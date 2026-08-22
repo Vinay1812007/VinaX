@@ -47,3 +47,5 @@ ASSETS_HOST = "vinax.pages.dev"
 #   TELEMETRY_PEPPER  DEVICE_ID_SECRET  CRON_SECRET
 #   BRAVE_API_KEY  GITHUB_REPO  GITHUB_TOKEN  FCM_SERVICE_ACCOUNT
 # Full documentation of every name: .env.example
+
+GITHUB_REPO = "Vinay1812007/VinaX"
