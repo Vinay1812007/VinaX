@@ -196,7 +196,7 @@ const assetsFetch =
   (input: Request | string | URL): Promise<Response> => {
     const url = toAssetsUrl(env, input);
     if (input instanceof Request) return fetch(new Request(url.toString(), input));
-    return fetch(url.toString(), { redirect: 'manual' });
+    return fetch(url.toString(), { redirect: 'follow' });
   };
 
 const pickHandler = (mod: Mod, method: string): Handler | undefined => {
