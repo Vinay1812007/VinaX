@@ -1466,9 +1466,10 @@
   }
   // ---------- JioSaavn mirror health (server-side ping via /api/admin/musicapi) ----------
   var MUSIC_APIS = [
-    { id: 'saavn-dev', label: 'saavn.dev' },
     { id: 'saavn-sumit', label: 'sumit.co' },
-    { id: 'nepotune', label: 'nepotune' }
+    { id: 'saavn-dev', label: 'saavn.dev' },
+    { id: 'nepotune', label: 'nepotune' },
+    { id: 'b4a', label: 'b4a.run' }
   ];
   var labMusicBusy = false;
   var labMusicAt = '';

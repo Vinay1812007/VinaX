@@ -10,9 +10,10 @@ import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 type Env = AdminEnv;
 
 const MIRRORS = [
-  { id: 'saavn-dev', label: 'saavn.dev', base: 'https://saavn.dev/api' },
   { id: 'saavn-sumit', label: 'saavn.sumit.co', base: 'https://saavn.sumit.co/api' },
+  { id: 'saavn-dev', label: 'saavn.dev', base: 'https://saavn.dev/api' },
   { id: 'nepotune', label: 'nepotuneapi.vercel.app', base: 'https://nepotuneapi.vercel.app/api' },
+  { id: 'b4a', label: 'jiosaavn-api-privatecv8.b4a.run', base: 'https://jiosaavn-api-privatecv8.b4a.run/api' },
 ] as const;
 
 interface MirrorHealth {
