@@ -34,6 +34,7 @@ import * as m_api_admin_live from './functions/api/admin/live';
 import * as m_api_admin_location from './functions/api/admin/location';
 import * as m_api_admin_maintenance from './functions/api/admin/maintenance';
 import * as m_api_admin_music from './functions/api/admin/music';
+import * as m_api_admin_musicapi from './functions/api/admin/musicapi';
 import * as m_api_admin_notifylog from './functions/api/admin/notifylog';
 import * as m_api_admin_overview from './functions/api/admin/overview';
 import * as m_api_admin_push from './functions/api/admin/push';
@@ -124,6 +125,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/location': m_api_admin_location,
   '/api/admin/maintenance': m_api_admin_maintenance,
   '/api/admin/music': m_api_admin_music,
+  '/api/admin/musicapi': m_api_admin_musicapi,
   '/api/admin/notifylog': m_api_admin_notifylog,
   '/api/admin/overview': m_api_admin_overview,
   '/api/admin/push': m_api_admin_push,

@@ -1464,6 +1464,44 @@
       });
     });
   }
+  // ---------- JioSaavn mirror health (server-side ping via /api/admin/musicapi) ----------
+  var MUSIC_APIS = [
+    { id: 'saavn-dev', label: 'saavn.dev' },
+    { id: 'saavn-sumit', label: 'sumit.co' },
+    { id: 'nepotune', label: 'nepotune' }
+  ];
+  var labMusicBusy = false;
+  var labMusicAt = '';
+  function labPaintMusicAt() { var el = $('lab-music-at'); if (el) el.textContent = labMusicAt ? 'last checked ' + labMusicAt : ''; }
+  function labMusicPing() {
+    var host = $('lab-music-pings');
+    if (!host || labMusicBusy) return;
+    labMusicBusy = true;
+    host.innerHTML = MUSIC_APIS.map(function (m) {
+      return '<span class="lab-ping" id="lab-music-' + esc(m.id) + '">' + esc(m.label) + ' \u2026</span>';
+    }).join('');
+    fetch('/api/admin/musicapi', { headers: { 'x-admin-token': token() } })
+      .then(function (res) {
+        if (res.status === 401) { sessionStorage.removeItem(TOKEN_KEY); showLogin('Invalid token.'); return null; }
+        return res.json();
+      })
+      .then(function (j) {
+        ((j && j.mirrors) || []).forEach(function (m) {
+          var el = $('lab-music-' + m.id);
+          if (!el) return;
+          el.className = 'lab-ping ' + (m.ok ? 'ok' : 'bad');
+          el.textContent = (m.label || m.id) + ' ' + (m.ok ? '\u2713 ' + m.ms + ' ms' : '\u2717 ' + (m.note || 'failed'));
+          el.title = m.base + (m.ok ? ' \u00b7 ' + m.songs + ' result(s)' : '');
+        });
+      })
+      .catch(function () {
+        MUSIC_APIS.forEach(function (m) {
+          var el = $('lab-music-' + m.id);
+          if (el) { el.className = 'lab-ping bad'; el.textContent = m.label + ' \u2717 network'; }
+        });
+      })
+      .then(function () { labMusicBusy = false; labMusicAt = labNow(); labPaintMusicAt(); });
+  }
   function renderAiLab() {
     var chips = LAB_LANES.map(function (L) {
       return '<button class="lab-chip' + (L.lane === labLane ? ' active' : '') + '" data-lane="' + esc(L.lane) + '">' +
@@ -1472,9 +1510,10 @@
     }).join('');
     $('view').innerHTML =
       '<div class="card" id="lab-root" style="max-width:860px">' +
-      '<h3 style="margin-top:0">AI Lab <span class="muted">· each lane answers with its own key + pinned model — no failover, failures show honestly</span></h3>' +
+      '<h3 style="margin-top:0">API Monitoring <span class="muted">· seven AI lanes + JioSaavn music mirrors — no failover, failures show honestly</span></h3>' +
       '<div class="lab-chips">' + chips + '</div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-ping">Ping all seven</button><span id="lab-ping-at" class="lab-ping-at"></span><span id="lab-pings" class="chips" style="margin:0"></span></div>' +
+      '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-music">Ping JioSaavn APIs</button><span id="lab-music-at" class="lab-ping-at"></span><span id="lab-music-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="lab-msgs" id="lab-msgs"></div>' +
       '<textarea id="lab-in" class="lab-input" rows="3" placeholder="Test message — Enter sends, Shift+Enter for a new line"></textarea>' +
       '<div class="row" style="margin-top:10px"><button id="lab-send">Send</button><button class="ghost" id="lab-clear">Clear chat</button><span class="muted" style="font-size:11px">History lives per lane, in memory only — capped at 1000 tokens per reply.</span></div>' +
@@ -1490,14 +1529,16 @@
     $('lab-send').addEventListener('click', labSend);
     $('lab-clear').addEventListener('click', function () { labHist[labLane] = []; labPaintMsgs(); });
     $('lab-ping').addEventListener('click', labPingAll);
+    $('lab-music').addEventListener('click', labMusicPing);
     $('lab-in').addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); labSend(); }
     });
     labPaintDots();
     labPaintPingAt();
+    labPaintMusicAt();
     // First open of the Lab auto-checks lane health once — dots fill in
     // without a click; later refreshes never repaint the chat.
-    if (!labAutoPinged) { labAutoPinged = true; labPingAll(); }
+    if (!labAutoPinged) { labAutoPinged = true; labPingAll(); labMusicPing(); }
     stamp();
   }
   function labPaintDots() { LAB_LANES.forEach(function (L) { labPaintDot(L.lane); }); }
@@ -1905,7 +1946,7 @@
     stamp();
   }
 
-  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'AI Lab', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', config: 'App Configuration' };
+  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', config: 'App Configuration' };
   var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true };
   function refreshActive() {
     if (active === 'overview') loadOverview();
