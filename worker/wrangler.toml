@@ -26,6 +26,8 @@ routes = [
   { pattern = "www.sirimillavinay.online/img", zone_name = "sirimillavinay.online" },
   { pattern = "www.sirimillavinay.online/apk", zone_name = "sirimillavinay.online" },
 
+  { pattern = "admin.sirimillavinay.online/api/*", zone_name = "sirimillavinay.online" },
+
   # Host-level redirects handled by functions/_middleware.ts
   { pattern = "update.sirimillavinay.online/*", zone_name = "sirimillavinay.online" },
   { pattern = "admin.sirimillavinay.online/", zone_name = "sirimillavinay.online" },
