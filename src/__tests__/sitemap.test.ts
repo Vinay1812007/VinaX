@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { onRequestGet as sitemapIndex } from '../../functions/sitemap.xml';
-import { onRequestGet as staticSitemap } from '../../functions/sitemap-static.xml';
+import { onRequestGet as sitemapIndex } from '../../worker/functions/sitemap.xml';
+import { onRequestGet as staticSitemap } from '../../worker/functions/sitemap-static.xml';
 
 const ORIGIN = 'https://www.sirimillavinay.online';
 const locsOf = (xml: string): string[] => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
@@ -60,7 +60,7 @@ describe('static sitemap', () => {
 describe('dynamic child sitemaps (source contract)', () => {
   for (const f of ['sitemap-songs', 'sitemap-albums', 'sitemap-artists', 'sitemap-movies']) {
     it(`${f}: www origin, trailing-slash <loc> template, 30-min edge cache`, () => {
-      const src = readFileSync(`functions/${f}.xml.ts`, 'utf8');
+      const src = readFileSync(`worker/functions/${f}.xml.ts`, 'utf8');
       expect(src).toContain("const ORIGIN = 'https://www.sirimillavinay.online'");
       expect(src).toContain('max-age=1800, s-maxage=1800');
       // Detail URLs are built as `${ORIGIN}/<type>/<slug>-<safeId>/` — trailing slash.
@@ -71,6 +71,6 @@ describe('dynamic child sitemaps (source contract)', () => {
     });
   }
   it('song map guards the 50k-URL sitemap limit', () => {
-    expect(readFileSync('functions/sitemap-songs.xml.ts', 'utf8')).toContain('slice(0, 50000)');
+    expect(readFileSync('worker/functions/sitemap-songs.xml.ts', 'utf8')).toContain('slice(0, 50000)');
   });
 });

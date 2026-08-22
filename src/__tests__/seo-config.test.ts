@@ -10,8 +10,8 @@ describe('SEO configuration', () => {
   });
   it('sitemap includes the trust pages', () => {
     // The sitemap is generated live by a Pages Function now; the static
-    // routes it serves live in functions/sitemap-static.xml.ts.
-    const s = readFileSync('functions/sitemap-static.xml.ts', 'utf8');
+    // routes it serves live in worker/functions/sitemap-static.xml.ts.
+    const s = readFileSync('worker/functions/sitemap-static.xml.ts', 'utf8');
     for (const p of ['/privacy', '/terms', '/contact']) expect(s).toContain(p);
   });
   it('index.html exposes the prerender SEO slot and base meta', () => {
@@ -56,7 +56,7 @@ describe('SEO configuration', () => {
       'src/utils/songCard.ts',
       'index.html',
       'scripts/prerender.mjs',
-      'functions/_lib/render.ts',
+      'worker/functions/_lib/render.ts',
     ];
     for (const f of files) {
       const src = readFileSync(f, 'utf8');
