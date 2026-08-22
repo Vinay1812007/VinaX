@@ -1,5 +1,29 @@
 import { describe, it, expect } from 'vitest';
-import { artSrcSet, bestImage, FALLBACK_ART } from './images';
+import { artSrcSet, bestImage, derivedVariants, FALLBACK_ART } from './images';
+
+describe('derivedVariants (4.19.5 — CDN serves unlisted 250/350 sizes)', () => {
+  const imgs = [
+    { quality: '50x50', url: 'https://c.saavncdn.com/x/a-50x50.jpg' },
+    { quality: '150x150', url: 'https://c.saavncdn.com/x/a-150x150.jpg' },
+    { quality: '500x500', url: 'https://c.saavncdn.com/x/a-500x500.jpg' },
+  ];
+  it('derives 250 and 350 by rewriting the 500 URL', () => {
+    const out = derivedVariants(imgs);
+    expect(out.map((v) => v.quality).sort()).toStrictEqual(['150x150', '250x250', '350x350', '500x500', '50x50'].sort());
+    expect(out.find((v) => v.quality === '350x350')?.url).toBe('https://c.saavncdn.com/x/a-350x350.jpg');
+  });
+  it('passes through untouched when no 500x500 URL exists to rewrite', () => {
+    const odd = [{ quality: '500x500', url: 'https://elsewhere.example/full.jpg' }];
+    expect(derivedVariants(odd)).toStrictEqual(odd);
+    expect(derivedVariants(undefined)).toStrictEqual([]);
+  });
+  it('feeds a retina-friendly capped srcset (350 max) for card tiles', () => {
+    expect(artSrcSet(derivedVariants(imgs), 350)).toBe(
+      'https://c.saavncdn.com/x/a-50x50.jpg 50w, https://c.saavncdn.com/x/a-150x150.jpg 150w, https://c.saavncdn.com/x/a-250x250.jpg 250w, https://c.saavncdn.com/x/a-350x350.jpg 350w',
+    );
+    expect(bestImage(derivedVariants(imgs), 250)).toBe('https://c.saavncdn.com/x/a-250x250.jpg');
+  });
+});
 
 describe('bestImage', () => {
   const imgs = [
@@ -40,6 +64,16 @@ describe('artSrcSet', () => {
     expect(artSrcSet([])).toBeUndefined();
     expect(artSrcSet([imgs[0]])).toBeUndefined();
     expect(artSrcSet([{ quality: 'high', url: 'x' }])).toBeUndefined();
+  });
+
+  it('caps offered variants at maxPx (4.18.0 — card tiles must not fetch 500×500)', () => {
+    expect(artSrcSet(imgs, 150)).toBe('small 50w, mid 150w');
+    expect(artSrcSet(imgs, 499)).toBe('small 50w, mid 150w');
+    expect(artSrcSet(imgs, 500)).toBe('small 50w, mid 150w, large 500w');
+  });
+
+  it('ignores a cap that would remove every variant', () => {
+    expect(artSrcSet(imgs, 10)).toBe('small 50w, mid 150w, large 500w');
   });
 });
 

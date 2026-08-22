@@ -136,6 +136,13 @@ export async function setMediaHandlers(h: MediaHandlers): Promise<void> {
         case 'seekto': if (d.seekTime != null) h.seekTo(d.seekTime); break;
         case 'seekbackward': h.seekBy(-10); break;
         case 'seekforward': h.seekBy(10); break;
+        case 'openplayer':
+          // Notification body tapped (4.16.1): MainActivity relays the launch
+          // intent's open-player extra here — AppLayout listens on 'vx:np'
+          // (short name: this chunk is first-load-budgeted) and navigates to
+          // the full-screen player.
+          window.dispatchEvent(new CustomEvent('vx:np'));
+          break;
         case 'playFromId':
           if (d.mediaId && d.mediaId.startsWith('song_')) {
             const id = d.mediaId.replace('song_', '');

@@ -1,0 +1,42 @@
+# Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
+name: E2E
+
+# Playwright smoke suite (audit §6): boots the BUILT bundle under vite preview
+# with all external network aborted, and walks the app's spine — onboarding,
+# navigation, settings, handoff fail-soft, taste profile. Deterministic by
+# construction (no live catalog, no AI backend), so a red run means the app
+# broke, not the internet.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # playwright-core (the installed dependency) must install its OWN
+      # pinned Chromium build — `npx playwright install` pulls the latest
+      # `playwright` package instead, whose browser revision can drift from
+      # what playwright-core's launcher expects.
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run build
+      - run: npm run e2e
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

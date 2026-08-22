@@ -96,7 +96,7 @@ export default function AIPlaylistPage() {
         </button>
       </div>
 
-      {error && <EmptyState title="No playlist yet" message={error} />}
+      {error && <EmptyState icon={<SparkleIcon className="w-8 h-8" />} title="No playlist yet" message={error} />}
 
       {result && (
         <div>

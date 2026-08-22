@@ -6,6 +6,9 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useReasonStore } from '@/store/reasonStore';
 import { TUNE_OPTIONS } from '@/services/recommendation/tune';
+import { getMoodPin } from '@/services/personalization/session';
+import { clearMoodPin, pinMood } from '@/features/player/moodPin';
+import type { Mood } from '@/services/recommendation/mood';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
 import { LiveLyricLine } from '@/components/LiveLyricLine';
 import { SyncedLyrics } from '@/components/SyncedLyrics';
@@ -45,6 +48,8 @@ import { shareLink } from '@/utils/share';
 import { shareNowPlayingCard } from '@/utils/shareCard';
 import { toast } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
+import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 const SLEEP_OPTIONS = [15, 30, 60];
 
@@ -82,7 +87,13 @@ export default function NowPlayingPage() {
   const artSwipe = useRef<{ y: number; t: number } | null>(null);
   const [swipeFx, setSwipeFx] = useState<'up' | 'down' | null>(null);
   const [rightTab, setRightTab] = useState<'queue' | 'lyrics'>('queue');
+  // C5 — the manually pinned session mood (45-min override of inference).
+  const [moodPin, setMoodPin] = useState<Mood | null>(() => getMoodPin());
   const [immersive, setImmersive] = useState(false);
+  // Android back exits immersive lyrics before it leaves the player (P0-2).
+  useDismissOnBack(immersive, () => setImmersive(false));
+  const immersiveRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(immersiveRef, immersive, () => setImmersive(false));
   const tabTouched = useRef(false);
   const onArtTouchStart = (e: React.TouchEvent) => {
     e.stopPropagation(); // keep the sheet's dismiss-drag out of the artwork zone
@@ -303,7 +314,7 @@ export default function NowPlayingPage() {
             alt=""
             draggable={false}
             className={cn(
-              'relative w-72 h-72 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-[0_28px_70px_-14px_rgb(var(--ember-500)/0.4)] transition-all duration-500',
+              'relative w-72 h-72 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-[0_28px_70px_-14px_rgb(var(--ember-500)/0.4)] transition-[color,background-color,border-color,opacity,transform] duration-500',
               isPlaying ? 'scale-100' : 'scale-[0.97] opacity-90',
             )}
           />
@@ -338,7 +349,7 @@ export default function NowPlayingPage() {
             {song.album?.id && (
               <Link
                 to={albumPath(song.album)}
-                className="mt-2 flex w-fit max-w-full items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-ink-800/70 border border-white/5 text-ink-200 hover:text-ink-100 hover:bg-ink-700 transition-colors"
+                className="mt-2 flex w-fit max-w-full items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-ink-800/70 border border-glass text-ink-200 hover:text-ink-100 hover:bg-ink-700 transition-colors"
               >
                 <span className="truncate">From “{filmTitle ?? song.album.name}”</span> ›
               </Link>
@@ -563,9 +574,50 @@ export default function NowPlayingPage() {
                   toast(`Tuning: ${opt.label}…`);
                 }}
                 aria-label={`Tune queue: ${opt.label}`}
-                className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-white/5 transition hover:bg-ink-700 hover:text-ink-100 active:scale-95"
+                className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100 active:scale-95"
               >
                 {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* C5 — pin a mood: overrides the inferred session mood for 45 min */}
+        <div className="mt-5">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-2">
+            Pin a mood <span className="normal-case font-semibold text-ink-500 tracking-normal">· steers picks for 45 min</span>
+          </h2>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {(
+              [
+                ['romantic', 'Romantic'],
+                ['energetic', 'Energetic'],
+                ['chill', 'Chill'],
+                ['melancholy', 'Melancholy'],
+                ['devotional', 'Devotional'],
+              ] as Array<[Mood, string]>
+            ).map(([m, label]) => (
+              <button
+                key={m}
+                onClick={() => {
+                  if (moodPin === m) {
+                    clearMoodPin();
+                    setMoodPin(null);
+                    toast('Mood unpinned');
+                  } else {
+                    pinMood(m);
+                    setMoodPin(m);
+                    toast(`${label} pinned — picks lean that way for 45 min`);
+                  }
+                }}
+                aria-pressed={moodPin === m}
+                className={
+                  moodPin === m
+                    ? 'shrink-0 px-3.5 py-2 rounded-full text-xs font-bold bg-ember-500/25 text-ember-200 border border-ember-400/40 transition active:scale-95'
+                    : 'shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100 active:scale-95'
+                }
+              >
+                {label}
               </button>
             ))}
           </div>
@@ -579,7 +631,7 @@ export default function NowPlayingPage() {
               {upNext.length > 0 && (
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-ink-800/70 border border-white/5',
+                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-ink-800/70 border border-glass',
                     queueSource === 'ai' ? 'text-ember-300' : 'text-ink-300',
                   )}
                   title={queueSource === 'ai' ? 'This continuation was curated by the AI DJ' : 'The AI was busy — these are instant local picks tuned to your taste'}
@@ -629,7 +681,9 @@ export default function NowPlayingPage() {
       </div>
       {immersive && (
         <div
+          ref={immersiveRef}
           role="dialog"
+          aria-modal="true"
           aria-label="Immersive lyrics"
           className="absolute inset-0 z-30 flex flex-col animate-fade-up bg-ink-950/25 backdrop-blur-sm"
         >

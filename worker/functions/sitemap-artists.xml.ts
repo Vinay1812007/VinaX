@@ -3,7 +3,11 @@
 // Defensive + edge-cached for a day; referenced from robots.txt.
 // Pruned 2026-07 (DQA-10): saavn.dev DNS is dead and the b4a.run mirror 404s
 // these endpoints — both only added timeout latency to sitemap builds.
+import type { SupabaseEnv } from './_lib/supabase';
+import { harvestSoon, seoRow } from './_lib/seo';
+
 const BASES = [
+  'https://www.sirimillavinay.online/api/cat',
   'https://saavn.sumit.co/api',
   'https://nepotuneapi.vercel.app/api',
 ];
@@ -33,6 +37,7 @@ const slugify = (t: unknown): string =>
   String(t ?? '')
     .toLowerCase()
     .normalize('NFKD')
+    .replace(/&[a-z]+;|&#x?[0-9a-f]+;/gi, ' ')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60) || 'x';
@@ -54,8 +59,12 @@ async function results(path: string, query: string, limit = 25): Promise<any[]> 
   return fetchFirst(`${path}?query=${encodeURIComponent(query)}&limit=${limit}`);
 }
 
-export const onRequestGet = async (): Promise<Response> => {
+export const onRequestGet = async (context: {
+  env: SupabaseEnv;
+  waitUntil?: (p: Promise<unknown>) => void;
+}): Promise<Response> => {
   const urls = new Set<string>();
+  const harvested: any[] = [];
   const tasks: Promise<any[]>[] = [];
   for (const l of LANGS) {
     tasks.push(results('search/artists', `top ${l} singers`, 25));
@@ -69,8 +78,12 @@ export const onRequestGet = async (): Promise<Response> => {
       // Audit finding M-SRV-7: sanitize the id before it enters the XML.
       const safeId = String(a.id).replace(/[^\w-]/g, '');
       if (!safeId) continue;
-      urls.add(`${ORIGIN}/artist/${slugify(a.name)}-${safeId}/`);
+      urls.add(`${ORIGIN}/artist/${slugify(a.name)}-${safeId}`);  // no trailing slash: must match the page's canonical (4.16.3)
+      harvested.push(a);
     }
   }
+  // Feed the persistent SEO corpus — these artists become tomorrow's crawl
+  // frontier (the seo-crawl walker expands their full song/album lists).
+  harvestSoon(context.env, harvested.map((a) => seoRow('artist', a?.id, a?.name)), context.waitUntil);
   return respond(xml([...urls]));
 };

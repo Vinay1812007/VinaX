@@ -17,12 +17,12 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'hidden md:flex flex-col shrink-0 my-3 ml-3 rounded-3xl glass-sidebar overflow-y-auto overflow-x-hidden transition-[width] duration-200 ease-out',
+        'hidden md:flex flex-col shrink-0 my-3 ml-3 rounded-3xl glass-sidebar overflow-y-auto overflow-x-hidden no-scrollbar sticky top-0 max-h-dvh transition-[width] duration-200 ease-out',
         collapsed ? 'w-[4.5rem]' : 'w-60',
       )}
     >
       <div className={cn('flex items-center py-5', collapsed ? 'justify-center px-2' : 'justify-between px-5')}>
-        <NavLink to="/" className="flex items-center gap-2.5 min-w-0" aria-label="VinaX home">
+        <NavLink to="/" className="vx-brand flex items-center gap-2.5 min-w-0" aria-label="VinaX home">
           <img src="/icons/icon.svg" alt="" className="w-8 h-8 rounded-lg shrink-0" />
           {!collapsed && (
             <span className="text-xl font-bold tracking-tight truncate">
@@ -72,7 +72,7 @@ export function Sidebar() {
                       title={collapsed ? t(label) : undefined}
                       className={({ isActive }) =>
                         cn(
-                          'relative flex items-center rounded-2xl text-[13.5px] transition-all',
+                          'relative flex items-center rounded-2xl text-[13.5px] transition-[color,background-color,border-color,opacity,transform]',
                           collapsed ? 'justify-center w-10 h-10 mx-auto' : 'gap-3 px-3 py-2.5',
                           isActive
                             ? 'nav-pill-active text-ember-300 font-semibold'
@@ -99,7 +99,7 @@ export function Sidebar() {
       </nav>
 
       {!collapsed && (
-        <div className="vx-sidebar-footer mx-3 mb-3 mt-2 flex items-center gap-2 px-3 py-2.5 rounded-2xl border border-white/[0.04] bg-white/[0.02]">
+        <div className="vx-sidebar-footer mx-3 mb-3 mt-2 flex items-center gap-2 px-3 py-2.5 rounded-2xl border border-glass bg-[var(--tile)]">
           <img src="/icons/icon.svg" alt="" className="w-6 h-6 rounded-md shrink-0" />
           <div className="min-w-0 leading-tight">
             <div className="text-[11.5px] font-semibold text-ink-200 truncate">{DISPLAY_VERSION}</div>

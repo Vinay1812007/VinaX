@@ -11,19 +11,32 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 );
 
-// Boot succeeded: reset the shell's update-recovery counter.
+// Lift the boot transition guard (index.html pre-paint script) once the first
+// hydrated frame has painted — transitions behave normally from then on.
+requestAnimationFrame(() =>
+  requestAnimationFrame(() => document.documentElement.classList.remove('boot-still')),
+);
+
+// Boot succeeded: reset every recovery counter the boot shell uses.
 try {
   window.sessionStorage.removeItem('vinax.bootRetry');
+  window.sessionStorage.removeItem('vinax.bootPanicked');
+  window.sessionStorage.removeItem('vinax.preloadReload');
 } catch {
   /* ignore */
 }
 
 // A deploy can remove old hashed chunks while a session is open; when a lazy
-// route chunk fails to load, reload once to pick up the new build.
-let reloadedForStaleChunk = false;
+// route chunk fails to load, reload once to pick up the new build. The retry
+// counter now lives in sessionStorage (not a module-scoped variable) — a
+// module-scoped guard resets on every reload, so a persistent CSP or network
+// failure could bounce the page endlessly (v4.13.1 hotfix).
 window.addEventListener('vite:preloadError', (event) => {
-  if (reloadedForStaleChunk) return;
-  reloadedForStaleChunk = true;
+  const KEY = 'vinax.preloadReload';
+  let n = 0;
+  try { n = Number(sessionStorage.getItem(KEY) || 0); } catch { /* ignore */ }
+  if (n >= 1) return; // one reload per session, then stop and let the user see the error
+  try { sessionStorage.setItem(KEY, '1'); } catch { /* proceed anyway */ }
   event.preventDefault();
   window.location.reload();
 });
@@ -69,7 +82,21 @@ if (
   (!Capacitor.isNativePlatform() || remoteOrigin)
 ) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => {
+    void navigator.serviceWorker.register('/sw.js').then((reg) => {
+      // v4.13.2 — the previous SW served stale HTML pointing at asset chunks
+      // the origin had rotated away, stranding users on the boot splash.
+      // When a fresh SW installs, tell it to skipWaiting so the next
+      // navigation gets fresh HTML instead of one more grace period.
+      const nudge = (w: ServiceWorker | null): void => { if (w) w.postMessage({ type: 'SKIP_WAITING' }); };
+      nudge(reg.waiting);
+      reg.addEventListener('updatefound', () => {
+        const installing = reg.installing;
+        if (!installing) return;
+        installing.addEventListener('statechange', () => {
+          if (installing.state === 'installed') nudge(reg.waiting);
+        });
+      });
+    }).catch(() => {
       /* ignore: the app works fine without a service worker */
     });
   });

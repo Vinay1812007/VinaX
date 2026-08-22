@@ -38,7 +38,7 @@ export function SongRow({ song, songs, index, showArt = true }: Props) {
       data-deter-context
       data-song-id={song.id}
       className={cn(
-        'group flex items-center gap-3 px-2 py-2 rounded-xl cursor-pointer transition-all active:scale-[0.98]',
+        'group flex items-center gap-3 px-2 py-2 rounded-xl cursor-pointer transition-[color,background-color,border-color,opacity,transform] active:scale-[0.98]',
         isCurrent ? 'bg-ink-800' : 'hover:bg-ink-850',
       )}
     >
@@ -50,7 +50,7 @@ export function SongRow({ song, songs, index, showArt = true }: Props) {
             alt=""
             loading="lazy"
             decoding="async"
-            className="w-11 h-11 rounded-lg object-cover"
+            className="w-11 h-11 rounded-lg object-cover transition-transform duration-300 group-hover:scale-[1.06]"
           />
           {isPlaying && (
             <div className="absolute inset-0 rounded-lg bg-ink-950/60 flex items-end justify-center gap-0.5 pb-2">

@@ -108,22 +108,64 @@ create table if not exists vinax_room_members (
 );
 
 create table if not exists vinax_push_subscriptions (
-  endpoint   text primary key,
-  p256dh     text not null,
-  auth       text not null,
-  lang       text,
-  active     boolean not null default true,
-  updated_at timestamptz not null default now()
+  endpoint       text primary key,
+  p256dh         text not null,
+  auth           text not null,
+  lang           text,
+  country        text,     -- CF ISO-2, set/updated at subscribe time
+  region         text,     -- CF human name (state / province)
+  city           text,     -- CF city name (may be null on some networks)
+  tz_offset      int,      -- device UTC offset in minutes east (quiet-hours gate)
+  last_pushed_at timestamptz, -- last notification send (frequency-cap gate)
+  active         boolean not null default true,
+  updated_at     timestamptz not null default now()
 );
+-- Idempotent add for existing deployments (the CREATE above only fires on a
+-- brand-new table). Safe to re-run.
+alter table vinax_push_subscriptions add column if not exists tz_offset int;
+alter table vinax_push_subscriptions add column if not exists last_pushed_at timestamptz;
+-- Geo columns added post-hoc for the location-targeted push feature.
+alter table if exists vinax_push_subscriptions
+  add column if not exists country text,
+  add column if not exists region  text,
+  add column if not exists city    text;
 
 -- Android FCM device tokens (written by /api/push/fcm-register, read by the
 -- admin push sender). Was missing from this file while the code used it.
 create table if not exists vinax_fcm_tokens (
-  token      text primary key,
-  platform   text,
-  lang       text,
-  active     boolean not null default true,
-  updated_at timestamptz not null default now()
+  token          text primary key,
+  platform       text,
+  lang           text,
+  country        text,
+  region         text,
+  city           text,
+  tz_offset      int,
+  last_pushed_at timestamptz,
+  active         boolean not null default true,
+  updated_at     timestamptz not null default now()
+);
+alter table vinax_fcm_tokens add column if not exists tz_offset int;
+alter table vinax_fcm_tokens add column if not exists last_pushed_at timestamptz;
+alter table if exists vinax_fcm_tokens
+  add column if not exists country text,
+  add column if not exists region  text,
+  add column if not exists city    text;
+
+-- SEO URL corpus — one row per indexable catalog URL (song/album/artist/
+-- playlist). Fed by the seo-crawl cron + entity page renders + live-search
+-- sitemaps; consumed by the paginated /sitemaps/<type>-<n>.xml endpoints.
+-- PUBLIC catalog metadata only — never any user or device data.
+create table if not exists vinax_seo_urls (
+  key         text primary key,               -- '<type>:<entity_id>'
+  type        text not null,                  -- song | album | artist | playlist
+  entity_id   text not null,
+  slug        text not null,
+  title       text,
+  lang        text,
+  added_at    timestamptz not null default now(),
+  lastmod     timestamptz not null default now(),
+  expanded_at timestamptz,                    -- frontier: last artist/album walk
+  expand_page int not null default 0          -- frontier: next page to walk
 );
 
 -- ============================== INDEXES ==============================
@@ -136,6 +178,21 @@ create index if not exists idx_vinax_room_members_seen on vinax_room_members (co
 create index if not exists vinax_ai_events_created_idx on vinax_ai_events (created_at desc);
 create index if not exists vinax_ai_events_feature_idx on vinax_ai_events (feature);
 create index if not exists idx_vinax_fcm_tokens_active on vinax_fcm_tokens (active, updated_at desc);
+-- Geo-targeted push filters on both channels stay fast as subscribers grow.
+create index if not exists idx_vinax_push_subs_geo on vinax_push_subscriptions (country, region, city) where active = true;
+create index if not exists idx_vinax_fcm_tokens_geo on vinax_fcm_tokens (country, region, city) where active = true;
+-- Sitemap pagination + crawl-frontier reads on the SEO corpus.
+create index if not exists vinax_seo_urls_type_added on vinax_seo_urls (type, added_at, key);
+create index if not exists vinax_seo_urls_frontier   on vinax_seo_urls (type, expanded_at nulls first);
+
+-- Admin-published app config (banners, home-screen defaults). One key→jsonb
+-- row per surface; written by /api/admin/appconfig, read publicly (cached)
+-- through /api/appconfig.
+create table if not exists vinax_config (
+  key        text primary key,
+  value      jsonb not null,
+  updated_at timestamptz not null default now()
+);
 
 -- ===================== ROW-LEVEL SECURITY (service-role only) =====================
 -- RLS with no policies blocks the public anon key; the Cloudflare functions use
@@ -150,6 +207,8 @@ alter table vinax_rooms              enable row level security;
 alter table vinax_room_members       enable row level security;
 alter table vinax_push_subscriptions enable row level security;
 alter table vinax_fcm_tokens         enable row level security;
+alter table vinax_seo_urls           enable row level security;
+alter table vinax_config             enable row level security;
 
 -- ===================== RESET EXISTING FUNCTIONS =====================
 -- Dropping tables does NOT drop functions, and "create or replace" cannot change

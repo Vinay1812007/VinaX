@@ -6,6 +6,7 @@
  *  picks which lane env key signs the call (default DEEPSEEK_V4_FLASH);
  *  ?model= overrides the probed slug (default: that lane's pinned model). */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { rateLimit } from '../../_lib/ratelimit';
 import { LANE_MODEL, laneEndpoint, type AiEnv, type Lane } from '../../_lib/ai';
 
 type Env = AdminEnv & AiEnv;
@@ -20,19 +21,22 @@ const BY_SUFFIX: Record<string, { env: keyof AiEnv; lane: Lane }> = {
   NVIDIA_NEMOTRON_3_NANO_30B_A3B: { env: 'VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B', lane: 'search' },
 };
 
-function json(o: unknown): Response {
-  return new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+function json(o: unknown, status = 200): Response {
+  return new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
+  // Paid upstream ping — throttle even for authed callers (audit: unthrottled).
+  const limited = rateLimit(request, 'admin-enginetest', { capacity: 10, refillPerMinute: 10 }, env as never);
+  if (limited) return limited;
   const url = new URL(request.url);
   const suffix = (url.searchParams.get('key') ?? 'DEEPSEEK_V4_FLASH').toUpperCase();
   const pick = BY_SUFFIX[suffix];
-  if (!pick) return json({ error: 'unknown key', keys: Object.keys(BY_SUFFIX) });
+  if (!pick) return json({ error: 'unknown key', keys: Object.keys(BY_SUFFIX) }, 400);
   const key = env[pick.env];
-  if (!key) return json({ key: suffix, error: 'env not set', env: pick.env });
+  if (!key) return json({ key: suffix, error: 'env not set', env: pick.env }, 503);
   const model = url.searchParams.get('model') ?? LANE_MODEL[pick.lane];
   const base = laneEndpoint(env, pick.lane);
   const t0 = Date.now();

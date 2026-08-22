@@ -11,13 +11,24 @@
          (removing that would need a bigger refactor). connect-src is set to
          'self' + Supabase for direct client hits (currently unused by this
          console, kept as a hedge for future direct queries). -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org" />
     <title>VinaX Admin</title>
+    <!-- Leaflet (vendored — CSP script-src is 'self') for the World map. -->
+    <link rel="stylesheet" href="/admin/leaflet/leaflet.css" />
     <style>
       :root { color-scheme: dark; --ember: #22d3ee; --pink: #a78bfa; --grad: linear-gradient(135deg, #22d3ee, #60a5fa); }
       * { box-sizing: border-box; }
       [hidden] { display: none !important; }
       .thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+      /* World map (Leaflet + OSM). Dark-invert the light OSM tiles so the map
+         sits naturally in the dark console; labels stay readable. */
+      #wmap { height: 440px; border-radius: 16px; overflow: hidden; background: #0b0f1c; }
+      #wmap .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.6); }
+      #wmap .leaflet-container { background: #0b0f1c; }
+      .live-dot { border-radius: 50%; background: #78dcff; box-shadow: 0 0 0 0 rgba(120, 220, 255, 0.6); animation: lpulse 1.8s ease-out infinite; }
+      .live-dot.playing { background: #ff5aa0; box-shadow: 0 0 0 0 rgba(255, 90, 160, 0.6); animation-name: lpulse-p; }
+      @keyframes lpulse { 0% { box-shadow: 0 0 0 0 rgba(120, 220, 255, 0.6); } 100% { box-shadow: 0 0 0 16px rgba(120, 220, 255, 0); } }
+      @keyframes lpulse-p { 0% { box-shadow: 0 0 0 0 rgba(255, 90, 160, 0.6); } 100% { box-shadow: 0 0 0 16px rgba(255, 90, 160, 0); } }
       .thumb.ph { background: #1b1b27; }
       .thumb-sm { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
       .srow { display: grid; grid-template-columns: 40px minmax(0,1.2fr) 1fr 50px; gap: 12px; align-items: center; margin-bottom: 8px; font-size: 13px; }
@@ -47,6 +58,24 @@
       .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 15px; }
       .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 12px var(--ember); }
       .brand small { font-weight: 600; color: #8a8a99; font-size: 12px; }
+      /* 80th Independence Day skin — html.fest-ind is set by app.js inside
+         the Aug 14-15 window and disappears on its own after it. */
+      html.fest-ind body::after { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 99; pointer-events: none; background: linear-gradient(90deg, #ff9933 0 33.4%, #fff 33.4% 66.7%, #138808 66.7% 100%); }
+      html.fest-ind { --ember: #ff9933; --grad: linear-gradient(135deg, #ff9933, #138808); }
+      .fest-sky { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+      .fest-flag { position: absolute; top: 50%; left: 50%; width: min(52vw, 480px); aspect-ratio: 3/2; display: flex; opacity: .16; transform: translate(-50%,-50%) rotate(-5deg); animation: festSway 9s ease-in-out infinite; }
+      .fest-flag i { flex: 1; background: linear-gradient(180deg, #ff9933 0 33.4%, #f2f2f2 33.4% 66.7%, #138808 66.7% 100%); animation: festWave 2.8s ease-in-out infinite; }
+      .fest-chakra { position: absolute; left: 50%; top: 50%; width: 21%; color: #0a3d91; transform: translate(-50%,-50%); animation: festSpin 36s linear infinite; }
+      .fest-ball { position: absolute; bottom: -70px; border-radius: 50%; opacity: 0; animation: festRise linear infinite; }
+      .fb0 { background: radial-gradient(circle at 32% 28%, #ffcf9e, #ff9933 70%); }
+      .fb1 { background: radial-gradient(circle at 32% 28%, #fff, #cfd8e3 75%); }
+      .fb2 { background: radial-gradient(circle at 32% 28%, #8fd96b, #138808 72%); }
+      @keyframes festSway { 0%,100% { transform: translate(-50%,-50%) rotate(-5deg); } 50% { transform: translate(-50%,calc(-50% - 14px)) rotate(-2.5deg); } }
+      @keyframes festWave { 0%,100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(4.5%) scaleY(.965); } }
+      @keyframes festSpin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+      @keyframes festRise { 0% { transform: translateY(0); opacity: 0; } 7% { opacity: .3; } 88% { opacity: .24; } 100% { transform: translateY(-118vh) translateX(5vw); opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { .fest-flag, .fest-flag i, .fest-chakra, .fest-ball { animation: none; } .fest-ball { display: none; } }
+      .fest-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; color: #ffd9ad; background: linear-gradient(90deg, rgba(255,153,51,0.18), rgba(19,136,8,0.18)); border: 1px solid rgba(255,153,51,0.4); }
       header .spacer { flex: 1; }
       header .updated { font-size: 11px; color: #6f6f7e; }
       .seg { display: inline-flex; gap: 4px; background: #111119; border: 1px solid #20202c; border-radius: 999px; padding: 3px; }
@@ -63,7 +92,8 @@
       #app { display: flex; flex-direction: column; height: 100dvh; }
       header { flex-shrink: 0; }
       .layout { display: flex; flex: 1 1 auto; min-height: 0; }
-      nav { width: 220px; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.06); padding: 14px 12px; background: rgba(10,10,16,0.4); backdrop-filter: blur(16px); overflow-y: auto; overscroll-behavior: contain; }
+      nav { width: 220px; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.06); padding: 14px 12px; background: rgba(10,10,16,0.4); backdrop-filter: blur(16px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+      nav::-webkit-scrollbar { display: none; }
       nav button[data-sec] { display: block; width: 100%; text-align: left; background: transparent; color: #9a9aa8; border: 0; border-radius: 10px; padding: 10px 14px; margin-bottom: 2px; font-weight: 600; font-size: 13.5px; }
       nav button.active { background: linear-gradient(135deg, rgba(34,211,238,0.2), rgba(96,165,250,0.14)); color: #fff; box-shadow: inset 0 0 0 1px rgba(34,211,238,0.35); }
       nav button:hover:not(:disabled) { background: #121219; }
@@ -337,10 +367,11 @@
           <button data-sec="world">🌍 World</button>
           <button data-sec="search">Search Analytics</button>
           <button data-sec="insights">Insights</button>
+          <button data-sec="experiments">A/B Experiments</button>
           <div class="nav-group-label" data-group>Operations</div>
           <button data-sec="technical">Technical</button>
           <button data-sec="ai">AI Monitoring</button>
-          <button data-sec="ailab">API Monitoring</button>
+          <button data-sec="ailab">AI Lab</button>
           <button data-sec="feedback">Feedback</button>
           <button data-sec="notify2">Notifications</button>
           <button data-sec="rooms">Live Rooms</button>
@@ -357,6 +388,7 @@
 
     <div id="modal" class="modal" hidden><div class="box" id="modalBody"></div></div>
 
+    <script src="/admin/leaflet/leaflet.js"></script>
     <script src="/admin/app.js"></script>
   </body>
 </html>

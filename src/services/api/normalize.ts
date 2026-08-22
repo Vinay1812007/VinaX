@@ -1,4 +1,4 @@
-import { isBlocked } from '@/services/content/blocklist';
+import { isBlockedSong } from '@/services/content/blocklist';
 import type {
   Album,
   AlbumRef,
@@ -133,7 +133,7 @@ export function normalizeSong(raw: any): Song | null {
 
 export function normalizeSongList(raw: unknown): Song[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map(normalizeSong).filter((s): s is Song => s !== null && !isBlocked(s.id));
+  return raw.map(normalizeSong).filter((s): s is Song => s !== null && !isBlockedSong(s));
 }
 
 export function normalizeAlbum(raw: any): Album | null {

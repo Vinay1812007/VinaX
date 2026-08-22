@@ -116,4 +116,5 @@ jobs:
             vinax.apk.sha256
           body: |
             Signed release APK for VinaX ${{ github.ref_name }}.
+            VersionCode: ${{ env.VERSION_CODE }}
             Download and install on your Android device.

@@ -43,3 +43,31 @@ describe('voice reply lane (v3.4.1 latency fix)', () => {
     expect(LANE_BY_MODE.nova).toBe('home');
   });
 });
+
+/**
+ * 4.13.0 — the "productivity default" clause pushes every seat toward doing
+ * over describing. This tests the SHAPE (all seats inherit it, refusal shape
+ * still intact, prompt-injection guard still intact), so a well-meaning
+ * future rewrite that drops the clause fails loudly instead of silently
+ * softening the assistant.
+ */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+describe('4.13 productivity persona', () => {
+  const src = readFileSync(resolve(__dirname, './vinaxai.ts'), 'utf8');
+
+  it('appends PRODUCTIVITY DEFAULT to the shared system prompt (all seats inherit it)', () => {
+    expect(src).toContain('PRODUCTIVITY DEFAULT (v4.13)');
+    expect(src).toMatch(/Bias toward doing, not describing/);
+    expect(src).toMatch(/deliver the finished artifact first/);
+  });
+
+  it('keeps the refusal shape and prompt-injection guard downstream — clause is INSIDE the shared prompt', () => {
+    const promptIdx = src.indexOf('PRODUCTIVITY DEFAULT (v4.13)');
+    const injectIdx = src.indexOf('PROMPT INJECTION\n');
+    const refuseIdx = src.indexOf('REFUSAL SHAPE');
+    expect(promptIdx).toBeGreaterThan(refuseIdx);
+    expect(injectIdx).toBeGreaterThan(promptIdx);
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { biasUnseenFirst, rotatePage } from './homeVariety';
+import { biasUnseenFirst, reorderByShelfMood, rotatePage } from './homeVariety';
 
 describe('rotatePage — per-visit page rotation', () => {
   it('returns a page in 1..pages', () => {
@@ -39,5 +39,27 @@ describe('biasUnseenFirst — soft anti-repeat that never starves a shelf', () =
   it('is a no-op when nothing was seen recently', () => {
     const out = biasUnseenFirst(songs, new Set());
     expect(out).toBe(songs);
+  });
+});
+
+describe('reorderByShelfMood — shelf reads to its title (A9)', () => {
+  const s = (id: string, title: string) => ({ id, title, subtitle: '' });
+  const shelf = [s('p', 'Party Dance Blast'), s('c', 'Chill Lofi Rain'), s('n', 'Some Track')];
+
+  it('sinks mood-clashing songs to the back of a moody shelf', () => {
+    const out = reorderByShelfMood('Chill late-night melodies', shelf);
+    // 'c' (chill) + 'n' (neutral, flexes) stay ahead of the party clasher 'p'.
+    expect(out.map((x) => x.id)).toEqual(['c', 'n', 'p']);
+  });
+
+  it('preserves order within the fitting group (relevance is never shuffled)', () => {
+    const out = reorderByShelfMood('Weekend Party', [s('n', 'Neutral One'), s('d1', 'Dance Anthem'), s('d2', 'DJ Blast')]);
+    expect(out.map((x) => x.id)).toEqual(['n', 'd1', 'd2']);
+  });
+
+  it('is a no-op for a neutral title, a short shelf, or when nothing clashes', () => {
+    expect(reorderByShelfMood('Ilaiyaraaja essentials', shelf)).toBe(shelf);
+    const two = [s('a', 'Party'), s('b', 'Sad')];
+    expect(reorderByShelfMood('Party night', two)).toBe(two);
   });
 });

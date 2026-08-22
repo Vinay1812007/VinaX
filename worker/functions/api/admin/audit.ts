@@ -21,7 +21,15 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   ]);
   const items = [
     ...events.map((e) => ({ kind: e.type, text: e.message ?? '', at: e.created_at })),
-    ...audits.map((a) => ({ kind: 'user-delete', text: a.message ?? '', at: a.created_at })),
+    // E12 — messages pack "kind|text"; legacy rows without a pipe are the old
+    // maintenance deletions and keep their 'user-delete' label.
+    ...audits.map((a) => {
+      const msg = a.message ?? '';
+      const pipe = msg.indexOf('|');
+      return pipe > 0
+        ? { kind: msg.slice(0, pipe), text: msg.slice(pipe + 1), at: a.created_at }
+        : { kind: 'user-delete', text: msg, at: a.created_at };
+    }),
   ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30);
   return new Response(JSON.stringify({ items }), {
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },

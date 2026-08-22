@@ -67,4 +67,13 @@ export default tseslint.config(
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
+  {
+    // Root config files are outside tsconfig's include, so tsc never sees
+    // them — lint is their only gate. no-dupe-keys (in js recommended) is the
+    // rule that catches the duplicate-theme-key class of bug that silently
+    // dropped our borderRadius overrides.
+    files: ['tailwind.config.ts', 'vite.config.ts', 'playwright.config.ts'],
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    languageOptions: { ecmaVersion: 2022, globals: nodeGlobals },
+  },
 );

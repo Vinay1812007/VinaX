@@ -1,6 +1,6 @@
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { DISPLAY_VERSION } from '@/constants/version';
 // NOTE: do NOT statically import from '@/constants/changelog' here —
 // the changelog module is ~10 KB gz of historical release notes; pulling it
@@ -8,6 +8,8 @@ import { DISPLAY_VERSION } from '@/constants/version';
 // on the effect that actually needs it (audit finding: undid the P2-shape
 // win from the "Living Glass" consolidation).
 import type { VersionInfo, ChangeEntry } from '@/constants/changelog';
+import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 const TYPE_META: Record<ChangeEntry['type'], { label: string; dot: string; bg: string; text: string }> = {
   new:      { label: 'New',      dot: 'bg-emerald-400', bg: 'bg-emerald-400/10', text: 'text-emerald-400' },
@@ -49,6 +51,16 @@ export function WhatsNewSheet() {
   const [open, setOpen] = useState<boolean>(false);
   const [notes, setNotes] = useState<VersionInfo | null>(null);
   const [fingerprint, setFingerprint] = useState<string | null>(null);
+  // EVERY dismissal path stamps the fingerprint — Escape and Android-back
+  // used to close without stamping, so the sheet re-armed on every launch
+  // until the user happened to tap the button.
+  const dismiss = () => {
+    if (fingerprint) setLocal(KEYS.lastSeenVersion, fingerprint);
+    setOpen(false);
+  };
+  useDismissOnBack(open, dismiss);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open, dismiss);
 
   useEffect(() => {
     const onboarded = getLocal<boolean>(KEYS.onboarded, false);
@@ -74,14 +86,9 @@ export function WhatsNewSheet() {
 
   if (!open || !notes) return null;
 
-  const dismiss = () => {
-    if (fingerprint) setLocal(KEYS.lastSeenVersion, fingerprint);
-    setOpen(false);
-  };
-
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-ink-950/80 backdrop-blur-sm p-0 sm:p-6">
-      <div className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-6 animate-fade-up max-h-[85vh] flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="What's new" className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-6 animate-fade-up max-h-[85vh] flex flex-col">
         <div className="flex items-center gap-3 mb-4">
           <img src="/icons/icon.svg" alt="" className="w-10 h-10 rounded-xl" />
           <div>

@@ -88,12 +88,35 @@ export interface RoomState {
   requests: RoomTrack[];
 }
 
-export async function createRoom(song: Song | null): Promise<string | null> {
-  const r = await post({ action: 'create', hostName: me().name, song });
-  const code = (r?.code as string | undefined) ?? null;
-  const hostToken = (r?.hostToken as string | undefined) ?? null;
-  if (code && hostToken) rememberHostToken(code, hostToken);
-  return code;
+export type CreateRoomResult =
+  | { code: string; reason?: undefined }
+  | { code: null; reason: 'needs_migration' | 'rate_limited' | 'not_configured' | 'failed' };
+
+/** Create with a DISTINGUISHABLE failure reason — "Could not start a session"
+ *  hid a server schema gap (missing host_token column) for weeks because
+ *  every failure collapsed to null. */
+export async function createRoom(song: Song | null): Promise<CreateRoomResult> {
+  try {
+    const res = await fetch(BASE, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create', hostName: me().name, song }),
+    });
+    const r = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    const code = (r?.code as string | undefined) ?? null;
+    const hostToken = (r?.hostToken as string | undefined) ?? null;
+    if (res.ok && code && hostToken) {
+      rememberHostToken(code, hostToken);
+      return { code };
+    }
+    const err = String(r?.error ?? '');
+    if (err === 'needs_migration') return { code: null, reason: 'needs_migration' };
+    if (err === 'not_configured') return { code: null, reason: 'not_configured' };
+    if (res.status === 429) return { code: null, reason: 'rate_limited' };
+    return { code: null, reason: 'failed' };
+  } catch {
+    return { code: null, reason: 'failed' };
+  }
 }
 
 export async function updateRoom(
@@ -112,6 +135,23 @@ export async function requestSong(code: string, song: Song): Promise<void> {
   await post({ action: 'request', code, song, by: me().name });
 }
 
+/** D11 — the emojis a room reaction may carry (must match the server list). */
+export const REACTION_EMOJI = ['❤️', '🔥', '😂', '👏', '🎉', '😍'] as const;
+
+export interface RoomReaction {
+  e: string;
+  at: string;
+}
+
+/** D11 — react to what's playing. Resolves true only when the relay actually
+ *  stored it (false until the reaction columns are migrated), so the UI can be
+ *  honest about whether anyone else will see it. */
+export async function sendReaction(code: string, emoji: string): Promise<boolean> {
+  const m = me();
+  const r = await post({ action: 'react', code, deviceId: m.deviceId, emoji, name: m.name });
+  return r?.ok === true;
+}
+
 export async function heartbeat(code: string): Promise<void> {
   const m = me();
   await post({ action: 'heartbeat', code, deviceId: m.deviceId, name: m.name });
@@ -127,11 +167,28 @@ export async function endRoom(code: string): Promise<void> {
   forgetHostToken(code);
 }
 
-export async function getRoom(code: string): Promise<{ room: RoomState | null; members: string[] } | null> {
+export interface RoomPoll {
+  room: RoomState | null;
+  /** Member NAMES — present only when this device is the authorized host
+   *  (privacy M-SRV-2: anonymous code-holders never see names). */
+  members?: string[];
+  /** Always present: how many devices are in the room. */
+  memberCount?: number;
+  reactions?: RoomReaction[];
+}
+
+export async function getRoom(code: string): Promise<RoomPoll | null> {
   try {
-    const res = await fetch(`${BASE}?code=${encodeURIComponent(code)}`, { cache: 'no-store' });
+    // If WE created this room, prove it — the server only returns member
+    // names to the host token (M-SRV-2). The July server change shipped
+    // without this client half: guests got `memberCount` while the client
+    // still read `members`, so `setMembers(undefined)` crashed the page on
+    // the first poll — for every invite-link guest, and for hosts 5s in.
+    const hostToken = getHostToken(code);
+    const auth = hostToken ? `&hostToken=${encodeURIComponent(hostToken)}` : '';
+    const res = await fetch(`${BASE}?code=${encodeURIComponent(code)}${auth}`, { cache: 'no-store' });
     if (!res.ok) return null;
-    return (await res.json()) as { room: RoomState | null; members: string[] };
+    return (await res.json()) as RoomPoll;
   } catch {
     return null;
   }

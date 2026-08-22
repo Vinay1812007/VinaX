@@ -108,7 +108,7 @@ export function SyncedLyrics({ lines, live, size = 'md', className }: Props) {
           onClick={() => live && seek(Math.max(0, line.t + offset))}
           disabled={!live}
           className={cn(
-            'block w-full text-left rounded-xl px-3 py-1.5 transition-all duration-300',
+            'block w-full text-left rounded-xl px-3 py-1.5 transition-[color,background-color,border-color,opacity,transform] duration-300',
             live && 'hover:bg-ink-800/60',
             i === activeIndex
               ? cn('vx-lyric-active font-bold scale-[1.02] origin-left', sizes.active)

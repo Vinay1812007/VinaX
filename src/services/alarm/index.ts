@@ -78,4 +78,25 @@ export function initAlarm(): void {
   });
   check();
   window.setInterval(check, 20000);
+
+  // Package D12 (audit) — the late-tap fix. The in-app poll only fires within
+  // 2 minutes of the alarm time, so tapping the wake notification at 07:09
+  // used to open the app to… silence. Now the tap itself is the trigger:
+  // whenever the alarm notification is acted on, play immediately (still at
+  // most once per day via lastFired).
+  if (isNativePlatform()) {
+    void import('@capacitor/local-notifications')
+      .then(({ LocalNotifications }) => {
+        void LocalNotifications.addListener('localNotificationActionPerformed', (e) => {
+          if (e.notification.id !== NOTIF_ID) return;
+          const a = useAlarmStore.getState();
+          if (!a.enabled || a.lastFired === today()) return;
+          useAlarmStore.getState().markFired(today());
+          fire();
+        });
+      })
+      .catch(() => {
+        /* plugin unavailable — in-app polling still covers the open-app case */
+      });
+  }
 }

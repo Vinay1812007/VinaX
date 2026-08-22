@@ -203,7 +203,7 @@ export default function QuizPage() {
               onClick={() => answer(opt)}
               disabled={revealed}
               className={cn(
-                'w-full text-left px-4 py-3 rounded-2xl glass-card transition-all',
+                'w-full text-left px-4 py-3 rounded-2xl glass-card transition-[color,background-color,border-color,opacity,transform]',
                 !revealed && 'glass-hover active:scale-[0.98]',
                 revealed && isCorrect && 'ring-2 ring-emerald-400 bg-emerald-400/15',
                 revealed && isChosen && !isCorrect && 'ring-2 ring-rose-400 bg-rose-400/15',

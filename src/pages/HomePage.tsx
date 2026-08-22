@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { HOME_BLOCK_KEYS, orderHomeBlocks } from '@/constants/homeBlocks';
+import { useServerHomeConfig } from '@/features/home/useAppConfig';
+import { PromoBanner } from '@/components/PromoBanner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { PullToRefresh } from '@/components/PullToRefresh';
@@ -10,7 +14,7 @@ import { ShelfSkeleton, CardGridSkeleton } from '@/components/Skeletons';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
 import { flattenSongPages } from '@/features/search/useInfiniteSongs';
 import { useUnlimitedFeed } from '@/features/home/useUnlimitedFeed';
-import { createShelfDeduper } from '@/features/home/dedupeShelves';
+import { createShelfDeduper, resetShelfDeduper } from '@/features/home/dedupeShelves';
 import { Chip } from '@/components/Chip';
 import { GetAppBanner } from '@/components/GetAppBanner';
 import { PushPromptCard } from '@/components/PushPromptCard';
@@ -46,8 +50,9 @@ import { useTrendingAlbums, useTrendingArtists } from '@/features/home/useTrendi
 import { moodRotationOfTheDay, useMoodShelf } from '@/features/home/useMoodShelves';
 import { GENRE_SHELVES } from '@/features/home/useGenreShelves';
 import { useSeasonalShelf } from '@/features/home/useSeasonalShelf';
+import { useExperiment } from '@/features/experiments/useExperiment';
+import { EXP_HOME_SHELF_ORDER, homeShelfOrder } from '@/features/experiments/homeShelfOrder';
 import { albumPath } from '@/utils/slug';
-import { useT } from '@/i18n';
 import { playArtist } from '@/features/player/playEntity';
 import { letterAvatar } from '@/utils/avatar';
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
@@ -55,12 +60,48 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { useRegion } from '@/features/location/useRegion';
-import { FALLBACK_ART, bestImage } from '@/utils/images';
+import { FALLBACK_ART, artSrcSet, bestImage } from '@/utils/images';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import { dayPartLabel } from '@/utils/time';
 import { getStreak } from '@/utils/streak';
+import { personalMessage } from '@/features/home/personalMessage';
+import { activeFestivalMusic } from '@/services/recommendation/festival';
+import { loadProfile } from '@/services/personalization/storage';
+import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { trendingSeed } from '@/constants/seeds';
 import type { Song } from '@/types';
+
+/**
+ * Mounts a home block only when it scrolls within ~800px of the viewport
+ * (4.18.3 TBT pass). Until then it holds a fixed-height placeholder so the
+ * page keeps scroll depth (without one, every collapsed block would sit
+ * inside the observer margin at once and everything would mount together —
+ * defeating the whole point). The swap happens ~a screen before the block
+ * is visible, so users never see the placeholder and CLS stays 0. Falls
+ * back to mounting immediately when IntersectionObserver is unavailable.
+ */
+function DeferredBlock({ render }: { render?: () => ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (on) return;
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setOn(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setOn(true);
+      },
+      { rootMargin: '800px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [on]);
+  if (on) return <>{render?.()}</>;
+  return <div ref={ref} className="h-56" aria-hidden />;
+}
 
 function SongShelf({ title, explanation, songs, seeAllTo }: { title: string; explanation?: string; songs: Song[]; seeAllTo?: string }) {
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -82,13 +123,8 @@ function SongShelf({ title, explanation, songs, seeAllTo }: { title: string; exp
   );
 }
 
-function greeting(): string {
-  const part = dayPartLabel();
-  if (part === 'morning') return 'Good morning';
-  if (part === 'afternoon') return 'Good afternoon';
-  if (part === 'evening') return 'Good evening';
-  return 'Late night waves';
-}
+// The old static greeting() lives on inside personalMessage's day-part
+// titles — every listener now gets their own line on top of it.
 
 export default function HomePage() {
   usePageTitle('Home');
@@ -111,12 +147,22 @@ export default function HomePage() {
   const newReleases = useNewReleases();
   const popular = usePopular();
   const aiHome = useAiHome();
-  const t = useT();
   const favorites = useLibraryStore((s) => s.favorites);
   const timeShelf = useTimeOfDayShelf();
   const mixes = useRecommendations();
   const primaryLang = pinned[0] ?? 'hindi';
   const trending = useTrendingForLanguage(primaryLang);
+  // More generated shelves (4.16.0): a decade rewind in the primary language
+  // and trending from the listener's SECOND pinned language. Hook order stays
+  // static — the second-language query just goes unused when there isn't one.
+  const secondLang = pinned[1] && pinned[1] !== primaryLang ? pinned[1] : null;
+  const trendingSecond = useTrendingForLanguage(secondLang ?? primaryLang);
+  const decadeRewind = useMoodShelf(`90s ${primaryLang} hits`, primaryLang, 12);
+  // Home builder (4.16.0): hidden/ordered blocks from Settings → Home layout.
+  const hiddenHome = useSettingsStore((s) => s.hiddenHome);
+  const homeOrder = useSettingsStore((s) => s.homeOrder);
+  // Admin-published server defaults (Home Screen Management).
+  const { data: serverHomeCfg } = useServerHomeConfig();
   const playQueueFeed = usePlayerStore((s) => s.playQueue);
   const feed = useUnlimitedFeed();
   const feedSongs = flattenSongPages(feed.data?.pages);
@@ -145,11 +191,63 @@ export default function HomePage() {
   const moodE = useMoodShelf(moods[4].query, primaryLang, 8);
   const moodF = useMoodShelf(moods[5].query, primaryLang, 8);
   const moodQueries = [moodA, moodB, moodC, moodD, moodE, moodF];
+  // Roadmap O.2 — first live A/B: home shelf order. Resolves to 'control'
+  // (today's exact layout) until the experiment exists AND this device's
+  // deterministic bucket lands in an allocated variant.
+  const shelfOrder = homeShelfOrder(useExperiment(EXP_HOME_SHELF_ORDER));
   // Cross-shelf de-dupe: each shelf shows only songs not already shown above it.
   const dedupe = createShelfDeduper();
   const heroSongs = daily.data?.length ? daily.data : trendingNow.data?.length ? trendingNow.data : feedSongs;
 
+  // Quick-play home-screen widget: the widget launches the app with
+  // ?widget=play (cold start) or flags sessionStorage via appUrlOpen (warm
+  // start). Either way: auto-start the Aura Mix once hero songs land, once.
+  const widgetPlayed = useRef(false);
+  useEffect(() => {
+    if (widgetPlayed.current || !heroSongs.length) return;
+    let want = false;
+    try {
+      want =
+        sessionStorage.getItem('vinax.widget-play') === '1' ||
+        new URLSearchParams(window.location.search).get('widget') === 'play';
+    } catch {
+      /* private mode */
+    }
+    if (!want) return;
+    widgetPlayed.current = true;
+    try {
+      sessionStorage.removeItem('vinax.widget-play');
+      window.history.replaceState(null, '', window.location.pathname);
+    } catch {
+      /* best effort */
+    }
+    playQueueFeed(heroSongs, 0);
+  }, [heroSongs, playQueueFeed]);
+
   const userName = getLocal<string>(KEYS.userName, '');
+  // Personalized hero message — on-device only (name, history, streak,
+  // profile, festival calendar). Memoized on the stable day-level inputs so
+  // it never flips mid-session.
+  const hello = useMemo(() => {
+    const now = new Date();
+    const profile = loadProfile();
+    const lastTs = historyEntries[0]?.ts ?? null;
+    return personalMessage({
+      name: userName,
+      hour: now.getHours(),
+      dayOfWeek: now.getDay(),
+      dateKey: now.toISOString().slice(0, 10),
+      totalPlays: historyEntries.length,
+      weekPlays: weekEntries.length,
+      weekMinutes,
+      streakDays: getStreak(),
+      daysSinceLastListen: lastTs ? (Date.now() - lastTs) / 86_400_000 : Infinity,
+      topLanguage: topLanguages(profile, 1)[0]?.id ?? null,
+      topArtist: topArtists(profile, 1)[0]?.affinity.name ?? null,
+      festivalId: activeFestivalMusic(now)?.id ?? null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- day-stable inputs
+  }, [userName, historyEntries.length]);
   const [notifOpen, setNotifOpen] = useState(false);
 
   // Pull-to-refresh: invalidate every query the shelves depend on. TanStack
@@ -157,6 +255,9 @@ export default function HomePage() {
   // waits until all in-flight fetches resolve before releasing.
   const qc = useQueryClient();
   const handleRefresh = () => {
+    // Package A5 — explicit refresh wipes the session-scoped dedup memory
+    // so the same shelves get a genuinely fresh set of picks.
+    resetShelfDeduper();
     return Promise.all([
       qc.invalidateQueries({ queryKey: ['trending'] }),
       qc.invalidateQueries({ queryKey: ['trending-now'] }),
@@ -164,11 +265,14 @@ export default function HomePage() {
       qc.invalidateQueries({ queryKey: ['new-releases-lang'] }),
       qc.invalidateQueries({ queryKey: ['popular'] }),
       qc.invalidateQueries({ queryKey: ['time-of-day'] }),
-      qc.invalidateQueries({ queryKey: ['daily-mix'] }),
+      // 'vinax-daily' / 'mixes' are the REAL keys (useDailyMix /
+      // useRecommendations) — the old 'daily-mix' / 'recommendations' here
+      // matched nothing, so those two shelves never refreshed on pull.
+      qc.invalidateQueries({ queryKey: ['vinax-daily'] }),
       qc.invalidateQueries({ queryKey: ['weekly-mix'] }),
       qc.invalidateQueries({ queryKey: ['ai-home'] }),
       qc.invalidateQueries({ queryKey: ['unlimited-feed'] }),
-      qc.invalidateQueries({ queryKey: ['recommendations'] }),
+      qc.invalidateQueries({ queryKey: ['mixes'] }),
       // New shelves — added when HomePage was expanded (Group A/B/C/D/E/F).
       qc.invalidateQueries({ queryKey: ['recently-played-albums'] }),
       qc.invalidateQueries({ queryKey: ['because-you-listened-to'] }),
@@ -183,152 +287,50 @@ export default function HomePage() {
     ]);
   };
 
-  return (
-   <PullToRefresh onRefresh={handleRefresh}>
-    <div className="max-w-screen-2xl mx-auto vx-stagger">
-      {/* Home header: brand (mobile) + quick theme & settings (all sizes) */}
-      <div className="sticky top-0 z-30 -mx-5 px-5 mb-4 pt-[max(0.375rem,var(--safe-top))] pb-2.5 flex items-center justify-between bg-[rgb(var(--ink-950)/0.7)] backdrop-blur-xl border-b border-white/5 md:static md:z-auto md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none md:border-0 md:pt-1 md:pb-0">
-        <div className="md:hidden flex items-center gap-2.5">
-          <img src="/icons/icon.svg" alt="" className="w-9 h-9 rounded-xl" />
-          <span className="text-2xl font-bold tracking-tight">
-            <span className="bg-gradient-to-r from-ember-400 to-tide-400 bg-clip-text text-transparent">VinaX</span><span className="text-ember-500">.</span>
-          </span>
-        </div>
-        <div className="hidden md:flex items-center gap-6 min-w-0">
-          <div className="min-w-0">
-            <p className="text-xl font-bold tracking-tight truncate">
-              Welcome back
-              {userName ? `, ${userName}` : ''}
-            </p>
-            <p className="text-[11px] text-ink-400">Tuned to you · private by design</p>
-          </div>
-          <Link
-            to="/search"
-            className="glass-search rounded-full px-4 py-2.5 w-72 flex items-center gap-2 text-sm text-ink-400 hover:text-ink-200 transition-colors"
-          >
-            <SearchIcon className="w-4 h-4" /> Songs, artists, albums…
-          </Link>
-        </div>
-        <div className="flex items-center gap-1">
-          <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-            <span className="relative block w-5 h-5 overflow-visible" aria-hidden>
-              <SunIcon className="theme-ico theme-ico-sun absolute inset-0 w-5 h-5" />
-              <MoonIcon className="theme-ico theme-ico-moon absolute inset-0 w-5 h-5" />
-            </span>
-          </IconButton>
-          <IconButton label="Notifications" onClick={() => setNotifOpen(true)}>
-            <span className="text-[17px] leading-none" aria-hidden>🔔</span>
-          </IconButton>
-          <IconButton label="Settings" onClick={() => navigate('/settings')}>
-            <SettingsIcon className="w-5 h-5" />
-          </IconButton>
-        </div>
-      </div>
-      <PushPromptCard />
-      <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
-      <GetAppBanner />
+  // Fusion layer data (4.12.0): quick-grid tiles from feeds the page already
+  // holds, and the language rail from pinned + hub languages (pinned first).
+  const railLangs = [
+    ...pinned,
+    ...(HUB_LANGUAGES as readonly string[]).filter((l) => !pinned.includes(l)),
+  ].slice(0, 12);
+  const quickTiles = [
+    continueListening.length && {
+      label: 'Continue Listening',
+      image: bestImage(continueListening[0].images, 120),
+      go: () => playQueueFeed(continueListening, 0),
+    },
+    favorites.length && {
+      label: 'Liked Songs',
+      image: bestImage(favorites[0].images, 120),
+      go: () => navigate('/favorites'),
+    },
+    onRepeat.length && {
+      label: 'On Repeat',
+      image: bestImage(onRepeat[0].images, 120),
+      go: () => playQueueFeed(onRepeat, 0),
+    },
+    (daily.data?.length ?? 0) > 0 && {
+      label: 'VinaX Daily',
+      image: bestImage(daily.data![0].images, 120),
+      go: () => playQueueFeed(daily.data!, 0),
+    },
+    (weekly.data?.length ?? 0) > 0 && {
+      label: 'For You This Week',
+      image: bestImage(weekly.data![0].images, 120),
+      go: () => navigate('/weekly'),
+    },
+    mostListened.length && {
+      label: 'Most Listened',
+      image: bestImage(mostListened[0].images, 120),
+      go: () => navigate('/history'),
+    },
+  ].filter((t): t is { label: string; image: string; go: () => void } => !!t).slice(0, 6);
 
-      {continueListening.length >= 2 && (
-        <section aria-label="Jump back in" className="mb-5">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-            {continueListening.slice(0, 6).map((song, i) => (
-              <button
-                key={song.id}
-                onClick={() => usePlayerStore.getState().playQueue(continueListening, i)}
-                className="flex items-center gap-2.5 rounded-xl glass-card overflow-hidden pr-3 text-left hover:bg-ink-800/40 transition-colors"
-              >
-                <img
-                  src={bestImage(song.images, 150)}
-                  onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                  alt=""
-                  loading="lazy"
-                  className="w-12 h-12 object-cover shrink-0"
-                />
-                <span className="text-xs font-semibold truncate">{song.title}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-      <DownloadCta />
-
-      {/* Hero — full-bleed colour wash that fades into the page */}
-      <div className={`-mx-5 md:-mx-10 -mt-6 lg:mt-0 mb-6 px-5 md:px-10 pt-6 pb-4 bg-gradient-to-b ${
-        ({
-          morning: 'from-transparent to-transparent',
-          afternoon: 'from-transparent to-transparent',
-          evening: 'from-transparent to-transparent',
-          'late-night': 'from-transparent to-transparent',
-        } as Record<string, string>)[dayPartLabel()] ?? 'from-transparent to-transparent'
-      }`}>
-        <h1 className="text-3xl md:text-[34px] font-extrabold tracking-tight">{t(greeting())}</h1>
-        <p className="text-ink-300 mt-1 text-sm">
-          {region?.country ? `Tuned for ${region.country}` : 'Tuned to you'} · no account, all local
-          {weekEntries.length > 0 && (
-            <span className="text-ink-400"> · this week: {weekEntries.length} plays ≈ {weekMinutes} min</span>
-          )}
-          {getStreak() > 1 && <span className="text-ember-400 font-semibold"> · 🔥 {getStreak()}-day streak</span>}
-        </p>
-        <div className="flex gap-2 mt-4 flex-wrap">
-          <button
-            onClick={() => {
-              const pool = [...(trending.data ?? []), ...feedSongs, ...continueListening];
-              if (!pool.length) {
-                toast('Still loading — try again in a second');
-                return;
-              }
-              const i = Math.floor(Math.random() * pool.length);
-              playQueueFeed(pool, i);
-              toast(`Surprise: ${pool[i].title}`);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full btn-premium text-sm font-bold"
-          >
-            <SparkleIcon className="w-4 h-4" /> Surprise me
-          </button>
-          <Chip onClick={() => navigate('/charts')}>Charts</Chip>
-          <Chip onClick={() => navigate('/moods')}>Moods</Chip>
-          <Chip onClick={() => navigate('/regions')}>Regions</Chip>
-          <Chip onClick={() => navigate('/made-for-you')}>Made For You</Chip>
-        </div>
-      </div>
-
-      {/* Aura Mix hero — the AI DJ entry point */}
-      <section className="relative overflow-hidden rounded-3xl mb-6 border border-white/5 bg-ink-850">
-        <div
-          className="vx-hero-wash absolute inset-0 pointer-events-none opacity-70"
-          style={{
-            background:
-              'radial-gradient(120% 130% at 0% 0%, rgb(var(--aura-violet) / 0.32), transparent 55%), radial-gradient(110% 120% at 100% 10%, rgb(var(--aura-cyan) / 0.26), transparent 55%), radial-gradient(120% 130% at 55% 130%, rgb(var(--aura-lime) / 0.22), transparent 60%)',
-          }}
-          aria-hidden
-        />
-        <div className="relative p-6 md:p-8">
-          <p className="aura-eyebrow text-xs font-bold uppercase tracking-widest text-ember-300 flex items-center gap-1.5">
-            <SparkleIcon className="w-3.5 h-3.5" /> AI DJ · ready
-          </p>
-          <h2 className="text-3xl md:text-4xl font-extrabold mt-2">Your Aura Mix</h2>
-          <p className="text-sm text-ink-200/90 mt-2 max-w-md leading-relaxed">
-            A fresh mix tuned to your taste, mood and languages. Press play and the AI DJ builds the rest.
-          </p>
-          <div className="mt-5 flex items-center gap-2.5">
-            <button
-              onClick={() => heroSongs.length && playQueueFeed(heroSongs, 0)}
-              disabled={!heroSongs.length}
-              aria-label="Play your Aura Mix"
-              className="inline-flex items-center gap-2 px-7 py-3 rounded-full btn-primary shadow-glow transition hover:bg-ember-400 active:scale-95 disabled:opacity-50"
-            >
-              <PlayIcon className="w-4 h-4 ml-0.5" /> Play
-            </button>
-            <button
-              onClick={() => navigate('/made-for-you')}
-              className="px-5 py-3 rounded-full btn-secondary text-sm"
-            >
-              Made for you
-            </button>
-          </div>
-        </div>
-      </section>
-
+  // The two reorderable home bands (roadmap O.2). Closures rather than
+  // pre-built elements so the cross-shelf dedupe runs in DISPLAY order
+  // whichever band renders first.
+  const personalBand = () => (
+    <>
       {/* 1. Continue Listening — pick up where you left off */}
       <SongShelf title="Continue Listening" explanation="Pick up where you left off" songs={dedupe(continueListening)} seeAllTo="/history" />
 
@@ -402,7 +404,11 @@ export default function HomePage() {
           ))}
         </Shelf>
       )}
+    </>
+  );
 
+  const discoveryBand = () => (
+    <>
       {/* 11. Trending Near You */}
       {nearYou.isLoading ? (
         <ShelfSkeleton />
@@ -465,6 +471,67 @@ export default function HomePage() {
         <SongShelf title="Hidden Gems" explanation="Deep cuts worth discovering" songs={dedupe(hiddenGems.data)} />
       ) : null}
 
+      {/* 16b. Decade Rewind (4.16.0) — generated: 90s classics, primary language */}
+      {decadeRewind.data && decadeRewind.data.length > 0 && (
+        <SongShelf
+          title="Decade Rewind · 90s"
+          explanation={`Golden-era ${languageLabel(primaryLang)} classics`}
+          songs={dedupe(decadeRewind.data)}
+        />
+      )}
+
+      {/* 16c. Second-language trending (4.16.0) — your other side */}
+      {secondLang && trendingSecond.data && trendingSecond.data.length > 0 && (
+        <SongShelf
+          title={`Trending · ${languageLabel(secondLang)}`}
+          explanation="From your second language"
+          songs={dedupe(trendingSecond.data)}
+          seeAllTo={
+            (HUB_LANGUAGES as readonly string[]).includes(secondLang)
+              ? `/${secondLang}-songs`
+              : `/search/${encodeURIComponent(trendingSeed(secondLang))}`
+          }
+        />
+      )}
+    </>
+  );
+
+  // ---- Home builder (4.16.0): every big block below is orderable/hideable
+  // from Settings -> Home layout. Thunks (not pre-built elements) so the
+  // cross-shelf dedupe still runs in DISPLAY order. The hero, language rail
+  // and quick-jump strip above stay fixed - they are the app's identity.
+  const homeBlocks: Record<string, () => ReactNode> = {
+    quick: () => (
+      <>
+      {quickTiles.length >= 2 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-7">
+          {quickTiles.map((t) => (
+            <button
+              key={t.label}
+              onClick={t.go}
+              className="group flex items-center gap-3 rounded-xl glass-card overflow-hidden pr-3 text-left hover:bg-ink-800/40 transition"
+            >
+              <img
+                src={t.image}
+                onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+                alt=""
+                loading="lazy"
+                className="w-12 h-12 md:w-14 md:h-14 object-cover shrink-0"
+              />
+              <span className="text-[13px] font-bold truncate flex-1">{t.label}</span>
+              <span className="w-8 h-8 rounded-full btn-primary hidden md:grid place-items-center text-[11px] opacity-0 group-hover:opacity-100 transition shrink-0">
+                ▶
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      </>
+    ),
+    personal: () => personalBand(),
+    discovery: () => discoveryBand(),
+    charts: () => (
+      <>
       {/* 17. Top 50 Global / Top 50 Country / Viral 50 — nav cards to /charts */}
       <section aria-label="Charts" className="mb-8">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -496,12 +563,18 @@ export default function HomePage() {
           </Link>
         </div>
       </section>
-
+      </>
+    ),
+    seasonal: () => (
+      <>
       {/* 18. Seasonal shelf — only when a season/event matches "now" */}
       {seasonal.season && seasonal.data && seasonal.data.length > 0 && (
         <SongShelf title={seasonal.season.title} explanation="For the moment" songs={dedupe(seasonal.data)} />
       )}
-
+      </>
+    ),
+    moods: () => (
+      <>
       {/* 19. Mood Playlists — a grid of 6 mood shelves, 8 songs each */}
       {moodQueries.some((q) => q.data && q.data.length > 0) && (
         <section className="mb-8">
@@ -533,10 +606,22 @@ export default function HomePage() {
                           className="flex items-center gap-2 w-full text-left rounded-md hover:bg-ink-800/40 p-1"
                         >
                           <img
+                            /* 4.18.1: 36px cell — srcset lets 1x screens take
+                               the 50px file, 2x+ keeps 150 (PSI desktop
+                               image-delivery finding). */
                             src={bestImage(song.images, 150)}
-                            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+                            srcSet={artSrcSet(song.images, 150)}
+                            sizes="36px"
+                            width={36}
+                            height={36}
+                            onError={(e) => {
+                              const t = e.target as HTMLImageElement;
+                              t.srcset = '';
+                              t.src = FALLBACK_ART;
+                            }}
                             alt=""
                             loading="lazy"
+                            decoding="async"
                             className="w-9 h-9 rounded object-cover shrink-0"
                           />
                           <span className="min-w-0 flex-1">
@@ -553,7 +638,10 @@ export default function HomePage() {
           </div>
         </section>
       )}
-
+      </>
+    ),
+    genres: () => (
+      <>
       {/* 20. Genre Collections — compact horizontal row of chip-cards */}
       <section className="mb-8">
         <h2 className="text-xl md:text-2xl font-extrabold tracking-tight mb-3">Genre Collections</h2>
@@ -569,7 +657,10 @@ export default function HomePage() {
           ))}
         </div>
       </section>
-
+      </>
+    ),
+    artists: () => (
+      <>
       {/* 21. Trending Artists (round MediaCards) */}
       {trendingArtists.data && trendingArtists.data.length >= 3 && (
         <Shelf title="Trending Artists" explanation="Names topping the charts">
@@ -586,7 +677,10 @@ export default function HomePage() {
           ))}
         </Shelf>
       )}
-
+      </>
+    ),
+    albums: () => (
+      <>
       {/* 22. Trending Albums */}
       {trendingAlbums.data && trendingAlbums.data.length > 0 && (
         <Shelf title="Trending Albums" explanation="The albums everyone's spinning">
@@ -602,17 +696,26 @@ export default function HomePage() {
           ))}
         </Shelf>
       )}
-
+      </>
+    ),
+    daypicks: () => (
+      <>
       {/* Time-of-day picks */}
       {timeShelf.isLoading ? (
         <ShelfSkeleton />
       ) : (
         <SongShelf title={timeShelf.title} explanation={`Based on your ${dayPartLabel()} sessions`} songs={dedupe(timeShelf.data ?? [])} />
       )}
-
+      </>
+    ),
+    loved: () => (
+      <>
       {/* 23. Recently Loved */}
       <SongShelf title="Recently Loved" explanation="Your latest favorites" songs={dedupe(favorites.slice(0, 12))} seeAllTo="/favorites" />
-
+      </>
+    ),
+    feed: () => (
+      <>
       {/* Endless feed: keep scrolling to load more songs forever. */}
       <section className="mt-2">
         <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">More For You</h2>
@@ -644,6 +747,218 @@ export default function HomePage() {
           <p className="text-sm text-ink-400 py-4">Feed unavailable right now — try again shortly.</p>
         )}
       </section>
+      </>
+    ),
+  };
+  // Default order honors the home-shelf-order experiment (personal <-> discovery).
+  const experimentOrder =
+    shelfOrder === 'discovery-first'
+      ? HOME_BLOCK_KEYS.map((k) => (k === 'personal' ? 'discovery' : k === 'discovery' ? 'personal' : k))
+      : HOME_BLOCK_KEYS;
+  // Admin-published defaults (Home Screen Management): the server order is
+  // the default when the listener hasn't customized theirs; server-disabled
+  // blocks are hidden for everyone (union with the listener's own hidden).
+  const serverBlocks = serverHomeCfg?.blocks;
+  const serverOrder = serverBlocks?.length ? orderHomeBlocks(serverBlocks.map((b) => b.id), experimentOrder) : experimentOrder;
+  const serverHidden = serverBlocks?.filter((b) => b.enabled === false).map((b) => b.id) ?? [];
+  const visibleHome = orderHomeBlocks(homeOrder, serverOrder).filter(
+    (k) => !hiddenHome.includes(k) && !serverHidden.includes(k),
+  );
+  // Progressive mount v2 (4.18.3, PSI TBT pass): v1 (4.17.0) mounted the
+  // first two blocks immediately and ALL remaining ~10 blocks in one idle
+  // callback — a single giant long task (hundreds of DOM nodes + effects)
+  // that dominated mobile TBT. Blocks beyond the first two now mount
+  // per-block via DeferredBlock as they scroll within ~800px of the
+  // viewport, so an unscrolled load mounts almost nothing extra and a
+  // scrolling user pays one small task per block instead of one huge one.
+  // The queries all run from mount either way (hooks live above), so data
+  // is usually ready the moment a block appears.
+
+  return (
+   <PullToRefresh onRefresh={handleRefresh}>
+    <div className="max-w-screen-2xl mx-auto vx-stagger">
+      {/* Home header: brand (mobile) + quick theme & settings (all sizes) */}
+      <div className="sticky top-0 z-30 -mx-5 px-5 mb-4 pt-[max(0.375rem,var(--safe-top))] pb-2.5 flex items-center justify-between bg-[rgb(var(--ink-950)/0.7)] backdrop-blur-xl border-b border-glass md:static md:z-auto md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none md:border-0 md:pt-1 md:pb-0">
+        <div className="md:hidden vx-brand flex items-center gap-2.5">
+          <img src="/icons/icon.svg" alt="" className="w-9 h-9 rounded-xl" />
+          <span className="text-2xl font-bold tracking-tight">
+            <span className="bg-gradient-to-r from-ember-400 to-tide-400 bg-clip-text text-transparent">VinaX</span><span className="text-ember-500">.</span>
+          </span>
+        </div>
+        <div className="hidden md:flex items-center gap-6 min-w-0">
+          <div className="min-w-0">
+            <p className="text-xl font-bold tracking-tight truncate">
+              Welcome back
+              {userName ? `, ${userName}` : ''}
+            </p>
+            <p className="text-[11px] text-ink-400">Tuned to you · private by design</p>
+          </div>
+          <Link
+            to="/search"
+            className="glass-search rounded-full px-4 py-2.5 w-72 flex items-center gap-2 text-sm text-ink-400 hover:text-ink-200 transition-colors"
+          >
+            <SearchIcon className="w-4 h-4" /> Songs, artists, albums…
+          </Link>
+        </div>
+        <div className="flex items-center gap-1">
+          <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+            <span className="relative block w-5 h-5 overflow-visible" aria-hidden>
+              <SunIcon className="theme-ico theme-ico-sun absolute inset-0 w-5 h-5" />
+              <MoonIcon className="theme-ico theme-ico-moon absolute inset-0 w-5 h-5" />
+            </span>
+          </IconButton>
+          <IconButton label="Notifications" onClick={() => setNotifOpen(true)}>
+            <span className="text-[17px] leading-none" aria-hidden>🔔</span>
+          </IconButton>
+          <IconButton label="Settings" onClick={() => navigate('/settings')}>
+            <SettingsIcon className="w-5 h-5" />
+          </IconButton>
+        </div>
+      </div>
+      <PushPromptCard />
+      <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
+      <GetAppBanner />
+
+      {continueListening.length >= 2 && (
+        <section aria-label="Jump back in" className="mb-5">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+            {continueListening.slice(0, 6).map((song, i) => (
+              <button
+                key={song.id}
+                onClick={() => usePlayerStore.getState().playQueue(continueListening, i)}
+                className="flex items-center gap-2.5 rounded-xl glass-card overflow-hidden pr-3 text-left hover:bg-ink-800/40 transition-colors"
+              >
+                <img
+                  /* 4.18.1: 48px cell — same srcset negotiation as the row
+                     lists (50px file on 1x screens, 150 on 2x+). */
+                  src={bestImage(song.images, 150)}
+                  srcSet={artSrcSet(song.images, 150)}
+                  sizes="48px"
+                  width={48}
+                  height={48}
+                  onError={(e) => {
+                    const t = e.target as HTMLImageElement;
+                    t.srcset = '';
+                    t.src = FALLBACK_ART;
+                  }}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="w-12 h-12 object-cover shrink-0"
+                />
+                <span className="text-xs font-semibold truncate">{song.title}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      <DownloadCta />
+
+      {/* Hero — full-bleed colour wash that fades into the page */}
+      <div className={`-mx-5 md:-mx-10 -mt-6 lg:mt-0 mb-6 px-5 md:px-10 pt-6 pb-4 bg-gradient-to-b ${
+        ({
+          morning: 'from-transparent to-transparent',
+          afternoon: 'from-transparent to-transparent',
+          evening: 'from-transparent to-transparent',
+          'late-night': 'from-transparent to-transparent',
+        } as Record<string, string>)[dayPartLabel()] ?? 'from-transparent to-transparent'
+      }`}>
+        <p className="text-[11px] font-extrabold tracking-[0.22em] text-ember-400 uppercase mb-1.5">
+          {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} · made for you
+        </p>
+        <h1 className="text-3xl md:text-[38px] font-extrabold tracking-tight">{hello.title}</h1>
+        <p className="text-ink-200 mt-1.5 text-sm font-medium">{hello.subtitle}</p>
+        <p className="text-ink-300 mt-1 text-sm">
+          {region?.country ? `Tuned for ${region.country}` : 'Tuned to you'} · no account, all local
+          {weekEntries.length > 0 && (
+            <span className="text-ink-400"> · this week: {weekEntries.length} plays ≈ {weekMinutes} min</span>
+          )}
+          {getStreak() > 1 && <span className="text-ember-400 font-semibold"> · 🔥 {getStreak()}-day streak</span>}
+        </p>
+        <div className="flex gap-2 mt-4 flex-wrap">
+          <button
+            onClick={() => {
+              const pool = [...(trending.data ?? []), ...feedSongs, ...continueListening];
+              if (!pool.length) {
+                toast('Still loading — try again in a second');
+                return;
+              }
+              const i = Math.floor(Math.random() * pool.length);
+              playQueueFeed(pool, i);
+              toast(`Surprise: ${pool[i].title}`);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full btn-premium text-sm font-bold"
+          >
+            <SparkleIcon className="w-4 h-4" /> Surprise me
+          </button>
+          <Chip onClick={() => navigate('/charts')}>Charts</Chip>
+          <Chip onClick={() => navigate('/moods')}>Moods</Chip>
+          <Chip onClick={() => navigate('/regions')}>Regions</Chip>
+          <Chip onClick={() => navigate('/made-for-you')}>Made For You</Chip>
+        </div>
+      </div>
+
+      {/* Aura Mix hero — the AI DJ entry point */}
+      <section className="relative overflow-hidden rounded-3xl mb-6 border border-glass bg-ink-850">
+        <div
+          className="vx-hero-wash absolute inset-0 pointer-events-none opacity-70"
+          style={{
+            background:
+              'radial-gradient(120% 130% at 0% 0%, rgb(var(--aura-violet) / 0.32), transparent 55%), radial-gradient(110% 120% at 100% 10%, rgb(var(--aura-cyan) / 0.26), transparent 55%), radial-gradient(120% 130% at 55% 130%, rgb(var(--aura-lime) / 0.22), transparent 60%)',
+          }}
+          aria-hidden
+        />
+        <div className="relative p-6 md:p-8">
+          <p className="aura-eyebrow text-xs font-bold uppercase tracking-widest text-ember-300 flex items-center gap-1.5">
+            <SparkleIcon className="w-3.5 h-3.5" /> AI DJ · ready
+          </p>
+          <h2 className="text-3xl md:text-4xl font-extrabold mt-2">Your Aura Mix</h2>
+          <p className="text-sm text-ink-200/90 mt-2 max-w-md leading-relaxed">
+            A fresh mix tuned to your taste, mood and languages. Press play and the AI DJ builds the rest.
+          </p>
+          <div className="mt-5 flex items-center gap-2.5">
+            <button
+              onClick={() => heroSongs.length && playQueueFeed(heroSongs, 0)}
+              disabled={!heroSongs.length}
+              aria-label="Play your Aura Mix"
+              className="inline-flex items-center gap-2 px-7 py-3 rounded-full btn-primary shadow-glow transition hover:bg-ember-400 active:scale-95 disabled:opacity-50"
+            >
+              <PlayIcon className="w-4 h-4 ml-0.5" /> Play
+            </button>
+            <button
+              onClick={() => navigate('/made-for-you')}
+              className="px-5 py-3 rounded-full btn-secondary text-sm"
+            >
+              Made for you
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Fusion layer (4.12.0) — Saavn-style language rail + Spotify-style
+          quick grid over the existing shelves. Pure recomposition of data the
+          page already loads; tiles hide until their source has content. */}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-2 px-2 mb-4 snap-x" aria-label="Languages">
+        <Link to="/languages" className="snap-start shrink-0 px-4 py-2 rounded-full text-xs font-extrabold btn-primary">For You</Link>
+        {railLangs.map((l) => (
+          <Link
+            key={l}
+            to={`/${l}-songs`}
+            className="snap-start shrink-0 px-4 py-2 rounded-full text-xs font-bold glass-card hover:bg-ink-800/40 whitespace-nowrap"
+          >
+            {languageLabel(l)}
+          </Link>
+        ))}
+      </div>
+
+      {/* Owner-published promo banner (admin → Banner & Promotion). */}
+      <PromoBanner className="mb-8" />
+
+      {visibleHome.map((k, i) => (
+        <Fragment key={k}>
+          {i < 2 ? homeBlocks[k]?.() : <DeferredBlock render={homeBlocks[k]} />}
+        </Fragment>
+      ))}
     </div>
    </PullToRefresh>
   );

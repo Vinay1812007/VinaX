@@ -157,12 +157,12 @@ const splitRow = (r: string): string[] =>
 
 function TableBlock({ head, rows }: { head: string[]; rows: string[][] }): ReactNode {
   return (
-    <div className="my-2 overflow-x-auto rounded-xl border border-white/10">
+    <div className="my-2 overflow-x-auto rounded-xl border border-glass-strong">
       <table className="w-full text-xs">
         <thead>
           <tr>
             {head.map((h, k) => (
-              <th key={k} className="text-left px-3 py-2 bg-ink-800/70 border-b border-white/10 font-semibold whitespace-nowrap">
+              <th key={k} className="text-left px-3 py-2 bg-ink-800/70 border-b border-glass-strong font-semibold whitespace-nowrap">
                 {inline(h)}
               </th>
             ))}
@@ -172,7 +172,7 @@ function TableBlock({ head, rows }: { head: string[]; rows: string[][] }): React
           {rows.map((r, ri) => (
             <tr key={ri} className="odd:bg-ink-900/40">
               {r.map((c, ci) => (
-                <td key={ci} className="px-3 py-1.5 border-b border-white/5 align-top">
+                <td key={ci} className="px-3 py-1.5 border-b border-glass align-top">
                   {inline(c)}
                 </td>
               ))}
@@ -198,7 +198,7 @@ function Prose({ text }: { text: string }): ReactNode {
       continue;
     }
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) {
-      blocks.push(<hr key={blocks.length} className="my-3 border-white/10" />);
+      blocks.push(<hr key={blocks.length} className="my-3 border-glass-strong" />);
       i += 1;
       continue;
     }
@@ -407,7 +407,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }): ReactNode {
   // Very large blocks skip tinting so the chat never jank-scrolls.
   const tinted = useMemo(() => (code.length > 20_000 ? code : highlightCode(code, lang)), [code, lang]);
   return (
-    <div className="my-2 rounded-xl overflow-hidden border border-white/10 bg-ink-900">
+    <div className="my-2 rounded-xl overflow-hidden border border-glass-strong bg-ink-900">
       <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
         <span className="uppercase tracking-wide">{lang || 'text'}</span>
         <div className="flex items-center gap-3">
@@ -446,7 +446,7 @@ function MermaidBlock({ code }: { code: string }): ReactNode {
   if (err) return <CodeBlock lang="mermaid" code={code} />;
   if (!svg) return <div className="my-2 text-xs text-ink-400 py-3 px-1">Rendering diagram…</div>;
   return (
-    <div className="my-2 rounded-xl border border-white/10 bg-ink-900 overflow-hidden">
+    <div className="my-2 rounded-xl border border-glass-strong bg-ink-900 overflow-hidden">
       <div className="flex justify-end px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
         <CopyBtn text={code} label="Copy source" />
       </div>
@@ -462,7 +462,7 @@ function HtmlPreview({ lang, code }: { lang: string; code: string }): ReactNode 
       ? `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#fff">${code}</body>`
       : code;
   return (
-    <div className="my-2 rounded-xl overflow-hidden border border-white/10 bg-ink-900">
+    <div className="my-2 rounded-xl overflow-hidden border border-glass-strong bg-ink-900">
       <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
         <div className="flex gap-3">
           <button onClick={() => setTab('preview')} className={cn('transition', tab === 'preview' ? 'text-ink-100 font-semibold' : 'hover:text-ink-100')}>
@@ -498,7 +498,7 @@ function CsvBlock({ code }: { code: string }): ReactNode {
   const head = rows[0] ?? [];
   const body = rows.slice(1);
   return (
-    <div className="my-2 rounded-xl overflow-hidden border border-white/10">
+    <div className="my-2 rounded-xl overflow-hidden border border-glass-strong">
       <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
         <span>CSV · {body.length} rows</span>
         <button onClick={() => download('data.csv', code, 'text/csv')} className="hover:text-ink-100 transition">
@@ -510,7 +510,7 @@ function CsvBlock({ code }: { code: string }): ReactNode {
           <thead>
             <tr>
               {head.map((h, k) => (
-                <th key={k} className="text-left px-3 py-2 bg-ink-900 border-b border-white/10 font-semibold whitespace-nowrap">
+                <th key={k} className="text-left px-3 py-2 bg-ink-900 border-b border-glass-strong font-semibold whitespace-nowrap">
                   {h}
                 </th>
               ))}
@@ -520,7 +520,7 @@ function CsvBlock({ code }: { code: string }): ReactNode {
             {body.map((r, ri) => (
               <tr key={ri} className="odd:bg-ink-900/40">
                 {r.map((c, ci) => (
-                  <td key={ci} className="px-3 py-1.5 border-b border-white/5">
+                  <td key={ci} className="px-3 py-1.5 border-b border-glass">
                     {c}
                   </td>
                 ))}
@@ -536,7 +536,7 @@ function CsvBlock({ code }: { code: string }): ReactNode {
 function CodeRouter({ lang, code, closed }: { lang: string; code: string; closed: boolean }): ReactNode {
   if (!closed)
     return (
-      <pre className="my-2 p-3 rounded-xl bg-ink-900 border border-white/10 overflow-x-auto text-xs leading-relaxed font-mono">
+      <pre className="my-2 p-3 rounded-xl bg-ink-900 border border-glass-strong overflow-x-auto text-xs leading-relaxed font-mono">
         <code>{code}</code>
       </pre>
     );

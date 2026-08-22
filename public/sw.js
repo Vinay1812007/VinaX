@@ -6,7 +6,7 @@
  *   - everything else (music APIs, CDN artwork, audio streams): passthrough
  * Stream URLs and API responses are NEVER cached.
  */
-const CACHE = 'vinax-shell-v8';
+const CACHE = 'vinax-shell-v11';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg', '/fonts/manrope-var.woff2'];
 
 self.addEventListener('install', (event) => {
@@ -44,10 +44,25 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // APIs / CDN / media: leave alone
 
   // App navigations: always try the network so users get fresh HTML; only
-  // serve the cached shell when the network is unavailable.
+  // serve the cached shell when the network fails — or HANGS. The 2026-08-17
+  // stuck-shell incident: a stalled navigation fetch throws nothing, so the
+  // old handler waited forever and the tab spun on the static shell. The
+  // network now gets 6 seconds; past that the request aborts and the cached
+  // shell answers immediately (its hashed assets are cache-first below, so
+  // the app still boots; the 4.18.4 in-page watchdog covers anything left).
   if (req.mode === 'navigate') {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
     event.respondWith(
-      fetch(req).catch(() => caches.match('/').then((r) => r || Response.error())),
+      fetch(req, { signal: ctrl.signal })
+        .then((res) => {
+          clearTimeout(timer);
+          return res;
+        })
+        .catch(() => {
+          clearTimeout(timer);
+          return caches.match('/').then((r) => r || Response.error());
+        }),
     );
     return;
   }
@@ -66,7 +81,11 @@ self.addEventListener('fetch', (event) => {
               if (ct.indexOf('text/html') === -1) return cached;
               c.delete(req);
             }
-            return fetch(req).then((res) => {
+            // `no-cache` forces revalidation with the origin, so a poisoned
+            // browser HTTP-cache entry (SPA HTML stored under an /assets/*
+            // URL with `immutable` during the 2026-08-20 stuck-shell outage)
+            // can never be replayed into the module graph from here.
+            return fetch(req, { cache: 'no-cache' }).then((res) => {
               const rct = (res.headers.get('content-type') || '').toLowerCase();
               if (res.ok && rct.indexOf('text/html') === -1) {
                 const copy = res.clone();

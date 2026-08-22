@@ -11,6 +11,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { NAV_GROUPS } from '@/constants/nav';
 import { cn } from '@/utils/cn';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface Entry {
   id: string;
@@ -47,6 +48,8 @@ function fuzzyScore(query: string, text: string): number {
  * Enter plays). Lazy-loaded — costs nothing until first opened.
  */
 export default function CommandPalette({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true, onClose);
   const [query, setQuery] = useState('');
   const [sel, setSel] = useState(0);
   const [songs, setSongs] = useState<Song[]>([]);
@@ -167,6 +170,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"

@@ -9,6 +9,7 @@ import {
   type TasteProfile,
 } from './profile';
 import { withProfile as withProfileCoalesced } from './storage';
+import { recordSessionPlay } from './session';
 
 function logEvent(type: string, song: Song, playedSec?: number): void {
   void addEvent({
@@ -51,6 +52,9 @@ export function recordPlay(song: Song): void {
     bumpHourBucket(p, song.language, new Date().getHours());
     rememberRecent(p, song.id);
   });
+  // Package A1 — feed the rolling session window so the current-mood arc
+  // influences the next batch of recommendations. Session-only, never persisted.
+  recordSessionPlay(song);
   logEvent('play', song);
 }
 
@@ -86,3 +90,27 @@ export function recordQueueAdd(song: Song): void {
   });
   logEvent('queue_add', song);
 }
+
+/** Package A3 — the listener explicitly asked for less of an artist.
+ *  Records a strong negative signal (5× skip weight) AND soft-mutes the
+ *  primary artist for 14 days so nothing by them shows up on Home shelves.
+ *  Undoable via unmuteArtist below. */
+export function softMuteArtist(song: Song, days = 14): void {
+  const primary = song.artists[0];
+  if (!primary) return;
+  const key = primary.id || primary.name.toLowerCase();
+  const until = Date.now() + days * 86_400_000;
+  withProfile((p) => {
+    // Strong negative signal beyond a normal skip.
+    bumpAll(p, song, -3.75, 'skip');
+    p.totals.skips += 1;
+    if (!p.softMuted) p.softMuted = {};
+    p.softMuted[key] = { until };
+  });
+  logEvent('soft_mute', song);
+}
+
+// Undo path deliberately not exported yet — the 14-day natural expiry in
+// applyDecay handles the common case, and the audit didn't ask for a
+// manual unmute UI. When the "Muted artists" list ships in Settings it'll
+// wire straight to the softMuted field on the profile.

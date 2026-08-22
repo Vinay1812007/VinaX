@@ -1,0 +1,68 @@
+# Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
+name: Synthetic uptime
+
+# Audit §6 — synthetic monitors. Every 30 minutes, probe the production site
+# and its key edge functions from a real network vantage point. Three-attempt
+# retry absorbs edge blips (same pattern as the cron pushes); a genuine outage
+# opens ONE issue (deduped by title search) instead of a pile.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe site + edge functions
+        run: |
+          set -eu
+          probe() {
+            # $1 = label, $2 = url, $3 = expected HTTP code(s) regex
+            attempt=1
+            while :; do
+              code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 20 "$2" || echo 000)
+              if echo "$code" | grep -qE "$3"; then
+                echo "OK  $1 ($code)"
+                return 0
+              fi
+              if [ "$attempt" -ge 3 ]; then
+                echo "::error::$1 failed: HTTP $code (expected $3) after $attempt attempts"
+                return 1
+              fi
+              echo "$1 attempt $attempt got $code; retrying in 30s"
+              attempt=$((attempt + 1))
+              sleep 30
+            done
+          }
+          fail=0
+          # The app shell — must serve HTML that names the product.
+          probe "app shell" "https://www.sirimillavinay.online/" "^200$" || fail=1
+          grep -qi "vinax" /tmp/body || { echo "::error::app shell body does not mention VinaX"; fail=1; }
+          # Edge functions — alive means a deliberate JSON answer, not the SPA shell.
+          probe "geo function" "https://www.sirimillavinay.online/api/geo" "^200$" || fail=1
+          # handoff GET with a malformed code must answer 400 (function alive,
+          # validating) or 503 (alive, KV unbound) — 200 would mean the SPA
+          # shell swallowed the route, i.e. functions are DOWN.
+          probe "handoff function" "https://www.sirimillavinay.online/api/handoff?c=bad" "^(400|503)$" || fail=1
+          exit $fail
+
+      - name: Open failure issue (deduped)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          existing=$(gh issue list --state open --search "Synthetic uptime probe failed in:title" --json number --jq 'length')
+          if [ "$existing" -gt 0 ]; then
+            echo "An open uptime issue already exists — not filing another."
+            exit 0
+          fi
+          gh issue create \
+            --title "Synthetic uptime probe failed" \
+            --body "A production probe failed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

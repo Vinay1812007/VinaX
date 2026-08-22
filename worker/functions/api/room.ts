@@ -5,7 +5,7 @@
  *    guests. This prevents a code-holder from hijacking playback or destroying
  *    the room for everyone. See audit finding H8.
  *  No personal data; both secrets are generated with crypto.getRandomValues. */
-import { sbDelete, sbInsertIgnore, sbRpc, sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { sbDelete, sbInsertIgnore, sbRpc, sbSelect, sbSelectRes, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
 import { rateLimit } from '../_lib/ratelimit';
 import { safeEqual } from '../_lib/safe-compare';
 
@@ -34,11 +34,17 @@ const ROOM_RL: Record<string, { capacity: number; refillPerMinute: number }> = {
   create: { capacity: 3, refillPerMinute: 3 },
   heartbeat: { capacity: 60, refillPerMinute: 60 },
   request: { capacity: 20, refillPerMinute: 20 },
+  react: { capacity: 20, refillPerMinute: 15 },
   leave: { capacity: 20, refillPerMinute: 20 },
   update: { capacity: 20, refillPerMinute: 20 },
   end: { capacity: 20, refillPerMinute: 20 },
   GET: { capacity: 60, refillPerMinute: 60 },
 };
+
+/** Package D11 — the only emojis a reaction may carry (server-enforced). */
+const REACTION_EMOJI = ['❤️', '🔥', '😂', '👏', '🎉', '😍'];
+/** How long a reaction stays visible in polls. */
+const REACTION_WINDOW_MS = 8_000;
 
 export const onRequestOptions = async (): Promise<Response> =>
   new Response(null, { status: 204, headers: CORS });
@@ -145,12 +151,22 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const providedHostToken = clip(url.searchParams.get('hostToken'), 64);
 
   const since = new Date(Date.now() - 12_000).toISOString();
-  const [rooms, members] = await Promise.all([
+  const reactSince = new Date(Date.now() - REACTION_WINDOW_MS).toISOString();
+  const [rooms, members, reactionRows] = await Promise.all([
     sbSelect<{ host_name: string | null; song: unknown; position: number; playing: boolean; updated_at: string; host_token: string | null }>(
       env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=host_name,song,position,playing,updated_at,host_token`,
     ),
     sbSelect<{ name: string | null }>(
       env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}&last_seen=gte.${encodeURIComponent(since)}&select=name`,
+    ),
+    // D11 — recent reactions, DELIBERATELY a separate query: if the reaction
+    // columns haven't been migrated yet this select 400s alone and reactions
+    // are simply absent, while memberCount keeps working untouched. No names
+    // attached — reactions are anonymous to guests by design (M-SRV-2 spirit).
+    sbSelect<{ reaction: string | null; reacted_at: string | null }>(
+      env,
+      'vinax_room_members',
+      `code=eq.${encodeURIComponent(code)}&reacted_at=gte.${encodeURIComponent(reactSince)}&reaction=not.is.null&select=reaction,reacted_at`,
     ),
   ]);
 
@@ -180,6 +196,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const responseBody: Record<string, unknown> = {
     room: roomOut,
     memberCount: members.length,
+    // D11 — everyone sees the room's recent reactions (emoji + stamp only).
+    reactions: reactionRows
+      .filter((r) => r.reaction && r.reacted_at && REACTION_EMOJI.includes(r.reaction))
+      .map((r) => ({ e: r.reaction, at: r.reacted_at })),
   };
   if (hostAuthorized) {
     responseBody.members = members.map((m) => m.name).filter(Boolean);
@@ -217,7 +237,27 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
         playing: false,
         updated_at: now,
       }, 'code');
-      if (rows === null) return json({ error: 'create_failed' }, 500);
+      if (rows === null) {
+        // The insert was REJECTED (not a collision). The dominant real-world
+        // cause: the live table predates the H8 host_token column, so
+        // PostgREST refuses the whole row and every "Start session" fails.
+        // Probe the schema so the client (and the admin) get an honest,
+        // actionable error instead of a generic 500.
+        const probe = await sbSelectRes(env, 'vinax_rooms', 'select=host_token&limit=1');
+        if (!probe.ok) {
+          const tableProbe = await sbSelectRes(env, 'vinax_rooms', 'select=code&limit=1');
+          return json(
+            {
+              error: 'needs_migration',
+              message: tableProbe.ok
+                ? 'vinax_rooms is missing the host_token column — run supabase/migrations/2026-08-vinax-rooms-hosttoken.sql'
+                : 'vinax_rooms table is missing — run supabase/schema.sql',
+            },
+            503,
+          );
+        }
+        return json({ error: 'create_failed' }, 500);
+      }
       if (rows.length > 0) created = { code, hostToken };
       // rows.length === 0 -> the random code collided; loop with fresh keys.
     }
@@ -294,6 +334,30 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       return json({ error: 'append_failed' }, 500);
     }
     return json({ ok: true });
+  }
+
+  if (action === 'react') {
+    const rl = rateLimit(request, 'room-react', ROOM_RL.react, env);
+    if (rl) return rl;
+    const code = body ? clip(body.code, 8) : null;
+    const deviceId = body ? clip(body.deviceId, 64) : null;
+    const emoji = body ? clip(body.emoji, 8) : null;
+    if (!code || !deviceId || !emoji || !REACTION_EMOJI.includes(emoji)) {
+      return json({ error: 'bad_request' }, 400);
+    }
+    // Race-free by construction: each member only ever writes their OWN row
+    // (keyed code+device_id), so no RPC is needed — unlike the shared request
+    // array. One live reaction per member also self-limits spam. Doubles as a
+    // heartbeat. Fails soft (ok:false) until the reaction columns exist.
+    const ok = await sbUpsert(env, 'vinax_room_members', {
+      code,
+      device_id: deviceId,
+      name: body ? clip(body.name, 60) : null,
+      last_seen: now,
+      reaction: emoji,
+      reacted_at: now,
+    }, 'code,device_id');
+    return json({ ok });
   }
 
   if (action === 'heartbeat') {

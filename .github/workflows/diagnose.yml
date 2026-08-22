@@ -1,0 +1,131 @@
+# Production hydration diagnostic (2026-08-17 incident: site stuck on the
+# static shell in app + web). Fetches the live HTML, checks every referenced
+# asset answers 200, then loads the page in headless Chrome WITH JavaScript
+# and reports whether React actually mounted (#main-content present).
+# Results are emitted as check annotations so they are readable via the API.
+name: diagnose
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/diagnose.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: self-hosted catalog /api/cat (4.20.0)
+        run: |
+          OUT=$(curl -s -m 15 -o /tmp/c.json -w '%{http_code} %{time_total}s' 'https://www.sirimillavinay.online/api/cat/search/songs?query=top%20hindi%20songs&limit=3' || echo ERR)
+          SUMMARY=$(python3 -c "
+          import json
+          try:
+            d=json.load(open('/tmp/c.json'))
+            r=(d.get('data') or {}).get('results') or []
+            first=r[0] if r else {}
+            urls=first.get('downloadUrl') or []
+            print(len(r),'results | first:',first.get('name'),'| streams:',len(urls))
+          except Exception as e: print('parse-fail', e)")
+          echo "::notice title=selfcat-search::$OUT | $SUMMARY"
+          STREAM=$(python3 -c "
+          import json
+          d=json.load(open('/tmp/c.json'))
+          r=(d.get('data') or {}).get('results') or []
+          u=(r[0].get('downloadUrl') or []) if r else []
+          print(u[2]['url'] if len(u)>2 else '')" 2>/dev/null || true)
+          if [ -n "$STREAM" ]; then
+            CODE=$(curl -s -o /dev/null -w '%{http_code} -> %{redirect_url}' "$STREAM")
+            echo "::notice title=selfcat-stream::$CODE"
+            FINAL=$(curl -s -L -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36' -r 0-2047 -o /dev/null -w '%{http_code} %{content_type} %{size_download}b' "$STREAM")
+            echo "::notice title=selfcat-audio::$FINAL"
+          else
+            echo "::warning title=selfcat-stream::no stream url in first result"
+          fi
+      - name: same-IP auth token test (is the signature IP-bound?)
+        run: |
+          ENC=$(curl -s 'https://www.sirimillavinay.online/api/cat/search/songs?query=top%20hindi%20songs&limit=1' | python3 -c "
+          import json,sys,urllib.parse
+          d=json.load(sys.stdin)
+          r=(d.get('data') or {}).get('results') or []
+          u=(r[0].get('downloadUrl') or []) if r else []
+          q=urllib.parse.urlparse(u[0]['url']).query if u else ''
+          print(urllib.parse.parse_qs(q).get('e',[''])[0])" 2>/dev/null || true)
+          if [ -n "$ENC" ]; then
+            AUTH=$(curl -s -A 'Mozilla/5.0' "https://www.jiosaavn.com/api.php?__call=song.generateAuthToken&url=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$ENC")&bitrate=96&_format=json&_marker=0&api_version=4&ctx=web6dot0" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('auth_url') or (d[0].get('auth_url') if isinstance(d,list) and d else ''))" 2>/dev/null || true)
+            echo "::notice title=sameip-auth::${AUTH:0:120}"
+            if [ -n "$AUTH" ]; then
+              R=$(curl -s -A 'Mozilla/5.0' -r 0-2047 -o /dev/null -w '%{http_code} %{content_type} %{size_download}b' "$AUTH")
+              echo "::notice title=sameip-fetch::$R"
+            fi
+          else
+            echo "::warning title=sameip::no encrypted url available"
+          fi
+      - name: catalog API mirrors (2026-08-18 outage probe)
+        run: |
+          for base in https://saavn.sumit.co/api https://nepotuneapi.vercel.app/api; do
+            OUT=$(curl -s -m 12 -o /tmp/r.json -w '%{http_code} %{time_total}s' "$base/search/songs?query=top%20hindi%20songs&limit=3" || echo 'ERR')
+            N=$(python3 -c "
+          import json
+          try:
+            d=json.load(open('/tmp/r.json'))
+            r=(d.get('data') or {}).get('results') or []
+            print(len(r), '| first:', (r[0].get('name') if r else 'none'), '| hasUrl:', bool(r and (r[0].get('downloadUrl') or r[0].get('download_url') or r[0].get('media_url'))))
+          except Exception as e: print('parse-fail', e)
+          " 2>/dev/null)
+            echo "::notice title=api-$base::$OUT | results: $N"
+          done
+      - name: saavncdn artwork size support (4.19.5 image-quality probe)
+        run: |
+          IMG=$(curl -s 'https://saavn.sumit.co/api/search/songs?query=top%20hindi%20songs&limit=1' | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          r=(d.get('data') or {}).get('results') or []
+          for v in (r[0].get('image') or []):
+            u=v.get('url') or v.get('link') or ''
+            if '500x500' in u: print(u); break
+          " 2>/dev/null || true)
+          echo "::notice title=probe-src::$IMG"
+          if [ -n "$IMG" ]; then
+            for s in 150x150 250x250 350x350 500x500; do
+              U=$(echo "$IMG" | sed "s/500x500/$s/")
+              CODE=$(curl -s -o /tmp/i.bin -w '%{http_code}' "$U"); BYTES=$(wc -c < /tmp/i.bin)
+              TYPE=$(file -b --mime-type /tmp/i.bin 2>/dev/null || echo '?')
+              echo "::notice title=cdn-$s::$CODE $TYPE ${BYTES}b"
+            done
+          else
+            echo "::warning title=cdn-probe::could not obtain a sample image url"
+          fi
+      - name: apex host canonicalization (4.19.2)
+        run: |
+          for p in / /charts /moods /song/x-y; do
+            out=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "https://sirimillavinay.online$p")
+            echo "::notice title=apex$p::$out"
+          done
+      - name: fetch shell + verify assets
+        run: |
+          set -e
+          curl -sS -D headers.txt https://www.sirimillavinay.online/ -o home.html
+          echo "::notice title=html-bytes::$(wc -c < home.html)"
+          echo "::notice title=cache-headers::$(grep -i -E 'cf-cache-status|age:|cache-control' headers.txt | tr '\n' ' | ')"
+          for u in $(grep -o 'src="/assets/[^"]*"' home.html | sed 's/src="//;s/"//' | head -12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://www.sirimillavinay.online$u")
+            echo "::notice title=asset::$u -> $code"
+            [ "$code" = "200" ] || echo "::error title=asset-broken::$u returned $code"
+          done
+          for u in $(grep -o 'href="/assets/[^"]*"' home.html | sed 's/href="//;s/"//' | head -6); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://www.sirimillavinay.online$u")
+            echo "::notice title=preload::$u -> $code"
+            [ "$code" = "200" ] || echo "::error title=preload-broken::$u returned $code"
+          done
+          if grep -q 'rel="stylesheet"' home.html; then echo "::warning title=css::external stylesheet present (pre-4.18.0 shell? stale cache)"; else echo "::notice title=css::inline (4.18.x shell confirmed)"; fi
+          grep -q '__vxBoot' home.html && echo "::notice title=prefetch::4.18.2 prefetch script present" || echo "::warning title=prefetch::prefetch script ABSENT (older deploy live?)"
+      - name: rendered DOM after JS execution
+        run: |
+          google-chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=25000 --dump-dom "https://www.sirimillavinay.online/" > dom.html 2> chrome.log || true
+          echo "::notice title=dom-bytes::$(wc -c < dom.html)"
+          if grep -q 'id="main-content"' dom.html; then
+            echo "::notice title=hydration::OK - React mounted (#main-content present)"
+          else
+            echo "::error title=hydration::FAILED - static shell only after 25s virtual time"
+          fi
+          grep -q 'id="boot"' dom.html && echo "::warning title=boot::boot brand row still in DOM" || echo "::notice title=boot::boot row cleared"
+          echo "::notice title=chrome-log::$(head -c 700 chrome.log | tr '\n' ' ')"

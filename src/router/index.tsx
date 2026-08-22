@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/layouts/AppLayout';
 import { RouteError } from '@/components/ErrorBoundary';
 import { HUB_LANGUAGES } from '@/constants/languages';
+import { MOOD_HUBS } from '@/constants/hubs';
 
 // Route-based code splitting: every page is its own chunk.
 const HomePage = lazy(() => import('@/pages/HomePage'));
@@ -29,16 +30,19 @@ const QueuePage = lazy(() => import('@/pages/QueuePage'));
 const NowPlayingPage = lazy(() => import('@/pages/NowPlayingPage'));
 const LanguagesPage = lazy(() => import('@/pages/LanguagesPage'));
 const LanguageHubPage = lazy(() => import('@/pages/LanguageHubPage'));
+const MoodHubPage = lazy(() => import('@/pages/MoodHubPage'));
 const ExplorePage = lazy(() => import('@/pages/ExplorePage'));
 const MoviesPage = lazy(() => import('@/pages/MoviesPage'));
 const MoodsPage = lazy(() => import('@/pages/MoodsPage'));
 const RegionsPage = lazy(() => import('@/pages/RegionsPage'));
 const TasteProfilePage = lazy(() => import('@/pages/TasteProfilePage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
+const HandoffPage = lazy(() => import('@/pages/HandoffPage'));
 const CacheInfoPage = lazy(() => import('@/pages/CacheInfoPage'));
 const AboutPage = lazy(() => import('@/pages/AboutPage'));
 const HelpPage = lazy(() => import('@/pages/HelpPage'));
 const StatsPage = lazy(() => import('@/pages/StatsPage'));
+const RecapPage = lazy(() => import('@/pages/RecapPage'));
 const OfflinePage = lazy(() => import('@/pages/OfflinePage'));
 const ListenTogetherPage = lazy(() => import('@/pages/ListenTogetherPage'));
 const CollectionPage = lazy(() => import('@/pages/CollectionPage'));
@@ -97,12 +101,17 @@ export const router = createBrowserRouter([
       { path: 'now-playing', element: <NowPlayingPage /> },
       { path: 'languages', element: <LanguagesPage /> },
       ...HUB_LANGUAGES.map((l) => ({ path: `${l}-songs`, element: <LanguageHubPage language={l} /> })),
+      // Mood x language landing pages (SEO category layer) — 72 routes.
+      ...HUB_LANGUAGES.flatMap((l) =>
+        MOOD_HUBS.map((m) => ({ path: `${l}-${m.slug}-songs`, element: <MoodHubPage language={l} mood={m} /> })),
+      ),
       { path: 'explore', element: <ExplorePage /> },
       { path: 'movies', element: <MoviesPage /> },
       { path: 'moods', element: <MoodsPage /> },
       { path: 'regions', element: <RegionsPage /> },
       { path: 'taste-profile', element: <TasteProfilePage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'handoff', element: <HandoffPage /> },
       { path: 'cache-info', element: <CacheInfoPage /> },
       { path: 'about', element: <AboutPage /> },
       { path: 'privacy', element: <PrivacyPage /> },
@@ -111,6 +120,7 @@ export const router = createBrowserRouter([
       { path: 'dmca', element: <DmcaPage /> },
       { path: 'help', element: <HelpPage /> },
       { path: 'stats', element: <StatsPage /> },
+      { path: 'recap', element: <RecapPage /> },
       { path: 'offline', element: <OfflinePage /> },
       { path: 'together', element: <ListenTogetherPage /> },
       { path: 'collection/:id', element: <CollectionPage /> },

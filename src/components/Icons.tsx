@@ -217,3 +217,12 @@ export function WaveformIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/** Two-line grip for drag-to-reorder handles (queue rows). */
+export function GripIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+      <path d="M5 9h14M5 15h14" />
+    </svg>
+  );
+}

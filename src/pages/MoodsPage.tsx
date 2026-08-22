@@ -28,7 +28,7 @@ export default function MoodsPage() {
             key={m.id}
             onClick={() => setMood(m.id)}
             className={cn(
-              'rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5',
+              'rounded-2xl border p-5 text-left transition-[color,background-color,border-color,opacity,transform] hover:-translate-y-0.5',
               mood === m.id ? 'border-ember-500 bg-ink-800' : 'border-ink-700 bg-ink-850 hover:border-ink-500',
             )}
           >

@@ -52,7 +52,7 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
           <p className="text-[11px] text-ink-400 truncate">{song.subtitle}</p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => prev()} aria-label="Previous song" className="p-1.5 text-ink-300 hover:text-ink-100 transition">
+          <button onClick={() => prev()} aria-label="Previous song" className="p-1.5 text-ink-300 hover:text-ink-100 transition relative after:absolute after:inset-0 after:-m-[8px]">
             <PrevIcon className="w-4 h-4" />
           </button>
           <button
@@ -62,7 +62,7 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
           >
             {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
           </button>
-          <button onClick={() => next(true)} aria-label="Next song" className="p-1.5 text-ink-300 hover:text-ink-100 transition">
+          <button onClick={() => next(true)} aria-label="Next song" className="p-1.5 text-ink-300 hover:text-ink-100 transition relative after:absolute after:inset-0 after:-m-[8px]">
             <NextIcon className="w-4 h-4" />
           </button>
         </div>
@@ -71,7 +71,7 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
         <span>{fmt(currentTime)}</span>
         <button
           aria-label="Seek"
-          className="relative flex-1 h-4 cursor-pointer"
+          className="relative flex-1 h-4 cursor-pointer before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
           onClick={(e) => {
             if (duration <= 0) return;
             const r = e.currentTarget.getBoundingClientRect();
@@ -84,7 +84,7 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
         <span>{fmt(duration)}</span>
       </div>
       {(curLine ?? nextLine) != null && (
-        <div className="mt-2 border-t border-white/10 pt-2">
+        <div className="mt-2 border-t border-glass-strong pt-2">
           {curLine != null && <p className="text-[13px] font-semibold text-ink-100 leading-snug truncate">{curLine}</p>}
           {nextLine != null && <p className="text-[11px] text-ink-400 leading-snug truncate">{nextLine}</p>}
         </div>

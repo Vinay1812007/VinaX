@@ -56,7 +56,7 @@ function toEventSong(song: Song | null | undefined): EventSong | undefined {
 async function send(type: string, song?: Song | null, extra?: Record<string, unknown>): Promise<void> {
   if (!consented()) return;
   try {
-    await fetch(ENDPOINT, {
+    const res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -68,6 +68,11 @@ async function send(type: string, song?: Song | null, extra?: Record<string, unk
       keepalive: true,
       body: JSON.stringify({
         deviceId: deviceId(),
+        // H-SRV-6 loop closure: echo the HMAC-signed id the server issued on
+        // first contact. Without it the server derives an ip+ua id on EVERY
+        // post, so one listener appeared as a fresh "user" after every
+        // network/IP change (the admin duplicate-rows bug).
+        signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined,
         name: getLocal<string>(KEYS.userName, '') || undefined,
         type,
         platform: PLATFORM,
@@ -76,6 +81,12 @@ async function send(type: string, song?: Song | null, extra?: Record<string, unk
         ...(extra ?? {}),
       }),
     });
+    // First contact: the server answers 200 + { signed_device_id_next } once;
+    // store it so every later post keeps the same stable identity.
+    if (res.status === 200) {
+      const j = (await res.json().catch(() => null)) as { signed_device_id_next?: string } | null;
+      if (j?.signed_device_id_next) setLocal(KEYS.signedDeviceId, j.signed_device_id_next);
+    }
   } catch {
     /* analytics is best-effort and must never affect playback */
   }

@@ -22,3 +22,4 @@ vite.config.ts.timestamp-*
 
 # TypeScript incremental build info
 *.tsbuildinfo
+test-results/

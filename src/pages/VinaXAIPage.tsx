@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { isNativePlatform } from '@/services/native';
 import { buildTasteSnapshot } from '@/services/ai/taste';
+import { extractRecommendedFromThread } from '@/services/ai/threadMemory';
 import { searchSongs } from '@/services/api';
 import { usePlayerStore } from '@/store/playerStore';
 import { AuroraBackground } from '@/components/AuroraBackground';
@@ -524,23 +525,80 @@ export default function VinaXAIPage(): ReactNode {
       say('Going back a song.');
       return true;
     }
-    const play = /^(?:play|put on)\s+(.+)$/i.exec(text.trim());
-    if (play) {
-      const q = play[1].replace(/\s+(?:song|music|now|please)$/i, '').trim();
-      if (q.length > 1) {
+    // Package B4 — sub-intent parser layered on top of the play command.
+    // Supports:
+    //   play X                       — plays X immediately (existing)
+    //   queue X                      — enqueues X after the current song
+    //   start X / put on X           — synonyms of play
+    //   shuffle X / shuffle songs by X — plays a shuffled batch matching X
+    //   similar to X / more like X    — startRadio() on the first match
+    //   play X in <language>          — filters results by language
+    //   play X without <artist>       — drops any result by that artist
+    const playPattern = /^(?:play|queue|start|put on|shuffle|similar to|more like)\s+(.+)$/i;
+    const cmd = playPattern.exec(text.trim());
+    if (cmd) {
+      const verb = (cmd[0].match(/^(play|queue|start|put on|shuffle|similar to|more like)/i)?.[1] ?? 'play').toLowerCase();
+      let rest = cmd[1].trim();
+      // Strip trailing filler ("play X song / music / now / please")
+      rest = rest.replace(/\s+(?:song|music|now|please)$/i, '').trim();
+
+      // Extract "in <language>" filter.
+      let langFilter: string | null = null;
+      const langMatch = rest.match(/\s+in\s+([a-z]+)$/i);
+      if (langMatch) {
+        langFilter = langMatch[1].toLowerCase();
+        rest = rest.slice(0, langMatch.index).trim();
+      }
+
+      // Extract "without <artist>" exclusion.
+      let excludeArtist: string | null = null;
+      const withoutMatch = rest.match(/\s+without\s+(.+)$/i);
+      if (withoutMatch) {
+        excludeArtist = withoutMatch[1].toLowerCase().trim();
+        rest = rest.slice(0, withoutMatch.index).trim();
+      }
+
+      // "shuffle songs by X" — allow "shuffle songs by AR Rahman" style.
+      const shuffleByMatch = rest.match(/^songs?\s+by\s+(.+)$/i);
+      if (shuffleByMatch) rest = shuffleByMatch[1].trim();
+
+      if (rest.length > 1) {
         try {
-          const results = await searchSongs(q, 5);
-          if (results.length) {
-            usePlayerStore.getState().playQueue(results, 0);
-            say(`Playing ${results[0].title} by ${results[0].subtitle}.`);
+          const rawResults = await searchSongs(rest, verb === 'shuffle' ? 15 : 8);
+          let results = rawResults;
+          if (langFilter) {
+            const matches = results.filter((s) => (s.language ?? '').toLowerCase().startsWith(langFilter));
+            if (matches.length) results = matches; // fall through to unfiltered if no language match
+          }
+          if (excludeArtist) {
+            results = results.filter((s) => !s.subtitle.toLowerCase().includes(excludeArtist));
+          }
+          if (!results.length) {
+            say(`I couldn't find “${rest}” — try the song name with the artist.`);
             return true;
           }
+          const player = usePlayerStore.getState();
+          if (verb === 'queue') {
+            player.enqueueNext(results[0]);
+            say(`Queued ${results[0].title} by ${results[0].subtitle}.`);
+          } else if (verb === 'shuffle') {
+            const shuffled = [...results].sort(() => Math.random() - 0.5);
+            player.playQueue(shuffled, 0);
+            say(`Shuffling ${shuffled.length} tracks from ${rest}.`);
+          } else if (verb === 'similar to' || verb === 'more like') {
+            player.startRadio(results[0]);
+            say(`Starting a radio like ${results[0].title}.`);
+          } else {
+            player.playQueue(results, 0);
+            const langBit = langFilter ? ` (in ${langFilter})` : '';
+            const excludeBit = excludeArtist ? ` (skipping ${excludeArtist})` : '';
+            say(`Playing ${results[0].title} by ${results[0].subtitle}${langBit}${excludeBit}.`);
+          }
+          return true;
         } catch {
           /* search down — let the AI answer instead */
           return false;
         }
-        say(`I couldn't find “${q}” — try the song name with the artist.`);
-        return true;
       }
     }
     return false;
@@ -652,7 +710,10 @@ export default function VinaXAIPage(): ReactNode {
           // Research always searches, and multi-source rules are prepended above.
           web: stateRef.current.web || researchNow || freshTrigger,
           images: imgs,
-          taste: buildTasteSnapshot(),
+          // B5 — the snapshot plus this thread's own memory: everything the
+          // assistant already recommended in this conversation, so "give me
+          // more" turns reach into fresh territory instead of looping.
+          taste: { ...buildTasteSnapshot(), alreadyRecommendedThisChat: extractRecommendedFromThread(messages) },
         }),
         signal: controller.signal,
       });
@@ -832,7 +893,15 @@ export default function VinaXAIPage(): ReactNode {
     setVoiceUserCaption('');
     setVoiceAiCaption('');
     const engine = new LiveVoiceEngine(
-      { lang: 'en-IN', getVoice: () => pickSynthVoice('en-IN'), toSpoken: speechForSpoken },
+      {
+        lang: 'en-IN',
+        getVoice: () => pickSynthVoice('en-IN'),
+        toSpoken: speechForSpoken,
+        // Package B6 — barge-in: interrupt the reply the moment you start
+        // talking. Guarded by a grace period + echo filter in the engine. If a
+        // specific device ever talks over itself, flip this to false.
+        bargeIn: true,
+      },
       {
         onState: (st) => {
           setVoiceState(st);
@@ -927,7 +996,7 @@ export default function VinaXAIPage(): ReactNode {
       {/* Sidebar */}
       <aside
         className={cn(
-          'flex-col w-64 shrink-0 bg-ink-900 border-r border-white/5',
+          'flex-col w-64 shrink-0 bg-ink-900 border-r border-glass',
           sidebarOpen ? 'flex fixed inset-y-0 left-0 z-40' : 'hidden',
           'md:flex md:static md:z-auto',
         )}
@@ -1032,7 +1101,7 @@ export default function VinaXAIPage(): ReactNode {
             </div>
           ))}
         </div>
-        <div className="p-3 border-t border-white/5">
+        <div className="p-3 border-t border-glass">
           <Link to="/" className="flex items-center gap-2 text-xs text-ink-400 hover:text-ink-100 px-2 py-1.5">
             ← Back to VinaX
           </Link>
@@ -1065,15 +1134,15 @@ export default function VinaXAIPage(): ReactNode {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="flex items-center gap-2 px-4 py-3 border-b border-white/5 shrink-0">
+        <header className="flex items-center gap-2 px-4 py-3 border-b border-glass shrink-0">
           <button className="md:hidden p-1.5 text-ink-300" aria-label="Menu" onClick={() => setSidebarOpen(true)}>
             <MenuIcon className="w-6 h-6" />
           </button>
-          <span className="w-8 h-8 rounded-xl bg-premium text-white flex items-center justify-center shrink-0">
+          <span className="w-8 h-8 rounded-xl bg-ai-accent text-white flex items-center justify-center shrink-0">
             <SparkleIcon className="w-5 h-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <h1 className="text-sm font-bold leading-tight">VinaX AI</h1>
+            <h1 className="text-sm font-bold leading-tight ai-title w-fit">VinaX AI</h1>
             <p className="text-[11px] text-ink-400 leading-tight">Ask anything · nothing you type is stored on our servers</p>
           </div>
           <div className="relative">
@@ -1089,7 +1158,7 @@ export default function VinaXAIPage(): ReactNode {
               ⤓
             </button>
             {exportOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl bg-[color:var(--surface-modal)] border border-white/10 shadow-2xl py-1">
+              <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl bg-[color:var(--surface-modal)] border border-glass-strong shadow-2xl py-1">
                 {(['txt', 'md', 'pdf'] as const).map((k) => (
                   <button
                     key={k}
@@ -1118,7 +1187,7 @@ export default function VinaXAIPage(): ReactNode {
               ⚙
             </button>
             {settingsOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-2xl bg-[color:var(--surface-modal)] border border-white/10 shadow-2xl p-3 space-y-3 text-left">
+              <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-2xl bg-[color:var(--surface-modal)] border border-glass-strong shadow-2xl p-3 space-y-3 text-left">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1">Default engine</p>
                   <select
@@ -1157,7 +1226,7 @@ export default function VinaXAIPage(): ReactNode {
                         }}
                         className={cn(
                           'px-3 py-1.5 rounded-lg text-xs font-bold',
-                          fontSize === f ? 'bg-premium text-white' : 'bg-ink-800/70 text-ink-300',
+                          fontSize === f ? 'bg-ai-accent text-white' : 'bg-ink-800/70 text-ink-300',
                         )}
                       >
                         {f.toUpperCase()}
@@ -1192,7 +1261,7 @@ export default function VinaXAIPage(): ReactNode {
         {/* Messages */}
         <div
           ref={listRef}
-          className={cn('flex-1 overflow-y-auto', fontSize === 's' ? 'text-[13px]' : fontSize === 'l' ? 'text-[17px]' : '')}
+          className={cn('flex-1 overflow-y-auto ai-ambient', fontSize === 's' ? 'text-[13px]' : fontSize === 'l' ? 'text-[17px]' : '')}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
@@ -1201,7 +1270,7 @@ export default function VinaXAIPage(): ReactNode {
         >
           {messages.length === 0 ? (
             <div className="min-h-full flex flex-col items-center justify-center px-5 py-10 text-center">
-              <span className="w-16 h-16 rounded-2xl bg-premium text-white flex items-center justify-center mb-5 shadow-2xl">
+              <span className="w-16 h-16 rounded-2xl bg-ai-accent text-white flex items-center justify-center mb-5">
                 <SparkleIcon className="w-8 h-8" />
               </span>
               <h2 className="text-2xl font-bold mb-2">
@@ -1219,7 +1288,7 @@ export default function VinaXAIPage(): ReactNode {
                   <button
                     key={s}
                     onClick={() => void send(s)}
-                    className="px-4 py-3 rounded-xl text-sm text-left bg-ink-800/70 text-ink-200 border border-white/5 hover:bg-ink-700 hover:text-ink-100 transition"
+                    className="px-4 py-3 rounded-xl text-sm text-left bg-ink-800/70 text-ink-200 border border-glass hover:bg-ink-700 hover:text-ink-100 hover:border-ember-500/40 transition"
                   >
                     {s}
                   </button>
@@ -1233,7 +1302,7 @@ export default function VinaXAIPage(): ReactNode {
                   {m.role === 'assistant' && (
                     <span
                       className={cn(
-                        'w-7 h-7 rounded-lg bg-premium text-white flex items-center justify-center shrink-0 mt-0.5',
+                        'w-7 h-7 rounded-lg bg-ai-accent text-white flex items-center justify-center shrink-0 mt-0.5',
                         busy && i === messages.length - 1 && 'motion-safe:animate-[avatar-pulse_1.6s_ease-in-out_infinite]',
                       )}
                     >
@@ -1243,7 +1312,7 @@ export default function VinaXAIPage(): ReactNode {
                   <div
                     className={cn(
                       'max-w-[85%] text-sm',
-                      m.role === 'user' ? 'btn-primary rounded-2xl rounded-br-md px-4 py-2.5' : 'glass-card rounded-2xl rounded-bl-md px-4 py-3',
+                      m.role === 'user' ? 'btn-primary rounded-2xl rounded-br-md px-4 py-2.5' : 'glass-card ai-bubble rounded-2xl rounded-bl-md px-4 py-3',
                     )}
                     onDoubleClick={m.role === 'user' ? () => editPrompt(i, m.content) : undefined}
                     title={m.role === 'user' ? 'Double-tap to edit & resend' : undefined}
@@ -1314,19 +1383,48 @@ export default function VinaXAIPage(): ReactNode {
                       <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
                     )}
                     {m.sources?.length ? (
-                      <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-wrap gap-1.5">
-                        {m.sources.map((u, k) => (
-                          <a
-                            key={k}
-                            href={u}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] px-2 py-0.5 rounded-full bg-ink-800 text-ink-300 hover:text-ink-100"
-                          >
-                            <GlobeIcon className="w-3 h-3 inline mr-1" />
-                            {new URL(u).hostname.replace('www.', '')}
-                          </a>
-                        ))}
+                      // B8 — the ranked-source card: numbered to match the [1][2]
+                      // citations in the answer. The colored chip is a local
+                      // letter avatar, NOT a favicon fetch — pulling icons from
+                      // third parties would leak what you read (privacy rule 2).
+                      <div className="mt-2.5 pt-2.5 border-t border-glass-strong">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500 mb-1.5 flex items-center gap-1">
+                          <GlobeIcon className="w-3 h-3" /> Sources
+                        </p>
+                        <div className="space-y-1">
+                          {m.sources.map((u, k) => {
+                            let host = u;
+                            let path = '';
+                            try {
+                              const parsed = new URL(u);
+                              host = parsed.hostname.replace(/^www\./, '');
+                              path = parsed.pathname.length > 1 ? parsed.pathname.slice(0, 40) : '';
+                            } catch {
+                              /* show the raw string */
+                            }
+                            const hue = (host.charCodeAt(0) * 47 + host.length * 13) % 360;
+                            return (
+                              <a
+                                key={k}
+                                href={u}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-ink-800/70 transition-colors min-w-0"
+                              >
+                                <span className="text-[10px] font-bold text-ink-500 w-6 shrink-0">[{k + 1}]</span>
+                                <span
+                                  aria-hidden
+                                  className="w-[18px] h-[18px] rounded-md flex items-center justify-center text-[10px] font-extrabold text-white shrink-0"
+                                  style={{ background: `hsl(${hue} 55% 42%)` }}
+                                >
+                                  {host.charAt(0).toUpperCase()}
+                                </span>
+                                <span className="text-[11px] font-semibold text-ink-200 truncate">{host}</span>
+                                {path && <span className="text-[10px] text-ink-500 truncate hidden sm:inline">{path}</span>}
+                              </a>
+                            );
+                          })}
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -1337,7 +1435,7 @@ export default function VinaXAIPage(): ReactNode {
         </div>
 
         {/* Composer */}
-        <div className="shrink-0 border-t border-white/5 px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-glass px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto w-full max-w-3xl">
             {pending.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">

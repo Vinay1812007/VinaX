@@ -19,7 +19,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Main navigation"
-      className="vx-dock md:hidden mx-4 mb-[max(0.6rem,var(--safe-bottom))] rounded-[28px] glass-navbar shadow-lift overflow-hidden"
+      className="vx-dock md:hidden mx-4 mb-[max(0.6rem,var(--safe-bottom))] rounded-3xl glass-navbar shadow-lift overflow-hidden"
     >
       <ul className="flex items-center justify-between px-2 py-1.5">
         {items.map(({ to, label, icon: Icon, ai }) => (
@@ -44,7 +44,13 @@ export function BottomNav() {
                   ) : (
                     <Icon className="w-5 h-5 shrink-0" />
                   )}
-                  {isActive && <span className="whitespace-nowrap truncate">{t(label)}</span>}
+                  {isActive ? (
+                    <span className="whitespace-nowrap truncate">{t(label)}</span>
+                  ) : (
+                    /* Inactive tabs show only the icon — give screen readers
+                       the name anyway (audit P2-22). */
+                    <span className="sr-only">{t(label)}</span>
+                  )}
                 </>
               )}
             </NavLink>

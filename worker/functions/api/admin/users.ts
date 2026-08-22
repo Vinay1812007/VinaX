@@ -30,7 +30,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
   let query =
     'select=device_id,name,platform,country,city,is_playing,first_seen,last_seen' +
-    `&order=last_seen.desc&limit=${limit}&offset=${offset}`;
+    // limit+1: the extra row is a cheap, exact hasMore signal — the UI used
+    // to infer it from rows.length >= limit, which shows a Next button that
+    // lands on an empty page whenever the last page is exactly full (D-22).
+    `&order=last_seen.desc&limit=${limit + 1}&offset=${offset}`;
   if (q) query += `&or=(name.ilike.*${encodeURIComponent(q)}*,device_id.ilike.*${encodeURIComponent(q)}*)`;
 
   const [users, summary] = await Promise.all([
@@ -38,7 +41,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     sbRpc<Summary>(env, 'vinax_user_summary', {}),
   ]);
 
-  return new Response(JSON.stringify({ users, summary: summary ?? null, limit, offset }), {
+  const hasMore = users.length > limit;
+  if (hasMore) users.length = limit;
+  return new Response(JSON.stringify({ users, summary: summary ?? null, limit, offset, hasMore }), {
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 };

@@ -5,6 +5,7 @@
  * Admin-gated because each check spends a few model tokens.
  */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { rateLimit } from '../../_lib/ratelimit';
 import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { LANE_MODEL, laneEndpoint, type AiEnv } from '../../_lib/ai';
 
@@ -46,6 +47,10 @@ async function pingKey(name: string, key: string | undefined, model: string, bas
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
+  // 7 live model pings per call — cap the frequency so a stuck 10s auto-
+  // refresh loop can't burn upstream quota (audit: unthrottled).
+  const limited = rateLimit(request, 'admin-health', { capacity: 4, refillPerMinute: 2 }, env as never);
+  if (limited) return limited;
   const [dj, muse, sage, swift, scholar, home, search, lastEvents] = await Promise.all([
     pingKey('VinaX 120B · AI DJ · radio · smart queue', env.VINAX_CHATGPT_120_B, LANE_MODEL.dj, laneEndpoint(env, 'dj')),
     pingKey('VinaX FLASH · chat · playlists', env.VINAX_DEEPSEEK_V4_FLASH, LANE_MODEL.chat, laneEndpoint(env, 'chat')),

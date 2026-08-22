@@ -1,80 +1,125 @@
-# VinaX Design System — "Living Glass" (v1.4.0)
+# VinaX Design System — "Living Glass" (v4.1)
 
 The single source of truth for how VinaX looks, moves and behaves.
-Implementation lives in `src/styles/index.css` (token layers), `tailwind.config.ts`
-(scale) and `src/components/*` (composition). Rule of thumb: **new UI composes
-existing tokens/classes; new tokens require updating this document.**
+Implementation lives in `src/styles/index.css` (token layers),
+`tailwind.config.ts` (scale) and `src/components/*` (composition). Rule of
+thumb: **new UI composes existing tokens/classes; new tokens require updating
+this document.** (The v1.4 edition of this file described the retired
+cyan-era palette; this edition matches the shipped indigo system.)
 
-## 1. Foundations
+## 1. Theming architecture
 
-### Color tokens
-| Token | Dark | Light | Use |
-|---|---|---|---|
-| canvas | `#060609` | `#eef0f6` | page base under blobs |
-| ink-100…500 | light→dim text | dark→dim text | text hierarchy |
-| ember (cyan era) | `#22d3ee` | same | brand primary, focus, active |
-| tide (violet) | `#a78bfa` | same | brand secondary, gradients |
-| `--art` | extracted from artwork | same | living accent |
-| success / danger | `#7ce38b` / `#ff8a8a` | same | glass-tinted states |
+Four modes, persisted in the settings store (`vinax.settings.v1`), resolved
+by `src/utils/theme.ts`:
 
-### Glass recipes
-| Surface | bg | blur | border | shadow |
-|---|---|---|---|---|
-| panel/card (dark) | rgba(9,9,16,.42) | 16px sat160 | white .10 | 0 8 32 black .30 |
-| panel/card (light) | rgba(255,255,255,.45) | 16px sat160 | white .65 | 0 8 32 indigo .07 |
-| navbar / player bar | same bg | **20px** | same | + top highlight |
-| sheet / modal | same bg | **24px** | same | 0 24 64 -16 float |
-Cards add: top sheen gradient + cyan corner glow (radial 170px @ top-right, .13).
+| Mode | Class on `<html>` | Notes |
+| --- | --- | --- |
+| Dark (default) | `dark` | The `:root` token set |
+| Light | `light` | Full token override block |
+| AMOLED | `dark amoled` | Rides dark; only the deepest surfaces go true-black |
+| System | resolves live | `prefers-color-scheme` + change listener |
 
-### Type — Manrope variable (self-hosted, 24KB, `font-weight: 200–800`)
-| Style | Size/leading | Weight | Tracking |
-|---|---|---|---|
-| display | 2rem / 2.25 | 800 | -0.02em |
-| title | 1.25rem | 700 | -0.01em |
-| body | 0.875–0.9375rem | 400/600 | 0 |
-| label | 11px uppercase | 700 | +0.08em |
-| numerals | tabular-nums for times/stats |
+An inline pre-paint script in `index.html` reads the persisted preference and
+classes `<html>` **before first paint** — no dark flash for light users, no
+grey flash for AMOLED. It mirrors `applyThemeClasses()`; keep the two in
+sync.
 
-### Spacing & radius
-8-point system via Tailwind (`gap-2/3/4/6`, `p-4/5/6`). Radii: controls = full
-pill/circle · cards `1.25rem` (2xl) · heroes/sheets `1.75rem` (3xl).
+Future custom themes: add a token override block (the AMOLED block is the
+template — override only what changes) plus a `ThemePref` union member. No
+component changes are ever needed; that is the contract.
 
-## 2. Motion
-Ease `var(--ease)` (smooth-spring) · 200–500ms.
-- Page enter: fade-up, keyed on pathname
-- Section stagger: rise 10px, 500ms, 40ms cascade (first 8)
-- Hover: cards -3px lift + shadow · buttons -1px + brighten
-- Press: 97% squash + radial **bloom** (CSS ripple)
-- Dock: active icon springs 1→1.14→1 (450ms)
-- Theme: sun/moon rotate past each other (500ms); surfaces cross-fade 400ms
-- Blobs: 18–30s drifts; dim 40% when paused
-**Every animation has a reduced-motion fallback (opacity-only or none).**
+**Dynamic accent** (Settings) tints the ember ramp from the playing artwork
+at runtime. The 400 (text) tier derives brighter on dark and darker on light
+so extracted colors stay readable on both canvases.
 
-## 3. Interactive states (mandatory for every control)
-| State | Treatment |
-|---|---|
-| default | glass recipe of its surface |
-| hover | lift/brighten (pointer devices only) |
-| active | squash + bloom |
-| focused | `:focus-visible` ring `rgba(138,103,255,.65)`, offset 2px |
-| disabled | 45% opacity, no motion/shadow, `not-allowed` |
-| loading | `.skeleton` (+ auto shimmer sweep) |
-| success / error | `.input-success` / `.input-error` ring + border |
+## 2. Color tokens
 
-## 4. Components (compose, don't reinvent)
-`glass-card` `glass-panel` `glass-navbar` `glass-sheet` `glass-modal`
-`glass-search` `glass-input` · `btn-primary` `btn-secondary` `IconButton`
-`Chip` `Toggle` · `nav-pill-active` (menus) · dock (`vx-dock-*`) ·
-`Shelf`+`MediaCard` · `LiveLyricLine` · `ChatPlayerCard` · `Skeletons` ·
-`Toasts` · `AuroraBackground` (the blob layer) · `SiteGate` (maintenance).
+- **Surfaces — `ink`** (950 → 100): 950/900/850/800/700 are canvases and
+  cards; 600/500 are faint UI (dividers, disabled, decorative icons);
+  400/300 are muted text; 200/100 are primary text. The ramp is monotonic by
+  contrast and gated in BOTH themes by `src/__tests__/contrast.test.ts`.
+- **Accent — `ember`** (indigo, 600 → 300): CTAs, focus rings, active
+  states. **400 is the accent *text* tier.** In light mode the whole ramp
+  re-pitches ~2 shades darker (the dark ramp measures 2.66:1 on a light
+  canvas — illegible).
+- **Support — `tide`** (cyan): chips, secondary links, recommendation
+  reasons. Same light-mode re-pitch.
+- **Glass material** — `--glass-bg*`, `--glass-border`,
+  `--glass-border-strong`, `--glass-shadow*`, `--tile*`. Hairlines MUST use
+  `border-glass` / `border-glass-strong`, never `border-white/N` (white
+  alpha vanishes on light surfaces).
+- **`--art`** + tint alphas: the living accent extracted from playing
+  artwork; light mode washes frosted surfaces with it.
 
-## 5. Accessibility
-- Touch targets ≥44px (IconButton pads automatically)
-- WCAG AA contrast on glass — if a panel fails over bright blobs, raise bg alpha, never shrink text
-- Full keyboard: focus-visible everywhere, Esc closes overlays, D-pad on TV
-- `prefers-reduced-motion` respected globally; `aria-label` on icon-only controls
+Text hierarchy in practice: `text-ink-100` headings → `text-ink-200` body →
+`text-ink-300` secondary → `text-ink-400` meta (**the floor for meaningful
+copy**) → `ink-500`/`ink-600` decorative only.
 
-## 6. Voice & honesty
-Warm, plain sentences. AI slowness is labeled ("Instant picks"), recommendations
-explain themselves ("why this song"), nothing dark-patterned: no ads, no login
+## 3. Type, spacing, radius, elevation
+
+- **Type** — Manrope variable (self-hosted, `font-weight: 200–800`):
+  `text-display` (2rem/800/-0.02em), `text-title` (1.375rem/700),
+  `text-meta` (13px); 11px uppercase labels at +0.08em; `tabular-nums` for
+  times and stats.
+- **Spacing** — 8-point system via Tailwind (`gap-2/3/4/6`, `p-4/5/6`).
+- **Radius** — controls = pill/circle; cards `2xl` (1.25rem = 20px) or
+  `card` (1.375rem); heroes/sheets `3xl` (1.75rem = 28px) or `sheet`. No
+  arbitrary `rounded-[Npx]` — if a value feels missing, promote a token.
+- **Elevation** — `shadow-card` (contact) → `shadow-float` → `shadow-lift`;
+  `shadow-glow` for the accent halo; glass surfaces carry `--glass-shadow`.
+
+## 4. Motion
+
+One easing (`--ease-calm`), durations 140/200/320ms (+ slow ambient drifts).
+Page enter fade-up; hover lift −3px on cards; press squash 97%; blobs 18–30s
+drift, dimmed when paused. **Every animation needs a reduced-motion fallback**
+— both the OS preference and the in-app toggle must be respected.
+
+## 5. Interactive states (mandatory for every control)
+
+default (glass recipe) · hover (lift/brighten, pointer only) · active
+(squash) · focused (`:focus-visible` 2px `ember-500` ring, offset 2) ·
+disabled (45% opacity, no motion) · loading (`.skeleton` shimmer) ·
+error/success (`.input-error`/`.input-success`).
+
+## 6. Components (compose, don't reinvent)
+
+Primitives: `Button` (wraps `.btn-primary|secondary|premium`; default
+`type="button"`, `busy` state — prefer it in new code; the 84 existing raw
+`btn-*` sites are valid usage, not migration debt) · `IconButton` (required
+label; `--touch-pad` hit-box expansion to ≥44px — **the** pattern for any
+visually-small control) · `Chip` · `MediaCard` · `SongRow` · `PageHeader` ·
+`Marquee` · `Seekbar` · `Toasts` · `Skeletons` (Shelf/List/Header/Page/
+CardGrid) · `States` (EmptyState / ErrorState with retry) · `ErrorBoundary`
+(+ Player/Route variants) · `TrackMenu` · `ContextMenu` · `CommandPalette` ·
+glass classes (`glass-card` `glass-panel` `glass-navbar` `glass-modal`
+`glass-input` …).
+
+**Cards**: `glass-card` for elevated content surfaces; a flat `bg-ink-800` +
+`border-glass` row is acceptable for dense lists. Do not invent a third
+idiom.
+
+**Overlays**: `OnboardingSheet` holds the reference focus-trap
+implementation (capture opener → initial focus → trap Tab → Escape →
+restore). New overlays must reuse the pattern (shared `useFocusTrap`
+extraction is scheduled — delta audit P1-9).
+
+## 7. Hard rules
+
+1. No raw hexes in components. Standing exceptions, by decision: canvas
+   share cards (deliberately dark-branded for social feeds) and chart series
+   palettes.
+2. No `border-white/N`, no `text-white/N` — use tokens.
+3. Every theme-affecting change keeps `contrast.test.ts` green.
+4. `tailwind.config.ts` is linted (`no-dupe-keys`) — root configs sit
+   outside tsc's include, so lint is their only gate. Never declare a theme
+   key twice.
+5. Icon-only controls: `IconButton`, or `aria-label` + `--touch-pad`.
+6. Touch targets ≥44px effective; WCAG AA contrast on glass — raise surface
+   alpha, never shrink text.
+
+## 8. Voice & honesty
+
+Warm, plain sentences. AI slowness is labeled, recommendations explain
+themselves ("why this song"), nothing dark-patterned: no ads, no login
 walls, no premium. The free promise renders as pride: "₹0 · free forever".

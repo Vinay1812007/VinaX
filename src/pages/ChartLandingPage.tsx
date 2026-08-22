@@ -36,7 +36,7 @@ const CONFIG: Record<ChartVariant, VariantConfig> = {
     title: 'Top Songs — Most Popular Right Now',
     desc: `The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, no login, updated continuously.`,
     intro:
-      'The biggest songs on VinaX right now, ranked across every language we love. Tap any track to start playing — no account, no ads in the way.',
+      'The biggest songs on VinaX right now, ranked across every language we love. Tap any track to start playing — no account needed.',
     seed: `top hit songs india ${YEAR}`,
     listName: 'Top Songs on VinaX',
   },
@@ -86,7 +86,7 @@ function SearchChips() {
           <Link
             key={query}
             to={`/search/${encodeURIComponent(query)}`}
-            className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-white/5 transition hover:bg-ink-700 hover:text-ink-100"
+            className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100"
           >
             {query}
           </Link>
@@ -171,7 +171,7 @@ export default function ChartLandingPage({ variant }: { variant: ChartVariant })
             <Link
               key={l}
               to={`/${l}-songs`}
-              className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-white/5 transition hover:bg-ink-700 hover:text-ink-100"
+              className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100"
             >
               {languageLabel(l)} songs
             </Link>

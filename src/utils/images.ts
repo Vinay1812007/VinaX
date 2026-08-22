@@ -20,15 +20,44 @@ function usableVariants(images: ImageVariant[] | undefined): ImageVariant[] {
   );
 }
 
-/** srcset from the catalog's own size variants ("…50.jpg 50w, …150.jpg 150w, …500.jpg 500w"). */
-export function artSrcSet(images: ImageVariant[] | undefined): string | undefined {
+/**
+ * The catalog only PUBLISHES 50/150/500 variants, but the artwork CDN also
+ * serves 250x250 and 350x350 for the same asset (verified live 2026-08-17:
+ * 200 image/jpeg at 15 KB / 26 KB vs 46 KB for the 500). Deriving those by
+ * URL rewrite gives card tiles a sharp-on-retina middle ground — the 4.18.0
+ * flat 150 cap read soft on 2x+ phones (owner report), while 500 was the
+ * ~1 MB PSI finding. Only derives when a 500x500 URL exists to rewrite;
+ * anything else passes through untouched.
+ */
+export function derivedVariants(images: ImageVariant[] | undefined): ImageVariant[] {
+  const usable = usableVariants(images);
+  const v500 = usable.find((v) => v.url.includes('500x500'));
+  if (!v500) return usable;
+  const have = new Set(usable.map((v) => qualityPx(v.quality)));
+  return usable.concat(
+    [250, 350]
+      .filter((px) => !have.has(px))
+      .map((px) => ({ quality: `${px}x${px}`, url: v500.url.replace(/500x500/g, `${px}x${px}`) })),
+  );
+}
+
+/** srcset from the catalog's own size variants ("…50.jpg 50w, …150.jpg 150w, …500.jpg 500w").
+ *
+ *  `maxPx` caps which variants are offered (4.18.0, PSI "improve image
+ *  delivery ~1 MB"): the catalog only publishes 50/150/500, so a ~150 px card
+ *  tile on any 2x screen resolved to the 500×500 file — ~35 KB where ~6 KB
+ *  serves the same cell. Card tiles cap at 150; hero/detail art passes no cap
+ *  and keeps the full-quality 500. If the cap would remove every variant it
+ *  is ignored (better a big image than none). */
+export function artSrcSet(images: ImageVariant[] | undefined, maxPx?: number): string | undefined {
   const usable = usableVariants(images);
   if (usable.length === 0) return undefined;
-  const parts = usable
+  const all = usable
     .map((v) => ({ px: qualityPx(v.quality), url: v.url }))
     .filter((v) => v.px > 0)
-    .sort((a, b) => a.px - b.px)
-    .map((v) => `${v.url} ${v.px}w`);
+    .sort((a, b) => a.px - b.px);
+  const capped = maxPx ? all.filter((v) => v.px <= maxPx) : all;
+  const parts = (capped.length ? capped : all).map((v) => `${v.url} ${v.px}w`);
   const unique = [...new Set(parts)];
   return unique.length > 1 ? unique.join(', ') : undefined;
 }

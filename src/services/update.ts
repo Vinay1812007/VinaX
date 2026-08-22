@@ -53,7 +53,12 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
     };
 
     const latestBuild = Number(data.build) || 0;
-    if (!latestBuild || latestBuild <= installedBuild) return null; // already up to date
+    if (!latestBuild || latestBuild <= installedBuild) {
+      // Up to date — a previous install attempt evidently succeeded, so the
+      // reinstall-guidance marker (if any) is stale. Clear it.
+      try { localStorage.removeItem(KEYS.updateAttempt); } catch { /* ignore */ }
+      return null;
+    }
 
     return {
       latest: data.version ?? String(latestBuild),
@@ -71,6 +76,44 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 
 export type InstallPhase = 'downloading' | 'installing';
 
+// ---------------------------------------------------------------------------
+// Install-attempt tracking (v4.13.3). There is no callback from the Android
+// package installer, so the only reliable signal that an install DIDN'T take
+// is the update dialog reappearing for the same build after an attempt.
+// That state flips the dialog into the one-time reinstall guidance — the
+// path legacy installs signed with the old (debug) key need, since Android
+// permanently refuses cross-signature upgrades ("package conflicts with an
+// existing package").
+// ---------------------------------------------------------------------------
+import { KEYS } from '@/constants/storage-keys';
+
+interface UpdateAttempt {
+  build: number;
+  ts: number;
+}
+
+export function markUpdateAttempt(build: number): void {
+  try {
+    localStorage.setItem(KEYS.updateAttempt, JSON.stringify({ build, ts: Date.now() } satisfies UpdateAttempt));
+  } catch {
+    /* storage full/blocked — guidance just won't trigger */
+  }
+}
+
+/** True when a previous attempt at THIS build didn't stick (installer opened,
+ *  app relaunched, dialog is back). 10-minute floor avoids flagging the very
+ *  first attempt while the installer is still open in front of the app. */
+export function installLikelyBlocked(build: number): boolean {
+  try {
+    const raw = localStorage.getItem(KEYS.updateAttempt);
+    if (!raw) return false;
+    const a = JSON.parse(raw) as Partial<UpdateAttempt>;
+    return a.build === build && typeof a.ts === 'number' && Date.now() - a.ts > 10 * 60_000;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Fully in-app update: downloads the signed APK with native HTTP (no browser,
  * no CORS), writes it to app cache, and hands it to the Android package
@@ -81,6 +124,7 @@ export async function downloadAndInstall(
   apkUrl: string,
   onPhase: (phase: InstallPhase) => void,
   expectedHash?: string,
+  expectedBuild?: number,
 ): Promise<void> {
   const [{ CapacitorHttp }, { Filesystem, Directory }, { FileOpener }] = await Promise.all([
     import('@capacitor/core'),
@@ -136,4 +180,7 @@ export async function downloadAndInstall(
   const { uri } = await Filesystem.getUri({ path: 'vinax-update.apk', directory: Directory.Cache });
   onPhase('installing');
   await FileOpener.open({ filePath: uri, contentType: 'application/vnd.android.package-archive' });
+  // Handed off to the Android installer — remember it. If the dialog is back
+  // for this same build later, the install didn't take (see installLikelyBlocked).
+  if (expectedBuild) markUpdateAttempt(expectedBuild);
 }

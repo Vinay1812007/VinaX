@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { audioEngine } from '@/services/audio/engine';
 import { useOutputStore } from '@/store/outputStore';
 import { useCastStore, ensureCastSdk } from '@/services/cast';
 import { toast } from '@/store/toastStore';
 import { isNativePlatform } from '@/services/native';
+import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface Device {
   deviceId: string;
@@ -13,6 +15,9 @@ interface Device {
 /** "Connect to a device": route audio to any connected output
  *  (speakers/headphones via setSinkId) or cast to a TV (Chromecast). */
 export function DeviceSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useDismissOnBack(open, onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open, onClose);
   const [devices, setDevices] = useState<Device[]>([]);
   const sinkId = useOutputStore((s) => s.sinkId);
   const setOutput = useOutputStore((s) => s.setOutput);
@@ -78,7 +83,7 @@ export function DeviceSheet({ open, onClose }: { open: boolean; onClose: () => v
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="glass-sheet relative w-full sm:max-w-sm sm:rounded-3xl rounded-t-3xl p-4 max-h-[80vh] overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Connect to a device" className="glass-sheet relative w-full sm:max-w-sm sm:rounded-3xl rounded-t-3xl p-4 max-h-[80vh] overflow-y-auto">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-ink-600/60 sm:hidden" aria-hidden />
         <h2 className="text-lg font-bold">Connect to a device</h2>
         <p className="text-xs text-ink-400 mb-3">Play VinaX on another output.</p>

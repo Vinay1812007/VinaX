@@ -1,14 +1,16 @@
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useCurrentSong, usePlayerStore } from '@/store/playerStore';
+import { loadKaraokeHistory, recordKaraokeSession } from '@/features/karaoke/history';
 import { PlayIcon, PauseIcon, NextIcon, PrevIcon } from '@/components/Icons';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
 import { SyncedLyrics } from '@/components/SyncedLyrics';
 import { useSettingsStore } from '@/store/settingsStore';
 import { EmptyState } from '@/components/States';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
-import { ChevronDownIcon } from '@/components/Icons';
+import { ChevronDownIcon, WaveformIcon } from '@/components/Icons';
 
 export default function KaraokePage() {
   usePageTitle('Karaoke');
@@ -24,14 +26,50 @@ export default function KaraokePage() {
   const nextSong = usePlayerStore((s) => s.next);
   const prevSong = usePlayerStore((s) => s.prev);
   const seek = usePlayerStore((s) => s.seek);
+  const playSong = usePlayerStore((s) => s.playSong);
+  // D10 — remember every karaoke session locally so "Sing again" works.
+  const [recent] = useState(loadKaraokeHistory);
+  useEffect(() => {
+    if (song) recordKaraokeSession(song);
+  }, [song?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!song) {
     return (
-      <EmptyState
-        title="Nothing playing"
-        message="Play a song to start karaoke."
-        action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
-      />
+      <div className="max-w-xl mx-auto">
+        <EmptyState
+          icon={<WaveformIcon className="w-8 h-8" />}
+          title="Nothing playing"
+          message="Play a song to start karaoke."
+          action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
+        />
+        {recent.length > 0 && (
+          <section className="mt-8">
+            <h2 className="text-sm font-bold text-ink-200 mb-2.5 px-1">Sing again</h2>
+            <div className="space-y-1.5">
+              {recent.map(({ song: s }) => (
+                <button
+                  key={s.id}
+                  onClick={() => playSong(s)}
+                  className="w-full flex items-center gap-3 glass-card rounded-xl p-2.5 text-left hover:bg-ink-800/40 transition"
+                >
+                  <img
+                    src={bestImage(s.images, 96)}
+                    onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+                    alt=""
+                    loading="lazy"
+                    className="w-10 h-10 rounded-lg object-cover shrink-0"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold truncate">{s.title}</span>
+                    <span className="block text-xs text-ink-400 truncate">{s.subtitle}</span>
+                  </span>
+                  <PlayIcon className="w-4 h-4 text-ember-400 ml-auto shrink-0" />
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
     );
   }
 
@@ -96,7 +134,7 @@ export default function KaraokePage() {
         <div className="flex items-center justify-between">
           <Link
             to={`/lyrics/${song.id}`}
-            className="h-9 px-4 rounded-full bg-white/[0.08] border border-white/10 text-xs font-extrabold text-ink-200 inline-flex items-center hover:bg-white/15 transition"
+            className="h-9 px-4 rounded-full bg-white/[0.08] border border-glass-strong text-xs font-extrabold text-ink-200 inline-flex items-center hover:bg-white/15 transition"
           >
             Meaning
           </Link>

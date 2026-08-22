@@ -13,7 +13,10 @@ import {
   importProfileJson,
   resetAppState,
 } from '@/features/settings/actions';
+import { ACCENT_OPTIONS } from '@/constants/accents';
+import { applyGlassLevel } from '@/utils/theme';
 import { COUNTRIES, REGIONS } from '@/constants/regions';
+import { KEYS } from '@/constants/storage-keys';
 import { DISPLAY_VERSION } from '@/constants/version';
 import { ensureNotificationPermission, getNotificationPermission, isNativePlatform } from '@/services/native';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '@/services/push';
@@ -28,7 +31,11 @@ import { UI_LANGS } from '@/i18n';
 import type { AudioQualityPref } from '@/services/audio/engine';
 import { PageHeader } from '@/components/PageHeader';
 import { cn } from '@/utils/cn';
-import { ClockIcon, DownloadIcon, HelpIcon, SettingsIcon, ShieldIcon, SparkleIcon } from '@/components/Icons';
+import { ClockIcon, DownloadIcon, HelpIcon, HomeIcon, SettingsIcon, ShieldIcon, SparkleIcon } from '@/components/Icons';
+import { HOME_BLOCKS, HOME_BLOCK_KEYS, orderHomeBlocks } from '@/constants/homeBlocks';
+import { moveHomeBlock, resetHomeLayout, toggleHomeBlock } from '@/features/settings/homeLayout';
+import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 function Row({ label, note, children }: { label: string; note?: string; children: ReactNode }) {
   return (
@@ -51,7 +58,7 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
       onClick={() => onChange(!on)}
       className={cn('w-11 h-6 rounded-full transition-colors relative', on ? 'bg-ember-500' : 'bg-ink-600')}
     >
-      <span className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all', on ? 'left-[22px]' : 'left-0.5')} />
+      <span className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white transition-[color,background-color,border-color,opacity,transform]', on ? 'left-[22px]' : 'left-0.5')} />
     </button>
   );
 }
@@ -78,12 +85,51 @@ function Section({
   );
 }
 
+
+// C7 — human names for every KEYS entry the erase modal lists. Derived from
+// the registry at render, so a new storage key can never silently go unlisted
+// (unknown keys fall back to their raw name — visible, if inelegant).
+const ERASE_LABELS: Record<string, string> = {
+  schemaVersion: 'Storage schema version',
+  settings: 'Settings & preferences',
+  player: 'Player state & queue',
+  library: 'Favorites, collections & hidden songs',
+  history: 'Listening history',
+  search: 'Recent searches',
+  profile: 'Taste profile',
+  profileKid: 'Kid-mode taste profile',
+  region: 'Region preference',
+  onboarded: 'Onboarding state',
+  lastSeenVersion: 'What\u2019s-New read state',
+  deviceId: 'Anonymous device id',
+  userName: 'Your name',
+  analyticsConsent: 'Analytics consent choice',
+  downloads: 'Downloads index',
+  alarm: 'Wake alarm',
+  lyricsOffset: 'Lyric sync offsets',
+  karaoke: 'Karaoke history',
+  weekly: 'Weekly mix cache',
+  output: 'Audio output preference',
+  roomHostTokens: 'Listen Together host keys',
+  updateAttempt: 'Update install attempt marker',
+  aiChats: 'VinaX AI chat history',
+};
+const eraseItems = [
+  ...Object.keys(KEYS).map((k) => ERASE_LABELS[k] ?? k),
+  'Play-event log (IndexedDB)',
+  'Cached artwork & audio (Cache Storage)',
+];
+
 export default function SettingsPage() {
   usePageTitle('Settings');
   const s = useSettingsStore();
   const region = useRegion();
   const fileRef = useRef<HTMLInputElement>(null);
   const [notifPerm, setNotifPerm] = useState<'granted' | 'denied' | 'unsupported' | 'unknown'>('unknown');
+  const [eraseOpen, setEraseOpen] = useState(false); // C7 deletion receipt
+  useDismissOnBack(eraseOpen, () => setEraseOpen(false));
+  const eraseRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(eraseRef, eraseOpen, () => setEraseOpen(false));
   useEffect(() => {
     if (isNativePlatform()) void getNotificationPermission().then(setNotifPerm);
   }, []);
@@ -181,6 +227,64 @@ export default function SettingsPage() {
                 {t === 'dark' ? 'Dark' : t === 'light' ? 'Light' : t === 'amoled' ? 'Black' : 'System'}
               </Chip>
             ))}
+          </div>
+        </Row>
+        <Row label="Accent color" note="The highlight color across buttons, links and the player. Every choice stays readable in light and dark.">
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Accent color">
+            {ACCENT_OPTIONS.map((a) => (
+              <button
+                key={a.id}
+                role="radio"
+                aria-checked={s.accent === a.id}
+                aria-label={`${a.label} accent`}
+                title={a.label}
+                onClick={() => s.setAccent(a.id)}
+                className={`w-8 h-8 rounded-full border-2 transition active:scale-95 ${
+                  s.accent === a.id ? 'border-ink-100 scale-110 shadow-glow' : 'border-transparent opacity-80 hover:opacity-100'
+                }`}
+                style={{ backgroundColor: a.dot }}
+              />
+            ))}
+          </div>
+        </Row>
+        <Row label="Glass effect" note="How see-through panels and bars feel — iOS-style frosted glass. Left is classic solid, right is deep glass.">
+          <div className="flex items-center gap-3 w-full max-w-[260px]">
+            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">SOLID</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={s.glassLevel}
+              aria-label="Glass effect intensity"
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                s.setGlassLevel(v);
+                applyGlassLevel(v, s.glassBlur);
+              }}
+              className="flex-1 accent-ember-500"
+            />
+            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">GLASS</span>
+          </div>
+        </Row>
+        <Row label="Background blur" note="Independent from glass — dial from sharp glass to a soft, hazy backdrop.">
+          <div className="flex items-center gap-3 w-full max-w-[260px]">
+            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">SHARP</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={s.glassBlur}
+              aria-label="Background blur intensity"
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                s.setGlassBlur(v);
+                applyGlassLevel(s.glassLevel, v);
+              }}
+              className="flex-1 accent-ember-500"
+            />
+            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">HAZY</span>
           </div>
         </Row>
         <Row label="Autoplay" note="Start playback immediately when you pick a song.">
@@ -310,6 +414,19 @@ export default function SettingsPage() {
             <span className="text-xs text-ink-400 w-8 tabular-nums">{Math.round(s.recommendationIntensity * 100)}%</span>
           </div>
         </Row>
+        <Row label="Explore mode" note="Reserve a corner of your shelves for songs deliberately unlike your usual — trending picks from languages you haven’t tried.">
+          <Toggle on={s.exploreMode} onChange={s.setExploreMode} label="Explore mode" />
+        </Row>
+        <Row label="Kid mode" note="Hides songs the catalog marks explicit — everywhere — and keeps a separate taste profile so a child’s listening never shapes yours. Favorites and downloads stay shared. Only as good as the catalog’s explicit flags.">
+          <Toggle
+            on={s.kidMode}
+            onChange={(v) => {
+              s.setKidMode(v);
+              toast(v ? 'Kid mode on — explicit songs hidden, separate taste profile active' : 'Kid mode off — back to your own taste profile');
+            }}
+            label="Kid mode"
+          />
+        </Row>
         <div className="py-3.5 border-b border-[color:var(--glass-border)]">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
@@ -346,6 +463,57 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
+      </Section>
+
+      {/* Home builder (4.16.0) — hide or reorder the big Home blocks. */}
+      <Section title="Home layout" icon={HomeIcon}>
+        <div className="flex items-start justify-between gap-3 py-3.5 border-b border-[color:var(--glass-border)]">
+          <p className="text-xs text-ink-400 leading-relaxed">
+            Build your own Home: switch blocks off or move them up and down. The greeting, Aura Mix and
+            language rail always stay on top. Applies on this device only.
+          </p>
+          <button
+            onClick={() => {
+              resetHomeLayout();
+              toast('Home layout reset to default');
+            }}
+            className="shrink-0 px-3 py-1.5 rounded-full glass-button text-xs font-semibold"
+          >
+            Reset layout
+          </button>
+        </div>
+        {orderHomeBlocks(s.homeOrder).map((key, i, arr) => {
+          const def = HOME_BLOCKS.find((b) => b.key === key);
+          if (!def) return null;
+          const on = !s.hiddenHome.includes(key);
+          return (
+            <div key={key} className="flex items-center gap-2 py-2.5 border-b border-[color:var(--glass-border)] last:border-0">
+              <div className="flex flex-col gap-0.5">
+                <button
+                  aria-label={`Move ${def.label} up`}
+                  disabled={i === 0}
+                  onClick={() => moveHomeBlock(key, -1, HOME_BLOCK_KEYS)}
+                  className="w-7 h-6 rounded-md glass-button text-[11px] leading-none disabled:opacity-30"
+                >
+                  ▲
+                </button>
+                <button
+                  aria-label={`Move ${def.label} down`}
+                  disabled={i === arr.length - 1}
+                  onClick={() => moveHomeBlock(key, 1, HOME_BLOCK_KEYS)}
+                  className="w-7 h-6 rounded-md glass-button text-[11px] leading-none disabled:opacity-30"
+                >
+                  ▼
+                </button>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className={cn('text-sm font-medium truncate', !on && 'text-ink-400 line-through')}>{def.label}</p>
+                <p className="text-xs text-ink-400 truncate">{def.hint}</p>
+              </div>
+              <Toggle on={on} onChange={() => toggleHomeBlock(key)} label={`Show ${def.label}`} />
+            </div>
+          );
+        })}
       </Section>
 
       <div className="mb-6 rounded-2xl p-5 glass-card relative overflow-hidden">
@@ -408,6 +576,9 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="Your Data" icon={DownloadIcon}>
+        <Row label="Move to a new device" note="Encrypted QR handoff — scan on the new phone and everything comes across. Parked 10 minutes, burned after one use.">
+          <Link to="/handoff" className="px-4 py-2 rounded-full glass-button text-sm inline-block">Start</Link>
+        </Row>
         <Row label="Export profile & settings" note="Portable JSON of all local data — favorites, history, profile, preferences.">
           <button onClick={downloadProfileExport} className="px-4 py-2 rounded-full glass-button text-sm">Export</button>
         </Row>
@@ -440,12 +611,51 @@ export default function SettingsPage() {
         </Row>
         <Row label="Reset app state" note="Erases everything VinaX stores on this device and reloads.">
           <button
-            onClick={() => window.confirm('Erase ALL local VinaX data?') && void resetAppState()}
+            onClick={() => setEraseOpen(true)}
             className="px-4 py-2 rounded-full bg-red-500/15 border border-red-500/50 text-red-300 text-sm font-semibold hover:bg-red-500/25"
           >
             Reset
           </button>
         </Row>
+        {/* C7 — the deletion receipt: exactly what "erase everything" removes,
+            listed from the live KEYS registry so it can never drift stale. */}
+        {eraseOpen && (
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-ink-950/80 backdrop-blur-sm p-0 sm:p-6" role="dialog" aria-modal="true" aria-label="Erase everything">
+            <div ref={eraseRef} className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-6 max-h-[85vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-1">Erase everything?</h2>
+              <p className="text-xs text-ink-400 mb-4">
+                This deletes the following from THIS device only — VinaX has no servers holding a copy, so there is no undo.
+              </p>
+              <ul className="space-y-1 mb-4 text-[13px] text-ink-200">
+                {eraseItems.map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span aria-hidden className="text-red-300 mt-0.5">✕</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(eraseItems.join('\n')).then(() => toast('List copied'));
+                  }}
+                  className="px-4 py-2.5 rounded-full border border-ink-600 text-sm text-ink-200"
+                >
+                  Copy list
+                </button>
+                <button onClick={() => setEraseOpen(false)} className="flex-1 px-4 py-2.5 rounded-full border border-ink-600 text-sm font-semibold text-ink-200">
+                  Keep my data
+                </button>
+                <button
+                  onClick={() => void resetAppState()}
+                  className="px-4 py-2.5 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 text-sm font-bold hover:bg-red-500/30"
+                >
+                  Erase all
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </Section>
 
       <p className="text-xs text-ink-400 leading-relaxed mb-8 px-1">

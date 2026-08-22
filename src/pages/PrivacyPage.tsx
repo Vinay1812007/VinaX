@@ -43,10 +43,12 @@ export default function PrivacyPage() {
           Rooms are ephemeral: a room code, first names, and the shared queue exist while the session lives and are
           cleaned up afterwards.
         </p>
-        <H>No cookies, no trackers, no ads</H>
+        <H>Trackers and ads — the honest version</H>
         <p>
-          There is no third-party analytics script, no advertising SDK, no tracking pixel and no cookie banner because
-          there are no tracking cookies. The typeface, the icons and the code are all served from our own domain.
+          VinaX sets no tracking cookies and runs no third-party analytics: your taste profile, history and
+          favorites never leave your device. <b>There are no ads anywhere</b> — not on the website, not in the
+          Android app, and never in Kid mode — so there are no ad cookies, no ad networks, and nothing VinaX
+          stores about your listening is ever shared with any advertiser.
         </p>
         <H>Your controls</H>
         <p>

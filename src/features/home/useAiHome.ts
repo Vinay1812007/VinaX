@@ -4,9 +4,10 @@ import type { Song } from '@/types';
 import { searchSongsPage } from '@/services/api';
 import { rankSongs } from '@/features/search/useSearch';
 import { getAiHomeSections } from '@/services/ai/home';
-import { biasUnseenFirst, loadRecentHomeIds, recordRecentHomeIds, rotatePage } from '@/features/home/homeVariety';
+import { biasUnseenFirst, loadRecentHomeIds, recordRecentHomeIds, reorderByShelfMood, rotatePage } from '@/features/home/homeVariety';
 import { loadProfile, profileStamp } from '@/services/personalization/storage';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
+import { getSliders, sliderDialLines } from '@/services/personalization/dials';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useHistoryStore } from '@/store/historyStore';
 
@@ -65,6 +66,8 @@ export function useAiHome() {
         freshnessSeed: visitNonce,
         timeOfDay,
         recentlyPlayed: entries.slice(0, 10).map((e) => `${e.song.title} — ${e.song.subtitle}`),
+        // Package C3 — hand-tuned dials ride along in the stringified context.
+        tasteDials: sliderDialLines(getSliders(profile)),
       };
       const sections = await getAiHomeSections(ctx);
       if (!sections.length) return [];
@@ -78,8 +81,10 @@ export function useAiHome() {
           const pg = rotatePage(sec.query, visitNonce, idx, 3);
           const raw = rankSongs(await searchSongsPage(sec.query, pg, 18));
           const onLang = pinned.length ? raw.filter((s) => s.language != null && pinned.includes(s.language)) : raw;
-          // Prefer songs not shown lately, but never starve the shelf.
-          const songs = biasUnseenFirst(onLang, seenIds).slice(0, 12);
+          // A9 — sink mood-clashing picks so the shelf reads to its title, then
+          // prefer songs not shown lately. Both are stable, so relevance holds.
+          const onMood = reorderByShelfMood(sec.title, onLang);
+          const songs = biasUnseenFirst(onMood, seenIds).slice(0, 12);
           return { title: sec.title, songs };
         }),
       );

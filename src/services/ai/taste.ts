@@ -8,6 +8,8 @@
 import { useSettingsStore } from '@/store/settingsStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
+import { loadProfile } from '@/services/personalization/storage';
+import { getSliders, sliderDialLines } from '@/services/personalization/dials';
 import type { Song } from '@/types';
 
 export interface TasteSnapshot {
@@ -19,6 +21,11 @@ export interface TasteSnapshot {
   topSongs: string[];
   likedSongs: string[];
   recentlyPlayed: string[];
+  /** Package C3 — one-liners for any hand-tuned taste dials (empty if neutral). */
+  tasteDials: string[];
+  /** Package B5 — songs already recommended earlier in THIS chat thread, so the
+   *  model never re-serves them. Set by the chat page, not by the builder. */
+  alreadyRecommendedThisChat?: string[];
 }
 
 const line = (s: Song): string =>
@@ -68,5 +75,6 @@ export function buildTasteSnapshot(now = Date.now()): TasteSnapshot {
     topSongs,
     likedSongs: favorites.slice(0, 8).map(line),
     recentlyPlayed: entries.slice(0, 10).map((e) => line(e.song)),
+    tasteDials: sliderDialLines(getSliders(loadProfile())),
   };
 }

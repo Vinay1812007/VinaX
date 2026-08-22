@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { PageHeader } from '@/components/PageHeader';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
-import { createRoom, updateRoom, heartbeat, leaveRoom, endRoom, getRoom, requestSong, type RoomTrack } from '@/services/together';
+import { createRoom, updateRoom, heartbeat, leaveRoom, endRoom, getRoom, requestSong, sendReaction, REACTION_EMOJI, type RoomReaction, type RoomTrack } from '@/services/together';
 import { searchSongs } from '@/services/api';
 import { bestImage } from '@/utils/images';
 import type { Song } from '@/types';
@@ -73,6 +73,7 @@ export default function ListenTogetherPage() {
   const [code, setCode] = useState('');
   const [joinCode, setJoinCode] = useState((params.get('code') ?? '').toUpperCase());
   const [members, setMembers] = useState<string[]>([]);
+  const [listenerCount, setListenerCount] = useState(1);
   const [hostName, setHostName] = useState<string | null>(null);
   const [queue, setQueue] = useState<RoomTrack[]>([]);
   const [busy, setBusy] = useState(false);
@@ -130,7 +131,10 @@ export default function ListenTogetherPage() {
       void heartbeat(code);
       void getRoom(code).then((d) => {
         if (!d) return;
-        setMembers(d.members);
+        // Names come back only for the authorized host; the count always does.
+        setMembers(d.members ?? []);
+        setListenerCount(d.memberCount ?? d.members?.length ?? 1);
+        absorbRef.current(d.reactions);
         // Adopt guest song requests into the live queue, with attribution.
         for (const t of d.room?.requests ?? []) {
           if (!t.song || consumed.has(t.song.id)) continue;
@@ -170,12 +174,15 @@ export default function ListenTogetherPage() {
         setMode('idle');
         setCode('');
         setMembers([]);
+        setListenerCount(1);
         setHostName(null);
         setQueue([]);
         return;
       }
       if (!d) return;
-      setMembers(d.members);
+      setMembers(d.members ?? []);
+      setListenerCount(d.memberCount ?? d.members?.length ?? 1);
+      absorbRef.current(d.reactions);
       setHostName(d.room?.host_name ?? null);
       setQueue(d.room?.queue ?? []);
       const r = d.room;
@@ -220,13 +227,21 @@ export default function ListenTogetherPage() {
 
   const host = async () => {
     setBusy(true);
-    const c = await createRoom(current ?? null);
+    const r = await createRoom(current ?? null);
     setBusy(false);
-    if (!c) {
-      toast('Could not start a session');
+    if (!r.code) {
+      // Honest, cause-specific messages — the generic toast hid a server
+      // schema gap for weeks.
+      toast(
+        r.reason === 'needs_migration' || r.reason === 'not_configured'
+          ? 'Sessions aren’t set up on the server yet — the owner needs to run the rooms database update.'
+          : r.reason === 'rate_limited'
+            ? 'Too many tries — wait a minute and try again.'
+            : 'Could not start a session — check your connection and try again.',
+      );
       return;
     }
-    setCode(c);
+    setCode(r.code);
     setMode('host');
   };
 
@@ -263,6 +278,67 @@ export default function ListenTogetherPage() {
   };
 
   const inviteLink = `/together?code=${code}`;
+
+  // Package D11 — emoji reactions. Every member's poll carries the room's
+  // recent reactions (anonymous: emoji + stamp only); new ones float up over
+  // the session card. Your own tap floats instantly, and lastReactRef advances
+  // so the next poll doesn't replay it.
+  const [floats, setFloats] = useState<Array<{ id: number; e: string; left: number }>>([]);
+  const floatSeq = useRef(0);
+  const lastReactRef = useRef(Date.now());
+  const spawnFloats = (emojis: string[]): void => {
+    const batch = emojis.slice(0, 6).map((e) => ({
+      id: ++floatSeq.current,
+      e,
+      left: 10 + Math.random() * 78,
+    }));
+    if (!batch.length) return;
+    setFloats((p) => [...p, ...batch]);
+    const ids = new Set(batch.map((b) => b.id));
+    window.setTimeout(() => setFloats((p) => p.filter((f) => !ids.has(f.id))), 2600);
+  };
+  // Routed through a ref so the poll effects (whose dep arrays are deliberately
+  // minimal) always call the latest closure without re-attaching.
+  const absorbRef = useRef<(list?: RoomReaction[]) => void>(() => undefined);
+  const absorbReactions = (list?: RoomReaction[]): void => {
+    if (!list?.length) return;
+    const fresh = list
+      .map((r) => ({ e: r.e, t: Date.parse(r.at) }))
+      .filter((r) => Number.isFinite(r.t) && r.t > lastReactRef.current);
+    if (!fresh.length) return;
+    lastReactRef.current = Math.max(...fresh.map((r) => r.t));
+    spawnFloats(fresh.map((r) => r.e));
+  };
+  absorbRef.current = absorbReactions;
+  const react = (emoji: string): void => {
+    lastReactRef.current = Date.now(); // don't re-float our own from the poll
+    spawnFloats([emoji]);
+    void sendReaction(code, emoji).then((ok) => {
+      if (!ok) toast('Reactions aren’t enabled on this server yet');
+    });
+  };
+
+  // A QR of the invite link, so a friend in the room joins by
+  // pointing their camera instead of typing a code. Generated locally.
+  const [qr, setQr] = useState('');
+  useEffect(() => {
+    if (mode !== 'host' || !code) {
+      setQr('');
+      return;
+    }
+    let alive = true;
+    void import('qrcode')
+      .then(({ toDataURL }) =>
+        toDataURL(`${window.location.origin}${inviteLink}`, { margin: 1, width: 240, errorCorrectionLevel: 'M' }),
+      )
+      .then((url) => {
+        if (alive) setQr(url);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [mode, code, inviteLink]);
 
   if (mode === 'idle') {
     return (
@@ -301,21 +377,49 @@ export default function ListenTogetherPage() {
     <div className="max-w-xl mx-auto">
       <PageHeader title="Listen Together" />
 
-      <div className="glass-panel rounded-2xl p-6 text-center mb-4">
+      <div className="glass-panel rounded-2xl p-6 text-center mb-4 relative overflow-hidden">
+        {/* D11 — floating reactions from everyone in the room. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-10">
+          {floats.map((f) => (
+            <span key={f.id} className="vx-react" style={{ left: `${f.left}%` }}>{f.e}</span>
+          ))}
+        </div>
         <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-ember-300 mb-2 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-ember-400 animate-pulse" aria-hidden />{mode === 'host' ? 'Live session · You\u2019re hosting' : `Following ${hostName ?? 'the host'}`}</p>
         <p className="text-4xl font-extrabold tracking-[0.3em] text-ember-400">{code}</p>
-        {mode === 'host' && (
-          <div className="flex items-center justify-center gap-2 mt-4">
+        {/* D11 — react to what's playing; everyone in the room sees it rise. */}
+        <div className="flex items-center justify-center gap-1.5 mt-4" role="group" aria-label="React to the music">
+          {REACTION_EMOJI.map((e) => (
             <button
-              onClick={() => void shareLink(inviteLink, 'Listen with me on VinaX').then((r) => toast(r === 'copied' ? 'Invite copied' : 'Invite shared'))}
-              className="px-4 py-2 rounded-full btn-primary text-sm font-bold"
+              key={e}
+              onClick={() => react(e)}
+              aria-label={`React ${e}`}
+              className="w-10 h-10 rounded-full bg-white/[0.06] border border-glass-strong text-lg hover:bg-white/[0.14] active:scale-90 transition"
             >
-              Share invite
+              {e}
             </button>
-            <button onClick={() => void navigator.clipboard?.writeText(code).then(() => toast('Code copied'))} className="px-4 py-2 rounded-full border border-ink-600 text-sm font-semibold">
-              Copy code
-            </button>
-          </div>
+          ))}
+        </div>
+        {mode === 'host' && (
+          <>
+            {qr && (
+              <img
+                src={qr}
+                alt={`QR code to join room ${code}`}
+                className="mx-auto mt-4 w-36 h-36 rounded-xl bg-white p-1.5"
+              />
+            )}
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <button
+                onClick={() => void shareLink(inviteLink, 'Listen with me on VinaX').then((r) => toast(r === 'copied' ? 'Invite copied' : 'Invite shared'))}
+                className="px-4 py-2 rounded-full btn-primary text-sm font-bold"
+              >
+                Share invite
+              </button>
+              <button onClick={() => void navigator.clipboard?.writeText(code).then(() => toast('Code copied'))} className="px-4 py-2 rounded-full border border-ink-600 text-sm font-semibold">
+                Copy code
+              </button>
+            </div>
+          </>
         )}
       </div>
 
@@ -361,8 +465,10 @@ export default function ListenTogetherPage() {
       )}
 
       <div className="glass-card rounded-2xl p-4 mb-4">
-        <p className="text-xs text-ink-400 mb-2 flex items-center gap-1.5"><UsersIcon className="w-4 h-4" /> {members.length || 1} listening</p>
+        <p className="text-xs text-ink-400 mb-2 flex items-center gap-1.5"><UsersIcon className="w-4 h-4" /> {Math.max(listenerCount, members.length, 1)} listening</p>
         <div className="flex flex-wrap gap-2">
+          {/* Names render only when the server shared them (the host's view);
+              guests see the honest count above — never each other's names. */}
           {(members.length ? members : ['You']).map((m, i) => (
             <span key={`${m}-${i}`} className="glass-card rounded-full px-3 py-1 text-xs">{m}</span>
           ))}

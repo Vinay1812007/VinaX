@@ -24,7 +24,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const feedback = await sbSelect<FeedbackRow>(
     env,
     'vinax_feedback',
-    'select=id,type,name,message,app_version,platform,country,city,status,created_at&order=created_at.desc&limit=200',
+    'select=id,type,name,message,app_version,platform,country,city,status,created_at&type=neq.admin-audit&order=created_at.desc&limit=200',
   );
 
   return new Response(JSON.stringify({ feedback }), {
@@ -44,8 +44,9 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const status = body && typeof body.status === 'string' ? body.status.slice(0, 16) : 'resolved';
   const ok = await sbUpdate(env, 'vinax_feedback', `id=eq.${id}`, { status });
 
+  // A failed Supabase write is a SERVER problem, not the client's (D-17).
   return new Response(JSON.stringify({ ok }), {
-    status: ok ? 200 : 400,
+    status: ok ? 200 : 500,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 };

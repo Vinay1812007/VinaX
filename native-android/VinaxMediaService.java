@@ -47,6 +47,10 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
     public static final String ACTION_STATE     = "vinax.STATE";
     public static final String ACTION_POSITION  = "vinax.POSITION";
     public static final String ACTION_STOP_SELF = "vinax.STOP_SELF";
+    /** Launch-intent extra: tapping the notification body / media session
+     *  should open the app ON THE FULL-SCREEN PLAYER (4.16.1). MainActivity
+     *  reads it and relays via VinaxMediaPlugin.openPlayerRequested(). */
+    public static final String EXTRA_OPEN_PLAYER = "vinax.open.player";
     private static final String ACTION_PLAY  = "vinax.PLAY";
     private static final String ACTION_PAUSE = "vinax.PAUSE";
     private static final String ACTION_PREV  = "vinax.PREV";
@@ -78,6 +82,7 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
         createChannel();
 
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (launch != null) launch.putExtra(EXTRA_OPEN_PLAYER, true);
         PendingIntent pi = launch != null
                 ? PendingIntent.getActivity(this, 0, launch, piFlags()) : null;
 
@@ -181,6 +186,8 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
         PendingIntent content = null;
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (launch != null) {
+            // Tapping the notification body opens the full-screen player.
+            launch.putExtra(EXTRA_OPEN_PLAYER, true);
             content = PendingIntent.getActivity(this, 0, launch, piFlags());
         }
 

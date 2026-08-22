@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { albumPath } from '@/utils/slug';
 import { filmTitleFromAlbumName } from '@/services/api/movies';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -8,7 +9,7 @@ import { CardGridSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { Chip } from '@/components/Chip';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
-import { SearchIcon, XIcon } from '@/components/Icons';
+import { SearchIcon, XIcon, FilmIcon } from '@/components/Icons';
 import { flattenAlbumPages, useInfiniteAlbums } from '@/features/search/useInfiniteSongs';
 import { LANGUAGES, languageLabel } from '@/constants/languages';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -95,6 +96,7 @@ export default function MoviesPage() {
       {q.isError && <ErrorState retry={() => void q.refetch()} />}
       {!q.isLoading && !q.isError && albums.length === 0 && (
         <EmptyState
+          icon={<FilmIcon className="w-8 h-8" />}
           title="Nothing here yet"
           message={
             searching
@@ -105,6 +107,44 @@ export default function MoviesPage() {
       )}
       {albums.length > 0 && (
         <>
+          {/* D9 — featured film: the top result as a full-bleed backdrop card. */}
+          {!searching && shown[0] && (
+            <Link
+              to={albumPath(shown[0])}
+              className="relative block rounded-3xl overflow-hidden mb-5 group ring-1 ring-white/10"
+            >
+              <img
+                src={bestImage(shown[0].images, 500)}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-50"
+                aria-hidden
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-ink-950/40 to-transparent" aria-hidden />
+              <div className="relative flex items-end gap-4 p-5 pt-16 sm:pt-24">
+                <img
+                  src={bestImage(shown[0].images, 250)}
+                  alt=""
+                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl object-cover shadow-float shrink-0"
+                />
+                <div className="min-w-0 flex-1 pb-1">
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-ember-300 mb-1">Featured film</p>
+                  <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight truncate">
+                    {filmTitleFromAlbumName(shown[0].title) ?? shown[0].title}
+                  </h2>
+                  <p className="text-xs text-ink-300 truncate">{shown[0].subtitle || 'Full soundtrack'}</p>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void playAlbum(shown[0].id, shown[0].title);
+                  }}
+                  className="shrink-0 px-5 py-2.5 rounded-full btn-primary text-sm font-bold active:scale-95 transition"
+                >
+                  Play soundtrack
+                </button>
+              </div>
+            </Link>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
             {shown.map((a) => (
               <MediaCard

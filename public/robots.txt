@@ -10,6 +10,7 @@ Disallow: /now-playing
 Disallow: /stats
 Disallow: /settings
 Disallow: /taste-profile
+Disallow: /handoff
 Disallow: /offline
 Disallow: /collection/
 Disallow: /cache-info

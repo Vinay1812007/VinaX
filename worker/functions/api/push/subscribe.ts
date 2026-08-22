@@ -1,6 +1,7 @@
 /** Store a browser push subscription (upsert by endpoint). */
 import { sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
 import { rateLimit } from '../../_lib/ratelimit';
+import { cleanTzOffset } from '../../_lib/notifyGate';
 
 interface SubscribeEnv extends SupabaseEnv {
   TELEMETRY_PEPPER?: string;
@@ -45,6 +46,8 @@ function isAllowedPushEndpoint(raw: string): boolean {
   return false;
 }
 
+interface CfExtras { cf?: { country?: string; region?: string; city?: string } }
+
 export const onRequestPost = async (context: { request: Request; env: SubscribeEnv }): Promise<Response> => {
   const { request, env } = context;
   // Audit finding H-SRV-3: this endpoint was previously unrated and would
@@ -52,13 +55,18 @@ export const onRequestPost = async (context: { request: Request; env: SubscribeE
   const limited = rateLimit(request, 'push-subscribe', { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
   const body = (await request.json().catch(() => null)) as
-    | { endpoint?: string; keys?: { p256dh?: string; auth?: string }; lang?: string }
+    | { endpoint?: string; keys?: { p256dh?: string; auth?: string }; lang?: string; tzOffset?: number }
     | null;
   const endpoint = body?.endpoint;
   const p256dh = body?.keys?.p256dh;
   const auth = body?.keys?.auth;
   if (!endpoint || !p256dh || !auth) return json({ error: 'bad_request' }, 400);
   if (!isAllowedPushEndpoint(endpoint)) return json({ error: 'endpoint_rejected' }, 400);
+  // Coarse geo — read from Cloudflare edge, stored at subscribe time so
+  // location-targeted admin pushes ("Hyderabad trending") have a subscriber
+  // filter to hit. IP itself never enters the DB (privacy promise intact).
+  const cf = (request as Request & CfExtras).cf ?? {};
+  const country = request.headers.get('CF-IPCountry') ?? cf.country ?? null;
   const ok = await sbUpsert(
     env,
     'vinax_push_subscriptions',
@@ -67,6 +75,12 @@ export const onRequestPost = async (context: { request: Request; env: SubscribeE
       p256dh,
       auth,
       lang: typeof body?.lang === 'string' ? body.lang.slice(0, 8) : null,
+      country: country && country !== 'XX' && country !== 'T1' ? country : null,
+      region: cf.region ?? null,
+      city: cf.city ?? null,
+      // Device UTC offset (minutes east) for the quiet-hours gate — coarse and
+      // non-identifying (not the IP, not a precise location).
+      tz_offset: cleanTzOffset(body?.tzOffset),
       active: true,
       updated_at: new Date().toISOString(),
     },

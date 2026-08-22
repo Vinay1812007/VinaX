@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { Song } from '@/types';
 import { cn } from '@/utils/cn';
 import { toast } from '@/store/toastStore';
 import { shareOrSaveImage } from '@/utils/shareImage';
+import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 const MAX = 6;
 const trunc = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1) + '…' : s);
@@ -20,8 +22,8 @@ async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {
   x.fillStyle = bg;
   x.fillRect(0, 0, 1080, 1080);
   const glow = x.createRadialGradient(220, 200, 0, 220, 200, 680);
-  glow.addColorStop(0, 'rgba(255,106,43,0.28)');
-  glow.addColorStop(1, 'rgba(255,106,43,0)');
+  glow.addColorStop(0, 'rgba(99,102,241,0.32)');
+  glow.addColorStop(1, 'rgba(99,102,241,0)');
   x.fillStyle = glow;
   x.fillRect(0, 0, 1080, 1080);
 
@@ -72,6 +74,9 @@ async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {
 }
 
 export function LyricShareSheet({ lines, song, onClose }: { lines: string[]; song: Song; onClose: () => void }) {
+  useDismissOnBack(true, onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, true, onClose);
   const [sel, setSel] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -98,6 +103,10 @@ export function LyricShareSheet({ lines, song, onClose }: { lines: string[]; son
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Share lyrics"
         className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-5 max-h-[85vh] flex flex-col animate-fade-up"
         onClick={(e) => e.stopPropagation()}
       >

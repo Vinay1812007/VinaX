@@ -2,6 +2,8 @@ import { getAlbum, getSongSuggestions, searchSongsPage } from '@/services/api';
 import { isJunkTrack } from './quality';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { trendingSeed } from '@/constants/seeds';
+import { LANGUAGES } from '@/constants/languages';
+import { kidModeOn } from '@/services/kidMode';
 import type { Candidate, RecommendationContext } from './types';
 
 const REDISCOVERY_AGE_MS = 14 * 86_400_000;
@@ -91,6 +93,23 @@ export async function gatherCandidates(ctx: RecommendationContext): Promise<Cand
     );
   }
 
+  // 4b. Package A4 — exploration budget (opt-in). Trending picks in languages
+  // the listener has literally never played: not in the profile, not pinned,
+  // never muted. Salt-rotated so different opens explore different corners.
+  if (ctx.explore) {
+    const heard = new Set(Object.keys(ctx.profile.languages));
+    const unheard = LANGUAGES.map((l) => l.id).filter(
+      (id) => !heard.has(id) && !ctx.pinnedLanguages.includes(id) && !ctx.mutedLanguages.includes(id),
+    );
+    for (const lang of rotate(unheard, ctx.salt, 2)) {
+      tasks.push(
+        safe(searchSongsPage(trendingSeed(lang, ctx.salt), 1 + (Math.abs(ctx.salt) % 3), 10), []).then((songs) =>
+          songs.map((song) => ({ song, source: 'explore' as const })),
+        ),
+      );
+    }
+  }
+
   // 5. Rediscovery: completed listens older than two weeks (no fetch needed).
   const cutoff = Date.now() - REDISCOVERY_AGE_MS;
   const rediscovery: Candidate[] = ctx.history
@@ -100,5 +119,24 @@ export async function gatherCandidates(ctx: RecommendationContext): Promise<Cand
 
   const settled = await Promise.allSettled(tasks);
   const pool: Candidate[] = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
-  return [...pool, ...rediscovery].filter((c) => !isJunkTrack(c.song));
+
+  // Package A3: filter out any candidate whose primary artist the listener
+  // explicitly asked less of. `softMuted` is an optional field; a v1 profile
+  // without it just returns undefined and the filter is a no-op.
+  const now = Date.now();
+  const muted = ctx.profile?.softMuted ?? {};
+  const isMuted = (song: Candidate['song']): boolean => {
+    const primary = song.artists[0];
+    if (!primary) return false;
+    const byId = primary.id ? muted[primary.id] : undefined;
+    const byName = muted[primary.name.toLowerCase()];
+    const entry = byId ?? byName;
+    return !!(entry && entry.until > now);
+  };
+
+  return [...pool, ...rediscovery]
+    .filter((c) => !isJunkTrack(c.song))
+    .filter((c) => !isMuted(c.song))
+    // C2 — kid mode: explicit-flagged songs never enter the candidate pool.
+    .filter((c) => !(c.song.explicit && kidModeOn()));
 }

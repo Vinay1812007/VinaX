@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isNativePlatform } from '@/services/native';
+import { alertsSnoozedUntil, snoozeAlerts } from '@/services/announcements';
+import { toast } from '@/store/toastStore';
 import { XIcon } from '@/components/Icons';
+import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface Announcement {
   title?: string;
@@ -24,9 +28,13 @@ function ago(ts?: number): string {
 
 /** Canvas 3c — notification center: today's pick + recent release notes. */
 export function NotificationSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useDismissOnBack(open, onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open, onClose);
   const navigate = useNavigate();
   const [anns, setAnns] = useState<Announcement[]>([]);
   const [notes, setNotes] = useState<NoteRow[]>([]);
+  const [snoozed, setSnoozed] = useState(() => alertsSnoozedUntil() != null);
   useEffect(() => {
     if (!open) return;
     const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
@@ -45,8 +53,10 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-ink-950/70 backdrop-blur-sm p-0 sm:p-6" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-5 animate-fade-up"
         role="dialog"
+        aria-modal="true"
         aria-label="Notifications"
         onClick={(e) => e.stopPropagation()}
       >
@@ -95,6 +105,21 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
             </div>
           ))}
         </div>
+        {/* D7 — a week of quiet, without touching the permanent toggle. */}
+        {isNativePlatform() && (
+          <button
+            onClick={() => {
+              if (snoozed) return;
+              snoozeAlerts(7);
+              setSnoozed(true);
+              toast('Alerts muted for 7 days');
+            }}
+            className="w-full mt-3 py-2 rounded-full border border-ink-600 text-xs font-semibold text-ink-300 hover:text-ink-100 transition disabled:opacity-60"
+            disabled={snoozed}
+          >
+            {snoozed ? 'Alerts muted for 7 days ✓' : 'Mute alerts for 7 days'}
+          </button>
+        )}
       </div>
     </div>
   );

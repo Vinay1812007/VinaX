@@ -2,16 +2,29 @@
 
 # 🎵 VinaX
 
+
+### Local music catalog development
+
+`npm run dev` now exposes the same `/api/cat/*` catalog handler used by Cloudflare Pages through a Vite development middleware. The browser therefore calls `http://localhost:5173/api/cat/...` instead of community mirrors. The handler talks directly to JioSaavn and also resolves the encrypted media URL for playback.
+
+The local catalog can be tested directly with:
+
+```text
+http://localhost:5173/api/cat/search/songs?query=top%20telugu%20songs%202026&limit=5
+```
+
+If an existing `VITE_API_BASES` environment variable is set, remove it while testing the built-in local catalog, or set it to `/api/cat`.
+
 ### Music tuned to you — free, no login, private by design.
 
 **[▶ Open VinaX](https://www.sirimillavinay.online/)** · **[📱 Android APK](https://www.sirimillavinay.online/download)** · **[🤖 VinaX AI](https://www.sirimillavinay.online/VinaXAI)**
 
-**Release Version: VinaX V1**
+**Release line: VinaX V1**
 
-![version](https://img.shields.io/badge/release-VinaX%20V1-22d3ee)
+![release](https://img.shields.io/badge/release-VinaX%20V1-22d3ee)
 ![status](https://img.shields.io/badge/status-production-22c55e)
 ![platform](https://img.shields.io/badge/web%20·%20android%20·%20tv-121212)
-![login](https://img.shields.io/badge/accounts-none-22d3ee)
+![accounts](https://img.shields.io/badge/accounts-none-22d3ee)
 ![privacy](https://img.shields.io/badge/personalization-on--device-a78bfa)
 
 </div>
@@ -20,114 +33,149 @@
 
 ## The idea
 
-A music player for Indian and international music in 12+ languages that treats listeners
-like adults: **no account, no tracking, no ads, no paywall — ever**. The taste profile,
-history and favorites live on the device and never leave it. Personalization is computed
-locally; AI features receive only a short, capped, anonymous taste summary.
+A music player for Indian and international music in 12+ languages that treats
+listeners like adults: **no account, no login, no paywall, no feature-gating —
+ever.** The taste profile, history and favorites live on the device and never
+leave it. Personalization is computed locally; AI features receive only a
+short, capped, anonymous taste summary.
+
+**The honest part:** there are **no ads anywhere** — not on the website, not
+in the Android app, and never in Kid mode. VinaX sets **no tracking cookies of
+its own**, and nothing about your listening is ever shared with anyone. The
+full policy, in plain language, is on the
+[privacy page](https://www.sirimillavinay.online/privacy).
 
 ## What it does
 
-🎧 **Player** — gesture controls, synced karaoke lyrics (romanized + translated + AI
-"Meaning"), offline downloads, drive mode, sleep timer, wake-up alarm, lock-screen
-controls, and *living color*: the whole app tints itself from the playing artwork.
+🏠 **A Home that learns you** — shelves grown from your listening (Continue
+Listening, On Repeat, Because You Listened To, Fresh Finds, Hidden Gems, Decade
+Rewind, second-language trending), six daily-rotating mood boards, seasonal and
+festival shelves, and an endless personalized feed. **Home builder:** every
+block can be hidden or reordered from Settings → Home layout.
 
-🤖 **VinaX AI — the VinaX V1 engine family** — a full chat with all seven engines
-selectable, each with its own strength and its own signature answer style:
-**VinaX FLASH** (everyday chat · the default), **VinaX 20B** (fastest answers),
-**VinaX SUPER** (deepest reasoning · the Think engine), **VinaX INSTANT**
-(music knowledge · answers in a blink), **VinaX 120B** (the big creative engine that
-also runs the AI DJ), **VinaX ULTRA** (the most powerful all-rounder) and
-**VinaX NANO 3** (light and quick · loves finding songs — it also works
-behind the Search page as a personalized music expert). Live web search, files and images, Think/Research modes, and
-hands-free voice chat that works on the web and in the Android app — replying out loud in a
-natural studio voice — with every reply wearing a chip naming the engine that actually answered. Ask
-"play ⟨song⟩" and the reply is a live mini-player with lyrics singing along. Behind the
-app, the same seven lanes drive the AI DJ, AI playlists and the home-screen curator —
-with cross-lane failover so one bad engine never takes a feature down. When the AI is
-slow the app says "Instant picks" instead of pretending.
+🎧 **Player** — gesture controls, drag-to-reorder queue, synced karaoke lyrics
+(romanized + translated + AI "Meaning"), offline downloads, drive mode, sleep
+timer, wake-up alarm, lock-screen controls, tap-the-notification →
+full-screen player (Android), and *living color*: the app tints itself from
+the playing artwork.
 
-🎚 **Tune this queue** — twelve one-tap intents (melody, beats, devotional, heartbreak,
-classics, fresh, language switches, surprise) that reshape what plays next, with
-on-device scoring as a fallback so tuning works even if the AI doesn't.
+🤖 **VinaX AI — the VinaX V1 engine family** — a full chat with seven
+selectable engines, each with its own strength: **FLASH** (everyday chat, the
+default), **20B** (fastest), **SUPER** (deepest reasoning — the Think engine),
+**INSTANT** (music knowledge in a blink), **120B** (the big creative engine
+that also runs the AI DJ), **ULTRA** (the strongest all-rounder) and **NANO 3**
+(light, quick, loves finding songs — it also powers personalized search).
+Live web search, files and images, Think/Research modes, and hands-free voice
+chat replying in a natural studio voice. Ask "play ⟨song⟩" and the reply is a
+live mini-player with lyrics. Behind the app the same seven lanes drive the AI
+DJ, AI playlists and the home curator — with cross-lane failover so one bad
+engine never takes a feature down.
 
-👥 **Listen Together** — room-code sessions, everyone at the same second (~1s sync),
-live shared queue with credits, host controls, "End for all".
+🎚 **Tune this queue** — twelve one-tap intents (melody, beats, devotional,
+heartbreak, classics, fresh, language switches, surprise) that reshape what
+plays next, with on-device scoring as a fallback so tuning works even when the
+AI doesn't.
 
-⌨️ **Power tools** — Ctrl/⌘+K command palette (jump anywhere, fire player actions, play
-songs as you type), a real right-click menu on every song, and keyboard-first playback.
+👥 **Listen Together** — room-code sessions, everyone at the same second
+(~1s sync), live shared queue with credits, host controls, "End for all".
 
-🔔 **Notifications** — opt-in web push: at most one AI-picked song a day plus rare owner
-announcements; the Android app shows them on open. A bell on Home is the notification
-center.
+⌨️ **Power tools** — Ctrl/⌘+K command palette (jump anywhere, fire player
+actions, play songs as you type), a real right-click menu on every song, and
+keyboard-first playback.
 
-📊 **Your VinaX** — on-device stats: plays, hours, top artists, language mix, 🔥 streaks.
-Computed here, never uploaded, sharable by choice.
+🔔 **Notifications** — opt-in push, personalized per listener: the daily song
+pick comes from *your* language with a message written *in* that language
+(device locale first, geography as fallback). At most one song a day plus rare
+owner announcements. A bell on Home is the notification center.
 
-📱 **Everywhere** — installable PWA, auto-updating Android shell APK, TV with D-pad
-navigation, capability-based UI (touch/mouse/TV detected by hardware).
+📊 **Your VinaX** — on-device stats: plays, hours, top artists, language mix,
+🔥 streaks, and a shareable Year-in-Music card painted entirely on your device.
+
+📱 **Everywhere** — installable PWA, auto-updating signed Android APK, TV with
+D-pad navigation, capability-based UI (touch/mouse/TV detected by hardware).
 
 ## Engineering highlights
 
-- **Stack:** React 19 + TypeScript + Vite 8 (Rolldown) · Tailwind token system ·
-  Zustand + TanStack Query · Cloudflare Pages (static frontend) + a Cloudflare Worker backend (60+ edge modules, `worker/`) · Supabase ·
-  Capacitor 8 · self-hosted Manrope variable font.
-- **Seven AI lanes** (the VinaX V1 engine family: FLASH · 20B · SUPER · INSTANT ·
-  120B · ULTRA · NANO 3) with cross-lane failover and per-lane observability — every
-  lane has its own key and pinned engine (env names documented in `.env.example`), and
-  the admin AI Lab can bench each one live. All lanes share DJ-grade taste conditioning
-  from a bounded on-device snapshot.
-- **Resilient voice:** live voice chat and mic dictation detect a dead browser speech
-  service and fail over to on-device speech recognition (installing the model on first
-  use), with honest on-screen errors instead of silent hangs.
-- **Quality surface:** a junk-track filter keeps dialogues/BGM/jukebox strips out of
-  every AI surface; shelf diversity caps identical covers; design-system auto-tests lock
-  brand tokens, theme switching and WCAG contrast into CI.
-- **Rendering:** 28 prerendered routes + edge-rendered entity pages (real titles, OG,
-  JSON-LD at the CDN) + client SPA player. Live sitemap index.
-- **Delivery hardening:** assets can never fall back to HTML, URL-epoch cache lever,
-  CSP-hashed boot self-healing, conservative service worker, owner-controlled
+- **Stack:** React 19 + TypeScript strict + Vite 8 (Rolldown) · Tailwind token
+  system ("Living Glass", user-adjustable glass + blur dials) · Zustand +
+  TanStack Query · Cloudflare Pages + Functions (60+ edge modules) · Supabase
+  (service-role only, RLS deny-all) · Capacitor 8 · self-hosted Manrope
+  variable font.
+- **Performance-first shell:** the pre-hydration screen is real, styled
+  content (headline + description + navigation) — not a splash — so LCP lands
+  at CSS-time; below-the-fold Home blocks mount progressively after first
+  paint; zero non-composited animations; 161 KB gz first-load budget enforced
+  in CI.
+- **Seven AI lanes** (FLASH · 20B · SUPER · INSTANT · 120B · ULTRA · NANO 3)
+  with cross-lane failover and per-lane observability — every lane has its own
+  key and pinned engine (documented in `.env.example`), benchable live from
+  the admin AI Lab. All lanes share DJ-grade taste conditioning from a bounded
+  on-device snapshot.
+- **Infinite-catalog SEO:** an hourly walker expands the music catalog
+  artist-by-artist into a persistent URL corpus (Supabase), served back as
+  unbounded paginated sitemaps with canonical-exact URLs; entity pages are
+  edge-rendered with real titles, OG cards and JSON-LD, and every render
+  feeds newly-discovered entities back into the corpus.
+- **Resilient voice:** live voice chat and dictation detect a dead browser
+  speech service and fail over to on-device recognition, with honest on-screen
+  errors instead of silent hangs.
+- **Quality surface:** junk-track filtering on every AI surface, shelf
+  diversity caps, design-system auto-tests locking brand tokens, theme
+  switching and WCAG contrast into CI.
+- **Delivery hardening:** hashed assets can never fall back to HTML, CSP with
+  auto-managed script hashes, boot self-healing (a poisoned service worker
+  cache unregisters and recovers itself), conservative SW, owner-controlled
   Live/Maintenance switch.
-- **Gates on every push:** eslint (0 warnings) → tsc → full vitest suite → build +
-  prerender → 155 KB gz first-load budget → Lighthouse → signed APK build.
+- **Gates on every push:** eslint (0 warnings) → tsc → full vitest suite →
+  build + prerender + CSP-hash sync → first-load budget → Playwright E2E +
+  axe accessibility → Lighthouse → signed APK build on `[release]`.
 
 ## Owner console
 
-`/admin` on a separate subdomain, token-gated: 18 dashboards — real-time listening,
-growth chart, search & engagement analytics, world map, user management with audited
-deletes, AI-lane health, an AI Lab test bench for all seven engines, sent-notification log
-with retract, full admin audit trail, content-control blocklist (takedowns propagate in
-minutes), weekly This-Week digest, push composer with song/album picker,
-Live/Maintenance switch, and a ⌘K palette. Light and dark themes, both properly legible.
+`/admin` on a separate subdomain, token-gated: 18 dashboards — real-time
+listening, growth chart, search & engagement analytics, world map, user
+management with audited deletes and per-user profile export, A/B experiments,
+AI-lane health, an AI Lab bench for all seven engines, sent-notification log
+with retract, full admin audit trail, content-control blocklist (takedowns
+propagate in minutes), weekly digest, push composer with song/album picker,
+Live/Maintenance switch, and a ⌘K palette. Light and dark, both legible.
 
 ## Repository map
 
 ```
 src/                the app (43 pages, stores, typed services, design tokens)
-functions/          edge: AI lanes · rooms · push · admin · cron · sitemaps
+functions/          edge: AI lanes · rooms · push · admin · cron · sitemaps · SEO corpus
 public/admin/       owner console (vanilla, token-gated)
-supabase/schema.sql full idempotent DB schema
-scripts/            prerender · bundle budget · android patch
+native-android/     Capacitor media-session bridge (notification → full player)
+supabase/           idempotent schema + migrations (paste-and-run SQL)
+scripts/            prerender · bundle budget · CSP hashes · android patch
 docs/               design system · QA script · release audits · runbooks
+.github/workflows/  CI gates · APK release · hourly SEO crawl · daily pushes
 ```
 
 ## Run it
 
 ```bash
 npm install && npm run dev     # dev server on :5173 — zero secrets needed
-npm test                       # vitest
-npm run build                  # typecheck + build + prerender 28 routes
+npm test                       # vitest (unit + contract tests)
+npm run build                  # typecheck + build + prerender + CSP hashes
+npx playwright test            # E2E smoke + accessibility gates
 ```
 
-Deploy: push to `main` — CI gates, then Cloudflare Pages ships web + admin, and the APK
-workflow builds a signed Android release. Every server secret is documented in
-`.env.example` (Cloudflare → Pages → Environment variables); none are needed locally.
+Deploy: push to `main` — CI gates run, Cloudflare Pages ships web + admin, and
+a `[release]` commit additionally publishes a signed Android APK that existing
+installs pick up through the in-app updater. Every server secret is documented
+in `.env.example` (Cloudflare → Pages → Environment variables); none are
+needed locally.
 
-## The two promises
+## The promises
 
-1. **Free and login-free, always.** No accounts, no paywalls, no ads, no feature-gating.
-2. **Private by design.** On-device personalization, opt-in aggregate-only analytics,
-   IPs never stored, no cookies, no third-party trackers. Export or erase everything:
-   Settings → Your Data.
+1. **Free and login-free, always.** No accounts, no paywalls, no
+   feature-gating. Web ads are the only funding, they stay modest, and they
+   never enter the Android app or Kid mode.
+2. **Private by design.** On-device personalization, opt-in aggregate-only
+   analytics, IPs never stored, no VinaX tracking cookies, no data ever shared
+   with advertisers. Export or erase everything: Settings → Your Data.
 
 ---
 

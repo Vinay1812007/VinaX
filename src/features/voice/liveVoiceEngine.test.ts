@@ -3,7 +3,7 @@
  *  the voice-mode reply path again. If feed() delivers a sentence but speak()
  *  is never called, or finish() doesn't drain the tail, this test fails. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LiveVoiceEngine } from './liveVoiceEngine';
+import { LiveVoiceEngine, isLikelyEcho } from './liveVoiceEngine';
 
 interface FakeUtter {
   text: string;
@@ -266,6 +266,69 @@ describe('LiveVoiceEngine — voice-mode reply wiring (v2.5.2 lock)', () => {
     expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
     expect(played).toEqual([]);
     expect(fatals).toEqual([]);
+    engine.destroy();
+  });
+});
+
+describe('isLikelyEcho (B6 barge-in echo filter)', () => {
+  it('treats a substring of the spoken text as echo', () => {
+    expect(isLikelyEcho('the whole reply', 'here is the whole reply for you')).toBe(true);
+  });
+  it('treats reordered spoken words as echo', () => {
+    expect(isLikelyEcho('reply whole', 'the whole reply arrived')).toBe(true);
+  });
+  it('does NOT treat genuinely different speech as echo', () => {
+    expect(isLikelyEcho('stop play something else', 'here are three romantic songs')).toBe(false);
+  });
+  it('ignores empty heard text (not a barge-in)', () => {
+    expect(isLikelyEcho('', 'anything')).toBe(true);
+  });
+  it('is punctuation/case insensitive', () => {
+    expect(isLikelyEcho('HELLO, THERE!', 'well hello there friend')).toBe(true);
+  });
+});
+
+describe('pauseSpeaking (B6 barge-in state machine)', () => {
+  it('cancels TTS and returns to listening from speaking', () => {
+    const states: string[] = [];
+    const engine = new LiveVoiceEngine(
+      { lang: 'en-IN', getVoice: () => null, toSpoken: (s) => s },
+      {
+        onState: (s) => states.push(s),
+        onLevel: () => {},
+        onUserInterim: () => {},
+        onUserFinal: () => {},
+        onAssistantCaption: () => {},
+        onFatal: () => {},
+      },
+    );
+    (engine as unknown as { beginTurn: () => void }).beginTurn(); // -> thinking
+    // finish(fullText) with nothing streamed speaks it directly -> speaking (sync).
+    engine.finish('Here is a long spoken reply.');
+    expect(states[states.length - 1]).toBe('speaking');
+
+    engine.pauseSpeaking(); // barge-in path
+    expect(states[states.length - 1]).toBe('listening');
+    expect(synthesisCancel).toHaveBeenCalled();
+    engine.destroy();
+  });
+
+  it('is a no-op when not speaking', () => {
+    const states: string[] = [];
+    const engine = new LiveVoiceEngine(
+      { lang: 'en-IN', getVoice: () => null, toSpoken: (s) => s },
+      {
+        onState: (s) => states.push(s),
+        onLevel: () => {},
+        onUserInterim: () => {},
+        onUserFinal: () => {},
+        onAssistantCaption: () => {},
+        onFatal: () => {},
+      },
+    );
+    // idle — never spoke. pauseSpeaking must do nothing.
+    engine.pauseSpeaking();
+    expect(states).toEqual([]);
     engine.destroy();
   });
 });

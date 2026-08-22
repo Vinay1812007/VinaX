@@ -21,10 +21,39 @@ export function explainReasons(reasons: ReasonComponent[]): string {
       return 'Trending in your languages';
     case 'region':
       return 'Popular in your region';
+    case 'time':
+      return 'For this time of day';
+    case 'mood':
+      return 'Matches your current mood';
+    case 'session':
+      return 'Keeps your current vibe going';
+    case 'co-play':
+      return top.detail ? `You often play ${top.detail} alongside this` : 'You often play these together';
+    case 'discovery':
+      return top.detail
+        ? `Something different — ${languageLabel(top.detail)} you haven’t tried`
+        : 'Something different — outside your usual';
     case 'popularity':
     default:
       return 'Popular right now';
   }
+}
+
+/**
+ * Package C4 — the fuller "why am I seeing this?" line: up to `max` distinct
+ * top reasons joined into one honest sentence ("Because you play Sid Sriram ·
+ * trending in your languages"). Plain words, no jargon, computed on-device.
+ */
+export function explainTopReasons(reasons: ReasonComponent[], max = 3): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const r of reasons) {
+    if (parts.length >= max) break;
+    if (seen.has(r.kind)) continue;
+    seen.add(r.kind);
+    parts.push(explainReasons([r]));
+  }
+  return parts.length ? parts.join(' · ') : 'Popular right now';
 }
 
 export function explainMix(kind: string, ctx: RecommendationContext, detail?: string): string {
@@ -47,6 +76,18 @@ export function explainMix(kind: string, ctx: RecommendationContext, detail?: st
       return detail ? `Because you played “${detail}”` : 'Because of your recent listens';
     case 'fresh':
       return 'New-ish releases matched to your taste';
+    case 'explore':
+      return 'Deliberately unlike your usual — languages and artists you haven’t tried';
+    case 'weekend':
+      return 'Slower openers, longer arcs — matched to how you actually listen on weekends';
+    case 'late-night':
+      return 'Softer, longer, less shouty — a mix that suits after-midnight ears';
+    case 'comeback':
+      return 'Back after a break? Here’s where you left off, gently';
+    case 'artist-radio':
+      return detail ? `A station around ${detail} — songs that co-play with them for you` : 'An artist-anchored station';
+    case 'discover-weekly':
+      return 'This week’s discovery lane: fresh-to-you picks refreshed every Monday';
     default:
       return 'Picked for you, locally';
   }

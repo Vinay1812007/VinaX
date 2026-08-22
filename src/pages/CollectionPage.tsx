@@ -6,7 +6,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { EmptyState } from '@/components/States';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
-import { PlayIcon, ShuffleIcon, XIcon, DownloadIcon } from '@/components/Icons';
+import { PlayIcon, ShuffleIcon, XIcon, DownloadIcon, LibraryIcon } from '@/components/Icons';
 import { toast } from '@/store/toastStore';
 import { isNativePlatform } from '@/services/native';
 import { downloadMany } from '@/services/downloads';
@@ -37,9 +37,12 @@ export default function CollectionPage() {
     if (dlBusy || !songs.length) return;
     setDlBusy(true);
     setDlDone(0);
-    const { saved } = await downloadMany(songs, (d) => setDlDone(d));
+    const { saved, failed } = await downloadMany(songs, (d) => setDlDone(d));
     setDlBusy(false);
-    toast(saved ? `Saved ${saved} song${saved === 1 ? '' : 's'} offline` : 'Already saved offline');
+    // Honest reporting: a total failure used to read "Already saved offline".
+    if (failed && saved) toast(`Saved ${saved} offline — ${failed} failed (check your connection)`);
+    else if (failed) toast(`Downloads failed (${failed}) — check your connection and try again`);
+    else toast(saved ? `Saved ${saved} song${saved === 1 ? '' : 's'} offline` : 'Already saved offline');
   };
   const playAll = (shuffle: boolean) => {
     if (!songs.length) return;
@@ -96,7 +99,7 @@ export default function CollectionPage() {
       </div>
 
       {!songs.length ? (
-        <EmptyState title="No songs yet" message="Add songs from any song's ⋯ menu → Add to this playlist." />
+        <EmptyState icon={<LibraryIcon className="w-8 h-8" />} title="No songs yet" message="Add songs from any song's ⋯ menu → Add to this playlist." />
       ) : (
         <div className="space-y-1">
           {songs.map((song, i) => (

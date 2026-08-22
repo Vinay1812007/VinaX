@@ -16,13 +16,31 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
   Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()
-  Content-Security-Policy: default-src 'self'; connect-src 'self' https://cloudflareinsights.com https://saavn.dev https://*.sumit.co https://nepotuneapi.vercel.app https://jiosaavn-api-privatecv8.b4a.run https://lrclib.net https://*.sirimillavinay.online https://www.gstatic.com; media-src https: blob:; img-src https: data: blob:; script-src 'self' 'inline-speculation-rules' 'sha256-wIUKdga3yp6Q/JCvXQMl7xIqcstJSHRF+3yUja9Sy88=' 'sha256-qa23HEpTAU3n7KzonzCxzeaK4O15iHy20HdN0fyugOU=' https://www.gstatic.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; frame-src 'self'; form-action 'self'; manifest-src 'self'
+  Content-Security-Policy: default-src 'self'; connect-src 'self' https://cloudflareinsights.com https://saavn.dev https://*.sumit.co https://nepotuneapi.vercel.app https://jiosaavn-api-privatecv8.b4a.run https://lrclib.net https://*.sirimillavinay.online https://*.saavncdn.com https://nominatim.openstreetmap.org https://www.gstatic.com; media-src https: blob:; img-src https: data: blob:; script-src 'self' 'inline-speculation-rules' 'sha256-qMIIhenEwObYzUWQlF8vjQvffX41dHdtE9gdF1KBVjc=' 'sha256-5CaWuF9AViRVXN9kTBM+Al8YBCcQuLXc9/sljBC5w0Y=' 'sha256-RRc+X/dt9126MJ8ZSKlMeSSXRwods6RmTBC99CU3Udk=' 'sha256-Ryhvu+sqdqsrpOQ+qDsfKJMPh1UDX/qBui2EeCvVLiA=' https://www.gstatic.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; frame-src 'self'; form-action 'self'; manifest-src 'self'
 
+# `immutable` deliberately DROPPED (2026-08-21): during the stuck-shell outage
+# the SPA HTML got cached under /assets/*.js URLs, and `immutable` told
+# browsers never to revalidate — not even on reload — so affected users were
+# bricked for up to a year with no self-heal possible. Without it, a plain
+# reload revalidates (hashed content answers 304 instantly, so the cost is
+# one conditional request on explicit reloads only) and the boot self-heal's
+# location.reload() can actually flush a poisoned entry.
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=31536000
 
 /icons/*
+  Cache-Control: public, max-age=2592000
+
+# Un-hashed static assets that change rarely (PageSpeed "efficient cache
+# lifetimes", 4.17.0). 30 days; a rename is the cache-bust if one ever changes.
+/fonts/*
+  Cache-Control: public, max-age=2592000
+/favicon.ico
+  Cache-Control: public, max-age=2592000
+/og.png
   Cache-Control: public, max-age=604800
+/manifest.webmanifest
+  Cache-Control: public, max-age=86400
 
 /sw.js
   Cache-Control: no-cache

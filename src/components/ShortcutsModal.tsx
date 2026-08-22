@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { XIcon } from './Icons';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 const SHORTCUTS: Array<[string, string]> = [
   ['Space', 'Play / pause'],
@@ -16,6 +17,8 @@ const SHORTCUTS: Array<[string, string]> = [
 /** Keyboard shortcuts overlay — opens with "?" or from Settings. */
 export function ShortcutsModal() {
   const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open, () => setOpen(false));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -37,7 +40,7 @@ export function ShortcutsModal() {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm p-6" onClick={() => setOpen(false)}>
-      <div className="w-full max-w-sm glass-modal rounded-3xl p-6 animate-fade-up" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" className="w-full max-w-sm glass-modal rounded-3xl p-6 animate-fade-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">Keyboard shortcuts</h2>
           <button aria-label="Close" onClick={() => setOpen(false)} className="p-1.5 text-ink-400 hover:text-ink-100">

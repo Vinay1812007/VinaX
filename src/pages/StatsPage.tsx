@@ -102,7 +102,7 @@ export default function StatsPage() {
 
       {/* streak */}
       <div
-        className="rounded-[20px] border border-ember-400/20 p-4 flex items-center gap-3.5"
+        className="rounded-2xl border border-ember-400/20 p-4 flex items-center gap-3.5"
         style={{ background: 'linear-gradient(120deg, rgba(34,211,238,0.16), rgba(96,165,250,0.08))' }}
       >
         <span className="text-[28px]" aria-hidden>🔥</span>
@@ -115,6 +115,23 @@ export default function StatsPage() {
           </span>
         </span>
       </div>
+
+      {/* Year in Music recap */}
+      <Link
+        to="/recap"
+        className="block rounded-2xl border border-ember-400/25 p-4 transition hover:opacity-90"
+        style={{ background: 'linear-gradient(120deg, rgba(99,102,241,0.20), rgba(45,212,191,0.09))' }}
+      >
+        <span className="flex items-center justify-between gap-3">
+          <span>
+            <span className="block text-[15px] font-extrabold">Your Year in Music ✨</span>
+            <span className="block text-[11px] font-semibold text-ink-300">
+              Your persona, top artists and a share-anywhere card — built on this device
+            </span>
+          </span>
+          <span className="text-ink-300 font-extrabold" aria-hidden>›</span>
+        </span>
+      </Link>
 
       {/* top artists */}
       <section>

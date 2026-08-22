@@ -15,10 +15,25 @@ export const onRequestOptions = async (): Promise<Response> =>
 
 interface IdRow { song_id: string; }
 
+// Package E4 — the blocklist now carries three kinds in one table, namespaced
+// in the song_id column (which is plain text): bare ids block one song,
+// `artist:<name>` blocks everything by that artist, `kw:<term>` blocks any
+// song whose title/subtitle contains the term. Old clients that only read
+// `ids` keep working — prefixed entries can never collide with real ids and
+// are also filtered out of the ids array below.
 export const onRequestGet = async (context: { env: Env }): Promise<Response> => {
   const rows = await sbSelect<IdRow>(context.env, 'vinax_blocklist', 'select=song_id&limit=5000');
-  const ids = rows.map((r) => r.song_id).filter(Boolean);
-  return new Response(JSON.stringify({ ids }), {
+  const ids: string[] = [];
+  const artists: string[] = [];
+  const keywords: string[] = [];
+  for (const r of rows) {
+    const v = r.song_id;
+    if (!v) continue;
+    if (v.startsWith('artist:')) artists.push(v.slice(7));
+    else if (v.startsWith('kw:')) keywords.push(v.slice(3));
+    else ids.push(v);
+  }
+  return new Response(JSON.stringify({ ids, artists, keywords }), {
     headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=60', ...CORS },
   });
 };

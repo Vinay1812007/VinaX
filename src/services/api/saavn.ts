@@ -20,8 +20,9 @@ function listFrom(d: unknown): unknown[] | null {
   return null;
 }
 
-export function searchSongs(query: string, limit = 25): Promise<Song[]> {
+export function searchSongs(query: string, limit = 25, opts?: { signal?: AbortSignal }): Promise<Song[]> {
   return orchestratedRequest({
+    signal: opts?.signal,
     paths: [
       `/search/songs?query=${enc(query)}&limit=${limit}`,
       `/search/songs?query=${enc(query)}&page=1&limit=${limit}`,
@@ -34,8 +35,9 @@ export function searchSongs(query: string, limit = 25): Promise<Song[]> {
 }
 
 /** Paged song search — powers infinite scroll. Page is 1-based. */
-export function searchSongsPage(query: string, page: number, limit = 25): Promise<Song[]> {
+export function searchSongsPage(query: string, page: number, limit = 25, opts?: { signal?: AbortSignal }): Promise<Song[]> {
   return orchestratedRequest({
+    signal: opts?.signal,
     paths: [
       `/search/songs?query=${enc(query)}&page=${page}&limit=${limit}`,
       `/search/songs?query=${enc(query)}&p=${page}&limit=${limit}`,
@@ -47,8 +49,9 @@ export function searchSongsPage(query: string, page: number, limit = 25): Promis
   });
 }
 
-export function searchAlbums(query: string, limit = 20): Promise<Album[]> {
+export function searchAlbums(query: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Album[]> {
   return orchestratedRequest({
+    signal: opts?.signal,
     paths: [`/search/albums?query=${enc(query)}&limit=${limit}`],
     validate: (json) => {
       const list = listFrom(unwrap(json));
@@ -58,8 +61,9 @@ export function searchAlbums(query: string, limit = 20): Promise<Album[]> {
   });
 }
 
-export function searchAlbumsPage(query: string, page: number, limit = 20): Promise<Album[]> {
+export function searchAlbumsPage(query: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Album[]> {
   return orchestratedRequest({
+    signal: opts?.signal,
     paths: [
       `/search/albums?query=${enc(query)}&page=${page}&limit=${limit}`,
       `/search/albums?query=${enc(query)}&p=${page}&limit=${limit}`,
@@ -72,8 +76,9 @@ export function searchAlbumsPage(query: string, page: number, limit = 20): Promi
   });
 }
 
-export function searchArtists(query: string, limit = 20): Promise<Artist[]> {
+export function searchArtists(query: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Artist[]> {
   return orchestratedRequest({
+    signal: opts?.signal,
     paths: [`/search/artists?query=${enc(query)}&limit=${limit}`],
     validate: (json) => {
       const list = listFrom(unwrap(json));
@@ -83,8 +88,9 @@ export function searchArtists(query: string, limit = 20): Promise<Artist[]> {
   });
 }
 
-export function searchPlaylists(query: string, limit = 20): Promise<Playlist[]> {
+export function searchPlaylists(query: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Playlist[]> {
   return orchestratedRequest({
+    signal: opts?.signal,
     paths: [`/search/playlists?query=${enc(query)}&limit=${limit}`],
     validate: (json) => {
       const list = listFrom(unwrap(json));
@@ -94,8 +100,44 @@ export function searchPlaylists(query: string, limit = 20): Promise<Playlist[]> 
   });
 }
 
-export function searchAll(query: string): Promise<SearchResults> {
+/** Paged artist search (P2-30 follow-up: the tab was capped at 20). Same
+ *  page/p fallback ladder that already works for songs and albums; mirrors
+ *  that ignore paging repeat page 1, which the client de-dupes by id and
+ *  treats as end-of-results. Page is 1-based. */
+export function searchArtistsPage(query: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Artist[]> {
   return orchestratedRequest({
+    signal: opts?.signal,
+    paths: [
+      `/search/artists?query=${enc(query)}&page=${page}&limit=${limit}`,
+      `/search/artists?query=${enc(query)}&p=${page}&limit=${limit}`,
+    ],
+    validate: (json) => {
+      const list = listFrom(unwrap(json));
+      if (!list) return null;
+      return list.map(normalizeArtist).filter((a): a is Artist => a !== null);
+    },
+  });
+}
+
+/** Paged playlist search — twin of searchArtistsPage. */
+export function searchPlaylistsPage(query: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Playlist[]> {
+  return orchestratedRequest({
+    signal: opts?.signal,
+    paths: [
+      `/search/playlists?query=${enc(query)}&page=${page}&limit=${limit}`,
+      `/search/playlists?query=${enc(query)}&p=${page}&limit=${limit}`,
+    ],
+    validate: (json) => {
+      const list = listFrom(unwrap(json));
+      if (!list) return null;
+      return list.map(normalizePlaylist).filter((p): p is Playlist => p !== null);
+    },
+  });
+}
+
+export function searchAll(query: string, opts?: { signal?: AbortSignal }): Promise<SearchResults> {
+  return orchestratedRequest({
+    signal: opts?.signal,
     paths: [`/search?query=${enc(query)}`],
     validate: (json) => {
       const d = unwrap(json);

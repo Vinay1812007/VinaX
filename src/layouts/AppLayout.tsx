@@ -1,6 +1,5 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { Sidebar } from '@/components/Sidebar';
 import { ContextMenu } from '@/components/ContextMenu';
 import { BottomNav } from '@/components/BottomNav';
@@ -16,7 +15,9 @@ import { OfflineBanner } from '@/components/OfflineBanner';
 import { OnboardingSheet } from '@/components/OnboardingSheet';
 import { AnnouncementBridge } from '@/components/AnnouncementBridge';
 import { initTelemetry } from '@/services/analytics/telemetry';
-import { applyThemeClasses, resolveTheme } from '@/utils/theme';
+import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
+import { closeTopOverlay } from '@/hooks/useDismissOnBack';
+import { recallScroll, rememberScroll, restoreWhenTall } from '@/features/nav/scrollMemory';
 import { loadBlocklist } from '@/services/content/blocklist';
 import { initLockScreenLyrics } from '@/services/media-session/lockscreenLyrics';
 import { initDownloads } from '@/services/downloads';
@@ -24,8 +25,10 @@ import { initSpatialNav } from '@/services/tv/spatialNav';
 import { initAlarm } from '@/services/alarm';
 import { ShortcutsModal } from '@/components/ShortcutsModal';
 import { UpdateDialog } from '@/components/UpdateDialog';
-import { FestiveSplash } from '@/components/FestiveSplash';
-import { WhatsNewSheet } from '@/components/WhatsNewSheet';
+// Boot overlays (festival splash, What's-New sheet) render at most once per
+// day/release — lazy chunks, not first-load bytes (161KB budget, zero slack).
+const FestiveSplash = lazy(() => import('@/components/FestiveSplash').then((m) => ({ default: m.FestiveSplash })));
+const WhatsNewSheet = lazy(() => import('@/components/WhatsNewSheet').then((m) => ({ default: m.WhatsNewSheet })));
 import { initAudioOutputWatcher } from '@/services/audio/outputWatcher';
 import { audioEngine } from '@/services/audio/engine';
 import { useCastStore } from '@/services/cast';
@@ -46,11 +49,15 @@ import { installDeterrence } from '@/utils/deterrence';
 // Lazy: the palette costs nothing until the first ⌘/Ctrl+K.
 const CommandPalette = lazy(() => import('@/components/CommandPalette'));
 
+// Cold boot: the very first route render skips the page-enter fade so the
+// hero (the LCP element) paints the moment React commits, ~250ms sooner on
+// throttled mobile. Every navigation after that keeps the animation.
+let hasBooted = false;
+
 export function AppLayout() {
+  const coldBoot = !hasBooted;
+
   const mainRef = useRef<HTMLElement>(null);
-  const queryClient = useQueryClient();
-  // Pull-to-refresh (touch): pull px while dragging, -1 while refreshing.
-  const [ptr, setPtr] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   // ⌘/Ctrl+K opens the command palette (works while typing too, like the console).
@@ -65,46 +72,15 @@ export function AppLayout() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => {
-    const el = mainRef.current;
-    if (!el || !window.matchMedia('(pointer: coarse)').matches) return;
-    let startY = 0;
-    let pulling = false;
-    const onStart = (e: TouchEvent) => {
-      if (el.scrollTop <= 0) {
-        startY = e.touches[0].clientY;
-        pulling = true;
-      }
-    };
-    const onMove = (e: TouchEvent) => {
-      if (!pulling) return;
-      const dy = e.touches[0].clientY - startY;
-      if (el.scrollTop > 0 || dy <= 0) {
-        setPtr(0);
-        return;
-      }
-      setPtr(Math.min(110, dy * 0.5));
-    };
-    const onEnd = () => {
-      if (!pulling) return;
-      pulling = false;
-      setPtr((cur) => {
-        if (cur > 64) {
-          void queryClient.refetchQueries({ type: 'active' }).finally(() => setPtr(0));
-          return -1;
-        }
-        return 0;
-      });
-    };
-    el.addEventListener('touchstart', onStart, { passive: true });
-    el.addEventListener('touchmove', onMove, { passive: true });
-    el.addEventListener('touchend', onEnd);
-    return () => {
-      el.removeEventListener('touchstart', onStart);
-      el.removeEventListener('touchmove', onMove);
-      el.removeEventListener('touchend', onEnd);
-    };
-  }, [queryClient]);
+  // NOTE: the layout-level pull-to-refresh that lived here is GONE. It
+  // predated <PullToRefresh> (HomePage) and the two ran simultaneously on
+  // touch devices: one pull rendered BOTH spinners at different offsets
+  // ("two loading animations"), and past ~128px raw drag it ALSO
+  // refetched every active query on top of HomePage's own refresh. Worse,
+  // it keyed off <main>'s scrollTop, which is permanently 0 on pages that
+  // scroll an inner div (Now Playing lyrics, VinaX AI chat, Karaoke) — so
+  // scrolling those fired spurious global refetches. PullToRefresh is the
+  // single implementation now.
 
   // After a call (or any forced audio interruption), resume automatically the
   // moment the app is visible again — Android pauses us and won't restart on
@@ -125,30 +101,55 @@ export function AppLayout() {
   const navigationType = useNavigationType();
   const theme = useSettingsStore((s) => s.theme);
   const accent = useSettingsStore((s) => s.accent);
+  const glassLevel = useSettingsStore((s) => s.glassLevel);
+  const glassBlur = useSettingsStore((s) => s.glassBlur);
   const dynamicTheme = useSettingsStore((s) => s.dynamicTheme);
   const currentAccent = usePlayerStore((s) => s.currentAccent);
   const density = useSettingsStore((s) => s.density);
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { pathname } = location;
   const isFullScreenPlayer = pathname === '/now-playing';
   useKeyboardShortcuts();
 
-  // Android hardware back: pop history, or minimize on the root screen.
+  // Android hardware back: close the topmost open overlay first (sheet, menu,
+  // dialog — audit P0-2), then pop history, or minimize on the root screen.
   useEffect(() => {
     if (!isNativePlatform()) return;
     let remove: (() => void) | null = null;
+    let removeUrl: (() => void) | null = null;
     void import('@capacitor/app').then(({ App }) => {
       void App.addListener('backButton', ({ canGoBack }) => {
+        if (closeTopOverlay()) return;
         if (canGoBack && window.history.length > 1) window.history.back();
         else void App.minimizeApp();
       }).then((handle) => {
         remove = () => void handle.remove();
       });
+      // Quick-play home-screen widget: its tap launches the activity with
+      // ?widget=play. When the app is ALREADY running, that arrives here as
+      // appUrlOpen — flag it and go Home; HomePage auto-plays the Aura Mix
+      // once its hero songs are in. (Cold starts carry the param in the
+      // initial URL and HomePage reads it directly.)
+      void App.addListener('appUrlOpen', ({ url }) => {
+        if (url && url.includes('widget=play')) {
+          try { sessionStorage.setItem('vinax.widget-play', '1'); } catch { /* private mode */ }
+          navigate('/');
+        }
+      }).then((handle) => {
+        removeUrl = () => void handle.remove();
+      });
     });
-    return () => remove?.();
+    return () => {
+      remove?.();
+      removeUrl?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // One-time bootstrap.
   useEffect(() => {
+    hasBooted = true;
     const onIdle = (fn: () => void): void => {
       const ric = (window as Window & {
         requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
@@ -211,10 +212,61 @@ export function AppLayout() {
     });
   }, []);
 
-  // Clean navigation: new pages open at the top; browser-back keeps position.
+  // Two window-level hooks in one effect (first-load bytes are budgeted):
+  // 1. Playback-notification tap (4.16.1, Android app): the native layer
+  //    relays the launch intent's open-player extra as 'vinax:openplayer' —
+  //    navigate to the full-screen player, unless it's already open.
+  // 2. Wheel rescue (4.16.0, web): third-party scripts (ad quality scans,
+  //    measurement helpers) can park invisible fixed elements directly under
+  //    <body>, OUTSIDE #root. A wheel event landing on one of those bubbles
+  //    to window but scrolls nothing — the page looks normal and is frozen
+  //    (field report: home stuck at top). Everything we ship lives inside
+  //    #root and manages its own scrolling, so a wheel whose target is NOT
+  //    inside #root is by definition hitting an injected blocker — route it
+  //    to <main>. Passive + additive: normal scrolling never takes this path.
   useEffect(() => {
-    if (navigationType !== 'POP') mainRef.current?.scrollTo({ top: 0 });
-  }, [pathname, navigationType]);
+    const open = () => {
+      // window.location, NOT the router location: that closure would be stale.
+      if (window.location.pathname !== '/now-playing') navigate('/now-playing');
+    };
+    window.addEventListener('vx:np', open);
+    const onWheel = (e: WheelEvent) => {
+      const m = mainRef.current;
+      const root = document.getElementById('root');
+      const t = e.target;
+      if (!m || !root || !(t instanceof Node) || root.contains(t)) return;
+      m.scrollBy({ top: e.deltaY });
+    };
+    if (!isNativePlatform()) window.addEventListener('wheel', onWheel, { passive: true });
+    return () => {
+      window.removeEventListener('vx:np', open);
+      window.removeEventListener('wheel', onWheel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate is stable
+  }, []);
+
+  // Navigation state (audit P0-3): new pages open at the top; back/forward
+  // RESTORES the exact position. The scroller is our overflow <main> (the
+  // browser can't see it), so positions are remembered per history entry and
+  // replayed once the remounted page is tall enough to hold them.
+  const locationKey = location.key;
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const save = () => rememberScroll(locationKey, el.scrollTop);
+    el.addEventListener('scroll', save, { passive: true });
+    let cancel: (() => void) | undefined;
+    if (navigationType === 'POP') {
+      const target = recallScroll(locationKey);
+      if (target > 0) cancel = restoreWhenTall(el, target);
+    } else {
+      el.scrollTo({ top: 0 });
+    }
+    return () => {
+      el.removeEventListener('scroll', save);
+      cancel?.();
+    };
+  }, [locationKey, navigationType]);
 
   useEffect(() => {
     const apply = () => {
@@ -222,40 +274,24 @@ export function AppLayout() {
       applyThemeClasses(resolved);
       document.documentElement.dataset.accent = accent;
       document.documentElement.dataset.density = density;
+      applyGlassLevel(glassLevel, glassBlur);
 
-      // Apply dynamic accent if enabled and available
+      // Dynamic accent (experimental, off by default): the artwork-tint math
+      // lives in a lazy chunk so first-load users never pay for it.
       if (dynamicTheme && currentAccent) {
-        // Hex-to-rgb conversion with validation guard
-        const hex = currentAccent.replace('#', '');
-        if (!/^[0-9A-Fa-f]{6}$/.test(hex)) {
-          // Malformed extracted colour: clear any stale dynamic override.
-          document.documentElement.style.removeProperty('--ember-500');
-          document.documentElement.style.removeProperty('--ember-400');
-          document.documentElement.style.removeProperty('--ember-600');
-          return;
-        }
-        const r = parseInt(hex.substring(0, 2), 16);
-        const g = parseInt(hex.substring(2, 4), 16);
-        const b = parseInt(hex.substring(4, 6), 16);
-        const rgb = `${r} ${g} ${b}`;
-        document.documentElement.style.setProperty('--ember-500', rgb);
-        // Brighten slightly for 400
-        const b400 = `${Math.min(255, r + 40)} ${Math.min(255, g + 40)} ${Math.min(255, b + 40)}`;
-        document.documentElement.style.setProperty('--ember-400', b400);
-        // Darken for 600
-        const d600 = `${Math.max(0, r - 40)} ${Math.max(0, g - 40)} ${Math.max(0, b - 40)}`;
-        document.documentElement.style.setProperty('--ember-600', d600);
+        void import('@/utils/dynamicAccent').then((m) => m.applyArtAccent(currentAccent));
       } else {
-        document.documentElement.style.removeProperty('--ember-500');
-        document.documentElement.style.removeProperty('--ember-400');
-        document.documentElement.style.removeProperty('--ember-600');
+        const st = document.documentElement.style;
+        st.removeProperty('--ember-500');
+        st.removeProperty('--ember-400');
+        st.removeProperty('--ember-600');
       }
     };
     apply();
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme, accent, density, dynamicTheme, currentAccent]);
+  }, [theme, accent, density, glassLevel, glassBlur, dynamicTheme, currentAccent]);
 
   // Per-route canonical + index/noindex strategy (search & personal pages noindex).
   useEffect(() => {
@@ -294,28 +330,16 @@ export function AppLayout() {
       <AuroraBackground />
       <div className="flex flex-1 min-h-0">
         <Sidebar />
-        {ptr !== 0 && (
-          <div
-            className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-40 md:hidden transition-transform"
-            style={{ top: `calc(var(--safe-top) + ${ptr === -1 ? 18 : Math.max(2, ptr - 24)}px)` }}
-          >
-            <span
-              className={`flex items-center justify-center w-9 h-9 rounded-full glass-navbar shadow-lift ${ptr === -1 ? 'animate-spin' : ''}`}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" className="w-5 h-5 text-ember-300">
-                <path d="M21 12a9 9 0 1 1-3-6.7" />
-                <path d="M21 3v6h-6" />
-              </svg>
-            </span>
-          </div>
-        )}
         <main ref={mainRef} id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto px-5 md:px-10 pt-6 pb-44 md:pb-28">
           <MobileBackBar />
           <DiagBanner />
           <OfflineBanner />
-          <ErrorBoundary>
+          <ErrorBoundary resetKey={pathname}>
             <Suspense fallback={<PageSkeleton />}>
-              <div key={pathname} className="animate-fade-up">
+              {/* Search keeps one mount across /search → /search/:q so
+                  committing a query doesn't reset filters/scroll (P1-17);
+                  every other route remounts for the page-enter animation. */}
+              <div key={pathname.startsWith('/search') ? '/search' : pathname} className={coldBoot ? undefined : 'animate-fade-up'}>
                 <Outlet />
               </div>
             </Suspense>
@@ -340,8 +364,10 @@ export function AppLayout() {
       )}
       {!isNativePlatform() && <ShortcutsModal />}
       {isNativePlatform() && <UpdateDialog />}
-      <FestiveSplash />
-      <WhatsNewSheet />
+      <Suspense fallback={null}>
+        <FestiveSplash />
+        <WhatsNewSheet />
+      </Suspense>
       {!isFullScreenPlayer && (
         <div className="fixed bottom-0 inset-x-0 z-40 pb-[env(safe-area-inset-bottom)]">
           <PlayerErrorBoundary>

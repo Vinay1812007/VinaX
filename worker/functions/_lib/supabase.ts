@@ -79,6 +79,28 @@ export async function sbUpsert(env: SupabaseEnv, table: string, row: unknown, on
   }
 }
 
+/**
+ * SELECT that distinguishes "no rows" from "the read FAILED" (table missing,
+ * transport error, bad filter). sbSelect's swallow-everything contract made
+ * a missing table indistinguishable from an empty one — admin/experiments
+ * reported `configured: true` over a table that doesn't exist (audit D-1).
+ */
+export async function sbSelectRes<T>(
+  env: SupabaseEnv,
+  table: string,
+  query: string,
+): Promise<{ ok: boolean; rows: T[] }> {
+  const b = base(env);
+  if (!b) return { ok: false, rows: [] };
+  try {
+    const res = await fetch(`${b.url}/rest/v1/${table}?${query}`, { headers: headers(b.key) });
+    if (!res.ok) return { ok: false, rows: [] };
+    return { ok: true, rows: (await res.json().catch(() => [])) as T[] };
+  } catch {
+    return { ok: false, rows: [] };
+  }
+}
+
 export async function sbSelect<T>(env: SupabaseEnv, table: string, query: string): Promise<T[]> {
   const b = base(env);
   if (!b) return [];
@@ -88,6 +110,32 @@ export async function sbSelect<T>(env: SupabaseEnv, table: string, query: string
     return (await res.json().catch(() => [])) as T[];
   } catch {
     return [];
+  }
+}
+
+/**
+ * Exact row count via a HEAD request (Prefer: count=exact) — no rows move.
+ * Returns null when Supabase is unconfigured or the read fails (missing
+ * table, transport error), so callers can distinguish "0 rows" from "broken".
+ */
+export async function sbCount(env: SupabaseEnv, table: string, query = ''): Promise<number | null> {
+  const b = base(env);
+  if (!b) return null;
+  try {
+    // limit=1 keeps the scan cheap; NO Range header — an explicit `range: 0-0`
+    // can answer 416 on an empty table (PostgREST version dependent), which
+    // made a legitimate zero look like a failure (4.15.0 "corpus":null bug).
+    // GET, not HEAD (4.16.2): in production the unfiltered HEAD count came
+    // back without a usable content-range while filtered ones worked — GET
+    // always carries the header and a limit=1 body costs nothing.
+    const res = await fetch(`${b.url}/rest/v1/${table}?select=*&limit=1${query ? `&${query}` : ''}`, {
+      headers: headers(b.key, { prefer: 'count=exact' }),
+    });
+    if (!res.ok) return null;
+    const total = Number((res.headers.get('content-range') ?? '').split('/')[1]);
+    return Number.isFinite(total) ? total : null;
+  } catch {
+    return null;
   }
 }
 

@@ -13,9 +13,10 @@
  */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { LANE_ENV, LANE_MODEL, isGroqEndpoint, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
-import { methodNotAllowed } from '../../_lib/ratelimit';
+import { aggregateLaneHealth, type AiEventRow } from '../../_lib/laneHealth';
+import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
 
-type Env = AdminEnv & AiEnv;
+type Env = AdminEnv & AiEnv & SupabaseEnv;
 
 const LANES: readonly Lane[] = ['chat', 'fast', 'deep', 'scholar', 'home', 'dj', 'search'];
 const MAX_TOKENS_CAP = 1000;
@@ -32,8 +33,21 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/** POST-only: answer GET with an honest 405 instead of the SPA shell (DQA-07). */
-export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
+/** Package B11 — GET: the lane-health report. Per-lane p50/p95/p99 latency,
+ *  success rate, failover-hop / empty-stream / self-search counters over the
+ *  trailing 24h of vinax_ai_events, aggregated in-function (no RPC needed;
+ *  row cap keeps the read bounded). */
+export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
+  const { request, env } = context;
+  if (!isAdmin(request, env)) return unauthorized();
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const rows = await sbSelect<AiEventRow>(
+    env,
+    'vinax_ai_events',
+    `created_at=gte.${encodeURIComponent(since)}&select=model,ok,status,error,latency_ms&order=created_at.desc&limit=10000`,
+  );
+  return json({ hours: 24, sampled: rows.length, capped: rows.length >= 10000, lanes: aggregateLaneHealth(rows) });
+};
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;

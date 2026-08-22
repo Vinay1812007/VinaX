@@ -23,7 +23,7 @@ export async function registerNativePush(navigate: (to: string) => void): Promis
         void fetch(`${BASE}/api/push/fcm-register`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ token: t.value, platform: 'android' }),
+          body: JSON.stringify({ token: t.value, platform: 'android', tzOffset: -new Date().getTimezoneOffset() }),
         }).catch(() => {});
       });
       void PushNotifications.addListener('registrationError', () => {

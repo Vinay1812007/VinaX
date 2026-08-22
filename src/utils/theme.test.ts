@@ -3,7 +3,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyThemeClasses, resolveTheme } from './theme';
 
-const css = readFileSync('src/styles/index.css', 'utf8');
+// Festival skins (html.fest-*) are deliberate, CLASS-SCOPED accent overrides
+// active only inside their calendar windows — strip those blocks so this test
+// keeps pinning the year-round base cascade, not a seasonal costume (4.17.3).
+const css = readFileSync('src/styles/index.css', 'utf8').replace(
+  /html\.fest-[\w.-]*\s*\{[^}]*\}/g,
+  '',
+);
 
 /** Last definition wins the cascade — assert the v3.8 MODERN MINIMAL era is
  *  what ships. Multiple :root blocks stack in this file (three previous
@@ -24,17 +30,19 @@ describe('color tokens (v3.8 modern minimal wins the cascade)', () => {
     expect(lastValue('--tide-400')).toBe('103 232 249');
   });
 
-  it('glass recipe is solid ink — blur used sparingly', () => {
-    // v3.8 modern minimal: solid surfaces, hairline borders, blur only where
-    // depth is doing real work. The old white-frost translucent surfaces
-    // were part of the earlier Glass-2.0 aesthetic (now overridden).
-    expect(lastValue('--glass-blur')).toBe('6px');
-    // The v3.8 block ends with an html.light override, so the "last"
-    // --glass-bg the regex finds is the light-mode value. Both surfaces are
-    // asserted separately below.
-    expect(lastValue('--glass-bg')).toBe('rgb(255 255 255)'); // light: solid white
-    expect(css).toContain('--glass-bg: rgb(255 255 255)'); // v3.8 light
-    expect(css).toContain('--glass-bg: rgb(16 19 24)'); // v3.8 dark
+  it('glass recipe is ADJUSTABLE — separate alpha and blur dials (4.13)', () => {
+    // 4.13 split the single alpha dial from 4.12 into TWO: --glass-alpha
+    // controls translucency, --glass-blur-boost (0..1) controls blur haze
+    // independently. This lets users pick "sharp glass" OR "hazy solid" —
+    // moods the single dial couldn't express. AMOLED stays solid on purpose
+    // (true-black canvases don't frost), and the reduced-transparency
+    // fallback still forces --surface-solid.
+    expect(css).toContain('--glass-bg: rgb(16 19 24 / var(--glass-alpha))'); // dark
+    expect(css).toContain('--glass-bg: rgb(255 255 255 / var(--glass-alpha))'); // light
+    expect(css).toContain('--glass-blur-boost:');
+    expect(css).toContain('--glass-blur: calc(6px + var(--glass-blur-boost) * 34px)');
+    expect(css).toMatch(/html\.amoled\s*\{[^}]*--glass-bg:\s*rgb\(8 8 11\)/);
+    expect(css).toContain('prefers-reduced-transparency');
   });
 
   it('hero gradient is indigo → deeper-indigo (quiet single-hue)', () => {

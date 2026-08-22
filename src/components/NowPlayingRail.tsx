@@ -24,7 +24,7 @@ export function NowPlayingRail() {
   return (
     <aside
       aria-label="Now playing"
-      className="hidden xl:flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-l border-white/5 px-5 pt-6 pb-32"
+      className="hidden xl:flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-l border-glass px-5 pt-6 pb-32"
     >
       <h2 className="text-xs font-bold uppercase tracking-widest text-ink-400">Now Playing</h2>
       <button

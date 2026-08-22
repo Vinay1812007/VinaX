@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
@@ -9,6 +8,8 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
 import { cn } from '@/utils/cn';
+import { useSessionState } from '@/hooks/useSessionState';
+
 
 const PERIODS = [
   { id: 'today', label: 'Today', q: 'trending songs india' },
@@ -42,7 +43,7 @@ function fmtPlays(n: number | null | undefined): string {
 /** Canvas 4c — Charts & Discover: what India is playing right now. */
 export default function ChartsPage() {
   usePageTitle('Charts');
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]['id']>('today');
+  const [period, setPeriod] = useSessionState<(typeof PERIODS)[number]['id']>('vinax.charts.period.v1', 'today');
   const q = PERIODS.find((p) => p.id === period)?.q ?? PERIODS[0].q;
   const songsQ = useInfiniteSongs(q);
   const songs = flattenSongPages(songsQ.data?.pages).slice(0, 20);
@@ -50,7 +51,7 @@ export default function ChartsPage() {
   const playsCount = useHistoryStore((s) => s.entries.length);
 
   return (
-    <div className="max-w-screen-xl mx-auto pb-8">
+    <div className="max-w-screen-xl mx-auto pb-8 vx-stagger">
       {/* header + period pills */}
       <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
@@ -94,7 +95,7 @@ export default function ChartsPage() {
                     <span
                       className={cn(
                         'w-7 text-[17px] font-extrabold shrink-0',
-                        i < 3 ? 'bg-clip-text text-transparent' : 'text-ink-500',
+                        i < 3 ? 'bg-clip-text text-transparent' : 'text-ink-400',
                       )}
                       style={i < 3 ? { backgroundImage: 'linear-gradient(135deg, #22d3ee, #a78bfa)' } : undefined}
                     >
@@ -153,7 +154,7 @@ export default function ChartsPage() {
 
           <Link
             to="/weekly"
-            className="block rounded-[20px] border border-ember-400/20 p-4 card-lift"
+            className="block rounded-2xl border border-ember-400/20 p-4 card-lift"
             style={{ background: 'linear-gradient(120deg, rgba(34,211,238,0.14), rgba(96,165,250,0.07))' }}
           >
             <p className="text-[11px] font-extrabold tracking-widest text-ember-300">WEEKLY PERSONAL MIX</p>

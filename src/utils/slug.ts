@@ -4,6 +4,9 @@ export function slugify(text: string | undefined): string {
     String(text ?? '')
       .toLowerCase()
       .normalize('NFKD')
+      // HTML entities from the catalog (&quot; &amp; …) must never become
+      // slug words ('-quot-') — strip entity patterns before the collapse.
+      .replace(/&[a-z]+;|&#x?[0-9a-f]+;/gi, ' ')
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 60) || 'x'

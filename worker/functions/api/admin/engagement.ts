@@ -8,7 +8,9 @@ type Env = AdminEnv & SupabaseEnv;
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
-  const days = Math.min(90, Math.max(1, Number(new URL(request.url).searchParams.get('days') || 7)));
+  const rawDays = parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10);
+  // NaN survives Math.min/max and used to throw RangeError -> 500 on ?days=abc (D-5).
+  const days = Number.isFinite(rawDays) ? Math.min(Math.max(rawDays, 1), 90) : 7;
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
   const [events, users] = await Promise.all([
     sbSelect<{ type: string; device_id: string | null; song_id: string | null }>(

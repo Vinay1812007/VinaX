@@ -16,6 +16,10 @@ function clearPlayerData(): void {
 
 interface Props {
   children: ReactNode;
+  /** When this changes (e.g. the pathname), a tripped boundary resets — so
+   * navigating away from a crashed page shows the new page, not the stale
+   * error UI (delta audit P1-16). */
+  resetKey?: unknown;
 }
 
 interface State {
@@ -27,6 +31,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
+  }
+
+  componentDidUpdate(prev: Props): void {
+    if (this.state.error && prev.resetKey !== this.props.resetKey) {
+      this.setState({ error: null });
+    }
   }
 
   componentDidCatch(error: Error): void {
@@ -56,17 +66,27 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
+      // Distinguish "an update was mid-publish and this page's chunk moved"
+      // (the common, self-healing case during a deploy) from a real render
+      // crash — the generic message made deploy-skew look like a broken app.
+      const isChunk = /dynamically imported|Loading chunk|MIME type|Failed to fetch/i.test(
+        String(this.state.error?.message ?? ''),
+      );
       return (
         <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-          <p className="text-2xl font-semibold">Something hit a wrong note</p>
+          <p className="text-2xl font-semibold">
+            {isChunk ? 'An update just went live' : 'Something hit a wrong note'}
+          </p>
           <p className="text-ink-300 max-w-md">
-            A part of this page failed to render. Your music and data are safe.
+            {isChunk
+              ? 'VinaX was updating while this page loaded. Tap below to get the new version — your music and data are safe.'
+              : 'A part of this page failed to render. Your music and data are safe.'}
           </p>
           <button
             onClick={() => window.location.reload()}
             className="px-5 py-2.5 rounded-full btn-primary"
           >
-            Try again
+            {isChunk ? 'Load the new version' : 'Try again'}
           </button>
         </div>
       );

@@ -2,7 +2,22 @@ import { gatherCandidates } from './candidates';
 import { rankCandidates, scoreCandidate } from './scoring';
 import { buildMixes } from './mixes';
 import { rotateTop } from './variety';
+import { explainTopReasons } from './explanations';
+import { useReasonStore } from '@/store/reasonStore';
 import type { Mix, RecommendationContext, ScoredCandidate } from './types';
+
+/** Package C4 — publish plain-words "why this song" lines for every pick the
+ *  listener can actually see, so the track menu can answer "Why this song?".
+ *  fillReasons never overwrites a richer AI DJ line. */
+function publishReasons(scored: ScoredCandidate[]): void {
+  try {
+    useReasonStore
+      .getState()
+      .fillReasons(scored.map((s) => [s.candidate.song.id, explainTopReasons(s.reasons)]));
+  } catch {
+    /* a store hiccup must never break shelf building */
+  }
+}
 
 function artistKeyOf(s: ScoredCandidate): string {
   const a = s.candidate.song.artists[0];
@@ -66,6 +81,7 @@ function ctxKey(ctx: RecommendationContext): string {
     ctx.pinnedLanguages.join(','),
     ctx.mutedLanguages.join(','),
     Math.round(ctx.intensity * 10),
+    ctx.explore ? 1 : 0,
     ctx.salt,
     ctx.region?.country ?? '',
     // Decay runs off updatedAt — bucketed so long sessions refresh shelves.
@@ -84,6 +100,9 @@ export async function buildRecommendations(ctx: RecommendationContext): Promise<
   const candidates = await gatherCandidates(ctx);
   const ranked = rankCandidates(candidates, ctx);
   const mixes = buildMixes(ranked, ctx);
+  // C4 — every song placed on a shelf gets its honest "why" line.
+  const placed = new Set(mixes.flatMap((m) => m.songs.map((s) => s.id)));
+  publishReasons(ranked.filter((s) => placed.has(s.candidate.song.id)));
   memo = { key, at: Date.now(), mixes };
   return mixes;
 }
@@ -144,7 +163,7 @@ export async function similarToSong(
     // rankCandidates already tier-shuffles by salt; rotateTop then rotates the
     // very top band too, so the leading next-song picks aren't frozen when a
     // few candidates sit alone in their own score tiers.
-    return rotateTop(
+    const picks = rotateTop(
       diversify(
         rankCandidates(
           songs
@@ -156,6 +175,10 @@ export async function similarToSong(
       ),
       ctx.salt,
     );
+    // C4 — the instant local queue gets "why" lines too (AI lines, when the AI
+    // path served instead, were already set and are never overwritten).
+    publishReasons(picks);
+    return picks;
   } catch {
     return [];
   }

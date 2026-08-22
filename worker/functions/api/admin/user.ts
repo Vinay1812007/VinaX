@@ -33,14 +33,28 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
 
-  const deviceId = new URL(request.url).searchParams.get('deviceId');
+  const rawId = new URL(request.url).searchParams.get('deviceId');
+  // Length-capped: a huge id produced an over-length PostgREST URL whose 414
+  // was swallowed and answered as an indistinguishable 'no such user'.
+  const deviceId = rawId && rawId.length <= 128 ? rawId : null;
   if (!deviceId) {
     return new Response(JSON.stringify({ error: 'bad_request' }), {
       status: 400,
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
     });
   }
   const enc = encodeURIComponent(deviceId);
+
+  // full=1 → the profile-download export: a much larger event window with
+  // every column the server holds, so User Management's "Download profile"
+  // ships everything there IS. Honesty note: this is the server-side coarse
+  // record (events + latest state). The on-device taste profile is never
+  // uploaded — by design — so it cannot appear here.
+  const full = new URL(request.url).searchParams.get('full') === '1';
+  const eventCols = full
+    ? 'type,song_id,song_title,song_artist,song_image,language,platform,app_version,created_at,country,city,region,origin_verified'
+    : 'type,song_title,song_artist,language,created_at,country,city';
+  const eventLimit = full ? 2000 : 150;
 
   const [users, events] = await Promise.all([
     sbSelect<UserRow>(
@@ -51,7 +65,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     sbSelect<EventRow>(
       env,
       'vinax_events',
-      `device_id=eq.${enc}&order=created_at.desc&limit=150&select=type,song_title,song_artist,language,created_at,country,city`,
+      `device_id=eq.${enc}&order=created_at.desc&limit=${eventLimit}&select=${eventCols}`,
     ),
   ]);
 

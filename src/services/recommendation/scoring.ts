@@ -7,6 +7,8 @@ import {
   profileConfidence,
   timeOfDayWeight,
 } from '@/services/personalization/profile';
+import { energyOfSong } from '@/services/personalization/session';
+import { coPlayAffinity, coPlayIndexFor } from './coplay';
 import type { Candidate, ReasonComponent, RecommendationContext, ScoredCandidate } from './types';
 import { inferMood, moodMatchScore } from './mood';
 
@@ -15,9 +17,18 @@ const SOURCE_BOOST: Record<Candidate['source'], number> = {
   'favorite-artist': 0.14,
   'favorite-album': 0.12,
   rediscovery: 0.1,
+  // A4 — explore candidates have zero taste affinity by construction, so the
+  // boost keeps them positive (rankCandidates drops score <= 0) while still
+  // ranking below real taste matches; the mixer guarantees their shelf slots.
+  explore: 0.08,
   trending: 0.06,
   history: 0.0,
 };
+
+// Package C3 — the only reliable "instrumental" signal from catalog metadata is
+// the title itself, so the vocal↔instrumental dial nudges just these obvious
+// cuts and leaves everything else untouched (honest over a fake heuristic).
+const INSTRUMENTAL_RE = /\b(instrumental|bgm|background score|theme music|karaoke|lo-?fi)\b/i;
 
 /**
  * Deterministic hybrid scoring. Personalized terms are blended in by
@@ -44,21 +55,27 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
   if (langTerm > 0.02) reasons.push({ kind: 'language', weight: langTerm, detail: song.language ?? undefined });
   score += langTerm;
 
-  const artW =
-    artistWeight(
-      profile,
-      song.artists.map((a) => a.id).filter(Boolean),
-      song.artists.map((a) => a.name),
-    ) * 0.3 * personalBlend;
+  const artistIds = song.artists.map((a) => a.id).filter(Boolean);
+  const artistNames = song.artists.map((a) => a.name);
+  const rawArtW = artistWeight(profile, artistIds, artistNames);
+  const artW = rawArtW * 0.3 * personalBlend;
   if (artW > 0.02) reasons.push({ kind: 'artist', weight: artW, detail: song.artists[0]?.name });
   score += artW;
 
+  // Roadmap O.3 — co-play similarity: candidates by artists this listener
+  // plays in the same sitting as the SEED's artists (radio/auto-queue set
+  // ctx.coPlaySeed). Entirely on-device; index memoized per history state.
+  if (ctx.coPlaySeed && ctx.history.length >= 8) {
+    const affinity = coPlayAffinity(coPlayIndexFor(ctx.history), ctx.coPlaySeed, song);
+    if (affinity > 0) {
+      const coTerm = affinity * 0.14 * personalBlend;
+      if (coTerm > 0.02) reasons.push({ kind: 'co-play', weight: coTerm, detail: song.artists[0]?.name });
+      score += coTerm;
+    }
+  }
+
   // Recency boost: artists you've played in the last week stay "hot".
-  const lastSeen = artistLastSeen(
-    profile,
-    song.artists.map((a) => a.id).filter(Boolean),
-    song.artists.map((a) => a.name),
-  );
+  const lastSeen = artistLastSeen(profile, artistIds, artistNames);
   if (lastSeen && Date.now() - lastSeen < 7 * 86_400_000) {
     score += 0.05 * personalBlend;
   }
@@ -80,18 +97,31 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
     score += mm;
   }
 
+  // Package A1 — session vector (energy + language momentum). Blended at a
+  // gentle ~0.10 so the current-mood arc colours the ordering without
+  // overriding long-term taste. The vector strengthens as more songs play
+  // this session (sessionSize), fading in from a single-track fluke.
+  if (typeof ctx.sessionEnergy === 'number') {
+    const ramp = Math.min(1, (ctx.sessionSize ?? 0) / 5); // full weight after ~5 plays
+    const candEnergy = energyOfSong(song);
+    // Closeness on the energy axis, signed around the midpoint: identical
+    // energy → +, opposite → −. Max ±0.07 at full ramp.
+    const energyNudge = (0.5 - Math.abs(candEnergy - ctx.sessionEnergy)) * 0.14 * ramp;
+    // Language momentum: you're on a run in one language right now. Small,
+    // additive, distinct from the long-term pinned-language preference.
+    const langMomentum = ctx.sessionLanguage && song.language === ctx.sessionLanguage ? 0.03 * ramp : 0;
+    const sessionTerm = energyNudge + langMomentum;
+    if (Math.abs(sessionTerm) > 0.02) reasons.push({ kind: 'session', weight: sessionTerm });
+    score += sessionTerm;
+  }
+
   // Skip aversion (signed around 0.5): reward what you finish, demote what you skip.
   if (song.language && profile.languages[song.language]) {
     const ls = (lowSkipScore(profile.languages[song.language]) - 0.5) * 0.2 * personalBlend;
     if (Math.abs(ls) > 0.02) reasons.push({ kind: 'low-skip', weight: ls });
     score += ls;
   }
-  const artSkip =
-    (artistSkipScore(
-      profile,
-      song.artists.map((a) => a.id).filter(Boolean),
-      song.artists.map((a) => a.name),
-    ) - 0.5) * 0.14 * personalBlend;
+  const artSkip = (artistSkipScore(profile, artistIds, artistNames) - 0.5) * 0.14 * personalBlend;
   score += artSkip;
 
   const boost = SOURCE_BOOST[c.source];
@@ -99,13 +129,44 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
   if (c.source === 'related') reasons.push({ kind: 'related', weight: boost, detail: c.seedTitle });
   if (c.source === 'rediscovery') reasons.push({ kind: 'rediscovery', weight: boost });
   if (c.source === 'trending') reasons.push({ kind: 'trending', weight: boost });
+  if (c.source === 'explore') reasons.push({ kind: 'discovery', weight: boost, detail: song.language ?? undefined });
 
   // Freshness: light boost for recent releases (novelty without dominating).
   const year = song.year ? Number(song.year) : null;
   if (year && year >= new Date().getFullYear() - 1) score += 0.04;
 
+  // Package A10 — festival/season boost: during a festival window, lift songs in
+  // its languages or mood a touch. Silent (like freshness) — it colours ranking
+  // without a reason chip. Off-season the field is absent and this is skipped.
+  if (ctx.festival) {
+    if (ctx.festival.languages && song.language && ctx.festival.languages.includes(song.language)) score += 0.14;
+    if (ctx.festival.moods && ctx.festival.moods.includes(inferMood(song))) score += 0.1;
+  }
+
   // Repetition guard: heavily demote very recently played songs.
   if (profile.recentSongIds.includes(song.id)) score -= 0.5;
+
+  // Package C3 — hand-tuned taste dials. Small signed linear nudges that vanish
+  // at the neutral 0.5 default (an untouched profile scores exactly as before)
+  // and are gated behind the optional field, so cold profiles pay nothing.
+  const dials = profile.sliders;
+  if (dials) {
+    // Familiar ↔ adventurous: adventurous lifts discovery sources and demotes
+    // the over-familiar; familiar does the reverse. Symmetric around neutral.
+    const adv = (dials.adventurous - 0.5) * 2;
+    const discovery = c.source === 'rediscovery' || c.source === 'trending' || c.source === 'related';
+    score += adv * ((discovery ? 0.05 : 0) - rawArtW * 0.06);
+    // Classics ↔ recent: map release age to a signed recency axis (+new, −old).
+    if (year) {
+      const age = new Date().getFullYear() - year;
+      const yr = age <= 1 ? 1 : age >= 9 ? -1 : (5 - age) / 4;
+      score += (dials.recency - 0.5) * 2 * yr * 0.06;
+    }
+    // Melody ↔ beats: reward candidates near the preferred end of the energy axis.
+    score += (dials.energy - 0.5) * 2 * (energyOfSong(song) - 0.5) * 0.1;
+    // Vocal ↔ instrumental: title-detectable instrumentals only.
+    if (INSTRUMENTAL_RE.test(song.title)) score += -((dials.vocalness - 0.5) * 2) * 0.06;
+  }
 
   return { candidate: c, score, reasons: reasons.sort((a, b) => b.weight - a.weight) };
 }

@@ -12,6 +12,77 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.2.0': {
+    title: 'A big one — festivals, faster home, calmer notifications',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Songs play again everywhere. The stream resolver was handing out signed links that started getting refused, so tracks skipped — streaming now resolves directly with no expiring token in the way, and offline downloads on Android are more reliable too.',
+      },
+      {
+        type: 'new',
+        text: 'No ads anywhere, ever — website, Android app and Kid mode alike. No ad cookies, no ad networks, nothing about your listening shared with anyone.',
+      },
+      {
+        type: 'new',
+        text: 'Every Indian festival now dresses up the whole app automatically — Sankranti, Holi, Eid, Onam, Ganesh Chaturthi, Dussehra, Diwali, Christmas, New Year and more. The theme arrives the day before and bows out the day after, on its own.',
+      },
+      {
+        type: 'new',
+        text: 'Moving to a new phone is part of sign-up now: “Move from old device” beams your taste, favourites and history across with one encrypted QR, before you play a single song.',
+      },
+      {
+        type: 'new',
+        text: 'Android: a quick-play home-screen widget — one tap starts your Aura Mix without opening the app first.',
+      },
+      {
+        type: 'improved',
+        text: 'Notifications got calmer and smarter: never between 11pm and 8am your local time, and never more than one a day — so a good song reaches you at a good moment, not at 3am.',
+      },
+      {
+        type: 'improved',
+        text: 'Home feels smoother — a single, snappier pull-to-refresh (no more double spinner), consistent page-entrance animations across Home, Discover, Charts and Library, and gentler artwork motion throughout.',
+      },
+    ],
+  },
+  '5.1.0': {
+    title: 'Playback restored, ads gone for good',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Songs play again everywhere. The stream resolver was handing out signed CDN links that started answering "Access Denied", so every track skipped — streams now resolve directly on VinaX servers with no expiring token in the path.',
+      },
+      {
+        type: 'new',
+        text: 'No ads anywhere, ever. The last ad slots have been removed from the website — VinaX is now completely ad-free on web, Android, and Kid mode alike, with no ad cookies and no ad networks.',
+      },
+      {
+        type: 'new',
+        text: 'Moving to a new phone is now part of sign-up: the welcome screen offers "Move from old device" (encrypted QR handoff) alongside file import, so your taste, favorites and history come across before you play a single song.',
+      },
+      {
+        type: 'improved',
+        text: 'Pull-to-refresh on Home is smoother and single-spinnered, offline downloads on Android are more reliable, and the admin dashboard got a round of fixes across User Management, the world map, and double-click behavior.',
+      },
+    ],
+  },
+  '5.0.0': {
+    title: 'Song delivery goes first-party',
+    changes: [
+      {
+        type: 'new',
+        text: 'VinaX now serves songs from its own first-party catalog API (sirimillavinay.online) as the primary source. Search, playback, and the daily song push no longer depend on community-run wrappers being up.',
+      },
+      {
+        type: 'improved',
+        text: 'The community wrappers (saavn.sumit.co, nepotuneapi) remain as automatic fallbacks only — if the first-party API is ever unreachable, songs keep flowing without you noticing.',
+      },
+      {
+        type: 'fixed',
+        text: 'Removed the dead saavn.dev endpoint (DNS no longer resolves) and the b4a.run mirror from every remaining call site, including the daily song-push cron and the Admin push composer. No more silent failures or wasted requests on endpoints that can never answer.',
+      },
+    ],
+  },
   '3.9.2': {
     title: 'Living glass everywhere',
     changes: [

@@ -15,7 +15,7 @@ const TIPS: string[] = [
 ];
 
 const FAQ: Array<{ q: string; a: string }> = [
-  { q: 'Is VinaX really free? What’s the catch?', a: 'Free, forever, for everything — no subscriptions, no premium tiers, no ads, no login. There is no catch: it’s a passion project. The admin console literally has a card that reads “₹0 · Revenue — free forever”.' },
+  { q: 'Is VinaX really free? What’s the catch?', a: 'Free, forever, for everything — no subscriptions, no premium tiers, no login. The website shows a few unobtrusive ads to keep the servers running; the Android app is completely ad-free. That’s the whole business model.' },
   { q: 'Do I need an account?', a: 'Never. Your name is only used to greet you, and your taste profile, favorites, history and downloads live on this device alone. Nothing you play is tied to an identity anywhere.' },
   { q: 'What data leaves my device?', a: 'Only anonymous, opt-in usage statistics (like “a song was played in your city”) that help improve VinaX — and you can switch that off. IP addresses are never stored. Everything personal stays local, with one-tap export and erase in Settings → Your Data.' },
   { q: 'How do the recommendations work without an account?', a: 'The taste profile is computed on this device: languages you pinned, songs you finish, favorite and skip. AI features receive only a short, capped, anonymous summary of that — never your history.' },
@@ -28,7 +28,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   { q: 'What is the Ctrl+K command palette?', a: 'Press Ctrl/⌘+K anywhere to open the command palette — jump to any page, fire player actions like play, pause and skip, or type a song name to find and play it instantly. Right-click any song for the same quick actions (play next, queue, favorite, copy link). In VinaX AI, Ctrl/⌘+K starts a fresh chat.' },
   { q: 'What do “AI DJ” and “Instant picks” mean under songs?', a: 'AI DJ means the AI curated those picks. Instant picks means the on-device engine answered while the AI was busy — honesty over pretending. Both follow your languages and mood.' },
   { q: 'What is the 🔔 bell on Home?', a: 'Your notification center: the daily song pick, owner announcements and recent release notes. Tapping a notification jumps straight to the song or page.' },
-  { q: 'What is the daily pick?', a: 'If you turn notifications on, VinaX suggests at most ONE song a day — chosen by the AI, delivered as a push on the web and shown in the app when it opens. Off by default, off anytime.' },
+  { q: 'What is the daily pick?', a: 'If you turn notifications on, VinaX suggests at most ONE song a day — chosen by the AI, delivered as a push on the web and shown in the app when it opens. Never during your night (no pushes between 11pm and 8am your local time), and never more than one a day. Off by default, off anytime.' },
   { q: 'What is “Your VinaX”?', a: 'Your on-device listening stats: plays, hours, favorites, artists, a 🔥 day-streak, top artists and your language mix — computed here, never uploaded, with a Share button if you want to show off.' },
   { q: 'How does Listen Together work?', a: 'Start a session, share the room code or invite link. Everyone hears the same second (~1s sync), sees the live queue, and can add songs with credit. The host keeps play/pause/skip; “End for all” closes it for everyone.' },
   { q: 'How do I download songs for offline?', a: 'In the Android app, open a song’s menu and choose Download. Your library, favorites and history also browse offline with artwork; downloads play from the Downloads screen.' },

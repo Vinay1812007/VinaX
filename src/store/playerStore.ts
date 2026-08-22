@@ -16,7 +16,8 @@ import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
 import { useCastStore, castInterceptPlayPause, castInterceptSeek, castMime } from '@/services/cast';
 import { bestImage } from '@/utils/images';
-import { dedupeSongs, isValidSong, normTitle, noteUnavailable, resetSkipGuard } from './playerGuards';
+import { dedupeSongs, isValidSong, normTitle, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
+import { kidModeOn, stripExplicit } from '@/services/kidMode';
 import { tuneScoreAdjust, type TuneIntent } from '@/services/recommendation/tune';
 import { inferMood } from '@/services/recommendation/mood';
 
@@ -56,6 +57,10 @@ export interface PlayerState {
   enqueueAll(songs: Song[]): void;
   removeAt(index: number): void;
   moveInQueue(from: number, to: number): void;
+  /** Package D5 — drop this row and everything after it (future rows only). */
+  clearFrom(index: number): void;
+  /** Package D5 — reorder everything after the playing song. */
+  sortUpcoming(kind: QueueSortKind): void;
   clearPlayed(): void;
   clearQueue(): void;
   togglePlay(): void;
@@ -252,6 +257,7 @@ export const usePlayerStore = create<PlayerState>()(
           history: useHistoryStore.getState().entries,
           tuneIntent: get().tuneIntent,
           sessionMood: inferMood(seed),
+          coPlaySeed: seed,
         };
         // Anti-repeat: never re-queue what's already queued OR played in the
         // last ~60 tracks (profile.recentSongIds).
@@ -295,7 +301,7 @@ export const usePlayerStore = create<PlayerState>()(
           const onPinned = pool.filter((s) => s.language != null && pinnedSet.has(s.language));
           if (onPinned.length) pool = onPinned;
         }
-        pool = dedupeSongs(pool);
+        pool = dedupeSongs(stripExplicit(pool));
         const fresh = pool.slice(0, 6);
         if (tune) for (const s of fresh) tuneSuggested.add(s.id);
         // Top up from a direct on-language search so the queue stays 100% in the
@@ -348,7 +354,7 @@ export const usePlayerStore = create<PlayerState>()(
         }
         const before = get().queue.length;
         const { lastQueueSource } = await import('@/services/recommendation/engine');
-        const combined = dedupeSongs([...get().queue, ...fresh]);
+        const combined = dedupeSongs([...get().queue, ...stripExplicit(fresh)]);
         if (combined.length > before) set({ queue: combined, queueSource: lastQueueSource() });
         return combined.length > before;
       }
@@ -551,6 +557,11 @@ export const usePlayerStore = create<PlayerState>()(
           // AI DJ drives the queue on EVERY play: start the tapped song and let
           // the AI build the continuation, instead of following the source list.
           const seed = songs[Math.min(Math.max(0, startIndex), songs.length - 1)];
+          // C2 — kid mode: an explicit-flagged song never starts playback.
+          if (seed.explicit && kidModeOn()) {
+            toast('Kid mode is on — that song is marked explicit');
+            return;
+          }
           resetSkipGuard(); // manual play — the user vouches for the sources
           set({ queue: [seed], index: 0, currentTime: 0 });
           startTrack(seed, true);
@@ -577,6 +588,10 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         startRadio: (song) => {
+          if (song.explicit && kidModeOn()) {
+            toast('Kid mode is on — that song is marked explicit');
+            return;
+          }
           resetSkipGuard(); // manual play
           set({ queue: [song], index: 0, currentTime: 0, shuffle: false });
           startTrack(song, true);
@@ -587,6 +602,10 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         enqueue: (song) => {
+          if (song.explicit && kidModeOn()) {
+            toast('Kid mode is on — that song is marked explicit');
+            return;
+          }
           const { queue } = get();
           if (queue.some((s) => s.id === song.id)) {
             toast('Already in queue');
@@ -600,7 +619,7 @@ export const usePlayerStore = create<PlayerState>()(
 
         enqueueAll: (songs) => {
           const existing = new Set(get().queue.map((s) => s.id));
-          const fresh = songs.filter((s) => !existing.has(s.id));
+          const fresh = stripExplicit(songs).filter((s) => !existing.has(s.id));
           if (!fresh.length) {
             toast('Already in queue');
             return;
@@ -611,6 +630,10 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         enqueueNext: (song) => {
+          if (song.explicit && kidModeOn()) {
+            toast('Kid mode is on — that song is marked explicit');
+            return;
+          }
           const { queue, index } = get();
           recordQueueAdd(song);
           // If the song "play next" is invoked on already IS the currently
@@ -658,15 +681,25 @@ export const usePlayerStore = create<PlayerState>()(
 
         moveInQueue: (from, to) => {
           const { queue, index } = get();
-          if (from === to || from < 0 || to < 0 || from >= queue.length || to >= queue.length) return;
-          const next = [...queue];
-          const [item] = next.splice(from, 1);
-          next.splice(to, 0, item);
-          let newIndex = index;
-          if (index === from) newIndex = to;
-          else if (from < index && to >= index) newIndex = index - 1;
-          else if (from > index && to <= index) newIndex = index + 1;
-          set({ queue: next, index: newIndex });
+          const moved = reorderQueue(queue, index, from, to);
+          if (moved) set(moved);
+        },
+
+        sortUpcoming: (kind) => {
+          const { queue, index } = get();
+          if (queue.length - index < 3) return; // nothing worth sorting
+          const head = queue.slice(0, index + 1);
+          set({ queue: [...head, ...sortQueueTail(queue.slice(index + 1), kind)] });
+        },
+
+        clearFrom: (i) => {
+          const { queue, index } = get();
+          // Only the future can be swept — the playing song and history stay.
+          const next = queueAfterClearFrom(queue, index, i);
+          if (!next) return;
+          const dropped = queue.length - next.length;
+          set({ queue: next });
+          toast(`Cleared ${dropped} upcoming ${dropped === 1 ? 'song' : 'songs'}`);
         },
 
         clearPlayed: () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Song } from '@/types';
-import { dedupeSongs, isValidSong, normTitle, noteUnavailable, resetSkipGuard } from './playerGuards';
+import { dedupeSongs, isValidSong, normTitle, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail } from './playerGuards';
 
 const song = (id: string, title: string): Song => ({
   kind: 'song',
@@ -81,5 +81,80 @@ describe('isValidSong (persist rehydrate guard — DQA-06)', () => {
 
   it('accepts minimal-but-safe legacy entries', () => {
     expect(isValidSong({ id: 'a', title: 'T', images: [], audio: [], artists: [] })).toBe(true);
+  });
+});
+
+describe('queueAfterClearFrom (D5)', () => {
+  const q = ['a', 'b', 'c', 'd', 'e'];
+
+  it('sweeps from a future row down, keeping the playing song and history', () => {
+    expect(queueAfterClearFrom(q, 1, 3)).toEqual(['a', 'b', 'c']);
+    expect(queueAfterClearFrom(q, 0, 1)).toEqual(['a']);
+  });
+
+  it('refuses to sweep the playing row, the past, or out-of-range rows', () => {
+    expect(queueAfterClearFrom(q, 2, 2)).toBeNull(); // the playing row itself
+    expect(queueAfterClearFrom(q, 2, 1)).toBeNull(); // history
+    expect(queueAfterClearFrom(q, 2, 5)).toBeNull(); // past the end
+    expect(queueAfterClearFrom([], 0, 0)).toBeNull();
+  });
+});
+
+describe('sortQueueTail (D5)', () => {
+  const mk = (id: string, title: string, year: string | null): Song => ({ ...song(id, title), year });
+  const list = [
+    mk('a', 'Sad Lonely Tears', '2010'),
+    mk('b', 'Party Dance Blast', '2024'),
+    mk('c', 'Chill Lofi Rain', '2018'),
+    mk('d', 'Plain Track', '2001'),
+  ];
+
+  it('energy puts bangers first, calm puts them last', () => {
+    expect(sortQueueTail(list, 'energy').map((s) => s.id)).toEqual(['b', 'd', 'c', 'a']);
+    expect(sortQueueTail(list, 'calm').map((s) => s.id)).toEqual(['a', 'c', 'd', 'b']);
+  });
+
+  it('new/old sort by release year with stable ties', () => {
+    expect(sortQueueTail(list, 'new').map((s) => s.id)).toEqual(['b', 'c', 'a', 'd']);
+    expect(sortQueueTail(list, 'old').map((s) => s.id)).toEqual(['d', 'a', 'c', 'b']);
+  });
+
+  it('mood clusters run high-energy to melancholy and never drop songs', () => {
+    const out = sortQueueTail(list, 'mood');
+    expect(out.map((s) => s.id)).toEqual(['b', 'd', 'c', 'a']);
+    expect(out).toHaveLength(list.length);
+  });
+});
+
+describe('reorderQueue (drag-to-reorder)', () => {
+  const q = ['a', 'b', 'c', 'd', 'e'];
+
+  it('moves an upcoming song and leaves the playing index alone', () => {
+    // playing 'a' (0); drag 'd' (3) up to slot 1
+    const r = reorderQueue(q, 0, 3, 1);
+    expect(r?.queue).toEqual(['a', 'd', 'b', 'c', 'e']);
+    expect(r?.index).toBe(0);
+  });
+
+  it('keeps the index pinned to the SAME song when rows cross it', () => {
+    // playing 'c' (2); move 'a' (0) below it → c shifts left
+    const down = reorderQueue(q, 2, 0, 3);
+    expect(down?.queue).toEqual(['b', 'c', 'd', 'a', 'e']);
+    expect(down?.queue[down.index]).toBe('c');
+    // playing 'c' (2); move 'e' (4) above it → c shifts right
+    const up = reorderQueue(q, 2, 4, 0);
+    expect(up?.queue).toEqual(['e', 'a', 'b', 'c', 'd']);
+    expect(up?.queue[up.index]).toBe('c');
+    // moving the playing song itself follows it
+    const self = reorderQueue(q, 2, 2, 0);
+    expect(self?.queue[self.index]).toBe('c');
+    expect(self?.index).toBe(0);
+  });
+
+  it('returns null on no-ops and out-of-range moves (caller skips set())', () => {
+    expect(reorderQueue(q, 0, 2, 2)).toBeNull();
+    expect(reorderQueue(q, 0, -1, 2)).toBeNull();
+    expect(reorderQueue(q, 0, 1, 5)).toBeNull();
+    expect(reorderQueue([], 0, 0, 0)).toBeNull();
   });
 });

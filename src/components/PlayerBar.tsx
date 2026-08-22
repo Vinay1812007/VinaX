@@ -127,7 +127,7 @@ export function PlayerBar() {
       <div className="sm:hidden px-2 pb-1.5">
         <div
           className={cn(
-            'np-mini relative rounded-xl overflow-hidden shadow-lg border border-white/5',
+            'np-mini relative rounded-xl overflow-hidden shadow-lg border border-glass',
             changed && 'np-changed',
           )}
           data-buffering={isBuffering ? 'true' : undefined}
@@ -155,7 +155,7 @@ export function PlayerBar() {
               </span>
             </button>
             {sleepActive && (
-              <button onClick={cancelSleep} aria-label="Cancel sleep timer" className="flex items-center gap-1 px-2 py-1 rounded-full bg-ink-700/60 text-[11px] font-bold text-ink-100">
+              <button onClick={cancelSleep} aria-label="Cancel sleep timer" className="flex items-center gap-1 px-2 py-1 rounded-full bg-ink-700/60 text-[11px] font-bold text-ink-100 relative after:absolute after:inset-0 after:-m-[10px]">
                 <ClockIcon className="w-3.5 h-3.5" /> {sleepLabel}
               </button>
             )}
@@ -238,7 +238,7 @@ export function PlayerBar() {
               </div>
             )}
             {sleepActive && (
-              <button onClick={cancelSleep} title="Cancel sleep timer" className="flex items-center gap-1 px-2 py-1 mr-1 rounded-full border border-ink-600 text-[11px] font-bold text-ember-400 hover:border-ember-500">
+              <button onClick={cancelSleep} aria-label="Cancel sleep timer" title="Cancel sleep timer" className="flex items-center gap-1 px-2 py-1 mr-1 rounded-full border border-ink-600 text-[11px] font-bold text-ember-400 hover:border-ember-500 relative after:absolute after:inset-0 after:-m-[10px]">
                 <ClockIcon className="w-3.5 h-3.5" /> {sleepLabel}
               </button>
             )}

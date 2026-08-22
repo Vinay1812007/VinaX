@@ -33,9 +33,45 @@ export interface TasteProfile {
   recentSongIds: string[];
   /** Per-language play counts bucketed by 6h slice (0=night,1=morning,2=afternoon,3=evening). */
   hourBuckets: Record<string, number[]>;
+  /** Package A3 — "Show fewer like this". Artist keys the user explicitly
+   *  demoted; entries expire after `until`. Optional so existing v1 profiles
+   *  in the wild that predate this field keep loading cleanly. */
+  softMuted?: Record<string, { until: number }>;
+  /** Package C3 — four hand-tuned "taste dials". Optional so v1 profiles that
+   *  predate C3 keep loading; getSliders() fills the neutral defaults. Stays on
+   *  schema version 1 — it's an additive, defaulted field, not a shape change. */
+  sliders?: TasteSliders;
 }
 
+/**
+ * Package C3 — the taste dials. Each is a 0..1 position where 0.5 is neutral
+ * ("let my listening decide"). They bias the on-device scorer directly and are
+ * summarized as one-liners for the AI DJ / Home / chat. Never uploaded.
+ */
+export interface TasteSliders {
+  /** 0 = stick to familiar favourites · 1 = adventurous, discovery-first. */
+  adventurous: number;
+  /** 0 = timeless classics · 1 = fresh, recent releases. */
+  recency: number;
+  /** 0 = mellow, melody-forward · 1 = high-energy, beat-driven. */
+  energy: number;
+  /** 0 = instrumental-friendly · 1 = vocal-forward. */
+  vocalness: number;
+}
+
+export type SliderKey = keyof TasteSliders;
+
+// The dials' runtime (defaults, summariser, setter) lives in the lazy-loaded
+// ./dials module, not here — profile.ts is first-load, and only lazy surfaces
+// (the Taste Profile page and the AI payload builders) ever touch that runtime,
+// so keeping it out holds the first-load bundle flat. Only the TYPES stay here.
+
 const HALF_LIFE_DAYS = 14;
+// Negative-preference decay is slower than positive — a skip should sting
+// longer than a play should reward. Package A2 upgrades applyDecay to
+// exponentially fade `skips` at this half-life so a year-old skip doesn't
+// keep demoting an artist forever.
+const SKIP_HALF_LIFE_DAYS = 30;
 const DAY_MS = 86_400_000;
 
 export function createEmptyProfile(now = Date.now()): TasteProfile {
@@ -49,16 +85,34 @@ export function createEmptyProfile(now = Date.now()): TasteProfile {
     hourBuckets: {},
     totals: { plays: 0, completes: 0, skips: 0, favorites: 0, queueAdds: 0 },
     recentSongIds: [],
+    softMuted: {},
   };
 }
 
-/** Exponential time decay so yesterday matters more than last month. */
+/** Exponential time decay so yesterday matters more than last month.
+ *  Package A2: positive affinity fades at HALF_LIFE_DAYS (14d), negative
+ *  signals (`skips`) fade at SKIP_HALF_LIFE_DAYS (30d) — skips sting longer
+ *  than plays reward. Also GCs expired softMuted entries from A3. */
 export function applyDecay(profile: TasteProfile, now = Date.now()): void {
   const elapsedDays = (now - profile.updatedAt) / DAY_MS;
   if (elapsedDays <= 0.25) return;
-  const factor = Math.pow(0.5, elapsedDays / HALF_LIFE_DAYS);
-  for (const a of Object.values(profile.languages)) a.score *= factor;
-  for (const a of Object.values(profile.artists)) a.score *= factor;
+  const posFactor = Math.pow(0.5, elapsedDays / HALF_LIFE_DAYS);
+  const negFactor = Math.pow(0.5, elapsedDays / SKIP_HALF_LIFE_DAYS);
+  for (const a of Object.values(profile.languages)) {
+    a.score *= posFactor;
+    a.skips *= negFactor;
+  }
+  for (const a of Object.values(profile.artists)) {
+    a.score *= posFactor;
+    a.skips *= negFactor;
+  }
+  // GC expired soft-mutes (natural expiry — no half-life needed, the `until`
+  // timestamp handles it). Optional field, tolerant of undefined.
+  if (profile.softMuted) {
+    for (const [key, entry] of Object.entries(profile.softMuted)) {
+      if (entry.until <= now) delete profile.softMuted[key];
+    }
+  }
   profile.updatedAt = now;
 }
 

@@ -5,13 +5,16 @@ main = "index.ts"
 compatibility_date = "2026-08-01"
 
 # Same-zone routes: the Worker answers exactly these paths on the production
-# domain. Everything else (the static SPA on Cloudflare Pages) is untouched.
-# The Pages project must stay attached to the custom domain — it is the
-# origin the Worker falls through to.
+# domain; everything else is served by the Pages project attached to the
+# domain (which must stay attached — it is the fallthrough origin).
 routes = [
-  # API (all endpoints, including /api/admin/*, /api/cron/*, /api/push/*)
+  # API — all endpoints, including /api/cat/* (self-hosted catalog),
+  # /api/admin/*, /api/cron/*, /api/push/*
   { pattern = "www.sirimillavinay.online/api/*", zone_name = "sirimillavinay.online" },
-  { pattern = "sirimillavinay.online/api/*", zone_name = "sirimillavinay.online" },
+
+  # Apex: catch-all so _middleware's 301 canonicalization to www runs at the
+  # edge for every apex URL (no duplicate second origin).
+  { pattern = "sirimillavinay.online/*", zone_name = "sirimillavinay.online" },
 
   # Edge-rendered SEO entity pages
   { pattern = "www.sirimillavinay.online/song/*", zone_name = "sirimillavinay.online" },
@@ -19,35 +22,100 @@ routes = [
   { pattern = "www.sirimillavinay.online/artist/*", zone_name = "sirimillavinay.online" },
   { pattern = "www.sirimillavinay.online/playlist/*", zone_name = "sirimillavinay.online" },
 
-  # Sitemaps (covers /sitemap.xml and every /sitemap-*.xml)
+  # Sitemaps: /sitemap.xml, /sitemap-*.xml AND the paginated /sitemaps/*
   { pattern = "www.sirimillavinay.online/sitemap*", zone_name = "sirimillavinay.online" },
 
   # Image proxy + APK download
   { pattern = "www.sirimillavinay.online/img", zone_name = "sirimillavinay.online" },
   { pattern = "www.sirimillavinay.online/apk", zone_name = "sirimillavinay.online" },
 
-  { pattern = "admin.sirimillavinay.online/api/*", zone_name = "sirimillavinay.online" },
-
   # Host-level redirects handled by functions/_middleware.ts
   { pattern = "update.sirimillavinay.online/*", zone_name = "sirimillavinay.online" },
   { pattern = "admin.sirimillavinay.online/", zone_name = "sirimillavinay.online" },
+  # Admin dashboard API (the admin SPA calls /api/* on its own host)
+  { pattern = "admin.sirimillavinay.online/api/*", zone_name = "sirimillavinay.online" },
+
+  # SEO hub pages (/<lang>-<mood>-songs — functions/[hub].ts allow-list,
+  # 12 languages x 6 moods, generated to match _lib/render.ts).
+  { pattern = "www.sirimillavinay.online/hindi-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/hindi-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/hindi-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/hindi-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/hindi-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/hindi-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/telugu-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/telugu-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/telugu-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/telugu-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/telugu-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/telugu-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/tamil-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/tamil-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/tamil-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/tamil-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/tamil-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/tamil-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/english-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/english-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/english-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/english-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/english-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/english-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/punjabi-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/punjabi-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/punjabi-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/punjabi-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/punjabi-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/punjabi-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/kannada-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/kannada-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/kannada-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/kannada-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/kannada-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/kannada-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/malayalam-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/malayalam-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/malayalam-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/malayalam-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/malayalam-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/malayalam-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bengali-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bengali-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bengali-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bengali-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bengali-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bengali-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/marathi-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/marathi-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/marathi-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/marathi-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/marathi-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/marathi-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bhojpuri-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bhojpuri-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bhojpuri-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bhojpuri-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bhojpuri-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/bhojpuri-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/gujarati-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/gujarati-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/gujarati-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/gujarati-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/gujarati-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/gujarati-workout-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/urdu-romantic-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/urdu-sad-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/urdu-party-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/urdu-devotional-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/urdu-melody-songs*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/urdu-workout-songs*", zone_name = "sirimillavinay.online" },
 ]
 
 [vars]
-# Host of the Pages deployment serving the static frontend. The Worker
-# fetches the SPA shell / static assets from here (ASSETS shim + fallthrough).
-# Replace with your real <project>.pages.dev host.
+# Host of the Pages deployment serving the static frontend.
 ASSETS_HOST = "vinax.pages.dev"
-
-# Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`,
-# never in this file) — same names as before, now on the Worker instead of Pages:
-#   VINAX_DEEPSEEK_V4_FLASH  VINAX_CHATGPT_20_B  VINAX_NEMOTRON_SUPER
-#   VINAX_GROQ_API_KEY  VINAX_CHATGPT_120_B  VINAX_NEMOTRON_ULTRA
-#   VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B  NVIDIA_BASE_URL
-#   SUPABASE_URL  SUPABASE_SERVICE_ROLE_KEY  ADMIN_LOGIN_PASSWORD
-#   VAPID_PUBLIC_KEY  VAPID_PRIVATE_KEY  VAPID_SUBJECT
-#   TELEMETRY_PEPPER  DEVICE_ID_SECRET  CRON_SECRET
-#   BRAVE_API_KEY  GITHUB_REPO  GITHUB_TOKEN  FCM_SERVICE_ACCOUNT
-# Full documentation of every name: .env.example
-
 GITHUB_REPO = "Vinay1812007/VinaX"
+
+# Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
+# or the Workers dashboard, never in this file) — every name documented in
+# .env.example now lives on this Worker instead of the Pages project.

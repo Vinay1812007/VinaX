@@ -42,7 +42,8 @@ export default function AboutPage() {
         </p>
         <p>
           The vision is simple: <strong>great music for India, open to everyone.</strong> No paywalls, no
-          premium tiers, no ads — just press play. And it stays that way without trading your privacy:
+          premium tiers — just press play. A few ads on the website keep the lights on (the app itself is
+          ad-free), and it stays that way without trading your privacy:
           personalization is computed on your device, nothing you type is stored on our servers, and
           your IP address is never kept. The only data we ever receive is optional, anonymous usage that
           you can switch off — everything you can see on your <a href="/taste-profile" className="text-ember-400">Taste Profile</a> page

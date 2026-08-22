@@ -5,17 +5,22 @@ import type { Song } from '@/types';
 import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { shareLink } from '@/utils/share';
-import { shareSongCard } from '@/utils/songCard';
+import { shareSongCard, shareSongStoryCard } from '@/utils/songCard';
 import { toast } from '@/store/toastStore';
 import { isNativePlatform } from '@/services/native';
 import { sendFeedback } from '@/services/feedback';
+import { softMuteArtist } from '@/services/personalization/updater';
+import { useReasonStore } from '@/store/reasonStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { downloadSong, removeDownload } from '@/services/downloads';
 import { cn } from '@/utils/cn';
 import { DotsIcon } from './Icons';
+import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 
 export function TrackMenu({ song }: { song: Song }) {
   const [open, setOpen] = useState(false);
+  // Android back closes the menu instead of leaving the page (audit P0-2).
+  useDismissOnBack(open, () => setOpen(false));
   const [flipUp, setFlipUp] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
@@ -26,6 +31,8 @@ export function TrackMenu({ song }: { song: Song }) {
   const toggleHidden = useLibraryStore((s) => s.toggleHidden);
   const downloaded = useDownloadsStore((s) => !!s.items[song.id]);
   const downloading = useDownloadsStore((s) => !!s.downloading[song.id]);
+  // Package C4 — the honest "why am I seeing this?" line (AI DJ or local scorer).
+  const whyLine = useReasonStore((s) => s.reasons[song.id]);
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +94,14 @@ export function TrackMenu({ song }: { song: Song }) {
           toast(ok ? 'Thanks — reported' : 'Could not send report'),
         ),
     },
+    // C4 — only offered when this song was actually recommended (an entry
+    // exists); library/search results aren't automatic picks, so no item.
+    whyLine
+      ? {
+          label: 'Why this song?',
+          action: () => toast(whyLine),
+        }
+      : null,
     {
       label: 'Not interested',
       action: () => {
@@ -94,13 +109,50 @@ export function TrackMenu({ song }: { song: Song }) {
         toast('We’ll show this less');
       },
     },
+    song.artists[0]
+      ? {
+          // Package A3 — long-form "less of this artist" (14-day soft-mute
+          // + 5× negative bump). Complements "Not interested" which only
+          // hides the specific song. Toast is undo-able within 5 s.
+          label: `Show fewer like ${song.artists[0].name.slice(0, 20)}${song.artists[0].name.length > 20 ? '…' : ''}`,
+          action: () => {
+            softMuteArtist(song, 14);
+            toast(`Muted ${song.artists[0].name} for 2 weeks`);
+          },
+        }
+      : null,
     {
       label: 'Share',
       action: () => void shareLink(songPath(song), song.title).then((r) => r === 'copied' && toast('Link copied')),
     },
     {
+      // D15 — pre-filled WhatsApp share (works on app + web via wa.me).
+      label: 'Share to WhatsApp',
+      action: () =>
+        window.open(
+          `https://wa.me/?text=${encodeURIComponent(`🎵 ${song.title} — ${song.subtitle}\nListen free on VinaX: ${window.location.origin}${songPath(song)}`)}`,
+          '_blank',
+          'noopener',
+        ),
+    },
+    {
+      // D15 — pre-filled Telegram share.
+      label: 'Share to Telegram',
+      action: () =>
+        window.open(
+          `https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}${songPath(song)}`)}&text=${encodeURIComponent(`🎵 ${song.title} — ${song.subtitle} · free on VinaX`)}`,
+          '_blank',
+          'noopener',
+        ),
+    },
+    {
       label: 'Share as image',
       action: () => void shareSongCard(song).then((ok) => { if (!ok) toast('Could not create image'); }),
+    },
+    {
+      // D15 — 9:16 for Instagram/WhatsApp status.
+      label: 'Share as story',
+      action: () => void shareSongStoryCard(song).then((ok) => { if (!ok) toast('Could not create image'); }),
     },
   ];
 

@@ -18,7 +18,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     sbSelect<{ code: string }>(
       env,
       'vinax_room_members',
-      `last_seen=gte.${encodeURIComponent(memSince)}&select=code`,
+      `last_seen=gte.${encodeURIComponent(memSince)}&select=code&limit=2000`, // bounded like every other admin read (D-12)
     ),
   ]);
   const counts: Record<string, number> = {};

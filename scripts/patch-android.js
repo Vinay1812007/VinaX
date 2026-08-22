@@ -30,6 +30,23 @@ if (fs.existsSync(nativeSrc)) {
   console.warn('[native] native-android directory not found');
 }
 
+// 1b-res. Widget resources: copy native-android/res/** (layout, drawable,
+// xml) into the app's res tree so the quick-play widget's RemoteViews and
+// provider-info compile with the project.
+const nativeRes = path.join(root, 'native-android', 'res');
+if (fs.existsSync(nativeRes)) {
+  for (const dir of fs.readdirSync(nativeRes)) {
+    const srcDir = path.join(nativeRes, dir);
+    if (!fs.statSync(srcDir).isDirectory()) continue;
+    const dstDir = path.join(resRoot, dir);
+    fs.mkdirSync(dstDir, { recursive: true });
+    for (const f of fs.readdirSync(srcDir)) {
+      fs.copyFileSync(path.join(srcDir, f), path.join(dstDir, f));
+      console.log(`[res] Copied ${dir}/${f}`);
+    }
+  }
+}
+
 // 1c. Google Services config for FCM background push. Capacitor 8 already applies
 // the google-services Gradle plugin when this file is present, so dropping it in
 // is all that's needed. Copied only when committed, so builds without it are
@@ -47,6 +64,7 @@ if (fs.existsSync(gservicesSrc)) {
 if (fs.existsSync(javaRoot)) {
   const mainActivity = `package ${PKG};
 
+import android.content.Intent;
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
 
@@ -55,6 +73,28 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(VinaxMediaPlugin.class);
         super.onCreate(savedInstanceState);
+        maybeOpenPlayer(getIntent());
+    }
+
+    @Override
+    public void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // Warm start: the activity already exists (launchMode singleTask), so
+        // a notification tap lands here instead of onCreate.
+        maybeOpenPlayer(intent);
+    }
+
+    /** Playback-notification body tap (4.16.1): the launch intent carries
+     *  EXTRA_OPEN_PLAYER — relay to JS so the app opens the full-screen
+     *  player instead of wherever it was left. */
+    private void maybeOpenPlayer(Intent intent) {
+        try {
+            if (intent != null && intent.getBooleanExtra(VinaxMediaService.EXTRA_OPEN_PLAYER, false)) {
+                intent.removeExtra(VinaxMediaService.EXTRA_OPEN_PLAYER);
+                VinaxMediaPlugin.openPlayerRequested();
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
@@ -130,6 +170,15 @@ if (fs.existsSync(manifestPath)) {
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <receiver android:name=".VinaxQuickPlayWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/vinax_widget_info" />
+        </receiver>
 `;
 
   // WARNING (audit finding M-OPS-9): these regexes are fragile — they assume
@@ -150,6 +199,10 @@ if (fs.existsSync(manifestPath)) {
 
   const oldReceiverRegex = /<receiver[^>]*android:name="androidx\.media\.session\.MediaButtonReceiver"[^>]*>.*?<\/receiver>/gs;
   manifest = manifest.replace(oldReceiverRegex, '');
+
+  // Remove a previously injected widget receiver so re-runs stay idempotent.
+  const oldWidgetRegex = /<receiver[^>]*android:name="\.VinaxQuickPlayWidget"[^>]*>.*?<\/receiver>/gs;
+  manifest = manifest.replace(oldWidgetRegex, '');
 
   if (!manifest.includes('VinaxMediaService')) {
     const before = manifest;

@@ -27,14 +27,22 @@ function extOf(url: string): string {
 }
 
 function bestAudioUrl(song: Song): string | null {
-  const order = ['320kbps', '160kbps', '96kbps', '48kbps'];
-  const sorted = [...song.audio].sort((a, b) => {
-    const ia = order.indexOf(a.quality);
-    const ib = order.indexOf(b.quality);
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-  });
+  // Parse the NUMBER out of the quality label instead of exact-matching
+  // '320kbps' strings — upstreams label variants '320', '320 kbps', etc.,
+  // and an exact-match miss used to sort them last and download whatever
+  // happened to be first (often the lowest quality).
+  const kbps = (q: string | undefined): number => {
+    const m = /(\d+)/.exec(q ?? '');
+    return m ? Number(m[1]) : 0;
+  };
+  const sorted = [...song.audio].filter((v) => v.url).sort((a, b) => kbps(b.quality) - kbps(a.quality));
   return sorted[0]?.url ?? song.audio[0]?.url ?? null;
 }
+
+/** A saved file smaller than this cannot be a real song — it's an upstream
+ *  error body (CDN "Access Denied" XML, an HTML error page) that arrived
+ *  with a 200. Even a 10-second 48 kbps jingle is ~60 KB. */
+const MIN_VALID_BYTES = 10 * 1024;
 
 /** Rebuild the local-URL map from persisted downloads (native only). */
 export async function initDownloads(): Promise<void> {
@@ -87,6 +95,19 @@ export async function downloadSong(song: Song): Promise<boolean> {
         throw new Error(`http ${res.status}`);
       }
       await Filesystem.writeFile({ path, data: res.data, directory: Directory.Data, recursive: true });
+    }
+    // Validate the bytes on disk: the downloader streams whatever the server
+    // sent, so a 200-shaped error page would otherwise be saved as a "song"
+    // and fail silently at play time.
+    try {
+      const st = await Filesystem.stat({ path, directory: Directory.Data });
+      if (typeof st.size === 'number' && st.size < MIN_VALID_BYTES) {
+        await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => undefined);
+        throw new Error(`invalid download (${st.size} bytes)`);
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('invalid download')) throw e;
+      /* stat unsupported — keep the file, playback fallback still covers us */
     }
     const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
     urlMap.set(song.id, Capacitor.convertFileSrc(uri));

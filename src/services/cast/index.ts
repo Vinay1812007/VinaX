@@ -140,17 +140,12 @@ export const useCastStore = create<CastState>((set, get) => ({
       window.__onGCastApiAvailable(true);
     }
 
-    // Auto-inject the Cast SDK during idle time so device discovery is armed
-    // before the user opens DeviceSheet. Deferred so it never blocks first
-    // paint. requestIdleCallback isn't in Safari — fall back to a timeout.
-    const w = window as unknown as {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void;
-    };
-    if (typeof w.requestIdleCallback === 'function') {
-      w.requestIdleCallback(() => ensureCastSdk(), { timeout: 3000 });
-    } else {
-      setTimeout(() => ensureCastSdk(), 2000);
-    }
+    // 4.18.0 (PSI unused-JS pass): the SDK used to auto-inject at idle so
+    // discovery was pre-armed — which meant EVERY web visit downloaded and
+    // parsed Google's whole Cast framework (and logged a console error when
+    // it couldn't phone home) for a picker almost no visit opens. It now
+    // loads only when DeviceSheet opens (ensureCastSdk() there); discovery
+    // arms a beat after the sheet appears instead of pre-emptively.
   },
 }));
 

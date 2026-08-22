@@ -15,7 +15,7 @@ function repo(env: GithubEnv): string {
 }
 
 export interface GhAsset { name: string; url: string; browser_download_url: string; }
-export interface GhRelease { tag_name: string; name: string; assets: GhAsset[]; }
+export interface GhRelease { tag_name: string; name: string; body?: string | null; assets: GhAsset[]; }
 
 export function githubConfigured(env: GithubEnv): boolean {
   return !!env.GITHUB_TOKEN;

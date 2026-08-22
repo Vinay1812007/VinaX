@@ -72,7 +72,9 @@ export async function enablePush(lang?: string): Promise<EnablePushResult> {
     const res = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ endpoint: data.endpoint, keys: data.keys, lang }),
+      // tzOffset (minutes east of UTC) powers the server's quiet-hours gate,
+      // so nobody is pushed at 3am local. Coarse and non-identifying.
+      body: JSON.stringify({ endpoint: data.endpoint, keys: data.keys, lang, tzOffset: -new Date().getTimezoneOffset() }),
     });
     const saved = (await res.json().catch(() => null)) as { ok?: boolean } | null;
     return saved?.ok ? 'ok' : 'error';

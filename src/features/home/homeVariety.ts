@@ -13,6 +13,8 @@
  * starved below its minimum.
  */
 
+import { moodFromText, moodMatchScore } from '@/services/recommendation/mood';
+
 /** Cheap 32-bit string hash (FNV-1a-ish) — stable across loads. */
 export function hashStr(s: string): number {
   let h = 2166136261;
@@ -45,6 +47,26 @@ export function biasUnseenFirst<T extends { id: string }>(songs: T[], seenIds: S
   const seen: T[] = [];
   for (const s of songs) (seenIds.has(s.id) ? seen : unseen).push(s);
   return [...unseen, ...seen];
+}
+
+/**
+ * Package A9 — nudge a shelf's songs toward the mood its TITLE implies. A shelf
+ * the AI titled "Chill late-night melodies" should not open with a party
+ * banger. We infer the shelf's mood from its title, then stably sink the
+ * clearly-clashing songs to the back — order preserved within each group, so
+ * relevance is never shuffled away, only obvious mood outliers move. No-op for a
+ * neutral/ambiguous title, a short shelf, or when nothing (or everything)
+ * clashes. Pure and title-driven, so it degrades gracefully with `inferMood`.
+ */
+export function reorderByShelfMood<T extends { title: string; subtitle: string }>(title: string, songs: T[]): T[] {
+  const shelfMood = moodFromText(title);
+  if (shelfMood === 'neutral' || songs.length < 3) return songs;
+  const fit: T[] = [];
+  const clash: T[] = [];
+  for (const s of songs) {
+    (moodMatchScore(moodFromText(`${s.title} ${s.subtitle}`), shelfMood) > 0.1 ? fit : clash).push(s);
+  }
+  return fit.length && clash.length ? [...fit, ...clash] : songs;
 }
 
 const RECENT_KEY = 'vinax.aihome.recent.v1';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { inferMood, moodMatchScore } from './mood';
+import { inferMood, moodFromText, moodMatchScore } from './mood';
 import type { Song } from '../../types';
 
 const song = (title: string, subtitle = ''): Song => ({
@@ -31,6 +31,14 @@ describe('inferMood', () => {
   it('falls back to neutral and tolerates null', () => {
     expect(inferMood(song('Generic Track 7'))).toBe('neutral');
     expect(inferMood(null)).toBe('neutral');
+  });
+});
+
+describe('moodFromText', () => {
+  it('reads a mood straight from free text (shelf titles, A9)', () => {
+    expect(moodFromText('Chill late-night melodies')).toBe('chill');
+    expect(moodFromText('Weekend Party Bangers')).toBe('energetic');
+    expect(moodFromText('A.R. Rahman deep cuts')).toBe('neutral');
   });
 });
 

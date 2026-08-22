@@ -33,7 +33,7 @@ export function LiveLyricLine({ lines, onOpen }: { lines: LrcLine[]; onOpen: () 
         <span className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Lyrics</span>
         <span className="text-[11px] font-semibold text-ember-300">Open ›</span>
       </div>
-      <p className={cn('text-xl font-extrabold leading-snug transition-all', current ? 'vx-lyric-active' : 'vx-lyric-dim')}>
+      <p className={cn('text-xl font-extrabold leading-snug transition-[color,background-color,border-color,opacity,transform]', current ? 'vx-lyric-active' : 'vx-lyric-dim')}>
         {current ?? '♪'}
       </p>
       {upcoming && <p className="text-base vx-lyric-dim opacity-70 leading-snug mt-1.5 truncate">{upcoming}</p>}

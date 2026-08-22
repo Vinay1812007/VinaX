@@ -20,7 +20,7 @@ const LABEL: Record<LiveVoiceState, string> = {
   idle: '',
   listening: 'Listening…',
   thinking: 'Thinking…',
-  speaking: 'Speaking — tap the orb to interrupt',
+  speaking: 'Speaking — just talk to jump in',
 };
 
 /** Full-screen live-voice surface: an orb that breathes with your mic level,

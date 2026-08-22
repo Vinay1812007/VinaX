@@ -43,11 +43,22 @@ export function PullToRefresh({
 }: PullToRefreshProps) {
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  // Mirror the render state in refs: the touch handlers read these. Reading
+  // React STATE inside touchend was the "sometimes doesn't refresh" bug — on
+  // a fast flick the final touchmove and touchend land in the same task,
+  // before React commits, so the handler saw a stale (smaller) pull value
+  // and dropped the refresh. Refs update synchronously.
+  const pullRef = useRef(0);
+  const refreshingRef = useRef(false);
   const startY = useRef<number | null>(null);
   const startX = useRef<number | null>(null);
   const active = useRef(false);
   const hasHapticed = useRef(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const setPullBoth = useCallback((v: number) => {
+    pullRef.current = v;
+    setPull(v);
+  }, []);
 
   const scrollTopEl = useCallback((): HTMLElement => {
     // The app scrolls on the primary <main>; fall back to documentElement.
@@ -56,8 +67,9 @@ export function PullToRefresh({
   }, []);
 
   const commitRefresh = useCallback(async () => {
+    refreshingRef.current = true;
     setRefreshing(true);
-    setPull(threshold);
+    setPullBoth(threshold);
     const started = Date.now();
     let done = false;
     const timeout = new Promise<void>((resolve) => {
@@ -76,16 +88,17 @@ export function PullToRefresh({
     if (held < SPINNER_MIN_MS) {
       await new Promise((r) => window.setTimeout(r, SPINNER_MIN_MS - held));
     }
+    refreshingRef.current = false;
     setRefreshing(false);
-    setPull(0);
+    setPullBoth(0);
     hasHapticed.current = false;
-  }, [onRefresh, threshold]);
+  }, [onRefresh, setPullBoth, threshold]);
 
   useEffect(() => {
     if (disabled) return;
 
     const onTouchStart = (e: TouchEvent) => {
-      if (refreshing) return;
+      if (refreshingRef.current) return;
       // Only arm the gesture if the primary scroll container is at the top.
       if (scrollTopEl().scrollTop > 0) return;
       const t = e.touches[0];
@@ -96,7 +109,7 @@ export function PullToRefresh({
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (refreshing || startY.current === null || startX.current === null) return;
+      if (refreshingRef.current || startY.current === null || startX.current === null) return;
       const t = e.touches[0];
       const dy = t.clientY - startY.current;
       const dx = t.clientX - startX.current;
@@ -105,13 +118,13 @@ export function PullToRefresh({
       // Only care about DOWNWARD pulls from the top of the page.
       if (dy <= 0) {
         active.current = false;
-        setPull(0);
+        setPullBoth(0);
         return;
       }
       // If content scrolled while we were touching, cancel the pull.
       if (scrollTopEl().scrollTop > 0) {
         active.current = false;
-        setPull(0);
+        setPullBoth(0);
         return;
       }
       active.current = true;
@@ -119,7 +132,7 @@ export function PullToRefresh({
       const raw = dy;
       const damped = raw < threshold ? raw : threshold + (raw - threshold) * 0.35;
       const clamped = Math.min(MAX_PULL, damped);
-      setPull(clamped);
+      setPullBoth(clamped);
       if (clamped >= threshold && !hasHapticed.current) {
         hasHapticed.current = true;
         haptic('light');
@@ -131,9 +144,9 @@ export function PullToRefresh({
     };
 
     const onTouchEnd = () => {
-      if (refreshing) return;
+      if (refreshingRef.current) return;
       const wasActive = active.current;
-      const finalPull = pull;
+      const finalPull = pullRef.current;
       active.current = false;
       startY.current = null;
       startX.current = null;
@@ -141,10 +154,16 @@ export function PullToRefresh({
         void commitRefresh();
       } else {
         // Cancelled — smoothly retract.
-        setPull(0);
+        setPullBoth(0);
       }
     };
 
+    // Handlers read only refs, so this effect mounts the listeners ONCE. The
+    // old dep list included `pull`, which tore down and re-attached all four
+    // listeners on every frame of the drag — after which Chromium marked the
+    // touch sequence non-cancelable and preventDefault() stopped working,
+    // handing the gesture to the WebView's own overscroll (Android's
+    // "pull does nothing" report).
     const opts: AddEventListenerOptions = { passive: false };
     window.addEventListener('touchstart', onTouchStart, opts);
     window.addEventListener('touchmove', onTouchMove, opts);
@@ -156,7 +175,7 @@ export function PullToRefresh({
       window.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [commitRefresh, disabled, pull, refreshing, scrollTopEl, threshold]);
+  }, [commitRefresh, disabled, scrollTopEl, setPullBoth, threshold]);
 
   const progress = Math.min(1, pull / threshold);
   const showIndicator = pull > 4 || refreshing;

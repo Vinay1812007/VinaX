@@ -17,7 +17,7 @@ export const FESTIVALS: Festival[] = [
   { id: 'republic', greeting: 'Happy Republic Day', emoji: '🇮🇳', colors: ['#f97316', '#ffffff', '#22c55e', '#3b82f6'], windows: [[1, 25, 1, 26]] },
   { id: 'holi', greeting: 'Happy Holi', emoji: '🎨', colors: ['#ec4899', '#a855f7', '#22d3ee', '#facc15', '#22c55e'], windows: [[3, 3, 3, 4]] },
   { id: 'eid', greeting: 'Eid Mubarak', emoji: '🌙', colors: ['#22c55e', '#fde047', '#ffffff'], windows: [[3, 20, 3, 21]] },
-  { id: 'independence', greeting: 'Happy Independence Day', emoji: '🇮🇳', colors: ['#f97316', '#ffffff', '#22c55e', '#3b82f6'], windows: [[8, 14, 8, 15]] },
+  { id: 'independence', greeting: 'Happy 80th Independence Day', emoji: '🇮🇳', colors: ['#f97316', '#ffffff', '#22c55e', '#3b82f6'], windows: [[8, 14, 8, 15]] },
   { id: 'onam', greeting: 'Happy Onam', emoji: '🌼', colors: ['#facc15', '#fb923c', '#22c55e', '#ffffff'], windows: [[8, 25, 8, 27]] },
   { id: 'ganesh', greeting: 'Happy Ganesh Chaturthi', emoji: '🐘', colors: ['#fb923c', '#ef4444', '#facc15'], windows: [[9, 13, 9, 15]] },
   { id: 'dussehra', greeting: 'Happy Dussehra', emoji: '🏹', colors: ['#ef4444', '#facc15', '#fb923c'], windows: [[10, 19, 10, 20]] },
@@ -36,4 +36,16 @@ export function activeFestival(date = new Date()): Festival | null {
     }
   }
   return null;
+}
+
+/**
+ * Theme window (owner request): each festival's SKIN applies from the day
+ * BEFORE its calendar window through its last day, then the app reverts to
+ * the normal theme the morning after. The splash/greeting keeps using
+ * activeFestival (real window only) — this wider check drives only the
+ * fest-<id> CSS class. Keep the inline pre-paint table in index.html in
+ * sync when editing FESTIVALS.
+ */
+export function activeFestivalTheme(date = new Date()): Festival | null {
+  return activeFestival(date) ?? activeFestival(new Date(date.getTime() + 86_400_000));
 }

@@ -77,3 +77,68 @@ export function isValidSong(s: unknown): s is Song {
     Array.isArray(o.artists)
   );
 }
+
+/** Package D5 — the queue after "clear from here down". Only future rows can
+ *  be swept: `from` must sit strictly after the playing index and inside the
+ *  queue. Returns null for a no-op (caller leaves state untouched). */
+export function queueAfterClearFrom<T>(queue: T[], index: number, from: number): T[] | null {
+  if (from <= index || from >= queue.length) return null;
+  return queue.slice(0, from);
+}
+
+/**
+ * Pure reorder for drag-to-rearrange: move `from` → `to` and keep the playing
+ * `index` pointing at the SAME song. Null on no-ops/out-of-range so callers
+ * can skip the set() entirely.
+ */
+export function reorderQueue<T>(
+  queue: T[],
+  index: number,
+  from: number,
+  to: number,
+): { queue: T[]; index: number } | null {
+  if (from === to || from < 0 || to < 0 || from >= queue.length || to >= queue.length) return null;
+  const next = [...queue];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  let newIndex = index;
+  if (index === from) newIndex = to;
+  else if (from < index && to >= index) newIndex = index - 1;
+  else if (from > index && to <= index) newIndex = index + 1;
+  return { queue: next, index: newIndex };
+}
+
+// ---------------------------------------------------------------------------
+// Package D5 — "Sort by" for the upcoming queue. Pure and stable: equal keys
+// keep their existing order, so sorting never shuffles what it doesn't rank.
+// ---------------------------------------------------------------------------
+import { energyOfSong } from '@/services/personalization/session';
+import { inferMood, type Mood } from '@/services/recommendation/mood';
+
+export type QueueSortKind = 'energy' | 'calm' | 'new' | 'old' | 'mood';
+
+// Mood clusters ordered by falling energy so a "mood" sort reads as one long
+// deliberate arc instead of alphabetical noise.
+const MOOD_ORDER: Record<Mood, number> = {
+  energetic: 0,
+  romantic: 1,
+  neutral: 2,
+  devotional: 3,
+  chill: 4,
+  melancholy: 5,
+};
+
+export function sortQueueTail(songs: Song[], kind: QueueSortKind): Song[] {
+  const keyed = songs.map((s, i) => ({ s, i }));
+  const yearOf = (s: Song): number => (s.year ? Number(s.year) || 0 : 0);
+  keyed.sort((a, b) => {
+    let d: number;
+    if (kind === 'energy') d = energyOfSong(b.s) - energyOfSong(a.s);
+    else if (kind === 'calm') d = energyOfSong(a.s) - energyOfSong(b.s);
+    else if (kind === 'new') d = yearOf(b.s) - yearOf(a.s);
+    else if (kind === 'old') d = yearOf(a.s) - yearOf(b.s);
+    else d = MOOD_ORDER[inferMood(a.s)] - MOOD_ORDER[inferMood(b.s)];
+    return d !== 0 ? d : a.i - b.i; // stable
+  });
+  return keyed.map((k) => k.s);
+}

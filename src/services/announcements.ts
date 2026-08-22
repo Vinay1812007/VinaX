@@ -26,6 +26,27 @@ export function setAppAlertsEnabled(on: boolean): void {
   if (on) void ensureNotificationPermission();
 }
 
+// Package D7 — temporary quiet: mute announcement alerts for N days without
+// flipping the permanent toggle. Self-expires; no cleanup needed.
+const SNOOZE_KEY = 'vinax.alerts-snooze.v1';
+
+export function snoozeAlerts(days = 7): void {
+  try {
+    localStorage.setItem(SNOOZE_KEY, String(Date.now() + days * 86_400_000));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function alertsSnoozedUntil(): number | null {
+  try {
+    const until = Number(localStorage.getItem(SNOOZE_KEY) ?? 0);
+    return until > Date.now() ? until : null;
+  } catch {
+    return null;
+  }
+}
+
 interface Announcement {
   title?: string;
   body?: string;
@@ -36,7 +57,7 @@ interface Announcement {
 let listenerWired = false;
 
 export async function checkAnnouncements(navigate: (to: string) => void): Promise<void> {
-  if (!isNativePlatform() || !appAlertsEnabled()) return;
+  if (!isNativePlatform() || !appAlertsEnabled() || alertsSnoozedUntil() != null) return;
   try {
     // Don't collide with onboarding — the next open will ask instead.
     if (!localStorage.getItem(KEYS.onboarded)) return;

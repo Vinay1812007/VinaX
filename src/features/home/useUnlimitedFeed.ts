@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { Song } from '@/types';
 import { searchSongsPage } from '@/services/api';
@@ -30,15 +30,26 @@ const SEED_TEMPLATES: Array<(l: string) => string> = [
 
 /**
  * Endless home feed: each page pulls from a rotating (seed x language x upstream
- * page) matrix, so scrolling never runs out. A random per-mount offset means
- * every page refresh starts the feed somewhere different (fresh home on reload).
- * Pages are deduped by id downstream (flattenSongPages), so songs never repeat.
+ * page) matrix, so scrolling never runs out. A random per-LOAD offset means
+ * every hard refresh starts the feed somewhere different (fresh home on
+ * reload). Pages are deduped by id downstream (flattenSongPages).
+ *
+ * The offset is a module singleton, NOT per-mount state (audit P0-1): a
+ * per-mount seed changed the query key on every navigation back to Home,
+ * which threw away all loaded pages, refetched a DIFFERENT feed, and dumped
+ * the user at the top. Now back-navigation returns to the exact same feed
+ * (and the pages come straight from the query cache).
  */
+let visitSeed: number | null = null;
+function getVisitSeed(): number {
+  if (visitSeed === null) visitSeed = Math.floor(Math.random() * 100000);
+  return visitSeed;
+}
+
 export function useUnlimitedFeed() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const languages = pinned.length ? pinned : ['hindi'];
-  // New random offset on every mount → a different feed on every refresh.
-  const [visit] = useState(() => Math.floor(Math.random() * 100000));
+  const visit = getVisitSeed();
 
   return useInfiniteQuery({
     queryKey: ['unlimited-feed', languages, visit],

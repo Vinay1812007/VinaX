@@ -33,9 +33,17 @@ import java.util.List;
 @CapacitorPlugin(name = "VinaxMedia")
 public class VinaxMediaPlugin extends Plugin {
 
+    /** Set when the launch intent asked for the player before the WebView
+     *  was ready (cold start from a notification tap). Flushed on load(). */
+    private static boolean pendingOpenPlayer = false;
+
     @Override
     public void load() {
         VinaxMediaService.plugin = this;
+        if (pendingOpenPlayer) {
+            pendingOpenPlayer = false;
+            emitOpenPlayer();
+        }
     }
 
     /** Called by the service when a transport control is pressed. */
@@ -43,6 +51,23 @@ public class VinaxMediaPlugin extends Plugin {
         JSObject data = new JSObject();
         data.put("action", action);
         notifyListeners("action", data);
+    }
+
+    /** Notification body tapped — JS should open the full-screen player.
+     *  Retained until consumed so a cold start (listener attaches after the
+     *  intent arrives) still receives it. */
+    public void emitOpenPlayer() {
+        JSObject data = new JSObject();
+        data.put("action", "openplayer");
+        notifyListeners("action", data, true);
+    }
+
+    /** Called by MainActivity when the launch intent carries the
+     *  open-player extra (see VinaxMediaService.EXTRA_OPEN_PLAYER). */
+    public static void openPlayerRequested() {
+        VinaxMediaPlugin p = VinaxMediaService.plugin;
+        if (p != null) p.emitOpenPlayer();
+        else pendingOpenPlayer = true;
     }
 
     /** Called by the service on a lockscreen/Bluetooth seek. */

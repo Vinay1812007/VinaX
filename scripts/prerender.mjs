@@ -10,7 +10,9 @@ const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const ROUTES = [
-  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is a free, no-login music streaming app for India — Telugu, Hindi, Tamil and nine more languages, with smart recommendations, live charts, an AI DJ and synced lyrics. Private by design, tuned to you.', h1: 'VinaX — Free Music Streaming for India' },
+  // Home description must sit in Bing's 25–160 char window (BWT flagged the
+  // old 205-char version, 2026-08-17). This one is ~152.
+  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is a free, no-login music streaming app for India — Telugu, Hindi, Tamil and 9 more languages with smart mixes, live charts, AI DJ and synced lyrics.', h1: 'VinaX — Free Music Streaming for India' },
   { p: '/discover', t: 'Discover', d: 'Fresh picks, trending songs and ready-made mixes across languages and moods.', h1: 'Discover new music' },
   { p: '/charts', t: 'Top Charts', d: 'The most popular songs right now, by language — updated daily.', h1: 'Top Charts', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/charts#page', name: 'Top Charts', url: 'https://www.sirimillavinay.online/charts', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/top-songs', t: 'Top Songs — Most Popular Right Now', d: 'The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, no login, updated continuously.', h1: 'Top Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/top-songs#page', name: 'Top Songs on VinaX', url: 'https://www.sirimillavinay.online/top-songs', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
@@ -71,6 +73,26 @@ try {
   process.exit(1);
 }
 
+// Inline the built stylesheet (4.17.8): the <link rel="stylesheet"> was the
+// last render-blocking request on the critical path (~450 ms on PSI's
+// throttled mobile — Lighthouse "Render-blocking requests" named exactly this
+// file). Baking it into the shell means first paint needs only the HTML
+// stream: no extra round trip before the styled #seo-content hero renders.
+// Trade-off is ~21 KB gz added to each HTML response, which costs ~100 ms of
+// extra HTML download on the same throttled profile — a clear net win. The
+// only url() in the bundle is the absolute /fonts/manrope-var.woff2 (already
+// preloaded), so inlining cannot break relative resolution. Fully defensive:
+// on any surprise, the link tag stays and the page merely loads as before.
+try {
+  const cssLink = base.match(/<link rel="stylesheet"[^>]*href="\/(assets\/[^"]+\.css)"[^>]*>/);
+  if (cssLink) {
+    const css = readFileSync(join(DIST, cssLink[1]), 'utf8');
+    if (css && !css.includes('</style')) base = base.replace(cssLink[0], `<style>${css}</style>`);
+  }
+} catch (e) {
+  console.error('prerender: css inline skipped:', e && e.message);
+}
+
 /**
  * Same JSON-LD script-escape as the edge renderer — a route's payload could
  * grow to contain user-supplied strings (album titles etc.) at some point,
@@ -95,7 +117,11 @@ for (const r of ROUTES) {
       (r.ld ? `<script type="application/ld+json">${jsonForScript(r.ld)}</script>` : '') +
       `</head>`;
     const content =
-      `<div id="seo-content"><h1>${esc(r.h1)}</h1><p>${esc(r.d)}</p>${NAV}</div>`;
+      // <main>: the pre-hydration shell must carry a main landmark of its own
+      // (PSI 2026-08: "Document does not have a main landmark" — the audit
+      // snapshots the static shell before React mounts <main id="main-content">).
+      // React wipes #root children on hydrate, so there is never a duplicate.
+      `<main id="seo-content"><h1>${esc(r.h1)}</h1><p>${esc(r.d)}</p>${NAV}</main>`;
     const html = base
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(r.t)} · VinaX</title>`)
       .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(r.d)}$2`)

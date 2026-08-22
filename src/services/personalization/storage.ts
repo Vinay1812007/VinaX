@@ -1,14 +1,31 @@
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, removeLocal, setLocal } from '@/services/storage/local';
 import { clearEvents } from '@/services/storage/idb';
+import { useSettingsStore } from '@/store/settingsStore';
 import { applyDecay, createEmptyProfile, type TasteProfile } from './profile';
 
 let cached: TasteProfile | null = null;
+let cachedKey: string | null = null;
 let _pendingProfile: TasteProfile | null = null;
 
+/** C2 — Kid mode keeps its own taste namespace so a child's listening never
+ *  colours the grown-up profile (and vice versa). Everything else — favorites,
+ *  downloads, settings — stays shared: this is a family device, not accounts. */
+function activeKey(): string {
+  return useSettingsStore.getState().kidMode ? KEYS.profileKid : KEYS.profile;
+}
+
 export function loadProfile(): TasteProfile {
+  const key = activeKey();
+  // A kid-mode toggle mid-session swaps the namespace: drop the old cache
+  // (and any pending debounced write — it belongs to the previous profile).
+  if (cachedKey !== key) {
+    cached = null;
+    _pendingProfile = null;
+    cachedKey = key;
+  }
   if (cached) return cached;
-  const stored = getLocal<TasteProfile | null>(KEYS.profile, null);
+  const stored = getLocal<TasteProfile | null>(key, null);
   cached = stored && stored.version === 1 ? stored : createEmptyProfile();
   if (!cached.hourBuckets) cached.hourBuckets = {};
   applyDecay(cached);
@@ -23,7 +40,7 @@ function flushProfile(): void {
   if (saveTimer == null) return;
   window.clearTimeout(saveTimer);
   saveTimer = null;
-  if (cached) setLocal(KEYS.profile, cached);
+  if (cached && cachedKey) setLocal(cachedKey, cached);
   _pendingProfile = null;
 }
 
@@ -42,9 +59,12 @@ if (typeof window !== 'undefined') {
 /** Debounced persistence — profile updates happen on every play event. */
 export function saveProfile(profile: TasteProfile): void {
   cached = profile;
+  // Bind the write to the namespace active NOW — if kid mode toggles inside
+  // the debounce window, this write still lands in the profile it belongs to.
+  const key = cachedKey ?? activeKey();
   if (saveTimer != null) window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
-    setLocal(KEYS.profile, profile);
+    setLocal(key, profile);
     saveTimer = null;
     _pendingProfile = null;
   }, 800);
@@ -66,7 +86,7 @@ export function withProfile(updater: (profile: TasteProfile) => TasteProfile): v
 export async function resetProfile(): Promise<void> {
   cached = createEmptyProfile();
   _pendingProfile = null;
-  removeLocal(KEYS.profile);
+  removeLocal(activeKey());
   await clearEvents();
 }
 

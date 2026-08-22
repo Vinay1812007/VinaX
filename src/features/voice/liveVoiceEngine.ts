@@ -98,6 +98,37 @@ export interface LiveVoiceOptions {
   lang: string;
   getVoice(): SpeechSynthesisVoice | null;
   toSpoken(md: string): string;
+  /** Package B6 — barge-in: keep the mic open while the assistant is speaking
+   *  and cut it off the moment the listener starts talking. Off unless the
+   *  caller opts in, because it only works cleanly where the platform's echo
+   *  cancellation is reliable (Android/desktop Chrome do; some WebViews don't).
+   *  The onBargeInInterim guards (grace period + echo filter) contain the
+   *  false-trigger risk, but a caller can flip this off in one line if a
+   *  device talks over itself. */
+  bargeIn?: boolean;
+}
+
+/**
+ * Echo filter for barge-in. When the mic is open during TTS it also hears the
+ * assistant's own voice through the speaker; that echo, transcribed, is a
+ * substring of what we're currently saying. Real barge-in speech is not. So:
+ * if what we heard is contained in what we're speaking (normalised to bare
+ * lowercase words), treat it as our own echo and DON'T interrupt.
+ * Exported pure so the state-machine tests can lock it without audio.
+ */
+export function isLikelyEcho(heard: string, spoken: string): boolean {
+  const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const h = norm(heard);
+  const s = norm(spoken);
+  if (!h) return true; // nothing meaningful heard → not a real barge-in
+  if (!s) return false; // we're not speaking anything → can't be echo
+  // Whole heard phrase sits inside what we're saying → almost certainly echo.
+  if (s.includes(h)) return true;
+  // Or every heard word appears in the spoken text (recognizer reordered a
+  // few echoed words) → still echo.
+  const spokenWords = new Set(s.split(' '));
+  const heardWords = h.split(' ');
+  return heardWords.every((w) => spokenWords.has(w));
 }
 
 export interface LiveVoiceCallbacks {
@@ -192,6 +223,16 @@ export class LiveVoiceEngine {
    *  surface a fatal instead of silently swallowing the reply. */
   private ttsStartedThisTurn = false;
   private ttsFatalFired = false;
+  // Package B6 — barge-in. A dedicated recognition session that runs ONLY
+  // while the assistant speaks; deliberately isolated from the main STT
+  // failover machinery so it can't perturb the normal listening lifecycle.
+  private bargeSession: SttSession | null = null;
+  private bargeSeq = 0;
+  /** The text currently being spoken — the echo filter compares against it. */
+  private speakingText = '';
+  /** When the current speaking chunk began — a short grace period after this
+   *  suppresses barge-in so the opening of our own audio can't self-trigger. */
+  private speakStartedAt = 0;
   // level meter + waveform
   private stream: MediaStream | null = null;
   private audioCtx: AudioContext | null = null;
@@ -240,6 +281,7 @@ export class LiveVoiceEngine {
     this.clearNoResult();
     this.clearSpeakTimers();
     this.clearThink();
+    this.disarmBargeIn();
     this.abortRec();
     this.queue = [];
     this.speakingNow = false;
@@ -358,6 +400,76 @@ export class LiveVoiceEngine {
     this.turnDone();
   }
 
+  /** Package B6 — barge-in / manual pause: stop speaking THIS INSTANT and hand
+   *  the floor back to the listener. Public so the overlay can bind it to a
+   *  gesture; the barge-in detector also calls it when the listener starts
+   *  talking over the reply. No-op unless we're actually speaking. Reuses the
+   *  battle-tested interrupt() path, which cancels TTS and reopens the mic. */
+  pauseSpeaking(): void {
+    if (this.destroyed || this.state !== 'speaking') return;
+    this.interrupt();
+  }
+
+  // ---------- barge-in ----------
+
+  /** Start a short-lived recognition session for the duration of a speaking
+   *  chunk. Isolated from the main STT lifecycle (its own seq + session ref)
+   *  so its callbacks can never be confused with a real listening turn. */
+  private armBargeIn(): void {
+    if (this.destroyed || !this.opts.bargeIn || this.bargeSession) return;
+    if (typeof recognitionCtor === 'undefined' && !sttSupported()) return;
+    this.speakStartedAt = Date.now();
+    const seq = ++this.bargeSeq;
+    try {
+      this.bargeSession = createSttSession(
+        { lang: this.opts.lang, processLocally: this.useLocal },
+        {
+          onInterim: (t) => {
+            if (this.destroyed || seq !== this.bargeSeq) return;
+            this.onBargeInInterim(t);
+          },
+          onEnd: () => {
+            if (seq !== this.bargeSeq) return;
+            this.bargeSession = null;
+            // Re-arm if we're still speaking — recognizers end their own
+            // sessions periodically; keep an ear open until the chunk finishes.
+            if (!this.destroyed && this.state === 'speaking' && this.opts.bargeIn) {
+              window.setTimeout(() => {
+                if (!this.destroyed && this.state === 'speaking') this.armBargeIn();
+              }, 120);
+            }
+          },
+        },
+      );
+    } catch {
+      this.bargeSession = null;
+    }
+  }
+
+  private disarmBargeIn(): void {
+    this.bargeSeq += 1; // invalidate any in-flight callbacks
+    const s = this.bargeSession;
+    this.bargeSession = null;
+    try {
+      s?.abort();
+    } catch {
+      /* already gone */
+    }
+  }
+
+  private onBargeInInterim(text: string): void {
+    if (this.state !== 'speaking') return;
+    // Grace period: ignore the first stretch of a chunk so the opening of our
+    // own audio can't self-trigger before the echo filter has real words.
+    if (Date.now() - this.speakStartedAt < 700) return;
+    const heard = text.trim();
+    if (heard.replace(/[^a-z0-9]/gi, '').length < 3) return; // too little to be intent
+    if (isLikelyEcho(heard, this.speakingText)) return; // our own voice echoing back
+    // Real speech over the reply — yield the floor. interrupt() reopens the
+    // mic, and the fresh listening session captures the user's full utterance.
+    this.pauseSpeaking();
+  }
+
   // ---------- internals ----------
 
   /** Must run inside the user's tap. Chrome — a hard rule on Android — drops
@@ -387,6 +499,9 @@ export class LiveVoiceEngine {
 
   private setState(s: LiveVoiceState): void {
     if (this.destroyed || this.state === s) return;
+    // Package B6 — tear the barge-in ear down the instant we stop speaking, so
+    // it can never leak into a listening/thinking turn.
+    if (s !== 'speaking' && this.bargeSession) this.disarmBargeIn();
     this.state = s;
     this.cbs.onState(s);
   }
@@ -582,6 +697,10 @@ export class LiveVoiceEngine {
     }
     this.setState('speaking');
     this.speakingNow = true;
+    // Package B6 — remember what we're saying (echo filter) and open the
+    // barge-in ear for this chunk. No-op unless opts.bargeIn is set.
+    this.speakingText = item.text;
+    this.armBargeIn();
     const token = this.turn;
     if (!this.serverTtsDown) {
       const fetched = item.audio ?? this.fetchServerTts(item.text);

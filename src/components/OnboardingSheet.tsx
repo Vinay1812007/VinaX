@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { LANGUAGES } from '@/constants/languages';
 import { KEYS } from '@/constants/storage-keys';
 // Dynamic-imported inside finish() so the heavy changelog module doesn't
@@ -8,6 +9,11 @@ import { readBrowserSignals } from '@/services/location/browserSignals';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useUiStore } from '@/store/uiStore';
 import { ensureNotificationPermission, isNativePlatform } from '@/services/native';
+import { searchSongs } from '@/services/api';
+import { trendingSeed } from '@/constants/seeds';
+import { bestImage, FALLBACK_ART } from '@/utils/images';
+import { useLibraryStore } from '@/store/libraryStore';
+import type { Song } from '@/types';
 import { Chip } from './Chip';
 import {
   SparkleIcon,
@@ -18,6 +24,7 @@ import {
   HeartIcon,
   ChevronDownIcon,
 } from './Icons';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 /** Small pill for keyboard shortcut hints ("Space", "⌘K", etc). */
 const KEY_CHIP = 'inline-flex items-center px-1.5 py-0.5 rounded-md border border-ink-600/70 bg-ink-900/50 text-[10.5px] font-semibold text-ink-200 font-mono';
@@ -34,33 +41,41 @@ interface TourSlide {
   visual?: ReactNode;
 }
 
+/**
+ * The Welcome tour (fully rewritten 4.17.1). Ground rules for editing:
+ *  - Every claim must be TRUE today. No version numbers in titles: the tour
+ *    is evergreen, What's New handles releases.
+ *  - Short lines, one idea each. The user is 10 seconds from music.
+ */
 const TOUR: TourSlide[] = [
   {
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Welcome to VinaX',
     lines: [
-      'Free forever — no login, no account, no ads, private by design.',
-      '12 Indian languages and English, tuned to what you actually love to play.',
-      'Everything runs on this device — your taste never leaves your phone.',
+      'Free forever. No account, no login, no paywall — press play and go.',
+      'Telugu, Hindi, Tamil and nine more languages, plus English — tuned to what you actually play.',
+      'Your taste lives on this device and never leaves it. That’s the whole design.',
+      'No ads anywhere — not on the website, not in the app, and never in Kid mode.',
     ],
   },
   {
     icon: <HomeIcon className="w-7 h-7" />,
-    title: 'A home that learns you',
+    title: 'A Home that learns you',
     lines: [
-      'Shelves adapt to your taste — Continue Listening, On Repeat, Most Listened, Because You Listened To, Fresh Finds, Hidden Gems and more.',
-      '6 mood mixes rotate every day, with seasonal shelves — Monsoon Melodies, Weekend Party, festival specials — when the moment fits.',
-      'Pull down to refresh: every shelf re-fetches with a new set of picks.',
+      'Shelves grow out of your listening — Continue Listening, On Repeat, Because You Listened To, Fresh Finds, Hidden Gems, Decade Rewind.',
+      'Six mood boards rotate daily; seasonal shelves appear when the moment fits — festivals, monsoon, weekends.',
+      'Make it YOUR home: Settings → Home layout lets you hide or reorder every block.',
+      'Pull down anytime for a completely fresh set of picks.',
     ],
   },
   {
     icon: <PlayIcon className="w-7 h-7" />,
     title: 'Play, swipe, sing along',
     lines: [
-      'Tap any song to start — the queue builds itself around what you played.',
-      'Swipe the mini-player left/right to skip, up for the full player.',
-      'Karaoke-style lyrics sing along in real time, line by line.',
-      'Close the app mid-song and come back — you land right where you left off.',
+      'Tap any song — the queue builds itself around it, and drag the ☰ grip to reorder.',
+      'Swipe the mini-player to skip, swipe up for the full player with karaoke lyrics that follow the singer line by line.',
+      'On Android, tapping the playback notification drops you straight into the full-screen player.',
+      'Close the app mid-song, come back tomorrow — you resume exactly where you were.',
     ],
     shortcuts: [
       { combo: 'Space', label: 'play / pause' },
@@ -74,18 +89,18 @@ const TOUR: TourSlide[] = [
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Meet VinaX AI',
     lines: [
-      'A full chat with seven engines: FLASH (default), 20B (fastest), SUPER (deepest thinking), INSTANT (music knowledge), 120B (creative + AI DJ), ULTRA (all-rounder) and NANO 3 (music discovery).',
-      'Flip on Think for careful reasoning, or Research to pull from the live web.',
-      '“play <song>” turns the reply into a real mini-player right in the chat.',
-      'Voice chat listens and answers out loud — fully hands-free.',
+      'Seven engines, each with its own strength: FLASH for everyday chat, 20B for speed, SUPER for deep thinking, INSTANT for music trivia, 120B for creativity (it runs the AI DJ), ULTRA the all-rounder, NANO 3 the song-finder.',
+      'Flip on Think for careful reasoning, or Research to pull answers from the live web.',
+      'Say “play ⟨song⟩” and the reply becomes a real mini-player, lyrics and all.',
+      'Voice chat is fully hands-free — it listens, thinks, and answers out loud.',
     ],
   },
   {
     icon: <SearchIcon className="w-7 h-7" />,
-    title: 'Search & command palette',
+    title: 'Search everything from one box',
     lines: [
-      'Tap search, or press the shortcut anywhere, to jump to any page, control the player, or find and play a song from one input.',
-      'Right-click (or long-press) any song for instant actions: play next, queue, favorite, copy link.',
+      'One input finds songs, artists, albums, pages and player actions — start typing and hit enter.',
+      'Right-click (or long-press) any song anywhere: play next, add to queue, favorite, copy link.',
     ],
     shortcuts: [
       { combo: '⌘ K', label: 'palette (mac)' },
@@ -109,19 +124,43 @@ const TOUR: TourSlide[] = [
     icon: <UsersIcon className="w-7 h-7" />,
     title: 'Listen Together',
     lines: [
-      'Create a room in one tap and share the code — friends join in a second.',
-      'Everyone hears the same second, kept in sync to about a beat.',
-      'Guests can request songs straight into your queue.',
-      'End the room for everyone whenever you’re done.',
+      'One tap makes a room; share the code and friends are in within seconds.',
+      'Everyone hears the same second — synced to about a beat.',
+      'Guests request songs straight into your queue; you stay the DJ.',
+      'Done? “End for all” closes the room for everyone at once.',
     ],
+  },
+  {
+    icon: <SparkleIcon className="w-7 h-7" />,
+    title: 'Make it yours',
+    lines: [
+      'Two glass dials in Settings — Glass effect (solid → deep glass) and Background blur (sharp → hazy).',
+      'Ten accent colours across dark, light and AMOLED — and the app can tint itself from the playing artwork.',
+      'Home layout builder: hide the blocks you skip, move your favourites up.',
+    ],
+    visual: (
+      <div className="mt-3 mx-auto max-w-[280px] rounded-xl border border-ink-700/70 bg-ink-950/50 backdrop-blur-md p-3 space-y-2">
+        <div className="flex items-center justify-between text-[11px] text-ink-300">
+          <span className="font-bold">Glass effect</span>
+          <span className="text-ink-500">SOLID · GLASS</span>
+        </div>
+        <div className="h-1 rounded-full bg-ink-800 relative"><span className="absolute inset-y-0 left-0 w-[40%] rounded-full bg-ember-500" /></div>
+        <div className="flex items-center justify-between text-[11px] text-ink-300">
+          <span className="font-bold">Background blur</span>
+          <span className="text-ink-500">SHARP · HAZY</span>
+        </div>
+        <div className="h-1 rounded-full bg-ink-800 relative"><span className="absolute inset-y-0 left-0 w-[40%] rounded-full bg-tide-500" /></div>
+      </div>
+    ),
   },
   {
     icon: <HeartIcon className="w-7 h-7" />,
     title: 'Yours means yours',
     lines: [
-      'Favorites, history, downloads and taste all live on this device — nothing is ever uploaded.',
-      'Ten accent themes with dark, light and AMOLED — the whole app tints itself to the artwork playing.',
-      'New phone? Export a file, import it anywhere (Settings → Your Data).',
+      'Favorites, history, downloads, stats and your whole taste profile live on this device. Nothing is uploaded, ever.',
+      'Your VinaX shows your listening year — top artists, hours, streaks — computed here, shareable only if YOU choose.',
+      'New phone? Settings → Move to a new device beams everything across with one QR — or export/import a file from Your Data.',
+      'That’s the tour. Press play — VinaX learns from the very first song.',
     ],
   },
 ];
@@ -134,8 +173,14 @@ const TOUR: TourSlide[] = [
 export function OnboardingSheet() {
   const tourOpen = useUiStore((s) => s.tourOpen);
   const closeTour = useUiStore((s) => s.closeTour);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [firstRun, setFirstRun] = useState(() => !getLocal<boolean>(KEYS.onboarded, false));
-  const open = firstRun || tourOpen;
+  // The sheet steps aside on /handoff so a first-run device can complete the
+  // QR "Move to a new device" import (which reloads with the old device's
+  // profile, onboarded flag included). Leaving /handoff without importing
+  // brings the sheet straight back.
+  const open = (firstRun || tourOpen) && location.pathname !== '/handoff';
   const [step, setStep] = useState(-1); // -1 = language pick, 0..n = tour
   const detected = readBrowserSignals().languages;
   const [picked, setPicked] = useState<string[]>(detected.length ? detected : ['hindi', 'english']);
@@ -143,6 +188,12 @@ export function OnboardingSheet() {
   const [consent, setConsent] = useState<boolean>(true);
   const [nameErr, setNameErr] = useState(false);
   const [importErr, setImportErr] = useState(false);
+  // Package A7/D1 — the 10-song taste-seed step. Sits between the language
+  // picker and the tour. Liking a handful jumps the cold profile's confidence
+  // from ~0 to ~0.5, so Home has something to work with on the very first open.
+  const [seedOpen, setSeedOpen] = useState(false);
+  const [seedSongs, setSeedSongs] = useState<Song[]>([]);
+  const [seedLiked, setSeedLiked] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   // Returning user restoring an exported profile — importProfileJson validates
   // the file and reloads on success, so we only handle the failure path here.
@@ -202,60 +253,12 @@ export function OnboardingSheet() {
   // hook order is stable across renders (audit finding M5). We route `finish`
   // through a ref so the keydown effect doesn't need to re-attach every time
   // a state hook downstream changes finish's identity.
-  const openerRef = useRef<HTMLElement | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const escapeRef = useRef<() => void>(() => undefined);
-
-  useEffect(() => {
-    if (!open) return;
-    openerRef.current = document.activeElement as HTMLElement | null;
-    return () => {
-      openerRef.current?.focus?.();
-    };
-  }, [open]);
-
-  // On first mount, drop focus into the dialog so the very first keystroke
-  // is captured by the modal instead of by whatever had focus before.
-  useEffect(() => {
-    if (!open) return;
-    const root = dialogRef.current;
-    const first = root?.querySelector<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
-    );
-    first?.focus?.();
-  }, [open]);
-
-  // Escape closes the sheet; Tab is trapped inside so keyboard focus can't
-  // wander into the (aria-hidden but rendered) app behind it.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        escapeRef.current();
-        return;
-      }
-      if (e.key !== 'Tab') return;
-      const root = dialogRef.current;
-      if (!root) return;
-      const focusables = root.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (!focusables.length) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-      if (e.shiftKey && (active === first || !root.contains(active))) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [open]);
+  // The full trap (opener restore, initial focus, Tab cycle, Escape) now
+  // lives in useFocusTrap — extracted FROM this component (audit P1-9) so the
+  // other overlays share the reference implementation instead of having none.
+  useFocusTrap(dialogRef, open, () => escapeRef.current());
 
   if (!open) return null;
 
@@ -263,23 +266,27 @@ export function OnboardingSheet() {
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   const finish = () => {
+    // A fresh install has no "previous version" — stamp the current content
+    // fingerprint (not the version string) so What's New doesn't fire on
+    // the very first launch. FIRST RUN ONLY: a returning user replaying the
+    // tour (Help → Replay welcome tour) must NOT consume a pending What's
+    // New — this stamp used to run unconditionally and silently ate the
+    // update card for anyone who touched the tour.
+    if (firstRun) {
+      void import('@/constants/changelog').then((m) => {
+        setLocal(KEYS.lastSeenVersion, m.latestNotesFingerprint());
+      });
+    }
     setLocal(KEYS.onboarded, true);
     setFirstRun(false);
     closeTour();
-    // A fresh install has no "previous version" — stamp the current content
-    // fingerprint (not the version string) so What's New doesn't fire on
-    // the very first launch. Dynamically imported so the ~10 KB gz
-    // historical changelog stays out of the first-load bundle.
-    void import('@/constants/changelog').then((m) => {
-      setLocal(KEYS.lastSeenVersion, m.latestNotesFingerprint());
-    });
     // Ask for the notification permission lock-screen lyrics + media controls need.
     if (isNativePlatform()) void ensureNotificationPermission();
   };
   // Route the ref to the current finish so the keydown effect stays stable.
   escapeRef.current = finish;
 
-  const continueFromWelcome = () => {
+  const continueFromWelcome = async () => {
     const trimmed = name.trim();
     if (trimmed.length < 2) {
       setNameErr(true);
@@ -291,6 +298,37 @@ export function OnboardingSheet() {
     if (picked.length) useSettingsStore.getState().setPinnedLanguages(picked);
     // Register this (anonymous) device + name with the backend, if consented.
     void import('@/services/analytics/telemetry').then((m) => m.registerUser());
+    // Open the taste-seed step and fetch a dozen trending songs in the top
+    // picked language. If the catalog is unreachable or returns too few, we
+    // silently skip straight to the tour — the seed step never blocks setup.
+    const top = picked[0] ?? 'hindi';
+    setSeedOpen(true);
+    void searchSongs(trendingSeed(top), 14)
+      .then((songs) => {
+        const clean = songs.filter((s) => s.images && s.images.length).slice(0, 12);
+        if (clean.length >= 6) setSeedSongs(clean);
+        else {
+          setSeedOpen(false);
+          setStep(0);
+        }
+      })
+      .catch(() => {
+        setSeedOpen(false);
+        setStep(0);
+      });
+  };
+
+  const toggleSeed = (id: string) =>
+    setSeedLiked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  /** Leave the seed step. When `keep` is true, the liked songs are written to
+   *  Favorites (which records them into the on-device taste profile). */
+  const finishSeed = (keep: boolean) => {
+    if (keep && seedLiked.length) {
+      const store = useLibraryStore.getState();
+      for (const s of seedSongs) if (seedLiked.includes(s.id)) store.toggleFavorite(s);
+    }
+    setSeedOpen(false);
     setStep(0);
   };
 
@@ -304,7 +342,76 @@ export function OnboardingSheet() {
       aria-labelledby="vx-onboarding-title"
     >
       <div ref={dialogRef} className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-6 animate-fade-up">
-        {step === -1 ? (
+        {seedOpen ? (
+          <>
+            <div className="flex items-center justify-between mb-1">
+              <h2 id="vx-onboarding-title" className="text-xl font-bold">Tap a few you love</h2>
+              <button
+                onClick={() => finishSeed(false)}
+                className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 hover:text-ink-300 transition"
+              >
+                Skip
+              </button>
+            </div>
+            <p className="text-xs text-ink-400 mb-4">
+              This teaches Home your taste instantly — everything stays on your device.
+            </p>
+            {seedSongs.length === 0 ? (
+              <div className="grid grid-cols-3 gap-2.5" aria-hidden>
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="aspect-square rounded-xl skeleton" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2.5">
+                {seedSongs.map((s) => {
+                  const liked = seedLiked.includes(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => toggleSeed(s.id)}
+                      aria-pressed={liked}
+                      aria-label={`${liked ? 'Unlike' : 'Like'} ${s.title}`}
+                      className="group relative aspect-square rounded-xl overflow-hidden ring-1 ring-white/5 active:scale-95 transition"
+                    >
+                      <img
+                        src={bestImage(s.images, 150)}
+                        onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+                        alt=""
+                        loading="lazy"
+                        className={liked ? 'w-full h-full object-cover brightness-[0.55]' : 'w-full h-full object-cover'}
+                      />
+                      <span
+                        className={
+                          liked
+                            ? 'absolute inset-0 flex items-center justify-center'
+                            : 'absolute bottom-1 right-1 flex items-center justify-center w-6 h-6 rounded-full bg-black/45 opacity-0 group-hover:opacity-100 transition'
+                        }
+                      >
+                        <HeartIcon className={liked ? 'w-7 h-7 text-ember-400' : 'w-3.5 h-3.5 text-white/90'} />
+                      </span>
+                      <span className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-gradient-to-t from-black/75 to-transparent text-[10px] font-semibold text-white text-left leading-tight line-clamp-1">
+                        {s.title}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="mt-5 flex items-center gap-2.5">
+              <button
+                onClick={() => finishSeed(true)}
+                disabled={seedSongs.length === 0}
+                className="flex-1 py-3 rounded-full btn-premium font-bold disabled:opacity-50"
+              >
+                {seedLiked.length ? `Continue with ${seedLiked.length} liked` : 'Continue'}
+              </button>
+            </div>
+            <p className="mt-3 text-center text-[11px] font-semibold text-ink-400">
+              You can heart or unheart anything later, anytime.
+            </p>
+          </>
+        ) : step === -1 ? (
           <>
             <div className="flex items-center gap-3 mb-2">
               <img src="/icons/icon.svg" alt="" className="w-10 h-10 rounded-xl" />
@@ -357,18 +464,30 @@ export function OnboardingSheet() {
               <span>Share anonymous usage (city-level location, no account) to help improve VinaX. You can change this anytime.</span>
             </label>
             <div className="flex gap-3">
-              <button onClick={continueFromWelcome} className="flex-1 py-3 rounded-full btn-premium font-bold">
+              <button onClick={() => void continueFromWelcome()} className="flex-1 py-3 rounded-full btn-premium font-bold">
                 Continue
               </button>
             </div>
-            <p className="mt-3 text-center text-xs font-semibold text-ink-400">No account. No tracking. No ads.</p>
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="w-full mt-3 text-xs text-ink-400 hover:text-ink-200 transition"
-            >
-              Already using VinaX on another device?{' '}
-              <span className="text-ember-400 font-semibold">Import your profile</span>
-            </button>
+            <p className="mt-3 text-center text-xs font-semibold text-ink-400">No account. No login. Private by design.</p>
+            <p className="mt-4 text-center text-xs text-ink-400">Already using VinaX on another device?</p>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={() => navigate('/handoff?mode=receive')}
+                className="flex-1 py-2.5 rounded-full border border-ink-600 text-xs font-semibold text-ink-200 hover:bg-ink-800/40 transition"
+              >
+                Move from old device
+              </button>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex-1 py-2.5 rounded-full border border-ink-600 text-xs font-semibold text-ink-200 hover:bg-ink-800/40 transition"
+              >
+                Import a file
+              </button>
+            </div>
+            <p className="mt-2 text-center text-[11px] text-ink-500">
+              Move: on your old device open Settings → <b>Move to a new device</b>, then scan its QR with this
+              device&rsquo;s camera — or tap Move above and type the code.
+            </p>
             <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} />
             {importErr && (
               <p className="mt-2 text-xs text-red-300 text-center">

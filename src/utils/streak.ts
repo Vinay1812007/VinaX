@@ -6,12 +6,16 @@ interface StreakData {
   best?: number;
 }
 
-function dayStr(ts = Date.now()): string {
-  const d = new Date(ts);
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
+/** C6 — UTC day key. Local dates made streaks fragile: a timezone change or a
+ *  DST jump could skip or repeat a "day" and silently break (or double-earn)
+ *  a streak. UTC days are uniform 24h everywhere, so travel can't touch them.
+ *  Exported for the boundary tests. Migration note: previously-stored local
+ *  keys differ from UTC keys by at most one day, so the worst one-time effect
+ *  on an existing streak is one extra qualifying day — never a reset. */
+export function dayKey(ts = Date.now()): string {
+  return new Date(ts).toISOString().slice(0, 10);
 }
+const dayStr = dayKey;
 
 function read(): StreakData {
   try {

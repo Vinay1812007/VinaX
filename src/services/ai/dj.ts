@@ -3,6 +3,8 @@ import type { RecommendationContext } from '@/services/recommendation/types';
 import { getSong, getSongSuggestions, searchSongs } from '@/services/api';
 import { isNativePlatform } from '@/services/native';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
+import { getSliders, sliderDialLines } from '@/services/personalization/dials';
+import { loadRecentHomeIds } from '@/features/home/homeVariety';
 import { tunePromptHint } from '@/services/recommendation/tune';
 
 // On web the function is same-origin; the native app bundles the web assets
@@ -158,6 +160,8 @@ function buildContext(seed: Song | null, ctx: RecommendationContext): Record<str
     ].slice(0, 15),
     topLanguages: topLanguages(ctx.profile, 4).map((l) => l.id),
     personalizationIntensity: ctx.intensity,
+    // Package C3 — hand-tuned dials as plain guidance lines (empty when neutral).
+    tasteDials: sliderDialLines(getSliders(ctx.profile)),
   };
 }
 
@@ -280,6 +284,10 @@ export async function aiSimilarSongs(
     seedId,
     ...ctx.history.slice(0, 50).map((e) => e.song.id),
     ...surfaced.map((x) => x.id),
+    // A6 — the DJ and AI Home used to share ~40% of picks because both mine the
+    // same neighborhood. Exclude whatever Home surfaced in its recent builds so
+    // the queue complements the front page instead of echoing it.
+    ...loadRecentHomeIds(),
   ]);
 
   // Catalog-grounded pool: real, guaranteed-playable songs so the AI ranks

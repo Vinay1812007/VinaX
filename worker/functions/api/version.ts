@@ -20,6 +20,24 @@ function json(body: unknown, status = 200, cache = 'no-store'): Response {
   });
 }
 
+/**
+ * The build number the installed app must compare against — it MUST equal the
+ * APK's Android versionCode, or the update check silently never fires.
+ *
+ * Root cause of the "no in-app updates" outage: CI builds APKs with
+ * versionCode = BASE + run_number (H-OPS-2 disjoint ranges) but tagged
+ * releases "-build<run_number>" (the RAW run number). Parsing the tag gave
+ * e.g. 106 while installed devices carried 1106 — every device looked "up to
+ * date" forever. CI now writes an explicit "VersionCode: NNN" line into the
+ * release body, which is authoritative; the tag parse remains as a fallback
+ * for the pre-fix releases. Exported for tests.
+ */
+export function buildFromRelease(tagName: string, body?: string | null): number {
+  const fromBody = parseInt(/versioncode[:\s]+(\d+)/i.exec(body ?? '')?.[1] ?? '0', 10);
+  if (fromBody > 0) return fromBody;
+  return parseInt(/build(\d+)/i.exec(tagName)?.[1] ?? '0', 10);
+}
+
 export const onRequestOptions = async (): Promise<Response> =>
   new Response(null, { status: 204, headers: CORS });
 
@@ -30,8 +48,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const rel = await latestRelease(env);
   if (!rel || !rel.tag_name) return json({ error: 'no_release' }, 502);
 
-  // CI tags every build "v<name>-build<runNumber>"; runNumber == Android versionCode.
-  const build = parseInt(/build(\d+)/i.exec(rel.tag_name)?.[1] ?? '0', 10);
+  const build = buildFromRelease(rel.tag_name, rel.body);
   const version = rel.tag_name.replace(/^v/, '').split('-build')[0];
 
   let sha256: string | undefined;

@@ -5,13 +5,14 @@ import { usePlayerStore } from '@/store/playerStore';
 import { SongRow } from '@/components/SongRow';
 import { EmptyState } from '@/components/States';
 import { Chip } from '@/components/Chip';
-import { PlayIcon, ShuffleIcon, DownloadIcon } from '@/components/Icons';
+import { PlayIcon, ShuffleIcon, DownloadIcon, HeartIcon } from '@/components/Icons';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
 import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
 import { downloadMany } from '@/services/downloads';
 import { toast } from '@/store/toastStore';
+import { useSessionState } from '@/hooks/useSessionState';
 
 type SortMode = 'recent' | 'title' | 'artist';
 
@@ -28,7 +29,7 @@ export default function FavoritesPage() {
   const playQueue = usePlayerStore((s) => s.playQueue);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const shuffle = usePlayerStore((s) => s.shuffle);
-  const [sort, setSort] = useState<SortMode>('recent');
+  const [sort, setSort] = useSessionState<SortMode>('vinax.favorites.sort.v1', 'recent');
   const sorted = useMemo(() => sortSongs(favorites, sort), [favorites, sort]);
   const [dlBusy, setDlBusy] = useState(false);
   const [dlDone, setDlDone] = useState(0);
@@ -36,13 +37,16 @@ export default function FavoritesPage() {
     if (dlBusy || !sorted.length) return;
     setDlBusy(true);
     setDlDone(0);
-    const { saved } = await downloadMany(sorted, (d) => setDlDone(d));
+    const { saved, failed } = await downloadMany(sorted, (d) => setDlDone(d));
     setDlBusy(false);
-    toast(saved ? `Saved ${saved} song${saved === 1 ? '' : 's'} offline` : 'Already saved offline');
+    // Honest reporting: a total failure used to read "Already saved offline".
+    if (failed && saved) toast(`Saved ${saved} offline — ${failed} failed (check your connection)`);
+    else if (failed) toast(`Downloads failed (${failed}) — check your connection and try again`);
+    else toast(saved ? `Saved ${saved} song${saved === 1 ? '' : 's'} offline` : 'Already saved offline');
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto vx-stagger">
       <PageHeader
         title="Favorites"
         subtitle={`${favorites.length} songs · stored locally`}
@@ -82,6 +86,7 @@ export default function FavoritesPage() {
 
       {favorites.length === 0 ? (
         <EmptyState
+          icon={<HeartIcon className="w-8 h-8" />}
           title="No favorites yet"
           message="Tap the heart on any song. Favorites power your “Similar to Favorites” recommendations."
           action={<Link to="/discover" className="px-5 py-2.5 rounded-full btn-primary">Discover music</Link>}

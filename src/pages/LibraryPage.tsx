@@ -8,7 +8,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { SongRow } from '@/components/SongRow';
 import { EmptyState } from '@/components/States';
-import { PlusIcon, UsersIcon, XIcon } from '@/components/Icons';
+import { PlusIcon, UsersIcon, XIcon, ClockIcon } from '@/components/Icons';
 import { PageHeader } from '@/components/PageHeader';
 
 export default function LibraryPage() {
@@ -21,7 +21,7 @@ export default function LibraryPage() {
   const [newName, setNewName] = useState('');
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto vx-stagger">
       <PageHeader title="Library" subtitle="Everything here lives on this device only." />
 
       <Link
@@ -129,6 +129,7 @@ export default function LibraryPage() {
         </div>
         {history.length === 0 ? (
           <EmptyState
+            icon={<ClockIcon className="w-8 h-8" />}
             title="Nothing played yet"
             message="Your listening history will appear here as you play."
             action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}

@@ -1,8 +1,8 @@
 import { isNativePlatform } from '@/services/native';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { albumPath, artistPath, playlistPath } from '@/utils/slug';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { SongRow } from '@/components/SongRow';
@@ -15,16 +15,24 @@ import { ClockIcon, PlayIcon, SearchIcon, SparkleIcon, XIcon } from '@/component
 import {
   normalizeQuery,
   rankSongs,
-  useSearchAlbums,
   useSearchAll,
-  useSearchArtists,
-  useSearchPlaylists,
 } from '@/features/search/useSearch';
-import { flattenSongPages, useInfiniteSongs } from '@/features/search/useInfiniteSongs';
+import {
+  flattenAlbumPages,
+  flattenArtistPages,
+  flattenPlaylistPages,
+  flattenSongPages,
+  useInfiniteAlbums,
+  useInfiniteArtists,
+  useInfinitePlaylists,
+  useInfiniteSongs,
+} from '@/features/search/useInfiniteSongs';
 import { createSttSession, probeSttSupport, sttSupported, type SttSession } from '@/features/voice/stt';
 import { useSearchStore } from '@/store/searchStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { loadProfile } from '@/services/personalization/storage';
+import { topArtists } from '@/services/personalization/profile';
 import { expertSongSearch } from '@/services/ai/expert';
 import type { Song } from '@/types';
 import { playAlbum, playArtist, playPlaylist } from '@/features/player/playEntity';
@@ -38,11 +46,45 @@ import { shouldSyncRouteToInput } from '@/features/search/routeSync';
 const TABS = ['All', 'Songs', 'Albums', 'Artists', 'Playlists'] as const;
 type Tab = (typeof TABS)[number];
 
+// Package D4 — the picked filter tab sticks for the whole browsing session, so
+// leaving Search and coming back lands on the same view (session-scoped only;
+// a fresh open always starts on All).
+const TAB_KEY = 'vinax.search.tab.v1';
+function loadStickyTab(): Tab {
+  try {
+    const t = window.sessionStorage.getItem(TAB_KEY);
+    return (TABS as readonly string[]).includes(t ?? '') ? (t as Tab) : 'All';
+  } catch {
+    return 'All';
+  }
+}
+
+/** Bold the matched substring so suggestions read as completions (P2-30). */
+function Highlight({ text, term }: { text: string; term: string }) {
+  const i = term ? text.toLowerCase().indexOf(term.toLowerCase()) : -1;
+  if (i < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, i)}
+      <span className="text-ember-400 font-bold">{text.slice(i, i + term.length)}</span>
+      {text.slice(i + term.length)}
+    </>
+  );
+}
+
 export default function SearchPage() {
   const { query: routeQuery } = useParams();
   const navigate = useNavigate();
   const [input, setInput] = useState(routeQuery ?? '');
-  const [tab, setTab] = useState<Tab>('All');
+  const [tab, setTabState] = useState<Tab>(loadStickyTab);
+  const setTab = useCallback((t: Tab) => {
+    setTabState(t);
+    try {
+      window.sessionStorage.setItem(TAB_KEY, t);
+    } catch {
+      /* private mode — the tab just won't stick */
+    }
+  }, []);
   const [listening, setListening] = useState(false);
   // Voice search rides the same STT abstraction as the AI page: Web Speech in
   // browsers, the system recognizer (native plugin) inside the Android app.
@@ -53,6 +95,15 @@ export default function SearchPage() {
   const [langFilter, setLangFilter] = useState<string | null>(null);
   const [albumLang, setAlbumLang] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
+  const navigationType = useNavigationType();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  // Focus the box only on a FRESH arrival at /search with no query — never on
+  // back-navigation, where a popping keyboard + focus scroll would fight the
+  // restored position (delta audit P1-17).
+  useEffect(() => {
+    if (!routeQuery && navigationType !== 'POP') searchInputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
+  }, []);
   // Live focus for effects: the route→input sync must read the CURRENT focus
   // synchronously (state is one render behind), so it never fights typing.
   const focusedRef = useRef(false);
@@ -92,10 +143,14 @@ export default function SearchPage() {
     else setAiError('Something went wrong. Please try again.');
   };
 
-  // A new search query starts a fresh round with the expert.
+  // A new search query starts a fresh round with the expert — and clears any
+  // language filters chosen for the previous query, so a filtered tab never
+  // silently shows nothing (delta audit P1-12).
   useEffect(() => {
     setAiSongs(null);
     setAiError(null);
+    setLangFilter(null);
+    setAlbumLang(null);
   }, [q]);
 
   const expertPanel = (aiLoading || aiError || (aiSongs?.length ?? 0) > 0) && (
@@ -177,13 +232,20 @@ export default function SearchPage() {
   }, [routeQuery]);
 
   const all = useSearchAll(q);
-  const infiniteSongs = useInfiniteSongs(q, tab === 'Songs');
-  const albums = useSearchAlbums(q, tab === 'Albums');
-  const artists = useSearchArtists(q, tab === 'Artists');
-  const playlists = useSearchPlaylists(q, tab === 'Playlists');
+  const infiniteSongs = useInfiniteSongs(q, tab === 'Songs', { search: true });
+  const albums = useInfiniteAlbums(q, tab === 'Albums'); // paged — was capped at 20 (P2-29)
+  const artists = useInfiniteArtists(q, tab === 'Artists'); // paged — was capped at 20 (P2-30)
+  const playlists = useInfinitePlaylists(q, tab === 'Playlists');
 
   const active = q.length > 1;
-  const rankedAllSongs = all.data ? rankSongs(all.data.songs) : [];
+  // One memoized ranking pass per settled result set (was recomputed twice
+  // per render — P2-19), in search mode: junk filter off, relevance on.
+  const allSongs = all.data?.songs;
+  const rankedAllSongs = useMemo(
+    () => (allSongs ? rankSongs(allSongs, { query: q, searchMode: true }) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- q is baked into allSongs' query
+    [allSongs],
+  );
 
   // Search analytics: one event per settled query, with its result count.
   const lastTracked = useRef('');
@@ -198,17 +260,18 @@ export default function SearchPage() {
   const allSongList = flattenSongPages(infiniteSongs.data?.pages);
   const availableLangs = [...new Set(allSongList.map((s) => s.language).filter((l): l is string => !!l && l !== 'unknown'))];
   const songList = langFilter ? allSongList.filter((s) => s.language === langFilter) : allSongList;
-  const albumLangs = [...new Set((albums.data ?? []).map((a) => a.language).filter((l): l is string => !!l && l !== 'unknown'))];
-  const albumList = albumLang ? (albums.data ?? []).filter((a) => a.language === albumLang) : (albums.data ?? []);
+  const allAlbums = flattenAlbumPages(albums.data?.pages);
+  const albumLangs = [...new Set(allAlbums.map((a) => a.language).filter((l): l is string => !!l && l !== 'unknown'))];
+  const albumList = albumLang ? allAlbums.filter((a) => a.language === albumLang) : allAlbums;
   const trimmed = input.trim();
-  const recentMatches = trimmed
-    ? recent.filter((r) => r.toLowerCase().includes(trimmed.toLowerCase()) && r !== q).slice(0, 3)
-    : [];
-  const titleSuggest = (() => {
-    const ranked = all.data ? rankSongs(all.data.songs) : [];
+  const recentMatches = useMemo(
+    () => (trimmed ? recent.filter((r) => r.toLowerCase().includes(trimmed.toLowerCase()) && r !== q).slice(0, 3) : []),
+    [trimmed, recent, q],
+  );
+  const titleSuggest = useMemo(() => {
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const s of ranked) {
+    for (const s of rankedAllSongs) {
       const t = s.title.trim();
       const key = t.toLowerCase();
       if (t && key !== trimmed.toLowerCase() && !seen.has(key)) {
@@ -218,8 +281,13 @@ export default function SearchPage() {
       if (out.length >= 7) break;
     }
     return out;
-  })();
+  }, [rankedAllSongs, trimmed]);
   const showSuggest = focused && trimmed.length >= 1 && (recentMatches.length > 0 || titleSuggest.length > 0);
+  // Keyboard-first autocomplete (P2-30): ↑/↓ walk the combined list, Enter
+  // picks the highlighted entry (or commits the typed text), Esc dismisses.
+  const suggList = useMemo(() => [...recentMatches, ...titleSuggest], [recentMatches, titleSuggest]);
+  const [suggSel, setSuggSel] = useState(-1);
+  useEffect(() => setSuggSel(-1), [trimmed, focused]);
 
   const startVoice = () => {
     if (!voiceReady) return;
@@ -240,7 +308,9 @@ export default function SearchPage() {
           if (recRef.current !== session) return;
           recRef.current = null;
           setListening(false);
-          if (finalText) setInput(finalText);
+          // Commit, don't just fill the box — voice queries now reach the
+          // URL and recents like typed ones (audit P2-20).
+          if (finalText) applySuggestion(finalText);
         },
       },
     );
@@ -270,8 +340,8 @@ export default function SearchPage() {
           {trendingQ.data?.queries.map((q) => (
             <button
               key={q}
-              onClick={() => setInput(q)}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-white/5 hover:bg-ink-700 hover:text-ink-100 transition"
+              onClick={() => applySuggestion(q)}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass hover:bg-ink-700 hover:text-ink-100 transition"
             >
               {q}
             </button>
@@ -281,16 +351,30 @@ export default function SearchPage() {
       <div className="relative">
         <SearchIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
         <input
-          autoFocus
+          ref={searchInputRef}
           value={input}
           maxLength={120}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (showSuggest && e.key === 'ArrowDown') {
               e.preventDefault();
-              commitSearch(input);
+              setSuggSel((v) => (v + 1) % suggList.length);
+            } else if (showSuggest && e.key === 'ArrowUp') {
+              e.preventDefault();
+              setSuggSel((v) => (v <= 0 ? suggList.length - 1 : v - 1));
+            } else if (e.key === 'Escape' && showSuggest) {
+              setFocused(false);
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              const picked = suggSel >= 0 ? suggList[suggSel] : null;
+              if (picked) applySuggestion(picked);
+              else commitSearch(input);
             }
           }}
+          role="combobox"
+          aria-expanded={showSuggest}
+          aria-controls="search-suggest"
+          aria-activedescendant={suggSel >= 0 ? `sugg-${suggSel}` : undefined}
           onFocus={() => {
             focusedRef.current = true;
             setFocused(true);
@@ -300,7 +384,7 @@ export default function SearchPage() {
             window.setTimeout(() => setFocused(false), 120);
           }}
           placeholder={listening ? 'Listening…' : 'Songs, albums, artists, playlists…'}
-          className={`w-full glass-search rounded-2xl pl-12 pr-20 py-3.5 text-sm outline-none transition-all focus:ring-2 focus:ring-ember-500/35 focus:shadow-[0_0_34px_-8px_rgb(var(--ember-500)/0.5)] ${listening ? 'border-ember-500 ring-2 ring-ember-500/40' : ''}`}
+          className={`w-full glass-search rounded-2xl pl-12 pr-20 py-3.5 text-sm outline-none transition-[color,background-color,border-color,opacity,transform] focus:ring-2 focus:ring-ember-500/35 focus:shadow-[0_0_34px_-8px_rgb(var(--ember-500)/0.5)] ${listening ? 'border-ember-500 ring-2 ring-ember-500/40' : ''}`}
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
           {input && (
@@ -328,43 +412,39 @@ export default function SearchPage() {
           )}
         </div>
         {showSuggest && (
-          <div className="absolute left-0 right-0 top-full mt-2 z-30 bg-ink-850 border border-ink-700/70 shadow-float rounded-2xl py-2 max-h-80 overflow-y-auto">
-            {recentMatches.map((r) => (
-              <button
-                key={`r-${r}`}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  suggPointer.current = { x: e.clientX, y: e.clientY };
-                }}
-                onPointerUp={(e) => {
-                  const p = suggPointer.current;
-                  suggPointer.current = null;
-                  if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12) applySuggestion(r);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-ink-800/60"
-              >
-                <ClockIcon className="w-4 h-4 text-ink-400 shrink-0" />
-                <span className="text-sm truncate">{r}</span>
-              </button>
-            ))}
-            {titleSuggest.map((t) => (
-              <button
-                key={`t-${t}`}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  suggPointer.current = { x: e.clientX, y: e.clientY };
-                }}
-                onPointerUp={(e) => {
-                  const p = suggPointer.current;
-                  suggPointer.current = null;
-                  if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12) applySuggestion(t);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-ink-800/60"
-              >
-                <SearchIcon className="w-4 h-4 text-ink-400 shrink-0" />
-                <span className="text-sm truncate">{t}</span>
-              </button>
-            ))}
+          <div
+            id="search-suggest"
+            role="listbox"
+            aria-label="Search suggestions"
+            className="absolute left-0 right-0 top-full mt-2 z-30 bg-ink-850 border border-ink-700/70 shadow-float rounded-2xl py-2 max-h-80 overflow-y-auto"
+          >
+            {suggList.map((text, i) => {
+              const isRecent = i < recentMatches.length;
+              const Icon = isRecent ? ClockIcon : SearchIcon;
+              return (
+                <button
+                  key={`${isRecent ? 'r' : 't'}-${text}`}
+                  id={`sugg-${i}`}
+                  role="option"
+                  aria-selected={suggSel === i}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    suggPointer.current = { x: e.clientX, y: e.clientY };
+                  }}
+                  onPointerUp={(e) => {
+                    const p = suggPointer.current;
+                    suggPointer.current = null;
+                    if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12) applySuggestion(text);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-ink-800/60 ${suggSel === i ? 'bg-ink-800/80' : ''}`}
+                >
+                  <Icon className="w-4 h-4 text-ink-400 shrink-0" />
+                  <span className="text-sm truncate">
+                    <Highlight text={text} term={trimmed} />
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -388,7 +468,7 @@ export default function SearchPage() {
               <div className="flex flex-wrap gap-2">
                 {recent.map((r) => (
                   <span key={r} className="inline-flex items-center gap-1">
-                    <Chip onClick={() => setInput(r)}>{r}</Chip>
+                    <Chip onClick={() => applySuggestion(r)}>{r}</Chip>
                     <button aria-label={`Remove ${r}`} onClick={() => removeRecent(r)} className="p-1.5 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70 -ml-0.5">
                       <XIcon className="w-3.5 h-3.5" />
                     </button>
@@ -397,7 +477,7 @@ export default function SearchPage() {
               </div>
             </>
           ) : (
-            <EmptyState title="Find your next favorite" message="Search across songs, albums, artists, and playlists. Results rank toward your languages — scroll for unlimited results." />
+            <EmptyState icon={<SearchIcon className="w-8 h-8" />} title="Find your next favorite" message="Search across songs, albums, artists, and playlists. Results rank toward your languages — scroll for unlimited results." />
           )}
 
           <div className="mt-7 rounded-2xl glass-card px-4 py-3.5">
@@ -451,6 +531,24 @@ export default function SearchPage() {
               <span className="block text-xs text-ink-400 truncate">Find songs, talk music, ask anything — full chat with web search</span>
             </span>
           </Link>
+
+          {(() => {
+            // Package D4 — cold-box suggestions straight from the on-device
+            // taste profile: one tap searches an artist you actually play.
+            const mine = topArtists(loadProfile(), 8).map((a) => a.affinity.name).filter(Boolean);
+            return mine.length >= 2 ? (
+              <section className="mt-7">
+                <p className="text-sm font-semibold text-ink-300 mb-3">From your artists</p>
+                <div className="flex flex-wrap gap-2">
+                  {mine.map((name) => (
+                    <Chip key={name} onClick={() => applySuggestion(name)}>
+                      {name}
+                    </Chip>
+                  ))}
+                </div>
+              </section>
+            ) : null;
+          })()}
 
           <section className="mt-7">
             <p className="text-sm font-semibold text-ink-300 mb-3">In the mood for</p>
@@ -557,6 +655,7 @@ export default function SearchPage() {
                   {rankedAllSongs.length === 0 && all.data.albums.length === 0 && all.data.artists.length === 0 && all.data.playlists.length === 0 && (
                     <>
                       <EmptyState
+                        icon={<SearchIcon className="w-8 h-8" />}
                         title="No results"
                         message={`Nothing matched “${q}”. Try a shorter or transliterated spelling — or ask the AI.`}
                         action={
@@ -616,17 +715,36 @@ export default function SearchPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {albumList.map((a) => <MediaCard key={a.id} to={albumPath(a)} image={bestImage(a.images)} images={a.images} title={a.title} subtitle={a.subtitle} fluid onPlay={() => void playAlbum(a.id, a.title)} />)}
               </div>
+              <InfiniteSentinel
+                onVisible={() => void albums.fetchNextPage()}
+                disabled={!albums.hasNextPage || albums.isFetchingNextPage}
+                loading={albums.isFetchingNextPage}
+              />
             </>
           )}
           {tab === 'Artists' && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {(artists.data ?? []).map((a) => <MediaCard key={a.id} to={artistPath(a)} image={bestImage(a.images) === FALLBACK_ART ? letterAvatar(a.name) : bestImage(a.images)} images={a.images} title={a.name} subtitle="Artist" round fluid onPlay={() => void playArtist(a.id, a.name)} />)}
-            </div>
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {flattenArtistPages(artists.data?.pages).map((a) => <MediaCard key={a.id} to={artistPath(a)} image={bestImage(a.images) === FALLBACK_ART ? letterAvatar(a.name) : bestImage(a.images)} images={a.images} title={a.name} subtitle="Artist" round fluid onPlay={() => void playArtist(a.id, a.name)} />)}
+              </div>
+              <InfiniteSentinel
+                onVisible={() => void artists.fetchNextPage()}
+                disabled={!artists.hasNextPage || artists.isFetchingNextPage}
+                loading={artists.isFetchingNextPage}
+              />
+            </>
           )}
           {tab === 'Playlists' && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {(playlists.data ?? []).map((p) => <MediaCard key={p.id} to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={p.subtitle} fluid onPlay={() => void playPlaylist(p.id, p.title)} />)}
-            </div>
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {flattenPlaylistPages(playlists.data?.pages).map((p) => <MediaCard key={p.id} to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={p.subtitle} fluid onPlay={() => void playPlaylist(p.id, p.title)} />)}
+              </div>
+              <InfiniteSentinel
+                onVisible={() => void playlists.fetchNextPage()}
+                disabled={!playlists.hasNextPage || playlists.isFetchingNextPage}
+                loading={playlists.isFetchingNextPage}
+              />
+            </>
           )}
         </div>
       )}

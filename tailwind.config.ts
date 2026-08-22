@@ -1,9 +1,15 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Tarang design tokens.
- * Dark-first. "Ink" surfaces, warm amber "ember" accent, teal "tide" support.
+ * VinaX design tokens.
+ * Dark-first. "Ink" surfaces, indigo "ember" accent, cyan "tide" support.
  * Spacing follows a 4px base grid via Tailwind defaults.
+ *
+ * NOTE: keep each theme key declared exactly once — a duplicate key in this
+ * object silently discards the earlier one (this bit us: borderRadius was
+ * declared twice and 2xl/3xl fell back to Tailwind defaults at 93 call
+ * sites). This file is linted by `npm run lint` (no-dupe-keys) to prevent a
+ * recurrence.
  */
 export default {
   darkMode: 'class',
@@ -13,6 +19,15 @@ export default {
       borderRadius: {
         '2xl': '1.25rem',
         '3xl': '1.75rem',
+        card: '1.375rem',
+        sheet: '2rem',
+        pill: '9999px',
+      },
+      borderColor: {
+        // Hairline tokens — always use these instead of border-white/N so
+        // hairlines re-theme (white-alpha borders vanish on light surfaces).
+        glass: 'var(--glass-border)',
+        'glass-strong': 'var(--glass-border-strong)',
       },
       colors: {
         ink: {
@@ -22,6 +37,7 @@ export default {
           800: 'rgb(var(--ink-800) / <alpha-value>)',
           700: 'rgb(var(--ink-700) / <alpha-value>)',
           600: 'rgb(var(--ink-600) / <alpha-value>)',
+          500: 'rgb(var(--ink-500) / <alpha-value>)',
           400: 'rgb(var(--ink-400) / <alpha-value>)',
           300: 'rgb(var(--ink-300) / <alpha-value>)',
           200: 'rgb(var(--ink-200) / <alpha-value>)',
@@ -46,11 +62,6 @@ export default {
         'display': ['2rem', { lineHeight: '2.25rem', letterSpacing: '-0.02em', fontWeight: '800' }],
         'title': ['1.375rem', { lineHeight: '1.75rem', letterSpacing: '-0.01em', fontWeight: '700' }],
         'meta': ['0.8125rem', { lineHeight: '1.125rem' }],
-      },
-      borderRadius: {
-        card: '1.375rem',
-        sheet: '2rem',
-        pill: '9999px',
       },
       boxShadow: {
         // Soft, premium elevation — layered (contact + ambient) for realism.

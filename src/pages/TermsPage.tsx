@@ -18,8 +18,8 @@ export default function TermsPage() {
         </p>
         <H>Free means free</H>
         <p>
-          There are no subscriptions, no premium tiers, no ads and no in-app purchases — and no plans for any. If you
-          ever see VinaX asking for money, it isn&rsquo;t VinaX.
+          There are no subscriptions, no premium tiers, no in-app purchases and no advertising — and no plans for
+          any. If you ever see VinaX asking for money, it isn&rsquo;t VinaX.
         </p>
         <H>No accounts</H>
         <p>

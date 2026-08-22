@@ -1,3 +1,5 @@
+import { isNativePlatform } from '@/services/native';
+
 export interface ApiBase {
   id: string;
   url: string;
@@ -11,11 +13,26 @@ export interface ApiBase {
  * Pruned 2026-07 (DQA-10): saavn.dev (DNS no longer resolves) and the b4a.run
  * mirror (no CORS headers, so browsers can never read it) only produced
  * console errors and wasted requests. Re-add via VITE_API_BASES if revived.
+ * V5.0 (2026-08): first-party catalog API (sirimillavinay.online) leads the
+ * list for the web app — song delivery no longer depends on community wrappers.
  */
-export const DEFAULT_API_BASES: ApiBase[] = [
-  { id: 'saavn-sumit', url: 'https://saavn.sumit.co/api', label: 'saavn.sumit.co' },
-  { id: 'nepotune', url: 'https://nepotuneapi.vercel.app/api', label: 'nepotuneapi' },
-];
+export const DEFAULT_API_BASES: ApiBase[] = isNativePlatform()
+  ? [
+      // Capacitor does not have the Cloudflare Pages function on its local
+      // WebView origin, so native playback/search uses the deployed catalog.
+      { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
+    ]
+  : [
+      // Browser/web builds always use our same-origin catalog. In local Vite
+      // development, vite.config.ts mounts /api/cat and runs the exact same
+      // Cloudflare catalog handler against JioSaavn. In production, Cloudflare
+      // Pages serves functions/api/cat/[[path]].ts at this same path.
+      { id: 'local-catalog', url: '/api/cat', label: 'VinaX Catalog' },
+      // Remote first-party fallback for cases where the deployed same-origin
+      // function is temporarily unavailable. Community mirrors are deliberately
+      // not included because they have recently returned 429/402 outages.
+      { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
+    ];
 
 function basesFromEnv(): ApiBase[] | null {
   const raw = import.meta.env.VITE_API_BASES;

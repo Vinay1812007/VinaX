@@ -32,6 +32,14 @@
   }
   // Export to window for use across the file / future modules.
   try { window.html = html; } catch (_e) {}
+  // Device-type icon for user rows: instant visual scan of web vs app.
+  function platIcon(p) {
+    p = String(p || 'web').toLowerCase();
+    if (p === 'android' || p === 'ios') return '📱';
+    if (p === 'tv') return '📺';
+    if (p === 'desktop' || p === 'electron') return '💻';
+    return '🌐';
+  }
   function ago(iso) { var s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000)); if (s < 60) return s + 's ago'; if (s < 3600) return Math.round(s / 60) + 'm ago'; if (s < 86400) return Math.round(s / 3600) + 'h ago'; return Math.round(s / 86400) + 'd ago'; }
   function date(iso) { try { return new Date(iso).toLocaleDateString(); } catch (e) { return '—'; } }
   function ist(s) {
@@ -174,15 +182,14 @@
   }
   function loadLocation() { apiMemo('/api/admin/location?days=' + rangeDays).then(function (d) { if (d && active === 'location') renderLocation(d); }).catch(noop); }
 
-  var WORLD_LAND=[[[-180.0,69.0],[-174.3,66.3],[-174.6,67.1],[-171.9,66.9],[-169.9,66.0],[-172.5,65.4],[-173.0,64.3],[-179.9,65.9],[-180.0,65.0],[180.0,65.0],[177.4,64.6],[179.2,62.3],[173.7,61.7],[170.3,59.9],[168.9,60.6],[163.5,59.9],[162.0,58.2],[163.2,57.6],[162.1,54.9],[160.4,54.3],[160.0,53.2],[158.5,53.0],[156.8,51.0],[155.4,55.4],[155.9,56.8],[163.7,61.1],[164.5,62.6],[160.1,60.5],[159.3,61.8],[156.7,61.4],[154.2,59.8],[155.0,59.1],[142.2,59.0],[135.1,54.7],[138.2,53.8],[139.9,54.2],[141.4,52.2],[140.1,48.4],[138.2,46.3],[134.9,43.4],[132.3,43.3],[127.5,39.8],[129.5,36.8],[129.1,35.1],[126.5,34.4],[126.1,36.7],[126.9,36.9],[124.7,38.1],[125.3,39.6],[121.1,38.9],[122.2,40.4],[121.6,40.9],[118.0,39.2],[117.5,38.7],[118.9,37.4],[122.4,37.5],[119.2,34.9],[121.9,31.7],[121.7,28.2],[118.7,24.5],[115.9,22.8],[110.8,21.4],[110.4,20.3],[108.5,21.7],[105.9,19.8],[109.3,13.4],[109.2,11.7],[105.2,8.6],[105.1,9.9],[100.1,13.4],[99.2,9.2],[103.0,5.5],[104.2,1.3],[101.4,2.8],[100.1,6.5],[98.5,8.4],[98.3,7.8],[98.8,11.4],[97.2,16.9],[95.4,15.7],[94.2,16.0],[94.3,18.2],[91.4,22.8],[87.0,21.5],[86.5,20.2],[80.3,15.9],[79.9,10.4],[77.5,8.0],[73.5,16.0],[72.6,21.4],[70.5,20.9],[66.4,25.4],[57.4,25.7],[56.5,27.1],[54.7,26.5],[51.5,27.9],[50.1,30.1],[48.0,30.0],[50.8,24.8],[51.6,25.8],[51.8,24.0],[54.0,24.1],[56.4,26.4],[56.8,24.2],[59.8,22.3],[57.7,18.9],[55.3,17.2],[48.7,14.0],[43.5,12.6],[42.7,16.8],[39.1,21.3],[38.5,23.7],[34.6,28.1],[34.9,29.5],[33.9,27.6],[32.4,29.9],[35.5,23.1],[36.9,22.0],[37.5,18.6],[43.3,12.4],[42.7,11.7],[44.6,10.4],[51.1,12.0],[51.0,10.6],[47.7,4.2],[40.3,-2.6],[39.2,-4.7],[38.8,-6.5],[40.5,-10.8],[40.8,-14.7],[39.5,-16.7],[34.8,-19.8],[35.5,-24.1],[32.6,-25.7],[32.2,-28.8],[28.2,-32.8],[19.6,-34.8],[18.2,-33.9],[18.2,-31.7],[15.2,-27.1],[14.3,-22.1],[11.8,-18.1],[13.7,-10.7],[11.9,-5.0],[8.8,-1.1],[9.4,3.7],[8.5,4.8],[5.9,4.3],[4.3,6.3],[-2.0,4.7],[-9.0,4.8],[-12.4,7.3],[-16.6,12.2],[-17.6,14.7],[-16.1,18.1],[-17.0,21.9],[-14.4,26.3],[-9.6,29.9],[-9.3,32.6],[-5.9,35.8],[-2.2,35.2],[1.5,36.6],[9.5,37.4],[11.1,36.9],[10.3,33.8],[19.1,30.3],[20.1,32.2],[21.5,32.8],[28.9,30.9],[31.0,31.6],[33.8,31.0],[36.0,34.6],[36.2,36.7],[27.6,36.7],[26.2,39.5],[29.2,41.2],[33.5,42.0],[38.3,40.9],[41.7,42.0],[36.7,45.2],[39.1,47.3],[35.0,46.3],[36.3,45.1],[33.9,44.4],[32.5,45.3],[33.3,46.1],[30.7,46.6],[27.7,42.6],[28.8,41.1],[22.6,40.3],[24.0,37.7],[23.1,37.9],[23.2,36.4],[22.5,36.4],[19.4,40.3],[19.5,41.7],[13.1,45.7],[12.3,45.4],[12.6,44.1],[18.5,40.2],[16.9,40.4],[17.1,38.9],[16.1,38.0],[15.4,40.0],[8.9,44.4],[6.5,43.1],[3.1,43.1],[3.0,41.9],[0.8,41.0],[0.1,38.7],[-2.1,36.7],[-5.4,35.9],[-6.5,36.9],[-8.9,36.9],[-9.4,43.0],[-1.4,44.0],[-1.2,46.0],[-4.6,48.7],[-1.6,48.6],[-1.9,49.8],[1.3,50.1],[4.7,53.1],[8.1,53.5],[8.8,54.0],[8.5,57.1],[10.6,57.7],[10.9,56.5],[9.6,55.5],[10.9,54.0],[19.7,54.4],[21.3,55.2],[21.6,57.4],[24.1,57.0],[24.4,58.4],[23.3,59.2],[29.1,60.0],[22.9,59.8],[21.3,60.7],[21.5,63.2],[25.4,65.1],[22.2,65.7],[21.4,64.4],[17.8,62.7],[17.1,61.3],[18.8,60.1],[16.8,58.7],[15.9,56.1],[12.9,55.4],[10.4,59.5],[8.4,58.3],[5.7,58.6],[5.0,62.0],[5.9,62.6],[19.2,69.8],[24.5,71.0],[28.2,71.2],[31.3,70.5],[30.0,70.2],[31.1,69.6],[36.5,69.1],[41.1,67.5],[41.1,66.8],[38.4,66.0],[33.2,66.6],[34.8,65.9],[34.9,64.4],[37.0,63.9],[36.5,64.8],[37.2,65.1],[39.6,64.5],[40.4,64.8],[39.8,65.5],[42.1,66.5],[44.0,66.1],[44.5,66.8],[43.5,68.6],[46.3,68.2],[46.8,67.7],[45.6,67.0],[46.3,66.7],[53.7,68.9],[54.5,68.8],[53.5,68.2],[58.8,68.9],[59.9,68.3],[61.1,68.9],[60.0,69.5],[60.6,69.9],[68.5,68.1],[69.2,68.6],[66.9,69.5],[66.7,71.0],[69.2,72.8],[72.6,72.8],[71.8,71.4],[72.8,70.4],[72.6,69.0],[73.7,68.4],[71.3,66.3],[72.4,66.2],[75.1,67.8],[74.9,69.0],[73.6,69.6],[74.4,70.6],[73.1,71.4],[74.9,72.1],[74.7,72.8],[75.7,72.3],[75.3,71.3],[76.4,71.2],[75.9,71.9],[77.6,72.3],[81.5,71.7],[80.5,73.6],[86.8,73.9],[86.0,74.5],[87.2,75.1],[100.8,76.4],[104.4,77.7],[107.2,76.5],[114.1,75.8],[109.4,74.2],[123.2,73.0],[123.3,73.7],[127.0,73.6],[131.3,70.8],[132.3,71.8],[139.9,71.5],[139.1,72.4],[140.5,72.8],[149.5,72.2],[153.0,70.8],[159.0,70.9],[160.9,69.4],[167.8,69.6],[169.6,68.7],[170.8,69.0],[170.5,70.1],[178.6,69.4],[-180.0,69.0]],[[-90.5,69.5],[-90.5,68.5],[-89.2,69.3],[-87.3,67.2],[-85.5,69.9],[-82.6,69.7],[-81.3,69.2],[-82.0,68.1],[-81.3,67.6],[-83.3,66.4],[-85.8,66.6],[-87.3,64.8],[-93.2,62.0],[-94.7,58.9],[-93.2,58.8],[-92.3,57.1],[-82.3,55.1],[-82.1,53.3],[-79.9,51.2],[-78.6,52.6],[-79.8,54.7],[-76.5,56.5],[-78.5,58.8],[-77.3,59.9],[-78.1,62.3],[-73.8,62.4],[-69.6,61.1],[-69.3,59.0],[-67.7,58.2],[-64.6,60.3],[-61.4,57.0],[-61.8,56.3],[-57.3,54.6],[-55.7,52.1],[-60.0,50.2],[-66.4,50.2],[-71.1,46.8],[-65.1,49.2],[-64.2,48.7],[-65.1,48.1],[-64.5,46.2],[-61.5,45.9],[-60.5,47.0],[-59.8,45.9],[-65.4,43.5],[-66.2,44.5],[-64.4,45.3],[-67.1,45.1],[-70.7,43.0],[-70.0,41.6],[-73.7,40.9],[-71.9,40.9],[-74.0,40.8],[-74.9,38.9],[-75.5,39.5],[-75.1,38.4],[-75.9,37.2],[-76.4,39.1],[-76.3,38.1],[-77.0,38.2],[-75.7,35.6],[-81.3,31.4],[-80.4,25.2],[-81.7,25.9],[-84.1,30.1],[-89.2,30.3],[-89.2,29.3],[-90.2,29.1],[-93.8,29.7],[-96.6,28.3],[-97.9,22.4],[-96.3,19.3],[-94.4,18.1],[-92.0,18.7],[-90.8,19.3],[-90.3,21.0],[-87.1,21.5],[-88.9,15.9],[-83.4,15.3],[-83.8,11.1],[-81.4,8.8],[-79.6,9.6],[-76.8,8.6],[-74.9,11.1],[-71.8,12.4],[-71.1,12.1],[-71.9,11.4],[-71.7,9.1],[-71.4,11.0],[-69.9,12.2],[-68.2,10.6],[-61.9,10.7],[-62.4,9.9],[-57.1,6.0],[-54.0,5.8],[-51.3,4.2],[-50.0,1.7],[-50.4,-0.1],[-48.6,-0.2],[-48.6,-1.2],[-47.8,-0.6],[-44.9,-1.6],[-44.6,-2.7],[-40.0,-2.9],[-35.6,-5.1],[-34.7,-7.3],[-35.1,-9.0],[-38.7,-13.1],[-39.3,-17.9],[-40.9,-21.9],[-47.6,-24.9],[-48.9,-28.7],[-53.8,-34.4],[-56.2,-34.9],[-58.4,-33.9],[-56.8,-36.9],[-59.2,-38.7],[-62.3,-38.8],[-62.7,-41.0],[-65.1,-41.1],[-65.0,-42.1],[-63.5,-42.6],[-65.2,-43.5],[-65.6,-45.0],[-67.3,-45.6],[-67.6,-46.3],[-65.6,-47.2],[-66.0,-48.1],[-69.1,-50.7],[-68.2,-52.4],[-70.8,-52.9],[-71.0,-53.8],[-74.9,-52.3],[-75.6,-48.7],[-74.1,-46.9],[-75.6,-46.6],[-74.4,-44.1],[-73.2,-44.5],[-72.7,-42.4],[-74.3,-43.2],[-73.2,-39.3],[-73.6,-37.2],[-71.4,-32.4],[-70.2,-19.8],[-71.5,-17.4],[-76.0,-14.6],[-79.8,-7.2],[-81.3,-6.1],[-81.4,-4.7],[-79.8,-2.7],[-81.0,-2.2],[-80.9,-1.1],[-77.1,3.8],[-78.2,8.3],[-79.6,8.9],[-80.9,7.2],[-85.7,9.9],[-87.5,13.3],[-91.2,13.9],[-94.7,16.2],[-96.6,15.7],[-103.5,18.3],[-105.5,19.9],[-106.0,22.8],[-112.2,29.0],[-113.1,31.2],[-114.8,31.8],[-114.7,30.2],[-109.4,23.2],[-110.0,22.8],[-112.2,24.7],[-112.3,26.0],[-115.1,27.7],[-114.2,28.6],[-117.3,33.0],[-120.6,34.6],[-124.4,40.3],[-123.9,45.5],[-124.7,48.2],[-122.6,47.1],[-122.8,49.0],[-127.4,50.8],[-127.8,52.3],[-134.1,58.1],[-147.1,60.9],[-151.7,59.2],[-150.6,61.3],[-158.4,56.0],[-164.8,54.4],[-157.7,57.6],[-157.0,58.9],[-162.0,58.7],[-161.9,59.6],[-163.8,59.8],[-166.1,61.5],[-164.6,63.1],[-160.8,63.8],[-161.5,64.4],[-160.8,64.8],[-165.0,64.4],[-168.1,65.7],[-164.5,66.6],[-161.7,66.1],[-166.8,68.4],[-156.6,71.4],[-136.5,68.9],[-128.1,70.5],[-125.8,69.5],[-121.5,69.8],[-113.9,68.4],[-115.3,67.9],[-108.9,67.4],[-107.8,67.9],[-108.8,68.3],[-108.2,68.7],[-106.1,68.8],[-101.5,67.6],[-97.7,68.6],[-96.1,68.2],[-96.1,67.3],[-94.2,69.1],[-96.5,70.1],[-95.2,71.9],[-91.5,70.2],[-92.4,69.7],[-90.5,69.5]],[[-27.1,83.5],[-20.8,82.7],[-31.9,82.2],[-22.1,81.7],[-23.2,81.2],[-15.8,81.9],[-12.2,81.3],[-20.0,80.2],[-17.7,80.1],[-19.7,78.8],[-19.7,77.6],[-18.5,77.0],[-21.7,76.6],[-19.8,76.1],[-19.6,75.2],[-20.7,75.2],[-19.4,74.3],[-23.6,73.3],[-22.3,72.2],[-24.8,72.3],[-21.8,70.7],[-25.5,71.4],[-25.2,70.8],[-26.4,70.2],[-22.3,70.1],[-39.8,65.5],[-42.8,62.7],[-43.4,60.1],[-48.3,60.9],[-51.6,63.6],[-54.0,67.2],[-50.9,69.9],[-54.7,69.6],[-54.4,70.8],[-51.4,70.6],[-55.8,71.7],[-54.7,72.6],[-58.6,75.5],[-68.5,76.1],[-71.4,77.0],[-66.8,77.4],[-73.3,78.0],[-65.7,79.4],[-68.0,80.1],[-62.2,81.3],[-62.6,81.8],[-50.4,82.4],[-44.5,81.7],[-46.8,82.6],[-27.1,83.5]],[[143.6,-13.8],[145.4,-15.0],[146.4,-19.0],[148.8,-20.4],[153.1,-26.1],[153.1,-30.9],[150.0,-37.4],[146.3,-39.0],[145.0,-37.9],[143.6,-38.8],[140.6,-38.0],[139.6,-36.1],[138.1,-35.6],[138.2,-34.4],[136.8,-35.3],[137.8,-32.9],[136.0,-34.9],[134.3,-32.6],[131.3,-31.5],[126.1,-32.2],[123.7,-33.9],[119.9,-34.0],[118.0,-35.1],[115.0,-34.2],[115.7,-31.6],[113.3,-26.1],[114.2,-26.3],[113.4,-24.4],[114.1,-21.8],[114.2,-22.5],[116.7,-20.7],[120.9,-19.7],[125.7,-14.2],[127.1,-13.8],[129.6,-15.0],[130.6,-12.5],[132.6,-12.1],[132.4,-11.1],[136.5,-11.9],[135.5,-15.0],[140.2,-17.7],[142.5,-10.7],[143.6,-13.8]],[[-86.6,73.2],[-85.8,72.5],[-82.3,73.8],[-80.8,72.1],[-77.8,72.8],[-74.1,71.3],[-72.2,71.6],[-67.0,69.2],[-68.8,68.7],[-61.9,66.9],[-63.9,65.0],[-68.0,66.3],[-64.7,63.4],[-65.0,62.7],[-68.8,63.7],[-66.2,61.9],[-74.8,64.7],[-77.7,64.2],[-78.6,64.6],[-77.9,65.3],[-74.0,65.5],[-72.9,67.7],[-79.0,70.2],[-84.9,70.0],[-89.9,71.2],[-89.4,73.1],[-85.8,73.8],[-86.6,73.2]],[[-180.0,-16.6],[179.4,-16.8],[178.7,-17.0],[179.4,-16.4],[-180.0,-16.6]],[[134.1,-1.2],[135.5,-3.4],[138.3,-1.7],[144.6,-3.9],[147.6,-6.1],[147.2,-7.4],[150.7,-10.6],[147.9,-10.1],[144.7,-7.6],[142.6,-9.3],[137.6,-8.4],[138.7,-7.3],[137.9,-5.4],[133.7,-3.5],[133.0,-4.1],[132.0,-2.8],[133.7,-2.2],[130.5,-0.9],[132.4,-0.4],[134.1,-1.2]],[[-68.5,83.1],[-61.9,82.6],[-67.7,81.5],[-65.5,81.5],[-71.2,79.8],[-76.9,79.3],[-75.4,78.5],[-79.8,77.2],[-77.9,76.8],[-80.6,76.2],[-89.5,76.5],[-87.8,77.2],[-88.3,77.9],[-85.0,77.5],[-88.0,78.4],[-85.1,79.3],[-86.9,80.3],[-81.8,80.5],[-87.6,80.5],[-91.6,81.9],[-68.5,83.1]],[[141.0,37.1],[140.3,35.1],[135.8,33.5],[135.1,34.6],[131.0,33.9],[132.0,33.1],[131.3,31.5],[130.2,31.4],[129.4,33.3],[132.6,35.4],[135.7,35.5],[136.7,37.3],[137.4,36.8],[139.4,38.2],[139.9,40.6],[141.4,41.4],[141.9,39.2],[141.0,37.1]],[[105.8,-5.9],[102.6,-4.2],[95.3,5.5],[97.5,5.2],[103.8,0.1],[103.4,-0.7],[106.1,-3.1],[105.8,-5.9]],[[117.9,1.8],[119.0,0.9],[117.8,0.8],[116.1,-4.0],[110.2,-2.9],[109.1,-0.5],[109.7,2.0],[111.2,1.9],[113.0,3.1],[116.7,6.9],[119.2,5.4],[117.3,3.2],[117.9,1.8]],[[57.5,70.7],[53.7,70.8],[51.5,72.0],[55.6,75.1],[68.9,76.5],[58.5,74.3],[55.4,72.4],[57.5,70.7]],[[50.1,-13.6],[50.4,-15.7],[49.7,-15.7],[47.1,-24.9],[45.4,-25.6],[44.0,-25.0],[43.3,-22.1],[44.4,-20.1],[44.4,-16.2],[47.7,-14.6],[49.2,-12.0],[50.1,-13.6]],[[-114.2,73.1],[-114.7,72.7],[-109.9,73.0],[-108.2,71.7],[-108.4,73.1],[-106.5,73.1],[-104.5,71.0],[-101.0,70.0],[-102.7,69.5],[-102.4,68.8],[-113.3,68.5],[-117.3,70.0],[-112.4,70.4],[-117.9,70.5],[-118.4,70.9],[-116.1,71.3],[-119.4,71.6],[-117.9,72.7],[-114.2,73.1]],[[-3.0,58.6],[-4.1,57.6],[-2.0,57.7],[-3.1,56.0],[1.7,52.7],[1.4,51.3],[-5.2,50.0],[-3.4,51.4],[-5.3,52.0],[-4.2,52.3],[-4.6,53.5],[-2.9,54.0],[-4.8,54.8],[-5.0,55.8],[-5.6,55.3],[-6.2,56.8],[-5.0,58.6],[-3.0,58.6]],[[-94.7,77.1],[-89.2,75.6],[-81.1,75.7],[-79.8,74.9],[-89.8,74.5],[-97.1,76.8],[-94.7,77.1]],[[125.2,1.4],[123.7,0.2],[120.2,0.2],[120.9,-1.4],[123.3,-0.6],[121.5,-1.9],[123.2,-5.3],[122.2,-5.3],[122.7,-4.5],[121.5,-4.6],[121.0,-2.6],[120.3,-2.9],[120.4,-5.5],[119.4,-5.4],[118.8,-2.8],[120.0,0.6],[125.2,1.4]],[[173.0,-40.9],[174.2,-41.3],[173.1,-43.9],[171.5,-44.2],[169.3,-46.6],[166.7,-46.2],[167.0,-45.1],[173.0,-40.9]],[[174.6,-36.2],[176.8,-37.9],[178.5,-37.7],[175.2,-41.7],[174.9,-39.9],[173.8,-39.5],[174.7,-37.4],[172.6,-34.5],[174.6,-36.2]],[[-79.7,22.8],[-74.2,20.3],[-77.8,19.9],[-77.1,20.4],[-78.7,21.6],[-81.8,22.6],[-85.0,21.9],[-82.3,23.2],[-79.7,22.8]],[[-120.5,71.4],[-123.1,70.9],[-125.9,71.9],[-123.9,73.7],[-124.9,74.3],[-115.5,73.5],[-120.5,71.4]],[[-87.0,79.7],[-85.8,79.3],[-90.8,78.2],[-96.7,80.2],[-92.4,81.3],[-87.0,79.7]],[[18.3,79.7],[21.5,79.0],[15.9,76.8],[10.4,79.7],[18.3,79.7]],[[-14.5,66.5],[-13.6,65.1],[-18.7,63.5],[-22.8,64.0],[-21.8,64.4],[-24.0,64.9],[-22.2,65.4],[-24.3,65.6],[-22.1,66.4],[-20.6,65.7],[-14.5,66.5]],[[-56.1,50.7],[-56.8,49.8],[-53.5,49.2],[-53.1,46.7],[-54.2,46.8],[-54.2,47.8],[-55.4,46.9],[-59.3,47.6],[-57.4,50.7],[-55.4,51.6],[-56.1,50.7]],[[-67.8,-53.8],[-65.1,-54.7],[-69.2,-55.5],[-74.7,-52.8],[-71.1,-54.1],[-69.3,-52.5],[-67.8,-53.8]],[[108.6,-6.8],[110.8,-6.5],[115.7,-8.4],[105.4,-6.9],[106.1,-5.9],[108.6,-6.8]],[[121.3,18.5],[122.2,18.5],[122.5,17.1],[121.7,14.3],[124.0,13.8],[124.1,12.5],[120.6,13.9],[121.0,14.5],[120.1,15.0],[119.9,16.4],[121.3,18.5]],[[-108.2,76.2],[-105.7,75.5],[-112.2,74.4],[-113.9,74.7],[-111.8,75.2],[-117.7,75.2],[-115.4,76.5],[-109.1,75.5],[-110.5,76.4],[-108.2,76.2]],[[143.9,44.2],[145.3,44.4],[145.5,43.3],[140.0,41.6],[142.0,45.6],[143.9,44.2]],[[99.9,78.9],[95.0,79.0],[91.2,80.3],[95.9,81.3],[100.2,79.8],[99.9,78.9]],[[143.6,50.7],[144.7,49.0],[143.2,49.3],[142.6,47.9],[143.5,46.1],[142.7,46.7],[142.1,46.0],[142.2,54.2],[143.6,50.7]],[[126.4,8.4],[125.4,5.6],[123.6,7.8],[121.9,7.2],[123.5,8.7],[125.5,9.0],[125.4,9.8],[126.4,8.4]],[[-6.8,52.3],[-10.0,51.8],[-9.2,52.9],[-9.7,53.9],[-6.7,55.2],[-5.7,54.6],[-6.8,52.3]],[[-100.4,73.8],[-97.4,73.8],[-98.1,73.0],[-96.5,72.6],[-96.7,71.7],[-99.3,71.4],[-102.5,72.5],[-100.4,72.7],[-101.5,73.4],[-100.4,73.8]],[[-72.6,19.9],[-68.3,18.6],[-71.4,17.6],[-74.5,18.3],[-72.3,18.7],[-73.4,19.6],[-72.6,19.9]],[[145.1,75.6],[144.3,74.8],[139.0,74.6],[137.0,75.3],[138.8,76.1],[145.1,75.6]],[[-123.5,48.5],[-125.7,48.8],[-128.4,50.8],[-125.8,50.3],[-123.5,48.5]],[[25.4,80.4],[27.4,80.1],[23.0,79.4],[17.4,80.3],[25.4,80.4]],[[-93.2,72.8],[-95.4,72.1],[-96.0,73.4],[-90.5,73.9],[-93.2,72.8]],[[145.4,-40.8],[148.3,-40.9],[147.9,-43.2],[146.0,-43.5],[144.7,-41.2],[145.4,-40.8]],[[152.0,-5.5],[150.2,-6.3],[148.3,-5.7],[150.8,-5.5],[151.5,-4.2],[152.3,-4.3],[152.0,-5.5]],[[-98.5,76.7],[-97.7,76.3],[-98.2,75.0],[-102.5,75.6],[-102.6,76.3],[-98.5,76.7]],[[124.4,-10.1],[123.5,-10.2],[125.1,-8.7],[127.3,-8.4],[124.4,-10.1]],[[81.2,6.2],[79.9,6.8],[80.1,9.8],[81.8,7.5],[81.2,6.2]],[[-100.1,78.3],[-105.2,78.4],[-104.2,78.7],[-105.5,79.3],[-100.1,78.3]],[[121.2,22.8],[120.7,22.0],[120.1,23.6],[121.5,25.3],[121.2,22.8]],[[125.5,12.2],[125.8,11.0],[125.0,11.3],[124.8,10.1],[124.3,12.6],[125.5,12.2]],[[124.0,10.3],[123.0,9.0],[122.4,9.7],[124.1,11.2],[124.0,10.3]],[[-132.7,54.0],[-131.7,54.1],[-132.1,53.0],[-131.2,52.2],[-133.1,53.4],[-132.7,54.0]],[[110.3,18.7],[108.7,18.5],[108.6,19.4],[110.8,20.1],[110.3,18.7]],[[9.2,41.2],[9.7,39.2],[8.8,38.9],[8.2,41.0],[9.2,41.2]]];
 
-  // --- World Listening: real-time map (self-contained canvas; no external
-  // libraries, so it stays CSP-safe). Draws real coastlines from an embedded
-  // simplified world outline (Natural Earth 110m, Douglas-Peucker simplified)
-  // on an equirectangular projection, then plots listeners at CITY level. Live
-  // listeners (active in the last ~60s, /api/admin/live) pulse; the selected
-  // range's cities (/api/admin/location) are the calmer base layer. Drag to
-  // pan, scroll to zoom. WORLD_LAND is defined just above.
+  // --- World Listening: Leaflet + OpenStreetMap tiles (vendored under
+  // /admin/leaflet, so script-src 'self' still holds). Range cities from
+  // /api/admin/location are the calm base layer; live listeners from
+  // /api/admin/live pulse on top. CITY_COORD answers common cities exactly;
+  // anything unknown is geocoded once via Nominatim (throttled, cached in
+  // localStorage) and refines from the country-centroid guess on the next
+  // repaint.
   var CITY_COORD = {
     'mumbai':[19.08,72.88],'bombay':[19.08,72.88],'delhi':[28.61,77.21],'new delhi':[28.61,77.21],
     'bengaluru':[12.97,77.59],'bangalore':[12.97,77.59],'hyderabad':[17.38,78.49],'chennai':[13.08,80.27],
@@ -227,9 +234,52 @@
   };
   var mapState = null;
 
+  // Nominatim geocode cache (accurate coords for cities outside CITY_COORD).
+  // One lookup per unknown city EVER (misses cached as 'x'), ≥1.2 s between
+  // requests per the OSM usage policy — admin-only traffic, so tiny volume.
+  var GEO_CACHE_KEY = 'vinax_admin_geo2';
+  var geoCache = null;
+  function geoCacheLoad() {
+    if (!geoCache) {
+      try { geoCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}') || {}; } catch (e) { geoCache = {}; }
+    }
+    return geoCache;
+  }
+  function geoCacheSave() { try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(geoCache)); } catch (e) {} }
+  var geoQueue = [], geoQueued = {}, geoBusy = false;
+  function queueGeocode(city, cc) {
+    var key = (String(city || '').toLowerCase().trim() + '|' + String(cc || '').toUpperCase().slice(0, 2));
+    if (!city || geoQueued[key] || geoCacheLoad()[key] !== undefined) return;
+    geoQueued[key] = true;
+    geoQueue.push({ key: key, city: city, cc: cc });
+    pumpGeocode();
+  }
+  function pumpGeocode() {
+    if (geoBusy) return;
+    var next = geoQueue.shift();
+    if (!next) return;
+    geoBusy = true;
+    fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&city=' + encodeURIComponent(next.city) + (next.cc ? '&countrycodes=' + encodeURIComponent(String(next.cc).toLowerCase()) : ''))
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (j) {
+        var hit = j && j[0];
+        var c = geoCacheLoad();
+        c[next.key] = (hit && hit.lat) ? [parseFloat(hit.lat), parseFloat(hit.lon)] : 'x';
+        geoCacheSave();
+      })
+      .catch(noop)
+      .then(function () { setTimeout(function () { geoBusy = false; pumpGeocode(); }, 1200); });
+  }
+
+  /** Returns [lat, lon, exact] — exact from CITY_COORD or the geocode cache,
+   *  else a deterministic jitter around the country centroid (and queues a
+   *  real geocode for next time). */
   function cityLL(city, cc) {
     var key = String(city || '').toLowerCase().trim();
     if (CITY_COORD[key]) return CITY_COORD[key];
+    var cached = geoCacheLoad()[key + '|' + String(cc || '').toUpperCase().slice(0, 2)];
+    if (cached && cached !== 'x') return cached;
+    if (cached === undefined) queueGeocode(city, cc);
     var g = GEO_CENTROID[String(cc || '').toUpperCase().slice(0, 2)];
     if (!g) return null;
     var h = 0, i;
@@ -237,36 +287,42 @@
     var jx = ((h % 97) / 97 - 0.5) * 7, jy = (((h >> 4) % 97) / 97 - 0.5) * 6;
     return [g[0] + jy, g[1] + jx];
   }
-
-  function worldPoints(cities) {
-    var pts = [], max = 1, i, r, ll, n;
-    for (i = 0; i < cities.length; i++) {
-      r = cities[i]; ll = cityLL(r.city, r.country); if (!ll) continue;
-      n = r.listeners || 0; if (n > max) max = n;
-      pts.push({ lat: ll[0], lon: ll[1], n: n });
-    }
-    return { pts: pts, max: max };
+  /** True when cityLL would answer with a real (non-jittered) coordinate. */
+  function cityExact(city, cc) {
+    var key = String(city || '').toLowerCase().trim();
+    if (CITY_COORD[key]) return true;
+    var cached = geoCacheLoad()[key + '|' + String(cc || '').toUpperCase().slice(0, 2)];
+    return !!(cached && cached !== 'x');
   }
 
+  // Last good payloads — apiMemo resolves null for unchanged data, and a
+  // double-click on the nav used to feed renderWorld(null, null), blanking
+  // the whole map until the upstream data actually changed.
+  var lastWorldLoc = null, lastWorldLive = null;
   function loadWorld() {
     Promise.all([
       apiMemo('/api/admin/location?days=' + rangeDays).catch(function () { return null; }),
       apiMemo('/api/admin/live').catch(function () { return null; })
-    ]).then(function (r) { if (active === 'world') renderWorld(r[0], r[1]); });
+    ]).then(function (r) {
+      if (r[0]) lastWorldLoc = r[0];
+      if (r[1]) lastWorldLive = r[1];
+      if (active !== 'world') return;
+      // Repaint only when something changed OR the section was just entered
+      // (view still shows "Loading…"). Unchanged auto-ticks skip the repaint
+      // so map pan/zoom isn't reset every 10 s.
+      if (r[0] || r[1] || !document.getElementById('wmap')) renderWorld(lastWorldLoc, lastWorldLive);
+    });
   }
 
   function renderWorld(loc, live) {
     loc = loc || {}; live = live || {};
     var countries = loc.countries || [];
     setExport('world-countries', countries);
-    var base = worldPoints(loc.cities || []);
+    var cities = loc.cities || [];
+    var mappable = 0;
+    cities.forEach(function (r) { if (cityLL(r.city, r.country)) mappable++; });
     var liveList = (live && live.listeners) || [];
-    var livePts = [];
-    liveList.forEach(function (r) {
-      var ll = cityLL(r.city, r.country); if (!ll) return;
-      livePts.push({ lat: ll[0], lon: ll[1], playing: !!r.playing });
-    });
-    var nowN = (live && live.count) || livePts.length;
+    var nowN = (live && live.count) || liveList.length;
     var nowRows = liveList.slice(0, 24).map(function (r) {
       var where = [r.city, r.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">Unknown</span>';
       var song = r.song ? esc(r.song) + (r.artist ? ' <span class="muted">· ' + esc(r.artist) + '</span>' : '') : '<span class="muted">—</span>';
@@ -278,8 +334,8 @@
     $('view').innerHTML =
       '<div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">' +
         '<div style="flex:2;min-width:300px">' +
-          '<canvas id="wmap" width="760" height="380" style="width:100%;height:auto;background:#0b0f1c;border-radius:16px;cursor:grab;touch-action:none;display:block"></canvas>' +
-          '<p class="muted" style="margin-top:8px"><span class="dot2 on"></span> ' + nowN + ' listening now · ' + base.pts.length + ' active cities in the selected range. Drag to pan, scroll to zoom.</p>' +
+          '<div id="wmap"></div>' +
+          '<p class="muted" style="margin-top:8px"><span class="dot2 on"></span> ' + nowN + ' listening now · ' + mappable + ' active cities in the selected range. OpenStreetMap — drag to pan, scroll or pinch to zoom.</p>' +
         '</div>' +
         '<div style="flex:1;min-width:240px">' +
           '<h3>Listening now</h3>' +
@@ -290,100 +346,56 @@
         '</div>' +
       '</div>';
     stamp();
-    startMap(base.pts, livePts, base.max);
+    startLeafletMap(cities, liveList);
   }
 
-  function startMap(base, livePts, maxN) {
-    var cv = $('wmap'); if (!cv || !cv.getContext) return;
-    var ctx = cv.getContext('2d');
-    var W = cv.width, H = cv.height;
+  // Leaflet world map. Keeps the operator's view (center/zoom) across
+  // repaints via mapState.view; range cities are sized circles, live
+  // listeners are pulsing dots (CSS .live-dot in index.html).
+  var leafMap = null;
+  function startLeafletMap(cities, liveList) {
+    var host = $('wmap');
+    if (!host) return;
+    if (typeof L === 'undefined') { host.innerHTML = '<div class="empty">Map library failed to load.</div>'; return; }
     var prev = mapState && mapState.view;
-    var z = prev ? prev.z : 1, panX = prev ? prev.panX : 0, panY = prev ? prev.panY : 0;
-    var dragging = false, lx = 0, ly = 0;
-    if (mapState && mapState.raf) cancelAnimationFrame(mapState.raf);
-    if (mapState && mapState.detach) mapState.detach();
-
-    function clampPan() {
-      var ww = W * z, wh = H * z;
-      if (panX > 0) panX = 0; if (panX < W - ww) panX = W - ww;
-      if (panY > 0) panY = 0; if (panY < H - wh) panY = H - wh;
-    }
-    function px(lon) { return (lon + 180) / 360 * (W * z) + panX; }
-    function py(lat) { return (90 - lat) / 180 * (H * z) + panY; }
-
-    function drawLand() {
-      var i, j, ring, x, y, prevLon, started, lon, lat;
-      for (i = 0; i < WORLD_LAND.length; i++) {
-        ring = WORLD_LAND[i];
-        ctx.beginPath(); started = false; prevLon = null;
-        for (j = 0; j < ring.length; j++) {
-          lon = ring[j][0]; lat = ring[j][1];
-          if (prevLon !== null && Math.abs(lon - prevLon) > 180) started = false;
-          x = px(lon); y = py(lat);
-          if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
-          prevLon = lon;
-        }
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(41,52,84,0.92)'; ctx.fill();
-        ctx.strokeStyle = 'rgba(96,116,170,0.6)'; ctx.lineWidth = 0.8; ctx.stroke();
-      }
-    }
-    function disc(x, y, r, fill, stroke) {
-      ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fillStyle = fill; ctx.fill();
-      if (stroke) { ctx.lineWidth = 1; ctx.strokeStyle = stroke; ctx.stroke(); }
-    }
-    function draw() {
-      if (active !== 'world' || !document.body.contains(cv)) return;
-      ctx.fillStyle = '#0b0f1c'; ctx.fillRect(0, 0, W, H);
-      drawLand();
-      var i, p, x, y, r;
-      for (i = 0; i < base.length; i++) {
-        p = base[i]; x = px(p.lon); y = py(p.lat);
-        if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
-        r = 2.2 + 6 * Math.sqrt((p.n || 0) / maxN);
-        disc(x, y, r, 'rgba(120,150,255,0.5)', null);
-      }
-      var t = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
-      var phase = t - Math.floor(t);
-      for (i = 0; i < livePts.length; i++) {
-        p = livePts[i]; x = px(p.lon); y = py(p.lat);
-        if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
-        var col = p.playing ? '255,90,160' : '120,220,255';
-        var er = 4 + phase * 16;
-        ctx.beginPath(); ctx.arc(x, y, er, 0, 6.2832);
-        ctx.strokeStyle = 'rgba(' + col + ',' + (0.5 * (1 - phase)).toFixed(3) + ')';
-        ctx.lineWidth = 2; ctx.stroke();
-        disc(x, y, 4.2, 'rgba(' + col + ',0.95)', 'rgba(255,255,255,0.85)');
-      }
-      mapState.view = { z: z, panX: panX, panY: panY };
-      mapState.raf = requestAnimationFrame(draw);
-    }
-    function relpt(e) {
-      var b = cv.getBoundingClientRect(); var tt = e.touches ? e.touches[0] : e;
-      return { x: (tt.clientX - b.left) * (W / b.width), y: (tt.clientY - b.top) * (H / b.height) };
-    }
-    function down(e) { dragging = true; cv.style.cursor = 'grabbing'; var p = relpt(e); lx = p.x; ly = p.y; }
-    function move(e) { if (!dragging || !document.body.contains(cv)) return; var p = relpt(e); panX += (p.x - lx); panY += (p.y - ly); lx = p.x; ly = p.y; clampPan(); }
-    function up() { dragging = false; cv.style.cursor = 'grab'; }
-    function wheel(e) {
-      e.preventDefault(); var p = relpt(e);
-      var wx = (p.x - panX) / (W * z), wy = (p.y - panY) / (H * z);
-      z = Math.max(1, Math.min(8, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
-      panX = p.x - wx * (W * z); panY = p.y - wy * (H * z); clampPan();
-    }
-    cv.addEventListener('mousedown', down);
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
-    cv.addEventListener('touchstart', down);
-    cv.addEventListener('touchmove', function (e) { move(e); e.preventDefault(); });
-    cv.addEventListener('touchend', up);
-    cv.addEventListener('wheel', wheel, { passive: false });
-    mapState = { raf: 0, view: { z: z, panX: panX, panY: panY }, detach: function () {
-      document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
-    } };
-    clampPan(); draw();
+    if (leafMap) { try { leafMap.remove(); } catch (e) {} leafMap = null; }
+    leafMap = L.map(host, { worldCopyJump: true, zoomControl: true });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors'
+    }).addTo(leafMap);
+    if (prev) leafMap.setView([prev.lat, prev.lng], prev.zoom);
+    else leafMap.setView([21.5, 79.0], 4); // India-centered default
+    leafMap.on('moveend zoomend', function () {
+      if (!leafMap) return;
+      var c = leafMap.getCenter();
+      mapState = { view: { lat: c.lat, lng: c.lng, zoom: leafMap.getZoom() } };
+    });
+    var maxN = 1;
+    cities.forEach(function (r) { if ((r.listeners || 0) > maxN) maxN = r.listeners || 0; });
+    cities.forEach(function (r) {
+      var ll = cityLL(r.city, r.country);
+      if (!ll) return;
+      var n = r.listeners || 0;
+      var exact = cityExact(r.city, r.country);
+      var m = L.circleMarker([ll[0], ll[1]], {
+        radius: 4 + 10 * Math.sqrt(n / maxN),
+        color: '#22d3ee', weight: 1, opacity: 0.8,
+        fillColor: '#22d3ee', fillOpacity: 0.3
+      }).addTo(leafMap);
+      m.bindPopup('<b>' + esc(r.city || 'Unknown') + '</b>' + (r.country ? ', ' + esc(r.country) : '') +
+        '<br>' + n + ' listener' + (n === 1 ? '' : 's') + ' \u00b7 ' + (r.plays || 0) + ' plays' +
+        (exact ? '' : '<br><i>approximate \u2014 refining\u2026</i>'));
+    });
+    liveList.forEach(function (r) {
+      var ll = cityLL(r.city, r.country);
+      if (!ll) return;
+      var icon = L.divIcon({ className: 'live-dot' + (r.playing ? ' playing' : ''), iconSize: [14, 14] });
+      var m = L.marker([ll[0], ll[1]], { icon: icon, zIndexOffset: 500 }).addTo(leafMap);
+      var song = r.song ? esc(r.song) + (r.artist ? ' \u00b7 ' + esc(r.artist) : '') : (r.playing ? 'Playing' : 'Online');
+      m.bindPopup('<b>' + esc(r.name || 'Listener') + '</b><br>' + song + '<br>' + esc([r.city, r.country].filter(Boolean).join(', ') || 'Unknown'));
+    });
   }
-
 
   // ---------- Music ----------
   function renderMusic(d) {
@@ -397,6 +409,31 @@
   }
   function loadMusic() { apiMemo('/api/admin/music?days=' + rangeDays).then(function (d) { if (d && active === 'music') renderMusic(d); }).catch(noop); }
 
+  // ---------- A/B Experiments ----------
+  // The nav button existed but no section did — clicking it left "Loading…"
+  // on screen forever. Read-only view over GET /api/admin/experiments.
+  function renderExperiments(d) {
+    var exps = (d && d.experiments) || [];
+    setExport('experiments', exps);
+    if (d && d.configured === false) {
+      $('view').innerHTML = '<div class="card"><p class="muted">Experiments table not found — run the vinax_experiments migration from supabase/schema.sql to enable A/B testing.</p></div>';
+      stamp();
+      return;
+    }
+    var cards = exps.map(function (x) {
+      var rows = (x.metrics || []).map(function (m) {
+        return '<tr><td>' + esc(m.variant) + '</td><td>' + (m.pct != null ? m.pct + '%' : '—') + '</td><td>' + (m.devices || 0) + '</td><td>' + (m.playsPerDevice != null ? m.playsPerDevice : '—') + '</td><td>' + (m.skipRatePct != null ? m.skipRatePct + '%' : '—') + '</td></tr>';
+      }).join('');
+      return '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">' + esc(x.name || x.key) + ' ' + (x.active ? '<span class="pill">active</span>' : '<span class="pill" style="opacity:.6">paused</span>') + '</h3>' +
+        '<p class="muted" style="font-size:12px">key: <span style="font-family:monospace">' + esc(x.key) + '</span> · created ' + date(x.created_at) + ' · metrics from the last 14 days</p>' +
+        '<table><thead><tr><th>Variant</th><th>Split</th><th>Devices</th><th>Plays/device</th><th>Skip rate</th></tr></thead><tbody>' +
+        (rows || '<tr><td colspan="5" class="empty">No variants.</td></tr>') + '</tbody></table></div>';
+    }).join('');
+    $('view').innerHTML = cards || '<div class="empty">No experiments yet. Create one via POST /api/admin/experiments.</div>';
+    stamp();
+  }
+  function loadExperiments() { apiMemo('/api/admin/experiments').then(function (d) { if (d && active === 'experiments') renderExperiments(d); }).catch(noop); }
+
   // ---------- Users ----------
   function renderUsers(d) {
     var s = d.summary || {};
@@ -404,10 +441,13 @@
     setExport('users', U);
     var rows = U.map(function (u) {
       var loc = [u.city, u.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">—</span>';
-      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + '</td><td>' + loc + '</td><td><span class="pill">' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:#ff8a8a">Delete</button></td></tr>';
+      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:#ff8a8a">Delete</button></td></tr>';
     }).join('');
     var canPrev = userOffset > 0;
-    var canNext = U.length >= (d.limit || 50);
+    // D-22 follow-up: the server already computes hasMore (fetches limit+1);
+    // trust it instead of re-deriving from the page length, which disabled
+    // "Next" one page early on an exactly-full last page.
+    var canNext = d.hasMore != null ? !!d.hasMore : U.length >= (d.limit || 50);
     $('view').innerHTML =
       '<div class="cards"><div class="card"><div class="n">' + (s.total_users || 0) + '</div><div class="l">Total users</div></div>' +
       '<div class="card"><div class="n">' + (s.active_24h || 0) + '</div><div class="l">Active (24h)</div></div>' +
@@ -429,11 +469,13 @@
     Array.prototype.forEach.call(document.querySelectorAll('button.udel'), function (b) {
       b.addEventListener('click', function (e) {
         e.stopPropagation();
+        if (b.disabled) return; // double-click guard: never stack two prompts / two deletes
+        b.disabled = true;
         var reason = window.prompt('Deleting this user and ALL their events.\n\nA reason is MANDATORY (kept as an audit note):');
-        if (reason == null) return;
+        if (reason == null) { b.disabled = false; return; }
         reason = reason.trim();
-        if (reason.length < 3) { window.alert('Deletion cancelled — a written reason is mandatory.'); return; }
-        postApi('/api/admin/maintenance', { action: 'delete_user', device_id: b.getAttribute('data-del'), reason: reason }).then(function (r) { if (r) loadUsers(); }).catch(noop);
+        if (reason.length < 3) { window.alert('Deletion cancelled — a written reason is mandatory.'); b.disabled = false; return; }
+        postApi('/api/admin/maintenance', { action: 'delete_user', device_id: b.getAttribute('data-del'), reason: reason }).then(function (r) { if (r) loadUsers(); else b.disabled = false; }).catch(function () { b.disabled = false; });
       });
     });
     stamp();
@@ -448,7 +490,10 @@
     $('modalBody').innerHTML = '<button class="x" id="mx">✕</button><div class="empty">Loading…</div>';
     $('modal').hidden = false;
     $('mx').addEventListener('click', closeModal);
-    apiMemo('/api/admin/user?deviceId=' + encodeURIComponent(deviceId)).then(function (d) {
+    // Plain api(), NOT apiMemo: the memo resolves null for an unchanged
+    // payload, which left the modal stuck on "Loading…" whenever the same
+    // user was opened twice (double-click, or close + reopen).
+    api('/api/admin/user?deviceId=' + encodeURIComponent(deviceId)).then(function (d) {
       if (!d) return;
       var u = d.user || {};
       var ev = d.events || [];
@@ -807,7 +852,7 @@
   function loadEngagement() { apiMemo('/api/admin/engagement?days=' + rangeDays).then(function (d) { if (d && active === 'engagement') renderEngagement(d); }).catch(noop); }
 
   // ---------- Notifications (push composer) ----------
-  var PN_BASES = ['https://saavn.dev/api', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api', 'https://jiosaavn-api-privatecv8.b4a.run/api'];
+  var PN_BASES = ['https://www.sirimillavinay.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
   var pnDest = '/';
   var pnKind = 'home';
   function pnPickHtml(txt) { return '<span class="pill">Opens: ' + esc(txt) + '</span>'; }
@@ -832,10 +877,23 @@
     out.innerHTML = '<div class="empty">Searching…</div>';
     var path = '/search/' + (pnKind === 'album' ? 'albums' : 'songs') + '?query=' + encodeURIComponent(q) + '&limit=8';
     var i = 0;
+    var anyOk = false; // a base responded with valid JSON (results may be empty)
     function tryNext() {
-      if (i >= PN_BASES.length) { out.innerHTML = '<div class="empty">No results — catalog sources unavailable, try again.</div>'; return; }
+      if (i >= PN_BASES.length) {
+        // Distinguish "no matches for this query" (a base answered, empty)
+        // from "every source is down" — the old code showed the scary
+        // "sources unavailable" for BOTH, so a rare/short query looked broken.
+        out.innerHTML = anyOk
+          ? '<div class="empty">No matches for “' + esc(q) + '” — try a different spelling.</div>'
+          : '<div class="empty">Catalog sources unavailable right now — try again.</div>';
+        return;
+      }
       var base = PN_BASES[i]; i += 1;
-      fetch(base + path, { signal: AbortSignal.timeout(6000) }).then(function (r) { return r.json(); }).then(function (j) {
+      fetch(base + path, { signal: AbortSignal.timeout(6000) }).then(function (r) {
+        if (!r.ok) throw new Error('http ' + r.status);
+        return r.json();
+      }).then(function (j) {
+        anyOk = true;
         var list = pnParse(j);
         if (!list.length) { tryNext(); return; }
         out.innerHTML = list.slice(0, 8).map(function (it, idx) {
@@ -937,9 +995,15 @@
   }
   function loadContent() { apiMemo('/api/admin/content').then(function (d) { if (d && active === 'content') renderContent(d); }).catch(noop); }
   // ---------- Growth card (Overview) ----------
+  var lastGrowth = null;
   function loadGrowth() {
     apiMemo('/api/admin/growth').then(function (d) {
-      if (active !== 'overview' || !d) return;
+      if (active !== 'overview') return;
+      // Overview repaints wipe #view; growth's payload is day-granular so the
+      // memo answers null on most ticks — fall back to the last good payload
+      // or the card silently disappears after the first auto-refresh.
+      if (d) lastGrowth = d; else d = lastGrowth;
+      if (!d) return;
       var old = document.getElementById('growthbox');
       if (old) old.remove();
       var view = $('view');
@@ -1151,9 +1215,13 @@
     refresh();
   }
   // ---------- Weekly digest (Overview) ----------
+  var lastDigest = null;
   function loadDigest() {
     apiMemo('/api/admin/digest').then(function (d) {
-      if (active !== 'overview' || !d || !d.digest) return;
+      if (active !== 'overview') return;
+      // Same last-good fallback as loadGrowth — see comment there.
+      if (d && d.digest) lastDigest = d; else d = lastDigest;
+      if (!d || !d.digest) return;
       var g = d.digest;
       var old = document.getElementById('digestbox');
       if (old) old.remove();
@@ -1248,8 +1316,10 @@
         : emptyState('empty_rooms', 'No Listen Together rooms right now', 'When listeners open a room and share the code, active + recent rooms show up here — with a one-click "end" for moderation.'));
     Array.prototype.forEach.call(document.querySelectorAll('button.rend'), function (b) {
       b.addEventListener('click', function () {
-        if (!window.confirm('End room ' + b.getAttribute('data-code') + ' for everyone?')) return;
-        postApi('/api/admin/maintenance', { action: 'end_room', code: b.getAttribute('data-code') }).then(function (r) { if (r) loadRooms(); }).catch(noop);
+        if (b.disabled) return; // double-click guard
+        b.disabled = true;
+        if (!window.confirm('End room ' + b.getAttribute('data-code') + ' for everyone?')) { b.disabled = false; return; }
+        postApi('/api/admin/maintenance', { action: 'end_room', code: b.getAttribute('data-code') }).then(function (r) { if (r) loadRooms(); else b.disabled = false; }).catch(function () { b.disabled = false; });
       });
     });
     setExport('rooms', d.rooms || []);
@@ -1464,45 +1534,6 @@
       });
     });
   }
-  // ---------- JioSaavn mirror health (server-side ping via /api/admin/musicapi) ----------
-  var MUSIC_APIS = [
-    { id: 'saavn-sumit', label: 'sumit.co' },
-    { id: 'saavn-dev', label: 'saavn.dev' },
-    { id: 'nepotune', label: 'nepotune' },
-    { id: 'b4a', label: 'b4a.run' }
-  ];
-  var labMusicBusy = false;
-  var labMusicAt = '';
-  function labPaintMusicAt() { var el = $('lab-music-at'); if (el) el.textContent = labMusicAt ? 'last checked ' + labMusicAt : ''; }
-  function labMusicPing() {
-    var host = $('lab-music-pings');
-    if (!host || labMusicBusy) return;
-    labMusicBusy = true;
-    host.innerHTML = MUSIC_APIS.map(function (m) {
-      return '<span class="lab-ping" id="lab-music-' + esc(m.id) + '">' + esc(m.label) + ' \u2026</span>';
-    }).join('');
-    fetch('/api/admin/musicapi', { headers: { 'x-admin-token': token() } })
-      .then(function (res) {
-        if (res.status === 401) { sessionStorage.removeItem(TOKEN_KEY); showLogin('Invalid token.'); return null; }
-        return res.json();
-      })
-      .then(function (j) {
-        ((j && j.mirrors) || []).forEach(function (m) {
-          var el = $('lab-music-' + m.id);
-          if (!el) return;
-          el.className = 'lab-ping ' + (m.ok ? 'ok' : 'bad');
-          el.textContent = (m.label || m.id) + ' ' + (m.ok ? '\u2713 ' + m.ms + ' ms' : '\u2717 ' + (m.note || 'failed'));
-          el.title = m.base + (m.ok ? ' \u00b7 ' + m.songs + ' result(s)' : '');
-        });
-      })
-      .catch(function () {
-        MUSIC_APIS.forEach(function (m) {
-          var el = $('lab-music-' + m.id);
-          if (el) { el.className = 'lab-ping bad'; el.textContent = m.label + ' \u2717 network'; }
-        });
-      })
-      .then(function () { labMusicBusy = false; labMusicAt = labNow(); labPaintMusicAt(); });
-  }
   function renderAiLab() {
     var chips = LAB_LANES.map(function (L) {
       return '<button class="lab-chip' + (L.lane === labLane ? ' active' : '') + '" data-lane="' + esc(L.lane) + '">' +
@@ -1511,10 +1542,9 @@
     }).join('');
     $('view').innerHTML =
       '<div class="card" id="lab-root" style="max-width:860px">' +
-      '<h3 style="margin-top:0">API Monitoring <span class="muted">· seven AI lanes + JioSaavn music mirrors — no failover, failures show honestly</span></h3>' +
+      '<h3 style="margin-top:0">AI Lab <span class="muted">· each lane answers with its own key + pinned model — no failover, failures show honestly</span></h3>' +
       '<div class="lab-chips">' + chips + '</div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-ping">Ping all seven</button><span id="lab-ping-at" class="lab-ping-at"></span><span id="lab-pings" class="chips" style="margin:0"></span></div>' +
-      '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-music">Ping JioSaavn APIs</button><span id="lab-music-at" class="lab-ping-at"></span><span id="lab-music-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="lab-msgs" id="lab-msgs"></div>' +
       '<textarea id="lab-in" class="lab-input" rows="3" placeholder="Test message — Enter sends, Shift+Enter for a new line"></textarea>' +
       '<div class="row" style="margin-top:10px"><button id="lab-send">Send</button><button class="ghost" id="lab-clear">Clear chat</button><span class="muted" style="font-size:11px">History lives per lane, in memory only — capped at 1000 tokens per reply.</span></div>' +
@@ -1530,16 +1560,14 @@
     $('lab-send').addEventListener('click', labSend);
     $('lab-clear').addEventListener('click', function () { labHist[labLane] = []; labPaintMsgs(); });
     $('lab-ping').addEventListener('click', labPingAll);
-    $('lab-music').addEventListener('click', labMusicPing);
     $('lab-in').addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); labSend(); }
     });
     labPaintDots();
     labPaintPingAt();
-    labPaintMusicAt();
     // First open of the Lab auto-checks lane health once — dots fill in
     // without a click; later refreshes never repaint the chat.
-    if (!labAutoPinged) { labAutoPinged = true; labPingAll(); labMusicPing(); }
+    if (!labAutoPinged) { labAutoPinged = true; labPingAll(); }
     stamp();
   }
   function labPaintDots() { LAB_LANES.forEach(function (L) { labPaintDot(L.lane); }); }
@@ -1676,58 +1704,93 @@
     stamp();
   }
 
-  // ---------- Home Screen Management (functional, localStorage-backed) ----------
-  var HOME_CFG_KEY = 'vinax_admin_home_config';
-  function loadHomeCfg() {
-    try {
-      var raw = localStorage.getItem(HOME_CFG_KEY);
-      if (raw) { var j = JSON.parse(raw); if (Array.isArray(j)) return j; }
-    } catch (e) {}
-    return HOME_SHELVES_CATALOG.map(function (s, i) { return { id: s.id, name: s.name, order: i, enabled: true }; });
+  // ---------- Home Screen Management (server-backed via /api/admin/appconfig) ----------
+  // These are the app's REAL Home block keys (src/constants/homeBlocks.ts) —
+  // the old catalog used invented ids that matched nothing client-side, so
+  // nothing saved here could ever propagate.
+  var HOME_BLOCKS_APP = [
+    { id: 'quick', name: 'Quick access grid' },
+    { id: 'personal', name: 'Your music shelves' },
+    { id: 'discovery', name: 'Discovery shelves' },
+    { id: 'charts', name: 'Top 50 cards' },
+    { id: 'seasonal', name: 'Seasonal shelf' },
+    { id: 'moods', name: 'Mood playlists' },
+    { id: 'genres', name: 'Genre collections' },
+    { id: 'artists', name: 'Trending artists' },
+    { id: 'albums', name: 'Trending albums' },
+    { id: 'daypicks', name: 'Time-of-day picks' },
+    { id: 'loved', name: 'Recently loved' },
+    { id: 'feed', name: 'Endless feed' }
+  ];
+  function defaultHomeCfg() {
+    return HOME_BLOCKS_APP.map(function (s) { return { id: s.id, enabled: true }; });
   }
-  function saveHomeCfg(cfg) { try { localStorage.setItem(HOME_CFG_KEY, JSON.stringify(cfg)); return true; } catch (e) { return false; } }
-  var hsCfg = null;
+  function blockName(id) {
+    var b = HOME_BLOCKS_APP.filter(function (x) { return x.id === id; })[0];
+    return b ? b.name : id;
+  }
+  var hsCfg = null; // [{id, enabled}] in display order
+  var hsLoaded = false;
+  function normalizeHomeCfg(value) {
+    var known = {};
+    var out = [];
+    if (value && Array.isArray(value.blocks)) {
+      value.blocks.forEach(function (b) {
+        if (b && typeof b.id === 'string' && !known[b.id] && HOME_BLOCKS_APP.some(function (x) { return x.id === b.id; })) {
+          known[b.id] = true;
+          out.push({ id: b.id, enabled: b.enabled !== false });
+        }
+      });
+    }
+    HOME_BLOCKS_APP.forEach(function (s) { if (!known[s.id]) out.push({ id: s.id, enabled: true }); });
+    return out;
+  }
   function renderHomescreenSection() {
-    if (!hsCfg) hsCfg = loadHomeCfg();
-    hsCfg.sort(function (a, b) { return a.order - b.order; });
-    var known = {}; hsCfg.forEach(function (s) { known[s.id] = true; });
-    var addable = HOME_SHELVES_CATALOG.filter(function (s) { return !known[s.id]; });
+    if (!hsLoaded) {
+      hsLoaded = true;
+      $('view').innerHTML = '<div class="empty">Loading published config…</div>';
+      api('/api/admin/appconfig?key=home-config').then(function (d) {
+        hsCfg = normalizeHomeCfg(d && d.value);
+        if (active === 'homescreen') renderHomescreenSection();
+      }).catch(function () {
+        hsCfg = defaultHomeCfg();
+        if (active === 'homescreen') renderHomescreenSection();
+      });
+      return;
+    }
+    if (!hsCfg) hsCfg = defaultHomeCfg();
     var rows = hsCfg.map(function (s, i) {
-      return html`<div class="hs-row${s.enabled ? '' : ' disabled'}" data-id="${s.id}">` +
+      return '<div class="hs-row' + (s.enabled ? '' : ' disabled') + '" data-id="' + esc(s.id) + '">' +
         '<span class="hs-ord">' + (i + 1) + '</span>' +
-        html`<input class="hs-name" value="${s.name}" data-hn="${s.id}" />` +
-        '<span class="muted" style="font-size:11px">' + esc((HOME_SHELVES_CATALOG.filter(function(c){return c.id===s.id;})[0] || {source:'custom'}).source) + '</span>' +
+        '<span style="flex:1;font-weight:600">' + esc(blockName(s.id)) + ' <span class="muted" style="font-size:11px;font-weight:400">' + esc(s.id) + '</span></span>' +
         '<span class="row" style="gap:4px"><button class="ghost hs-up" data-id="' + esc(s.id) + '" style="padding:3px 8px">▲</button><button class="ghost hs-dn" data-id="' + esc(s.id) + '" style="padding:3px 8px">▼</button></span>' +
-        '<span class="row" style="gap:8px"><label class="switch"><span class="track ' + (s.enabled ? 'on' : '') + '"><span class="knob"></span></span><input type="checkbox" hidden class="hs-tog" data-id="' + esc(s.id) + '"' + (s.enabled ? ' checked' : '') + ' /></label><button class="ghost hs-del" data-id="' + esc(s.id) + '" style="padding:3px 10px;color:#ff8a8a">Remove</button></span>' +
+        '<span class="row" style="gap:8px"><label class="switch"><span class="track ' + (s.enabled ? 'on' : '') + '"><span class="knob"></span></span><input type="checkbox" hidden class="hs-tog" data-id="' + esc(s.id) + '"' + (s.enabled ? ' checked' : '') + ' /></label></span>' +
         '</div>';
     }).join('');
-    var addOpts = addable.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join('');
     $('view').innerHTML =
-      '<div class="stub-banner"><h4>Preview mode — no backend yet</h4>' +
-      '<p>Config is saved locally to <code>' + HOME_CFG_KEY + '</code>. TODO: wire <b>GET/PUT /api/admin/home-config</b> so this preview propagates to every client via /api/config.</p></div>' +
-      '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Home shelves</h3>' +
-      (rows || emptyState('empty_activity','No shelves configured','Click "Add section" below to seed one from the catalog.')) +
+      '<div class="stub-banner"><h4>Live — published to every client</h4>' +
+      '<p>Order + visibility below are the <b>server defaults</b> for the app\'s Home (edge-cached ≤5 min). A listener\'s own Settings → Home layout still wins on their device; blocks disabled here are hidden for everyone.</p></div>' +
+      '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Home blocks</h3>' + rows +
       '<div class="row" style="margin-top:12px;gap:8px">' +
-        (addOpts ? '<select id="hs-add-pick" style="padding:8px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff">' + addOpts + '</select><button id="hs-add">+ Add section</button>' : '<span class="muted" style="font-size:12px">All catalog shelves are added.</span>') +
         '<span class="spacer" style="flex:1"></span>' +
-        '<button id="hs-save">Save config</button>' +
-        '<button class="ghost" id="hs-reset">Reset</button>' +
+        '<button id="hs-save">Publish</button>' +
+        '<button class="ghost" id="hs-reset">Reset to defaults</button>' +
         '<span class="muted" id="hs-out" style="font-size:12px"></span>' +
       '</div></div>' +
-      '<h3>Saved JSON <span class="muted">· copy for a future config-table upload</span></h3>' +
-      '<pre id="hs-json" style="background:#0d0d15;border:1px solid #23232f;border-radius:12px;padding:14px;font-size:12px;overflow:auto;max-height:280px">' + esc(JSON.stringify(hsCfg, null, 2)) + '</pre>';
+      '<h3>Published JSON</h3>' +
+      '<pre id="hs-json" style="background:#0d0d15;border:1px solid #23232f;border-radius:12px;padding:14px;font-size:12px;overflow:auto;max-height:280px">' + esc(JSON.stringify({ blocks: hsCfg }, null, 2)) + '</pre>';
     Array.prototype.forEach.call(document.querySelectorAll('.hs-up'), function (b) {
       b.addEventListener('click', function () {
         var id = b.getAttribute('data-id');
         var i = hsCfg.findIndex(function (s) { return s.id === id; });
-        if (i > 0) { hsCfg[i].order = i - 1; hsCfg[i - 1].order = i; hsCfg = hsCfg.slice(); renderHomescreenSection(); }
+        if (i > 0) { var t = hsCfg[i - 1]; hsCfg[i - 1] = hsCfg[i]; hsCfg[i] = t; renderHomescreenSection(); }
       });
     });
     Array.prototype.forEach.call(document.querySelectorAll('.hs-dn'), function (b) {
       b.addEventListener('click', function () {
         var id = b.getAttribute('data-id');
         var i = hsCfg.findIndex(function (s) { return s.id === id; });
-        if (i >= 0 && i < hsCfg.length - 1) { hsCfg[i].order = i + 1; hsCfg[i + 1].order = i; renderHomescreenSection(); }
+        if (i >= 0 && i < hsCfg.length - 1) { var t = hsCfg[i + 1]; hsCfg[i + 1] = hsCfg[i]; hsCfg[i] = t; renderHomescreenSection(); }
       });
     });
     Array.prototype.forEach.call(document.querySelectorAll('.hs-tog'), function (chk) {
@@ -1738,38 +1801,20 @@
         if (s) { s.enabled = !s.enabled; renderHomescreenSection(); }
       });
     });
-    Array.prototype.forEach.call(document.querySelectorAll('.hs-del'), function (b) {
-      b.addEventListener('click', function () {
-        var id = b.getAttribute('data-id');
-        hsCfg = hsCfg.filter(function (s) { return s.id !== id; });
-        hsCfg.forEach(function (s, i) { s.order = i; });
-        renderHomescreenSection();
-      });
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('.hs-name'), function (inp) {
-      inp.addEventListener('input', function () {
-        var id = inp.getAttribute('data-hn');
-        var s = hsCfg.filter(function (x) { return x.id === id; })[0];
-        if (s) s.name = inp.value;
-      });
-    });
-    var addBtn = $('hs-add');
-    if (addBtn) addBtn.addEventListener('click', function () {
-      var picked = $('hs-add-pick').value;
-      var src = HOME_SHELVES_CATALOG.filter(function (s) { return s.id === picked; })[0];
-      if (!src) return;
-      hsCfg.push({ id: src.id, name: src.name, order: hsCfg.length, enabled: true });
-      renderHomescreenSection();
-    });
     $('hs-save').addEventListener('click', function () {
-      var ok = saveHomeCfg(hsCfg);
-      $('hs-out').textContent = ok ? 'Saved locally ✓' : 'Save failed';
-      setTimeout(function () { $('hs-out').textContent = ''; }, 3000);
+      var btn = $('hs-save');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      $('hs-out').textContent = 'Publishing…';
+      postApi('/api/admin/appconfig', { key: 'home-config', value: { blocks: hsCfg } }).then(function (r) {
+        btn.disabled = false;
+        $('hs-out').textContent = r && r.ok ? 'Published ✓ (live within ~5 min)' : 'Publish failed' + (r && r.error ? ' — ' + r.error : '');
+        setTimeout(function () { var o = $('hs-out'); if (o) o.textContent = ''; }, 4000);
+      }).catch(function () { btn.disabled = false; $('hs-out').textContent = 'Publish failed — network'; });
     });
     $('hs-reset').addEventListener('click', function () {
-      if (!window.confirm('Reset to catalog defaults?')) return;
-      try { localStorage.removeItem(HOME_CFG_KEY); } catch (e) {}
-      hsCfg = null; renderHomescreenSection();
+      if (!window.confirm('Reset to the app defaults (all blocks on, default order)? Publish to make it live.')) return;
+      hsCfg = defaultHomeCfg(); renderHomescreenSection();
     });
     stamp();
   }
@@ -1807,19 +1852,35 @@
     stamp();
   }
 
-  // ---------- Banner & Promotion Management ----------
-  var BN_KEY = 'vinax_admin_banners';
+  // ---------- Banner & Promotion Management (server-backed) ----------
   var bnPreview = { title: '', subtitle: '', linkType: 'song', linkId: '', start: '', end: '', img: '' };
+  var bnSaved = null; // server copy; null = not loaded yet
   function renderBannersSection() {
-    var saved = [];
-    try { var raw = localStorage.getItem(BN_KEY); if (raw) saved = JSON.parse(raw) || []; } catch (e) {}
+    if (bnSaved === null) {
+      $('view').innerHTML = '<div class="empty">Loading published banners…</div>';
+      api('/api/admin/appconfig?key=banners').then(function (d) {
+        bnSaved = (d && Array.isArray(d.value)) ? d.value : [];
+        if (active === 'banners') renderBannersSection();
+      }).catch(function () {
+        bnSaved = [];
+        if (active === 'banners') renderBannersSection();
+      });
+      return;
+    }
+    var saved = bnSaved;
+    function publish(next, out) {
+      postApi('/api/admin/appconfig', { key: 'banners', value: next }).then(function (r) {
+        if (r && r.ok) { bnSaved = next; $(out).textContent = 'Published ✓ (live within ~5 min)'; setTimeout(renderBannersSection, 600); }
+        else $(out).textContent = 'Publish failed' + (r && r.error ? ' — ' + r.error : '');
+      }).catch(function () { $(out).textContent = 'Publish failed — network'; });
+    }
     var savedRows = saved.map(function (b, i) {
       return html`<tr><td>${b.title}</td><td class="muted">${b.subtitle}</td><td><span class="pill">${b.linkType}</span> ${b.linkId}</td><td class="muted">${b.start || '—'} → ${b.end || '—'}</td>` +
         '<td><button class="ghost bn-del" data-i="' + i + '" style="padding:3px 10px;font-size:11px;color:#ff8a8a">Delete</button></td></tr>';
     }).join('');
     $('view').innerHTML =
-      '<div class="stub-banner"><h4>Local preview only</h4>' +
-      '<p>Banner metadata is stashed in <code>' + BN_KEY + '</code>. Upload converts to base64 for preview — no bytes leave the browser. TODO: <b>POST /api/admin/banners</b> for real publish + object-storage upload.</p></div>' +
+      '<div class="stub-banner"><h4>Live — published to the site</h4>' +
+      '<p>Banners publish to the server (<code>/api/admin/appconfig</code>) and show on every client\'s Home within ~5 minutes, within their schedule window. Keep images small (≤200 KB) — they embed in the config.</p></div>' +
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Compose</h3>' +
       '<div class="row" style="flex-wrap:wrap;gap:10px">' +
         '<input id="bn-title" type="text" placeholder="Title" value="' + esc(bnPreview.title) + '" style="max-width:280px" />' +
@@ -1833,15 +1894,15 @@
         '<input id="bn-start" type="date" value="' + esc(bnPreview.start) + '" style="padding:9px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff" />' +
         '<input id="bn-end" type="date" value="' + esc(bnPreview.end) + '" style="padding:9px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff" />' +
       '</div>' +
-      '<div class="row" style="margin-top:10px"><input id="bn-file" type="file" accept="image/*" /><span class="muted" style="font-size:12px">Converted to base64 preview only</span></div>' +
+      '<div class="row" style="margin-top:10px"><input id="bn-file" type="file" accept="image/*" /><span class="muted" style="font-size:12px">Embedded in the published config — keep it ≤200 KB</span></div>' +
       '<h3>Preview</h3>' +
       '<div class="bn-preview" id="bn-prev">' +
         (bnPreview.img ? '<img src="' + esc(bnPreview.img) + '" alt="" style="max-height:80px;border-radius:8px;margin-bottom:8px" />' : '') +
         '<h4>' + esc(bnPreview.title || 'Your banner title') + '</h4><p>' + esc(bnPreview.subtitle || 'A helpful subtitle appears here') + '</p></div>' +
-      '<div class="row" style="margin-top:12px"><button id="bn-save">Save (preview only)</button><span class="muted" id="bn-out" style="font-size:12px"></span></div></div>' +
-      '<h3>Saved banners (' + saved.length + ')</h3>' +
+      '<div class="row" style="margin-top:12px"><button id="bn-save">Publish banner</button><span class="muted" id="bn-out" style="font-size:12px"></span></div></div>' +
+      '<h3>Published banners (' + saved.length + ')</h3>' +
       (savedRows ? '<table><thead><tr><th>Title</th><th>Subtitle</th><th>Link</th><th>Schedule</th><th></th></tr></thead><tbody>' + savedRows + '</tbody></table>'
-        : emptyState('empty_activity','No banners yet','Compose one above and click "Save" to stash it locally.')) +
+        : emptyState('empty_activity','No banners yet','Compose one above and click "Publish banner" to make it live.')) +
       '<h3>Saved JSON</h3><pre style="background:#0d0d15;border:1px solid #23232f;border-radius:12px;padding:14px;font-size:12px;overflow:auto;max-height:220px">' + esc(JSON.stringify(saved, null, 2)) + '</pre>';
     function syncFields() {
       bnPreview.title = $('bn-title').value; bnPreview.subtitle = $('bn-sub').value;
@@ -1859,17 +1920,29 @@
       rd.readAsDataURL(f);
     });
     $('bn-save').addEventListener('click', function () {
+      var btn = $('bn-save');
+      if (btn.disabled) return;
       if (!bnPreview.title.trim()) { $('bn-out').textContent = 'Title required.'; return; }
-      var next = saved.concat([{ title: bnPreview.title, subtitle: bnPreview.subtitle, linkType: bnPreview.linkType, linkId: bnPreview.linkId, start: bnPreview.start, end: bnPreview.end, savedAt: new Date().toISOString() }]);
-      try { localStorage.setItem(BN_KEY, JSON.stringify(next)); $('bn-out').textContent = 'Saved locally ✓'; setTimeout(renderBannersSection, 400); }
-      catch (e) { $('bn-out').textContent = 'Save failed (storage full?)'; }
+      if (bnPreview.img && bnPreview.img.length > 300000) { $('bn-out').textContent = 'Image too large — pick one under ~200 KB.'; return; }
+      btn.disabled = true;
+      $('bn-out').textContent = 'Publishing…';
+      var next = saved.concat([{
+        id: 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        title: bnPreview.title, subtitle: bnPreview.subtitle, linkType: bnPreview.linkType,
+        linkId: bnPreview.linkId, start: bnPreview.start, end: bnPreview.end, img: bnPreview.img,
+        savedAt: new Date().toISOString()
+      }]);
+      publish(next, 'bn-out');
+      setTimeout(function () { if (btn) btn.disabled = false; }, 1200);
     });
     Array.prototype.forEach.call(document.querySelectorAll('.bn-del'), function (b) {
       b.addEventListener('click', function () {
+        if (b.disabled) return;
+        b.disabled = true;
         var i = parseInt(b.getAttribute('data-i'), 10);
-        saved.splice(i, 1);
-        try { localStorage.setItem(BN_KEY, JSON.stringify(saved)); } catch (e) {}
-        renderBannersSection();
+        var next = saved.slice();
+        next.splice(i, 1);
+        publish(next, 'bn-out');
       });
     });
     stamp();
@@ -1947,7 +2020,7 @@
     stamp();
   }
 
-  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', config: 'App Configuration' };
+  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'AI Lab', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', config: 'App Configuration' };
   var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true };
   function refreshActive() {
     if (active === 'overview') loadOverview();
@@ -1957,6 +2030,7 @@
     else if (active === 'world') loadWorld();
     else if (active === 'music') loadMusic();
     else if (active === 'insights') loadInsights();
+    else if (active === 'experiments') loadExperiments();
     else if (active === 'users') loadUsers();
     else if (active === 'technical') loadTechnical();
     else if (active === 'feedback') loadFeedback();
@@ -1982,8 +2056,13 @@
     var el = document.activeElement;
     return !!(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') && $('view').contains(el));
   }
+  // Sections whose state lives in this browser (localStorage) — an auto-tick
+  // re-render adds nothing and used to wipe in-progress edits the moment
+  // focus left a field, and reset scroll every 10 s.
+  var LOCAL_SECTIONS = { songs: true, playlists: true, homescreen: true, categories: true, banners: true, config: true };
   function autoTick() {
     if (formFocused()) return;
+    if (LOCAL_SECTIONS[active]) return;
     refreshActive();
   }
   function startAuto() { stopAuto(); if (autoRefresh && !document.hidden) autoTimer = setInterval(autoTick, refreshMs); }
@@ -2093,42 +2172,22 @@
     // (The mousemove 3D card tilt lived here — retired: it rotated whole
     //  tables/cards over their neighbours and added nothing but wobble.)
 
-    // ---- Sortable table columns ----
+    // ---- Health re-check button (delegated: the box re-renders) ----
+    // NOTE: the delegated th-sort that used to live here is GONE — it fought
+    // enhanceTables' own per-th sorting (two handlers per click desynced the
+    // sort arrows and re-appended every paginated row), which is what made
+    // double-clicking a column header "break" the table.
     $('view').addEventListener('click', function (e) {
       if (e.target && e.target.id === 'hrecheck') {
         var el = document.getElementById('healthbox');
         if (el) el.innerHTML = '<div class="empty">Re-checking…</div>';
         api('/api/admin/health').then(function (h) { var b = document.getElementById('healthbox'); if (b) b.innerHTML = healthHtml(h); }).catch(noop);
-        return;
       }
-      var th = e.target && e.target.closest ? e.target.closest('th') : null;
-      if (!th) return;
-      var table = th.closest('table'); var tbody = table && table.querySelector('tbody');
-      if (!tbody || tbody.querySelector('.empty')) return;
-      var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
-      var dir = th.classList.contains('s-asc') ? -1 : 1;
-      Array.prototype.forEach.call(th.parentNode.children, function (h) { h.classList.remove('s-asc', 's-desc'); });
-      th.classList.add(dir === 1 ? 's-asc' : 's-desc');
-      var rows = Array.prototype.slice.call(tbody.rows);
-      rows.sort(function (a, b) {
-        var av = (a.cells[idx] ? a.cells[idx].textContent : '').trim();
-        var bv = (b.cells[idx] ? b.cells[idx].textContent : '').trim();
-        var an = parseFloat(av.replace(/[^0-9.\-]/g, '')), bn = parseFloat(bv.replace(/[^0-9.\-]/g, ''));
-        if (!isNaN(an) && !isNaN(bn) && av !== '' && bv !== '') return (an - bn) * dir;
-        return av.localeCompare(bv) * dir;
-      });
-      rows.forEach(function (r) { tbody.appendChild(r); });
     });
 
-    // ---- Double-click any card or table → fullscreen zoom (Esc closes) ----
-    // Never from form fields/buttons: double-clicking to select text in a
-    // filter box used to pop the whole panel into the overlay by accident.
-    $('view').addEventListener('dblclick', function (e) {
-      var t = e.target;
-      if (t && t.closest && t.closest('input, textarea, select, button, a, label, [contenteditable]')) return;
-      var z = t && t.closest ? t.closest('.card, table') : null;
-      if (z) z.classList.toggle('zoomed');
-    });
+    // (The dblclick fullscreen-zoom is retired: an accidental double-click on
+    //  any table threw it into a fixed overlay that looked like the dashboard
+    //  broke. Escape still clears any stale .zoomed state from old sessions.)
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') Array.prototype.forEach.call(document.querySelectorAll('.zoomed'), function (z) { z.classList.remove('zoomed'); });
     });

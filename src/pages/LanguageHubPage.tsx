@@ -1,8 +1,13 @@
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useJsonLd } from '@/hooks/useSeo';
 import { SITE_ORIGIN } from '@/utils/schema';
-import { songPath } from '@/utils/slug';
+import { albumPath, artistPath, songPath } from '@/utils/slug';
+import { searchAlbums, searchArtists } from '@/services/api';
+import { MediaCard } from '@/components/MediaCard';
+import { bestImage } from '@/utils/images';
+import { playAlbum, playArtist } from '@/features/player/playEntity';
 import { useNewForLanguage, useTrendingForLanguage } from '@/features/home/useHomeShelves';
 import { flattenSongPages, useInfiniteSongs } from '@/features/search/useInfiniteSongs';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
@@ -10,7 +15,9 @@ import { usePlayerStore } from '@/store/playerStore';
 import { SongRow } from '@/components/SongRow';
 import { ListSkeleton } from '@/components/Skeletons';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
+import { MOOD_HUBS } from '@/constants/hubs';
 import type { Song } from '@/types/music';
+
 
 function HubSection({ heading, songs, loading }: { heading: string; songs: Song[] | undefined; loading: boolean }) {
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -41,6 +48,17 @@ export default function LanguageHubPage({ language }: { language: string }) {
   const label = languageLabel(language);
   const trending = useTrendingForLanguage(language);
   const fresh = useNewForLanguage(language);
+  // Package D9 — hub depth: the language's big artists and album hits.
+  const artists = useQuery({
+    queryKey: ['hub-artists', language],
+    queryFn: () => searchArtists(`${label} singers`, 12),
+    staleTime: 60 * 60_000,
+  });
+  const albums = useQuery({
+    queryKey: ['hub-albums', language],
+    queryFn: () => searchAlbums(`${label} hit albums`, 12),
+    staleTime: 60 * 60_000,
+  });
   const more = useInfiniteSongs(`${label} songs`);
   const shelfIds = new Set([...(trending.data ?? []), ...(fresh.data ?? [])].map((s) => s.id));
   const moreSongs = flattenSongPages(more.data?.pages).filter((s) => !shelfIds.has(s.id));
@@ -79,6 +97,45 @@ export default function LanguageHubPage({ language }: { language: string }) {
       <HubSection heading="Trending now" songs={trending.data} loading={trending.isLoading} />
       <HubSection heading="New releases" songs={fresh.data} loading={fresh.isLoading} />
 
+      {(artists.data?.length ?? 0) >= 4 && (
+        <section className="mb-8">
+          <h2 className="text-lg font-bold mb-3">Top {label} artists</h2>
+          <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-2 px-2">
+            {(artists.data ?? []).map((a) => (
+              <MediaCard
+                key={a.id}
+                to={artistPath(a)}
+                image={bestImage(a.images)}
+                images={a.images}
+                title={a.name}
+                subtitle="Artist"
+                round
+                onPlay={() => void playArtist(a.id, a.name)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {(albums.data?.length ?? 0) >= 4 && (
+        <section className="mb-8">
+          <h2 className="text-lg font-bold mb-3">{label} albums worth an evening</h2>
+          <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-2 px-2">
+            {(albums.data ?? []).map((al) => (
+              <MediaCard
+                key={al.id}
+                to={albumPath(al)}
+                image={bestImage(al.images)}
+                images={al.images}
+                title={al.title}
+                subtitle={al.subtitle || 'Album'}
+                onPlay={() => void playAlbum(al.id, al.title)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="mb-8">
         <h2 className="text-lg font-bold mb-2">More {label} songs</h2>
         {moreSongs.map((song, i) => (
@@ -92,13 +149,21 @@ export default function LanguageHubPage({ language }: { language: string }) {
       </section>
 
       <section className="mb-6">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-3">{label} songs by mood</h2>
+        <div className="flex flex-wrap gap-2 mb-6">
+          {MOOD_HUBS.map((m) => (
+            <Link key={m.slug} to={`/${language}-${m.slug}-songs`} className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100">
+              {label} {m.label.toLowerCase()} songs
+            </Link>
+          ))}
+        </div>
         <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-3">More languages</h2>
         <div className="flex flex-wrap gap-2">
           {HUB_LANGUAGES.filter((l) => l !== language).map((l) => (
             <Link
               key={l}
               to={`/${l}-songs`}
-              className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-white/5 transition hover:bg-ink-700 hover:text-ink-100"
+              className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100"
             >
               {languageLabel(l)} songs
             </Link>

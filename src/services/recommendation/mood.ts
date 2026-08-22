@@ -18,13 +18,17 @@ const KEYWORDS: Array<[Mood, RegExp]> = [
  * analysis the catalog does not expose; this is a lightweight signal that
  * complements the AI curator's deeper mood matching.
  */
-export function inferMood(song: Song | null | undefined): Mood {
-  if (!song) return 'neutral';
-  const text = `${song.title} ${song.subtitle}`.toLowerCase();
+export function moodFromText(text: string): Mood {
+  const t = text.toLowerCase();
   for (const [mood, re] of KEYWORDS) {
-    if (re.test(text)) return mood;
+    if (re.test(t)) return mood;
   }
   return 'neutral';
+}
+
+export function inferMood(song: Song | null | undefined): Mood {
+  if (!song) return 'neutral';
+  return moodFromText(`${song.title} ${song.subtitle}`);
 }
 
 /** 0..1 mood similarity; 'neutral' stays flexible so it never over-penalizes. */
