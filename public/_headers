@@ -1,0 +1,35 @@
+# XXX audit H-OPS-4: replaced the `https://*.vercel.app` + `https://*.b4a.run`
+#   wildcards with the two specific hosts actually referenced by the app:
+#     - nepotuneapi.vercel.app       (src/constants/endpoints.ts, functions/sitemap-*.xml.ts)
+#     - jiosaavn-api-privatecv8.b4a.run (public/admin/app.js)
+#   If a new mirror is added, list it here explicitly rather than re-widening
+#   to a wildcard — any *.vercel.app / *.b4a.run tenant was a potential exfil
+#   endpoint under the old rule.
+# XXX audit M-OPS-5: `style-src 'unsafe-inline'` is required today because
+#   Vite + the inline boot splash inject <style> blocks without a nonce.
+#   Long-term fix is to switch to hashed/nonced styles and drop 'unsafe-inline';
+#   keeping it now so the app doesn't break, but 'self' is listed first as a
+#   reminder that the inline allowance is the exception, not the norm.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()
+  Content-Security-Policy: default-src 'self'; connect-src 'self' https://cloudflareinsights.com https://saavn.dev https://*.sumit.co https://nepotuneapi.vercel.app https://jiosaavn-api-privatecv8.b4a.run https://lrclib.net https://*.sirimillavinay.online https://www.gstatic.com; media-src https: blob:; img-src https: data: blob:; script-src 'self' 'inline-speculation-rules' 'sha256-wIUKdga3yp6Q/JCvXQMl7xIqcstJSHRF+3yUja9Sy88=' 'sha256-qa23HEpTAU3n7KzonzCxzeaK4O15iHy20HdN0fyugOU=' https://www.gstatic.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; frame-src 'self'; form-action 'self'; manifest-src 'self'
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/icons/*
+  Cache-Control: public, max-age=604800
+
+/sw.js
+  Cache-Control: no-cache
+/admin/app.js
+  Cache-Control: no-cache
+/admin/index.html
+  Cache-Control: no-cache
+
+/assets-404.txt
+  Cache-Control: no-store

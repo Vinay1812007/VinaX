@@ -1,0 +1,46 @@
+# Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
+name: AI song push
+
+# Pings the protected cron endpoint, which picks a song and pushes it to all
+# subscribed devices. Set the CRON_SECRET repository secret to match the
+# CRON_SECRET env var configured on Cloudflare.
+on:
+  schedule:
+    - cron: '30 13 * * *' # once daily at 13:30 UTC = 19:00 IST (evening listening). One per day, max.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Trigger song push
+        # Audit finding L4: retry transient failures (Cloudflare edge blips,
+        # cold-start delays) before giving up. Three attempts, 30s backoff.
+        run: |
+          set -eu
+          attempt=1
+          until curl -fsS -X POST "https://www.sirimillavinay.online/api/cron/song-push" \
+              -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "::error::song-push endpoint failed after $attempt attempts"
+              exit 1
+            fi
+            echo "attempt $attempt failed; sleeping 30s"
+            attempt=$((attempt + 1))
+            sleep 30
+          done
+
+      - name: Open failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "cron AI song push failed" \
+            --body "The scheduled AI song push workflow failed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

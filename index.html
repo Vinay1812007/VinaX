@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/icon-48.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+    <link rel="preconnect" href="https://saavn.dev" crossorigin />
+    <link rel="preconnect" href="https://c.saavncdn.com" />
+    <link rel="dns-prefetch" href="https://aac.saavncdn.com" />
+    <link rel="dns-prefetch" href="https://lrclib.net" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0c18" />
+    <meta name="description" content="VinaX — music tuned to you. No login. Private by design." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="VinaX" />
+    <meta property="og:title" content="VinaX — music tuned to you" />
+    <meta property="og:description" content="Music tuned to you. No login, private by design." />
+    <meta property="og:image" content="https://www.sirimillavinay.online/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.sirimillavinay.online/og.png" />
+    <meta name="twitter:title" content="VinaX — music tuned to you" />
+    <meta name="twitter:description" content="Music tuned to you. No login, private by design." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VinaX" />
+    <title>VinaX</title>
+    <style>
+      html, body { background: #0b0c18; margin: 0; }
+      #root { min-height: 100dvh; }
+      #boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #0b0c18; color: #eff2f8; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; }
+      #boot svg { width: 120px; height: 120px; }
+      #boot .bt { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+      #boot .bs { font-size: 15px; color: #7c879e; }
+      #boot .bw { display: flex; align-items: flex-end; gap: 5px; height: 22px; margin-top: 4px; }
+      #boot .bw i { width: 4px; height: 100%; border-radius: 3px; transform-origin: bottom; background: linear-gradient(to top, #a3e635, #22d3ee); animation: bw 1s ease-in-out infinite; }
+      #boot .bw i:nth-child(2) { animation-delay: 0.15s; }
+      #boot .bw i:nth-child(3) { animation-delay: 0.3s; }
+      #boot .bw i:nth-child(4) { animation-delay: 0.45s; }
+      #boot .bw i:nth-child(5) { animation-delay: 0.6s; }
+      @keyframes bw { 0%, 100% { transform: scaleY(0.32); } 50% { transform: scaleY(1); } }
+      @media (prefers-reduced-motion: reduce) { #boot .bw i { animation: none; transform: scaleY(0.5); } }
+    </style>
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://www.sirimillavinay.online/#org","name":"VinaX","alternateName":["VinaX V1","VinaX Music","sirimillavinay.online"],"url":"https://www.sirimillavinay.online/","logo":{"@type":"ImageObject","url":"https://www.sirimillavinay.online/icons/icon.svg"},"slogan":"Music tuned to you","description":"VinaX is a free, no-login music app with an AI DJ, synced lyrics, offline downloads and casting. Private by design — your taste stays on your device.","sameAs":["https://github.com/Vinay1812007/VinaX"]},{"@type":"WebSite","@id":"https://www.sirimillavinay.online/#website","url":"https://www.sirimillavinay.online/","name":"VinaX","publisher":{"@id":"https://www.sirimillavinay.online/#org"},"inLanguage":"en","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://www.sirimillavinay.online/search/{search_term_string}"},"query-input":"required name=search_term_string"}},{"@type":"SoftwareApplication","@id":"https://www.sirimillavinay.online/#app","name":"VinaX","operatingSystem":"Android, Web","applicationCategory":"MusicApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},"publisher":{"@id":"https://www.sirimillavinay.online/#org"},"url":"https://www.sirimillavinay.online/download"}]}
+    </script>
+    <script type="speculationrules">
+      {
+        "prefetch": [
+          {
+            "where": {
+              "and": [
+                { "href_matches": "/*" },
+                {
+                  "not": {
+                    "href_matches": [
+                      "/api/*",
+                      "/admin/*",
+                      "/apk",
+                      "/settings",
+                      "/library",
+                      "/queue",
+                      "/now-playing",
+                      "/cache-info",
+                      "/search",
+                      "/search/*",
+                      "/history",
+                      "/favorites",
+                      "/collection/*",
+                      "/taste-profile",
+                      "/stats",
+                      "/offline"
+                    ]
+                  }
+                }
+              ]
+            },
+            "eagerness": "moderate"
+          }
+        ]
+      }
+    </script>
+      <link rel="preload" href="/fonts/manrope-var.woff2" as="font" type="font/woff2" crossorigin />
+  </head>
+  <body>
+    <div id="root"><div id="boot"><svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" aria-label="VinaX"><defs><linearGradient id="vxa" x1="98" y1="26" x2="64" y2="102" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="128" height="128" rx="28" fill="#0b0c18"/><line x1="30" y1="26" x2="64" y2="102" stroke="#a3e635" stroke-width="16" stroke-linecap="round"/><polyline points="98,26 78,52 90,70 64,102" fill="none" stroke="url(#vxa)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">VinaX</div><div class="bs">Music tuned to you</div><div class="bw"><i></i><i></i><i></i><i></i><i></i></div></div><div id="seo-slot"></div></div>
+    <script>
+      // Boot self-healing: if the entry chunk fails to load (mid-deploy edge
+      // skew, flaky network), retry up to 3 times instead of freezing on the
+      // splash. The app clears the counter once it boots.
+      (function () {
+        var KEY = 'vinax.bootRetry';
+        var n = 0;
+        try { n = Number(sessionStorage.getItem(KEY) || 0); } catch (e) { n = 0; }
+        window.addEventListener('error', function (e) {
+          var t = e.target;
+          if (!t || t.tagName !== 'SCRIPT' || !t.src || t.src.indexOf('/assets/') === -1) return;
+          var bs = document.querySelector('#boot .bs');
+          if (n >= 3) {
+            if (bs) bs.textContent = 'Having trouble loading \u2014 please check your connection and refresh.';
+            return;
+          }
+          try { sessionStorage.setItem(KEY, String(n + 1)); } catch (e2) { /* retry anyway */ }
+          if (bs) bs.textContent = 'Updating\u2026';
+          setTimeout(function () { location.reload(); }, 600 + n * 2000);
+        }, true);
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,49 @@
+# VinaX backend — Cloudflare Worker configuration.
+# Deploy: npx wrangler deploy --config worker/wrangler.toml
+name = "vinax-api"
+main = "index.ts"
+compatibility_date = "2026-08-01"
+
+# Same-zone routes: the Worker answers exactly these paths on the production
+# domain. Everything else (the static SPA on Cloudflare Pages) is untouched.
+# The Pages project must stay attached to the custom domain — it is the
+# origin the Worker falls through to.
+routes = [
+  # API (all endpoints, including /api/admin/*, /api/cron/*, /api/push/*)
+  { pattern = "www.sirimillavinay.online/api/*", zone_name = "sirimillavinay.online" },
+  { pattern = "sirimillavinay.online/api/*", zone_name = "sirimillavinay.online" },
+
+  # Edge-rendered SEO entity pages
+  { pattern = "www.sirimillavinay.online/song/*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/album/*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/artist/*", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/playlist/*", zone_name = "sirimillavinay.online" },
+
+  # Sitemaps (covers /sitemap.xml and every /sitemap-*.xml)
+  { pattern = "www.sirimillavinay.online/sitemap*", zone_name = "sirimillavinay.online" },
+
+  # Image proxy + APK download
+  { pattern = "www.sirimillavinay.online/img", zone_name = "sirimillavinay.online" },
+  { pattern = "www.sirimillavinay.online/apk", zone_name = "sirimillavinay.online" },
+
+  # Host-level redirects handled by functions/_middleware.ts
+  { pattern = "update.sirimillavinay.online/*", zone_name = "sirimillavinay.online" },
+  { pattern = "admin.sirimillavinay.online/", zone_name = "sirimillavinay.online" },
+]
+
+[vars]
+# Host of the Pages deployment serving the static frontend. The Worker
+# fetches the SPA shell / static assets from here (ASSETS shim + fallthrough).
+# Replace with your real <project>.pages.dev host.
+ASSETS_HOST = "vinax.pages.dev"
+
+# Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`,
+# never in this file) — same names as before, now on the Worker instead of Pages:
+#   VINAX_DEEPSEEK_V4_FLASH  VINAX_CHATGPT_20_B  VINAX_NEMOTRON_SUPER
+#   VINAX_GROQ_API_KEY  VINAX_CHATGPT_120_B  VINAX_NEMOTRON_ULTRA
+#   VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B  NVIDIA_BASE_URL
+#   SUPABASE_URL  SUPABASE_SERVICE_ROLE_KEY  ADMIN_LOGIN_PASSWORD
+#   VAPID_PUBLIC_KEY  VAPID_PRIVATE_KEY  VAPID_SUBJECT
+#   TELEMETRY_PEPPER  DEVICE_ID_SECRET  CRON_SECRET
+#   BRAVE_API_KEY  GITHUB_REPO  GITHUB_TOKEN  FCM_SERVICE_ACCOUNT
+# Full documentation of every name: .env.example

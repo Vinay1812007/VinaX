@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "296694772987",
+    "project_id": "apptarangmusic",
+    "storage_bucket": "apptarangmusic.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:296694772987:android:f4db29b35a641c8816ec5e",
+        "android_client_info": {
+          "package_name": "app.tarang.music"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6xqXsb-jeBX6EPIr1-JXrLEUg3CpLPJo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /search
+Disallow: /library
+Disallow: /favorites
+Disallow: /history
+Disallow: /queue
+Disallow: /now-playing
+Disallow: /stats
+Disallow: /settings
+Disallow: /taste-profile
+Disallow: /offline
+Disallow: /collection/
+Disallow: /cache-info
+Sitemap: https://www.sirimillavinay.online/sitemap.xml

@@ -1,0 +1,10 @@
+# Hashed build assets must NEVER fall back to the SPA shell: an HTML body
+# cached under the /assets/* immutable header bricks that chunk URL for up to
+# a year. A missing asset is a plain 404 — the app reloads and recovers.
+/assets/*  /assets-404.txt  404
+
+# Route aliases — legacy/guessable paths land on the real pages.
+/downloads  /offline  301
+/listen-together  /together  301
+
+/*    /index.html   200
