@@ -1,16 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-<<<<<<< HEAD:backend/tsconfig.json
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-=======
-    "useDefineForClassFields": true,
-    "lib": [
-      "ES2020",
-      "DOM",
-      "DOM.Iterable"
-    ],
->>>>>>> origin/main:tsconfig.json
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -22,25 +13,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-<<<<<<< HEAD:backend/tsconfig.json
     "types": ["node"]
   },
   "include": ["worker"]
-=======
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "src/*"
-      ]
-    }
-  },
-  "include": [
-    "src"
-  ],
-  "references": [
-    {
-      "path": "./tsconfig.node.json"
-    }
-  ]
->>>>>>> origin/main:tsconfig.json
 }
