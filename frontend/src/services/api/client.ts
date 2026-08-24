@@ -48,15 +48,32 @@ function devLog(...args: unknown[]): void {
  * First-shelf boot prefetch (4.18.2). index.html fires the cold-load trending
  * request from an inline script — in parallel with the JS download — and
  * parks {url, json} on window.__vxBoot. The first fetchJson whose URL matches
- * byte-for-byte consumes it (single use); anything else — mismatch, upstream
+ * by path + query consumes it (single use); anything else — mismatch, upstream
  * failure (json resolves null), or a hung request outlasting the caller's
  * timeout — falls through to the normal network path. Worst case equals the
  * old behavior; best case removes the whole JS-parse leg from the LCP chain.
+ *
+ * Matching is on normalized pathname+search (not byte-for-byte): index.html
+ * parks an ABSOLUTE url (origin + /api/cat/...) while the client requests the
+ * same-origin RELATIVE path (/api/cat/...) — exact string equality could
+ * never match, which silently disabled the prefetch. Both sides resolve
+ * against location.href before comparing.
  */
 function takeBootPrefetch(url: string): Promise<unknown> | null {
   const w = window as unknown as { __vxBoot?: { url: string; json: Promise<unknown> } | null };
   const boot = w.__vxBoot;
-  if (!boot || boot.url !== url || typeof boot.json?.then !== 'function') return null;
+  if (!boot || typeof boot.json?.then !== 'function') return null;
+  const norm = (u: string): string | null => {
+    try {
+      const abs = new URL(u, location.href);
+      return abs.pathname + abs.search;
+    } catch {
+      return null;
+    }
+  };
+  const a = norm(boot.url);
+  const b = norm(url);
+  if (a === null || b === null || a !== b) return null;
   w.__vxBoot = null;
   return boot.json;
 }
