@@ -2,7 +2,7 @@
   "name": "vinax",
   "private": true,
   "version": "5.2.0",
-  "description": "VinaX — music tuned to you. No login. Private by design.",
+  "description": "VinaX frontend \u2014 music tuned to you. No login. Private by design. (Cloudflare Pages)",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -12,10 +12,8 @@
     "prebuild:clean": "rm -rf dist node_modules/.vite node_modules/.vite-temp node_modules/.rolldown node_modules/.cache .vite",
     "build": "npm run prebuild:clean && tsc --noEmit && vite build && node scripts/prerender.mjs",
     "preview": "vite preview",
-    "dev:worker": "wrangler dev --config worker/wrangler.toml --port 8787",
-    "deploy:worker": "wrangler deploy --config worker/wrangler.toml",
     "deploy:pages": "npm run build && wrangler pages deploy dist --project-name vinax",
-    "lint": "eslint src worker scripts --max-warnings 0",
+    "lint": "eslint src scripts --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "cap:sync": "npm run build && npx cap sync android && node scripts/patch-android.js",
