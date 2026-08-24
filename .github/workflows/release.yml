@@ -12,6 +12,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -89,7 +92,7 @@ jobs:
         run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.jks
 
       - name: Build signed release APK
-        working-directory: android
+        working-directory: frontend/android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -112,8 +115,8 @@ jobs:
           name: VinaX ${{ github.ref_name }}
           make_latest: true
           files: |
-            vinax.apk
-            vinax.apk.sha256
+            frontend/vinax.apk
+            frontend/vinax.apk.sha256
           body: |
             Signed release APK for VinaX ${{ github.ref_name }}.
             VersionCode: ${{ env.VERSION_CODE }}

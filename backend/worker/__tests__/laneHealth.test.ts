@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateLaneHealth, percentile, type AiEventRow } from '../../worker/functions/_lib/laneHealth';
+import { aggregateLaneHealth, percentile, type AiEventRow } from '../functions/_lib/laneHealth';
 
 const row = (over: Partial<AiEventRow>): AiEventRow => ({
   model: 'gpt-oss @chat',

@@ -4,13 +4,13 @@
  * the exact PostgREST queries and status codes are asserted, not mocked away.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { onRequestPost as maintenancePost } from '../../worker/functions/api/admin/maintenance';
-import { onRequestGet as searchAnalyticsGet } from '../../worker/functions/api/admin/search-analytics';
-import { onRequestGet as engagementGet } from '../../worker/functions/api/admin/engagement';
-import { onRequestGet as feedbackGet } from '../../worker/functions/api/admin/feedback';
-import { onRequestPost as pushPost } from '../../worker/functions/api/admin/push';
-import { onRequestPost as contentPost } from '../../worker/functions/api/admin/content';
-import { isAdmin } from '../../worker/functions/_lib/admin';
+import { onRequestPost as maintenancePost } from '../functions/api/admin/maintenance';
+import { onRequestGet as searchAnalyticsGet } from '../functions/api/admin/search-analytics';
+import { onRequestGet as engagementGet } from '../functions/api/admin/engagement';
+import { onRequestGet as feedbackGet } from '../functions/api/admin/feedback';
+import { onRequestPost as pushPost } from '../functions/api/admin/push';
+import { onRequestPost as contentPost } from '../functions/api/admin/content';
+import { isAdmin } from '../functions/_lib/admin';
 
 const ENV = {
   ADMIN_LOGIN_PASSWORD: 'test-secret',

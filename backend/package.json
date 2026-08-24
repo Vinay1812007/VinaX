@@ -1,0 +1,29 @@
+{
+  "name": "vinax-api",
+  "private": true,
+  "version": "5.2.0",
+  "description": "VinaX backend — Cloudflare Worker (API, SEO pages, sitemaps, image proxy).",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev --config worker/wrangler.toml --port 8787",
+    "deploy": "wrangler deploy --config worker/wrangler.toml",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint worker --max-warnings 0",
+    "format": "prettier --write \"worker/**/*.ts\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.10.0",
+    "eslint": "^10.7.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.2",
+    "typescript-eslint": "^8.63.0",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.0.0"
+  }
+}

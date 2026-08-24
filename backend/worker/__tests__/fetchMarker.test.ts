@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { probeFetchMarker } from '../../worker/functions/_lib/fetchMarker';
+import { probeFetchMarker } from '../functions/_lib/fetchMarker';
 
 /** B3 — the [[FETCH: …]] probe must be exact about waiting vs releasing:
  *  a wrong 'no' leaks tool syntax to the client, a wrong 'wait' stalls the

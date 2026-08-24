@@ -12,6 +12,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -69,7 +72,7 @@ jobs:
           base64 -d ci/debug-keystore.b64 > ~/.android/debug.keystore
 
       - name: Build debug APK
-        working-directory: android
+        working-directory: frontend/android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Rename APK
@@ -82,7 +85,7 @@ jobs:
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: vinax-debug-apk
-          path: out/vinax-debug.apk
+          path: frontend/out/vinax-debug.apk
           retention-days: 2
 
       # ---- Release path (only when publishing) ----------------------------------
@@ -138,7 +141,7 @@ jobs:
 
       - name: Build signed release APK
         if: ${{ env.IS_RELEASE == 'true' && env.HAS_KEYSTORE == 'true' }}
-        working-directory: android
+        working-directory: frontend/android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -170,8 +173,8 @@ jobs:
           name: VinaX v${{ env.APP_VERSION }} (build ${{ env.VERSION_CODE }})
           make_latest: true
           files: |
-            vinax.apk
-            vinax.apk.sha256
+            frontend/vinax.apk
+            frontend/vinax.apk.sha256
           body: |
             Automated build of VinaX.
             Version: ${{ env.APP_VERSION }}

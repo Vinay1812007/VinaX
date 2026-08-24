@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { onRequestGet as sitemapIndex } from '../../worker/functions/sitemap.xml';
-import { onRequestGet as staticSitemap } from '../../worker/functions/sitemap-static.xml';
+import { onRequestGet as sitemapIndex } from '../functions/sitemap.xml';
+import { onRequestGet as staticSitemap } from '../functions/sitemap-static.xml';
 
 const ORIGIN = 'https://www.sirimillavinay.online';
 const locsOf = (xml: string): string[] => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);

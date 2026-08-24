@@ -14,7 +14,7 @@
  * what streamed, which engine the meta frames credit.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { onRequestPost } from '../../worker/functions/api/vinaxai';
+import { onRequestPost } from '../functions/api/vinaxai';
 
 type FetchPlan = (url: string, init?: RequestInit) => Response | Promise<Response>;
 

@@ -10,7 +10,7 @@
  * fallback for pre-fix releases.
  */
 import { describe, expect, it } from 'vitest';
-import { buildFromRelease } from '../../worker/functions/api/version';
+import { buildFromRelease } from '../functions/api/version';
 
 describe('buildFromRelease', () => {
   it('prefers the explicit VersionCode line CI now writes into the body', () => {

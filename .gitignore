@@ -1,25 +1,3 @@
 node_modules
-dist
-dist-ssr
-*.local
-.env
-.env.*
-!.env.example
-.dev.vars
-.dev.vars.*
-.wrangler
-android/
-ios/
 .DS_Store
-coverage
 *.log
-.idea
-.vscode/*
-!.vscode/extensions.json
-
-# Vite timestamp files
-vite.config.ts.timestamp-*
-
-# TypeScript incremental build info
-*.tsbuildinfo
-test-results/

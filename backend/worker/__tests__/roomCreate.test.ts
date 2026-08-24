@@ -6,7 +6,7 @@
  * diagnostics.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { onRequestPost } from '../../worker/functions/api/room';
+import { onRequestPost } from '../functions/api/room';
 
 const ENV = { SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk' };
 
