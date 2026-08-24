@@ -119,3 +119,16 @@ GITHUB_REPO = "Vinay1812007/VinaX"
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in
 # .env.example now lives on this Worker instead of the Pages project.
+# One-time encrypted device-handoff links (worker/functions/api/handoff.ts).
+[[kv_namespaces]]
+binding = "HANDOFF"
+id = "34a611e441644d0b9eb77cbbe584a766"
+
+[observability]
+enabled = false
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
