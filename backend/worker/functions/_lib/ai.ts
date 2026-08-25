@@ -36,7 +36,7 @@
  *   NVIDIA_BASE_URL       optional DEFAULT endpoint override — applies only
  *                         to lanes without their own LANE_BASE pin
  */
-import { sbInsert, supabaseConfigured, type SupabaseEnv } from './supabase';
+import { dbInsert, dbConfigured, type DbEnv } from './db';
 
 export interface AiEnv {
   VINAX_DEEPSEEK_V4_FLASH?: string;
@@ -548,11 +548,11 @@ export interface AiLogRow {
 
 /**
  * Fire-and-forget log of an AI request for the admin AI-monitoring dashboard.
- * No-op when Supabase isn't configured; never throws.
+ * No-op when the D1 database is not configured; never throws.
  */
-export function logAiEvent(env: SupabaseEnv, row: AiLogRow): Promise<void> {
-  if (!supabaseConfigured(env)) return Promise.resolve();
-  return sbInsert(env, 'vinax_ai_events', {
+export function logAiEvent(env: DbEnv, row: AiLogRow): Promise<void> {
+  if (!dbConfigured(env)) return Promise.resolve();
+  return dbInsert(env, 'vinax_ai_events', {
     feature: row.feature,
     model: row.model,
     ok: row.ok,

@@ -7,10 +7,10 @@
  * one keep their old 'user-delete' label). Best-effort by design: an audit
  * write must never fail the action it describes.
  */
-import { sbInsert, type SupabaseEnv } from './supabase';
+import { dbInsert, type DbEnv } from './db';
 
-export function logAdminAudit(env: SupabaseEnv, kind: string, text: string): Promise<void> {
-  return sbInsert(env, 'vinax_feedback', {
+export function logAdminAudit(env: DbEnv, kind: string, text: string): Promise<void> {
+  return dbInsert(env, 'vinax_feedback', {
     type: 'admin-audit',
     // Explicit status: the column defaults to 'new', which made every audit
     // write inflate the Overview "New feedback" KPI and render in the inbox;

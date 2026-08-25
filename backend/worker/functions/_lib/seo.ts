@@ -14,10 +14,10 @@
  *
  * The corpus is then served back as paginated /sitemaps/<type>-<n>.xml files
  * (10k URLs each, unbounded page count) via the /sitemap.xml index. Rows are
- * PUBLIC catalog metadata only. Everything here is fail-silent: no Supabase,
+ * PUBLIC catalog metadata only. Everything here is fail-silent: no database,
  * no harm — the legacy sitemaps keep working exactly as before.
  */
-import { sbInsertIgnore, supabaseConfigured, type SupabaseEnv } from './supabase';
+import { dbInsertIgnore, dbConfigured, type DbEnv } from './db';
 
 export type SeoType = 'song' | 'album' | 'artist' | 'playlist';
 
@@ -34,7 +34,7 @@ export interface SeoRow {
   lang: string | null;
 }
 
-/** Sitemap page size. MUST be ≤ Supabase's PostgREST max-rows (default 1000):
+/** Sitemap page size. Kept well under D1's per-query result comfort zone:
  *  a larger `limit=` is SILENTLY truncated to 1000, so with 10k pages the
  *  rows between 1000 and 9999 of every page were invisible to Google (found
  *  via GSC showing exactly 1,000 discovered per corpus sitemap, 4.16.3). */
@@ -124,11 +124,11 @@ export function dedupeRows(rows: Array<SeoRow | null | undefined>): SeoRow[] {
  * added_at/frontier state). One batched POST regardless of row count.
  * Returns how many rows were actually NEW (best-effort; -1 = not configured).
  */
-export async function harvest(env: SupabaseEnv, rows: Array<SeoRow | null | undefined>): Promise<number> {
-  if (!supabaseConfigured(env)) return -1;
+export async function harvest(env: DbEnv, rows: Array<SeoRow | null | undefined>): Promise<number> {
+  if (!dbConfigured(env)) return -1;
   const batch = dedupeRows(rows);
   if (!batch.length) return 0;
-  const inserted = await sbInsertIgnore<{ key: string }>(env, 'vinax_seo_urls', batch, 'key');
+  const inserted = await dbInsertIgnore<{ key: string }>(env, 'vinax_seo_urls', batch, 'key');
   return inserted ? inserted.length : 0;
 }
 
@@ -137,7 +137,7 @@ export async function harvest(env: SupabaseEnv, rows: Array<SeoRow | null | unde
  * runs after the response via waitUntil when available, never throws.
  */
 export function harvestSoon(
-  env: SupabaseEnv,
+  env: DbEnv,
   rows: Array<SeoRow | null | undefined>,
   waitUntil?: (p: Promise<unknown>) => void,
 ): void {

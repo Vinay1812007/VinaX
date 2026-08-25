@@ -10,7 +10,7 @@
 // 2026-07) and this file still pointed at it alone, so entity pages were
 // silently serving the PLAIN shell to every crawler. Same list the sitemaps
 // use; first mirror with data wins.
-import type { SupabaseEnv } from './supabase';
+import type { DbEnv } from './db';
 import { artistRows, harvestSoon, seoRow, songRowsDeep, type SeoRow } from './seo';
 
 const BASES = ['https://www.sirimillavinay.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
@@ -20,7 +20,7 @@ interface Assets {
   ASSETS: { fetch: (req: Request | string | URL) => Promise<Response> };
 }
 
-type RenderEnv = Assets & SupabaseEnv;
+type RenderEnv = Assets & DbEnv;
 type WaitUntil = ((p: Promise<unknown>) => void) | undefined;
 
 const esc = (s: unknown): string =>
@@ -513,7 +513,7 @@ export async function renderEntity(
     // 25–160 char window regardless of how long a title runs.
     meta.desc = clampDesc(meta.desc);
     // Feed the SEO corpus with everything this page knows (fire-and-forget:
-    // the response never waits on Supabase, failures are invisible).
+    // the response never waits on the database, failures are invisible).
     harvestSoon(env, meta.harvestRows ?? [], waitUntil);
     const path = `/${type}/${slugify(meta.h1)}-${realId}`;
     const img = meta.image

@@ -23,7 +23,7 @@ export const QUIET_START = 23;
 export const QUIET_END = 8;
 const DEFAULT_MIN_GAP_HOURS = 18;
 
-import { sbUpdate, type SupabaseEnv } from './supabase';
+import { dbUpdate, type DbEnv } from './db';
 
 export interface GateEnv {
   NOTIFY_MIN_GAP_HOURS?: string;
@@ -123,7 +123,7 @@ export function cleanTzOffset(raw: unknown): number | null {
  * tokens (fcm); `col` names the matching primary-key column.
  */
 export async function stampPushed(
-  env: SupabaseEnv,
+  env: DbEnv,
   table: 'vinax_push_subscriptions' | 'vinax_fcm_tokens',
   col: 'endpoint' | 'token',
   keys: string[],
@@ -135,6 +135,6 @@ export async function stampPushed(
     // Double-quote each value so reserved URL chars in endpoints are treated
     // as literal; percent-encode for URL safety (PostgREST decodes).
     const list = slice.map((k) => `"${encodeURIComponent(k)}"`).join(',');
-    await sbUpdate(env, table, `${col}=in.(${list})`, { last_pushed_at: nowIso }).catch(() => false);
+    await dbUpdate(env, table, `${col}=in.(${list})`, { last_pushed_at: nowIso }).catch(() => false);
   }
 }
