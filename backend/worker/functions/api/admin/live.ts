@@ -7,6 +7,7 @@ type Env = AdminEnv & SupabaseEnv;
 interface UserRow {
   device_id: string;
   name: string | null;
+  username?: string | null;
   city: string | null;
   country: string | null;
   platform: string | null;
@@ -25,7 +26,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const query =
     `last_seen=gte.${encodeURIComponent(since)}` +
     `&order=last_seen.desc&limit=500` +
-    `&select=device_id,name,city,country,platform,current_song_title,current_song_artist,current_song_image,is_playing,last_seen`;
+    `&select=device_id,name,username,city,country,platform,current_song_title,current_song_artist,current_song_image,is_playing,last_seen`;
   const rows = await sbSelect<UserRow>(env, 'vinax_users', query);
 
   const byCountry: Record<string, number> = {};

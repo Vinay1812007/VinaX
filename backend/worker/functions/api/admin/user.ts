@@ -8,6 +8,7 @@ type Env = AdminEnv & SupabaseEnv;
 interface UserRow {
   device_id: string;
   name: string | null;
+  username?: string | null;
   platform: string | null;
   country: string | null;
   city: string | null;
@@ -60,7 +61,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     sbSelect<UserRow>(
       env,
       'vinax_users',
-      `device_id=eq.${enc}&limit=1&select=device_id,name,platform,country,city,region,app_version,is_playing,first_seen,last_seen,current_song_title,current_song_artist`,
+      `device_id=eq.${enc}&limit=1&select=device_id,name,username,platform,country,city,region,app_version,is_playing,first_seen,last_seen,current_song_title,current_song_artist`,
     ),
     sbSelect<EventRow>(
       env,

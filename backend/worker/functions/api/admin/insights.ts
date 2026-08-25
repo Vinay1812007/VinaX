@@ -12,7 +12,7 @@ function clampDays(v: string | null): number {
 interface Segments { new_7d: number; returning_7d: number; inactive_30d: number; power_users: number; }
 interface HourRow { hour: number; plays: number; }
 interface TrendRow { song_title: string; song_artist: string | null; song_image: string | null; plays: number; prev_plays: number; }
-interface ListenerRow { device_id: string; name: string | null; plays: number; }
+interface ListenerRow { device_id: string; name: string | null; username?: string | null; plays: number; }
 interface LangRow { language: string; plays: number; listeners: number; }
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
