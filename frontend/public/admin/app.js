@@ -494,7 +494,7 @@
     var exps = (d && d.experiments) || [];
     setExport('experiments', exps);
     if (d && d.configured === false) {
-      $('view').innerHTML = '<div class="card"><p class="muted">Experiments table not found — run the vinax_experiments migration from supabase/schema.sql to enable A/B testing.</p></div>';
+      $('view').innerHTML = '<div class="card"><p class="muted">Experiments table not found — check the D1 database binding (tables auto-create on first use).</p></div>';
       stamp();
       return;
     }
@@ -639,12 +639,12 @@
       var extra = k.configured ? '' : ' <span class="muted">(not configured)</span>';
       return '<tr><td>' + esc(k.key) + extra + '</td><td class="muted">' + esc((k.model || '—').split('/').pop() || '—') + '</td><td>' + badge + '</td><td class="muted">' + esc(k.note || '') + '</td></tr>';
     }).join('');
-    var sb = h.supabase || {};
+    var sb = h.database || h.supabase || {};
     var sbBadge = sb.lastEventAt
       ? '<span style="color:#36d399">last event ' + ago(sb.lastEventAt) + '</span>'
       : '<span style="color:#ff6b6b">' + esc(sb.note || 'no readable events') + '</span>';
     return '<table><thead><tr><th>Key</th><th>Model</th><th>Status</th><th>Detail</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<p class="muted" style="margin-top:8px">Supabase: ' + (sb.configured ? sbBadge : '<span style="color:#ff6b6b">not configured</span>') + '</p>';
+      '<p class="muted" style="margin-top:8px">Database (D1): ' + (sb.configured ? sbBadge : '<span style="color:#ff6b6b">not configured</span>') + '</p>';
   }
   function renderTechnical(d) {
     var s = d.summary || {};
@@ -667,7 +667,7 @@
       '<h3>App versions</h3>' + bars(d.versions || [], function (x) { return esc(x.app_version) + ' <span class="muted">· ' + esc(x.platform) + '</span>'; }, function (x) { return x.users; }) +
       '<h3>Errors per day</h3>' + dayChart(d.errorsByDay, 'hits', 'linear-gradient(180deg,#ff8080,#ff4d4d)') +
       '<h3>Top errors</h3><table><thead><tr><th>Kind</th><th>Message</th><th>Hits</th><th>Last</th></tr></thead><tbody>' + (errRows || '<tr><td colspan="4" class="empty">No errors logged. 🎉</td></tr>') + '</tbody></table>' +
-      '<h3>Data tools <span class="muted">· Supabase maintenance</span></h3><div class="row" style="flex-wrap:wrap;gap:8px">' +
+      '<h3>Data tools <span class="muted">· database maintenance</span></h3><div class="row" style="flex-wrap:wrap;gap:8px">' +
       '<button class="ghost" id="mt-purge">Purge events &gt; 90d</button>' +
       '<button class="ghost" id="mt-errors">Clear all errors</button>' +
       '<button class="ghost" id="mt-ai">Trim AI log (keep 14d)</button>' +
@@ -2164,7 +2164,130 @@
     stamp();
   }
 
-  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', config: 'App Configuration' };
+  // ---------- Festival Themes (server override of the app's festival calendar) ----------
+  // The app skins itself from src/constants/festivals.ts by date. This panel
+  // publishes vinax_config key 'festival' ({mode:'auto'|'off'|'force', id})
+  // through /api/admin/appconfig; clients pick it up within ~1 minute and
+  // either follow the calendar (auto), suppress every skin (off), or wear
+  // the chosen festival immediately (force) — splash, confetti and all.
+  var FEST_LIST = [
+    { id: 'sankranti', name: 'Sankranti & Pongal', emoji: '\uD83E\uDE81', when: 'Jan 13\u201316', win: [[113, 116]], colors: ['#f59e0b', '#fde047', '#fb923c', '#22c55e'] },
+    { id: 'republic', name: 'Republic Day', emoji: '\uD83C\uDDEE\uD83C\uDDF3', when: 'Jan 25\u201326', win: [[125, 126]], colors: ['#f97316', '#ffffff', '#22c55e', '#3b82f6'] },
+    { id: 'shivaratri', name: 'Maha Shivaratri', emoji: '\uD83D\uDD31', when: 'Feb 14\u201315 (2026)', win: [[214, 215]], colors: ['#94a3b8', '#60a5fa', '#1e3a8a', '#ffffff'] },
+    { id: 'holi', name: 'Holi', emoji: '\uD83C\uDFA8', when: 'Mar 3\u20134 (2026)', win: [[303, 304]], colors: ['#ec4899', '#a855f7', '#22d3ee', '#facc15', '#22c55e'] },
+    { id: 'ugadi', name: 'Ugadi', emoji: '\uD83E\uDD6D', when: 'Mar 18\u201319 (2026)', win: [[318, 319]], colors: ['#65a30d', '#facc15', '#84cc16', '#fb923c'] },
+    { id: 'eid', name: 'Eid', emoji: '\uD83C\uDF19', when: 'Mar 20\u201321 (2026)', win: [[320, 321]], colors: ['#22c55e', '#fde047', '#ffffff'] },
+    { id: 'bonalu', name: 'Bonalu', emoji: '\uD83C\uDFFA', when: 'Jul 12\u201326 (2026)', win: [[712, 726]], colors: ['#eab308', '#dc2626', '#22c55e'] },
+    { id: 'independence', name: 'Independence Day', emoji: '\uD83C\uDDEE\uD83C\uDDF3', when: 'Aug 14\u201315', win: [[814, 815]], colors: ['#f97316', '#ffffff', '#22c55e', '#3b82f6'] },
+    { id: 'onam', name: 'Onam', emoji: '\uD83C\uDF3C', when: 'Aug 25\u201327 (2026)', win: [[825, 827]], colors: ['#facc15', '#fb923c', '#22c55e', '#ffffff'] },
+    { id: 'janmashtami', name: 'Krishna Janmashtami', emoji: '\uD83E\uDD9A', when: 'Sep 3\u20134 (2026)', win: [[903, 904]], colors: ['#0ea5e9', '#fde047', '#a855f7', '#22d3ee'] },
+    { id: 'ganesh', name: 'Vinayaka Chavithi', emoji: '\uD83D\uDC18', when: 'Sep 13\u201315 (2026)', win: [[913, 915]], colors: ['#fb923c', '#ef4444', '#facc15'] },
+    { id: 'bathukamma', name: 'Bathukamma', emoji: '\uD83C\uDF38', when: 'Oct 10\u201318 (2026)', win: [[1010, 1018]], colors: ['#ec4899', '#f59e0b', '#facc15', '#22c55e'] },
+    { id: 'dussehra', name: 'Dussehra', emoji: '\uD83C\uDFF9', when: 'Oct 19\u201320 (2026)', win: [[1019, 1020]], colors: ['#ef4444', '#facc15', '#fb923c'] },
+    { id: 'diwali', name: 'Diwali', emoji: '\uD83E\uDE94', when: 'Nov 7\u20139 (2026)', win: [[1107, 1109]], colors: ['#facc15', '#fb923c', '#ef4444', '#a855f7'] },
+    { id: 'karthika', name: 'Karthika Masam', emoji: '\uD83E\uDE94', when: 'force-only', win: [], colors: ['#f59e0b', '#fb923c', '#fde047'] },
+    { id: 'christmas', name: 'Christmas', emoji: '\uD83C\uDF84', when: 'Dec 24\u201325', win: [[1224, 1225]], colors: ['#ef4444', '#22c55e', '#ffffff', '#facc15'] },
+    { id: 'newyear', name: 'New Year', emoji: '\uD83C\uDF86', when: 'Dec 31\u2013Jan 1', win: [[1231, 1231], [101, 101]], colors: ['#facc15', '#22d3ee', '#a855f7', '#fb7185'] },
+  ];
+  function festAutoNow() {
+    var d = new Date(), v = (d.getMonth() + 1) * 100 + d.getDate();
+    for (var i = 0; i < FEST_LIST.length; i++) {
+      var w = FEST_LIST[i].win;
+      for (var j = 0; j < w.length; j++) if (v >= w[j][0] && v <= w[j][1]) return FEST_LIST[i];
+    }
+    return null;
+  }
+  function festById(id) {
+    for (var i = 0; i < FEST_LIST.length; i++) if (FEST_LIST[i].id === id) return FEST_LIST[i];
+    return null;
+  }
+  var ftSaved; // undefined = not loaded; null/'object' = server value
+  function renderFestivalsSection() {
+    if (ftSaved === undefined) {
+      $('view').innerHTML = '<div class="empty">Loading festival config\u2026</div>';
+      api('/api/admin/appconfig?key=festival').then(function (d) {
+        ftSaved = (d && d.value && typeof d.value === 'object') ? d.value : null;
+        if (active === 'festivals') renderFestivalsSection();
+      }).catch(function () {
+        ftSaved = null;
+        if (active === 'festivals') renderFestivalsSection();
+      });
+      return;
+    }
+    var mode = (ftSaved && ftSaved.mode) || 'auto';
+    var forcedId = mode === 'force' && ftSaved ? String(ftSaved.id || '') : '';
+    var auto = festAutoNow();
+    var effective = mode === 'off' ? null : (mode === 'force' ? festById(forcedId) : auto);
+    function publish(value, label) {
+      postApi('/api/admin/appconfig', { key: 'festival', value: value }).then(function (r) {
+        var o = $('ft-out');
+        if (r && r.ok) {
+          ftSaved = value;
+          if (o) o.textContent = label + ' \u2713 (listeners update within ~1 min)';
+          setTimeout(renderFestivalsSection, 700);
+        } else if (o) o.textContent = 'Publish failed' + (r && r.error ? ' \u2014 ' + r.error : '');
+      }).catch(function () { var o = $('ft-out'); if (o) o.textContent = 'Publish failed \u2014 network'; });
+    }
+    var statusLine = effective
+      ? effective.emoji + ' <b>' + esc(effective.name) + '</b>' + (mode === 'force' ? ' <span class="pill">forced</span>' : ' <span class="pill">auto \u00b7 calendar</span>')
+      : (mode === 'off' ? 'Default theme <span class="pill">festivals off</span>' : 'Default theme <span class="pill">auto \u00b7 no festival today</span>');
+    var cards = FEST_LIST.map(function (f) {
+      var isForced = forcedId === f.id;
+      var isAuto = auto && auto.id === f.id;
+      var sw = f.colors.map(function (c) {
+        return '<i style="display:inline-block;width:16px;height:16px;border-radius:5px;margin-right:4px;background:' + esc(c) + ';border:1px solid rgba(255,255,255,.18)"></i>';
+      }).join('');
+      return '<div class="card" style="padding:14px 16px' + (isForced ? ';box-shadow:inset 0 0 0 1.5px rgba(34,211,238,.7)' : '') + '">' +
+        '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px">' +
+          '<span style="font-size:20px">' + f.emoji + '</span>' + esc(f.name) +
+          (isForced ? '<span class="pill">forced</span>' : (isAuto ? '<span class="pill">active today</span>' : '')) +
+        '</div>' +
+        '<div class="muted" style="font-size:11.5px;margin:6px 0 8px">' + esc(f.when) + '</div>' +
+        '<div style="margin-bottom:10px">' + sw + '</div>' +
+        (isForced
+          ? '<button class="ghost ft-auto" style="padding:5px 12px;font-size:12px">Back to auto</button>'
+          : '<button class="ghost ft-force" data-id="' + esc(f.id) + '" style="padding:5px 12px;font-size:12px">Force now</button>') +
+      '</div>';
+    }).join('');
+    $('view').innerHTML =
+      '<div class="stub-banner"><h4>Festival Themes \u2014 live control</h4>' +
+      '<p>The app normally follows its built-in festival calendar (splash, confetti, accent ramp + top ribbon). ' +
+      'From here you can <b>force</b> any festival for every listener right now, switch everything <b>off</b>, or return to <b>auto</b>. ' +
+      'Lunar dates are 2026 \u2014 refresh them yearly in <code>src/constants/festivals.ts</code>.</p></div>' +
+      '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Listeners currently see</h3>' +
+      '<p style="font-size:15px;margin:6px 0 12px">' + statusLine + '</p>' +
+      '<div class="row" style="gap:10px;flex-wrap:wrap">' +
+        '<button id="ft-mode-auto"' + (mode === 'auto' ? '' : ' class="ghost"') + '>Auto (calendar)</button>' +
+        '<button id="ft-mode-off"' + (mode === 'off' ? '' : ' class="ghost"') + '>All festivals off</button>' +
+        '<span class="muted" id="ft-out" style="font-size:12px"></span>' +
+      '</div></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px">' + cards + '</div>';
+    $('ft-mode-auto').addEventListener('click', function () {
+      if (mode === 'auto') return;
+      publish({ mode: 'auto' }, 'Back to calendar');
+    });
+    $('ft-mode-off').addEventListener('click', function () {
+      if (mode === 'off') return;
+      vxConfirm('Turn festival themes OFF for every listener? The app shows its default look even during festival windows.', { title: 'Festival Themes', okText: 'Turn off' }).then(function (ok) {
+        if (ok) publish({ mode: 'off' }, 'Festivals off');
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('button.ft-force'), function (b) {
+      b.addEventListener('click', function () {
+        var f = festById(b.getAttribute('data-id'));
+        if (!f) return;
+        vxConfirm('Force the ' + f.name + ' theme for EVERY listener now? Splash, confetti and accent colors switch within about a minute.', { title: 'Festival Themes', okText: 'Force ' + f.name }).then(function (ok) {
+          if (ok) publish({ mode: 'force', id: f.id }, f.name + ' forced');
+        });
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('button.ft-auto'), function (b) {
+      b.addEventListener('click', function () { publish({ mode: 'auto' }, 'Back to calendar'); });
+    });
+    stamp();
+  }
+
+  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration' };
   var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true };
   function refreshActive() {
     if (active === 'overview') loadOverview();
@@ -2191,6 +2314,7 @@
     else if (active === 'homescreen') renderHomescreenSection();
     else if (active === 'categories') renderCategoriesSection();
     else if (active === 'banners') renderBannersSection();
+    else if (active === 'festivals') renderFestivalsSection();
     else if (active === 'config') renderConfigSection();
   }
   document.addEventListener('keydown', function (e) {
@@ -2203,7 +2327,7 @@
   // Sections whose state lives in this browser (localStorage) — an auto-tick
   // re-render adds nothing and used to wipe in-progress edits the moment
   // focus left a field, and reset scroll every 10 s.
-  var LOCAL_SECTIONS = { songs: true, playlists: true, homescreen: true, categories: true, banners: true, config: true };
+  var LOCAL_SECTIONS = { songs: true, playlists: true, homescreen: true, categories: true, banners: true, festivals: true, config: true };
   function autoTick() {
     if (formFocused()) return;
     if (LOCAL_SECTIONS[active]) return;
