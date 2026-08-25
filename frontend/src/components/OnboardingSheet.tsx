@@ -176,17 +176,28 @@ export function OnboardingSheet() {
   const location = useLocation();
   const navigate = useNavigate();
   const [firstRun, setFirstRun] = useState(() => !getLocal<boolean>(KEYS.onboarded, false));
+  // Existing listeners from before usernames existed: reopen ONLY the welcome
+  // step once so they claim a handle, then close without re-running the tour.
+  const [handleOnly, setHandleOnly] = useState(
+    () => getLocal<boolean>(KEYS.onboarded, false) && !getLocal<string>(KEYS.userHandle, ''),
+  );
   // The sheet steps aside on /handoff so a first-run device can complete the
   // QR "Move to a new device" import (which reloads with the old device's
   // profile, onboarded flag included). Leaving /handoff without importing
   // brings the sheet straight back.
-  const open = (firstRun || tourOpen) && location.pathname !== '/handoff';
+  const open = (firstRun || handleOnly || tourOpen) && location.pathname !== '/handoff';
   const [step, setStep] = useState(-1); // -1 = language pick, 0..n = tour
   const detected = readBrowserSignals().languages;
   const [picked, setPicked] = useState<string[]>(detected.length ? detected : ['hindi', 'english']);
   const [name, setName] = useState<string>(() => getLocal<string>(KEYS.userName, ''));
   const [consent, setConsent] = useState<boolean>(true);
   const [nameErr, setNameErr] = useState(false);
+  // Unique handle — mandatory, because display names collide across listeners.
+  const [handle, setHandle] = useState<string>(() => getLocal<string>(KEYS.userHandle, ''));
+  const [handleEdited, setHandleEdited] = useState(false);
+  const [handleErr, setHandleErr] = useState<string | null>(null);
+  const [handleSuggestions, setHandleSuggestions] = useState<string[]>([]);
+  const [claiming, setClaiming] = useState(false);
   const [importErr, setImportErr] = useState(false);
   // Package A7/D1 — the 10-song taste-seed step. Sits between the language
   // picker and the tour. Liking a handful jumps the cold profile's confidence
@@ -286,6 +297,55 @@ export function OnboardingSheet() {
   // Route the ref to the current finish so the keydown effect stays stable.
   escapeRef.current = finish;
 
+  /** vinay mac → vinay_mac_k4x — editable suggestion, never empty. */
+  const genHandle = (from: string): string => {
+    const stem = from
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 14);
+    const salt = Math.random().toString(36).replace(/[^a-z0-9]/g, '').slice(0, 3) || '777';
+    return `${stem || 'listener'}_${salt}`.slice(0, 20);
+  };
+
+  const onNameChange = (v: string) => {
+    setName(v);
+    // Keep the suggested handle tracking the name until the listener edits it.
+    if (!handleEdited) setHandle(v.trim().length >= 2 ? genHandle(v) : '');
+  };
+
+  /** Claim the unique handle server-side. Returns the saved handle or null. */
+  const claimHandle = async (username: string, displayName: string): Promise<string | null> => {
+    try {
+      const base = isNativePlatform() ? 'https://www.sirimillavinay.online/api/username' : '/api/username';
+      const res = await fetch(base, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          name: displayName,
+          signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined,
+        }),
+      });
+      if (res.status === 409) {
+        const j = (await res.json().catch(() => null)) as { suggestions?: string[] } | null;
+        setHandleErr(`@${username} already exists — pick another username.`);
+        setHandleSuggestions(j?.suggestions ?? []);
+        return null;
+      }
+      const j = (await res.json().catch(() => null)) as
+        | { ok?: boolean; username?: string; signed_device_id_next?: string }
+        | null;
+      if (j?.signed_device_id_next) setLocal(KEYS.signedDeviceId, j.signed_device_id_next);
+      // Network/server hiccup: don't block onboarding forever — accept locally,
+      // the handle re-claims on the next app open (handleOnly reopens if unsaved).
+      return j?.ok ? (j.username ?? username) : username;
+    } catch {
+      return username;
+    }
+  };
+
   const continueFromWelcome = async () => {
     const trimmed = name.trim();
     if (trimmed.length < 2) {
@@ -293,7 +353,23 @@ export function OnboardingSheet() {
       return;
     }
     setNameErr(false);
+    const username = handle.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+      setHandleErr('Username is mandatory — 3–20 letters, numbers or _ only.');
+      return;
+    }
+    setHandleErr(null);
+    setClaiming(true);
+    const saved = await claimHandle(username, trimmed);
+    setClaiming(false);
+    if (!saved) return; // taken — error + suggestions are on screen
+    setLocal(KEYS.userHandle, saved);
     setLocal(KEYS.userName, trimmed);
+    if (handleOnly) {
+      // Pre-username listener: handle claimed, nothing else to redo.
+      setHandleOnly(false);
+      return;
+    }
     setLocal(KEYS.analyticsConsent, consent);
     if (picked.length) useSettingsStore.getState().setPinnedLanguages(picked);
     // Register this (anonymous) device + name with the backend, if consented.
@@ -426,7 +502,7 @@ export function OnboardingSheet() {
             <input
               id="vx-name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => onNameChange(e.target.value)}
               placeholder="Your name"
               maxLength={40}
               aria-invalid={nameErr}
@@ -437,35 +513,90 @@ export function OnboardingSheet() {
               }
             />
             {nameErr && <p className="mt-1.5 text-xs text-red-300">Name is mandatory — tell us what to call you.</p>}
-            <div className="flex items-center justify-between gap-3 mt-4 mb-3">
-              <p className="text-sm font-bold text-ink-200">Which languages do you listen in?</p>
-              <button
-                onClick={() => setPicked(picked.length === LANGUAGES.length ? [] : LANGUAGES.map((l) => l.id))}
-                className="shrink-0 text-xs font-semibold text-ember-400 hover:text-ember-300"
-              >
-                {picked.length === LANGUAGES.length ? 'Clear' : 'All languages'}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 mb-6">
-              {LANGUAGES.map((l) => (
-                <Chip key={l.id} active={picked.includes(l.id)} onClick={() => toggle(l.id)}>
-                  {l.label}
-                </Chip>
-              ))}
-            </div>
-            <p className="-mt-4 mb-5 text-[11px] font-semibold text-ink-400">Pick at least one — you can change these anytime.</p>
-            <label className="flex items-start gap-2.5 mb-4 text-xs text-ink-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-0.5 accent-ember-500"
-              />
-              <span>Share anonymous usage (city-level location, no account) to help improve VinaX. You can change this anytime.</span>
+            <label className="block mt-3 mb-1 text-sm text-ink-300" htmlFor="vx-username">
+              Pick a username <span className="text-ink-400 font-normal">(unique — auto-suggested, edit if you like)</span>
             </label>
-            <div className="flex gap-3">
-              <button onClick={() => void continueFromWelcome()} className="flex-1 py-3 rounded-full btn-premium font-bold">
-                Continue
+            <div className="relative">
+              <span aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-400">@</span>
+              <input
+                id="vx-username"
+                value={handle}
+                onChange={(e) => {
+                  setHandleEdited(true);
+                  setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20));
+                  setHandleErr(null);
+                  setHandleSuggestions([]);
+                }}
+                placeholder="username"
+                maxLength={20}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-invalid={handleErr != null}
+                className={
+                  handleErr
+                    ? 'glass-input w-full pl-9 pr-4 py-2.5 rounded-xl text-sm ring-1 ring-red-400/70'
+                    : 'glass-input w-full pl-9 pr-4 py-2.5 rounded-xl text-sm'
+                }
+              />
+            </div>
+            {handleErr && <p className="mt-1.5 text-xs text-red-300">{handleErr}</p>}
+            {handleSuggestions.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-ink-400">Available:</span>
+                {handleSuggestions.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setHandleEdited(true);
+                      setHandle(s);
+                      setHandleErr(null);
+                      setHandleSuggestions([]);
+                    }}
+                    className="px-2.5 py-1 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/20 text-ink-200"
+                  >
+                    @{s}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!handleOnly && (
+              <>
+                <div className="flex items-center justify-between gap-3 mt-4 mb-3">
+                  <p className="text-sm font-bold text-ink-200">Which languages do you listen in?</p>
+                  <button
+                    onClick={() => setPicked(picked.length === LANGUAGES.length ? [] : LANGUAGES.map((l) => l.id))}
+                    className="shrink-0 text-xs font-semibold text-ember-400 hover:text-ember-300"
+                  >
+                    {picked.length === LANGUAGES.length ? 'Clear' : 'All languages'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {LANGUAGES.map((l) => (
+                    <Chip key={l.id} active={picked.includes(l.id)} onClick={() => toggle(l.id)}>
+                      {l.label}
+                    </Chip>
+                  ))}
+                </div>
+                <p className="-mt-4 mb-5 text-[11px] font-semibold text-ink-400">Pick at least one — you can change these anytime.</p>
+                <label className="flex items-start gap-2.5 mb-4 text-xs text-ink-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    className="mt-0.5 accent-ember-500"
+                  />
+                  <span>Share anonymous usage (city-level location, no account) to help improve VinaX. You can change this anytime.</span>
+                </label>
+              </>
+            )}
+            <div className={handleOnly ? 'flex gap-3 mt-5' : 'flex gap-3'}>
+              <button
+                onClick={() => void continueFromWelcome()}
+                disabled={claiming}
+                className="flex-1 py-3 rounded-full btn-premium font-bold disabled:opacity-60"
+              >
+                {claiming ? 'Checking username…' : 'Continue'}
               </button>
             </div>
             <p className="mt-3 text-center text-xs font-semibold text-ink-400">No account. No login. Private by design.</p>
