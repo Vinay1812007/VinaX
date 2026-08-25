@@ -63,18 +63,18 @@ async function resolveDevice(
   request: Request,
   env: Env,
   claimedSigned: unknown,
-): Promise<{ deviceId: string; issued: string | null }> {
+): Promise<{ deviceId: string; issued: string | null; verified: boolean }> {
   const secret = env.DEVICE_ID_SECRET ?? env.TELEMETRY_PEPPER ?? 'vinax-default-pepper-set-me';
   const signed = typeof claimedSigned === 'string' ? claimedSigned.slice(0, 256) : '';
   const verified = signed ? await verifyDeviceId(signed, secret) : null;
-  if (verified) return { deviceId: verified, issued: null };
+  if (verified) return { deviceId: verified, issued: null, verified: true };
   const ip =
     request.headers.get('cf-connecting-ip') ??
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
     'unknown';
   const ua = request.headers.get('user-agent') ?? 'unknown';
   const deviceId = await deriveServerDeviceId(secret, ip, ua);
-  return { deviceId, issued: await signDeviceId(deviceId, secret) };
+  return { deviceId, issued: await signDeviceId(deviceId, secret), verified: false };
 }
 
 /** Availability probe — used live while the listener types. */
@@ -99,9 +99,13 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   const username = normalize(body.username);
   if (!username) return json({ error: 'invalid' }, 400);
 
-  const { deviceId, issued } = await resolveDevice(request, env, body.signed_device_id);
+  const { deviceId, issued, verified } = await resolveDevice(request, env, body.signed_device_id);
   const owner = await ownerOf(env, username);
-  if (owner && owner !== deviceId) {
+  // An existing handle may only be re-claimed by a device that PROVES it is
+  // the owner via a valid signed id. Ip+ua-derived identity is not proof —
+  // two browsers on one machine (e.g. incognito) share it, which let the
+  // same handle be "created" twice. Unverified claimers always get 409.
+  if (owner && !(verified && owner === deviceId)) {
     return json({ error: 'taken', suggestions: await suggest(env, username) }, 409);
   }
 
