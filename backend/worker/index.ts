@@ -72,6 +72,7 @@ import * as m_api_room from './functions/api/room';
 import * as m_api_site_mode from './functions/api/site-mode';
 import * as m_api_trending_searches from './functions/api/trending-searches';
 import * as m_api_tts from './functions/api/tts';
+import * as m_api_username from './functions/api/username';
 import * as m_api_version from './functions/api/version';
 import * as m_api_vinaxai from './functions/api/vinaxai';
 import * as m_apk from './functions/apk';
@@ -174,6 +175,7 @@ const EXACT: Record<string, Mod> = {
   '/api/site-mode': m_api_site_mode,
   '/api/trending-searches': m_api_trending_searches,
   '/api/tts': m_api_tts,
+  '/api/username': m_api_username,
   '/api/version': m_api_version,
   '/api/vinaxai': m_api_vinaxai,
   '/apk': m_apk,
