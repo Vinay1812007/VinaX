@@ -20,6 +20,9 @@ export const KEYS = {
    *  the server derives ip+ua ids and one listener multiplies into many rows. */
   signedDeviceId: `${STORAGE_PREFIX}.signed-device-id`,
   userName: `${STORAGE_PREFIX}.user-name`,
+  /** Unique lowercase handle claimed via /api/username at onboarding —
+   *  display names collide, the handle never does. */
+  userHandle: `${STORAGE_PREFIX}.user-handle`,
   analyticsConsent: `${STORAGE_PREFIX}.analytics-consent`,
   downloads: `${STORAGE_PREFIX}.downloads.v1`,
   alarm: `${STORAGE_PREFIX}.alarm.v1`,
