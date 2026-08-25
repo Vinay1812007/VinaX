@@ -51,3 +51,28 @@ export function useServerHomeConfig() {
     },
   });
 }
+
+export interface FestivalOverrideConfig {
+  mode?: 'auto' | 'off' | 'force';
+  id?: string;
+}
+
+/**
+ * Festival theme override published from the admin Festival Themes panel.
+ * null / 'auto' keeps the built-in calendar; 'force' skins the app with the
+ * chosen festival immediately; 'off' suppresses skins even inside a window.
+ */
+export function useFestivalOverride() {
+  return useQuery({
+    queryKey: ['festival-override'],
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    retry: 1,
+    queryFn: async (): Promise<FestivalOverrideConfig | null> => {
+      const r = await fetch(`${BASE}/api/appconfig?key=festival`);
+      if (!r.ok) return null;
+      const j = (await r.json()) as { festival?: FestivalOverrideConfig | null };
+      return j.festival && typeof j.festival === 'object' ? j.festival : null;
+    },
+  });
+}
