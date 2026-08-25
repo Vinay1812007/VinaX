@@ -12,6 +12,35 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.3.0': {
+    title: 'Festivals come alive, the AI reads the room',
+    changes: [
+      {
+        type: 'new',
+        text: 'Every festival look was redesigned from scratch — all 23 now feel real and different: diyas and sparkles rise on Diwali, colours rain on Holi, petals drift for Onam, snow falls at Christmas, each with its own colours and glow. It all appears and disappears on its own.',
+      },
+      {
+        type: 'new',
+        text: 'The AI got much more personal. The AI DJ, next-song picks and your Home now read the moment — the hour, the day of the week (Saturday night leans party, workday midday stays steady), your live energy (skip a few and it changes direction to lift you), and the festival being celebrated, with a festive shelf on Home during one.',
+      },
+      {
+        type: 'new',
+        text: 'New Help guides — “Make the app yours” walks you tap-by-tap through themes, accents, the glass dials and your Home layout, and the FAQ now explains the festival looks and the smarter picks.',
+      },
+      {
+        type: 'fixed',
+        text: 'The Glass effect and Background blur sliders now actually work on phones — an old battery optimisation was silently ignoring them. The phone range stays battery-friendly: zero still costs nothing.',
+      },
+      {
+        type: 'fixed',
+        text: 'Settings reads properly on small screens — wide controls like the accent colours and sliders now sit below their label instead of squeezing the text into one word per line, and the last accent dot is no longer cut off.',
+      },
+      {
+        type: 'fixed',
+        text: 'Claiming a username is airtight now — a name that is already taken can no longer be grabbed by a second person.',
+      },
+    ],
+  },
   '5.2.0': {
     title: 'A big one — festivals, faster home, calmer notifications',
     changes: [
