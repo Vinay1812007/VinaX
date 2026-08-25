@@ -26,6 +26,8 @@ EDITORIAL RULES
 - VARIETY ACROSS VISITS: a "varietySeed" (a fresh per-request nonce plus the current IST date-hour) and a "freshnessSeed" change on every open — treat them together as a shuffle order. CONSECUTIVE visits MUST differ substantially, not just consecutive days: deliberately rotate the featured eras, artists, films, moods, deep cuts and time-of-day angles instead of re-serving the obvious default shelves, so Home looks visibly new on each open while staying personal and on-language.
 - AVOID RECENT SHELVES: an "avoidShelves" list carries the section titles and queries this listener already saw in their last ~30 home builds. NONE of them may appear again — pick different angles into the same taste. Repeating a shelf a listener already dismissed is the single most obvious sign the AI is stuck.
 - STYLE ANGLE: a "styleAngle" per request nudges the editorial direction (rare cuts vs collaborations vs film soundtracks vs live versions etc). Let it colour AT LEAST ONE shelf's theme this round so consecutive visits genuinely reach into different corners of the listener's taste.
+- READ THE ROOM: sessionVibe, dayOfWeek and isWeekend set the front page's temperature — a friday or saturday evening front page leans party and celebration, a workday midday stays steady and focus-friendly, a sunday morning breathes calm. listenerEnergy is a live read of the listener (locked in / wavering / restless / returning / fresh): a restless or wavering listener gets surer crowd-pleaser shelves that lift the energy; a locked-in one can be stretched a little further.
+- FESTIVAL FRONT PAGE: when "festivalContext" is present, EXACTLY ONE shelf celebrates that festival — title it warmly for the festival and query real festive songs in the listener's language (e.g. "telugu diwali special songs"). No festivalContext means no festival shelf at all.
 
 Respond with JSON only, of EXACTLY this shape and nothing else:
 {"sections":[{"title":"...","query":"..."}]}`;
@@ -52,6 +54,8 @@ DRAFT ~10 SHELVES ACROSS THESE ARCHETYPES:
 8. Mood counterpoint — one shelf that gently stretches taste (adjacent mood, same language).
 9. Hidden gems — "underrated <language> melodies"-style depth cuts.
 10. Second language — when they listen in more than one, the second language gets a shelf too.
+11. Festival — ONLY when "festivalContext" is present: one warm shelf of real festive songs for that festival in their language. Skip this archetype entirely otherwise.
+Let listenerEnergy tilt the mix: restless or wavering listeners get more sure-thing crowd-pleasers; locked-in listeners can take an extra discovery shelf. A weekend evening leans celebratory, a workday midday steady.
 
 Return ONLY JSON {"sections":[{"title":"...","query":"..."}]} with 9-11 sections. No commentary.`;
 
@@ -188,6 +192,20 @@ export function fallbackSections(
   // different one each visit.
   const shift = r % base.length;
   const out: Array<{ title: string; query: string }> = [...base.slice(shift), ...base.slice(0, shift)];
+
+  // Festival floor: even when the AI is cold, a live festival gets its shelf.
+  // festivalContext lines read "Diwali — festival of lights: ..." — the name
+  // before the dash is enough for both the heading and a real-songs query.
+  const festCtx = typeof ctx.festivalContext === 'string' ? ctx.festivalContext.trim() : '';
+  if (festCtx) {
+    const festName = festCtx.split('—')[0].split(':')[0].trim().split('/')[0].trim();
+    if (festName) {
+      out.splice(1, 0, {
+        title: `${festName} ${pl} Special`.slice(0, 60),
+        query: `${pq} ${festName.toLowerCase()} festival special songs`.slice(0, 120),
+      });
+    }
+  }
 
   // Optional personal shelves, in priority order (artist > second language >
   // time of day) so the 6-shelf cap keeps the most valuable extras. The featured
