@@ -1,9 +1,9 @@
 /** Per-user drill-down: the user's latest-state row + recent raw events.
  *  Top songs / languages / recents are derived client-side from the events. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 interface UserRow {
   device_id: string;
@@ -58,12 +58,12 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const eventLimit = full ? 2000 : 150;
 
   const [users, events] = await Promise.all([
-    sbSelect<UserRow>(
+    dbSelect<UserRow>(
       env,
       'vinax_users',
       `device_id=eq.${enc}&limit=1&select=device_id,name,username,platform,country,city,region,app_version,is_playing,first_seen,last_seen,current_song_title,current_song_artist`,
     ),
-    sbSelect<EventRow>(
+    dbSelect<EventRow>(
       env,
       'vinax_events',
       `device_id=eq.${enc}&order=created_at.desc&limit=${eventLimit}&select=${eventCols}`,

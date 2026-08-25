@@ -1,8 +1,8 @@
 /** User Management: paginated + searchable user list with summary counts. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbRpc, dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 interface UserRow {
   device_id: string;
@@ -38,8 +38,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (q) query += `&or=(name.ilike.*${encodeURIComponent(q)}*,username.ilike.*${encodeURIComponent(q)}*,device_id.ilike.*${encodeURIComponent(q)}*)`;
 
   const [users, summary] = await Promise.all([
-    sbSelect<UserRow>(env, 'vinax_users', query),
-    sbRpc<Summary>(env, 'vinax_user_summary', {}),
+    dbSelect<UserRow>(env, 'vinax_users', query),
+    dbRpc<Summary>(env, 'vinax_user_summary', {}),
   ]);
 
   const hasMore = users.length > limit;

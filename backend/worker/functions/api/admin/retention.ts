@@ -5,9 +5,9 @@
  * "run the migration" instead of erroring.
  */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { dbRpc, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 interface CohortRow {
   cohort_week: string;
@@ -20,7 +20,7 @@ interface CohortRow {
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
-  const rows = await sbRpc<CohortRow[]>(env, 'vinax_retention', { p_weeks: 8 });
+  const rows = await dbRpc<CohortRow[]>(env, 'vinax_retention', { p_weeks: 8 });
   return new Response(
     JSON.stringify(rows === null ? { configured: false, cohorts: [] } : { configured: true, cohorts: rows }),
     { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },

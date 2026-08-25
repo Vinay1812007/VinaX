@@ -1,8 +1,8 @@
 /** Live Listen Together rooms: active rooms, member counts, now playing. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
@@ -10,12 +10,12 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const since = new Date(Date.now() - 2 * 3600_000).toISOString();
   const memSince = new Date(Date.now() - 60_000).toISOString();
   const [rooms, members] = await Promise.all([
-    sbSelect<{ code: string; host_name: string | null; song: unknown; playing: boolean; updated_at: string }>(
+    dbSelect<{ code: string; host_name: string | null; song: unknown; playing: boolean; updated_at: string }>(
       env,
       'vinax_rooms',
       `updated_at=gte.${encodeURIComponent(since)}&select=code,host_name,song,playing,updated_at&order=updated_at.desc&limit=50`,
     ),
-    sbSelect<{ code: string }>(
+    dbSelect<{ code: string }>(
       env,
       'vinax_room_members',
       `last_seen=gte.${encodeURIComponent(memSince)}&select=code&limit=2000`, // bounded like every other admin read (D-12)

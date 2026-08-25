@@ -1,11 +1,11 @@
 /** Admin: send a push notification to every subscribed device. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbInsert, sbSelect, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { dbInsert, dbSelect, dbUpdate, type DbEnv } from '../../_lib/db';
 import { pushConfigured, sendPush, type PushSubscriptionRecord, type VapidEnv } from '../../_lib/webpush';
 import { fcmConfigured, sendFcm, type FcmEnv } from '../../_lib/fcm';
 
-type Env = AdminEnv & SupabaseEnv & VapidEnv & FcmEnv;
+type Env = AdminEnv & DbEnv & VapidEnv & FcmEnv;
 
 /** Concurrency-bounded parallel map. Duplicated verbatim from cron/song-push
  *  to avoid an inter-directory helper import that Pages Functions rejects. */
@@ -87,12 +87,12 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
   const [webSubs, fcmToks] = await Promise.all([
-    sbSelect<GeoRow>(
+    dbSelect<GeoRow>(
       env,
       'vinax_push_subscriptions',
       'select=country,region,city&active=eq.true&limit=5000',
     ).catch(() => [] as GeoRow[]),
-    sbSelect<GeoRow>(
+    dbSelect<GeoRow>(
       env,
       'vinax_fcm_tokens',
       'select=country,region,city&active=eq.true&limit=5000',
@@ -162,7 +162,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // rides inside the JSON message body — no schema migration needed.
   if (dedupeKey) {
     const since = new Date(Date.now() - 10 * 60_000).toISOString();
-    const recent = await sbSelect<{ message: string | null }>(
+    const recent = await dbSelect<{ message: string | null }>(
       env,
       'vinax_events',
       `type=eq.announcement&created_at=gte.${encodeURIComponent(since)}&select=message&limit=50&order=created_at.desc`,
@@ -173,7 +173,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     }
   }
 
-  const subs = await sbSelect<SubRow>(
+  const subs = await dbSelect<SubRow>(
     env,
     'vinax_push_subscriptions',
     `select=endpoint,p256dh,auth&active=eq.true&limit=5000${geoSuffix}`,
@@ -185,7 +185,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // Android client and burned the dedupe key (audit D-3).
   if (dryRun) {
     const toks = fcmConfigured(env)
-      ? await sbSelect<{ token: string }>(env, 'vinax_fcm_tokens', `select=token&active=eq.true&limit=5000${geoSuffix}`).catch(() => [])
+      ? await dbSelect<{ token: string }>(env, 'vinax_fcm_tokens', `select=token&active=eq.true&limit=5000${geoSuffix}`).catch(() => [])
       : [];
     return json({ dryRun: true, web: subs.length, fcm: toks.length, audience: geoTagForLog });
   }
@@ -196,7 +196,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // a Delhi listener). Only unfiltered "send to everyone" pushes get the
   // vinax_events row.
   if (!geoQuery.length) {
-    await sbInsert(env, 'vinax_events', {
+    await dbInsert(env, 'vinax_events', {
       device_id: 'admin',
       type: 'announcement',
       message: JSON.stringify({
@@ -221,7 +221,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       title, body: text, url, icon: '/icons/icon-192.png',
     });
     if (r.gone) {
-      await sbUpdate(env, 'vinax_push_subscriptions', `endpoint=eq.${encodeURIComponent(s.endpoint)}`, {
+      await dbUpdate(env, 'vinax_push_subscriptions', `endpoint=eq.${encodeURIComponent(s.endpoint)}`, {
         active: false,
       }).catch(() => false);
     }
@@ -237,7 +237,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // Also fan out to native Android via FCM — background push, even when closed.
   let fcm = 0;
   if (fcmConfigured(env)) {
-    const toks = await sbSelect<{ token: string }>(
+    const toks = await dbSelect<{ token: string }>(
       env,
       'vinax_fcm_tokens',
       `select=token&active=eq.true&limit=5000${geoSuffix}`,
@@ -248,7 +248,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       // Parallel dead-token cleanup — the old sequential loop compounded the
       // same wall-clock problem the web-push loop had (audit finding H14).
       await mapWithConcurrency(r.dead, 16, (dead) =>
-        sbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(dead)}`, { active: false }).catch(() => false),
+        dbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(dead)}`, { active: false }).catch(() => false),
       );
     }
   }

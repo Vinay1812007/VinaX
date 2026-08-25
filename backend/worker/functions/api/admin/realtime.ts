@@ -1,9 +1,9 @@
 /** Real-time pulse: starts/min, joins, live listeners + cities, errors (5m),
  *  AI latency (15m), active rooms. Designed for 5-10s polling. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
@@ -12,18 +12,18 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const m5 = new Date(Date.now() - 5 * 60_000).toISOString();
   const m15 = new Date(Date.now() - 15 * 60_000).toISOString();
   const [starts, joins, errors, live, ai, rooms] = await Promise.all([
-    sbSelect<{ id: number }>(env, 'vinax_events', `type=eq.play&created_at=gte.${encodeURIComponent(m1)}&select=id&limit=500`),
-    sbSelect<{ device_id: string }>(env, 'vinax_users', `first_seen=gte.${encodeURIComponent(m5)}&select=device_id&limit=200`),
-    sbSelect<{ error_kind: string | null; message: string | null; created_at: string }>(
+    dbSelect<{ id: number }>(env, 'vinax_events', `type=eq.play&created_at=gte.${encodeURIComponent(m1)}&select=id&limit=500`),
+    dbSelect<{ device_id: string }>(env, 'vinax_users', `first_seen=gte.${encodeURIComponent(m5)}&select=device_id&limit=200`),
+    dbSelect<{ error_kind: string | null; message: string | null; created_at: string }>(
       env, 'vinax_events', `type=eq.error&created_at=gte.${encodeURIComponent(m5)}&select=error_kind,message,created_at&order=created_at.desc&limit=10`,
     ),
-    sbSelect<{ name: string | null; city: string | null; country: string | null; current_song_title: string | null }>(
+    dbSelect<{ name: string | null; city: string | null; country: string | null; current_song_title: string | null }>(
       env, 'vinax_users', `last_seen=gte.${encodeURIComponent(m5)}&select=name,city,country,current_song_title&limit=100`,
     ),
-    sbSelect<{ latency_ms: number | null; ok: boolean }>(
+    dbSelect<{ latency_ms: number | null; ok: boolean }>(
       env, 'vinax_ai_events', `created_at=gte.${encodeURIComponent(m15)}&select=latency_ms,ok&limit=200`,
     ),
-    sbSelect<{ code: string; updated_at: string }>(
+    dbSelect<{ code: string; updated_at: string }>(
       env, 'vinax_rooms', `updated_at=gte.${encodeURIComponent(m5)}&select=code,updated_at&limit=50`,
     ),
   ]);

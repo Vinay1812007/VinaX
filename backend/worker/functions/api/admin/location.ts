@@ -1,9 +1,9 @@
 /** Location Analytics: listeners + plays by country / city, and platform split.
  *  Coarse + anonymous: city/country come from the Cloudflare edge; no raw IP. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { dbRpc, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 function clampDays(v: string | null): number {
   const n = parseInt(v ?? '7', 10);
@@ -19,8 +19,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
   const days = clampDays(new URL(request.url).searchParams.get('days'));
   const [geo, platforms] = await Promise.all([
-    sbRpc<GeoRow[]>(env, 'vinax_geo', { days }),
-    sbRpc<PlatRow[]>(env, 'vinax_platforms', {}),
+    dbRpc<GeoRow[]>(env, 'vinax_geo', { days }),
+    dbRpc<PlatRow[]>(env, 'vinax_platforms', {}),
   ]);
 
   const rows = geo ?? [];

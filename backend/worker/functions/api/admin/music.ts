@@ -1,8 +1,8 @@
 /** Music Analytics: top songs / artists / languages + plays-by-day. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { dbRpc, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 function clampDays(v: string | null): number {
   const n = parseInt(v ?? '7', 10);
@@ -20,10 +20,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
   const days = clampDays(new URL(request.url).searchParams.get('days'));
   const [topSongs, topArtists, topLanguages, playsByDay] = await Promise.all([
-    sbRpc<SongRow[]>(env, 'vinax_top_songs', { days, lim: 25 }),
-    sbRpc<ArtistRow[]>(env, 'vinax_top_artists', { days, lim: 25 }),
-    sbRpc<LangRow[]>(env, 'vinax_top_languages', { days, lim: 20 }),
-    sbRpc<DayRow[]>(env, 'vinax_plays_by_day', { days: Math.min(days, 30) }),
+    dbRpc<SongRow[]>(env, 'vinax_top_songs', { days, lim: 25 }),
+    dbRpc<ArtistRow[]>(env, 'vinax_top_artists', { days, lim: 25 }),
+    dbRpc<LangRow[]>(env, 'vinax_top_languages', { days, lim: 20 }),
+    dbRpc<DayRow[]>(env, 'vinax_plays_by_day', { days: Math.min(days, 30) }),
   ]);
 
   return new Response(

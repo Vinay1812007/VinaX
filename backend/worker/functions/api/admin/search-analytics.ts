@@ -1,9 +1,9 @@
 /** Search analytics: top queries, zero-result queries, trending artists +
  *  languages. Sourced from consent-gated anonymous search events. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, dbRpc, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
@@ -13,11 +13,11 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const days = Number.isFinite(rawDays) ? Math.min(Math.max(rawDays, 1), 90) : 7;
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
   const [rows, artists, languages] = await Promise.all([
-    sbSelect<{ message: string | null }>(
+    dbSelect<{ message: string | null }>(
       env, 'vinax_events', `type=eq.search&created_at=gte.${encodeURIComponent(since)}&select=message&order=created_at.desc&limit=3000`,
     ),
-    sbRpc<unknown[]>(env, 'vinax_top_artists', { days, lim: 12 }).catch(() => []),
-    sbRpc<unknown[]>(env, 'vinax_top_languages', { days, lim: 10 }).catch(() => []),
+    dbRpc<unknown[]>(env, 'vinax_top_artists', { days, lim: 12 }).catch(() => []),
+    dbRpc<unknown[]>(env, 'vinax_top_languages', { days, lim: 10 }).catch(() => []),
   ]);
   const top = new Map<string, number>();
   const zero = new Map<string, number>();

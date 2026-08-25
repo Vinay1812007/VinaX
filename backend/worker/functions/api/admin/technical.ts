@@ -1,8 +1,8 @@
 /** Technical Monitoring: version spread, errors, field Web Vitals, lyric coverage. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbRpc, dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 function clampDays(v: string | null): number {
   const n = parseInt(v ?? '7', 10);
@@ -78,16 +78,16 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const days = clampDays(new URL(request.url).searchParams.get('days'));
   const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString();
   const [versions, errors, errorsByDay, summary, vitalRows, lyricRows] = await Promise.all([
-    sbRpc<VersionRow[]>(env, 'vinax_versions', {}),
-    sbRpc<ErrorRow[]>(env, 'vinax_errors', { days, lim: 50 }),
-    sbRpc<DayRow[]>(env, 'vinax_errors_by_day', { days: Math.min(days, 30) }),
-    sbRpc<Summary>(env, 'vinax_tech_summary', {}),
-    sbSelect<VitalEventRow>(
+    dbRpc<VersionRow[]>(env, 'vinax_versions', {}),
+    dbRpc<ErrorRow[]>(env, 'vinax_errors', { days, lim: 50 }),
+    dbRpc<DayRow[]>(env, 'vinax_errors_by_day', { days: Math.min(days, 30) }),
+    dbRpc<Summary>(env, 'vinax_tech_summary', {}),
+    dbSelect<VitalEventRow>(
       env,
       'vinax_events',
       `select=error_kind,message&type=eq.vital&created_at=gte.${encodeURIComponent(sinceIso)}&limit=10000`,
     ),
-    sbSelect<LyricEventRow>(
+    dbSelect<LyricEventRow>(
       env,
       'vinax_events',
       `select=song_id,song_title,song_artist&type=eq.lyric-miss&created_at=gte.${encodeURIComponent(sinceIso)}&limit=10000`,

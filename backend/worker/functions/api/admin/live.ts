@@ -1,8 +1,8 @@
 /** Live Listening: devices active in the last 60s, with their current song. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 interface UserRow {
   device_id: string;
@@ -27,7 +27,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     `last_seen=gte.${encodeURIComponent(since)}` +
     `&order=last_seen.desc&limit=500` +
     `&select=device_id,name,username,city,country,platform,current_song_title,current_song_artist,current_song_image,is_playing,last_seen`;
-  const rows = await sbSelect<UserRow>(env, 'vinax_users', query);
+  const rows = await dbSelect<UserRow>(env, 'vinax_users', query);
 
   const byCountry: Record<string, number> = {};
   for (const r of rows) {

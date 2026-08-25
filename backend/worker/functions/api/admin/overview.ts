@@ -1,8 +1,8 @@
 /** Overview: headline KPIs, engagement (DAU/WAU/MAU), and growth charts. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { dbRpc, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 interface Summary {
   active_now: number; total_users: number; new_today: number; plays_today: number;
@@ -18,11 +18,11 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!isAdmin(request, env)) return unauthorized();
 
   const [summary, newUsersByDay, playsByDay, topSongs, geo] = await Promise.all([
-    sbRpc<Summary>(env, 'vinax_overview', {}),
-    sbRpc<DayUsers[]>(env, 'vinax_new_users_by_day', { days: 14 }),
-    sbRpc<DayPlays[]>(env, 'vinax_plays_by_day', { days: 14 }),
-    sbRpc<SongRow[]>(env, 'vinax_top_songs', { days: 7, lim: 5 }),
-    sbRpc<GeoRow[]>(env, 'vinax_geo', { days: 7 }),
+    dbRpc<Summary>(env, 'vinax_overview', {}),
+    dbRpc<DayUsers[]>(env, 'vinax_new_users_by_day', { days: 14 }),
+    dbRpc<DayPlays[]>(env, 'vinax_plays_by_day', { days: 14 }),
+    dbRpc<SongRow[]>(env, 'vinax_top_songs', { days: 7, lim: 5 }),
+    dbRpc<GeoRow[]>(env, 'vinax_geo', { days: 7 }),
   ]);
 
   const byCountry: Record<string, number> = {};
