@@ -63,7 +63,7 @@ const TOUR: TourSlide[] = [
     title: 'A Home that learns you',
     lines: [
       'Shelves grow out of your listening — Continue Listening, On Repeat, Because You Listened To, Fresh Finds, Hidden Gems, Decade Rewind.',
-      'Six mood boards rotate daily; seasonal shelves appear when the moment fits — festivals, monsoon, weekends.',
+      'Six mood boards rotate daily, and on 23 Indian festivals — Sankranti to Diwali to Christmas — the whole app dresses up on its own and a festival shelf appears.',
       'Make it YOUR home: Settings → Home layout lets you hide or reorder every block.',
       'Pull down anytime for a completely fresh set of picks.',
     ],
@@ -134,9 +134,10 @@ const TOUR: TourSlide[] = [
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Make it yours',
     lines: [
-      'Two glass dials in Settings — Glass effect (solid → deep glass) and Background blur (sharp → hazy).',
+      'Two glass dials in Settings — Glass effect (solid → deep glass) and Background blur (sharp → hazy) — on every device, phones included.',
       'Ten accent colours across dark, light and AMOLED — and the app can tint itself from the playing artwork.',
       'Home layout builder: hide the blocks you skip, move your favourites up.',
+      'On festival days the app dresses itself for the celebration — and undresses on its own after.',
     ],
     visual: (
       <div className="mt-3 mx-auto max-w-[280px] rounded-xl border border-ink-700/70 bg-ink-950/50 backdrop-blur-md p-3 space-y-2">
