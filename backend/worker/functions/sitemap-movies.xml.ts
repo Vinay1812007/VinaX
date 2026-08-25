@@ -3,7 +3,7 @@
 // so "<movie name> songs" searches land on VinaX album pages. Edge-cached.
 // Pruned 2026-07 (DQA-10): saavn.dev DNS is dead and the b4a.run mirror 404s
 // these endpoints — both only added timeout latency to sitemap builds.
-import type { SupabaseEnv } from './_lib/supabase';
+import type { DbEnv } from './_lib/db';
 import { artistRows, harvestSoon, seoRow } from './_lib/seo';
 
 const BASES = [
@@ -50,7 +50,7 @@ async function results(query: string, limit = 30): Promise<any[]> {
 }
 
 export const onRequestGet = async (context: {
-  env: SupabaseEnv;
+  env: DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> => {
   const urls = new Set<string>();

@@ -11,8 +11,6 @@ interface Ctx {
   request: Request;
   env: {
     ASSETS: { fetch: (req: Request | string | URL) => Promise<Response> };
-    SUPABASE_URL?: string;
-    SUPABASE_SERVICE_ROLE_KEY?: string;
   };
   next: () => Promise<Response>;
   waitUntil?: (p: Promise<unknown>) => void;

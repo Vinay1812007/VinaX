@@ -11,10 +11,10 @@
  *      discovers the catalog the index grows without bound (4.15.0).
  *
  * Every child is generated ON-REQUEST and edge-cached (30 min); no scheduler,
- * no build step. If Supabase/the corpus table is missing, the index degrades
+ * no build step. If the database/the corpus table is missing, the index degrades
  * to exactly the legacy behavior — never fewer URLs than before.
  */
-import { sbCount, type SupabaseEnv } from './_lib/supabase';
+import { dbCount, type DbEnv } from './_lib/db';
 import { SEO_PAGE_SIZE, SEO_TYPES } from './_lib/seo';
 
 const ORIGIN = 'https://www.sirimillavinay.online';
@@ -27,7 +27,7 @@ const MAPS = [
   'sitemap-artists.xml',
 ];
 
-export const onRequestGet = async (context: { env: SupabaseEnv }): Promise<Response> => {
+export const onRequestGet = async (context: { env: DbEnv }): Promise<Response> => {
   const today = new Date().toISOString().slice(0, 10);
   const children: string[] = MAPS.map((m) => `${ORIGIN}/${m}`);
 
@@ -36,7 +36,7 @@ export const onRequestGet = async (context: { env: SupabaseEnv }): Promise<Respo
   const counts = await Promise.all(
     Object.entries(SEO_TYPES).map(async ([plural, type]) => ({
       plural,
-      count: (await sbCount(context.env, 'vinax_seo_urls', `type=eq.${type}`)) ?? 0,
+      count: (await dbCount(context.env, 'vinax_seo_urls', `type=eq.${type}`)) ?? 0,
     })),
   );
   for (const { plural, count } of counts) {
