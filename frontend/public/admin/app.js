@@ -2171,23 +2171,29 @@
   // either follow the calendar (auto), suppress every skin (off), or wear
   // the chosen festival immediately (force) — splash, confetti and all.
   var FEST_LIST = [
-    { id: 'sankranti', name: 'Sankranti & Pongal', emoji: '\uD83E\uDE81', when: 'Jan 13\u201316', win: [[113, 116]], colors: ['#f59e0b', '#fde047', '#fb923c', '#22c55e'] },
-    { id: 'republic', name: 'Republic Day', emoji: '\uD83C\uDDEE\uD83C\uDDF3', when: 'Jan 25\u201326', win: [[125, 126]], colors: ['#f97316', '#ffffff', '#22c55e', '#3b82f6'] },
-    { id: 'shivaratri', name: 'Maha Shivaratri', emoji: '\uD83D\uDD31', when: 'Feb 14\u201315 (2026)', win: [[214, 215]], colors: ['#94a3b8', '#60a5fa', '#1e3a8a', '#ffffff'] },
-    { id: 'holi', name: 'Holi', emoji: '\uD83C\uDFA8', when: 'Mar 3\u20134 (2026)', win: [[303, 304]], colors: ['#ec4899', '#a855f7', '#22d3ee', '#facc15', '#22c55e'] },
-    { id: 'ugadi', name: 'Ugadi', emoji: '\uD83E\uDD6D', when: 'Mar 18\u201319 (2026)', win: [[318, 319]], colors: ['#65a30d', '#facc15', '#84cc16', '#fb923c'] },
-    { id: 'eid', name: 'Eid', emoji: '\uD83C\uDF19', when: 'Mar 20\u201321 (2026)', win: [[320, 321]], colors: ['#22c55e', '#fde047', '#ffffff'] },
-    { id: 'bonalu', name: 'Bonalu', emoji: '\uD83C\uDFFA', when: 'Jul 12\u201326 (2026)', win: [[712, 726]], colors: ['#eab308', '#dc2626', '#22c55e'] },
-    { id: 'independence', name: 'Independence Day', emoji: '\uD83C\uDDEE\uD83C\uDDF3', when: 'Aug 14\u201315', win: [[814, 815]], colors: ['#f97316', '#ffffff', '#22c55e', '#3b82f6'] },
-    { id: 'onam', name: 'Onam', emoji: '\uD83C\uDF3C', when: 'Aug 25\u201327 (2026)', win: [[825, 827]], colors: ['#facc15', '#fb923c', '#22c55e', '#ffffff'] },
-    { id: 'janmashtami', name: 'Krishna Janmashtami', emoji: '\uD83E\uDD9A', when: 'Sep 3\u20134 (2026)', win: [[903, 904]], colors: ['#0ea5e9', '#fde047', '#a855f7', '#22d3ee'] },
-    { id: 'ganesh', name: 'Vinayaka Chavithi', emoji: '\uD83D\uDC18', when: 'Sep 13\u201315 (2026)', win: [[913, 915]], colors: ['#fb923c', '#ef4444', '#facc15'] },
-    { id: 'bathukamma', name: 'Bathukamma', emoji: '\uD83C\uDF38', when: 'Oct 10\u201318 (2026)', win: [[1010, 1018]], colors: ['#ec4899', '#f59e0b', '#facc15', '#22c55e'] },
-    { id: 'dussehra', name: 'Dussehra', emoji: '\uD83C\uDFF9', when: 'Oct 19\u201320 (2026)', win: [[1019, 1020]], colors: ['#ef4444', '#facc15', '#fb923c'] },
-    { id: 'diwali', name: 'Diwali', emoji: '\uD83E\uDE94', when: 'Nov 7\u20139 (2026)', win: [[1107, 1109]], colors: ['#facc15', '#fb923c', '#ef4444', '#a855f7'] },
-    { id: 'karthika', name: 'Karthika Masam', emoji: '\uD83E\uDE94', when: 'force-only', win: [], colors: ['#f59e0b', '#fb923c', '#fde047'] },
-    { id: 'christmas', name: 'Christmas', emoji: '\uD83C\uDF84', when: 'Dec 24\u201325', win: [[1224, 1225]], colors: ['#ef4444', '#22c55e', '#ffffff', '#facc15'] },
-    { id: 'newyear', name: 'New Year', emoji: '\uD83C\uDF86', when: 'Dec 31\u2013Jan 1', win: [[1231, 1231], [101, 101]], colors: ['#facc15', '#22d3ee', '#a855f7', '#fb7185'] },
+    { id: 'sankranti', name: 'Sankranti & Pongal', emoji: '\uD83E\uDE81', when: 'Jan 13\u201316', win: [[113, 116]], colors: ['#f59e0b', '#fde047', '#fb923c', '#22c55e'], fx: 'Kites drifting in a sunrise glow' },
+    { id: 'republic', name: 'Republic Day', emoji: '\uD83C\uDDEE\uD83C\uDDF3', when: 'Jan 25\u201326', win: [[125, 126]], colors: ['#f97316', '#ffffff', '#22c55e', '#3b82f6'], fx: 'Tricolor balloons rising' },
+    { id: 'shivaratri', name: 'Maha Shivaratri', emoji: '\uD83D\uDD31', when: 'Feb 14\u201315 (2026)', win: [[214, 215]], colors: ['#94a3b8', '#60a5fa', '#1e3a8a', '#ffffff'], fx: 'Trishul + crescent in cold moonlight' },
+    { id: 'holi', name: 'Holi', emoji: '\uD83C\uDFA8', when: 'Mar 3\u20134 (2026)', win: [[303, 304]], colors: ['#ec4899', '#a855f7', '#22d3ee', '#facc15', '#22c55e'], fx: 'Colour powder raining through neon haze' },
+    { id: 'ugadi', name: 'Ugadi', emoji: '\uD83E\uDD6D', when: 'Mar 18\u201319 (2026)', win: [[318, 319]], colors: ['#65a30d', '#facc15', '#84cc16', '#fb923c'], fx: 'Mango + neem leaves falling' },
+    { id: 'eid', name: 'Eid', emoji: '\uD83C\uDF19', when: 'Mar 20\u201321 (2026)', win: [[320, 321]], colors: ['#22c55e', '#fde047', '#ffffff'], fx: 'Lanterns floating under a crescent' },
+    { id: 'ramanavami', name: 'Sri Rama Navami', emoji: '\uD83D\uDEA9', when: 'Mar 26\u201327 (2026)', win: [[326, 327]], colors: ['#f97316', '#facc15', '#fef3c7'], fx: 'Saffron flags + marigolds rising' },
+    { id: 'easter', name: 'Good Friday & Easter', emoji: '\u271D\uFE0F', when: 'Apr 3\u20135 (2026)', win: [[403, 405]], colors: ['#a78bfa', '#fde047', '#ffffff', '#f9a8d4'], fx: 'Doves in a lavender dawn' },
+    { id: 'hanuman', name: 'Hanuman Jayanti', emoji: '\uD83D\uDEA9', when: 'May 12\u201313 (2026)', win: [[512, 513]], colors: ['#ea580c', '#f59e0b', '#fde047'], fx: 'Sindoor flags + hibiscus rising' },
+    { id: 'bonalu', name: 'Bonalu', emoji: '\uD83C\uDFFA', when: 'Jul 12\u201326 (2026)', win: [[712, 726]], colors: ['#eab308', '#dc2626', '#22c55e'], fx: 'Neem leaves + bells in turmeric light' },
+    { id: 'independence', name: 'Independence Day', emoji: '\uD83C\uDDEE\uD83C\uDDF3', when: 'Aug 14\u201315', win: [[814, 815]], colors: ['#f97316', '#ffffff', '#22c55e', '#3b82f6'], fx: 'Waving tricolor + chakra + balloons' },
+    { id: 'varalakshmi', name: 'Varalakshmi Vratam', emoji: '\uD83E\uDEB7', when: 'Aug 21 (2026, approx)', win: [[821, 821]], colors: ['#ec4899', '#f59e0b', '#fde047'], fx: 'Lotus blooms rising in gold-pink light' },
+    { id: 'onam', name: 'Onam', emoji: '\uD83C\uDF3C', when: 'Aug 25\u201327 (2026)', win: [[825, 827]], colors: ['#facc15', '#fb923c', '#22c55e', '#ffffff'], fx: 'Pookalam petals falling' },
+    { id: 'janmashtami', name: 'Krishna Janmashtami', emoji: '\uD83E\uDD9A', when: 'Sep 3\u20134 (2026)', win: [[903, 904]], colors: ['#0ea5e9', '#fde047', '#a855f7', '#22d3ee'], fx: 'Peacock feathers in midnight blue' },
+    { id: 'ganesh', name: 'Vinayaka Chavithi', emoji: '\uD83D\uDC18', when: 'Sep 13\u201315 (2026)', win: [[913, 915]], colors: ['#fb923c', '#ef4444', '#facc15'], fx: 'Hibiscus + diyas in sindoor glow' },
+    { id: 'bathukamma', name: 'Bathukamma', emoji: '\uD83C\uDF38', when: 'Oct 10\u201318 (2026)', win: [[1010, 1018]], colors: ['#ec4899', '#f59e0b', '#facc15', '#22c55e'], fx: 'Gunuka + tangedu flowers raining' },
+    { id: 'dussehra', name: 'Dussehra', emoji: '\uD83C\uDFF9', when: 'Oct 19\u201320 (2026)', win: [[1019, 1020]], colors: ['#ef4444', '#facc15', '#fb923c'], fx: 'Bows + marigolds in crimson-gold' },
+    { id: 'diwali', name: 'Diwali', emoji: '\uD83E\uDE94', when: 'Nov 7\u20139 (2026)', win: [[1107, 1109]], colors: ['#facc15', '#fb923c', '#ef4444', '#a855f7'], fx: 'Diyas + fireworks over a warm night glow' },
+    { id: 'nagula', name: 'Nagula Chavithi', emoji: '\uD83D\uDC0D', when: 'Nov 13\u201314 (2026)', win: [[1113, 1114]], colors: ['#22c55e', '#eab308', '#a3e635'], fx: 'Marigolds + naga motifs in green light' },
+    { id: 'karthika', name: 'Karthika Masam', emoji: '\uD83E\uDE94', when: 'force-only', win: [], colors: ['#f59e0b', '#fb923c', '#fde047'], fx: 'Rows of temple lamps rising all month' },
+    { id: 'vaikunta', name: 'Vaikunta Ekadasi', emoji: '\uD83D\uDED5', when: 'Dec 19\u201320 (2026, approx)', win: [[1219, 1220]], colors: ['#fbbf24', '#a78bfa', '#fef3c7'], fx: 'Temple gold + lotus in violet dawn' },
+    { id: 'christmas', name: 'Christmas', emoji: '\uD83C\uDF84', when: 'Dec 24\u201325', win: [[1224, 1225]], colors: ['#ef4444', '#22c55e', '#ffffff', '#facc15'], fx: 'Snowfall over a cosy night' },
+    { id: 'newyear', name: 'New Year', emoji: '\uD83C\uDF86', when: 'Dec 31\u2013Jan 1', win: [[1231, 1231], [101, 101]], colors: ['#facc15', '#22d3ee', '#a855f7', '#fb7185'], fx: 'Fireworks bursting skyward' },
   ];
   function festAutoNow() {
     var d = new Date(), v = (d.getMonth() + 1) * 100 + d.getDate();
@@ -2242,7 +2248,8 @@
           '<span style="font-size:20px">' + f.emoji + '</span>' + esc(f.name) +
           (isForced ? '<span class="pill">forced</span>' : (isAuto ? '<span class="pill">active today</span>' : '')) +
         '</div>' +
-        '<div class="muted" style="font-size:11.5px;margin:6px 0 8px">' + esc(f.when) + '</div>' +
+        '<div class="muted" style="font-size:11.5px;margin:6px 0 2px">' + esc(f.when) + '</div>' +
+        '<div class="muted" style="font-size:11px;margin:0 0 8px;color:#8f8fa3">' + esc(f.fx || '') + '</div>' +
         '<div style="margin-bottom:10px">' + sw + '</div>' +
         (isForced
           ? '<button class="ghost ft-auto" style="padding:5px 12px;font-size:12px">Back to auto</button>'
@@ -2251,7 +2258,7 @@
     }).join('');
     $('view').innerHTML =
       '<div class="stub-banner"><h4>Festival Themes \u2014 live control</h4>' +
-      '<p>The app normally follows its built-in festival calendar (splash, confetti, accent ramp + top ribbon). ' +
+      '<p>Every festival is a full theme: greeting splash + confetti, accent colors, top ribbon, an ambient glow and a living backdrop (diyas, kites, petals, snow\u2026). The app follows its built-in calendar by default. ' +
       'From here you can <b>force</b> any festival for every listener right now, switch everything <b>off</b>, or return to <b>auto</b>. ' +
       'Lunar dates are 2026 \u2014 refresh them yearly in <code>src/constants/festivals.ts</code>.</p></div>' +
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Listeners currently see</h3>' +
