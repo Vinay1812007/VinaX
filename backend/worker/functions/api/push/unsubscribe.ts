@@ -1,8 +1,8 @@
 /** Mark a browser push subscription inactive. */
-import { sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { dbUpdate, type DbEnv } from '../../_lib/db';
 import { rateLimit } from '../../_lib/ratelimit';
 
-interface UnsubscribeEnv extends SupabaseEnv {
+interface UnsubscribeEnv extends DbEnv {
   TELEMETRY_PEPPER?: string;
 }
 
@@ -11,7 +11,7 @@ export const onRequestPost = async (context: { request: Request; env: Unsubscrib
   // Audit finding H-SRV-3: this endpoint was previously unrated and
   // unauthenticated — anyone who knew a listener's endpoint URL (which leaks
   // in the browser subscribe response) could silently disable their push.
-  const limited = rateLimit(request, 'push-unsubscribe', { capacity: 10, refillPerMinute: 10 }, env);
+  const limited = await rateLimit(request, 'push-unsubscribe', { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
 
   const body = (await request.json().catch(() => null)) as { endpoint?: string } | null;
@@ -36,7 +36,7 @@ export const onRequestPost = async (context: { request: Request; env: Unsubscrib
     });
   }
 
-  const ok = await sbUpdate(env, 'vinax_push_subscriptions', `endpoint=eq.${encodeURIComponent(body.endpoint)}`, {
+  const ok = await dbUpdate(env, 'vinax_push_subscriptions', `endpoint=eq.${encodeURIComponent(body.endpoint)}`, {
     active: false,
   });
   return new Response(JSON.stringify({ ok }), {

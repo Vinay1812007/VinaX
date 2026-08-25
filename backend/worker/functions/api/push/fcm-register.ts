@@ -1,10 +1,10 @@
 /** Store a native Android FCM device token (upsert by token). Anonymous — just
  *  the opaque device token, so background push can reach a closed app. */
-import { sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
+import { dbUpsert, type DbEnv } from '../../_lib/db';
 import { rateLimit } from '../../_lib/ratelimit';
 import { cleanTzOffset } from '../../_lib/notifyGate';
 
-interface FcmRegisterEnv extends SupabaseEnv {
+interface FcmRegisterEnv extends DbEnv {
   TELEMETRY_PEPPER?: string;
 }
 
@@ -20,14 +20,14 @@ interface CfExtras { cf?: { country?: string; region?: string; city?: string } }
 export const onRequestPost = async (context: { request: Request; env: FcmRegisterEnv }): Promise<Response> => {
   const { request, env } = context;
   // Audit finding H-SRV-3.
-  const limited = rateLimit(request, 'push-fcm', { capacity: 10, refillPerMinute: 10 }, env);
+  const limited = await rateLimit(request, 'push-fcm', { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
   const body = (await request.json().catch(() => null)) as { token?: string; lang?: string; platform?: string; tzOffset?: number } | null;
   const token = body?.token;
   if (!token || token.length < 20 || token.length > 4096) return json({ error: 'bad_request' }, 400);
   const cf = (request as Request & CfExtras).cf ?? {};
   const country = request.headers.get('CF-IPCountry') ?? cf.country ?? null;
-  const ok = await sbUpsert(
+  const ok = await dbUpsert(
     env,
     'vinax_fcm_tokens',
     {

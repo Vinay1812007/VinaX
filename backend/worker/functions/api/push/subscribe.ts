@@ -1,9 +1,9 @@
 /** Store a browser push subscription (upsert by endpoint). */
-import { sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
+import { dbUpsert, type DbEnv } from '../../_lib/db';
 import { rateLimit } from '../../_lib/ratelimit';
 import { cleanTzOffset } from '../../_lib/notifyGate';
 
-interface SubscribeEnv extends SupabaseEnv {
+interface SubscribeEnv extends DbEnv {
   TELEMETRY_PEPPER?: string;
 }
 
@@ -52,7 +52,7 @@ export const onRequestPost = async (context: { request: Request; env: SubscribeE
   const { request, env } = context;
   // Audit finding H-SRV-3: this endpoint was previously unrated and would
   // happily accept an arbitrary loop of endpoint registrations from one IP.
-  const limited = rateLimit(request, 'push-subscribe', { capacity: 10, refillPerMinute: 10 }, env);
+  const limited = await rateLimit(request, 'push-subscribe', { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
   const body = (await request.json().catch(() => null)) as
     | { endpoint?: string; keys?: { p256dh?: string; auth?: string }; lang?: string; tzOffset?: number }
@@ -67,7 +67,7 @@ export const onRequestPost = async (context: { request: Request; env: SubscribeE
   // filter to hit. IP itself never enters the DB (privacy promise intact).
   const cf = (request as Request & CfExtras).cf ?? {};
   const country = request.headers.get('CF-IPCountry') ?? cf.country ?? null;
-  const ok = await sbUpsert(
+  const ok = await dbUpsert(
     env,
     'vinax_push_subscriptions',
     {
