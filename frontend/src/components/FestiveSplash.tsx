@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { resolveFestival, resolveFestivalTheme } from '@/constants/festivals';
+import { resolveFestival, resolveFestivalTheme, type Festival } from '@/constants/festivals';
 import { useFestivalOverride } from '@/features/home/useAppConfig';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { STORAGE_PREFIX } from '@/constants/storage-keys';
@@ -15,7 +15,6 @@ interface Piece {
   rotate: number;
   round: boolean;
 }
-
 
 /** 24-spoke Ashoka Chakra, drawn inline — spins slowly via CSS. */
 function Chakra() {
@@ -39,8 +38,6 @@ function Chakra() {
  * chakra turning slowly) and tricolor balls drifting upward. Everything is
  * transform/opacity only (compositor-friendly), pointer-events-none, behind
  * the app content, and neutralised by the global reduced-motion cascade.
- * Renders ONLY while the independence window is active — gone at midnight
- * into Aug 16 with zero cleanup.
  */
 function IndependenceBackdrop() {
   return (
@@ -63,6 +60,50 @@ function IndependenceBackdrop() {
             animationDuration: `${10 + (i % 6) * 2.5}s`,
           }}
         />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Generic living backdrop (festival redesign, 5.2.x): every festival now has
+ * its own ambience — emoji particles rising (diyas, lanterns, fireworks),
+ * falling (marigolds, snow, colour powder) or drifting across (kites,
+ * peacock feathers), over a per-festival glow painted by `.fest-sky::before`
+ * in the stylesheet. Deterministic arithmetic (no Math.random) keeps renders
+ * stable; transforms/opacity only; hidden entirely under reduced-motion.
+ */
+function FestBackdrop({ festival }: { festival: Festival }) {
+  const bd = festival.backdrop;
+  const pieces = useMemo(() => {
+    if (!bd) return [];
+    const base = bd.density ?? 14;
+    const count = typeof window !== 'undefined' && window.innerWidth < 640 ? Math.round(base * 0.6) : base;
+    return Array.from({ length: count }, (_, i) => ({
+      glyph: bd.p[i % bd.p.length],
+      left: (i * 61 + 7) % 94,
+      size: 14 + ((i * 7) % 16),
+      delay: (i * 2.3) % 12,
+      duration: 11 + (i % 6) * 2.8,
+      sway: i % 2 === 0 ? 1 : -1,
+    }));
+  }, [bd]);
+  if (!bd) return null;
+  return (
+    <div className="fest-sky" aria-hidden>
+      {pieces.map((p, i) => (
+        <span
+          key={i}
+          className={`fxp fxp-${bd.motion}${p.sway > 0 ? '' : ' fxp-alt'}`}
+          style={{
+            left: `${p.left}%`,
+            fontSize: p.size,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+          }}
+        >
+          {p.glyph}
+        </span>
       ))}
     </div>
   );
@@ -93,11 +134,8 @@ export function FestiveSplash() {
 
   const pieces = useMemo<Piece[]>(() => {
     if (!festival) return [];
-    // 4.17.9 boot-cost pass: 90 confetti spans (each an animated compositor
-    // layer) ran inside the LCP/TBT window on every cold load — PSI always
-    // starts with empty storage, so every audited load paid for the full
-    // spectacle. Density now scales with the screen that shows it: phones
-    // get 40 pieces (visually identical at that width), larger screens 64.
+    // 4.17.9 boot-cost pass: confetti density scales with the screen that
+    // shows it — phones get 40 pieces, larger screens 64.
     const pieceCount = window.innerWidth < 640 ? 40 : 64;
     return Array.from({ length: pieceCount }, () => ({
       left: Math.random() * 100,
@@ -110,12 +148,10 @@ export function FestiveSplash() {
     }));
   }, [festival]);
 
-  // Festival skin (owner request; generalized from the 4.17.3 Independence
-  // tricolor): EVERY festival now themes the whole app — accent ramp + top
-  // ribbon + brand badge — via one html class (fest-<id>) the stylesheet
-  // keys on. The skin runs from the day BEFORE the festival through its
-  // last day (activeFestivalTheme), then auto-reverts. Independence keeps
-  // its richer fest-ind treatment (flag backdrop) via the same class.
+  // Festival skin: EVERY festival themes the whole app — accent ramp + top
+  // ribbon + brand badge + ambient glow — via one html class (fest-<id>) the
+  // stylesheet keys on. The skin runs from the day BEFORE the festival
+  // through its last day (or per the admin override), then auto-reverts.
   useEffect(() => {
     const root = document.documentElement;
     const themeFest = resolveFestivalTheme(override);
@@ -139,16 +175,15 @@ export function FestiveSplash() {
     };
   }, [visible, festival, todayKey]);
 
-  // 4.17.9: mount the living backdrop AFTER boot instead of at t=0. While the
-  // splash is up the backdrop sits invisible behind a 95%-opaque overlay, so
-  // mounting it with the splash was pure raster cost inside the exact window
-  // Lighthouse measures (flag strips + chakra + 14 animated balls). It now
-  // arrives as the splash starts fading (2.5 s) — a seamless reveal — or, on
-  // splash-free visits, after the main thread first goes idle. The .fest-sky
-  // ease-in keyframe makes the late mount read as intentional.
+  // 4.17.9: mount the living backdrop AFTER boot instead of at t=0. While
+  // the splash is up the backdrop sits invisible behind a 95%-opaque
+  // overlay, so it arrives as the splash starts fading (2.5 s) — a seamless
+  // reveal — or, on splash-free visits, after the main thread first goes
+  // idle. Applies to every festival's backdrop, not just Independence Day.
   const [backdropOn, setBackdropOn] = useState(false);
   useEffect(() => {
-    if (festival?.id !== 'independence') return;
+    setBackdropOn(false);
+    if (!festival || (festival.id !== 'independence' && !festival.backdrop)) return;
     if (visible) {
       const t = window.setTimeout(() => setBackdropOn(true), 2500);
       return () => window.clearTimeout(t);
@@ -162,7 +197,11 @@ export function FestiveSplash() {
     };
   }, [festival, visible]);
 
-  const backdrop = festival?.id === 'independence' && backdropOn ? <IndependenceBackdrop /> : null;
+  const backdrop = !festival || !backdropOn
+    ? null
+    : festival.id === 'independence'
+      ? <IndependenceBackdrop />
+      : <FestBackdrop festival={festival} />;
   if (!visible || !festival) return backdrop;
 
   return (
