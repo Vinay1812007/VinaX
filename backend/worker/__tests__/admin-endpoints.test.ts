@@ -1,9 +1,9 @@
 /**
  * Admin dashboard repair (customers/users first) — regression tests driving
- * the REAL Pages Functions handlers with a stubbed Supabase REST layer, so
- * the exact PostgREST queries and status codes are asserted, not mocked away.
+ * the REAL handlers against a real (in-memory) SQLite database through the
+ * D1 layer, so actual database effects are asserted, not transport calls.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { onRequestPost as maintenancePost } from '../functions/api/admin/maintenance';
 import { onRequestGet as searchAnalyticsGet } from '../functions/api/admin/search-analytics';
 import { onRequestGet as engagementGet } from '../functions/api/admin/engagement';
@@ -11,35 +11,15 @@ import { onRequestGet as feedbackGet } from '../functions/api/admin/feedback';
 import { onRequestPost as pushPost } from '../functions/api/admin/push';
 import { onRequestPost as contentPost } from '../functions/api/admin/content';
 import { isAdmin } from '../functions/_lib/admin';
+import { fakeD1Ready, seed, tableRows, type FakeD1 } from './fake-d1';
 
-const ENV = {
+const BASE_ENV = {
   ADMIN_LOGIN_PASSWORD: 'test-secret',
-  SUPABASE_URL: 'https://sb.test',
-  SUPABASE_SERVICE_ROLE_KEY: 'srk',
   VAPID_PUBLIC_KEY: 'pk',
   VAPID_PRIVATE_KEY: 'sk',
   VAPID_SUBJECT: 'mailto:x@y.z',
 };
-
-interface Call {
-  url: string;
-  method: string;
-  body: string | null;
-}
-const calls: Call[] = [];
-
-/** Stub the Supabase REST surface; per-test overrides by URL substring. */
-function installFetch(routes: Array<[string, () => Response]> = []): void {
-  calls.length = 0;
-  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? String(init.body) : null });
-    for (const [needle, make] of routes) {
-      if (url.includes(needle)) return Promise.resolve(make());
-    }
-    return Promise.resolve(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }));
-  });
-}
+const envWith = (db: FakeD1) => ({ ...BASE_ENV, DB: db });
 
 let ipSeq = 0;
 function adminReq(body: unknown, method = 'POST'): Request {
@@ -55,46 +35,55 @@ function adminReq(body: unknown, method = 'POST'): Request {
   });
 }
 
-beforeEach(() => vi.unstubAllGlobals());
-afterEach(() => vi.unstubAllGlobals());
-
 describe('delete_user (customer deletion)', () => {
   it('demands a written reason', async () => {
-    installFetch();
-    const res = await maintenancePost({ request: adminReq({ action: 'delete_user', device_id: 'dev1', reason: 'x' }), env: ENV });
+    const db = await fakeD1Ready();
+    seed(db, 'vinax_users', [{ device_id: 'dev1' }]);
+    const res = await maintenancePost({ request: adminReq({ action: 'delete_user', device_id: 'dev1', reason: 'x' }), env: envWith(db) });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe('reason_required');
-    expect(calls).toHaveLength(0); // nothing touched the database
+    expect(tableRows(db, 'vinax_users')).toHaveLength(1); // nothing deleted
   });
 
   it('reports an honest 404 for an unknown device instead of a silent success', async () => {
-    installFetch([['vinax_users', () => new Response('[]', { status: 200 })]]);
+    const db = await fakeD1Ready();
     const res = await maintenancePost({
       request: adminReq({ action: 'delete_user', device_id: 'no-such-device', reason: 'DMCA request' }),
-      env: ENV,
+      env: envWith(db),
     });
     expect(res.status).toBe(404);
     expect(((await res.json()) as { error: string }).error).toBe('not_found');
   });
 
   it('deletes, cleans room membership, scrubs feedback, and audits without the raw id', async () => {
-    installFetch([
-      ['vinax_users?device_id', () => new Response(JSON.stringify([{ device_id: 'dev-abcdef123456' }]), { status: 200 })],
+    const db = await fakeD1Ready();
+    const id = 'dev-abcdef123456';
+    seed(db, 'vinax_users', [{ device_id: id, name: 'X' }]);
+    seed(db, 'vinax_events', [
+      { device_id: id, type: 'play' },
+      { device_id: id, type: 'error' },
+      { device_id: 'other-device', type: 'play' },
     ]);
+    seed(db, 'vinax_room_members', [{ code: 'ROOM01', device_id: id }]);
+    seed(db, 'vinax_feedback', [{ device_id: id, type: 'bug', message: 'app crashed' }]);
     const res = await maintenancePost({
-      request: adminReq({ action: 'delete_user', device_id: 'dev-abcdef123456', reason: 'user | requested' }),
-      env: ENV,
+      request: adminReq({ action: 'delete_user', device_id: id, reason: 'user | requested' }),
+      env: envWith(db),
     });
     expect(res.status).toBe(200);
-    const urls = calls.map((c) => `${c.method} ${c.url}`);
-    expect(urls.some((u) => u.startsWith('DELETE') && u.includes('vinax_events'))).toBe(true);
-    expect(urls.some((u) => u.startsWith('DELETE') && u.includes('vinax_room_members'))).toBe(true); // no orphaned membership
-    const scrub = calls.find((c) => c.method === 'PATCH' && c.url.includes('vinax_feedback'));
-    expect(scrub?.body).toContain('"device_id":"deleted"'); // id scrubbed from filed feedback
-    const audit = calls.find((c) => c.method === 'POST' && c.url.includes('vinax_feedback'));
-    expect(audit?.body).toContain('"status":"audit"'); // never inflates the New-feedback KPI
-    expect(audit?.body).toContain('user / requested'); // pipe stripped — audit kind can't be forged
-    expect(audit?.body).not.toContain('dev-abcdef123456'); // only the truncated id is recorded
+    expect(tableRows(db, 'vinax_users')).toHaveLength(0);
+    // Only the deleted device's events are gone; others survive.
+    const events = tableRows(db, 'vinax_events');
+    expect(events).toHaveLength(1);
+    expect(events[0].device_id).toBe('other-device');
+    expect(tableRows(db, 'vinax_room_members')).toHaveLength(0); // no orphaned membership
+    const feedback = tableRows(db, 'vinax_feedback');
+    const scrubbed = feedback.find((f) => f.message === 'app crashed');
+    expect(scrubbed?.device_id).toBe('deleted'); // id scrubbed from filed feedback
+    const audit = feedback.find((f) => f.type === 'admin-audit');
+    expect(audit?.status).toBe('audit'); // never inflates the New-feedback KPI
+    expect(String(audit?.message)).toContain('user / requested'); // pipe stripped
+    expect(String(audit?.message)).not.toContain(id); // only the truncated id is recorded
   });
 });
 
@@ -103,34 +92,34 @@ describe('days-clamp hardening (D-5)', () => {
     ['search-analytics', searchAnalyticsGet],
     ['engagement', engagementGet],
   ])('%s answers ?days=abc with 200, not a RangeError 500', async (_name, handler) => {
-    installFetch();
+    const db = await fakeD1Ready();
     const request = new Request('https://admin.test/api/admin/x?days=abc', {
       headers: { 'x-admin-token': 'test-secret', 'cf-connecting-ip': `10.8.0.${++ipSeq % 250}` },
     });
-    const res = await handler({ request, env: ENV });
+    const res = await handler({ request, env: envWith(db) });
     expect(res.status).toBe(200);
   });
 });
 
 describe('push composer', () => {
   it('dry-run persists NOTHING — no announcement row, no dedupe burn (D-3)', async () => {
-    installFetch();
+    const db = await fakeD1Ready();
     const res = await pushPost({
       request: adminReq({ title: 'T', body: 'B', link: '/', dryRun: true, dedupe_key: 'k1' }),
-      env: ENV,
+      env: envWith(db),
     });
     expect(res.status).toBe(200);
     expect(((await res.json()) as { dryRun: boolean }).dryRun).toBe(true);
-    expect(calls.some((c) => c.method === 'POST' && c.url.includes('vinax_events'))).toBe(false);
-    expect(calls.some((c) => c.method === 'POST' && c.url.includes('vinax_feedback'))).toBe(false);
+    expect(tableRows(db, 'vinax_events')).toHaveLength(0);
+    expect(tableRows(db, 'vinax_feedback')).toHaveLength(0);
   });
 
   it('refuses a blank body and an external link (D-20)', async () => {
-    installFetch();
-    const blank = await pushPost({ request: adminReq({ title: 'T', body: '   ', link: '/' }), env: ENV });
+    const db = await fakeD1Ready();
+    const blank = await pushPost({ request: adminReq({ title: 'T', body: '   ', link: '/' }), env: envWith(db) });
     expect(blank.status).toBe(400);
     expect(((await blank.json()) as { error: string }).error).toBe('body_required');
-    const evil = await pushPost({ request: adminReq({ title: 'T', body: 'B', link: 'https://evil.example/x' }), env: ENV });
+    const evil = await pushPost({ request: adminReq({ title: 'T', body: 'B', link: 'https://evil.example/x' }), env: envWith(db) });
     expect(evil.status).toBe(400);
     expect(((await evil.json()) as { error: string }).error).toBe('bad_link');
   });
@@ -138,28 +127,34 @@ describe('push composer', () => {
 
 describe('feedback inbox', () => {
   it('excludes admin-audit rows from the customer-feedback list (D-4)', async () => {
-    installFetch();
+    const db = await fakeD1Ready();
+    seed(db, 'vinax_feedback', [
+      { device_id: 'd1', type: 'bug', message: 'real feedback', created_at: '2026-08-20T00:00:00.000Z' },
+      { device_id: 'admin', type: 'admin-audit', message: 'delete-user|x', status: 'audit', created_at: '2026-08-21T00:00:00.000Z' },
+    ]);
     const request = new Request('https://admin.test/api/admin/feedback', {
       headers: { 'x-admin-token': 'test-secret', 'cf-connecting-ip': `10.8.1.${++ipSeq % 250}` },
     });
-    await feedbackGet({ request, env: ENV });
-    expect(calls[0]?.url).toContain('type=neq.admin-audit');
+    const res = await feedbackGet({ request, env: envWith(db) });
+    const body = (await res.json()) as { feedback: { type: string; message: string }[] };
+    expect(body.feedback).toHaveLength(1);
+    expect(body.feedback[0].message).toBe('real feedback');
   });
 });
 
 describe('content blocklist', () => {
   it('unknown action → 400 unknown_action (was a bare {ok:false})', async () => {
-    installFetch();
-    const res = await contentPost({ request: adminReq({ action: 'explode', songId: 'x1' }), env: ENV });
+    const db = await fakeD1Ready();
+    const res = await contentPost({ request: adminReq({ action: 'explode', songId: 'x1' }), env: envWith(db) });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe('unknown_action');
   });
 
   it('unblock namespaces artist/keyword kinds like block does (D-19)', async () => {
-    installFetch();
-    await contentPost({ request: adminReq({ action: 'unblock', songId: 'Some Artist', kind: 'artist' }), env: ENV });
-    const del = calls.find((c) => c.method === 'DELETE');
-    expect(del?.url).toContain(encodeURIComponent('artist:some artist'));
+    const db = await fakeD1Ready();
+    seed(db, 'vinax_blocklist', [{ song_id: 'artist:some artist', song_title: 'Some Artist' }]);
+    await contentPost({ request: adminReq({ action: 'unblock', songId: 'Some Artist', kind: 'artist' }), env: envWith(db) });
+    expect(tableRows(db, 'vinax_blocklist')).toHaveLength(0); // namespaced id matched + removed
   });
 });
 
@@ -169,12 +164,12 @@ describe('admin auth brute-force lockout', () => {
       new Request('https://admin.test/api/admin/x', {
         headers: { 'x-admin-token': tok, 'cf-connecting-ip': '198.51.100.7' },
       });
-    for (let i = 0; i < 15; i++) expect(isAdmin(mk(`wrong-${i}`), ENV)).toBe(false);
-    expect(isAdmin(mk('test-secret'), ENV)).toBe(false); // locked out
+    for (let i = 0; i < 15; i++) expect(isAdmin(mk(`wrong-${i}`), BASE_ENV)).toBe(false);
+    expect(isAdmin(mk('test-secret'), BASE_ENV)).toBe(false); // locked out
     // A different source with the right token is unaffected.
     const other = new Request('https://admin.test/api/admin/x', {
       headers: { 'x-admin-token': 'test-secret', 'cf-connecting-ip': '198.51.100.8' },
     });
-    expect(isAdmin(other, ENV)).toBe(true);
+    expect(isAdmin(other, BASE_ENV)).toBe(true);
   });
 });

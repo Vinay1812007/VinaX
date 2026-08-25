@@ -1,14 +1,12 @@
 /**
- * Listen Together "Start session" (prod bug 2026-08): the create insert
- * writes host_token (security H8); on databases that never ran that
- * migration PostgREST rejects the row and every session start failed with a
- * generic toast. These tests drive the REAL handler and pin the new honest
- * diagnostics.
+ * Listen Together "Start session" — drives the REAL handler against a real
+ * (in-memory) SQLite database through the D1 layer, pinning both the happy
+ * path and the honest schema diagnostics (security H8 / prod bug 2026-08).
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { onRequestPost } from '../functions/api/room';
-
-const ENV = { SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk' };
+import { fakeD1, fakeD1Ready, tableRows } from './fake-d1';
+import { __resetDbBootstrap } from '../functions/_lib/db';
 
 let ipSeq = 0;
 function createReq(): Request {
@@ -20,46 +18,43 @@ function createReq(): Request {
   });
 }
 
-afterEach(() => vi.unstubAllGlobals());
-
 describe('room create', () => {
-  it('healthy schema: returns a code and a host token', async () => {
-    vi.stubGlobal('fetch', (_input: RequestInfo | URL, init?: RequestInit) => {
-      const method = init?.method ?? 'GET';
-      if (method === 'POST') {
-        const row = JSON.parse(String(init?.body)) as { code: string };
-        return Promise.resolve(new Response(JSON.stringify([{ code: row.code }]), { status: 201 }));
-      }
-      return Promise.resolve(new Response('[]', { status: 200 }));
-    });
-    const res = await onRequestPost({ request: createReq(), env: ENV });
+  it('healthy schema: returns a code and a host token, and persists the room', async () => {
+    const db = await fakeD1Ready();
+    const res = await onRequestPost({ request: createReq(), env: { DB: db } });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { code: string; hostToken: string };
     expect(body.code).toHaveLength(6);
     expect(body.hostToken.length).toBeGreaterThan(20);
+    const rooms = tableRows(db, 'vinax_rooms');
+    expect(rooms).toHaveLength(1);
+    expect(rooms[0].code).toBe(body.code);
+    expect(rooms[0].host_token).toBe(body.hostToken);
   });
 
   it('missing host_token column: an honest 503 needs_migration, not a blind 500', async () => {
-    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? 'GET';
-      // Insert rejected (unknown column), host_token select rejected too,
-      // but the table itself exists (select=code works).
-      if (method === 'POST') return Promise.resolve(new Response('{"message":"column not found"}', { status: 400 }));
-      if (url.includes('select=host_token')) return Promise.resolve(new Response('{"message":"column not found"}', { status: 400 }));
-      return Promise.resolve(new Response('[]', { status: 200 }));
-    });
-    const res = await onRequestPost({ request: createReq(), env: ENV });
+    // Simulate a legacy database: schema_version says "current" (so the
+    // bootstrap skips), but vinax_rooms predates host_token.
+    const db = fakeD1();
+    db.raw.exec(`create table vinax_meta (key text primary key, value text);
+      insert into vinax_meta values ('schema_version', '999');
+      create table vinax_rooms (code text primary key, host_name text, song text,
+        position real, playing integer, updated_at text, created_at text);`);
+    const res = await onRequestPost({ request: createReq(), env: { DB: db } });
     expect(res.status).toBe(503);
     const body = (await res.json()) as { error: string; message: string };
     expect(body.error).toBe('needs_migration');
     expect(body.message).toContain('host_token');
+    __resetDbBootstrap();
   });
 
-  it('missing table entirely: names schema.sql as the fix', async () => {
-    vi.stubGlobal('fetch', () => Promise.resolve(new Response('{"message":"relation does not exist"}', { status: 404 })));
-    const res = await onRequestPost({ request: createReq(), env: ENV });
+  it('missing table entirely: points at the D1 binding as the fix', async () => {
+    const db = fakeD1();
+    db.raw.exec(`create table vinax_meta (key text primary key, value text);
+      insert into vinax_meta values ('schema_version', '999');`);
+    const res = await onRequestPost({ request: createReq(), env: { DB: db } });
     expect(res.status).toBe(503);
-    expect(((await res.json()) as { message: string }).message).toContain('schema.sql');
+    expect(((await res.json()) as { message: string }).message).toContain('wrangler.toml');
+    __resetDbBootstrap();
   });
 });

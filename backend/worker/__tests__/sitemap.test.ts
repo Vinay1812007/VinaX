@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { fakeD1Ready } from './fake-d1';
 import { onRequestGet as sitemapIndex } from '../functions/sitemap.xml';
 import { onRequestGet as staticSitemap } from '../functions/sitemap-static.xml';
 
@@ -10,7 +11,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('sitemap index', () => {
   it('is valid XML, lists every child map as a www-absolute URL, 30-min edge cache', async () => {
-    // Supabase unconfigured → the index degrades to exactly the legacy maps.
+    // Database unconfigured → the index degrades to exactly the legacy maps.
     const res = await sitemapIndex({ env: {} });
     expect(res.headers.get('content-type')).toContain('application/xml');
     const cache = res.headers.get('cache-control') ?? '';
@@ -38,19 +39,17 @@ describe('sitemap index', () => {
   });
 
   it('adds paginated corpus maps when the SEO corpus has rows (4.15.0)', async () => {
-    // sbCount does a HEAD with Prefer: count=exact and reads content-range.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: RequestInfo | URL) => {
-        const u = String(url);
-        // 23k songs → 3 pages; everything else empty.
-        const total = u.includes('type=eq.song') ? 23000 : 0;
-        return new Response(null, { status: 200, headers: { 'content-range': `0-0/${total}` } });
-      }),
+    // Real corpus rows in the (in-memory) D1 database: 23k songs -> 23 pages.
+    const db = await fakeD1Ready();
+    const stmt = db.raw.prepare(
+      'insert into vinax_seo_urls (key, type, entity_id, slug, added_at, lastmod) values (?, ?, ?, ?, ?, ?)',
     );
-    const res = await sitemapIndex({ env: { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k' } });
+    for (let i = 0; i < 23000; i += 1) {
+      stmt.run(`song:${i}`, 'song', String(i), `slug-${i}`, '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z');
+    }
+    const res = await sitemapIndex({ env: { DB: db } });
     const xml = await res.text();
-    // 23k songs at 1000/page (Supabase max-rows cap, 4.16.3) → 23 pages.
+    // 23k songs at 1000/page -> 23 pages.
     for (const n of [1, 12, 23]) expect(xml).toContain(`${ORIGIN}/sitemaps/songs-${n}.xml`);
     expect(xml).not.toContain('/sitemaps/songs-24.xml');
     expect(xml).not.toContain('/sitemaps/albums-1.xml');
