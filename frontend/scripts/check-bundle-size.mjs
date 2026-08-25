@@ -60,7 +60,14 @@ const DIST = 'dist';
 // regex+px double check, concat over spread): Rolldown codegen churn ate
 // them (161.0 -> 161.1 across identical logic — same class as the 150->155
 // rebase). 162 leaves ~0.9 KB headroom; regressions still fail the build.
-const FIRST_LOAD_BUDGET = 162 * 1024; // gzipped
+// 2026-08-25: re-based 162 -> 163 (+1 KB) for the username uniqueness fix
+// (owner report: same handle "created" twice from incognito). Measured move:
+// 161.x -> 162.1 KB gz. The debounced GET /api/username?u= availability
+// check + taken/free status lines live in OnboardingSheet, which renders in
+// the first-load shell (onboarding gates the very first paint for new
+// listeners), so none of it can be lazy. 163 leaves ~0.9 KB headroom;
+// regressions still fail the build.
+const FIRST_LOAD_BUDGET = 163 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 // Deliberately lazy diagram/math engines (loaded only when VinaX AI renders them).
