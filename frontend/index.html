@@ -49,9 +49,11 @@
         // KEEP IN SYNC with src/constants/festivals.ts.
         var fd = new Date(), fv = (fd.getMonth() + 1) * 100 + fd.getDate();
         var FW = [[112, 116, 'sankranti'], [124, 126, 'republic'], [213, 215, 'shivaratri'], [302, 304, 'holi'],
-          [317, 319, 'ugadi'], [319, 321, 'eid'], [711, 726, 'bonalu'], [813, 815, 'ind'], [824, 827, 'onam'],
-          [902, 904, 'janmashtami'], [912, 915, 'ganesh'], [1009, 1018, 'bathukamma'], [1018, 1020, 'dussehra'],
-          [1106, 1109, 'diwali'], [1223, 1225, 'christmas'], [1230, 1231, 'newyear'], [101, 101, 'newyear']];
+          [317, 319, 'ugadi'], [319, 321, 'eid'], [325, 327, 'ramanavami'], [402, 405, 'easter'],
+          [511, 513, 'hanuman'], [711, 726, 'bonalu'], [813, 815, 'ind'], [820, 821, 'varalakshmi'],
+          [824, 827, 'onam'], [902, 904, 'janmashtami'], [912, 915, 'ganesh'], [1009, 1018, 'bathukamma'],
+          [1018, 1020, 'dussehra'], [1106, 1109, 'diwali'], [1112, 1114, 'nagula'], [1218, 1220, 'vaikunta'],
+          [1223, 1225, 'christmas'], [1230, 1231, 'newyear'], [101, 101, 'newyear']];
         for (var fi = 0; fi < FW.length; fi++)
           if (fv >= FW[fi][0] && fv <= FW[fi][1]) { document.documentElement.classList.add('fest-' + FW[fi][2]); break; }
         try {
