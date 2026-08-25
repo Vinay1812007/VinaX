@@ -8,7 +8,10 @@
   var exportRows = null, exportName = 'vinax';
   var userOffset = 0, userQ = '';
   var lastJson = null, lastStampAt = Date.now();
-  var refreshMs = parseInt((localStorage.getItem('vinax_admin_interval') || '10000'), 10) || 10000;
+  // Request-budget fix: default auto-refresh 10s -> 30s. An always-open
+  // admin tab at 10s burned ~8-9k Worker requests/day by itself; 30s keeps
+  // dashboards live at a third of the cost (header selector still offers 10s).
+  var refreshMs = parseInt((localStorage.getItem('vinax_admin_interval') || '30000'), 10) || 30000;
 
   function $(id) { return document.getElementById(id); }
   function token() { return sessionStorage.getItem(TOKEN_KEY) || ''; }
@@ -2338,8 +2341,23 @@
   function autoTick() {
     if (formFocused()) return;
     if (LOCAL_SECTIONS[active]) return;
+    if (isIdle()) return; // untouched tab: stop burning the request budget
     refreshActive();
   }
+  // Request-budget fix: an admin tab left open (but untouched) all day kept
+  // polling forever. After 10 idle minutes the auto-refresh pauses; any
+  // mouse/key/scroll/touch wakes it and refreshes immediately.
+  var lastActivity = Date.now();
+  var IDLE_MS = 10 * 60_000;
+  function noteActivity() {
+    var wasIdle = Date.now() - lastActivity > IDLE_MS;
+    lastActivity = Date.now();
+    if (wasIdle && autoRefresh && !document.hidden) { refreshActive(); startAuto(); }
+  }
+  ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'].forEach(function (ev) {
+    document.addEventListener(ev, noteActivity, { passive: true });
+  });
+  function isIdle() { return Date.now() - lastActivity > IDLE_MS; }
   function startAuto() { stopAuto(); if (autoRefresh && !document.hidden) autoTimer = setInterval(autoTick, refreshMs); }
   function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
   function setSection(sec) {
@@ -2530,7 +2548,7 @@
       }).catch(noop);
     }
     kpiTick();
-    setInterval(kpiTick, 60_000);
+    setInterval(function () { if (!document.hidden && !isIdle()) kpiTick(); }, 60_000);
 
     // ---- Stale-data banner ----
     setInterval(function () {
