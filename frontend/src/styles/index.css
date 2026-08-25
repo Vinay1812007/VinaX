@@ -1359,19 +1359,22 @@ html.device-tv :focus-visible {
   html { font-size: 106.25%; }
 }
 
-/* backdrop-filter is expensive on phones — drop it in dark mode. Light mode
-   keeps it because the transparent white glass NEEDS the frost to define
-   surfaces on the pale canvas. Written with rgb()/0 so the media query
-   doesn't shadow the canonical --glass-blur value in text order (the theme
-   token contract asserted in theme.test.ts is text-last-wins). */
+/* backdrop-filter is expensive on phones, so the mobile range is CAPPED —
+   but it must still follow the Settings dials. The old block zeroed dark-mode
+   blur entirely, which made "Glass effect" and "Background blur" sliders do
+   nothing on phones (user-reported as broken). Now the user's
+   --glass-blur-boost drives a reduced 0–22px range: dial at 0 = free (no
+   filter cost), default 0.4 ≈ 9px, max = still well under the desktop 40px.
+   Written with max() so the media query doesn't shadow the canonical
+   --glass-blur value in text order (theme.test.ts is text-last-wins). */
 @media (max-width: 640px) {
   :root {
-    --glass-blur: max(0px, 0px);
-    --glass-blur-strong: max(0px, 0px);
+    --glass-blur: max(0px, var(--glass-blur-boost) * 22px);
+    --glass-blur-strong: max(0px, 4px + var(--glass-blur-boost) * 26px);
   }
   html.light {
-    --glass-blur: max(0px, 18px);
-    --glass-blur-strong: max(0px, 26px);
+    --glass-blur: max(0px, 4px + var(--glass-blur-boost) * 26px);
+    --glass-blur-strong: max(0px, 8px + var(--glass-blur-boost) * 30px);
   }
 }
 
