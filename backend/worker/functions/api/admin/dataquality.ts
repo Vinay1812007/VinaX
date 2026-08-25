@@ -13,9 +13,9 @@
  * keep working).
  */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 const SAMPLE = 5000;
 
@@ -28,14 +28,14 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!isAdmin(request, env)) return unauthorized();
 
   const [events, aiEvents] = await Promise.all([
-    sbSelect<{ origin_verified: boolean | null; country: string | null }>(
+    dbSelect<{ origin_verified: boolean | null; country: string | null }>(
       env,
       'vinax_events',
       // type=play: the metrics are defined over PLAY events; sampling every
       // event type (vitals, errors, admin markers) skewed both percentages (D-8).
       `select=origin_verified,country&type=eq.play&order=created_at.desc&limit=${SAMPLE}`,
     ),
-    sbSelect<{ ok: boolean | null; error: string | null }>(
+    dbSelect<{ ok: boolean | null; error: string | null }>(
       env,
       'vinax_ai_events',
       `select=ok,error&order=created_at.desc&limit=${SAMPLE}`,

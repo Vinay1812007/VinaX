@@ -1,8 +1,8 @@
 /** Insights: user segments, hourly activity, trending songs, top listeners, languages. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { dbRpc, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 function clampDays(v: string | null): number {
   const n = parseInt(v ?? '7', 10);
@@ -21,11 +21,11 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
   const days = clampDays(new URL(request.url).searchParams.get('days'));
   const [segments, playsByHour, trending, topListeners, languages] = await Promise.all([
-    sbRpc<Segments>(env, 'vinax_segments', {}),
-    sbRpc<HourRow[]>(env, 'vinax_plays_by_hour', { days }),
-    sbRpc<TrendRow[]>(env, 'vinax_trending', { days, lim: 15 }),
-    sbRpc<ListenerRow[]>(env, 'vinax_top_listeners', { days, lim: 20 }),
-    sbRpc<LangRow[]>(env, 'vinax_languages', { days }),
+    dbRpc<Segments>(env, 'vinax_segments', {}),
+    dbRpc<HourRow[]>(env, 'vinax_plays_by_hour', { days }),
+    dbRpc<TrendRow[]>(env, 'vinax_trending', { days, lim: 15 }),
+    dbRpc<ListenerRow[]>(env, 'vinax_top_listeners', { days, lim: 20 }),
+    dbRpc<LangRow[]>(env, 'vinax_languages', { days }),
   ]);
 
   return new Response(

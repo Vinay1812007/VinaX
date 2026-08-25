@@ -1,14 +1,14 @@
 /** New listeners per day (last 28d) for the Overview growth card. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
   const since = new Date(Date.now() - 28 * 86_400_000).toISOString();
-  const rows = await sbSelect<{ first_seen: string }>(
+  const rows = await dbSelect<{ first_seen: string }>(
     env,
     'vinax_users',
     `first_seen=gte.${encodeURIComponent(since)}&select=first_seen&limit=5000`,

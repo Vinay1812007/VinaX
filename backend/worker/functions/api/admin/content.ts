@@ -1,9 +1,9 @@
 /** Content Admin: view + manage the song blocklist the app honors. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbDelete, sbRpc, sbSelect, sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
+import { dbDelete, dbRpc, dbSelect, dbUpsert, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 interface BlockRow { song_id: string; song_title: string | null; reason: string | null; created_at: string; }
 interface SongRow { song_id: string; song_title: string | null; song_artist: string | null; plays: number; }
@@ -19,8 +19,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!isAdmin(request, env)) return unauthorized();
 
   const [blocked, topSongs] = await Promise.all([
-    sbSelect<BlockRow>(env, 'vinax_blocklist', 'select=song_id,song_title,reason,created_at&order=created_at.desc&limit=500'),
-    sbRpc<SongRow[]>(env, 'vinax_blockable_songs', { days: 30, lim: 40 }),
+    dbSelect<BlockRow>(env, 'vinax_blocklist', 'select=song_id,song_title,reason,created_at&order=created_at.desc&limit=500'),
+    dbRpc<SongRow[]>(env, 'vinax_blockable_songs', { days: 30, lim: 40 }),
   ]);
 
   return new Response(JSON.stringify({ blocked, topSongs: topSongs ?? [] }), {
@@ -61,13 +61,13 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
 
   let ok: boolean;
   if (action === 'block') {
-    ok = await sbUpsert(env, 'vinax_blocklist', {
+    ok = await dbUpsert(env, 'vinax_blocklist', {
       song_id: songId,
       song_title: body ? clip(body.songTitle, 200) : null,
       reason: body ? clip(body.reason, 200) : null,
     }, 'song_id');
   } else if (action === 'unblock') {
-    ok = await sbDelete(env, 'vinax_blocklist', `song_id=eq.${encodeURIComponent(songId)}`);
+    ok = await dbDelete(env, 'vinax_blocklist', `song_id=eq.${encodeURIComponent(songId)}`);
   } else {
     // Same convention as maintenance/experiments — was a bare 400 {ok:false}
     // with no error key (D-17).
@@ -81,7 +81,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     void logAdminAudit(env, `blocklist-${action}`, `${songId}${body?.reason ? ` — ${clip(body.reason, 120)}` : ''}`);
   }
 
-  // A failed Supabase write is a server-side failure, not a client error.
+  // A failed database write is a server-side failure, not a client error.
   return new Response(JSON.stringify({ ok }), {
     status: ok ? 200 : 500,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },

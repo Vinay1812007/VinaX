@@ -9,10 +9,10 @@
  */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbDelete, sbSelect, sbSelectRes, sbUpdate, sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
+import { dbDelete, dbSelect, dbSelectRes, dbUpdate, dbUpsert, type DbEnv } from '../../_lib/db';
 import { assignVariant, sanitizeVariants, type ExperimentConfig } from '../../_lib/experiments';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -36,14 +36,14 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
   // Error-aware read: a missing vinax_experiments table (migration not run)
   // must report configured:false — not masquerade as "configured, empty" (D-1).
-  const sel = await sbSelectRes<ExpRow>(env, 'vinax_experiments', 'select=key,name,variants,active,created_at&order=created_at.desc.nullslast&limit=50');
+  const sel = await dbSelectRes<ExpRow>(env, 'vinax_experiments', 'select=key,name,variants,active,created_at&order=created_at.desc.nullslast&limit=50');
   if (!sel.ok) return json({ configured: false, experiments: [] });
   const rows = sel.rows;
   if (!rows.length) return json({ configured: true, experiments: [] });
 
   // One events sample serves every experiment's metrics.
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
-  const events = await sbSelect<EventRow>(
+  const events = await dbSelect<EventRow>(
     env,
     'vinax_events',
     `created_at=gte.${encodeURIComponent(since)}&type=in.(play,complete,skip)&select=device_id,type&order=created_at.desc&limit=10000`,
@@ -111,7 +111,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     if (variants.length < 2) return json({ error: 'need_two_variants' }, 400);
     // created_at only on first insert — writing it on every save reset the
     // creation date and reshuffled the list on each edit (D-16b).
-    const existing = await sbSelect<{ key: string }>(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}&select=key&limit=1`);
+    const existing = await dbSelect<{ key: string }>(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}&select=key&limit=1`);
     const patch = {
       key,
       name: typeof body?.name === 'string' ? body.name.slice(0, 80) : null,
@@ -119,19 +119,19 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       active: body?.active === true,
       ...(existing.length ? {} : { created_at: new Date().toISOString() }),
     };
-    const ok = await sbUpsert(env, 'vinax_experiments', patch, 'key');
+    const ok = await dbUpsert(env, 'vinax_experiments', patch, 'key');
     if (ok) void logAdminAudit(env, 'experiment-save', `${key} · ${variants.map((v) => `${v.name}:${v.pct}%`).join(' / ')} · ${body?.active ? 'ACTIVE' : 'paused'}`);
     return json({ ok }, ok ? 200 : 500);
   }
   if (action === 'toggle') {
     // Update-only: an upsert on an unknown key used to INSERT a phantom
     // experiment with null variants that broke the list sort (D-16).
-    const ok = await sbUpdate(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}`, { active: body?.active === true });
+    const ok = await dbUpdate(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}`, { active: body?.active === true });
     if (ok) void logAdminAudit(env, 'experiment-toggle', `${key} → ${body?.active ? 'ACTIVE' : 'paused'}`);
     return json({ ok });
   }
   if (action === 'delete') {
-    const ok = await sbDelete(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}`);
+    const ok = await dbDelete(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}`);
     if (ok) void logAdminAudit(env, 'experiment-delete', key);
     return json({ ok });
   }

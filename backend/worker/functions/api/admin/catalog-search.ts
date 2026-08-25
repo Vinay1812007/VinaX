@@ -107,7 +107,7 @@ async function searchOne(base: string, path: string): Promise<{ ok: boolean; ite
 export const onRequestGet = async (context: { request: Request; env: AdminEnv }): Promise<Response> => {
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
-  const rl = rateLimit(request, 'admin-catalog-search', { capacity: 40, refillPerMinute: 40 }, env);
+  const rl = await rateLimit(request, 'admin-catalog-search', { capacity: 40, refillPerMinute: 40 }, env);
   if (rl) return rl;
 
   const url = new URL(request.url);

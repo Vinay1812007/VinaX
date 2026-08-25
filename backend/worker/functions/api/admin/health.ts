@@ -1,15 +1,15 @@
 /**
  * System health: live-checks all seven AI lane keys (tiny 4-token ping, each
- * against its OWN lane endpoint — providers are mixed now) and Supabase
+ * against its OWN lane endpoint — providers are mixed now) and database
  * write freshness, so an outage shows its exact cause instead of guesswork.
  * Admin-gated because each check spends a few model tokens.
  */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimit } from '../../_lib/ratelimit';
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, dbConfigured, type DbEnv } from '../../_lib/db';
 import { LANE_MODEL, laneEndpoint, type AiEnv } from '../../_lib/ai';
 
-type Env = AdminEnv & SupabaseEnv & AiEnv;
+type Env = AdminEnv & DbEnv & AiEnv;
 
 interface KeyHealth {
   key: string;
@@ -49,7 +49,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!isAdmin(request, env)) return unauthorized();
   // 7 live model pings per call — cap the frequency so a stuck 10s auto-
   // refresh loop can't burn upstream quota (audit: unthrottled).
-  const limited = rateLimit(request, 'admin-health', { capacity: 4, refillPerMinute: 2 }, env as never);
+  const limited = await rateLimit(request, 'admin-health', { capacity: 4, refillPerMinute: 2 }, env as never);
   if (limited) return limited;
   const [dj, muse, sage, swift, scholar, home, search, lastEvents] = await Promise.all([
     pingKey('VinaX 120B · AI DJ · radio · smart queue', env.VINAX_CHATGPT_120_B, LANE_MODEL.dj, laneEndpoint(env, 'dj')),
@@ -59,19 +59,19 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     pingKey('VinaX INSTANT · music knowledge', env.VINAX_GROQ_API_KEY, LANE_MODEL.scholar, laneEndpoint(env, 'scholar')),
     pingKey('VinaX ULTRA · home builder · live voice', env.VINAX_NEMOTRON_ULTRA, LANE_MODEL.home, laneEndpoint(env, 'home')),
     pingKey('VinaX NANO 3 · search music expert', env.VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B, LANE_MODEL.search, laneEndpoint(env, 'search')),
-    sbSelect<{ created_at?: string }>(env, 'vinax_events', 'select=created_at&order=created_at.desc&limit=1'),
+    dbSelect<{ created_at?: string }>(env, 'vinax_events', 'select=created_at&order=created_at.desc&limit=1'),
   ]);
   const lastEventAt = lastEvents.length ? (lastEvents[0].created_at ?? null) : null;
   return new Response(
     JSON.stringify({
       time: new Date().toISOString(),
       ai: [dj, muse, sage, swift, scholar, home, search],
-      supabase: {
-        configured: supabaseConfigured(env),
+      database: {
+        configured: dbConfigured(env),
         lastEventAt,
         note: lastEventAt
           ? null
-          : 'No readable events — Supabase paused/unreachable, table empty, or writes failing.',
+          : 'No readable events — D1 binding missing, table empty, or writes failing.',
       },
     }),
     { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },

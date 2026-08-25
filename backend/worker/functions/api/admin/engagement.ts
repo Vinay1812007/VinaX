@@ -1,9 +1,9 @@
 /** Engagement: skip/completion/repeat rates, favorites/downloads/shares,
  *  retention cohorts (D1/D7/D30, approximate), avg plays per user. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
@@ -13,11 +13,11 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const days = Number.isFinite(rawDays) ? Math.min(Math.max(rawDays, 1), 90) : 7;
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
   const [events, users] = await Promise.all([
-    sbSelect<{ type: string; device_id: string | null; song_id: string | null }>(
+    dbSelect<{ type: string; device_id: string | null; song_id: string | null }>(
       env, 'vinax_events',
       `type=in.(play,skip,complete,favorite,download,share)&created_at=gte.${encodeURIComponent(since)}&select=type,device_id,song_id&order=created_at.desc&limit=5000`,
     ),
-    sbSelect<{ first_seen: string; last_seen: string }>(
+    dbSelect<{ first_seen: string; last_seen: string }>(
       env, 'vinax_users', 'select=first_seen,last_seen&limit=5000',
     ),
   ]);

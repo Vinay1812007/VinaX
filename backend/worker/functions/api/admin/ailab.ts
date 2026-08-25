@@ -14,9 +14,9 @@
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { LANE_ENV, LANE_MODEL, isGroqEndpoint, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
 import { aggregateLaneHealth, type AiEventRow } from '../../_lib/laneHealth';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & AiEnv & SupabaseEnv;
+type Env = AdminEnv & AiEnv & DbEnv;
 
 const LANES: readonly Lane[] = ['chat', 'fast', 'deep', 'scholar', 'home', 'dj', 'search'];
 const MAX_TOKENS_CAP = 1000;
@@ -41,7 +41,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const rows = await sbSelect<AiEventRow>(
+  const rows = await dbSelect<AiEventRow>(
     env,
     'vinax_ai_events',
     `created_at=gte.${encodeURIComponent(since)}&select=model,ok,status,error,latency_ms&order=created_at.desc&limit=10000`,

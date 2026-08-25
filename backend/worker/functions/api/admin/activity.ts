@@ -1,8 +1,8 @@
 /** Activity Feed: the most recent raw events across all listeners. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 interface EventRow {
   type: string;
@@ -19,7 +19,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
 
-  const events = await sbSelect<EventRow>(
+  const events = await dbSelect<EventRow>(
     env,
     'vinax_events',
     // device 'admin' rows are system markers (site-mode, digests, announcements) — not listener activity

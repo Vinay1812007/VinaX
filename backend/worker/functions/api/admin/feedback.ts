@@ -1,8 +1,8 @@
 /** Admin: latest in-app feedback / bug reports. */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { dbSelect, dbUpdate, type DbEnv } from '../../_lib/db';
 
-type Env = AdminEnv & SupabaseEnv;
+type Env = AdminEnv & DbEnv;
 
 interface FeedbackRow {
   id: number;
@@ -21,7 +21,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
 
-  const feedback = await sbSelect<FeedbackRow>(
+  const feedback = await dbSelect<FeedbackRow>(
     env,
     'vinax_feedback',
     'select=id,type,name,message,app_version,platform,country,city,status,created_at&type=neq.admin-audit&order=created_at.desc&limit=200',
@@ -42,9 +42,9 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     return new Response(JSON.stringify({ error: 'bad_request' }), { status: 400, headers: { 'content-type': 'application/json' } });
   }
   const status = body && typeof body.status === 'string' ? body.status.slice(0, 16) : 'resolved';
-  const ok = await sbUpdate(env, 'vinax_feedback', `id=eq.${id}`, { status });
+  const ok = await dbUpdate(env, 'vinax_feedback', `id=eq.${id}`, { status });
 
-  // A failed Supabase write is a SERVER problem, not the client's (D-17).
+  // A failed database write is a SERVER problem, not the client's (D-17).
   return new Response(JSON.stringify({ ok }), {
     status: ok ? 200 : 500,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },

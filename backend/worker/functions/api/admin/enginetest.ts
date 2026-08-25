@@ -29,7 +29,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
   // Paid upstream ping — throttle even for authed callers (audit: unthrottled).
-  const limited = rateLimit(request, 'admin-enginetest', { capacity: 10, refillPerMinute: 10 }, env as never);
+  const limited = await rateLimit(request, 'admin-enginetest', { capacity: 10, refillPerMinute: 10 }, env as never);
   if (limited) return limited;
   const url = new URL(request.url);
   const suffix = (url.searchParams.get('key') ?? 'DEEPSEEK_V4_FLASH').toUpperCase();
