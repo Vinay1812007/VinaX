@@ -1,3 +1,42 @@
+# VinaX crawl policy.
+# Search engines that send listeners (Google, Bing, DuckDuckGo, Yandex...)
+# are fully welcome on the public catalog. AI-training scrapers and SEO-tool
+# crawlers are blocked: they re-crawl the whole 20k+ URL corpus around the
+# clock, burn the API request budget, and send zero listeners.
+
+# ---- Blocked: AI/dataset scrapers ----
+User-agent: GPTBot
+User-agent: ChatGPT-User
+User-agent: CCBot
+User-agent: ClaudeBot
+User-agent: Claude-Web
+User-agent: anthropic-ai
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: Bytespider
+User-agent: PetalBot
+User-agent: Amazonbot
+User-agent: meta-externalagent
+User-agent: FacebookBot
+User-agent: Diffbot
+User-agent: omgili
+User-agent: Timpibot
+User-agent: PerplexityBot
+User-agent: YouBot
+User-agent: cohere-ai
+Disallow: /
+
+# ---- Blocked: SEO-tool crawlers (no listener value) ----
+User-agent: AhrefsBot
+User-agent: SemrushBot
+User-agent: MJ12bot
+User-agent: DotBot
+User-agent: DataForSeoBot
+User-agent: BLEXBot
+User-agent: ZoominfoBot
+Disallow: /
+
+# ---- Everyone else (incl. Googlebot, Bingbot, DuckDuckBot) ----
 User-agent: *
 Allow: /
 Disallow: /api/
@@ -14,4 +53,7 @@ Disallow: /handoff
 Disallow: /offline
 Disallow: /collection/
 Disallow: /cache-info
+# Politeness hint (Bing/Yandex honor it; Google uses Search Console settings)
+Crawl-delay: 5
+
 Sitemap: https://www.sirimillavinay.online/sitemap.xml
