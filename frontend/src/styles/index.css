@@ -1960,6 +1960,33 @@ html.fest-newyear body::after { background: linear-gradient(90deg, #22d3ee 0 35%
 html.fest-newyear { --ember-300: 165 243 252; --ember-400: 103 232 249; --ember-500: 34 211 238; --ember-600: 8 145 178; }
 html.fest-newyear.light { --ember-300: 14 116 144; --ember-400: 21 94 117; --ember-500: 22 78 99; --ember-600: 18 64 82; }
 
+/* Regional additions (Festival Themes panel, 5.2.x): Telugu-first set —
+   Maha Shivaratri, Ugadi, Bonalu, Krishna Janmashtami, Bathukamma, and the
+   force-only Karthika Masam. Same contract as above: top ribbon + accent. */
+html.fest-shivaratri body::after { background: linear-gradient(90deg, #94a3b8 0 40%, #60a5fa 40% 75%, #1e3a8a 75% 100%); }
+html.fest-shivaratri { --ember-300: 191 219 254; --ember-400: 147 197 253; --ember-500: 96 165 250; --ember-600: 59 130 246; }
+html.fest-shivaratri.light { --ember-300: 29 78 216; --ember-400: 30 64 175; --ember-500: 30 58 138; --ember-600: 23 37 84; }
+
+html.fest-ugadi body::after { background: linear-gradient(90deg, #65a30d 0 40%, #facc15 40% 70%, #ca8a04 70% 100%); }
+html.fest-ugadi { --ember-300: 190 242 100; --ember-400: 163 230 53; --ember-500: 132 204 22; --ember-600: 101 163 13; }
+html.fest-ugadi.light { --ember-300: 77 124 15; --ember-400: 63 98 18; --ember-500: 54 83 20; --ember-600: 41 63 15; }
+
+html.fest-bonalu body::after { background: linear-gradient(90deg, #eab308 0 45%, #dc2626 45% 80%, #22c55e 80% 100%); }
+html.fest-bonalu { --ember-300: 253 224 71; --ember-400: 250 204 21; --ember-500: 234 179 8; --ember-600: 202 138 4; }
+html.fest-bonalu.light { --ember-300: 161 98 7; --ember-400: 133 77 14; --ember-500: 113 63 18; --ember-600: 92 51 14; }
+
+html.fest-janmashtami body::after { background: linear-gradient(90deg, #0ea5e9 0 40%, #fde047 40% 70%, #a855f7 70% 100%); }
+html.fest-janmashtami { --ember-300: 125 211 252; --ember-400: 56 189 248; --ember-500: 14 165 233; --ember-600: 2 132 199; }
+html.fest-janmashtami.light { --ember-300: 3 105 161; --ember-400: 7 89 133; --ember-500: 12 74 110; --ember-600: 8 51 78; }
+
+html.fest-bathukamma body::after { background: linear-gradient(90deg, #ec4899 0 25%, #f59e0b 25% 50%, #facc15 50% 75%, #22c55e 75% 100%); }
+html.fest-bathukamma { --ember-300: 249 168 212; --ember-400: 244 114 182; --ember-500: 236 72 153; --ember-600: 219 39 119; }
+html.fest-bathukamma.light { --ember-300: 190 24 93; --ember-400: 157 23 77; --ember-500: 131 24 67; --ember-600: 99 18 51; }
+
+html.fest-karthika body::after { background: linear-gradient(90deg, #f59e0b 0 50%, #c2410c 50% 100%); }
+html.fest-karthika { --ember-300: 252 211 77; --ember-400: 245 158 11; --ember-500: 217 119 6; --ember-600: 180 83 9; }
+html.fest-karthika.light { --ember-300: 154 52 18; --ember-400: 124 45 18; --ember-500: 100 36 14; --ember-600: 77 27 10; }
+
 /* Brand badge: the festival emoji rides next to the logo, aria-silent. */
 html.fest-sankranti .vx-brand::after { content: '\1FA81' / ''; }
 html.fest-republic .vx-brand::after { content: '\1F1EE\1F1F3' / ''; }
@@ -1971,10 +1998,18 @@ html.fest-dussehra .vx-brand::after { content: '\1F3F9' / ''; }
 html.fest-diwali .vx-brand::after { content: '\1FA94' / ''; }
 html.fest-christmas .vx-brand::after { content: '\1F384' / ''; }
 html.fest-newyear .vx-brand::after { content: '\1F386' / ''; }
+html.fest-shivaratri .vx-brand::after { content: '\1F531' / ''; }
+html.fest-ugadi .vx-brand::after { content: '\1F96D' / ''; }
+html.fest-bonalu .vx-brand::after { content: '\1F3FA' / ''; }
+html.fest-janmashtami .vx-brand::after { content: '\1F99A' / ''; }
+html.fest-bathukamma .vx-brand::after { content: '\1F338' / ''; }
+html.fest-karthika .vx-brand::after { content: '\1FA94' / ''; }
 html.fest-sankranti .vx-brand::after, html.fest-republic .vx-brand::after, html.fest-holi .vx-brand::after,
 html.fest-eid .vx-brand::after, html.fest-onam .vx-brand::after, html.fest-ganesh .vx-brand::after,
 html.fest-dussehra .vx-brand::after, html.fest-diwali .vx-brand::after, html.fest-christmas .vx-brand::after,
-html.fest-newyear .vx-brand::after {
+html.fest-newyear .vx-brand::after, html.fest-shivaratri .vx-brand::after, html.fest-ugadi .vx-brand::after,
+html.fest-bonalu .vx-brand::after, html.fest-janmashtami .vx-brand::after, html.fest-bathukamma .vx-brand::after,
+html.fest-karthika .vx-brand::after {
   font-size: 12px;
   line-height: 1;
   margin-left: 3px;
