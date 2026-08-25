@@ -124,6 +124,34 @@ GITHUB_REPO = "Vinay1812007/VinaX"
 binding = "HANDOFF"
 id = "34a611e441644d0b9eb77cbbe584a766"
 
+# Primary database — Cloudflare D1 (SQLite), replacing Supabase entirely.
+# The schema bootstraps itself on first use (functions/_lib/db.ts), so a
+# fresh database needs no manual console work. Free plan.
+[[d1_databases]]
+binding = "DB"
+database_name = "vinax-db"
+database_id = "1aa92b99-058b-496d-bc6c-ea43e4def1c5"
+
+# Nightly JSON snapshots of every table (functions/api/cron/backup.ts).
+# DORMANT until R2 is enabled on the account: click "Add R2 subscription"
+# in the dashboard (free monthly quota), create a bucket named
+# "vinax-backups", then uncomment this block and add a daily workflow that
+# POSTs /api/cron/backup with the x-cron-secret header.
+# [[r2_buckets]]
+# binding = "BACKUPS"
+# bucket_name = "vinax-backups"
+
+# Globally consistent rate limiting for sensitive routes — one Durable
+# Object instance per route (functions/_lib/ratelimiterDo.ts). Free plan
+# (SQLite-backed class).
+[[durable_objects.bindings]]
+name = "RATE_LIMIT"
+class_name = "RateLimiterDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiterDO"]
+
 [observability]
 enabled = false
 

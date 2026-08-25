@@ -51,6 +51,7 @@ import * as m_api_appconfig from './functions/api/appconfig';
 import * as m_api_assistant from './functions/api/assistant';
 import * as m_api_blocklist from './functions/api/blocklist';
 import * as m_api_cron_ai_daily_push from './functions/api/cron/ai-daily-push';
+import * as m_api_cron_backup from './functions/api/cron/backup';
 import * as m_api_cron_seo_crawl from './functions/api/cron/seo-crawl';
 import * as m_api_cron_song_push from './functions/api/cron/song-push';
 import * as m_api_cron_weekly_digest from './functions/api/cron/weekly-digest';
@@ -154,6 +155,7 @@ const EXACT: Record<string, Mod> = {
   '/api/assistant': m_api_assistant,
   '/api/blocklist': m_api_blocklist,
   '/api/cron/ai-daily-push': m_api_cron_ai_daily_push,
+  '/api/cron/backup': m_api_cron_backup,
   '/api/cron/seo-crawl': m_api_cron_seo_crawl,
   '/api/cron/song-push': m_api_cron_song_push,
   '/api/cron/weekly-digest': m_api_cron_weekly_digest,
@@ -279,6 +281,10 @@ const route = async (request: Request, env: Env, ctx: ExecCtx): Promise<Response
   };
   return handler(context);
 };
+
+// Durable Object class must be exported from the Worker entry module so the
+// RATE_LIMIT binding in wrangler.toml can find it.
+export { RateLimiterDO } from './functions/_lib/ratelimiterDo';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecCtx): Promise<Response> {
