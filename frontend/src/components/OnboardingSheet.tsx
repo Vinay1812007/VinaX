@@ -198,6 +198,8 @@ export function OnboardingSheet() {
   const [handleErr, setHandleErr] = useState<string | null>(null);
   const [handleSuggestions, setHandleSuggestions] = useState<string[]>([]);
   const [claiming, setClaiming] = useState(false);
+  // Live availability, checked while the listener types (debounced).
+  const [handleAvail, setHandleAvail] = useState<'checking' | 'free' | 'taken' | null>(null);
   const [importErr, setImportErr] = useState(false);
   // Package A7/D1 — the 10-song taste-seed step. Sits between the language
   // picker and the tour. Liking a handful jumps the cold profile's confidence
@@ -270,6 +272,31 @@ export function OnboardingSheet() {
   // lives in useFocusTrap — extracted FROM this component (audit P1-9) so the
   // other overlays share the reference implementation instead of having none.
   useFocusTrap(dialogRef, open, () => escapeRef.current());
+
+  // Debounced live "already exists?" probe — the error shows while typing,
+  // not only after Continue. The POST claim remains the authority.
+  useEffect(() => {
+    const u = handle.trim().toLowerCase();
+    if (!open || !/^[a-z0-9_]{3,20}$/.test(u)) {
+      setHandleAvail(null);
+      return;
+    }
+    if (u === getLocal<string>(KEYS.userHandle, '')) {
+      setHandleAvail('free'); // our own saved handle is always ok
+      return;
+    }
+    setHandleAvail('checking');
+    const base = isNativePlatform() ? 'https://www.sirimillavinay.online/api/username' : '/api/username';
+    const t = window.setTimeout(() => {
+      fetch(`${base}?u=${encodeURIComponent(u)}`)
+        .then((r) => r.json())
+        .then((j: { available?: boolean }) => {
+          setHandleAvail(j?.available === false ? 'taken' : 'free');
+        })
+        .catch(() => setHandleAvail(null)); // network hiccup: stay quiet, claim decides
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [handle, open]);
 
   if (!open) return null;
 
@@ -356,6 +383,10 @@ export function OnboardingSheet() {
     const username = handle.trim().toLowerCase();
     if (!/^[a-z0-9_]{3,20}$/.test(username)) {
       setHandleErr('Username is mandatory — 3–20 letters, numbers or _ only.');
+      return;
+    }
+    if (handleAvail === 'taken') {
+      setHandleErr(`@${username} already exists — pick another username.`);
       return;
     }
     setHandleErr(null);
@@ -540,7 +571,15 @@ export function OnboardingSheet() {
                 }
               />
             </div>
-            {handleErr && <p className="mt-1.5 text-xs text-red-300">{handleErr}</p>}
+            {handleErr ? (
+              <p className="mt-1.5 text-xs text-red-300">{handleErr}</p>
+            ) : handleAvail === 'taken' ? (
+              <p className="mt-1.5 text-xs text-red-300">@{handle} already exists — pick another username.</p>
+            ) : handleAvail === 'free' ? (
+              <p className="mt-1.5 text-xs text-emerald-300">@{handle} is available.</p>
+            ) : handleAvail === 'checking' ? (
+              <p className="mt-1.5 text-xs text-ink-400">Checking availability…</p>
+            ) : null}
             {handleSuggestions.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-semibold text-ink-400">Available:</span>
