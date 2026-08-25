@@ -7,6 +7,7 @@ type Env = AdminEnv & SupabaseEnv;
 interface UserRow {
   device_id: string;
   name: string | null;
+  username?: string | null;
   platform: string | null;
   country: string | null;
   city: string | null;
@@ -29,12 +30,12 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const q = (url.searchParams.get('q') ?? '').replace(/[,()*%"\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
 
   let query =
-    'select=device_id,name,platform,country,city,is_playing,first_seen,last_seen' +
+    'select=device_id,name,username,platform,country,city,is_playing,first_seen,last_seen' +
     // limit+1: the extra row is a cheap, exact hasMore signal — the UI used
     // to infer it from rows.length >= limit, which shows a Next button that
     // lands on an empty page whenever the last page is exactly full (D-22).
     `&order=last_seen.desc&limit=${limit + 1}&offset=${offset}`;
-  if (q) query += `&or=(name.ilike.*${encodeURIComponent(q)}*,device_id.ilike.*${encodeURIComponent(q)}*)`;
+  if (q) query += `&or=(name.ilike.*${encodeURIComponent(q)}*,username.ilike.*${encodeURIComponent(q)}*,device_id.ilike.*${encodeURIComponent(q)}*)`;
 
   const [users, summary] = await Promise.all([
     sbSelect<UserRow>(env, 'vinax_users', query),
