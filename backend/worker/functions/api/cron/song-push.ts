@@ -11,14 +11,14 @@
  * Protected by CRON_SECRET. Trigger it from a scheduler (see
  * .github/workflows/song-push.yml) — Cloudflare Pages has no native cron.
  */
-import { sbInsert, sbSelect, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { dbInsert, dbSelect, dbUpdate, type DbEnv } from '../../_lib/db';
 import { pushConfigured, sendPush, type PushSubscriptionRecord, type VapidEnv } from '../../_lib/webpush';
 import { gateRecipients, stampPushed, type GateEnv } from '../../_lib/notifyGate';
 import { chat, type AiEnv } from '../../_lib/ai';
 import { safeEqual } from '../../_lib/safe-compare';
 import { catalogLang, groupByLang, langName } from '../../_lib/pushlang';
 
-type Env = SupabaseEnv & VapidEnv & AiEnv & GateEnv & { CRON_SECRET?: string };
+type Env = DbEnv & VapidEnv & AiEnv & GateEnv & { CRON_SECRET?: string };
 
 /** Concurrency-bounded parallel map (up to `limit` in flight). */
 async function mapWithConcurrency<T, R>(
@@ -165,7 +165,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
   if (!env.CRON_SECRET || !safeEqual(key, env.CRON_SECRET)) return json({ error: 'unauthorized' }, 401);
   if (!pushConfigured(env)) return json({ error: 'push_not_configured' }, 400);
   // Hard cap: one song push per day, no matter how often the cron fires.
-  const lastPush = await sbSelect<{ created_at: string }>(
+  const lastPush = await dbSelect<{ created_at: string }>(
     env,
     'vinax_events',
     'type=eq.song-push&select=created_at&order=created_at.desc&limit=1',
@@ -174,7 +174,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
     return json({ ok: false, reason: 'throttled_daily' }, 200);
   }
 
-  const allSubs = await sbSelect<SubRow>(
+  const allSubs = await dbSelect<SubRow>(
     env,
     'vinax_push_subscriptions',
     'select=endpoint,p256dh,auth,country,region,city,lang,tz_offset,last_pushed_at&active=eq.true&limit=5000',
@@ -207,12 +207,12 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
   // an interrupted run must never double-push on the next fire). The in-app
   // announcement uses the largest group's pick.
   const head = prepared[0];
-  const throttleRow = sbInsert(env, 'vinax_events', {
+  const throttleRow = dbInsert(env, 'vinax_events', {
     device_id: 'admin',
     type: 'song-push',
     message: `queued|${prepared.map((p) => `${p.lang}:${p.song.name}`).join('|').slice(0, 190)}`,
   }).catch(() => false);
-  const announcementRow = sbInsert(env, 'vinax_events', {
+  const announcementRow = dbInsert(env, 'vinax_events', {
     device_id: 'admin',
     type: 'announcement',
     message: JSON.stringify({ title: 'Your song pick', body: head.blurb, link: head.link, ts: Date.now() }).slice(0, 900),
@@ -232,7 +232,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
         icon: p.song.image,
       });
       if (res.gone) {
-        await sbUpdate(env, 'vinax_push_subscriptions', `endpoint=eq.${encodeURIComponent(row.endpoint)}`, {
+        await dbUpdate(env, 'vinax_push_subscriptions', `endpoint=eq.${encodeURIComponent(row.endpoint)}`, {
           active: false,
         }).catch(() => false);
       } else if (res.ok) {

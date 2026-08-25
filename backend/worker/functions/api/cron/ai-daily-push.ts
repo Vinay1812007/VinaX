@@ -22,14 +22,14 @@
  * Protected by CRON_SECRET. Header-only (audit finding H-SRV-7).
  * Total wall clock: ~4 s per fire (AI turn is the long pole, ~2 s).
  */
-import { sbInsert, sbSelect, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { dbInsert, dbSelect, dbUpdate, type DbEnv } from '../../_lib/db';
 import { pushConfigured, sendPush, type PushSubscriptionRecord, type VapidEnv } from '../../_lib/webpush';
 import { fcmConfigured, sendFcm, type FcmEnv } from '../../_lib/fcm';
 import { chat, type AiEnv } from '../../_lib/ai';
 import { safeEqual } from '../../_lib/safe-compare';
 import { gateRecipients, stampPushed, type GateEnv } from '../../_lib/notifyGate';
 
-type Env = SupabaseEnv & VapidEnv & FcmEnv & AiEnv & GateEnv & { CRON_SECRET?: string };
+type Env = DbEnv & VapidEnv & FcmEnv & AiEnv & GateEnv & { CRON_SECRET?: string };
 
 function json(o: unknown, status = 200): Response {
   return new Response(JSON.stringify(o), {
@@ -167,7 +167,7 @@ function langName(code: string): string {
 async function pickTarget(env: Env): Promise<GeoTarget> {
   // Which cities already got an AI push today? (last 22h to be safe of clock skew.)
   const since = new Date(Date.now() - 22 * 3_600_000).toISOString();
-  const recent = await sbSelect<{ message: string | null }>(
+  const recent = await dbSelect<{ message: string | null }>(
     env,
     'vinax_events',
     `type=eq.ai-push&created_at=gte.${encodeURIComponent(since)}&select=message&limit=200`,
@@ -185,8 +185,8 @@ async function pickTarget(env: Env): Promise<GeoTarget> {
   }
 
   const [webSubs, fcmToks] = await Promise.all([
-    sbSelect<SubGeoRow>(env, 'vinax_push_subscriptions', 'select=country,region,city,lang&active=eq.true&limit=5000').catch(() => []),
-    sbSelect<SubGeoRow>(env, 'vinax_fcm_tokens', 'select=country,region,city,lang&active=eq.true&limit=5000').catch(() => []),
+    dbSelect<SubGeoRow>(env, 'vinax_push_subscriptions', 'select=country,region,city,lang&active=eq.true&limit=5000').catch(() => []),
+    dbSelect<SubGeoRow>(env, 'vinax_fcm_tokens', 'select=country,region,city,lang&active=eq.true&limit=5000').catch(() => []),
   ]);
   const all = [...webSubs, ...fcmToks];
 
@@ -479,7 +479,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
   const force = url.searchParams.get('force') === '1';
   if (!force) {
     const throttleFloor = new Date(Date.now() - 150 * 60_000).toISOString();
-    const recent = await sbSelect<{ created_at: string }>(
+    const recent = await dbSelect<{ created_at: string }>(
       env,
       'vinax_events',
       `type=eq.ai-push&created_at=gte.${encodeURIComponent(throttleFloor)}&select=created_at&limit=1`,
@@ -504,8 +504,8 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
   const targetSuffix = targetSubsFilter.length ? '&' + targetSubsFilter.join('&') : '';
 
   const [webCohortRows, fcmCohortRows] = await Promise.all([
-    sbSelect<{ lang: string | null }>(env, 'vinax_push_subscriptions', `select=lang&active=eq.true&limit=5000${targetSuffix}`).catch(() => []),
-    sbSelect<{ lang: string | null }>(env, 'vinax_fcm_tokens', `select=lang&active=eq.true&limit=5000${targetSuffix}`).catch(() => []),
+    dbSelect<{ lang: string | null }>(env, 'vinax_push_subscriptions', `select=lang&active=eq.true&limit=5000${targetSuffix}`).catch(() => []),
+    dbSelect<{ lang: string | null }>(env, 'vinax_fcm_tokens', `select=lang&active=eq.true&limit=5000${targetSuffix}`).catch(() => []),
   ]);
   const cohortSource = [...webCohortRows, ...fcmCohortRows];
   const geoInferred = inferLangForGeo(target.city, target.region, target.country);
@@ -568,7 +568,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
 
     const song = await resolveSong(pick.song_query);
     if (!song) {
-      await sbInsert(env, 'vinax_events', {
+      await dbInsert(env, 'vinax_events', {
         device_id: 'admin', type: 'ai-push-error',
         message: JSON.stringify({ reason: 'song_not_in_catalog', slot: slot.key, target, cohort, pick, ai_raw: aiTurn.rawOutput, ai_error: aiTurn.laneError, ts: Date.now() }).slice(0, 900),
       }).catch(() => false);
@@ -589,7 +589,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
       : `lang=ilike.${encodeURIComponent(cohort.primaryLang + '%')}`;
     const cohortFullSuffix = finalGeoFilter ? `&${finalGeoFilter}&${langClause}` : `&${langClause}`;
 
-    await sbInsert(env, 'vinax_events', {
+    await dbInsert(env, 'vinax_events', {
       device_id: 'admin',
       type: 'ai-push',
       song_id: song.id,
@@ -621,7 +621,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
       const nowMs = Date.now();
       const nowIso = new Date(nowMs).toISOString();
       if (pushConfigured(env)) {
-        const allSubs = await sbSelect<{ endpoint: string; p256dh: string; auth: string; country: string | null; tz_offset: number | null; last_pushed_at: string | null }>(
+        const allSubs = await dbSelect<{ endpoint: string; p256dh: string; auth: string; country: string | null; tz_offset: number | null; last_pushed_at: string | null }>(
           env, 'vinax_push_subscriptions',
           `select=endpoint,p256dh,auth,country,tz_offset,last_pushed_at&active=eq.true&limit=5000${cohortFullSuffix}`,
         ).catch(() => []);
@@ -631,7 +631,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
         const pushed: string[] = [];
         const results = await mapWithConcurrency(g.eligible, 32, async (s) => {
           const r = await sendPush(env, s as PushSubscriptionRecord, { title: pick.title, body: pick.body, url: link, icon: song.image });
-          if (r.gone) await sbUpdate(env, 'vinax_push_subscriptions', `endpoint=eq.${encodeURIComponent(s.endpoint)}`, { active: false }).catch(() => false);
+          if (r.gone) await dbUpdate(env, 'vinax_push_subscriptions', `endpoint=eq.${encodeURIComponent(s.endpoint)}`, { active: false }).catch(() => false);
           else if (r.ok) pushed.push(s.endpoint);
           return r;
         });
@@ -639,7 +639,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
         if (pushed.length) await stampPushed(env, 'vinax_push_subscriptions', 'endpoint', pushed, nowIso);
       }
       if (fcmConfigured(env)) {
-        const allToks = await sbSelect<{ token: string; country: string | null; tz_offset: number | null; last_pushed_at: string | null }>(
+        const allToks = await dbSelect<{ token: string; country: string | null; tz_offset: number | null; last_pushed_at: string | null }>(
           env, 'vinax_fcm_tokens', `select=token,country,tz_offset,last_pushed_at&active=eq.true&limit=5000${cohortFullSuffix}`,
         ).catch(() => []);
         const g = gateRecipients(allToks, env, nowMs);
@@ -651,7 +651,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
           const delivered = g.eligible.map((t) => t.token).filter((t) => !dead.has(t));
           if (delivered.length) await stampPushed(env, 'vinax_fcm_tokens', 'token', delivered, nowIso);
           await mapWithConcurrency(r.dead, 16, (d) =>
-            sbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(d)}`, { active: false }).catch(() => false),
+            dbUpdate(env, 'vinax_fcm_tokens', `token=eq.${encodeURIComponent(d)}`, { active: false }).catch(() => false),
           );
         }
       }

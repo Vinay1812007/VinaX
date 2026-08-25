@@ -2,10 +2,10 @@
  *  Aggregates the last 7 days into one row the admin Overview displays.
  *  Counts are computed from a capped sample (newest 5000 events), so on busy
  *  weeks they are floors, not exact totals — the digest says so. */
-import { sbInsert, sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbInsert, dbSelect, dbConfigured, type DbEnv } from '../../_lib/db';
 import { safeEqual } from '../../_lib/safe-compare';
 
-type Env = SupabaseEnv & { CRON_SECRET?: string };
+type Env = DbEnv & { CRON_SECRET?: string };
 
 function json(o: unknown, status = 200): Response {
   return new Response(JSON.stringify(o), {
@@ -23,15 +23,15 @@ export const onRequest = async (context: { request: Request; env: Env }): Promis
   // Constant-time compare so response timing can't leak the cron secret
   // byte-by-byte (audit finding M11).
   if (!env.CRON_SECRET || !safeEqual(key, env.CRON_SECRET)) return json({ error: 'unauthorized' }, 401);
-  if (!supabaseConfigured(env)) return json({ error: 'db_not_configured' }, 400);
+  if (!dbConfigured(env)) return json({ error: 'db_not_configured' }, 400);
 
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const enc = encodeURIComponent(since);
 
   const [activeUsers, newUsers, events] = await Promise.all([
-    sbSelect<{ device_id: string }>(env, 'vinax_users', `last_seen=gte.${enc}&select=device_id&limit=5000`).catch(() => []),
-    sbSelect<{ device_id: string }>(env, 'vinax_users', `first_seen=gte.${enc}&select=device_id&limit=5000`).catch(() => []),
-    sbSelect<{ type: string; song_title: string | null; message: string | null }>(
+    dbSelect<{ device_id: string }>(env, 'vinax_users', `last_seen=gte.${enc}&select=device_id&limit=5000`).catch(() => []),
+    dbSelect<{ device_id: string }>(env, 'vinax_users', `first_seen=gte.${enc}&select=device_id&limit=5000`).catch(() => []),
+    dbSelect<{ type: string; song_title: string | null; message: string | null }>(
       env,
       'vinax_events',
       `created_at=gte.${enc}&select=type,song_title,message&order=created_at.desc&limit=5000`,
@@ -71,7 +71,7 @@ export const onRequest = async (context: { request: Request; env: Env }): Promis
     sampled: events.length >= 5000,
     ts: Date.now(),
   };
-  const ok = await sbInsert(env, 'vinax_events', {
+  const ok = await dbInsert(env, 'vinax_events', {
     device_id: 'admin',
     type: 'weekly-digest',
     message: JSON.stringify(digest).slice(0, 900),

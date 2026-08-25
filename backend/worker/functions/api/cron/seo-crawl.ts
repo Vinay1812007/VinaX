@@ -16,11 +16,11 @@
  * batched. Protected by CRON_SECRET (see .github/workflows/seo-crawl.yml).
  * PUBLIC catalog metadata only — nothing user-related is read or written.
  */
-import { sbCount, sbSelect, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { dbCount, dbSelect, dbUpdate, type DbEnv } from '../../_lib/db';
 import { SEO_TYPES, artistRows, dedupeRows, harvest, parseResults, seoRow, songRowsDeep, type SeoRow } from '../../_lib/seo';
 import { safeEqual } from '../../_lib/safe-compare';
 
-type Env = SupabaseEnv & { CRON_SECRET?: string };
+type Env = DbEnv & { CRON_SECRET?: string };
 
 // Same mirror ladder as _lib/render.ts and the live-search sitemaps.
 const BASES = ['https://www.sirimillavinay.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
@@ -119,11 +119,11 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
   const key = request.headers.get('x-cron-secret') ?? '';
   if (!env.CRON_SECRET || !safeEqual(key, env.CRON_SECRET)) return json({ error: 'unauthorized' }, 401);
 
-  const artistCount = await sbCount(env, 'vinax_seo_urls', 'type=eq.artist');
+  const artistCount = await dbCount(env, 'vinax_seo_urls', 'type=eq.artist');
   if (artistCount === null) {
-    // Table missing or Supabase unconfigured — tell the operator exactly what
+    // Table missing or database unconfigured — tell the operator exactly what
     // to do instead of silently no-oping every hour.
-    return json({ ok: false, reason: 'seo_table_unavailable', hint: 'run supabase/migrations/2026-08-vinax-seo-urls.sql' }, 200);
+    return json({ ok: false, reason: 'seo_table_unavailable', hint: 'check the DB (D1) binding in wrangler.toml — tables auto-create on first use' }, 200);
   }
 
   const discovered: SeoRow[] = [];
@@ -134,7 +134,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
     discovered.push(...(await bootstrap()));
   } else {
     // Artist frontier: least-recently-expanded first (never-expanded = first).
-    const artists = await sbSelect<FrontierRow>(
+    const artists = await dbSelect<FrontierRow>(
       env,
       'vinax_seo_urls',
       `type=eq.artist&select=key,entity_id,expand_page&order=expanded_at.asc.nullsfirst&limit=${ARTISTS_PER_RUN}`,
@@ -146,14 +146,14 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
       expandedArtists += 1;
       // Exhausted artists restart at page 0 on their next (distant) turn, so
       // new releases are eventually re-swept.
-      await sbUpdate(env, 'vinax_seo_urls', `key=eq.${encodeURIComponent(a.key)}`, {
+      await dbUpdate(env, 'vinax_seo_urls', `key=eq.${encodeURIComponent(a.key)}`, {
         expanded_at: now,
         expand_page: more ? (Number(a.expand_page) || 0) + 1 : 0,
       });
     }
 
     // Album frontier: only albums never expanded (their track lists are static).
-    const albums = await sbSelect<FrontierRow>(
+    const albums = await dbSelect<FrontierRow>(
       env,
       'vinax_seo_urls',
       `type=eq.album&expanded_at=is.null&select=key,entity_id,expand_page&order=added_at.asc&limit=${ALBUMS_PER_RUN}`,
@@ -161,7 +161,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
     for (const al of albums) {
       discovered.push(...(await expandAlbum(al)));
       expandedAlbums += 1;
-      await sbUpdate(env, 'vinax_seo_urls', `key=eq.${encodeURIComponent(al.key)}`, { expanded_at: now });
+      await dbUpdate(env, 'vinax_seo_urls', `key=eq.${encodeURIComponent(al.key)}`, { expanded_at: now });
     }
   }
 
@@ -171,7 +171,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
   // unfiltered total proved unreliable in production, 4.15.x "corpus":null).
   const corpus: Record<string, number> = {};
   for (const [plural, type] of Object.entries(SEO_TYPES)) {
-    corpus[plural] = (await sbCount(env, 'vinax_seo_urls', `type=eq.${type}`)) ?? -1;
+    corpus[plural] = (await dbCount(env, 'vinax_seo_urls', `type=eq.${type}`)) ?? -1;
   }
   return json({
     ok: true,
