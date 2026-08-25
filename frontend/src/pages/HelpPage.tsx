@@ -12,19 +12,22 @@ const TIPS: string[] = [
   'In the full player, drag down to dismiss it.',
   'Heart songs to shape your recommendations — VinaX learns only on your device.',
   'Open a song’s menu and Start Radio to auto-build a station around it.',
+  'On festival days the whole app dresses up by itself — colors, a greeting and gentle festive touches — then returns to normal when the festival ends.',
 ];
 
 const FAQ: Array<{ q: string; a: string }> = [
-  { q: 'Is VinaX really free? What’s the catch?', a: 'Free, forever, for everything — no subscriptions, no premium tiers, no login. The website shows a few unobtrusive ads to keep the servers running; the Android app is completely ad-free. That’s the whole business model.' },
+  { q: 'Is VinaX really free? What’s the catch?', a: 'Free, forever, for everything — no subscriptions, no premium tiers, no login, and no ads anywhere: not on the website, not in the app. Press play and go.' },
   { q: 'Do I need an account?', a: 'Never. Your name is only used to greet you, and your taste profile, favorites, history and downloads live on this device alone. Nothing you play is tied to an identity anywhere.' },
   { q: 'What data leaves my device?', a: 'Only anonymous, opt-in usage statistics (like “a song was played in your city”) that help improve VinaX — and you can switch that off. IP addresses are never stored. Everything personal stays local, with one-tap export and erase in Settings → Your Data.' },
   { q: 'How do the recommendations work without an account?', a: 'The taste profile is computed on this device: languages you pinned, songs you finish, favorite and skip. AI features receive only a short, capped, anonymous summary of that — never your history.' },
+  { q: 'Why do my picks feel different at different times?', a: 'That’s deliberate. The AI DJ and Home read the moment: the hour, the day of the week (a Saturday night leans party, a workday midday stays steady), your live energy (skipping a lot tells it to change direction and lift the mood), and any festival being celebrated. Every round also avoids repeating what it already played you.' },
+  { q: 'Why did the app suddenly change its colors and look?', a: 'A festival! VinaX celebrates 23 Indian festivals — Sankranti, Holi, Ugadi, Eid, Onam, Ganesh Chaturthi, Dussehra, Diwali, Christmas, New Year and more. During the festival window the app dresses itself: matching colors, a greeting splash and gentle festive touches, and a festival shelf appears on Home. It all returns to normal automatically when the festival ends.' },
   { q: 'What is VinaX AI?', a: 'A full chat assistant: pick from seven engines, search the live web, attach images or files, dictate with the mic or talk hands-free in voice mode. Ask for music — “play <song>” — and the reply is a live mini-player right in the chat, with lyrics singing along.' },
   { q: 'What are the seven engines?', a: 'VinaX FLASH is the everyday default; VinaX 20B answers fastest; VinaX SUPER thinks deepest; VinaX INSTANT knows music and answers in a blink; VinaX 120B is the big creative engine that also runs the AI DJ; VinaX ULTRA is the most powerful all-rounder and powers live voice; VinaX NANO 3 is light and quick and loves finding songs — it also works behind the Search page. Every reply shows a small chip naming the engine that actually answered.' },
   { q: 'How does voice chat work?', a: 'Tap the waveform icon in the chat composer — it works in the browser and in the Android app. Allow the microphone, then just talk: VinaX listens, thinks and speaks back in a natural studio voice; tap the orb to interrupt. On first use some browsers download a small on-device speech pack, after which what you say is recognised on your device.' },
   { q: 'What do Think and Research do?', a: 'Think tells the engine to reason more carefully before it answers — best for tricky questions. Research lets it check the live web and cite what it finds — best for anything recent. Turn either on from the chat composer; when a live search comes up empty, VinaX says so plainly instead of guessing.' },
   { q: 'How do I control songs from the chat?', a: '“play <song>”, “pause”, “next” and “previous” all work as messages. A play request answers with artwork, play/pause and skip controls, a seek bar and the current lyric line — the card always mirrors the real player.' },
-  { q: 'What does the Queue page do?', a: 'It’s the AI DJ’s home. The queue builds itself around what’s playing, every upcoming song shows WHY it was picked, and the tune chips — ✦ Surprise me, More chill, More energetic, Romantic — retune it instantly.' },
+  { q: 'What does the Queue page do?', a: 'It’s the AI DJ’s home. The queue builds itself around what’s playing, every upcoming song shows WHY it was picked, and the tune chips — ✦ Surprise me, More chill, More energetic, Romantic — retune it instantly. The DJ also reads the room: time of day, weekend nights, your skip-streaks and live festivals all shape what comes next.' },
   { q: 'What is the Ctrl+K command palette?', a: 'Press Ctrl/⌘+K anywhere to open the command palette — jump to any page, fire player actions like play, pause and skip, or type a song name to find and play it instantly. Right-click any song for the same quick actions (play next, queue, favorite, copy link). In VinaX AI, Ctrl/⌘+K starts a fresh chat.' },
   { q: 'What do “AI DJ” and “Instant picks” mean under songs?', a: 'AI DJ means the AI curated those picks. Instant picks means the on-device engine answered while the AI was busy — honesty over pretending. Both follow your languages and mood.' },
   { q: 'What is the 🔔 bell on Home?', a: 'Your notification center: the daily song pick, owner announcements and recent release notes. Tapping a notification jumps straight to the song or page.' },
@@ -35,7 +38,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   { q: 'Why did my music pause during a phone call?', a: 'Android pauses all audio for calls. VinaX resumes by itself the moment the call ends — no need to reopen the app.' },
   { q: 'A song won’t play — why?', a: 'Music streams from community catalog sources that can be briefly unavailable. Try again in a moment or pick another version — the player also skips ahead automatically when a source fails.' },
   { q: 'Where are synced lyrics from, and what is “Meaning”?', a: 'Lyrics come from a public lyrics library, synced line-by-line with karaoke color-fill that follows your theme. If a line lands early or late, open the lyric offset and nudge the timing until it sits perfectly. Meaning gives you a one-line AI explanation; many songs also offer romanized and translated views.' },
-  { q: 'Can I change the look of the app?', a: 'Yes — Settings has dark, light and black (AMOLED) themes, and whichever you choose, the whole app gently tints itself to the artwork of the song playing. Lyrics pick up matching colors too.' },
+  { q: 'Can I change the look of the app?', a: 'Yes — Settings has dark, light and black (AMOLED) themes, ten accent colors, and two glass dials: Glass effect (classic solid → deep see-through glass) and Background blur (sharp → hazy). They work on phones too, with a battery-friendly range. Whichever you choose, the whole app gently tints itself to the artwork of the song playing.' },
   { q: 'How do I move VinaX to a new device?', a: 'Old device: Settings → Your Data → Export. New device: on the welcome screen tap “Import your profile” (or Settings → Your Data → Import). Favorites, history, taste and settings arrive intact.' },
   { q: 'How do I export or erase everything?', a: 'Settings → Your Data. Export downloads one file with everything; the clear buttons erase history, favorites, queue, cached data or the whole profile. Since nothing is on our servers, erasing locally erases it everywhere.' },
 ];
@@ -88,6 +91,22 @@ const GUIDES: Array<{ title: string; steps: string[] }> = [
       'Pin your languages on the Languages page — every shelf and mix follows them.',
       'Favorite what you love and skip what you don’t; the on-device taste profile learns silently.',
       'Check Taste Profile to see what it learned, and Settings → Recommendations to set how bold it should be.',
+    ],
+  },
+  {
+    title: 'Make the app yours',
+    steps: [
+      'Open Settings → Appearance. Tap a Theme chip — Dark, Black (AMOLED), Light or System.',
+      'Tap an accent dot to recolor buttons, links and the player. Drag the Glass and Blur sliders until the panels feel right.',
+      'Tap Home layout to hide blocks you skip and move your favourites to the top — the Home tab reshuffles instantly.',
+    ],
+  },
+  {
+    title: 'Enjoy the festival looks',
+    steps: [
+      'Do nothing — on Sankranti, Holi, Onam, Diwali, Christmas and 19 more festivals, the app dresses itself automatically.',
+      'Look for the greeting splash when you open the app, the festive colors everywhere, and a festival shelf on Home.',
+      'When the festival window ends, everything quietly returns to your normal look.',
     ],
   },
   {

@@ -37,14 +37,22 @@ import { moveHomeBlock, resetHomeLayout, toggleHomeBlock } from '@/features/sett
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
-function Row({ label, note, children }: { label: string; note?: string; children: ReactNode }) {
+function Row({ label, note, children, stack }: { label: string; note?: string; children: ReactNode; stack?: boolean }) {
+  // `stack` — for wide controls (color swatches, sliders, chip groups): on
+  // phones the control drops BELOW the label at full width instead of
+  // crushing the label column into one-word-per-line text.
   return (
-    <div className="flex items-start justify-between gap-4 py-3.5 border-b border-[color:var(--glass-border)] last:border-0">
+    <div
+      className={cn(
+        'py-3.5 border-b border-[color:var(--glass-border)] last:border-0',
+        stack ? 'flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4' : 'flex items-start justify-between gap-4',
+      )}
+    >
       <div>
         <p className="text-sm font-medium">{label}</p>
         {note && <p className="text-xs text-ink-400 mt-0.5 max-w-md leading-relaxed">{note}</p>}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className={stack ? 'sm:shrink-0' : 'shrink-0'}>{children}</div>
     </div>
   );
 }
@@ -220,7 +228,7 @@ export default function SettingsPage() {
             ))}
           </div>
         </Row>
-        <Row label="Theme">
+        <Row stack label="Theme">
           <div className="flex gap-1.5">
             {(['dark', 'amoled', 'light', 'system'] as const).map((t) => (
               <Chip key={t} active={s.theme === t} onClick={() => s.setTheme(t)}>
@@ -229,7 +237,7 @@ export default function SettingsPage() {
             ))}
           </div>
         </Row>
-        <Row label="Accent color" note="The highlight color across buttons, links and the player. Every choice stays readable in light and dark.">
+        <Row stack label="Accent color" note="The highlight color across buttons, links and the player. Every choice stays readable in light and dark.">
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Accent color">
             {ACCENT_OPTIONS.map((a) => (
               <button
@@ -247,7 +255,7 @@ export default function SettingsPage() {
             ))}
           </div>
         </Row>
-        <Row label="Glass effect" note="How see-through panels and bars feel — iOS-style frosted glass. Left is classic solid, right is deep glass.">
+        <Row stack label="Glass effect" note="How see-through panels and bars feel — iOS-style frosted glass. Left is classic solid, right is deep glass.">
           <div className="flex items-center gap-3 w-full max-w-[260px]">
             <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">SOLID</span>
             <input
@@ -267,7 +275,7 @@ export default function SettingsPage() {
             <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">GLASS</span>
           </div>
         </Row>
-        <Row label="Background blur" note="Independent from glass — dial from sharp glass to a soft, hazy backdrop.">
+        <Row stack label="Background blur" note="Independent from glass — dial from sharp glass to a soft, hazy backdrop.">
           <div className="flex items-center gap-3 w-full max-w-[260px]">
             <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">SHARP</span>
             <input
@@ -340,7 +348,7 @@ export default function SettingsPage() {
         <Row label="Reduce motion" note="Minimise animations and transitions across the app (better for motion sensitivity and older phones).">
           <Toggle on={s.reduceMotion} onChange={(v) => { s.setReduceMotion(v); document.documentElement.classList.toggle('reduce-motion', v); }} label="Reduce motion" />
         </Row>
-        <Row label="Density" note="Comfortable spacing or compact for more on screen.">
+        <Row stack label="Density" note="Comfortable spacing or compact for more on screen.">
           <div className="flex gap-1.5">
             {(['comfortable', 'compact'] as const).map((d) => (
               <Chip key={d} active={s.density === d} onClick={() => s.setDensity(d)}>
@@ -377,7 +385,7 @@ export default function SettingsPage() {
             </button>
           </Row>
         )}
-        <Row label="Audio quality" note="Picks the closest available stream; falls back automatically.">
+        <Row stack label="Audio quality" note="Picks the closest available stream; falls back automatically.">
           <div className="flex gap-1.5">
             {(['low', 'medium', 'high'] as AudioQualityPref[]).map((q) => (
               <Chip key={q} active={s.audioQuality === q} onClick={() => s.setAudioQuality(q)}>
@@ -386,7 +394,7 @@ export default function SettingsPage() {
             ))}
           </div>
         </Row>
-        <Row label="Lyrics size" note="Text size for synced lyrics in the player, karaoke, and lyrics page.">
+        <Row stack label="Lyrics size" note="Text size for synced lyrics in the player, karaoke, and lyrics page.">
           <div className="flex gap-1.5">
             {(['sm', 'md', 'lg', 'xl'] as const).map((z) => (
               <Chip key={z} active={s.lyricsSize === z} onClick={() => s.setLyricsSize(z)}>
@@ -398,7 +406,7 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="Recommendations" icon={SparkleIcon}>
-        <Row label="Intensity" note="Low = mostly popular/trending. High = strongly personalized.">
+        <Row stack label="Intensity" note="Low = mostly popular/trending. High = strongly personalized.">
           <div className="flex items-center gap-2">
             <input
               type="range"
