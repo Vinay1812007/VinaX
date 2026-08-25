@@ -4,6 +4,7 @@ import type { Song } from '@/types';
 import { searchSongsPage } from '@/services/api';
 import { rankSongs } from '@/features/search/useSearch';
 import { getAiHomeSections } from '@/services/ai/home';
+import { buildSessionContext } from '@/services/ai/sessionContext';
 import { biasUnseenFirst, loadRecentHomeIds, recordRecentHomeIds, reorderByShelfMood, rotatePage } from '@/features/home/homeVariety';
 import { loadProfile, profileStamp } from '@/services/personalization/storage';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
@@ -48,9 +49,9 @@ export function useAiHome() {
     refetchOnMount: 'always',
     queryFn: async () => {
       const profile = loadProfile();
-      const h = new Date().getHours();
-      const timeOfDay = h < 5 ? 'late night' : h < 12 ? 'morning' : h < 17 ? 'afternoon' : h < 22 ? 'evening' : 'night';
       const entries = useHistoryStore.getState().entries;
+      // Deep session context: weekday vibe, listener energy, festival.
+      const session = buildSessionContext(entries);
       const counts = new Map<string, { label: string; n: number }>();
       for (const e of entries) {
         const cur = counts.get(e.song.id);
@@ -64,7 +65,7 @@ export function useAiHome() {
         topSongs,
         preferredLanguages: pinned,
         freshnessSeed: visitNonce,
-        timeOfDay,
+        ...session,
         recentlyPlayed: entries.slice(0, 10).map((e) => `${e.song.title} — ${e.song.subtitle}`),
         // Package C3 — hand-tuned dials ride along in the stringified context.
         tasteDials: sliderDialLines(getSliders(profile)),
