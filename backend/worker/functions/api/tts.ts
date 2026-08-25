@@ -46,7 +46,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const { request, env } = context;
   // Voice chat speaks sentence-by-sentence, so one turn is a small burst of
   // requests — capacity covers a long reply, refill covers steady listening.
-  const limited = rateLimit(request, 'tts', { capacity: 30, refillPerMinute: 30 });
+  const limited = await rateLimit(request, 'tts', { capacity: 30, refillPerMinute: 30 });
   if (limited) return limited;
   const json = (b: unknown, status = 200): Response =>
     new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS } });

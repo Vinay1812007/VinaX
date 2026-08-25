@@ -14,7 +14,7 @@
  */
 import { chat, gather, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
+import { type DbEnv } from '../_lib/db';
 import { tasteBlock } from '../_lib/taste';
 import { styleAngle } from '../_lib/variety';
 
@@ -132,7 +132,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv & DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> => {
   try {
@@ -146,12 +146,12 @@ export const onRequestPost = async (context: {
 
 async function handlePost(context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv & DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'playlist', { capacity: 6, refillPerMinute: 3 });
+  const limited = await rateLimit(request, 'playlist', { capacity: 6, refillPerMinute: 3 });
   if (limited) return limited;
 
   let body: { prompt?: unknown; languages?: unknown; taste?: unknown; avoidTitles?: unknown };

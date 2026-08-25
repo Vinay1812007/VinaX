@@ -1,6 +1,6 @@
 /** Community top searches (7d) — aggregated anonymous query strings only.
  *  Public + edge-cached; powers the chips under the search bar. */
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { dbSelect, dbConfigured, type DbEnv } from '../_lib/db';
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -10,15 +10,15 @@ const CORS: Record<string, string> = {
 export const onRequestOptions = async (): Promise<Response> =>
   new Response(null, { status: 204, headers: CORS });
 
-export const onRequestGet = async (context: { env: SupabaseEnv }): Promise<Response> => {
+export const onRequestGet = async (context: { env: DbEnv }): Promise<Response> => {
   const { env } = context;
-  if (!supabaseConfigured(env)) {
+  if (!dbConfigured(env)) {
     return new Response(JSON.stringify({ queries: [] }), {
       headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=600', ...CORS },
     });
   }
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const rows = await sbSelect<{ message: string | null }>(
+  const rows = await dbSelect<{ message: string | null }>(
     env,
     'vinax_events',
     `type=eq.search&created_at=gte.${encodeURIComponent(since)}&select=message&order=created_at.desc&limit=2000`,

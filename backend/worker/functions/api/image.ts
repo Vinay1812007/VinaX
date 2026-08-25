@@ -28,7 +28,7 @@ export const onRequestOptions = async (): Promise<Response> =>
 export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
-  const limited = rateLimit(context.request, 'image', { capacity: 6, refillPerMinute: 3 });
+  const limited = await rateLimit(context.request, 'image', { capacity: 6, refillPerMinute: 3 });
   if (limited) return limited;
   try {
     return await handleImage(context);

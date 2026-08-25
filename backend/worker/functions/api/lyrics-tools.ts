@@ -3,7 +3,7 @@
  *  of lines in the same order so synced-lyric timing stays aligned. */
 import { chat, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
+import { type DbEnv } from '../_lib/db';
 
 const SYS: Record<string, string> = {
   romanize:
@@ -35,7 +35,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv & DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> => {
   try {
@@ -49,12 +49,12 @@ export const onRequestPost = async (context: {
 
 async function handlePost(context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv & DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'lyrics-tools', { capacity: 12, refillPerMinute: 6 });
+  const limited = await rateLimit(request, 'lyrics-tools', { capacity: 12, refillPerMinute: 6 });
   if (limited) return limited;
 
   const body = (await request.json().catch(() => null)) as { lines?: unknown; mode?: unknown } | null;

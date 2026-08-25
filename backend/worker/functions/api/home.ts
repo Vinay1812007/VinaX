@@ -9,7 +9,7 @@
  */
 import { chat, gather, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
+import { type DbEnv } from '../_lib/db';
 import { varietySeed, styleAngle } from '../_lib/variety';
 
 const SYSTEM_PROMPT = `You compose the home screen of VinaX, a free music app for Indian music (Telugu, Hindi, Tamil and nine more languages). Work like a magazine editor with a music director's ear: the front page is curated in moods, tempo arcs and eras — never in lazy tags — and it reads differently every day. If anyone asks, VinaX built you; no AI vendor or model is ever named. From a listener's on-device taste and the time of day, design 4 to 6 personalized home sections.
@@ -212,12 +212,12 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv & DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> => {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'home', { capacity: 10, refillPerMinute: 5 });
+  const limited = await rateLimit(request, 'home', { capacity: 10, refillPerMinute: 5 });
   if (limited) return limited;
 
   let body: { context?: Record<string, unknown>; avoidShelves?: unknown };

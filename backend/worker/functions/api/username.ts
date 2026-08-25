@@ -17,11 +17,11 @@
  * plus the partial unique index added in the vinax_users migration
  * (create unique index on lower(username)) as the race-proof backstop.
  */
-import { sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { dbSelect, dbUpsert, dbConfigured, type DbEnv } from '../_lib/db';
 import { deriveServerDeviceId, signDeviceId, verifyDeviceId } from '../_lib/deviceid';
 import { rateLimit } from '../_lib/ratelimit';
 
-interface Env extends SupabaseEnv {
+interface Env extends DbEnv {
   DEVICE_ID_SECRET?: string;
   TELEMETRY_PEPPER?: string;
 }
@@ -39,7 +39,7 @@ const normalize = (raw: unknown): string | null => {
 
 /** Owner device of a handle, or null when the handle is free. */
 async function ownerOf(env: Env, username: string): Promise<string | null> {
-  const rows = await sbSelect<{ device_id: string }>(
+  const rows = await dbSelect<{ device_id: string }>(
     env,
     'vinax_users',
     `username=ilike.${encodeURIComponent(username)}&select=device_id&limit=1`,
@@ -80,8 +80,8 @@ async function resolveDevice(
 /** Availability probe — used live while the listener types. */
 export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = ctx;
-  if (!supabaseConfigured(env)) return json({ available: true, unchecked: true });
-  const limited = rateLimit(request, 'username-check', { capacity: 30, refillPerMinute: 30 }, env);
+  if (!dbConfigured(env)) return json({ available: true, unchecked: true });
+  const limited = await rateLimit(request, 'username-check', { capacity: 30, refillPerMinute: 30 }, env);
   if (limited) return limited;
   const username = normalize(new URL(request.url).searchParams.get('u'));
   if (!username) return json({ available: false, error: 'invalid' }, 400);
@@ -91,8 +91,8 @@ export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise
 /** Claim — called once from onboarding's Continue. Idempotent per device. */
 export const onRequestPost = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = ctx;
-  if (!supabaseConfigured(env)) return json({ ok: true, unchecked: true });
-  const limited = rateLimit(request, 'username-claim', { capacity: 10, refillPerMinute: 5 }, env);
+  if (!dbConfigured(env)) return json({ ok: true, unchecked: true });
+  const limited = await rateLimit(request, 'username-claim', { capacity: 10, refillPerMinute: 5, global: true }, env);
   if (limited) return limited;
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return json({ error: 'invalid' }, 400);
@@ -116,7 +116,7 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   };
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : '';
   if (name) row.name = name;
-  const saved = await sbUpsert(env, 'vinax_users', row, 'device_id');
+  const saved = await dbUpsert(env, 'vinax_users', row, 'device_id');
   // The DB's unique index is the race backstop: if a parallel claim won,
   // the upsert fails and the handle reads as taken.
   if (!saved) return json({ error: 'taken', suggestions: await suggest(env, username) }, 409);

@@ -9,7 +9,7 @@
  * filtered to their schedule window HERE so clients never see (or ship logic
  * for) expired/unstarted campaigns.
  */
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { dbSelect, dbConfigured, type DbEnv } from '../_lib/db';
 
 interface ConfigRow {
   value: unknown;
@@ -51,14 +51,14 @@ export function activeBanners(value: unknown, now = new Date()): Banner[] {
     .slice(0, 10);
 }
 
-export const onRequestGet = async (context: { request: Request; env: SupabaseEnv }): Promise<Response> => {
+export const onRequestGet = async (context: { request: Request; env: DbEnv }): Promise<Response> => {
   const { request, env } = context;
   const key = new URL(request.url).searchParams.get('key') ?? '';
   if (key !== 'banners' && key !== 'home-config') {
     return new Response(JSON.stringify({ error: 'unknown_key' }), { status: 400, headers: { 'content-type': 'application/json' } });
   }
-  if (!supabaseConfigured(env)) return json(key === 'banners' ? { banners: [] } : { config: null });
-  const rows = await sbSelect<ConfigRow>(env, 'vinax_config', `key=eq.${encodeURIComponent(key)}&select=value&limit=1`).catch(
+  if (!dbConfigured(env)) return json(key === 'banners' ? { banners: [] } : { config: null });
+  const rows = await dbSelect<ConfigRow>(env, 'vinax_config', `key=eq.${encodeURIComponent(key)}&select=value&limit=1`).catch(
     () => [] as ConfigRow[],
   );
   const value = rows[0]?.value ?? null;

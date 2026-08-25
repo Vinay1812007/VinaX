@@ -60,7 +60,7 @@ function randomId(): string {
 export const onRequestPost = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = ctx;
   if (!env.HANDOFF) return json({ error: 'not_configured' }, 503);
-  const limited = rateLimit(request, 'handoff-put', { capacity: 5, refillPerMinute: 3 }, env);
+  const limited = await rateLimit(request, 'handoff-put', { capacity: 5, refillPerMinute: 3, global: true }, env);
   if (limited) return limited;
 
   let body: { blob?: unknown; iv?: unknown };
@@ -83,7 +83,7 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
 export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = ctx;
   if (!env.HANDOFF) return json({ error: 'not_configured' }, 503);
-  const limited = rateLimit(request, 'handoff-get', { capacity: 10, refillPerMinute: 5 }, env);
+  const limited = await rateLimit(request, 'handoff-get', { capacity: 10, refillPerMinute: 5 }, env);
   if (limited) return limited;
 
   const id = new URL(request.url).searchParams.get('c') ?? '';

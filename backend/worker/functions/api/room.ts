@@ -5,11 +5,11 @@
  *    guests. This prevents a code-holder from hijacking playback or destroying
  *    the room for everyone. See audit finding H8.
  *  No personal data; both secrets are generated with crypto.getRandomValues. */
-import { sbDelete, sbInsertIgnore, sbRpc, sbSelect, sbSelectRes, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { dbDelete, dbInsertIgnore, dbRpc, dbSelect, dbSelectRes, dbUpsert, dbConfigured, type DbEnv } from '../_lib/db';
 import { rateLimit } from '../_lib/ratelimit';
 import { safeEqual } from '../_lib/safe-compare';
 
-interface RoomEnv extends SupabaseEnv {
+interface RoomEnv extends DbEnv {
   TELEMETRY_PEPPER?: string;
 }
 
@@ -30,8 +30,8 @@ function json(body: unknown, status = 200): Response {
 
 /** Rate-limit bucket lookup for each room action. Different verbs get very
  *  different budgets (heartbeats fire every ~5s, creates should not). */
-const ROOM_RL: Record<string, { capacity: number; refillPerMinute: number }> = {
-  create: { capacity: 3, refillPerMinute: 3 },
+const ROOM_RL: Record<string, { capacity: number; refillPerMinute: number; global?: boolean }> = {
+  create: { capacity: 3, refillPerMinute: 3, global: true },
   heartbeat: { capacity: 60, refillPerMinute: 60 },
   request: { capacity: 20, refillPerMinute: 20 },
   react: { capacity: 20, refillPerMinute: 15 },
@@ -106,7 +106,7 @@ function newHostToken(): string {
 /** Read the stored host_token for a room; returns null if the row lacks one
  *  (legacy rooms created before this deploy). */
 async function readHostToken(env: Env, code: string): Promise<string | null | 'missing_row'> {
-  const rows = await sbSelect<{ host_token: string | null }>(
+  const rows = await dbSelect<{ host_token: string | null }>(
     env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=host_token`,
   );
   if (!rows.length) return 'missing_row';
@@ -121,7 +121,7 @@ async function readHostToken(env: Env, code: string): Promise<string | null | 'm
  *  rows now return 403 legacy_room instead.
  *
  *  TODO(security H-SRV-5): backfill host_token for existing rows via a
- *  Supabase migration OR run a purge cron that deletes rows older than a few
+ *  DB migration OR run a purge cron that deletes rows older than a few
  *  hours (rooms are short-lived; the legacy fleet drains naturally). Until
  *  then, host actions on pre-fix rooms fail fast — guests can still read the
  *  room, and the host recreates cleanly. */
@@ -142,9 +142,9 @@ async function requireHost(env: Env, code: string, provided: string | null): Pro
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  const limited = rateLimit(request, 'room-get', ROOM_RL.GET, env);
+  const limited = await rateLimit(request, 'room-get', ROOM_RL.GET, env);
   if (limited) return limited;
-  if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
+  if (!dbConfigured(env)) return json({ error: 'not_configured' }, 503);
   const url = new URL(request.url);
   const code = clip(url.searchParams.get('code'), 8);
   if (!code) return json({ error: 'bad_request' }, 400);
@@ -153,17 +153,17 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const since = new Date(Date.now() - 12_000).toISOString();
   const reactSince = new Date(Date.now() - REACTION_WINDOW_MS).toISOString();
   const [rooms, members, reactionRows] = await Promise.all([
-    sbSelect<{ host_name: string | null; song: unknown; position: number; playing: boolean; updated_at: string; host_token: string | null }>(
+    dbSelect<{ host_name: string | null; song: unknown; position: number; playing: boolean; updated_at: string; host_token: string | null }>(
       env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=host_name,song,position,playing,updated_at,host_token`,
     ),
-    sbSelect<{ name: string | null }>(
+    dbSelect<{ name: string | null }>(
       env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}&last_seen=gte.${encodeURIComponent(since)}&select=name`,
     ),
     // D11 — recent reactions, DELIBERATELY a separate query: if the reaction
     // columns haven't been migrated yet this select 400s alone and reactions
     // are simply absent, while memberCount keeps working untouched. No names
     // attached — reactions are anonymous to guests by design (M-SRV-2 spirit).
-    sbSelect<{ reaction: string | null; reacted_at: string | null }>(
+    dbSelect<{ reaction: string | null; reacted_at: string | null }>(
       env,
       'vinax_room_members',
       `code=eq.${encodeURIComponent(code)}&reacted_at=gte.${encodeURIComponent(reactSince)}&reaction=not.is.null&select=reaction,reacted_at`,
@@ -209,26 +209,26 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
+  if (!dbConfigured(env)) return json({ error: 'not_configured' }, 503);
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const action = body ? clip(body.action, 12) : null;
   const now = new Date().toISOString();
 
   if (action === 'create') {
-    const rl = rateLimit(request, 'room-create', ROOM_RL.create, env);
+    const rl = await rateLimit(request, 'room-create', ROOM_RL.create, env);
     if (rl) return rl;
-    // sbUpsert with merge-duplicates would silently overwrite an existing
+    // dbUpsert with merge-duplicates would silently overwrite an existing
     // row's host_token if two concurrent creates picked the same random code
     // — the second caller would receive a hostToken the first caller can't
     // recognize, and the first host's control of the room silently evaporates
-    // (audit finding H-SRV-4). Use sbInsertIgnore instead: on collision the
+    // (audit finding H-SRV-4). Use dbInsertIgnore instead: on collision the
     // response comes back empty, and we regenerate + retry.
     let created: { code: string; hostToken: string } | null = null;
     for (let attempt = 0; attempt < 5 && !created; attempt += 1) {
       const code = newCode();
       const hostToken = newHostToken();
-      const rows = await sbInsertIgnore<{ code: string }>(env, 'vinax_rooms', {
+      const rows = await dbInsertIgnore<{ code: string }>(env, 'vinax_rooms', {
         code,
         host_name: body ? clip(body.hostName, 60) : null,
         host_token: hostToken,
@@ -243,15 +243,15 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
         // PostgREST refuses the whole row and every "Start session" fails.
         // Probe the schema so the client (and the admin) get an honest,
         // actionable error instead of a generic 500.
-        const probe = await sbSelectRes(env, 'vinax_rooms', 'select=host_token&limit=1');
+        const probe = await dbSelectRes(env, 'vinax_rooms', 'select=host_token&limit=1');
         if (!probe.ok) {
-          const tableProbe = await sbSelectRes(env, 'vinax_rooms', 'select=code&limit=1');
+          const tableProbe = await dbSelectRes(env, 'vinax_rooms', 'select=code&limit=1');
           return json(
             {
               error: 'needs_migration',
               message: tableProbe.ok
-                ? 'vinax_rooms is missing the host_token column — run supabase/migrations/2026-08-vinax-rooms-hosttoken.sql'
-                : 'vinax_rooms table is missing — run supabase/schema.sql',
+                ? 'vinax_rooms is missing the host_token column — bump the schema in _lib/db.ts'
+                : 'vinax_rooms table is missing — check the DB (D1) binding in wrangler.toml',
             },
             503,
           );
@@ -269,7 +269,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
 
   if (action === 'update') {
-    const rl = rateLimit(request, 'room-update', ROOM_RL.update, env);
+    const rl = await rateLimit(request, 'room-update', ROOM_RL.update, env);
     if (rl) return rl;
     const code = body ? clip(body.code, 8) : null;
     if (!code) return json({ error: 'bad_request' }, 400);
@@ -278,7 +278,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     if (authErr) return authErr;
     // Preserve requests the host hasn't consumed yet — a state push must
     // never clobber a guest request that raced it.
-    const existing = await sbSelect<{ song: unknown }>(
+    const existing = await dbSelect<{ song: unknown }>(
       env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=song`,
     );
     const prev = unpackSong(existing[0]?.song);
@@ -286,7 +286,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       ? (body?.consumedIds as unknown[]).filter((x): x is string => typeof x === 'string')
       : [];
     const requests = prev.requests.filter((t) => !consumedIds.includes(songIdOf(t)));
-    const ok = await sbUpsert(env, 'vinax_rooms', {
+    const ok = await dbUpsert(env, 'vinax_rooms', {
       code,
       song: { v: 2, current: body?.song ?? null, queue: trackArr(body?.queue, 12), requests },
       position: typeof body?.position === 'number' ? body.position : 0,
@@ -297,7 +297,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
 
   if (action === 'request') {
-    const rl = rateLimit(request, 'room-request', ROOM_RL.request, env);
+    const rl = await rateLimit(request, 'room-request', ROOM_RL.request, env);
     if (rl) return rl;
     const code = body ? clip(body.code, 8) : null;
     if (!code) return json({ error: 'bad_request' }, 400);
@@ -318,16 +318,16 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     // Atomic append inside the DB so two concurrent guest requests don't
     // clobber each other via read-modify-write (audit finding M12). The RPC
     // also de-dupes and caps to the last 20 entries.
-    const ok = await sbRpc<void>(env, 'vinax_room_append_request', {
+    const ok = await dbRpc<void>(env, 'vinax_room_append_request', {
       p_code: code,
       p_song: cleanSong,
       p_by: (body ? clip(body.by, 40) : null) ?? '',
     });
-    // sbRpc returns null on any HTTP failure — including our own
+    // dbRpc returns null on any HTTP failure — including our own
     // `room_not_found` raise, so translate that to a 404 client-side by
     // probing existence when the RPC signals a failure.
     if (ok === null) {
-      const existing = await sbSelect<{ code: string }>(
+      const existing = await dbSelect<{ code: string }>(
         env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=code`,
       );
       if (!existing.length) return json({ error: 'not_found' }, 404);
@@ -337,7 +337,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
 
   if (action === 'react') {
-    const rl = rateLimit(request, 'room-react', ROOM_RL.react, env);
+    const rl = await rateLimit(request, 'room-react', ROOM_RL.react, env);
     if (rl) return rl;
     const code = body ? clip(body.code, 8) : null;
     const deviceId = body ? clip(body.deviceId, 64) : null;
@@ -349,7 +349,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     // (keyed code+device_id), so no RPC is needed — unlike the shared request
     // array. One live reaction per member also self-limits spam. Doubles as a
     // heartbeat. Fails soft (ok:false) until the reaction columns exist.
-    const ok = await sbUpsert(env, 'vinax_room_members', {
+    const ok = await dbUpsert(env, 'vinax_room_members', {
       code,
       device_id: deviceId,
       name: body ? clip(body.name, 60) : null,
@@ -361,19 +361,19 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
 
   if (action === 'heartbeat') {
-    const rl = rateLimit(request, 'room-heartbeat', ROOM_RL.heartbeat, env);
+    const rl = await rateLimit(request, 'room-heartbeat', ROOM_RL.heartbeat, env);
     if (rl) return rl;
     const code = body ? clip(body.code, 8) : null;
     const deviceId = body ? clip(body.deviceId, 64) : null;
     if (!code || !deviceId) return json({ error: 'bad_request' }, 400);
-    const ok = await sbUpsert(env, 'vinax_room_members', {
+    const ok = await dbUpsert(env, 'vinax_room_members', {
       code, device_id: deviceId, name: body ? clip(body.name, 60) : null, last_seen: now,
     }, 'code,device_id');
     return json({ ok });
   }
 
   if (action === 'end') {
-    const rl = rateLimit(request, 'room-end', ROOM_RL.end, env);
+    const rl = await rateLimit(request, 'room-end', ROOM_RL.end, env);
     if (rl) return rl;
     const code = body ? clip(body.code, 8) : null;
     if (!code) return json({ error: 'bad_request' }, 400);
@@ -381,19 +381,19 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     const authErr = await requireHost(env, code, hostToken);
     if (authErr) return authErr;
     const ok = await Promise.all([
-      sbDelete(env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}`),
-      sbDelete(env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}`),
+      dbDelete(env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}`),
+      dbDelete(env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}`),
     ]).then((r) => r.every(Boolean));
     return json({ ok });
   }
 
   if (action === 'leave') {
-    const rl = rateLimit(request, 'room-leave', ROOM_RL.leave, env);
+    const rl = await rateLimit(request, 'room-leave', ROOM_RL.leave, env);
     if (rl) return rl;
     const code = body ? clip(body.code, 8) : null;
     const deviceId = body ? clip(body.deviceId, 64) : null;
     if (!code || !deviceId) return json({ error: 'bad_request' }, 400);
-    const ok = await sbDelete(env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}&device_id=eq.${encodeURIComponent(deviceId)}`);
+    const ok = await dbDelete(env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}&device_id=eq.${encodeURIComponent(deviceId)}`);
     return json({ ok });
   }
 

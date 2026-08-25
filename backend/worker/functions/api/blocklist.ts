@@ -1,8 +1,8 @@
 /** Public, cacheable list of blocked song ids. The app fetches this and hides
  *  the matching songs from results + playback. Coarse, no auth needed. */
-import { sbSelect, type SupabaseEnv } from '../_lib/supabase';
+import { dbSelect, type DbEnv } from '../_lib/db';
 
-type Env = SupabaseEnv;
+type Env = DbEnv;
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -22,7 +22,7 @@ interface IdRow { song_id: string; }
 // `ids` keep working — prefixed entries can never collide with real ids and
 // are also filtered out of the ids array below.
 export const onRequestGet = async (context: { env: Env }): Promise<Response> => {
-  const rows = await sbSelect<IdRow>(context.env, 'vinax_blocklist', 'select=song_id&limit=5000');
+  const rows = await dbSelect<IdRow>(context.env, 'vinax_blocklist', 'select=song_id&limit=5000');
   const ids: string[] = [];
   const artists: string[] = [];
   const keywords: string[] = [];

@@ -8,7 +8,7 @@ import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { istNowLine } from '../_lib/time';
-import { type SupabaseEnv } from '../_lib/supabase';
+import { type DbEnv } from '../_lib/db';
 
 const SYSTEM_PROMPT = `You are VinaX Assistant — the friendly helper built into VinaX (sirimillavinay.online), a free, private, no-login music app with its heart in Indian music (Telugu, Hindi, Tamil and nine more languages). Listeners bring you anything: everyday questions, writing, translations, quick math, advice — help the way a great general assistant would, warm and concise, a few short sentences unless the question truly needs more. If anyone asks who made or built you: "VinaX built me" — no AI vendor or model is ever named.
 
@@ -52,7 +52,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv & DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> => {
   try {
@@ -67,12 +67,12 @@ export const onRequestPost = async (context: {
 
 async function handlePost(context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv & DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'assistant', { capacity: 20, refillPerMinute: 10 });
+  const limited = await rateLimit(request, 'assistant', { capacity: 20, refillPerMinute: 10 });
   if (limited) return limited;
   let body: { messages?: InMsg[]; taste?: unknown };
   try {

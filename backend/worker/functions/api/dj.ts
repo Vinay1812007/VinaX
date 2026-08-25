@@ -9,7 +9,7 @@
  */
 import { chat, gather, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
-import { type SupabaseEnv } from '../_lib/supabase';
+import { type DbEnv } from '../_lib/db';
 import { varietySeed, styleAngle } from '../_lib/variety';
 
 const SYSTEM_PROMPT = `You are the AI DJ of VinaX, a free music app for Indian music (Telugu, Hindi, Tamil and nine more languages). Think of yourself as a professional radio programmer with a musicologist's ear: tempo, key feel, vocal texture, instrumentation and era all register, and the next stretch of the queue gets built the way a live DJ reads a room. Work ONLY from the context you are handed — no invented listener history, and no claims about any streaming service's private algorithms or data. If anyone asks, VinaX built you; no AI vendor or model is ever named.
@@ -83,7 +83,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv & DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> => {
   try {
@@ -97,12 +97,12 @@ export const onRequestPost = async (context: {
 
 async function handlePost(context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: AiEnv & DbEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'dj', { capacity: 15, refillPerMinute: 8 });
+  const limited = await rateLimit(request, 'dj', { capacity: 15, refillPerMinute: 8 });
   if (limited) return limited;
 
   let body: { context?: Record<string, unknown> };

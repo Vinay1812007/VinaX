@@ -1,6 +1,6 @@
 /** Current site mode — 'live' (default) or 'maintenance' with a note.
  *  Set from the admin console; the client checks this every minute. */
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { dbSelect, dbConfigured, type DbEnv } from '../_lib/db';
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -10,11 +10,11 @@ const CORS: Record<string, string> = {
 export const onRequestOptions = async (): Promise<Response> =>
   new Response(null, { status: 204, headers: CORS });
 
-export const onRequestGet = async (context: { env: SupabaseEnv }): Promise<Response> => {
+export const onRequestGet = async (context: { env: DbEnv }): Promise<Response> => {
   const { env } = context;
   const headers = { 'content-type': 'application/json', 'cache-control': 'public, max-age=60', ...CORS };
-  if (!supabaseConfigured(env)) return new Response(JSON.stringify({ mode: 'live' }), { headers });
-  const rows = await sbSelect<{ message: string | null }>(
+  if (!dbConfigured(env)) return new Response(JSON.stringify({ mode: 'live' }), { headers });
+  const rows = await dbSelect<{ message: string | null }>(
     env,
     'vinax_events',
     'type=eq.site-mode&select=message&order=created_at.desc&limit=1',
