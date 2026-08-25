@@ -1907,7 +1907,7 @@
       return '<div class="hs-row' + (s.enabled ? '' : ' disabled') + '" data-id="' + esc(s.id) + '">' +
         '<span class="hs-ord">' + (i + 1) + '</span>' +
         '<span style="flex:1;font-weight:600">' + esc(blockName(s.id)) + ' <span class="muted" style="font-size:11px;font-weight:400">' + esc(s.id) + '</span></span>' +
-        '<span class="row" style="gap:4px"><button class="ghost hs-up" data-id="' + esc(s.id) + '" style="padding:3px 8px">▲</button><button class="ghost hs-dn" data-id="' + esc(s.id) + '" style="padding:3px 8px">▼</button></span>' +
+        '<span class="row" style="gap:6px"><button class="ghost icon-btn hs-up" data-id="' + esc(s.id) + '" title="Move up" aria-label="Move up"' + (i === 0 ? ' disabled' : '') + '>▲</button><button class="ghost icon-btn hs-dn" data-id="' + esc(s.id) + '" title="Move down" aria-label="Move down"' + (i === hsCfg.length - 1 ? ' disabled' : '') + '>▼</button></span>' +
         '<span class="row" style="gap:8px"><label class="switch"><span class="track ' + (s.enabled ? 'on' : '') + '"><span class="knob"></span></span><input type="checkbox" hidden class="hs-tog" data-id="' + esc(s.id) + '"' + (s.enabled ? ' checked' : '') + ' /></label></span>' +
         '</div>';
     }).join('');

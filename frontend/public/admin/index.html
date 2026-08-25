@@ -140,11 +140,24 @@
       /* Sparkline hover chip */
       .spk-chip { display: inline-block; position: fixed; pointer-events: none; background: #13131c; border: 1px solid #2a2a38; color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 8px; z-index: 40; opacity: 0; transition: opacity .1s; }
       .spk-chip.show { opacity: 1; }
-      /* Homescreen row */
-      .hs-row { display: grid; grid-template-columns: 24px 1fr 44px auto auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 6px; background: rgba(24,22,34,0.35); }
+      /* Homescreen row — 4 real columns (was 5 with a 44px slot that crushed
+         the reorder arrows into the toggle). */
+      .hs-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 6px; background: rgba(24,22,34,0.35); }
       .hs-row .hs-name { background: transparent; border: 0; color: #ecebf4; font-weight: 600; font-size: 13px; padding: 4px 6px; border-radius: 6px; }
       .hs-row .hs-name:focus { outline: 1px solid rgba(34,211,238,0.5); background: rgba(0,0,0,0.25); }
-      .hs-row .hs-ord { color: #6f6f7e; font-variant-numeric: tabular-nums; font-size: 12px; }
+      .hs-row .hs-ord { color: #6f6f7e; font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
+      /* Compact square icon buttons (reorder arrows etc.) — centered glyph,
+         clear disabled state at the ends of the list. */
+      .icon-btn { width: 32px; height: 32px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 11px; line-height: 1; }
+      .icon-btn:disabled { opacity: .22; }
+      /* Buttons: consistent hover / press feedback console-wide. */
+      button { transition: filter .12s ease, transform .08s ease, background .15s ease, box-shadow .15s ease, border-color .15s ease; }
+      button:not(:disabled):hover { filter: brightness(1.12); }
+      button:not(:disabled):active { transform: scale(.96); }
+      button.ghost:not(:disabled):hover { background: rgba(255,255,255,0.06); border-color: #3d3d50; filter: none; }
+      body.lightadm button.ghost:not(:disabled):hover { background: #eef0f7; border-color: #b9bdd1; }
+      /* Header icon buttons: uniform pill height, centered glyphs. */
+      header button.ghost { height: 34px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 13px; }
       .hs-row.disabled { opacity: 0.45; }
       body.lightadm .hs-row { background: #fbfbfe; border-color: #dfe1ea; }
       body.lightadm .hs-row .hs-name { color: #17171f; }
@@ -385,6 +398,7 @@
       /* Touch devices: comfortable hit areas. */
       @media (pointer: coarse) {
         button { min-height: 38px; }
+        .icon-btn { width: 38px; height: 38px; }
         .switch .track { width: 40px; height: 22px; }
         .switch .knob { width: 18px; height: 18px; }
         .switch .track.on .knob { left: 20px; }
