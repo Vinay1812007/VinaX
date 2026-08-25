@@ -312,9 +312,37 @@
         .card { border-color: #bbb; break-inside: avoid; }
         main { max-width: none; }
       }
+      /* ---------- Custom dialogs (styled alert / confirm / prompt) ---------- */
+      .vxd-overlay {
+        position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-start; justify-content: center;
+        padding: 12vh 20px 20px; background: rgba(4, 4, 8, 0.6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        animation: vxdFade .14s ease;
+      }
+      .vxd-overlay.closing { opacity: 0; transition: opacity .12s ease; pointer-events: none; }
+      .vxd {
+        width: 100%; max-width: 440px; background: #101018; border: 1px solid #262635; border-radius: 18px;
+        padding: 18px 20px 16px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(34, 211, 238, 0.06);
+        animation: vxdPop .16s cubic-bezier(.2, .9, .3, 1.2);
+      }
+      @keyframes vxdFade { from { opacity: 0; } }
+      @keyframes vxdPop { from { opacity: 0; transform: translateY(-8px) scale(.97); } }
+      .vxd-head { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 12px; letter-spacing: .6px; text-transform: uppercase; color: #9a9aa8; margin-bottom: 10px; }
+      .vxd-logo { width: 10px; height: 10px; border-radius: 50%; background: var(--grad); box-shadow: 0 0 10px rgba(34, 211, 238, 0.8); flex: none; }
+      .vxd.danger .vxd-logo { background: linear-gradient(135deg, #f87171, #f43f5e); box-shadow: 0 0 10px rgba(244, 63, 94, 0.7); }
+      .vxd-msg { font-size: 14.5px; line-height: 1.55; color: #ecebf4; white-space: pre-line; overflow-wrap: break-word; }
+      .vxd-input { margin-top: 12px; }
+      .vxd-note { margin-top: 7px; font-size: 12px; color: #fca5a5; min-height: 15px; }
+      .vxd-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+      .vxd-actions button { min-width: 88px; }
+      .vxd.danger .vxd-ok { background: linear-gradient(135deg, #f87171, #e11d48); }
+      body.lightadm .vxd-overlay { background: rgba(235, 236, 244, 0.55); }
+      body.lightadm .vxd { background: #fff; border-color: #d5d7e2; box-shadow: 0 24px 70px rgba(30, 30, 60, 0.25); }
+      body.lightadm .vxd-msg { color: #17171f; }
+      body.lightadm .vxd-head { color: #6b6b80; }
       @media (prefers-reduced-motion: reduce) {
         #view.enter > *, .bfill, .day .col { animation: none !important; }
         .card { transition: none; }
+        .vxd-overlay, .vxd { animation: none !important; }
       }
     </style>
   </head>

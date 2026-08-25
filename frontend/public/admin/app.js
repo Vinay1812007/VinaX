@@ -32,6 +32,84 @@
   }
   // Export to window for use across the file / future modules.
   try { window.html = html; } catch (_e) {}
+
+  // ---------- Custom dialogs (styled replacements for alert/confirm/prompt) ----------
+  // Native browser popups ("admin.sirimillavinay.online says") are replaced by
+  // in-page modals that match the console theme. Promise-based:
+  //   vxAlert(msg, opts)    → resolves when dismissed
+  //   vxConfirm(msg, opts)  → resolves true (OK) / false (Cancel)
+  //   vxPrompt(msg, opts)   → resolves trimmed input string, or null on cancel
+  // opts: { title, okText, cancelText, danger, placeholder, value, minLength,
+  // note }. danger paints the OK button red for destructive actions. Enter =
+  // OK, Escape / overlay click = Cancel. minLength keeps OK disabled (with an
+  // inline note) until the prompt input is long enough — mandatory reasons.
+  function vxDialog(o) {
+    return new Promise(function (resolve) {
+      var prevFocus = document.activeElement;
+      var isPrompt = o.mode === 'prompt';
+      var hasCancel = o.mode !== 'alert';
+      var wrap = document.createElement('div');
+      wrap.className = 'vxd-overlay';
+      wrap.innerHTML =
+        '<div class="vxd' + (o.danger ? ' danger' : '') + '" role="dialog" aria-modal="true">' +
+          '<div class="vxd-head"><span class="vxd-logo"></span>' + esc(o.title || 'VinaX Admin') + '</div>' +
+          '<div class="vxd-msg"></div>' +
+          (isPrompt ? '<input class="vxd-input" type="text">' : '') +
+          (isPrompt && o.minLength ? '<div class="vxd-note"></div>' : '') +
+          '<div class="vxd-actions">' +
+            (hasCancel ? '<button class="ghost vxd-cancel" type="button">' + esc(o.cancelText || 'Cancel') + '</button>' : '') +
+            '<button class="vxd-ok" type="button">' + esc(o.okText || 'OK') + '</button>' +
+          '</div>' +
+        '</div>';
+      wrap.querySelector('.vxd-msg').textContent = o.message || '';
+      var input = wrap.querySelector('.vxd-input');
+      var note = wrap.querySelector('.vxd-note');
+      var okBtn = wrap.querySelector('.vxd-ok');
+      var cancelBtn = wrap.querySelector('.vxd-cancel');
+      if (input) {
+        if (o.placeholder) input.placeholder = o.placeholder;
+        if (o.value) input.value = o.value;
+      }
+      function valid() {
+        if (!input || !o.minLength) return true;
+        var ok = input.value.trim().length >= o.minLength;
+        okBtn.disabled = !ok;
+        if (note) note.textContent = ok ? '' : (o.note || ('At least ' + o.minLength + ' characters required.'));
+        return ok;
+      }
+      function close(result) {
+        document.removeEventListener('keydown', onKey, true);
+        wrap.classList.add('closing');
+        setTimeout(function () { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }, 130);
+        if (prevFocus && prevFocus.focus) { try { prevFocus.focus(); } catch (_f) {} }
+        resolve(result);
+      }
+      function done() {
+        if (!valid()) { if (input) input.focus(); return; }
+        close(o.mode === 'confirm' ? true : (isPrompt ? input.value.trim() : undefined));
+      }
+      function cancel() { close(o.mode === 'confirm' ? false : (isPrompt ? null : undefined)); }
+      function onKey(e) {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); return; }
+        if (e.key === 'Enter') {
+          if (e.target === cancelBtn) return; // native click on focused Cancel
+          e.preventDefault(); done();
+        }
+      }
+      okBtn.addEventListener('click', done);
+      if (cancelBtn) cancelBtn.addEventListener('click', cancel);
+      wrap.addEventListener('mousedown', function (e) { if (e.target === wrap) cancel(); });
+      if (input) input.addEventListener('input', valid);
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(wrap);
+      valid();
+      setTimeout(function () { (input || okBtn).focus(); if (input && o.value) input.select(); }, 30);
+    });
+  }
+  function vxAlert(message, opts) { return vxDialog(Object.assign({ mode: 'alert', message: message }, opts || {})); }
+  function vxConfirm(message, opts) { return vxDialog(Object.assign({ mode: 'confirm', message: message }, opts || {})); }
+  function vxPrompt(message, opts) { return vxDialog(Object.assign({ mode: 'prompt', message: message }, opts || {})); }
+
   // Device-type icon for user rows: instant visual scan of web vs app.
   function platIcon(p) {
     p = String(p || 'web').toLowerCase();
@@ -471,11 +549,14 @@
         e.stopPropagation();
         if (b.disabled) return; // double-click guard: never stack two prompts / two deletes
         b.disabled = true;
-        var reason = window.prompt('Deleting this user and ALL their events.\n\nA reason is MANDATORY (kept as an audit note):');
-        if (reason == null) { b.disabled = false; return; }
-        reason = reason.trim();
-        if (reason.length < 3) { window.alert('Deletion cancelled — a written reason is mandatory.'); b.disabled = false; return; }
-        postApi('/api/admin/maintenance', { action: 'delete_user', device_id: b.getAttribute('data-del'), reason: reason }).then(function (r) { if (r) loadUsers(); else b.disabled = false; }).catch(function () { b.disabled = false; });
+        vxPrompt('Deleting this user and ALL their events.', {
+          title: 'Delete user', danger: true, okText: 'Delete user',
+          placeholder: 'Reason — mandatory, kept as an audit note',
+          minLength: 3, note: 'A written reason is mandatory (at least 3 characters).'
+        }).then(function (reason) {
+          if (reason == null) { b.disabled = false; return; }
+          postApi('/api/admin/maintenance', { action: 'delete_user', device_id: b.getAttribute('data-del'), reason: reason }).then(function (r) { if (r) loadUsers(); else b.disabled = false; }).catch(function () { b.disabled = false; });
+        });
       });
     });
     stamp();
@@ -600,14 +681,16 @@
       var el = $(btn);
       if (!el) return;
       el.addEventListener('click', function () {
-        if (!window.confirm(msg)) return;
-        el.disabled = true;
-        postApi('/api/admin/maintenance', Object.assign({ action: action }, extra || {})).then(function (r) {
-          el.disabled = false;
-          var o = $('mt-out');
-          if (o) o.textContent = r && r.ok ? 'Done ✓' : 'Failed';
-          setTimeout(function () { if (o) o.textContent = ''; }, 4000);
-        }).catch(function () { el.disabled = false; });
+        vxConfirm(msg, { title: 'Maintenance', danger: true, okText: 'Yes, run it' }).then(function (ok) {
+          if (!ok) return;
+          el.disabled = true;
+          postApi('/api/admin/maintenance', Object.assign({ action: action }, extra || {})).then(function (r) {
+            el.disabled = false;
+            var o = $('mt-out');
+            if (o) o.textContent = r && r.ok ? 'Done ✓' : 'Failed';
+            setTimeout(function () { if (o) o.textContent = ''; }, 4000);
+          }).catch(function () { el.disabled = false; });
+        });
       });
     }
     run('mt-purge', 'purge_events', { days: 90 }, 'Delete ALL events older than 90 days?');
@@ -969,25 +1052,28 @@
       (bRows || '<tr><td colspan="4" class="empty">Nothing blocked \u2014 as it should be.</td></tr>') + '</tbody></table>';
     function act(action, songId, title, reason) {
       postApi('/api/admin/content', { action: action, songId: songId, songTitle: title || null, reason: reason || null }).then(function (r) {
-        if (r) loadContent(); else window.alert('Action failed');
+        if (r) loadContent(); else vxAlert('Action failed', { title: 'Content Control' });
       }).catch(noop);
     }
     $('ct-add').addEventListener('click', function () {
       var id = $('ct-id').value.trim();
       if (!id) { $('ct-out').textContent = 'Song ID required.'; return; }
-      if (!window.confirm('Block this song for every listener?')) return;
-      act('block', id, null, $('ct-reason').value.trim());
+      vxConfirm('Block this song for every listener?', { title: 'Content Control', danger: true, okText: 'Block song' }).then(function (ok) {
+        if (ok) act('block', id, null, $('ct-reason').value.trim());
+      });
     });
     Array.prototype.forEach.call(document.querySelectorAll('.ct-block'), function (b) {
       b.addEventListener('click', function () {
-        var reason = window.prompt('Reason for blocking (kept on record):', '') || '';
-        act('block', b.getAttribute('data-id'), b.getAttribute('data-title'), reason.trim());
+        vxPrompt('Block “' + (b.getAttribute('data-title') || b.getAttribute('data-id')) + '” for every listener?', { title: 'Content Control', danger: true, okText: 'Block song', placeholder: 'Reason (kept on record)' }).then(function (reason) {
+          if (reason != null) act('block', b.getAttribute('data-id'), b.getAttribute('data-title'), reason);
+        });
       });
     });
     Array.prototype.forEach.call(document.querySelectorAll('.ct-unblock'), function (b) {
       b.addEventListener('click', function () {
-        if (!window.confirm('Unblock this song?')) return;
-        act('unblock', b.getAttribute('data-id'));
+        vxConfirm('Unblock this song?', { title: 'Content Control', okText: 'Unblock' }).then(function (ok) {
+          if (ok) act('unblock', b.getAttribute('data-id'));
+        });
       });
     });
     setExport('blocklist', blocked);
@@ -1131,11 +1217,13 @@
         (rows || '<tr><td colspan="4" class="empty">Nothing sent yet.</td></tr>') + '</tbody></table>';
       Array.prototype.forEach.call(host.querySelectorAll('.pn-retract'), function (b) {
         b.addEventListener('click', function () {
-          if (!window.confirm('Retract this announcement? App users will stop receiving it on open.')) return;
-          postApi('/api/admin/notifylog', { action: 'retract', created_at: b.getAttribute('data-at') }).then(function (r) {
-            if (r && r.ok) loadNotifyLog();
-            else window.alert('Retract failed');
-          }).catch(noop);
+          vxConfirm('Retract this announcement? App users will stop receiving it on open.', { title: 'Notifications', danger: true, okText: 'Retract' }).then(function (ok) {
+            if (!ok) return;
+            postApi('/api/admin/notifylog', { action: 'retract', created_at: b.getAttribute('data-at') }).then(function (r) {
+              if (r && r.ok) loadNotifyLog();
+              else vxAlert('Retract failed', { title: 'Notifications' });
+            }).catch(noop);
+          });
         });
       });
     }).catch(noop);
@@ -1196,18 +1284,22 @@
       var noteEl = document.getElementById('sm-note');
       var note = noteEl ? noteEl.value : '';
       var label = mode === 'maintenance' ? 'Put the WHOLE site into maintenance for every listener?' : 'Bring the site back live for everyone?';
-      if (!window.confirm(label)) return;
-      smOut = 'Switching…';
-      $('sm-out').textContent = smOut;
-      postApi('/api/admin/maintenance', { action: 'site_mode', mode: mode, note: note.trim() }).then(function (r) {
-        smOut = r && r.ok ? 'Done — takes effect within a minute. ✓' : 'Failed';
-        var el = document.getElementById('sm-out');
-        if (el) el.textContent = smOut;
-        refresh();
-      }).catch(function () {
-        smOut = 'Failed';
-        var el = document.getElementById('sm-out');
-        if (el) el.textContent = smOut;
+      vxConfirm(label, mode === 'maintenance'
+        ? { title: 'Site mode', danger: true, okText: 'Enter maintenance' }
+        : { title: 'Site mode', okText: 'Go live' }).then(function (ok) {
+        if (!ok) return;
+        smOut = 'Switching…';
+        $('sm-out').textContent = smOut;
+        postApi('/api/admin/maintenance', { action: 'site_mode', mode: mode, note: note.trim() }).then(function (r) {
+          smOut = r && r.ok ? 'Done — takes effect within a minute. ✓' : 'Failed';
+          var el = document.getElementById('sm-out');
+          if (el) el.textContent = smOut;
+          refresh();
+        }).catch(function () {
+          smOut = 'Failed';
+          var el = document.getElementById('sm-out');
+          if (el) el.textContent = smOut;
+        });
       });
     }
     document.getElementById('sm-live').addEventListener('click', function () { setMode('live'); });
@@ -1289,15 +1381,17 @@
       if (!t || !b) { $('pn-out').textContent = 'Title and message are required.'; return; }
       var link = pnKind === 'custom' ? ($('pn-link').value.trim() || '/') : pnDest;
       if (link.charAt(0) !== '/') { $('pn-out').textContent = 'Links must be in-app paths starting with /.'; return; }
-      if (!window.confirm('Send this notification to ALL subscribed devices now?\n\nOpens: ' + link)) return;
-      $('pn-send').disabled = true;
-      $('pn-out').textContent = 'Sending…';
-      postApi('/api/admin/push', { title: t, body: b, link: link }).then(function (r) {
-        $('pn-send').disabled = false;
-        if (!r) { $('pn-out').textContent = 'Failed'; return; }
-        $('pn-out').textContent = 'Delivered to ' + (r.sent || 0) + ' of ' + (r.total || 0) + ' web device(s)' + (r.gone ? ' · ' + r.gone + ' expired removed' : '') + ' ✓ — the app picks it up on next open.';
-        loadNotifyStat();
-      }).catch(function () { $('pn-send').disabled = false; $('pn-out').textContent = 'Failed'; });
+      vxConfirm('Send this notification to ALL subscribed devices now?\n\nOpens: ' + link, { title: 'Push notification', okText: 'Send now' }).then(function (ok) {
+        if (!ok) return;
+        $('pn-send').disabled = true;
+        $('pn-out').textContent = 'Sending…';
+        postApi('/api/admin/push', { title: t, body: b, link: link }).then(function (r) {
+          $('pn-send').disabled = false;
+          if (!r) { $('pn-out').textContent = 'Failed'; return; }
+          $('pn-out').textContent = 'Delivered to ' + (r.sent || 0) + ' of ' + (r.total || 0) + ' web device(s)' + (r.gone ? ' · ' + r.gone + ' expired removed' : '') + ' ✓ — the app picks it up on next open.';
+          loadNotifyStat();
+        }).catch(function () { $('pn-send').disabled = false; $('pn-out').textContent = 'Failed'; });
+      });
     });
     loadNotifyStat();
   }
@@ -1318,8 +1412,10 @@
       b.addEventListener('click', function () {
         if (b.disabled) return; // double-click guard
         b.disabled = true;
-        if (!window.confirm('End room ' + b.getAttribute('data-code') + ' for everyone?')) { b.disabled = false; return; }
-        postApi('/api/admin/maintenance', { action: 'end_room', code: b.getAttribute('data-code') }).then(function (r) { if (r) loadRooms(); else b.disabled = false; }).catch(function () { b.disabled = false; });
+        vxConfirm('End room ' + b.getAttribute('data-code') + ' for everyone?', { title: 'Live Rooms', danger: true, okText: 'End room' }).then(function (ok) {
+          if (!ok) { b.disabled = false; return; }
+          postApi('/api/admin/maintenance', { action: 'end_room', code: b.getAttribute('data-code') }).then(function (r) { if (r) loadRooms(); else b.disabled = false; }).catch(function () { b.disabled = false; });
+        });
       });
     });
     setExport('rooms', d.rooms || []);
@@ -1858,8 +1954,9 @@
       }).catch(function () { btn.disabled = false; $('hs-out').textContent = 'Publish failed — network'; });
     });
     $('hs-reset').addEventListener('click', function () {
-      if (!window.confirm('Reset to the app defaults (all blocks on, default order)? Publish to make it live.')) return;
-      hsCfg = defaultHomeCfg(); renderHomescreenSection();
+      vxConfirm('Reset to the app defaults (all blocks on, default order)? Publish to make it live.', { title: 'Home Screen', okText: 'Reset' }).then(function (ok) {
+        if (ok) { hsCfg = defaultHomeCfg(); renderHomescreenSection(); }
+      });
     });
     stamp();
   }
@@ -2058,9 +2155,11 @@
       setTimeout(function () { $('cfg-out').textContent = ''; }, 3000);
     });
     $('cfg-reset').addEventListener('click', function () {
-      if (!window.confirm('Reset config to defaults?')) return;
-      try { localStorage.removeItem(CFG_KEY); } catch (e) {}
-      renderConfigSection();
+      vxConfirm('Reset config to defaults?', { title: 'App Configuration', okText: 'Reset' }).then(function (ok) {
+        if (!ok) return;
+        try { localStorage.removeItem(CFG_KEY); } catch (e) {}
+        renderConfigSection();
+      });
     });
     stamp();
   }
@@ -2240,7 +2339,7 @@
     // ---- JSON export of the current panel ----
     $('json').disabled = true;
     $('json').addEventListener('click', function () {
-      if (!lastJson) { window.alert('No data loaded yet — open any dashboard first.'); return; }
+      if (!lastJson) { vxAlert('No data loaded yet — open any dashboard first.', { title: 'Export' }); return; }
       var blob = new Blob([JSON.stringify(lastJson, null, 2)], { type: 'application/json' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
@@ -2258,7 +2357,7 @@
           'Plays today: ' + (s.plays_today || 0) + ' · 7d: ' + (s.plays_7d || 0) + '\n' +
           'Users: ' + (s.total_users || 0) + ' total · +' + (s.new_today || 0) + ' today · DAU ' + (s.dau || 0) + ' / WAU ' + (s.wau || 0) + ' / MAU ' + (s.mau || 0) + '\n' +
           'Errors (24h): ' + (s.errors_24h || 0) + ' · New feedback: ' + (s.feedback_new || 0);
-        try { navigator.clipboard.writeText(txt).then(function () { $('report').textContent = '✓'; setTimeout(function () { $('report').textContent = '📋'; }, 1200); }); } catch (err) { window.prompt('Copy report:', txt); }
+        try { navigator.clipboard.writeText(txt).then(function () { $('report').textContent = '✓'; setTimeout(function () { $('report').textContent = '📋'; }, 1200); }); } catch (err) { vxPrompt('Copy the report text below:', { title: 'Day report', value: txt, okText: 'Done' }); }
       }).catch(noop);
     });
 
@@ -2272,7 +2371,7 @@
       try { localStorage.setItem('vinax_admin_notify', notifyOn ? '1' : ''); } catch (err) {}
       if (notifyOn && typeof Notification !== 'undefined') {
         if (Notification.permission === 'default') Notification.requestPermission();
-        else if (Notification.permission === 'denied') window.alert('Notifications are blocked for this site in the browser settings.');
+        else if (Notification.permission === 'denied') vxAlert('Notifications are blocked for this site in the browser settings.', { title: 'Notifications' });
       }
       paintNotify();
     });
