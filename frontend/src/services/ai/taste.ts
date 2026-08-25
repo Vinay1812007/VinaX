@@ -10,11 +10,16 @@ import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { loadProfile } from '@/services/personalization/storage';
 import { getSliders, sliderDialLines } from '@/services/personalization/dials';
+import { buildSessionContext } from '@/services/ai/sessionContext';
 import type { Song } from '@/types';
 
 export interface TasteSnapshot {
   timeOfDay: string;
   sessionVibe: string;
+  dayOfWeek: string;
+  isWeekend: boolean;
+  listenerEnergy: string;
+  festivalContext?: string;
   preferredLanguages: string[];
   avoidLanguages: string[];
   topArtists: string[];
@@ -38,12 +43,10 @@ const RECENT_WINDOW_MS = 14 * 86_400_000;
 const RECENT_WEIGHT = 3;
 
 export function buildTasteSnapshot(now = Date.now()): TasteSnapshot {
-  const h = new Date(now).getHours();
-  const timeOfDay = h < 5 ? 'late night' : h < 12 ? 'morning' : h < 17 ? 'afternoon' : h < 22 ? 'evening' : 'night';
-  const sessionVibe =
-    h < 5 ? 'late-night / wind-down' : h < 12 ? 'morning / easy' : h < 17 ? 'afternoon / steady' : h < 22 ? 'evening / lively' : 'night / mellow';
   const settings = useSettingsStore.getState();
   const entries = useHistoryStore.getState().entries;
+  // Deep session context: weekday-aware vibe, live listener energy, festival.
+  const session = buildSessionContext(entries, new Date(now));
   const favorites = useLibraryStore.getState().favorites;
   const weight = (ts: number): number => (now - ts <= RECENT_WINDOW_MS ? RECENT_WEIGHT : 1);
 
@@ -67,8 +70,7 @@ export function buildTasteSnapshot(now = Date.now()): TasteSnapshot {
   const topArtists = [...artistCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name]) => name);
 
   return {
-    timeOfDay,
-    sessionVibe,
+    ...session,
     preferredLanguages: settings.pinnedLanguages.slice(0, 5),
     avoidLanguages: settings.mutedLanguages.slice(0, 5),
     topArtists,

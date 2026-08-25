@@ -6,6 +6,7 @@ import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { getSliders, sliderDialLines } from '@/services/personalization/dials';
 import { loadRecentHomeIds } from '@/features/home/homeVariety';
 import { tunePromptHint } from '@/services/recommendation/tune';
+import { buildSessionContext } from '@/services/ai/sessionContext';
 
 // On web the function is same-origin; the native app bundles the web assets
 // locally, so it must call the deployed function's absolute URL.
@@ -114,11 +115,9 @@ function sampleWithoutReplacement<T>(arr: T[], n: number): T[] {
 
 /** Compact, privacy-bounded context sent to the AI DJ function. */
 function buildContext(seed: Song | null, ctx: RecommendationContext): Record<string, unknown> {
-  const h = ctx.hour;
-  const timeOfDay =
-    h < 5 ? 'late night' : h < 12 ? 'morning' : h < 17 ? 'afternoon' : h < 22 ? 'evening' : 'night';
-  const sessionVibe =
-    h < 5 ? 'late-night / wind-down' : h < 12 ? 'morning / easy' : h < 17 ? 'afternoon / steady' : h < 22 ? 'evening / lively' : 'night / mellow';
+  // Deep session context: weekday-aware vibe, live listener-energy read from
+  // the skip/complete streak, and the festival the app is celebrating.
+  const session = buildSessionContext(ctx.history);
   const discoveryFocus = pickDiscoveryFocus();
   // Most-played specific tracks — the strongest "you love this" signal.
   const playCounts = new Map<string, { song: Song; n: number }>();
@@ -140,8 +139,7 @@ function buildContext(seed: Song | null, ctx: RecommendationContext): Record<str
     tuneInstruction: ctx.tuneIntent ? tunePromptHint(ctx.tuneIntent) : undefined,
     preferredLanguages: ctx.pinnedLanguages,
     avoidLanguages: ctx.mutedLanguages,
-    timeOfDay,
-    sessionVibe,
+    ...session,
     discoveryFocus,
     recentlyPlayed: ctx.history.slice(0, 15).map((e) => describe(e.song)),
     recentlyCompleted: ctx.history.filter((e) => e.completed).slice(0, 12).map((e) => describe(e.song)),
