@@ -326,7 +326,7 @@
     var nowRows = liveList.slice(0, 24).map(function (r) {
       var where = [r.city, r.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">Unknown</span>';
       var song = r.song ? esc(r.song) + (r.artist ? ' <span class="muted">· ' + esc(r.artist) + '</span>' : '') : '<span class="muted">—</span>';
-      return '<tr><td><span class="dot2 ' + (r.playing ? 'on' : 'off') + '"></span>' + esc(r.name || 'Listener') + '</td><td>' + song + '</td><td class="muted">' + where + '</td></tr>';
+      return '<tr><td><span class="dot2 ' + (r.playing ? 'on' : 'off') + '"></span>' + esc(r.name || 'Listener') + (r.username ? ' <span class="muted">@' + esc(r.username) + '</span>' : '') + '</td><td>' + song + '</td><td class="muted">' + where + '</td></tr>';
     }).join('');
     var list = countries.slice(0, 12).map(function (c) {
       return '<tr><td>' + esc(c.country) + '</td><td>' + c.listeners + '</td></tr>';
@@ -393,7 +393,7 @@
       var icon = L.divIcon({ className: 'live-dot' + (r.playing ? ' playing' : ''), iconSize: [14, 14] });
       var m = L.marker([ll[0], ll[1]], { icon: icon, zIndexOffset: 500 }).addTo(leafMap);
       var song = r.song ? esc(r.song) + (r.artist ? ' \u00b7 ' + esc(r.artist) : '') : (r.playing ? 'Playing' : 'Online');
-      m.bindPopup('<b>' + esc(r.name || 'Listener') + '</b><br>' + song + '<br>' + esc([r.city, r.country].filter(Boolean).join(', ') || 'Unknown'));
+      m.bindPopup('<b>' + esc(r.name || 'Listener') + (r.username ? ' @' + esc(r.username) : '') + '</b><br>' + song + '<br>' + esc([r.city, r.country].filter(Boolean).join(', ') || 'Unknown'));
     });
   }
 
@@ -513,7 +513,7 @@
       var recent = ev.slice(0, 18).map(function (e) { return '<tr><td><span class="pill">' + esc(e.type) + '</span></td><td>' + (e.song_title ? esc(e.song_title) : '<span class="muted">—</span>') + '</td><td class="muted">' + ago(e.created_at) + '</td></tr>'; }).join('');
       $('modalBody').innerHTML =
         '<button class="x" id="mx">✕</button>' +
-        '<h2 style="margin:2px 0 2px">' + esc(name || u.name || 'Anonymous') + '</h2>' +
+        '<h2 style="margin:2px 0 2px">' + esc(name || u.name || 'Anonymous') + (u.username ? ' <span class="muted" style="font-size:14px">@' + esc(u.username) + '</span>' : '') + '</h2>' +
         '<div class="muted" style="font-size:12.5px;margin-bottom:14px">' + esc([u.city, u.country].filter(Boolean).join(', ') || 'Unknown') + ' · ' + esc(u.platform || 'web') + (u.app_version ? ' · v' + esc(u.app_version) : '') + ' · joined ' + date(u.first_seen) + ' · last seen ' + ago(u.last_seen) + '</div>' +
         '<div class="cards"><div class="card"><div class="n">' + plays.length + '</div><div class="l">Plays (recent)</div></div>' +
         '<div class="card"><div class="n">' + top.length + '</div><div class="l">Distinct songs</div></div>' +
@@ -714,7 +714,7 @@
     var s = d.segments || {};
     setExport('top-listeners', d.topListeners || []);
     var listeners = (d.topListeners || []).map(function (u) {
-      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td>' + esc(u.name || 'Anonymous') + '</td><td>' + u.plays + '</td></tr>';
+      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + u.plays + '</td></tr>';
     }).join('');
     $('view').innerHTML =
       '<div class="cards">' + card(s.new_7d, 'New (7d)') + card(s.returning_7d, 'Returning (7d)') + card(s.inactive_30d, 'Inactive (7–30d)') + card(s.power_users, 'Power users (20+ plays)') + '</div>' +
@@ -796,7 +796,7 @@
       return '<tr><td>' + esc(e.error_kind || '—') + '</td><td>' + esc(e.message || '') + '</td><td class="muted">' + ago(e.created_at) + '</td></tr>';
     }).join('');
     var cities = (d.liveCities || []).map(function (u) {
-      return '<tr><td><span class="dot2 on"></span>' + esc(u.name || 'Anonymous') + '</td><td>' + esc([u.city, u.country].filter(Boolean).join(', ') || '—') + '</td><td>' + esc(u.current_song_title || '—') + '</td></tr>';
+      return '<tr><td><span class="dot2 on"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + esc([u.city, u.country].filter(Boolean).join(', ') || '—') + '</td><td>' + esc(u.current_song_title || '—') + '</td></tr>';
     }).join('');
     $('view').innerHTML =
       '<div class="cards">' +
