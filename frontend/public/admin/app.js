@@ -494,7 +494,7 @@
     var exps = (d && d.experiments) || [];
     setExport('experiments', exps);
     if (d && d.configured === false) {
-      $('view').innerHTML = '<div class="card"><p class="muted">Experiments table not found — run the vinax_experiments migration from supabase/schema.sql to enable A/B testing.</p></div>';
+      $('view').innerHTML = '<div class="card"><p class="muted">Experiments table not found — check the D1 database binding (tables auto-create on first use).</p></div>';
       stamp();
       return;
     }
@@ -639,12 +639,12 @@
       var extra = k.configured ? '' : ' <span class="muted">(not configured)</span>';
       return '<tr><td>' + esc(k.key) + extra + '</td><td class="muted">' + esc((k.model || '—').split('/').pop() || '—') + '</td><td>' + badge + '</td><td class="muted">' + esc(k.note || '') + '</td></tr>';
     }).join('');
-    var sb = h.supabase || {};
+    var sb = h.database || h.supabase || {};
     var sbBadge = sb.lastEventAt
       ? '<span style="color:#36d399">last event ' + ago(sb.lastEventAt) + '</span>'
       : '<span style="color:#ff6b6b">' + esc(sb.note || 'no readable events') + '</span>';
     return '<table><thead><tr><th>Key</th><th>Model</th><th>Status</th><th>Detail</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<p class="muted" style="margin-top:8px">Supabase: ' + (sb.configured ? sbBadge : '<span style="color:#ff6b6b">not configured</span>') + '</p>';
+      '<p class="muted" style="margin-top:8px">Database (D1): ' + (sb.configured ? sbBadge : '<span style="color:#ff6b6b">not configured</span>') + '</p>';
   }
   function renderTechnical(d) {
     var s = d.summary || {};
@@ -667,7 +667,7 @@
       '<h3>App versions</h3>' + bars(d.versions || [], function (x) { return esc(x.app_version) + ' <span class="muted">· ' + esc(x.platform) + '</span>'; }, function (x) { return x.users; }) +
       '<h3>Errors per day</h3>' + dayChart(d.errorsByDay, 'hits', 'linear-gradient(180deg,#ff8080,#ff4d4d)') +
       '<h3>Top errors</h3><table><thead><tr><th>Kind</th><th>Message</th><th>Hits</th><th>Last</th></tr></thead><tbody>' + (errRows || '<tr><td colspan="4" class="empty">No errors logged. 🎉</td></tr>') + '</tbody></table>' +
-      '<h3>Data tools <span class="muted">· Supabase maintenance</span></h3><div class="row" style="flex-wrap:wrap;gap:8px">' +
+      '<h3>Data tools <span class="muted">· database maintenance</span></h3><div class="row" style="flex-wrap:wrap;gap:8px">' +
       '<button class="ghost" id="mt-purge">Purge events &gt; 90d</button>' +
       '<button class="ghost" id="mt-errors">Clear all errors</button>' +
       '<button class="ghost" id="mt-ai">Trim AI log (keep 14d)</button>' +
