@@ -2365,6 +2365,8 @@
     active = sec;
     try { if (location.hash !== '#' + sec) location.hash = sec; localStorage.setItem('vinax_admin_sec', sec); } catch (e) {}
     Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-sec]'), function (b) { b.classList.toggle('active', b.getAttribute('data-sec') === sec); });
+    // Mobile: the nav is a horizontal chip rail — keep the active chip visible.
+    try { var ab = document.querySelector('#nav button.active'); if (ab && ab.scrollIntoView) ab.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) {}
     $('secTitle').textContent = TITLES[sec] || '';
     var v = $('view'); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
     $('range').hidden = !USES_RANGE[sec];
