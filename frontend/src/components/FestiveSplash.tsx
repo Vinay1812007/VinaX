@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { activeFestival, activeFestivalTheme } from '@/constants/festivals';
+import { resolveFestival, resolveFestivalTheme } from '@/constants/festivals';
+import { useFestivalOverride } from '@/features/home/useAppConfig';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { STORAGE_PREFIX } from '@/constants/storage-keys';
 
@@ -69,12 +70,26 @@ function IndependenceBackdrop() {
 
 /** 3-second festival opening: themed confetti + greeting, once per day. */
 export function FestiveSplash() {
-  const festival = useMemo(() => activeFestival(), []);
+  // Admin override (Festival Themes panel). Until the config answers, the
+  // built-in calendar drives everything exactly as before — a forced or
+  // suppressed festival simply catches up a moment after boot.
+  const { data: override } = useFestivalOverride();
+  const festival = useMemo(() => resolveFestival(override), [override]);
   const todayKey = `${festival?.id ?? ''}-${new Date().toDateString()}`;
   const [visible, setVisible] = useState(
-    () => !!festival && getLocal<string>(SEEN_KEY, '') !== todayKey,
+    () => !!resolveFestival(null) && getLocal<string>(SEEN_KEY, '') !== todayKey,
   );
   const [leaving, setLeaving] = useState(false);
+
+  // A festival arriving AFTER mount (admin force landing post-boot) still
+  // gets its once-per-day splash; state initializers only run once.
+  useEffect(() => {
+    if (festival && getLocal<string>(SEEN_KEY, '') !== todayKey) {
+      setLeaving(false);
+      setVisible(true);
+    }
+    if (!festival) setVisible(false);
+  }, [festival, todayKey]);
 
   const pieces = useMemo<Piece[]>(() => {
     if (!festival) return [];
@@ -103,7 +118,7 @@ export function FestiveSplash() {
   // its richer fest-ind treatment (flag backdrop) via the same class.
   useEffect(() => {
     const root = document.documentElement;
-    const themeFest = activeFestivalTheme();
+    const themeFest = resolveFestivalTheme(override);
     const wanted = themeFest ? `fest-${themeFest.id === 'independence' ? 'ind' : themeFest.id}` : null;
     for (const c of Array.from(root.classList)) if (c.startsWith('fest-') && c !== wanted) root.classList.remove(c);
     if (wanted) root.classList.add(wanted);
@@ -111,7 +126,7 @@ export function FestiveSplash() {
       for (const c of Array.from(document.documentElement.classList))
         if (c.startsWith('fest-')) document.documentElement.classList.remove(c);
     };
-  }, [festival]);
+  }, [festival, override]);
 
   useEffect(() => {
     if (!visible || !festival) return;
