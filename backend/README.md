@@ -1,11 +1,11 @@
-# VinaX — backend (`backend/`)
+# VinaX — backend (`backend` branch)
 
 Standalone **Cloudflare Worker** (`vinax-api`) serving everything dynamic for
 VinaX: `/api/*`, edge-rendered SEO pages (`/song|album|artist|playlist/*`,
 hub pages), `/sitemap*`, the image proxy (`/img`), the APK download (`/apk`),
 and the `update.` / `admin.` host redirects.
 
-The static frontend lives in the **`frontend/` folder** and deploys to
+The static frontend lives on the **`frontend` branch** and deploys to
 Cloudflare Pages; that Pages deployment is also the fallthrough origin for
 every URL the Worker's routes don't claim.
 
@@ -17,7 +17,7 @@ every URL the Worker's routes don't claim.
 | `worker/functions/` | All handlers (unchanged from the original monorepo) |
 | `worker/wrangler.toml` | Worker config: name, routes, `[vars]` |
 | `worker/__tests__/` | Endpoint tests (moved from `src/__tests__`) |
-| `index.html` | Snapshot of the SPA shell — **test fixture only** (render.test.ts). At runtime the Worker fetches the live shell from `ASSETS_HOST`. Refresh it from `../frontend/index.html` if the shell's meta tags change. |
+| `index.html` | Snapshot of the SPA shell — **test fixture only** (render.test.ts). At runtime the Worker fetches the live shell from `ASSETS_HOST`. Refresh it from the `frontend` branch if the shell's meta tags change. |
 
 ## Develop
 
@@ -50,3 +50,5 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config worker/wrangler.toml
 
 `[vars] ASSETS_HOST` in `worker/wrangler.toml` must point at the Pages host
 (`vinax.pages.dev`) so the edge-rendered SEO pages can fetch the SPA shell.
+
+<!-- Deploy pipeline check: build token rotated 2026-08-25. -->
