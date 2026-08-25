@@ -39,8 +39,8 @@ There is **no CORS anywhere**: the Worker's routes claim specific paths on `www.
                         │
          ┌──────────────┼───────────────────┐
          ▼              ▼                   ▼
-     Supabase      AI providers        HANDOFF KV
-     (Postgres)    (7 model lanes)     (one-time links)
+     D1 database   AI providers        HANDOFF KV
+     (SQLite)      (7 model lanes)     (one-time links)
 ```
 
 ---
@@ -138,8 +138,10 @@ cd backend  && npm ci && npm run deploy
 ### Configuration & secrets
 
 - Non-secret Worker config lives in `wrangler.toml` under `[vars]`: `ASSETS_HOST` (the Pages host serving the SPA shell, `vinax.pages.dev`) and `GITHUB_REPO` (used by the APK release endpoint).
-- **Secrets never live in git.** Every name is documented in [`backend/.env.example`](backend/.env.example); values are set on the Worker via `npx wrangler secret put <NAME> --config worker/wrangler.toml` or the dashboard. Currently configured: Supabase pair (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`), `ADMIN_LOGIN_PASSWORD`, VAPID keypair + subject (web push), `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET`, `CRON_SECRET`, `GITHUB_TOKEN`, `FCM_SERVICE_ACCOUNT`, and the 7 AI lane keys (`VINAX_DEEPSEEK_V4_FLASH`, `VINAX_CHATGPT_20_B`, `VINAX_CHATGPT_120_B`, `VINAX_NEMOTRON_SUPER`, `VINAX_NEMOTRON_ULTRA`, `VINAX_GROQ_API_KEY`, `VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B`). Optional/unset: `BRAVE_API_KEY` (enables web search inside VinaX AI), `NVIDIA_BASE_URL`.
-- **Bindings:** `HANDOFF` → KV namespace `vinax-handoff` (one-time encrypted device-handoff links, burn-on-read). Declared in `wrangler.toml`; the code degrades to `not_configured` if absent.
+- **Secrets never live in git.** Every name is documented in [`backend/.env.example`](backend/.env.example); values are set on the Worker via `npx wrangler secret put <NAME> --config worker/wrangler.toml` or the dashboard. Currently configured: `ADMIN_LOGIN_PASSWORD`, VAPID keypair + subject (web push), `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET`, `CRON_SECRET`, `GITHUB_TOKEN`, `FCM_SERVICE_ACCOUNT`, and the 7 AI lane keys (`VINAX_DEEPSEEK_V4_FLASH`, `VINAX_CHATGPT_20_B`, `VINAX_CHATGPT_120_B`, `VINAX_NEMOTRON_SUPER`, `VINAX_NEMOTRON_ULTRA`, `VINAX_GROQ_API_KEY`, `VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B`). Optional/unset: `BRAVE_API_KEY` (enables web search inside VinaX AI), `NVIDIA_BASE_URL`.
+- **Database:** Cloudflare D1 (`DB` → `vinax-db`) — no keys, no external service. The schema self-bootstraps on first use (`backend/worker/functions/_lib/db.ts`), so a fresh database needs zero console work. `RATE_LIMIT` → `RateLimiterDO` Durable Object gives sensitive routes a globally consistent rate limit.
+- **Database:** Cloudflare D1 (binding `DB` → database `vinax-db`) — SQLite at the edge, no keys, no external service. The schema self-bootstraps on first use (`backend/worker/functions/_lib/db.ts`), so a fresh database needs zero console work; all admin analytics run as SQL in the same module.
+- **Bindings:** `HANDOFF` → KV namespace `vinax-handoff` (one-time encrypted device-handoff links, burn-on-read); `RATE_LIMIT` → `RateLimiterDO` Durable Object (globally consistent rate limits on sensitive routes); optional `BACKUPS` → R2 bucket for nightly table snapshots (dormant until R2 is enabled on the account). All declared in `wrangler.toml`; the code degrades gracefully if a binding is absent.
 - The frontend needs **no** env vars or secrets on Pages. `VITE_*` variables are optional public overrides only.
 
 ---
