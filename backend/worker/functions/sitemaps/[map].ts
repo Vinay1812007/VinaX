@@ -12,7 +12,7 @@
  * 4.14.x ads.txt outage). The legacy /sitemap-*.xml functions predate that
  * rule and stay as-is.
  */
-import { sbSelect, type SupabaseEnv } from '../_lib/supabase';
+import { dbSelect, type DbEnv } from '../_lib/db';
 import { SEO_PAGE_SIZE, SEO_TYPES, slugify } from '../_lib/seo';
 
 const ORIGIN = 'https://www.sirimillavinay.online';
@@ -32,7 +32,7 @@ function xmlEscapePath(s: string): string {
 
 export const onRequestGet = async (context: {
   request: Request;
-  env: SupabaseEnv;
+  env: DbEnv;
   params: { map: string };
 }): Promise<Response> => {
   const m = /^([a-z]+)-(\d{1,4})\.xml$/.exec(String(context.params.map ?? ''));
@@ -41,7 +41,7 @@ export const onRequestGet = async (context: {
   if (!type || page < 1) return new Response('not found', { status: 404 });
 
   const offset = (page - 1) * SEO_PAGE_SIZE;
-  const rows = await sbSelect<UrlRow>(
+  const rows = await dbSelect<UrlRow>(
     context.env,
     'vinax_seo_urls',
     `type=eq.${type}&select=entity_id,slug,title,lastmod&order=added_at.asc,key.asc&limit=${SEO_PAGE_SIZE}&offset=${offset}`,
