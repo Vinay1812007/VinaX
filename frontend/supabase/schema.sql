@@ -9,6 +9,9 @@
 create table if not exists vinax_users (
   device_id            text primary key,
   name                 text,
+  -- Unique handle claimed at onboarding via POST /api/username. Display
+  -- names collide across listeners; the handle never does.
+  username             text,
   platform             text,
   app_version          text,
   country              text,
@@ -21,6 +24,13 @@ create table if not exists vinax_users (
   first_seen           timestamptz default now(),
   last_seen            timestamptz default now()
 );
+-- Idempotent add for deploys that predate usernames, + the case-insensitive
+-- unique index that makes two devices claiming the same handle impossible.
+alter table if exists vinax_users
+  add column if not exists username text;
+create unique index if not exists vinax_users_username_unique
+  on vinax_users (lower(username))
+  where username is not null;
 
 create table if not exists vinax_events (
   id          bigint generated always as identity primary key,
@@ -430,9 +440,11 @@ language sql stable as $$
   limit lim;
 $$;
 
+-- Return type changed (added username) — drop the old signature first.
+drop function if exists vinax_top_listeners(int, int);
 create or replace function vinax_top_listeners(days int default 7, lim int default 20)
-returns table(device_id text, name text, plays bigint) language sql stable as $$
-  select e.device_id, max(u.name) as name, count(*)::bigint as plays
+returns table(device_id text, name text, username text, plays bigint) language sql stable as $$
+  select e.device_id, max(u.name) as name, max(u.username) as username, count(*)::bigint as plays
   from vinax_events e
   left join vinax_users u on u.device_id = e.device_id
   where e.type='play' and e.created_at > now() - make_interval(days => days)
