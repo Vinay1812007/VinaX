@@ -13,7 +13,7 @@ import { sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../
 
 type Env = AdminEnv & SupabaseEnv;
 
-export const ALLOWED_KEYS = new Set(['banners', 'home-config', 'festival']);
+export const ALLOWED_KEYS = new Set(['banners', 'home-config', 'festival', 'status-note']);
 /** jsonb payload cap — banners may embed small base64 images. */
 const MAX_VALUE_BYTES = 900 * 1024;
 
