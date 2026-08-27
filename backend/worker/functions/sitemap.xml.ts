@@ -21,7 +21,6 @@ const ORIGIN = 'https://www.sirimillavinay.online';
 const MAPS = [
   'sitemap-static.xml',
   'sitemap-hubs.xml',
-  'sitemap-songs.xml',
   'sitemap-albums.xml',
   'sitemap-movies.xml',
   'sitemap-artists.xml',
