@@ -13,6 +13,8 @@
  */
 
 import { onRequest as hostMiddleware } from './functions/_middleware';
+import * as m_api_status from './functions/api/status';
+  '/api/status': m_api_status,
 import * as m_album_id from './functions/album/[id]';
 import * as m_api_admin_activity from './functions/api/admin/activity';
 import * as m_api_admin_ai from './functions/api/admin/ai';
