@@ -26,8 +26,16 @@
     return 'No recent data';
   }
 
+  var note = document.getElementById('note');
+  function renderNote(n) {
+    var text = typeof n === 'string' ? n : n && typeof n.text === 'string' ? n.text : '';
+    if (!text.trim()) { note.style.display = 'none'; note.textContent = ''; return; }
+    note.textContent = text.trim();
+    note.style.display = 'block';
+  }
   function render(data) {
     err.style.display = 'none';
+    renderNote(data.note);
     document.getElementById('window').textContent = String(data.windowDays || 90);
     banner.className = data.overall === 'operational' ? 'ok' : data.overall === 'outage' ? 'bad' : '';
     banner.textContent =
