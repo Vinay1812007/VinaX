@@ -16,10 +16,11 @@ https://sirimillavinay.online/* https://www.sirimillavinay.online/:splat 301
 /downloads  /offline  301
 /listen-together  /together  301
 
-# Status page — status.sirimillavinay.online serves the standalone status
-# app (public/status/), fully independent of the SPA shell, so listeners can
-# check on VinaX even when the app itself is misbehaving.
-https://status.sirimillavinay.online/ /status/index.html 200
-https://status.sirimillavinay.online/* /status/:splat 200
+# Status page — status.sirimillavinay.online lands on the standalone status
+# app (public/status/, plain static files — fully independent of the SPA
+# shell, so listeners can check on VinaX even when the app misbehaves).
+# Pages only honors host-based sources for REDIRECTS, not 200 rewrites, so
+# the subdomain 301s onto the real /status/ path, which static files serve.
+https://status.sirimillavinay.online/ https://status.sirimillavinay.online/status/ 301
 
 /*    /index.html   200
