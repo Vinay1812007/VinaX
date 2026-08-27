@@ -14,7 +14,6 @@
 
 import { onRequest as hostMiddleware } from './functions/_middleware';
 import * as m_api_status from './functions/api/status';
-  '/api/status': m_api_status,
 import * as m_album_id from './functions/album/[id]';
 import * as m_api_admin_activity from './functions/api/admin/activity';
 import * as m_api_admin_ai from './functions/api/admin/ai';
@@ -175,6 +174,7 @@ const EXACT: Record<string, Mod> = {
   '/api/push/vapid': m_api_push_vapid,
   '/api/room': m_api_room,
   '/api/site-mode': m_api_site_mode,
+  '/api/status': m_api_status,
   '/api/trending-searches': m_api_trending_searches,
   '/api/tts': m_api_tts,
   '/api/username': m_api_username,
