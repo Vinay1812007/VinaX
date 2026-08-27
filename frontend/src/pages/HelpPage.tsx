@@ -245,7 +245,8 @@ export default function HelpPage() {
           <a href="/terms" className="text-ember-400 hover:underline">Terms of Use</a> ·{' '}
           <a href="/privacy" className="text-ember-400 hover:underline">Privacy</a> ·{' '}
           <a href="/dmca" className="text-ember-400 hover:underline">DMCA & takedowns</a> ·{' '}
-          <a href="/contact" className="text-ember-400 hover:underline">Contact</a>
+          <a href="/contact" className="text-ember-400 hover:underline">Contact</a> ·{' '}
+          <a href="https://status.sirimillavinay.online" target="_blank" rel="noreferrer" className="text-ember-400 hover:underline">Status</a>
         </p>
       </section>
 
