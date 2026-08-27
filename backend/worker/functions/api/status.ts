@@ -143,7 +143,7 @@ export const onRequestGet = async (context: { request: Request; env: SupabaseEnv
 
   const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
   const configured = supabaseConfigured(env);
-  const [daily, last] = configured
+  const [daily, last, noteRows] = configured
     ? await Promise.all([
         sbSelect<{ component: string; day: string; up: number; total: number }>(
           env,
@@ -155,8 +155,10 @@ export const onRequestGet = async (context: { request: Request; env: SupabaseEnv
           'uptime_last',
           'select=component,ok,latency_ms,checked_at&limit=50',
         ),
+        // Owner-posted incident note (admin console -> appconfig key 'status-note').
+        sbSelect<{ value: unknown }>(env, 'vinax_config', 'select=value&key=eq.status-note&limit=1'),
       ])
-    : [[], []];
+    : [[], [], []];
 
   const lastBy = new Map(last.map((r) => [r.component, r]));
   const dailyBy = new Map<string, Array<{ day: string; up: number; total: number }>>();
@@ -185,11 +187,21 @@ export const onRequestGet = async (context: { request: Request; env: SupabaseEnv
   });
   const allUp = components.every((c) => c.status === 'up');
   const anyDown = components.some((c) => c.status === 'down');
+  // Incident note: a plain string, or { text, level } — passed through as-is
+  // (the page treats empty/blank as "no note").
+  const rawNote = noteRows.length ? noteRows[0].value : null;
+  const note =
+    typeof rawNote === 'string'
+      ? rawNote.trim() || null
+      : rawNote && typeof rawNote === 'object' && typeof (rawNote as { text?: unknown }).text === 'string'
+        ? ((rawNote as { text: string }).text.trim() ? rawNote : null)
+        : null;
   return json(
     {
       generatedAt: new Date().toISOString(),
       windowDays: WINDOW_DAYS,
       overall: allUp ? 'operational' : anyDown ? 'outage' : 'unknown',
+      note,
       components,
     },
     200,
