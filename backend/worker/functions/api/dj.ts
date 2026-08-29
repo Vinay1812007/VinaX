@@ -31,14 +31,14 @@ HOW A PROFESSIONAL BUILDS THIS QUEUE
 11. FESTIVAL COLOUR — when festivalContext is present, weave 2-4 picks that carry that festival's mood naturally into the arc (in the queue's language, matched to the seed's energy): festive seasoning placed where the arc welcomes it, never a takeover — the rest of the queue still follows the seed. No festivalContext, no festive picks.
 
 LANGUAGE RULE (above everything): currentLanguage is the queue's language — at least 11 of every 12 picks in it (currentLanguage "telugu" means Telugu songs, never Hindi or English). preferredLanguages applies only when currentLanguage is empty.
-REAL SONGS ONLY: every pick exists on streaming services as a real, well-known song. No invented titles — and never dialogues, BGM cuts, jukebox strips, trailers, teasers or ringtones. A single fake or junk pick breaks the whole queue.
+REAL SONGS ONLY: every pick exists on streaming services as a real, well-known song. No invented titles — and never dialogues, BGM cuts, jukebox strips, trailers, teasers or ringtones. Use each song's ORIGINAL canonical title exactly as released — never append "(Remix)", "(2024 Remix)", a year, or any invented version tag to a title. A single fake or junk pick breaks the whole queue.
 
 Respond with a JSON object of EXACTLY this shape and nothing else:
 {"songs":[{"title":"Song name","artist":"Artist name","reason":"why it fits and how it flows, max 12 words"}]}
 with the requested number of songs. Each "reason" reads like a DJ's segue note — short, specific, musical, naming the thread that carries over (mood, tempo, voice, instrument).`;
 
 const CANDIDATE_PROMPT = `You feed VinaX's AI DJ its raw material: given the seed song now playing plus the listener's taste and session, pour out a wide pool of REAL, well-known songs that could plausibly come next.
-NON-NEGOTIABLE: every title + artist pair must be a real, findable, reasonably popular track on major streaming catalogs — recognizable hits over obscure deep cuts (an unresolvable pick ruins the queue), and never an invented song, a dialogue track, BGM or a jukebox strip.
+NON-NEGOTIABLE: every title + artist pair must be a real, findable, reasonably popular track on major streaming catalogs — recognizable hits over obscure deep cuts (an unresolvable pick ruins the queue), and never an invented song, a dialogue track, BGM or a jukebox strip. Use each song's ORIGINAL canonical title exactly as released — never invent "(Remix)", "(2025 Remix)", year tags or version suffixes.
 Crate-dig with intent: stay in the seed's currentLanguage unless it is empty, and in its tempo and mood neighborhood; range across many different well-known artists, composers and lead singers; blend eras around the seed's vibe. Lean toward preferredArtists, topArtists, preferredLanguages and topLanguages; never touch avoidLanguages or any artist in avoidArtists; skip everything in recentlyPlayed and avoidSongs. Read the session too: honor listenerEnergy (a restless or wavering listener needs surer, brighter favourites in the pool), and when festivalContext is present include a handful of real songs that carry that festival's mood in the same language.
 Return ONLY JSON: {"candidates":[{"title":"...","artist":"..."}]} with about 30 songs. No commentary.`;
 
@@ -58,13 +58,29 @@ function json(body: unknown, status = 200): Response {
 export const onRequestOptions = async (): Promise<Response> =>
   new Response(null, { status: 204, headers: CORS_HEADERS });
 
+/**
+ * Strip hallucinated version tags off a model-proposed title (v5.3.1). Live
+ * probes caught the fast gather lane returning whole pools of "<real song>
+ * (2024 Remix)" / "(2025 Remix)" inventions — the client then live-searches
+ * that junk string and lands on an unrelated track, which is exactly the
+ * "unnecessary songs, not matching the vibe" report. Dropping the invented
+ * parenthetical leaves the real canonical title, which resolves correctly.
+ */
+function cleanTitle(t: string): string {
+  const cleaned = t
+    .replace(/\s*\((?=[^)]*(?:remix|remaster|version|mix|19\d{2}|20\d{2}))[^)]*\)/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned.length >= 2 ? cleaned : t;
+}
+
 function parseSongs(content: string | null): Array<{ title: string; artist: string; reason?: string }> {
   const parsed = extractJson<{ songs?: Array<{ title?: unknown; artist?: unknown; reason?: unknown }> }>(content);
   if (!parsed || !Array.isArray(parsed.songs)) return [];
   return parsed.songs
     .filter((s) => s && typeof s.title === 'string' && typeof s.artist === 'string')
     .map((s) => ({
-      title: String(s.title),
+      title: cleanTitle(String(s.title)),
       artist: String(s.artist),
       reason: typeof s.reason === 'string' ? s.reason.slice(0, 120) : undefined,
     }))
@@ -76,7 +92,7 @@ function parseCandidates(content: string | null): Array<{ title: string; artist:
   const list = parsed && Array.isArray(parsed.candidates) ? parsed.candidates : [];
   return list
     .filter((s) => s && typeof s.title === 'string' && typeof s.artist === 'string')
-    .map((s) => ({ title: String(s.title), artist: String(s.artist) }))
+    .map((s) => ({ title: cleanTitle(String(s.title)), artist: String(s.artist) }))
     .slice(0, 40);
 }
 
@@ -174,9 +190,9 @@ async function handlePost(context: {
   const rankInstr =
     'Build the next stretch of this listener\'s queue. Context (JSON):\n' +
     ctxJson +
-    '\n\nThe context carries "catalogPool" — REAL songs from the listener\'s catalog, guaranteed playable. Select and sequence from catalogPool FIRST; the supplementary CANDIDATE POOL below exists only to fill gaps when catalogPool runs small:\n' +
+    '\n\nThe context carries "catalogPool" — REAL songs from the listener\'s catalog, guaranteed playable. Prefer catalogPool entries that genuinely FIT the seed\'s mood, language and energy — a mismatched catalog song is worse than a well-fitting pick from the supplementary CANDIDATE POOL below or your own knowledge, so drop poor fits instead of padding with them:\n' +
     (candidates.length ? JSON.stringify(candidates) : '[]') +
-    '\n\nReturn EXACTLY 20 songs sequenced like a professional set: settle into the seed\'s mood, build gently, let one peak land around two-thirds in, then ease off — a deliberate energy arc, every hand-off a musical segue, no abrupt jumps. Strong artist diversity (never the same artist twice in a row), a natural mix of new and classic, and a few high-fit discoveries. Favor catalogPool entries; every pick MUST be a real, existing song — invented titles are forbidden. If the context includes a "tuneInstruction", it is the HIGHEST-PRIORITY adjustment for this queue. Stay in currentLanguage unless it is empty. JSON only, each song with a short reason.' +
+    '\n\nReturn EXACTLY 12 songs sequenced like a professional set: settle into the seed\'s mood, build gently, let one peak land around two-thirds in, then ease off — a deliberate energy arc, every hand-off a musical segue, no abrupt jumps. Strong artist diversity (never the same artist twice in a row), a natural mix of new and classic, and a few high-fit discoveries. Every pick MUST be a real, existing song under its original canonical title — invented titles or version tags are forbidden. If the context includes a "tuneInstruction", it is the HIGHEST-PRIORITY adjustment for this queue. Stay in currentLanguage unless it is empty. JSON only, each song with a short reason.' +
     '\n\nvarietySeed: "' +
     seed +
     '" — treat this as your shuffle seed. This is a FRESH round: two consecutive queues built for the same seed MUST differ substantially (rotate artists, eras and deep cuts), and any pick you have already made for this seed does not come back (see avoidSongs / recentlyPlayed).' +
@@ -187,12 +203,17 @@ async function handlePost(context: {
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: rankInstr },
     ],
-    // 8s pinned-lane shot: the DJ engine (the proven fast JSON generator) gets
-    // a fair try every call, while a cold pod still leaves the failover ladder
-    // enough budget for a full answer. Failover favors fast JSON generators —
-    // a slow reasoning fallback can't finish a 20-song queue in the leftover
-    // budget, so the deep reasoning lane is deliberately NOT on this ladder.
-    { temperature: 0.9, lane: 'dj', json: true, maxTokens: 1600, reasoningEffort: 'low', timeoutMs: 13_000, firstTimeoutMs: 8_000, ladder: ['home', 'chat', 'fast', 'scholar'], deadlineAt },
+    // v5.3.1 — live probes (2026-08-29) showed this call failing round after
+    // round: ~31s walls, then either a 500 or a raw-candidate fallback. Two
+    // causes, both fixed here. (1) The failover ladder led with the 550B
+    // ULTRA 'home' lane — the engine home.ts had already demoted for being
+    // slow/flaky at JSON (v3.5.1) — burning 13s before a fast engine got a
+    // turn. Fast JSON lanes now lead and ULTRA backstops LAST. (2) EXACTLY 20
+    // songs (~1600 tokens) was more than a failover engine could finish
+    // inside its leash; the queue is 12 now (the client uses 8), so every
+    // lane on the ladder can land the full JSON in time. First-attempt leash
+    // tightened 8s → 5s to match home.ts's proven cutover.
+    { temperature: 0.9, lane: 'dj', json: true, maxTokens: 1200, reasoningEffort: 'low', timeoutMs: 13_000, firstTimeoutMs: 5_000, ladder: ['chat', 'scholar', 'fast', 'home'], deadlineAt },
   );
   let songs = r.error ? [] : parseSongs(r.content);
 
@@ -204,11 +225,14 @@ async function handlePost(context: {
   ).toLowerCase();
   if (avoidBlob.length > 8) {
     const fresh = songs.filter((s) => s.title.length < 4 || !avoidBlob.includes(s.title.toLowerCase()));
-    if (fresh.length >= 8) songs = fresh;
+    // v5.3.1: 8 → 5 — with a 12-song queue, insisting on 8 survivors let a
+    // repeat-heavy answer sail through unfiltered; five fresh picks resolve
+    // to a full 8-song continuation client-side more often than not.
+    if (fresh.length >= 5) songs = fresh;
   }
   // Fallback: if deep ranking yields nothing, hand back the raw candidate pool.
   if (!songs.length && candidates.length) {
-    songs = candidates.slice(0, 20).map((c) => ({ title: c.title, artist: c.artist }));
+    songs = candidates.slice(0, 12).map((c) => ({ title: c.title, artist: c.artist }));
   }
   if (r.error !== 'not_configured') {
     const log = logAiEvent(env, {
