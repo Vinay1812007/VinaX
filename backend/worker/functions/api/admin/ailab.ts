@@ -1,5 +1,5 @@
 /**
- * AI Lab — admin-only streaming test bench for the seven AI lanes.
+ * AI Lab — admin-only streaming test bench for every AI lane (13 in v5.4.0).
  *
  * POST { lane, messages: [{ role, content }...], maxTokens? } and the reply
  * streams back as SSE (meta → delta* → done), the same wire format as
@@ -18,7 +18,10 @@ import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & AiEnv & SupabaseEnv;
 
-const LANES: readonly Lane[] = ['chat', 'fast', 'deep', 'scholar', 'home', 'dj', 'search'];
+// v5.4.0: the bench covers every lane, the six new seats included — special-
+// purpose lanes (translate/safety/guard) and the unstable agent reserve are
+// bench-only here; they sit in no feature ladder.
+const LANES: readonly Lane[] = ['chat', 'fast', 'deep', 'scholar', 'home', 'dj', 'search', 'pro', 'mini', 'translate', 'safety', 'guard', 'agent'];
 const MAX_TOKENS_CAP = 1000;
 
 interface InMsg {
