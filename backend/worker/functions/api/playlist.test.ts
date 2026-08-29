@@ -1,8 +1,9 @@
 /** Locks the playlist-variety fix (v3.3.1): every request carries a fresh
- *  varietySeed nonce, the client's avoidTitles reach the model prompt AND get
- *  hard-enforced on the output, and the endpoint rides the healthy dj lane
- *  (gpt-oss-20b since v3.7.0) at a hot temperature instead of the degraded chat lane —
- *  the trio that broke "AI always generates the same playlist". */
+ * varietySeed nonce, the client's avoidTitles reach the model prompt AND get
+ * hard-enforced on the output, and the endpoint rides the healthy dj lane
+ * (nemotron-3.5-lightning since v5.4.0) at a hot temperature instead of the
+ * degraded chat lane — the trio that broke "AI always generates the same
+ * playlist". */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { filterAvoided, onRequestPost, titleKey, varietySeed } from './playlist';
 
@@ -87,7 +88,8 @@ describe('onRequestPost — variety plumbing end to end', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       }),
-      env: { VINAX_CHATGPT_120_B: 'test-key' },
+      // v5.4.0: the dj lane rides its own lightning key now.
+      env: { VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key' },
     });
 
   it('pins the dj engine at temp 0.95 and injects nonce + avoidTitles into the prompt', async () => {
@@ -96,7 +98,8 @@ describe('onRequestPost — variety plumbing end to end', () => {
     expect(res.status).toBe(200);
     const curate = calls.find((c) => c.system.startsWith('You build playlists'));
     expect(curate).toBeDefined();
-    expect(curate!.model).toBe('openai/gpt-oss-20b'); // v3.7.0: dj lane re-pinned 120b->20b (120b hung >25s)
+    // v5.4.0: dj lane re-pinned to nemotron-3.5-lightning (probed on its key).
+    expect(curate!.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
     expect(curate!.temperature).toBe(0.95);
     expect(curate!.user).toMatch(/varietySeed: "[0-9a-f]{8} · IST /);
     expect(curate!.user).toContain('avoidTitles: ["Old Repeat"]');

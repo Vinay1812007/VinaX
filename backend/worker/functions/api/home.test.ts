@@ -1,8 +1,9 @@
 /** Locks the home-builder reliability fix (v3.5.1): the curate step rides the
- *  FAST dj engine (gpt-oss-20b since v3.7.0) instead of the slow/flaky 550B ULTRA, and — no
- *  matter what the upstream engines do — /api/home ALWAYS answers 200 with a
- *  usable, on-language shelf set. When the AI curate + idea gather both come up
- *  empty, deterministic fallbackSections() ships instead of the old 500. */
+ * FAST dj engine (nemotron-3.5-lightning since v5.4.0) instead of the
+ * slow/flaky 550B ULTRA, and — no matter what the upstream engines do —
+ * /api/home ALWAYS answers 200 with a usable, on-language shelf set. When the
+ * AI curate + idea gather both come up empty, deterministic fallbackSections()
+ * ships instead of the old 500. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { onRequestPost, parseSections, fallbackSections } from './home';
 
@@ -26,7 +27,7 @@ describe('parseSections — robust extraction', () => {
     const raw = {
       sections: [
         { title: 'Keep', query: 'q1' },
-        { title: '   ', query: 'q2' }, // blank title
+        { title: ' ', query: 'q2' }, // blank title
         { title: 'NoQuery', query: '' }, // blank query
         { title: 'Bad', query: 5 }, // non-string query
         { title: 'A', query: 'a' },
@@ -109,7 +110,8 @@ describe('onRequestPost — always-usable /api/home envelope', () => {
 
   let ip = 0;
   const KEYS = {
-    VINAX_CHATGPT_120_B: 'dj-key',
+    // v5.4.0: the dj lane rides its own lightning key now.
+    VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'dj-key',
     VINAX_GROQ_API_KEY: 'scholar-key',
     VINAX_DEEPSEEK_V4_FLASH: 'chat-key',
     VINAX_NEMOTRON_ULTRA: 'ultra-key',
@@ -168,7 +170,7 @@ describe('onRequestPost — always-usable /api/home envelope', () => {
       { status: 200, headers: { 'content-type': 'application/json' } },
     );
 
-  it('curates on the fast dj engine (gpt-oss-20b), not the 550B ULTRA', async () => {
+  it('curates on the fast dj engine (nemotron-3.5-lightning), not the 550B ULTRA', async () => {
     const calls = stubUpstream(() => sectionsReply());
     const res = await post(CTX);
     expect(res.status).toBe(200);
@@ -177,10 +179,10 @@ describe('onRequestPost — always-usable /api/home envelope', () => {
     // The curate call is the one carrying the front-page composer system prompt.
     const curate = calls.find((c) => c.system.startsWith('You compose the home screen'));
     expect(curate).toBeDefined();
-    // v3.7.0: dj lane re-pinned to the fast gpt-oss-20b (NVIDIA 120b hung >25s); still
-    // the fast dj lane, still NOT the slow 550B ULTRA — Home builds stay quick.
-    expect(curate!.model).toBe('openai/gpt-oss-20b'); // dj lane, not nemotron-3-ultra
-    expect(data.model).toBe('openai/gpt-oss-20b');
+    // v5.4.0: dj lane re-pinned to nemotron-3.5-lightning (probed 0.8s warm);
+    // still the fast dj lane, still NOT the slow 550B ULTRA — Home builds stay quick.
+    expect(curate!.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b'); // dj lane, not nemotron-3-ultra
+    expect(data.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
   });
 
   it('ships deterministic fallback sections (200, never 500) when every engine fails', async () => {

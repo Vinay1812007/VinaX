@@ -1,8 +1,8 @@
 /** Locks the AI DJ variety fix (v3.6.0): every /api/dj request injects a fresh
- *  varietySeed (nonce + IST date-hour) into the curate prompt — so consecutive
- *  "Play"/radio starts from the same seed build different queues — and the
- *  server still hard-filters any avoidSongs the client already surfaced. Same
- *  pattern the AI Playlist got in v3.3.1. */
+ * varietySeed (nonce + IST date-hour) into the curate prompt — so consecutive
+ * "Play"/radio starts from the same seed build different queues — and the
+ * server still hard-filters any avoidSongs the client already surfaced. Same
+ * pattern the AI Playlist got in v3.3.1. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { onRequestPost } from './dj';
 
@@ -43,7 +43,8 @@ describe('onRequestPost — DJ variety + anti-repeat plumbing', () => {
       }),
       // Only the dj key: gather (fast lane) has no key and is skipped, so the
       // sole outbound call is the curate on the dj engine.
-      env: { VINAX_CHATGPT_120_B: 'dj-key' },
+      // v5.4.0: the dj lane rides its own lightning key now.
+      env: { VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'dj-key' },
     });
 
   const eightFresh = Array.from({ length: 8 }, (_, i) => ({
@@ -58,9 +59,10 @@ describe('onRequestPost — DJ variety + anti-repeat plumbing', () => {
     expect(res.status).toBe(200);
     const curate = calls.find((c) => c.system.startsWith('You are the AI DJ'));
     expect(curate).toBeDefined();
-    // v3.7.0: dj lane re-pinned to gpt-oss-20b (NVIDIA gpt-oss-120b hung >25s; the
-    // fast same-family sibling keeps the curate quick + JSON-clean on the same key).
-    expect(curate!.model).toBe('openai/gpt-oss-20b');
+    // v5.4.0: dj lane re-pinned to the owner-mandated realtime DJ engine,
+    // nemotron-3.5-lightning (probed 0.8s warm on its own key); gpt-oss-20b
+    // stays as the same-key secondary.
+    expect(curate!.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
     expect(curate!.temperature).toBe(0.9);
     expect(curate!.user).toMatch(/varietySeed: "[0-9a-f]{8} · IST \d{4}-\d{2}-\d{2} \d{2}h"/);
   });
