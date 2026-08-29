@@ -32,6 +32,11 @@ try {
 // module-scoped guard resets on every reload, so a persistent CSP or network
 // failure could bounce the page endlessly (v4.13.1 hotfix).
 window.addEventListener('vite:preloadError', (event) => {
+  // v5.3.1 — offline downloads: with no network a reload can never fetch the
+  // missing chunk; it only makes the screen flash over and over. Stay put and
+  // let the error boundary render instead (the service worker precaches the
+  // full chunk graph now, so this is a rare last resort).
+  if (!navigator.onLine) return;
   const KEY = 'vinax.preloadReload';
   let n = 0;
   try { n = Number(sessionStorage.getItem(KEY) || 0); } catch { /* ignore */ }
@@ -96,6 +101,22 @@ if (
           if (installing.state === 'installed') nudge(reg.waiting);
         });
       });
+      // v5.3.1 — offline downloads: ask the worker to download the full
+      // chunk graph (see public/sw.js PRECACHE) so every page — Downloads
+      // included — opens with no network. Refresh it on every boot and
+      // whenever connectivity comes back, because sw.js itself rarely
+      // changes between deploys and install-time precache alone would
+      // never pick up new chunks.
+      const precache = (): void => {
+        try {
+          reg.active?.postMessage({ type: 'PRECACHE' });
+        } catch {
+          /* ignore */
+        }
+      };
+      precache();
+      window.addEventListener('online', precache);
+      navigator.serviceWorker.addEventListener('controllerchange', precache);
     }).catch(() => {
       /* ignore: the app works fine without a service worker */
     });
