@@ -1446,7 +1446,25 @@
     { lane: 'translate', name: 'TRANSLATE', nick: 'VinaX TRANSLATE', model: 'nvidia/riva-translate-4b-instruct-v2' },
     { lane: 'safety', name: 'SAFETY', nick: 'VinaX SAFETY', model: 'nvidia/nemotron-3.5-content-safety' },
     { lane: 'guard', name: 'GUARD', nick: 'VinaX GUARD', model: 'nvidia/llama-3.1-nemotron-safety-guard-8b-v3' },
-    { lane: 'agent', name: 'K3', nick: 'VinaX K3', model: 'moonshotai/kimi-k3' }
+    { lane: 'agent', name: 'K3', nick: 'VinaX K3', model: 'moonshotai/kimi-k3' },
+    // v5.4.1 inventory rows — every remaining owner-listed model gets its own
+    // probe-able row on its own key. Several are dead or absent upstream
+    // (probed 2026-08-29); this bench is where that shows honestly.
+    { lane: 'dsflash', name: 'DS-FLASH', nick: 'DeepSeek Flash', model: 'deepseek-ai/deepseek-v4-flash-0731' },
+    { lane: 'oss120', name: 'OSS-120B', nick: 'GPT-OSS 120B', model: 'openai/gpt-oss-120b' },
+    { lane: 'diffusion', name: 'GLIMMER', nick: 'VinaX GLIMMER', model: 'google/diffusiongemma-26b-a4b-it' },
+    { lane: 'gemma4', name: 'GEMMA-4', nick: 'Gemma 4 31B', model: 'google/gemma-4-31b-it' },
+    { lane: 'omni', name: 'OMNI', nick: 'Nano Omni Reasoning', model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning' },
+    { lane: 'muse', name: 'MUSE-G', nick: 'Muse Glimmer 30B', model: 'nvidia/muse-glimmer-30b' },
+    { lane: 'laguna', name: 'LAGUNA', nick: 'Laguna XS 2.1', model: 'nvidia/laguna-xs-2.1' },
+    { lane: 'voicechat', name: 'VOICECHAT', nick: 'Nemotron Voicechat', model: 'nvidia/nemotron-voicechat' },
+    { lane: 'translate2', name: 'RIVA-1.1', nick: 'Riva Translate v1.1', model: 'nvidia/riva-translate-4b-instruct-v1_1' },
+    { lane: 'rank', name: 'ISING-1.5', nick: 'Ising Calibration 1.5', model: 'nvidia/ising-calibration-1.5-31b' },
+    { lane: 'rank2', name: 'ISING-1', nick: 'Ising Calibration 1', model: 'nvidia/ising-calibration-1-35b-a3b' },
+    { lane: 'embedlane', name: 'EMBED', nick: 'Nemotron Embed 1B', model: 'nvidia/nemotron-3-embed-1b' },
+    { lane: 'video', name: 'VIDEO-DET', nick: 'Synthetic Video Detector', model: 'nvidia/synthetic-video-detector' },
+    { lane: 'speaker', name: 'SPEAKER', nick: 'Active Speaker Detection', model: 'nvidia/active-speaker-detection' },
+    { lane: 'petr', name: 'STREAMPETR', nick: 'StreamPETR', model: 'nvidia/streampetr' }
   ];
   var labLane = 'chat';
   var labHist = {}; // lane -> [{ role, content, error?, meta? }] — in memory only, gone on reload
@@ -1690,7 +1708,7 @@
     }).join('');
     $('view').innerHTML =
       '<div class="card" id="lab-root" style="max-width:860px">' +
-      '<h3 style="margin-top:0">API Monitoring <span class="muted">· all 13 AI lanes + music catalog sources — no failover, failures show honestly</span></h3>' +
+      '<h3 style="margin-top:0">API Monitoring <span class="muted">· all 26 models across 28 lanes + music catalog sources — no failover, failures show honestly</span></h3>' +
       '<div class="lab-chips">' + chips + '</div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-ping">Ping all lanes</button><span id="lab-ping-at" class="lab-ping-at"></span><span id="lab-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-music">Ping music APIs</button><span id="lab-music-at" class="lab-ping-at"></span><span id="lab-music-pings" class="chips" style="margin:0"></span></div>' +
