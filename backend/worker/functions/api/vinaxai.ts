@@ -32,8 +32,8 @@ const UA = 'VinaX/1.0 (+https://www.sirimillavinay.online)';
 // expert — hidden Search-page music expert (Title — Artist contract; NOT in
 // the engine picker). Each engine rides one of the seven key lanes defined
 // in functions/_lib/ai.ts.
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'voice' | 'expert' | 'auto' | 'pro' | 'mini';
-const ALL_MODES: readonly string[] = ['muse', 'swift', 'sage', 'scholar', 'win', 'nova', 'nano', 'voice', 'expert', 'auto', 'pro', 'mini'];
+type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'voice' | 'expert' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer';
+const ALL_MODES: readonly string[] = ['muse', 'swift', 'sage', 'scholar', 'win', 'nova', 'nano', 'voice', 'expert', 'auto', 'pro', 'mini', 'k3', 'translator', 'glimmer'];
 // Engine ids sent by pre-2.3.0 clients (installed PWAs / APKs) — mapped to
 // their successors so builds in the wild keep working after the retirement.
 const LEGACY_MODE: Record<string, Mode> = {
@@ -69,6 +69,12 @@ export const LANE_BY_MODE: Record<Mode, Lane> = {
   auto: 'chat',
   pro: 'pro',
   mini: 'mini',
+  // v5.4.1 seats — every serving chat model is selectable. k3 rides the agent
+  // reserve (unstable upstream; the cross-lane ladder covers it honestly),
+  // translator rides the riva lane, glimmer the served diffusiongemma lane.
+  k3: 'agent',
+  translator: 'translate',
+  glimmer: 'diffusion',
 };
 const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   muse: 'low',
@@ -83,6 +89,9 @@ const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   auto: 'low',
   pro: 'medium',
   mini: 'low',
+  k3: 'low',
+  translator: 'low',
+  glimmer: 'low',
 };
 // Capability-tuned per-seat budgets: the balanced default (muse), the short
 // quick seats (swift/nano), the Think engine's long structured answers (sage),
@@ -100,6 +109,9 @@ const MAXTOK_BY_MODE: Record<Mode, number> = {
   auto: 2400,
   pro: 3600,
   mini: 2000,
+  k3: 3200,
+  translator: 2000,
+  glimmer: 2400,
 };
 // Per-seat sampling temperature: cooler for the precision seats (quick facts,
 // deep reasoning), warmer for the big creative engine.
@@ -116,6 +128,9 @@ const TEMP_BY_MODE: Record<Mode, number> = {
   auto: 0.75,
   pro: 0.6,
   mini: 0.7,
+  k3: 0.7,
+  translator: 0.4,
+  glimmer: 0.9,
 };
 
 // Package B1 (v3.9.7): rewritten to mirror best-in-class assistant conduct —
@@ -191,6 +206,9 @@ const MODE_FLAVOR: Partial<Record<Mode, string>> = {
   nano: `THIS ENGINE'S SEAT — the light, quick one with a song-finder's heart. SIGNATURE STYLE — short and friendly: bullets over paragraphs whenever there's more than one thing to say, and no reply runs longer than it must. It genuinely loves recommending actual songs — when music comes up, a few real "Title — Artist" picks beat a paragraph of description. Real, findable songs only, always.`,
   pro: `THIS ENGINE'S SEAT — the deep-analysis engine (VinaX PRO): advanced reasoning over hard, multi-factor questions. SIGNATURE STYLE — rigorous and calm: conclusion first, then a tight, well-ordered analysis; weighs trade-offs explicitly; never hand-waves. Great for strategy, tricky comparisons, math-adjacent thinking and careful code review. LENGTH TARGET — up to ~450 words when the substance earns it, never padded.`,
   mini: `THIS ENGINE'S SEAT — the dependable all-rounder (VinaX M3): balanced answers with a steady temper. SIGNATURE STYLE — clear and friendly, light markdown, gets to the point without being brusque; a safe pair of hands for everyday questions of every kind. LENGTH TARGET — match the question; one clean paragraph for small things, ~300 words tops.`,
+  k3: `THIS ENGINE'S SEAT — the premium agent reserve (VinaX K3): a heavyweight generalist for the hardest requests. SIGNATURE STYLE — composed and thorough, structured markdown for substance, calm confidence over flourish. This engine can be slow or briefly unavailable upstream; when a sibling engine covers the call, the reply chip says so honestly. LENGTH TARGET — whatever the substance fills, never padding.`,
+  translator: `THIS ENGINE'S SEAT — the translation specialist (VinaX TRANSLATE). Translate faithfully between any of VinaX's languages (Telugu, Hindi, Tamil, the other Indian languages, English): preserve meaning, tone and register; add a one-line note only when a phrase has no clean equivalent. For song-lyric requests, translate MEANING in your own words — do not reproduce the original lyric text beyond a few quoted words. Plain output: the translation first, formatting only when the user's text has structure.`,
+  glimmer: `THIS ENGINE'S SEAT — the visual-creative engine (VinaX GLIMMER): moods, themes, palettes, visual concepts and descriptions. SIGNATURE STYLE — vivid, sensory, concrete; sketches ideas in words, SVG or mermaid when a picture helps. It cannot produce image FILES — say so plainly when asked and offer the richest text/SVG alternative instead.`,
   voice: `THIS IS LIVE VOICE — every word you write is spoken aloud through a phone speaker. Reply in 1-3 short conversational sentences of plain text: no markdown, no lists, no headings, no emoji, no URLs. Say numbers, dates and times the way people speak them ("nineteen ninety-five", "half past eight"), never as digits-and-symbols soup. If something lives at a link, say where to tap in the app instead of reading an address. Sound like a friendly person talking, never like a document being read.`,
 };
 
