@@ -1426,20 +1426,27 @@
   }
   function loadRooms() { apiMemo('/api/admin/rooms').then(function (d) { if (d && active === 'rooms') renderRooms(d); }).catch(noop); }
 
-  // ---------- AI Lab (streaming test bench for the seven AI lanes) ----------
+  // ---------- AI Lab (streaming test bench for every AI lane, v5.4.0) ----------
   // Interactive pane: EXCLUDED from the silent auto-refresh — loadAiLab only
   // paints once and never clobbers a conversation in progress.
   var LAB_LANES = [
     // model = the lane's PINNED primary (must match functions/_lib/ai.ts LANE_MODEL).
-    // v3.7.0: chat + dj re-pinned off NVIDIA gpt-oss-120b (hung >25s) to the fast
-    // gpt-oss-20b on their own keys; nicknames unchanged (nickname != model).
+    // v5.4.0: dj rides its own lightning key; deep upgraded to nemotron-3-super-120b;
+    // six new probe-verified lanes joined the bench (pro/mini/translate/safety/
+    // guard/agent) — every model below was probed live on its own key before pinning.
     { lane: 'chat', name: 'FLASH', nick: 'VinaX FLASH', model: 'openai/gpt-oss-20b' },
     { lane: 'fast', name: '20B', nick: 'VinaX 20B', model: 'openai/gpt-oss-20b' },
-    { lane: 'deep', name: 'SUPER', nick: 'VinaX SUPER', model: 'nvidia/llama-3.3-nemotron-super-49b-v1.5' },
+    { lane: 'deep', name: 'SUPER', nick: 'VinaX SUPER', model: 'nvidia/nemotron-3-super-120b-a12b' },
     { lane: 'scholar', name: 'INSTANT', nick: 'VinaX INSTANT', model: 'llama-3.3-70b-versatile' },
     { lane: 'home', name: 'ULTRA', nick: 'VinaX ULTRA', model: 'nvidia/nemotron-3-ultra-550b-a55b' },
-    { lane: 'dj', name: '120B', nick: 'VinaX 120B', model: 'openai/gpt-oss-20b' },
-    { lane: 'search', name: 'NANO 3', nick: 'VinaX NANO 3', model: 'nvidia/nemotron-3-nano-30b-a3b' }
+    { lane: 'dj', name: 'LIGHTNING', nick: 'VinaX LIGHTNING', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
+    { lane: 'search', name: 'NANO 3', nick: 'VinaX NANO 3', model: 'nvidia/nemotron-3-nano-30b-a3b' },
+    { lane: 'pro', name: 'PRO', nick: 'VinaX PRO', model: 'deepseek-ai/deepseek-v4-pro-0813' },
+    { lane: 'mini', name: 'M3', nick: 'VinaX M3', model: 'minimaxai/minimax-m3' },
+    { lane: 'translate', name: 'TRANSLATE', nick: 'VinaX TRANSLATE', model: 'nvidia/riva-translate-4b-instruct-v2' },
+    { lane: 'safety', name: 'SAFETY', nick: 'VinaX SAFETY', model: 'nvidia/nemotron-3.5-content-safety' },
+    { lane: 'guard', name: 'GUARD', nick: 'VinaX GUARD', model: 'nvidia/llama-3.1-nemotron-safety-guard-8b-v3' },
+    { lane: 'agent', name: 'K3', nick: 'VinaX K3', model: 'moonshotai/kimi-k3' }
   ];
   var labLane = 'chat';
   var labHist = {}; // lane -> [{ role, content, error?, meta? }] — in memory only, gone on reload
@@ -1683,9 +1690,9 @@
     }).join('');
     $('view').innerHTML =
       '<div class="card" id="lab-root" style="max-width:860px">' +
-      '<h3 style="margin-top:0">API Monitoring <span class="muted">· seven AI lanes + music catalog sources — no failover, failures show honestly</span></h3>' +
+      '<h3 style="margin-top:0">API Monitoring <span class="muted">· all 13 AI lanes + music catalog sources — no failover, failures show honestly</span></h3>' +
       '<div class="lab-chips">' + chips + '</div>' +
-      '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-ping">Ping all seven</button><span id="lab-ping-at" class="lab-ping-at"></span><span id="lab-pings" class="chips" style="margin:0"></span></div>' +
+      '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-ping">Ping all lanes</button><span id="lab-ping-at" class="lab-ping-at"></span><span id="lab-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-music">Ping music APIs</button><span id="lab-music-at" class="lab-ping-at"></span><span id="lab-music-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="lab-msgs" id="lab-msgs"></div>' +
       '<textarea id="lab-in" class="lab-input" rows="3" placeholder="Test message — Enter sends, Shift+Enter for a new line"></textarea>' +
