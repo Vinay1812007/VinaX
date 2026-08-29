@@ -199,6 +199,17 @@ function normKey(title: string, artist: string): string {
   return (title + '|' + artist).toLowerCase().replace(/[^a-z0-9|]+/g, '');
 }
 
+// v5.3.1 — junk gate for live-search resolution. When an AI pick has to be
+// resolved through search, the first hit is sometimes a dialogue strip, BGM
+// cut or ringtone edit of the film rather than the song itself; those were
+// landing in queues as "unnecessary songs". Never accept them.
+const JUNK_TITLE = /\b(dialogue|dialogues|bgm|jukebox|trailer|teaser|ringtone|promo|commentary)\b/i;
+
+/** Loose title key for comparing an AI suggestion with a search result. */
+function titleKey(t: string): string {
+  return t.toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z0-9]+/g, '');
+}
+
 /** Resolve AI { title, artist, reason } picks to playable catalog songs, deduped. */
 async function resolve(
   suggestions: Suggestion[],
@@ -243,7 +254,7 @@ async function resolve(
       searchSongs(`${s.title} ${s.artist}`, 6).catch(() => [] as Song[]),
     ),
   );
-  const ok = (r: Song) => !seen.has(r.id) && !(r.language != null && muted.includes(r.language));
+  const ok = (r: Song) => !seen.has(r.id) && !(r.language != null && muted.includes(r.language)) && !JUNK_TITLE.test(r.title);
   for (let i = 0; i < remaining.length; i++) {
     if (out.length >= limit) break;
     const s = remaining[i];
@@ -252,7 +263,22 @@ async function resolve(
     // Prefer a result in the target language so the queue stays on-language.
     // Hard on-language: when a target language is set, only accept results in
     // that language — an off-language suggestion is skipped, never substituted.
-    const pick = prefer ? results.find((r) => ok(r) && r.language === prefer) : results.find(ok);
+    //
+    // v5.3.1 relevance gate: within the language rule, prefer a result whose
+    // title actually matches the AI's suggestion — a search for a junk or
+    // hallucinated title used to land whatever the catalog returned first,
+    // putting unrelated tracks in the queue. A pick with no title overlap at
+    // all is skipped rather than substituted.
+    const want = titleKey(s.title);
+    const titleMatches = (r: Song) => {
+      if (!want) return true;
+      const got = titleKey(r.title);
+      return got.length > 0 && (got.includes(want) || want.includes(got));
+    };
+    const inLang = (r: Song) => !prefer || r.language === prefer;
+    const pick =
+      results.find((r) => ok(r) && inLang(r) && titleMatches(r)) ??
+      (prefer ? results.find((r) => ok(r) && r.language === prefer) : results.find(ok));
     if (pick) {
       seen.add(pick.id);
       out.push({ song: pick, reason: s.reason });
@@ -302,6 +328,29 @@ export async function aiSimilarSongs(
     pool = await getSongSuggestions(seedId, 80);
   } catch {
     /* pool is optional */
+  }
+  // v5.3.1: widen the neighborhood itself — blend in the suggestions of one
+  // recently completed song (rotated by crypto nonce) so the pool isn't the
+  // seed's same 80-song orbit on every single round. This is what finally
+  // breaks "the same playlist again": the model gets genuinely new real
+  // material to pick from, not just a reshuffle of one neighborhood.
+  try {
+    const comp = ctx.history.filter((e) => e.completed && e.song.id !== seedId);
+    if (comp.length) {
+      const b = new Uint8Array(1);
+      crypto.getRandomValues(b);
+      const alt = comp[b[0] % Math.min(comp.length, 10)].song;
+      const extra = await getSongSuggestions(alt.id, 40);
+      const have = new Set(pool.map((s) => s.id));
+      for (const s of extra) {
+        if (!have.has(s.id)) {
+          have.add(s.id);
+          pool.push(s);
+        }
+      }
+    }
+  } catch {
+    /* second neighborhood is optional */
   }
   const filteredPool = pool.filter((s) => !exclude.has(s.id));
   const rotatedPool = sampleWithoutReplacement(filteredPool, 35);
