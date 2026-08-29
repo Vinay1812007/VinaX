@@ -19,16 +19,19 @@ describe('sitemap index', () => {
     const xml = await res.text();
     expect(xml.startsWith('<?xml')).toBe(true);
     expect(xml).toContain('<sitemapindex');
+    // v5.3.0: the legacy sitemap-songs.xml left the index — it always returned
+    // 0 URLs (songs live in the paginated /sitemaps/songs-N.xml corpus maps),
+    // and an empty child gets a sitemap index flagged in Search Console.
     for (const child of [
       'sitemap-static.xml',
       'sitemap-hubs.xml',
-      'sitemap-songs.xml',
       'sitemap-albums.xml',
       'sitemap-movies.xml',
       'sitemap-artists.xml',
     ]) {
       expect(xml).toContain(`${ORIGIN}/${child}`);
     }
+    expect(xml).not.toContain(`${ORIGIN}/sitemap-songs.xml`);
     const locs = locsOf(xml);
     expect(locs.length).toBeGreaterThanOrEqual(5);
     for (const loc of locs) {
@@ -54,8 +57,10 @@ describe('sitemap index', () => {
     for (const n of [1, 12, 23]) expect(xml).toContain(`${ORIGIN}/sitemaps/songs-${n}.xml`);
     expect(xml).not.toContain('/sitemaps/songs-24.xml');
     expect(xml).not.toContain('/sitemaps/albums-1.xml');
-    // Legacy children survive alongside the corpus maps.
-    expect(xml).toContain(`${ORIGIN}/sitemap-songs.xml`);
+    // Legacy children survive alongside the corpus maps (minus the retired
+    // always-empty sitemap-songs.xml — the corpus maps ARE the song URLs).
+    expect(xml).toContain(`${ORIGIN}/sitemap-albums.xml`);
+    expect(xml).not.toContain(`${ORIGIN}/sitemap-songs.xml`);
   });
 });
 
