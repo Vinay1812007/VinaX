@@ -213,7 +213,10 @@ async function handlePost(context: {
     // inside its leash; the queue is 12 now (the client uses 8), so every
     // lane on the ladder can land the full JSON in time. First-attempt leash
     // tightened 8s → 5s to match home.ts's proven cutover.
-    { temperature: 0.9, lane: 'dj', json: true, maxTokens: 1200, reasoningEffort: 'low', timeoutMs: 13_000, firstTimeoutMs: 5_000, ladder: ['chat', 'scholar', 'fast', 'home'], deadlineAt },
+    // maxTokens stays 1600: the queue is 12 songs now, but reasoning-style
+    // failover engines spend tokens thinking before the JSON — headroom is
+    // what keeps their answers parseable instead of truncated.
+    { temperature: 0.9, lane: 'dj', json: true, maxTokens: 1600, reasoningEffort: 'low', timeoutMs: 13_000, firstTimeoutMs: 5_000, ladder: ['chat', 'scholar', 'fast', 'home'], deadlineAt },
   );
   let songs = r.error ? [] : parseSongs(r.content);
 
@@ -233,6 +236,26 @@ async function handlePost(context: {
   // Fallback: if deep ranking yields nothing, hand back the raw candidate pool.
   if (!songs.length && candidates.length) {
     songs = candidates.slice(0, 12).map((c) => ({ title: c.title, artist: c.artist }));
+  }
+  // v5.3.1 floor — when every engine flakes AND there was no gather round
+  // (rich catalogPool skips it), shuffle the client's own real, playable pool
+  // instead of 500ing. Live probes caught exactly this hole: a strong pool,
+  // a bad engine minute, and the client fell all the way back to its
+  // deterministic local picker — the "same playlist every time" report. A
+  // shuffled slice of the pool keeps the queue real AND different per round.
+  if (!songs.length && poolSize > 0) {
+    const rawPool = ((reqCtx as { catalogPool?: unknown[] }).catalogPool ?? []) as Array<{
+      title?: unknown;
+      artist?: unknown;
+    }>;
+    const usable = rawPool
+      .filter((c) => c && typeof c.title === 'string' && typeof c.artist === 'string')
+      .map((c) => ({ title: String(c.title), artist: String(c.artist) }));
+    for (let i = usable.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [usable[i], usable[j]] = [usable[j], usable[i]];
+    }
+    songs = usable.slice(0, 12);
   }
   if (r.error !== 'not_configured') {
     const log = logAiEvent(env, {
