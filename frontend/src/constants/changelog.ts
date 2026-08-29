@@ -29,7 +29,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       },
       {
         type: 'improved',
-        text: 'The AI DJ digs through a wider musical neighborhood each round — blending the current song's orbit with one of your recent favourites — so back-to-back sessions genuinely differ.',
+        text: 'The AI DJ digs through a wider musical neighborhood each round — blending the current song\'s orbit with one of your recent favourites — so back-to-back sessions genuinely differ.',
       },
     ],
   },
