@@ -42,22 +42,35 @@ const speechForSpoken = (md: string): string =>
     .slice(0, 2000);
 const STORE_KEY = 'vinax_ai_chats_v1';
 
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano';
+type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini';
 // Engine picker wears the VinaX V1 engine names (v3.0.0); ids stay stable for
 // the API. All seven engines are selectable since v3.0.2.
 const MODES: Array<{ id: Mode; label: string; hint: string }> = [
+  // v5.4.0: AUTO picks the seat per question server-side; PRO and M3 ride the
+  // new probe-verified reserve lanes (deepseek-v4-pro / minimax-m3).
+  { id: 'auto', label: 'VinaX AUTO', hint: 'Picks the best engine for each question' },
   { id: 'muse', label: 'VinaX FLASH', hint: 'Everyday chat · recommended' },
   { id: 'swift', label: 'VinaX 20B', hint: 'Fastest answers' },
   { id: 'sage', label: 'VinaX SUPER', hint: 'Thinks deepest' },
   { id: 'scholar', label: 'VinaX INSTANT', hint: 'Music knowledge · instant answers' },
-  { id: 'win', label: 'VinaX 120B', hint: 'Big creative engine · runs the AI DJ' },
+  { id: 'win', label: 'VinaX LIGHTNING', hint: 'Big creative engine · runs the AI DJ' },
   { id: 'nova', label: 'VinaX ULTRA', hint: 'Most powerful · complex questions' },
   { id: 'nano', label: 'VinaX NANO 3', hint: 'Light and quick · song finder' },
+  { id: 'pro', label: 'VinaX PRO', hint: 'Deep analysis · advanced reasoning' },
+  { id: 'mini', label: 'VinaX M3', hint: 'Dependable all-rounder' },
 ];
 // Engine chip on each reply: which engine actually answered (from stream meta) —
 // derived from the served model slug so failovers are reported honestly.
 // Order matters: specific slugs sit BEFORE the generic llama/vision row.
 const ENGINE_NICK: Array<[RegExp, string]> = [
+  // v5.4.0 engines (probe-verified pins) — specific slugs sit first so the
+  // legacy rows below can never mislabel them.
+  [/nemotron-3\.5-lightning/i, 'VinaX LIGHTNING'],
+  [/nemotron-3-super-120b/i, 'VinaX SUPER'],
+  [/deepseek-v4-pro/i, 'VinaX PRO'],
+  [/minimax/i, 'VinaX M3'],
+  [/kimi/i, 'VinaX K3'],
+  [/riva-translate/i, 'VinaX TRANSLATE'],
   // v3.7.0: openai/gpt-oss-20b now pins the chat (FLASH), fast (20B) AND dj (120B)
   // seats — NVIDIA gpt-oss-120b hung >25s and was retired. The chip reports the
   // engine that actually answered, keyed off the served slug, so a gpt-oss-20b reply
