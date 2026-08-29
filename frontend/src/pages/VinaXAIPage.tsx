@@ -42,7 +42,7 @@ const speechForSpoken = (md: string): string =>
     .slice(0, 2000);
 const STORE_KEY = 'vinax_ai_chats_v1';
 
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini';
+type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer';
 // Engine picker wears the VinaX V1 engine names (v3.0.0); ids stay stable for
 // the API. All seven engines are selectable since v3.0.2.
 const MODES: Array<{ id: Mode; label: string; hint: string }> = [
@@ -58,6 +58,9 @@ const MODES: Array<{ id: Mode; label: string; hint: string }> = [
   { id: 'nano', label: 'VinaX NANO 3', hint: 'Light and quick · song finder' },
   { id: 'pro', label: 'VinaX PRO', hint: 'Deep analysis · advanced reasoning' },
   { id: 'mini', label: 'VinaX M3', hint: 'Dependable all-rounder' },
+  { id: 'k3', label: 'VinaX K3', hint: 'Premium agent · heavyweight generalist' },
+  { id: 'translator', label: 'VinaX TRANSLATE', hint: 'Translation specialist · 12+ languages' },
+  { id: 'glimmer', label: 'VinaX GLIMMER', hint: 'Visual-creative · moods and themes' },
 ];
 // Engine chip on each reply: which engine actually answered (from stream meta) —
 // derived from the served model slug so failovers are reported honestly.
@@ -71,6 +74,7 @@ const ENGINE_NICK: Array<[RegExp, string]> = [
   [/minimax/i, 'VinaX M3'],
   [/kimi/i, 'VinaX K3'],
   [/riva-translate/i, 'VinaX TRANSLATE'],
+  [/diffusiongemma/i, 'VinaX GLIMMER'],
   // v3.7.0: openai/gpt-oss-20b now pins the chat (FLASH), fast (20B) AND dj (120B)
   // seats — NVIDIA gpt-oss-120b hung >25s and was retired. The chip reports the
   // engine that actually answered, keyed off the served slug, so a gpt-oss-20b reply
