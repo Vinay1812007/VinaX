@@ -250,7 +250,10 @@ async function handlePost(context: {
     }>;
     const usable = rawPool
       .filter((c) => c && typeof c.title === 'string' && typeof c.artist === 'string')
-      .map((c) => ({ title: String(c.title), artist: String(c.artist) }));
+      .map((c) => ({ title: String(c.title), artist: String(c.artist) }))
+      // The floor honors the avoid-list too — an engine-down round must not
+      // become a repeat round (the shuffle alone reorders, this removes).
+      .filter((c) => c.title.length < 4 || !avoidBlob.includes(c.title.toLowerCase()));
     for (let i = usable.length - 1; i > 0; i -= 1) {
       const j = Math.floor(Math.random() * (i + 1));
       [usable[i], usable[j]] = [usable[j], usable[i]];
