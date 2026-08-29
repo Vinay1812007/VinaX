@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -11,6 +11,27 @@ const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 
 const BUILD_NUMBER = process.env.VITE_BUILD_NUMBER || '';
 const APP_VERSION = BUILD_NUMBER ? `${pkg.version}+${BUILD_NUMBER}` : pkg.version;
 
+/** Emit /precache-manifest.json — the URL of every hashed build asset — so
+ *  the service worker (public/sw.js) can download the complete chunk graph
+ *  up front and the whole app keeps working offline. The Android shell needs
+ *  this: with runtime caching alone, a lazy page the user had never visited
+ *  (e.g. Downloads) was simply missing offline, so tapping "downloads" while
+ *  offline hit a failed chunk import (v5.3.1 offline-downloads fix). */
+const precacheManifest = (): Plugin => ({
+  name: 'vinax-precache-manifest',
+  generateBundle(_options, bundle) {
+    const files = Object.keys(bundle)
+      .filter((f) => f.startsWith('assets/'))
+      .sort()
+      .map((f) => `/${f}`);
+    this.emitFile({
+      type: 'asset',
+      fileName: 'precache-manifest.json',
+      source: JSON.stringify(files),
+    });
+  },
+});
+
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   // Playwright owns e2e/ (*.spec.ts run via `npm run e2e`); vitest must not
@@ -18,7 +39,7 @@ export default defineConfig({
   test: {
     exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**', 'android/**'],
   },
-  plugins: [react()],
+  plugins: [react(), precacheManifest()],
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },
   },
