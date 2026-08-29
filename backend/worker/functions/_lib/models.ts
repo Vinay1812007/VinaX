@@ -74,7 +74,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['reasoning', 'generation'], latency_class: 'medium', quality_class: 'premium',
     cost_class: 'high', output_format: 'json', chat_capable: true,
     fallback_models: ['deepseek-v4-pro-0813', 'nemotron-3-super-120b-a12b', 'gpt-oss-120b'],
-    verified: false, ...T,
+    verified: true, ...T,
+    notes: 'Probed 2026-08-29: served once (16.6s cold) then HUNG 18s+. Wired as the agent lane reserve only — no feature primary, no ladder, until it stabilizes.',
   },
   'deepseek-v4-pro-0813': {
     id: 'deepseek-ai/deepseek-v4-pro-0813', envKey: 'VINAX_DEEPSEEK_V4_PRO', provider: 'nvidia',
@@ -82,7 +83,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['reasoning', 'generation'], latency_class: 'slow', quality_class: 'premium',
     cost_class: 'high', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-super-120b-a12b', 'gpt-oss-120b'],
-    verified: false, ...T,
+    verified: true, ...T,
+    notes: 'Probed 2026-08-29: cold probe timed out, warm 0.59s. Ladder reserve (pro lane), not a feature primary.',
   },
   'deepseek-v4-flash-0731': {
     id: 'deepseek-ai/deepseek-v4-flash-0731', envKey: 'VINAX_DEEPSEEK_V4_FLASH', provider: 'nvidia',
@@ -91,7 +93,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b', 'nemotron-3-nano-30b-a3b'],
     verified: false, ...T,
-    notes: 'Earlier generation of this family empty-streamed on NVIDIA (v3.2.0 log) — verify before pinning.',
+    notes: 'Probed 2026-08-29 TWICE: hangs 18s+ with no response. DO NOT PIN until it heals; the chat lane key keeps serving gpt-oss-20b instead.',
   },
   'nemotron-3.5-lightning-30b-a3b': {
     id: 'nvidia/nemotron-3.5-lightning-30b-a3b', envKey: 'VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B', provider: 'nvidia',
@@ -99,7 +101,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['reasoning', 'generation', 'ranking'], latency_class: 'realtime', quality_class: 'high',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['deepseek-v4-flash-0731', 'gpt-oss-20b'],
-    verified: false, ...T,
+    verified: true, ...T,
+    notes: 'Probed 2026-08-29: 7.3s cold / 0.80s warm, JSON-clean. DJ lane primary since v5.4.0, thinking off via reasoningOffParams.',
   },
   'muse-glimmer-30b': {
     id: 'nvidia/muse-glimmer-30b', envKey: 'VINAX_MUSE_GLIMMER_30B', provider: 'nvidia',
@@ -108,6 +111,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'text', chat_capable: true,
     fallback_models: ['gemma-4-31b-it', 'gpt-oss-20b'],
     verified: false, ...T,
+    notes: 'Probed 2026-08-29: 404 on nvidia/ and microsoft/ prefixes — slug not on the NIM catalog. Inventory only until a serving slug is known.',
   },
   'riva-translate-4b-instruct-v2': {
     id: 'nvidia/riva-translate-4b-instruct-v2', envKey: 'VINAX_RIVA_TRANSLATE_4B_INSTRUCT_V2', provider: 'nvidia',
@@ -115,7 +119,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['translation'], latency_class: 'fast', quality_class: 'high',
     cost_class: 'low', output_format: 'text', chat_capable: true,
     fallback_models: ['riva-translate-4b-instruct-v1_1'],
-    verified: false, ...T,
+    verified: true, ...T,
+    notes: 'Probed 2026-08-29: 200 in 0.93s. Translate lane primary since v5.4.0.',
   },
   'riva-translate-4b-instruct-v1_1': {
     id: 'nvidia/riva-translate-4b-instruct-v1_1', envKey: 'VINAX_RIVA_TRANSLATE_4B_INSTRUCT_V1_1', provider: 'nvidia',
@@ -124,6 +129,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'low', output_format: 'text', chat_capable: true,
     fallback_models: [],
     verified: false, ...T,
+    notes: 'Probed 2026-08-29: 404 — slug not on the NIM catalog. v2 runs without a same-family fallback.',
   },
   'ising-calibration-1.5-31b': {
     id: 'nvidia/ising-calibration-1.5-31b', envKey: 'VINAX_ISING_CALIBRATION_1_5_31B', provider: 'nvidia',
@@ -132,7 +138,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['ising-calibration-1-35b-a3b'],
     verified: false, ...T,
-    notes: 'Interface unconfirmed — probe before wiring into the ranking path.',
+    notes: 'Sibling 1-35b-a3b probed 410 Gone upstream 2026-08-29 — family looks retired. Deterministic client-side ranking stays authoritative.',
   },
   'ising-calibration-1-35b-a3b': {
     id: 'nvidia/ising-calibration-1-35b-a3b', envKey: 'VINAX_ISING_CALIBRATION_1_35B_A3B', provider: 'nvidia',
@@ -141,7 +147,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: [],
     verified: false, ...T,
-    notes: 'Interface unconfirmed — probe before wiring into the ranking path.',
+    notes: 'Probed 2026-08-29: 410 Gone — model retired upstream. Do not wire.',
   },
   'nemotron-3-embed-1b': {
     id: 'nvidia/nemotron-3-embed-1b', envKey: 'VINAX_NEMOTRON_3_EMBED_1B', provider: 'nvidia',
@@ -149,8 +155,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['embedding'], latency_class: 'realtime', quality_class: 'high',
     cost_class: 'low', output_format: 'vector', chat_capable: false,
     fallback_models: [],
-    verified: false, ...T,
-    notes: 'Rides /v1/embeddings, not chat-completions. Needs the embed() adapter + a vector store before any feature can use it.',
+    verified: true, ...T,
+    notes: 'Probed 2026-08-29: 200 in 0.38s, 2048-dim vectors via /v1/embeddings. embed() helper wired in ai.ts; no feature consumes it yet (needs a vector store).',
   },
   'laguna-xs-2.1': {
     id: 'nvidia/laguna-xs-2.1', envKey: 'VINAX_LAGUNA_XS_2_1', provider: 'nvidia',
@@ -159,6 +165,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-nano-30b-a3b'],
     verified: false, ...T,
+    notes: 'Probed 2026-08-29: 404 — slug not on the NIM catalog.',
   },
   'minimax-m3': {
     id: 'minimaxai/minimax-m3', envKey: 'VINAX_MINIMAX_M3', provider: 'nvidia',
@@ -166,8 +173,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['reasoning', 'generation'], latency_class: 'medium', quality_class: 'high',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-120b', 'gpt-oss-20b'],
-    verified: false, ...T,
-    notes: 'minimax-m3 predecessor went DEGRADED upstream in v2.7.2 — verify health before pinning.',
+    verified: true, ...T,
+    notes: 'Probed 2026-08-29: cold probe timed out, warm 0.41s — healed since the v2.7.2 degradation. mini lane ladder reserve; owner table (2026-08-29) is the sign-off.',
   },
   'diffusiongemma-26b-a4b-it': {
     id: 'google/diffusiongemma-26b-a4b-it', envKey: 'VINAX_DIFFUSIONGEMMA_26B_A4B_IT', provider: 'nvidia',
@@ -193,7 +200,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['safety', 'classification'], latency_class: 'fast', quality_class: 'high',
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: ['llama-3.1-nemotron-safety-guard-8b-v3'],
-    verified: false, ...T,
+    verified: true, ...T,
+    notes: 'Probed 2026-08-29: 200 in 0.52s. Safety lane primary; moderate() in ai.ts.',
   },
   'nemotron-3-nano-omni-30b-a3b-reasoning': {
     id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', envKey: 'VINAX_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING', provider: 'nvidia',
@@ -229,7 +237,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b'],
     verified: false, ...T,
-    notes: 'This slug hung upstream in v2.7.2 (no HTTP response) — verify health before pinning.',
+    notes: 'Probed 2026-08-29: hangs 18s+ (matches the v2.7.2 hang history). DO NOT PIN.',
   },
   'nemotron-voicechat': {
     id: 'nvidia/nemotron-voicechat', envKey: 'VINAX_NEMOTRON_VOICECHAT', provider: 'nvidia',
@@ -238,7 +246,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'text', chat_capable: true,
     fallback_models: [],
     verified: false, ...T,
-    notes: 'Live voice currently rides the Groq scholar lane for sub-second TTFB (v3.4.1) — only move it after latency is proven comparable.',
+    notes: 'Probed 2026-08-29: 404 on nvidia/nemotron-voicechat and nvidia/nemotron-3-voicechat — slug not on the NIM catalog. Live voice stays on the Groq scholar lane.',
   },
   'nemotron-3-super-120b-a12b': {
     id: 'nvidia/nemotron-3-super-120b-a12b', envKey: 'VINAX_NEMOTRON_SUPER', provider: 'nvidia',
@@ -246,8 +254,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['reasoning', 'generation'], latency_class: 'medium', quality_class: 'high',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-120b', 'gpt-oss-20b'],
-    verified: false, ...T,
-    notes: 'The deep lane currently pins llama-3.3-nemotron-super-49b-v1.5 on this key — probe the 120b slug before switching.',
+    verified: true, ...T,
+    notes: 'Probed 2026-08-29: 200 in 0.55s on its own key. Deep (Think) lane primary since v5.4.0; the old 49b pin is the same-key secondary.',
   },
   'nemotron-3-nano-30b-a3b': {
     id: 'nvidia/nemotron-3-nano-30b-a3b', envKey: 'VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B', provider: 'nvidia',
@@ -273,7 +281,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['safety', 'classification'], latency_class: 'fast', quality_class: 'medium',
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3.5-content-safety'],
-    verified: false, ...T,
+    verified: true, ...T,
+    notes: 'Probed 2026-08-29: 200 in 0.53s. Guard lane — safety second opinion.',
   },
   'gpt-oss-20b': {
     id: 'openai/gpt-oss-20b', envKey: 'VINAX_CHATGPT_20_B', provider: 'nvidia',
