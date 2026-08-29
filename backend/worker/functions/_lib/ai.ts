@@ -96,6 +96,7 @@ export interface AiEnv {
   VINAX_NEMOTRON_VOICECHAT?: string;
   VINAX_STREAMPETR?: string;
   VINAX_LLAMA_3_1_NEMOTRON_SAFETY_GUARD_8B_V3?: string;
+  VINAX_NEMOTRON_3_NANO_30B_A3B?: string;
   NVIDIA_BASE_URL?: string;
 }
 
@@ -119,7 +120,26 @@ export type Lane =
   | 'translate'
   | 'safety'
   | 'guard'
-  | 'agent';
+  | 'agent'
+  // v5.4.1 — inventory bench lanes: one lane per owner-listed model so the
+  // admin AI Lab can probe and monitor ALL 26 models on their own keys. These
+  // drive no features and sit in no ladder; several pin slugs that are dead
+  // or absent upstream (the bench is exactly where that shows honestly).
+  | 'dsflash'
+  | 'muse'
+  | 'translate2'
+  | 'rank'
+  | 'rank2'
+  | 'laguna'
+  | 'diffusion'
+  | 'omni'
+  | 'gemma4'
+  | 'voicechat'
+  | 'oss120'
+  | 'embedlane'
+  | 'video'
+  | 'speaker'
+  | 'petr';
 
 /** Default (NVIDIA) chat-completions endpoint, honoring the env override. */
 export function defaultEndpoint(env: AiEnv): string {
@@ -211,6 +231,26 @@ export const LANE_MODEL: Record<Lane, string> = {
   safety: 'nvidia/nemotron-3.5-content-safety',
   guard: 'nvidia/llama-3.1-nemotron-safety-guard-8b-v3',
   agent: 'moonshotai/kimi-k3',
+  // Inventory bench lanes (v5.4.1) — see the Lane union note. Status at the
+  // 2026-08-29 probe: deepseek-flash + gemma-4 HANG; muse/laguna/voicechat and
+  // riva-v1_1 404; the ising ranks are 410 Gone; gpt-oss-120b hangs on NVIDIA;
+  // diffusiongemma SERVES; omni/video/speaker/petr are unprobed catalog
+  // guesses. The bench shows the live truth either way.
+  dsflash: 'deepseek-ai/deepseek-v4-flash-0731',
+  muse: 'nvidia/muse-glimmer-30b',
+  translate2: 'nvidia/riva-translate-4b-instruct-v1_1',
+  rank: 'nvidia/ising-calibration-1.5-31b',
+  rank2: 'nvidia/ising-calibration-1-35b-a3b',
+  laguna: 'nvidia/laguna-xs-2.1',
+  diffusion: 'google/diffusiongemma-26b-a4b-it',
+  omni: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+  gemma4: 'google/gemma-4-31b-it',
+  voicechat: 'nvidia/nemotron-voicechat',
+  oss120: 'openai/gpt-oss-120b',
+  embedlane: 'nvidia/nemotron-3-embed-1b',
+  video: 'nvidia/synthetic-video-detector',
+  speaker: 'nvidia/active-speaker-detection',
+  petr: 'nvidia/streampetr',
 };
 
 /** Per-lane SECONDARY model pin — a healthy same-key variant tried on the
@@ -247,6 +287,21 @@ export const LANE_ENV: Record<Lane, keyof AiEnv> = {
   safety: 'VINAX_NEMOTRON_3_5_CONTENT_SAFETY',
   guard: 'VINAX_LLAMA_3_1_NEMOTRON_SAFETY_GUARD_8B_V3',
   agent: 'VINAX_KIMI_K3',
+  dsflash: 'VINAX_DEEPSEEK_V4_FLASH',
+  muse: 'VINAX_MUSE_GLIMMER_30B',
+  translate2: 'VINAX_RIVA_TRANSLATE_4B_INSTRUCT_V1_1',
+  rank: 'VINAX_ISING_CALIBRATION_1_5_31B',
+  rank2: 'VINAX_ISING_CALIBRATION_1_35B_A3B',
+  laguna: 'VINAX_LAGUNA_XS_2_1',
+  diffusion: 'VINAX_DIFFUSIONGEMMA_26B_A4B_IT',
+  omni: 'VINAX_NEMOTRON_3_NANO_30B_A3B',
+  gemma4: 'VINAX_GEMMA_4_31B_IT',
+  voicechat: 'VINAX_NEMOTRON_VOICECHAT',
+  oss120: 'VINAX_CHATGPT_120_B',
+  embedlane: 'VINAX_NEMOTRON_3_EMBED_1B',
+  video: 'VINAX_SYNTHETIC_VIDEO_DETECTOR',
+  speaker: 'VINAX_ACTIVE_SPEAKER_DETECTION',
+  petr: 'VINAX_STREAMPETR',
 };
 
 /** Cross-lane failover ladder: when a lane's own key/model pair is missing or

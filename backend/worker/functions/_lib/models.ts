@@ -204,13 +204,13 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     notes: 'Probed 2026-08-29: 200 in 0.52s. Safety lane primary; moderate() in ai.ts.',
   },
   'nemotron-3-nano-omni-30b-a3b-reasoning': {
-    id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', envKey: 'VINAX_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING', provider: 'nvidia',
+    id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', envKey: 'VINAX_NEMOTRON_3_NANO_30B_A3B', provider: 'nvidia',
     role: 'Multimodal reasoning — voice/visual command context, richer interaction',
     capabilities: ['multimodal', 'reasoning'], latency_class: 'fast', quality_class: 'medium',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-nano-30b-a3b'],
     verified: false, ...T,
-    notes: 'Env key not yet in the owner list with this exact name — confirm the secret name before wiring.',
+    notes: 'Keyed to VINAX_NEMOTRON_3_NANO_30B_A3B (the owner list has no OMNI-named secret; this is the spare nano key). Bench lane: omni.',
   },
   'synthetic-video-detector': {
     id: 'nvidia/synthetic-video-detector', envKey: 'VINAX_SYNTHETIC_VIDEO_DETECTOR', provider: 'nvidia',
