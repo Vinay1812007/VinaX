@@ -12,6 +12,27 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.4.0': {
+    title: 'Downloads work fully offline, and a new AI brain',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Offline downloads finally work like they should: the app now saves everything it needs while you are online, so with no internet Downloads opens instantly and your saved songs play. The flashing screen when tapping the offline downloads link is gone. Open the app online once after updating and you are set.',
+      },
+      {
+        type: 'fixed',
+        text: 'The AI DJ was quietly failing and falling back to the same list every time. Its engines now answer fastest-first, made-up picks like (2024 Remix) are cleaned to the real songs, every suggestion must match the song it names before it enters your queue, and even on a bad engine minute you still get a fresh shuffle of real songs from your library — never a repeat, never junk.',
+      },
+      {
+        type: 'new',
+        text: 'A new multi-model AI engine under the hood — a dedicated real-time DJ engine, an upgraded Think engine, plus translation, safety and taste models, every one live-tested before it went in, with automatic fallbacks so one slow engine never takes a feature down.',
+      },
+      {
+        type: 'improved',
+        text: 'The AI DJ digs through a wider musical neighborhood each round — blending the current song's orbit with one of your recent favourites — so back-to-back sessions genuinely differ.',
+      },
+    ],
+  },
   '5.3.0': {
     title: 'Festivals come alive, the AI reads the room',
     changes: [
