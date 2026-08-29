@@ -32,8 +32,8 @@ const UA = 'VinaX/1.0 (+https://www.sirimillavinay.online)';
 // expert — hidden Search-page music expert (Title — Artist contract; NOT in
 // the engine picker). Each engine rides one of the seven key lanes defined
 // in functions/_lib/ai.ts.
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'voice' | 'expert';
-const ALL_MODES: readonly string[] = ['muse', 'swift', 'sage', 'scholar', 'win', 'nova', 'nano', 'voice', 'expert'];
+type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'voice' | 'expert' | 'auto' | 'pro' | 'mini';
+const ALL_MODES: readonly string[] = ['muse', 'swift', 'sage', 'scholar', 'win', 'nova', 'nano', 'voice', 'expert', 'auto', 'pro', 'mini'];
 // Engine ids sent by pre-2.3.0 clients (installed PWAs / APKs) — mapped to
 // their successors so builds in the wild keep working after the retirement.
 const LEGACY_MODE: Record<string, Mode> = {
@@ -63,6 +63,12 @@ export const LANE_BY_MODE: Record<Mode, Lane> = {
   nano: 'search',
   voice: 'scholar',
   expert: 'search',
+  // v5.4.0 seats: auto resolves to another seat before routing (see
+  // pickAutoMode) — 'chat' here is only the type-complete default; pro and
+  // mini ride the new probe-verified reserve lanes.
+  auto: 'chat',
+  pro: 'pro',
+  mini: 'mini',
 };
 const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   muse: 'low',
@@ -74,6 +80,9 @@ const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   nano: 'low',
   voice: 'low',
   expert: 'low',
+  auto: 'low',
+  pro: 'medium',
+  mini: 'low',
 };
 // Capability-tuned per-seat budgets: the balanced default (muse), the short
 // quick seats (swift/nano), the Think engine's long structured answers (sage),
@@ -88,6 +97,9 @@ const MAXTOK_BY_MODE: Record<Mode, number> = {
   nano: 1200,
   voice: 700,
   expert: 900,
+  auto: 2400,
+  pro: 3600,
+  mini: 2000,
 };
 // Per-seat sampling temperature: cooler for the precision seats (quick facts,
 // deep reasoning), warmer for the big creative engine.
@@ -101,6 +113,9 @@ const TEMP_BY_MODE: Record<Mode, number> = {
   nano: 0.7,
   voice: 0.75,
   expert: 0.75,
+  auto: 0.75,
+  pro: 0.6,
+  mini: 0.7,
 };
 
 // Package B1 (v3.9.7): rewritten to mirror best-in-class assistant conduct —
@@ -174,6 +189,8 @@ const MODE_FLAVOR: Partial<Record<Mode, string>> = {
   win: `THIS ENGINE'S SEAT — the big creative engine, the same one behind the AI DJ. Writing, ideas, verses and lyric-adjacent creativity are home turf: bold angles, vivid language, drafts worth keeping — always anchored to what is actually true. SIGNATURE STYLE — open like a friendly collaborator, shape longer pieces with clean markdown (**bold** key beats, short lists for options), and close creative work by offering one natural follow-up, like a tighter cut or a different tone.`,
   nova: `THIS ENGINE'S SEAT — the most powerful generalist, built for the complex questions. SIGNATURE STYLE — comprehensive but organized: cover what matters in a logical order, weigh trade-offs honestly, hold real nuance without hedging everything, and keep the temper even and warm. Depth earns its length; thorough never means padded. LENGTH TARGET — up to ~500 words when the question earns it, and not a sentence past what the substance fills.`,
   nano: `THIS ENGINE'S SEAT — the light, quick one with a song-finder's heart. SIGNATURE STYLE — short and friendly: bullets over paragraphs whenever there's more than one thing to say, and no reply runs longer than it must. It genuinely loves recommending actual songs — when music comes up, a few real "Title — Artist" picks beat a paragraph of description. Real, findable songs only, always.`,
+  pro: `THIS ENGINE'S SEAT — the deep-analysis engine (VinaX PRO): advanced reasoning over hard, multi-factor questions. SIGNATURE STYLE — rigorous and calm: conclusion first, then a tight, well-ordered analysis; weighs trade-offs explicitly; never hand-waves. Great for strategy, tricky comparisons, math-adjacent thinking and careful code review. LENGTH TARGET — up to ~450 words when the substance earns it, never padded.`,
+  mini: `THIS ENGINE'S SEAT — the dependable all-rounder (VinaX M3): balanced answers with a steady temper. SIGNATURE STYLE — clear and friendly, light markdown, gets to the point without being brusque; a safe pair of hands for everyday questions of every kind. LENGTH TARGET — match the question; one clean paragraph for small things, ~300 words tops.`,
   voice: `THIS IS LIVE VOICE — every word you write is spoken aloud through a phone speaker. Reply in 1-3 short conversational sentences of plain text: no markdown, no lists, no headings, no emoji, no URLs. Say numbers, dates and times the way people speak them ("nineteen ninety-five", "half past eight"), never as digits-and-symbols soup. If something lives at a link, say where to tap in the app instead of reading an address. Sound like a friendly person talking, never like a document being read.`,
 };
 
@@ -211,6 +228,23 @@ export function needsFreshInfo(q: string): boolean {
   // 202[6-9]: 2026 is the CURRENT year — a question naming it is exactly the
   // kind that needs live results (the old 202[7-9] silently skipped it).
   return /\b(today|tonight|yesterday|this (?:week|month|year|weekend|season)|right now|as of (?:now|today)|breaking(?: news)?|who won|live scores?|box office|standings|weather|price of|stock price|202[6-9]|latest|recently released)\b/i.test(q);
+}
+
+/** v5.4.0 — the AUTO seat: route a question to the best engine by its shape.
+ * Deliberately simple and observable — the reply's meta chip names the seat
+ * that actually answered, so the routing is never a mystery. Resolved
+ * server-side before lane routing; the client stays a plain picker. */
+export function pickAutoMode(q: string): Mode {
+  const s = q.toLowerCase();
+  if (
+    /\b(prove|solve|equation|algorithm|debug|step[- ]by[- ]step|analy[sz]e|derive|optimi[sz]e|complexity|theorem|trade[- ]?offs?)\b/.test(s) ||
+    q.length > 900
+  )
+    return 'sage';
+  if (/\b(write|rewrite|poem|story|lyrics|essay|script|draft|caption|slogan|compose|creative)\b/.test(s)) return 'win';
+  if (/\b(singer|composer|lyricist|soundtrack|raga|who sang|which (?:film|movie|song|album))\b/.test(s)) return 'scholar';
+  if (q.length < 80) return 'swift';
+  return 'muse';
 }
 
 
@@ -552,7 +586,16 @@ async function handleChat(
   }
 
   const rawMode = typeof body.mode === 'string' ? body.mode : '';
-  const mode: Mode = ALL_MODES.includes(rawMode) ? (rawMode as Mode) : (LEGACY_MODE[rawMode] ?? 'muse');
+  const pickedMode: Mode = ALL_MODES.includes(rawMode) ? (rawMode as Mode) : (LEGACY_MODE[rawMode] ?? 'muse');
+  // v5.4.0 — AUTO seat: choose the engine from the question itself before any
+  // routing, so every later mode-keyed lookup (lane, flavor, budgets) sees a
+  // concrete seat. Uses the raw last user text (pre data-fence wrapping).
+  const lastUserRaw =
+    (Array.isArray(body.messages) ? body.messages : [])
+      .filter((m) => m?.role === 'user' && typeof m?.content === 'string')
+      .map((m) => String(m.content))
+      .pop() ?? '';
+  const mode: Mode = pickedMode === 'auto' ? pickAutoMode(lastUserRaw.slice(0, 2000)) : pickedMode;
   const images = Array.isArray(body.images)
     ? (body.images as unknown[])
         .filter((s): s is string =>
