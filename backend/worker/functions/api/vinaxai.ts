@@ -689,10 +689,16 @@ async function handleChat(
   // "what day is it" / "this week" land correctly — voice mode included; the
   // expert lane just returns songs as JSON and doesn't need it.
   const knowledge = mode === 'voice' ? APP_KNOWLEDGE_VOICE : APP_KNOWLEDGE;
+  // v5.4.1: the translator seat runs a dedicated MT model (riva) that treats
+  // long conversational system prompts as more text to translate — probed
+  // live, it garbled targets under the full prompt. It gets a terse
+  // machine-translation contract instead.
   const basePrompt =
     mode === 'expert'
       ? EXPERT_SYSTEM_PROMPT
-      : `${istNowLine()}\n\n${SYSTEM_PROMPT}\n\n${knowledge}${flavor ? `\n\n${flavor}` : ''}`;
+      : mode === 'translator'
+        ? 'You are a translation engine. Translate the text the user provides into the target language they name; if no target is named, translate into English. Reply with ONLY the translation — no notes, no commentary, no source text.'
+        : `${istNowLine()}\n\n${SYSTEM_PROMPT}\n\n${knowledge}${flavor ? `\n\n${flavor}` : ''}`;
   let sys = taste ? `${basePrompt}\n\n${MUSIC_CONDUCT}\n\n${taste}` : basePrompt;
   if (searchBlock) sys = `${sys}\n\nLIVE WEB RESULTS (fetched just now):\n${searchBlock}`;
   else if (webStatus === 'failed')
