@@ -1654,7 +1654,7 @@ export default function VinaXAIPage(): ReactNode {
                     <div
                       role="listbox"
                       aria-label="Choose engine"
-                      className="absolute bottom-full mb-2 left-0 z-50 w-64 max-h-[min(60vh,480px)] overflow-y-auto overscroll-contain rounded-2xl bg-[color:var(--surface-modal)] backdrop-blur-xl border border-[color:var(--glass-border)] shadow-2xl py-1.5 animate-fade-up"
+                      className="absolute bottom-full mb-2 left-0 z-50 w-64 max-h-[420px] overflow-y-auto overscroll-contain rounded-2xl bg-[color:var(--surface-modal)] backdrop-blur-xl border border-[color:var(--glass-border)] shadow-2xl py-1.5 animate-fade-up"
                     >
                       {MODES.map((mm) => (
                         <button
