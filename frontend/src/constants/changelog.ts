@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.5.4': {
+    title: 'Tap the people behind the song',
+    changes: [
+      {
+        type: 'new',
+        text: 'The player now shows who made the song right under the title — 🎼 composer, 🎤 singers, ✍️ lyricist and the 🎬 film — and every credit is tappable, taking you straight to that artist or movie.',
+      },
+    ],
+  },
   '5.5.3': {
     title: 'A Home that never repeats itself',
     changes: [
