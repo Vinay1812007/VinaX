@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCurrentSong, usePlayerStore } from '@/store/playerStore';
 import { useLyricsOffsetStore } from '@/store/lyricsOffsetStore';
 import { activeLyricIndex } from '@/features/lyrics/activeLine';
@@ -33,8 +33,43 @@ function scrollContainerOf(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
+interface TimeAnchor {
+  t: number;
+  at: number;
+  playing: boolean;
+}
+
+/**
+ * v5.6.0 — Apple-Music-smooth karaoke fill. The store ticks currentTime a few
+ * times a second; animating the sweep off those ticks looked steppy and lagged
+ * the voice. The active line now runs its own requestAnimationFrame loop that
+ * interpolates wall-clock time from the last store tick and writes --kfill
+ * straight to the span's style — 60fps, zero React re-renders.
+ */
+function KaraokeLine({ text, start, est, anchor }: { text: string; start: number; est: number; anchor: React.MutableRefObject<TimeAnchor> }) {
+  const spanRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const a = anchor.current;
+      const t = a.t + (a.playing ? (performance.now() - a.at) / 1000 : 0);
+      const pct = Math.max(0, Math.min(100, ((t - start) / est) * 100));
+      spanRef.current?.style.setProperty('--kfill', `${pct.toFixed(1)}%`);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [text, start, est, anchor]);
+  return (
+    <span ref={spanRef} className="karaoke-fill" style={{ '--kfill': '0%' } as React.CSSProperties}>
+      {text}
+    </span>
+  );
+}
+
 export function SyncedLyrics({ lines, live, size = 'md', className }: Props) {
   const currentTime = usePlayerStore((s) => (live ? s.currentTime : 0));
+  const isPlaying = usePlayerStore((s) => (live ? s.isPlaying : false));
   const seek = usePlayerStore((s) => s.seek);
   // The per-song sync nudge lives in ONE store and applies on EVERY live
   // surface — before v3.1.1 the full-screen player ignored it, so a saved
@@ -44,6 +79,11 @@ export function SyncedLyrics({ lines, live, size = 'md', className }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   /** While the user is scrolling the lyrics themselves, pause auto-follow. */
   const userScrollUntil = useRef(0);
+  /** Wall-clock anchor for rAF interpolation between store time ticks. */
+  const anchor = useRef<TimeAnchor>({ t: 0, at: 0, playing: false });
+  useEffect(() => {
+    anchor.current = { t: currentTime, at: performance.now(), playing: isPlaying };
+  }, [currentTime, isPlaying]);
 
   useEffect(() => {
     const root = containerRef.current;
@@ -61,10 +101,26 @@ export function SyncedLyrics({ lines, live, size = 'md', className }: Props) {
     };
   }, [live]);
 
-  const activeIndex = useMemo(
-    () => (live ? activeLyricIndex(lines, currentTime, offset) : -1),
-    [lines, currentTime, live, offset],
-  );
+  // The active line advances the moment its timestamp passes — driven by the
+  // same interpolated clock as the fill, not the store's coarse ticks, so the
+  // highlight lands ON the beat instead of up to a quarter-second after it.
+  const [activeIndex, setActiveIndex] = useState(-1);
+  useEffect(() => {
+    if (!live) {
+      setActiveIndex(-1);
+      return;
+    }
+    let raf = 0;
+    const tick = () => {
+      const a = anchor.current;
+      const t = a.t + (a.playing ? (performance.now() - a.at) / 1000 : 0);
+      const idx = activeLyricIndex(lines, t, offset);
+      setActiveIndex((prev) => (prev === idx ? prev : idx));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [live, lines, offset]);
 
   useEffect(() => {
     if (activeIndex < 0) return;
@@ -82,20 +138,14 @@ export function SyncedLyrics({ lines, live, size = 'md', className }: Props) {
     scroller.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
   }, [activeIndex]);
 
-  // Progressive fill for the active line: 0→100% between this line's start
-  // and the next line's timestamp (LRC is line-timed; the sweep approximates
-  // word sync the way premium players do it).
-  const fillPct = useMemo(() => {
-    if (!live || activeIndex < 0) return 0;
-    const line = lines[activeIndex];
+  // Estimated singing duration for a line: text length paced (~85ms/glyph
+  // tracks Telugu syllables well), clamped to the real gap to the next line.
+  const estFor = (i: number): number => {
+    const line = lines[i];
     const start = line.t + offset;
-    const gap = activeIndex + 1 < lines.length ? lines[activeIndex + 1].t + offset - start : 5;
-    // Vocals usually end before the next timestamp (breaths, interludes) —
-    // pace the sweep to an estimated singing duration from text length,
-    // clamped to the real gap. ~85ms per glyph tracks Telugu syllables well.
-    const est = Math.min(Math.max(1.2, line.text.length * 0.085), Math.max(1.2, gap));
-    return Math.max(0, Math.min(100, ((currentTime - start) / est) * 100));
-  }, [live, activeIndex, lines, currentTime, offset]);
+    const gap = i + 1 < lines.length ? lines[i + 1].t + offset - start : 5;
+    return Math.min(Math.max(1.2, line.text.length * 0.085), Math.max(1.2, gap));
+  };
 
   const sizes = SIZE_CLASSES[size];
 
@@ -119,9 +169,7 @@ export function SyncedLyrics({ lines, live, size = 'md', className }: Props) {
           )}
         >
           {i === activeIndex && live && line.text ? (
-            <span className="karaoke-fill" style={{ '--kfill': `${fillPct}%` } as React.CSSProperties}>
-              {line.text}
-            </span>
+            <KaraokeLine text={line.text} start={line.t + offset} est={estFor(i)} anchor={anchor} />
           ) : (
             line.text || '♪'
           )}
