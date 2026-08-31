@@ -1,13 +1,25 @@
 import { NavLink } from 'react-router-dom';
 import { cn } from '@/utils/cn';
-import { CompassIcon, HomeIcon, LibraryIcon, SearchIcon, SparkleIcon } from './Icons';
-import { haptic } from '@/services/native';
+import { CompassIcon, DownloadIcon, HomeIcon, LibraryIcon, SearchIcon, SparkleIcon } from './Icons';
+import { haptic, isNativePlatform } from '@/services/native';
 import { useT } from '@/i18n';
 
-const items = [
+interface DockItem {
+  to: string;
+  label: string;
+  icon: typeof HomeIcon;
+  ai?: true;
+}
+
+const items: DockItem[] = [
   { to: '/', label: 'Home', icon: HomeIcon },
   { to: '/discover', label: 'Discover', icon: CompassIcon },
   { to: '/search', label: 'Search', icon: SearchIcon },
+  // v5.5.2 — Android app: downloads are the whole point of the native shell,
+  // so they get a first-class dock seat there. The web dock keeps its tighter
+  // five seats (browser listeners stream; the Downloads screen stays reachable
+  // from Library).
+  ...(isNativePlatform() ? [{ to: '/offline', label: 'Downloads', icon: DownloadIcon }] : []),
   { to: '/library', label: 'Library', icon: LibraryIcon },
   { to: '/VinaXAI', label: 'VinaX AI', icon: SparkleIcon, ai: true as const },
 ];
