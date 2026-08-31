@@ -19,7 +19,7 @@ If an existing `VITE_API_BASES` environment variable is set, remove it while tes
 
 **[▶ Open VinaX](https://www.sirimillavinay.online/)** · **[📱 Android APK](https://www.sirimillavinay.online/download)** · **[🤖 VinaX AI](https://www.sirimillavinay.online/VinaXAI)**
 
-**Release line: VinaX V5.5**
+**Release line: VinaX V5.6**
 
 ![release](https://img.shields.io/badge/release-VinaX%20V1-22d3ee)
 ![status](https://img.shields.io/badge/status-production-22c55e)
@@ -60,8 +60,8 @@ top when reachable.
 
 🎧 **Player** — gesture controls, drag-to-reorder queue, synced karaoke lyrics
 (romanized + translated + AI "Meaning"), offline downloads that truly work
-offline (the whole app pre-caches itself, saved songs play from a same-origin
-audio cache, the Android app gives Downloads its own bottom-bar tab, and an
+offline (the whole app pre-caches itself, saved songs play from local blob
+storage that never touches the network, the Android app gives Downloads its own bottom-bar tab, and an
 offline launch lands straight on the Downloads screen), drive mode, sleep
 timer, wake-up alarm, lock-screen controls, tap-the-notification →
 full-screen player (Android), tappable credits under the title (composer,
