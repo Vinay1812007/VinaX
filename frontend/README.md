@@ -64,7 +64,8 @@ offline (the whole app pre-caches itself, saved songs play from a same-origin
 audio cache, the Android app gives Downloads its own bottom-bar tab, and an
 offline launch lands straight on the Downloads screen), drive mode, sleep
 timer, wake-up alarm, lock-screen controls, tap-the-notification →
-full-screen player (Android), and *living color*: the app tints itself from
+full-screen player (Android), tappable credits under the title (composer,
+singers, lyricist, film), and *living color*: the app tints itself from
 the playing artwork.
 
 🤖 **VinaX AI — the VinaX V5 engine family** — a full chat with thirteen
