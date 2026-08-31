@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import type { Directory, FilesystemPlugin } from '@capacitor/filesystem';
 import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
 import { useDownloadsStore } from '@/store/downloadsStore';
@@ -86,12 +87,12 @@ const MIN_VALID_BYTES = 10 * 1024;
 async function cacheAudioFromDisk(
   id: string,
   path: string,
-  Filesystem: { readFile: (o: { path: string; directory: unknown }) => Promise<{ data: unknown }> },
-  directory: unknown,
+  fs: FilesystemPlugin,
+  directory: Directory,
 ): Promise<boolean> {
   try {
     if (typeof caches === 'undefined') return false;
-    const { data } = await Filesystem.readFile({ path, directory });
+    const { data } = await fs.readFile({ path, directory });
     let blob: Blob;
     if (typeof data === 'string') {
       // Native returns base64 — a data: fetch decodes it without a JS loop.
