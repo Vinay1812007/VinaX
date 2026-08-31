@@ -68,16 +68,16 @@ full-screen player (Android), tappable credits under the title (composer,
 singers, lyricist, film), and *living color*: the app tints itself from
 the playing artwork.
 
-🤖 **VinaX AI — the VinaX V5 engine family** — a full chat with thirteen
-selectable engines, each with its own strength: **AUTO** (reads every question
-and picks the best engine for it), **FLASH** (everyday chat, the default),
-**20B** (fastest), **SUPER** (deepest reasoning — the Think engine),
-**INSTANT** (music knowledge in a blink), **LIGHTNING** (the big creative
-engine that also runs the AI DJ), **ULTRA** (the strongest all-rounder),
-**NANO 3** (light, quick, loves finding songs — it also powers personalized
-search), **PRO** (deep analysis), **M3** (dependable all-rounder), **K3**
-(premium agent reserve), **TRANSLATE** (12+ languages, Telugu-verified) and
-**GLIMMER** (visual-creative). Live web search, files and images,
+🤖 **VinaX AI — the VinaX V5 engine family** — a full chat with all
+eighteen engines selectable by name (v5.6.1, the owner's key roster): from
+**VinaX AUTO** (reads every question and picks the best engine) and the
+balanced default through **VinaX NVD NMTRN 3.5 LTNG 30B** (the big creative
+engine that also runs the AI DJ), **VinaX NVD NMTRN SUP** (deepest
+reasoning), **VinaX NVD NMTRN ULT** (strongest all-rounder), **VinaX DP V4
+PRO** and **FLASH**, **VinaX CGT 20B/120B**, **VinaX GRQ ALL** (music
+knowledge in a blink), **VinaX MIMX M3**, **VinaX K3**, **VinaX DIF GEM**,
+**VinaX MUSE GMR 30B**, **VinaX GEM 4 31B**, **VinaX LGNA XS 2.1**, the
+**VinaX ING CALBTN** pair and **VinaX TRANSLATE**. Live web search, files and images,
 Think/Research modes, and hands-free voice chat replying in a natural studio
 voice. Ask "play ⟨song⟩" and the reply is a live mini-player with lyrics.
 Behind the app the same lanes drive the AI DJ, AI playlists and the home
