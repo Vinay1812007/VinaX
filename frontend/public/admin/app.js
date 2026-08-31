@@ -1527,7 +1527,7 @@
     bubble.className = 'lab-msg bot lab-cursor';
     var metaDiv = document.createElement('div');
     metaDiv.className = 'lab-meta';
-    metaDiv.textContent = 'Contacting ' + labInfo(lane).nick + ' · ' + labShortModel(labInfo(lane).model) + '…';
+    metaDiv.textContent = 'Contacting ' + labInfo(lane).nick + '…';
     if (host) {
       var e0 = host.querySelector('.empty');
       if (e0) e0.remove();
@@ -1621,7 +1621,7 @@
     if (!el) return;
     el.className = 'lab-ping ' + (ok ? 'ok' : 'bad');
     el.textContent = labInfo(lane).name + ' ' + (ok ? '✓ ' + ms + ' ms' : '✗ ' + (why || 'failed'));
-    el.title = labInfo(lane).nick + ' · ' + labShortModel(labInfo(lane).model);
+    el.title = labInfo(lane).nick;
   }
   // Health dot on each lane chip: green answered <4s, amber answered slow, red failed.
   function labPaintDot(lane) {
@@ -1721,7 +1721,7 @@
     var chips = LAB_LANES.map(function (L) {
       return '<button class="lab-chip' + (L.lane === labLane ? ' active' : '') + '" data-lane="' + esc(L.lane) + '">' +
         '<span class="ln"><span class="lab-dot" id="lab-dot-' + esc(L.lane) + '"></span>' + esc(L.name) + ' · ' + esc(L.lane) + '</span>' +
-        '<span class="lm">' + esc(L.nick) + ' · ' + esc(labShortModel(L.model)) + '</span></button>';
+        '<span class="lm">' + esc(L.nick) + '</span></button>';
     }).join('');
     $('view').innerHTML =
       '<div class="card" id="lab-root" style="max-width:860px">' +
