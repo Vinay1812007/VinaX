@@ -5,6 +5,30 @@ import { AppLayout } from '@/layouts/AppLayout';
 import { RouteError } from '@/components/ErrorBoundary';
 import { HUB_LANGUAGES } from '@/constants/languages';
 import { MOOD_HUBS } from '@/constants/hubs';
+import { isNativePlatform } from '@/services/native';
+import { useDownloadsStore } from '@/store/downloadsStore';
+
+/**
+ * v5.5.2 — native offline boot: opening the Android app with no internet used
+ * to land on Home, which can do nothing without a network. When the listener
+ * has saved songs, land them straight on the Downloads screen instead — the
+ * one place the app is fully useful offline. Runs before the router is
+ * created so the first render already IS the Downloads page (no flash, no
+ * history entry back to a dead Home).
+ */
+function offlineBootRedirect(): void {
+  try {
+    if (!isNativePlatform()) return;
+    if (navigator.onLine) return;
+    if (window.location.pathname !== '/') return;
+    const hasDownloads = Object.keys(useDownloadsStore.getState().items).length > 0;
+    if (!hasDownloads) return;
+    window.history.replaceState(null, '', '/offline');
+  } catch {
+    /* never let a boot nicety break boot */
+  }
+}
+offlineBootRedirect();
 
 // Route-based code splitting: every page is its own chunk.
 const HomePage = lazy(() => import('@/pages/HomePage'));
