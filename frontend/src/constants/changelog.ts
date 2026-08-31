@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.6.2': {
+    title: 'Engine picker polish',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'The VinaX AI engine picker now scrolls — all eighteen engines fit on any screen instead of spilling past the top.',
+      },
+      {
+        type: 'improved',
+        text: 'Engine nicknames are now the only model names shown anywhere — the admin dashboards included; raw internal model ids no longer appear.',
+      },
+    ],
+  },
   '5.6.1': {
     title: 'Eighteen engines, all yours to pick',
     changes: [
