@@ -6,7 +6,10 @@
  *  - everything else (music APIs, CDN artwork, audio streams): passthrough
  * Stream URLs and API responses are NEVER cached.
  *
- * v12 — full-app precache. The Vite build now emits /precache-manifest.json
+ * v13 — offline audio: downloaded songs live in the AUDIO_CACHE bucket and
+ * are served from /offline-audio/<id> by this worker with real Range support
+ * (the Android file bridge can be bypassed for media on service-worker pages
+ * — the reason downloads looked saved but never played). v12 — full-app precache. The Vite build now emits /precache-manifest.json
  * listing every hashed asset URL; the worker downloads the complete chunk
  * graph at install and again on {type: 'PRECACHE'} messages (posted by the
  * app on every boot and whenever it comes back online). Before v12 only
@@ -15,8 +18,11 @@
  * and downloaded songs could not even reach the player. Now the whole app
  * works offline once it has been online for a few seconds after a deploy.
  */
-const CACHE = 'vinax-shell-v12';
+const CACHE = 'vinax-shell-v13';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg', '/fonts/manrope-var.woff2'];
+// Downloaded songs (written by services/downloads at download time). NEVER
+// cleared on activate — losing it silently un-downloads every saved song.
+const AUDIO_CACHE = 'vinax-audio-v1';
 
 /** Download every build asset listed by the manifest into the cache.
  *  Best-effort: failures (offline, mid-deploy 404s) leave the cache as-is
@@ -84,10 +90,44 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== AUDIO_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
+
+
+/** Serve a downloaded song from AUDIO_CACHE, honoring Range requests so the
+ *  player can seek. 404 when the entry is missing — the engine's source list
+ *  then falls through to streaming (or fails honestly when offline). */
+async function serveOfflineAudio(req, url) {
+  try {
+    const cache = await caches.open(AUDIO_CACHE);
+    const hit = await cache.match(url.pathname);
+    if (!hit) return new Response('not cached', { status: 404 });
+    const range = req.headers.get('range');
+    if (!range) return hit;
+    const blob = await hit.blob();
+    const m = /bytes=(\d+)-(\d*)/.exec(range);
+    if (!m) return hit;
+    const start = Number(m[1]);
+    const end = m[2] ? Math.min(Number(m[2]), blob.size - 1) : blob.size - 1;
+    if (Number.isNaN(start) || start >= blob.size || start > end) {
+      return new Response(null, { status: 416, headers: { 'content-range': 'bytes */' + blob.size } });
+    }
+    const part = blob.slice(start, end + 1);
+    return new Response(part, {
+      status: 206,
+      headers: {
+        'content-type': hit.headers.get('content-type') || 'audio/mp4',
+        'content-range': 'bytes ' + start + '-' + end + '/' + blob.size,
+        'accept-ranges': 'bytes',
+        'content-length': String(part.size),
+      },
+    });
+  } catch (e) {
+    return new Response('audio error', { status: 500 });
+  }
+}
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
@@ -99,6 +139,13 @@ self.addEventListener('fetch', (event) => {
   // images load straight from the network exactly as if there were no service
   // worker (intercepting artwork broke first-visit + mobile covers).
   if (url.origin !== self.location.origin) return; // APIs / CDN / media: leave alone
+
+  // Downloaded songs — served straight from the audio cache with Range
+  // support so seeking works. Fully offline; no file bridge involved (v13).
+  if (url.pathname.startsWith('/offline-audio/')) {
+    event.respondWith(serveOfflineAudio(req, url));
+    return;
+  }
 
   // App navigations: always try the network so users get fresh HTML; only
   // serve the cached shell when the network fails — or HANGS. The 2026-08-17
