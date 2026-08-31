@@ -9,6 +9,7 @@ import { TUNE_OPTIONS } from '@/services/recommendation/tune';
 import { getMoodPin } from '@/services/personalization/session';
 import { clearMoodPin, pinMood } from '@/features/player/moodPin';
 import type { Mood } from '@/services/recommendation/mood';
+import type { ArtistRef, Song } from '@/types';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
 import { LiveLyricLine } from '@/components/LiveLyricLine';
 import { SyncedLyrics } from '@/components/SyncedLyrics';
@@ -50,6 +51,41 @@ import { toast } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+
+interface CreditChip {
+  icon: string;
+  role: string;
+  name: string;
+  to: string;
+}
+
+/**
+ * v5.5.4 — who-made-this credits under the title, every one clickable.
+ * Roles come from the catalog when it provides them (music / singer /
+ * lyricist); catalogs that send bare names still get clickable 🎤 Artist
+ * chips, and the soundtrack album becomes the 🎬 Film chip.
+ */
+function buildCreditChips(song: Song, filmTitle: string | null): CreditChip[] {
+  const chips: CreditChip[] = [];
+  const seen = new Set<string>();
+  const push = (icon: string, role: string, name: string, to: string): void => {
+    const k = name.trim().toLowerCase();
+    if (!k || seen.has(k) || chips.length >= 5) return;
+    seen.add(k);
+    chips.push({ icon, role, name, to });
+  };
+  const linkFor = (a: ArtistRef): string => (a.id ? artistPath(a) : `/search/${encodeURIComponent(a.name)}`);
+  const roleOf = (a: ArtistRef): string => (a.role ?? '').toLowerCase();
+  for (const a of song.artists) if (/music|compos/.test(roleOf(a))) push('🎼', 'Music', a.name, linkFor(a));
+  for (const a of song.artists) if (/sing|vocal/.test(roleOf(a))) push('🎤', 'Singer', a.name, linkFor(a));
+  for (const a of song.artists) if (/lyric/.test(roleOf(a))) push('✍️', 'Lyrics', a.name, linkFor(a));
+  // Role-less catalog rows: still credit and link every name we have.
+  for (const a of song.artists) if (!roleOf(a)) push('🎤', 'Artist', a.name, linkFor(a));
+  if (song.album?.id) {
+    chips.push({ icon: '🎬', role: 'Film', name: filmTitle ?? song.album.name, to: albumPath(song.album) });
+  }
+  return chips;
+}
 
 const SLEEP_OPTIONS = [15, 30, 60];
 
@@ -189,6 +225,7 @@ export default function NowPlayingPage() {
   const upNext = queue.slice(index + 1, index + 6);
   const playingFrom = song.album?.name ?? 'Your Queue';
   const filmTitle = song.album ? filmTitleFromAlbumName(song.album.name) : null;
+  const creditChips = buildCreditChips(song, filmTitle);
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -346,13 +383,20 @@ export default function NowPlayingPage() {
                 {streamKbps >= 320 ? 'HD · ' : ''}{streamKbps} kbps
               </span>
             )}
-            {song.album?.id && (
-              <Link
-                to={albumPath(song.album)}
-                className="mt-2 flex w-fit max-w-full items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-ink-800/70 border border-glass text-ink-200 hover:text-ink-100 hover:bg-ink-700 transition-colors"
-              >
-                <span className="truncate">From “{filmTitle ?? song.album.name}”</span> ›
-              </Link>
+            {creditChips.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {creditChips.map((c) => (
+                  <Link
+                    key={`${c.role}-${c.name}`}
+                    to={c.to}
+                    className="flex max-w-full items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-ink-800/70 border border-glass text-ink-200 hover:text-ink-100 hover:bg-ink-700 transition-colors"
+                  >
+                    <span aria-hidden="true">{c.icon}</span>
+                    <span className="text-ink-400">{c.role}</span>
+                    <span className="truncate">{c.name}</span>
+                  </Link>
+                ))}
+              </div>
             )}
             {reasons[song.id] && (
               <p className="mt-2 flex items-center gap-1.5 text-xs italic text-ember-300/90">
