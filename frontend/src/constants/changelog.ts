@@ -12,6 +12,35 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.6.0': {
+    title: 'Offline that finally works, and an AI that writes beautifully',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Downloaded songs now play with data off — even after closing the app. Saved audio plays straight from local storage through a path that cannot touch the network.',
+      },
+      {
+        type: 'fixed',
+        text: 'Voice mode and the mic button no longer close the app on Android.',
+      },
+      {
+        type: 'new',
+        text: 'VinaX AI now formats its answers live while typing — headings, bold, lists, code and tables render as they stream, like the big chat apps — plus 👍/👎 on every reply and an Edit button on your messages.',
+      },
+      {
+        type: 'improved',
+        text: 'Synced lyrics now glide smoothly with the voice, Apple-Music style, instead of stepping a beat behind.',
+      },
+      {
+        type: 'improved',
+        text: 'The queue got sharper: songs from the same film, the same composer and the same era now rank higher, a pinned mood steers every pick, and overplayed artists rest.',
+      },
+      {
+        type: 'fixed',
+        text: 'The 🎬 film chip in the player is now always tappable, even when the catalog gives the movie no page — it opens a search instead.',
+      },
+    ],
+  },
   '5.5.4': {
     title: 'Tap the people behind the song',
     changes: [
