@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.6.1': {
+    title: 'Eighteen engines, all yours to pick',
+    changes: [
+      {
+        type: 'new',
+        text: 'VinaX AI now lets you choose from all eighteen engines — from VinaX K3 and VinaX DP V4 PRO to VinaX CGT 120B — each under its own name, with AUTO still picking for you.',
+      },
+      {
+        type: 'improved',
+        text: 'The engine roster was rebuilt around the eighteen live keys: retired engines are gone from every menu and monitor, and if an engine has a bad moment a sibling answers and the reply chip says so honestly.',
+      },
+    ],
+  },
   '5.6.0': {
     title: 'Offline that finally works, and an AI that writes beautifully',
     changes: [
