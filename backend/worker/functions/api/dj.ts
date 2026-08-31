@@ -66,6 +66,20 @@ export const onRequestOptions = async (): Promise<Response> =>
  * "unnecessary songs, not matching the vibe" report. Dropping the invented
  * parenthetical leaves the real canonical title, which resolves correctly.
  */
+/** Canonical song identity (v5.5.0) — matches the client's flow.ts key so the
+ * server can verify pool membership: normalized title + primary artist. */
+function canonKey(title: string, artist: string): string {
+  const t = title
+    .toLowerCase()
+    .replace(/\s*[([{][^)\]}]*(?:from|remix|remaster|reprise|version|mix|unplugged|19\d{2}|20\d{2})[^)\]}]*[)\]}]/gi, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+  const a = artist
+    .toLowerCase()
+    .split(',')[0]
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+  return `${t}|${a}`;
+}
+
 function cleanTitle(t: string): string {
   const cleaned = t
     .replace(/\s*\((?=[^)]*(?:remix|remaster|version|mix|19\d{2}|20\d{2}))[^)]*\)/gi, '')
@@ -190,7 +204,7 @@ async function handlePost(context: {
   const rankInstr =
     'Build the next stretch of this listener\'s queue. Context (JSON):\n' +
     ctxJson +
-    '\n\nThe context carries "catalogPool" — REAL songs from the listener\'s catalog, guaranteed playable. Prefer catalogPool entries that genuinely FIT the seed\'s mood, language and energy — a mismatched catalog song is worse than a well-fitting pick from the supplementary CANDIDATE POOL below or your own knowledge, so drop poor fits instead of padding with them:\n' +
+    '\n\nThe context carries "catalogPool" — REAL songs, already language-locked, deduplicated and vibe-filtered by the app. Your job is to SELECT AND ORDER from catalogPool (and, only when it runs thin, the supplementary CANDIDATE POOL below): sequence the best-fitting picks into the arc. Never invent a song that is in neither pool — off-pool picks are discarded by the server:\n' +
     (candidates.length ? JSON.stringify(candidates) : '[]') +
     '\n\nReturn EXACTLY 12 songs sequenced like a professional set: settle into the seed\'s mood, build gently, let one peak land around two-thirds in, then ease off — a deliberate energy arc, every hand-off a musical segue, no abrupt jumps. Strong artist diversity (never the same artist twice in a row), a natural mix of new and classic, and a few high-fit discoveries. Every pick MUST be a real, existing song under its original canonical title — invented titles or version tags are forbidden. If the context includes a "tuneInstruction", it is the HIGHEST-PRIORITY adjustment for this queue. Stay in currentLanguage unless it is empty. JSON only, each song with a short reason.' +
     '\n\nvarietySeed: "' +
@@ -219,6 +233,25 @@ async function handlePost(context: {
     { temperature: 0.9, lane: 'dj', json: true, maxTokens: 1600, reasoningEffort: 'low', timeoutMs: 13_000, firstTimeoutMs: 5_000, ladder: ['chat', 'scholar', 'fast', 'home'], deadlineAt },
   );
   let songs = r.error ? [] : parseSongs(r.content);
+
+  // VinaX Flow (v5.5.0): when the client hands a curated catalogPool, the
+  // model is a RE-RANKER — a pick outside the pool is a hallucination or a
+  // rule-breaker (wrong language, duplicate identity) by definition, so it
+  // is dropped structurally. Old clients with thin pools keep the lenient
+  // path via the >=5 survivor gate.
+  if (poolSize > 0 && songs.length) {
+    const rawPoolForKeys = ((reqCtx as { catalogPool?: unknown[] }).catalogPool ?? []) as Array<{
+      title?: unknown;
+      artist?: unknown;
+    }>;
+    const poolKeys = new Set(
+      rawPoolForKeys
+        .filter((c) => c && typeof c.title === 'string' && typeof c.artist === 'string')
+        .map((c) => canonKey(String(c.title), String(c.artist))),
+    );
+    const inPool = songs.filter((s) => poolKeys.has(canonKey(s.title, s.artist)));
+    if (inPool.length >= 5) songs = inPool;
+  }
 
   // HARD anti-repeat: whatever the model claims, never return a song the
   // client already surfaced or played recently (prompt obedience not assumed).
