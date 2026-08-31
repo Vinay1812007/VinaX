@@ -69,7 +69,7 @@ singers, lyricist, film), and *living color*: the app tints itself from
 the playing artwork.
 
 🤖 **VinaX AI — the VinaX V5 engine family** — a full chat with all
-eighteen engines selectable by name (v5.6.1, the owner's key roster): from
+eighteen engines selectable by name from a scrollable picker (v5.6.1, the owner's key roster): from
 **VinaX AUTO** (reads every question and picks the best engine) and the
 balanced default through **VinaX NVD NMTRN 3.5 LTNG 30 B** (the big creative
 engine that also runs the AI DJ), **VinaX NVD NMTRN SUP** (deepest
