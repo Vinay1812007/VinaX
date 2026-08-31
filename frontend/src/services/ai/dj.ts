@@ -13,6 +13,8 @@ import {
   type FlowBuckets,
 } from '@/services/recommendation/flow';
 import { isNativePlatform } from '@/services/native';
+import { getMoodPin } from '@/services/personalization/session';
+import type { FlowAffinity } from '@/services/recommendation/flow';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { getSliders, sliderDialLines } from '@/services/personalization/dials';
 import { loadRecentHomeIds } from '@/features/home/homeVariety';
@@ -136,6 +138,7 @@ function buildContext(seed: Song | null, ctx: RecommendationContext): Record<str
     seedSong: seed ? describe(seed) : null,
     currentLanguage: seed?.language ?? null,
     tuneInstruction: ctx.tuneIntent ? tunePromptHint(ctx.tuneIntent) : undefined,
+    pinnedMood: getMoodPin() ?? undefined,
     preferredLanguages: ctx.pinnedLanguages,
     avoidLanguages: ctx.mutedLanguages,
     ...session,
@@ -269,21 +272,28 @@ export async function aiSimilarSongs(
     altSeed = completed[b[0] % Math.min(completed.length, 10)].song;
   }
   const langWord = lockLang ?? '';
-  const [seedPool, secondPool, artistA, artistB, freshPool] = await Promise.all([
+  // Flow v2 — a pinned mood steers every harvest query for its 45 minutes.
+  const moodPin = getMoodPin();
+  const moodWord = moodPin ?? '';
+  const filmName = seed?.album?.name ?? '';
+  const [seedPool, filmPool, secondPool, artistA, artistB, freshPool] = await Promise.all([
     getSongSuggestions(seedId, 80).catch(() => [] as Song[]),
+    // Flow v2 — the seed's own film: film-mates are the strongest same-vibe
+    // signal Indian film catalogs offer (same composer, same era, same mood).
+    filmName ? searchSongs(`${filmName} ${langWord} songs`.trim(), 10).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
     altSeed ? getSongSuggestions(altSeed.id, 40).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
-    seedArtist ? searchSongs(`${seedArtist} ${langWord} hit songs`.trim(), 12).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
+    seedArtist ? searchSongs(`${seedArtist} ${langWord} ${moodWord} hit songs`.replace(/\s+/g, ' ').trim(), 12).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
     tasteArtist && tasteArtist !== seedArtist
-      ? searchSongs(`${tasteArtist} ${langWord} best songs`.trim(), 8).catch(() => [] as Song[])
+      ? searchSongs(`${tasteArtist} ${langWord} ${moodWord} best songs`.replace(/\s+/g, ' ').trim(), 8).catch(() => [] as Song[])
       : Promise.resolve([] as Song[]),
-    lockLang ? searchSongs(`latest ${lockLang} songs`, 12).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
+    lockLang ? searchSongs(`${moodWord ? moodWord + ' ' : 'latest '}${lockLang} songs`.trim(), 12).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
   ]);
 
   // ---- Stage 2: hard rules, one dedup set across all buckets ----
   const dedup = new Set<string>();
   const filterOpts = { language: lockLang, exclude: excludeKeys, dedup };
   const buckets: FlowBuckets = {
-    seed: hardFilter(seedPool.filter((s) => !excludeIds.has(s.id)), filterOpts),
+    seed: hardFilter([...seedPool, ...filmPool].filter((s) => !excludeIds.has(s.id)), filterOpts),
     second: hardFilter(secondPool.filter((s) => !excludeIds.has(s.id)), filterOpts),
     artist: hardFilter([...artistA, ...artistB].filter((s) => !excludeIds.has(s.id)), filterOpts),
     fresh: hardFilter(freshPool.filter((s) => !excludeIds.has(s.id)), filterOpts),
@@ -292,13 +302,27 @@ export async function aiSimilarSongs(
   if (!poolSize) return []; // offline / catalog down — the local fallback takes it
 
   // ---- Stage 3+4: the deterministic queue (always computed, always valid) ----
-  const deterministic = scoreAndSequence(buckets, limit);
+  // Flow v2 affinity: film-mate boost, shared-artist (composer) boost,
+  // favourite-artist boost, era proximity, served-artist fatigue.
+  const fatigue = new Map<string, number>();
+  for (const k of excludeKeys) {
+    const artistHalf = k.split('|')[1];
+    if (artistHalf) fatigue.set(artistHalf, (fatigue.get(artistHalf) ?? 0) + 1);
+  }
+  const affinity: FlowAffinity = {
+    seedAlbum: seed?.album?.name ?? null,
+    seedArtists: seed?.artists.map((a) => a.name) ?? [],
+    seedYear: seed?.year != null && Number.isFinite(Number(seed.year)) ? Number(seed.year) : null,
+    favArtists: topArtists(ctx.profile, 8).map((a) => a.affinity.name),
+    artistFatigue: fatigue,
+  };
+  const deterministic = scoreAndSequence(buckets, limit, affinity);
 
   // ---- Stage 4b: AI re-rank of the clean top slice (never the source of truth) ----
   let final: Array<{ song: Song; reason?: string }> = deterministic.map((song) => ({ song }));
   if (aiAvailable !== false) {
     try {
-      const slice = rerankSlice(buckets, 25);
+      const slice = rerankSlice(buckets, 25, affinity);
       const poolByKey = new Map<string, Song>();
       for (const s of slice) poolByKey.set(songKey(s), s);
       const ctxObj = buildContext(seed, ctx);
