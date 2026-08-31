@@ -9,6 +9,13 @@ import { reportError } from '@/services/analytics/telemetry';
  * Offline downloads (Android app only). Audio is fetched with native HTTP (no
  * CORS) and saved to the app's data directory.
  *
+ * v5.6.0 — downloads now play from blob: URLs materialized straight out of
+ * the Cache API: the bytes never touch the network stack, the service worker
+ * or the WebView's request-interception layer at play time — the three layers
+ * whose quirks broke offline playback in the field. The /offline-audio/ SW
+ * route and the file-bridge URL remain as ordered fallbacks, and every saved
+ * song exposes ALL of its offline sources to the audio engine.
+ *
  * v5.5.1 — the playback path moved OFF the Android file bridge. The old flow
  * played downloads through Capacitor.convertFileSrc(...) URLs, which the
  * WebView serves via shouldInterceptRequest — but a page controlled by a
@@ -23,11 +30,29 @@ import { reportError } from '@/services/analytics/telemetry';
  */
 const urlMap = new Map<string, string>();
 
+/** File-bridge (convertFileSrc) URLs — the last-resort offline source. */
+const bridgeMap = new Map<string, string>();
+
 /** Same-origin cache bucket the service worker serves audio from (sw.js). */
 const AUDIO_CACHE = 'vinax-audio-v1';
 
 export function getOfflineUrl(id: string): string | null {
   return urlMap.get(id) ?? null;
+}
+
+/**
+ * Every offline source for a song, best first: the blob: URL (no network
+ * stack at all), the /offline-audio/ service-worker route, then the file
+ * bridge. The audio engine tries them in order before any streaming URL.
+ */
+export function getOfflineSources(id: string): string[] {
+  const out: string[] = [];
+  const main = urlMap.get(id);
+  if (main) out.push(main);
+  if (main?.startsWith('blob:')) out.push(audioUrlFor(id));
+  const bridge = bridgeMap.get(id);
+  if (bridge && !out.includes(bridge)) out.push(bridge);
+  return out;
 }
 
 function safeId(id: string): string {
@@ -79,6 +104,36 @@ function bestAudioUrl(song: Song): string | null {
  *  with a 200. Even a 10-second 48 kbps jingle is ~60 KB. */
 const MIN_VALID_BYTES = 10 * 1024;
 
+/** Decode base64 into a Blob in bounded slices (each a multiple of 4 chars). */
+function base64ToBlob(b64: string, mime: string): Blob {
+  const CHUNK = 0x8000 * 4;
+  const parts: BlobPart[] = [];
+  for (let i = 0; i < b64.length; i += CHUNK) {
+    const bin = atob(b64.slice(i, i + CHUNK));
+    const arr = new Uint8Array(bin.length);
+    for (let j = 0; j < bin.length; j += 1) arr[j] = bin.charCodeAt(j);
+    parts.push(arr);
+  }
+  return new Blob(parts, { type: mime });
+}
+
+/**
+ * The preferred playable URL: a blob: handle materialized from the cached
+ * response. Plays entirely in-renderer — no network stack, no service worker,
+ * no WebView interception — which is what finally makes offline bulletproof.
+ */
+async function blobUrlFromCache(id: string): Promise<string | null> {
+  try {
+    if (typeof caches === 'undefined') return null;
+    const cache = await caches.open(AUDIO_CACHE);
+    const hit = await cache.match(audioUrlFor(id));
+    if (!hit) return null;
+    return URL.createObjectURL(await hit.blob());
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Copy a downloaded file from disk into the Cache API so the service worker
  * can serve it at /offline-audio/<id>. Returns true when the cache entry is
@@ -95,8 +150,10 @@ async function cacheAudioFromDisk(
     const { data } = await fs.readFile({ path, directory });
     let blob: Blob;
     if (typeof data === 'string') {
-      // Native returns base64 — a data: fetch decodes it without a JS loop.
-      blob = await (await fetch(`data:${mimeForPath(path)};base64,${data}`)).blob();
+      // Chunked base64 decode — a giant data: URL fetch proved fragile on
+      // real devices for 320kbps files; atob over bounded slices is boring
+      // and works at any size.
+      blob = base64ToBlob(data, mimeForPath(path));
     } else if (data instanceof Blob) {
       blob = data;
     } else {
@@ -115,7 +172,10 @@ async function cacheAudioFromDisk(
       }),
     );
     return true;
-  } catch {
+  } catch (e) {
+    // Visible in Technical Monitoring — a silent false here is exactly how
+    // offline playback failures hid for three releases.
+    reportError('offline-cache', `${id}: ${e instanceof Error ? e.message : String(e)}`);
     return false;
   }
 }
@@ -143,16 +203,21 @@ export async function initDownloads(): Promise<void> {
       const path = items[id].path;
       if (!path) continue;
       try {
-        // Preferred: the same-origin cache URL the service worker serves —
-        // rebuild the entry from disk if the WebView evicted it.
+        // Always record the file-bridge URL as the last-resort source.
+        try {
+          const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
+          bridgeMap.set(id, Capacitor.convertFileSrc(uri));
+        } catch {
+          /* bridge unavailable */
+        }
+        // Preferred: a blob: URL straight from the audio cache — rebuild the
+        // cache entry from disk if the WebView evicted it.
         if ((await hasCachedAudio(id)) || (await cacheAudioFromDisk(id, path, Filesystem, Directory.Data))) {
-          urlMap.set(id, audioUrlFor(id));
+          urlMap.set(id, (await blobUrlFromCache(id)) ?? audioUrlFor(id));
           continue;
         }
-        // Last resort: the file-bridge URL (works when no service worker
-        // controls the page).
-        const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
-        urlMap.set(id, Capacitor.convertFileSrc(uri));
+        const bridge = bridgeMap.get(id);
+        if (bridge) urlMap.set(id, bridge);
       } catch {
         /* file gone — leave unmapped so it streams */
       }
@@ -207,11 +272,17 @@ export async function downloadSong(song: Song): Promise<boolean> {
     // v5.5.1: put the audio into the same-origin cache the service worker
     // serves — the URL that actually plays offline. The file-bridge URL is
     // only the fallback mapping when the cache write fails.
-    if (await cacheAudioFromDisk(song.id, path, Filesystem, Directory.Data)) {
-      urlMap.set(song.id, audioUrlFor(song.id));
-    } else {
+    try {
       const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
-      urlMap.set(song.id, Capacitor.convertFileSrc(uri));
+      bridgeMap.set(song.id, Capacitor.convertFileSrc(uri));
+    } catch {
+      /* bridge unavailable */
+    }
+    if (await cacheAudioFromDisk(song.id, path, Filesystem, Directory.Data)) {
+      urlMap.set(song.id, (await blobUrlFromCache(song.id)) ?? audioUrlFor(song.id));
+    } else {
+      const bridge = bridgeMap.get(song.id);
+      if (bridge) urlMap.set(song.id, bridge);
     }
     useDownloadsStore.getState().add(song, path);
     return true;
@@ -243,7 +314,16 @@ export async function downloadMany(
 
 export async function removeDownload(id: string): Promise<void> {
   const item = useDownloadsStore.getState().items[id];
+  const main = urlMap.get(id);
+  if (main?.startsWith('blob:')) {
+    try {
+      URL.revokeObjectURL(main);
+    } catch {
+      /* already gone */
+    }
+  }
   urlMap.delete(id);
+  bridgeMap.delete(id);
   useDownloadsStore.getState().remove(id);
   try {
     if (typeof caches !== 'undefined') {
