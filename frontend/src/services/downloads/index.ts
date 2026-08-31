@@ -6,11 +6,24 @@ import { reportError } from '@/services/analytics/telemetry';
 
 /**
  * Offline downloads (Android app only). Audio is fetched with native HTTP (no
- * CORS), saved to the app's data directory, and played from the local file.
- * Strictly additive: getOfflineUrl is prepended to the engine's source list, so
- * if a local file is ever missing/corrupt the engine falls back to streaming.
+ * CORS) and saved to the app's data directory.
+ *
+ * v5.5.1 — the playback path moved OFF the Android file bridge. The old flow
+ * played downloads through Capacitor.convertFileSrc(...) URLs, which the
+ * WebView serves via shouldInterceptRequest — but a page controlled by a
+ * service worker can route media fetches around that hook entirely (a
+ * documented WebView limitation), so downloaded songs LOOKED saved and never
+ * played. Now every download is ALSO stored in the Cache API under a
+ * same-origin /offline-audio/<id> URL that the service worker serves itself,
+ * with real Range support for seeking — fully offline, no bridge, no
+ * interception quirk. The file on disk stays as the durable copy: the cache
+ * is rebuilt from it on boot whenever the WebView evicted it, and the
+ * convertFileSrc URL remains the last-resort fallback mapping.
  */
 const urlMap = new Map<string, string>();
+
+/** Same-origin cache bucket the service worker serves audio from (sw.js). */
+const AUDIO_CACHE = 'vinax-audio-v1';
 
 export function getOfflineUrl(id: string): string | null {
   return urlMap.get(id) ?? null;
@@ -20,10 +33,31 @@ function safeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
 }
 
+/** The synthetic same-origin URL a downloaded song plays from. */
+function audioUrlFor(id: string): string {
+  return `/offline-audio/${safeId(id)}`;
+}
+
 /** Use the source format for the saved file so the WebView decodes it reliably. */
 function extOf(url: string): string {
   const m = url.match(/\.(mp4|m4a|mp3|aac|ogg|webm)(?:[?#]|$)/i);
   return m ? m[1].toLowerCase() : 'mp4';
+}
+
+function mimeForPath(path: string): string {
+  const ext = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase() ?? 'mp4';
+  switch (ext) {
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'aac':
+      return 'audio/aac';
+    case 'ogg':
+      return 'audio/ogg';
+    case 'webm':
+      return 'audio/webm';
+    default:
+      return 'audio/mp4'; // mp4 / m4a
+  }
 }
 
 function bestAudioUrl(song: Song): string | null {
@@ -44,7 +78,59 @@ function bestAudioUrl(song: Song): string | null {
  *  with a 200. Even a 10-second 48 kbps jingle is ~60 KB. */
 const MIN_VALID_BYTES = 10 * 1024;
 
-/** Rebuild the local-URL map from persisted downloads (native only). */
+/**
+ * Copy a downloaded file from disk into the Cache API so the service worker
+ * can serve it at /offline-audio/<id>. Returns true when the cache entry is
+ * in place. One song at a time, so the transient base64 read stays bounded.
+ */
+async function cacheAudioFromDisk(
+  id: string,
+  path: string,
+  Filesystem: { readFile: (o: { path: string; directory: unknown }) => Promise<{ data: unknown }> },
+  directory: unknown,
+): Promise<boolean> {
+  try {
+    if (typeof caches === 'undefined') return false;
+    const { data } = await Filesystem.readFile({ path, directory });
+    let blob: Blob;
+    if (typeof data === 'string') {
+      // Native returns base64 — a data: fetch decodes it without a JS loop.
+      blob = await (await fetch(`data:${mimeForPath(path)};base64,${data}`)).blob();
+    } else if (data instanceof Blob) {
+      blob = data;
+    } else {
+      return false;
+    }
+    if (blob.size < MIN_VALID_BYTES) return false;
+    const cache = await caches.open(AUDIO_CACHE);
+    await cache.put(
+      audioUrlFor(id),
+      new Response(blob, {
+        headers: {
+          'content-type': mimeForPath(path),
+          'content-length': String(blob.size),
+          'accept-ranges': 'bytes',
+        },
+      }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True when the song's /offline-audio/ cache entry exists. */
+async function hasCachedAudio(id: string): Promise<boolean> {
+  try {
+    if (typeof caches === 'undefined') return false;
+    const cache = await caches.open(AUDIO_CACHE);
+    return !!(await cache.match(audioUrlFor(id)));
+  } catch {
+    return false;
+  }
+}
+
+/** Rebuild the playable-URL map from persisted downloads (native only). */
 export async function initDownloads(): Promise<void> {
   if (!isNativePlatform()) return;
   const items = useDownloadsStore.getState().items;
@@ -56,6 +142,14 @@ export async function initDownloads(): Promise<void> {
       const path = items[id].path;
       if (!path) continue;
       try {
+        // Preferred: the same-origin cache URL the service worker serves —
+        // rebuild the entry from disk if the WebView evicted it.
+        if ((await hasCachedAudio(id)) || (await cacheAudioFromDisk(id, path, Filesystem, Directory.Data))) {
+          urlMap.set(id, audioUrlFor(id));
+          continue;
+        }
+        // Last resort: the file-bridge URL (works when no service worker
+        // controls the page).
         const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
         urlMap.set(id, Capacitor.convertFileSrc(uri));
       } catch {
@@ -109,8 +203,15 @@ export async function downloadSong(song: Song): Promise<boolean> {
       if (e instanceof Error && e.message.startsWith('invalid download')) throw e;
       /* stat unsupported — keep the file, playback fallback still covers us */
     }
-    const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
-    urlMap.set(song.id, Capacitor.convertFileSrc(uri));
+    // v5.5.1: put the audio into the same-origin cache the service worker
+    // serves — the URL that actually plays offline. The file-bridge URL is
+    // only the fallback mapping when the cache write fails.
+    if (await cacheAudioFromDisk(song.id, path, Filesystem, Directory.Data)) {
+      urlMap.set(song.id, audioUrlFor(song.id));
+    } else {
+      const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
+      urlMap.set(song.id, Capacitor.convertFileSrc(uri));
+    }
     useDownloadsStore.getState().add(song, path);
     return true;
   } catch (e) {
@@ -143,6 +244,14 @@ export async function removeDownload(id: string): Promise<void> {
   const item = useDownloadsStore.getState().items[id];
   urlMap.delete(id);
   useDownloadsStore.getState().remove(id);
+  try {
+    if (typeof caches !== 'undefined') {
+      const cache = await caches.open(AUDIO_CACHE);
+      await cache.delete(audioUrlFor(id));
+    }
+  } catch {
+    /* cache already gone */
+  }
   if (isNativePlatform() && item?.path) {
     try {
       const { Filesystem, Directory } = await import('@capacitor/filesystem');
