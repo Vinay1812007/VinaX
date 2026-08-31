@@ -30,6 +30,7 @@
  *  - A 25s thinking watchdog returns to listening if no reply ever arrives.
  */
 import { cutSentences } from './sentences';
+import { Capacitor } from '@capacitor/core';
 import { createSttSession, recognitionCtor, sttSupported, type SttSession } from './stt';
 
 export type LiveVoiceState = 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -67,6 +68,15 @@ export function localRecognitionState(): LocalRouteState {
  *  Idempotent and non-blocking; safe on browsers without the API. */
 export function prepareLocalRecognition(lang: string): void {
   if (localRoute !== 'unknown') return;
+  // v5.6.0 — NEVER touch the WebView's SpeechRecognition statics inside the
+  // Android app: the WebView exposes a hollow webkitSpeechRecognition with no
+  // service behind it, and poking its available()/install() force-closes the
+  // renderer — this was the "voice mode exits the app" crash. On native the
+  // Capacitor plugin runs the system recognizer; there is no local web route.
+  if (Capacitor.isNativePlatform()) {
+    localRoute = 'no-api';
+    return;
+  }
   const S = recognitionCtor() as unknown as RecognitionStatics | null;
   if (!S || typeof S.available !== 'function') {
     localRoute = 'no-api';
