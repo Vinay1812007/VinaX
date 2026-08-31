@@ -12,6 +12,27 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.5.0': {
+    title: 'A smarter queue that never repeats, and 13 AI engines',
+    changes: [
+      {
+        type: 'new',
+        text: 'The Next Song algorithm, AI DJ and Home were rebuilt on VinaX Flow: songs are gathered from four corners of the catalog, locked to your language, cleaned of duplicate copies (the same song under different uploads now counts as ONE song), and sequenced like a live DJ set \u2014 no artist twice in a row, a fresh shuffle every round, and one shared memory so Home and the queue stop repeating each other.',
+      },
+      {
+        type: 'new',
+        text: 'VinaX AI now has 13 selectable engines \u2014 including AUTO, which reads each question and picks the best engine for it, plus PRO for deep analysis, M3, K3, TRANSLATE for 12+ languages, and GLIMMER for visual-creative ideas. Every engine was live-tested before joining.',
+      },
+      {
+        type: 'improved',
+        text: 'Even when an AI engine has a slow minute, your queue never breaks and never repeats: the app builds a valid, varied continuation on its own and the AI only fine-tunes the order when it answers in time.',
+      },
+      {
+        type: 'improved',
+        text: 'Translation got honest: the seat now runs on an engine that actually handles Telugu properly, verified live.',
+      },
+    ],
+  },
   '5.4.0': {
     title: 'Downloads work fully offline, and a new AI brain',
     changes: [
