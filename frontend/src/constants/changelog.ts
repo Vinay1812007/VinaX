@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.5.3': {
+    title: 'A Home that never repeats itself',
+    changes: [
+      {
+        type: 'new',
+        text: 'Home now rebuilds itself differently on every open — shelves rotate through moods, time of day, eras and your favourite artists, so no two visits look the same.',
+      },
+      {
+        type: 'improved',
+        text: 'Morning, evening and late-night now each get their own vibe on Home, and the shelves you just saw are steered away from on the next visit.',
+      },
+    ],
+  },
   '5.5.2': {
     title: 'Downloads, one tap away',
     changes: [
