@@ -18,15 +18,15 @@ import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & AiEnv & SupabaseEnv;
 
-// v5.4.1: the bench covers EVERY lane — the seven feature lanes, the six
-// v5.4.0 seats, and the inventory lanes that give each of the owner's 26
-// models its own probe-able row. Inventory lanes drive no features; a dead
-// or absent model fails its bench ping honestly, which is the point.
+// v5.6.1: the bench covers EVERY lane over the owner's 18 live keys — the
+// feature lanes plus the inventory lanes that give each remaining model its
+// own probe-able row. Inventory lanes drive no features; a dead or absent
+// model fails its bench ping honestly, which is the point.
 const LANES: readonly Lane[] = [
   'chat', 'fast', 'deep', 'scholar', 'home', 'dj', 'search',
-  'pro', 'mini', 'translate', 'safety', 'guard', 'agent',
-  'dsflash', 'muse', 'translate2', 'rank', 'rank2', 'laguna', 'diffusion',
-  'omni', 'gemma4', 'voicechat', 'oss120', 'embedlane', 'video', 'speaker', 'petr',
+  'pro', 'mini', 'agent',
+  'dsflash', 'muse', 'rank', 'rank2', 'laguna', 'diffusion',
+  'omni', 'gemma4', 'oss120',
 ];
 const MAX_TOKENS_CAP = 1000;
 
@@ -91,35 +91,6 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const key = env[LANE_ENV[lane]];
   if (!key) return json({ error: 'not_configured', status: 0, head: `${LANE_ENV[lane]} is not set`, lane, model });
 
-  // The embeddings model has no chat interface — bench it through
-  // /v1/embeddings and report the vector dimensionality instead (v5.4.1).
-  if (lane === 'embedlane') {
-    const t0 = Date.now();
-    const ctrl = new AbortController();
-    const et = setTimeout(() => ctrl.abort(), 12_000);
-    try {
-      const er = await fetch('https://integrate.api.nvidia.com/v1/embeddings', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model, input: [messages[messages.length - 1].content.slice(0, 500)] }),
-        signal: ctrl.signal,
-      });
-      const txt = await er.text().catch(() => '');
-      let dims = 0;
-      try {
-        const d = JSON.parse(txt) as { data?: Array<{ embedding?: unknown[] }> };
-        dims = Array.isArray(d.data?.[0]?.embedding) ? d.data[0].embedding.length : 0;
-      } catch {
-        /* non-JSON upstream body — status + head tell the story */
-      }
-      if (!er.ok || !dims) return json({ error: 'upstream', status: er.status, head: txt.slice(0, 220), lane, model });
-      return json({ ok: true, lane, model, dims, latency_ms: Date.now() - t0, head: `${dims}-dim vector in ${Date.now() - t0}ms` });
-    } catch (e) {
-      return json({ error: 'unreachable', status: 0, head: e instanceof Error ? e.name : String(e).slice(0, 120), lane, model });
-    } finally {
-      clearTimeout(et);
-    }
-  }
 
   // The bench probes the lane's OWN endpoint — providers are mixed now.
   const endpoint = laneEndpoint(env, lane);
