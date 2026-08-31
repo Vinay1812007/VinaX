@@ -640,7 +640,7 @@
         ? '<span style="color:#36d399">OK ' + (k.status || '') + '</span>'
         : '<span style="color:#ff6b6b">FAIL ' + (k.status == null ? 'network' : k.status) + '</span>';
       var extra = k.configured ? '' : ' <span class="muted">(not configured)</span>';
-      return '<tr><td>' + esc(k.key) + extra + '</td><td class="muted">' + esc((k.model || '—').split('/').pop() || '—') + '</td><td>' + badge + '</td><td class="muted">' + esc(k.note || '') + '</td></tr>';
+      return '<tr><td>' + esc(k.key) + extra + '</td><td class="muted">' + esc(aiNick(k.model)) + '</td><td>' + badge + '</td><td class="muted">' + esc(k.note || '') + '</td></tr>';
     }).join('');
     var sb = h.database || h.supabase || {};
     var sbBadge = sb.lastEventAt
@@ -857,7 +857,7 @@
     var recentRows = recent.length
       ? recent.map(function (x) {
           var st = x.ok ? '<span style="color:#36d399">ok</span>' : '<span style="color:#ff6b6b">' + esc(x.error || ('HTTP ' + (x.status || ''))) + '</span>';
-          return '<tr><td class="muted">' + esc(ist(x.ts)) + '</td><td><span class="pill">' + esc(x.feature) + '</span></td><td class="muted">' + esc(x.model || '\u2014') + '</td><td>' + st + '</td><td>' + (x.latency_ms != null ? x.latency_ms + ' ms' : '\u2014') + '</td><td><span class="pill">' + esc(x.client || '\u2014') + '</span></td></tr>';
+          return '<tr><td class="muted">' + esc(ist(x.ts)) + '</td><td><span class="pill">' + esc(x.feature) + '</span></td><td class="muted">' + esc(aiNick(x.model)) + '</td><td>' + st + '</td><td>' + (x.latency_ms != null ? x.latency_ms + ' ms' : '\u2014') + '</td><td><span class="pill">' + esc(x.client || '\u2014') + '</span></td></tr>';
         }).join('')
       : null;
     if (total === 0 && !recentRows) {
@@ -869,7 +869,7 @@
       '<div class="cards">' + card(total, 'AI requests') + card(rate + '%', 'Success rate') + card(fail, 'Failures') + card((m.avg_latency_ms || 0) + ' ms', 'Avg latency') + '</div>' +
       '<h3>Requests per day</h3>' + dayChart(m.by_day, 'total') +
       '<h3>By feature</h3>' + bars(m.by_feature, function (x) { return esc(x.feature); }, function (x) { return x.total; }) +
-      '<h3>By model</h3>' + bars(m.by_model, function (x) { return esc(x.model); }, function (x) { return x.count; }) +
+      '<h3>By model</h3>' + bars(m.by_model, function (x) { return esc(aiNick(x.model)); }, function (x) { return x.count; }) +
       '<h3>Web vs App</h3>' + bars(m.by_client, function (x) { return esc(x.client); }, function (x) { return x.count; }) +
       '<h3>Errors</h3>' + errTable +
       '<h3>Recent requests</h3><table><thead><tr><th>Time (IST)</th><th>Feature</th><th>Model</th><th>Status</th><th>Latency</th><th>Client</th></tr></thead><tbody>' + recentRows + '</tbody></table>';
@@ -1434,7 +1434,7 @@
     // v5.6.1: trimmed to the owner's 18 live keys (2026-08-31 Cloudflare
     // cleanup) and renamed to the owner's display names. 19 lanes / 18 keys —
     // chat and dsflash share the DeepSeek Flash key.
-    { lane: 'dj', name: 'NMTRN 3.5 LTNG', nick: 'VinaX NVD NMTRN 3.5 LTNG 30B', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
+    { lane: 'dj', name: 'NMTRN 3.5 LTNG', nick: 'VinaX NVD NMTRN 3.5 LTNG 30 B', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
     { lane: 'chat', name: 'BALANCED', nick: 'VinaX Balanced (Flash key)', model: 'openai/gpt-oss-20b' },
     { lane: 'fast', name: 'CGT 20B', nick: 'VinaX CGT 20B', model: 'openai/gpt-oss-20b' },
     { lane: 'deep', name: 'NMTRN SUP', nick: 'VinaX NVD NMTRN SUP', model: 'nvidia/nemotron-3-super-120b-a12b' },
@@ -1444,15 +1444,15 @@
     { lane: 'pro', name: 'DP V4 PRO', nick: 'VinaX DP V4 PRO', model: 'deepseek-ai/deepseek-v4-pro-0813' },
     { lane: 'mini', name: 'MIMX M3', nick: 'VinaX MIMX M3', model: 'minimaxai/minimax-m3' },
     { lane: 'agent', name: 'K3', nick: 'VinaX K3', model: 'moonshotai/kimi-k3' },
-    { lane: 'dsflash', name: 'DP V4 FLASH', nick: 'VinaX DP V4 FLASH', model: 'deepseek-ai/deepseek-v4-flash-0731' },
+    { lane: 'dsflash', name: 'DP V4 DLASH', nick: 'VinaX DP V4 DLASH', model: 'deepseek-ai/deepseek-v4-flash-0731' },
     { lane: 'oss120', name: 'CGT 120B', nick: 'VinaX CGT 120B', model: 'openai/gpt-oss-120b' },
     { lane: 'diffusion', name: 'DIF GEM', nick: 'VinaX DIF GEM 26B A4B IT', model: 'google/diffusiongemma-26b-a4b-it' },
-    { lane: 'gemma4', name: 'GEM 4 31B', nick: 'VinaX GEM 4 31B', model: 'google/gemma-4-31b-it' },
+    { lane: 'gemma4', name: 'GEM 4 31 B', nick: 'VinaX GEM 4 31 B', model: 'google/gemma-4-31b-it' },
     { lane: 'omni', name: 'NMTRN NN30B', nick: 'VinaX NVD NMTRN NN30B A3B', model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning' },
     { lane: 'muse', name: 'MUSE GMR', nick: 'VinaX MUSE GMR 30B', model: 'nvidia/muse-glimmer-30b' },
     { lane: 'laguna', name: 'LGNA XS 2.1', nick: 'VinaX LGNA XS 2.1', model: 'nvidia/laguna-xs-2.1' },
     { lane: 'rank', name: 'ING CALBTN 15', nick: 'VinaX ING CALBTN 15 31B', model: 'nvidia/ising-calibration-1.5-31b' },
-    { lane: 'rank2', name: 'ING CALBTN 1', nick: 'VinaX ING CALBTN 1 35B A3B', model: 'nvidia/ising-calibration-1-35b-a3b' }
+    { lane: 'rank2', name: 'ING CALBTN 1', nick: 'VinaX ING CALBTN 1 35b A3B', model: 'nvidia/ising-calibration-1-35b-a3b' }
   ];
   var labLane = 'chat';
   var labHist = {}; // lane -> [{ role, content, error?, meta? }] — in memory only, gone on reload
@@ -1463,7 +1463,36 @@
   var labAutoPinged = false; // the first Lab open auto-pings once per page load
 
   function labInfo(lane) { for (var i = 0; i < LAB_LANES.length; i++) { if (LAB_LANES[i].lane === lane) return LAB_LANES[i]; } return LAB_LANES[0]; }
-  function labShortModel(m) { var p = String(m || '').split('/'); return p[p.length - 1]; }
+  // v5.6.2 — owner rule: the AI nicknames are the ONLY model names shown
+  // anywhere in the app. Served slugs map to their VinaX names here.
+  var AI_NICKS = [
+    [/nemotron-3\.5-lightning/i, 'VinaX NVD NMTRN 3.5 LTNG 30B'],
+    [/nemotron-3-super-120b|nemotron-super-49b|nemotron.super/i, 'VinaX NVD NMTRN SUP'],
+    [/nemotron-3-ultra/i, 'VinaX NVD NMTRN ULT'],
+    [/nano-omni/i, 'VinaX NVD NMTRN NN30B A3B'],
+    [/nemotron-3-nano/i, 'VinaX NVD NMTRN'],
+    [/deepseek-v4-pro/i, 'VinaX DP V4 PRO'],
+    [/deepseek-v4-flash/i, 'VinaX DP V4 FLASH'],
+    [/minimax/i, 'VinaX MIMX M3'],
+    [/kimi/i, 'VinaX K3'],
+    [/diffusiongemma/i, 'VinaX DIF GEM 26B A4B IT'],
+    [/muse-glimmer/i, 'VinaX MUSE GMR 30B'],
+    [/gemma-4/i, 'VinaX GEM 4 31B'],
+    [/laguna/i, 'VinaX LGNA XS 2.1'],
+    [/ising-calibration-1\.5/i, 'VinaX ING CALBTN 15 31B'],
+    [/ising-calibration-1-35b/i, 'VinaX ING CALBTN 1 35B A3B'],
+    [/gpt-oss-120b/i, 'VinaX CGT 120B'],
+    [/gpt-oss-20b/i, 'VinaX CGT 20B'],
+    [/llama-3\.3-70b|llama-3\.1-8b|llama3/i, 'VinaX GRQ ALL']
+  ];
+  function aiNick(m) {
+    var str = String(m || '');
+    if (!str) return '\u2014';
+    for (var i = 0; i < AI_NICKS.length; i++) { if (AI_NICKS[i][0].test(str)) return AI_NICKS[i][1]; }
+    var p = str.split('/');
+    return p[p.length - 1];
+  }
+  function labShortModel(m) { return aiNick(m); }
   function labNow() { try { return new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true, hour: 'numeric', minute: '2-digit' }) + ' IST'; } catch (e) { return ''; } }
   function labMetaText(meta) {
     var bits = [labShortModel(meta.model), meta.lane,
