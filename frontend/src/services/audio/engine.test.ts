@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Song } from '@/types';
 
-vi.mock('@/services/downloads', () => ({ getOfflineUrl: () => null }));
+vi.mock('@/services/downloads', () => ({ getOfflineSources: () => [] }));
 const { orderedSources, recoveryAction } = await import('./engine');
 
 const song = (qualities: string[]): Song =>

@@ -1,5 +1,5 @@
 import type { Song } from '@/types';
-import { getOfflineUrl } from '@/services/downloads';
+import { getOfflineSources } from '@/services/downloads';
 
 export type AudioQualityPref = 'low' | 'medium' | 'high';
 
@@ -193,8 +193,11 @@ class AudioEngine {
     if (!this.el) return;
     this.song = song;
     const streaming = orderedSources(song, pref);
-    const offline = getOfflineUrl(song.id);
-    this.sources = offline ? [offline, ...streaming] : streaming;
+    // v5.6.0 — every offline source, best first (blob: → SW route → file
+    // bridge), ahead of streaming: a saved song exhausts local copies before
+    // it ever touches the network.
+    const offline = getOfflineSources(song.id);
+    this.sources = offline.length ? [...offline, ...streaming] : streaming;
     this.sourceIdx = 0;
     this.wantAutoplay = autoplay;
     this.lastTime = 0;
