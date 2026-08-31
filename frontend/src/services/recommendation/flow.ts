@@ -178,18 +178,42 @@ interface Scored {
 }
 
 /**
+ * Flow v2 (v5.6.0) — vibe affinity. The v1 scorer knew bucket + rank only;
+ * "matching" lives in these signals: songs from the seed's own film, songs
+ * sharing a credited artist (that's how the composer connects film music),
+ * the listener's favourite artists, era proximity, and fatigue for artists
+ * the queue has served a lot lately.
+ */
+export interface FlowAffinity {
+  seedAlbum?: string | null;
+  seedArtists?: string[];
+  seedYear?: number | null;
+  favArtists?: string[];
+  /** normalized-artist -> how many recent served entries (fatigue). */
+  artistFatigue?: Map<string, number>;
+}
+
+function normName(x: string): string {
+  return x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+/**
  * Stage 3 + 4: score every candidate (bucket weight + in-bucket rank decay +
  * per-round jitter), then greedily sequence under the diversity constraints —
  * a lead artist never twice in a row and at most twice overall. The result is
  * the deterministic queue; the AI may re-order it but never replace it.
  */
-export function scoreAndSequence(buckets: FlowBuckets, limit: number): Song[] {
+export function scoreAndSequence(buckets: FlowBuckets, limit: number, affinity?: FlowAffinity): Song[] {
   const BASE: Array<[keyof FlowBuckets, number]> = [
     ['seed', 62],
     ['second', 50],
     ['artist', 45],
     ['fresh', 42],
   ];
+  const seedAlbum = affinity?.seedAlbum ? affinity.seedAlbum.toLowerCase() : '';
+  const seedArtists = new Set((affinity?.seedArtists ?? []).map(normName));
+  const favArtists = new Set((affinity?.favArtists ?? []).map(normName));
+  const seedYear = affinity?.seedYear ?? null;
   const pool: Scored[] = [];
   const seen = new Set<string>();
   for (const [name, base] of BASE) {
@@ -197,11 +221,24 @@ export function scoreAndSequence(buckets: FlowBuckets, limit: number): Song[] {
       const key = songKey(song);
       if (seen.has(key)) return;
       seen.add(key);
+      // Flow v2 affinity bonus.
+      let bonus = 0;
+      const names = song.artists.map((a) => normName(a.name));
+      if (seedAlbum && song.album?.name && song.album.name.toLowerCase() === seedAlbum) bonus += 10;
+      if (seedArtists.size && names.some((n) => n && seedArtists.has(n))) bonus += 7;
+      if (favArtists.size && names.some((n) => n && favArtists.has(n))) bonus += 4;
+      if (seedYear != null) {
+        const y = song.year != null ? Number(song.year) : NaN;
+        if (Number.isFinite(y)) bonus -= Math.min(8, Math.abs(y - seedYear) * 0.35);
+      }
+      const lead = normName(primaryArtist(song));
+      const fatigue = affinity?.artistFatigue?.get(lead) ?? 0;
+      bonus -= Math.min(9, fatigue * 3);
       pool.push({
         song,
         key,
         artist: primaryArtist(song).toLowerCase(),
-        score: base - i * 0.45 + jitter(8),
+        score: base - i * 0.45 + jitter(8) + bonus,
       });
     });
   }
@@ -229,6 +266,6 @@ export function scoreAndSequence(buckets: FlowBuckets, limit: number): Song[] {
 }
 
 /** The scored top slice handed to the AI re-ranker (never more than this). */
-export function rerankSlice(buckets: FlowBuckets, size: number): Song[] {
-  return scoreAndSequence(buckets, size);
+export function rerankSlice(buckets: FlowBuckets, size: number, affinity?: FlowAffinity): Song[] {
+  return scoreAndSequence(buckets, size, affinity);
 }
