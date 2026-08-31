@@ -1,6 +1,17 @@
 import type { Song } from '@/types';
 import type { RecommendationContext } from '@/services/recommendation/types';
 import { getSong, getSongSuggestions, searchSongs } from '@/services/api';
+import {
+  canonicalKey,
+  hardFilter,
+  primaryArtist,
+  recordServed,
+  rerankSlice,
+  scoreAndSequence,
+  servedKeySet,
+  songKey,
+  type FlowBuckets,
+} from '@/services/recommendation/flow';
 import { isNativePlatform } from '@/services/native';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { getSliders, sliderDialLines } from '@/services/personalization/dials';
@@ -15,12 +26,19 @@ const DJ_ENDPOINT = isNativePlatform()
   : '/api/dj';
 
 /**
- * Automatic AI DJ. The queue/next-song is built by the AI service whenever the Cloudflare
- * function is configured with a key — no toggle, no button. We probe lazily;
- * if the function reports "not configured" (503) we remember that and stay
- * fully local, so we never waste calls. Any failure also degrades to local.
+ * The AI DJ, rebuilt on VinaX Flow (v5.5.0, owner-approved 2026-08-31).
+ *
+ * The deterministic Flow core (services/recommendation/flow.ts) harvests four
+ * real-catalog buckets, enforces the language lock + canonical dedup + junk
+ * rules IN CODE, scores with per-round jitter and sequences a queue under the
+ * artist-diversity constraints. The AI is a RE-RANKER only: it receives the
+ * top of the already-clean pool and may re-order it — a suggestion outside
+ * the pool is dropped, never searched (live-search resolution was the junk
+ * vector: a hallucinated title landed whatever the catalog returned first).
+ * When the AI is slow, down or unconfigured, the deterministic queue ships —
+ * the DJ no longer collapses to a repeating local fallback.
  */
-let aiAvailable: boolean | null = null; // null = unknown, false = stay local
+let aiAvailable: boolean | null = null; // null = unknown, false = skip the model call
 
 interface Suggestion {
   title: string;
@@ -94,25 +112,6 @@ function pickDiscoveryFocus(): string {
   return DISCOVERY_FOCI[b[0] % DISCOVERY_FOCI.length];
 }
 
-/**
- * Sample `n` items from `arr` uniformly at random, without replacement. Uses a
- * fresh crypto nonce so consecutive calls with the same `arr` produce a
- * different subset — critical for the AI DJ, whose catalogPool otherwise
- * arrives as the same top-40 similar-songs response every time and lets the
- * model reshuffle the same neighborhood round after round.
- */
-function sampleWithoutReplacement<T>(arr: T[], n: number): T[] {
-  if (n >= arr.length) return [...arr];
-  const copy = [...arr];
-  const bytes = new Uint8Array(n);
-  crypto.getRandomValues(bytes);
-  for (let i = 0; i < n; i += 1) {
-    const j = i + (bytes[i] % (copy.length - i));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy.slice(0, n);
-}
-
 /** Compact, privacy-bounded context sent to the AI DJ function. */
 function buildContext(seed: Song | null, ctx: RecommendationContext): Record<string, unknown> {
   // Deep session context: weekday-aware vibe, live listener-energy read from
@@ -164,13 +163,12 @@ function buildContext(seed: Song | null, ctx: RecommendationContext): Record<str
 }
 
 async function callDj(context: Record<string, unknown>): Promise<Suggestion[]> {
-  // Hard client leash: if the edge has a slow day, fail over to instant local
-  // picks instead of holding the queue hostage (DQA-02/14). 35s (2026-07-18,
-  // v3.2.0): widened with the server's 28→31s budget — a measured 27.5s cold
-  // call was grazing the old ceilings, and the leash must clear the server
-  // deadline with room for network + resolve.
+  // Hard client leash: if the edge has a slow day, the deterministic Flow
+  // queue ships instead of holding the queue hostage. 20s (v5.5.0): the AI is
+  // a re-ranker now, not the source of the queue — a re-rank that can't land
+  // inside 20s isn't worth waiting for.
   const ctrl = new AbortController();
-  const timer = window.setTimeout(() => ctrl.abort(), 35_000);
+  const timer = window.setTimeout(() => ctrl.abort(), 20_000);
   let res: Response;
   try {
     res = await fetch(DJ_ENDPOINT, {
@@ -186,7 +184,7 @@ async function callDj(context: Record<string, unknown>): Promise<Suggestion[]> {
     window.clearTimeout(timer);
   }
   if (res.status === 503) {
-    aiAvailable = false; // key not configured on the edge — stay local from now on
+    aiAvailable = false; // key not configured on the edge — stay deterministic from now on
     return [];
   }
   if (!res.ok) throw new Error(`ai ${res.status}`);
@@ -195,198 +193,148 @@ async function callDj(context: Record<string, unknown>): Promise<Suggestion[]> {
   return Array.isArray(data.songs) ? data.songs : [];
 }
 
-function normKey(title: string, artist: string): string {
-  return (title + '|' + artist).toLowerCase().replace(/[^a-z0-9|]+/g, '');
-}
-
-// v5.3.1 — junk gate for live-search resolution. When an AI pick has to be
-// resolved through search, the first hit is sometimes a dialogue strip, BGM
-// cut or ringtone edit of the film rather than the song itself; those were
-// landing in queues as "unnecessary songs". Never accept them.
-const JUNK_TITLE = /\b(dialogue|dialogues|bgm|jukebox|trailer|teaser|ringtone|promo|commentary)\b/i;
-
-/** Loose title key for comparing an AI suggestion with a search result. */
-function titleKey(t: string): string {
-  return t.toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z0-9]+/g, '');
-}
-
-/** Resolve AI { title, artist, reason } picks to playable catalog songs, deduped. */
-async function resolve(
+/**
+ * Resolve AI { title, artist } picks against the Flow pool ONLY. A suggestion
+ * that isn't in the pool is dropped — never live-searched (v5.5.0): the pool
+ * is real, language-locked and deduped; anything outside it is a hallucination
+ * or a rule-breaker by definition.
+ */
+function resolveFromPool(
   suggestions: Suggestion[],
-  exclude: Set<string>,
+  poolByKey: Map<string, Song>,
   limit: number,
-  muted: string[] = [],
-  prefer: string | null = null,
-  poolMap: Map<string, Song> | null = null,
-): Promise<Array<{ song: Song; reason?: string }>> {
+): Array<{ song: Song; reason?: string }> {
   const out: Array<{ song: Song; reason?: string }> = [];
-  const seen = new Set(exclude);
-  // Pool-served picks are instant (no network). Handle them synchronously
-  // first so we short-circuit the whole search phase whenever the catalog
-  // pool already has the AI's suggestions.
-  const remaining: Suggestion[] = [];
+  const used = new Set<string>();
   for (const s of suggestions) {
     if (out.length >= limit) break;
-    if (poolMap) {
-      const hit = poolMap.get(normKey(s.title, s.artist));
-      if (
-        hit &&
-        !seen.has(hit.id) &&
-        !(hit.language != null && muted.includes(hit.language)) &&
-        (!prefer || hit.language === prefer)
-      ) {
-        seen.add(hit.id);
-        out.push({ song: hit, reason: s.reason });
-        continue;
-      }
-    }
-    remaining.push(s);
-  }
-  if (out.length >= limit || !remaining.length) return out;
-  // The rest fall back to a live search. The previous implementation awaited
-  // them one at a time, so 6-8 suggestions * ~500 ms/search added ~4 s of
-  // serial network stall AFTER the AI itself had already spent up to 35 s
-  // (audit finding M4). Fan out in parallel with per-item try/catch instead;
-  // apply the pick logic after all results resolve so we still honour the
-  // ordering the AI produced.
-  const resultsByIndex = await Promise.all(
-    remaining.map((s) =>
-      searchSongs(`${s.title} ${s.artist}`, 6).catch(() => [] as Song[]),
-    ),
-  );
-  const ok = (r: Song) => !seen.has(r.id) && !(r.language != null && muted.includes(r.language)) && !JUNK_TITLE.test(r.title);
-  for (let i = 0; i < remaining.length; i++) {
-    if (out.length >= limit) break;
-    const s = remaining[i];
-    const results = resultsByIndex[i];
-    if (!results.length) continue;
-    // Prefer a result in the target language so the queue stays on-language.
-    // Hard on-language: when a target language is set, only accept results in
-    // that language — an off-language suggestion is skipped, never substituted.
-    //
-    // v5.3.1 relevance gate: within the language rule, prefer a result whose
-    // title actually matches the AI's suggestion — a search for a junk or
-    // hallucinated title used to land whatever the catalog returned first,
-    // putting unrelated tracks in the queue. A pick with no title overlap at
-    // all is skipped rather than substituted.
-    const want = titleKey(s.title);
-    const titleMatches = (r: Song) => {
-      if (!want) return true;
-      const got = titleKey(r.title);
-      return got.length > 0 && (got.includes(want) || want.includes(got));
-    };
-    const inLang = (r: Song) => !prefer || r.language === prefer;
-    const pick =
-      results.find((r) => ok(r) && inLang(r) && titleMatches(r)) ??
-      (prefer ? results.find((r) => ok(r) && r.language === prefer) : results.find(ok));
-    if (pick) {
-      seen.add(pick.id);
-      out.push({ song: pick, reason: s.reason });
+    const k = canonicalKey(s.title, s.artist);
+    const hit = poolByKey.get(k);
+    if (hit && !used.has(k)) {
+      used.add(k);
+      out.push({ song: hit, reason: s.reason });
     }
   }
   return out;
 }
 
 /**
- * AI-built continuation from a seed song. Returns playable songs, or [] on any
- * failure (or when the AI DJ isn't configured) so callers fall back to local.
+ * VinaX Flow continuation from a seed song. Always returns a real queue when
+ * the catalog is reachable: the AI re-ranks when it's healthy, the
+ * deterministic sequence ships when it isn't. Returns [] only when the
+ * harvest itself failed (offline), so callers still fall back to local.
  */
 export async function aiSimilarSongs(
   seedId: string,
   ctx: RecommendationContext,
   limit = 8,
 ): Promise<Song[]> {
-  if (aiAvailable === false) return []; // known unconfigured → stay local
   let seed: Song | null = null;
   try {
     seed = await getSong(seedId);
   } catch {
     /* seed lookup is optional */
   }
+
+  // ---- Language lock (owner rule: the queue speaks the seed's language) ----
+  const lockLang =
+    seed?.language && seed.language !== 'unknown'
+      ? seed.language
+      : ctx.pinnedLanguages.length
+        ? ctx.pinnedLanguages[0]
+        : null;
+
+  // ---- Exclusions: ids we know + canonical identities across every surface ----
   const surfaced = loadSurfaced();
-  const exclude = new Set<string>([
+  const excludeIds = new Set<string>([
     seedId,
     ...ctx.history.slice(0, 50).map((e) => e.song.id),
     ...surfaced.map((x) => x.id),
-    // A6 — the DJ and AI Home used to share ~40% of picks because both mine the
-    // same neighborhood. Exclude whatever Home surfaced in its recent builds so
-    // the queue complements the front page instead of echoing it.
+    // A6 — exclude whatever Home surfaced recently so the queue complements
+    // the front page instead of echoing it.
     ...loadRecentHomeIds(),
   ]);
+  const excludeKeys = servedKeySet();
+  if (seed) excludeKeys.add(songKey(seed));
+  for (const e of ctx.history.slice(0, 50)) excludeKeys.add(songKey(e.song));
 
-  // Catalog-grounded pool: real, guaranteed-playable songs so the AI ranks
-  // ACTUAL tracks rather than hallucinating titles (critical for regional music).
-  //
-  // v3.7.1 anti-repeat: fetch a WIDE pool (80) then randomly downsample to ~35
-  // per request. The old approach fetched exactly 40 and handed all of them to
-  // the model — for a given seedId the upstream API returns the same 40 every
-  // time, so even with the varietySeed the model reshuffled the SAME
-  // neighborhood every round. A fresh crypto-nonce subsample means the model
-  // sees a genuinely different starting slate each call.
-  let pool: Song[] = [];
-  try {
-    pool = await getSongSuggestions(seedId, 80);
-  } catch {
-    /* pool is optional */
+  // ---- Stage 1: harvest four real-catalog buckets in parallel ----
+  const seedArtist = seed ? primaryArtist(seed) : '';
+  const tasteArtist = topArtists(ctx.profile, 3).map((a) => a.affinity.name)[0] ?? '';
+  const completed = ctx.history.filter((e) => e.completed && e.song.id !== seedId);
+  let altSeed: Song | null = null;
+  if (completed.length) {
+    const b = new Uint8Array(1);
+    crypto.getRandomValues(b);
+    altSeed = completed[b[0] % Math.min(completed.length, 10)].song;
   }
-  // v5.3.1: widen the neighborhood itself — blend in the suggestions of one
-  // recently completed song (rotated by crypto nonce) so the pool isn't the
-  // seed's same 80-song orbit on every single round. This is what finally
-  // breaks "the same playlist again": the model gets genuinely new real
-  // material to pick from, not just a reshuffle of one neighborhood.
-  try {
-    const comp = ctx.history.filter((e) => e.completed && e.song.id !== seedId);
-    if (comp.length) {
-      const b = new Uint8Array(1);
-      crypto.getRandomValues(b);
-      const alt = comp[b[0] % Math.min(comp.length, 10)].song;
-      const extra = await getSongSuggestions(alt.id, 40);
-      const have = new Set(pool.map((s) => s.id));
-      for (const s of extra) {
-        if (!have.has(s.id)) {
-          have.add(s.id);
-          pool.push(s);
+  const langWord = lockLang ?? '';
+  const [seedPool, secondPool, artistA, artistB, freshPool] = await Promise.all([
+    getSongSuggestions(seedId, 80).catch(() => [] as Song[]),
+    altSeed ? getSongSuggestions(altSeed.id, 40).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
+    seedArtist ? searchSongs(`${seedArtist} ${langWord} hit songs`.trim(), 12).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
+    tasteArtist && tasteArtist !== seedArtist
+      ? searchSongs(`${tasteArtist} ${langWord} best songs`.trim(), 8).catch(() => [] as Song[])
+      : Promise.resolve([] as Song[]),
+    lockLang ? searchSongs(`latest ${lockLang} songs`, 12).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
+  ]);
+
+  // ---- Stage 2: hard rules, one dedup set across all buckets ----
+  const dedup = new Set<string>();
+  const filterOpts = { language: lockLang, exclude: excludeKeys, dedup };
+  const buckets: FlowBuckets = {
+    seed: hardFilter(seedPool.filter((s) => !excludeIds.has(s.id)), filterOpts),
+    second: hardFilter(secondPool.filter((s) => !excludeIds.has(s.id)), filterOpts),
+    artist: hardFilter([...artistA, ...artistB].filter((s) => !excludeIds.has(s.id)), filterOpts),
+    fresh: hardFilter(freshPool.filter((s) => !excludeIds.has(s.id)), filterOpts),
+  };
+  const poolSize = buckets.seed.length + buckets.second.length + buckets.artist.length + buckets.fresh.length;
+  if (!poolSize) return []; // offline / catalog down — the local fallback takes it
+
+  // ---- Stage 3+4: the deterministic queue (always computed, always valid) ----
+  const deterministic = scoreAndSequence(buckets, limit);
+
+  // ---- Stage 4b: AI re-rank of the clean top slice (never the source of truth) ----
+  let final: Array<{ song: Song; reason?: string }> = deterministic.map((song) => ({ song }));
+  if (aiAvailable !== false) {
+    try {
+      const slice = rerankSlice(buckets, 25);
+      const poolByKey = new Map<string, Song>();
+      for (const s of slice) poolByKey.set(songKey(s), s);
+      const ctxObj = buildContext(seed, ctx);
+      ctxObj.catalogPool = slice.map((s) => ({
+        title: s.title,
+        artist: primaryArtist(s),
+        language: s.language,
+      }));
+      const suggestions = await callDj(ctxObj);
+      const resolved = resolveFromPool(suggestions, poolByKey, limit);
+      if (resolved.length >= Math.min(5, limit)) {
+        // Fill any remainder from the deterministic order, canonical-deduped.
+        const used = new Set(resolved.map((r) => songKey(r.song)));
+        for (const song of deterministic) {
+          if (resolved.length >= limit) break;
+          const k = songKey(song);
+          if (!used.has(k)) {
+            used.add(k);
+            resolved.push({ song });
+          }
         }
+        final = resolved;
       }
-    }
-  } catch {
-    /* second neighborhood is optional */
-  }
-  const filteredPool = pool.filter((s) => !exclude.has(s.id));
-  const rotatedPool = sampleWithoutReplacement(filteredPool, 35);
-  const poolMap = new Map<string, Song>();
-  const catalogPool: Array<{ title: string; artist: string; language: string | null }> = [];
-  for (const s of rotatedPool) {
-    const artist = s.artists[0]?.name ?? s.subtitle.split(',')[0] ?? '';
-    poolMap.set(normKey(s.title, artist), s);
-    catalogPool.push({ title: s.title, artist, language: s.language });
-  }
-  // Keep the WHOLE original pool in the map so a suggestion that happens to
-  // land on a song we didn't include in the visible catalogPool still resolves
-  // without a live search round-trip.
-  for (const s of filteredPool) {
-    if (!poolMap.has(normKey(s.title, s.artists[0]?.name ?? ''))) {
-      const artist = s.artists[0]?.name ?? s.subtitle.split(',')[0] ?? '';
-      poolMap.set(normKey(s.title, artist), s);
+    } catch {
+      /* the deterministic queue ships — that is the design */
     }
   }
 
-  try {
-    const ctxObj = buildContext(seed, ctx);
-    ctxObj.catalogPool = catalogPool;
-    const suggestions = await callDj(ctxObj);
-    if (!suggestions.length) return [];
-    const seedLang = seed?.language && seed.language !== 'unknown' ? seed.language : null;
-    const prefer = seedLang ?? (ctx.pinnedLanguages.length === 1 ? ctx.pinnedLanguages[0] : null);
-    const resolved = await resolve(suggestions, exclude, limit, ctx.mutedLanguages, prefer, poolMap);
-    recordSurfaced(resolved.map((r) => r.song));
-    const withReason = resolved.filter((r) => r.reason);
-    if (withReason.length) {
-      const { useReasonStore } = await import('@/store/reasonStore');
-      useReasonStore.getState().setReasons(withReason.map((r) => [r.song.id, r.reason as string]));
-    }
-    return resolved.map((r) => r.song);
-  } catch {
-    return [];
+  // ---- Stage 5: shared memory so no surface repeats another ----
+  const songs = final.slice(0, limit).map((r) => r.song);
+  recordSurfaced(songs);
+  recordServed(songs.map((s) => songKey(s)));
+  const withReason = final.filter((r) => r.reason);
+  if (withReason.length) {
+    const { useReasonStore } = await import('@/store/reasonStore');
+    useReasonStore.getState().setReasons(withReason.map((r) => [r.song.id, r.reason as string]));
   }
+  return songs;
 }
