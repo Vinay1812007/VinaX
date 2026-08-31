@@ -81,8 +81,15 @@ function buildCreditChips(song: Song, filmTitle: string | null): CreditChip[] {
   for (const a of song.artists) if (/lyric/.test(roleOf(a))) push('✍️', 'Lyrics', a.name, linkFor(a));
   // Role-less catalog rows: still credit and link every name we have.
   for (const a of song.artists) if (!roleOf(a)) push('🎤', 'Artist', a.name, linkFor(a));
-  if (song.album?.id) {
-    chips.push({ icon: '🎬', role: 'Film', name: filmTitle ?? song.album.name, to: albumPath(song.album) });
+  // v5.6.0 — the film chip no longer needs an album id: when the catalog
+  // sends only a name, the chip searches it, so the movie is ALWAYS tappable.
+  if (song.album?.name) {
+    chips.push({
+      icon: '🎬',
+      role: 'Film',
+      name: filmTitle ?? song.album.name,
+      to: song.album.id ? albumPath(song.album) : `/search/${encodeURIComponent(filmTitle ?? song.album.name)}`,
+    });
   }
   return chips;
 }

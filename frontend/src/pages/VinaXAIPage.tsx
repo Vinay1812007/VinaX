@@ -133,6 +133,8 @@ interface Msg {
   engine?: string;
   /** Render as a live mini-player card (music commands). */
   player?: boolean;
+  /** Listener feedback on this reply. */
+  rating?: 'up' | 'down';
 }
 interface Conversation {
   id: string;
@@ -453,6 +455,10 @@ export default function VinaXAIPage(): ReactNode {
 
   const exportAll = (): void => {
     downloadFile('vinax-ai-chats.json', JSON.stringify(chats, null, 2), 'application/json');
+  };
+
+  const rateReply = (idx: number, rating: 'up' | 'down'): void => {
+    setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, rating: m.rating === rating ? undefined : rating } : m)));
   };
 
   const regenerate = (): void => {
@@ -1347,10 +1353,15 @@ export default function VinaXAIPage(): ReactNode {
                       m.content ? (
                         <>
                           {busy && i === messages.length - 1 ? (
-                            <p className="whitespace-pre-wrap leading-relaxed">
-                              {m.content}
+                            /* v5.6.0 — markdown renders LIVE while streaming
+                               (headings, bold, lists, code, tables), exactly
+                               like ChatGPT/Gemini; RichContent streams safely
+                               (an unclosed fence shows as preformatted text
+                               until it completes). */
+                            <div>
+                              <RichContent text={m.content} />
                               <span className="vx-caret" aria-hidden />
-                            </p>
+                            </div>
                           ) : (
                             <RichContent text={m.content} />
                           )}
@@ -1376,6 +1387,22 @@ export default function VinaXAIPage(): ReactNode {
                               >
                                 Copy
                               </button>
+                              <button
+                                onClick={() => rateReply(i, 'up')}
+                                aria-label="Good response"
+                                aria-pressed={m.rating === 'up'}
+                                className={cn('hover:text-ink-100', m.rating === 'up' && 'text-ember-400')}
+                              >
+                                👍
+                              </button>
+                              <button
+                                onClick={() => rateReply(i, 'down')}
+                                aria-label="Bad response"
+                                aria-pressed={m.rating === 'down'}
+                                className={cn('hover:text-ink-100', m.rating === 'down' && 'text-ember-400')}
+                              >
+                                👎
+                              </button>
                               {i === messages.length - 1 && (
                                 <>
                                   <button onClick={regenerate} className="hover:text-ink-100">
@@ -1397,7 +1424,17 @@ export default function VinaXAIPage(): ReactNode {
                         </span>
                       )
                     ) : (
-                      <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                      <>
+                        <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                        {!busy && (
+                          <button
+                            onClick={() => editPrompt(i, m.content)}
+                            className="mt-1 block text-[11px] text-white/70 hover:text-white"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </>
                     )}
                     {m.sources?.length ? (
                       // B8 — the ranked-source card: numbered to match the [1][2]
