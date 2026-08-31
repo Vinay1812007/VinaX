@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.5.2': {
+    title: 'Downloads, one tap away',
+    changes: [
+      {
+        type: 'new',
+        text: 'The Android app now has a Downloads tab right in the bottom bar — your saved songs are one tap away, no digging through the Library.',
+      },
+      {
+        type: 'new',
+        text: 'Open the app with no internet and it now lands straight on your Downloads — the screen that actually works offline — instead of an empty Home.',
+      },
+    ],
+  },
   '5.5.1': {
     title: 'Downloads that play offline. Every time.',
     changes: [
