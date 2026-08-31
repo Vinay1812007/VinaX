@@ -42,25 +42,33 @@ const speechForSpoken = (md: string): string =>
     .slice(0, 2000);
 const STORE_KEY = 'vinax_ai_chats_v1';
 
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer';
+type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer' | 'flash' | 'musegl' | 'ising15' | 'ising135' | 'laguna' | 'gemma4' | 'omni' | 'cgt120';
 // Engine picker wears the VinaX V1 engine names (v3.0.0); ids stay stable for
 // the API. All seven engines are selectable since v3.0.2.
 const MODES: Array<{ id: Mode; label: string; hint: string }> = [
-  // v5.4.0: AUTO picks the seat per question server-side; PRO and M3 ride the
-  // new probe-verified reserve lanes (deepseek-v4-pro / minimax-m3).
+  // v5.6.1 — the owner's 18 live models, each under its owner-chosen name
+  // (2026-08-31 key cleanup), plus AUTO and the balanced default seat.
   { id: 'auto', label: 'VinaX AUTO', hint: 'Picks the best engine for each question' },
-  { id: 'muse', label: 'VinaX FLASH', hint: 'Everyday chat · recommended' },
-  { id: 'swift', label: 'VinaX 20B', hint: 'Fastest answers' },
-  { id: 'sage', label: 'VinaX SUPER', hint: 'Thinks deepest' },
-  { id: 'scholar', label: 'VinaX INSTANT', hint: 'Music knowledge · instant answers' },
-  { id: 'win', label: 'VinaX LIGHTNING', hint: 'Big creative engine · runs the AI DJ' },
-  { id: 'nova', label: 'VinaX ULTRA', hint: 'Most powerful · complex questions' },
-  { id: 'nano', label: 'VinaX NANO 3', hint: 'Light and quick · song finder' },
-  { id: 'pro', label: 'VinaX PRO', hint: 'Deep analysis · advanced reasoning' },
-  { id: 'mini', label: 'VinaX M3', hint: 'Dependable all-rounder' },
+  { id: 'muse', label: 'VinaX Balanced', hint: 'Everyday chat · recommended' },
+  { id: 'win', label: 'VinaX NVD NMTRN 3.5 LTNG 30B', hint: 'Big creative engine · runs the AI DJ' },
+  { id: 'sage', label: 'VinaX NVD NMTRN SUP', hint: 'Thinks deepest' },
+  { id: 'nova', label: 'VinaX NVD NMTRN ULT', hint: 'Most powerful · complex questions' },
+  { id: 'nano', label: 'VinaX NVD NMTRN', hint: 'Light and quick · song finder' },
+  { id: 'omni', label: 'VinaX NVD NMTRN NN30B A3B', hint: 'Compact omni reasoner' },
+  { id: 'pro', label: 'VinaX DP V4 PRO', hint: 'Deep analysis · advanced reasoning' },
+  { id: 'flash', label: 'VinaX DP V4 FLASH', hint: 'Rapid generalist' },
+  { id: 'swift', label: 'VinaX CGT 20B', hint: 'Fastest answers' },
+  { id: 'cgt120', label: 'VinaX CGT 120B', hint: 'Heavyweight open engine' },
+  { id: 'scholar', label: 'VinaX GRQ ALL', hint: 'Music knowledge · instant answers' },
+  { id: 'mini', label: 'VinaX MIMX M3', hint: 'Dependable all-rounder' },
   { id: 'k3', label: 'VinaX K3', hint: 'Premium agent · heavyweight generalist' },
+  { id: 'glimmer', label: 'VinaX DIF GEM 26B A4B IT', hint: 'Visual-creative · moods and themes' },
+  { id: 'musegl', label: 'VinaX MUSE GMR 30B', hint: 'Playful creative sparks' },
+  { id: 'gemma4', label: 'VinaX GEM 4 31B', hint: 'Open generalist' },
+  { id: 'laguna', label: 'VinaX LGNA XS 2.1', hint: 'Small and swift' },
+  { id: 'ising15', label: 'VinaX ING CALBTN 15 31B', hint: 'Rankings and comparisons' },
+  { id: 'ising135', label: 'VinaX ING CALBTN 1 35B A3B', hint: 'Quick judgments' },
   { id: 'translator', label: 'VinaX TRANSLATE', hint: 'Translation specialist · 12+ languages' },
-  { id: 'glimmer', label: 'VinaX GLIMMER', hint: 'Visual-creative · moods and themes' },
 ];
 // Engine chip on each reply: which engine actually answered (from stream meta) —
 // derived from the served model slug so failovers are reported honestly.
@@ -68,21 +76,27 @@ const MODES: Array<{ id: Mode; label: string; hint: string }> = [
 const ENGINE_NICK: Array<[RegExp, string]> = [
   // v5.4.0 engines (probe-verified pins) — specific slugs sit first so the
   // legacy rows below can never mislabel them.
-  [/nemotron-3\.5-lightning/i, 'VinaX LIGHTNING'],
-  [/nemotron-3-super-120b/i, 'VinaX SUPER'],
-  [/deepseek-v4-pro/i, 'VinaX PRO'],
-  [/minimax/i, 'VinaX M3'],
+  [/nemotron-3\.5-lightning/i, 'VinaX NVD NMTRN 3.5 LTNG 30B'],
+  [/nemotron-3-super-120b/i, 'VinaX NVD NMTRN SUP'],
+  [/deepseek-v4-pro/i, 'VinaX DP V4 PRO'],
+  [/deepseek-v4-flash/i, 'VinaX DP V4 FLASH'],
+  [/minimax/i, 'VinaX MIMX M3'],
   [/kimi/i, 'VinaX K3'],
-  [/riva-translate/i, 'VinaX TRANSLATE'],
-  [/diffusiongemma/i, 'VinaX GLIMMER'],
+  [/diffusiongemma/i, 'VinaX DIF GEM 26B A4B IT'],
+  [/muse-glimmer/i, 'VinaX MUSE GMR 30B'],
+  [/gemma-4/i, 'VinaX GEM 4 31B'],
+  [/laguna/i, 'VinaX LGNA XS 2.1'],
+  [/ising-calibration-1\.5/i, 'VinaX ING CALBTN 15 31B'],
+  [/ising-calibration-1-35b/i, 'VinaX ING CALBTN 1 35B A3B'],
+  [/nano-omni/i, 'VinaX NVD NMTRN NN30B A3B'],
   // v3.7.0: openai/gpt-oss-20b now pins the chat (FLASH), fast (20B) AND dj (120B)
   // seats — NVIDIA gpt-oss-120b hung >25s and was retired. The chip reports the
   // engine that actually answered, keyed off the served slug, so a gpt-oss-20b reply
   // reads "VinaX 20B" whichever seat summoned it (the muse/win pickers still present
   // their own names — nickname != model). The gpt-oss-120b row is kept below as
   // legacy so any old meta from before the retire still labels cleanly.
-  [/gpt-oss-120b/i, 'VinaX 120B'],
-  [/gpt-oss-20b/i, 'VinaX 20B'],
+  [/gpt-oss-120b/i, 'VinaX CGT 120B'],
+  [/gpt-oss-20b/i, 'VinaX CGT 20B'],
   [/nemotron-super|nemotron.super/i, 'VinaX SUPER'],
   // ULTRA pins home; it also frequently COVERS the chat seat via the failover
   // ladder while the chat key is down — same honest engine-named chip either way.
