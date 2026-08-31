@@ -6,6 +6,7 @@ import { rankSongs } from '@/features/search/useSearch';
 import { getAiHomeSections } from '@/services/ai/home';
 import { buildSessionContext } from '@/services/ai/sessionContext';
 import { biasUnseenFirst, loadRecentHomeIds, recordRecentHomeIds, reorderByShelfMood, rotatePage } from '@/features/home/homeVariety';
+import { recordServed, servedKeySet, songKey } from '@/services/recommendation/flow';
 import { loadProfile, profileStamp } from '@/services/personalization/storage';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { getSliders, sliderDialLines } from '@/services/personalization/dials';
@@ -75,25 +76,51 @@ export function useAiHome() {
       // Songs Home surfaced across recent visits — bias each shelf away from
       // them (soft) so consecutive opens don't re-serve the same rows.
       const seenIds = new Set(loadRecentHomeIds());
+      // VinaX Flow (v5.5.0): one canonical-identity ledger for the whole visit
+      // — the same song can no longer appear on two shelves under two catalog
+      // ids — plus the cross-surface served memory shared with the AI DJ, so
+      // Home leans away from what the queue just played.
+      const visitKeys = new Set<string>();
+      const served = servedKeySet();
       const results = await Promise.allSettled(
         sections.map(async (sec, idx) => {
           // Rotate upstream pages by the per-mount visit nonce (was date%3, which
           // repeated for days) so every Home open pulls a fresh page slice.
           const pg = rotatePage(sec.query, visitNonce, idx, 3);
           const raw = rankSongs(await searchSongsPage(sec.query, pg, 18));
-          const onLang = pinned.length ? raw.filter((s) => s.language != null && pinned.includes(s.language)) : raw;
+          // Language lock: the listener's pinned languages, else their top
+          // languages — an unlocked shelf used to admit whatever the search
+          // returned. Relax back to raw only if the lock would starve the shelf.
+          const lockLangs = pinned.length ? pinned : ctx.topLanguages;
+          const locked = lockLangs.length ? raw.filter((s) => s.language != null && lockLangs.includes(s.language)) : raw;
+          const onLang = locked.length >= 4 ? locked : raw;
+          // Canonical dedup across every shelf of this visit.
+          const unique = onLang.filter((s) => {
+            const k = songKey(s);
+            if (visitKeys.has(k)) return false;
+            visitKeys.add(k);
+            return true;
+          });
           // A9 — sink mood-clashing picks so the shelf reads to its title, then
-          // prefer songs not shown lately. Both are stable, so relevance holds.
-          const onMood = reorderByShelfMood(sec.title, onLang);
-          const songs = biasUnseenFirst(onMood, seenIds).slice(0, 12);
+          // prefer songs not shown lately (by id AND by canonical identity).
+          const onMood = reorderByShelfMood(sec.title, unique);
+          const biased = biasUnseenFirst(onMood, seenIds);
+          const freshFirst = [
+            ...biased.filter((s) => !served.has(songKey(s))),
+            ...biased.filter((s) => served.has(songKey(s))),
+          ];
+          const songs = freshFirst.slice(0, 12);
           return { title: sec.title, songs };
         }),
       );
       const shelves = results
         .filter((r): r is PromiseFulfilledResult<AiHomeShelf> => r.status === 'fulfilled' && r.value.songs.length >= 4)
         .map((r) => r.value);
-      // Remember what this visit surfaced so the next open leans elsewhere.
+      // Remember what this visit surfaced so the next open leans elsewhere —
+      // by id (Home's own memory) and by canonical identity (the memory
+      // shared with the AI DJ and next-song).
       recordRecentHomeIds(shelves.flatMap((s) => s.songs.map((x) => x.id)));
+      recordServed(shelves.flatMap((s) => s.songs.map((x) => songKey(x))));
       return shelves;
     },
   });
