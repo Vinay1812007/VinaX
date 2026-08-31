@@ -19,7 +19,7 @@ If an existing `VITE_API_BASES` environment variable is set, remove it while tes
 
 **[▶ Open VinaX](https://www.sirimillavinay.online/)** · **[📱 Android APK](https://www.sirimillavinay.online/download)** · **[🤖 VinaX AI](https://www.sirimillavinay.online/VinaXAI)**
 
-**Release line: VinaX V1**
+**Release line: VinaX V5.5**
 
 ![release](https://img.shields.io/badge/release-VinaX%20V1-22d3ee)
 ![status](https://img.shields.io/badge/status-production-22c55e)
@@ -51,25 +51,33 @@ full policy, in plain language, is on the
 Listening, On Repeat, Because You Listened To, Fresh Finds, Hidden Gems, Decade
 Rewind, second-language trending), six daily-rotating mood boards, seasonal and
 festival shelves, and an endless personalized feed. **Home builder:** every
-block can be hidden or reordered from Settings → Home layout.
+block can be hidden or reordered from Settings → Home layout. Shelves ride
+**VinaX Flow** — language-locked, duplicate-free (one identity per song, no
+matter how many catalog copies exist) and never echoing what the queue just
+played.
 
 🎧 **Player** — gesture controls, drag-to-reorder queue, synced karaoke lyrics
-(romanized + translated + AI "Meaning"), offline downloads, drive mode, sleep
+(romanized + translated + AI "Meaning"), offline downloads that truly work
+offline (the whole app pre-caches itself), drive mode, sleep
 timer, wake-up alarm, lock-screen controls, tap-the-notification →
 full-screen player (Android), and *living color*: the app tints itself from
 the playing artwork.
 
-🤖 **VinaX AI — the VinaX V1 engine family** — a full chat with seven
-selectable engines, each with its own strength: **FLASH** (everyday chat, the
-default), **20B** (fastest), **SUPER** (deepest reasoning — the Think engine),
-**INSTANT** (music knowledge in a blink), **120B** (the big creative engine
-that also runs the AI DJ), **ULTRA** (the strongest all-rounder) and **NANO 3**
-(light, quick, loves finding songs — it also powers personalized search).
-Live web search, files and images, Think/Research modes, and hands-free voice
-chat replying in a natural studio voice. Ask "play ⟨song⟩" and the reply is a
-live mini-player with lyrics. Behind the app the same seven lanes drive the AI
-DJ, AI playlists and the home curator — with cross-lane failover so one bad
-engine never takes a feature down.
+🤖 **VinaX AI — the VinaX V5 engine family** — a full chat with thirteen
+selectable engines, each with its own strength: **AUTO** (reads every question
+and picks the best engine for it), **FLASH** (everyday chat, the default),
+**20B** (fastest), **SUPER** (deepest reasoning — the Think engine),
+**INSTANT** (music knowledge in a blink), **LIGHTNING** (the big creative
+engine that also runs the AI DJ), **ULTRA** (the strongest all-rounder),
+**NANO 3** (light, quick, loves finding songs — it also powers personalized
+search), **PRO** (deep analysis), **M3** (dependable all-rounder), **K3**
+(premium agent reserve), **TRANSLATE** (12+ languages, Telugu-verified) and
+**GLIMMER** (visual-creative). Live web search, files and images,
+Think/Research modes, and hands-free voice chat replying in a natural studio
+voice. Ask "play ⟨song⟩" and the reply is a live mini-player with lyrics.
+Behind the app the same lanes drive the AI DJ, AI playlists and the home
+curator — with cross-lane failover so one bad engine never takes a feature
+down.
 
 🎚 **Tune this queue** — twelve one-tap intents (melody, beats, devotional,
 heartbreak, classics, fresh, language switches, surprise) that reshape what
@@ -106,11 +114,16 @@ D-pad navigation, capability-based UI (touch/mouse/TV detected by hardware).
   at CSS-time; below-the-fold Home blocks mount progressively after first
   paint; zero non-composited animations; 161 KB gz first-load budget enforced
   in CI.
-- **Seven AI lanes** (FLASH · 20B · SUPER · INSTANT · 120B · ULTRA · NANO 3)
-  with cross-lane failover and per-lane observability — every lane has its own
-  key and pinned engine (documented in `.env.example`), benchable live from
-  the admin AI Lab. All lanes share DJ-grade taste conditioning from a bounded
-  on-device snapshot.
+- **A 26-model AI engine across 28 lanes** with cross-lane failover and
+  per-lane observability — every lane has its own key and live-probed pinned
+  engine (registry in `functions/_lib/models.ts`, keys in `.env.example`),
+  all benchable from the admin AI Lab. Feature queues ride **VinaX Flow**: a
+  deterministic, catalog-grounded core (language lock, canonical dedup,
+  jittered scoring, artist-diverse sequencing, one shared anti-repeat memory)
+  with the AI as a pool-only re-ranker that can never invent a song.
+- **Release hygiene:** every code change ships with its What's New entry and
+  a README touch in the same push — `release.test.ts` enforces that the
+  version, `package.json` and the changelog's top entry always move together.
 - **Infinite-catalog SEO:** an hourly walker expands the music catalog
   artist-by-artist into a persistent URL corpus (Supabase), served back as
   unbounded paginated sitemaps with canonical-exact URLs; entity pages are
