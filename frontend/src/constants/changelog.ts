@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.5.1': {
+    title: 'Downloads that play offline. Every time.',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Downloaded songs now truly play with no internet \u2014 100%. Saved audio is kept inside the app\u2019s own storage and served directly by the app with full seeking, instead of relying on an Android file link that could silently fail. Existing downloads are upgraded automatically the first time you open the app.',
+      },
+    ],
+  },
   '5.5.0': {
     title: 'A smarter queue that never repeats, and 13 AI engines',
     changes: [
