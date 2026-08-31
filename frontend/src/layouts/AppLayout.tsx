@@ -162,6 +162,10 @@ export function AppLayout() {
     runMigrations();
     document.documentElement.classList.toggle('reduce-motion', useSettingsStore.getState().reduceMotion);
     usePlayerStore.getState().initEngine();
+    // v5.6.0 — downloads must be playable BEFORE the first tap, not after the
+    // idle callback: a listener opening the app offline heads straight for a
+    // saved song, and an unmapped id would stream (and fail).
+    void initDownloads();
     // initEngine already synchronously imported the static `audioEngine` via
     // playerStore, so the dynamic import here is dead weight — use the same
     // static one and drop the extra microtask (audit finding M3).
@@ -177,7 +181,6 @@ export function AppLayout() {
       initTelemetry();
       void loadBlocklist();
       initLockScreenLyrics();
-      void initDownloads();
       initSpatialNav();
       initAlarm();
       initAudioOutputWatcher();
