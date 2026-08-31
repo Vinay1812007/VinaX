@@ -32,8 +32,8 @@ const UA = 'VinaX/1.0 (+https://www.sirimillavinay.online)';
 // expert — hidden Search-page music expert (Title — Artist contract; NOT in
 // the engine picker). Each engine rides one of the seven key lanes defined
 // in functions/_lib/ai.ts.
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'voice' | 'expert' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer';
-const ALL_MODES: readonly string[] = ['muse', 'swift', 'sage', 'scholar', 'win', 'nova', 'nano', 'voice', 'expert', 'auto', 'pro', 'mini', 'k3', 'translator', 'glimmer'];
+type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'voice' | 'expert' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer' | 'flash' | 'musegl' | 'ising15' | 'ising135' | 'laguna' | 'gemma4' | 'omni' | 'cgt120';
+const ALL_MODES: readonly string[] = ['muse', 'swift', 'sage', 'scholar', 'win', 'nova', 'nano', 'voice', 'expert', 'auto', 'pro', 'mini', 'k3', 'translator', 'glimmer', 'flash', 'musegl', 'ising15', 'ising135', 'laguna', 'gemma4', 'omni', 'cgt120'];
 // Engine ids sent by pre-2.3.0 clients (installed PWAs / APKs) — mapped to
 // their successors so builds in the wild keep working after the retirement.
 const LEGACY_MODE: Record<string, Mode> = {
@@ -79,6 +79,17 @@ export const LANE_BY_MODE: Record<Mode, Lane> = {
   k3: 'agent',
   translator: 'fast',
   glimmer: 'diffusion',
+  // v5.6.1 — every one of the owner's 18 keys is a selectable engine. These
+  // eight ride the inventory lanes; a model that is dead upstream fails over
+  // through the ladder and the reply chip names the engine that answered.
+  flash: 'dsflash',
+  musegl: 'muse',
+  ising15: 'rank',
+  ising135: 'rank2',
+  laguna: 'laguna',
+  gemma4: 'gemma4',
+  omni: 'omni',
+  cgt120: 'oss120',
 };
 const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   muse: 'low',
@@ -96,6 +107,14 @@ const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   k3: 'low',
   translator: 'low',
   glimmer: 'low',
+  flash: 'low',
+  musegl: 'low',
+  ising15: 'low',
+  ising135: 'low',
+  laguna: 'low',
+  gemma4: 'low',
+  omni: 'low',
+  cgt120: 'medium',
 };
 // Capability-tuned per-seat budgets: the balanced default (muse), the short
 // quick seats (swift/nano), the Think engine's long structured answers (sage),
@@ -116,6 +135,14 @@ const MAXTOK_BY_MODE: Record<Mode, number> = {
   k3: 3200,
   translator: 2000,
   glimmer: 2400,
+  flash: 2000,
+  musegl: 2400,
+  ising15: 1600,
+  ising135: 1600,
+  laguna: 1600,
+  gemma4: 2400,
+  omni: 2000,
+  cgt120: 3200,
 };
 // Per-seat sampling temperature: cooler for the precision seats (quick facts,
 // deep reasoning), warmer for the big creative engine.
@@ -135,6 +162,14 @@ const TEMP_BY_MODE: Record<Mode, number> = {
   k3: 0.7,
   translator: 0.4,
   glimmer: 0.9,
+  flash: 0.7,
+  musegl: 0.85,
+  ising15: 0.6,
+  ising135: 0.6,
+  laguna: 0.7,
+  gemma4: 0.7,
+  omni: 0.7,
+  cgt120: 0.7,
 };
 
 // Package B1 (v3.9.7): rewritten to mirror best-in-class assistant conduct —
@@ -213,6 +248,14 @@ const MODE_FLAVOR: Partial<Record<Mode, string>> = {
   k3: `THIS ENGINE'S SEAT — the premium agent reserve (VinaX K3): a heavyweight generalist for the hardest requests. SIGNATURE STYLE — composed and thorough, structured markdown for substance, calm confidence over flourish. This engine can be slow or briefly unavailable upstream; when a sibling engine covers the call, the reply chip says so honestly. LENGTH TARGET — whatever the substance fills, never padding.`,
   translator: `THIS ENGINE'S SEAT — the translation specialist (VinaX TRANSLATE). Translate faithfully between any of VinaX's languages (Telugu, Hindi, Tamil, the other Indian languages, English): preserve meaning, tone and register; add a one-line note only when a phrase has no clean equivalent. For song-lyric requests, translate MEANING in your own words — do not reproduce the original lyric text beyond a few quoted words. Plain output: the translation first, formatting only when the user's text has structure.`,
   glimmer: `THIS ENGINE'S SEAT — the visual-creative engine (VinaX GLIMMER): moods, themes, palettes, visual concepts and descriptions. SIGNATURE STYLE — vivid, sensory, concrete; sketches ideas in words, SVG or mermaid when a picture helps. It cannot produce image FILES — say so plainly when asked and offer the richest text/SVG alternative instead.`,
+  flash: `THIS ENGINE'S SEAT — the rapid generalist (VinaX DP V4 FLASH): quick, capable answers with a light touch. SIGNATURE STYLE — direct and tidy, light markdown, no padding.`,
+  musegl: `THIS ENGINE'S SEAT — the muse engine (VinaX MUSE GMR 30B): playful creative sparks — captions, hooks, names, tiny verses. SIGNATURE STYLE — bright and brief.`,
+  ising15: `THIS ENGINE'S SEAT — the calibration engine (VinaX ING CALBTN 15 31B): comparisons, rankings and scoring questions answered with visible criteria. SIGNATURE STYLE — a short table or ordered list with one-line reasons.`,
+  ising135: `THIS ENGINE'S SEAT — the light calibration engine (VinaX ING CALBTN 1 35B A3B): quick judgments and orderings. SIGNATURE STYLE — compact, criteria-first.`,
+  laguna: `THIS ENGINE'S SEAT — the small swift engine (VinaX LGNA XS 2.1): tiny questions, instant answers. SIGNATURE STYLE — a sentence or three, never more.`,
+  gemma4: `THIS ENGINE'S SEAT — the open generalist (VinaX GEM 4 31B): balanced everyday answers with a friendly, plain voice. SIGNATURE STYLE — clean paragraphs, light markdown.`,
+  omni: `THIS ENGINE'S SEAT — the omni reasoner (VinaX NVD NMTRN NN30B A3B): compact reasoning over mixed, messy questions. SIGNATURE STYLE — conclusion first, short support.`,
+  cgt120: `THIS ENGINE'S SEAT — the heavyweight open engine (VinaX CGT 120B): long-form substance, careful structure. SIGNATURE STYLE — well-organized markdown, depth without padding.`,
   voice: `THIS IS LIVE VOICE — every word you write is spoken aloud through a phone speaker. Reply in 1-3 short conversational sentences of plain text: no markdown, no lists, no headings, no emoji, no URLs. Say numbers, dates and times the way people speak them ("nineteen ninety-five", "half past eight"), never as digits-and-symbols soup. If something lives at a link, say where to tap in the app instead of reading an address. Sound like a friendly person talking, never like a document being read.`,
 };
 
