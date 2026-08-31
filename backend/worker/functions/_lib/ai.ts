@@ -69,6 +69,8 @@
 import { sbInsert, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 export interface AiEnv {
+  // The owner's 18 live keys (2026-08-31 cleanup — every retired secret was
+  // deleted from Cloudflare, so their fields are gone here too).
   VINAX_DEEPSEEK_V4_FLASH?: string;
   VINAX_CHATGPT_20_B?: string;
   VINAX_NEMOTRON_SUPER?: string;
@@ -76,32 +78,21 @@ export interface AiEnv {
   VINAX_CHATGPT_120_B?: string;
   VINAX_NEMOTRON_ULTRA?: string;
   VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B?: string;
-  // gen-5 keys (owner-added 2026-08-29) — see ./models.ts for the inventory.
   VINAX_KIMI_K3?: string;
   VINAX_DEEPSEEK_V4_PRO?: string;
   VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B?: string;
   VINAX_MUSE_GLIMMER_30B?: string;
-  VINAX_RIVA_TRANSLATE_4B_INSTRUCT_V2?: string;
-  VINAX_RIVA_TRANSLATE_4B_INSTRUCT_V1_1?: string;
   VINAX_ISING_CALIBRATION_1_5_31B?: string;
   VINAX_ISING_CALIBRATION_1_35B_A3B?: string;
-  VINAX_NEMOTRON_3_EMBED_1B?: string;
   VINAX_LAGUNA_XS_2_1?: string;
   VINAX_MINIMAX_M3?: string;
   VINAX_DIFFUSIONGEMMA_26B_A4B_IT?: string;
-  VINAX_NEMOTRON_3_5_CONTENT_SAFETY?: string;
-  VINAX_SYNTHETIC_VIDEO_DETECTOR?: string;
-  VINAX_ACTIVE_SPEAKER_DETECTION?: string;
   VINAX_GEMMA_4_31B_IT?: string;
-  VINAX_NEMOTRON_VOICECHAT?: string;
-  VINAX_STREAMPETR?: string;
-  VINAX_LLAMA_3_1_NEMOTRON_SAFETY_GUARD_8B_V3?: string;
   VINAX_NEMOTRON_3_NANO_30B_A3B?: string;
   NVIDIA_BASE_URL?: string;
 }
 
 const ENDPOINT = 'https://integrate.api.nvidia.com/v1/chat/completions';
-const EMBED_ENDPOINT = 'https://integrate.api.nvidia.com/v1/embeddings';
 
 /** The feature lanes. Every AI call runs on exactly one lane.
  * v5.4.0 adds: pro (deep-reasoning reserve), mini (general reserve),
@@ -117,29 +108,20 @@ export type Lane =
   | 'search'
   | 'pro'
   | 'mini'
-  | 'translate'
-  | 'safety'
-  | 'guard'
   | 'agent'
-  // v5.4.1 — inventory bench lanes: one lane per owner-listed model so the
-  // admin AI Lab can probe and monitor ALL 26 models on their own keys. These
-  // drive no features and sit in no ladder; several pin slugs that are dead
-  // or absent upstream (the bench is exactly where that shows honestly).
+  // Inventory lanes — one per remaining owner model so the admin AI Lab can
+  // probe every key. v5.6.1: trimmed to the 18 keys the owner kept (the riva
+  // translators, embed, safety pair, voicechat, video, speaker and petr keys
+  // were deleted from Cloudflare 2026-08-31, so their lanes are gone).
   | 'dsflash'
   | 'muse'
-  | 'translate2'
   | 'rank'
   | 'rank2'
   | 'laguna'
   | 'diffusion'
   | 'omni'
   | 'gemma4'
-  | 'voicechat'
-  | 'oss120'
-  | 'embedlane'
-  | 'video'
-  | 'speaker'
-  | 'petr';
+  | 'oss120';
 
 /** Default (NVIDIA) chat-completions endpoint, honoring the env override. */
 export function defaultEndpoint(env: AiEnv): string {
@@ -227,9 +209,6 @@ export const LANE_MODEL: Record<Lane, string> = {
   search: 'nvidia/nemotron-3-nano-30b-a3b',
   pro: 'deepseek-ai/deepseek-v4-pro-0813',
   mini: 'minimaxai/minimax-m3',
-  translate: 'nvidia/riva-translate-4b-instruct-v2',
-  safety: 'nvidia/nemotron-3.5-content-safety',
-  guard: 'nvidia/llama-3.1-nemotron-safety-guard-8b-v3',
   agent: 'moonshotai/kimi-k3',
   // Inventory bench lanes (v5.4.1) — see the Lane union note. Status at the
   // 2026-08-29 probe: deepseek-flash + gemma-4 HANG; muse/laguna/voicechat and
@@ -238,19 +217,13 @@ export const LANE_MODEL: Record<Lane, string> = {
   // guesses. The bench shows the live truth either way.
   dsflash: 'deepseek-ai/deepseek-v4-flash-0731',
   muse: 'nvidia/muse-glimmer-30b',
-  translate2: 'nvidia/riva-translate-4b-instruct-v1_1',
   rank: 'nvidia/ising-calibration-1.5-31b',
   rank2: 'nvidia/ising-calibration-1-35b-a3b',
   laguna: 'nvidia/laguna-xs-2.1',
   diffusion: 'google/diffusiongemma-26b-a4b-it',
   omni: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
   gemma4: 'google/gemma-4-31b-it',
-  voicechat: 'nvidia/nemotron-voicechat',
   oss120: 'openai/gpt-oss-120b',
-  embedlane: 'nvidia/nemotron-3-embed-1b',
-  video: 'nvidia/synthetic-video-detector',
-  speaker: 'nvidia/active-speaker-detection',
-  petr: 'nvidia/streampetr',
 };
 
 /** Per-lane SECONDARY model pin — a healthy same-key variant tried on the
@@ -283,25 +256,16 @@ export const LANE_ENV: Record<Lane, keyof AiEnv> = {
   search: 'VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B',
   pro: 'VINAX_DEEPSEEK_V4_PRO',
   mini: 'VINAX_MINIMAX_M3',
-  translate: 'VINAX_RIVA_TRANSLATE_4B_INSTRUCT_V2',
-  safety: 'VINAX_NEMOTRON_3_5_CONTENT_SAFETY',
-  guard: 'VINAX_LLAMA_3_1_NEMOTRON_SAFETY_GUARD_8B_V3',
   agent: 'VINAX_KIMI_K3',
   dsflash: 'VINAX_DEEPSEEK_V4_FLASH',
   muse: 'VINAX_MUSE_GLIMMER_30B',
-  translate2: 'VINAX_RIVA_TRANSLATE_4B_INSTRUCT_V1_1',
   rank: 'VINAX_ISING_CALIBRATION_1_5_31B',
   rank2: 'VINAX_ISING_CALIBRATION_1_35B_A3B',
   laguna: 'VINAX_LAGUNA_XS_2_1',
   diffusion: 'VINAX_DIFFUSIONGEMMA_26B_A4B_IT',
   omni: 'VINAX_NEMOTRON_3_NANO_30B_A3B',
   gemma4: 'VINAX_GEMMA_4_31B_IT',
-  voicechat: 'VINAX_NEMOTRON_VOICECHAT',
   oss120: 'VINAX_CHATGPT_120_B',
-  embedlane: 'VINAX_NEMOTRON_3_EMBED_1B',
-  video: 'VINAX_SYNTHETIC_VIDEO_DETECTOR',
-  speaker: 'VINAX_ACTIVE_SPEAKER_DETECTION',
-  petr: 'VINAX_STREAMPETR',
 };
 
 /** Cross-lane failover ladder: when a lane's own key/model pair is missing or
@@ -508,47 +472,6 @@ export async function gather(
   return out;
 }
 
-/**
- * Text embeddings via NVIDIA /v1/embeddings on nemotron-3-embed-1b (probed
- * live 2026-08-29: 200 in ~0.4s, 2048-dim vectors). Returns one vector per
- * input, or null when the key is missing or the call fails — callers MUST
- * treat embeddings as an enhancement, never a dependency. No feature calls
- * this yet (v5.4.0 wires the capability; semantic search comes separately —
- * it also needs a vector store).
- */
-export async function embed(
-  env: AiEnv,
-  texts: string[],
-  opts: { timeoutMs?: number } = {},
-): Promise<number[][] | null> {
-  const key = env.VINAX_NEMOTRON_3_EMBED_1B;
-  if (!key || texts.length === 0) return null;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 8_000);
-  try {
-    const res = await fetch(EMBED_ENDPOINT, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model: 'nvidia/nemotron-3-embed-1b', input: texts.slice(0, 64) }),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) return null;
-    const data = (await res.json().catch(() => null)) as
-      | { data?: Array<{ index?: number; embedding?: unknown }> }
-      | null;
-    if (!data || !Array.isArray(data.data)) return null;
-    const rows = data.data
-      .filter((d): d is { index: number; embedding: number[] } => Array.isArray(d?.embedding))
-      .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
-      .map((d) => d.embedding);
-    return rows.length === texts.slice(0, 64).length ? rows : null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export interface ModerationResult {
   /** True when a safety model judged the text unsafe. */
   flagged: boolean;
@@ -560,34 +483,14 @@ export interface ModerationResult {
 }
 
 /**
- * Moderate AI-GENERATED text through the safety lane (nemotron-3.5-content-
- * safety, probed 0.52s), with the guard lane (llama-3.1-nemotron-safety-
- * guard-8b, probed 0.53s) as the second opinion when the first is down.
- * Song metadata must NOT be routed through here (owner rule: don't burn
- * safety inference on catalog data). Both models answer in prose/JSON that
- * names a safe/unsafe verdict; the match below is deliberately broad —
- * a false "flagged" hides one AI sentence, a false pass shows one, so we
- * bias toward flagging on any unsafe marker.
+ * v5.6.1 — the owner deleted the safety/guard keys from Cloudflare
+ * (2026-08-31 key cleanup), so no moderation model is reachable any more.
+ * The function keeps its contract and is honest about it: every text comes
+ * back { unchecked: true } and the CALLER decides fail-open vs fail-closed —
+ * exactly as the original design required when no safety model answered.
  */
-export async function moderate(env: AiEnv, text: string): Promise<ModerationResult> {
-  const ask = async (lane: Lane): Promise<ModerationResult | null> => {
-    const r = await chat(env, [{ role: 'user', content: text.slice(0, 4000) }], {
-      lane,
-      ladder: [],
-      temperature: 0,
-      maxTokens: 200,
-      timeoutMs: 5_000,
-    });
-    if (!r.content) return null;
-    const c = r.content.toLowerCase();
-    const flagged = /\bunsafe\b|"safe"\s*:\s*false|\bviolat|\bharmful\b|\bblocked\b/.test(c);
-    return { flagged, unchecked: false, model: r.model };
-  };
-  try {
-    return (await ask('safety')) ?? (await ask('guard')) ?? { flagged: false, unchecked: true, model: null };
-  } catch {
-    return { flagged: false, unchecked: true, model: null };
-  }
+export async function moderate(_env: AiEnv, _text: string): Promise<ModerationResult> {
+  return { flagged: false, unchecked: true, model: null };
 }
 
 /**
