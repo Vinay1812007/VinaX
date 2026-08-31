@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { Song } from '@/types';
 import { searchSongsPage } from '@/services/api';
 import { rankSongs } from '@/features/search/useSearch';
-import { getAiHomeSections } from '@/services/ai/home';
+import { getHomeSections } from '@/services/ai/home';
 import { buildSessionContext } from '@/services/ai/sessionContext';
 import { biasUnseenFirst, loadRecentHomeIds, recordRecentHomeIds, reorderByShelfMood, rotatePage } from '@/features/home/homeVariety';
 import { recordServed, servedKeySet, songKey } from '@/services/recommendation/flow';
@@ -71,7 +71,10 @@ export function useAiHome() {
         // Package C3 — hand-tuned dials ride along in the stringified context.
         tasteDials: sliderDialLines(getSliders(profile)),
       };
-      const sections = await getAiHomeSections(ctx);
+      // v5.5.3 — AI shelves when the engine answers, mood/time/era shelves from
+      // the local seeded designer always: every Home open is different by
+      // construction, even with the AI fully down.
+      const sections = await getHomeSections(ctx);
       if (!sections.length) return [];
       // Songs Home surfaced across recent visits — bias each shelf away from
       // them (soft) so consecutive opens don't re-serve the same rows.
