@@ -18,6 +18,8 @@ export interface LyricsResult {
 const BASE = 'https://lrclib.net/api';
 
 interface LrclibRecord {
+  trackName?: string;
+  artistName?: string;
   plainLyrics?: string | null;
   syncedLyrics?: string | null;
   instrumental?: boolean;
@@ -72,11 +74,54 @@ function cleanSongTitle(t: string): string {
     .trim();
 }
 
-/** Rank search candidates: synced beats plain; duration proximity beats position. */
-function pickBest(list: LrclibRecord[], duration: number | null): LrclibRecord | null {
+/** Normalize a title/artist for matching: strip film noise, diacritics and
+ *  punctuation, lowercase, collapse spaces. */
+function normMatch(s: string): string {
+  return cleanSongTitle(s)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Words that carry no song identity — ignored when comparing titles. */
+const NOISE_WORDS = new Set(['from', 'the', 'a', 'an', 'feat', 'ft', 'film', 'movie', 'version']);
+
+/**
+ * v5.7.2 — how much a candidate's title looks like the requested one. The
+ * ranker used to score ONLY synced-ness and duration, so a title-only search
+ * for "Killi Killi" crowned "Badman Mood (feat. Killi)" — confident,
+ * wrong-language lyrics on a Telugu song. Titles now gate: a candidate whose
+ * name doesn't resemble the request can never win, whatever else it offers.
+ */
+function titleAffinity(want: string, got: string): number {
+  const w = normMatch(want);
+  const g = normMatch(got);
+  if (!w || !g) return -1000;
+  if (w === g) return 60;
+  if (w.includes(g) || g.includes(w)) return 40;
+  const a = new Set(w.split(' ').filter((t) => !NOISE_WORDS.has(t)));
+  const b = new Set(g.split(' ').filter((t) => !NOISE_WORDS.has(t)));
+  let inter = 0;
+  for (const t of a) if (b.has(t)) inter += 1;
+  const union = a.size + b.size - inter;
+  return union > 0 && inter / union >= 0.5 ? 25 : -1000;
+}
+
+/** Rank search candidates: the title must match; then synced beats plain,
+ *  duration proximity beats position, and a shared artist word helps.
+ *  (Artist is a bonus, never a gate — our catalog credits actors and
+ *  composers where LRCLIB credits singers, so mismatches are routine.) */
+function pickBest(list: LrclibRecord[], track: string, artist: string, duration: number | null): LrclibRecord | null {
   if (!list.length) return null;
+  const artistTokens = normMatch(artist).split(' ').filter((t) => t.length > 1 && !NOISE_WORDS.has(t));
   const score = (r: LrclibRecord): number => {
     let s = r.syncedLyrics ? 100 : r.plainLyrics ? 40 : -1000;
+    s += titleAffinity(track, r.trackName ?? '');
+    const candArtist = normMatch(r.artistName ?? '');
+    if (candArtist && artistTokens.some((t) => candArtist.includes(t))) s += 15;
     const d = (r as { duration?: unknown }).duration;
     if (duration && typeof d === 'number') {
       const dd = Math.abs(d - duration);
@@ -96,7 +141,7 @@ async function lookupOnce(track: string, artist: string, duration: number | null
   const q = new URLSearchParams({ track_name: track, artist_name: artist });
   const list = (await getJson(`${BASE}/search?${q}`)) as LrclibRecord[] | null;
   if (Array.isArray(list)) {
-    const r = toResult(pickBest(list, duration));
+    const r = toResult(pickBest(list, track, artist, duration));
     if (r) return r;
   }
   return null;
@@ -118,7 +163,7 @@ async function runLookup(
   const finalTitle = cleaned || track;
   const list = (await getJson(`${BASE}/search?${new URLSearchParams({ q: finalTitle })}`)) as LrclibRecord[] | null;
   if (Array.isArray(list)) {
-    return toResult(pickBest(list, duration));
+    return toResult(pickBest(list, finalTitle, artist, duration));
   }
   return null;
 }
