@@ -87,8 +87,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['reasoning', 'generation'], latency_class: 'slow', quality_class: 'premium',
     cost_class: 'high', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-super-120b-a12b', 'gpt-oss-120b'],
-    verified: true, ...T,
-    notes: 'Probed 2026-08-29: cold probe timed out, warm 0.59s. Ladder reserve (pro lane), not a feature primary.',
+    verified: false, ...T,
+    notes: 'DEAD/hanging 2026-09-01 (bench unreachable; live seat rescued by ladder). Pin kept for the PRO identity seat; ladder covers.',
   },
   'deepseek-v4-flash-0731': {
     id: 'deepseek-ai/deepseek-v4-flash-0731', envKey: 'VINAX_DEEPSEEK_V4_FLASH', display_name: 'VinaX DP V4 FLASH', provider: 'nvidia',
@@ -97,7 +97,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b', 'nemotron-3-nano-30b-a3b'],
     verified: false, ...T,
-    notes: 'Probed 2026-08-29 TWICE: hangs 18s+ with no response. DO NOT PIN until it heals; the chat lane key keeps serving gpt-oss-20b instead.',
+    notes: 'DEAD/hanging 2026-09-01 (bench unreachable; live seat rescued by ladder).',
   },
   'nemotron-3.5-lightning-30b-a3b': {
     id: 'nvidia/nemotron-3.5-lightning-30b-a3b', envKey: 'VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B', display_name: 'VinaX NVD NMTRN 3.5 LTNG 30B', provider: 'nvidia',
@@ -115,7 +115,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'text', chat_capable: true,
     fallback_models: ['gemma-4-31b-it', 'gpt-oss-20b'],
     verified: false, ...T,
-    notes: 'Probed 2026-08-29: 404 on nvidia/ and microsoft/ prefixes — slug not on the NIM catalog. Inventory only until a serving slug is known.',
+    notes: 'GONE upstream 2026-09-01: NIM returns 404 for the slug.',
   },
   'ising-calibration-1.5-31b': {
     id: 'nvidia/ising-calibration-1.5-31b', envKey: 'VINAX_ISING_CALIBRATION_1_5_31B', display_name: 'VinaX ING CALBTN 15 31B', provider: 'nvidia',
@@ -133,7 +133,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: [],
     verified: false, ...T,
-    notes: 'Probed 2026-08-29: 410 Gone — model retired upstream. Do not wire.',
+    notes: 'GONE upstream 2026-09-01: NIM returns 410 for the slug.',
   },
   'laguna-xs-2.1': {
     id: 'nvidia/laguna-xs-2.1', envKey: 'VINAX_LAGUNA_XS_2_1', display_name: 'VinaX LGNA XS 2.1', provider: 'nvidia',
@@ -142,7 +142,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-nano-30b-a3b'],
     verified: false, ...T,
-    notes: 'Probed 2026-08-29: 404 — slug not on the NIM catalog.',
+    notes: 'GONE upstream 2026-09-01: NIM returns 404 for the slug.',
   },
   'minimax-m3': {
     id: 'minimaxai/minimax-m3', envKey: 'VINAX_MINIMAX_M3', display_name: 'VinaX MIMX M3', provider: 'nvidia',
@@ -187,7 +187,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b'],
     verified: false, ...T,
-    notes: 'Probed 2026-08-29: hangs 18s+ (matches the v2.7.2 hang history). DO NOT PIN.',
+    notes: 'DEAD/hanging 2026-09-01 (bench unreachable; live seat rescued by ladder).',
   },
   'nemotron-3-super-120b-a12b': {
     id: 'nvidia/nemotron-3-super-120b-a12b', envKey: 'VINAX_NEMOTRON_SUPER', display_name: 'VinaX NVD NMTRN SUP', provider: 'nvidia',
@@ -213,8 +213,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['generation', 'reasoning', 'classification'], latency_class: 'fast', quality_class: 'medium',
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: [],
-    verified: true, ...T,
-    notes: 'The proven workhorse — currently pins dj/chat/fast lanes. Cap thinking with reasoning_effort:low.',
+    verified: false, ...T,
+    notes: 'DEAD 2026-09-01: hangs on NVIDIA on both funded keys (bench + live seat probes). No longer pinned by any feature lane.',
   },
   'gpt-oss-120b': {
     id: 'openai/gpt-oss-120b', envKey: 'VINAX_CHATGPT_120_B', display_name: 'VinaX CGT 120B', provider: 'nvidia',

@@ -201,9 +201,12 @@ export function reasoningOffParams(model: string): Record<string, unknown> {
  *   nemotron-voicechat, laguna-xs and riva-v1_1 404 on the NIM catalog. */
 export const LANE_MODEL: Record<Lane, string> = {
   dj: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-  chat: 'openai/gpt-oss-20b',
+  // v5.6.3 — gpt-oss-20b probed DEAD on NVIDIA (hangs; two keys, same result,
+  // 2026-09-01). The balanced seat moves to the served 120B; the Flash key
+  // still signs it (NVIDIA keys are account-scoped).
+  chat: 'openai/gpt-oss-120b',
   deep: 'nvidia/nemotron-3-super-120b-a12b',
-  fast: 'openai/gpt-oss-20b',
+  fast: 'nvidia/nemotron-3-nano-30b-a3b', // fastest live engine (556ms probe)
   scholar: 'llama-3.3-70b-versatile',
   home: 'nvidia/nemotron-3-ultra-550b-a55b',
   search: 'nvidia/nemotron-3-nano-30b-a3b',
@@ -237,7 +240,8 @@ export const LANE_MODEL: Record<Lane, string> = {
  * - deep (v5.4.0): the previous 49b primary — proven Think engine.
  * - chat/home/search/scholar: unchanged from v3.7.0. */
 export const LANE_SECONDARY: Partial<Record<Lane, string>> = {
-  dj: 'openai/gpt-oss-20b',
+  dj: 'nvidia/nemotron-3-nano-30b-a3b',
+  fast: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   deep: 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
   chat: 'nvidia/nemotron-3-ultra-550b-a55b',
   home: 'openai/gpt-oss-20b',
