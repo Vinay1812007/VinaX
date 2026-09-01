@@ -53,8 +53,8 @@ const MODES: Array<{ id: Mode; label: string; hint: string }> = [
   { id: 'win', label: 'VinaX NVD NMTRN 3.5 LTNG 30B', hint: 'Big creative engine · runs the AI DJ' },
   { id: 'sage', label: 'VinaX NVD NMTRN SUP', hint: 'Thinks deepest' },
   { id: 'nova', label: 'VinaX NVD NMTRN ULT', hint: 'Most powerful · complex questions' },
-  { id: 'nano', label: 'VinaX NVD NMTRN', hint: 'Light and quick · song finder' },
-  { id: 'omni', label: 'VinaX NVD NMTRN NN30B A3B', hint: 'Compact omni reasoner' },
+  { id: 'nano', label: 'VinaX NVD NMTRN NN30B A3B', hint: 'Light and quick · song finder' },
+  { id: 'omni', label: 'VinaX NVD NMTRN', hint: 'Compact omni reasoner' },
   { id: 'pro', label: 'VinaX DP V4 PRO', hint: 'Deep analysis · advanced reasoning' },
   { id: 'flash', label: 'VinaX DP V4 FLASH', hint: 'Rapid generalist' },
   { id: 'swift', label: 'VinaX CGT 20B', hint: 'Fastest answers' },
@@ -88,7 +88,7 @@ const ENGINE_NICK: Array<[RegExp, string]> = [
   [/laguna/i, 'VinaX LGNA XS 2.1'],
   [/ising-calibration-1\.5/i, 'VinaX ING CALBTN 15 31B'],
   [/ising-calibration-1-35b/i, 'VinaX ING CALBTN 1 35B A3B'],
-  [/nano-omni/i, 'VinaX NVD NMTRN NN30B A3B'],
+  [/nano-omni/i, 'VinaX NVD NMTRN'],
   // v3.7.0: openai/gpt-oss-20b now pins the chat (FLASH), fast (20B) AND dj (120B)
   // seats — NVIDIA gpt-oss-120b hung >25s and was retired. The chip reports the
   // engine that actually answered, keyed off the served slug, so a gpt-oss-20b reply
@@ -101,7 +101,7 @@ const ENGINE_NICK: Array<[RegExp, string]> = [
   // chip in the app speaks the same names (old stored slugs included).
   [/nemotron-super|nemotron.super/i, 'VinaX NVD NMTRN SUP'],
   [/nemotron-3-ultra|nemotron.ultra/i, 'VinaX NVD NMTRN ULT'],
-  [/nemotron-3-nano|diffusiongemma|gemma/i, 'VinaX NVD NMTRN'],
+  [/nemotron-3-nano|diffusiongemma|gemma/i, 'VinaX NVD NMTRN NN30B A3B'],
   // Retired slugs from repo history (inkling/qwen/old deepseeks) — generic label.
   [/inkling|qwen|deepseek/i, 'VinaX AI'],
   [/llama-3\.3-70b|llama-3\.1-8b|vision|llama/i, 'VinaX GRQ ALL'],
