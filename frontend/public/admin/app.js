@@ -1435,7 +1435,7 @@
     // cleanup) and renamed to the owner's display names. 19 lanes / 18 keys —
     // chat and dsflash share the DeepSeek Flash key.
     { lane: 'dj', name: 'NMTRN 3.5 LTNG', nick: 'VinaX NVD NMTRN 3.5 LTNG 30 B', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
-    { lane: 'chat', name: 'BALANCED', nick: 'VinaX Balanced (Flash key)', model: 'openai/gpt-oss-120b' },
+    { lane: 'chat', name: 'BALANCED', nick: 'VinaX Balanced (LTNG key)', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
     { lane: 'fast', name: 'CGT 20B', nick: 'VinaX CGT 20B', model: 'nvidia/nemotron-3-nano-30b-a3b' },
     { lane: 'deep', name: 'NMTRN SUP', nick: 'VinaX NVD NMTRN SUP', model: 'nvidia/nemotron-3-super-120b-a12b' },
     { lane: 'scholar', name: 'GRQ ALL', nick: 'VinaX GRQ ALL', model: 'llama-3.3-70b-versatile' },
