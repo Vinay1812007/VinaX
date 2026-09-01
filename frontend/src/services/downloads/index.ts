@@ -1,32 +1,34 @@
 import { Capacitor } from '@capacitor/core';
-import type { Directory, FilesystemPlugin } from '@capacitor/filesystem';
+import type { FilesystemPlugin } from '@capacitor/filesystem';
 import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
-import { useDownloadsStore } from '@/store/downloadsStore';
+import { useDownloadsStore, type DownloadDir } from '@/store/downloadsStore';
 import { reportError } from '@/services/analytics/telemetry';
 
 /**
  * Offline downloads (Android app only). Audio is fetched with native HTTP (no
- * CORS) and saved to the app's data directory.
+ * CORS) and saved into the app's own folder on device storage, so saved songs
+ * play from local files exactly like any offline-first player.
  *
- * v5.6.0 — downloads now play from blob: URLs materialized straight out of
- * the Cache API: the bytes never touch the network stack, the service worker
- * or the WebView's request-interception layer at play time — the three layers
- * whose quirks broke offline playback in the field. The /offline-audio/ SW
+ * v5.7.3 — offline sources are now available the INSTANT the app opens. The
+ * boot rebuild used to fill the playable-URL map asynchronously (base64 file
+ * reads, cache writes — seconds of work), so an offline launch that tapped a
+ * downloaded song in its first moments found an EMPTY map, fell through to
+ * streaming URLs, and died with "music servers unreachable" — the exact
+ * failure reported from the field. Two changes kill that race for good:
+ *   1. getOfflineSources() derives the service-worker route (a pure function
+ *      of the id) and the file-bridge URL (from the uri persisted at save
+ *      time) synchronously — no boot work needed for a saved song to play.
+ *   2. New downloads store into the app's folder on device storage
+ *      (Android/data/<app>/files), with the internal data directory as the
+ *      fallback; every file operation honors the directory each item was
+ *      saved under, so old downloads keep playing untouched.
+ *
+ * v5.6.0 — downloads play best from blob: URLs materialized out of the Cache
+ * API: the bytes never touch the network stack, the service worker or the
+ * WebView's request-interception layer at play time. The /offline-audio/ SW
  * route and the file-bridge URL remain as ordered fallbacks, and every saved
  * song exposes ALL of its offline sources to the audio engine.
- *
- * v5.5.1 — the playback path moved OFF the Android file bridge. The old flow
- * played downloads through Capacitor.convertFileSrc(...) URLs, which the
- * WebView serves via shouldInterceptRequest — but a page controlled by a
- * service worker can route media fetches around that hook entirely (a
- * documented WebView limitation), so downloaded songs LOOKED saved and never
- * played. Now every download is ALSO stored in the Cache API under a
- * same-origin /offline-audio/<id> URL that the service worker serves itself,
- * with real Range support for seeking — fully offline, no bridge, no
- * interception quirk. The file on disk stays as the durable copy: the cache
- * is rebuilt from it on boot whenever the WebView evicted it, and the
- * convertFileSrc URL remains the last-resort fallback mapping.
  */
 const urlMap = new Map<string, string>();
 
@@ -36,6 +38,14 @@ const bridgeMap = new Map<string, string>();
 /** Same-origin cache bucket the service worker serves audio from (sw.js). */
 const AUDIO_CACHE = 'vinax-audio-v1';
 
+type FsDirectory = import('@capacitor/filesystem').Directory;
+type FsDirectoryEnum = typeof import('@capacitor/filesystem').Directory;
+
+/** Resolve a persisted directory tag to the runtime enum (legacy → Data). */
+function dirOf(D: FsDirectoryEnum, tag?: DownloadDir): FsDirectory {
+  return tag === 'EXTERNAL' ? D.External : D.Data;
+}
+
 export function getOfflineUrl(id: string): string | null {
   return urlMap.get(id) ?? null;
 }
@@ -44,12 +54,27 @@ export function getOfflineUrl(id: string): string | null {
  * Every offline source for a song, best first: the blob: URL (no network
  * stack at all), the /offline-audio/ service-worker route, then the file
  * bridge. The audio engine tries them in order before any streaming URL.
+ *
+ * v5.7.3 — for a saved song the SW route and the bridge are derived HERE,
+ * synchronously, instead of waiting on the async boot rebuild: a download
+ * always has playable offline sources from the app's very first frame.
  */
 export function getOfflineSources(id: string): string[] {
   const out: string[] = [];
   const main = urlMap.get(id);
   if (main) out.push(main);
-  if (main?.startsWith('blob:')) out.push(audioUrlFor(id));
+  const item = isNativePlatform() ? useDownloadsStore.getState().items[id] : undefined;
+  if (item) {
+    const sw = audioUrlFor(id);
+    if (!out.includes(sw)) out.push(sw);
+    let bridge = bridgeMap.get(id) ?? null;
+    if (!bridge && item.uri) {
+      bridge = Capacitor.convertFileSrc(item.uri);
+      bridgeMap.set(id, bridge);
+    }
+    if (bridge && !out.includes(bridge)) out.push(bridge);
+    return out;
+  }
   const bridge = bridgeMap.get(id);
   if (bridge && !out.includes(bridge)) out.push(bridge);
   return out;
@@ -143,7 +168,7 @@ async function cacheAudioFromDisk(
   id: string,
   path: string,
   fs: FilesystemPlugin,
-  directory: Directory,
+  directory: FsDirectory,
 ): Promise<boolean> {
   try {
     if (typeof caches === 'undefined') return false;
@@ -191,35 +216,53 @@ async function hasCachedAudio(id: string): Promise<boolean> {
   }
 }
 
-/** Rebuild the playable-URL map from persisted downloads (native only). */
+/**
+ * Rebuild the playable-URL map from persisted downloads (native only).
+ * Phased so a saved song is playable before ANY heavy work happens:
+ *   1. instant — file-bridge URLs from the uri persisted at save time;
+ *   2. light — resolve + persist URIs for legacy items (no file reads);
+ *   3. heavy — ensure Cache API entries and upgrade to blob: URLs.
+ */
 export async function initDownloads(): Promise<void> {
   if (!isNativePlatform()) return;
   const items = useDownloadsStore.getState().items;
   const ids = Object.keys(items);
   if (!ids.length) return;
+  // Phase 1 — synchronous: every item that saved its uri gets a playable
+  // bridge URL with zero filesystem work.
+  for (const id of ids) {
+    const uri = items[id].uri;
+    if (uri && !bridgeMap.has(id)) bridgeMap.set(id, Capacitor.convertFileSrc(uri));
+  }
   try {
     const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    // Phase 2 — light: legacy items (saved before uris were persisted) get
+    // theirs resolved and written back, so the NEXT boot skips this pass.
     for (const id of ids) {
-      const path = items[id].path;
-      if (!path) continue;
+      const it = items[id];
+      if (!it.path || it.uri) continue;
       try {
-        // Always record the file-bridge URL as the last-resort source.
-        try {
-          const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
-          bridgeMap.set(id, Capacitor.convertFileSrc(uri));
-        } catch {
-          /* bridge unavailable */
-        }
-        // Preferred: a blob: URL straight from the audio cache — rebuild the
-        // cache entry from disk if the WebView evicted it.
-        if ((await hasCachedAudio(id)) || (await cacheAudioFromDisk(id, path, Filesystem, Directory.Data))) {
+        const { uri } = await Filesystem.getUri({ path: it.path, directory: dirOf(Directory, it.dir) });
+        bridgeMap.set(id, Capacitor.convertFileSrc(uri));
+        useDownloadsStore.getState().setUri(id, uri);
+      } catch {
+        /* file gone — derived sources will fall through to streaming */
+      }
+    }
+    // Phase 3 — heavy: cache entries + blob upgrades, one song at a time.
+    for (const id of ids) {
+      const it = items[id];
+      if (!it.path) continue;
+      const directory = dirOf(Directory, it.dir);
+      try {
+        if ((await hasCachedAudio(id)) || (await cacheAudioFromDisk(id, it.path, Filesystem, directory))) {
           urlMap.set(id, (await blobUrlFromCache(id)) ?? audioUrlFor(id));
           continue;
         }
         const bridge = bridgeMap.get(id);
         if (bridge) urlMap.set(id, bridge);
       } catch {
-        /* file gone — leave unmapped so it streams */
+        /* leave unmapped — getOfflineSources still derives SW + bridge */
       }
     }
   } catch {
@@ -240,51 +283,63 @@ export async function downloadSong(song: Song): Promise<boolean> {
   try {
     const { Filesystem, Directory } = await import('@capacitor/filesystem');
     const path = `vinax-downloads/${safeId(song.id)}.${extOf(url)}`;
-    try {
-      // Preferred: stream straight to disk — no base64 through the JS bridge,
-      // so big 320kbps files cannot blow the bridge or memory.
-      await Filesystem.downloadFile({ url, path, directory: Directory.Data, recursive: true });
-    } catch {
-      // Fallback for older plugin versions: bridge transfer.
-      const { CapacitorHttp } = await import('@capacitor/core');
-      const res = await CapacitorHttp.get({ url, responseType: 'blob' });
-      // The < 1000 heuristic wrongly rejected legitimately tiny audio (jingles,
-      // interstitials). res.status alone is the reliable signal — a 200 with
-      // valid base64 data is a successful download regardless of length.
-      if (res.status !== 200 || typeof res.data !== 'string') {
-        throw new Error(`http ${res.status}`);
+    const saveTo = async (directory: FsDirectory): Promise<void> => {
+      try {
+        // Preferred: stream straight to disk — no base64 through the JS
+        // bridge, so big 320kbps files cannot blow the bridge or memory.
+        await Filesystem.downloadFile({ url, path, directory, recursive: true });
+      } catch {
+        // Fallback for older plugin versions: bridge transfer.
+        const { CapacitorHttp } = await import('@capacitor/core');
+        const res = await CapacitorHttp.get({ url, responseType: 'blob' });
+        if (res.status !== 200 || typeof res.data !== 'string') {
+          throw new Error(`http ${res.status}`);
+        }
+        await Filesystem.writeFile({ path, data: res.data, directory, recursive: true });
       }
-      await Filesystem.writeFile({ path, data: res.data, directory: Directory.Data, recursive: true });
+    };
+    // v5.7.3 — save into the app's own folder on device storage
+    // (Android/data/<app>/files/vinax-downloads) so downloads live with the
+    // app like any offline-first player; devices without usable external
+    // storage fall back to the internal data directory.
+    let dirTag: DownloadDir = 'EXTERNAL';
+    try {
+      await saveTo(dirOf(Directory, 'EXTERNAL'));
+    } catch {
+      dirTag = 'DATA';
+      await saveTo(dirOf(Directory, 'DATA'));
     }
+    const directory = dirOf(Directory, dirTag);
     // Validate the bytes on disk: the downloader streams whatever the server
     // sent, so a 200-shaped error page would otherwise be saved as a "song"
     // and fail silently at play time.
     try {
-      const st = await Filesystem.stat({ path, directory: Directory.Data });
+      const st = await Filesystem.stat({ path, directory });
       if (typeof st.size === 'number' && st.size < MIN_VALID_BYTES) {
-        await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => undefined);
+        await Filesystem.deleteFile({ path, directory }).catch(() => undefined);
         throw new Error(`invalid download (${st.size} bytes)`);
       }
     } catch (e) {
       if (e instanceof Error && e.message.startsWith('invalid download')) throw e;
       /* stat unsupported — keep the file, playback fallback still covers us */
     }
-    // v5.5.1: put the audio into the same-origin cache the service worker
-    // serves — the URL that actually plays offline. The file-bridge URL is
-    // only the fallback mapping when the cache write fails.
+    // Resolve the absolute uri ONCE and persist it with the item — this is
+    // what makes the file-bridge source available instantly on future boots.
+    let uri: string | undefined;
     try {
-      const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
-      bridgeMap.set(song.id, Capacitor.convertFileSrc(uri));
+      const r = await Filesystem.getUri({ path, directory });
+      uri = r.uri;
+      bridgeMap.set(song.id, Capacitor.convertFileSrc(r.uri));
     } catch {
       /* bridge unavailable */
     }
-    if (await cacheAudioFromDisk(song.id, path, Filesystem, Directory.Data)) {
+    if (await cacheAudioFromDisk(song.id, path, Filesystem, directory)) {
       urlMap.set(song.id, (await blobUrlFromCache(song.id)) ?? audioUrlFor(song.id));
     } else {
       const bridge = bridgeMap.get(song.id);
       if (bridge) urlMap.set(song.id, bridge);
     }
-    useDownloadsStore.getState().add(song, path);
+    useDownloadsStore.getState().add(song, path, uri, dirTag);
     return true;
   } catch (e) {
     // Surface the real device error in Technical Monitoring instead of dying silently.
@@ -336,7 +391,7 @@ export async function removeDownload(id: string): Promise<void> {
   if (isNativePlatform() && item?.path) {
     try {
       const { Filesystem, Directory } = await import('@capacitor/filesystem');
-      await Filesystem.deleteFile({ path: item.path, directory: Directory.Data });
+      await Filesystem.deleteFile({ path: item.path, directory: dirOf(Directory, item.dir) });
     } catch {
       /* already gone */
     }
