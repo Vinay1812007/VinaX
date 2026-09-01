@@ -201,10 +201,10 @@ export function reasoningOffParams(model: string): Record<string, unknown> {
  *   nemotron-voicechat, laguna-xs and riva-v1_1 404 on the NIM catalog. */
 export const LANE_MODEL: Record<Lane, string> = {
   dj: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-  // v5.6.3 — gpt-oss-20b probed DEAD on NVIDIA (hangs; two keys, same result,
-  // 2026-09-01). The balanced seat moves to the served 120B; the Flash key
-  // still signs it (NVIDIA keys are account-scoped).
-  chat: 'openai/gpt-oss-120b',
+  // v5.6.4 — the FLASH key itself is dead (both its rows hang while the same
+  // models serve on other keys). The balanced seat moves to the proven
+  // lightning pair until the owner recreates the Flash key.
+  chat: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   deep: 'nvidia/nemotron-3-super-120b-a12b',
   fast: 'nvidia/nemotron-3-nano-30b-a3b', // fastest live engine (556ms probe)
   scholar: 'llama-3.3-70b-versatile',
@@ -252,7 +252,7 @@ export const LANE_SECONDARY: Partial<Record<Lane, string>> = {
 /** Env var that holds each lane's key — exported for the admin AI Lab bench. */
 export const LANE_ENV: Record<Lane, keyof AiEnv> = {
   dj: 'VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B',
-  chat: 'VINAX_DEEPSEEK_V4_FLASH',
+  chat: 'VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B', // v5.6.4: Flash key dead — see LANE_MODEL note
   deep: 'VINAX_NEMOTRON_SUPER',
   fast: 'VINAX_CHATGPT_20_B',
   scholar: 'VINAX_GROQ_API_KEY',
