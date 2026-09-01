@@ -21,6 +21,11 @@ export const DEFAULT_API_BASES: ApiBase[] = isNativePlatform()
       // Capacitor does not have the Cloudflare Pages function on its local
       // WebView origin, so native playback/search uses the deployed catalog.
       { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
+      // v5.6.5 — the owner's own hosted Saavn wrapper (Render). A free-tier
+      // dyno cold-starts in ~50s and its /suggestions endpoint is buggy, so it
+      // is a FALLBACK, never the primary; the health registry benches it when
+      // it misbehaves, exactly like any other base.
+      { id: 'vinax-render', url: 'https://vinax-saavan-api.onrender.com/api', label: 'VinaX Saavn API' },
     ]
   : [
       // Browser/web builds always use our same-origin catalog. In local Vite
@@ -32,6 +37,8 @@ export const DEFAULT_API_BASES: ApiBase[] = isNativePlatform()
       // function is temporarily unavailable. Community mirrors are deliberately
       // not included because they have recently returned 429/402 outages.
       { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
+      // v5.6.5 — see the native list: the owner's Render wrapper, fallback only.
+      { id: 'vinax-render', url: 'https://vinax-saavan-api.onrender.com/api', label: 'VinaX Saavn API' },
     ];
 
 function basesFromEnv(): ApiBase[] | null {
