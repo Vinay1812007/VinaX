@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.2': {
+    title: 'Lyrics you can trust again',
+    changes: [
+      {
+        type: 'fixed',
+        text: "Lyrics matching got strict: a lookup can no longer bring back a different song's words \u2014 titles must truly match before lyrics are shown, so a Telugu track can't display an unrelated English song again.",
+      },
+      {
+        type: 'fixed',
+        text: 'Lyrics load faster and more reliably: when a music source does not carry lyrics, VinaX skips straight to one that does instead of wrongly marking the main source unhealthy.',
+      },
+    ],
+  },
   '5.7.1': {
     title: 'The queue feels the vibe now',
     changes: [
