@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.0': {
+    title: 'VinaX V5.7 — the production cut',
+    changes: [
+      {
+        type: 'new',
+        text: 'The big V5.7 release rolls up everything recent: downloads that truly play offline, a Downloads tab in the app bar, a Home that never repeats itself, tappable song credits, Apple-smooth lyrics, eighteen selectable AI engines with live formatting, and the new VinaX Saavn API leading the music sources.',
+      },
+      {
+        type: 'improved',
+        text: 'Under the hood: every engine seat rides a live, probe-verified model with honest failover, and the whole pipeline — tests, security headers, release hygiene — is green end to end.',
+      },
+    ],
+  },
   '5.6.7': {
     title: 'VinaX Saavn API takes the lead',
     changes: [
