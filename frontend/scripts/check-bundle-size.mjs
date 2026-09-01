@@ -67,7 +67,13 @@ const DIST = 'dist';
 // the first-load shell (onboarding gates the very first paint for new
 // listeners), so none of it can be lazy. 163 leaves ~0.9 KB headroom;
 // regressions still fail the build.
-const FIRST_LOAD_BUDGET = 163 * 1024; // gzipped
+// 2026-09-01: re-based 163 -> 164 (+1 KB) for the v5.7.2 lyrics fix (owner
+// report: wrong/missing lyrics). Measured move: 163.0 -> 163.1 KB gz. The
+// orchestrator's 404-as-route-miss handling (ApiError.status + skip-dialect
+// logic) lives in the api client, which every first-paint fetch rides, so
+// none of it can be lazy. 164 leaves ~0.9 KB headroom; regressions still
+// fail the build.
+const FIRST_LOAD_BUDGET = 164 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 // Deliberately lazy diagram/math engines (loaded only when VinaX AI renders them).
