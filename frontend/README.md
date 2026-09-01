@@ -78,7 +78,9 @@ PRO** and **DLASH**, **VinaX CGT 20B/120B**, **VinaX GRQ ALL** (music
 knowledge in a blink), **VinaX MIMX M3**, **VinaX K3**, **VinaX DIF GEM**,
 **VinaX MUSE GMR 30B**, **VinaX GEM 4 31 B**, **VinaX LGNA XS 2.1**, the
 **VinaX ING CALBTN** pair and **VinaX TRANSLATE** — the engine nicknames
-are the only model names shown anywhere, admin dashboards included. Live web search, files and images,
+are the only model names shown anywhere, admin dashboards included, and
+feature seats ride only live, probe-verified engines — a dead upstream
+model is benched, never served. Live web search, files and images,
 Think/Research modes, and hands-free voice chat replying in a natural studio
 voice. Ask "play ⟨song⟩" and the reply is a live mini-player with lyrics.
 Behind the app the same lanes drive the AI DJ, AI playlists and the home
