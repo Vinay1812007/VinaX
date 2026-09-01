@@ -19,7 +19,7 @@ If an existing `VITE_API_BASES` environment variable is set, remove it while tes
 
 **[▶ Open VinaX](https://www.sirimillavinay.online/)** · **[📱 Android APK](https://www.sirimillavinay.online/download)** · **[🤖 VinaX AI](https://www.sirimillavinay.online/VinaXAI)**
 
-**Release line: VinaX V5.6**
+**Release line: VinaX V5.7**
 
 ![release](https://img.shields.io/badge/release-VinaX%20V1-22d3ee)
 ![status](https://img.shields.io/badge/status-production-22c55e)
