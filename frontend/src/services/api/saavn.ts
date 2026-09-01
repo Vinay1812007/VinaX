@@ -232,6 +232,10 @@ export function getArtistTopSongs(id: string, page = 0): Promise<Song[]> {
 export function getLyrics(id: string): Promise<Lyrics> {
   return orchestratedRequest({
     paths: [`/songs/${enc(id)}/lyrics`, `/lyrics?id=${enc(id)}`],
+    // v5.7.2 — lyrics race an 8s UI deadline in useSyncedLyrics. A cold or
+    // hung primary must not eat the whole budget before the ladder reaches a
+    // base that actually serves the lyrics route: time out fast per attempt.
+    timeoutMs: 3500,
     validate: (json) => normalizeLyrics(unwrap(json)),
   });
 }

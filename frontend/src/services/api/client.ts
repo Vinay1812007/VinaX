@@ -10,6 +10,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public readonly attempts: number = 0,
+    /** HTTP status when the failure was a non-OK response; null otherwise. */
+    public readonly status: number | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -107,7 +109,7 @@ async function fetchJsonNetwork(url: string, timeoutMs: number, external?: Abort
       signal: controller.signal,
       headers: { Accept: 'application/json' },
     });
-    if (!res.ok) throw new ApiError(`HTTP ${res.status} for ${url}`);
+    if (!res.ok) throw new ApiError(`HTTP ${res.status} for ${url}`, 0, res.status);
     return (await res.json()) as unknown;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
@@ -169,6 +171,16 @@ export async function orchestratedRequest<T>(req: OrchestratedRequest<T>): Promi
           // A caller cancel is not the endpoint's fault: no health penalty,
           // and no point walking the rest of the ladder.
           if (isCancelled(req.signal)) throw new ApiError('cancelled', attempts);
+          // v5.7.2 — HTTP 404 means THIS ROUTE doesn't exist on this base,
+          // not that the base is down. Treat it like a shape miss: try the
+          // base's next path dialect (then the next base) with no health
+          // penalty. Before this, a missing route (the primary catalog has
+          // no lyrics endpoints) burned a health strike per lyrics fetch and
+          // could bench the healthy main music API for everything.
+          if (err instanceof ApiError && err.status === 404) {
+            devLog('route miss (404)', base.label, path);
+            continue;
+          }
           healthRegistry.recordFailure(base.id);
           devLog('request failed', base.label, path, err);
           break; // dead/erroring base: skip its remaining path dialects
