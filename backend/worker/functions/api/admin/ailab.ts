@@ -62,7 +62,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
 
-  let body: { lane?: unknown; messages?: InMsg[]; maxTokens?: unknown };
+  let body: { lane?: unknown; messages?: InMsg[]; maxTokens?: unknown; model?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -87,7 +87,12 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const mtRaw = typeof body.maxTokens === 'number' && Number.isFinite(body.maxTokens) ? Math.floor(body.maxTokens) : 700;
   const maxTokens = Math.min(Math.max(1, mtRaw), MAX_TOKENS_CAP);
 
-  const model = LANE_MODEL[lane];
+  // v5.6.3 — optional model override: the Lab can probe ANY candidate slug on
+  // a lane's own key, so a replacement model is VERIFIED SERVING before it is
+  // ever pinned (the registry's core honesty rule).
+  const overrideModel =
+    typeof body.model === 'string' && /^[\w./:-]{1,128}$/.test(body.model) ? body.model : null;
+  const model = overrideModel ?? LANE_MODEL[lane];
   const key = env[LANE_ENV[lane]];
   if (!key) return json({ error: 'not_configured', status: 0, head: `${LANE_ENV[lane]} is not set`, lane, model });
 
