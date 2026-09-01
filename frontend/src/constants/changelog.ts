@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.6.6': {
+    title: 'The new music source, on the dashboard',
+    changes: [
+      {
+        type: 'improved',
+        text: 'The owner dashboard now health-checks the new VinaX music mirror alongside every other song source, so its status is always one tap away.',
+      },
+    ],
+  },
   '5.6.5': {
     title: 'A third music source in reserve',
     changes: [
