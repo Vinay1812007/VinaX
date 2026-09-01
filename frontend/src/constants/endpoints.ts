@@ -18,27 +18,25 @@ export interface ApiBase {
  */
 export const DEFAULT_API_BASES: ApiBase[] = isNativePlatform()
   ? [
-      // Capacitor does not have the Cloudflare Pages function on its local
-      // WebView origin, so native playback/search uses the deployed catalog.
-      { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
-      // v5.6.5 — the owner's own hosted Saavn wrapper (Render). A free-tier
-      // dyno cold-starts in ~50s and its /suggestions endpoint is buggy, so it
-      // is a FALLBACK, never the primary; the health registry benches it when
-      // it misbehaves, exactly like any other base.
+      // v5.6.7 — OWNER DECISION (2026-09-01): the owner-hosted VinaX Saavn API
+      // is the MAIN catalog source. Known caveats, accepted by the owner: a
+      // free-tier Render dyno cold-starts (~50s) — the 8s request timeout
+      // fails such a call over to the first-party catalog and the health
+      // registry benches the base for a minute — and its /suggestions
+      // endpoint is buggy, which the same fallback absorbs per call.
       { id: 'vinax-render', url: 'https://vinax-saavan-api.onrender.com/api', label: 'VinaX Saavn API' },
+      { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
     ]
   : [
-      // Browser/web builds always use our same-origin catalog. In local Vite
-      // development, vite.config.ts mounts /api/cat and runs the exact same
-      // Cloudflare catalog handler against JioSaavn. In production, Cloudflare
-      // Pages serves functions/api/cat/[[path]].ts at this same path.
-      { id: 'local-catalog', url: '/api/cat', label: 'VinaX Catalog' },
-      // Remote first-party fallback for cases where the deployed same-origin
-      // function is temporarily unavailable. Community mirrors are deliberately
-      // not included because they have recently returned 429/402 outages.
-      { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
-      // v5.6.5 — see the native list: the owner's Render wrapper, fallback only.
+      // v5.6.7 — the owner's Render wrapper leads on web too (owner decision).
       { id: 'vinax-render', url: 'https://vinax-saavan-api.onrender.com/api', label: 'VinaX Saavn API' },
+      // Same-origin first-party catalog: the fast, free fallback. In local
+      // Vite development, vite.config.ts mounts /api/cat with the exact same
+      // Cloudflare catalog handler; in production Cloudflare Pages serves
+      // functions/api/cat/[[path]].ts at this path.
+      { id: 'local-catalog', url: '/api/cat', label: 'VinaX Catalog' },
+      // Remote first-party fallback when the same-origin function is down.
+      { id: 'sirimilla', url: 'https://www.sirimillavinay.online/api/cat', label: 'sirimillavinay.online' },
     ];
 
 function basesFromEnv(): ApiBase[] | null {

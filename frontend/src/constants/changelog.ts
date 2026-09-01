@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.6.7': {
+    title: 'VinaX Saavn API takes the lead',
+    changes: [
+      {
+        type: 'improved',
+        text: 'The VinaX Saavn API is now the main music source for search and playback, with the first-party catalog standing right behind it — if it ever sleeps or stumbles, songs keep flowing without a beat missed.',
+      },
+    ],
+  },
   '5.6.6': {
     title: 'The new music source, on the dashboard',
     changes: [
