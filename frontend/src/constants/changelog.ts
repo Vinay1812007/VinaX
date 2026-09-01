@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.1': {
+    title: 'The queue feels the vibe now',
+    changes: [
+      {
+        type: 'improved',
+        text: 'The AI DJ and next-song picks now read the vibe of what you are playing — a sad song pulls soulful company, a mass number pulls beats — and a pinned mood steers everything even harder.',
+      },
+      {
+        type: 'new',
+        text: 'Fresh trends get real weight: this year\'s releases and the songs everyone is playing right now rise in every queue, and late nights drift naturally toward calmer picks.',
+      },
+    ],
+  },
   '5.7.0': {
     title: 'VinaX V5.7 — the production cut',
     changes: [
