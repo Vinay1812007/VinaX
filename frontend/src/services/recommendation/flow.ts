@@ -18,6 +18,7 @@
  *   crypto jitter per round so identical inputs still rank differently.
  */
 import type { Song } from '@/types';
+import { inferMood, moodMatchScore, type Mood } from './mood';
 
 /** One shared cross-surface served-memory (DJ + next-song + Home). */
 const SERVED_KEY = 'vinax.flow.served.v1';
@@ -191,6 +192,22 @@ export interface FlowAffinity {
   favArtists?: string[];
   /** normalized-artist -> how many recent served entries (fatigue). */
   artistFatigue?: Map<string, number>;
+  /** Flow v3 (v5.7.1) — the vibe layer. The target mood is the pinned mood
+   * when the listener set one, else the seed's inferred mood; candidates that
+   * match it rise, clashing vibes sink. hourMood is a soft time-of-day pull
+   * (late night → chill) applied only when nothing stronger is present. */
+  seedMood?: Mood | null;
+  pinnedMood?: Mood | null;
+  hourMood?: Mood | null;
+}
+
+/** Soft time-of-day vibe: late night leans chill, weekend evening leans up. */
+export function hourMoodNow(now = new Date()): Mood | null {
+  const h = now.getHours();
+  const d = now.getDay();
+  if (h >= 22 || h < 5) return 'chill';
+  if (h >= 18 && h <= 21 && (d === 5 || d === 6 || d === 0)) return 'energetic';
+  return null;
 }
 
 function normName(x: string): string {
@@ -214,6 +231,13 @@ export function scoreAndSequence(buckets: FlowBuckets, limit: number, affinity?:
   const seedArtists = new Set((affinity?.seedArtists ?? []).map(normName));
   const favArtists = new Set((affinity?.favArtists ?? []).map(normName));
   const seedYear = affinity?.seedYear ?? null;
+  // Flow v3 — the vibe target: an explicit pin beats the seed's inferred
+  // mood; a neutral seed leaves only the soft hour pull.
+  const pinned = affinity?.pinnedMood ?? null;
+  const seedMood = affinity?.seedMood && affinity.seedMood !== 'neutral' ? affinity.seedMood : null;
+  const targetMood: Mood | null = pinned ?? seedMood;
+  const hourMood = affinity?.hourMood ?? null;
+  const thisYear = new Date().getFullYear();
   const pool: Scored[] = [];
   const seen = new Set<string>();
   for (const [name, base] of BASE) {
@@ -223,6 +247,28 @@ export function scoreAndSequence(buckets: FlowBuckets, limit: number, affinity?:
       seen.add(key);
       // Flow v2 affinity bonus.
       let bonus = 0;
+      // Flow v3 — vibe match: same mood +12, neutral 0, clash −6. The pin
+      // weighs double the inferred seed mood; the hour vibe is a half-weight
+      // nudge that only acts when no stronger target exists.
+      const m = inferMood(song);
+      if (targetMood) {
+        const w = pinned ? 24 : 18;
+        bonus += (moodMatchScore(targetMood, m) - 0.4) * w;
+      } else if (hourMood) {
+        bonus += (moodMatchScore(hourMood, m) - 0.4) * 8;
+      }
+      // Flow v3 — the trend bucket rewards what is genuinely NEW and HOT:
+      // this year's releases and big play counts rise; last year still helps.
+      if (name === 'fresh') {
+        const y = song.year != null ? Number(song.year) : NaN;
+        if (Number.isFinite(y)) {
+          if (y >= thisYear) bonus += 6;
+          else if (y === thisYear - 1) bonus += 3;
+        }
+        if (typeof song.playCount === 'number' && song.playCount > 0) {
+          bonus += Math.min(4, Math.log10(song.playCount + 1));
+        }
+      }
       const names = song.artists.map((a) => normName(a.name));
       if (seedAlbum && song.album?.name && song.album.name.toLowerCase() === seedAlbum) bonus += 10;
       if (seedArtists.size && names.some((n) => n && seedArtists.has(n))) bonus += 7;
