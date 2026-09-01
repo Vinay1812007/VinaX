@@ -100,8 +100,9 @@
           try { st = (raw && JSON.parse(raw).state) || {}; } catch (e) { /* corrupt */ }
           var lang = (st.pinnedLanguages && st.pinnedLanguages[0]) || 'hindi';
           var q = 'top ' + lang + ' songs ' + new Date().getFullYear();
-          var catalogOrigin = /^https?:$/.test(location.protocol) ? location.origin : 'https://www.sirimillavinay.online';
-          var url = catalogOrigin + '/api/cat/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
+          // v5.6.7 — the prefetch must hit the FIRST ranked base so the
+          // orchestrator consumes it by exact URL match: the VinaX Saavn API.
+          var url = 'https://vinax-saavan-api.onrender.com/api/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
           window.__vxBoot = {
             url: url,
             json: fetch(url, { headers: { Accept: 'application/json' } })
