@@ -253,7 +253,10 @@ export const LANE_ENV: Record<Lane, keyof AiEnv> = {
   fast: 'VINAX_CHATGPT_20_B',
   scholar: 'VINAX_GROQ_API_KEY',
   home: 'VINAX_NEMOTRON_ULTRA',
-  search: 'VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B',
+  // v5.6.3 — keys realigned to the owner's sheet: nano-30b-a3b rides
+  // VINAX_NEMOTRON_3_NANO_30B_A3B; the omni-reasoning model rides
+  // VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B.
+  search: 'VINAX_NEMOTRON_3_NANO_30B_A3B',
   pro: 'VINAX_DEEPSEEK_V4_PRO',
   mini: 'VINAX_MINIMAX_M3',
   agent: 'VINAX_KIMI_K3',
@@ -263,7 +266,7 @@ export const LANE_ENV: Record<Lane, keyof AiEnv> = {
   rank2: 'VINAX_ISING_CALIBRATION_1_35B_A3B',
   laguna: 'VINAX_LAGUNA_XS_2_1',
   diffusion: 'VINAX_DIFFUSIONGEMMA_26B_A4B_IT',
-  omni: 'VINAX_NEMOTRON_3_NANO_30B_A3B',
+  omni: 'VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B',
   gemma4: 'VINAX_GEMMA_4_31B_IT',
   oss120: 'VINAX_CHATGPT_120_B',
 };

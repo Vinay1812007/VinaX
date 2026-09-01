@@ -172,7 +172,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     notes: 'Measured slow/flaky at big JSON under deadline (v3.5.1) — keep it LAST in latency-sensitive ladders, never first.',
   },
   'nemotron-3-nano-omni-30b-a3b-reasoning': {
-    id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', envKey: 'VINAX_NEMOTRON_3_NANO_30B_A3B', display_name: 'VinaX NVD NMTRN NN30B A3B', provider: 'nvidia',
+    id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', envKey: 'VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B', display_name: 'VinaX NVD NMTRN', provider: 'nvidia',
     role: 'Multimodal reasoning — voice/visual command context, richer interaction',
     capabilities: ['multimodal', 'reasoning'], latency_class: 'fast', quality_class: 'medium',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
@@ -199,7 +199,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     notes: 'Probed 2026-08-29: 200 in 0.55s on its own key. Deep (Think) lane primary since v5.4.0; the old 49b pin is the same-key secondary.',
   },
   'nemotron-3-nano-30b-a3b': {
-    id: 'nvidia/nemotron-3-nano-30b-a3b', envKey: 'VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B', display_name: 'VinaX NVD NMTRN', provider: 'nvidia',
+    id: 'nvidia/nemotron-3-nano-30b-a3b', envKey: 'VINAX_NEMOTRON_3_NANO_30B_A3B', display_name: 'VinaX NVD NMTRN NN30B A3B', provider: 'nvidia',
     role: 'Fast background AI — intent detection, classification, quick recommendations',
     capabilities: ['classification', 'generation', 'ranking'], latency_class: 'realtime', quality_class: 'medium',
     cost_class: 'low', output_format: 'json', chat_capable: true,
