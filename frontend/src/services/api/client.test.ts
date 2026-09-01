@@ -4,6 +4,7 @@
  * trending request on window.__vxBoot; the orchestrator consumes it by exact
  * URL match, exactly once, and falls back to the network on any miss or a
  * null payload (upstream failure). See index.html + takeBootPrefetch().
+ * v5.6.7: URLs track the FIRST ranked base — now the VinaX Saavn API.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { orchestratedRequest } from './client';
@@ -23,7 +24,7 @@ describe('boot prefetch consumption', () => {
     const fetchSpy = vi.fn(() => Promise.reject(new Error('network should not be hit')));
     vi.stubGlobal('fetch', fetchSpy);
     w.__vxBoot = {
-      url: 'https://www.sirimillavinay.online/api/cat/search/songs?query=top%20hindi%20songs%202099&limit=20',
+      url: 'https://vinax-saavan-api.onrender.com/api/search/songs?query=top%20hindi%20songs%202099&limit=20',
       json: Promise.resolve({ marker: 'prefetched' }),
     };
     const out = await orchestratedRequest<{ marker: string }>({
@@ -40,7 +41,7 @@ describe('boot prefetch consumption', () => {
       Promise.resolve(new Response(JSON.stringify({ marker: 'network' }), { headers: { 'content-type': 'application/json' } })),
     );
     vi.stubGlobal('fetch', fetchSpy);
-    w.__vxBoot = { url: 'https://www.sirimillavinay.online/api/cat/other', json: Promise.resolve({ marker: 'prefetched' }) };
+    w.__vxBoot = { url: 'https://vinax-saavan-api.onrender.com/api/other', json: Promise.resolve({ marker: 'prefetched' }) };
     const out = await orchestratedRequest<{ marker: string }>({
       paths: ['/search/songs?query=x&limit=20'],
       validate: (j) => (j && typeof (j as { marker?: string }).marker === 'string' ? (j as { marker: string }) : null),
@@ -55,7 +56,7 @@ describe('boot prefetch consumption', () => {
     );
     vi.stubGlobal('fetch', fetchSpy);
     w.__vxBoot = {
-      url: 'https://www.sirimillavinay.online/api/cat/search/songs?query=x&limit=20',
+      url: 'https://vinax-saavan-api.onrender.com/api/search/songs?query=x&limit=20',
       json: Promise.resolve(null),
     };
     const out = await orchestratedRequest<{ marker: string }>({
