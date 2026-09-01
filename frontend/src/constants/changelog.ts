@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.6.3': {
+    title: 'Healthier engines, honest lights',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Two core engines had quietly died upstream and were dragging the failover chain down with them — the balanced and fast seats now run on live, probe-verified engines, so every chat answers quickly again (voice replies included).',
+      },
+      {
+        type: 'improved',
+        text: 'The two Nemotron nano keys were re-matched to the models in the owner sheet, and the admin bench now shows the true pin for every lane.',
+      },
+    ],
+  },
   '5.6.2': {
     title: 'Engine picker polish',
     changes: [
