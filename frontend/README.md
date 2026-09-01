@@ -54,7 +54,8 @@ festival shelves, and an endless personalized feed. **Home builder:** every
 block can be hidden or reordered from Settings → Home layout. Shelves ride
 **VinaX Flow** — language-locked, duplicate-free (one identity per song, no
 matter how many catalog copies exist) and never echoing what the queue just
-played. Home redesigns itself on every open: a seeded shelf designer rotates
+played, vibe-matched to the playing song's mood and today's trends (v5.7.1).
+Home redesigns itself on every open: a seeded shelf designer rotates
 moods, time-of-day vibes, eras and your top artists, with the AI curating on
 top when reachable.
 
