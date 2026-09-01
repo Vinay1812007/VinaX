@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.6.4': {
+    title: 'Balanced seat back on a healthy engine',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'The Balanced engine was riding an API key that had gone dead — it now runs on the proven Lightning engine, answering in under a second again.',
+      },
+    ],
+  },
   '5.6.3': {
     title: 'Healthier engines, honest lights',
     changes: [
