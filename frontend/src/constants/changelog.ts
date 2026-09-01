@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.3': {
+    title: 'Downloads that play the moment the app opens',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Offline downloads on Android are fixed for real: saved songs are playable from the very first second the app opens \u2014 even with no internet \u2014 instead of falling back to streaming and failing.',
+      },
+      {
+        type: 'improved',
+        text: "Downloads now save into the app's own folder on your phone's storage and play straight from the local file, the way a proper offline player should.",
+      },
+    ],
+  },
   '5.7.2': {
     title: 'Lyrics you can trust again',
     changes: [
@@ -43,7 +56,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
     changes: [
       {
         type: 'new',
-        text: 'The big V5.7 release rolls up everything recent: downloads that truly play offline, a Downloads tab in the app bar, a Home that never repeats itself, tappable song credits, Apple-smooth lyrics, eighteen selectable AI engines with live formatting, and the new VinaX Saavn API leading the music sources.',
+        text: 'The big V5.7 release rolls up everything recent: downloads that truly play offline, a Downloads tab in the app bar, a Home that never repeats itself, tappable song credits, Apple-smooth lyrics, eighteen selectable AI engines with live formatting, and the new VinaX Music API leading the music sources.',
       },
       {
         type: 'improved',
@@ -52,11 +65,11 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
     ],
   },
   '5.6.7': {
-    title: 'VinaX Saavn API takes the lead',
+    title: 'VinaX Music API takes the lead',
     changes: [
       {
         type: 'improved',
-        text: 'The VinaX Saavn API is now the main music source for search and playback, with the first-party catalog standing right behind it — if it ever sleeps or stumbles, songs keep flowing without a beat missed.',
+        text: 'The VinaX Music API is now the main music source for search and playback, with the first-party catalog standing right behind it — if it ever sleeps or stumbles, songs keep flowing without a beat missed.',
       },
     ],
   },
