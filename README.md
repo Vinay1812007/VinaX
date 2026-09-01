@@ -194,7 +194,7 @@ Deployment is **not** done by GitHub Actions — Cloudflare's own git integratio
 ## 9. Admin & extras
 
 - **Admin console:** `https://admin.sirimillavinay.online` (SPA served from `frontend/public/admin`, API at `/api/admin/*`, gated by `ADMIN_LOGIN_PASSWORD`).
-- **Android app:** Capacitor wrapper of the same frontend; `update.sirimillavinay.online` redirects to the latest APK; push via FCM when `FCM_SERVICE_ACCOUNT` is set.
+- **Android app:** Capacitor wrapper of the same frontend; `update.sirimillavinay.online` redirects to the latest APK; push via FCM when `FCM_SERVICE_ACCOUNT` is set; downloads save into the app's own folder on device storage and play fully offline (v5.7.3).
 - **AI features:** nineteen model "lanes" (chat, quick answers, deep thinking, music Q&A, DJ/mixes, home-screen builder, search expert, and more) across the 18 owner-named engines, each pinned to its own provider + key in `backend/worker/functions/_lib/ai.ts`. Synced lyrics resolve LRCLIB-first with strict title matching (v5.7.2), falling back to catalog lyrics.
 - **Privacy posture:** no accounts, no login; telemetry device-ids are HMAC-peppered (`TELEMETRY_PEPPER`/`DEVICE_ID_SECRET`); device-to-device handoff uses one-time burn-on-read encrypted blobs in KV.
 
