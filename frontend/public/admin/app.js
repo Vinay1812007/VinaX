@@ -1678,6 +1678,7 @@
   // ---------- Music catalog source health (server-side, /api/admin/musicapi) ----------
   var MUSIC_APIS = [
     { id: 'vinax-cat', label: 'VinaX /api/cat' },
+    { id: 'vinax-render', label: 'VinaX Saavn API' },
     { id: 'saavn-sumit', label: 'sumit.co' },
     { id: 'saavn-dev', label: 'saavn.dev' },
     { id: 'nepotune', label: 'nepotune' },
