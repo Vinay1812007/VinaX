@@ -14,7 +14,8 @@ import {
 } from '@/services/recommendation/flow';
 import { isNativePlatform } from '@/services/native';
 import { getMoodPin } from '@/services/personalization/session';
-import type { FlowAffinity } from '@/services/recommendation/flow';
+import { hourMoodNow, type FlowAffinity } from '@/services/recommendation/flow';
+import { inferMood, type Mood } from '@/services/recommendation/mood';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { getSliders, sliderDialLines } from '@/services/personalization/dials';
 import { loadRecentHomeIds } from '@/features/home/homeVariety';
@@ -139,6 +140,7 @@ function buildContext(seed: Song | null, ctx: RecommendationContext): Record<str
     currentLanguage: seed?.language ?? null,
     tuneInstruction: ctx.tuneIntent ? tunePromptHint(ctx.tuneIntent) : undefined,
     pinnedMood: getMoodPin() ?? undefined,
+    seedVibe: seed ? inferMood(seed) : undefined,
     preferredLanguages: ctx.pinnedLanguages,
     avoidLanguages: ctx.mutedLanguages,
     ...session,
@@ -272,9 +274,20 @@ export async function aiSimilarSongs(
     altSeed = completed[b[0] % Math.min(completed.length, 10)].song;
   }
   const langWord = lockLang ?? '';
-  // Flow v2 — a pinned mood steers every harvest query for its 45 minutes.
+  // Flow v3 — the vibe layer: an explicit mood pin steers everything for its
+  // 45 minutes; with no pin, the SEED'S inferred vibe flavors the harvest, so
+  // a sad song pulls sad-side candidates and a mass number pulls beats.
   const moodPin = getMoodPin();
-  const moodWord = moodPin ?? '';
+  const seedMood: Mood = inferMood(seed);
+  const VIBE_WORD: Record<Mood, string> = {
+    romantic: 'romantic',
+    energetic: 'mass dance',
+    chill: 'melody chill',
+    melancholy: 'sad emotional',
+    devotional: 'devotional',
+    neutral: '',
+  };
+  const moodWord = moodPin ? VIBE_WORD[moodPin] : seedMood !== 'neutral' ? VIBE_WORD[seedMood] : '';
   const filmName = seed?.album?.name ?? '';
   const [seedPool, filmPool, secondPool, artistA, artistB, freshPool] = await Promise.all([
     getSongSuggestions(seedId, 80).catch(() => [] as Song[]),
@@ -286,7 +299,7 @@ export async function aiSimilarSongs(
     tasteArtist && tasteArtist !== seedArtist
       ? searchSongs(`${tasteArtist} ${langWord} ${moodWord} best songs`.replace(/\s+/g, ' ').trim(), 8).catch(() => [] as Song[])
       : Promise.resolve([] as Song[]),
-    lockLang ? searchSongs(`${moodWord ? moodWord + ' ' : 'latest '}${lockLang} songs`.trim(), 12).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
+    lockLang ? searchSongs(`${moodWord ? moodWord + ' ' : 'trending '}${lockLang} songs`.trim(), 12).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
   ]);
 
   // ---- Stage 2: hard rules, one dedup set across all buckets ----
@@ -315,6 +328,10 @@ export async function aiSimilarSongs(
     seedYear: seed?.year != null && Number.isFinite(Number(seed.year)) ? Number(seed.year) : null,
     favArtists: topArtists(ctx.profile, 8).map((a) => a.affinity.name),
     artistFatigue: fatigue,
+    // Flow v3 — the vibe layer (see flow.ts scoring).
+    seedMood,
+    pinnedMood: moodPin ?? null,
+    hourMood: hourMoodNow(),
   };
   const deterministic = scoreAndSequence(buckets, limit, affinity);
 
