@@ -97,20 +97,14 @@ const ENGINE_NICK: Array<[RegExp, string]> = [
   // legacy so any old meta from before the retire still labels cleanly.
   [/gpt-oss-120b/i, 'VinaX CGT 120B'],
   [/gpt-oss-20b/i, 'VinaX CGT 20B'],
-  [/nemotron-super|nemotron.super/i, 'VinaX SUPER'],
-  // ULTRA pins home; it also frequently COVERS the chat seat via the failover
-  // ladder while the chat key is down — same honest engine-named chip either way.
-  [/nemotron-3-ultra|nemotron.ultra/i, 'VinaX ULTRA'],
-  // Search-lane seat (NANO 3 chat + hidden expert): the secondary pin keeps the seat's name.
-  [/nemotron-3-nano|diffusiongemma|gemma/i, 'VinaX NANO 3'],
-  // Chat seat's engine (FLASH): the muse pin is openai/gpt-oss-20b since v3.7.0
-  // (gpt-oss-120b hung and was retired; inkling 404'd, qwen3.5 410-gone, deepseek
-  // retired before it). A live gpt-oss-20b reply is chipped "VinaX 20B" above; these
-  // rows only catch the retired slugs so legacy meta still reads right.
-  [/inkling/i, 'VinaX FLASH'],
-  [/qwen|deepseek/i, 'VinaX FLASH'],
-  [/llama-3\.3-70b|llama-3\.1-8b/i, 'VinaX INSTANT'],
-  [/vision|llama/i, 'VinaX VISION'],
+  // v5.6.2 — legacy catch-rows renamed to the owner nicknames too, so EVERY
+  // chip in the app speaks the same names (old stored slugs included).
+  [/nemotron-super|nemotron.super/i, 'VinaX NVD NMTRN SUP'],
+  [/nemotron-3-ultra|nemotron.ultra/i, 'VinaX NVD NMTRN ULT'],
+  [/nemotron-3-nano|diffusiongemma|gemma/i, 'VinaX NVD NMTRN'],
+  // Retired slugs from repo history (inkling/qwen/old deepseeks) — generic label.
+  [/inkling|qwen|deepseek/i, 'VinaX AI'],
+  [/llama-3\.3-70b|llama-3\.1-8b|vision|llama/i, 'VinaX GRQ ALL'],
 ];
 const nickForModel = (model: string): string => {
   for (const [re, nick] of ENGINE_NICK) if (re.test(model)) return nick;
@@ -1654,7 +1648,10 @@ export default function VinaXAIPage(): ReactNode {
                     <div
                       role="listbox"
                       aria-label="Choose engine"
-                      className="absolute bottom-full mb-2 left-0 z-50 w-64 max-h-[420px] overflow-y-auto overscroll-contain rounded-2xl bg-[color:var(--surface-modal)] backdrop-blur-xl border border-[color:var(--glass-border)] shadow-2xl py-1.5 animate-fade-up"
+                      className="absolute bottom-full mb-2 left-0 z-50 w-64 overflow-y-auto overscroll-contain rounded-2xl bg-[color:var(--surface-modal)] backdrop-blur-xl border border-[color:var(--glass-border)] shadow-2xl py-1.5 animate-fade-up"
+                      /* v5.6.2 — inline cap, immune to CSS purging: 18 engines
+                         must scroll inside the menu, never spill off-screen. */
+                      style={{ maxHeight: 'min(62vh, 460px)' }}
                     >
                       {MODES.map((mm) => (
                         <button
