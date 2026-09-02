@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.4': {
+    title: 'The app opens with no internet',
+    changes: [
+      {
+        type: 'fixed',
+        text: "Opening the app with no internet works again. The offline copy of the app was frozen at install time and went stale after updates until it could no longer start \u2014 the no-internet error many of you hit. It now refreshes itself every time you use the app online, so the next offline launch always has a complete, current copy.",
+      },
+      {
+        type: 'improved',
+        text: 'The offline copy is also more resilient while saving: one missing file can no longer block the whole offline shell from being stored.',
+      },
+    ],
+  },
   '5.7.3': {
     title: 'Downloads that play the moment the app opens',
     changes: [
