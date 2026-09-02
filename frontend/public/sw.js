@@ -18,7 +18,7 @@
  * and downloaded songs could not even reach the player. Now the whole app
  * works offline once it has been online for a few seconds after a deploy.
  */
-const CACHE = 'vinax-shell-v13';
+const CACHE = 'vinax-shell-v14';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg', '/fonts/manrope-var.woff2'];
 // Downloaded songs (written by services/downloads at download time). NEVER
 // cleared on activate — losing it silently un-downloads every saved song.
@@ -29,8 +29,30 @@ const AUDIO_CACHE = 'vinax-audio-v1';
  *  and the next PRECACHE message retries. Hashed URLs are immutable, so
  *  anything already cached is skipped; assets from older deploys that left
  *  the manifest are pruned to keep storage bounded. */
+/** v14 — refresh the app-shell entries from the network, best-effort per
+ *  file. The shell used to be written ONLY at SW install; precacheAll prunes
+ *  assets that leave the manifest, so after a few deploys the frozen
+ *  install-time HTML pointed at chunks the pruner had deleted — an offline
+ *  launch rendered that stale shell, its scripts could not load, and the app
+ *  showed a no-internet error. Refreshing the shell on every precache keeps
+ *  the offline HTML in lockstep with the assets being held for it. */
+async function cacheShell(c) {
+  await Promise.all(
+    SHELL.map(async (u) => {
+      try {
+        const r = await fetch(u, { cache: 'no-cache' });
+        if (r.ok) await c.put(u, r);
+      } catch (e) {
+        /* offline — keep whatever copy we already have */
+      }
+    }),
+  );
+}
+
 async function precacheAll() {
   try {
+    const c0 = await caches.open(CACHE);
+    await cacheShell(c0);
     const res = await fetch('/precache-manifest.json', { cache: 'no-cache' });
     if (!res.ok) return;
     const files = await res.json();
@@ -68,10 +90,13 @@ self.addEventListener('install', (event) => {
   // An immediate takeover can interrupt an in-flight navigation and swap the
   // controller mid-request. The page decides when it's safe to activate the
   // new worker by posting {type: 'SKIP_WAITING'} — see message handler below.
+  // v14 — individual best-effort puts instead of addAll(): addAll rejects
+  // wholesale when ANY member fails, which blocked the whole install (and
+  // with it every future offline launch) on one missing icon or font.
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((c) => c.addAll(SHELL))
+      .then((c) => cacheShell(c))
       .then(() => precacheAll()),
   );
 });
@@ -161,6 +186,19 @@ self.addEventListener('fetch', (event) => {
       fetch(req, { signal: ctrl.signal })
         .then((res) => {
           clearTimeout(timer);
+          // v14 — every successful navigation refreshes the cached shell, so
+          // the offline fallback is always the HTML of the CURRENT deploy
+          // (whose hashed assets the precacher is holding), never a frozen
+          // install-time copy pointing at pruned chunks.
+          try {
+            const ct = (res.headers.get('content-type') || '').toLowerCase();
+            if (res.ok && ct.indexOf('text/html') !== -1) {
+              const copy = res.clone();
+              caches.open(CACHE).then((c) => c.put('/', copy)).catch(() => undefined);
+            }
+          } catch (e) {
+            /* caching is best-effort — never break the navigation */
+          }
           return res;
         })
         .catch(() => {
