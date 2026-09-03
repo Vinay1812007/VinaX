@@ -6,14 +6,13 @@ import { FALLBACK_ART } from '@/utils/images';
 import { cn } from '@/utils/cn';
 
 /**
- * v5.7.11 — the video canvas, responsive the way the big players do it:
- *  - PHONE: the clip fills the WHOLE Now Playing screen as a crisp backdrop
- *    under the darkening gradients, with the still artwork in front — the
- *    immersive mobile-canvas look.
- *  - PC (md+): the clip plays inside the artwork square itself.
- * One state, one decoding <video> at a time (the hook knows the viewport and
- * only the matching surface mounts a player). Artwork is always the poster
- * and instant fallback; the ART/VIDEO toggle is remembered per device.
+ * v5.7.12 — the full-screen video canvas, on every screen size. The clip
+ * fills the WHOLE Now Playing view as a crisp backdrop under the darkening
+ * gradients — phone and desktop alike — and the artwork card steps aside so
+ * nothing covers the video (the artwork's space is kept so the layout never
+ * jumps). The ART/▶VIDEO toggle brings the still artwork back any time and
+ * remembers the choice per device. Exactly one <video> ever decodes: the
+ * backdrop is the only player.
  */
 const CANVAS_OFF_KEY = 'vinax_canvas_off';
 
@@ -32,7 +31,6 @@ export interface SongCanvasState {
   /** A usable clip exists for this song (drives the toggle's visibility). */
   hasVideo: boolean;
   off: boolean;
-  isDesktop: boolean;
   toggle(): void;
   markFailed(): void;
 }
@@ -41,15 +39,6 @@ export interface SongCanvasState {
 export function useSongCanvas(song: Song | null | undefined): SongCanvasState {
   const [off, setOff] = useState(canvasDisabled);
   const [failedId, setFailedId] = useState<string | null>(null);
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)');
-    const on = () => setIsDesktop(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
   const { data } = useQuery({
     queryKey: ['song-canvas', song?.id],
     queryFn: () => findVideoForSong(song as Song),
@@ -66,7 +55,6 @@ export function useSongCanvas(song: Song | null | undefined): SongCanvasState {
     src,
     hasVideo,
     off,
-    isDesktop,
     toggle: () => {
       const next = !off;
       setOff(next);
@@ -86,13 +74,11 @@ export function useSongCanvas(song: Song | null | undefined): SongCanvasState {
 /** A silently looping clip that breathes with playback. */
 function CanvasVideo({
   src,
-  poster,
   isPlaying,
   className,
   onError,
 }: {
   src: string;
-  poster?: string;
   isPlaying: boolean;
   className?: string;
   onError(): void;
@@ -109,7 +95,6 @@ function CanvasVideo({
       key={src}
       ref={ref}
       src={src}
-      poster={poster}
       muted
       loop
       autoPlay
@@ -122,12 +107,10 @@ function CanvasVideo({
   );
 }
 
-/** PHONE surface: the full-bleed canvas behind the whole player. Renders
- *  nothing on desktop (the square owns the clip there) so exactly one
- *  <video> decodes at any moment. Mount inside the backdrop layer, UNDER
- *  the darkening gradients. */
+/** The full-bleed canvas behind the whole player, on every viewport. Mount
+ *  inside the backdrop layer, UNDER the darkening gradients. */
 export function SongCanvasBackdrop({ canvas, isPlaying }: { canvas: SongCanvasState; isPlaying: boolean }) {
-  if (canvas.isDesktop || !canvas.src) return null;
+  if (!canvas.src) return null;
   return (
     <CanvasVideo
       src={canvas.src}
@@ -138,9 +121,9 @@ export function SongCanvasBackdrop({ canvas, isPlaying }: { canvas: SongCanvasSt
   );
 }
 
-/** The artwork square: on PC it hosts the clip; on phones it stays still
- *  artwork (the backdrop carries the motion) with a soft ring so it reads
- *  cleanly over the moving video. */
+/** The artwork slot: still art normally; while the canvas plays it turns into
+ *  a transparent window of the same size, so the full-screen video shows
+ *  through uncovered and the layout never jumps. The toggle lives here. */
 export function SongCanvas({
   canvas,
   isPlaying,
@@ -151,27 +134,20 @@ export function SongCanvas({
   artUrl: string | null;
 }) {
   const baseClasses = cn(
-    'relative w-72 h-72 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-[0_28px_70px_-14px_rgb(var(--ember-500)/0.4)] transition-[color,background-color,border-color,opacity,transform] duration-500',
+    'w-72 h-72 sm:w-80 sm:h-80 rounded-3xl transition-[color,background-color,border-color,opacity,transform] duration-500',
     isPlaying ? 'scale-100' : 'scale-[0.97] opacity-90',
   );
-  const videoInSquare = canvas.isDesktop && !!canvas.src;
   return (
     <>
-      {videoInSquare ? (
-        <CanvasVideo
-          src={canvas.src as string}
-          poster={artUrl ?? undefined}
-          isPlaying={isPlaying}
-          onError={canvas.markFailed}
-          className={baseClasses}
-        />
+      {canvas.src ? (
+        <div aria-hidden className={baseClasses} />
       ) : (
         <img
           src={artUrl ?? FALLBACK_ART}
           onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
           alt=""
           draggable={false}
-          className={cn(baseClasses, !canvas.isDesktop && canvas.src && 'ring-1 ring-white/15')}
+          className={cn(baseClasses, 'object-cover shadow-[0_28px_70px_-14px_rgb(var(--ember-500)/0.4)]')}
         />
       )}
       {canvas.hasVideo && (
