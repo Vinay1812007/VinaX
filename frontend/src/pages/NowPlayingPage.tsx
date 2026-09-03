@@ -37,6 +37,7 @@ import {
 } from '@/components/Icons';
 import { DeviceSheet } from '@/components/DeviceSheet';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
+import { SongCanvas } from '@/components/SongCanvas';
 import { extractAverageColor } from '@/utils/color';
 import { acquireWakeLock, releaseWakeLock } from '@/utils/wakeLock';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -352,16 +353,10 @@ export default function NowPlayingPage() {
               isPlaying ? 'opacity-100' : 'opacity-40',
             )}
           />
-          <img
-            src={artUrl ?? FALLBACK_ART}
-            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-            alt=""
-            draggable={false}
-            className={cn(
-              'relative w-72 h-72 sm:w-80 sm:h-80 rounded-3xl object-cover shadow-[0_28px_70px_-14px_rgb(var(--ember-500)/0.4)] transition-[color,background-color,border-color,opacity,transform] duration-500',
-              isPlaying ? 'scale-100' : 'scale-[0.97] opacity-90',
-            )}
-          />
+          {/* v5.7.10 — video canvas: the song's own music video loops silently
+              in the artwork square while the track plays (artwork stays the
+              poster + fallback; toggleable). */}
+          <SongCanvas song={song} isPlaying={isPlaying} artUrl={artUrl} />
           <button aria-label="Rewind 10 seconds (double tap)" onDoubleClick={() => doubleSeek(-1)} className="absolute inset-y-0 left-0 w-1/3 rounded-l-3xl" />
           <button
             aria-label="Double tap to favorite"
