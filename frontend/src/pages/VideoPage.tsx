@@ -47,7 +47,10 @@ export default function VideoPage() {
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    const onPlay = () => usePlayerStore.getState().pause();
+    const onPlay = () => {
+      const st = usePlayerStore.getState();
+      if (st.isPlaying) st.togglePlay();
+    };
     el.addEventListener('play', onPlay);
     return () => el.removeEventListener('play', onPlay);
   }, [src]);
