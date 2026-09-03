@@ -156,7 +156,16 @@ function normTitle(s: string): string {
  */
 export async function findVideoForSong(song: Song): Promise<Video | null> {
   const artist = song.artists[0]?.name ?? song.subtitle.split(',')[0] ?? '';
-  const list = await searchVideos(`${song.title} ${artist}`.trim(), 0, 10);
+  // Verified against the live API: the video search matches TITLES — adding
+  // the artist to the query returns nothing. Query the cleaned title alone;
+  // identity is enforced by the gates below, not by the query.
+  const q =
+    song.title
+      .replace(/\s*\((?:from|from the)\b[^)]*\)/gi, ' ')
+      .replace(/\s*[-\u2013\u2014]\s*(male|female|reprise|remix|version[^,]*)$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim() || song.title;
+  const list = await searchVideos(q, 0, 10);
   const byId = list.find((v) => v.songIds.includes(song.id));
   if (byId) return byId;
   const want = normTitle(song.title);
