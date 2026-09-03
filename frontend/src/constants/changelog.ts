@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.7': {
+    title: 'Sponsorships go live on the Ads page',
+    changes: [
+      {
+        type: 'new',
+        text: 'The Ads page now carries a real sponsored placement. It is scoped hard to that one page \u2014 the ad script loads only when you open Ads, and every other screen keeps loading zero ad scripts and zero trackers.',
+      },
+      {
+        type: 'improved',
+        text: 'Site ownership for the ad network is proven by a standard /ads.txt file, so the rest of the app needed no changes at all.',
+      },
+    ],
+  },
   '5.7.6': {
     title: 'A seat for sponsorships',
     changes: [
