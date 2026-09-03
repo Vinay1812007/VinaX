@@ -80,6 +80,9 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const VinaXAIPage = lazy(() => import('@/pages/VinaXAIPage'));
 // v5.7.6 — Ads placeholder page (sponsored placements configured later).
 const AdsPage = lazy(() => import('@/pages/AdsPage'));
+// v5.7.9 — music videos: browse + cinematic player.
+const VideosPage = lazy(() => import('@/pages/VideosPage'));
+const VideoPage = lazy(() => import('@/pages/VideoPage'));
 
 export const router = createBrowserRouter([
   {
@@ -137,6 +140,8 @@ export const router = createBrowserRouter([
       { path: 'regions', element: <RegionsPage /> },
       { path: 'taste-profile', element: <TasteProfilePage /> },
       { path: 'ads', element: <AdsPage /> },
+      { path: 'videos', element: <VideosPage /> },
+      { path: 'video/:id', element: <VideoPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'handoff', element: <HandoffPage /> },
       { path: 'cache-info', element: <CacheInfoPage /> },
