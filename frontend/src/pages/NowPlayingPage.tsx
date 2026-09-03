@@ -37,7 +37,7 @@ import {
 } from '@/components/Icons';
 import { DeviceSheet } from '@/components/DeviceSheet';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
-import { SongCanvas } from '@/components/SongCanvas';
+import { SongCanvas, SongCanvasBackdrop, useSongCanvas } from '@/components/SongCanvas';
 import { extractAverageColor } from '@/utils/color';
 import { acquireWakeLock, releaseWakeLock } from '@/utils/wakeLock';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -203,6 +203,8 @@ export default function NowPlayingPage() {
   }, []);
 
   const artUrl = song ? bestImage(song.images, 500) : null;
+  // v5.7.11 — one canvas state for both surfaces (mobile backdrop / PC square).
+  const canvas = useSongCanvas(song);
 
   useEffect(() => {
     let alive = true;
@@ -307,6 +309,8 @@ export default function NowPlayingPage() {
             className="absolute inset-0 h-full w-full scale-125 object-cover opacity-45 blur-3xl"
           />
         )}
+        {/* Phone canvas: the clip fills the player behind the gradients. */}
+        <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />
         <div
           aria-hidden
           className="absolute inset-0"
@@ -356,7 +360,7 @@ export default function NowPlayingPage() {
           {/* v5.7.10 — video canvas: the song's own music video loops silently
               in the artwork square while the track plays (artwork stays the
               poster + fallback; toggleable). */}
-          <SongCanvas song={song} isPlaying={isPlaying} artUrl={artUrl} />
+          <SongCanvas canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} />
           <button aria-label="Rewind 10 seconds (double tap)" onDoubleClick={() => doubleSeek(-1)} className="absolute inset-y-0 left-0 w-1/3 rounded-l-3xl" />
           <button
             aria-label="Double tap to favorite"
