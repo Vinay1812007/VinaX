@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.10': {
+    title: 'The artwork comes alive',
+    changes: [
+      {
+        type: 'new',
+        text: "Now Playing gets a video canvas: when the song you're playing has its official music video, the artwork square becomes a silently looping clip while the full track keeps playing \u2014 the premium-player look. A small toggle on the art switches back to still artwork, and your choice is remembered.",
+      },
+      {
+        type: 'improved',
+        text: 'The canvas is strict about identity: a video only appears when it truly belongs to the playing song, and artwork instantly takes over if the clip is missing or fails.',
+      },
+    ],
+  },
   '5.7.9': {
     title: 'Music videos arrive',
     changes: [
