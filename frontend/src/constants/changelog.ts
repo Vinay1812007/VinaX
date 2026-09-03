@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.5': {
+    title: 'A formal, organized admin console',
+    changes: [
+      {
+        type: 'improved',
+        text: 'The Admin Dashboard is fully reorganized: all 26 tools now live under eight formal categories \u2014 Dashboards, Audience, Catalog, Promotion, Analytics, AI & Engines, Operations, and Settings \u2014 with collapsible groups, tool counts, and a category trail over every screen.',
+      },
+      {
+        type: 'improved',
+        text: 'Admin navigation is tidier: collapsed categories are remembered per browser, the current tool stays visible even inside a collapsed group, and search finds any tool no matter which category it is folded into.',
+      },
+    ],
+  },
   '5.7.4': {
     title: 'The app opens with no internet',
     changes: [
