@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.6': {
+    title: 'A seat for sponsorships',
+    changes: [
+      {
+        type: 'new',
+        text: 'A new Ads page joins the sidebar under Explore. Nothing is live there yet \u2014 sponsored placements will be configured later, and until then the page loads no ad scripts and no trackers.',
+      },
+    ],
+  },
   '5.7.5': {
     title: 'A formal, organized admin console',
     changes: [
