@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.8': {
+    title: 'Ad network ownership tag',
+    changes: [
+      {
+        type: 'improved',
+        text: 'A single inert ownership tag in the page head lets the ad network verify the site instantly. It is plain metadata \u2014 no script, no tracker \u2014 and ads themselves still load only on the Ads page.',
+      },
+    ],
+  },
   '5.7.7': {
     title: 'Sponsorships go live on the Ads page',
     changes: [
