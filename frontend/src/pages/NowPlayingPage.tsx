@@ -309,7 +309,8 @@ export default function NowPlayingPage() {
             className="absolute inset-0 h-full w-full scale-125 object-cover opacity-45 blur-3xl"
           />
         )}
-        {/* Phone canvas: the clip fills the player behind the gradients. */}
+        {/* v5.7.12 — the video canvas: the clip fills the whole player behind
+            the gradients on every screen size (Spotify-canvas style). */}
         <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />
         <div
           aria-hidden
@@ -354,12 +355,14 @@ export default function NowPlayingPage() {
             aria-hidden
             className={cn(
               'absolute -inset-6 rounded-[2.5rem] blur-2xl transition-opacity duration-700 bg-[radial-gradient(60%_60%_at_50%_45%,rgb(var(--ember-500)/0.32),rgb(var(--aura-violet)/0.16)_58%,transparent_82%)] motion-safe:animate-[aura-pulse_5.5s_ease-in-out_infinite]',
-              isPlaying ? 'opacity-100' : 'opacity-40',
+              // The aura steps aside with the artwork while the canvas plays,
+              // so the full-screen video shows through untinted.
+              canvas.src ? 'opacity-0' : isPlaying ? 'opacity-100' : 'opacity-40',
             )}
           />
-          {/* v5.7.10 — video canvas: the song's own music video loops silently
-              in the artwork square while the track plays (artwork stays the
-              poster + fallback; toggleable). */}
+          {/* v5.7.12 — while the canvas plays full-screen, this slot becomes a
+              transparent window (same size, so the layout holds) and hosts the
+              ART/VIDEO toggle; still artwork returns the moment it's off. */}
           <SongCanvas canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} />
           <button aria-label="Rewind 10 seconds (double tap)" onDoubleClick={() => doubleSeek(-1)} className="absolute inset-y-0 left-0 w-1/3 rounded-l-3xl" />
           <button
