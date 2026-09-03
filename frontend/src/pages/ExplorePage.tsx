@@ -9,6 +9,7 @@ import { loadProfile } from '@/services/personalization/storage';
 import { topLanguages } from '@/services/personalization/profile';
 import {
   CompassIcon,
+  VideoIcon,
   PlayIcon,
   FilmIcon,
   GlobeIcon,
@@ -21,6 +22,7 @@ import {
 const tiles: Array<{ to: string; label: string; hint: string; icon: typeof CompassIcon }> = [
   { to: '/discover', label: 'Discover', hint: 'Fresh picks & playlists', icon: CompassIcon },
   { to: '/charts', label: 'Charts', hint: 'Top songs by language', icon: WaveIcon },
+  { to: '/videos', label: 'Videos', hint: 'Watch music videos', icon: VideoIcon },
   { to: '/movies', label: 'Movies', hint: 'Film soundtracks', icon: FilmIcon },
   { to: '/moods', label: 'Moods', hint: 'Music for every vibe', icon: SparkleIcon },
   { to: '/languages', label: 'Languages', hint: 'Pin what you listen to', icon: MusicIcon },
