@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.11': {
+    title: 'The canvas fits every screen',
+    changes: [
+      {
+        type: 'improved',
+        text: 'The video canvas now adapts like the big players: on phones the clip fills the whole Now Playing screen behind your controls \u2014 the immersive look \u2014 while on desktop it plays inside the artwork square. It switches automatically with your screen size.',
+      },
+      {
+        type: 'improved',
+        text: 'Only one video ever decodes at a time, so the canvas stays light on battery; the ART/VIDEO toggle works on both layouts and remembers your choice.',
+      },
+    ],
+  },
   '5.7.10': {
     title: 'The artwork comes alive',
     changes: [
