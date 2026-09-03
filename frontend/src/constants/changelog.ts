@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.9': {
+    title: 'Music videos arrive',
+    changes: [
+      {
+        type: 'new',
+        text: 'A new Videos section: search music videos or browse shelves in your languages, then watch in a cinematic full-width player \u2014 music pauses automatically when a video starts, and one tap plays the full track in the music player.',
+      },
+      {
+        type: 'improved',
+        text: 'The player is honest about sources: where the catalog only carries the official preview clip it says so \u2014 and full-length videos start playing automatically the moment the source provides them.',
+      },
+    ],
+  },
   '5.7.8': {
     title: 'Ad network ownership tag',
     changes: [

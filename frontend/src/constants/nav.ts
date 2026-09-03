@@ -12,6 +12,7 @@ import {
   QueueIcon,
   SearchIcon,
   SettingsIcon,
+  VideoIcon,
   SparkleIcon,
   UsersIcon,
   WaveIcon,
@@ -57,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Explore',
     items: [
+      { to: '/videos', label: 'Videos', icon: VideoIcon },
       { to: '/movies', label: 'Movies', icon: FilmIcon },
       { to: '/languages', label: 'Languages', icon: MusicIcon },
       { to: '/moods', label: 'Moods', icon: WaveIcon },
