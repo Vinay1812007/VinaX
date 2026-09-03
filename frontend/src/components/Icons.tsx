@@ -196,6 +196,13 @@ export const WaveIcon = ({ className }: IconProps) => (
   </svg>
 );
 
+export const VideoIcon = ({ className }: IconProps) => (
+  <svg {...base(className)}>
+    <rect x="2.5" y="5" width="19" height="14" rx="3" />
+    <path d="m10 9.5 5 2.5-5 2.5z" />
+  </svg>
+);
+
 export const MegaphoneIcon = ({ className }: IconProps) => (
   <svg {...base(className)}>
     <path d="m3 11 18-5v12L3 14v-3z" />
