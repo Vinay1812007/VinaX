@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.7.12': {
+    title: 'The canvas goes full screen',
+    changes: [
+      {
+        type: 'improved',
+        text: 'The video canvas is now truly full-screen everywhere: on phones and desktop alike, the clip fills the whole Now Playing view and the artwork card steps aside so nothing covers the video — the same immersive look the premium players use.',
+      },
+      {
+        type: 'improved',
+        text: 'The ART toggle stays right where the artwork was: one tap brings the still art back (and the video away), and your choice is remembered on that device.',
+      },
+    ],
+  },
   '5.7.11': {
     title: 'The canvas fits every screen',
     changes: [
