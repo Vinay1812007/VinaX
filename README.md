@@ -2,7 +2,7 @@
 
 **Free music streaming for India. No login. Private by design.**
 
-Live at **https://www.sirimillavinay.online** — Telugu, Hindi, Tamil and 9 more languages, with smart mixes, live charts, an AI DJ, synced lyrics, music videos with a Now Playing video canvas, and an Android app.
+Live at **https://www.sirimillavinay.online** — Telugu, Hindi, Tamil and 9 more languages, with smart mixes, live charts, an AI DJ, synced lyrics, music videos with a responsive Now Playing video canvas (full-bleed on phones, in-artwork on desktop), and an Android app.
 
 > **For AI agents / new contributors — read this first.** This file is the single source of truth for how the repo is laid out, how it deploys, and which commands are safe to run. Everything below is intentionally explicit: exact paths, exact commands, exact env-var names.
 
