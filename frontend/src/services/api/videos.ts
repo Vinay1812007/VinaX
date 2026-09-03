@@ -1,3 +1,5 @@
+import type { Song } from '@/types';
+
 /**
  * Music videos (v5.7.9) — served by the VinaX Music API only (the fallback
  * catalog bases have no video routes, so this rides a direct client instead
@@ -130,4 +132,44 @@ export function videoSources(v: Video): string[] {
   if (v.streamUrl) out.push(v.streamUrl);
   if (v.previewUrl) out.push(v.previewUrl);
   return out;
+}
+
+
+/** Lowercased, punctuation-free comparison form (same lesson as the lyrics
+ *  matcher: titles must gate, or a wrong clip plays with confidence). */
+function normTitle(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s*\((?:from|from the)\b[^)]*\)/gi, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * v5.7.10 — the video canvas behind Now Playing. Finds THE video for a song,
+ * strictly: a video whose songIds carries the song's own id wins outright;
+ * otherwise the titles must genuinely match AND share an artist word. A song
+ * with no confident match gets no canvas — never someone else's video.
+ */
+export async function findVideoForSong(song: Song): Promise<Video | null> {
+  const artist = song.artists[0]?.name ?? song.subtitle.split(',')[0] ?? '';
+  const list = await searchVideos(`${song.title} ${artist}`.trim(), 0, 10);
+  const byId = list.find((v) => v.songIds.includes(song.id));
+  if (byId) return byId;
+  const want = normTitle(song.title);
+  if (!want) return null;
+  const artistNorm = normTitle(artist);
+  for (const v of list) {
+    const got = normTitle(v.title);
+    if (!got) continue;
+    const titleOk = got === want || got.includes(want) || want.includes(got);
+    if (!titleOk) continue;
+    if (!artistNorm) return v;
+    const shared = artistNorm.split(' ').some((t) => t.length > 1 && normTitle(v.subtitle).includes(t));
+    if (shared) return v;
+  }
+  return null;
 }
