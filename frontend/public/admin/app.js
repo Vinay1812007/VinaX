@@ -2342,6 +2342,33 @@
 
   var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration' };
   var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true };
+  // v5.7.5 — formal category reorganisation: which category each tool sits
+  // under (drives the breadcrumb over the tool title) + collapsible category
+  // headers whose open/closed state persists per browser.
+  var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', config: 'Settings' };
+  var GRP_KEY = 'vinax_admin_navgroups';
+  function closedGroups() { try { var v = JSON.parse(localStorage.getItem(GRP_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+  function applyNavGroups() {
+    var closed = closedGroups();
+    Array.prototype.forEach.call(document.querySelectorAll('#nav .nav-group-label'), function (g) {
+      var off = closed.indexOf(g.getAttribute('data-group')) >= 0;
+      g.classList.toggle('closed', off);
+      g.setAttribute('aria-expanded', off ? 'false' : 'true');
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-sec]'), function (b) {
+      var off = closed.indexOf(b.getAttribute('data-cat')) >= 0;
+      // The active tool stays visible even inside a collapsed category, so
+      // the sidebar always shows where you are.
+      b.classList.toggle('grp-hidden', off && !b.classList.contains('active'));
+    });
+  }
+  function toggleNavGroup(name) {
+    var closed = closedGroups();
+    var i = closed.indexOf(name);
+    if (i >= 0) closed.splice(i, 1); else closed.push(name);
+    try { localStorage.setItem(GRP_KEY, JSON.stringify(closed)); } catch (e) {}
+    applyNavGroups();
+  }
   function refreshActive() {
     if (active === 'overview') loadOverview();
     else if (active === 'live') loadLive();
@@ -2411,6 +2438,9 @@
     // Mobile: the nav is a horizontal chip rail — keep the active chip visible.
     try { var ab = document.querySelector('#nav button.active'); if (ab && ab.scrollIntoView) ab.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) {}
     $('secTitle').textContent = TITLES[sec] || '';
+    var crumbEl = $('secCrumb');
+    if (crumbEl) crumbEl.textContent = CATS[sec] || '';
+    applyNavGroups();
     var v = $('view'); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
     $('range').hidden = !USES_RANGE[sec];
     $('csv').hidden = true;
@@ -2609,6 +2639,7 @@
         var q = (navSearch.value || '').toLowerCase().trim();
         var nav = document.getElementById('nav');
         if (!nav) return;
+        nav.classList.toggle('searching', !!q);
         // Show/hide each button by label match.
         var groupHasVisible = {};
         var currentGroup = null;
@@ -2654,6 +2685,8 @@
   }
 
   Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-sec]'), function (b) { b.addEventListener('click', function () { setSection(b.getAttribute('data-sec')); }); });
+  Array.prototype.forEach.call(document.querySelectorAll('#nav .nav-group-label'), function (g) { g.addEventListener('click', function () { toggleNavGroup(g.getAttribute('data-group')); }); });
+  applyNavGroups();
   $('enter').addEventListener('click', function () { var t = $('token').value.trim(); if (!t) { $('loginErr').textContent = 'Enter a token.'; return; } sessionStorage.setItem(TOKEN_KEY, t); start(); });
   $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('enter').click(); });
   $('logout').addEventListener('click', function () { sessionStorage.removeItem(TOKEN_KEY); showLogin(''); });
