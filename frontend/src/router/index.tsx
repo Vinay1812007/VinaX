@@ -78,6 +78,8 @@ const ContactPage = lazy(() => import('@/pages/ContactPage'));
 const DmcaPage = lazy(() => import('@/pages/DmcaPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const VinaXAIPage = lazy(() => import('@/pages/VinaXAIPage'));
+// v5.7.6 — Ads placeholder page (sponsored placements configured later).
+const AdsPage = lazy(() => import('@/pages/AdsPage'));
 
 export const router = createBrowserRouter([
   {
@@ -134,6 +136,7 @@ export const router = createBrowserRouter([
       { path: 'moods', element: <MoodsPage /> },
       { path: 'regions', element: <RegionsPage /> },
       { path: 'taste-profile', element: <TasteProfilePage /> },
+      { path: 'ads', element: <AdsPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'handoff', element: <HandoffPage /> },
       { path: 'cache-info', element: <CacheInfoPage /> },
