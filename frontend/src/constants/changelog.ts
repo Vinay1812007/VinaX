@@ -12,6 +12,23 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.8.0': {
+    title: 'A formal new admin console',
+    changes: [
+      {
+        type: 'new',
+        text: 'The admin console has been redesigned from the ground up in a clean, formal style: flat surfaces, hairline borders, one calm accent, a strict spacing grid and restrained typography \u2014 the glows, blurs and gradients are gone, so every dashboard reads like a professional operations panel.',
+      },
+      {
+        type: 'improved',
+        text: 'One token system now drives the whole console, so the light theme is a true counterpart of the dark one, tables and cards share the same rhythm on every tool, and controls (buttons, inputs, selects, segmented tabs, switches) look and behave identically everywhere \u2014 on desktop, tablet and phone.',
+      },
+      {
+        type: 'improved',
+        text: 'Header actions are labelled in plain words (CSV, JSON, Report, Alerts, Theme, Refresh) instead of icons, the sign-in screen is a proper form, and the sidebar\u2019s categories and active tool are easier to scan.',
+      },
+    ],
+  },
   '5.7.12': {
     title: 'The canvas goes full screen',
     changes: [
