@@ -17,10 +17,12 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        '2xl': '1.25rem',
-        '3xl': '1.75rem',
-        card: '1.375rem',
-        sheet: '2rem',
+        // v5.8.1 formal pass: the whole radius scale tightened in one place so
+        // every rounded-2xl/3xl call site reads crisp (was 1.25 / 1.75 / 1.375 / 2rem).
+        '2xl': '0.875rem',
+        '3xl': '1rem',
+        card: '0.75rem',
+        sheet: '1.25rem',
         pill: '9999px',
       },
       borderColor: {
@@ -59,17 +61,18 @@ export default {
       },
       fontSize: {
         // VinaX type scale — expressive display sizes, compact metadata.
-        'display': ['2rem', { lineHeight: '2.25rem', letterSpacing: '-0.02em', fontWeight: '800' }],
+        'display': ['2rem', { lineHeight: '2.25rem', letterSpacing: '-0.02em', fontWeight: '700' }],
         'title': ['1.375rem', { lineHeight: '1.75rem', letterSpacing: '-0.01em', fontWeight: '700' }],
         'meta': ['0.8125rem', { lineHeight: '1.125rem' }],
       },
       boxShadow: {
         // Soft, premium elevation — layered (contact + ambient) for realism.
-        card: '0 1px 2px rgba(0,0,0,0.18), 0 6px 20px -6px rgba(0,0,0,0.40)',
-        float: '0 2px 6px rgba(0,0,0,0.22), 0 12px 34px -8px rgba(0,0,0,0.50)',
-        lift: '0 12px 44px -12px rgba(0,0,0,0.55)',
-        glow: '0 0 40px rgb(var(--ember-500) / 0.35)',
-        soft: '0 12px 40px -10px rgba(0,0,0,0.45)',
+        // v5.8.1 formal pass: contact shadows only — no ambient bloom, no glow.
+        card: '0 1px 2px rgba(0,0,0,0.18)',
+        float: '0 2px 8px -2px rgba(0,0,0,0.35)',
+        lift: '0 4px 16px -8px rgba(0,0,0,0.45)',
+        glow: '0 0 0 1px rgb(var(--ember-500) / 0.25)',
+        soft: '0 4px 16px -8px rgba(0,0,0,0.35)',
       },
       transitionTimingFunction: {
         vinax: 'cubic-bezier(0.22, 1, 0.36, 1)',
