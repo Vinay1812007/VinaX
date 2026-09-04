@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.8.1': {
+    title: 'A calmer, more formal VinaX',
+    changes: [
+      {
+        type: 'improved',
+        text: 'The whole app takes on a cleaner, more professional look: flat surfaces with hairline borders, tighter corners, one solid accent and short, calm motion. The floating glows, press blooms, animated aurora blobs and hero washes are gone \u2014 the music and your artwork are the only things that shine.',
+      },
+      {
+        type: 'improved',
+        text: 'Every page changes look, but nothing moves: layouts, navigation and features stay exactly where you know them. Your theme, accent and glass settings are all respected.',
+      },
+    ],
+  },
   '5.8.0': {
     title: 'A formal new admin console',
     changes: [
