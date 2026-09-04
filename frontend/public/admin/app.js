@@ -221,7 +221,7 @@
     if (!items || !items.length) return '<tr><td colspan="3" class="empty">No data yet.</td></tr>';
     return items.map(function (x) {
       var delta = x.plays - (x.prev_plays || 0);
-      var trend = delta > 0 ? '<span style="color:#36d399">▲ ' + delta + '</span>' : (delta < 0 ? '<span style="color:#ff6b6b">▼ ' + Math.abs(delta) + '</span>' : '<span class="muted">—</span>');
+      var trend = delta > 0 ? '<span style="color:var(--ok)">▲ ' + delta + '</span>' : (delta < 0 ? '<span style="color:var(--danger)">▼ ' + Math.abs(delta) + '</span>' : '<span class="muted">—</span>');
       var img = x.song_image ? '<img class="thumb-sm" loading="lazy" alt="" src="' + esc(x.song_image) + '" />' : '';
       return '<tr><td><span class="nowcell">' + img + '<span>' + esc(x.song_title || '') + (x.song_artist ? ' <span class="muted">· ' + esc(x.song_artist) + '</span>' : '') + '</span></span></td><td>' + x.plays + '</td><td>' + trend + '</td></tr>';
     }).join('');
@@ -461,8 +461,8 @@
       var exact = cityExact(r.city, r.country);
       var m = L.circleMarker([ll[0], ll[1]], {
         radius: 4 + 10 * Math.sqrt(n / maxN),
-        color: '#22d3ee', weight: 1, opacity: 0.8,
-        fillColor: '#22d3ee', fillOpacity: 0.3
+        color: '#4f8cff', weight: 1, opacity: 0.8,
+        fillColor: '#4f8cff', fillOpacity: 0.3
       }).addTo(leafMap);
       m.bindPopup('<b>' + esc(r.city || 'Unknown') + '</b>' + (r.country ? ', ' + esc(r.country) : '') +
         '<br>' + n + ' listener' + (n === 1 ? '' : 's') + ' \u00b7 ' + (r.plays || 0) + ' plays' +
@@ -522,7 +522,7 @@
     setExport('users', U);
     var rows = U.map(function (u) {
       var loc = [u.city, u.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">—</span>';
-      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:#ff8a8a">Delete</button></td></tr>';
+      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:var(--danger)">Delete</button></td></tr>';
     }).join('');
     var canPrev = userOffset > 0;
     // D-22 follow-up: the server already computes hasMore (fetches limit+1);
@@ -637,17 +637,17 @@
     if (!h) return '<div class="empty">Health check unavailable.</div>';
     var rows = (h.ai || []).map(function (k) {
       var badge = k.ok
-        ? '<span style="color:#36d399">OK ' + (k.status || '') + '</span>'
-        : '<span style="color:#ff6b6b">FAIL ' + (k.status == null ? 'network' : k.status) + '</span>';
+        ? '<span style="color:var(--ok)">OK ' + (k.status || '') + '</span>'
+        : '<span style="color:var(--danger)">FAIL ' + (k.status == null ? 'network' : k.status) + '</span>';
       var extra = k.configured ? '' : ' <span class="muted">(not configured)</span>';
       return '<tr><td>' + esc(k.key) + extra + '</td><td class="muted">' + esc(aiNick(k.model)) + '</td><td>' + badge + '</td><td class="muted">' + esc(k.note || '') + '</td></tr>';
     }).join('');
     var sb = h.database || h.supabase || {};
     var sbBadge = sb.lastEventAt
-      ? '<span style="color:#36d399">last event ' + ago(sb.lastEventAt) + '</span>'
-      : '<span style="color:#ff6b6b">' + esc(sb.note || 'no readable events') + '</span>';
+      ? '<span style="color:var(--ok)">last event ' + ago(sb.lastEventAt) + '</span>'
+      : '<span style="color:var(--danger)">' + esc(sb.note || 'no readable events') + '</span>';
     return '<table><thead><tr><th>Key</th><th>Model</th><th>Status</th><th>Detail</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<p class="muted" style="margin-top:8px">Database (D1): ' + (sb.configured ? sbBadge : '<span style="color:#ff6b6b">not configured</span>') + '</p>';
+      '<p class="muted" style="margin-top:8px">Database (D1): ' + (sb.configured ? sbBadge : '<span style="color:var(--danger)">not configured</span>') + '</p>';
   }
   function renderTechnical(d) {
     var s = d.summary || {};
@@ -655,7 +655,7 @@
     var errRows = (d.errors || []).map(function (e) { return '<tr><td><span class="pill">' + esc(e.error_kind) + '</span></td><td>' + esc(e.message || '—') + '</td><td>' + e.hits + '</td><td class="muted">' + ago(e.last_seen) + '</td></tr>'; }).join('');
     var vitCards = (d.vitals || []).map(function (v) {
       var val = v.p75 == null ? '—' : (v.p75 + (v.unit || ''));
-      var split = v.count ? ('<span style="color:#36d399">' + v.good + ' good</span> · ' + v.ni + ' ni · <span style="color:#ff6b6b">' + v.poor + ' poor</span>') : 'no samples yet';
+      var split = v.count ? ('<span style="color:var(--ok)">' + v.good + ' good</span> · ' + v.ni + ' ni · <span style="color:var(--danger)">' + v.poor + ' poor</span>') : 'no samples yet';
       return '<div class="card"><div class="n">' + val + '</div><div class="l">' + esc(v.metric) + ' p75 · ' + split + '</div></div>';
     }).join('');
     var lyricList = (d.lyricMisses || []).map(function (x) { return { song_title: x.song_title, song_artist: x.song_artist, plays: x.hits }; });
@@ -856,7 +856,7 @@
       : '<div class="empty">No errors \uD83C\uDF89</div>';
     var recentRows = recent.length
       ? recent.map(function (x) {
-          var st = x.ok ? '<span style="color:#36d399">ok</span>' : '<span style="color:#ff6b6b">' + esc(x.error || ('HTTP ' + (x.status || ''))) + '</span>';
+          var st = x.ok ? '<span style="color:var(--ok)">ok</span>' : '<span style="color:var(--danger)">' + esc(x.error || ('HTTP ' + (x.status || ''))) + '</span>';
           return '<tr><td class="muted">' + esc(ist(x.ts)) + '</td><td><span class="pill">' + esc(x.feature) + '</span></td><td class="muted">' + esc(aiNick(x.model)) + '</td><td>' + st + '</td><td>' + (x.latency_ms != null ? x.latency_ms + ' ms' : '\u2014') + '</td><td><span class="pill">' + esc(x.client || '\u2014') + '</span></td></tr>';
         }).join('')
       : null;
@@ -1038,7 +1038,7 @@
     var topRows = top.map(function (t) {
       var isB = !!bset[t.song_id];
       return '<tr><td><b>' + esc(t.song_title || t.song_id) + '</b> <span class="muted">' + esc(t.song_artist || '') + '</span></td><td>' + (t.plays || 0) + '</td>' +
-        '<td>' + (isB ? '<span class="pill">blocked</span>' : '<button class="ghost ct-block" data-id="' + esc(t.song_id) + '" data-title="' + esc(t.song_title || '') + '" style="padding:3px 10px;font-size:11px;color:#ff8a8a">Block</button>') + '</td></tr>';
+        '<td>' + (isB ? '<span class="pill">blocked</span>' : '<button class="ghost ct-block" data-id="' + esc(t.song_id) + '" data-title="' + esc(t.song_title || '') + '" style="padding:3px 10px;font-size:11px;color:var(--danger)">Block</button>') + '</td></tr>';
     }).join('');
     var bRows = blocked.map(function (b) {
       return '<tr><td><b>' + esc(b.song_title || b.song_id) + '</b></td><td class="muted">' + esc(b.reason || '\u2014') + '</td><td class="muted">' + date(b.created_at) + '</td>' +
@@ -1105,13 +1105,13 @@
       var bars = days.map(function (n, i) {
         var dt = new Date(today.getTime() - (days.length - 1 - i) * 86400000);
         var lbl = (dt.getMonth() + 1) + '/' + dt.getDate();
-        return '<div class="spk-bar" data-lbl="' + esc(lbl + ': ' + n) + '" style="flex:1;display:flex;flex-direction:column-reverse;height:100%;cursor:default"><div style="height:' + Math.max(4, Math.round((n / max) * 100)) + '%;background:linear-gradient(180deg, rgba(34,211,238,0.85), rgba(34,211,238,0.35));border-radius:4px 4px 0 0;transition:filter .12s"></div></div>';
+        return '<div class="spk-bar" data-lbl="' + esc(lbl + ': ' + n) + '" style="flex:1;display:flex;flex-direction:column-reverse;height:100%;cursor:default"><div style="height:' + Math.max(4, Math.round((n / max) * 100)) + '%;background:var(--accent);opacity:.85;border-radius:3px 3px 0 0;transition:opacity .12s"></div></div>';
       }).join('');
       var delta = d.prev14 > 0 ? Math.round(((d.last14 - d.prev14) / d.prev14) * 100) : (d.last14 > 0 ? 100 : 0);
       var dTxt = (delta >= 0 ? '+' : '') + delta + '% vs previous 14 days';
       view.insertAdjacentHTML('afterbegin',
         '<div class="card" id="growthbox" style="margin-bottom:14px;position:relative;overflow:visible"><h3 style="margin-top:0">New listeners <span class="muted">\u00b7 last 14 days \u00b7 <b>' + d.last14 + '</b> joined \u00b7 ' + esc(dTxt) + '</span></h3>' +
-        '<div id="spk-wrap" style="display:flex;align-items:flex-end;gap:4px;height:64px;padding:6px 0;background:linear-gradient(180deg, transparent 40%, rgba(34,211,238,0.04))">' + bars + '</div>' +
+        '<div id="spk-wrap" style="display:flex;align-items:flex-end;gap:4px;height:64px;padding:6px 0;border-bottom:1px solid var(--border)">' + bars + '</div>' +
         '<span class="spk-chip" id="spk-chip"></span></div>');
       var chipEl = document.getElementById('spk-chip');
       Array.prototype.forEach.call(document.querySelectorAll('.spk-bar'), function (el) {
@@ -1169,7 +1169,7 @@
       current = items.filter(function (it) { return it.label.toLowerCase().indexOf(f) !== -1; }).slice(0, 9);
       if (sel >= current.length) sel = Math.max(0, current.length - 1);
       list.innerHTML = current.map(function (it, i) {
-        return '<div class="pal-item' + (i === sel ? ' pal-sel' : '') + '" data-i="' + i + '" style="padding:9px 12px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;' + (i === sel ? 'background:var(--grad);color:#fff' : '') + '">' + esc(it.label) + '</div>';
+        return '<div class="pal-item' + (i === sel ? ' pal-sel' : '') + '" data-i="' + i + '" style="padding:9px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;' + (i === sel ? 'background:var(--grad);color:#fff' : '') + '">' + esc(it.label) + '</div>';
       }).join('') || '<div class="empty">No match</div>';
       Array.prototype.forEach.call(list.querySelectorAll('.pal-item'), function (el) {
         el.addEventListener('click', function () { pick(parseInt(el.getAttribute('data-i'), 10)); });
@@ -1210,7 +1210,7 @@
           var t = '', b = '', canRetract = true;
           try { var j = JSON.parse(r.message || '{}'); t = j.title || ''; b = j.body || ''; } catch (e) { t = r.message || ''; }
           return '<tr><td><span class="pill">announcement</span></td><td><b>' + esc(t) + '</b> <span class="muted">' + esc(b) + '</span></td><td class="muted">' + when + '</td>' +
-            '<td>' + (canRetract ? '<button class="ghost pn-retract" data-at="' + esc(r.created_at) + '" style="padding:3px 10px;font-size:11px;color:#ff8a8a">Retract</button>' : '') + '</td></tr>';
+            '<td>' + (canRetract ? '<button class="ghost pn-retract" data-at="' + esc(r.created_at) + '" style="padding:3px 10px;font-size:11px;color:var(--danger)">Retract</button>' : '') + '</td></tr>';
         }
         var parts = String(r.message || '').split('|');
         return '<tr><td><span class="pill">daily pick</span></td><td><b>' + esc(parts[1] || '') + '</b> <span class="muted">sent to ' + esc(parts[0] || '0') + ' device(s)</span></td><td class="muted">' + when + '</td><td></td></tr>';
@@ -1271,13 +1271,13 @@
       '<h3 style="margin-top:0">Site mode <span class="muted" id="sm-now">' + (smStatus || 'checking…') + '</span></h3>' +
       '<p class="muted" style="font-size:12px">Maintenance shows listeners a friendly “be right back” screen (it re-checks every minute). This console stays reachable either way.</p>' +
       '<input id="sm-note" type="text" placeholder="Optional message shown to listeners (e.g. Back in 20 minutes!)" style="margin-bottom:8px" />' +
-      '<div class="row"><button id="sm-live">● Go live</button><button id="sm-maint" class="ghost" style="color:#ffb4b4">Enter maintenance</button><span class="muted" id="sm-out" style="font-size:12px"></span></div>' +
+      '<div class="row"><button id="sm-live">● Go live</button><button id="sm-maint" class="ghost" style="color:var(--danger)">Enter maintenance</button><span class="muted" id="sm-out" style="font-size:12px"></span></div>' +
       '</div>');
     document.getElementById('sm-note').value = smNote;
     document.getElementById('sm-out').textContent = smOut;
     function refresh() {
       fetch('/api/site-mode?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
-        smStatus = d.mode === 'maintenance' ? '· <b style="color:#ff8a8a">MAINTENANCE</b>' + (d.note ? ' — ' + esc(d.note) : '') : '· <b style="color:#7ce38b">LIVE</b>';
+        smStatus = d.mode === 'maintenance' ? '· <b style="color:var(--danger)">MAINTENANCE</b>' + (d.note ? ' — ' + esc(d.note) : '') : '· <b style="color:var(--ok)">LIVE</b>';
         var el = document.getElementById('sm-now');
         if (el) el.innerHTML = smStatus;
         stamp();
@@ -1404,7 +1404,7 @@
     var rows = (d.rooms || []).map(function (r) {
       var live = r.members > 0 ? '<span class="dot2 on"></span>' : '<span class="dot2 off"></span>';
       var song = r.song_title ? esc(r.song_title) + (r.song_artist ? ' <span class="muted">· ' + esc(r.song_artist) + '</span>' : '') : '<span class="muted">—</span>';
-      return '<tr><td>' + live + '<b>' + esc(r.code) + '</b></td><td>' + esc(r.host || '—') + '</td><td>' + r.members + '</td><td>' + song + '</td><td>' + (r.playing ? '<span class="pill">Playing</span>' : '<span class="pill">Paused</span>') + '</td><td class="muted">' + ago(r.updated_at) + '</td><td><button class="ghost rend" data-code="' + esc(r.code) + '" style="padding:4px 10px;font-size:11px;color:#ff8a8a">End</button></td></tr>';
+      return '<tr><td>' + live + '<b>' + esc(r.code) + '</b></td><td>' + esc(r.host || '—') + '</td><td>' + r.members + '</td><td>' + song + '</td><td>' + (r.playing ? '<span class="pill">Playing</span>' : '<span class="pill">Paused</span>') + '</td><td class="muted">' + ago(r.updated_at) + '</td><td><button class="ghost rend" data-code="' + esc(r.code) + '" style="padding:4px 10px;font-size:11px;color:var(--danger)">End</button></td></tr>';
     }).join('');
     $('view').innerHTML =
       '<div class="cards">' + card(d.active, 'Rooms live now') + card(d.listeners, 'People in rooms') + card((d.rooms || []).length, 'Rooms (last 2h)') + '</div>' +
@@ -1840,7 +1840,7 @@
         return '<button data-t="' + t[0] + '"' + (t[0] === songsTab ? ' class="active"' : '') + '>' + t[1] + '</button>';
       }).join('') + '</div>' +
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">' + esc(tabs.filter(function(t){return t[0]===songsTab;})[0][1]) + ' — data source</h3>' +
-      '<p class="muted" style="font-size:12.5px">Feeds from: <code style="color:#a78bfa">' + esc(endpoints[songsTab]) + '</code></p>' +
+      '<p class="muted" style="font-size:12.5px">Feeds from: <code>' + esc(endpoints[songsTab]) + '</code></p>' +
       '<div class="row" style="gap:8px"><button id="song-preview" class="ghost qa-go">Preview top 3 (live)</button><span class="muted" style="font-size:12px" id="song-preview-out">Click preview to load current top songs.</span></div>' +
       '<div id="song-preview-box" style="margin-top:12px"></div></div>' +
       emptyState('empty_music', 'Song editor lands with the next release',
@@ -1965,7 +1965,7 @@
         '<span class="muted" id="hs-out" style="font-size:12px"></span>' +
       '</div></div>' +
       '<h3>Published JSON</h3>' +
-      '<pre id="hs-json" style="background:#0d0d15;border:1px solid #23232f;border-radius:12px;padding:14px;font-size:12px;overflow:auto;max-height:280px">' + esc(JSON.stringify({ blocks: hsCfg }, null, 2)) + '</pre>';
+      '<pre id="hs-json" class="codebox" style="max-height:280px">' + esc(JSON.stringify({ blocks: hsCfg }, null, 2)) + '</pre>';
     Array.prototype.forEach.call(document.querySelectorAll('.hs-up'), function (b) {
       b.addEventListener('click', function () {
         var id = b.getAttribute('data-id');
@@ -2016,7 +2016,7 @@
         .map(function (x) {
           return html`<tr><td>${x.label}</td><td class="muted">${x.id}</td><td class="muted">${count(x)}</td><td>` +
             '<button class="ghost" disabled title="Backend endpoint required — /api/admin/categories" style="padding:3px 10px;font-size:11px">Edit</button> ' +
-            '<button class="ghost" disabled title="Backend endpoint required — /api/admin/categories" style="padding:3px 10px;font-size:11px;color:#ff8a8a">Delete</button>' +
+            '<button class="ghost" disabled title="Backend endpoint required — /api/admin/categories" style="padding:3px 10px;font-size:11px;color:var(--danger)">Delete</button>' +
             '</td></tr>';
         }).join('');
       return '<h3>' + esc(title) + ' <span class="muted">· ' + items.length + '</span></h3>' +
@@ -2064,7 +2064,7 @@
     }
     var savedRows = saved.map(function (b, i) {
       return html`<tr><td>${b.title}</td><td class="muted">${b.subtitle}</td><td><span class="pill">${b.linkType}</span> ${b.linkId}</td><td class="muted">${b.start || '—'} → ${b.end || '—'}</td>` +
-        '<td><button class="ghost bn-del" data-i="' + i + '" style="padding:3px 10px;font-size:11px;color:#ff8a8a">Delete</button></td></tr>';
+        '<td><button class="ghost bn-del" data-i="' + i + '" style="padding:3px 10px;font-size:11px;color:var(--danger)">Delete</button></td></tr>';
     }).join('');
     $('view').innerHTML =
       '<div class="stub-banner"><h4>Live — published to the site</h4>' +
@@ -2075,12 +2075,12 @@
         '<input id="bn-sub" type="text" placeholder="Subtitle" value="' + esc(bnPreview.subtitle) + '" style="max-width:280px" />' +
       '</div>' +
       '<div class="row" style="flex-wrap:wrap;gap:10px;margin-top:8px">' +
-        '<select id="bn-type" style="padding:10px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff">' +
+        '<select id="bn-type" class="inp">' +
           ['song','album','playlist','artist'].map(function (t) { return '<option value="' + t + '"' + (bnPreview.linkType === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') +
         '</select>' +
         '<input id="bn-id" type="text" placeholder="Link ID" value="' + esc(bnPreview.linkId) + '" style="max-width:220px" />' +
-        '<input id="bn-start" type="date" value="' + esc(bnPreview.start) + '" style="padding:9px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff" />' +
-        '<input id="bn-end" type="date" value="' + esc(bnPreview.end) + '" style="padding:9px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff" />' +
+        '<input id="bn-start" type="date" value="' + esc(bnPreview.start) + '" class="inp" />' +
+        '<input id="bn-end" type="date" value="' + esc(bnPreview.end) + '" class="inp" />' +
       '</div>' +
       '<div class="row" style="margin-top:10px"><input id="bn-file" type="file" accept="image/*" /><span class="muted" style="font-size:12px">Embedded in the published config — keep it ≤200 KB</span></div>' +
       '<h3>Preview</h3>' +
@@ -2091,7 +2091,7 @@
       '<h3>Published banners (' + saved.length + ')</h3>' +
       (savedRows ? '<table><thead><tr><th>Title</th><th>Subtitle</th><th>Link</th><th>Schedule</th><th></th></tr></thead><tbody>' + savedRows + '</tbody></table>'
         : emptyState('empty_activity','No banners yet','Compose one above and click "Publish banner" to make it live.')) +
-      '<h3>Saved JSON</h3><pre style="background:#0d0d15;border:1px solid #23232f;border-radius:12px;padding:14px;font-size:12px;overflow:auto;max-height:220px">' + esc(JSON.stringify(saved, null, 2)) + '</pre>';
+      '<h3>Saved JSON</h3><pre class="codebox" style="max-height:220px">' + esc(JSON.stringify(saved, null, 2)) + '</pre>';
     function syncFields() {
       bnPreview.title = $('bn-title').value; bnPreview.subtitle = $('bn-sub').value;
       bnPreview.linkType = $('bn-type').value; bnPreview.linkId = $('bn-id').value;
@@ -2149,24 +2149,24 @@
       '<div class="card"><div class="n" id="cfg-ver">…</div><div class="l">Version · from overview</div></div>' +
       '<div class="card"><div class="n">Static</div><div class="l">Logo · icons/icon.svg</div></div></div>' +
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Brand</h3>' +
-      '<div class="row" style="align-items:center;gap:12px;margin-bottom:12px"><img src="/icons/icon.svg" alt="" style="width:56px;height:56px;border-radius:14px;background:#fff2;padding:6px" /><button class="ghost" disabled title="Backend endpoint required — /api/admin/config">Change logo</button></div>' +
-      '<div class="row" style="gap:10px;flex-wrap:wrap"><label style="font-size:12px;color:#8a8a99">Theme color</label><input id="cfg-color" type="color" value="' + esc(cfg.theme) + '" style="width:44px;height:34px;padding:0;border-radius:8px;border:1px solid #2a2a38;background:#13131c" /></div>' +
+      '<div class="row" style="align-items:center;gap:12px;margin-bottom:12px"><img src="/icons/icon.svg" alt="" style="width:56px;height:56px;border-radius:14px;background:var(--surface-3);padding:6px" /><button class="ghost" disabled title="Backend endpoint required — /api/admin/config">Change logo</button></div>' +
+      '<div class="row" style="gap:10px;flex-wrap:wrap"><label style="font-size:12px;color:var(--text-3)">Theme color</label><input id="cfg-color" type="color" value="' + esc(cfg.theme) + '" style="width:44px;height:34px;padding:2px" /></div>' +
       '<p class="muted" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:14px 0 6px">Accent</p>' +
       '<div class="sw" id="cfg-sw">' + ACCENTS.map(function (a) {
         return '<button data-acc="' + a + '"' + (cfg.accent === a ? ' class="on"' : '') + ' style="background:' + ACCENT_COLORS[a] + '" title="' + a + '"></button>';
       }).join('') + '</div></div>' +
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Defaults</h3>' +
-      '<label style="font-size:12px;color:#8a8a99">Default homepage shelves</label>' +
-      '<textarea id="cfg-shelves" rows="5" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff;font-size:13px;margin-top:4px">' + esc(cfg.defaultShelves) + '</textarea>' +
-      '<div class="row" style="gap:10px;margin-top:10px;flex-wrap:wrap"><label style="font-size:12px;color:#8a8a99">Default language</label>' +
-      '<select id="cfg-lang" style="padding:8px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff">' +
+      '<label style="font-size:12px;color:var(--text-3)">Default homepage shelves</label>' +
+      '<textarea id="cfg-shelves" rows="5" class="inp" style="margin-top:4px">' + esc(cfg.defaultShelves) + '</textarea>' +
+      '<div class="row" style="gap:10px;margin-top:10px;flex-wrap:wrap"><label style="font-size:12px;color:var(--text-3)">Default language</label>' +
+      '<select id="cfg-lang" class="inp">' +
         LANGUAGES_STATIC.map(function (l) { return '<option value="' + l + '"' + (cfg.defaultLang === l ? ' selected' : '') + '>' + (l.charAt(0).toUpperCase() + l.slice(1)) + '</option>'; }).join('') +
       '</select></div>' +
-      '<label style="font-size:12px;color:#8a8a99;display:block;margin-top:10px">Default playlists</label>' +
-      '<textarea id="cfg-pls" rows="4" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff;font-size:13px;margin-top:4px">' + esc(cfg.defaultPlaylists) + '</textarea></div>' +
+      '<label style="font-size:12px;color:var(--text-3);display:block;margin-top:10px">Default playlists</label>' +
+      '<textarea id="cfg-pls" rows="4" class="inp" style="margin-top:4px">' + esc(cfg.defaultPlaylists) + '</textarea></div>' +
       '<div class="card" id="cfg-mm-box" style="margin-bottom:14px"><h3 style="margin-top:0">Maintenance mode message</h3>' +
       '<p class="muted" style="font-size:12px">Reads / writes to <code>/api/admin/site-mode</code> via /api/admin/maintenance.</p>' +
-      '<textarea id="cfg-mm" rows="3" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a2a38;background:#13131c;color:#fff;font-size:13px" placeholder="Loading current…"></textarea>' +
+      '<textarea id="cfg-mm" rows="3" class="inp" placeholder="Loading current…"></textarea>' +
       '<div class="row" style="margin-top:10px;gap:8px"><button id="cfg-mm-save">Save maintenance message</button><span class="muted" id="cfg-mm-out" style="font-size:12px"></span></div></div>' +
       '<div class="row" style="gap:8px"><button id="cfg-save">Save config (local)</button><button class="ghost" id="cfg-reset">Reset to defaults</button><span class="muted" id="cfg-out" style="font-size:12px"></span></div>';
     // Load overview for name + version
@@ -2289,13 +2289,13 @@
       var sw = f.colors.map(function (c) {
         return '<i style="display:inline-block;width:16px;height:16px;border-radius:5px;margin-right:4px;background:' + esc(c) + ';border:1px solid rgba(255,255,255,.18)"></i>';
       }).join('');
-      return '<div class="card" style="padding:14px 16px' + (isForced ? ';box-shadow:inset 0 0 0 1.5px rgba(34,211,238,.7)' : '') + '">' +
+      return '<div class="card" style="padding:14px 16px' + (isForced ? ';box-shadow:inset 0 0 0 1.5px var(--accent)' : '') + '">' +
         '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px">' +
           '<span style="font-size:20px">' + f.emoji + '</span>' + esc(f.name) +
           (isForced ? '<span class="pill">forced</span>' : (isAuto ? '<span class="pill">active today</span>' : '')) +
         '</div>' +
         '<div class="muted" style="font-size:11.5px;margin:6px 0 2px">' + esc(f.when) + '</div>' +
-        '<div class="muted" style="font-size:11px;margin:0 0 8px;color:#8f8fa3">' + esc(f.fx || '') + '</div>' +
+        '<div class="muted" style="font-size:11px;margin:0 0 8px;color:var(--text-3)">' + esc(f.fx || '') + '</div>' +
         '<div style="margin-bottom:10px">' + sw + '</div>' +
         (isForced
           ? '<button class="ghost ft-auto" style="padding:5px 12px;font-size:12px">Back to auto</button>'
@@ -2525,7 +2525,7 @@
     try { new MutationObserver(function () { enhanceTables(); }).observe($('view'), { childList: true }); } catch (e) {}
     try {
       var sel = document.createElement('select');
-      sel.style.cssText = 'padding:7px 11px;border-radius:999px;border:1px solid #2a2a38;background:#13131c;color:#cfcfda;font-size:12px;cursor:pointer';
+      sel.title = 'Auto-refresh interval';
       [[5000, '5s'], [10000, '10s'], [30000, '30s'], [60000, '1m']].forEach(function (o) {
         var op = document.createElement('option'); op.value = o[0]; op.textContent = 'Every ' + o[1];
         if (o[0] === refreshMs) op.selected = true; sel.appendChild(op);
@@ -2581,7 +2581,7 @@
           'Plays today: ' + (s.plays_today || 0) + ' · 7d: ' + (s.plays_7d || 0) + '\n' +
           'Users: ' + (s.total_users || 0) + ' total · +' + (s.new_today || 0) + ' today · DAU ' + (s.dau || 0) + ' / WAU ' + (s.wau || 0) + ' / MAU ' + (s.mau || 0) + '\n' +
           'Errors (24h): ' + (s.errors_24h || 0) + ' · New feedback: ' + (s.feedback_new || 0);
-        try { navigator.clipboard.writeText(txt).then(function () { $('report').textContent = '✓'; setTimeout(function () { $('report').textContent = '📋'; }, 1200); }); } catch (err) { vxPrompt('Copy the report text below:', { title: 'Day report', value: txt, okText: 'Done' }); }
+        try { navigator.clipboard.writeText(txt).then(function () { $('report').textContent = 'Copied'; setTimeout(function () { $('report').textContent = 'Report'; }, 1200); }); } catch (err) { vxPrompt('Copy the report text below:', { title: 'Day report', value: txt, okText: 'Done' }); }
       }).catch(noop);
     });
 
