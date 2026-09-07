@@ -258,19 +258,6 @@ export default function NowPlayingPage() {
   // v5.7.11 — one canvas state for both surfaces (mobile backdrop / PC square).
   const canvas = useSongCanvas(song);
   const canvasOn = !!canvas.src;
-  // Where the immersive overlay goes: the sheet's own horizontal span (on
-  // desktop the player sits beside the sidebar — the overlay must too).
-  const [overlayBox, setOverlayBox] = useState<{ left: number; width: number } | null>(null);
-  useEffect(() => {
-    if (!chromeHidden) return;
-    const measure = () => {
-      const r = sheetRef.current?.getBoundingClientRect();
-      setOverlayBox(r ? { left: r.left, width: r.width } : null);
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [chromeHidden]);
   // The clip went away (no video for this song, canvas toggled off, playback
   // failed) — hand the controls straight back rather than leaving a blank.
   useEffect(() => {
@@ -302,6 +289,43 @@ export default function NowPlayingPage() {
       />
     );
   }
+
+  // The three gesture thirds over the clip / artwork: double-tap seek on the
+  // edges, double-tap favourite in the middle, single tap toggles the
+  // controls when a clip is on. Shared by the in-sheet pane and the
+  // immersive layer.
+  const tapZones = (
+    <>
+      <button
+        aria-label={canvasOn ? 'Rewind 10 seconds (double tap), or tap to toggle the controls' : 'Rewind 10 seconds (double tap)'}
+        onClick={canvasOn ? onCanvasTap : undefined}
+        onDoubleClick={() => {
+          cancelTap();
+          doubleSeek(-1);
+        }}
+        className="absolute inset-y-0 left-0 w-1/3 rounded-l-3xl"
+      />
+      <button
+        aria-label={canvasOn ? 'Double tap to favorite, or tap to toggle the controls' : 'Double tap to favorite'}
+        onClick={canvasOn ? onCanvasTap : undefined}
+        onDoubleClick={() => {
+          cancelTap();
+          useLibraryStore.getState().toggleFavorite(song);
+          haptic('medium');
+        }}
+        className="absolute inset-y-0 left-1/3 w-1/3"
+      />
+      <button
+        aria-label={canvasOn ? 'Forward 10 seconds (double tap), or tap to toggle the controls' : 'Forward 10 seconds (double tap)'}
+        onClick={canvasOn ? onCanvasTap : undefined}
+        onDoubleClick={() => {
+          cancelTap();
+          doubleSeek(1);
+        }}
+        className="absolute inset-y-0 right-0 w-1/3 rounded-r-3xl"
+      />
+    </>
+  );
 
   const upNext = queue.slice(index + 1, index + 6);
   const playingFrom = song.album?.name ?? 'Your Queue';
@@ -382,7 +406,7 @@ export default function NowPlayingPage() {
         )}
         {/* v5.7.12 — the video canvas: the clip fills the whole player behind
             the gradients on every screen size (Spotify-canvas style). */}
-        <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />
+        {!chromeHidden && <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />}
         <div
           aria-hidden
           className="absolute inset-0 transition-opacity duration-500"
@@ -436,10 +460,9 @@ export default function NowPlayingPage() {
         {/* Artwork */}
         {/* Artwork card normally; with a clip on (v5.9.0, Spotify Canvas), a
             transparent edge-to-edge pane over the full-screen clip that owns
-            every gesture. The outer box always holds its place in the flow —
-            in immersive mode only the inner gesture layer goes full-screen,
-            so the sheet keeps its height and the clip never re-crops when
-            the controls come and go. */}
+            every gesture. Immersive mode is a separate viewport-fixed layer
+            (see the portal below), so nothing here re-flows when the
+            controls come and go. */}
         <div
           className={cn(
             canvasOn
@@ -455,7 +478,7 @@ export default function NowPlayingPage() {
         <div
           className={cn(
             'select-none touch-pan-x',
-            chromeHidden ? 'fixed inset-0 z-20' : canvasOn ? 'absolute inset-0' : 'relative',
+            canvasOn ? 'absolute inset-0' : 'relative',
           )}
           data-deter-context
           onTouchStart={onArtTouchStart}
@@ -474,34 +497,7 @@ export default function NowPlayingPage() {
           {/* Empty window over the clip while the canvas plays; the still
               artwork the moment it's off (see SongCanvas). */}
           <SongCanvas canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} hideToggle={chromeHidden} />
-          <button
-            aria-label={canvasOn ? 'Rewind 10 seconds (double tap), or tap to hide the controls' : 'Rewind 10 seconds (double tap)'}
-            onClick={canvasOn ? onCanvasTap : undefined}
-            onDoubleClick={() => {
-              cancelTap();
-              doubleSeek(-1);
-            }}
-            className="absolute inset-y-0 left-0 w-1/3 rounded-l-3xl"
-          />
-          <button
-            aria-label={canvasOn ? 'Double tap to favorite, or tap to hide the controls' : 'Double tap to favorite'}
-            onClick={canvasOn ? onCanvasTap : undefined}
-            onDoubleClick={() => {
-              cancelTap();
-              useLibraryStore.getState().toggleFavorite(song);
-              haptic('medium');
-            }}
-            className="absolute inset-y-0 left-1/3 w-1/3"
-          />
-          <button
-            aria-label={canvasOn ? 'Forward 10 seconds (double tap), or tap to hide the controls' : 'Forward 10 seconds (double tap)'}
-            onClick={canvasOn ? onCanvasTap : undefined}
-            onDoubleClick={() => {
-              cancelTap();
-              doubleSeek(1);
-            }}
-            className="absolute inset-y-0 right-0 w-1/3 rounded-r-3xl"
-          />
+          {tapZones}
         </div>
         </div>
 
@@ -874,19 +870,31 @@ export default function NowPlayingPage() {
         </div>
         </div>
       </div>
-      {/* Portalled to <body>: the sheet's own transform would otherwise make
-          it the containing block, pinning this to the bottom of the (taller
-          than the screen) sheet instead of the bottom of the screen. */}
+      {/* v5.9.1 — immersive mode is its own layer on <body>, pinned to the
+          viewport. Inside the sheet the clip scrolled and dragged with the
+          sheet (a black band above the video whenever the page had moved);
+          out here it can't. The sheet's backdrop clip yields to this one so
+          only one <video> decodes. */}
       {chromeHidden &&
         createPortal(
           <div
-            aria-hidden
-            className="fixed inset-x-0 bottom-0 z-30 px-6 pt-20 pb-[max(1.5rem,env(safe-area-inset-bottom))] pointer-events-none bg-gradient-to-t from-ink-950/85 via-ink-950/45 to-transparent animate-fade-up"
-            style={overlayBox ? { left: overlayBox.left, width: overlayBox.width } : undefined}
+            className="fixed inset-0 z-[60] bg-ink-950 select-none touch-pan-x overflow-hidden animate-fade-up"
+            data-deter-context
+            onTouchStart={onArtTouchStart}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={onArtTouchEnd}
           >
-            <p className="text-lg font-bold text-white truncate">{song.title}</p>
-            <p className="text-sm text-white/70 truncate">{song.subtitle}</p>
-            <CanvasProgress />
+            <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />
+            <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-ink-950/60" />
+            {tapZones}
+            <div
+              aria-hidden
+              className="absolute inset-x-0 bottom-0 px-6 pt-20 pb-[max(1.5rem,env(safe-area-inset-bottom))] pointer-events-none bg-gradient-to-t from-ink-950/85 via-ink-950/45 to-transparent"
+            >
+              <p className="text-lg font-bold text-white truncate">{song.title}</p>
+              <p className="text-sm text-white/70 truncate">{song.subtitle}</p>
+              <CanvasProgress />
+            </div>
           </div>,
           document.body,
         )}

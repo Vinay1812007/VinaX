@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.9.1': {
+    title: 'Full-screen video, pinned',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Tap-to-hide on a video now pins the clip to the whole screen \u2014 no more black band above it when the page had been scrolled or dragged. Swipe up or down for next / previous and double-tap to seek still work in full-screen.',
+      },
+    ],
+  },
   '5.9.0': {
     title: 'The Spotify look',
     changes: [
