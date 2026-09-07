@@ -6,6 +6,7 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { applyArtColor, extractAverageColor, extractVibrantColor } from '@/utils/color';
 import { cn } from '@/utils/cn';
 import { Seekbar } from './Seekbar';
+import { NowLine } from './NowLine';
 import { FavButton } from './FavButton';
 import { IconButton } from './IconButton';
 import { Marquee } from './Marquee';
@@ -45,6 +46,8 @@ export function PlayerBar() {
   const muted = usePlayerStore((s) => s.muted);
   const sleepAt = usePlayerStore((s) => s.sleepAt);
   const sleepAfterTrack = usePlayerStore((s) => s.sleepAfterTrack);
+  const sleepSongsLeft = usePlayerStore((s) => s.sleepSongsLeft);
+  const setSleepSongs = usePlayerStore((s) => s.setSleepSongs);
   // Subscribe to the actions selectorly so a future refactor that closes
   // over state doesn't leave us with a stale closure (audit finding M10).
   // Zustand action refs are stable, so this pattern is one selector per
@@ -59,15 +62,18 @@ export function PlayerBar() {
   const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
   const setSleepAfterTrack = usePlayerStore((s) => s.setSleepAfterTrack);
 
-  const sleepActive = sleepAt != null || sleepAfterTrack;
+  const sleepActive = sleepAt != null || sleepAfterTrack || sleepSongsLeft > 0;
   const sleepLabel = sleepAfterTrack
     ? 'end'
+    : sleepSongsLeft > 0
+      ? `${sleepSongsLeft} song${sleepSongsLeft === 1 ? '' : 's'}`
     : sleepAt
       ? `${Math.max(1, Math.ceil((sleepAt - Date.now()) / 60_000))}m`
       : '';
   const cancelSleep = () => {
     setSleepTimer(null);
     setSleepAfterTrack(false);
+    setSleepSongs(0);
   };
   const navigate = useNavigate();
   const [accent, setAccent] = useState<string | null>(null);
@@ -227,6 +233,7 @@ export function PlayerBar() {
             </div>
             <div className="w-full max-w-xl">
               <Seekbar />
+              <NowLine />
             </div>
           </div>
 

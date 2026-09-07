@@ -29,6 +29,9 @@ export function TrackMenu({ song }: { song: Song }) {
   const addToCollection = useLibraryStore((s) => s.addToCollection);
   const createCollection = useLibraryStore((s) => s.createCollection);
   const toggleHidden = useLibraryStore((s) => s.toggleHidden);
+  const toggleLater = useLibraryStore((s) => s.toggleLater);
+  const inLater = useLibraryStore((s) => s.later.some((x) => x.id === song.id));
+  const toggleHiddenArtist = useLibraryStore((s) => s.toggleHiddenArtist);
   const downloaded = useDownloadsStore((s) => !!s.items[song.id]);
   const downloading = useDownloadsStore((s) => !!s.downloading[song.id]);
   // Package C4 — the honest "why am I seeing this?" line (AI DJ or local scorer).
@@ -53,6 +56,14 @@ export function TrackMenu({ song }: { song: Song }) {
     { label: 'Play next', action: () => enqueueNext(song) },
     { label: 'Add to queue', action: () => enqueue(song) },
     { label: 'Start radio', action: () => startRadio(song) },
+    // v5.12.0 — Listen Later: the one-tap "come back to this" list.
+    {
+      label: inLater ? 'Remove from Listen Later' : 'Listen later',
+      action: () => {
+        toggleLater(song);
+        toast(inLater ? 'Removed from Listen Later' : 'Saved to Listen Later');
+      },
+    },
     { label: 'Song details', action: () => navigate(songPath(song)) },
     song.album?.id ? { label: 'Go to album', action: () => navigate(albumPath(song.album!)) } : null,
     song.artists[0]?.id
@@ -118,6 +129,17 @@ export function TrackMenu({ song }: { song: Song }) {
           action: () => {
             softMuteArtist(song, 14);
             toast(`Muted ${song.artists[0].name} for 2 weeks`);
+          },
+        }
+      : null,
+    song.artists[0]?.name
+      ? {
+          // v5.12.0 — hard block: this artist never plays from any feed,
+          // radio or autoplay again until removed in Settings → Playback.
+          label: `Never play ${song.artists[0].name.slice(0, 20)}${song.artists[0].name.length > 20 ? '…' : ''}`,
+          action: () => {
+            toggleHiddenArtist(song.artists[0].name);
+            toast(`${song.artists[0].name} won’t play again · undo in Settings`);
           },
         }
       : null,

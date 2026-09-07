@@ -1,4 +1,5 @@
 import {
+  BookmarkIcon,
   ClockIcon,
   CompassIcon,
   DownloadIcon,
@@ -48,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/library', label: 'Library', icon: LibraryIcon },
       { to: '/favorites', label: 'Favorites', icon: HeartIcon },
+      { to: '/later', label: 'Listen Later', icon: BookmarkIcon },
       { to: '/history', label: 'History', icon: ClockIcon },
       { to: '/queue', label: 'Queue', icon: QueueIcon },
       { to: '/stats', label: 'Your VinaX', icon: SparkleIcon },

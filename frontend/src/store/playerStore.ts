@@ -37,6 +37,11 @@ export interface PlayerState {
   rate: number;
   sleepAt: number | null;
   sleepAfterTrack: boolean;
+  /** v5.12.0 — stop after this many more songs finish (0 = off). */
+  sleepSongsLeft: number;
+  /** v5.12.0 — A-B repeat: loop between these positions (seconds); null = off. */
+  loopA: number | null;
+  loopB: number | null;
   currentAccent: string | null;
   streamKbps: number | null;
   /** True while following a Listen Together host — suppresses AI auto-extend. */
@@ -47,6 +52,9 @@ export interface PlayerState {
   queueSource: 'ai' | 'instant';
 
   initEngine(): void;
+  setSleepSongs(n: number): void;
+  setLoopPoint(which: 'A' | 'B'): void;
+  clearLoop(): void;
   playQueue(songs: Song[], startIndex?: number): void;
   tuneQueue(intent: TuneIntent): void;
   playSong(song: Song): void;
@@ -235,7 +243,7 @@ export const usePlayerStore = create<PlayerState>()(
       }
 
       async function appendSimilar(seed: Song): Promise<boolean> {
-        const [{ similarToSong }, { loadProfile }, { useLibraryStore }, { resolvedRegion }] =
+        const [{ similarToSong }, { loadProfile }, { useLibraryStore, isSongBlocked }, { resolvedRegion }] =
           await Promise.all([
             import('@/services/recommendation/engine'),
             import('@/services/personalization/storage'),
@@ -301,7 +309,10 @@ export const usePlayerStore = create<PlayerState>()(
           const onPinned = pool.filter((s) => s.language != null && pinnedSet.has(s.language));
           if (onPinned.length) pool = onPinned;
         }
-        pool = dedupeSongs(stripExplicit(pool));
+        // v5.12.0 — "Never play" artists and hidden songs are dropped from
+        // every continuation, radio and autoplay, not only the home feeds.
+        const lib = useLibraryStore.getState();
+        pool = dedupeSongs(stripExplicit(pool)).filter((s) => !isSongBlocked(s, lib));
         const fresh = pool.slice(0, 6);
         if (tune) for (const s of fresh) tuneSuggested.add(s.id);
         // Top up from a direct on-language search so the queue stays 100% in the
@@ -388,14 +399,17 @@ export const usePlayerStore = create<PlayerState>()(
 
       function handleEnded(): void {
         resetSkipGuard(); // a track finished — sources are alive
-        const { queue, index, duration, repeat, sleepAt, sleepAfterTrack } = get();
+        const { queue, index, duration, repeat, sleepAt, sleepAfterTrack, sleepSongsLeft } = get();
         const song = queue[index];
         if (song) {
           recordComplete(song, duration);
           useHistoryStore.getState().markCompleted(song.id);
         }
-        if (sleepAfterTrack || (sleepAt && Date.now() >= sleepAt)) {
-          set({ sleepAt: null, sleepAfterTrack: false, isPlaying: false });
+        // v5.12.0 — sleep after N songs counts down here; the last one stops.
+        const songsDone = sleepSongsLeft > 0 ? sleepSongsLeft - 1 : 0;
+        if (sleepSongsLeft > 0) set({ sleepSongsLeft: songsDone });
+        if (sleepAfterTrack || (sleepSongsLeft === 1) || (sleepAt && Date.now() >= sleepAt)) {
+          set({ sleepAt: null, sleepAfterTrack: false, sleepSongsLeft: 0, isPlaying: false });
           audioEngine.pause();
           toast('Sleep timer: playback stopped');
           return;
@@ -456,6 +470,9 @@ export const usePlayerStore = create<PlayerState>()(
         rate: 1,
         sleepAt: null,
         sleepAfterTrack: false,
+        sleepSongsLeft: 0,
+        loopA: null,
+        loopB: null,
         currentAccent: null,
         streamKbps: null,
         followMode: false,
@@ -468,6 +485,9 @@ export const usePlayerStore = create<PlayerState>()(
           audioEngine.init({
             onTime: (currentTime, duration) => {
               set({ currentTime, duration });
+              // v5.12.0 — A-B repeat: bounce back to A the moment B passes.
+              const { loopA, loopB } = get();
+              if (loopA != null && loopB != null && loopB > loopA && currentTime >= loopB) audioEngine.seek(loopA);
               updatePositionState(duration, currentTime, get().rate);
               const playing = get().queue[get().index];
               const _sec5 = Math.floor(currentTime / 5); if (playing && _sec5 !== _lastResumedSec && Math.floor(currentTime) % 5 === 0) { _lastResumedSec = _sec5; saveResume(playing.id, currentTime, duration); }
@@ -563,12 +583,20 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           resetSkipGuard(); // manual play — the user vouches for the sources
-          set({ queue: [seed], index: 0, currentTime: 0 });
+          set({ queue: [seed], index: 0, currentTime: 0, loopA: null, loopB: null });
           startTrack(seed, true);
           void extendQueue(seed).catch(() => false);
         },
 
         playSong: (song) => get().playQueue([song], 0),
+        setSleepSongs: (n) => set({ sleepSongsLeft: Math.max(0, Math.round(n)), sleepAfterTrack: false, sleepAt: null }),
+        setLoopPoint: (which) => {
+          const { currentTime, loopA, loopB } = get();
+          if (which === 'A') set({ loopA: currentTime, loopB: loopB != null && loopB > currentTime ? loopB : null });
+          else if (loopA != null && currentTime > loopA + 0.5) set({ loopB: currentTime });
+          else set({ loopA: Math.max(0, currentTime - 10), loopB: currentTime });
+        },
+        clearLoop: () => set({ loopA: null, loopB: null }),
         tuneQueue: (intent) => {
           const { queue, index } = get();
           const current = queue[index];
@@ -583,7 +611,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (index < 0 || index >= queue.length) return;
           resetSkipGuard(); // manual play
           maybeRecordSkip(true);
-          set({ index, currentTime: 0 });
+          set({ index, currentTime: 0, loopA: null, loopB: null });
           startTrack(queue[index], true);
         },
 

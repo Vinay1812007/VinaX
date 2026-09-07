@@ -8,7 +8,8 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { SongRow } from '@/components/SongRow';
 import { EmptyState } from '@/components/States';
-import { PlusIcon, UsersIcon, XIcon, ClockIcon } from '@/components/Icons';
+import { BookmarkIcon, PlusIcon, UsersIcon, XIcon, ClockIcon } from '@/components/Icons';
+import { ImportPlaylistSheet } from '@/components/ImportPlaylistSheet';
 import { PageHeader } from '@/components/PageHeader';
 
 export default function LibraryPage() {
@@ -19,10 +20,23 @@ export default function LibraryPage() {
   const { createCollection, deleteCollection } = useLibraryStore.getState();
   const history = useHistoryStore((s) => s.entries);
   const [newName, setNewName] = useState('');
+  const [importing, setImporting] = useState(false);
 
   return (
     <div className="max-w-4xl mx-auto vx-stagger">
-      <PageHeader title="Library" subtitle="Everything here lives on this device only." />
+      <PageHeader
+        title="Library"
+        subtitle="Everything here lives on this device only."
+        actions={
+          <>
+            <Link to="/later" className="btn-secondary px-3 py-2 text-xs font-bold inline-flex items-center gap-1.5">
+              <BookmarkIcon className="w-4 h-4" /> Listen Later
+            </Link>
+            <button onClick={() => setImporting(true)} className="btn-secondary px-3 py-2 text-xs font-bold">Import from text</button>
+          </>
+        }
+      />
+      {importing && <ImportPlaylistSheet onClose={() => setImporting(false)} />}
 
       <Link
         to="/together"

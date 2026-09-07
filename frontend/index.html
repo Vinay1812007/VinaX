@@ -70,9 +70,10 @@
           document.documentElement.style.setProperty('--glass-alpha', String(1 - 0.55 * (gl / 100)));
           var gb = typeof st.glassBlur === 'number' ? Math.min(100, Math.max(0, st.glassBlur)) : 40;
           document.documentElement.style.setProperty('--glass-blur-boost', String(gb / 100));
+          var hr = new Date().getHours();
           var dark = pref === 'system'
             ? window.matchMedia('(prefers-color-scheme: dark)').matches
-            : pref !== 'light';
+            : pref === 'auto' ? !(hr >= 7 && hr < 19) : pref !== 'light';
           var cls = document.documentElement.classList;
           cls.toggle('light', !dark);
           cls.toggle('dark', dark);

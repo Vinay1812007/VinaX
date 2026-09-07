@@ -5,7 +5,7 @@ import { rankSongs } from '@/features/search/useSearch';
 import { loadProfile } from '@/services/personalization/storage';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { useSettingsStore } from '@/store/settingsStore';
-import { useLibraryStore } from '@/store/libraryStore';
+import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { languageLabel } from '@/constants/languages';
 
 function todaySeed(): string {
@@ -58,8 +58,8 @@ export function useDailyMix() {
           }
         }
       }
-      const hidden = new Set(useLibraryStore.getState().hiddenSongIds);
-      const ranked = rankSongs(pool).filter((x) => !hidden.has(x.id));
+      const lib = useLibraryStore.getState();
+      const ranked = rankSongs(pool).filter((x) => !isSongBlocked(x, lib));
       const onLang = pinned.length ? ranked.filter((x) => x.language != null && pinned.includes(x.language)) : ranked;
       return seededPick(onLang.length >= 8 ? onLang : ranked, seed + 'x', 20);
     },

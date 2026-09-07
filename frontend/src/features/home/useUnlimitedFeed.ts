@@ -4,7 +4,7 @@ import type { Song } from '@/types';
 import { searchSongsPage } from '@/services/api';
 import { rankSongs } from '@/features/search/useSearch';
 import { useSettingsStore } from '@/store/settingsStore';
-import { useLibraryStore } from '@/store/libraryStore';
+import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { languageLabel } from '@/constants/languages';
 
 const YEAR = new Date().getFullYear();
@@ -62,8 +62,8 @@ export function useUnlimitedFeed() {
       const upstreamPage = (Math.floor(p / combos) % 6) + 1; // cycle upstream pages 1..6
       const seed = template(languageLabel(language).toLowerCase());
       try {
-        const hidden = new Set(useLibraryStore.getState().hiddenSongIds);
-        return rankSongs(await searchSongsPage(seed, upstreamPage, 24)).filter((x) => !hidden.has(x.id));
+        const lib = useLibraryStore.getState();
+        return rankSongs(await searchSongsPage(seed, upstreamPage, 24)).filter((x) => !isSongBlocked(x, lib));
       } catch {
         return [] as Song[]; // a dead seed never ends the feed
       }

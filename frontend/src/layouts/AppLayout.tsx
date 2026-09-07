@@ -23,6 +23,7 @@ import { initLockScreenLyrics } from '@/services/media-session/lockscreenLyrics'
 import { initDownloads } from '@/services/downloads';
 import { initSpatialNav } from '@/services/tv/spatialNav';
 import { initAlarm } from '@/services/alarm';
+import { initDjVoice } from '@/features/player/djVoice';
 import { ShortcutsModal } from '@/components/ShortcutsModal';
 import { UpdateDialog } from '@/components/UpdateDialog';
 // Boot overlays (festival splash, What's-New sheet) render at most once per
@@ -184,6 +185,7 @@ export function AppLayout() {
       initSpatialNav();
       initAlarm();
       initAudioOutputWatcher();
+      initDjVoice();
       useCastStore.getState().init();
       // Android 13+: media notification needs notification permission.
       void requestNotificationPermissionOnce();
@@ -275,6 +277,12 @@ export function AppLayout() {
     const apply = () => {
       const resolved = resolveTheme(theme, window.matchMedia('(prefers-color-scheme: dark)').matches);
       applyThemeClasses(resolved);
+      // v5.12.0 — Auto follows the clock; re-check each minute so the sunset
+      // flip happens without a reload.
+      if (theme === 'auto') {
+        const t = window.setInterval(() => applyThemeClasses(resolveTheme('auto', false)), 60_000);
+        return () => window.clearInterval(t);
+      }
       document.documentElement.dataset.accent = accent;
       document.documentElement.dataset.density = density;
       applyGlassLevel(glassLevel, glassBlur);

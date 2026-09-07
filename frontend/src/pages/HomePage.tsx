@@ -23,6 +23,7 @@ import { DownloadCta } from '@/components/DownloadCta';
 import { IconButton } from '@/components/IconButton';
 import { MoonIcon, SearchIcon, SettingsIcon, SunIcon, SparkleIcon, PlayIcon } from '@/components/Icons';
 import { useHistoryStore } from '@/store/historyStore';
+import { onThisDay } from '@/features/home/onThisDay';
 import { getLocal } from '@/services/storage/local';
 import { KEYS } from '@/constants/storage-keys';
 import { toast } from '@/store/toastStore';
@@ -197,6 +198,7 @@ export default function HomePage() {
   const shelfOrder = homeShelfOrder(useExperiment(EXP_HOME_SHELF_ORDER));
   // Cross-shelf de-dupe: each shelf shows only songs not already shown above it.
   const dedupe = createShelfDeduper();
+  const memories = useMemo(() => onThisDay(historyEntries), [historyEntries]);
   const heroSongs = daily.data?.length ? daily.data : trendingNow.data?.length ? trendingNow.data : feedSongs;
 
   // Quick-play home-screen widget: the widget launches the app with
@@ -333,6 +335,11 @@ export default function HomePage() {
     <>
       {/* 1. Continue Listening — pick up where you left off */}
       <SongShelf title="Continue Listening" explanation="Pick up where you left off" songs={dedupe(continueListening)} seeAllTo="/history" />
+
+      {/* v5.12.0 — On this day: what you played on this date in earlier months/years */}
+      {memories && (
+        <SongShelf title="On this day" explanation={`You were playing these ${memories.label.toLowerCase()}`} songs={memories.songs} seeAllTo="/history" />
+      )}
 
       {/* 3. Recently Played Albums — hydrated from local history */}
       {recentAlbums.isLoading ? (

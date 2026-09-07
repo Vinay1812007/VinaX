@@ -1,9 +1,11 @@
-export type ThemePref = 'dark' | 'light' | 'system' | 'amoled';
+export type ThemePref = 'dark' | 'light' | 'system' | 'amoled' | 'auto';
 export type ResolvedTheme = 'dark' | 'light' | 'amoled';
 
 /** Resolve the user preference against the system scheme. Pure. */
-export function resolveTheme(pref: ThemePref, systemPrefersDark: boolean): ResolvedTheme {
+export function resolveTheme(pref: ThemePref, systemPrefersDark: boolean, hour = new Date().getHours()): ResolvedTheme {
   if (pref === 'system') return systemPrefersDark ? 'dark' : 'light';
+  // v5.12.0 — Auto: light through the day (07:00–18:59), dark at night.
+  if (pref === 'auto') return hour >= 7 && hour < 19 ? 'light' : 'dark';
   return pref;
 }
 

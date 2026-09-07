@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 
 import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useLibraryStore } from '@/store/libraryStore';
 import { useRegion } from '@/features/location/useRegion';
 import {
   clearCachedMetadata,
@@ -54,6 +55,24 @@ function Row({ label, note, children, stack }: { label: string; note?: string; c
       </div>
       <div className={stack ? 'sm:shrink-0' : 'shrink-0'}>{children}</div>
     </div>
+  );
+}
+
+/** v5.12.0 — artists blocked with “Never play …” from a song menu, with undo. */
+function NeverPlayRow() {
+  const hiddenArtists = useLibraryStore((s) => s.hiddenArtists);
+  const toggleHiddenArtist = useLibraryStore((s) => s.toggleHiddenArtist);
+  if (!hiddenArtists.length) return null;
+  return (
+    <Row stack label="Never play" note="These artists are skipped everywhere. Tap one to allow them again.">
+      <div className="flex flex-wrap gap-1.5">
+        {hiddenArtists.map((a) => (
+          <Chip key={a} active onClick={() => toggleHiddenArtist(a)}>
+            {a.replace(/\b\w/g, (c) => c.toUpperCase())} ✕
+          </Chip>
+        ))}
+      </div>
+    </Row>
   );
 }
 
@@ -230,9 +249,9 @@ export default function SettingsPage() {
         </Row>
         <Row stack label="Theme">
           <div className="flex gap-1.5">
-            {(['dark', 'amoled', 'light', 'system'] as const).map((t) => (
+            {(['dark', 'amoled', 'light', 'system', 'auto'] as const).map((t) => (
               <Chip key={t} active={s.theme === t} onClick={() => s.setTheme(t)}>
-                {t === 'dark' ? 'Dark' : t === 'light' ? 'Light' : t === 'amoled' ? 'Black' : 'System'}
+                {t === 'dark' ? 'Dark' : t === 'light' ? 'Light' : t === 'amoled' ? 'Black' : t === 'system' ? 'System' : 'Auto (day/night)'}
               </Chip>
             ))}
           </div>
@@ -334,6 +353,19 @@ export default function SettingsPage() {
             </div>
           </Row>
         )}
+        <Row label="DJ voice" note="A short spoken intro as each song starts — “Now playing … by …”. Uses your device’s own voice, nothing leaves the phone.">
+          <Toggle on={s.djVoice} onChange={s.setDjVoice} label="DJ voice" />
+        </Row>
+        <Row stack label="Daily listening goal" note="A ring on Your VinaX fills as you listen through the day.">
+          <div className="flex flex-wrap gap-1.5">
+            {[0, 15, 30, 60, 120].map((n) => (
+              <Chip key={n} active={s.dailyGoalMinutes === n} onClick={() => s.setDailyGoalMinutes(n)}>
+                {n === 0 ? 'Off' : n >= 60 ? `${n / 60}h` : `${n} min`}
+              </Chip>
+            ))}
+          </div>
+        </Row>
+        <NeverPlayRow />
         <Row label="Resume playback" note="Pick up longer tracks where you left off.">
           <Toggle on={s.resumePlayback} onChange={s.setResumePlayback} label="Resume playback" />
         </Row>

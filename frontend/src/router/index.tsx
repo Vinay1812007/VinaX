@@ -49,6 +49,7 @@ const ArtistPage = lazy(() => import('@/pages/ArtistPage'));
 const LyricsPage = lazy(() => import('@/pages/LyricsPage'));
 const LibraryPage = lazy(() => import('@/pages/LibraryPage'));
 const FavoritesPage = lazy(() => import('@/pages/FavoritesPage'));
+const ListenLaterPage = lazy(() => import('@/pages/ListenLaterPage'));
 const HistoryPage = lazy(() => import('@/pages/HistoryPage'));
 const QueuePage = lazy(() => import('@/pages/QueuePage'));
 const NowPlayingPage = lazy(() => import('@/pages/NowPlayingPage'));
@@ -125,6 +126,7 @@ export const router = createBrowserRouter([
       { path: 'lyrics/:id', element: <LyricsPage /> },
       { path: 'library', element: <LibraryPage /> },
       { path: 'favorites', element: <FavoritesPage /> },
+      { path: 'later', element: <ListenLaterPage /> },
       { path: 'history', element: <HistoryPage /> },
       { path: 'queue', element: <QueuePage /> },
       { path: 'now-playing', element: <NowPlayingPage /> },

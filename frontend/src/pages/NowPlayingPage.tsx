@@ -97,6 +97,7 @@ function buildCreditChips(song: Song, filmTitle: string | null): CreditChip[] {
 }
 
 const SLEEP_OPTIONS = [15, 30, 60];
+const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
 /**
  * The hairline of progress that survives into immersive mode. It subscribes
@@ -128,12 +129,15 @@ export default function NowPlayingPage() {
   const muted = usePlayerStore((s) => s.muted);
   const sleepAt = usePlayerStore((s) => s.sleepAt);
   const sleepAfterTrack = usePlayerStore((s) => s.sleepAfterTrack);
+  const sleepSongsLeft = usePlayerStore((s) => s.sleepSongsLeft);
+  const loopA = usePlayerStore((s) => s.loopA);
+  const loopB = usePlayerStore((s) => s.loopB);
   const queue = usePlayerStore((s) => s.queue);
   const index = usePlayerStore((s) => s.index);
   const streamKbps = usePlayerStore((s) => s.streamKbps);
   const {
     togglePlay, next, prev, cycleRepeat, toggleShuffle, setRate, setVolume, toggleMute,
-    setSleepTimer, setSleepAfterTrack, playAt, startRadio, tuneQueue,
+    setSleepTimer, setSleepAfterTrack, playAt, startRadio, tuneQueue, setSleepSongs, setLoopPoint, clearLoop,
   } = usePlayerStore.getState();
   const reasons = useReasonStore((s) => s.reasons);
   const queueSource = usePlayerStore((s) => s.queueSource);
@@ -707,6 +711,33 @@ export default function NowPlayingPage() {
                 <button onClick={() => setSleepTimer(null)} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ember-400">
                   cancel ({Math.max(0, Math.round((sleepAt - Date.now()) / 60_000))}m)
                 </button>
+              )}
+            </div>
+            {/* v5.12.0 — sleep after N songs */}
+            <div className="flex items-center gap-0.5" role="group" aria-label="Sleep after songs">
+              <span className="text-[10px] font-bold text-ink-400 uppercase">Songs</span>
+              {[3, 5, 10].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setSleepSongs(sleepSongsLeft === n ? 0 : n)}
+                  className={cn('px-2.5 py-2 rounded-lg text-xs font-semibold', sleepSongsLeft === n ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')}
+                >
+                  {n}
+                </button>
+              ))}
+              {sleepSongsLeft > 0 && <span className="text-[11px] font-semibold text-ember-400 tabular-nums">{sleepSongsLeft} left</span>}
+            </div>
+            {/* v5.12.0 — A-B repeat: loop any passage */}
+            <div className="flex items-center gap-0.5" role="group" aria-label="A-B repeat">
+              <span className="text-[10px] font-bold text-ink-400 uppercase">Loop</span>
+              <button onClick={() => setLoopPoint('A')} className={cn('px-2.5 py-2 rounded-lg text-xs font-bold', loopA != null ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')}>
+                A{loopA != null ? ` ${fmtTime(loopA)}` : ''}
+              </button>
+              <button onClick={() => setLoopPoint('B')} className={cn('px-2.5 py-2 rounded-lg text-xs font-bold', loopB != null ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')}>
+                B{loopB != null ? ` ${fmtTime(loopB)}` : ''}
+              </button>
+              {(loopA != null || loopB != null) && (
+                <button onClick={clearLoop} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ink-400 hover:text-ink-100">clear</button>
               )}
             </div>
           </div>

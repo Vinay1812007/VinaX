@@ -87,6 +87,14 @@ describe('theme resolution + application', () => {
     expect(resolveTheme('amoled', false)).toBe('amoled');
   });
 
+  it('auto follows the clock: light 07:00–18:59, dark otherwise (v5.12.0)', () => {
+    expect(resolveTheme('auto', true, 7)).toBe('light');
+    expect(resolveTheme('auto', false, 12)).toBe('light');
+    expect(resolveTheme('auto', false, 18)).toBe('light');
+    expect(resolveTheme('auto', false, 19)).toBe('dark');
+    expect(resolveTheme('auto', false, 2)).toBe('dark');
+  });
+
   it('applies the right classes to the root element', () => {
     const root = document.createElement('html');
     applyThemeClasses('light', root);

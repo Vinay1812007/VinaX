@@ -4,6 +4,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { getStreak, getBestStreak } from '@/utils/streak';
+import { GoalRing } from '@/components/GoalRing';
 import { toast } from '@/store/toastStore';
 
 const BAR_COLORS = ['#22d3ee', '#60a5fa', '#a78bfa', '#67e8f9', '#c4b5fd'];
@@ -115,6 +116,9 @@ export default function StatsPage() {
           </span>
         </span>
       </div>
+
+      {/* v5.12.0 — daily listening goal (set in Settings → Playback) */}
+      <GoalRing />
 
       {/* Year in Music recap */}
       <Link

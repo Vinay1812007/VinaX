@@ -12,6 +12,21 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.12.0': {
+    title: 'Ten new ways to listen',
+    changes: [
+      { type: 'new', text: 'Listen Later \u2014 a one-tap \u201ccome back to this\u201d list from any song menu, with its own page under Your Music. Play all, queue all, and tap Done as you go.' },
+      { type: 'new', text: 'Never play an artist \u2014 pick \u201cNever play \u2026\u201d from a song menu and that artist is dropped from every feed, mix, radio and autoplay. Undo any time in Settings \u2192 Never play.' },
+      { type: 'new', text: 'A-B repeat \u2014 loop any passage of a song. Open More in Now Playing, tap A at the start and B at the end; Clear to stop.' },
+      { type: 'new', text: 'Sleep after 3, 5 or 10 songs \u2014 alongside the minute timer, and the count shows in the player bar.' },
+      { type: 'new', text: 'Import a playlist from text \u2014 paste any list (one song per line, \u201cTitle \u2014 Artist\u201d) in Library \u2192 Import from text and VinaX finds every song and saves it as a playlist.' },
+      { type: 'new', text: 'Daily listening goal \u2014 choose 15 minutes to 2 hours in Settings and a ring on Your VinaX fills as you listen through the day.' },
+      { type: 'new', text: 'On this day \u2014 a Home shelf of what you were playing on this date last month or last year, built from your own history.' },
+      { type: 'new', text: 'Auto theme \u2014 light by day, dark by night, switching on its own at 7 am and 7 pm. Pick \u201cAuto\u201d under Theme.' },
+      { type: 'new', text: 'DJ voice \u2014 an optional spoken intro as each song starts, using your device\u2019s own voice. Off by default; switch it on in Settings \u2192 Playback.' },
+      { type: 'new', text: 'Live lyric line in the desktop player bar \u2014 the line being sung right now, under the seekbar, whenever a song has synced lyrics.' },
+    ],
+  },
   '5.11.6': {
     title: 'Light and Black, finished',
     changes: [

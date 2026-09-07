@@ -17,6 +17,19 @@ let _hiddenIds = new Set<string>();
  * until reload (audit finding H1). Callers must now pass the FULL snapshot
  * or the compiler will flag it.
  */
+/** Normalised artist name for the never-play list. */
+export function artistKey(name: string): string {
+  return name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** v5.12.0 — true when a song is hidden outright or credited to a never-play artist. */
+export function isSongBlocked(song: Song, state: { hiddenSongIds: string[]; hiddenArtists: string[] }): boolean {
+  if (state.hiddenSongIds.includes(song.id)) return true;
+  if (!state.hiddenArtists.length) return false;
+  const names = [...song.artists.map((a) => a.name), ...song.subtitle.split(',')].map(artistKey).filter(Boolean);
+  return names.some((n) => state.hiddenArtists.includes(n));
+}
+
 function rebuildIndexes(state: { favorites: Song[]; saved: SavedEntity[]; hiddenSongIds: string[] }) {
   _favIds = new Set(state.favorites.map(s => s.id));
   _savedIds = new Set(state.saved.map(e => e.id));
@@ -44,6 +57,10 @@ export interface LibraryState {
   collections: LocalCollection[];
   saved: SavedEntity[];
   hiddenSongIds: string[];
+  /** v5.12.0 — Listen Later: a lightweight 'save for later' queue, separate from favorites. */
+  later: Song[];
+  /** v5.12.0 — artists the listener never wants to hear (normalised lower-case names). */
+  hiddenArtists: string[];
 
   toggleFavorite(song: Song): void;
   isFavorite(id: string): boolean;
@@ -58,6 +75,10 @@ export interface LibraryState {
   removeFromCollection(collectionId: string, songId: string): void;
   renameCollection(id: string, name: string): void;
   moveInCollection(collectionId: string, from: number, to: number): void;
+  toggleLater(song: Song): void;
+  isLater(id: string): boolean;
+  toggleHiddenArtist(name: string): void;
+  isArtistHidden(song: Song): boolean;
 }
 
 export const useLibraryStore = create<LibraryState>()(
@@ -67,6 +88,20 @@ export const useLibraryStore = create<LibraryState>()(
       collections: [],
       saved: [],
       hiddenSongIds: [],
+      later: [],
+      hiddenArtists: [],
+      toggleLater: (song) => {
+        const has = get().later.some((s) => s.id === song.id);
+        set({ later: has ? get().later.filter((s) => s.id !== song.id) : [song, ...get().later].slice(0, 500) });
+      },
+      isLater: (id) => get().later.some((s) => s.id === id),
+      toggleHiddenArtist: (name) => {
+        const key = artistKey(name);
+        if (!key) return;
+        const list = get().hiddenArtists;
+        set({ hiddenArtists: list.includes(key) ? list.filter((a) => a !== key) : [...list, key] });
+      },
+      isArtistHidden: (song) => isSongBlocked(song, get()),
       toggleFavorite: (song) => {
         if (!get().favorites.some((s) => s.id === song.id))
           void import('@/services/analytics/telemetry').then((m) => m.trackFavorite(song));

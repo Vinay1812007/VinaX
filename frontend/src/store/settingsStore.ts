@@ -5,8 +5,12 @@ import { KEYS } from '@/constants/storage-keys';
 import type { AudioQualityPref } from '@/services/audio/engine';
 
 export interface SettingsState {
-  theme: 'dark' | 'light' | 'system' | 'amoled';
+  theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto';
   accent: string;
+  /** v5.12.0 — daily listening goal in minutes (0 = off). */
+  dailyGoalMinutes: number;
+  /** v5.12.0 — radio-DJ voice: announces each song as it starts. */
+  djVoice: boolean;
   /** 0-100 — iOS-style adjustable glass translucency (utils/theme.ts). */
   glassLevel: number;
   /** 0-100 — background blur intensity, independent from glassLevel. */
@@ -47,7 +51,9 @@ export interface SettingsState {
   /** Home builder: custom block order; [] = default order. */
   homeOrder: string[];
 
-  setTheme(theme: 'dark' | 'light' | 'system' | 'amoled'): void;
+  setTheme(theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto'): void;
+  setDailyGoalMinutes(n: number): void;
+  setDjVoice(v: boolean): void;
   setAccent(accent: string): void;
   setGlassLevel(v: number): void;
   setGlassBlur(v: number): void;
@@ -83,6 +89,8 @@ export interface SettingsState {
 const defaults = {
   theme: 'dark' as const,
   accent: 'crimson',
+  dailyGoalMinutes: 0,
+  djVoice: false,
   glassLevel: 40,
   glassBlur: 40,
   autoplay: true,
@@ -118,6 +126,8 @@ export const useSettingsStore = create<SettingsState>()(
     (set, get) => ({
       ...defaults,
       setTheme: (theme) => set({ theme }),
+      setDailyGoalMinutes: (n) => set({ dailyGoalMinutes: Math.max(0, Math.min(600, Math.round(n))) }),
+      setDjVoice: (djVoice) => set({ djVoice }),
       setAccent: (accent) => set({ accent }),
       setGlassLevel: (v) => set({ glassLevel: Math.min(100, Math.max(0, Math.round(v))) }),
       setGlassBlur: (v) => set({ glassBlur: Math.min(100, Math.max(0, Math.round(v))) }),
