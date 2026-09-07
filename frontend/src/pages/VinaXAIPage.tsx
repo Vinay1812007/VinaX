@@ -43,33 +43,36 @@ const speechForSpoken = (md: string): string =>
 const STORE_KEY = 'vinax_ai_chats_v1';
 
 type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer' | 'flash' | 'musegl' | 'ising15' | 'ising135' | 'laguna' | 'gemma4' | 'omni' | 'cgt120';
-// Engine picker wears the VinaX V1 engine names (v3.0.0); ids stay stable for
-// the API. All seven engines are selectable since v3.0.2.
-const MODES: Array<{ id: Mode; label: string; hint: string }> = [
-  // v5.6.1 — the owner's 18 live models, each under its owner-chosen name
-  // (2026-08-31 key cleanup), plus AUTO and the balanced default seat.
-  { id: 'auto', label: 'VinaX AUTO', hint: 'Picks the best engine for each question' },
-  { id: 'muse', label: 'VinaX Balanced', hint: 'Everyday chat · recommended' },
-  { id: 'win', label: 'VinaX NVD NMTRN 3.5 LTNG 30B', hint: 'Big creative engine · runs the AI DJ' },
-  { id: 'sage', label: 'VinaX NVD NMTRN SUP', hint: 'Thinks deepest' },
-  { id: 'nova', label: 'VinaX NVD NMTRN ULT', hint: 'Most powerful · complex questions' },
-  { id: 'nano', label: 'VinaX NVD NMTRN NN30B A3B', hint: 'Light and quick · song finder' },
-  { id: 'omni', label: 'VinaX NVD NMTRN', hint: 'Compact omni reasoner' },
-  { id: 'pro', label: 'VinaX DP V4 PRO', hint: 'Deep analysis · advanced reasoning' },
-  { id: 'flash', label: 'VinaX DP V4 FLASH', hint: 'Rapid generalist' },
-  { id: 'swift', label: 'VinaX CGT 20B', hint: 'Fastest answers' },
-  { id: 'cgt120', label: 'VinaX CGT 120B', hint: 'Heavyweight open engine' },
-  { id: 'scholar', label: 'VinaX GRQ ALL', hint: 'Music knowledge · instant answers' },
-  { id: 'mini', label: 'VinaX MIMX M3', hint: 'Dependable all-rounder' },
-  { id: 'k3', label: 'VinaX K3', hint: 'Premium agent · heavyweight generalist' },
-  { id: 'glimmer', label: 'VinaX DIF GEM 26B A4B IT', hint: 'Visual-creative · moods and themes' },
-  { id: 'musegl', label: 'VinaX MUSE GMR 30B', hint: 'Playful creative sparks' },
-  { id: 'gemma4', label: 'VinaX GEM 4 31B', hint: 'Open generalist' },
-  { id: 'laguna', label: 'VinaX LGNA XS 2.1', hint: 'Small and swift' },
-  { id: 'ising15', label: 'VinaX ING CALBTN 15 31B', hint: 'Rankings and comparisons' },
-  { id: 'ising135', label: 'VinaX ING CALBTN 1 35B A3B', hint: 'Quick judgments' },
-  { id: 'translator', label: 'VinaX TRANSLATE', hint: 'Translation specialist · 12+ languages' },
+// Engine picker (v5.10.0): six plain-English seats up front — the ones a
+// listener actually chooses between — and every other live engine under
+// Advanced, each still wearing its owner-chosen name. Ids stay stable for
+// the API; nothing about routing changed.
+const MODES: Array<{ id: Mode; label: string; hint: string; tier: 'core' | 'advanced' }> = [
+  { id: 'auto', label: 'Auto', hint: 'Picks the best engine for each question', tier: 'core' },
+  { id: 'muse', label: 'Balanced', hint: 'Everyday chat · recommended', tier: 'core' },
+  { id: 'swift', label: 'Fast', hint: 'Quickest answers · VinaX CGT 20B', tier: 'core' },
+  { id: 'sage', label: 'Deep', hint: 'Careful reasoning · VinaX NVD NMTRN SUP', tier: 'core' },
+  { id: 'win', label: 'Creative', hint: 'Ideas, lyrics, stories · VinaX NVD NMTRN 3.5 LTNG 30B', tier: 'core' },
+  { id: 'translator', label: 'Translate', hint: 'Translation specialist · 12+ languages', tier: 'core' },
+  // Advanced — the owner's remaining live models under their own names.
+  { id: 'nova', label: 'VinaX NVD NMTRN ULT', hint: 'Most powerful · complex questions', tier: 'advanced' },
+  { id: 'nano', label: 'VinaX NVD NMTRN NN30B A3B', hint: 'Light and quick · song finder', tier: 'advanced' },
+  { id: 'omni', label: 'VinaX NVD NMTRN', hint: 'Compact omni reasoner', tier: 'advanced' },
+  { id: 'pro', label: 'VinaX DP V4 PRO', hint: 'Deep analysis · advanced reasoning', tier: 'advanced' },
+  { id: 'flash', label: 'VinaX DP V4 FLASH', hint: 'Rapid generalist', tier: 'advanced' },
+  { id: 'cgt120', label: 'VinaX CGT 120B', hint: 'Heavyweight open engine', tier: 'advanced' },
+  { id: 'scholar', label: 'VinaX GRQ ALL', hint: 'Music knowledge · instant answers', tier: 'advanced' },
+  { id: 'mini', label: 'VinaX MIMX M3', hint: 'Dependable all-rounder', tier: 'advanced' },
+  { id: 'k3', label: 'VinaX K3', hint: 'Premium agent · heavyweight generalist', tier: 'advanced' },
+  { id: 'glimmer', label: 'VinaX DIF GEM 26B A4B IT', hint: 'Visual-creative · moods and themes', tier: 'advanced' },
+  { id: 'musegl', label: 'VinaX MUSE GMR 30B', hint: 'Playful creative sparks', tier: 'advanced' },
+  { id: 'gemma4', label: 'VinaX GEM 4 31B', hint: 'Open generalist', tier: 'advanced' },
+  { id: 'laguna', label: 'VinaX LGNA XS 2.1', hint: 'Small and swift', tier: 'advanced' },
+  { id: 'ising15', label: 'VinaX ING CALBTN 15 31B', hint: 'Rankings and comparisons', tier: 'advanced' },
+  { id: 'ising135', label: 'VinaX ING CALBTN 1 35B A3B', hint: 'Quick judgments', tier: 'advanced' },
 ];
+const CORE_MODES = MODES.filter((m) => m.tier === 'core');
+const ADVANCED_MODES = MODES.filter((m) => m.tier === 'advanced');
 // Engine chip on each reply: which engine actually answered (from stream meta) —
 // derived from the served model slug so failovers are reported honestly.
 // Order matters: specific slugs sit BEFORE the generic llama/vision row.
@@ -277,7 +280,7 @@ export default function VinaXAIPage(): ReactNode {
   const [mode, setMode] = useState<Mode>(() => {
     try {
       const saved = localStorage.getItem('vinax.aiDefaultMode') ?? '';
-      if ((['muse', 'swift', 'sage', 'scholar', 'win', 'nova', 'nano'] as string[]).includes(saved)) return saved as Mode;
+      if (MODES.some((mm) => mm.id === saved)) return saved as Mode;
       // Engine ids saved by older builds map to their closest successor.
       const legacy: Record<string, Mode> = { maverick: 'muse', diffusion: 'muse', medium: 'muse', fast: 'swift', deep: 'sage', gemma: 'scholar' };
       if (legacy[saved]) return legacy[saved];
@@ -298,6 +301,7 @@ export default function VinaXAIPage(): ReactNode {
     }
   });
   const [engineOpen, setEngineOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [web, setWeb] = useState(false);
   // Composer capability toggles (v2.4.0): Think routes the next messages to
   // the deep lane (high effort); Research forces multi-source web answers.
@@ -1022,12 +1026,12 @@ export default function VinaXAIPage(): ReactNode {
   const canSpeech = sttReady;
 
   return (
-    <div className="h-[100dvh] w-full flex text-ink-100 overflow-hidden">
+    <div className="h-[100dvh] w-full flex text-ink-100 overflow-hidden bg-ink-900">
       <AuroraBackground />
       {/* Sidebar */}
       <aside
         className={cn(
-          'flex-col w-64 shrink-0 bg-ink-900 border-r border-glass',
+          'flex-col w-64 shrink-0 bg-ink-950',
           sidebarOpen ? 'flex fixed inset-y-0 left-0 z-40' : 'hidden',
           'md:flex md:static md:z-auto',
         )}
@@ -1035,7 +1039,7 @@ export default function VinaXAIPage(): ReactNode {
         <div className="p-3">
           <button
             onClick={newChat}
-            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl btn-primary text-sm font-semibold active:scale-[.98] transition"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 btn-primary text-sm active:scale-[.98] transition"
           >
             <PlusIcon className="w-4 h-4" /> New chat
           </button>
@@ -1046,7 +1050,7 @@ export default function VinaXAIPage(): ReactNode {
             onChange={(e) => setChatQuery(e.target.value)}
             placeholder="Search chats…"
             aria-label="Search chats"
-            className="w-full px-3 py-2 rounded-xl bg-ink-800/70 text-sm outline-none placeholder:text-ink-500"
+            className="w-full px-3 py-2 rounded-full bg-ink-800 text-sm outline-none placeholder:text-ink-400 focus:ring-1 focus:ring-ink-100"
           />
         </div>
         <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
@@ -1057,8 +1061,8 @@ export default function VinaXAIPage(): ReactNode {
                 <div
                   key={c.id}
                   className={cn(
-                    'group flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer text-sm',
-                    c.id === active?.id ? 'bg-ink-800 text-ink-100' : 'text-ink-300 hover:bg-ink-800/60',
+                    'group flex items-center gap-1.5 px-3 py-2 rounded-md cursor-pointer text-sm font-semibold',
+                    c.id === active?.id ? 'bg-ink-800 text-ink-100' : 'text-ink-300 hover:text-ink-100 hover:bg-ink-850',
                   )}
                   onClick={() => {
                     setActiveId(c.id);
@@ -1132,8 +1136,8 @@ export default function VinaXAIPage(): ReactNode {
             </div>
           ))}
         </div>
-        <div className="p-3 border-t border-glass">
-          <Link to="/" className="flex items-center gap-2 text-xs text-ink-400 hover:text-ink-100 px-2 py-1.5">
+        <div className="p-3">
+          <Link to="/" className="flex items-center gap-2 text-xs font-bold text-ink-300 hover:text-ink-100 px-2 py-1.5">
             ← Back to VinaX
           </Link>
         </div>
@@ -1165,11 +1169,11 @@ export default function VinaXAIPage(): ReactNode {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="flex items-center gap-2 px-4 py-3 border-b border-glass shrink-0">
+        <header className="flex items-center gap-2 px-4 py-3 shrink-0">
           <button className="md:hidden p-1.5 text-ink-300" aria-label="Menu" onClick={() => setSidebarOpen(true)}>
             <MenuIcon className="w-6 h-6" />
           </button>
-          <span className="w-8 h-8 rounded-xl bg-ai-accent text-white flex items-center justify-center shrink-0">
+          <span className="w-8 h-8 rounded-full bg-ai-accent text-black flex items-center justify-center shrink-0">
             <SparkleIcon className="w-5 h-5" />
           </span>
           <div className="min-w-0 flex-1">
@@ -1189,7 +1193,7 @@ export default function VinaXAIPage(): ReactNode {
               ⤓
             </button>
             {exportOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl bg-[color:var(--surface-modal)] border border-glass-strong shadow-2xl py-1">
+              <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-md bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3)] p-1">
                 {(['txt', 'md', 'pdf'] as const).map((k) => (
                   <button
                     key={k}
@@ -1197,7 +1201,7 @@ export default function VinaXAIPage(): ReactNode {
                       exportChat(k);
                       setExportOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-ink-800/60"
+                    className="w-full text-left rounded-sm px-3 py-2 text-[13px] font-medium hover:bg-ink-700"
                   >
                     {k === 'txt' ? 'Plain text (.txt)' : k === 'md' ? 'Markdown (.md)' : 'PDF (print)'}
                   </button>
@@ -1218,7 +1222,7 @@ export default function VinaXAIPage(): ReactNode {
               ⚙
             </button>
             {settingsOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-2xl bg-[color:var(--surface-modal)] border border-glass-strong shadow-2xl p-3 space-y-3 text-left">
+              <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-md bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3)] p-3 space-y-3 text-left">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1">Default engine</p>
                   <select
@@ -1234,11 +1238,20 @@ export default function VinaXAIPage(): ReactNode {
                     }}
                     className="w-full px-2.5 py-2 rounded-lg bg-ink-800/70 text-xs outline-none"
                   >
-                    {MODES.map((mm) => (
-                      <option key={mm.id} value={mm.id}>
-                        {mm.label}
-                      </option>
-                    ))}
+                    <optgroup label="Engines">
+                      {CORE_MODES.map((mm) => (
+                        <option key={mm.id} value={mm.id}>
+                          {mm.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Advanced">
+                      {ADVANCED_MODES.map((mm) => (
+                        <option key={mm.id} value={mm.id}>
+                          {mm.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
                 <div>
@@ -1257,7 +1270,7 @@ export default function VinaXAIPage(): ReactNode {
                         }}
                         className={cn(
                           'px-3 py-1.5 rounded-lg text-xs font-bold',
-                          fontSize === f ? 'bg-ai-accent text-white' : 'bg-ink-800/70 text-ink-300',
+                          fontSize === f ? 'bg-ink-100 text-ink-950' : 'bg-ink-700 text-ink-200',
                         )}
                       >
                         {f.toUpperCase()}
@@ -1301,7 +1314,7 @@ export default function VinaXAIPage(): ReactNode {
         >
           {messages.length === 0 ? (
             <div className="min-h-full flex flex-col items-center justify-center px-5 py-10 text-center">
-              <span className="w-16 h-16 rounded-2xl bg-ai-accent text-white flex items-center justify-center mb-5">
+              <span className="w-16 h-16 rounded-full bg-ai-accent text-black flex items-center justify-center mb-5">
                 <SparkleIcon className="w-8 h-8" />
               </span>
               <h2 className="text-2xl font-bold mb-2">
@@ -1312,14 +1325,14 @@ export default function VinaXAIPage(): ReactNode {
                 — ask me anything
               </h2>
               <p className="text-sm text-ink-300 mb-7 max-w-md">
-                Music, writing, code, translations, current events — seven engines (VinaX FLASH, 20B, SUPER, INSTANT, 120B, ULTRA and NANO 3), live web search and voice chat.
+                Music first — ask for songs and play them right here — plus writing, code, translations and current events, with live web search and voice chat.
               </p>
               <div className="grid sm:grid-cols-2 gap-2.5 w-full max-w-xl">
                 {starters.map((s) => (
                   <button
                     key={s}
                     onClick={() => void send(s)}
-                    className="px-4 py-3 rounded-xl text-sm text-left bg-ink-800/70 text-ink-200 border border-glass hover:bg-ink-700 hover:text-ink-100 hover:border-ember-500/40 transition"
+                    className="px-4 py-3 rounded-lg text-sm font-semibold text-left bg-ink-850 text-ink-200 hover:bg-ink-800 hover:text-ink-100 transition"
                   >
                     {s}
                   </button>
@@ -1333,7 +1346,7 @@ export default function VinaXAIPage(): ReactNode {
                   {m.role === 'assistant' && (
                     <span
                       className={cn(
-                        'w-7 h-7 rounded-lg bg-ai-accent text-white flex items-center justify-center shrink-0 mt-0.5',
+                        'w-7 h-7 rounded-full bg-ai-accent text-black flex items-center justify-center shrink-0 mt-0.5',
                         busy && i === messages.length - 1 && 'motion-safe:animate-[avatar-pulse_1.6s_ease-in-out_infinite]',
                       )}
                     >
@@ -1342,8 +1355,10 @@ export default function VinaXAIPage(): ReactNode {
                   )}
                   <div
                     className={cn(
-                      'max-w-[85%] text-sm',
-                      m.role === 'user' ? 'btn-primary rounded-2xl rounded-br-md px-4 py-2.5' : 'glass-card ai-bubble rounded-2xl rounded-bl-md px-4 py-3',
+                      'text-sm',
+                      m.role === 'user'
+                        ? 'max-w-[85%] bg-ink-800 text-ink-100 rounded-2xl rounded-br-md px-4 py-2.5'
+                        : 'min-w-0 flex-1 max-w-[92%] px-0.5 py-1',
                     )}
                     onDoubleClick={m.role === 'user' ? () => editPrompt(i, m.content) : undefined}
                     title={m.role === 'user' ? 'Double-tap to edit & resend' : undefined}
@@ -1377,7 +1392,7 @@ export default function VinaXAIPage(): ReactNode {
                             <div className="mt-2 flex items-center gap-3 text-[11px] text-ink-400">
                               {m.engine ? (
                                 <span
-                                  className="px-2 py-px rounded-full bg-ink-800/50 text-[10px] font-medium text-ink-400"
+                                  className="px-2 py-px rounded-full bg-ink-800 text-[10px] font-semibold text-ink-300"
                                   title="Engine that answered"
                                 >
                                   {m.engine}
@@ -1437,7 +1452,7 @@ export default function VinaXAIPage(): ReactNode {
                         {!busy && (
                           <button
                             onClick={() => editPrompt(i, m.content)}
-                            className="mt-1 block text-[11px] text-white/70 hover:text-white"
+                            className="mt-1 block text-[11px] text-ink-400 hover:text-ink-100"
                           >
                             Edit
                           </button>
@@ -1497,7 +1512,7 @@ export default function VinaXAIPage(): ReactNode {
         </div>
 
         {/* Composer */}
-        <div className="shrink-0 border-t border-glass px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 px-3 sm:px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto w-full max-w-3xl">
             {pending.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
@@ -1518,7 +1533,7 @@ export default function VinaXAIPage(): ReactNode {
                 ))}
               </div>
             )}
-            <div className="flex items-end gap-2 glass-input rounded-2xl px-2.5 py-2">
+            <div className="flex items-end gap-1.5 bg-ink-800 rounded-3xl px-2.5 py-2 focus-within:ring-1 focus-within:ring-ink-100/40">
               <input
                 ref={fileRef}
                 type="file"
@@ -1530,7 +1545,7 @@ export default function VinaXAIPage(): ReactNode {
               <button
                 onClick={() => fileRef.current?.click()}
                 aria-label="Add photos or files"
-                className="p-2 rounded-full text-ink-300 hover:text-ink-100 hover:bg-ink-800/60 shrink-0"
+                className="p-2 rounded-full text-ink-300 hover:text-ink-100 hover:bg-ink-700 shrink-0"
                 title="Add photos & files"
               >
                 <PlusIcon className="w-5 h-5" />
@@ -1541,7 +1556,7 @@ export default function VinaXAIPage(): ReactNode {
                 title="Web search"
                 className={cn(
                   'p-2 rounded-full shrink-0 transition',
-                  web ? 'text-ember-400 bg-ember-500/15' : 'text-ink-300 hover:text-ink-100 hover:bg-ink-800/60',
+                  web ? 'text-ember-400 bg-ink-700' : 'text-ink-300 hover:text-ink-100 hover:bg-ink-700',
                 )}
               >
                 <GlobeIcon className="w-5 h-5" />
@@ -1568,7 +1583,7 @@ export default function VinaXAIPage(): ReactNode {
                   title="Live voice chat"
                   className={cn(
                     'p-2 rounded-full shrink-0 transition',
-                    voiceMode ? 'text-ember-400 bg-ember-500/15' : 'text-ink-300 hover:text-ink-100 hover:bg-ink-800/60',
+                    voiceMode ? 'text-ember-400 bg-ink-700' : 'text-ink-300 hover:text-ink-100 hover:bg-ink-700',
                   )}
                 >
                   <WaveformIcon className="w-5 h-5" />
@@ -1601,14 +1616,14 @@ export default function VinaXAIPage(): ReactNode {
                   title="Speak"
                   className={cn(
                     'p-2 rounded-full shrink-0 transition',
-                    listening ? 'text-black bg-ember-500 animate-pulse' : 'text-ink-300 hover:text-ink-100 hover:bg-ink-800/60',
+                    listening ? 'text-black bg-ember-500 animate-pulse' : 'text-ink-300 hover:text-ink-100 hover:bg-ink-700',
                   )}
                 >
                   <MicIcon className="w-5 h-5" />
                 </button>
               )}
               {busy ? (
-                <button onClick={stop} aria-label="Stop" className="p-2 rounded-full bg-ink-700 text-ink-100 shrink-0">
+                <button onClick={stop} aria-label="Stop" className="w-9 h-9 rounded-full bg-ink-100 text-ink-950 flex items-center justify-center shrink-0">
                   <StopIcon className="w-5 h-5" />
                 </button>
               ) : (
@@ -1616,7 +1631,7 @@ export default function VinaXAIPage(): ReactNode {
                   onClick={() => void send(input)}
                   disabled={!input.trim() && pending.length === 0}
                   aria-label="Send"
-                  className="p-2 rounded-full btn-primary shrink-0 disabled:opacity-40 active:scale-95 transition"
+                  className="w-9 h-9 rounded-full bg-ink-100 text-ink-950 flex items-center justify-center shrink-0 disabled:opacity-40 hover:scale-105 active:scale-95 transition"
                 >
                   <SendIcon className="w-5 h-5" />
                 </button>
@@ -1631,9 +1646,9 @@ export default function VinaXAIPage(): ReactNode {
                   onClick={() => setEngineOpen((v) => !v)}
                   aria-haspopup="listbox"
                   aria-expanded={engineOpen}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-ink-800/60 text-xs font-semibold text-ink-200 hover:text-ink-100 hover:bg-ink-800 transition"
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-ink-800 text-xs font-bold text-ink-100 hover:bg-ink-700 transition"
                 >
-                  <span className="font-mono">{MODES.find((mm) => mm.id === mode)?.label}</span>
+                  <span>{MODES.find((mm) => mm.id === mode)?.label}</span>
                   <span className="text-ink-400" aria-hidden>
                     ▾
                   </span>
@@ -1648,12 +1663,12 @@ export default function VinaXAIPage(): ReactNode {
                     <div
                       role="listbox"
                       aria-label="Choose engine"
-                      className="absolute bottom-full mb-2 left-0 z-50 w-64 overflow-y-auto overscroll-contain rounded-2xl bg-[color:var(--surface-modal)] backdrop-blur-xl border border-[color:var(--glass-border)] shadow-2xl py-1.5 animate-fade-up"
+                      className="absolute bottom-full mb-2 left-0 z-50 w-72 overflow-y-auto overscroll-contain rounded-md bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)] p-1 animate-fade-up"
                       /* v5.6.2 — inline cap, immune to CSS purging: 18 engines
                          must scroll inside the menu, never spill off-screen. */
                       style={{ maxHeight: 'min(62vh, 460px)' }}
                     >
-                      {MODES.map((mm) => (
+                      {CORE_MODES.map((mm) => (
                         <button
                           key={mm.id}
                           role="option"
@@ -1663,17 +1678,47 @@ export default function VinaXAIPage(): ReactNode {
                             setEngineOpen(false);
                           }}
                           className={cn(
-                            'w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left hover:bg-ink-800/60 transition-colors',
-                            mode === mm.id ? 'text-ember-300' : 'text-ink-100',
+                            'w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left rounded-sm hover:bg-ink-700 transition-colors',
+                            mode === mm.id ? 'text-ember-400' : 'text-ink-100',
                           )}
                         >
                           <span className="min-w-0">
-                            <span className="block font-mono text-[13px] truncate">{mm.label}</span>
-                            <span className="block text-[11px] text-ink-400">{mm.hint}</span>
+                            <span className="block text-[14px] font-bold truncate">{mm.label}</span>
+                            <span className="block text-[11px] text-ink-400 truncate">{mm.hint}</span>
                           </span>
                           {mode === mm.id && <span aria-hidden>✓</span>}
                         </button>
                       ))}
+                      <button
+                        onClick={() => setAdvancedOpen((v) => !v)}
+                        aria-expanded={advancedOpen}
+                        className="w-full flex items-center justify-between px-3.5 py-2 mt-1 border-t border-ink-700 text-[11px] font-bold uppercase tracking-wider text-ink-400 hover:text-ink-100"
+                      >
+                        Advanced engines
+                        <span aria-hidden className={cn('transition-transform', advancedOpen && 'rotate-180')}>▾</span>
+                      </button>
+                      {advancedOpen &&
+                        ADVANCED_MODES.map((mm) => (
+                          <button
+                            key={mm.id}
+                            role="option"
+                            aria-selected={mode === mm.id}
+                            onClick={() => {
+                              setMode(mm.id);
+                              setEngineOpen(false);
+                            }}
+                            className={cn(
+                              'w-full flex items-center justify-between gap-3 px-3.5 py-2 text-left rounded-sm hover:bg-ink-700 transition-colors',
+                              mode === mm.id ? 'text-ember-400' : 'text-ink-200',
+                            )}
+                          >
+                            <span className="min-w-0">
+                              <span className="block font-mono text-[12px] truncate">{mm.label}</span>
+                              <span className="block text-[11px] text-ink-400 truncate">{mm.hint}</span>
+                            </span>
+                            {mode === mm.id && <span aria-hidden>✓</span>}
+                          </button>
+                        ))}
                     </div>
                   </>
                 )}
@@ -1685,8 +1730,8 @@ export default function VinaXAIPage(): ReactNode {
                 className={cn(
                   'px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 transition',
                   think
-                    ? 'text-ember-400 bg-ember-500/15 ring-1 ring-ember-400/40'
-                    : 'text-ink-300 hover:text-ink-100 bg-ink-800/60 hover:bg-ink-800',
+                    ? 'bg-ink-100 text-ink-950'
+                    : 'text-ink-200 hover:text-ink-100 bg-ink-800 hover:bg-ink-700',
                 )}
               >
                 Think
@@ -1701,8 +1746,8 @@ export default function VinaXAIPage(): ReactNode {
                 className={cn(
                   'px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 transition',
                   research
-                    ? 'text-ember-400 bg-ember-500/15 ring-1 ring-ember-400/40'
-                    : 'text-ink-300 hover:text-ink-100 bg-ink-800/60 hover:bg-ink-800',
+                    ? 'bg-ink-100 text-ink-950'
+                    : 'text-ink-200 hover:text-ink-100 bg-ink-800 hover:bg-ink-700',
                 )}
               >
                 Research

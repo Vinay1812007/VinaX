@@ -12,6 +12,23 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.10.0': {
+    title: 'VinaX AI plays the songs it names',
+    changes: [
+      {
+        type: 'new',
+        text: 'Every song VinaX AI recommends is now a playable card \u2014 artwork, title, artist, tap to play, or add it to your queue. Ask for \u201cten songs for a rainy evening\u201d and press Play all.',
+      },
+      {
+        type: 'improved',
+        text: 'A simpler engine picker: Auto, Balanced, Fast, Deep, Creative and Translate up front, with every other engine one tap away under Advanced.',
+      },
+      {
+        type: 'improved',
+        text: 'The chat screen wears the new look: black sidebar, clean full-width replies, a rounded composer with a white send button, and menus that match the rest of the app.',
+      },
+    ],
+  },
   '5.9.3': {
     title: 'In our own words',
     changes: [

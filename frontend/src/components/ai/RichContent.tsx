@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { cn } from '@/utils/cn';
 import { tokenize } from './tokenize';
+import { SongPickChip, SongPicksBar, extractSongPicks, parseSongLine } from './SongPick';
 
 /**
  * Rich renderer for AI messages. Auto-detects and renders:
@@ -291,13 +292,7 @@ function Prose({ text }: { text: string }): ReactNode {
         items.push(lines[i].trim().replace(/^[-*+]\s+/, ''));
         i += 1;
       }
-      blocks.push(
-        <ul key={blocks.length} className="my-1.5 pl-5 list-disc space-y-1">
-          {items.map((it, k) => (
-            <li key={k}>{inline(it)}</li>
-          ))}
-        </ul>,
-      );
+      blocks.push(<ListBlock key={blocks.length} items={items} ordered={false} />);
       continue;
     }
     if (/^\d+\.\s+/.test(t)) {
@@ -306,13 +301,7 @@ function Prose({ text }: { text: string }): ReactNode {
         items.push(lines[i].trim().replace(/^\d+\.\s+/, ''));
         i += 1;
       }
-      blocks.push(
-        <ol key={blocks.length} className="my-1.5 pl-5 list-decimal space-y-1">
-          {items.map((it, k) => (
-            <li key={k}>{inline(it)}</li>
-          ))}
-        </ol>,
-      );
+      blocks.push(<ListBlock key={blocks.length} items={items} ordered />);
       continue;
     }
     const para: string[] = [];
@@ -332,14 +321,50 @@ function Prose({ text }: { text: string }): ReactNode {
       para.push(lines[i]);
       i += 1;
     }
-    if (para.length)
-      blocks.push(
-        <p key={blocks.length} className="leading-relaxed whitespace-pre-wrap">
-          {inline(para.join('\n'))}
-        </p>,
-      );
+    if (para.length) {
+      const picks = para.map(parseSongLine);
+      if (para.length > 1 && picks.every(Boolean)) {
+        blocks.push(
+          <div key={blocks.length} className="my-1.5">
+            {picks.map((pk, k) => (
+              <SongPickChip key={k} pick={pk!} />
+            ))}
+          </div>,
+        );
+      } else {
+        blocks.push(
+          <p key={blocks.length} className="leading-relaxed whitespace-pre-wrap">
+            {inline(para.join('\n'))}
+          </p>,
+        );
+      }
+    }
   }
   return <>{blocks}</>;
+}
+
+/** A bullet / numbered list — song lines inside it render as playable
+ *  chips (v5.10.0), everything else stays ordinary markdown. */
+function ListBlock({ items, ordered }: { items: string[]; ordered: boolean }): ReactNode {
+  const picks = items.map(parseSongLine);
+  const songy = picks.filter(Boolean).length >= Math.max(1, Math.ceil(items.length / 2));
+  if (songy) {
+    return (
+      <div className="my-1.5">
+        {items.map((it, k) =>
+          picks[k] ? <SongPickChip key={k} pick={picks[k]!} /> : <p key={k} className="my-1">{inline(it)}</p>,
+        )}
+      </div>
+    );
+  }
+  const Tag = ordered ? 'ol' : 'ul';
+  return (
+    <Tag className={cn('my-1.5 pl-5 space-y-1', ordered ? 'list-decimal' : 'list-disc')}>
+      {items.map((it, k) => (
+        <li key={k}>{inline(it)}</li>
+      ))}
+    </Tag>
+  );
 }
 
 // ---------- code + previews ----------
@@ -549,8 +574,10 @@ function CodeRouter({ lang, code, closed }: { lang: string; code: string; closed
 // ---------- tokenizer + entry ----------
 export function RichContent({ text }: { text: string }): ReactNode {
   const tokens = useMemo(() => tokenize(text), [text]);
+  const picks = useMemo(() => extractSongPicks(text), [text]);
   return (
     <div className="space-y-1 text-sm break-words">
+      {picks.length >= 2 && <SongPicksBar picks={picks} />}
       {tokens.map((tk, i) =>
         tk.t === 'code' ? (
           <CodeRouter key={i} lang={tk.lang} code={tk.code} closed={tk.closed} />

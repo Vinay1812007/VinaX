@@ -2339,3 +2339,13 @@ input[type='range']::-moz-range-thumb { background: rgb(var(--ink-100)); }
 :focus-visible { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25); outline-color: rgb(var(--ink-100)); }
 .btn-primary:focus-visible,
 .card-play:focus-visible { outline-color: rgb(var(--ember-500)); }
+
+/* VinaX AI — flat: solid green mark, plain white title, no ambience. */
+.bg-ai-accent { background: rgb(var(--ember-500)); box-shadow: none; }
+.ai-title,
+html.light .ai-title {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: rgb(var(--ink-100));
+}
+.ai-ambient { background: none; }
