@@ -187,7 +187,7 @@ export default function SearchPage() {
   // change WE caused (a commit below) never echoes back onto the input.
   const lastRouteApplied = useRef<string | null>(routeQuery ?? null);
 
-  // MANUAL, Spotify-style commit: Enter, or tapping a suggestion/chip, performs
+  // MANUAL commit: Enter, or tapping a suggestion/chip, performs
   // the search (updates the URL for deep-linking + records a recent). We do NOT
   // auto-navigate on partial typing, so the route can never feed back and
   // overwrite the box mid-keystroke — the root cause of the "input won't accept

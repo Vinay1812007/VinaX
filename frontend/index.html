@@ -104,7 +104,7 @@
           var lang = (st.pinnedLanguages && st.pinnedLanguages[0]) || 'hindi';
           var q = 'top ' + lang + ' songs ' + new Date().getFullYear();
           // v5.6.7 — the prefetch must hit the FIRST ranked base so the
-          // orchestrator consumes it by exact URL match: the VinaX Saavn API.
+          // orchestrator consumes it by exact URL match: the VinaX Music API.
           var url = 'https://vinax-saavan-api.onrender.com/api/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
           window.__vxBoot = {
             url: url,

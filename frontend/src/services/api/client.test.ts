@@ -4,7 +4,7 @@
  * trending request on window.__vxBoot; the orchestrator consumes it by exact
  * URL match, exactly once, and falls back to the network on any miss or a
  * null payload (upstream failure). See index.html + takeBootPrefetch().
- * v5.6.7: URLs track the FIRST ranked base — now the VinaX Saavn API.
+ * v5.6.7: URLs track the FIRST ranked base — now the VinaX Music API.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { orchestratedRequest } from './client';

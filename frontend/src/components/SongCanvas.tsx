@@ -6,7 +6,7 @@ import { FALLBACK_ART } from '@/utils/images';
 import { cn } from '@/utils/cn';
 
 /**
- * The video canvas on Now Playing — v5.9.0, the Spotify Canvas model: the
+ * The video canvas on Now Playing — v5.9.0, full-screen model: the
  * clip fills the WHOLE screen behind the player on every device, the
  * artwork card steps aside, and the controls sit over a bottom gradient.
  * (The catalogue's clips are landscape, so a portrait phone shows a

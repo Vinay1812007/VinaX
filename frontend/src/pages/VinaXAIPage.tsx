@@ -1363,7 +1363,7 @@ export default function VinaXAIPage(): ReactNode {
                           {busy && i === messages.length - 1 ? (
                             /* v5.6.0 — markdown renders LIVE while streaming
                                (headings, bold, lists, code, tables), exactly
-                               like ChatGPT/Gemini; RichContent streams safely
+                               like a chat assistant; RichContent streams safely
                                (an unclosed fence shows as preformatted text
                                until it completes). */
                             <div>

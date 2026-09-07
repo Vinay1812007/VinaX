@@ -25,8 +25,8 @@ function lastValue(varName: string): string {
   return last;
 }
 
-describe('color tokens (v5.9.0 Spotify look wins the cascade)', () => {
-  it('brand ramps resolve to Spotify green', () => {
+describe('color tokens (v5.9.0 flat black look wins the cascade)', () => {
+  it('brand ramps resolve to VinaX green', () => {
     // v5.9.0: one green accent (#1db954 / #1ed760) over black chrome and a
     // #121212 canvas. Every earlier era's ramp lives above in the cascade.
     expect(lastValue('--ember-400')).toBe('30 215 96');

@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.9.3': {
+    title: 'In our own words',
+    changes: [
+      {
+        type: 'improved',
+        text: 'Release notes, labels and settings now describe every feature in VinaX\u2019s own words \u2014 no other apps or assistants named anywhere in the product.',
+      },
+    ],
+  },
   '5.9.2': {
     title: 'Menus, buttons and controls, polished',
     changes: [
@@ -39,11 +48,11 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
     ],
   },
   '5.9.0': {
-    title: 'The Spotify look',
+    title: 'A bold new look',
     changes: [
       {
         type: 'new',
-        text: 'A whole new look, inspired by Spotify: black sidebar, player bar and tab bar over a deep #121212 canvas, one green accent, bold white headings, pill buttons, and cards that lift a green play button when you hover. Every page, every feature, exactly where it was.',
+        text: 'A whole new look: black sidebar, player bar and tab bar over a deep charcoal canvas, one green accent, bold white headings, pill buttons, and cards that lift a green play button when you hover. Every page, every feature, exactly where it was.',
       },
       {
         type: 'new',
@@ -51,12 +60,12 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       },
       {
         type: 'improved',
-        text: 'The video canvas now behaves like Spotify Canvas: the clip fills the entire screen behind the player on phones and desktop, the artwork steps aside, and the controls sit over a soft bottom gradient. Tap the clip to hide the controls; tap again to bring them back.',
+        text: 'The video canvas is now truly full-screen: the clip fills the entire screen behind the player on phones and desktop, the artwork steps aside, and the controls sit over a soft bottom gradient. Tap the clip to hide the controls; tap again to bring them back.',
       },
     ],
   },
   '5.8.2': {
-    title: 'Video, the JioSaavn way',
+    title: 'Video, front and centre',
     changes: [
       {
         type: 'new',
@@ -64,7 +73,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       },
       {
         type: 'improved',
-        text: 'The video canvas on phones now plays edge to edge at its true shape, pixel-sharp, in the artwork\u2019s place \u2014 no more blurry, zoomed-in crop \u2014 and full-screen mode centres it on black. On desktop the clip stays the full-bleed backdrop behind the player.',
+        text: 'The video canvas on phones now plays edge to edge, pixel-sharp, in the artwork\u2019s place \u2014 no more blurry, zoomed-in crop \u2014 and full-screen mode centres it on black. On desktop the clip stays the full-bleed backdrop behind the player.',
       },
       {
         type: 'improved',

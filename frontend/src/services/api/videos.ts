@@ -7,7 +7,7 @@ import type { Song } from '@/types';
  *
  * Honest playback contract, verified against the live upstream:
  *  - `previewUrl` is a real 720p MP4 clip (~30s) that always plays — the
- *    JioSaavn-video-CDN "preview" rendition.
+ *    video-CDN "preview" rendition.
  *  - `streamUrl` (the full-length master) is 404 upstream for every video
  *    probed at ship time. The player still tries it FIRST, so full videos
  *    light up automatically the moment the source starts serving them.

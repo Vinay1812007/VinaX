@@ -37,7 +37,7 @@
 :root {
   color-scheme: dark;
 
-  /* Surface scale — v5.9.0 Spotify look: pure-black chrome (sidebar,
+  /* Surface scale — v5.9.0 flat black look: pure-black chrome (sidebar,
      player, nav) over a #121212 canvas, #181818 / #282828 card tiers,
      #b3b3b3 secondary text, white primary. AAA on --ink-900 with --ink-100. */
   --ink-950: 0 0 0;
@@ -1183,7 +1183,7 @@ html.light .vx-reason {
 /* ============================================================================
    Media-card play chip. Touch: small, frosted, non-obtrusive so it doesn't
    fight the artwork. Pointer-with-hover: hidden until group hover, then
-   fades up, grows to 44px and fills with the accent — the Spotify/Apple
+   fades up, grows to 44px and fills with the accent — the familiar streaming-app
    Music pattern users expect. Paired with .card-scrim for legibility over
    any artwork. Live -art tint is picked up by parent when set.
    ========================================================================= */
@@ -2203,7 +2203,7 @@ html.light .vx-dock { box-shadow: none; }
 input[type='range']:hover::-webkit-slider-thumb { transform: scale(1.1); box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.14); }
 
 /* ============================================================================
-   v5.9.0 — the Spotify look. Flat black chrome, #121212 canvas, one green
+   v5.9.0 — the flat black look. Black chrome, #121212 canvas, one green
    accent, pill buttons with black text, bold type, cards that lift a green
    play button on hover. Declared last so it wins every earlier era.
    ========================================================================= */
@@ -2237,7 +2237,7 @@ input[type='range']:hover::-webkit-slider-thumb { transform: scale(1.1); box-sha
   color: rgb(var(--ink-100));
 }
 
-/* Sidebar + player: black, square-cornered panels like Spotify's shell. */
+/* Sidebar + player: black, square-cornered shell panels. */
 .glass-sidebar {
   background: var(--surface-sidebar);
   border: 0;
@@ -2290,7 +2290,7 @@ html.light .np-play-desktop { background: #000; color: #fff; }
 }
 .card-scrim { display: none; }
 
-/* Mobile dock: Spotify's solid black tab bar with labels under icons. */
+/* Mobile dock: a solid black tab bar with labels under icons. */
 .vx-dock { box-shadow: none; }
 .vx-dock-active { background: transparent; color: rgb(var(--ink-100)); }
 .vx-dock-active svg { animation: none; }

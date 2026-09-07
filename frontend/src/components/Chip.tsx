@@ -19,7 +19,7 @@ export function Chip({ active, tone = 'default', onClick, children }: Props) {
         // to ≥44px (IconButton's touch-pad pattern — audit P1-15) without
         // changing how chip rows look.
         'relative after:absolute after:inset-0 after:-m-[6px]',
-        // v5.9.0 Spotify chips: a selected chip is white on black, the rest
+        // v5.9.0 chips: a selected chip is white on black, the rest
         // sit as soft #282828 pills that brighten on hover.
         active && tone === 'default' && 'bg-white border-white text-black',
         active && tone === 'danger' && 'bg-red-500/20 border-red-500 text-red-300',

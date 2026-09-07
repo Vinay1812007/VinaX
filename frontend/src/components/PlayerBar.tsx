@@ -181,7 +181,7 @@ export function PlayerBar() {
       </div>
 
       {/* ---- Desktop bar: three-zone layout ---- */}
-      {/* v5.9.0 — Spotify's bar: full width, flush with the bottom, black. */}
+      {/* v5.9.0 — the bar: full width, flush with the bottom, black. */}
       <div className="hidden sm:block overflow-hidden glass-bottom-player">
         <div className="flex items-center gap-4 px-4 py-2.5 max-w-screen-2xl mx-auto">
           <div className="flex items-center gap-3 min-w-0 w-60 lg:w-80">

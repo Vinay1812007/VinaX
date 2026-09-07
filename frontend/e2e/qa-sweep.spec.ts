@@ -23,7 +23,7 @@ const ROUTES = [
   '/collection/none', '/no-such-page-404',
 ];
 
-const QA_NAME = 'QA TEST BY CLAUDE';
+const QA_NAME = 'QA TEST USER';
 
 interface PageReport {
   route: string;
@@ -43,7 +43,7 @@ async function prep(page: Page): Promise<{ errors: string[]; consoleErrs: string
   });
   await page.addInitScript((fp) => {
     window.localStorage.setItem('vinax.onboarded.v1', 'true');
-    window.localStorage.setItem('vinax.user-name', JSON.stringify('QA TEST BY CLAUDE'));
+    window.localStorage.setItem('vinax.user-name', JSON.stringify('QA TEST USER'));
     window.localStorage.setItem('vinax.last-seen-version', JSON.stringify(fp));
   }, latestNotesFingerprint());
   return { errors, consoleErrs };
@@ -133,7 +133,7 @@ test('QA PASS 2 — every route, catalog STUBBED (content must render)', async (
   expect(reports.filter((r) => r.pageErrors.length).map((r) => r.route)).toEqual([]);
 });
 
-test('QA PASS 3 — interaction flows as "QA TEST BY CLAUDE"', async ({ page }) => {
+test('QA PASS 3 — interaction flows as "QA TEST USER"', async ({ page }) => {
   const { errors } = await prep(page);
   await stubCatalog(page);
 

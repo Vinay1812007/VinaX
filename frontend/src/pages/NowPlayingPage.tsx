@@ -154,7 +154,7 @@ export default function NowPlayingPage() {
   useDismissOnBack(immersive, () => setImmersive(false));
   const immersiveRef = useRef<HTMLDivElement>(null);
   useFocusTrap(immersiveRef, immersive, () => setImmersive(false));
-  // v5.8.2 — JioSaavn-style canvas: tap the clip and every control drops
+  // v5.8.2 — immersive canvas: tap the clip and every control drops
   // away, tap again and they come back. Only offered while a video canvas is
   // actually playing — hiding the chrome over still artwork leaves a dead
   // screen, not an immersive one.
@@ -405,7 +405,7 @@ export default function NowPlayingPage() {
           />
         )}
         {/* v5.7.12 — the video canvas: the clip fills the whole player behind
-            the gradients on every screen size (Spotify-canvas style). */}
+            the gradients on every screen size (full-screen canvas style). */}
         {!chromeHidden && <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />}
         <div
           aria-hidden
@@ -458,7 +458,7 @@ export default function NowPlayingPage() {
         <div className="flex flex-col min-w-0">
 
         {/* Artwork */}
-        {/* Artwork card normally; with a clip on (v5.9.0, Spotify Canvas), a
+        {/* Artwork card normally; with a clip on (v5.9.0, full-screen canvas), a
             transparent edge-to-edge pane over the full-screen clip that owns
             every gesture. Immersive mode is a separate viewport-fixed layer
             (see the portal below), so nothing here re-flows when the

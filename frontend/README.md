@@ -5,7 +5,7 @@
 
 ### Local music catalog development
 
-`npm run dev` now exposes the same `/api/cat/*` catalog handler used by Cloudflare Pages through a Vite development middleware. The browser therefore calls `http://localhost:5173/api/cat/...` instead of community mirrors. The handler talks directly to JioSaavn and also resolves the encrypted media URL for playback.
+`npm run dev` now exposes the same `/api/cat/*` catalog handler used by Cloudflare Pages through a Vite development middleware. The browser therefore calls `http://localhost:5173/api/cat/...` instead of community mirrors. The handler talks directly to the upstream catalogue and also resolves the encrypted media URL for playback.
 
 The local catalog can be tested directly with:
 
@@ -81,7 +81,7 @@ knowledge in a blink), **VinaX MIMX M3**, **VinaX K3**, **VinaX DIF GEM**,
 **VinaX ING CALBTN** pair and **VinaX TRANSLATE** — the engine nicknames
 are the only model names shown anywhere, admin dashboards included, and
 feature seats ride only live, probe-verified engines — a dead upstream
-model — or a dead key — is benched, never served. The owner-hosted VinaX Saavn
+model — or a dead key — is benched, never served. The owner-hosted VinaX Music
 API leads the music sources (v5.6.7), with the first-party catalog as its
 fallback — every source health-checked from the admin API monitor. Live web search, files and images,
 Think/Research modes, and hands-free voice chat replying in a natural studio

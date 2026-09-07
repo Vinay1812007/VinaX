@@ -935,7 +935,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Fusion layer (4.12.0) — Saavn-style language rail + Spotify-style
+      {/* Fusion layer (4.12.0) — language rail + tile-grid
           quick grid over the existing shelves. Pure recomposition of data the
           page already loads; tiles hide until their source has content. */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-2 px-2 mb-4 snap-x" aria-label="Languages">

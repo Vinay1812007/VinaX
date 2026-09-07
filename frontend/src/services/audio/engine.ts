@@ -139,7 +139,7 @@ class AudioEngine {
 
   /**
    * Best-effort bitrate (kbps) of the stream playing right now, parsed from the
-   * source URL — saavn CDN urls embed it (e.g. ..._320.mp4). null when unknown
+   * source URL — catalogue CDN urls embed it (e.g. ..._320.mp4). null when unknown
    * or playing an offline file.
    */
   currentBitrate(): number | null {

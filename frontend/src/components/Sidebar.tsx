@@ -69,7 +69,7 @@ export function Sidebar() {
                       title={collapsed ? t(label) : undefined}
                       className={({ isActive }) =>
                         cn(
-                          // v5.9.0 Spotify nav: bold grey that turns white when
+                          // v5.9.0 nav: bold grey that turns white when
                           // active or hovered — no pills, no accent bar.
                           'relative flex items-center rounded-md text-[14px] font-bold transition-colors',
                           collapsed ? 'justify-center w-10 h-10 mx-auto' : 'gap-4 px-3 py-2',

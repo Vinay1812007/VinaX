@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/States';
 import { PlayIcon } from '@/components/Icons';
 
 /**
- * v5.7.9 — cinematic video player (JioSaavn/Spotify-canvas style): dark
+ * v5.7.9 — cinematic video player (full-screen canvas style): dark
  * immersive stage, autoplay, music pauses the moment the video starts.
  *
  * Source order is honest about the upstream: the FULL stream is tried first

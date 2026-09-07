@@ -1,5 +1,5 @@
 /**
- * v5.9.0 — the Spotify look has no ambient blobs: the canvas is a flat
+ * v5.9.0 — the flat look has no ambient blobs: the canvas is a flat
  * #121212 (bg-ink-900) under black chrome. Kept as a component so the
  * layout's mount point and the light/AMOLED token swap stay untouched.
  */

@@ -8,7 +8,7 @@ const entityMap: Record<string, string> = {
   '&nbsp;': ' ',
 };
 
-/** Decode the HTML entities the Saavn wrappers commonly leak into titles. */
+/** Decode the HTML entities the catalogue wrappers commonly leak into titles. */
 export function decodeHtml(input: string): string {
   if (!input) return '';
   let out = input.replace(/&(amp|quot|#039|apos|lt|gt|nbsp);/g, (m) => entityMap[m] ?? m);

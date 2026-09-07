@@ -1,5 +1,5 @@
 /**
- * Spotify-style manual search input (v3.6.0).
+ * Manual-commit search input (v3.6.0).
  *
  * The search box value is owned by the user alone. The URL still deep-links a
  * committed search, but the route must NEVER write back into the box while the

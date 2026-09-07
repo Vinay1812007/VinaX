@@ -1,6 +1,6 @@
 /**
  * Mood × language hub pages — the category-landing-page layer (the same play
- * JioSaavn/Gaana use to own "<language> <mood> songs" queries). Each entry
+ * the big streaming apps use to own "<language> <mood> songs" queries). Each entry
  * becomes 12 routes (one per HUB_LANGUAGE): /telugu-romantic-songs, etc.
  * KEEP IN SYNC with functions/_lib/render.ts (edge meta) and
  * functions/sitemap-hubs.xml.ts — Pages Functions cannot import src/.

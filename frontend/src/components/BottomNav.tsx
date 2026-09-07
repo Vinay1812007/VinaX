@@ -24,7 +24,7 @@ const items: DockItem[] = [
   { to: '/VinaXAI', label: 'VinaX AI', icon: SparkleIcon, ai: true as const },
 ];
 
-/** v5.9.0 — Spotify's tab bar: a solid black strip fading up from the
+/** v5.9.0 — the tab bar: a solid black strip fading up from the
  *  bottom edge, every tab an icon with its label under it, the active one
  *  white and the rest grey. */
 export function BottomNav() {
