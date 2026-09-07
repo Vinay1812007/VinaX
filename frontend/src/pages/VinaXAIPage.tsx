@@ -1462,19 +1462,20 @@ export default function VinaXAIPage(): ReactNode {
                     ) : m.role === 'assistant' ? (
                       m.content ? (
                         <>
-                          {busy && i === messages.length - 1 ? (
-                            /* v5.6.0 — markdown renders LIVE while streaming
-                               (headings, bold, lists, code, tables), exactly
-                               like a chat assistant; RichContent streams safely
-                               (an unclosed fence shows as preformatted text
-                               until it completes). */
-                            <div>
-                              <RichContent text={m.content} streaming />
-                              <span className="vx-caret" aria-hidden />
-                            </div>
-                          ) : (
-                            <RichContent text={m.content} />
-                          )}
+                          {/* v5.6.0 — markdown renders LIVE while streaming
+                              (headings, bold, lists, code, tables), exactly
+                              like a chat assistant; RichContent streams safely
+                              (an unclosed fence shows as preformatted text
+                              until it completes).
+                              v5.11.3 — ONE element type either way: swapping a
+                              <div> for a bare <RichContent> at the same child
+                              index made React unmount and remount the whole
+                              subtree the instant a reply finished, which
+                              re-ran every live preview from scratch. */}
+                          <div>
+                            <RichContent text={m.content} streaming={busy && i === messages.length - 1} />
+                            {busy && i === messages.length - 1 && <span className="vx-caret" aria-hidden />}
+                          </div>
                           {!busy && (
                             <div className="mt-2 flex items-center gap-3 text-[11px] text-ink-400">
                               {m.engine ? (

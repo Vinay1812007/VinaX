@@ -13,6 +13,10 @@
  */
 
 import { onRequest as hostMiddleware } from './functions/_middleware';
+// Every functions/api/**.ts handler needs BOTH an import here and an EXACT
+// entry below — worker/__tests__/routerCoverage.test.ts enforces it (an
+// orphaned handler falls through to Pages and 405s, which a --dry-run build
+// cannot detect: that is exactly how /api/preview shipped dead in v5.11.2).
 import * as m_api_status from './functions/api/status';
 import * as m_album_id from './functions/album/[id]';
 import * as m_api_admin_activity from './functions/api/admin/activity';
@@ -65,6 +69,7 @@ import * as m_api_home from './functions/api/home';
 import * as m_api_image from './functions/api/image';
 import * as m_api_lyrics_tools from './functions/api/lyrics-tools';
 import * as m_api_playlist from './functions/api/playlist';
+import * as m_api_preview from './functions/api/preview';
 import * as m_api_push_fcm_register from './functions/api/push/fcm-register';
 import * as m_api_push_subscribe from './functions/api/push/subscribe';
 import * as m_api_push_unsubscribe from './functions/api/push/unsubscribe';
@@ -168,6 +173,7 @@ const EXACT: Record<string, Mod> = {
   '/api/image': m_api_image,
   '/api/lyrics-tools': m_api_lyrics_tools,
   '/api/playlist': m_api_playlist,
+  '/api/preview': m_api_preview,
   '/api/push/fcm-register': m_api_push_fcm_register,
   '/api/push/subscribe': m_api_push_subscribe,
   '/api/push/unsubscribe': m_api_push_unsubscribe,

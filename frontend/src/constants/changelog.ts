@@ -12,6 +12,23 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.11.3': {
+    title: 'Run, for real this time',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Code the assistant writes now actually runs. The preview was reaching a dead address \u2014 it is wired up properly, so HTML, SVG and JavaScript render and execute in the reply, and \u201cOpen\u201d gives you the real page in a new tab.',
+      },
+      {
+        type: 'improved',
+        text: 'Pages that would have died silently now work: browser storage, pop-up dialogs, downloads, fullscreen and clipboard all behave inside the preview. Anything that does fail \u2014 a broken script, a CDN that will not load, a blocked tab \u2014 is reported under the preview instead of leaving a blank box.',
+      },
+      {
+        type: 'improved',
+        text: 'Every code block shows its language and line count with Copy, Download and Run; a preview waits for the reply to finish instead of restarting mid-answer.',
+      },
+    ],
+  },
   '5.11.2': {
     title: 'Run actually runs',
     changes: [

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/utils/cn';
 import { tokenize } from './tokenize';
 import { SongPickChip, SongPicksBar, extractSongPicks, parseSongLine } from './SongPick';
 import { ChartBlock } from './ChartBlock';
-import { PREVIEW_VIA_SERVER, newToken, onPreviewMessage, postPreview, scriptPage, type PreviewEvent } from './preview';
+import { newToken, onPreviewMessage, openPreview, postPreview, scriptPage, type PreviewEvent } from './preview';
 
 /**
  * Rich renderer for AI messages. Auto-detects and renders:
@@ -429,20 +429,45 @@ function highlightCode(code: string, lang: string): ReactNode[] {
   return out;
 }
 
-const RUNNABLE = new Set(['js', 'javascript', 'jsx', 'ts', 'typescript']);
+// jsx is deliberately absent: JSX in a classic <script> is always a
+// SyntaxError. ts/typescript stay — a fence tagged ts very often contains
+// plain JavaScript, which runs fine; annotations get a diagnosis below.
+const RUNNABLE = new Set(['js', 'javascript', 'ts', 'typescript']);
 
-/** v5.11.1 — Run for JavaScript/TypeScript: the code executes in a
- *  sandboxed iframe served by /api/preview (its own CSP — see preview.ts)
- *  and console output / errors stream back through postMessage. */
-function JsRunner({ code, onClose }: { code: string; onClose(): void }): ReactNode {
+/** v5.11.3 — Run for JavaScript: the snippet executes in a sandboxed iframe
+ *  served by /api/preview (its own CSP + injected reporter — see preview.ts),
+ *  and its console output, dialogs and errors stream back by postMessage.
+ *  Silence is a failure mode too, so an unanswered sandbox is reported
+ *  instead of hanging forever on "Running…". */
+function JsRunner({ code, lang, onClose }: { code: string; lang: string; onClose(): void }): ReactNode {
   const [lines, setLines] = useState<PreviewEvent[]>([]);
+  const [status, setStatus] = useState<'running' | 'live' | 'failed'>('running');
   const token = useMemo(() => newToken(), []);
   const frameName = `vx-run-${token}`;
-  const page = useMemo(() => scriptPage(code), [code]);
-  useEffect(() => onPreviewMessage(token, (ev) => setLines((prev) => [...prev, ev].slice(-400))), [token]);
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const page = useMemo(() => scriptPage(code, token), [code, token]);
+  useEffect(
+    () =>
+      onPreviewMessage(
+        token,
+        (ev) => {
+          setStatus('live');
+          if (ev.kind !== 'ready') setLines((prev) => (prev.length >= 400 ? prev : [...prev, ev]));
+        },
+        frameRef,
+      ),
+    [token],
+  );
   useEffect(() => {
-    if (PREVIEW_VIA_SERVER) postPreview(page, token, frameName, 'Run');
+    setStatus('running');
+    setLines([]);
+    postPreview(page, token, frameName, 'Run');
+    // Not a single message after 6s means the sandbox never answered at all
+    // (endpoint down, 403, 413, rate limited) — say so rather than spin.
+    const t = window.setTimeout(() => setStatus((s) => (s === 'running' ? 'failed' : s)), 6000);
+    return () => window.clearTimeout(t);
   }, [page, token, frameName]);
+  const tsHint = (lang === 'ts' || lang === 'typescript') && lines.some((l) => /SyntaxError/.test(l.text));
   return (
     <div className="border-t border-glass-strong">
       <div className="flex items-center justify-between px-3 py-1 bg-ink-850 text-[11px] text-ink-300">
@@ -450,19 +475,26 @@ function JsRunner({ code, onClose }: { code: string; onClose(): void }): ReactNo
         <button onClick={onClose} className="hover:text-ink-100">Close</button>
       </div>
       <iframe
+        ref={frameRef}
         title="run"
         name={frameName}
-        sandbox="allow-scripts allow-forms"
-        srcDoc={PREVIEW_VIA_SERVER ? undefined : page}
+        sandbox="allow-scripts allow-forms allow-downloads"
         className="hidden"
       />
       <pre className="p-3 max-h-64 overflow-auto text-xs leading-relaxed font-mono">
-        {lines.length === 0 ? <span className="text-ink-500">Running…</span> : null}
-        {lines.filter((l) => l.kind !== 'ready').map((l, i) => (
+        {status === 'failed' ? (
+          <div className="text-red-300">Couldn&rsquo;t reach the preview sandbox (/api/preview) — the code didn&rsquo;t run.</div>
+        ) : lines.length === 0 ? (
+          <span className="text-ink-500">{status === 'live' ? 'Finished — no output.' : 'Running…'}</span>
+        ) : null}
+        {lines.map((l, i) => (
           <div key={i} className={l.kind === 'error' ? 'text-red-300' : l.text.startsWith('✓') ? 'text-ember-400' : ''}>
             {l.text}
           </div>
         ))}
+        {tsHint && (
+          <div className="mt-1.5 text-ink-400">TypeScript isn&rsquo;t compiled before running — strip the type annotations to run this snippet.</div>
+        )}
       </pre>
     </div>
   );
@@ -493,7 +525,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }): ReactNode {
       <pre className="p-3 overflow-x-auto text-xs leading-relaxed font-mono">
         <code>{tinted}</code>
       </pre>
-      {runKey > 0 && <JsRunner key={runKey} code={code} onClose={() => setRunKey(0)} />}
+      {runKey > 0 && <JsRunner key={runKey} code={code} lang={lang} onClose={() => setRunKey(0)} />}
     </div>
   );
 }
@@ -529,40 +561,51 @@ function MermaidBlock({ code }: { code: string }): ReactNode {
   );
 }
 
-function HtmlPreview({ lang, code }: { lang: string; code: string }): ReactNode {
+/** v5.11.3 — live preview for html/svg/xml: the page is served by
+ *  /api/preview so its own scripts actually execute, runtime errors surface
+ *  under the frame instead of leaving a silent blank box, and "Open" is
+ *  detectable when the browser blocks the tab. */
+function HtmlPreview({ lang, code, streaming = false }: { lang: string; code: string; streaming?: boolean }): ReactNode {
   const [tab, setTab] = useState<'preview' | 'code'>('preview');
   const [runKey, setRunKey] = useState(0);
   const [events, setEvents] = useState<PreviewEvent[]>([]);
+  const [status, setStatus] = useState<'running' | 'live' | 'failed'>('running');
+  const [openNote, setOpenNote] = useState('');
   const token = useMemo(() => newToken(), []);
   const frameName = `vx-preview-${token}`;
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const title = lang === 'svg' ? 'SVG' : 'Preview';
   const srcDoc =
     lang === 'svg'
       ? `<!doctype html><html><head><meta charset="utf-8"><title>SVG</title></head><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#fff">${code}</body></html>`
       : code;
-  useEffect(() => onPreviewMessage(token, (ev) => setEvents((prev) => [...prev, ev].slice(-50))), [token]);
-  // Serve the page through /api/preview whenever the preview tab shows
-  // (first mount and every ▶ Run) — srcdoc would inherit the app's CSP and
-  // block the page's own scripts.
+  useEffect(
+    () =>
+      onPreviewMessage(
+        token,
+        (ev) => {
+          setStatus('live');
+          setEvents((prev) => [...prev, ev].slice(-50));
+        },
+        frameRef,
+      ),
+    [token],
+  );
+  // Serve through /api/preview whenever the preview tab shows (first paint and
+  // every ▶ Run) — srcdoc would inherit the app's CSP and block the page's own
+  // scripts. Never while the reply is still streaming: the message keeps
+  // changing, and each change would re-POST a half-written page.
   useEffect(() => {
-    if (tab !== 'preview' || !PREVIEW_VIA_SERVER) return;
+    if (tab !== 'preview' || streaming) return;
     setEvents([]);
-    postPreview(srcDoc, token, frameName, lang === 'svg' ? 'SVG' : 'Preview');
-  }, [tab, runKey, srcDoc, token, frameName, lang]);
+    setStatus('running');
+    postPreview(srcDoc, token, frameName, title);
+    const t = window.setTimeout(() => setStatus((s) => (s === 'running' ? 'failed' : s)), 6000);
+    return () => window.clearTimeout(t);
+  }, [tab, runKey, srcDoc, token, frameName, title, streaming]);
   const errors = events.filter((e) => e.kind === 'error');
   const open = () => {
-    if (PREVIEW_VIA_SERVER) postPreview(srcDoc, token, '_blank', lang === 'svg' ? 'SVG' : 'Preview');
-    else {
-      try {
-        const w = window.open('', '_blank');
-        if (w) {
-          w.document.open();
-          w.document.write(srcDoc);
-          w.document.close();
-        }
-      } catch {
-        /* popup blocked */
-      }
-    }
+    setOpenNote(openPreview(srcDoc, token, title) ? '' : 'Your browser blocked the new tab — allow pop-ups for this site.');
   };
   return (
     <div className="my-2 rounded-xl overflow-hidden border border-glass-strong bg-ink-900">
@@ -596,14 +639,34 @@ function HtmlPreview({ lang, code }: { lang: string; code: string }): ReactNode 
       </div>
       {tab === 'preview' ? (
         <>
-          <iframe
-            key={runKey}
-            title="preview"
-            name={frameName}
-            sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock"
-            srcDoc={PREVIEW_VIA_SERVER ? undefined : srcDoc}
-            className="w-full h-80 bg-white"
-          />
+          {streaming ? (
+            <div className="h-80 grid place-items-center bg-ink-900 text-xs text-ink-400">Waiting for the reply to finish…</div>
+          ) : (
+            <iframe
+              key={runKey}
+              ref={frameRef}
+              title="preview"
+              name={frameName}
+              /* Must stay in step with the CSP sandbox the endpoint sends —
+                 the effective sandbox is the INTERSECTION of the two. */
+              sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock allow-downloads"
+              /* Cross-origin frames are denied these by Permissions Policy
+                 unless the embedder delegates them. Camera/mic/geolocation are
+                 deliberately NOT delegated — they cannot work in an opaque
+                 origin anyway, and delegating turns a clean failure into a
+                 confusing one. */
+              allow="fullscreen; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+              className="w-full h-80 bg-white"
+            />
+          )}
+          {status === 'failed' && (
+            <div className="border-t border-glass-strong bg-ink-850 px-3 py-2 text-[11px] text-red-300">
+              ⚠ Couldn&rsquo;t reach the preview sandbox (/api/preview) — nothing was rendered.
+            </div>
+          )}
+          {openNote && (
+            <div className="border-t border-glass-strong bg-ink-850 px-3 py-2 text-[11px] text-amber-300">{openNote}</div>
+          )}
           {errors.length > 0 && (
             <div className="border-t border-glass-strong bg-ink-850 px-3 py-2 text-[11px] font-mono text-red-300 max-h-28 overflow-auto">
               {errors.slice(-5).map((e, i) => (
@@ -673,7 +736,7 @@ function CodeRouter({ lang, code, closed, streaming }: { lang: string; code: str
     );
   if (lang === 'mermaid') return <MermaidBlock code={code} />;
   if (lang === 'chart') return <ChartBlock code={code} fallback={<CodeBlock lang="json" code={code} />} />;
-  if (lang === 'html' || lang === 'svg' || lang === 'xml') return <HtmlPreview lang={lang} code={code} />;
+  if (lang === 'html' || lang === 'svg' || lang === 'xml') return <HtmlPreview lang={lang} code={code} streaming={streaming} />;
   if (lang === 'csv') return <CsvBlock code={code} />;
   return <CodeBlock lang={lang} code={code} />;
 }

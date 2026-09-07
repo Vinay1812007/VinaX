@@ -1,17 +1,21 @@
 import { isNativePlatform } from '@/services/native';
 
 /**
- * v5.11.2 — running assistant-written pages. A srcdoc iframe inherits the
- * app's strict CSP (hashed script-src), which silently blocks every inline
- * script the assistant writes; so the page is POSTed to /api/preview via a
- * plain form targeting the sandboxed iframe, and comes back as a network
- * document with its own permissive policy. The same form with target=_blank
- * is "Open in a new tab".
+ * v5.11.3 — running assistant-written pages: the sandbox/runtime hop of
+ * AI response -> code block UI -> Run -> sandbox/runtime -> output.
+ *
+ * A srcdoc iframe inherits the app's strict CSP (hashed script-src), which
+ * silently blocks every inline script the assistant writes. So the page is
+ * POSTed to /api/preview via a plain form targeting the sandboxed iframe, and
+ * comes back as a network document with its own permissive policy plus an
+ * injected reporter. The same form with a named window is "Open in a new tab".
+ *
+ * This path is used in dev too: `vite dev` and `vite preview` both proxy /api
+ * to the local worker, and the worker lists localhost/127.0.0.1 in
+ * frame-ancestors. A DEV-only srcdoc fallback would be an uninstrumented
+ * preview that behaves nothing like production — exactly where bugs hide.
  */
 export const PREVIEW_ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/preview' : '/api/preview';
-
-/** Dev server has no Functions — fall back to srcdoc (no CSP there either). */
-export const PREVIEW_VIA_SERVER = !import.meta.env.DEV;
 
 export const newToken = (): string => Math.random().toString(36).slice(2, 12);
 
@@ -40,14 +44,51 @@ export function postPreview(html: string, token: string, target: string, title =
   }
 }
 
+/**
+ * "Open in a new tab". Opens the tab FIRST so a blocked popup is detectable —
+ * a form with target="_blank" gives no handle back, so a blocked open would
+ * otherwise be silent. Returns false when the browser refused.
+ */
+export function openPreview(html: string, token: string, title = 'Preview'): boolean {
+  const name = `vxopen${token}`;
+  let win: Window | null;
+  try {
+    win = window.open('', name);
+  } catch {
+    return false;
+  }
+  if (!win) return false;
+  postPreview(html, token, name, title);
+  try {
+    win.focus();
+  } catch {
+    /* focus is best-effort */
+  }
+  return true;
+}
+
 export interface PreviewEvent {
   kind: 'log' | 'error' | 'ready';
   text: string;
 }
 
-/** Listen for the injected reporter's messages for one token. */
-export function onPreviewMessage(token: string, cb: (e: PreviewEvent) => void): () => void {
+/**
+ * Listen for the injected reporter's messages for one token.
+ *
+ * `frameRef` is dereferenced INSIDE the handler, never captured: the preview
+ * iframe carries key={runKey}, so every Run mounts a new DOM node while this
+ * listener stays registered.
+ */
+export function onPreviewMessage(
+  token: string,
+  cb: (e: PreviewEvent) => void,
+  frameRef?: { current: HTMLIFrameElement | null },
+): () => void {
   const handler = (e: MessageEvent): void => {
+    const el = frameRef?.current;
+    // e.origin is the string "null" for an opaque-origin frame, so identity of
+    // the sending window is the only check available.
+    if (el && e.source !== el.contentWindow) return;
     const d = e.data as { vxPreview?: string; kind?: string; text?: string } | null;
     if (!d || d.vxPreview !== token || !d.kind) return;
     if (d.kind === 'log' || d.kind === 'error' || d.kind === 'ready') cb({ kind: d.kind, text: String(d.text ?? '') });
@@ -56,7 +97,15 @@ export function onPreviewMessage(token: string, cb: (e: PreviewEvent) => void): 
   return () => window.removeEventListener('message', handler);
 }
 
-/** Wrap a JS/TS snippet as a page whose console reaches the chat. */
-export function scriptPage(code: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Run</title></head><body><script>${code.replace(/<\/script/gi, '<\\/script')}\n;(function(){try{parent.postMessage({vxPreview:(document.currentScript&&document.currentScript.getAttribute('data-token'))||'',kind:'log',text:'\\u2713 finished'},'*')}catch(e){}})();</script></body></html>`;
+/** Wrap a JS snippet as a page whose console reaches the chat. */
+export function scriptPage(code: string, token: string): string {
+  const t = token.replace(/[^\w-]/g, '');
+  return (
+    '<!doctype html><html><head><meta charset="utf-8"><title>Run</title></head><body><script>' +
+    code.replace(/<\/script/gi, '<\\/script') +
+    // Runs after the snippet: proves the script parsed and finished, so the UI
+    // can say "finished, no output" instead of hanging on "Running…".
+    `\n;try{parent.postMessage({vxPreview:'${t}',kind:'log',text:'✓ finished'},'*')}catch(e){}` +
+    '</script></body></html>'
+  );
 }
