@@ -12,6 +12,23 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.9.0': {
+    title: 'The Spotify look',
+    changes: [
+      {
+        type: 'new',
+        text: 'A whole new look, inspired by Spotify: black sidebar, player bar and tab bar over a deep #121212 canvas, one green accent, bold white headings, pill buttons, and cards that lift a green play button when you hover. Every page, every feature, exactly where it was.',
+      },
+      {
+        type: 'new',
+        text: 'Now Playing widget for your Android home screen: artwork, song, artist and previous / play-pause / next \u2014 controls that work without opening the app. Long-press your home screen \u2192 Widgets \u2192 VinaX.',
+      },
+      {
+        type: 'improved',
+        text: 'The video canvas now behaves like Spotify Canvas: the clip fills the entire screen behind the player on phones and desktop, the artwork steps aside, and the controls sit over a soft bottom gradient. Tap the clip to hide the controls; tap again to bring them back.',
+      },
+    ],
+  },
   '5.8.2': {
     title: 'Video, the JioSaavn way',
     changes: [

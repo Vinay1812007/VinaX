@@ -17,7 +17,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'hidden md:flex flex-col shrink-0 my-3 ml-3 rounded-3xl glass-sidebar overflow-y-auto overflow-x-hidden no-scrollbar sticky top-0 max-h-dvh transition-[width] duration-200 ease-out',
+        'hidden md:flex flex-col shrink-0 my-2 ml-2 rounded-lg glass-sidebar overflow-y-auto overflow-x-hidden no-scrollbar sticky top-0 max-h-dvh transition-[width] duration-200 ease-out',
         collapsed ? 'w-[4.5rem]' : 'w-60',
       )}
     >
@@ -25,10 +25,7 @@ export function Sidebar() {
         <NavLink to="/" className="vx-brand flex items-center gap-2.5 min-w-0" aria-label="VinaX home">
           <img src="/icons/icon.svg" alt="" className="w-8 h-8 rounded-lg shrink-0" />
           {!collapsed && (
-            <span className="text-xl font-bold tracking-tight truncate">
-              <span className="bg-gradient-to-r from-ember-400 to-tide-400 bg-clip-text text-transparent">VinaX</span>
-              <span className="text-ember-500">.</span>
-            </span>
+            <span className="text-xl font-bold tracking-tight truncate text-ink-100">VinaX</span>
           )}
         </NavLink>
         {!collapsed && (
@@ -72,18 +69,11 @@ export function Sidebar() {
                       title={collapsed ? t(label) : undefined}
                       className={({ isActive }) =>
                         cn(
-                          'relative flex items-center rounded-2xl text-[13.5px] transition-[color,background-color,border-color,opacity,transform]',
-                          collapsed ? 'justify-center w-10 h-10 mx-auto' : 'gap-3 px-3 py-2.5',
-                          isActive
-                            ? 'nav-pill-active text-ember-300 font-semibold'
-                            : cn(
-                                'font-medium text-ink-200 hover:text-ink-100',
-                                collapsed
-                                  ? 'hover:bg-ink-800/40'
-                                  : 'hover:bg-ink-800/40 motion-safe:hover:translate-x-0.5',
-                              ),
-                          isActive && !collapsed &&
-                            'before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:rounded-full before:bg-ember-500',
+                          // v5.9.0 Spotify nav: bold grey that turns white when
+                          // active or hovered — no pills, no accent bar.
+                          'relative flex items-center rounded-md text-[14px] font-bold transition-colors',
+                          collapsed ? 'justify-center w-10 h-10 mx-auto' : 'gap-4 px-3 py-2',
+                          isActive ? 'text-ink-100' : 'text-ink-300 hover:text-ink-100',
                         )
                       }
                     >

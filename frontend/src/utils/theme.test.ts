@@ -15,19 +15,25 @@ const css = readFileSync('src/styles/index.css', 'utf8').replace(
  *  what ships. Multiple :root blocks stack in this file (three previous
  *  redesigns still live above), and the last one is the one users see. */
 function lastValue(varName: string): string {
+  // Only :root blocks count — accent skins (html[data-accent=…]) and the
+  // light/AMOLED themes legitimately re-pitch the same tokens for THEIR
+  // canvas; the default cascade is whatever the last :root says.
+  const roots = [...css.matchAll(/:root\s*\{([^}]*)\}/g)].map((m) => m[1]);
   const re = new RegExp(`${varName.replace(/[-[\]/{}()*+?.\\^$|]/g, '\\$&')}:\\s*([^;]+);`, 'g');
   let last = '';
-  for (const m of css.matchAll(re)) last = m[1].trim();
+  for (const block of roots) for (const m of block.matchAll(re)) last = m[1].trim();
   return last;
 }
 
-describe('color tokens (v3.8 modern minimal wins the cascade)', () => {
-  it('brand ramps resolve to refined indigo', () => {
-    // v3.8: indigo primary, cyan supporting. Restrained + wearable across
-    // the whole app. Old cyan-primary lived above in earlier :root blocks.
-    expect(lastValue('--ember-400')).toBe('129 140 248');
-    expect(lastValue('--ember-500')).toBe('99 102 241');
-    expect(lastValue('--tide-400')).toBe('103 232 249');
+describe('color tokens (v5.9.0 Spotify look wins the cascade)', () => {
+  it('brand ramps resolve to Spotify green', () => {
+    // v5.9.0: one green accent (#1db954 / #1ed760) over black chrome and a
+    // #121212 canvas. Every earlier era's ramp lives above in the cascade.
+    expect(lastValue('--ember-400')).toBe('30 215 96');
+    expect(lastValue('--ember-500')).toBe('29 185 84');
+    expect(lastValue('--tide-400')).toBe('100 232 150');
+    expect(lastValue('--ink-900')).toBe('18 18 18');
+    expect(lastValue('--surface-sidebar')).toBe('rgb(0 0 0)');
   });
 
   it('glass recipe is ADJUSTABLE — separate alpha and blur dials (4.13)', () => {
@@ -37,7 +43,7 @@ describe('color tokens (v3.8 modern minimal wins the cascade)', () => {
     // moods the single dial couldn't express. AMOLED stays solid on purpose
     // (true-black canvases don't frost), and the reduced-transparency
     // fallback still forces --surface-solid.
-    expect(css).toContain('--glass-bg: rgb(16 19 24 / var(--glass-alpha))'); // dark
+    expect(css).toContain('--glass-bg: rgb(24 24 24 / var(--glass-alpha))'); // dark
     expect(css).toContain('--glass-bg: rgb(255 255 255 / var(--glass-alpha))'); // light
     expect(css).toContain('--glass-blur-boost:');
     expect(css).toContain('--glass-blur: calc(6px + var(--glass-blur-boost) * 34px)');
@@ -45,10 +51,9 @@ describe('color tokens (v3.8 modern minimal wins the cascade)', () => {
     expect(css).toContain('prefers-reduced-transparency');
   });
 
-  it('hero gradient is indigo → deeper-indigo (quiet single-hue)', () => {
-    // Was multi-stop cyan→violet→pink; v3.8 keeps only one hue family so
-    // the surface never fights the content.
-    expect(lastValue('--gradient-primary')).toBe('linear-gradient(180deg, rgb(99 102 241), rgb(79 70 229))');
+  it('hero gradient is green → deeper-green (quiet single-hue)', () => {
+    // One hue family only, so the surface never fights the content.
+    expect(lastValue('--gradient-primary')).toBe('linear-gradient(180deg, rgb(30 215 96), rgb(29 185 84))');
   });
 
   it('dark and light both define hairline glass borders', () => {
@@ -112,15 +117,15 @@ describe('contrast (WCAG AA on the documented pairs)', () => {
   }
 
   it('primary text on canvas ≥ 7:1 in both themes (v3.8 modern minimal)', () => {
-    // Dark canvas rgb(11 13 17) = #0b0d11 with rgb(245 247 251) = #f5f7fb text.
-    expect(contrast('#f5f7fb', '#0b0d11')).toBeGreaterThanOrEqual(7);
+    // Dark canvas rgb(18 18 18) = #121212 with white text.
+    expect(contrast('#ffffff', '#121212')).toBeGreaterThanOrEqual(7);
     // Light canvas rgb(240 242 247) = #f0f2f7 with rgb(12 14 20) = #0c0e14 text.
     expect(contrast('#0c0e14', '#f0f2f7')).toBeGreaterThanOrEqual(7);
   });
 
   it('secondary text stays readable (≥ 4.5:1)', () => {
-    // Dark: --ink-300 rgb(176 184 200) = #b0b8c8 on dark canvas.
-    expect(contrast('#b0b8c8', '#0b0d11')).toBeGreaterThanOrEqual(4.5);
+    // Dark: --ink-300 rgb(179 179 179) = #b3b3b3 on the #121212 canvas.
+    expect(contrast('#b3b3b3', '#121212')).toBeGreaterThanOrEqual(4.5);
     // Light: --ink-300 rgb(84 90 104) = #545a68 on light canvas.
     expect(contrast('#545a68', '#f0f2f7')).toBeGreaterThanOrEqual(4.5);
   });
@@ -130,13 +135,13 @@ describe('contrast (WCAG AA on the documented pairs)', () => {
     // (5.86:1 with white — AA). Hover lifts to --ember-500 (#6366f1) which
     // the accent-heavy chips + focus rings use; that lighter shade isn't a
     // text-on-fill surface so its 4.16:1 doesn't apply.
-    expect(contrast('#f5f7fb', '#4f46e5')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#000000', '#1db954')).toBeGreaterThanOrEqual(4.5);
   });
 
   it('lyric colors meet AA on both canvases (v3.1.1)', () => {
-    // dark canvas #0b0d11: active white, upcoming slate
-    expect(contrast('#ffffff', '#0b0d11')).toBeGreaterThanOrEqual(7);
-    expect(contrast('#94a3b8', '#0b0d11')).toBeGreaterThanOrEqual(4.5);
+    // dark canvas #121212: active white, upcoming slate
+    expect(contrast('#ffffff', '#121212')).toBeGreaterThanOrEqual(7);
+    expect(contrast('#94a3b8', '#121212')).toBeGreaterThanOrEqual(4.5);
     // light canvas #f0f2f7: active near-black, upcoming ink
     expect(contrast('#0a0c10', '#f0f2f7')).toBeGreaterThanOrEqual(7);
     expect(contrast('#475569', '#f0f2f7')).toBeGreaterThanOrEqual(4.5);

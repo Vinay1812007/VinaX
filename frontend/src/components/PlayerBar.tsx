@@ -170,7 +170,7 @@ export function PlayerBar() {
               aria-label={isPlaying ? 'Pause' : 'Play'}
               title={isPlaying ? 'Pause' : 'Play'}
               onClick={togglePlay}
-              className="np-mini-play inline-flex items-center justify-center w-10 h-10 rounded-full bg-white/[0.12] text-ink-100 shrink-0 active:scale-95 transition-transform"
+              className="np-mini-play inline-flex items-center justify-center w-10 h-10 rounded-full text-white shrink-0 active:scale-95 transition-transform"
             >
               {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6 ml-0.5" />}
             </button>
@@ -181,7 +181,8 @@ export function PlayerBar() {
       </div>
 
       {/* ---- Desktop bar: three-zone layout ---- */}
-      <div className="hidden sm:block mx-3 mb-3 rounded-3xl overflow-hidden glass-bottom-player">
+      {/* v5.9.0 — Spotify's bar: full width, flush with the bottom, black. */}
+      <div className="hidden sm:block overflow-hidden glass-bottom-player">
         <div className="flex items-center gap-4 px-4 py-2.5 max-w-screen-2xl mx-auto">
           <div className="flex items-center gap-3 min-w-0 w-60 lg:w-80">
             <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="group shrink-0">
@@ -189,7 +190,7 @@ export function PlayerBar() {
                 src={artUrl ?? FALLBACK_ART}
                 onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
                 alt=""
-                className={cn('w-14 h-14 rounded-xl object-cover group-hover:opacity-80 transition-opacity ring-1 ring-white/10 shadow-md', isBuffering && 'opacity-50')}
+                className={cn('w-14 h-14 rounded-md object-cover group-hover:opacity-80 transition-opacity shadow-md', isBuffering && 'opacity-50')}
               />
             </button>
             <div className="min-w-0">
@@ -210,7 +211,7 @@ export function PlayerBar() {
               <button
                 onClick={togglePlay}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="np-play-desktop w-11 h-11 rounded-full bg-premium text-white flex items-center justify-center hover:scale-[1.06] active:scale-95 transition-transform"
+                className="np-play-desktop w-9 h-9 rounded-full flex items-center justify-center hover:scale-[1.06] active:scale-95 transition-transform"
               >
                 {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
               </button>

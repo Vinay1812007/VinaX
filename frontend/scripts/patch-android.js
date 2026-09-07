@@ -179,6 +179,15 @@ if (fs.existsSync(manifestPath)) {
                 android:name="android.appwidget.provider"
                 android:resource="@xml/vinax_widget_info" />
         </receiver>
+
+        <receiver android:name=".VinaxPlayerWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/vinax_player_widget_info" />
+        </receiver>
 `;
 
   // WARNING (audit finding M-OPS-9): these regexes are fragile — they assume
@@ -203,6 +212,8 @@ if (fs.existsSync(manifestPath)) {
   // Remove a previously injected widget receiver so re-runs stay idempotent.
   const oldWidgetRegex = /<receiver[^>]*android:name="\.VinaxQuickPlayWidget"[^>]*>.*?<\/receiver>/gs;
   manifest = manifest.replace(oldWidgetRegex, '');
+  const oldPlayerWidgetRegex = /<receiver[^>]*android:name="\.VinaxPlayerWidget"[^>]*>.*?<\/receiver>/gs;
+  manifest = manifest.replace(oldPlayerWidgetRegex, '');
 
   if (!manifest.includes('VinaxMediaService')) {
     const before = manifest;

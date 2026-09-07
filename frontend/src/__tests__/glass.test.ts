@@ -43,7 +43,7 @@ describe('glassAlpha', () => {
   it('the stylesheet derives blur/saturation from independent dials (4.13)', () => {
     const css = readFileSync(resolve(__dirname, '../styles/index.css'), 'utf8');
     expect(css).toContain('--glass-alpha: 0.78');
-    expect(css).toMatch(/--glass-bg: rgb\(16 19 24 \/ var\(--glass-alpha\)\)/);
+    expect(css).toMatch(/--glass-bg: rgb\(24 24 24 \/ var\(--glass-alpha\)\)/);
     expect(css).toMatch(/--glass-bg: rgb\(255 255 255 \/ var\(--glass-alpha\)\)/);
     // 4.13 split: blur is its own dial (--glass-blur-boost 0..1) — sharp
     // glass and hazy solids are now BOTH reachable, which the single alpha

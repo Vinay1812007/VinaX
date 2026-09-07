@@ -51,10 +51,11 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
      *  should open the app ON THE FULL-SCREEN PLAYER (4.16.1). MainActivity
      *  reads it and relays via VinaxMediaPlugin.openPlayerRequested(). */
     public static final String EXTRA_OPEN_PLAYER = "vinax.open.player";
-    private static final String ACTION_PLAY  = "vinax.PLAY";
-    private static final String ACTION_PAUSE = "vinax.PAUSE";
-    private static final String ACTION_PREV  = "vinax.PREV";
-    private static final String ACTION_NEXT  = "vinax.NEXT";
+    /* Public: the home-screen widget (VinaxPlayerWidget) sends these too. */
+    public static final String ACTION_PLAY  = "vinax.PLAY";
+    public static final String ACTION_PAUSE = "vinax.PAUSE";
+    public static final String ACTION_PREV  = "vinax.PREV";
+    public static final String ACTION_NEXT  = "vinax.NEXT";
     private static final String ACTION_STOP  = "vinax.STOP";
     private static final String ROOT_ID      = "vinax_root";
 
@@ -151,12 +152,15 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
             case ACTION_STOP_SELF:
                 relay("stop");
                 stopForegroundCompat();
+                VinaxPlayerWidget.clear(this);
                 stopSelf();
                 return;
             default: break;
         }
         updateSession();
         promote();
+        // v5.9.0 — mirror every change onto the home-screen widget.
+        VinaxPlayerWidget.push(this, title, artist, artwork, playing);
     }
 
     private void updateSession() {
@@ -296,6 +300,7 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
     public void onDestroy() {
         if (session != null) session.release();
         super.onDestroy();
+        VinaxPlayerWidget.clear(this);
     }
 
     /* ── MediaBrowserServiceCompat ─────────────────────────────────────── */

@@ -4,6 +4,8 @@ Files copied into the generated `android/` project by `scripts/patch-android.js`
 
 - `VinaxMediaPlugin.java` — Capacitor bridge for the media session
 - `VinaxMediaService.java` — foreground service driving playback + lockscreen controls
+- `VinaxQuickPlayWidget.java` — static "Play my mix" home-screen widget
+- `VinaxPlayerWidget.java` (+ `res/layout/vinax_widget_player.xml`) — Now Playing widget with artwork, title and prev / play-pause / next, fed by the media service
 - `google-services.json` — Firebase config for FCM background push
 
 ## SECURITY: `google-services.json` API key restrictions (audit finding M-OPS-8)

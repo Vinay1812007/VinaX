@@ -400,9 +400,9 @@ export default function NowPlayingPage() {
           className={cn(
             'absolute inset-0 bg-gradient-to-b',
             chromeHidden
-              ? 'from-transparent via-transparent to-ink-950/45'
+              ? 'from-transparent via-transparent to-ink-950/60'
               : canvasOn
-                ? 'from-ink-950/55 via-ink-950/10 lg:via-ink-950/45 to-ink-950/90'
+                ? 'from-ink-950/35 via-ink-950/25 lg:via-ink-950/45 to-ink-950/95'
                 : 'from-ink-950/30 via-ink-950/70 to-ink-950',
           )}
         />
@@ -434,17 +434,16 @@ export default function NowPlayingPage() {
         <div className="flex flex-col min-w-0">
 
         {/* Artwork */}
-        {/* Artwork card normally; with a clip on, an edge-to-edge pane that
-            owns every gesture: on phones it holds the clip itself (native
-            ratio, centred), on desktop it is a window onto the backdrop clip.
-            The outer box always holds its place in the flow — in immersive
-            mode only the inner gesture layer goes full-screen (the clip
-            centred on black), so the sheet keeps its height and nothing
-            re-flows when the controls come and go. */}
+        {/* Artwork card normally; with a clip on (v5.9.0, Spotify Canvas), a
+            transparent edge-to-edge pane over the full-screen clip that owns
+            every gesture. The outer box always holds its place in the flow —
+            in immersive mode only the inner gesture layer goes full-screen,
+            so the sheet keeps its height and the clip never re-crops when
+            the controls come and go. */}
         <div
           className={cn(
             canvasOn
-              ? 'relative -mx-5 md:-mx-8 lg:mx-auto min-h-[16rem] sm:min-h-[20rem] lg:min-h-0 lg:h-auto mb-5 lg:mt-5 lg:mb-6'
+              ? 'relative -mx-5 md:-mx-8 lg:mx-auto h-[42vh] lg:h-auto mb-5 lg:mt-5 lg:mb-6'
               : 'relative mt-5 mb-6 mx-auto',
             swipeFx === 'up' && 'motion-safe:animate-[np-swipe-next_320ms_ease-out]',
             swipeFx === 'down' && 'motion-safe:animate-[np-swipe-prev_320ms_ease-out]',
@@ -456,11 +455,7 @@ export default function NowPlayingPage() {
         <div
           className={cn(
             'select-none touch-pan-x',
-            chromeHidden
-              ? 'fixed inset-0 z-20 flex items-center justify-center bg-ink-950 lg:bg-transparent'
-              : canvasOn
-                ? 'absolute inset-0 flex items-center justify-center'
-                : 'relative',
+            chromeHidden ? 'fixed inset-0 z-20' : canvasOn ? 'absolute inset-0' : 'relative',
           )}
           data-deter-context
           onTouchStart={onArtTouchStart}
@@ -476,8 +471,8 @@ export default function NowPlayingPage() {
               canvas.src ? 'opacity-0' : isPlaying ? 'opacity-100' : 'opacity-40',
             )}
           />
-          {/* The clip on phones, a transparent window on desktop, the still
-              artwork the moment the canvas is off (see SongCanvas). */}
+          {/* Empty window over the clip while the canvas plays; the still
+              artwork the moment it's off (see SongCanvas). */}
           <SongCanvas canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} hideToggle={chromeHidden} />
           <button
             aria-label={canvasOn ? 'Rewind 10 seconds (double tap), or tap to hide the controls' : 'Rewind 10 seconds (double tap)'}
@@ -606,7 +601,7 @@ export default function NowPlayingPage() {
           <button
             onClick={togglePlay}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="w-16 h-16 rounded-full bg-premium text-white flex items-center justify-center shadow-[0_12px_36px_-10px_rgb(var(--ember-500)/0.6)] hover:scale-105 active:scale-95 transition-transform"
+            className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
           >
             {isBuffering ? (
               <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -930,7 +925,7 @@ export default function NowPlayingPage() {
               <button
                 onClick={togglePlay}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="w-14 h-14 rounded-full bg-premium text-white flex items-center justify-center shadow-[0_12px_36px_-10px_rgb(var(--ember-500)/0.6)] hover:scale-105 active:scale-95 transition-transform"
+                className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
               >
                 {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6 ml-0.5" />}
               </button>

@@ -24,47 +24,38 @@ const items: DockItem[] = [
   { to: '/VinaXAI', label: 'VinaX AI', icon: SparkleIcon, ai: true as const },
 ];
 
-/** Floating dock — a detached pill bar. The active tab blooms into a labeled
- *  pill tinted by the current artwork's living color (--art). */
+/** v5.9.0 — Spotify's tab bar: a solid black strip fading up from the
+ *  bottom edge, every tab an icon with its label under it, the active one
+ *  white and the rest grey. */
 export function BottomNav() {
   const t = useT();
   return (
     <nav
       aria-label="Main navigation"
-      className="vx-dock md:hidden mx-4 mb-[max(0.6rem,var(--safe-bottom))] rounded-3xl glass-navbar shadow-lift overflow-hidden"
+      className="vx-dock md:hidden bg-gradient-to-t from-black via-black/95 to-black/70 pb-[var(--safe-bottom)]"
     >
-      <ul className="flex items-center justify-between px-2 py-1.5">
+      <ul className="flex items-stretch justify-around px-1 pt-1.5 pb-1">
         {items.map(({ to, label, icon: Icon, ai }) => (
-          <li key={to} className="min-w-0">
+          <li key={to} className="min-w-0 flex-1">
             <NavLink
               to={to}
               end={to === '/'}
               onClick={() => haptic('light')}
               className={({ isActive }) =>
                 cn(
-                  'vx-dock-item flex items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold',
-                  isActive ? 'vx-dock-active' : 'text-ink-400 active:text-ink-200',
+                  'vx-dock-item flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-[10px] font-semibold',
+                  isActive ? 'vx-dock-active text-ink-100' : 'text-ink-300 active:text-ink-100',
                 )
               }
             >
-              {({ isActive }) => (
-                <>
-                  {ai ? (
-                    <span className="vx-ai-pulse inline-flex items-center justify-center shrink-0">
-                      <Icon className="w-5 h-5" />
-                    </span>
-                  ) : (
-                    <Icon className="w-5 h-5 shrink-0" />
-                  )}
-                  {isActive ? (
-                    <span className="whitespace-nowrap truncate">{t(label)}</span>
-                  ) : (
-                    /* Inactive tabs show only the icon — give screen readers
-                       the name anyway (audit P2-22). */
-                    <span className="sr-only">{t(label)}</span>
-                  )}
-                </>
+              {ai ? (
+                <span className="vx-ai-pulse inline-flex items-center justify-center shrink-0">
+                  <Icon className="w-6 h-6" />
+                </span>
+              ) : (
+                <Icon className="w-6 h-6 shrink-0" />
               )}
+              <span className="whitespace-nowrap truncate max-w-full">{t(label)}</span>
             </NavLink>
           </li>
         ))}

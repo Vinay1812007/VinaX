@@ -4,21 +4,16 @@ import type { Song } from '@/types';
 import { findVideoForSong, type Video } from '@/services/api/videos';
 import { FALLBACK_ART } from '@/utils/images';
 import { cn } from '@/utils/cn';
-import { useIsDesktop } from '@/hooks/useMediaQuery';
 
 /**
- * The video canvas on Now Playing.
- *
- * v5.8.2 — the clips the catalogue serves are LANDSCAPE (1200×540 / 1280×720,
- * 10–30 s loops). Stretched to cover a portrait phone they showed a blurry
- * fifth of the frame, so phones now play the clip the JioSaavn way: at its
- * own aspect ratio, edge to edge, pixel-sharp, in the artwork's place over
- * the ambient backdrop — and in immersive mode centred on black. Desktop
- * screens are landscape too, so there the same clip stays the full-bleed
- * backdrop under the two-column layout (v5.7.12). Exactly one <video> ever
- * decodes: the band on phones, the backdrop on desktop. The ART/▶VIDEO
- * toggle brings the still artwork back any time and remembers the choice
- * per device.
+ * The video canvas on Now Playing — v5.9.0, the Spotify Canvas model: the
+ * clip fills the WHOLE screen behind the player on every device, the
+ * artwork card steps aside, and the controls sit over a bottom gradient.
+ * (The catalogue's clips are landscape, so a portrait phone shows a
+ * centre crop — that is the trade the owner chose over a letterboxed band.)
+ * Exactly one <video> ever decodes: the backdrop. The ART/▶VIDEO toggle
+ * brings the still artwork back any time and remembers the choice per
+ * device.
  */
 const CANVAS_OFF_KEY = 'vinax_canvas_off';
 
@@ -113,12 +108,10 @@ function CanvasVideo({
   );
 }
 
-/** The full-bleed canvas behind the whole player — desktop only (phones get
- *  the band in SongCanvas instead). Mount inside the backdrop layer, UNDER
- *  the darkening gradients. */
+/** The full-bleed canvas behind the whole player, on every viewport. Mount
+ *  inside the backdrop layer, UNDER the darkening gradients. */
 export function SongCanvasBackdrop({ canvas, isPlaying }: { canvas: SongCanvasState; isPlaying: boolean }) {
-  const desktop = useIsDesktop();
-  if (!canvas.src || !desktop) return null;
+  if (!canvas.src) return null;
   return (
     <CanvasVideo
       src={canvas.src}
@@ -129,11 +122,9 @@ export function SongCanvasBackdrop({ canvas, isPlaying }: { canvas: SongCanvasSt
   );
 }
 
-/** The artwork slot: still art normally. While the canvas plays, phones get
- *  the clip itself here — full width at its native aspect ratio, sharp — and
- *  desktop leaves the slot empty so the full-bleed backdrop shows through
- *  (the parent keeps a window of the artwork's size, so the two-column
- *  layout never jumps). */
+/** The artwork slot: still art normally. While the canvas plays the slot is
+ *  empty so the full-screen clip shows through uncovered; the parent pane
+ *  keeps the space and hosts the ART/▶VIDEO chip. */
 export function SongCanvas({
   canvas,
   isPlaying,
@@ -146,7 +137,6 @@ export function SongCanvas({
   /** Immersive mode: the controls are gone, so the ART/VIDEO chip goes too. */
   hideToggle?: boolean;
 }) {
-  const desktop = useIsDesktop();
   const baseClasses = cn(
     'w-72 h-72 sm:w-80 sm:h-80 rounded-3xl transition-[color,background-color,border-color,opacity,transform] duration-500',
     isPlaying ? 'scale-100' : 'scale-[0.97] opacity-90',
@@ -161,21 +151,6 @@ export function SongCanvas({
       {canvas.off ? '▶ VIDEO' : 'ART'}
     </button>
   );
-  if (canvas.src && !desktop) {
-    // The band. Its box is the full pane width; the clip letterboxes inside
-    // at its own ratio, so a 16:9 and a 20:9 clip both stay pixel-sharp.
-    return (
-      <div className="relative w-full max-h-full flex items-center justify-center">
-        <CanvasVideo
-          src={canvas.src}
-          isPlaying={isPlaying}
-          onError={canvas.markFailed}
-          className="w-full max-h-full object-contain"
-        />
-        {toggle}
-      </div>
-    );
-  }
   return (
     <>
       {!canvas.src && (

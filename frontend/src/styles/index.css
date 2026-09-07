@@ -37,33 +37,35 @@
 :root {
   color-scheme: dark;
 
-  /* Surface scale — AAA text contrast on --ink-900 with --ink-100. */
-  --ink-950: 6 7 10;
-  --ink-900: 11 13 17;
-  --ink-850: 16 19 24;
-  --ink-800: 22 26 33;
-  --ink-700: 34 40 50;
-  --ink-600: 68 76 92;
-  --ink-500: 96 105 122;
-  --ink-400: 130 140 156;
-  --ink-300: 176 184 200;
-  --ink-200: 214 220 232;
-  --ink-100: 245 247 251;
+  /* Surface scale — v5.9.0 Spotify look: pure-black chrome (sidebar,
+     player, nav) over a #121212 canvas, #181818 / #282828 card tiers,
+     #b3b3b3 secondary text, white primary. AAA on --ink-900 with --ink-100. */
+  --ink-950: 0 0 0;
+  --ink-900: 18 18 18;
+  --ink-850: 24 24 24;
+  --ink-800: 40 40 40;
+  --ink-700: 51 51 51;
+  --ink-600: 83 83 83;
+  --ink-500: 114 114 114;
+  --ink-400: 167 167 167;
+  --ink-300: 179 179 179;
+  --ink-200: 222 222 222;
+  --ink-100: 255 255 255;
 
   /* Brand ramps. ember = primary CTAs, focus rings, active state.
      tide = supporting affordances (chips, subtle links, secondary gradients).
      Accent-theme selectors below override these at runtime. */
-  --ember-600: 79 70 229;
-  --ember-500: 99 102 241;
-  --ember-400: 129 140 248;
-  --ember-300: 165 180 252;
-  --tide-500: 34 211 238;
-  --tide-400: 103 232 249;
+  --ember-600: 22 156 70;
+  --ember-500: 29 185 84;
+  --ember-400: 30 215 96;
+  --ember-300: 100 232 150;
+  --tide-500: 30 215 96;
+  --tide-400: 100 232 150;
 
   /* --art: living accent extracted from the currently playing artwork.
      Set at runtime by src/layouts/AppLayout.tsx; defaults to the accent so
      the very first page load doesn't leak a stale hue. */
-  --art: 99 102 241;
+  --art: 29 185 84;
 
   /* Art-tint alphas — used by light-mode glass surfaces to wash the frost
      with the current artwork's dominant color. Kept as tokens so future
@@ -75,9 +77,9 @@
 
   /* Aura palette — used by the home-page hero wash + settings glow. Kept
      as a small named subset so component code stays readable. */
-  --aura-violet: 129 140 248;
-  --aura-cyan: 103 232 249;
-  --aura-lime: 165 180 252;
+  --aura-violet: 30 215 96;
+  --aura-cyan: 100 232 150;
+  --aura-lime: 29 185 84;
 
   /* Glass material — iOS-style ADJUSTABLE translucency (Settings → Glass
      effect). --glass-alpha is the single dial: 1 = the classic solid look,
@@ -95,11 +97,11 @@
   --glass-blur: calc(6px + var(--glass-blur-boost) * 34px);
   --glass-blur-strong: calc(12px + var(--glass-blur-boost) * 34px);
   --glass-saturate: calc(100% + (1 - var(--glass-alpha)) * 90%);
-  --glass-bg: rgb(16 19 24 / var(--glass-alpha));
-  --glass-bg-strong: rgb(22 26 33 / var(--glass-alpha));
-  --glass-bg-muted: rgb(11 13 17 / var(--glass-alpha));
-  --glass-bg-hover: rgb(22 26 33 / max(var(--glass-alpha), 0.85));
-  --glass-bg-active: rgb(34 40 50 / max(var(--glass-alpha), 0.9));
+  --glass-bg: rgb(24 24 24 / var(--glass-alpha));
+  --glass-bg-strong: rgb(40 40 40 / var(--glass-alpha));
+  --glass-bg-muted: rgb(18 18 18 / var(--glass-alpha));
+  --glass-bg-hover: rgb(40 40 40 / max(var(--glass-alpha), 0.85));
+  --glass-bg-active: rgb(51 51 51 / max(var(--glass-alpha), 0.9));
   --glass-border: rgba(255, 255, 255, 0.06);
   --glass-border-strong: rgba(255, 255, 255, 0.12);
   --glass-highlight: rgba(255, 255, 255, 0.02);
@@ -110,19 +112,19 @@
   /* Solid-surface tokens — chrome and modals read these directly, and the
      translucency fallbacks (prefers-reduced-transparency, @supports not
      backdrop-filter) fall back to --surface-solid. */
-  --surface-solid: rgb(11 13 17);
-  --surface-input: rgb(22 26 33);
-  --surface-navbar: rgb(6 7 10);
-  --surface-sidebar: rgb(6 7 10);
-  --surface-modal: rgb(16 19 24);
-  --surface-player: rgb(11 13 17);
+  --surface-solid: rgb(18 18 18);
+  --surface-input: rgb(40 40 40);
+  --surface-navbar: rgb(0 0 0);
+  --surface-sidebar: rgb(0 0 0);
+  --surface-modal: rgb(40 40 40);
+  --surface-player: rgb(0 0 0);
 
   /* Gradients — single-hue, no rainbow stops (the hero + text-gradient
      carry the only real spectrum in the app). */
-  --gradient-primary: linear-gradient(180deg, rgb(99 102 241), rgb(79 70 229));
-  --gradient-secondary: linear-gradient(180deg, rgb(34 40 50), rgb(22 26 33));
-  --gradient-premium: linear-gradient(180deg, rgb(99 102 241), rgb(79 70 229));
-  --gradient-aurora: linear-gradient(120deg, rgb(129 140 248), rgb(103 232 249) 70%);
+  --gradient-primary: linear-gradient(180deg, rgb(30 215 96), rgb(29 185 84));
+  --gradient-secondary: linear-gradient(180deg, rgb(51 51 51), rgb(40 40 40));
+  --gradient-premium: linear-gradient(180deg, rgb(30 215 96), rgb(29 185 84));
+  --gradient-aurora: linear-gradient(120deg, rgb(30 215 96), rgb(100 232 150) 70%);
 
   /* Radii — three real values only, plus pill. v5.8.1 formal pass: tightened
      (8/12/16/20 → 6/8/12/14) so surfaces read crisp and professional. */
@@ -192,12 +194,12 @@ html.light {
      shifts ~2 shades darker; ember-400 (the text tier, 87 call sites) and
      tide-400 clear 4.5:1 on ink-900 AND ink-800. Asserted in
      src/__tests__/contrast.test.ts. */
-  --ember-600: 55 48 163;
-  --ember-500: 67 56 202;
-  --ember-400: 79 70 229;
-  --ember-300: 99 102 241;
-  --tide-500: 14 116 144;
-  --tide-400: 21 94 117;
+  --ember-600: 9 66 34;
+  --ember-500: 13 92 47;
+  --ember-400: 16 112 56;
+  --ember-300: 20 132 66;
+  --tide-500: 13 92 47;
+  --tide-400: 16 112 56;
 
   --glass-bg: rgb(255 255 255 / var(--glass-alpha));
   --glass-bg-strong: rgb(248 250 253 / var(--glass-alpha));
@@ -1496,11 +1498,11 @@ html.light .np-mini {
    selectors still win, so accent themes remain fully functional.
    ========================================================================= */
 :root {
-  --ember-400: 129 140 248;
-  --ember-500: 99 102 241;
-  --tide-400: 103 232 249;
+  --ember-400: 30 215 96;
+  --ember-500: 29 185 84;
+  --tide-400: 100 232 150;
   --glass-blur: 6px;
-  --gradient-primary: linear-gradient(180deg, rgb(99 102 241), rgb(79 70 229));
+  --gradient-primary: linear-gradient(180deg, rgb(30 215 96), rgb(29 185 84));
 }
 html.light {
   --glass-bg: rgb(255 255 255);
@@ -2199,3 +2201,109 @@ html.light .vx-dock { box-shadow: none; }
 .input-error { box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.2); }
 .input-success { box-shadow: 0 0 0 2px rgba(124, 227, 139, 0.2); }
 input[type='range']:hover::-webkit-slider-thumb { transform: scale(1.1); box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.14); }
+
+/* ============================================================================
+   v5.9.0 — the Spotify look. Flat black chrome, #121212 canvas, one green
+   accent, pill buttons with black text, bold type, cards that lift a green
+   play button on hover. Declared last so it wins every earlier era.
+   ========================================================================= */
+.btn-primary,
+.btn-premium {
+  color: #000;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  letter-spacing: 0;
+}
+.btn-primary:hover,
+.btn-premium:hover { transform: scale(1.04); }
+.btn-primary:active,
+.btn-premium:active { transform: scale(0.98); }
+.btn-secondary {
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  background: transparent;
+  border-color: rgb(var(--ink-500));
+  color: rgb(var(--ink-100));
+}
+.btn-secondary:hover {
+  background: transparent;
+  border-color: rgb(var(--ink-100));
+  transform: scale(1.04);
+}
+.bg-premium { background: #fff; color: #000; }
+.text-gradient {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: rgb(var(--ink-100));
+}
+
+/* Sidebar + player: black, square-cornered panels like Spotify's shell. */
+.glass-sidebar {
+  background: var(--surface-sidebar);
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.glass-bottom-player {
+  background: var(--surface-player);
+  border-top: 1px solid rgb(var(--ink-800));
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.glass-bottom-player::before { display: none; }
+.nav-pill-active {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.np-play-desktop { background: #fff; color: #000; box-shadow: none; }
+html.light .np-play-desktop { background: #000; color: #fff; }
+
+/* Cards: quiet until hover, then a #282828 tile and the green play button
+   rises from the artwork's corner. */
+.card-play {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 48px;
+  height: 48px;
+  border-radius: 9999px;
+  background: rgb(var(--ember-500));
+  color: #000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.15s ease;
+}
+.card-play svg { width: 20px; height: 20px; margin-left: 2px; }
+.card-play:hover { background: rgb(var(--ember-400)); transform: scale(1.04); }
+.card-play:active { transform: scale(0.96); }
+.group:hover .card-play,
+.group:focus-within .card-play { opacity: 1; transform: translateY(0); }
+@media (hover: none) {
+  .card-play { opacity: 1; transform: none; width: 40px; height: 40px; }
+}
+.card-scrim { display: none; }
+
+/* Mobile dock: Spotify's solid black tab bar with labels under icons. */
+.vx-dock { box-shadow: none; }
+.vx-dock-active { background: transparent; color: rgb(var(--ink-100)); }
+.vx-dock-active svg { animation: none; }
+.vx-dock-item:active { transform: scale(0.94); }
+
+/* Mini player keeps its artwork tint; the hairline reads white on it. */
+.np-mini { border-radius: 8px; }
+
+/* Range inputs: white fill, green on hover (progress + volume). */
+input[type='range']:hover { --range-fill: rgb(var(--ember-500)); }
+
+/* Focus ring reads white on black chrome — the green ring is kept for
+   controls that ARE green. */
+:focus-visible { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25); outline-color: rgb(var(--ink-100)); }
+.btn-primary:focus-visible,
+.card-play:focus-visible { outline-color: rgb(var(--ember-500)); }

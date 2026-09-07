@@ -15,15 +15,14 @@ export function Shelf({ title, explanation, seeAllTo, action, children }: Props)
     <section className="mb-8 reveal cv-auto">
       <div className="flex items-end justify-between mb-3 gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl md:text-2xl font-extrabold tracking-tight truncate">{title}</h2>
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight truncate hover:underline">{title}</h2>
           {explanation && <p className="text-xs text-ink-400 mt-0.5 truncate">{explanation}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {action}
           {seeAllTo && (
-            <Link to={seeAllTo} className="group/sa text-xs font-semibold text-ember-400 hover:text-ember-300 inline-flex items-center gap-0.5">
-              See all
-              <span aria-hidden className="inline-block transition-transform group-hover/sa:translate-x-0.5">›</span>
+            <Link to={seeAllTo} className="text-xs font-bold uppercase tracking-wider text-ink-300 hover:text-ink-100 hover:underline">
+              Show all
             </Link>
           )}
         </div>

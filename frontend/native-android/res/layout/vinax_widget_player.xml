@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/vinax_wp_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="8dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp"
+    android:background="@drawable/vinax_widget_player_bg">
+
+    <ImageView
+        android:id="@+id/vinax_wp_art"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:scaleType="centerCrop"
+        android:src="@mipmap/ic_launcher"
+        android:contentDescription="@null" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="4dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/vinax_wp_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="VinaX"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/vinax_wp_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tap to start listening"
+            android:textColor="#B3B3B3"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/vinax_wp_prev"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@android:drawable/ic_media_previous"
+        android:tint="#FFFFFF"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Previous" />
+
+    <ImageButton
+        android:id="@+id/vinax_wp_toggle"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@android:drawable/ic_media_play"
+        android:tint="#000000"
+        android:background="@drawable/vinax_widget_play_bg"
+        android:contentDescription="Play" />
+
+    <ImageButton
+        android:id="@+id/vinax_wp_next"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@android:drawable/ic_media_next"
+        android:tint="#FFFFFF"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Next" />
+</LinearLayout>

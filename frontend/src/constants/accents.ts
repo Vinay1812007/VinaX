@@ -16,7 +16,7 @@ export interface AccentOption {
 }
 
 export const ACCENT_OPTIONS: AccentOption[] = [
-  { id: 'crimson', label: 'VinaX', dot: 'rgb(129 140 248)' },
+  { id: 'crimson', label: 'VinaX', dot: 'rgb(30 215 96)' },
   { id: 'ember', label: 'Ember', dot: 'rgb(240 146 46)' },
   { id: 'sunset', label: 'Sunset', dot: 'rgb(251 146 60)' },
   { id: 'gold', label: 'Gold', dot: 'rgb(234 179 8)' },

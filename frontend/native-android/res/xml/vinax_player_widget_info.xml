@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="60dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/vinax_widget_player"
+    android:previewLayout="@layout/vinax_widget_player"
+    android:description="@string/app_name"
+    android:resizeMode="horizontal"
+    android:widgetCategory="home_screen" />
