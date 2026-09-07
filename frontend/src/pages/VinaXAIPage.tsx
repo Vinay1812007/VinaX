@@ -282,7 +282,18 @@ interface Pending {
 export default function VinaXAIPage(): ReactNode {
   const [chats, setChats] = useState<Conversation[]>(() => {
     const saved = loadChats();
-    return saved.length ? saved : [freshChat()];
+    // v5.11.1 — at most one empty "New chat" survives a reload; earlier
+    // builds let every New-chat tap stack another blank entry.
+    const kept: Conversation[] = [];
+    let blank = false;
+    for (const c of saved) {
+      if (c.messages.length === 0) {
+        if (blank) continue;
+        blank = true;
+      }
+      kept.push(c);
+    }
+    return kept.length ? kept : [freshChat()];
   });
   const [activeId, setActiveId] = useState<string>(() => '');
   const [input, setInput] = useState('');
@@ -534,6 +545,16 @@ export default function VinaXAIPage(): ReactNode {
   };
 
   const newChat = (): void => {
+    // Reuse an existing blank chat instead of stacking another one.
+    const blank = chats.find((c) => c.messages.length === 0);
+    if (blank) {
+      setActiveId(blank.id);
+      setInput('');
+      setPending([]);
+      setSidebarOpen(false);
+      taRef.current?.focus();
+      return;
+    }
     const c = freshChat();
     setChats((prev) => [c, ...prev]);
     setActiveId(c.id);
@@ -1448,7 +1469,7 @@ export default function VinaXAIPage(): ReactNode {
                                (an unclosed fence shows as preformatted text
                                until it completes). */
                             <div>
-                              <RichContent text={m.content} />
+                              <RichContent text={m.content} streaming />
                               <span className="vx-caret" aria-hidden />
                             </div>
                           ) : (

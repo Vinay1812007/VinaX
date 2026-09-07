@@ -428,15 +428,70 @@ function highlightCode(code: string, lang: string): ReactNode[] {
   return out;
 }
 
+const RUNNABLE = new Set(['js', 'javascript', 'jsx', 'ts', 'typescript']);
+
+/** v5.11.1 — Run for JavaScript/TypeScript: the code executes in a
+ *  sandboxed iframe (no same-origin, no network to us) and console output
+ *  streams back through postMessage. TypeScript runs as-is when it is plain
+ *  JS-compatible; type annotations fail loudly in the output pane. */
+function JsRunner({ code, onClose }: { code: string; onClose(): void }): ReactNode {
+  const [lines, setLines] = useState<Array<{ kind: 'log' | 'error' | 'done'; text: string }>>([]);
+  const token = useMemo(() => Math.random().toString(36).slice(2), []);
+  useEffect(() => {
+    const onMsg = (e: MessageEvent): void => {
+      const d = e.data as { vxRun?: string; kind?: 'log' | 'error' | 'done'; text?: string } | null;
+      if (!d || d.vxRun !== token || !d.kind) return;
+      setLines((prev) => [...prev, { kind: d.kind as 'log' | 'error' | 'done', text: String(d.text ?? '') }].slice(-400));
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [token]);
+  const srcDoc = `<!doctype html><meta charset="utf-8"><script>
+(function(){
+  var T=${JSON.stringify(token)};
+  function send(kind,args){try{parent.postMessage({vxRun:T,kind:kind,text:Array.prototype.map.call(args,function(a){try{return typeof a==='string'?a:JSON.stringify(a,null,1)}catch(e){return String(a)}}).join(' ')},'*')}catch(e){}}
+  ['log','info','warn','debug'].forEach(function(k){console[k]=function(){send('log',arguments)}});
+  console.error=function(){send('error',arguments)};
+  window.onerror=function(m,s,l,c,e){send('error',[String(e&&e.stack||m)])};
+  window.addEventListener('unhandledrejection',function(ev){send('error',[String(ev.reason&&ev.reason.stack||ev.reason)])});
+  setTimeout(function(){send('done',['✓ finished'])},0);
+})();
+</script><script>${code.replace(/<\/script/gi, '<\\/script')}</script>`;
+  return (
+    <div className="border-t border-glass-strong">
+      <div className="flex items-center justify-between px-3 py-1 bg-ink-850 text-[11px] text-ink-300">
+        <span>Output</span>
+        <button onClick={onClose} className="hover:text-ink-100">Close</button>
+      </div>
+      <iframe title="run" sandbox="allow-scripts" srcDoc={srcDoc} className="hidden" />
+      <pre className="p-3 max-h-64 overflow-auto text-xs leading-relaxed font-mono">
+        {lines.length === 0 ? <span className="text-ink-500">Running…</span> : null}
+        {lines.map((l, i) => (
+          <div key={i} className={l.kind === 'error' ? 'text-red-300' : l.kind === 'done' ? 'text-ember-400' : ''}>
+            {l.text}
+          </div>
+        ))}
+      </pre>
+    </div>
+  );
+}
+
 function CodeBlock({ lang, code }: { lang: string; code: string }): ReactNode {
   const ext = EXT[lang] || 'txt';
+  const [runKey, setRunKey] = useState(0);
   // Very large blocks skip tinting so the chat never jank-scrolls.
   const tinted = useMemo(() => (code.length > 20_000 ? code : highlightCode(code, lang)), [code, lang]);
+  const lineCount = useMemo(() => code.split('\n').length, [code]);
   return (
     <div className="my-2 rounded-xl overflow-hidden border border-glass-strong bg-ink-900">
       <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
-        <span className="uppercase tracking-wide">{lang || 'text'}</span>
+        <span className="uppercase tracking-wide">{lang || 'text'}<span className="normal-case text-ink-500"> · {lineCount} lines</span></span>
         <div className="flex items-center gap-3">
+          {RUNNABLE.has(lang) && (
+            <button onClick={() => setRunKey((k) => k + 1)} className="font-bold text-ember-400 hover:text-ember-300 transition">
+              ▶ Run
+            </button>
+          )}
           <button onClick={() => download(`vinax.${ext}`, code)} className="hover:text-ink-100 transition">
             Download
           </button>
@@ -446,6 +501,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }): ReactNode {
       <pre className="p-3 overflow-x-auto text-xs leading-relaxed font-mono">
         <code>{tinted}</code>
       </pre>
+      {runKey > 0 && <JsRunner key={runKey} code={code} onClose={() => setRunKey(0)} />}
     </div>
   );
 }
@@ -492,13 +548,30 @@ function HtmlPreview({ lang, code }: { lang: string; code: string }): ReactNode 
       <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
         <div className="flex gap-3">
           <button onClick={() => setTab('preview')} className={cn('transition', tab === 'preview' ? 'text-ink-100 font-semibold' : 'hover:text-ink-100')}>
-            Preview
+            ▶ Run
           </button>
           <button onClick={() => setTab('code')} className={cn('transition', tab === 'code' ? 'text-ink-100 font-semibold' : 'hover:text-ink-100')}>
             Code
           </button>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              try {
+                const w = window.open('', '_blank');
+                if (w) {
+                  w.document.open();
+                  w.document.write(srcDoc);
+                  w.document.close();
+                }
+              } catch {
+                /* popup blocked */
+              }
+            }}
+            className="hover:text-ink-100 transition"
+          >
+            Open
+          </button>
           <button
             onClick={() => download(lang === 'svg' ? 'image.svg' : 'page.html', code, lang === 'svg' ? 'image/svg+xml' : 'text/html')}
             className="hover:text-ink-100 transition"
@@ -559,8 +632,11 @@ function CsvBlock({ code }: { code: string }): ReactNode {
   );
 }
 
-function CodeRouter({ lang, code, closed }: { lang: string; code: string; closed: boolean }): ReactNode {
-  if (!closed)
+function CodeRouter({ lang, code, closed, streaming }: { lang: string; code: string; closed: boolean; streaming: boolean }): ReactNode {
+  // An unclosed fence is plain text only while the reply is still
+  // streaming; once it has finished (cut off by the length budget, say)
+  // it gets the full block — copy, download, run — like any other.
+  if (!closed && streaming)
     return (
       <pre className="my-2 p-3 rounded-xl bg-ink-900 border border-glass-strong overflow-x-auto text-xs leading-relaxed font-mono">
         <code>{code}</code>
@@ -574,7 +650,7 @@ function CodeRouter({ lang, code, closed }: { lang: string; code: string; closed
 }
 
 // ---------- tokenizer + entry ----------
-export function RichContent({ text }: { text: string }): ReactNode {
+export function RichContent({ text, streaming = false }: { text: string; streaming?: boolean }): ReactNode {
   const tokens = useMemo(() => tokenize(text), [text]);
   const picks = useMemo(() => extractSongPicks(text), [text]);
   return (
@@ -582,7 +658,7 @@ export function RichContent({ text }: { text: string }): ReactNode {
       {picks.length >= 2 && <SongPicksBar picks={picks} />}
       {tokens.map((tk, i) =>
         tk.t === 'code' ? (
-          <CodeRouter key={i} lang={tk.lang} code={tk.code} closed={tk.closed} />
+          <CodeRouter key={i} lang={tk.lang} code={tk.code} closed={tk.closed} streaming={streaming} />
         ) : (
           <Prose key={i} text={tk.text} />
         ),

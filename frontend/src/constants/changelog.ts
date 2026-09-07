@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.11.1': {
+    title: 'Run code, one New chat',
+    changes: [
+      {
+        type: 'new',
+        text: 'Code blocks now have Run: JavaScript runs right in the reply with its output underneath; HTML and SVG run as a live preview and can open in a new tab. Every block shows its language, line count, Copy and Download.',
+      },
+      {
+        type: 'fixed',
+        text: 'A reply cut short by its length limit used to lose its Copy and Download buttons \u2014 fixed. New chat no longer stacks blank chats: it reuses the empty one.',
+      },
+    ],
+  },
   '5.11.0': {
     title: 'VinaX AI, unleashed',
     changes: [
