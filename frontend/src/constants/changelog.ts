@@ -12,6 +12,27 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.11.0': {
+    title: 'VinaX AI, unleashed',
+    changes: [
+      {
+        type: 'new',
+        text: 'A true general assistant. It answers in whatever language and script you write \u2014 Telugu, Hindi, Tamil, English or romanised \u2014 and switches the moment you do. Coding requests get a plan, complete runnable code, tests and how to run it.',
+      },
+      {
+        type: 'new',
+        text: 'Charts. Ask for a comparison, trend or share and VinaX AI draws it \u2014 bar, line, area and pie, with hover values \u2014 right in the reply, next to diagrams, live HTML/SVG previews, tables and math.',
+      },
+      {
+        type: 'new',
+        text: 'Make it yours: tell VinaX AI about yourself in its settings (name, work, languages, how you like answers) and every reply is shaped to you. Quick-action buttons \u2014 Write, Code, Chart, Diagram, Translate, Summarise, Songs, Explain \u2014 set up the prompt in one tap.',
+      },
+      {
+        type: 'improved',
+        text: 'Bigger conversations: up to 8 attachments, code and documents up to 2 MB, 40 turns of memory, longer replies. Right-click, text selection and drag work normally on the AI page.',
+      },
+    ],
+  },
   '5.10.0': {
     title: 'VinaX AI plays the songs it names',
     changes: [

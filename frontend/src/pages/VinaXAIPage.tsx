@@ -116,23 +116,32 @@ const nickForModel = (model: string): string => {
 
 // Trending-flavoured starter pool — 4 are drawn at random per visit/new chat,
 // with the listener's pinned language woven in. Never the same wall twice.
+// v5.11.0 — feature buttons: one tap sets up the prompt (and the right seat).
+const QUICK_ACTIONS: Array<{ icon: string; label: string; prompt: string; mode?: Mode }> = [
+  { icon: '✍️', label: 'Write', prompt: 'Write a ', mode: 'win' },
+  { icon: '💻', label: 'Code', prompt: 'Write code that ', mode: 'sage' },
+  { icon: '📊', label: 'Chart', prompt: 'Make a chart of ' },
+  { icon: '🧭', label: 'Diagram', prompt: 'Draw a diagram of ' },
+  { icon: '🌐', label: 'Translate', prompt: 'Translate to Telugu: ', mode: 'translator' },
+  { icon: '📄', label: 'Summarise', prompt: 'Summarise this: ' },
+  { icon: '🎵', label: 'Songs', prompt: 'Recommend songs for ' },
+  { icon: '🧠', label: 'Explain', prompt: 'Explain simply: ' },
+];
 const STARTER_POOL: Array<(l: string) => string> = [
-  (l) => `Suggest 5 trending ${l} songs right now`,
-  (l) => `Which ${l} songs are perfect for a rainy evening?`,
-  (l) => `Make me a ${l} love-songs playlist idea`,
-  (l) => `What are the big ${l} movie releases this month?`,
+  (l) => `Suggest 5 ${l} songs for a rainy evening`,
   (l) => `Write a heartfelt birthday wish in ${l}`,
   (l) => `Translate "How are you doing?" into ${l}`,
-  () => "What's trending in tech news today?",
-  () => 'Latest cricket buzz — quick summary',
   () => 'Explain quantum computing simply',
-  () => 'Explain AI to a 10-year-old',
+  () => 'Write a Python script that renames photos by date taken, with tests',
+  () => 'Chart: India smartphone market share by brand, 2025',
+  () => 'Draw a flowchart of how a web request reaches a database',
   () => 'Plan a 3-day trip to Goa on a budget',
   () => 'Write an Instagram caption for a sunset photo',
   () => 'Help me write a professional leave email',
   () => '5 easy dinner recipes for tonight',
   () => 'Give me a 20-minute home workout',
-  () => 'Fun facts that sound fake but are true',
+  () => 'Compare React, Vue and Svelte in a table',
+  () => "What's trending in tech news today?",
 ];
 
 interface Msg {
@@ -293,6 +302,21 @@ export default function VinaXAIPage(): ReactNode {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  // v5.11.0 — personal profile: what the assistant should know about you.
+  const [profile, setProfile] = useState<string>(() => {
+    try {
+      return localStorage.getItem('vinax.aiProfile') ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const userName = useMemo(() => {
+    try {
+      return (JSON.parse(localStorage.getItem('vinax.user-name') ?? '""') as string) || '';
+    } catch {
+      return '';
+    }
+  }, []);
   const [fontSize, setFontSize] = useState<'s' | 'm' | 'l'>(() => {
     try {
       return (localStorage.getItem('vinax.aiFontSize') as 's' | 'm' | 'l') ?? 'm';
@@ -315,6 +339,17 @@ export default function VinaXAIPage(): ReactNode {
     // Standalone route: the main layout's theme effect never runs here.
     applyThemeClasses(resolveTheme(themePref, window.matchMedia('(prefers-color-scheme: dark)').matches));
   }, [themePref]);
+  // v5.10.1 — no deterrence on the AI page: text selects, images drag,
+  // right-click opens the browser menu (the document listeners in
+  // utils/deterrence.ts exempt this route; the class carries the CSS side).
+  useEffect(() => {
+    const root = document.documentElement;
+    const had = root.classList.contains('deter');
+    root.classList.remove('deter');
+    return () => {
+      if (had) root.classList.add('deter');
+    };
+  }, []);
   const [listening, setListening] = useState(false);
   const [micNote, setMicNote] = useState('');
   const [voiceMode, setVoiceMode] = useState(false);
@@ -354,8 +389,8 @@ export default function VinaXAIPage(): ReactNode {
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   // stable-ish refs so speech callbacks read latest values
-  const stateRef = useRef({ mode, web, think, research });
-  stateRef.current = { mode, web, think, research };
+  const stateRef = useRef({ mode, web, think, research, profile });
+  stateRef.current = { mode, web, think, research, profile };
 
   useEffect(() => {
     if (!activeId) setActiveId(chats[0]?.id ?? '');
@@ -688,7 +723,7 @@ export default function VinaXAIPage(): ReactNode {
     const imgs = pending.filter((p) => p.kind === 'image' && p.dataUrl).map((p) => p.dataUrl as string);
     const textFiles = pending.filter((p) => p.kind === 'text' && p.text);
     let content = q;
-    for (const f of textFiles) content += `\n\n--- ${f.name} ---\n${(f.text ?? '').slice(0, 6000)}`;
+    for (const f of textFiles) content += `\n\n--- ${f.name} ---\n${(f.text ?? '').slice(0, 40_000)}`;
 
     setInput('');
     setPending([]);
@@ -749,6 +784,7 @@ export default function VinaXAIPage(): ReactNode {
           // assistant already recommended in this conversation, so "give me
           // more" turns reach into fresh territory instead of looping.
           taste: { ...buildTasteSnapshot(), alreadyRecommendedThisChat: extractRecommendedFromThread(messages) },
+          profile: stateRef.current.profile || undefined,
         }),
         signal: controller.signal,
       });
@@ -995,14 +1031,14 @@ export default function VinaXAIPage(): ReactNode {
   const onFiles = async (files: FileList | null): Promise<void> => {
     if (!files) return;
     const add: Pending[] = [];
-    for (const file of Array.from(files).slice(0, 4)) {
+    for (const file of Array.from(files).slice(0, 8)) {
       if (file.type.startsWith('image/')) {
         try {
           add.push({ kind: 'image', name: file.name, dataUrl: await readAsDataURL(file) });
         } catch {
           /* skip unreadable image */
         }
-      } else if (file.size < 200_000) {
+      } else if (file.size < 2_000_000) {
         try {
           add.push({ kind: 'text', name: file.name, text: await readAsText(file) });
         } catch {
@@ -1010,7 +1046,7 @@ export default function VinaXAIPage(): ReactNode {
         }
       }
     }
-    setPending((prev) => [...prev, ...add].slice(0, 4));
+    setPending((prev) => [...prev, ...add].slice(0, 8));
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -1137,8 +1173,8 @@ export default function VinaXAIPage(): ReactNode {
           ))}
         </div>
         <div className="p-3">
-          <Link to="/" className="flex items-center gap-2 text-xs font-bold text-ink-300 hover:text-ink-100 px-2 py-1.5">
-            ← Back to VinaX
+          <Link to="/" className="flex items-center gap-2 text-xs font-bold text-ink-300 hover:text-ink-100 px-2 py-1.5" aria-label="Music">
+            ♪ Music
           </Link>
         </div>
       </aside>
@@ -1178,7 +1214,7 @@ export default function VinaXAIPage(): ReactNode {
           </span>
           <div className="min-w-0 flex-1">
             <h1 className="text-sm font-bold leading-tight ai-title w-fit">VinaX AI</h1>
-            <p className="text-[11px] text-ink-400 leading-tight">Ask anything · nothing you type is stored on our servers</p>
+            <p className="text-[11px] text-ink-400 leading-tight truncate">{MODES.find((mm) => mm.id === mode)?.label}{think ? ' · Think' : ''}{voiceMode ? ' · Voice' : ''}</p>
           </div>
           <div className="relative">
             <button
@@ -1278,6 +1314,24 @@ export default function VinaXAIPage(): ReactNode {
                     ))}
                   </div>
                 </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1">About you</p>
+                  <textarea
+                    value={profile}
+                    onChange={(e) => {
+                      const v = e.target.value.slice(0, 1500);
+                      setProfile(v);
+                      try {
+                        localStorage.setItem('vinax.aiProfile', v);
+                      } catch {
+                        /* private mode */
+                      }
+                    }}
+                    rows={3}
+                    placeholder="Name, what you do, languages you prefer, how you like answers… (stays on this device, sent with each message)"
+                    className="w-full px-2.5 py-2 rounded-lg bg-ink-700 text-xs outline-none resize-none placeholder:text-ink-400 focus:ring-1 focus:ring-ink-100"
+                  />
+                </div>
                 <button onClick={exportAll} className="w-full px-3 py-2 rounded-lg bg-ink-800/70 text-xs text-left hover:bg-ink-700">
                   Export all chats (.json)
                 </button>
@@ -1297,9 +1351,6 @@ export default function VinaXAIPage(): ReactNode {
               </div>
             )}
           </div>
-          <Link to="/" className="hidden md:inline text-xs text-ink-400 hover:text-ink-100">
-            ← VinaX
-          </Link>
         </header>
 
         {/* Messages */}
@@ -1321,12 +1372,27 @@ export default function VinaXAIPage(): ReactNode {
                 {(() => {
                   const h = new Date().getHours();
                   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-                })()}{' '}
-                — ask me anything
+                })()}
+                {userName ? `, ${userName}` : ''}
               </h2>
-              <p className="text-sm text-ink-300 mb-7 max-w-md">
-                Music first — ask for songs and play them right here — plus writing, code, translations and current events, with live web search and voice chat.
+              <p className="text-sm text-ink-300 mb-5 max-w-md">
+                Ask anything, in any language. Code with tests, charts, diagrams, documents and images, live web search, voice — and songs you can play.
               </p>
+              <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xl">
+                {QUICK_ACTIONS.map((qa) => (
+                  <button
+                    key={qa.label}
+                    onClick={() => {
+                      if (qa.mode) setMode(qa.mode);
+                      setInput(qa.prompt);
+                      taRef.current?.focus();
+                    }}
+                    className="px-3 py-1.5 rounded-full bg-ink-800 hover:bg-ink-700 text-[12px] font-bold text-ink-100 transition hover:scale-[1.03]"
+                  >
+                    {qa.icon} {qa.label}
+                  </button>
+                ))}
+              </div>
               <div className="grid sm:grid-cols-2 gap-2.5 w-full max-w-xl">
                 {starters.map((s) => (
                   <button
@@ -1538,7 +1604,7 @@ export default function VinaXAIPage(): ReactNode {
                 ref={fileRef}
                 type="file"
                 multiple
-                accept="image/*,.txt,.md,.csv,.json,.log"
+                accept="image/*,.txt,.md,.markdown,.csv,.tsv,.json,.log,.xml,.yml,.yaml,.toml,.ini,.env.example,.html,.htm,.css,.js,.jsx,.ts,.tsx,.py,.java,.kt,.c,.h,.cpp,.cs,.go,.rs,.rb,.php,.sh,.sql,.r,.swift,.dart"
                 className="hidden"
                 onChange={(e) => void onFiles(e.target.files)}
               />

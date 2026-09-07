@@ -10,14 +10,22 @@ export function installDeterrence(): void {
 
   const isEditable = (el: HTMLElement | null): boolean =>
     !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+  // v5.10.1 — VinaX AI is exempt (owner decision): right-click, drag,
+  // selection and devtools all behave like any chat app there. The
+  // listeners live on document and survive SPA navigation, so the check is
+  // per event, not per install.
+  const exempt = (): boolean => /^\/vinaxai/i.test(location.pathname);
 
   document.addEventListener('contextmenu', (e) => {
+    if (exempt()) return;
     if (!isEditable(e.target as HTMLElement)) e.preventDefault();
   });
   document.addEventListener('dragstart', (e) => {
+    if (exempt()) return;
     if (!isEditable(e.target as HTMLElement)) e.preventDefault();
   });
   document.addEventListener('keydown', (e) => {
+    if (exempt()) return;
     if (isEditable(e.target as HTMLElement)) return;
     const k = e.key.toUpperCase();
     const mod = e.ctrlKey || e.metaKey;

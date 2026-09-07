@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { cn } from '@/utils/cn';
 import { tokenize } from './tokenize';
 import { SongPickChip, SongPicksBar, extractSongPicks, parseSongLine } from './SongPick';
+import { ChartBlock } from './ChartBlock';
 
 /**
  * Rich renderer for AI messages. Auto-detects and renders:
@@ -566,6 +567,7 @@ function CodeRouter({ lang, code, closed }: { lang: string; code: string; closed
       </pre>
     );
   if (lang === 'mermaid') return <MermaidBlock code={code} />;
+  if (lang === 'chart') return <ChartBlock code={code} fallback={<CodeBlock lang="json" code={code} />} />;
   if (lang === 'html' || lang === 'svg' || lang === 'xml') return <HtmlPreview lang={lang} code={code} />;
   if (lang === 'csv') return <CsvBlock code={code} />;
   return <CodeBlock lang={lang} code={code} />;
