@@ -12,6 +12,23 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.9.2': {
+    title: 'Menus, buttons and controls, polished',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'The \u22ee menu on Now Playing could not be tapped while a video played \u2014 an invisible glow behind the artwork was catching the tap. Fixed.',
+      },
+      {
+        type: 'improved',
+        text: 'Overflow and right-click menus, icon buttons, toasts, sliders, search fields and outlined buttons all follow the new look: #282828 menus with roomy rows, grey icons that turn white, a white seek bar that goes green on hover, pill inputs, and a solid white toast.',
+      },
+      {
+        type: 'fixed',
+        text: 'A few green and white buttons still carried white text or icons from the old palette (AI mic, chat player, Search and Library headers, the quiz disc) \u2014 all readable again.',
+      },
+    ],
+  },
   '5.9.1': {
     title: 'Full-screen video, pinned',
     changes: [

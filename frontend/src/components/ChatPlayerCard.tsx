@@ -58,7 +58,7 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
           <button
             onClick={togglePlay}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="w-9 h-9 rounded-full bg-premium text-white flex items-center justify-center hover:scale-105 transition"
+            className="w-9 h-9 rounded-full bg-premium text-black flex items-center justify-center hover:scale-105 transition"
           >
             {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
           </button>

@@ -18,7 +18,7 @@ import { playAlbum } from '@/features/player/playEntity';
 
 function cnSort(active: boolean): string {
   return active
-    ? 'px-3.5 py-1.5 rounded-full text-xs font-bold bg-premium text-white'
+    ? 'px-3.5 py-1.5 rounded-full text-xs font-bold bg-premium text-black'
     : 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-300 hover:text-ink-100 transition';
 }
 

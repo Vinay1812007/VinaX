@@ -488,7 +488,9 @@ export default function NowPlayingPage() {
           <div
             aria-hidden
             className={cn(
-              'absolute -inset-6 rounded-[2.5rem] blur-2xl transition-opacity duration-700 bg-[radial-gradient(60%_60%_at_50%_45%,rgb(var(--ember-500)/0.32),rgb(var(--aura-violet)/0.16)_58%,transparent_82%)] motion-safe:animate-[aura-pulse_5.5s_ease-in-out_infinite]',
+              // pointer-events-none: this glow overhangs the pane by 24px and was
+              // swallowing taps on the top bar's ⋮ menu (v5.9.2).
+              'pointer-events-none absolute -inset-6 rounded-[2.5rem] blur-2xl transition-opacity duration-700 bg-[radial-gradient(60%_60%_at_50%_45%,rgb(var(--ember-500)/0.32),rgb(var(--aura-violet)/0.16)_58%,transparent_82%)] motion-safe:animate-[aura-pulse_5.5s_ease-in-out_infinite]',
               // The aura steps aside with the artwork while the canvas plays,
               // so the full-screen video shows through untinted.
               canvas.src ? 'opacity-0' : isPlaying ? 'opacity-100' : 'opacity-40',

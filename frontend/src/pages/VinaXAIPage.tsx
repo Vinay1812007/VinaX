@@ -1601,7 +1601,7 @@ export default function VinaXAIPage(): ReactNode {
                   title="Speak"
                   className={cn(
                     'p-2 rounded-full shrink-0 transition',
-                    listening ? 'text-white bg-ember-500 animate-pulse' : 'text-ink-300 hover:text-ink-100 hover:bg-ink-800/60',
+                    listening ? 'text-black bg-ember-500 animate-pulse' : 'text-ink-300 hover:text-ink-100 hover:bg-ink-800/60',
                   )}
                 >
                   <MicIcon className="w-5 h-5" />

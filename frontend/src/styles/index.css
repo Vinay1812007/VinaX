@@ -2300,7 +2300,39 @@ html.light .np-play-desktop { background: #000; color: #fff; }
 .np-mini { border-radius: 8px; }
 
 /* Range inputs: white fill, green on hover (progress + volume). */
+/* Range inputs (seek + volume): white fill and thumb, green on hover —
+   the fill token is read by the track pseudo-elements below. */
+input[type='range'] { --range-fill: rgb(var(--ink-100)); }
 input[type='range']:hover { --range-fill: rgb(var(--ember-500)); }
+input[type='range']::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, var(--range-fill) var(--fill), rgb(var(--ink-600)) var(--fill));
+}
+input[type='range']::-webkit-slider-thumb { background: rgb(var(--ink-100)); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
+input[type='range']:hover::-webkit-slider-thumb { box-shadow: 0 0 0 6px rgb(var(--ink-100) / 0.14); }
+input[type='range']::-moz-range-progress { background: var(--range-fill); }
+input[type='range']::-moz-range-thumb { background: rgb(var(--ink-100)); }
+
+/* Form controls follow the chrome: #282828 fields, white focus edge. */
+.glass-input,
+.glass-search {
+  background: var(--surface-input);
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+}
+.glass-input:focus,
+.glass-input:focus-within,
+.glass-search:focus,
+.glass-search:focus-within {
+  border-color: rgb(var(--ink-100));
+  box-shadow: none;
+}
+.glass-button {
+  border-radius: var(--radius-pill);
+  background: transparent;
+  border-color: rgb(var(--ink-500));
+  font-weight: 700;
+}
+.glass-button:hover { border-color: rgb(var(--ink-100)); }
 
 /* Focus ring reads white on black chrome — the green ring is kept for
    controls that ARE green. */

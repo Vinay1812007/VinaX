@@ -28,7 +28,7 @@ export default function LibraryPage() {
         to="/together"
         className="glass-panel rounded-2xl p-4 mb-8 flex items-center gap-3 hover:bg-ink-800/40 transition-colors"
       >
-        <span className="w-10 h-10 rounded-xl bg-premium text-white flex items-center justify-center shrink-0">
+        <span className="w-10 h-10 rounded-xl bg-ember-500 text-black flex items-center justify-center shrink-0">
           <UsersIcon className="w-5 h-5" />
         </span>
         <span className="min-w-0 flex-1">

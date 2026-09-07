@@ -7,7 +7,7 @@ export function DownloadCta() {
   return (
     <div className="hidden lg:flex items-center gap-4 mb-6 rounded-card glass p-4 animate-fade-up">
       <div className="relative shrink-0">
-        <div className="absolute -inset-2 rounded-2xl bg-premium opacity-40 blur-xl" aria-hidden />
+        <div className="absolute -inset-2 rounded-2xl bg-ember-500 opacity-30 blur-xl" aria-hidden />
         <img src="/icons/icon.svg" alt="" className="relative w-12 h-12 rounded-2xl" />
       </div>
       <div className="min-w-0 flex-1">

@@ -181,12 +181,12 @@ export function TrackMenu({ song }: { song: Song }) {
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
+          <div className="fixed inset-0 z-40 bg-black/40" onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
           <div
             ref={menuRef}
             role="menu"
             className={cn(
-              'absolute right-0 z-50 w-52 rounded-2xl py-1.5 animate-fade-up max-h-72 overflow-y-auto bg-[color:var(--surface-modal)] backdrop-blur-xl border border-[color:var(--glass-border)] shadow-2xl',
+              'absolute right-0 z-50 w-56 rounded-md p-1 animate-fade-up max-h-72 overflow-y-auto bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)]',
               flipUp ? 'bottom-full mb-1' : 'mt-1',
             )}
           >
@@ -199,7 +199,7 @@ export function TrackMenu({ song }: { song: Song }) {
                   item!.action();
                   setOpen(false);
                 }}
-                className="w-full text-left px-3.5 py-2 text-sm text-ink-100 hover:bg-ink-700 truncate"
+                className="w-full text-left rounded-sm px-3 py-2.5 text-[14px] font-medium text-ink-100 hover:bg-ink-700 truncate"
               >
                 {item!.label}
               </button>

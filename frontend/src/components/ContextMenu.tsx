@@ -185,7 +185,7 @@ export function ContextMenu() {
         role="menu"
         aria-label={menu.song ? `Actions for ${menu.song.title}` : 'App actions'}
         style={{ left: x, top: y, width: MENU_W }}
-        className="fixed py-1.5 rounded-2xl bg-[color:var(--surface-modal)] backdrop-blur-xl border border-[color:var(--glass-border)] shadow-2xl animate-fade-up"
+        className="fixed p-1 rounded-md bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)] animate-fade-up"
         onClick={(e) => e.stopPropagation()}
       >
         {menu.song && (
@@ -204,7 +204,7 @@ export function ContextMenu() {
               it.action();
             }}
             className={cn(
-              'w-full text-left px-3.5 py-2 text-sm truncate outline-none',
+              'w-full text-left rounded-sm px-3 py-2.5 text-[14px] font-medium truncate outline-none',
               i === sel ? 'bg-ink-700 text-ink-100' : 'text-ink-100',
             )}
           >

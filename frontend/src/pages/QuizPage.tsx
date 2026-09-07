@@ -166,7 +166,7 @@ export default function QuizPage() {
             <img src={bestImage(correct.images, 500)} alt="" className="w-full h-full object-cover animate-fade-up" />
           ) : (
             <>
-              <div className="absolute inset-0 bg-premium opacity-90" />
+              <div className="absolute inset-0 bg-ember-500 opacity-90" />
               <div className="absolute inset-0 flex items-end justify-center gap-1.5 pb-12">
                 {[0, 1, 2, 3, 4].map((i) => (
                   <span

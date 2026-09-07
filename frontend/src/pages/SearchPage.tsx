@@ -485,7 +485,7 @@ export default function SearchPage() {
               onClick={() => setAiOpen((v) => !v)}
               className="w-full flex items-center gap-3 text-left"
             >
-              <span className="w-9 h-9 rounded-xl bg-premium text-white flex items-center justify-center shrink-0">
+              <span className="w-9 h-9 rounded-xl bg-ember-500 text-black flex items-center justify-center shrink-0">
                 <SparkleIcon className="w-5 h-5" />
               </span>
               <span className="min-w-0">
