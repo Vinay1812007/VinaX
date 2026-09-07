@@ -52,6 +52,20 @@ jobs:
           probe "handoff function" "https://www.sirimillavinay.online/api/handoff?c=bad" "^(400|503)$" || fail=1
           exit $fail
 
+      # Edge module-graph integrity (2026-09-07 outage). The probes above only
+      # prove the shell and the functions answer; the app can still be totally
+      # dead if the EDGE serves a cached non-JS body under a hashed chunk URL.
+      # That day an HTML body sat on the entry chunk with max-age=31536000 —
+      # origin healthy, dist healthy, every existing check green, every visitor
+      # stuck on the boot splash. This step fetches the live shell and proves
+      # each asset it references really answers with JavaScript.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: "22" }
+      - name: Edge module-graph integrity
+        working-directory: frontend
+        run: node scripts/edge-integrity.mjs
+
       - name: Open failure issue (deduped)
         if: failure()
         env:

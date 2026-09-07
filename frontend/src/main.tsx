@@ -22,6 +22,7 @@ try {
   window.sessionStorage.removeItem('vinax.bootRetry');
   window.sessionStorage.removeItem('vinax.bootPanicked');
   window.sessionStorage.removeItem('vinax.preloadReload');
+  window.sessionStorage.removeItem('vinax.bootHealed');
 } catch {
   /* ignore */
 }

@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.11.4': {
+    title: 'Never stuck on the splash again',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'Fixed an outage where the app stopped at the loading screen saying \u201cUpdating\u2026\u201d and never opened. A network cache was handing the app a web page where its program file should have been, and every refresh asked for the exact same thing \u2014 so refreshing could not help. VinaX now asks again in a way the cache cannot answer from memory, and recovers by itself.',
+      },
+      {
+        type: 'improved',
+        text: 'A monitor now loads the live site every half hour and checks that every file it needs is really there and really is what it claims to be, so a problem like this is caught in minutes instead of being noticed by you.',
+      },
+    ],
+  },
   '5.11.3': {
     title: 'Run, for real this time',
     changes: [

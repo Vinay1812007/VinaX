@@ -217,6 +217,9 @@
         try { n = Number(sessionStorage.getItem(KEY) || 0); } catch (e) { n = 0; }
         var panicked = false;
         try { panicked = sessionStorage.getItem(PANIC) === '1'; } catch (e) { /* ignore */ }
+        var HEAL = 'vinax.bootHealed';
+        var healed = false;
+        try { healed = sessionStorage.getItem(HEAL) === '1'; } catch (e) { /* ignore */ }
         function nukeAndReload() {
           try { sessionStorage.setItem(PANIC, '1'); } catch (e) { /* proceed anyway */ }
           var jobs = [];
@@ -242,6 +245,28 @@
           var t = e.target;
           if (!t || t.tagName !== 'SCRIPT' || !t.src || t.src.indexOf('/assets/') === -1) return;
           var bs = document.querySelector('#boot .bs');
+          // URL-bust FIRST (2026-09-07 outage). A CDN can cache a non-JS body
+          // \u2014 an SPA fallback or an error page \u2014 under a hashed chunk
+          // URL for as long as its Cache-Control allows; that day an HTML body
+          // sat on the entry chunk with max-age=31536000. Every step below
+          // re-requests the SAME url, so reload, SW-unregister and cache-purge
+          // all returned the SAME poisoned body: none of them change the cache
+          // KEY, and the shell sat on "Updating\u2026" forever. A unique query
+          // is a different key, so the edge must fetch the chunk again. One
+          // shot, then fall through to the ladder.
+          if (!healed) {
+            healed = true;
+            try { sessionStorage.setItem(HEAL, '1'); } catch (e2) { /* retry anyway */ }
+            if (bs) bs.textContent = 'Updating\u2026';
+            try {
+              var heal = document.createElement('script');
+              heal.type = 'module';
+              if (t.crossOrigin) heal.crossOrigin = t.crossOrigin;
+              heal.src = t.src + (t.src.indexOf('?') === -1 ? '?' : '&') + 'vxheal=' + Date.now();
+              document.head.appendChild(heal);
+              return;
+            } catch (e3) { /* fall through to the reload ladder */ }
+          }
           if (n >= 2 && !panicked) {
             if (bs) bs.textContent = 'Refreshing app\u2026';
             nukeAndReload();
