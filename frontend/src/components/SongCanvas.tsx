@@ -121,17 +121,22 @@ export function SongCanvasBackdrop({ canvas, isPlaying }: { canvas: SongCanvasSt
   );
 }
 
-/** The artwork slot: still art normally; while the canvas plays it turns into
- *  a transparent window of the same size, so the full-screen video shows
- *  through uncovered and the layout never jumps. The toggle lives here. */
+/** The artwork slot: still art normally. While the canvas plays it steps
+ *  aside entirely so the full-screen clip shows through uncovered (v5.8.2,
+ *  JioSaavn-style: the clip IS the screen). The parent pane owns the space —
+ *  edge-to-edge on phones, a transparent window of the artwork's size on
+ *  desktop so the two-column layout never jumps. */
 export function SongCanvas({
   canvas,
   isPlaying,
   artUrl,
+  hideToggle = false,
 }: {
   canvas: SongCanvasState;
   isPlaying: boolean;
   artUrl: string | null;
+  /** Immersive mode: the controls are gone, so the ART/VIDEO chip goes too. */
+  hideToggle?: boolean;
 }) {
   const baseClasses = cn(
     'w-72 h-72 sm:w-80 sm:h-80 rounded-3xl transition-[color,background-color,border-color,opacity,transform] duration-500',
@@ -139,9 +144,7 @@ export function SongCanvas({
   );
   return (
     <>
-      {canvas.src ? (
-        <div aria-hidden className={baseClasses} />
-      ) : (
+      {!canvas.src && (
         <img
           src={artUrl ?? FALLBACK_ART}
           onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
@@ -150,7 +153,7 @@ export function SongCanvas({
           className={cn(baseClasses, 'object-cover shadow-[0_28px_70px_-14px_rgb(var(--ember-500)/0.4)]')}
         />
       )}
-      {canvas.hasVideo && (
+      {canvas.hasVideo && !hideToggle && (
         <button
           aria-label={canvas.off ? 'Turn the video canvas on' : 'Turn the video canvas off'}
           title={canvas.off ? 'Show video' : 'Show artwork'}

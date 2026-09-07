@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { albumPath, artistPath, songPath } from '@/utils/slug';
 import { filmTitleFromAlbumName } from '@/services/api/movies';
 import { Link, useNavigate } from 'react-router-dom';
@@ -97,6 +98,21 @@ function buildCreditChips(song: Song, filmTitle: string | null): CreditChip[] {
 
 const SLEEP_OPTIONS = [15, 30, 60];
 
+/**
+ * The hairline of progress that survives into immersive mode. It subscribes
+ * to the clock itself so ticking time never re-renders the whole player.
+ */
+function CanvasProgress() {
+  const currentTime = usePlayerStore((s) => s.currentTime);
+  const duration = usePlayerStore((s) => s.duration);
+  const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  return (
+    <div className="mt-3 h-[3px] rounded-full bg-white/25 overflow-hidden">
+      <div className="h-full bg-white/85" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
 export default function NowPlayingPage() {
   const song = useCurrentSong();
   usePageTitle(song ? song.title : 'Now Playing');
@@ -138,6 +154,38 @@ export default function NowPlayingPage() {
   useDismissOnBack(immersive, () => setImmersive(false));
   const immersiveRef = useRef<HTMLDivElement>(null);
   useFocusTrap(immersiveRef, immersive, () => setImmersive(false));
+  // v5.8.2 — JioSaavn-style canvas: tap the clip and every control drops
+  // away, tap again and they come back. Only offered while a video canvas is
+  // actually playing — hiding the chrome over still artwork leaves a dead
+  // screen, not an immersive one.
+  const [chromeHidden, setChromeHidden] = useState(false);
+  // Android back gives the controls back before it leaves the player (P0-2).
+  useDismissOnBack(chromeHidden, () => setChromeHidden(false));
+  const hintShown = useRef(false);
+  // A single tap toggles the chrome, but the double-tap seek/favourite zones
+  // live in the same layer — so the toggle waits out the double-tap window
+  // and the second click cancels it. Without this, a double-tap seek would
+  // flash the whole UI off and back on.
+  const tapTimer = useRef<number | null>(null);
+  const cancelTap = () => {
+    if (tapTimer.current !== null) {
+      window.clearTimeout(tapTimer.current);
+      tapTimer.current = null;
+    }
+  };
+  useEffect(() => cancelTap, []);
+  const onCanvasTap = () => {
+    cancelTap();
+    tapTimer.current = window.setTimeout(() => {
+      tapTimer.current = null;
+      if (!chromeHidden && !hintShown.current) {
+        hintShown.current = true;
+        toast('Tap anywhere to bring the controls back');
+      }
+      setChromeHidden(!chromeHidden);
+      haptic('light');
+    }, 260);
+  };
   const tabTouched = useRef(false);
   const onArtTouchStart = (e: React.TouchEvent) => {
     e.stopPropagation(); // keep the sheet's dismiss-drag out of the artwork zone
@@ -183,11 +231,15 @@ export default function NowPlayingPage() {
       if (e.key !== 'Escape') return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (chromeHidden) {
+        setChromeHidden(false);
+        return;
+      }
       navigate(-1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [navigate]);
+  }, [navigate, chromeHidden]);
 
   // slide-up entrance: start off-screen before paint, then spring up.
   useLayoutEffect(() => {
@@ -205,6 +257,12 @@ export default function NowPlayingPage() {
   const artUrl = song ? bestImage(song.images, 500) : null;
   // v5.7.11 — one canvas state for both surfaces (mobile backdrop / PC square).
   const canvas = useSongCanvas(song);
+  const canvasOn = !!canvas.src;
+  // The clip went away (no video for this song, canvas toggled off, playback
+  // failed) — hand the controls straight back rather than leaving a blank.
+  useEffect(() => {
+    if (!canvasOn) setChromeHidden(false);
+  }, [canvasOn]);
 
   useEffect(() => {
     let alive = true;
@@ -295,7 +353,7 @@ export default function NowPlayingPage() {
   };
 
   return (
-    <div ref={sheetRef} className="relative -mx-4 md:-mx-8 -mt-4 px-5 md:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[100dvh] -mb-44 md:-mb-28 overflow-hidden" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd}>
+    <div ref={sheetRef} className="relative -mx-5 md:-mx-10 -mt-6 px-5 md:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[100dvh] -mb-44 md:-mb-28 overflow-hidden" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd}>
       {/* Backdrop: the album art, heavily blurred + scaled, under a theme-adaptive
           darkening gradient (Apple-Music full-player look). Reuses the loaded art. */}
       <div className="absolute inset-0 -z-10" aria-hidden>
@@ -314,15 +372,38 @@ export default function NowPlayingPage() {
         <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />
         <div
           aria-hidden
-          className="absolute inset-0"
-          style={{ background: 'linear-gradient(180deg, rgb(var(--ember-500) / 0.16), transparent 45%)' }}
+          className="absolute inset-0 transition-opacity duration-500"
+          style={{
+            background: 'linear-gradient(180deg, rgb(var(--ember-500) / 0.16), transparent 45%)',
+            opacity: canvasOn ? 0.3 : 1,
+          }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-ink-950/30 via-ink-950/70 to-ink-950" />
+        {/* v5.8.2 — the scrim thins over a playing clip so the video reads
+            instead of drowning, and thins again once the controls are gone.
+            It stays bottom-weighted either way, so whatever chrome is still
+            on screen keeps its contrast. */}
+        <div
+          aria-hidden
+          className={cn(
+            'absolute inset-0 bg-gradient-to-b',
+            chromeHidden
+              ? 'from-transparent via-transparent to-ink-950/45'
+              : canvasOn
+                ? 'from-ink-950/55 via-ink-950/10 to-ink-950/90'
+                : 'from-ink-950/30 via-ink-950/70 to-ink-950',
+          )}
+        />
       </div>
 
       <div className="max-w-md lg:max-w-5xl mx-auto flex flex-col min-h-full">
         {/* Top bar — width-locked to the artwork column on lg so it never collides with the right panel */}
-        <div className="flex items-center justify-between lg:max-w-[26rem]">
+        <div
+          className={cn(
+            'flex items-center justify-between lg:max-w-[26rem] transition-opacity duration-300',
+            chromeHidden && 'opacity-0 pointer-events-none',
+          )}
+          aria-hidden={chromeHidden}
+        >
           <IconButton label="Close" onClick={closeSheet}>
             <ChevronDownIcon className="w-6 h-6" />
           </IconButton>
@@ -340,11 +421,27 @@ export default function NowPlayingPage() {
         <div className="flex flex-col min-w-0">
 
         {/* Artwork */}
+        {/* Artwork card normally; with a clip on, an edge-to-edge pane over
+            the video that owns every gesture. The outer box always holds its
+            place in the flow — in immersive mode only the inner gesture layer
+            goes full-screen, so the sheet keeps its height and the backdrop
+            clip never re-crops when the controls come and go. */}
         <div
           className={cn(
-            'relative mt-5 mb-6 select-none mx-auto touch-pan-x',
+            canvasOn
+              ? 'relative -mx-5 md:-mx-8 lg:mx-auto h-[44vh] lg:h-auto mb-5 lg:mt-5 lg:mb-6'
+              : 'relative mt-5 mb-6 mx-auto',
             swipeFx === 'up' && 'motion-safe:animate-[np-swipe-next_320ms_ease-out]',
             swipeFx === 'down' && 'motion-safe:animate-[np-swipe-prev_320ms_ease-out]',
+          )}
+        >
+        {/* Desktop keeps a transparent window of the artwork's size while the
+            clip plays (see SongCanvas), so the pane still has a box to fill. */}
+        {canvasOn && <div aria-hidden className="hidden lg:block w-80 h-80" />}
+        <div
+          className={cn(
+            'select-none touch-pan-x',
+            chromeHidden ? 'fixed inset-0 z-20' : canvasOn ? 'absolute inset-0' : 'relative',
           )}
           data-deter-context
           onTouchStart={onArtTouchStart}
@@ -363,18 +460,43 @@ export default function NowPlayingPage() {
           {/* v5.7.12 — while the canvas plays full-screen, this slot becomes a
               transparent window (same size, so the layout holds) and hosts the
               ART/VIDEO toggle; still artwork returns the moment it's off. */}
-          <SongCanvas canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} />
-          <button aria-label="Rewind 10 seconds (double tap)" onDoubleClick={() => doubleSeek(-1)} className="absolute inset-y-0 left-0 w-1/3 rounded-l-3xl" />
+          <SongCanvas canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} hideToggle={chromeHidden} />
           <button
-            aria-label="Double tap to favorite"
+            aria-label={canvasOn ? 'Rewind 10 seconds (double tap), or tap to hide the controls' : 'Rewind 10 seconds (double tap)'}
+            onClick={canvasOn ? onCanvasTap : undefined}
             onDoubleClick={() => {
+              cancelTap();
+              doubleSeek(-1);
+            }}
+            className="absolute inset-y-0 left-0 w-1/3 rounded-l-3xl"
+          />
+          <button
+            aria-label={canvasOn ? 'Double tap to favorite, or tap to hide the controls' : 'Double tap to favorite'}
+            onClick={canvasOn ? onCanvasTap : undefined}
+            onDoubleClick={() => {
+              cancelTap();
               useLibraryStore.getState().toggleFavorite(song);
               haptic('medium');
             }}
             className="absolute inset-y-0 left-1/3 w-1/3"
           />
-          <button aria-label="Forward 10 seconds (double tap)" onDoubleClick={() => doubleSeek(1)} className="absolute inset-y-0 right-0 w-1/3 rounded-r-3xl" />
+          <button
+            aria-label={canvasOn ? 'Forward 10 seconds (double tap), or tap to hide the controls' : 'Forward 10 seconds (double tap)'}
+            onClick={canvasOn ? onCanvasTap : undefined}
+            onDoubleClick={() => {
+              cancelTap();
+              doubleSeek(1);
+            }}
+            className="absolute inset-y-0 right-0 w-1/3 rounded-r-3xl"
+          />
         </div>
+        </div>
+
+        {/* Everything under the clip fades out together in immersive mode. */}
+        <div
+          className={cn('transition-opacity duration-300', chromeHidden && 'opacity-0 pointer-events-none')}
+          aria-hidden={chromeHidden}
+        >
 
         {/* Title row */}
         <div className="flex items-center justify-between gap-3">
@@ -579,10 +701,17 @@ export default function NowPlayingPage() {
           </div>
         )}
 
+        </div>
 
         </div>
 
-        <div className="flex flex-col min-w-0">
+        <div
+          className={cn(
+            'flex flex-col min-w-0 transition-opacity duration-300',
+            chromeHidden && 'opacity-0 pointer-events-none',
+          )}
+          aria-hidden={chromeHidden}
+        >
         <div className="mt-6 lg:mt-0 flex items-center gap-2" role="tablist" aria-label="Player panels">
           <button
             role="tab"
@@ -732,6 +861,21 @@ export default function NowPlayingPage() {
         </div>
         </div>
       </div>
+      {/* Portalled to <body>: the sheet's own transform would otherwise make
+          it the containing block, pinning this to the bottom of the (taller
+          than the screen) sheet instead of the bottom of the screen. */}
+      {chromeHidden &&
+        createPortal(
+          <div
+            aria-hidden
+            className="fixed inset-x-0 bottom-0 z-30 px-6 pt-20 pb-[max(1.5rem,env(safe-area-inset-bottom))] pointer-events-none bg-gradient-to-t from-ink-950/85 via-ink-950/45 to-transparent animate-fade-up"
+          >
+            <p className="text-lg font-bold text-white truncate">{song.title}</p>
+            <p className="text-sm text-white/70 truncate">{song.subtitle}</p>
+            <CanvasProgress />
+          </div>,
+          document.body,
+        )}
       {immersive && (
         <div
           ref={immersiveRef}
