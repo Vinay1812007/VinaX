@@ -135,7 +135,7 @@ export function PlayerBar() {
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
-          <div className="flex items-center gap-2.5 pl-2 pr-1 py-1.5 bg-ink-950/30 backdrop-blur-md">
+          <div className="flex items-center gap-2.5 pl-2 pr-1 py-1.5 bg-black/35 backdrop-blur-md">
             <button
               onClick={() => navigate('/now-playing')}
               className="flex items-center gap-3.5 flex-1 min-w-0 text-left"
@@ -150,8 +150,8 @@ export function PlayerBar() {
                 />
               </span>
               <span className="min-w-0 flex-1">
-                <Marquee text={song.title} className="text-[13px] font-semibold text-ink-100" />
-                <span className="block text-[11px] text-ink-200/70 truncate">{song.subtitle}</span>
+                <Marquee text={song.title} className="text-[13px] font-semibold text-white" />
+                <span className="block text-[11px] text-white/70 truncate">{song.subtitle}</span>
               </span>
             </button>
             {sleepActive && (
@@ -165,7 +165,7 @@ export function PlayerBar() {
                 <cast-media-route-button style={{ width: '24px', height: '24px', '--connected-color': 'rgb(var(--ember-400))', '--disconnected-color': 'currentColor' }} />
               </div>
             )}
-            <FavButton song={song} className="text-ink-200" />
+            <FavButton song={song} className="text-white/80" />
             <button
               aria-label={isPlaying ? 'Pause' : 'Play'}
               title={isPlaying ? 'Pause' : 'Play'}

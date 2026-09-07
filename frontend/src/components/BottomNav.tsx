@@ -32,7 +32,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Main navigation"
-      className="vx-dock md:hidden bg-gradient-to-t from-black via-black/95 to-black/70 pb-[var(--safe-bottom)]"
+      className="vx-dock md:hidden bg-gradient-to-t from-ink-950 via-ink-950/95 to-ink-950/80 pb-[var(--safe-bottom)]"
     >
       <ul className="flex items-stretch justify-around px-1 pt-1.5 pb-1">
         {items.map(({ to, label, icon: Icon, ai }) => (

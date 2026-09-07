@@ -21,7 +21,7 @@ export function Chip({ active, tone = 'default', onClick, children }: Props) {
         'relative after:absolute after:inset-0 after:-m-[6px]',
         // v5.9.0 chips: a selected chip is white on black, the rest
         // sit as soft #282828 pills that brighten on hover.
-        active && tone === 'default' && 'bg-white border-white text-black',
+        active && tone === 'default' && 'bg-ink-100 border-ink-100 text-ink-950',
         active && tone === 'danger' && 'bg-red-500/20 border-red-500 text-red-300',
         !active && 'bg-ink-800 border-transparent text-ink-100 hover:bg-ink-700',
       )}

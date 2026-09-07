@@ -12,6 +12,19 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.11.6': {
+    title: 'Light and Black, finished',
+    changes: [
+      {
+        type: 'improved',
+        text: 'Light mode is now a proper theme, not a dimmed dark one: a clean white canvas, deep-green buttons with white labels, a white tab bar and player, and a dark halo on focus. Black mode is pure OLED black. Dark stays charcoal with the bright green.',
+      },
+      {
+        type: 'fixed',
+        text: 'In Light mode several buttons (Surprise me, New chat, Play all) had black text on dark green, the tab bar was black on a white page, and the mini player\u2019s title was unreadable on its artwork tint \u2014 all fixed. The full-screen video mode now stays dark in every theme.',
+      },
+    ],
+  },
   '5.11.5': {
     title: 'No more false \u201cYou\u2019re offline\u201d',
     changes: [

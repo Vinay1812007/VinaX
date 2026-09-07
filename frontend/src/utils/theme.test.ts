@@ -119,15 +119,15 @@ describe('contrast (WCAG AA on the documented pairs)', () => {
   it('primary text on canvas ≥ 7:1 in both themes (v3.8 modern minimal)', () => {
     // Dark canvas rgb(18 18 18) = #121212 with white text.
     expect(contrast('#ffffff', '#121212')).toBeGreaterThanOrEqual(7);
-    // Light canvas rgb(240 242 247) = #f0f2f7 with rgb(12 14 20) = #0c0e14 text.
-    expect(contrast('#0c0e14', '#f0f2f7')).toBeGreaterThanOrEqual(7);
+    // Light canvas rgb(247 247 247) = #f7f7f7 with rgb(12 14 20) = #0c0e14 text.
+    expect(contrast('#0c0e14', '#f7f7f7')).toBeGreaterThanOrEqual(7);
   });
 
   it('secondary text stays readable (≥ 4.5:1)', () => {
     // Dark: --ink-300 rgb(179 179 179) = #b3b3b3 on the #121212 canvas.
     expect(contrast('#b3b3b3', '#121212')).toBeGreaterThanOrEqual(4.5);
     // Light: --ink-300 rgb(84 90 104) = #545a68 on light canvas.
-    expect(contrast('#545a68', '#f0f2f7')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#545a68', '#f7f7f7')).toBeGreaterThanOrEqual(4.5);
   });
 
   it('white button text on the indigo primary fill ≥ 4.5:1 (WCAG AA)', () => {
@@ -142,8 +142,8 @@ describe('contrast (WCAG AA on the documented pairs)', () => {
     // dark canvas #121212: active white, upcoming slate
     expect(contrast('#ffffff', '#121212')).toBeGreaterThanOrEqual(7);
     expect(contrast('#94a3b8', '#121212')).toBeGreaterThanOrEqual(4.5);
-    // light canvas #f0f2f7: active near-black, upcoming ink
-    expect(contrast('#0a0c10', '#f0f2f7')).toBeGreaterThanOrEqual(7);
-    expect(contrast('#475569', '#f0f2f7')).toBeGreaterThanOrEqual(4.5);
+    // light canvas #f7f7f7: active near-black, upcoming ink
+    expect(contrast('#0a0c10', '#f7f7f7')).toBeGreaterThanOrEqual(7);
+    expect(contrast('#475569', '#f7f7f7')).toBeGreaterThanOrEqual(4.5);
   });
 });

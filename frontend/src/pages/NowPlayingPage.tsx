@@ -599,7 +599,7 @@ export default function NowPlayingPage() {
           <button
             onClick={togglePlay}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+            className="w-16 h-16 rounded-full bg-ink-100 text-ink-950 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
           >
             {isBuffering ? (
               <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -880,18 +880,18 @@ export default function NowPlayingPage() {
       {chromeHidden &&
         createPortal(
           <div
-            className="fixed inset-0 z-[60] bg-ink-950 select-none touch-pan-x overflow-hidden animate-fade-up"
+            className="fixed inset-0 z-[60] bg-black select-none touch-pan-x overflow-hidden animate-fade-up"
             data-deter-context
             onTouchStart={onArtTouchStart}
             onTouchMove={(e) => e.stopPropagation()}
             onTouchEnd={onArtTouchEnd}
           >
             <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />
-            <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-ink-950/60" />
+            <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
             {tapZones}
             <div
               aria-hidden
-              className="absolute inset-x-0 bottom-0 px-6 pt-20 pb-[max(1.5rem,env(safe-area-inset-bottom))] pointer-events-none bg-gradient-to-t from-ink-950/85 via-ink-950/45 to-transparent"
+              className="absolute inset-x-0 bottom-0 px-6 pt-20 pb-[max(1.5rem,env(safe-area-inset-bottom))] pointer-events-none bg-gradient-to-t from-black/85 via-black/45 to-transparent"
             >
               <p className="text-lg font-bold text-white truncate">{song.title}</p>
               <p className="text-sm text-white/70 truncate">{song.subtitle}</p>
@@ -935,7 +935,7 @@ export default function NowPlayingPage() {
               <button
                 onClick={togglePlay}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+                className="w-14 h-14 rounded-full bg-ink-100 text-ink-950 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
               >
                 {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6 ml-0.5" />}
               </button>

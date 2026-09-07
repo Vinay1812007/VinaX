@@ -175,10 +175,10 @@ html.light {
   color-scheme: light;
 
   --ink-950: 255 255 255;
-  --ink-900: 240 242 247;
-  --ink-850: 232 234 240;
-  --ink-800: 220 224 232;
-  --ink-700: 200 204 214;
+  --ink-900: 247 247 247;
+  --ink-850: 240 240 240;
+  --ink-800: 229 229 229;
+  --ink-700: 212 212 212;
   --ink-600: 148 154 168;
   --ink-500: 132 138 152;
   /* 92 98 114 (not a straight inversion): the muted-text tier must clear
@@ -204,7 +204,7 @@ html.light {
   --glass-bg: rgb(255 255 255 / var(--glass-alpha));
   --glass-bg-strong: rgb(248 250 253 / var(--glass-alpha));
   --glass-bg-muted: rgb(244 246 251 / var(--glass-alpha));
-  --glass-bg-hover: rgb(240 242 247 / max(var(--glass-alpha), 0.85));
+  --glass-bg-hover: rgb(240 240 240 / max(var(--glass-alpha), 0.85));
   --glass-bg-active: rgb(232 234 240 / max(var(--glass-alpha), 0.9));
   --glass-border: rgba(15, 20, 30, 0.08);
   --glass-border-strong: rgba(15, 20, 30, 0.14);
@@ -375,7 +375,7 @@ body {
   transition: background-color 0.4s ease, color 0.4s ease;
 }
 html.light body {
-  background-color: rgb(240 242 247);
+  background-color: rgb(247 247 247);
 }
 
 main {
@@ -2349,3 +2349,31 @@ html.light .ai-title {
   color: rgb(var(--ink-100));
 }
 .ai-ambient { background: none; }
+
+/* ============================================================================
+   v5.11.6 — Light and Black modes finished. Dark = charcoal + bright green
+   with black labels; Light = clean white, deep-green fills with WHITE labels
+   (the light accent is darkened for AA text, so black-on-green no longer
+   reads); Black = pure OLED black. Everything below is light-mode only.
+   ========================================================================= */
+html.light .btn-primary,
+html.light .btn-premium,
+html.light .card-play,
+html.light .bg-ember-500.text-black,
+html.light .bg-ember-400.text-black,
+html.light .bg-ai-accent.text-black,
+html.light .bg-ai-accent { color: #fff; }
+html.light .btn-primary:hover,
+html.light .btn-premium:hover { background: rgb(var(--ember-400)); border-color: rgb(var(--ember-400)); }
+html.light .btn-secondary { border-color: rgb(var(--ink-600)); }
+html.light .btn-secondary:hover { border-color: rgb(var(--ink-100)); }
+/* Shell panels get a hairline instead of black: white on white needs an edge. */
+html.light .glass-sidebar { border-right: 1px solid rgb(var(--ink-800)); }
+html.light .glass-bottom-player { border-top: 1px solid rgb(var(--ink-800)); }
+html.light .vx-dock { border-top: 1px solid rgb(var(--ink-800)); }
+/* Focus ring: a dark halo, the white one vanished on the light canvas. */
+html.light :focus-visible { box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.16); outline-color: rgb(var(--ink-100)); }
+html.light .btn-primary:focus-visible,
+html.light .card-play:focus-visible { outline-color: rgb(var(--ember-500)); }
+/* Menus and toasts stay solid, never translucent, on light. */
+html.light .np-mini { box-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.35); }
