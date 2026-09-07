@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.11.2': {
+    title: 'Run actually runs',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'HTML, SVG and JavaScript the assistant writes now really run \u2014 the preview was blank and Open gave an empty tab because the app\u2019s security policy blocked the page\u2019s own scripts. Previews now load in their own sandbox, and any error in the code shows under the preview instead of a silent blank.',
+      },
+    ],
+  },
   '5.11.1': {
     title: 'Run code, one New chat',
     changes: [

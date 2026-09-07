@@ -3,6 +3,7 @@ import { cn } from '@/utils/cn';
 import { tokenize } from './tokenize';
 import { SongPickChip, SongPicksBar, extractSongPicks, parseSongLine } from './SongPick';
 import { ChartBlock } from './ChartBlock';
+import { PREVIEW_VIA_SERVER, newToken, onPreviewMessage, postPreview, scriptPage, type PreviewEvent } from './preview';
 
 /**
  * Rich renderer for AI messages. Auto-detects and renders:
@@ -431,43 +432,34 @@ function highlightCode(code: string, lang: string): ReactNode[] {
 const RUNNABLE = new Set(['js', 'javascript', 'jsx', 'ts', 'typescript']);
 
 /** v5.11.1 — Run for JavaScript/TypeScript: the code executes in a
- *  sandboxed iframe (no same-origin, no network to us) and console output
- *  streams back through postMessage. TypeScript runs as-is when it is plain
- *  JS-compatible; type annotations fail loudly in the output pane. */
+ *  sandboxed iframe served by /api/preview (its own CSP — see preview.ts)
+ *  and console output / errors stream back through postMessage. */
 function JsRunner({ code, onClose }: { code: string; onClose(): void }): ReactNode {
-  const [lines, setLines] = useState<Array<{ kind: 'log' | 'error' | 'done'; text: string }>>([]);
-  const token = useMemo(() => Math.random().toString(36).slice(2), []);
+  const [lines, setLines] = useState<PreviewEvent[]>([]);
+  const token = useMemo(() => newToken(), []);
+  const frameName = `vx-run-${token}`;
+  const page = useMemo(() => scriptPage(code), [code]);
+  useEffect(() => onPreviewMessage(token, (ev) => setLines((prev) => [...prev, ev].slice(-400))), [token]);
   useEffect(() => {
-    const onMsg = (e: MessageEvent): void => {
-      const d = e.data as { vxRun?: string; kind?: 'log' | 'error' | 'done'; text?: string } | null;
-      if (!d || d.vxRun !== token || !d.kind) return;
-      setLines((prev) => [...prev, { kind: d.kind as 'log' | 'error' | 'done', text: String(d.text ?? '') }].slice(-400));
-    };
-    window.addEventListener('message', onMsg);
-    return () => window.removeEventListener('message', onMsg);
-  }, [token]);
-  const srcDoc = `<!doctype html><meta charset="utf-8"><script>
-(function(){
-  var T=${JSON.stringify(token)};
-  function send(kind,args){try{parent.postMessage({vxRun:T,kind:kind,text:Array.prototype.map.call(args,function(a){try{return typeof a==='string'?a:JSON.stringify(a,null,1)}catch(e){return String(a)}}).join(' ')},'*')}catch(e){}}
-  ['log','info','warn','debug'].forEach(function(k){console[k]=function(){send('log',arguments)}});
-  console.error=function(){send('error',arguments)};
-  window.onerror=function(m,s,l,c,e){send('error',[String(e&&e.stack||m)])};
-  window.addEventListener('unhandledrejection',function(ev){send('error',[String(ev.reason&&ev.reason.stack||ev.reason)])});
-  setTimeout(function(){send('done',['✓ finished'])},0);
-})();
-</script><script>${code.replace(/<\/script/gi, '<\\/script')}</script>`;
+    if (PREVIEW_VIA_SERVER) postPreview(page, token, frameName, 'Run');
+  }, [page, token, frameName]);
   return (
     <div className="border-t border-glass-strong">
       <div className="flex items-center justify-between px-3 py-1 bg-ink-850 text-[11px] text-ink-300">
         <span>Output</span>
         <button onClick={onClose} className="hover:text-ink-100">Close</button>
       </div>
-      <iframe title="run" sandbox="allow-scripts" srcDoc={srcDoc} className="hidden" />
+      <iframe
+        title="run"
+        name={frameName}
+        sandbox="allow-scripts allow-forms"
+        srcDoc={PREVIEW_VIA_SERVER ? undefined : page}
+        className="hidden"
+      />
       <pre className="p-3 max-h-64 overflow-auto text-xs leading-relaxed font-mono">
         {lines.length === 0 ? <span className="text-ink-500">Running…</span> : null}
-        {lines.map((l, i) => (
-          <div key={i} className={l.kind === 'error' ? 'text-red-300' : l.kind === 'done' ? 'text-ember-400' : ''}>
+        {lines.filter((l) => l.kind !== 'ready').map((l, i) => (
+          <div key={i} className={l.kind === 'error' ? 'text-red-300' : l.text.startsWith('✓') ? 'text-ember-400' : ''}>
             {l.text}
           </div>
         ))}
@@ -539,15 +531,50 @@ function MermaidBlock({ code }: { code: string }): ReactNode {
 
 function HtmlPreview({ lang, code }: { lang: string; code: string }): ReactNode {
   const [tab, setTab] = useState<'preview' | 'code'>('preview');
+  const [runKey, setRunKey] = useState(0);
+  const [events, setEvents] = useState<PreviewEvent[]>([]);
+  const token = useMemo(() => newToken(), []);
+  const frameName = `vx-preview-${token}`;
   const srcDoc =
     lang === 'svg'
-      ? `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#fff">${code}</body>`
+      ? `<!doctype html><html><head><meta charset="utf-8"><title>SVG</title></head><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#fff">${code}</body></html>`
       : code;
+  useEffect(() => onPreviewMessage(token, (ev) => setEvents((prev) => [...prev, ev].slice(-50))), [token]);
+  // Serve the page through /api/preview whenever the preview tab shows
+  // (first mount and every ▶ Run) — srcdoc would inherit the app's CSP and
+  // block the page's own scripts.
+  useEffect(() => {
+    if (tab !== 'preview' || !PREVIEW_VIA_SERVER) return;
+    setEvents([]);
+    postPreview(srcDoc, token, frameName, lang === 'svg' ? 'SVG' : 'Preview');
+  }, [tab, runKey, srcDoc, token, frameName, lang]);
+  const errors = events.filter((e) => e.kind === 'error');
+  const open = () => {
+    if (PREVIEW_VIA_SERVER) postPreview(srcDoc, token, '_blank', lang === 'svg' ? 'SVG' : 'Preview');
+    else {
+      try {
+        const w = window.open('', '_blank');
+        if (w) {
+          w.document.open();
+          w.document.write(srcDoc);
+          w.document.close();
+        }
+      } catch {
+        /* popup blocked */
+      }
+    }
+  };
   return (
     <div className="my-2 rounded-xl overflow-hidden border border-glass-strong bg-ink-900">
       <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
         <div className="flex gap-3">
-          <button onClick={() => setTab('preview')} className={cn('transition', tab === 'preview' ? 'text-ink-100 font-semibold' : 'hover:text-ink-100')}>
+          <button
+            onClick={() => {
+              setTab('preview');
+              setRunKey((k) => k + 1);
+            }}
+            className={cn('transition font-bold', tab === 'preview' ? 'text-ember-400' : 'text-ember-400/80 hover:text-ember-300')}
+          >
             ▶ Run
           </button>
           <button onClick={() => setTab('code')} className={cn('transition', tab === 'code' ? 'text-ink-100 font-semibold' : 'hover:text-ink-100')}>
@@ -555,21 +582,7 @@ function HtmlPreview({ lang, code }: { lang: string; code: string }): ReactNode 
           </button>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              try {
-                const w = window.open('', '_blank');
-                if (w) {
-                  w.document.open();
-                  w.document.write(srcDoc);
-                  w.document.close();
-                }
-              } catch {
-                /* popup blocked */
-              }
-            }}
-            className="hover:text-ink-100 transition"
-          >
+          <button onClick={open} className="hover:text-ink-100 transition">
             Open
           </button>
           <button
@@ -582,7 +595,23 @@ function HtmlPreview({ lang, code }: { lang: string; code: string }): ReactNode 
         </div>
       </div>
       {tab === 'preview' ? (
-        <iframe title="preview" sandbox="allow-scripts" srcDoc={srcDoc} className="w-full h-80 bg-white" />
+        <>
+          <iframe
+            key={runKey}
+            title="preview"
+            name={frameName}
+            sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock"
+            srcDoc={PREVIEW_VIA_SERVER ? undefined : srcDoc}
+            className="w-full h-80 bg-white"
+          />
+          {errors.length > 0 && (
+            <div className="border-t border-glass-strong bg-ink-850 px-3 py-2 text-[11px] font-mono text-red-300 max-h-28 overflow-auto">
+              {errors.slice(-5).map((e, i) => (
+                <div key={i}>⚠ {e.text}</div>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <pre className="p-3 overflow-x-auto text-xs leading-relaxed font-mono">
           <code>{code}</code>
