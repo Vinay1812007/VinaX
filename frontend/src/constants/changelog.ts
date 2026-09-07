@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.11.5': {
+    title: 'No more false \u201cYou\u2019re offline\u201d',
+    changes: [
+      {
+        type: 'fixed',
+        text: 'The \u201cYou\u2019re offline\u201d banner could appear while you were online \u2014 some browsers (especially with a VPN on) misreport the connection. VinaX now checks the network for real before saying so, and clears the banner on its own the moment the connection is confirmed.',
+      },
+    ],
+  },
   '5.11.4': {
     title: 'Never stuck on the splash again',
     changes: [
