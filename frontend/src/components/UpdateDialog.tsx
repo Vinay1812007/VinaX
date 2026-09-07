@@ -1,11 +1,17 @@
 import { useState, useRef } from 'react';
 import { useUpdateStore } from '@/store/updateStore';
-import { downloadAndInstall, installLikelyBlocked, type InstallPhase } from '@/services/update';
+import { downloadAndInstall, installLikelyBlocked, snoozeUpdate, type InstallPhase } from '@/services/update';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 
 /**
- * Mandatory in-app update dialog: blocks the UI when a newer version exists,
- * downloads the APK inside the app, and opens the Android installer directly.
+ * In-app update dialog: shown when a newer version exists, downloads the APK
+ * inside the app, and opens the Android installer directly.
+ *
+ * v5.8.2 — Update now / Update later. The gate is no longer mandatory: later
+ * closes it for this build for a day (the Home banner keeps the reminder),
+ * a newer build brings it straight back, and Settings → Check for updates
+ * always shows it. Escape and Android back count as "later" too.
  *
  * v4.13.3 — reinstall guidance: Android permanently refuses to install an APK
  * over an app signed with a different key ("package conflicts with an
@@ -21,9 +27,14 @@ export function UpdateDialog() {
   const [error, setError] = useState<string | null>(null);
   const [exported, setExported] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
-  // Mandatory update gate: trap focus while shown, but no Escape-close and
-  // no dismiss. Hooks stay above the early return (rules-of-hooks).
-  useFocusTrap(dialogRef, info !== null);
+  const later = () => {
+    if (!info) return;
+    snoozeUpdate(info.latestBuild);
+    useUpdateStore.getState().setInfo(null);
+  };
+  // Hooks stay above the early return (rules-of-hooks).
+  useFocusTrap(dialogRef, info !== null, later);
+  useDismissOnBack(info !== null, later);
 
   if (!info) return null;
 
@@ -48,11 +59,11 @@ export function UpdateDialog() {
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink-950/85 backdrop-blur-sm p-0 sm:p-6">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Update required" className="w-full sm:max-w-sm glass-modal rounded-t-3xl sm:rounded-3xl p-6 animate-fade-up">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Update available" className="w-full sm:max-w-sm glass-modal rounded-t-3xl sm:rounded-3xl p-6 animate-fade-up">
         <div className="flex items-center gap-3 mb-3">
           <img src="/icons/icon.svg" alt="" className="w-11 h-11 rounded-xl" />
           <div>
-            <h2 className="text-lg font-bold">{blocked ? 'One-time reinstall needed' : 'Update required'}</h2>
+            <h2 className="text-lg font-bold">{blocked ? 'One-time reinstall needed' : 'Update available'}</h2>
             <p className="text-xs text-ink-300">v{info.current} → v{info.latest}</p>
           </div>
         </div>
@@ -87,7 +98,14 @@ export function UpdateDialog() {
               {busy && <span className="w-4 h-4 border-2 border-ink-950 border-t-transparent rounded-full animate-spin" />}
               {phase === 'downloading' ? 'Downloading…' : phase === 'installing' ? 'Opening installer…' : '2 · Download installer'}
             </button>
-            <p className="text-[11px] text-ink-500 mt-3 text-center">
+            <button
+              onClick={later}
+              disabled={busy}
+              className="w-full py-2.5 mt-2 rounded-full text-sm font-bold text-ink-300 hover:text-ink-100 transition"
+            >
+              Update later
+            </button>
+            <p className="text-[11px] text-ink-500 mt-1 text-center">
               After this one time, every future update installs over the top normally.
             </p>
           </>
@@ -110,10 +128,17 @@ export function UpdateDialog() {
                   ? 'Opening installer…'
                   : phase === 'error'
                     ? 'Retry update'
-                    : `Update to v${info.latest}`}
+                    : 'Update now'}
             </button>
-            {/* Always reachable — this dialog blocks the whole app, so the
-                data-export path must live INSIDE it, not behind it. */}
+            <button
+              onClick={later}
+              disabled={busy}
+              className="w-full py-3 mt-2 rounded-full btn-secondary text-sm font-bold"
+            >
+              Update later
+            </button>
+            {/* The data-export path stays inside the dialog: it is the first
+                thing to do before any install, so it must be one tap away. */}
             <button
               onClick={exportData}
               className="w-full py-2.5 mt-2 rounded-full text-xs font-bold text-ink-300 hover:text-ink-100 transition"

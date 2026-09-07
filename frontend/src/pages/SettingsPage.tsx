@@ -363,7 +363,7 @@ export default function SettingsPage() {
             {isNativePlatform() && (
               <button
                 onClick={() =>
-                  void checkForUpdate().then((u) => {
+                  void checkForUpdate({ manual: true }).then((u) => {
                     if (u) useUpdateStore.getState().setInfo(u);
                     else toast('You’re on the latest version');
                   })

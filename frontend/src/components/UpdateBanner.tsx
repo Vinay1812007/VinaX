@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { checkForUpdate } from '@/services/update';
 import { isNativePlatform } from '@/services/native';
+import { useUpdateStore } from '@/store/updateStore';
 
-/** Home banner shown on Android when the site carries a newer version. */
+/** Home banner shown on Android when the site carries a newer version. It
+ *  stays up through an "Update later", so the reminder is always one tap
+ *  from the in-app installer. */
 export function UpdateBanner() {
   const { data } = useQuery({
     queryKey: ['update-check'],
-    queryFn: checkForUpdate,
+    queryFn: () => checkForUpdate({ manual: true }),
     enabled: isNativePlatform(),
     staleTime: 30 * 60_000,
     retry: false,
@@ -20,14 +23,12 @@ export function UpdateBanner() {
         <p className="text-sm font-bold">Update available — v{data.latest}</p>
         <p className="text-xs text-ink-300 mt-0.5">You’re on v{data.current}. Install over the top, no uninstall needed.</p>
       </div>
-      <a
-        href={data.apkUrl}
-        target="_blank"
-        rel="noreferrer"
+      <button
+        onClick={() => useUpdateStore.getState().setInfo(data)}
         className="shrink-0 px-4 py-2 rounded-full text-sm btn-primary"
       >
-        Download
-      </a>
+        Update
+      </button>
     </div>
   );
 }

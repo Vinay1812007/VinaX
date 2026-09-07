@@ -148,20 +148,62 @@ function normTitle(s: string): string {
     .trim();
 }
 
+/** A video's name with the catalogue's own decoration removed — "(Full
+ *  Video)", "(Lyric Video)", "- Official Music Video", "- Bhediya" — so
+ *  "Apna Bana Le - Bhediya (Video)" compares as plain "apna bana le". */
+function normVideoTitle(s: string): string {
+  return normTitle(
+    s
+      .replace(/\s*\([^)]*\b(?:video|visualizer|lyrics?|audio|teaser|trailer|making)\b[^)]*\)/gi, ' ')
+      .replace(/\s*[-\u2013\u2014|]\s*(?:official\s+)?(?:full\s+|lyric(?:al)?\s+|music\s+)?(?:video|visualizer|song|audio)\b.*$/i, ' ')
+      .replace(/\s*[-\u2013\u2014|]\s*[^-\u2013\u2014|(]+$/, ' '),
+  );
+}
+
+/** Every word the song is credited to — singers, composers, the lyricist the
+ *  catalogue lists first, the album/film — as comparison tokens. The video
+ *  side credits differently (the singer where the song credits the lyricist,
+ *  the film in the title), so any shared token confirms identity. */
+function songTokens(song: Song): string[] {
+  const names = [
+    ...song.artists.map((a) => a.name),
+    ...song.subtitle.split(','),
+    song.album?.name ?? '',
+  ];
+  const out = new Set<string>();
+  for (const n of names) {
+    for (const t of normTitle(n).split(' ')) if (t.length > 2) out.add(t);
+  }
+  // A single's album is its own title, so title words prove nothing — a
+  // different "Heeriye" must not pass on the strength of the word "heeriye".
+  for (const t of normTitle(song.title).split(' ')) out.delete(t);
+  // Generic words that prove nothing on their own.
+  for (const w of ['the', 'and', 'from', 'feat', 'featuring', 'singh', 'kumar', 'original', 'motion', 'picture', 'soundtrack', 'hindi', 'tamil', 'telugu']) out.delete(w);
+  return [...out];
+}
+
 /**
  * v5.7.10 — the video canvas behind Now Playing. Finds THE video for a song,
  * strictly: a video whose songIds carries the song's own id wins outright;
- * otherwise the titles must genuinely match AND share an artist word. A song
- * with no confident match gets no canvas — never someone else's video.
+ * otherwise the titles must genuinely match AND the credits must share a
+ * word. A song with no confident match gets no canvas — never someone
+ * else's video.
+ *
+ * v5.8.2 — two things doubled the hit rate on the live catalogue without
+ * loosening identity: the credit check looks at every name the song carries
+ * (the catalogue often lists the lyricist first, where the video credits the
+ * singer) plus the film/album (video names carry it: "… - Bhediya (Video)"),
+ * and an exact-title candidate beats a contains-title one, so "Kesariya"
+ * gets "Kesariya (From 'Brahmastra')" over "Kesariya (Remix) …".
  */
 export async function findVideoForSong(song: Song): Promise<Video | null> {
-  const artist = song.artists[0]?.name ?? song.subtitle.split(',')[0] ?? '';
   // Verified against the live API: the video search matches TITLES — adding
   // the artist to the query returns nothing. Query the cleaned title alone;
   // identity is enforced by the gates below, not by the query.
   const q =
     song.title
       .replace(/\s*\((?:from|from the)\b[^)]*\)/gi, ' ')
+      .replace(/\s*\(feat\.?[^)]*\)/gi, ' ')
       .replace(/\s*[-\u2013\u2014]\s*(male|female|reprise|remix|version[^,]*)$/i, '')
       .replace(/\s+/g, ' ')
       .trim() || song.title;
@@ -170,15 +212,21 @@ export async function findVideoForSong(song: Song): Promise<Video | null> {
   if (byId) return byId;
   const want = normTitle(song.title);
   if (!want) return null;
-  const artistNorm = normTitle(artist);
+  const tokens = songTokens(song);
+  const credited = (v: Video) => {
+    if (tokens.length === 0) return true;
+    const hay = ' ' + normTitle(v.subtitle + ' ' + v.title) + ' ';
+    return tokens.some((t) => hay.includes(' ' + t + ' '));
+  };
+  let contains: Video | null = null;
   for (const v of list) {
     const got = normTitle(v.title);
     if (!got) continue;
-    const titleOk = got === want || got.includes(want) || want.includes(got);
-    if (!titleOk) continue;
-    if (!artistNorm) return v;
-    const shared = artistNorm.split(' ').some((t) => t.length > 1 && normTitle(v.subtitle).includes(t));
-    if (shared) return v;
+    if (got === want || normVideoTitle(v.title) === want) {
+      if (credited(v)) return v;
+      continue;
+    }
+    if (!contains && (got.includes(want) || want.includes(got)) && credited(v)) contains = v;
   }
-  return null;
+  return contains;
 }

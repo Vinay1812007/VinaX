@@ -12,6 +12,27 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.8.2': {
+    title: 'Video, the JioSaavn way',
+    changes: [
+      {
+        type: 'new',
+        text: 'Tap to hide the controls. When a song has a video, one tap on it clears everything away \u2014 just the clip, a thin progress line and the song name. Tap again to bring the controls back; double-tap seek and favourite still work.',
+      },
+      {
+        type: 'improved',
+        text: 'The video canvas on phones now plays edge to edge at its true shape, pixel-sharp, in the artwork\u2019s place \u2014 no more blurry, zoomed-in crop \u2014 and full-screen mode centres it on black. On desktop the clip stays the full-bleed backdrop behind the player.',
+      },
+      {
+        type: 'improved',
+        text: 'More songs find their video: the match now checks every credited name and the film, prefers the exact title over a remix, and never accepts a different song with the same name.',
+      },
+      {
+        type: 'new',
+        text: 'Android updates now offer Update now or Update later. Later keeps the reminder on Home and asks again tomorrow; Settings \u2192 Check for updates always shows it.',
+      },
+    ],
+  },
   '5.8.1': {
     title: 'A calmer, more formal VinaX',
     changes: [

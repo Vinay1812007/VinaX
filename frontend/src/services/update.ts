@@ -20,7 +20,7 @@ export const APK_URLS = ['https://www.sirimillavinay.online/api/apk'];
  * display name can change freely (e.g. reset to "1.1") without breaking
  * detection. Returns null on web or when no newer build exists.
  */
-export async function checkForUpdate(): Promise<UpdateInfo | null> {
+export async function checkForUpdate(opts: { manual?: boolean } = {}): Promise<UpdateInfo | null> {
   if (!isNativePlatform()) return null;
   try {
     const [{ CapacitorHttp }, { App }] = await Promise.all([
@@ -59,6 +59,10 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
       try { localStorage.removeItem(KEYS.updateAttempt); } catch { /* ignore */ }
       return null;
     }
+
+    // "Update later" (v5.8.2): the automatic launch/resume check respects the
+    // snooze; a manual "Check for updates" tap always shows what's there.
+    if (!opts.manual && isUpdateSnoozed(latestBuild)) return null;
 
     return {
       latest: data.version ?? String(latestBuild),
@@ -183,4 +187,37 @@ export async function downloadAndInstall(
   // Handed off to the Android installer — remember it. If the dialog is back
   // for this same build later, the install didn't take (see installLikelyBlocked).
   if (expectedBuild) markUpdateAttempt(expectedBuild);
+}
+
+// ---------------------------------------------------------------------------
+// "Update later" (v5.8.2). The gate used to be mandatory — a new build meant
+// a modal you could not get past. Now it offers Update now / Update later:
+// later puts the gate down for this build for a day (the Home banner keeps
+// the reminder visible), a NEWER build shows the dialog again immediately,
+// and a manual check from Settings always ignores the snooze.
+// ---------------------------------------------------------------------------
+export const UPDATE_SNOOZE_MS = 24 * 60 * 60_000;
+
+interface UpdateSnooze {
+  build: number;
+  until: number;
+}
+
+export function snoozeUpdate(build: number, now = Date.now()): void {
+  try {
+    localStorage.setItem(KEYS.updateSnooze, JSON.stringify({ build, until: now + UPDATE_SNOOZE_MS } satisfies UpdateSnooze));
+  } catch {
+    /* storage blocked — the dialog just comes back next launch */
+  }
+}
+
+export function isUpdateSnoozed(build: number, now = Date.now()): boolean {
+  try {
+    const raw = localStorage.getItem(KEYS.updateSnooze);
+    if (!raw) return false;
+    const s = JSON.parse(raw) as Partial<UpdateSnooze>;
+    return s.build === build && typeof s.until === 'number' && now < s.until;
+  } catch {
+    return false;
+  }
 }
