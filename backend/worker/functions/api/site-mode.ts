@@ -1,6 +1,7 @@
 /** Current site mode — 'live' (default) or 'maintenance' with a note.
  *  Set from the admin console; the client checks this every minute. */
 import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { maintenanceActive, readConfig } from '../_lib/clientConfig';
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -19,6 +20,10 @@ export const onRequestGet = async (context: { env: SupabaseEnv }): Promise<Respo
     'vinax_events',
     'type=eq.site-mode&select=message&order=created_at.desc&limit=1',
   ).catch(() => []);
+  // v5.15.0 — a scheduled window (Admin → Maintenance Scheduler) flips the
+  // site to maintenance on its own and back again, no one awake required.
+  const win = maintenanceActive((await readConfig(env, ['maintenance-window']))['maintenance-window']);
+  if (win) return new Response(JSON.stringify({ mode: 'maintenance', note: win.note, scheduled: true }), { headers });
   const raw = rows[0]?.message ?? 'live|';
   const i = raw.indexOf('|');
   const mode = (i >= 0 ? raw.slice(0, i) : raw) === 'maintenance' ? 'maintenance' : 'live';

@@ -427,13 +427,16 @@
           <button class="nav-group-label" data-group="Dashboards" aria-expanded="true">Dashboards <span class="ng-n">2</span><span class="ng-chev">▾</span></button>
           <button data-sec="overview" data-cat="Dashboards" class="active">Overview</button>
           <button data-sec="realtime" data-cat="Dashboards">Real-Time</button>
-          <button class="nav-group-label" data-group="Audience" aria-expanded="true">Audience <span class="ng-n">5</span><span class="ng-chev">▾</span></button>
+          <button class="nav-group-label" data-group="Audience" aria-expanded="true">Audience <span class="ng-n">8</span><span class="ng-chev">▾</span></button>
           <button data-sec="live" data-cat="Audience">Live Listening</button>
           <button data-sec="activity" data-cat="Audience">Activity Feed</button>
           <button data-sec="engagement" data-cat="Audience">Engagement</button>
           <button data-sec="users" data-cat="Audience">User Management</button>
           <button data-sec="retention" data-cat="Audience">Retention Cohorts</button>
-          <button class="nav-group-label" data-group="Catalog" aria-expanded="true">Catalog <span class="ng-n">7</span><span class="ng-chev">▾</span></button>
+          <button data-sec="usage" data-cat="Audience">Feature Usage</button>
+          <button data-sec="heatmap" data-cat="Audience">Listening Heatmap</button>
+          <button data-sec="funnel" data-cat="Audience">Onboarding Funnel</button>
+          <button class="nav-group-label" data-group="Catalog" aria-expanded="true">Catalog <span class="ng-n">13</span><span class="ng-chev">▾</span></button>
           <button data-sec="songs" data-cat="Catalog">Song Management</button>
           <button data-sec="playlists" data-cat="Catalog">Playlist Management</button>
           <button data-sec="homescreen" data-cat="Catalog">Home Screen</button>
@@ -441,9 +444,19 @@
           <button data-sec="content" data-cat="Catalog">Content Control</button>
           <button data-sec="catalog" data-cat="Catalog">Catalog Lookup</button>
           <button data-sec="trendpins" data-cat="Catalog">Trending Pins</button>
-          <button class="nav-group-label" data-group="Promotion" aria-expanded="true">Promotion <span class="ng-n">3</span><span class="ng-chev">▾</span></button>
+          <button data-sec="songstats" data-cat="Catalog">Song Drilldown</button>
+          <button data-sec="skips" data-cat="Catalog">Skip Report</button>
+          <button data-sec="synonyms" data-cat="Catalog">Search Synonyms</button>
+          <button data-sec="sources" data-cat="Catalog">Catalog Sources</button>
+          <button data-sec="langorder" data-cat="Catalog">Language Order</button>
+          <button data-sec="blocklistio" data-cat="Catalog">Blocklist Import/Export</button>
+          <button class="nav-group-label" data-group="Promotion" aria-expanded="true">Promotion <span class="ng-n">7</span><span class="ng-chev">▾</span></button>
           <button data-sec="banners" data-cat="Promotion">Banners &amp; Offers</button>
           <button data-sec="festivals" data-cat="Promotion">Festival Themes</button>
+          <button data-sec="broadcast" data-cat="Promotion">Broadcast Message</button>
+          <button data-sec="greeting" data-cat="Promotion">Home Greeting</button>
+          <button data-sec="faq" data-cat="Promotion">Help Center FAQ</button>
+          <button data-sec="announce" data-cat="Promotion">Announcement Composer</button>
           <button data-sec="notify2" data-cat="Promotion">Notifications</button>
           <button class="nav-group-label" data-group="Analytics" aria-expanded="true">Analytics <span class="ng-n">7</span><span class="ng-chev">▾</span></button>
           <button data-sec="music" data-cat="Analytics">Music Analytics</button>
@@ -453,11 +466,14 @@
           <button data-sec="insights" data-cat="Analytics">Insights</button>
           <button data-sec="experiments" data-cat="Analytics">A/B Experiments</button>
           <button data-sec="seo" data-cat="Analytics">SEO Corpus</button>
-          <button class="nav-group-label" data-group="AI &amp; Engines" aria-expanded="true">AI &amp; Engines <span class="ng-n">3</span><span class="ng-chev">▾</span></button>
+          <button class="nav-group-label" data-group="AI &amp; Engines" aria-expanded="true">AI &amp; Engines <span class="ng-n">6</span><span class="ng-chev">▾</span></button>
           <button data-sec="ai" data-cat="AI &amp; Engines">AI Monitoring</button>
           <button data-sec="ailab" data-cat="AI &amp; Engines">API Monitoring</button>
           <button data-sec="engineprobe" data-cat="AI &amp; Engines">Engine Probe</button>
-          <button class="nav-group-label" data-group="Operations" aria-expanded="true">Operations <span class="ng-n">9</span><span class="ng-chev">▾</span></button>
+          <button data-sec="aistarters" data-cat="AI &amp; Engines">AI Starter Prompts</button>
+          <button data-sec="aiquick" data-cat="AI &amp; Engines">AI Quick Actions</button>
+          <button data-sec="airules" data-cat="AI &amp; Engines">AI House Rules</button>
+          <button class="nav-group-label" data-group="Operations" aria-expanded="true">Operations <span class="ng-n">16</span><span class="ng-chev">▾</span></button>
           <button data-sec="technical" data-cat="Operations">Technical Monitoring</button>
           <button data-sec="feedback" data-cat="Operations">Feedback &amp; Bugs</button>
           <button data-sec="rooms" data-cat="Operations">Live Rooms</button>
@@ -467,11 +483,19 @@
           <button data-sec="tables" data-cat="Operations">Database Overview</button>
           <button data-sec="audit" data-cat="Operations">Audit Trail</button>
           <button data-sec="statusnote" data-cat="Operations">Status Note</button>
-          <button class="nav-group-label" data-group="Settings" aria-expanded="true">Settings <span class="ng-n">4</span><span class="ng-chev">▾</span></button>
+          <button data-sec="cron" data-cat="Operations">Cron Health</button>
+          <button data-sec="statushist" data-cat="Operations">Status History</button>
+          <button data-sec="envcheck" data-cat="Operations">Environment Checklist</button>
+          <button data-sec="query" data-cat="Operations">Query Console</button>
+          <button data-sec="relnotes" data-cat="Operations">Release Notes</button>
+          <button data-sec="maintwin" data-cat="Operations">Maintenance Scheduler</button>
+          <button data-sec="minver" data-cat="Operations">Minimum App Version</button>
+          <button class="nav-group-label" data-group="Settings" aria-expanded="true">Settings <span class="ng-n">5</span><span class="ng-chev">▾</span></button>
           <button data-sec="config" data-cat="Settings">App Configuration</button>
           <button data-sec="flags" data-cat="Settings">Feature Flags</button>
           <button data-sec="runbook" data-cat="Settings">Runbook</button>
           <button data-sec="backup" data-cat="Settings">Config Backup</button>
+          <button data-sec="pins" data-cat="Settings">Pinned Tools</button>
         </nav>
         <main>
           <div class="toolbar"><div class="tt"><span id="secCrumb" class="crumb"></span><h2 id="secTitle">Overview</h2></div><div class="spacer"></div><span class="updated" id="updated">—</span></div>

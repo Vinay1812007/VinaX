@@ -12,6 +12,16 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.15.0': {
+    title: 'Twenty-four more admin tools',
+    changes: [
+      { type: 'new', text: 'Admin console — 24 new tools: Feature Usage, Listening Heatmap, Onboarding Funnel, Song Drilldown, Skip Report, Search Synonyms, Catalog Sources, Language Order, Blocklist Import/Export, AI Starter Prompts, AI Quick Actions, AI House Rules, Cron Health, Status History, Environment Checklist, Query Console, Release Notes, Maintenance Scheduler, Minimum App Version, Broadcast Message, Home Greeting, Help Center FAQ, Announcement Composer and Pinned Tools.' },
+      { type: 'new', text: 'The team can now publish search synonyms (so “arr” finds A. R. Rahman), switch catalogue sources on or off, set the Home language order, add starter prompts and quick actions to VinaX AI, and put extra questions at the top of Help — all live within a minute, no update needed.' },
+      { type: 'new', text: 'Broadcast message: a one-time note every listener sees on their next open, with an optional in-app link. Home greeting: a custom line under the Home headline for a chosen period.' },
+      { type: 'improved', text: 'Maintenance can be scheduled ahead of time and the site flips itself to maintenance and back. A minimum app version can require an update for old Android builds.' },
+      { type: 'improved', text: 'VinaX AI follows house notes from the team when relevant, and its welcome chips and starter prompts can change without a release.' },
+    ],
+  },
   '5.14.0': {
     title: '43 festivals, 43 looks',
     changes: [

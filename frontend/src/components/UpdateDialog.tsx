@@ -28,7 +28,7 @@ export function UpdateDialog() {
   const [exported, setExported] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const later = () => {
-    if (!info) return;
+    if (!info || info.mandatory) return;
     snoozeUpdate(info.latestBuild);
     useUpdateStore.getState().setInfo(null);
   };
@@ -130,13 +130,17 @@ export function UpdateDialog() {
                     ? 'Retry update'
                     : 'Update now'}
             </button>
-            <button
-              onClick={later}
-              disabled={busy}
-              className="w-full py-3 mt-2 rounded-full btn-secondary text-sm font-bold"
-            >
-              Update later
-            </button>
+            {info.mandatory ? (
+              <p className="mt-2 text-center text-[11px] font-semibold text-ink-300">This version is no longer supported — update to keep listening.</p>
+            ) : (
+              <button
+                onClick={later}
+                disabled={busy}
+                className="w-full py-3 mt-2 rounded-full btn-secondary text-sm font-bold"
+              >
+                Update later
+              </button>
+            )}
             {/* The data-export path stays inside the dialog: it is the first
                 thing to do before any install, so it must be one tap away. */}
             <button

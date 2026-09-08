@@ -2633,12 +2633,383 @@
     }).catch(function () { if (active === 'statusnote') showFail(); });
   }
 
-  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note' };
-  var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true };
+  // ==========================================================================
+  // v5.15.0 — 24 more console tools. Config-backed editors talk to
+  // /api/admin/appconfig (one key each; listeners read them through the
+  // cached /api/appconfig?key=client bundle within about a minute).
+  // ==========================================================================
+  var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function wwwOrigin() { return location.origin.replace('admin.', 'www.'); }
+  function stampOut(id, text, isErr) { var o = $(id); if (o) { o.textContent = text; o.style.color = isErr ? 'var(--danger)' : ''; } }
+  // Small config editor scaffold: loads a key, renders a form via `form(value)`,
+  // wires `#<id>-save` to `read()` → publish. Keeps every editor ~20 lines.
+  function cfgEditor(opts) {
+    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    cfgGet(opts.key).then(function (d) {
+      if (active !== opts.sec) return;
+      var value = d && d.configured ? d.value : null;
+      $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">' + esc(opts.title) + '</h3><p class="muted" style="margin-top:-4px">' + opts.help + '</p>' + opts.form(value) +
+        '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px"><button id="' + opts.sec + '-save">' + esc(opts.saveLabel || 'Publish') + '</button>' +
+        (opts.clearable ? '<button id="' + opts.sec + '-clear" class="ghost">Clear</button>' : '') +
+        '<span class="muted" id="' + opts.sec + '-out" style="font-size:12px">' + (d && d.updated_at ? 'Last published ' + ago(d.updated_at) : 'Never published') + '</span></div></div>' + (opts.after ? opts.after(value) : '');
+      if (opts.wire) opts.wire(value);
+      $(opts.sec + '-save').addEventListener('click', function () {
+        var v;
+        try { v = opts.read(); } catch (e) { stampOut(opts.sec + '-out', String(e && e.message || e), true); return; }
+        cfgSet(opts.key, v).then(function (r) {
+          if (r && r.ok) { stampOut(opts.sec + '-out', 'Published ✓ · live for listeners within ~1 min'); if (opts.onSaved) opts.onSaved(v); }
+          else stampOut(opts.sec + '-out', 'Publish failed' + (r && r.error ? ' — ' + r.error : ''), true);
+        }).catch(function () { stampOut(opts.sec + '-out', 'Publish failed — network', true); });
+      });
+      var c = $(opts.sec + '-clear');
+      if (c) c.addEventListener('click', function () {
+        vxConfirm('Clear this setting for every listener?', { title: opts.title, okText: 'Clear' }).then(function (ok) {
+          if (!ok) return;
+          cfgSet(opts.key, opts.empty === undefined ? null : opts.empty).then(function () { cfgEditor(opts); });
+        });
+      });
+    }).catch(function () { if (active === opts.sec) showFail(); });
+  }
+  function inp(id, value, ph, extra) { return '<input id="' + id + '" class="inp" value="' + esc(value == null ? '' : String(value)) + '" placeholder="' + esc(ph || '') + '" ' + (extra || '') + ' />'; }
+  function lbl(text, control) { return '<label style="display:block;margin:10px 0 4px;font-size:12px;color:var(--text-2)">' + esc(text) + '</label>' + control; }
+  function isoLocal(v) { if (!v) return ''; var d = new Date(v); if (isNaN(d.getTime())) return ''; var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  function fromLocal(v) { if (!v) return ''; var d = new Date(v); return isNaN(d.getTime()) ? '' : d.toISOString(); }
+
+  // ---- Audience -----------------------------------------------------------
+  // 1. Feature usage — which parts of the app people actually touch.
+  function loadUsage() {
+    apiMemo('/api/admin/usage?days=' + rangeDays).then(function (d) {
+      if (!d || active !== 'usage') return;
+      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      exportRows = d.byType; exportName = 'feature-usage'; $('csv').hidden = false;
+      var total = d.byType.reduce(function (a, x) { return a + x.n; }, 0) || 1;
+      $('view').innerHTML =
+        '<div class="cards">' + card(d.sampled.toLocaleString(), 'Events sampled · ' + d.days + ' d') + card(d.byType.length, 'Event kinds') + card(d.byPlatform[0] ? d.byPlatform[0].platform : '—', 'Top platform') + '</div>' +
+        '<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap"><div class="card" style="flex:2;min-width:320px"><h3 style="margin-top:0">What listeners do</h3><table><thead><tr><th>Event</th><th>Count</th><th>Share</th><th>Devices</th></tr></thead><tbody>' +
+        d.byType.map(function (t) { return '<tr><td><code>' + esc(t.type) + '</code></td><td>' + t.n.toLocaleString() + '</td>' + pctCell(t.n / total) + '<td>' + t.devices.toLocaleString() + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+        '<div class="card" style="flex:1;min-width:240px"><h3 style="margin-top:0">By platform</h3>' + bars(d.byPlatform, function (x) { return esc(x.platform); }, function (x) { return x.n; }) + '</div></div>';
+    }).catch(function () { if (active === 'usage') showFail(); });
+  }
+  // 2. Listening heatmap — IST weekday × hour.
+  function loadHeatmap() {
+    apiMemo('/api/admin/usage?days=' + rangeDays).then(function (d) {
+      if (!d || active !== 'heatmap') return;
+      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      var max = 1; d.heatmap.forEach(function (r) { r.forEach(function (n) { if (n > max) max = n; }); });
+      var grid = '<div style="overflow:auto"><table style="border-collapse:separate;border-spacing:2px"><thead><tr><th></th>' + Array.from({ length: 24 }, function (_, h) { return '<th class="muted" style="font-size:10px;font-weight:600;padding:0 2px">' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        d.heatmap.map(function (row, day) { return '<tr><td class="muted" style="font-size:11px;padding-right:6px">' + DAY_NAMES[day] + '</td>' + row.map(function (n, h) { var a = n / max; return '<td title="' + DAY_NAMES[day] + ' ' + h + ':00 · ' + n + ' plays" style="width:22px;height:20px;border-radius:4px;background:rgba(59,120,240,' + (0.06 + a * 0.9).toFixed(2) + ')"></td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+      $('view').innerHTML =
+        '<div class="cards">' + card(d.peak ? DAY_NAMES[d.peak.day] + ' ' + d.peak.hour + ':00' : '—', 'Busiest hour (IST)') + card(d.peak ? d.peak.n : 0, 'Plays in that hour') + card(d.days + ' d', 'Window') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">When people listen <span class="muted">· plays + heartbeats, IST</span></h3>' + grid + '<p class="muted" style="font-size:11px;margin:10px 0 0">Darker = more listening. Use it to time pushes, releases and maintenance windows.</p></div>';
+    }).catch(function () { if (active === 'heatmap') showFail(); });
+  }
+  // 3. Onboarding funnel.
+  function loadFunnel() {
+    apiMemo('/api/admin/funnel?days=' + rangeDays).then(function (d) {
+      if (!d || active !== 'funnel') return;
+      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      exportRows = d.steps; exportName = 'funnel'; $('csv').hidden = false;
+      $('view').innerHTML =
+        '<div class="cards">' + card(d.steps[0] ? d.steps[0].devices.toLocaleString() : 0, 'Devices that opened the app') + card((d.steps[2] ? d.steps[2].pct : 0) + '%', 'Went on to play') + card((d.steps[3] ? d.steps[3].pct : 0) + '%', 'Finished a song') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">Funnel <span class="muted">· distinct devices, last ' + d.days + ' d, sample of ' + d.sampled.toLocaleString() + ' events</span></h3>' +
+        d.steps.map(function (s, i) { var prev = i ? d.steps[i - 1].devices : s.devices; var drop = prev ? Math.round((1 - s.devices / prev) * 100) : 0; return '<div class="brow"><div class="blabel">' + esc(s.label) + '</div><div class="btrack"><div class="bfill" style="width:' + s.pct + '%"></div></div><div class="bval">' + s.devices.toLocaleString() + ' · ' + s.pct + '%' + (i ? ' <span class="muted">(−' + drop + '%)</span>' : '') + '</div></div>'; }).join('') + '</div>';
+    }).catch(function () { if (active === 'funnel') showFail(); });
+  }
+
+  // ---- Catalog ------------------------------------------------------------
+  // 4. Song drilldown.
+  function renderSongStatsSection() {
+    $('view').innerHTML = '<div class="card"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Song drilldown</h3><input id="ss-q" class="inp" placeholder="Song id or title…" style="min-width:260px" /><button id="ss-go">Look up</button><span class="muted" style="font-size:12px">plays, skips, listeners, countries · last ' + rangeDays + ' d</span></div></div><div id="ss-out"></div>';
+    function run() {
+      var q = $('ss-q').value.trim(); if (!q) return;
+      $('ss-out').innerHTML = '<div class="empty">Looking up…</div>';
+      api('/api/admin/songstats?q=' + encodeURIComponent(q) + '&days=' + rangeDays).then(function (d) {
+        if (!d || active !== 'songstats') return;
+        if (!d.match) { $('ss-out').innerHTML = '<div class="empty">No plays for that in the last ' + rangeDays + ' days.</div>'; return; }
+        var m = d.match;
+        exportRows = d.byDay; exportName = 'song-' + m.id; $('csv').hidden = false;
+        $('ss-out').innerHTML =
+          '<div class="card"><div class="row" style="gap:12px;align-items:center">' + (m.image ? '<img class="thumb-sm" src="' + esc(m.image) + '" alt="" />' : '') + '<div><b>' + esc(m.title) + '</b><div class="muted">' + esc(m.artist) + ' · <code>' + esc(m.id) + '</code></div></div><div class="spacer"></div>' + (d.candidates.length ? '<span class="muted" style="font-size:12px">Also matched: ' + d.candidates.map(function (c) { return '<a href="#" data-ss="' + esc(c.id) + '">' + esc(c.title) + '</a>'; }).join(', ') + '</span>' : '') + '</div></div>' +
+          '<div class="cards">' + card(d.totals.plays, 'Plays') + card(d.totals.listeners, 'Listeners') + card(d.skipRate == null ? '—' : d.skipRate + '%', 'Skip rate') + card(d.totals.completes, 'Completions') + card(d.totals.favorites, 'Likes') + '</div>' +
+          '<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap"><div class="card" style="flex:2;min-width:300px"><h3 style="margin-top:0">Plays per day</h3>' + dayChart(d.byDay, 'plays') + '</div>' +
+          '<div class="card" style="flex:1;min-width:220px"><h3 style="margin-top:0">Countries</h3>' + bars(d.countries, function (x) { return esc(x.country); }, function (x) { return x.n; }) + '</div>' +
+          '<div class="card" style="flex:1;min-width:220px"><h3 style="margin-top:0">Platforms</h3>' + bars(d.platforms, function (x) { return esc(x.platform); }, function (x) { return x.n; }) + '</div></div>';
+        Array.prototype.forEach.call(document.querySelectorAll('[data-ss]'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); $('ss-q').value = a.getAttribute('data-ss'); run(); }); });
+      }).catch(function () { $('ss-out').innerHTML = '<div class="empty">Lookup failed.</div>'; });
+    }
+    $('ss-go').addEventListener('click', run);
+    $('ss-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
+  }
+  // 5. Skip report.
+  function loadSkips() {
+    apiMemo('/api/admin/skips?days=' + rangeDays).then(function (d) {
+      if (!d || active !== 'skips') return;
+      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      exportRows = d.items; exportName = 'skips'; $('csv').hidden = !d.items.length;
+      $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Most skipped <span class="muted">· songs with ≥' + d.min + ' plays in ' + d.days + ' d, ranked by skip rate</span></h3><table><thead><tr><th></th><th>Song</th><th>Plays</th><th>Skips</th><th>Rate</th><th></th></tr></thead><tbody>' +
+        (d.items.length ? d.items.map(function (s) { return '<tr><td>' + (s.image ? '<img class="thumb-sm" src="' + esc(s.image) + '" alt="" />' : '') + '</td><td><b>' + esc(s.title) + '</b><div class="muted">' + esc(s.artist) + '</div></td><td>' + s.plays + '</td><td>' + s.skips + '</td>' + pctCell(s.rate) + '<td><button class="ghost" data-block="' + esc(s.id) + '" data-title="' + esc(s.title) + '">Block</button> <button class="ghost" data-ss2="' + esc(s.id) + '">Drilldown</button></td></tr>'; }).join('') : '<tr><td colspan="6" class="empty">Nothing skipped enough to report.</td></tr>') + '</tbody></table></div>';
+      Array.prototype.forEach.call(document.querySelectorAll('[data-block]'), function (b) { b.addEventListener('click', function () { doBlock(b.getAttribute('data-block'), b.getAttribute('data-title')); }); });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-ss2]'), function (b) { b.addEventListener('click', function () { setSection('songstats'); setTimeout(function () { var q = $('ss-q'); if (q) { q.value = b.getAttribute('data-ss2'); $('ss-go').click(); } }, 50); }); });
+    }).catch(function () { if (active === 'skips') showFail(); });
+  }
+  // 6. Search synonyms.
+  function renderSynonymsSection() {
+    cfgEditor({
+      sec: 'synonyms', key: 'search-synonyms', title: 'Search synonyms', clearable: true, empty: {},
+      help: 'One per line as <code>typed = rewrite</code>. A query that equals the left side (or contains it as a whole word) is rewritten before it reaches the catalogue — Search, AI music commands and radio all benefit. Example: <code>arr = A. R. Rahman</code>.',
+      form: function (v) { var lines = v && typeof v === 'object' ? Object.keys(v).map(function (k) { return k + ' = ' + v[k]; }) : []; return '<textarea id="syn-text" class="inp" rows="12" style="width:100%;font-family:ui-monospace,monospace">' + esc(lines.join('\n')) + '</textarea>'; },
+      read: function () { var out = {}; $('syn-text').value.split('\n').forEach(function (l) { var i = l.indexOf('='); if (i < 1) return; var k = l.slice(0, i).trim().toLowerCase(), v = l.slice(i + 1).trim(); if (k && v) out[k] = v; }); if (Object.keys(out).length > 200) throw new Error('Max 200 synonyms'); return out; },
+    });
+  }
+  // 7. Catalog sources.
+  function renderSourcesSection() {
+    var SOURCES = [{ id: 'vinax-render', label: 'VinaX Music API (Render)' }, { id: 'local-catalog', label: 'VinaX Catalog (/api/cat, web only)' }, { id: 'sirimilla', label: 'sirimillavinay.online' }];
+    cfgEditor({
+      sec: 'sources', key: 'catalog-sources', title: 'Catalog sources', saveLabel: 'Publish switches',
+      help: 'Switch a catalogue source off for every listener (for example while it is down or rate-limited). The app never runs with zero sources — if all are off, all stay on.',
+      form: function (v) { return SOURCES.map(function (s) { var on = !(v && v[s.id] === false); return '<div class="row" style="align-items:center;gap:10px;margin:8px 0"><label class="switch"><input type="checkbox" data-src="' + s.id + '"' + (on ? ' checked' : '') + ' /><span class="track' + (on ? ' on' : '') + '"><span class="knob"></span></span></label><b>' + esc(s.label) + '</b><code class="muted">' + s.id + '</code></div>'; }).join(''); },
+      wire: function () { Array.prototype.forEach.call(document.querySelectorAll('[data-src]'), function (c) { c.addEventListener('change', function () { c.nextElementSibling.classList.toggle('on', c.checked); }); }); },
+      read: function () { var out = {}; Array.prototype.forEach.call(document.querySelectorAll('[data-src]'), function (c) { out[c.getAttribute('data-src')] = c.checked; }); return out; },
+    });
+  }
+  // 8. Language order.
+  function renderLanguageOrderSection() {
+    var LANGS = ['telugu', 'hindi', 'tamil', 'english', 'punjabi', 'kannada', 'malayalam', 'bengali', 'marathi', 'bhojpuri', 'gujarati', 'urdu'];
+    cfgEditor({
+      sec: 'langorder', key: 'language-order', title: 'Language order', clearable: true, empty: [],
+      help: 'Default order of the language rail on Home for listeners who have not pinned languages. Drag is not needed — type the order, one language id per line, top first.',
+      form: function (v) { return '<textarea id="lo-text" class="inp" rows="8" style="width:100%;font-family:ui-monospace,monospace">' + esc((Array.isArray(v) ? v : []).join('\n')) + '</textarea><p class="muted" style="font-size:11px">Known ids: ' + LANGS.join(', ') + '</p>'; },
+      read: function () { var out = []; $('lo-text').value.split('\n').forEach(function (l) { var id = l.trim().toLowerCase(); if (id && LANGS.indexOf(id) >= 0 && out.indexOf(id) < 0) out.push(id); }); return out; },
+    });
+  }
+  // 9. Blocklist import / export.
+  function renderBlocklistIoSection() {
+    $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Blocklist import / export</h3><p class="muted">Export the current blocklist as JSON, or import one (<code>[{"songId":"…","title":"…"}]</code>). Import adds; it never removes existing blocks.</p>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button id="bl-export">Download blocklist</button><label class="ghost" style="cursor:pointer;display:inline-flex;align-items:center;padding:6px 12px;border:1px solid var(--border);border-radius:8px">Import JSON<input id="bl-file" type="file" accept="application/json" hidden /></label><span class="muted" id="bl-out" style="font-size:12px"></span></div></div>';
+    $('bl-export').addEventListener('click', function () {
+      api('/api/admin/content').then(function (d) {
+        var list = (d && (d.blocked || d.blocklist || d.items)) || [];
+        var blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), blocked: list }, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'vinax-blocklist-' + new Date().toISOString().slice(0, 10) + '.json'; a.click();
+        stampOut('bl-out', list.length + ' entries exported');
+      }).catch(function () { stampOut('bl-out', 'Export failed', true); });
+    });
+    $('bl-file').addEventListener('change', function () {
+      var f = this.files && this.files[0]; if (!f) return;
+      f.text().then(function (t) {
+        var j = JSON.parse(t); var list = Array.isArray(j) ? j : (j.blocked || []);
+        var items = list.map(function (x) { return { id: x.songId || x.song_id || x.id, title: x.title || x.song_title || '' }; }).filter(function (x) { return x.id; });
+        if (!items.length) { stampOut('bl-out', 'No entries found in that file', true); return; }
+        vxConfirm('Block ' + items.length + ' songs for every listener?', { title: 'Import blocklist', okText: 'Block all' }).then(function (ok) {
+          if (!ok) return;
+          var done = 0, fail = 0;
+          (function next(i) {
+            if (i >= items.length) { stampOut('bl-out', done + ' blocked' + (fail ? ', ' + fail + ' failed' : '')); return; }
+            postApi('/api/admin/content', { action: 'block', songId: items[i].id, songTitle: items[i].title, reason: 'blocklist import' }).then(function (r) { if (r && r.ok) done++; else fail++; next(i + 1); }).catch(function () { fail++; next(i + 1); });
+          })(0);
+        });
+      }).catch(function () { stampOut('bl-out', 'Not valid JSON', true); });
+    });
+  }
+
+  // ---- AI & Engines ---------------------------------------------------------
+  // 10. AI starter prompts.
+  function renderAiStartersSection() {
+    cfgEditor({
+      sec: 'aistarters', key: 'ai-starters', title: 'AI starter prompts', clearable: true, empty: [],
+      help: 'Extra starter prompts VinaX AI draws from on a new chat (one per line, max 24). Use <code>{lang}</code> for the listener’s first language — e.g. <code>Suggest 5 {lang} songs for a road trip</code>.',
+      form: function (v) { return '<textarea id="st-text" class="inp" rows="10" style="width:100%">' + esc((Array.isArray(v) ? v : []).join('\n')) + '</textarea>'; },
+      read: function () { return $('st-text').value.split('\n').map(function (l) { return l.trim().slice(0, 160); }).filter(Boolean).slice(0, 24); },
+    });
+  }
+  // 11. AI quick actions.
+  function renderAiQuickSection() {
+    cfgEditor({
+      sec: 'aiquick', key: 'ai-quick', title: 'AI quick actions', clearable: true, empty: [],
+      help: 'The chips on VinaX AI’s welcome screen (max 8). One per line as <code>emoji | Label | Prompt text | mode</code>; mode is optional (auto, muse, swift, sage, win, translator). Leave empty to keep the built-in eight.',
+      form: function (v) { var lines = (Array.isArray(v) ? v : []).map(function (q) { return [q.icon || '', q.label || '', q.prompt || '', q.mode || ''].join(' | '); }); return '<textarea id="qa-text" class="inp" rows="9" style="width:100%">' + esc(lines.join('\n')) + '</textarea>'; },
+      read: function () { return $('qa-text').value.split('\n').map(function (l) { var p = l.split('|').map(function (x) { return x.trim(); }); if (p.length < 3 || !p[1] || !p[2]) return null; var o = { icon: p[0].slice(0, 4), label: p[1].slice(0, 20), prompt: p[2].slice(0, 200) + ' ' }; if (p[3]) o.mode = p[3].slice(0, 20); return o; }).filter(Boolean).slice(0, 8); },
+    });
+  }
+  // 12. AI house rules.
+  function renderAiRulesSection() {
+    cfgEditor({
+      sec: 'airules', key: 'ai-rules', title: 'AI house rules', clearable: true, empty: '',
+      help: 'Plain-text notes appended to the assistant’s system prompt for every chat (max 1200 characters): a promo to mention when relevant, a correction, a tone note. Never put secrets here. Skipped for the Search expert and translator lanes.',
+      form: function (v) { return '<textarea id="hr-text" class="inp" rows="8" style="width:100%" maxlength="1200">' + esc(typeof v === 'string' ? v : '') + '</textarea>'; },
+      read: function () { return $('hr-text').value.trim().slice(0, 1200); },
+    });
+  }
+
+  // ---- Operations -----------------------------------------------------------
+  // 13. Cron health.
+  function loadCron() {
+    apiMemo('/api/admin/cron').then(function (d) {
+      if (!d || active !== 'cron') return;
+      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      var bad = d.jobs.filter(function (j) { return j.ok === false; }).length;
+      $('view').innerHTML =
+        '<div class="cards">' + card(d.jobs.length, 'Scheduled jobs') + card(bad, 'Overdue') + card(ago(d.checkedAt), 'Checked') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">Jobs <span class="muted">· each leaves a footprint; overdue = footprint older than its schedule allows</span></h3><table><thead><tr><th>Job</th><th>Schedule</th><th>Last footprint</th><th>Status</th><th>Footprint</th></tr></thead><tbody>' +
+        d.jobs.map(function (j) { return '<tr><td><b>' + esc(j.label) + '</b><div class="muted"><code>' + esc(j.id) + '</code></div></td><td class="muted">' + esc(j.schedule) + '</td><td>' + (j.lastAt ? ago(j.lastAt) : '<span class="muted">never</span>') + '</td><td>' + (j.ok === null ? '<span class="pill">unreadable</span>' : okPill(j.ok, j.ok ? 'on time' : 'overdue')) + '</td><td class="muted">' + esc(j.note) + '</td></tr>'; }).join('') + '</tbody></table>' +
+        '<p class="muted" style="font-size:11px;margin:10px 0 0">Jobs run from GitHub Actions on a schedule. To run one now: Actions → workflow → Run workflow.</p></div>';
+    }).catch(function () { if (active === 'cron') showFail(); });
+  }
+  // 14. Status history — the public status API, 90 days.
+  function loadStatusHistory() {
+    fetch(wwwOrigin() + '/api/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (active !== 'statushist') return;
+      var comps = d.components || [];
+      $('view').innerHTML =
+        '<div class="cards">' + card(comps.length, 'Monitored components') + card(comps.filter(function (c) { return c.status === 'down'; }).length, 'Down now') + card(esc(d.overall || '—'), 'Overall') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">90-day uptime</h3>' +
+        (comps.length ? comps.map(function (c) {
+          var days = c.days || [];
+          var bars = days.map(function (x) { var up = x.total ? x.up / x.total : (x.ok === false ? 0 : 1); var col = up >= 0.999 ? 'var(--ok)' : up >= 0.98 ? '#f59e0b' : 'var(--danger)'; return '<i title="' + esc(x.day || '') + ' · ' + Math.round(up * 100) + '%" style="display:inline-block;width:6px;height:22px;margin-right:1px;border-radius:2px;background:' + col + ';opacity:' + (x.total ? 1 : 0.3) + '"></i>'; }).join('');
+          return '<div style="margin:10px 0"><div class="row" style="align-items:center;gap:8px"><b>' + esc(c.name || c.id) + '</b>' + okPill(c.status === 'up', c.status || 'unknown') + '<span class="muted">' + (c.uptime90 != null ? c.uptime90 + '% over 90 d' : '') + (c.latencyMs != null ? ' \u00b7 ' + c.latencyMs + ' ms' : '') + (c.checkedAt ? ' \u00b7 checked ' + ago(c.checkedAt) : '') + '</span>' + '</div><div style="margin-top:4px;white-space:nowrap;overflow:hidden">' + bars + '</div></div>';
+        }).join('') : '<div class="empty">No components reported.</div>') +
+        '<p class="muted" style="font-size:11px">Source: the public status endpoint. Ticks come from the status-tick workflow every 30 min.</p></div>';
+    }).catch(function () { if (active === 'statushist') showFail('Could not reach /api/status.'); });
+  }
+  // 15. Environment checklist.
+  function loadEnvCheck() {
+    apiMemo('/api/admin/envcheck').then(function (d) {
+      if (!d || active !== 'envcheck') return;
+      var groups = {}; d.items.forEach(function (i) { (groups[i.group] = groups[i.group] || []).push(i); });
+      $('view').innerHTML =
+        '<div class="cards">' + card(d.items.filter(function (i) { return i.set; }).length + '/' + d.items.length, 'Configured') + card(d.missingRequired.length, 'Required missing') + '</div>' +
+        (d.missingRequired.length ? '<div class="card" style="border-color:var(--danger)"><b>Missing required:</b> ' + d.missingRequired.map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(' ') + '</div>' : '') +
+        Object.keys(groups).map(function (g) { return '<div class="card"><h3 style="margin-top:0">' + esc(g) + '</h3><table><tbody>' + groups[g].map(function (i) { return '<tr><td><code>' + esc(i.name) + '</code></td><td>' + okPill(i.set, i.set ? 'set' : (i.required ? 'missing' : 'not set')) + '</td><td class="muted">' + esc(i.note) + (i.required ? ' · required' : '') + '</td></tr>'; }).join('') + '</tbody></table></div>'; }).join('') +
+        '<p class="muted" style="font-size:11px">Names only — values never leave the Worker. Set with <code>wrangler secret put NAME</code>.</p>';
+    }).catch(function () { if (active === 'envcheck') showFail(); });
+  }
+  // 16. Query console.
+  function renderQuerySection() {
+    var TABLES = ['vinax_events', 'vinax_ai_events', 'vinax_feedback', 'vinax_users', 'vinax_rooms', 'vinax_experiments', 'vinax_blocklist', 'vinax_config', 'vinax_seo_urls'];
+    $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Query console <span class="muted">· read-only, whitelisted columns, newest first</span></h3>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><select id="qc-table" class="inp">' + TABLES.map(function (t) { return '<option>' + t + '</option>'; }).join('') + '</select>' +
+      '<select id="qc-hours" class="inp"><option value="1">1 h</option><option value="24" selected>24 h</option><option value="168">7 d</option><option value="720">30 d</option><option value="2160">90 d</option></select>' +
+      inp('qc-col', '', 'column (optional)', 'style="width:150px"') + inp('qc-val', '', 'equals value', 'style="width:180px"') +
+      '<select id="qc-limit" class="inp"><option>50</option><option selected>200</option><option>500</option></select><button id="qc-run">Run</button><span class="muted" id="qc-out" style="font-size:12px"></span></div></div><div id="qc-rows"></div>';
+    function run() {
+      var p = new URLSearchParams({ table: $('qc-table').value, hours: $('qc-hours').value, limit: $('qc-limit').value });
+      if ($('qc-col').value.trim()) { p.set('col', $('qc-col').value.trim()); p.set('val', $('qc-val').value.trim()); }
+      $('qc-rows').innerHTML = '<div class="empty">Running…</div>';
+      fetch('/api/admin/query?' + p.toString(), { headers: { 'x-admin-token': sessionStorage.getItem(TOKEN_KEY) || '' }, cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.error) { $('qc-rows').innerHTML = '<div class="empty">' + esc(d.error) + '</div>'; return; }
+        exportRows = d.rows; exportName = d.table; $('csv').hidden = !d.rows.length;
+        stampOut('qc-out', d.rows.length + ' rows' + (d.truncated ? ' (truncated — narrow the filter)' : ''));
+        $('qc-rows').innerHTML = '<div class="card" style="overflow:auto"><table><thead><tr>' + d.columns.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          (d.rows.length ? d.rows.map(function (r) { return '<tr>' + d.columns.map(function (c) { var v = r[c]; var t = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); return '<td title="' + esc(t) + '" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.slice(0, 140)) + '</td>'; }).join('') + '</tr>'; }).join('') : '<tr><td colspan="' + d.columns.length + '" class="empty">No rows.</td></tr>') + '</tbody></table></div>';
+      }).catch(function () { $('qc-rows').innerHTML = '<div class="empty">Query failed.</div>'; });
+    }
+    $('qc-run').addEventListener('click', run);
+    $('qc-val').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
+  }
+  // 17. Release notes — the app's own update cards.
+  function loadReleaseNotes() {
+    fetch(wwwOrigin() + '/changelog.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (active !== 'relnotes') return;
+      var rel = d.releases || [];
+      $('view').innerHTML = '<div class="cards">' + card(rel.length, 'Releases with cards') + card(rel[0] ? 'v' + rel[0].version : '—', 'Latest') + card(d.generatedAt ? ago(d.generatedAt) : '—', 'Built') + '</div>' +
+        rel.slice(0, 40).map(function (r) { return '<div class="card"><h3 style="margin:0 0 6px">v' + esc(r.version) + (r.title ? ' <span class="muted">· ' + esc(r.title) + '</span>' : '') + '</h3><ul style="margin:0;padding-left:18px">' + r.changes.map(function (c) { return '<li style="margin:4px 0"><span class="pill">' + esc(c.type) + '</span> ' + esc(c.text) + '</li>'; }).join('') + '</ul></div>'; }).join('');
+    }).catch(function () { if (active === 'relnotes') showFail('changelog.json is not on the live site yet (ships with the next build).'); });
+  }
+  // 18. Maintenance scheduler.
+  function renderMaintWindowSection() {
+    cfgEditor({
+      sec: 'maintwin', key: 'maintenance-window', title: 'Maintenance scheduler', clearable: true, empty: null, saveLabel: 'Schedule',
+      help: 'Pick a window and the site switches itself to maintenance mode at the start and back to live at the end — no one has to be awake. Listeners see the note. Times are in your local zone.',
+      form: function (v) { v = v || {}; return lbl('Starts', inp('mw-start', isoLocal(v.start), '', 'type="datetime-local"')) + lbl('Ends', inp('mw-end', isoLocal(v.end), '', 'type="datetime-local"')) + lbl('Note shown to listeners', inp('mw-note', v.note || '', 'Back in 30 minutes — upgrading the database', 'maxlength="200" style="width:100%"')); },
+      read: function () { var s = fromLocal($('mw-start').value), e = fromLocal($('mw-end').value); if (!s || !e) throw new Error('Both start and end are required'); if (Date.parse(e) <= Date.parse(s)) throw new Error('End must be after start'); return { start: s, end: e, note: $('mw-note').value.trim().slice(0, 200) }; },
+      after: function (v) { if (!v || !v.start) return ''; var now = Date.now(), s = Date.parse(v.start), e = Date.parse(v.end); var state = now < s ? 'scheduled · starts ' + new Date(s).toLocaleString() : now <= e ? 'ACTIVE now · ends ' + new Date(e).toLocaleString() : 'finished ' + new Date(e).toLocaleString(); return '<div class="card"><b>Current window:</b> ' + esc(state) + '</div>'; },
+    });
+  }
+  // 19. Minimum app version.
+  function renderMinVersionSection() {
+    cfgEditor({
+      sec: 'minver', key: 'min-version', title: 'Minimum app version', clearable: true, empty: null, saveLabel: 'Publish minimum',
+      help: 'Android builds below this build number lose the “Update later” button and must update to keep using the app. Use it only for security fixes or breaking API changes. The build number is the versionCode on the release (see Releases &amp; CI).',
+      form: function (v) { return lbl('Minimum build number', inp('mv-build', v && v.build ? v.build : '', 'e.g. 5140', 'type="number" min="1" style="width:200px"')) + lbl('Reason (for the audit trail)', inp('mv-reason', v && v.reason ? v.reason : '', 'why listeners must update', 'style="width:100%" maxlength="160"')); },
+      read: function () { var b = parseInt($('mv-build').value, 10); if (!(b > 0)) throw new Error('Enter a build number'); return { build: b, reason: $('mv-reason').value.trim().slice(0, 160), setAt: new Date().toISOString() }; },
+    });
+  }
+
+  // ---- Promotion --------------------------------------------------------------
+  // 20. Broadcast message.
+  function renderBroadcastSection() {
+    cfgEditor({
+      sec: 'broadcast', key: 'broadcast', title: 'Broadcast message', clearable: true, empty: null, saveLabel: 'Send to everyone',
+      help: 'A one-time toast every listener sees the next time the app is open (each broadcast id shows once per device). Optional in-app link (a path like <code>/later</code>). Optional window.',
+      form: function (v) { v = v || {}; return lbl('Message', inp('bc-text', v.text || '', 'New: Listen Later — save songs for later from any menu', 'style="width:100%" maxlength="240"')) + lbl('Link (optional, in-app path)', inp('bc-link', v.link || '', '/later', 'style="width:280px"')) + '<div class="row" style="gap:12px;flex-wrap:wrap"><div>' + lbl('From (optional)', inp('bc-start', isoLocal(v.start), '', 'type="datetime-local"')) + '</div><div>' + lbl('Until (optional)', inp('bc-end', isoLocal(v.end), '', 'type="datetime-local"')) + '</div></div>'; },
+      read: function () { var t = $('bc-text').value.trim(); if (!t) throw new Error('Message is required'); var o = { id: 'b' + Date.now().toString(36), text: t.slice(0, 240) }; var l = $('bc-link').value.trim(); if (l) { if (l.charAt(0) !== '/') throw new Error('Link must be an in-app path starting with /'); o.link = l.slice(0, 200); } var s = fromLocal($('bc-start').value), e = fromLocal($('bc-end').value); if (s) o.start = s; if (e) o.end = e; return o; },
+      after: function (v) { return v && v.text ? '<div class="card"><b>Live broadcast:</b> “' + esc(v.text) + '” <span class="muted">· id ' + esc(v.id || '') + '</span></div>' : ''; },
+    });
+  }
+  // 21. Home greeting.
+  function renderGreetingSection() {
+    cfgEditor({
+      sec: 'greeting', key: 'greeting', title: 'Home greeting line', clearable: true, empty: null,
+      help: 'Replaces the line under the Home headline for everyone while the window is open (e.g. “Festival week — new Diwali mixes every day”). Outside the window the app’s own personal message returns.',
+      form: function (v) { v = v || {}; return lbl('Line', inp('gr-text', v.text || '', 'Festival week — new mixes every day', 'style="width:100%" maxlength="160"')) + '<div class="row" style="gap:12px;flex-wrap:wrap"><div>' + lbl('From (optional)', inp('gr-start', isoLocal(v.start), '', 'type="datetime-local"')) + '</div><div>' + lbl('Until (optional)', inp('gr-end', isoLocal(v.end), '', 'type="datetime-local"')) + '</div></div>'; },
+      read: function () { var t = $('gr-text').value.trim(); if (!t) throw new Error('Line is required'); var o = { text: t.slice(0, 160) }; var s = fromLocal($('gr-start').value), e = fromLocal($('gr-end').value); if (s) o.start = s; if (e) o.end = e; return o; },
+    });
+  }
+  // 22. Help center FAQ.
+  function renderFaqSection() {
+    cfgEditor({
+      sec: 'faq', key: 'support-faq', title: 'Help center FAQ', clearable: true, empty: [],
+      help: 'Questions shown at the top of Help &amp; Feedback (max 30). Blocks separated by a blank line: first line the question, the rest the answer.',
+      form: function (v) { var t = (Array.isArray(v) ? v : []).map(function (x) { return x.q + '\n' + x.a; }).join('\n\n'); return '<textarea id="faq-text" class="inp" rows="14" style="width:100%">' + esc(t) + '</textarea>'; },
+      read: function () { return $('faq-text').value.split(/\n\s*\n/).map(function (b) { var lines = b.trim().split('\n'); var q = (lines.shift() || '').trim().slice(0, 160); var a = lines.join('\n').trim().slice(0, 1200); return q && a ? { q: q, a: a } : null; }).filter(Boolean).slice(0, 30); },
+    });
+  }
+  // 23. Announcement composer (in-app announcement rows, picked up on open).
+  function renderAnnounceSection() {
+    $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Announcement composer</h3><p class="muted">An in-app announcement listeners pick up the next time they open the app (native shows it as a local notification; web shows it in the app). Retract from Notifications → Sent log.</p>' +
+      lbl('Title', inp('an-title', '', 'Big update: 43 festival themes', 'style="width:100%" maxlength="80"')) + lbl('Body', '<textarea id="an-body" class="inp" rows="4" style="width:100%" maxlength="300" placeholder="What changed and why it matters"></textarea>') + lbl('Link (optional in-app path)', inp('an-link', '', '/settings', 'style="width:280px"')) +
+      '<div class="row" style="gap:8px;align-items:center;margin-top:12px"><button id="an-send">Publish announcement</button><span class="muted" id="an-out" style="font-size:12px"></span></div></div>';
+    $('an-send').addEventListener('click', function () {
+      var title = $('an-title').value.trim(), body = $('an-body').value.trim(), link = $('an-link').value.trim();
+      if (!title || !body) { stampOut('an-out', 'Title and body are required', true); return; }
+      vxConfirm('Publish this announcement to every listener?', { title: 'Announcement', okText: 'Publish' }).then(function (ok) {
+        if (!ok) return;
+        postApi('/api/admin/push', { title: title, body: body, link: link || '/' }).then(function (r) {
+          if (r && (r.ok || r.sent != null)) { stampOut('an-out', 'Published ✓'); $('an-title').value = ''; $('an-body').value = ''; }
+          else stampOut('an-out', 'Failed' + (r && r.error ? ' — ' + r.error : ''), true);
+        }).catch(function () { stampOut('an-out', 'Failed — network', true); });
+      });
+    });
+  }
+
+  // ---- Settings ---------------------------------------------------------------
+  // 24. Pinned tools — the operator's own shortlist at the top of the nav.
+  var PINS_KEY = 'vinax_admin_pins';
+  function getPins() { try { return JSON.parse(localStorage.getItem(PINS_KEY) || '[]'); } catch (e) { return []; } }
+  function applyPins() {
+    var pins = getPins();
+    var host = document.getElementById('nav-pins');
+    if (!host) { host = document.createElement('div'); host.id = 'nav-pins'; var nav = document.getElementById('nav'); var first = nav.querySelector('.nav-group-label'); nav.insertBefore(host, first); }
+    host.innerHTML = pins.length ? '<div class="nav-group-label" style="cursor:default">Pinned <span class="ng-n">' + pins.length + '</span></div>' + pins.map(function (p) { return '<button data-sec="' + esc(p) + '" data-pin="1">★ ' + esc(TITLES[p] || p) + '</button>'; }).join('') : '';
+    Array.prototype.forEach.call(host.querySelectorAll('button[data-sec]'), function (b) { b.addEventListener('click', function () { setSection(b.getAttribute('data-sec')); }); });
+  }
+  function renderPinsSection() {
+    var pins = getPins();
+    var all = Object.keys(TITLES).sort(function (a, b) { return TITLES[a].localeCompare(TITLES[b]); });
+    $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Pinned tools</h3><p class="muted">Pin the panels you open most; they appear at the top of the sidebar on this browser. Keyboard: ⌘K searches every tool.</p><div class="chips">' +
+      all.map(function (s) { var on = pins.indexOf(s) >= 0; return '<button class="' + (on ? '' : 'ghost') + '" data-pintoggle="' + esc(s) + '" style="margin:3px">' + (on ? '★ ' : '') + esc(TITLES[s]) + '</button>'; }).join('') + '</div></div>';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pintoggle]'), function (b) {
+      b.addEventListener('click', function () { var s = b.getAttribute('data-pintoggle'); var p = getPins(); var i = p.indexOf(s); if (i >= 0) p.splice(i, 1); else if (p.length < 8) p.push(s); localStorage.setItem(PINS_KEY, JSON.stringify(p)); applyPins(); renderPinsSection(); });
+    });
+  }
+  setTimeout(function () { try { applyPins(); } catch (e) { /* nav not ready */ } }, 0);
+
+  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools' };
+  var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true, usage: true, heatmap: true, funnel: true, songstats: true, skips: true };
   // v5.7.5 — formal category reorganisation: which category each tool sits
   // under (drives the breadcrumb over the tool title) + collapsible category
   // headers whose open/closed state persists per browser.
-  var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations' };
+  var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings' };
   var GRP_KEY = 'vinax_admin_navgroups';
   function closedGroups() { try { var v = JSON.parse(localStorage.getItem(GRP_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
   function applyNavGroups() {
@@ -2703,6 +3074,30 @@
     else if (active === 'backup') renderBackupSection();
     else if (active === 'trendpins') renderTrendingPinsSection();
     else if (active === 'statusnote') renderStatusNoteSection();
+    else if (active === 'usage') loadUsage();
+    else if (active === 'heatmap') loadHeatmap();
+    else if (active === 'funnel') loadFunnel();
+    else if (active === 'songstats') renderSongStatsSection();
+    else if (active === 'skips') loadSkips();
+    else if (active === 'synonyms') renderSynonymsSection();
+    else if (active === 'sources') renderSourcesSection();
+    else if (active === 'langorder') renderLanguageOrderSection();
+    else if (active === 'blocklistio') renderBlocklistIoSection();
+    else if (active === 'aistarters') renderAiStartersSection();
+    else if (active === 'aiquick') renderAiQuickSection();
+    else if (active === 'airules') renderAiRulesSection();
+    else if (active === 'cron') loadCron();
+    else if (active === 'statushist') loadStatusHistory();
+    else if (active === 'envcheck') loadEnvCheck();
+    else if (active === 'query') renderQuerySection();
+    else if (active === 'relnotes') loadReleaseNotes();
+    else if (active === 'maintwin') renderMaintWindowSection();
+    else if (active === 'minver') renderMinVersionSection();
+    else if (active === 'broadcast') renderBroadcastSection();
+    else if (active === 'greeting') renderGreetingSection();
+    else if (active === 'faq') renderFaqSection();
+    else if (active === 'announce') renderAnnounceSection();
+    else if (active === 'pins') renderPinsSection();
   }
   document.addEventListener('keydown', function (e) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); }
@@ -2714,7 +3109,7 @@
   // Sections whose state lives in this browser (localStorage) — an auto-tick
   // re-render adds nothing and used to wipe in-progress edits the moment
   // focus left a field, and reset scroll every 10 s.
-  var LOCAL_SECTIONS = { songs: true, playlists: true, homescreen: true, categories: true, banners: true, festivals: true, config: true, catalog: true, engineprobe: true, edge: true, flags: true, runbook: true, backup: true, trendpins: true, statusnote: true };
+  var LOCAL_SECTIONS = { songs: true, playlists: true, homescreen: true, categories: true, banners: true, festivals: true, config: true, catalog: true, engineprobe: true, edge: true, flags: true, runbook: true, backup: true, trendpins: true, statusnote: true, songstats: true, synonyms: true, sources: true, langorder: true, blocklistio: true, aistarters: true, aiquick: true, airules: true, query: true, relnotes: true, maintwin: true, minver: true, broadcast: true, greeting: true, faq: true, announce: true, pins: true, statushist: true, envcheck: true };
   function autoTick() {
     if (formFocused()) return;
     if (LOCAL_SECTIONS[active]) return;

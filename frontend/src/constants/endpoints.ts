@@ -57,6 +57,17 @@ function basesFromEnv(): ApiBase[] | null {
 
 export const API_BASES: ApiBase[] = basesFromEnv() ?? DEFAULT_API_BASES;
 
+/** v5.15.0 — sources switched off from the admin console (Catalog Sources).
+ *  Never empties the list: if every source were disabled, all stay on. */
+let disabled = new Set<string>();
+export function setDisabledSources(ids: string[] | undefined | null): void {
+  disabled = new Set(Array.isArray(ids) ? ids : []);
+}
+export function activeBases(): ApiBase[] {
+  const on = API_BASES.filter((b) => !disabled.has(b.id));
+  return on.length ? on : API_BASES;
+}
+
 export const REQUEST_TIMEOUT_MS = 8000;
 export const COOLDOWN_MS = 60_000;
 export const MAX_CONSECUTIVE_FAILURES = 3;

@@ -104,3 +104,42 @@ export function useFeatureFlags(): FeatureFlags {
   });
   return q.data ?? {};
 }
+
+/** v5.15.0 — everything the admin console publishes for the app, in one read. */
+export interface ClientConfig {
+  greeting: { text: string } | null;
+  broadcast: { id: string; text: string; link?: string } | null;
+  synonyms: Record<string, string>;
+  disabledSources: string[];
+  languageOrder: string[];
+  aiStarters: string[];
+  aiQuick: Array<{ icon: string; label: string; prompt: string; mode?: string }>;
+  faq: Array<{ q: string; a: string }>;
+  minBuild: number | null;
+}
+
+export function useClientConfig(): ClientConfig | null {
+  const q = useQuery({
+    queryKey: ['client-config'],
+    staleTime: 60_000,
+    gcTime: 30 * 60_000,
+    retry: 1,
+    queryFn: async (): Promise<ClientConfig | null> => {
+      const r = await fetch(`${BASE}/api/appconfig?key=client`);
+      if (!r.ok) return null;
+      const j = (await r.json()) as Partial<ClientConfig>;
+      return {
+        greeting: j.greeting ?? null,
+        broadcast: j.broadcast ?? null,
+        synonyms: j.synonyms && typeof j.synonyms === 'object' ? j.synonyms : {},
+        disabledSources: Array.isArray(j.disabledSources) ? j.disabledSources : [],
+        languageOrder: Array.isArray(j.languageOrder) ? j.languageOrder : [],
+        aiStarters: Array.isArray(j.aiStarters) ? j.aiStarters : [],
+        aiQuick: Array.isArray(j.aiQuick) ? j.aiQuick : [],
+        faq: Array.isArray(j.faq) ? j.faq : [],
+        minBuild: typeof j.minBuild === 'number' ? j.minBuild : null,
+      };
+    },
+  });
+  return q.data ?? null;
+}

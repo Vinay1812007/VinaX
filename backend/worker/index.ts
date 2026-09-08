@@ -29,6 +29,13 @@ import * as m_api_admin_content from './functions/api/admin/content';
 import * as m_api_admin_dataquality from './functions/api/admin/dataquality';
 import * as m_api_admin_digest from './functions/api/admin/digest';
 import * as m_api_admin_edge from './functions/api/admin/edge';
+import * as m_api_admin_cron from './functions/api/admin/cron';
+import * as m_api_admin_envcheck from './functions/api/admin/envcheck';
+import * as m_api_admin_funnel from './functions/api/admin/funnel';
+import * as m_api_admin_query from './functions/api/admin/query';
+import * as m_api_admin_skips from './functions/api/admin/skips';
+import * as m_api_admin_songstats from './functions/api/admin/songstats';
+import * as m_api_admin_usage from './functions/api/admin/usage';
 import * as m_api_admin_engagement from './functions/api/admin/engagement';
 import * as m_api_admin_enginetest from './functions/api/admin/enginetest';
 import * as m_api_admin_experiments from './functions/api/admin/experiments';
@@ -137,6 +144,13 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/dataquality': m_api_admin_dataquality,
   '/api/admin/digest': m_api_admin_digest,
   '/api/admin/edge': m_api_admin_edge,
+  '/api/admin/cron': m_api_admin_cron,
+  '/api/admin/envcheck': m_api_admin_envcheck,
+  '/api/admin/funnel': m_api_admin_funnel,
+  '/api/admin/query': m_api_admin_query,
+  '/api/admin/skips': m_api_admin_skips,
+  '/api/admin/songstats': m_api_admin_songstats,
+  '/api/admin/usage': m_api_admin_usage,
   '/api/admin/engagement': m_api_admin_engagement,
   '/api/admin/enginetest': m_api_admin_enginetest,
   '/api/admin/experiments': m_api_admin_experiments,

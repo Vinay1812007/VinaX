@@ -7,6 +7,8 @@ export interface UpdateInfo {
   currentBuild: number;  // installed build/versionCode
   apkUrl: string;
   sha256?: string;
+  /** v5.15.0 — installed build is below the console's minimum: no "later". */
+  mandatory?: boolean;
 }
 
 /** Public update manifest + APK proxy (served by Cloudflare; works for the
@@ -50,6 +52,7 @@ export async function checkForUpdate(opts: { manual?: boolean } = {}): Promise<U
       version?: string;
       apkUrl?: string;
       sha256?: string;
+      minBuild?: number | null;
     };
 
     const latestBuild = Number(data.build) || 0;
@@ -62,7 +65,8 @@ export async function checkForUpdate(opts: { manual?: boolean } = {}): Promise<U
 
     // "Update later" (v5.8.2): the automatic launch/resume check respects the
     // snooze; a manual "Check for updates" tap always shows what's there.
-    if (!opts.manual && isUpdateSnoozed(latestBuild)) return null;
+    const mandatory = typeof data.minBuild === 'number' && data.minBuild > 0 && installedBuild < data.minBuild;
+    if (!mandatory && !opts.manual && isUpdateSnoozed(latestBuild)) return null;
 
     return {
       latest: data.version ?? String(latestBuild),
@@ -71,6 +75,7 @@ export async function checkForUpdate(opts: { manual?: boolean } = {}): Promise<U
       currentBuild: installedBuild,
       apkUrl: data.apkUrl || APK_URLS[0],
       sha256: data.sha256,
+      mandatory,
     };
   } catch (err) {
     console.error('[update] Failed to check for updates:', err);

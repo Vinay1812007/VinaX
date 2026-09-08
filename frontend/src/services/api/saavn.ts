@@ -1,4 +1,5 @@
 import type { Album, Artist, Lyrics, Playlist, SearchResults, Song } from '@/types';
+import { rewriteQuery } from '@/services/search/synonyms';
 import { orchestratedRequest } from './client';
 import {
   normalizeAlbum,
@@ -20,7 +21,8 @@ function listFrom(d: unknown): unknown[] | null {
   return null;
 }
 
-export function searchSongs(query: string, limit = 25, opts?: { signal?: AbortSignal }): Promise<Song[]> {
+export function searchSongs(rawQuery: string, limit = 25, opts?: { signal?: AbortSignal }): Promise<Song[]> {
+  const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
     signal: opts?.signal,
     paths: [
@@ -35,7 +37,8 @@ export function searchSongs(query: string, limit = 25, opts?: { signal?: AbortSi
 }
 
 /** Paged song search — powers infinite scroll. Page is 1-based. */
-export function searchSongsPage(query: string, page: number, limit = 25, opts?: { signal?: AbortSignal }): Promise<Song[]> {
+export function searchSongsPage(rawQuery: string, page: number, limit = 25, opts?: { signal?: AbortSignal }): Promise<Song[]> {
+  const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
     signal: opts?.signal,
     paths: [

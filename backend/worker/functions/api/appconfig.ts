@@ -11,6 +11,7 @@
  * for) expired/unstarted campaigns.
  */
 import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { CLIENT_KEYS, publicClientConfig, readConfig } from '../_lib/clientConfig';
 
 interface ConfigRow {
   value: unknown;
@@ -67,6 +68,9 @@ export function publicFlags(value: unknown): Record<string, boolean> {
 export const onRequestGet = async (context: { request: Request; env: SupabaseEnv }): Promise<Response> => {
   const { request, env } = context;
   const key = new URL(request.url).searchParams.get('key') ?? '';
+  // v5.15.0 — one bundle for everything the app reads at boot (greeting,
+  // broadcast, search synonyms, source switches, AI starters, FAQ, min build).
+  if (key === 'client') return json(publicClientConfig(await readConfig(env, CLIENT_KEYS)), 60);
   if (key !== 'banners' && key !== 'home-config' && key !== 'festival' && key !== 'flags') {
     return new Response(JSON.stringify({ error: 'unknown_key' }), { status: 400, headers: { 'content-type': 'application/json' } });
   }

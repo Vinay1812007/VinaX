@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { HOME_BLOCK_KEYS, orderHomeBlocks } from '@/constants/homeBlocks';
-import { useServerHomeConfig } from '@/features/home/useAppConfig';
+import { useClientConfig, useServerHomeConfig } from '@/features/home/useAppConfig';
 import { PromoBanner } from '@/components/PromoBanner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
@@ -291,9 +291,14 @@ export default function HomePage() {
 
   // Fusion layer data (4.12.0): quick-grid tiles from feeds the page already
   // holds, and the language rail from pinned + hub languages (pinned first).
+  // v5.15.0 — the console can set a default language order for the rail
+  // (Admin → Language Order); pinned languages always come first.
+  const clientCfg = useClientConfig();
+  const langOrder = clientCfg?.languageOrder ?? [];
+  const rank = (l: string) => { const i = langOrder.indexOf(l); return i < 0 ? 999 : i; };
   const railLangs = [
     ...pinned,
-    ...(HUB_LANGUAGES as readonly string[]).filter((l) => !pinned.includes(l)),
+    ...(HUB_LANGUAGES as readonly string[]).filter((l) => !pinned.includes(l)).sort((a, b) => rank(a) - rank(b)),
   ].slice(0, 12);
   const quickTiles = [
     continueListening.length && {
@@ -874,7 +879,7 @@ export default function HomePage() {
           {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} · made for you
         </p>
         <h1 className="text-3xl md:text-[38px] font-extrabold tracking-tight">{hello.title}</h1>
-        <p className="text-ink-200 mt-1.5 text-sm font-medium">{hello.subtitle}</p>
+        <p className="text-ink-200 mt-1.5 text-sm font-medium">{clientCfg?.greeting?.text ?? hello.subtitle}</p>
         <p className="text-ink-300 mt-1 text-sm">
           {region?.country ? `Tuned for ${region.country}` : 'Tuned to you'} · no account, all local
           {weekEntries.length > 0 && (

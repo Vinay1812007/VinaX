@@ -5,6 +5,7 @@ import { Chip } from '@/components/Chip';
 import { toast } from '@/store/toastStore';
 import { sendFeedback } from '@/services/feedback';
 import { useUiStore } from '@/store/uiStore';
+import { useClientConfig } from '@/features/home/useAppConfig';
 
 const TIPS: string[] = [
   'Tap any song or its artwork to play. Tap the mini-player to open the full screen.',
@@ -142,6 +143,7 @@ const SHORTCUTS: Array<[string, string]> = [
 
 
 export default function HelpPage() {
+  const clientCfg = useClientConfig();
   usePageTitle('Help & Feedback');
   const openTour = useUiStore((s) => s.openTour);
   const [type, setType] = useState<'bug' | 'idea' | 'other'>('bug');
@@ -190,7 +192,7 @@ export default function HelpPage() {
       <section className="glass-panel rounded-2xl p-5 mb-5">
         <h2 className="text-base font-bold mb-3">FAQ</h2>
         <div className="divide-y divide-ink-800">
-          {FAQ.map((f) => (
+          {[...(clientCfg?.faq ?? []), ...FAQ].map((f) => (
             <details key={f.q} className="py-2 group">
               <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-sm font-semibold py-1">
                 {f.q}

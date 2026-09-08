@@ -5,7 +5,9 @@
  */
 import { fetchAsset, githubConfigured, latestRelease, type GithubEnv } from '../_lib/github';
 
-type Env = GithubEnv;
+import { readConfig } from '../_lib/clientConfig';
+import type { SupabaseEnv } from '../_lib/supabase';
+type Env = GithubEnv & SupabaseEnv;
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -62,5 +64,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   }
 
   const origin = new URL(request.url).origin;
-  return json({ build, version, apkUrl: `${origin}/api/apk`, sha256 }, 200, 'public, max-age=60');
+  // v5.15.0 — Admin → Minimum App Version: builds below this must update
+  // before they can keep using the app (the client hides Later).
+  const cfg: Record<string, unknown> = await readConfig(env, ['min-version']).catch(() => ({}));
+  const mv = cfg['min-version'] as { build?: unknown } | undefined;
+  const minBuild = mv && Number.isInteger(mv.build) && (mv.build as number) > 0 ? (mv.build as number) : null;
+  return json({ build, version, apkUrl: `${origin}/api/apk`, sha256, minBuild }, 200, 'public, max-age=60');
 };

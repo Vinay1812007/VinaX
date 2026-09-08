@@ -1,7 +1,7 @@
 {
   "name": "vinax",
   "private": true,
-  "version": "5.14.0",
+  "version": "5.15.0",
   "description": "VinaX frontend — music tuned to you. No login. Private by design. (Cloudflare Pages)",
   "type": "module",
   "engines": {
@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vite",
     "prebuild:clean": "rm -rf dist node_modules/.vite node_modules/.vite-temp node_modules/.rolldown node_modules/.cache .vite",
-    "build": "npm run prebuild:clean && tsc --noEmit && vite build && node scripts/prerender.mjs",
+    "build": "npm run prebuild:clean && tsc --noEmit && vite build && node scripts/prerender.mjs && node scripts/changelog-json.mjs",
     "preview": "vite preview",
     "deploy:pages": "npm run build && wrangler pages deploy dist --project-name vinax",
     "lint": "eslint src scripts --max-warnings 0",

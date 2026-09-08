@@ -23,6 +23,7 @@ import { cn } from '@/utils/cn';
 import { RichContent } from '@/components/ai/RichContent';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useClientConfig } from '@/features/home/useAppConfig';
 
 const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/vinaxai' : '/api/vinaxai';
 /* Flip to true the day the account gets a real image model — the whole
@@ -443,10 +444,20 @@ export default function VinaXAIPage(): ReactNode {
   });
 
   // Fresh draw of 4 starters per visit and per new chat.
+  // v5.15.0 — the console can add starters (Admin → AI Starter Prompts) and
+  // replace the quick-action chips (Admin → AI Quick Actions).
+  const clientCfg = useClientConfig();
+  const quickActions = useMemo(
+    () => (clientCfg?.aiQuick.length ? clientCfg.aiQuick.map((q) => ({ ...q, mode: q.mode as Mode | undefined })) : QUICK_ACTIONS),
+    [clientCfg],
+  );
   const starters = useMemo(() => {
     const raw = useSettingsStore.getState().pinnedLanguages[0] ?? 'telugu';
     const lang = raw.charAt(0).toUpperCase() + raw.slice(1);
-    const pool = [...STARTER_POOL];
+    const pool: Array<(l: string) => string> = [
+      ...STARTER_POOL,
+      ...(clientCfg?.aiStarters ?? []).map((t) => (l: string) => t.replace(/\{lang\}/g, l)),
+    ];
     const picks: string[] = [];
     while (picks.length < 4 && pool.length) {
       const i = Math.floor(Math.random() * pool.length);
@@ -455,7 +466,7 @@ export default function VinaXAIPage(): ReactNode {
     return picks;
     // The chat id is a deliberate re-roll trigger: new chat = new starters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id]);
+  }, [active?.id, clientCfg]);
   const messages = active?.messages ?? [];
 
   const togglePin = (id: string): void =>
@@ -1400,7 +1411,7 @@ export default function VinaXAIPage(): ReactNode {
                 Ask anything, in any language. Code with tests, charts, diagrams, documents and images, live web search, voice — and songs you can play.
               </p>
               <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xl">
-                {QUICK_ACTIONS.map((qa) => (
+                {quickActions.map((qa) => (
                   <button
                     key={qa.label}
                     onClick={() => {

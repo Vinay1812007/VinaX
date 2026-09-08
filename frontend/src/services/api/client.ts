@@ -1,5 +1,5 @@
 import {
-  API_BASES,
+  activeBases,
   FALLBACK_PASSES,
   REQUEST_TIMEOUT_MS,
   RETRY_BACKOFF_MS,
@@ -147,7 +147,7 @@ export async function orchestratedRequest<T>(req: OrchestratedRequest<T>): Promi
   for (let pass = 0; pass < FALLBACK_PASSES; pass++) {
     if (isCancelled(req.signal)) throw new ApiError('cancelled', attempts);
     if (pass > 0) await sleep(RETRY_BACKOFF_MS * pass);
-    const ranked = healthRegistry.ranked(API_BASES);
+    const ranked = healthRegistry.ranked(activeBases());
 
     for (const base of ranked) {
       for (const path of req.paths) {

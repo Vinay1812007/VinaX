@@ -1,4 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { STORAGE_PREFIX } from '@/constants/storage-keys';
+import { toast } from '@/store/toastStore';
+import { setDisabledSources } from '@/constants/endpoints';
+import { setSearchSynonyms } from '@/services/search/synonyms';
+import { useClientConfig } from '@/features/home/useAppConfig';
 import { Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { Sidebar } from '@/components/Sidebar';
 import { ContextMenu } from '@/components/ContextMenu';
@@ -39,7 +44,7 @@ import { ErrorBoundary, PlayerErrorBoundary } from '@/components/ErrorBoundary';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { runMigrations } from '@/services/storage/local';
+import { getLocal, runMigrations, setLocal } from '@/services/storage/local';
 import { resolveRegion } from '@/services/location/inference';
 import { readBrowserSignals } from '@/services/location/browserSignals';
 import { defaultLanguagesForCountry } from '@/constants/regions';
@@ -54,8 +59,30 @@ const CommandPalette = lazy(() => import('@/components/CommandPalette'));
 // throttled mobile. Every navigation after that keeps the animation.
 let hasBooted = false;
 
+/**
+ * v5.15.0 — wire the admin-published client bundle into the running app:
+ * search synonyms, catalogue source switches, and the one-time broadcast.
+ */
+function useClientConfigEffects(): void {
+  const cfg = useClientConfig();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!cfg) return;
+    setSearchSynonyms(cfg.synonyms);
+    setDisabledSources(cfg.disabledSources);
+    const b = cfg.broadcast;
+    if (b && getLocal<string>(BROADCAST_SEEN_KEY, '') !== b.id) {
+      setLocal(BROADCAST_SEEN_KEY, b.id);
+      toast(b.text);
+      if (b.link) window.setTimeout(() => { if (location.pathname !== b.link) navigate(b.link as string); }, 1200);
+    }
+  }, [cfg, navigate]);
+}
+const BROADCAST_SEEN_KEY = `${STORAGE_PREFIX}.broadcast-seen`;
+
 export function AppLayout() {
   const coldBoot = !hasBooted;
+  useClientConfigEffects();
 
   const mainRef = useRef<HTMLElement>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
