@@ -21,6 +21,7 @@ import * as m_api_status from './functions/api/status';
 import * as m_album_id from './functions/album/[id]';
 import * as m_api_admin_activity from './functions/api/admin/activity';
 import * as m_api_admin_ai from './functions/api/admin/ai';
+import * as m_api_admin_aicost from './functions/api/admin/aicost';
 import * as m_api_admin_ailab from './functions/api/admin/ailab';
 import * as m_api_admin_appconfig from './functions/api/admin/appconfig';
 import * as m_api_admin_audit from './functions/api/admin/audit';
@@ -136,6 +137,7 @@ interface Env {
 const EXACT: Record<string, Mod> = {
   '/api/admin/activity': m_api_admin_activity,
   '/api/admin/ai': m_api_admin_ai,
+  '/api/admin/aicost': m_api_admin_aicost,
   '/api/admin/ailab': m_api_admin_ailab,
   '/api/admin/appconfig': m_api_admin_appconfig,
   '/api/admin/audit': m_api_admin_audit,

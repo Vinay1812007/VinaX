@@ -5,6 +5,7 @@ import { KEYS } from '@/constants/storage-keys';
 import { recordFavorite } from '@/services/personalization/updater';
 import { findDuplicates } from '@/features/library/duplicates';
 import { pruneTrash, type TrashEntry } from '@/features/library/trash';
+import { normalizeTags } from '@/features/library/tags';
 
 /** Derived indexes for O(1) membership checks. */
 let _favIds = new Set<string>();
@@ -49,6 +50,8 @@ export interface LocalCollection {
   description?: string;
   /** v5.17.0 — optional glyph shown on the Library tile. */
   emoji?: string;
+  /** v5.19.0 — lower-case labels (max 8, 24 chars each) the Library can filter by. */
+  tags?: string[];
 }
 
 /** v5.17.0 — editable metadata beyond the name. */
@@ -108,6 +111,8 @@ export interface LibraryState {
   dedupeCollection(id: string): number;
   /** v5.17.0 — set description / emoji (empty strings clear the field). */
   updateCollectionMeta(id: string, meta: CollectionMeta): void;
+  /** v5.19.0 — replace a collection's tags (normalised; an empty list clears the field). */
+  setCollectionTags(id: string, tags: string[] | string): void;
   toggleLater(song: Song): void;
   isLater(id: string): boolean;
   toggleHiddenArtist(name: string): void;
@@ -225,6 +230,17 @@ export const useLibraryStore = create<LibraryState>()(
               if (e) next.emoji = e;
               else delete next.emoji;
             }
+            return next;
+          }),
+        }),
+      setCollectionTags: (id, tags) =>
+        set({
+          collections: get().collections.map((c) => {
+            if (c.id !== id) return c;
+            const clean = normalizeTags(tags);
+            const next: LocalCollection = { ...c };
+            if (clean.length) next.tags = clean;
+            else delete next.tags;
             return next;
           }),
         }),

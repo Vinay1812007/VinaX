@@ -11,7 +11,16 @@
  * DuckDuckGo). If a BRAVE_API_KEY is ever configured it is preferred, but no key
  * is required for the feature to work.
  */
-import { defaultEndpoint, isGroqEndpoint, laneAttempts, logAiEvent, reasoningOffParams, type AiEnv, type Lane } from '../_lib/ai';
+import {
+  defaultEndpoint,
+  isGroqEndpoint,
+  laneAttempts,
+  logAiEvent,
+  reasoningOffParams,
+  usageFromJson,
+  type AiEnv,
+  type Lane,
+} from '../_lib/ai';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { probeFetchMarker } from '../_lib/fetchMarker';
@@ -795,6 +804,14 @@ async function handleChat(
   const visionAttempt = attempts.find((a) => a.endpoint === nvBase) ?? primary;
   const model = useVision ? VISION_MODEL : primary.model;
 
+  // v5.16.0 — ask the default base to append a usage chunk to the stream so
+  // the AI Cost panel sees real token counts. The scholar lane's external
+  // base is left EXACTLY as before (it rejects unknown knobs with a 400 —
+  // probed live for reasoning_effort — and reports usage on its final chunk
+  // unasked anyway). Should the default base ever refuse the option, the
+  // first 400 flips this off for the rest of the request and the same pair
+  // is re-asked plainly, so the stream itself never depends on it.
+  let usageOptIn = true;
   const payloadFor = (m: string, endpoint: string, messages: OutMsg[]): Record<string, unknown> => {
     const p: Record<string, unknown> = {
       model: m,
@@ -803,6 +820,7 @@ async function handleChat(
       max_tokens: MAXTOK_BY_MODE[mode],
       stream: true,
     };
+    if (usageOptIn && !isGroqEndpoint(endpoint)) p.stream_options = { include_usage: true };
     // NVIDIA-only knob: Groq rejects reasoning_effort with a 400 (probed live).
     if (m.includes('gpt-oss') && !isGroqEndpoint(endpoint)) p.reasoning_effort = EFFORT_BY_MODE[mode];
     // nemotron-3-nano (search/expert primary) leaks BARE chain-of-thought —
@@ -856,6 +874,19 @@ async function handleChat(
       up = null; // hang / network abort — the next pair takes the call
     }
     if (up?.ok) break;
+    // A 400 while the usage opt-in rode the request: drop the option for the
+    // rest of this request and re-ask the SAME pair once, so token accounting
+    // can never cost a listener their answer. A degraded key 400s again and
+    // the ladder walks on as before.
+    if (up?.status === 400 && usageOptIn && !isGroqEndpoint(a.endpoint)) {
+      usageOptIn = false;
+      try {
+        up = await callStream(a.model, a.key, a.endpoint, msgs, leash);
+      } catch {
+        up = null;
+      }
+      if (up?.ok) break;
+    }
     // Log the real status (timeout=0, degraded/bad id=4xx, upstream 5xx) for
     // diagnosis; meta reports the engine that finally answered.
     if (waitUntil)
@@ -927,6 +958,10 @@ async function handleChat(
       // a bare `let` would narrow to null at the check site (property reads
       // aren't narrowed across awaits).
       const fetchBox: { q: string | null } = { q: null };
+      // Token usage summed over every drain of this request (a B3 restart or
+      // an empty-stream rescue is a second upstream call, and both bill).
+      // Null until at least one upstream reported usage.
+      const usageBox: { prompt: number; completion: number; seen: boolean } = { prompt: 0, completion: 0, seen: false };
       const drain = async (body: ReadableStream<Uint8Array>, fetchMode: 'arm' | 'strip'): Promise<string> => {
         const reader = body.getReader();
         const decoder = new TextDecoder();
@@ -1011,6 +1046,14 @@ async function handleChat(
                 const j = JSON.parse(data) as { choices?: Array<{ delta?: { content?: unknown } }> };
                 const delta = j.choices?.[0]?.delta?.content;
                 if (typeof delta === 'string' && delta) onDelta(delta);
+                // The usage chunk (opt-in on the default base, unasked on the
+                // scholar base) carries no delta — one per upstream call.
+                const usage = usageFromJson(j);
+                if (usage) {
+                  usageBox.prompt += usage.prompt_tokens;
+                  usageBox.completion += usage.completion_tokens;
+                  usageBox.seen = true;
+                }
               } catch {
                 /* skip a malformed SSE chunk */
               }
@@ -1133,6 +1176,7 @@ async function handleChat(
             error: full ? null : 'empty',
             client: isApp ? 'app' : 'web',
             latency_ms: Date.now() - t0,
+            ...(usageBox.seen ? { prompt_tokens: usageBox.prompt, completion_tokens: usageBox.completion } : {}),
           }),
         );
       }

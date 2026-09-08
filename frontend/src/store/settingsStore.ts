@@ -62,6 +62,19 @@ export interface SettingsState {
   hiddenHome: string[];
   /** Home builder: custom block order; [] = default order. */
   homeOrder: string[];
+  /** v5.19.0 — sound effects master switch (Web Audio chain; graph code is a
+   *  lazy chunk — services/audio/effects.ts). Off = plain element playback. */
+  soundEffects: boolean;
+  /** v5.19.0 — 5-band EQ gains in dB (60 / 250 / 1k / 4k / 12k), ±12. */
+  eqGains: number[];
+  /** v5.19.0 — EQ preset id ('flat', 'bass', …) or 'custom' after a manual tweak. */
+  eqPreset: string;
+  /** v5.19.0 — mono mix (accessibility). */
+  mono: boolean;
+  /** v5.19.0 — stereo balance, -1 (left) .. 1 (right). */
+  balance: number;
+  /** v5.19.0 — loudness normalisation (compressor). */
+  normalize: boolean;
 
   setTheme(theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto'): void;
   setDailyGoalMinutes(n: number): void;
@@ -101,7 +114,24 @@ export interface SettingsState {
   setPinnedLanguages(ids: string[]): void;
   setMutedLanguages(ids: string[]): void;
   toggleSidebar(): void;
+  setSoundEffects(v: boolean): void;
+  /** Clamps to five values in ±12 dB and marks the preset 'custom'. */
+  setEqGains(gains: number[]): void;
+  /** Select a preset; pass its gains too (the table lives in the lazy effects chunk). */
+  setEqPreset(preset: string, gains?: number[]): void;
+  setMono(v: boolean): void;
+  setBalance(v: number): void;
+  setNormalize(v: boolean): void;
   resetSettings(): void;
+}
+
+const EQ_BAND_COUNT = 5;
+const EQ_LIMIT_DB = 12;
+function clampEq(gains: readonly number[] | undefined): number[] {
+  return Array.from({ length: EQ_BAND_COUNT }, (_, i) => {
+    const g = gains?.[i];
+    return Number.isFinite(g) ? Math.max(-EQ_LIMIT_DB, Math.min(EQ_LIMIT_DB, g as number)) : 0;
+  });
 }
 
 const defaults = {
@@ -143,6 +173,12 @@ const defaults = {
   sidebarCollapsed: false,
   hiddenHome: [] as string[],
   homeOrder: [] as string[],
+  soundEffects: false,
+  eqGains: [0, 0, 0, 0, 0] as number[],
+  eqPreset: 'flat',
+  mono: false,
+  balance: 0,
+  normalize: false,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -202,6 +238,14 @@ export const useSettingsStore = create<SettingsState>()(
       setPinnedLanguages: (pinnedLanguages) => set({ pinnedLanguages }),
       setMutedLanguages: (mutedLanguages) => set({ mutedLanguages }),
       toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
+      // v5.19.0 — sound effects. The engine/graph is driven by a subscription
+      // in services/audio/effectsBridge.ts (lazy), never from here.
+      setSoundEffects: (soundEffects) => set({ soundEffects }),
+      setEqGains: (gains) => set({ eqGains: clampEq(gains), eqPreset: 'custom' }),
+      setEqPreset: (eqPreset, gains) => set(gains ? { eqPreset, eqGains: clampEq(gains) } : { eqPreset }),
+      setMono: (mono) => set({ mono }),
+      setBalance: (v) => set({ balance: Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : 0 }),
+      setNormalize: (normalize) => set({ normalize }),
       resetSettings: () => set({ ...defaults }),
     }),
     {

@@ -26,6 +26,7 @@ import { useHistoryStore } from '@/store/historyStore';
 import { onThisDay } from '@/features/home/onThisDay';
 import { localDateKey, pickDailyFavorite, useBecauseYouLiked } from '@/features/home/useBecauseYouLiked';
 import { SongOfTheDayCard, StreakCard } from '@/features/home/DailyCards';
+import { FestivalLookaheadCard } from '@/features/home/FestivalLookaheadCard';
 import { getLocal } from '@/services/storage/local';
 import { KEYS } from '@/constants/storage-keys';
 import { toast } from '@/store/toastStore';
@@ -344,10 +345,12 @@ export default function HomePage() {
   // whichever band renders first.
   const personalBand = () => (
     <>
-      {/* v5.17.0 — streak + song of the day: compact cards, each hides itself when empty */}
+      {/* v5.17.0 — streak + song of the day: compact cards, each hides itself when empty.
+          v5.19.0 — plus a "Coming up" festival card when one is 1–3 days away. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-6 empty:hidden">
         <StreakCard entries={historyEntries} />
         <SongOfTheDayCard favorites={favorites} entries={historyEntries} />
+        <FestivalLookaheadCard />
       </div>
 
       {/* 1. Continue Listening — pick up where you left off */}

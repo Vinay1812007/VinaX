@@ -1,5 +1,6 @@
 import type { Song } from '@/types';
 import { getOfflineSources } from '@/services/downloads';
+import { useSettingsStore } from '@/store/settingsStore';
 
 export type AudioQualityPref = 'low' | 'medium' | 'high';
 
@@ -78,6 +79,20 @@ class AudioEngine {
   init(cb: EngineCallbacks): void {
     this.cb = cb;
     if (this.el) return;
+    this.el = this.createElement();
+    // v5.19.0 — effects persisted on: pull the lazy chain in now so the first
+    // track already plays through it (the bridge wires the settings sub).
+    if (useSettingsStore.getState().soundEffects) this.setEffectsEnabled(true);
+  }
+
+  /** Build a playback element with every listener attached. Listeners are
+   *  bound to an AbortController so a replaced element (effects toggle /
+   *  bypass) stops reporting the moment it is retired. */
+  private createElement(): HTMLAudioElement {
+    this.elAbort?.abort();
+    const ac = new AbortController();
+    this.elAbort = ac;
+    const on = { signal: ac.signal };
     const el = new Audio();
     this.applySink(el);
     el.preload = 'auto';
@@ -86,11 +101,11 @@ class AudioEngine {
       this.lastTime = el.currentTime;
       if (el.currentTime > 1.5) this.srcPlayedOk = true;
       this.cb?.onTime(el.currentTime, Number.isFinite(el.duration) ? el.duration : 0);
-    });
+    }, on);
     el.addEventListener('durationchange', () =>
       this.cb?.onTime(el.currentTime, Number.isFinite(el.duration) ? el.duration : 0),
-    );
-    el.addEventListener('play', () => this.cb?.onPlayState(true));
+    on);
+    el.addEventListener('play', () => this.cb?.onPlayState(true), on);
     el.addEventListener('pause', () => {
       this.clearStall();
       // A pause we didn't ask for (phone call, audio-focus loss): remember it
@@ -99,20 +114,21 @@ class AudioEngine {
         this.lastInterruptionAt = Date.now();
       }
       this.cb?.onPlayState(false);
-    });
+    }, on);
     el.addEventListener('waiting', () => {
       this.cb?.onBuffering(true);
       this.armStall();
-    });
+    }, on);
     el.addEventListener('playing', () => {
       this.srcPlayedOk = true;
       this.clearStall();
       this.cb?.onBuffering(false);
-    });
+    }, on);
     el.addEventListener('canplay', () => {
       this.clearStall();
       this.cb?.onBuffering(false);
-    });
+    }, on);
+    el.addEventListener('loadedmetadata', () => this.wireEffects(), on);
     el.addEventListener('loadeddata', () => {
       // Resume position after a mid-track source switch (quality fallback or a
       // transient Bluetooth/output-handoff error) so the track never restarts.
@@ -124,13 +140,102 @@ class AudioEngine {
         }
         this.pendingSeek = 0;
       }
-    });
+    }, on);
     el.addEventListener('ended', () => {
       this.clearStall();
       this.cb?.onEnded();
-    });
-    el.addEventListener('error', () => this.handleMediaError());
+    }, on);
+    el.addEventListener('error', () => this.handleMediaError(), on);
+    return el;
+  }
+
+  // ── v5.19.0 — sound effects (EQ / balance / mono / loudness) ─────────────
+  // The graph lives in ./effects (lazy). The element only gets
+  // crossOrigin='anonymous' while effects are on — a CORS-mode load is what
+  // lets createMediaElementSource hear the stream instead of silence.
+  private effectsOn = false;
+  private effectsMod: typeof import('./effects') | null = null;
+  private elAbort: AbortController | null = null;
+
+  /** Master switch. Mid-play toggles keep position and play state: ON reloads
+   *  the same element in CORS mode; OFF swaps in a fresh element because the
+   *  Web Audio API binds an element to its context for good. */
+  setEffectsEnabled(on: boolean): void {
+    if (on === this.effectsOn) return;
+    this.effectsOn = on;
+    if (on) {
+      void Promise.all([import('./effects'), import('./effectsBridge')])
+        .then(([mod, bridge]) => {
+          bridge.initSoundEffects();
+          if (!this.effectsOn) return; // toggled back off while loading
+          this.effectsMod = mod;
+          this.wireEffects();
+        })
+        .catch(() => undefined);
+      const el = this.el;
+      if (el && el.crossOrigin !== 'anonymous') {
+        el.crossOrigin = 'anonymous';
+        this.reloadInPlace();
+      }
+      return;
+    }
+    const el = this.el;
+    if (!el) return;
+    if (this.effectsMod?.isAttached(el)) {
+      this.effectsMod.detachEffects();
+      this.rebuildElement();
+    } else {
+      el.crossOrigin = null; // takes effect on the next load; nothing to redo now
+    }
+  }
+
+  /** Attach the chain to the current element once its media is known. */
+  private wireEffects(): void {
+    const el = this.el;
+    const mod = this.effectsMod;
+    if (!el || !mod || !this.effectsOn || el.crossOrigin !== 'anonymous' || el.readyState < 1) return;
+    mod.attachEffects(el, { onBypass: () => this.handleEffectsBypass() });
+  }
+
+  /** The probe heard silence through the chain (tainted source): the module
+   *  has already detached; restore direct playback on a plain element. The
+   *  next load() tries the chain again — a different source may be fine. */
+  private handleEffectsBypass(): void {
+    if (!this.el) return;
+    this.rebuildElement();
+  }
+
+  /** Same element, same source, same position — re-run the load so a changed
+   *  crossOrigin takes effect. */
+  private reloadInPlace(): void {
+    const el = this.el;
+    if (!el || !this.song || this.sources.length === 0 || !el.currentSrc) return;
+    this.pendingSeek = el.currentTime;
+    this.wantAutoplay = !el.paused && !el.ended;
+    this.applySource();
+  }
+
+  /** Retire the element and continue on a fresh one (no crossOrigin). */
+  private rebuildElement(): void {
+    const old = this.el;
+    if (!old) return;
+    const at = old.currentTime;
+    const playing = !old.paused && !old.ended;
+    this.lastIntentionalPause = Date.now();
+    this.clearStall();
+    const el = this.createElement(); // aborts the old element's listeners
+    old.pause();
+    old.removeAttribute('src');
+    old.load();
+    el.volume = old.volume;
+    el.muted = old.muted;
+    el.playbackRate = old.playbackRate;
     this.el = el;
+    if (this.song && this.sources.length > 0) {
+      this.pendingSeek = at;
+      this.wantAutoplay = playing;
+      this.applySource();
+    }
   }
 
   get currentSongId(): string | null {
@@ -178,6 +283,7 @@ class AudioEngine {
       }
     }
     this.sinkId = deviceId;
+    this.effectsMod?.setEffectsSink(deviceId); // the chain outputs via its context, not the element
     const pre = this.preloadEl as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
     if (pre && typeof pre.setSinkId === 'function') {
       try {
@@ -207,6 +313,12 @@ class AudioEngine {
     if (this.sources.length === 0) {
       this.cb?.onFatalError(song.id);
       return;
+    }
+    // v5.19.0 — a new song gets a fresh go at the chain (a bypass rebuilt the
+    // element without CORS mode; put it back before the load).
+    if (this.effectsOn) {
+      this.el.crossOrigin = 'anonymous';
+      this.effectsMod?.clearBypass();
     }
     this.applySource();
   }
@@ -295,6 +407,10 @@ class AudioEngine {
   }
 
   play(): void {
+    // v5.19.0 — play() is the user-gesture path: a suspended AudioContext
+    // only resumes here, and a late-loaded chain attaches here too.
+    this.effectsMod?.resumeContext();
+    this.wireEffects();
     void this.el?.play().catch((err: unknown) => {
       this.cb?.onPlayState(false);
       if (err instanceof DOMException && err.name === 'NotAllowedError') this.cb?.onBlocked?.();
@@ -454,10 +570,13 @@ class AudioEngine {
       this.preloadEl.load();
       this.preloadEl = null;
     }
+    this.effectsMod?.detachEffects();
     if (this.el) {
       this.el.pause();
       this.el.src = '';
     }
+    this.elAbort?.abort();
+    this.elAbort = null;
     this.el = null;
     this.cb = null;
     this.song = null;

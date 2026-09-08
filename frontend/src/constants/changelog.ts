@@ -12,6 +12,17 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.19.0': {
+    title: 'Sound, search and the eight follow-ups',
+    changes: [
+      { type: 'new', text: 'Sound — a real equaliser (presets and five bands), left/right balance, mono audio and loudness normalisation, processed on your device. Settings → Sound. Falls back cleanly on sources that can’t be processed.' },
+      { type: 'new', text: 'Search — results appear as you type, repeat searches are instant, exact titles rank first, “Did you mean …?” catches typos, lyric lines that the lyrics service doesn’t know fall back to title matches, and the recent-searches row is tidy again (pin and remove appear on hover or long-press).' },
+      { type: 'new', text: 'Settings has a search box: type “sleep”, “theme” or “alarm” and only the matching settings stay, highlighted.' },
+      { type: 'new', text: 'Playlists can carry tags; filter your library by tag. Home shows a “Coming up” card one to three days before a festival, with a one-tap playlist for it.' },
+      { type: 'new', text: 'Admin — AI Tokens & Cost (per model, per day, with your own price table), Broadcast messages can also go out as push notifications, and Feature Usage, Onboarding Funnel and Skip Report become exact once the new rollup migration is applied.' },
+      { type: 'improved', text: 'Every new console panel, the VinaX AI page, the festival skins and the 5.17 features now run under end-to-end tests in CI.' },
+    ],
+  },
   '5.18.0': {
     title: 'A fresh look: Aurora',
     changes: [

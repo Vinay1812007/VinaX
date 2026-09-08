@@ -284,9 +284,12 @@ function lyricSnippet(plain: string, query: string): string {
  * Free-text lyric search against the lyrics service: "the words you remember"
  * become up to 8 title/artist candidates, each with the matching line as a
  * snippet. Results are cached per query for 10 minutes; the request itself
- * aborts after 8 s (getJson's AbortController) and any failure yields [].
+ * aborts after 8 s and any failure yields [].
+ * v5.19.0 — `opts.signal` (the caller's abort signal, e.g. a query key that
+ * moved on) cancels the request too; an aborted search rejects instead of
+ * caching an empty result.
  */
-export async function searchLyrics(text: string): Promise<LyricsSearchHit[]> {
+export async function searchLyrics(text: string, opts?: { signal?: AbortSignal }): Promise<LyricsSearchHit[]> {
   const q = text.normalize('NFC').trim().replace(/\s+/g, ' ');
   if (!q) return [];
   const key = q.toLowerCase();
@@ -294,7 +297,20 @@ export async function searchLyrics(text: string): Promise<LyricsSearchHit[]> {
   const cached = lyricsSearchCache.get(key);
   if (cached && now - cached.at < LYRICS_SEARCH_TTL_MS) return cached.hits;
 
-  const list = (await getJson(`${BASE}/search?${new URLSearchParams({ q })}`, 8000)) as LrclibSearchRecord[] | null;
+  const outer = opts?.signal;
+  if (outer?.aborted) throw new DOMException('Aborted', 'AbortError');
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 8000);
+  const onOuterAbort = () => controller.abort();
+  outer?.addEventListener('abort', onOuterAbort, { once: true });
+  const list = await fetch(`${BASE}/search?${new URLSearchParams({ q })}`, { signal: controller.signal })
+    .then((res): Promise<LrclibSearchRecord[] | null> => (res.ok ? (res.json() as Promise<LrclibSearchRecord[]>) : Promise.resolve(null)))
+    .catch((): LrclibSearchRecord[] | null => null)
+    .finally(() => {
+      window.clearTimeout(timer);
+      outer?.removeEventListener('abort', onOuterAbort);
+    });
+  if (outer?.aborted) throw new DOMException('Aborted', 'AbortError');
   const hits: LyricsSearchHit[] = [];
   const seen = new Set<string>();
   for (const rec of Array.isArray(list) ? list : []) {
@@ -302,7 +318,7 @@ export async function searchLyrics(text: string): Promise<LyricsSearchHit[]> {
     const plain = rec.plainLyrics?.trim() ?? '';
     if (!title || !plain || rec.instrumental) continue;
     const artist = rec.artistName?.trim() ?? '';
-    const dedupe = `${title.toLowerCase()} ${artist.toLowerCase()}`;
+    const dedupe = `${title.toLowerCase()}\u0000${artist.toLowerCase()}`;
     if (seen.has(dedupe)) continue;
     seen.add(dedupe);
     hits.push({

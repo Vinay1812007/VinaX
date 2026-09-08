@@ -319,6 +319,12 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
 
 export type ChatError = 'not_configured' | 'unreachable' | 'failed';
 
+/** Provider-reported token usage for one call (OpenAI-compatible `usage`). */
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
 export interface ChatResult {
   content: string | null;
   model: string | null;
@@ -326,6 +332,31 @@ export interface ChatResult {
   keyRole?: string;
   error?: ChatError;
   status?: number;
+  /** Token usage of the attempt that answered, when the provider sent it
+   * (v5.16.0 — feeds the admin AI Cost panel through logAiEvent). */
+  usage?: TokenUsage;
+}
+
+const toInt = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v) : null;
+
+/**
+ * Pull `{prompt_tokens, completion_tokens}` out of a provider JSON body or a
+ * streamed SSE chunk. Accepts the OpenAI-compatible top-level `usage` object
+ * and the scholar lane's provider-specific `x_groq.usage` envelope (that
+ * provider reports usage on its final streamed chunk without being asked).
+ * Returns null unless BOTH counts are present as non-negative numbers, so a
+ * partial or malformed usage block never logs a half-truth.
+ */
+export function usageFromJson(j: unknown): TokenUsage | null {
+  if (!j || typeof j !== 'object') return null;
+  const o = j as { usage?: unknown; x_groq?: { usage?: unknown } };
+  const u = (o.usage ?? o.x_groq?.usage) as { prompt_tokens?: unknown; completion_tokens?: unknown } | null | undefined;
+  if (!u || typeof u !== 'object') return null;
+  const prompt = toInt(u.prompt_tokens);
+  const completion = toInt(u.completion_tokens);
+  if (prompt === null || completion === null) return null;
+  return { prompt_tokens: prompt, completion_tokens: completion };
 }
 
 export interface ChatMessage {
@@ -419,9 +450,10 @@ export async function chat(
       clearTimeout(timer);
       if (res.ok) {
         const data = (await res.json().catch(() => null)) as
-          | { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }> }
+          | { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }>; usage?: unknown }
           | null;
         const msg = data?.choices?.[0]?.message;
+        const usage = usageFromJson(data) ?? undefined;
         // Reasoning models (deep lane) may wrap chain-of-thought in
         // <think>…</think> inside content — strip it so internal reasoning
         // never reaches a caller or pollutes JSON extraction. Some engines
@@ -433,7 +465,7 @@ export async function chat(
           return t || null;
         };
         const content = clean(msg?.content) ?? clean(msg?.reasoning_content);
-        if (content) return { content, model, keyRole: role };
+        if (content) return { content, model, keyRole: role, ...(usage ? { usage } : {}) };
         // 200 but blank — fail over to the next lane pair.
         lastStatus = 200;
         break;
@@ -537,6 +569,34 @@ export interface AiLogRow {
   error?: string | null;
   client: 'web' | 'app';
   latency_ms: number;
+  /** Provider-reported token counts (v5.16.0, AI Cost panel). Optional: the
+   * columns arrive with the 2026-09 rollups migration, and the insert only
+   * carries them when the provider actually sent usage. */
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+}
+
+/** The exact row shape written to vinax_ai_events — exported for tests. */
+export function aiEventRow(row: AiLogRow): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    feature: row.feature,
+    model: row.model,
+    ok: row.ok,
+    status: row.status ?? null,
+    error: row.error ?? null,
+    client: row.client,
+    latency_ms: row.latency_ms,
+  };
+  // Token columns only when there are counts to write: an insert that names
+  // a column the table doesn't have yet fails outright, so a deploy that
+  // predates the migration keeps logging every call exactly as before.
+  const p = toInt(row.prompt_tokens);
+  const c = toInt(row.completion_tokens);
+  if (p !== null && c !== null) {
+    out.prompt_tokens = p;
+    out.completion_tokens = c;
+  }
+  return out;
 }
 
 /**
@@ -545,15 +605,14 @@ export interface AiLogRow {
  */
 export function logAiEvent(env: SupabaseEnv, row: AiLogRow): Promise<void> {
   if (!supabaseConfigured(env)) return Promise.resolve();
-  return sbInsert(env, 'vinax_ai_events', {
-    feature: row.feature,
-    model: row.model,
-    ok: row.ok,
-    status: row.status ?? null,
-    error: row.error ?? null,
-    client: row.client,
-    latency_ms: row.latency_ms,
-  })
-    .then(() => undefined)
+  const full = aiEventRow(row);
+  return sbInsert(env, 'vinax_ai_events', full)
+    .then((ok) => {
+      // The token columns may not exist yet (migration not applied): retry
+      // once without them so the event itself is never lost.
+      if (ok || !('prompt_tokens' in full)) return undefined;
+      const bare = Object.fromEntries(Object.entries(full).filter(([k]) => k !== 'prompt_tokens' && k !== 'completion_tokens'));
+      return sbInsert(env, 'vinax_ai_events', bare).then(() => undefined);
+    })
     .catch(() => undefined);
 }

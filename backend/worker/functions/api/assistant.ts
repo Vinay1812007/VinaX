@@ -108,6 +108,8 @@ async function handlePost(context: {
       error: r.error ?? (reply ? null : 'empty'),
       client: isApp ? 'app' : 'web',
       latency_ms: Date.now() - t0,
+      prompt_tokens: r.usage?.prompt_tokens,
+      completion_tokens: r.usage?.completion_tokens,
     });
     if (typeof context.waitUntil === 'function') context.waitUntil(log);
   }

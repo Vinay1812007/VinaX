@@ -2714,7 +2714,7 @@
       exportRows = d.byType; exportName = 'feature-usage'; $('csv').hidden = false;
       var total = d.byType.reduce(function (a, x) { return a + x.n; }, 0) || 1;
       $('view').innerHTML =
-        '<div class="cards">' + card(d.sampled.toLocaleString(), 'Events sampled · ' + d.days + ' d') + card(d.byType.length, 'Event kinds') + card(d.byPlatform[0] ? d.byPlatform[0].platform : '—', 'Top platform') + '</div>' +
+        '<div class="cards">' + card(d.sampled.toLocaleString(), (d.source === 'exact' ? 'Events counted · exact · ' : 'Events sampled · ') + d.days + ' d') + card(d.byType.length, 'Event kinds') + card(d.byPlatform[0] ? d.byPlatform[0].platform : '—', 'Top platform') + '</div>' +
         '<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap"><div class="card" style="flex:2;min-width:320px"><h3 style="margin-top:0">What listeners do</h3><table><thead><tr><th>Event</th><th>Count</th><th>Share</th><th>Devices</th></tr></thead><tbody>' +
         d.byType.map(function (t) { return '<tr><td><code>' + esc(t.type) + '</code></td><td>' + t.n.toLocaleString() + '</td>' + pctCell(t.n / total) + '<td>' + t.devices.toLocaleString() + '</td></tr>'; }).join('') + '</tbody></table></div>' +
         '<div class="card" style="flex:1;min-width:240px"><h3 style="margin-top:0">By platform</h3>' + bars(d.byPlatform, function (x) { return esc(x.platform); }, function (x) { return x.n; }) + '</div></div>';
@@ -2741,7 +2741,7 @@
       exportRows = d.steps; exportName = 'funnel'; $('csv').hidden = false;
       $('view').innerHTML =
         '<div class="cards">' + card(d.steps[0] ? d.steps[0].devices.toLocaleString() : 0, 'Devices that opened the app') + card((d.steps[2] ? d.steps[2].pct : 0) + '%', 'Went on to play') + card((d.steps[3] ? d.steps[3].pct : 0) + '%', 'Finished a song') + '</div>' +
-        '<div class="card"><h3 style="margin-top:0">Funnel <span class="muted">· distinct devices, last ' + d.days + ' d, sample of ' + d.sampled.toLocaleString() + ' events</span></h3>' +
+        '<div class="card"><h3 style="margin-top:0">Funnel <span class="muted">· distinct devices, last ' + d.days + ' d · ' + (d.source === 'exact' ? 'exact (rollup)' : 'sample of ' + d.sampled.toLocaleString() + ' events') + '</span></h3>' +
         d.steps.map(function (s, i) { var prev = i ? d.steps[i - 1].devices : s.devices; var drop = prev ? Math.round((1 - s.devices / prev) * 100) : 0; return '<div class="brow"><div class="blabel">' + esc(s.label) + '</div><div class="btrack"><div class="bfill" style="width:' + s.pct + '%"></div></div><div class="bval">' + s.devices.toLocaleString() + ' · ' + s.pct + '%' + (i ? ' <span class="muted">(−' + drop + '%)</span>' : '') + '</div></div>'; }).join('') + '</div>';
     }).catch(function () { if (active === 'funnel') showFail(); });
   }
@@ -2776,7 +2776,7 @@
       if (!d || active !== 'skips') return;
       if (!d.configured) { showFail('Supabase is not configured.'); return; }
       exportRows = d.items; exportName = 'skips'; $('csv').hidden = !d.items.length;
-      $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Most skipped <span class="muted">· songs with ≥' + d.min + ' plays in ' + d.days + ' d, ranked by skip rate</span></h3><table><thead><tr><th></th><th>Song</th><th>Plays</th><th>Skips</th><th>Rate</th><th></th></tr></thead><tbody>' +
+      $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Most skipped <span class="muted">· songs with ≥' + d.min + ' plays in ' + d.days + ' d, ranked by skip rate \u00b7 ' + (d.source === 'exact' ? 'exact' : 'sampled') + '</span></h3><table><thead><tr><th></th><th>Song</th><th>Plays</th><th>Skips</th><th>Rate</th><th></th></tr></thead><tbody>' +
         (d.items.length ? d.items.map(function (s) { return '<tr><td>' + (s.image ? '<img class="thumb-sm" src="' + esc(s.image) + '" alt="" />' : '') + '</td><td><b>' + esc(s.title) + '</b><div class="muted">' + esc(s.artist) + '</div></td><td>' + s.plays + '</td><td>' + s.skips + '</td>' + pctCell(s.rate) + '<td><button class="ghost" data-block="' + esc(s.id) + '" data-title="' + esc(s.title) + '">Block</button> <button class="ghost" data-ss2="' + esc(s.id) + '">Drilldown</button></td></tr>'; }).join('') : '<tr><td colspan="6" class="empty">Nothing skipped enough to report.</td></tr>') + '</tbody></table></div>';
       Array.prototype.forEach.call(document.querySelectorAll('[data-block]'), function (b) { b.addEventListener('click', function () { doBlock(b.getAttribute('data-block'), b.getAttribute('data-title')); }); });
       Array.prototype.forEach.call(document.querySelectorAll('[data-ss2]'), function (b) { b.addEventListener('click', function () { setSection('songstats'); setTimeout(function () { var q = $('ss-q'); if (q) { q.value = b.getAttribute('data-ss2'); $('ss-go').click(); } }, 50); }); });
@@ -2970,10 +2970,17 @@
   function renderBroadcastSection() {
     cfgEditor({
       sec: 'broadcast', key: 'broadcast', title: 'Broadcast message', clearable: true, empty: null, saveLabel: 'Send to everyone',
-      help: 'A one-time toast every listener sees the next time the app is open (each broadcast id shows once per device). Optional in-app link (a path like <code>/later</code>). Optional window.',
-      form: function (v) { v = v || {}; return lbl('Message', inp('bc-text', v.text || '', 'New: Listen Later — save songs for later from any menu', 'style="width:100%" maxlength="240"')) + lbl('Link (optional, in-app path)', inp('bc-link', v.link || '', '/later', 'style="width:280px"')) + '<div class="row" style="gap:12px;flex-wrap:wrap"><div>' + lbl('From (optional)', inp('bc-start', isoLocal(v.start), '', 'type="datetime-local"')) + '</div><div>' + lbl('Until (optional)', inp('bc-end', isoLocal(v.end), '', 'type="datetime-local"')) + '</div></div>'; },
+      help: 'A one-time toast every listener sees the next time the app is open (each broadcast id shows once per device). Optional in-app link (a path like <code>/later</code>). Optional window. Tick “Also push” to reach closed apps and subscribed browsers through notifications.',
+      form: function (v) { v = v || {}; return lbl('Message', inp('bc-text', v.text || '', 'New: Listen Later — save songs for later from any menu', 'style="width:100%" maxlength="240"')) + lbl('Link (optional, in-app path)', inp('bc-link', v.link || '', '/later', 'style="width:280px"')) + '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><input type="checkbox" id="bc-push" /> Also push as a notification (closed apps + browsers)</label>' + '<div class="row" style="gap:12px;flex-wrap:wrap"><div>' + lbl('From (optional)', inp('bc-start', isoLocal(v.start), '', 'type="datetime-local"')) + '</div><div>' + lbl('Until (optional)', inp('bc-end', isoLocal(v.end), '', 'type="datetime-local"')) + '</div></div>'; },
       read: function () { var t = $('bc-text').value.trim(); if (!t) throw new Error('Message is required'); var o = { id: 'b' + Date.now().toString(36), text: t.slice(0, 240) }; var l = $('bc-link').value.trim(); if (l) { if (l.charAt(0) !== '/') throw new Error('Link must be an in-app path starting with /'); o.link = l.slice(0, 200); } var s = fromLocal($('bc-start').value), e = fromLocal($('bc-end').value); if (s) o.start = s; if (e) o.end = e; return o; },
       after: function (v) { return v && v.text ? '<div class="card"><b>Live broadcast:</b> “' + esc(v.text) + '” <span class="muted">· id ' + esc(v.id || '') + '</span></div>' : ''; },
+      // v5.19.0 — optional push through the same composer path the Notifications tool uses.
+      onSaved: function (v) {
+        var cb = $('bc-push'); if (!cb || !cb.checked) return;
+        postApi('/api/admin/push', { title: 'VinaX', body: v.text, link: v.link || '/' }).then(function (r) {
+          stampOut('broadcast-out', r && (r.ok || r.sent != null) ? 'Published ✓ · pushed to ' + (r.sent != null ? r.sent + ' devices' : 'subscribers') : 'Published ✓ · push failed' + (r && r.error ? ' — ' + r.error : ''), !(r && (r.ok || r.sent != null)));
+        }).catch(function () { stampOut('broadcast-out', 'Published ✓ · push failed — network', true); });
+      },
     });
   }
   // 21. Home greeting.
@@ -3034,12 +3041,47 @@
   }
   setTimeout(function () { try { applyPins(); } catch (e) { /* nav not ready */ } }, 0);
 
-  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools' };
-  var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true, usage: true, heatmap: true, funnel: true, songstats: true, skips: true };
+  // v5.19.0 — AI tokens & cost (needs the tokens migration; prices come from
+  // the 'ai-prices' config key — never invented here).
+  function loadAiCost() {
+    apiMemo('/api/admin/aicost?days=' + rangeDays).then(function (d) {
+      if (!d || active !== 'aicost') return;
+      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      var tt = d.tokensTotal || { prompt: 0, completion: 0 };
+      var cost = (d.byModel || []).reduce(function (a, m) { return a + (m.cost || 0); }, 0);
+      exportRows = d.byModel || []; exportName = 'ai-cost'; $('csv').hidden = !exportRows.length;
+      $('view').innerHTML =
+        '<div class="cards">' + card(fmtN(tt.prompt), 'Prompt tokens · ' + d.days + ' d') + card(fmtN(tt.completion), 'Completion tokens') + card(d.unpriced ? '—' : '$' + cost.toFixed(2), d.unpriced ? 'Cost · set prices below' : 'Estimated cost') + card((d.sampled || 0).toLocaleString(), 'Calls counted') + '</div>' +
+        (tt.prompt + tt.completion === 0 ? '<div class="card" style="border-color:var(--warn)"><b>No token counts yet.</b> <span class="muted">Apply the tokens migration (frontend/supabase/migrations) and new calls start logging usage.</span></div>' : '') +
+        '<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap"><div class="card" style="flex:2;min-width:320px"><h3 style="margin-top:0">By model</h3><table><thead><tr><th>Model</th><th>Calls</th><th>Prompt</th><th>Completion</th><th>Cost</th></tr></thead><tbody>' +
+        ((d.byModel || []).length ? d.byModel.map(function (m) { return '<tr><td><code>' + esc(m.model) + '</code></td><td>' + fmtN(m.calls) + '</td><td>' + fmtN(m.prompt) + '</td><td>' + fmtN(m.completion) + '</td><td>' + (m.cost == null ? '<span class="muted">unpriced</span>' : '$' + m.cost.toFixed(3)) + '</td></tr>'; }).join('') : '<tr><td colspan="5" class="empty">Nothing logged in this window.</td></tr>') + '</tbody></table></div>' +
+        '<div class="card" style="flex:1;min-width:260px"><h3 style="margin-top:0">Tokens per day</h3>' + dayChart((d.byDay || []).map(function (x) { return { day: x.day, n: (x.prompt || 0) + (x.completion || 0) }; }), 'n') + '</div></div>' +
+        '<div id="aiprices-host"></div>';
+      renderAiPricesEditor();
+    }).catch(function () { if (active === 'aicost') showFail(); });
+  }
+  function renderAiPricesEditor() {
+    var host = $('aiprices-host'); if (!host) return;
+    cfgGet('ai-prices').then(function (d) {
+      if (active !== 'aicost') return;
+      var v = d && d.configured && d.value && typeof d.value === 'object' ? d.value : {};
+      var lines = Object.keys(v).map(function (k) { return k + ' = ' + (v[k].in != null ? v[k].in : 0) + ' / ' + (v[k].out != null ? v[k].out : 0); });
+      host.innerHTML = '<div class="card"><h3 style="margin-top:0">Prices <span class="muted">· USD per 1M tokens, one per line as <code>model-prefix = in / out</code></span></h3><textarea id="aip-text" class="inp" rows="6" style="width:100%;font-family:ui-monospace,monospace">' + esc(lines.join('\n')) + '</textarea><div class="row" style="gap:8px;align-items:center;margin-top:10px"><button id="aip-save">Publish prices</button><span class="muted" id="aip-out" style="font-size:12px">Longest prefix wins. Leave empty to show tokens only.</span></div></div>';
+      $('aip-save').addEventListener('click', function () {
+        var out = {};
+        $('aip-text').value.split('\n').forEach(function (l) { var m = /^\s*([^=]+?)\s*=\s*([0-9.]+)\s*\/\s*([0-9.]+)\s*$/.exec(l); if (m) out[m[1]] = { in: parseFloat(m[2]), out: parseFloat(m[3]) }; });
+        cfgSet('ai-prices', out).then(function (r) { stampOut('aip-out', r && r.ok ? 'Published ✓' : 'Publish failed', !(r && r.ok)); if (r && r.ok) { memoReset(); loadAiCost(); } }).catch(function () { stampOut('aip-out', 'Publish failed — network', true); });
+      });
+    }).catch(noop);
+  }
+  function fmtN(n) { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n); }
+
+  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools', aicost: 'AI Tokens & Cost' };
+  var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true, usage: true, heatmap: true, funnel: true, songstats: true, skips: true, aicost: true };
   // v5.7.5 — formal category reorganisation: which category each tool sits
   // under (drives the breadcrumb over the tool title) + collapsible category
   // headers whose open/closed state persists per browser.
-  var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings' };
+  var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines' };
   var GRP_KEY = 'vinax_admin_navgroups';
   function closedGroups() { try { var v = JSON.parse(localStorage.getItem(GRP_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
   function applyNavGroups() {
@@ -3128,6 +3170,7 @@
     else if (active === 'faq') renderFaqSection();
     else if (active === 'announce') renderAnnounceSection();
     else if (active === 'pins') renderPinsSection();
+    else if (active === 'aicost') loadAiCost();
   }
   document.addEventListener('keydown', function (e) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); }

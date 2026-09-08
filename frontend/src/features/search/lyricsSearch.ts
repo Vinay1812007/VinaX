@@ -11,7 +11,14 @@ import { searchSongs } from '@/services/api/saavn';
 export interface LyricsMatch {
   hit: LyricsSearchHit;
   song: Song;
+  /** v5.19.0 — 'lyrics' = the lyrics service matched the words; 'catalogue'
+   *  = the lyrics service had nothing and a title search stood in (many
+   *  Telugu/Tamil songs are titled by their first line). */
+  source: 'lyrics' | 'catalogue';
 }
+
+/** v5.19.0 — a catalogue search function, as the hooks bind it (with signal). */
+export type CatalogueSearch = (query: string, limit: number) => Promise<Song[]>;
 
 /** Words of a query worth matching: lowercase, punctuation-free, 2+ chars. */
 export function queryWords(text: string): string[] {
@@ -98,13 +105,13 @@ export function pickBest(hit: LyricsSearchHit, candidates: Song[]): Song | null 
  *  ones with no convincing match and any song that already appeared. */
 export async function resolveLyricsHits(
   hits: LyricsSearchHit[],
-  search: (query: string, limit: number) => Promise<Song[]> = searchSongs,
+  search: CatalogueSearch = searchSongs,
 ): Promise<LyricsMatch[]> {
   const settled = await Promise.allSettled(
     hits.map(async (hit) => {
       const q = [hit.title, hit.artist].filter(Boolean).join(' ');
       const song = pickBest(hit, await search(q, 3));
-      return song ? { hit, song } : null;
+      return song ? { hit, song, source: 'lyrics' as const } : null;
     }),
   );
   const out: LyricsMatch[] = [];
@@ -115,6 +122,53 @@ export async function resolveLyricsHits(
     out.push(r.value);
   }
   return out;
+}
+
+/** v5.19.0 — the first four query words, or '' when that is the whole line. */
+export function firstWords(line: string, count = 4): string {
+  const words = line.trim().split(/\s+/).filter(Boolean);
+  return words.length > count ? words.slice(0, count).join(' ') : '';
+}
+
+/** v5.19.0 — pure merge for the catalogue fallback: the full-line results
+ *  first, then the first-four-words results, each song once. Rejected
+ *  lookups contribute nothing. Exported for tests. */
+export function mergeCatalogueFallback(
+  results: readonly PromiseSettledResult<Song[]>[],
+  limit = CATALOGUE_FALLBACK_LIMIT,
+): LyricsMatch[] {
+  const out: LyricsMatch[] = [];
+  const seen = new Set<string>();
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue;
+    for (const song of r.value) {
+      if (!song?.id || seen.has(song.id)) continue;
+      seen.add(song.id);
+      out.push({
+        hit: { title: song.title, artist: song.subtitle ?? '', album: song.album?.name ?? '', duration: song.duration, snippet: '' },
+        song,
+        source: 'catalogue',
+      });
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
+}
+
+export const CATALOGUE_FALLBACK_LIMIT = 8;
+
+/**
+ * v5.19.0 — when the lyrics service comes up empty (or errors/times out),
+ * search the catalogue by the line itself and by its first four words, in
+ * parallel; a song titled by its opening line is found either way.
+ */
+export async function catalogueFallback(line: string, search: CatalogueSearch = searchSongs): Promise<LyricsMatch[]> {
+  const full = line.trim().replace(/\s+/g, ' ');
+  if (!full) return [];
+  const head = firstWords(full);
+  const lookups = [search(full, CATALOGUE_FALLBACK_LIMIT)];
+  if (head) lookups.push(search(head, CATALOGUE_FALLBACK_LIMIT));
+  return mergeCatalogueFallback(await Promise.allSettled(lookups));
 }
 
 /** A snippet split into runs, `hit` runs being the query words to highlight. */

@@ -17,16 +17,20 @@ import { CollageCover } from '@/features/library/CollageCover';
 import { findDuplicates } from '@/features/library/duplicates';
 import { SORT_OPTIONS, shuffled, sortSongs, type CollectionSort } from '@/features/library/sort';
 import { canShareText, collectionToText, copyText, shareText } from '@/features/library/collectionText';
+import { allTags } from '@/features/library/tags';
+import { TagChips, TagEditor } from '@/features/library/TagEditor';
 
 /**
  * v5.17.0 — collection page: collage cover, inline name/emoji/description
  * editing, pin, view-only sort, shuffle play, duplicate finder, copy/share as
  * text and a "Downloaded only" filter when offline copies exist.
+ * v5.19.0 — tags in the Edit form (chips, suggestions from other playlists).
  */
 export default function CollectionPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const collection = useLibraryStore((s) => s.collections.find((c) => c.id === id));
+  const allCollections = useLibraryStore((s) => s.collections);
   const downloads = useDownloadsStore((s) => s.items);
   const {
     renameCollection,
@@ -36,11 +40,15 @@ export default function CollectionPage() {
     togglePinCollection,
     dedupeCollection,
     updateCollectionMeta,
+    setCollectionTags,
   } = useLibraryStore.getState();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(collection?.name ?? '');
   const [emoji, setEmoji] = useState(collection?.emoji ?? '');
   const [description, setDescription] = useState(collection?.description ?? '');
+  const [tags, setTags] = useState<string[]>(collection?.tags ?? []);
+  // v5.19.0 — tags already used on OTHER playlists, offered as suggestions.
+  const tagSuggestions = useMemo(() => allTags(allCollections.filter((c) => c.id !== id)), [allCollections, id]);
   const [sort, setSort] = useState<CollectionSort>('added');
   const [downloadedOnly, setDownloadedOnly] = useState(false);
   const [dlBusy, setDlBusy] = useState(false);
@@ -94,12 +102,14 @@ export default function CollectionPage() {
     setName(collection.name);
     setEmoji(collection.emoji ?? '');
     setDescription(collection.description ?? '');
+    setTags(collection.tags ?? []);
     setEditing(true);
   };
   const saveEdit = () => {
     const n = name.trim();
     if (n && n !== collection.name) renameCollection(collection.id, n);
     updateCollectionMeta(collection.id, { description, emoji });
+    setCollectionTags(collection.id, tags);
     setEditing(false);
   };
   const remove = () => {
@@ -158,6 +168,7 @@ export default function CollectionPage() {
                 maxLength={280}
                 className="glass-input w-full px-4 py-2 rounded-xl text-sm resize-none"
               />
+              <TagEditor tags={tags} onChange={setTags} suggestions={tagSuggestions} />
               <div className="flex gap-2">
                 <button onClick={saveEdit} className="px-4 py-1.5 rounded-full btn-primary text-xs font-bold">Save</button>
                 <button onClick={() => setEditing(false)} className="px-4 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400">Cancel</button>
@@ -180,6 +191,7 @@ export default function CollectionPage() {
                 </button>
               </div>
               {collection.description && <p className="text-sm text-ink-300 mt-1 line-clamp-3">{collection.description}</p>}
+              <TagChips tags={collection.tags} className="mt-1.5" />
             </>
           )}
           <p className="text-sm text-ink-400 mt-1">

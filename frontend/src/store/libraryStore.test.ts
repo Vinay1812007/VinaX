@@ -91,6 +91,21 @@ describe('libraryStore v5.17.0 — collections', () => {
     expect(useLibraryStore.getState().collections[0].emoji).toBe('🚗');
   });
 
+  it('setCollectionTags normalises, caps and clears tags (v5.19.0)', () => {
+    const s = useLibraryStore.getState();
+    const id = s.createCollection('Tagged');
+    useLibraryStore.getState().setCollectionTags(id, ' Chill, DRIVE ,, chill, #telugu ');
+    expect(useLibraryStore.getState().collections[0].tags).toEqual(['chill', 'drive', 'telugu']);
+    useLibraryStore.getState().setCollectionTags(id, Array.from({ length: 12 }, (_, i) => `t${i}`));
+    expect(useLibraryStore.getState().collections[0].tags).toHaveLength(8);
+    useLibraryStore.getState().setCollectionTags(id, []);
+    expect(useLibraryStore.getState().collections[0].tags).toBeUndefined();
+    expect('tags' in useLibraryStore.getState().collections[0]).toBe(false);
+    // Unknown id is a no-op.
+    useLibraryStore.getState().setCollectionTags('nope', ['x']);
+    expect(useLibraryStore.getState().collections).toHaveLength(1);
+  });
+
   it('prunes expired trash entries on rehydrate and keeps the rest', () => {
     const now = Date.now();
     const col = (id: string) => ({ id, name: id, createdAt: 0, songs: [] });

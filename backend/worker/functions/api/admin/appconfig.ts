@@ -20,6 +20,8 @@ export const ALLOWED_KEYS = new Set([
   'banners', 'home-config', 'festival', 'status-note', 'flags', 'runbook', 'trending-pins',
   // v5.15.0 — client bundle keys (see _lib/clientConfig.ts) + server-side knobs
   'greeting', 'broadcast', 'search-synonyms', 'catalog-sources', 'language-order', 'ai-starters', 'ai-quick', 'support-faq', 'min-version', 'maintenance-window', 'ai-rules',
+  // v5.16.0 — operator-entered model prices for the AI Cost panel (admin-only)
+  'ai-prices',
 ]);
 /** jsonb payload cap — banners may embed small base64 images. */
 const MAX_VALUE_BYTES = 900 * 1024;

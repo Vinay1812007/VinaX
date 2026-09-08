@@ -1,7 +1,9 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { Album, Artist, Playlist, Song } from '@/types';
 import { searchAlbumsPage, searchArtistsPage, searchPlaylistsPage, searchSongsPage } from '@/services/api';
-import { normalizeQuery, rankSongs } from './useSearch';
+import { useSettingsStore } from '@/store/settingsStore';
+import { normalizeQuery, rankSongs, SEARCH_GC_MS, SEARCH_STALE_MS } from './useSearch';
+import { rerankSongs } from './rerank';
 
 /**
  * Endless song lists for any seed query (search, trending, moods, charts).
@@ -20,11 +22,16 @@ export function useInfiniteSongs(query: string, enabled = true, opts?: { search?
     queryKey: ['inf-songs', q, search ? 's' : 'x'],
     enabled: enabled && q.length > 1,
     initialPageParam: 1,
-    queryFn: async ({ pageParam, signal }) =>
-      rankSongs(await searchSongsPage(q, pageParam, 25, { signal }), search ? { query: q, searchMode: true } : {}),
+    queryFn: async ({ pageParam, signal }) => {
+      const page = rankSongs(await searchSongsPage(q, pageParam, 25, { signal }), search ? { query: q, searchMode: true } : {});
+      // v5.19.0 — literal-match tiers per page (exact title, starts-with, all
+      // words) so the song you typed heads its page; rendered pages never jump.
+      return search ? rerankSongs(page, q, useSettingsStore.getState().pinnedLanguages) : page;
+    },
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length >= (search ? 5 : 15) && allPages.length < 40 ? allPages.length + 1 : undefined,
-    staleTime: 10 * 60_000,
+    staleTime: SEARCH_STALE_MS,
+    gcTime: SEARCH_GC_MS,
   });
 }
 
@@ -37,7 +44,8 @@ export function useInfiniteAlbums(query: string, enabled = true) {
     queryFn: ({ pageParam, signal }) => searchAlbumsPage(q, pageParam, 20, { signal }),
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length >= 10 && allPages.length < 12 ? allPages.length + 1 : undefined,
-    staleTime: 10 * 60_000,
+    staleTime: SEARCH_STALE_MS,
+    gcTime: SEARCH_GC_MS,
   });
 }
 
@@ -61,7 +69,8 @@ export function useInfiniteArtists(query: string, enabled = true) {
       lastPage.length >= 10 && allPages.length < 12 && !pageAddedNothing(lastPage, allPages)
         ? allPages.length + 1
         : undefined,
-    staleTime: 10 * 60_000,
+    staleTime: SEARCH_STALE_MS,
+    gcTime: SEARCH_GC_MS,
   });
 }
 
@@ -77,7 +86,8 @@ export function useInfinitePlaylists(query: string, enabled = true) {
       lastPage.length >= 10 && allPages.length < 12 && !pageAddedNothing(lastPage, allPages)
         ? allPages.length + 1
         : undefined,
-    staleTime: 10 * 60_000,
+    staleTime: SEARCH_STALE_MS,
+    gcTime: SEARCH_GC_MS,
   });
 }
 

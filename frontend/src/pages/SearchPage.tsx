@@ -48,6 +48,10 @@ import { looksLikeLyric, splitHighlight } from '@/features/search/lyricsSearch';
 import { useLyricsSearch } from '@/features/search/useLyricsSearch';
 import { filterSongsLocally, SONG_SORT_LABELS, sortSongs } from '@/features/search/sortSongs';
 import { exampleQueries, SEARCH_TIP_LINE } from '@/features/search/searchTips';
+import { rerankSongs } from '@/features/search/rerank';
+import { candidatePool, COMMON_NAMES, didYouMean } from '@/features/search/didYouMean';
+import { useQuickResults } from '@/features/search/useQuickResults';
+import { putCachedQuick, QUICK_LIMIT } from '@/features/search/quickResults';
 
 const TABS = ['All', 'Songs', 'Albums', 'Artists', 'Playlists'] as const;
 type Tab = (typeof TABS)[number];
@@ -89,7 +93,10 @@ function PinGlyph({ className }: { className?: string }) {
 }
 
 /** v5.17.0 — one recent-search chip: tap opens it, long-press (or the pin
- *  button) pins it to the front, × forgets it. */
+ *  button) pins it to the front, × forgets it.
+ *  v5.19.0 — decluttered: the chip shows only its text (plus a small pin
+ *  glyph when pinned). Pin/× fade in on hover or keyboard focus; on touch
+ *  screens only a single small × stays visible and long-press does the pinning. */
 function RecentChip({
   query,
   pinned,
@@ -111,7 +118,7 @@ function RecentChip({
   };
   useEffect(() => cancel, []);
   return (
-    <span className="inline-flex items-center gap-0.5">
+    <span className="group inline-flex items-center">
       <span
         onPointerDown={() => {
           longPressed.current = false;
@@ -142,18 +149,47 @@ function RecentChip({
           {query}
         </Chip>
       </span>
-      <button
-        aria-label={pinned ? `Unpin ${query}` : `Pin ${query}`}
-        aria-pressed={pinned}
-        onClick={() => onTogglePin(false)}
-        className={cn('p-1.5 rounded-full hover:bg-ink-700/70', pinned ? 'text-ember-400' : 'text-ink-500 hover:text-ink-200')}
-      >
-        <PinGlyph className="w-3.5 h-3.5" />
-      </button>
-      <button aria-label={`Remove ${query}`} onClick={onRemove} className="p-1.5 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70 -ml-0.5">
-        <XIcon className="w-3.5 h-3.5" />
-      </button>
+      <span className="relative flex items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+        <button
+          aria-label={pinned ? `Unpin ${query}` : `Pin ${query}`}
+          aria-pressed={pinned}
+          onClick={() => onTogglePin(false)}
+          className={cn('p-1 rounded-full hover:bg-ink-700/70 [@media(hover:none)]:hidden', pinned ? 'text-ember-400' : 'text-ink-500 hover:text-ink-200')}
+        >
+          <PinGlyph className="w-3.5 h-3.5" />
+        </button>
+        <button aria-label={`Remove ${query}`} onClick={onRemove} className="p-1 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70">
+          <XIcon className="w-3 h-3" />
+        </button>
+      </span>
     </span>
+  );
+}
+
+/** v5.19.0 — one compact, playable "Quick results" row under the suggestions. */
+function QuickRow({ song, onPlay, dim }: { song: Song; onPlay: () => void; dim: boolean }) {
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  return (
+    <button
+      type="button"
+      onPointerDown={(e) => {
+        e.preventDefault(); // keep the box focused so the panel stays open
+        pointer.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerUp={(e) => {
+        const p = pointer.current;
+        pointer.current = null;
+        if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12) onPlay();
+      }}
+      className={cn('w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-ink-800/60 transition-opacity', dim && 'opacity-50')}
+    >
+      <img src={bestImage(song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm truncate">{song.title}</span>
+        <span className="block text-xs text-ink-400 truncate">{song.subtitle}</span>
+      </span>
+      <PlayIcon className="w-4 h-4 text-ink-400 shrink-0" />
+    </button>
   );
 }
 
@@ -198,7 +234,12 @@ export default function SearchPage() {
   // synchronously (state is one render behind), so it never fights typing.
   const focusedRef = useRef(false);
   const debounced = useDebouncedValue(input, 350);
-  const q = normalizeQuery(debounced);
+  // v5.19.0 — a COMMITTED query (Enter, chip, suggestion, voice, deep link)
+  // skips the typing debounce: the request — and its skeleton — start on the
+  // same frame as the commit. Live typing still settles through `debounced`.
+  const [commitQ, setCommitQ] = useState<string | null>(() => (routeQuery ? normalizeQuery(routeQuery) : null));
+  const typedNow = normalizeQuery(input);
+  const q = commitQ !== null && typedNow === commitQ ? commitQ : normalizeQuery(debounced);
   usePageTitle(q ? `“${q}”` : 'Search');
 
   const recent = useSearchStore((s) => s.recent);
@@ -274,6 +315,18 @@ export default function SearchPage() {
       )}
     </div>
   );
+  // Community top searches (aggregated + cached) — chips under the bar.
+  const trendingQ = useQuery<{ queries: string[] }>({
+    queryKey: ['trending-searches'],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
+      const r = await fetch(`${base}/api/trending-searches`);
+      const j = r.ok ? ((await r.json()) as { queries?: string[] }) : null;
+      return { queries: Array.isArray(j?.queries) ? j.queries : [] };
+    },
+  });
+
   const trendingNow = useTrendingNow();
   const recRef = useRef<SttSession | null>(null);
   const suggPointer = useRef<{ x: number; y: number } | null>(null);
@@ -296,6 +349,7 @@ export default function SearchPage() {
       const cq = normalizeQuery(raw);
       if (cq.length < 1) return;
       lastRouteApplied.current = cq; // our own commit — don't mirror it back in
+      setCommitQ(cq);
       if (cq !== routeQuery) navigate(`/search/${encodeURIComponent(cq)}`, { replace: true });
       if (cq.length >= 2) addRecent(cq);
     },
@@ -327,6 +381,7 @@ export default function SearchPage() {
     if (shouldSyncRouteToInput(routeQuery, lastRouteApplied.current, focusedRef.current)) {
       lastRouteApplied.current = routeQuery ?? null;
       setInput(routeQuery ?? '');
+      setCommitQ(routeQuery ? normalizeQuery(routeQuery) : null);
     }
   }, [routeQuery]);
 
@@ -346,21 +401,27 @@ export default function SearchPage() {
   // One memoized ranking pass per settled result set (was recomputed twice
   // per render — P2-19), in search mode: junk filter off, relevance on.
   const allSongs = all.data?.songs;
+  const allPlaceholder = all.isPlaceholderData;
+  // v5.19.0 — then the literal-match tiers (exact title → starts-with → all
+  // words) with a nudge for pinned languages, on top of the taste pass.
   const rankedAllSongs = useMemo(
-    () => (allSongs ? rankSongs(allSongs, { query: q, searchMode: true }) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- q is baked into allSongs' query
-    [allSongs],
+    () => (allSongs ? rerankSongs(rankSongs(allSongs, { query: q, searchMode: true }), q, pinnedLangs) : []),
+    [allSongs, q, pinnedLangs],
   );
+  // v5.19.0 — a settled full search seeds the quick-results cache, so
+  // re-typing (or returning to) this query previews instantly, no request.
+  useEffect(() => {
+    if (allSongs && !allPlaceholder && q.length >= 2) putCachedQuick(q, rankedAllSongs.slice(0, QUICK_LIMIT));
+  }, [allSongs, allPlaceholder, q, rankedAllSongs]);
 
   // Search analytics: one event per settled query, with its result count.
   const lastTracked = useRef('');
   useEffect(() => {
-    const q = debounced.trim();
-    if (q.length < 2 || !all.data || lastTracked.current === q) return;
+    if (q.length < 2 || !all.data || allPlaceholder || lastTracked.current === q) return;
     lastTracked.current = q;
     const count = all.data.songs.length;
     void import('@/services/analytics/telemetry').then((mm) => mm.trackSearch(q, count));
-  }, [debounced, all.data]);
+  }, [q, all.data, allPlaceholder]);
   const topResult = rankedAllSongs[0];
   const songPages = infiniteSongs.data?.pages;
   const allSongList = useMemo(() => flattenSongPages(songPages), [songPages]);
@@ -406,6 +467,32 @@ export default function SearchPage() {
   const [suggSel, setSuggSel] = useState(-1);
   useEffect(() => setSuggSel(-1), [trimmed, focused]);
 
+  // v5.19.0 — search-as-you-type preview: six playable songs under the
+  // suggestions, 250 ms after the (normalised) text settles, previous request
+  // aborted, URL untouched. Off in lyrics mode and while the box is blurred.
+  const quick = useQuickResults(focused && !lyricsMode ? typedNow : '');
+  const quickSongs = useMemo(() => rerankSongs(quick.songs, quick.key, pinnedLangs), [quick.songs, quick.key, pinnedLangs]);
+  const showQuick = focused && !lyricsMode && typedNow.length >= 2 && (quickSongs.length > 0 || quick.loading);
+  const showPanel = showSuggest || showQuick;
+
+  // v5.19.0 — "Did you mean …?" once a committed query settles with no songs:
+  // nearest of trending queries + recents + a small built-in name list.
+  const trendingQueries = trendingQ.data?.queries;
+  const noSongsSettled = !!all.data && !allPlaceholder && rankedAllSongs.length === 0;
+  const dym = useMemo(() => {
+    if (!noSongsSettled || q.length < 2) return null;
+    return didYouMean(q, candidatePool(q, [trendingQueries ?? [], recent, COMMON_NAMES]));
+  }, [noSongsSettled, q, trendingQueries, recent]);
+  const dymBar = dym ? (
+    <p role="status" className="mb-4 text-sm text-ink-300">
+      Did you mean{' '}
+      <button onClick={() => applySuggestion(dym)} className="font-bold text-ember-400 hover:text-ember-300">
+        {dym}
+      </button>
+      ?
+    </p>
+  ) : null;
+
   const startVoice = () => {
     if (!voiceReady) return;
     if (recRef.current) {
@@ -435,18 +522,6 @@ export default function SearchPage() {
     recRef.current = session;
     setListening(true);
   };
-
-  // Community top searches (aggregated + cached) — chips under the bar.
-  const trendingQ = useQuery<{ queries: string[] }>({
-    queryKey: ['trending-searches'],
-    staleTime: 10 * 60_000,
-    queryFn: async () => {
-      const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
-      const r = await fetch(`${base}/api/trending-searches`);
-      const j = r.ok ? ((await r.json()) as { queries?: string[] }) : null;
-      return { queries: Array.isArray(j?.queries) ? j.queries : [] };
-    },
-  });
 
   const lyricsChip = (
     <Chip active={lyricsMode} onClick={() => setLyricsMode((v) => !v)}>
@@ -487,7 +562,7 @@ export default function SearchPage() {
             } else if (showSuggest && e.key === 'ArrowUp') {
               e.preventDefault();
               setSuggSel((v) => (v <= 0 ? suggList.length - 1 : v - 1));
-            } else if (e.key === 'Escape' && showSuggest) {
+            } else if (e.key === 'Escape' && showPanel) {
               setFocused(false);
             } else if (e.key === 'Enter') {
               e.preventDefault();
@@ -497,7 +572,7 @@ export default function SearchPage() {
             }
           }}
           role="combobox"
-          aria-expanded={showSuggest}
+          aria-expanded={showPanel}
           aria-controls="search-suggest"
           aria-activedescendant={suggSel >= 0 ? `sugg-${suggSel}` : undefined}
           onFocus={() => {
@@ -536,13 +611,9 @@ export default function SearchPage() {
             </button>
           )}
         </div>
-        {showSuggest && (
-          <div
-            id="search-suggest"
-            role="listbox"
-            aria-label="Search suggestions"
-            className="absolute left-0 right-0 top-full mt-2 z-30 bg-ink-850 border border-ink-700/70 shadow-float rounded-2xl py-2 max-h-80 overflow-y-auto"
-          >
+        {showPanel && (
+          <div className="absolute left-0 right-0 top-full mt-2 z-30 bg-ink-850 border border-ink-700/70 shadow-float rounded-2xl py-2 max-h-[28rem] overflow-y-auto">
+          <div id="search-suggest" role="listbox" aria-label="Search suggestions" hidden={!showSuggest}>
             {suggList.map((text, i) => {
               const isRecent = i < recentMatches.length;
               const Icon = isRecent ? ClockIcon : SearchIcon;
@@ -570,6 +641,16 @@ export default function SearchPage() {
                 </button>
               );
             })}
+          </div>
+          {showQuick && (
+            <section aria-label="Quick results" aria-busy={quick.loading} className={cn(showSuggest && 'mt-1 pt-1 border-t border-ink-700/60')}>
+              <p className="px-4 pt-1 pb-1 text-[11px] font-bold uppercase tracking-widest text-ink-400">Quick results</p>
+              {quickSongs.length === 0 && quick.loading && <ListSkeleton rows={3} />}
+              {quickSongs.map((song, i) => (
+                <QuickRow key={song.id} song={song} dim={quick.stale} onPlay={() => playQueue(quickSongs, i)} />
+              ))}
+            </section>
+          )}
           </div>
         )}
       </div>
@@ -640,7 +721,7 @@ export default function SearchPage() {
                 })}
               </div>
               {pinned.length === 0 && recent.length > 1 && (
-                <p className="mt-2 text-[11px] text-ink-500">Long-press a search to pin it.</p>
+                <p className="mt-2 text-[11px] text-ink-500">Long-press (or hover) a search to pin it.</p>
               )}
             </>
           ) : (
@@ -778,10 +859,18 @@ export default function SearchPage() {
                   Play all
                 </button>
               </div>
+              {lyricMatches.every((m) => m.source === 'catalogue') && (
+                <p className="mb-2 text-xs text-ink-400">The lyrics service had no match — these titles begin with those words.</p>
+              )}
               {lyricMatches.map((m, i) => (
                 <div key={m.song.id}>
                   <SongRow song={m.song} songs={lyricSongs} index={i} />
-                  {m.hit.snippet && (
+                  {m.source === 'catalogue' && (
+                    <p className="pl-[3.75rem] pr-2 -mt-1 mb-2">
+                      <span className="inline-block rounded-full border border-ink-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-400">Matched by title</span>
+                    </p>
+                  )}
+                  {m.source === 'lyrics' && m.hit.snippet && (
                     <p className="pl-[3.75rem] pr-2 -mt-1 mb-2 text-xs text-ink-400 leading-relaxed">
                       {splitHighlight(m.hit.snippet, q).map((run, j) =>
                         run.hit ? (
@@ -805,8 +894,10 @@ export default function SearchPage() {
             <>
               {all.isLoading && <ListSkeleton />}
               {all.isError && <ErrorState retry={() => all.refetch()} />}
+              {dymBar}
+              {allPlaceholder && <div aria-hidden className="skeleton h-1 w-full rounded-full mb-4" />}
               {all.data && (
-                <div className="space-y-7">
+                <div aria-busy={allPlaceholder} className={cn('space-y-7 transition-opacity', allPlaceholder && 'opacity-40')}>
                   {topResult && (
                     <section>
                       <h2 className="text-lg font-bold mb-2">Top Result</h2>
@@ -956,6 +1047,7 @@ export default function SearchPage() {
               )}
               {infiniteSongs.isLoading && <ListSkeleton />}
               {infiniteSongs.isError && <ErrorState retry={() => infiniteSongs.refetch()} />}
+              {infiniteSongs.data && !infiniteSongs.isFetching && allSongList.length === 0 && dymBar}
               {resultFilter.trim() && displaySongs.length === 0 && songList.length > 0 && (
                 <p className="text-sm text-ink-400 px-2">Nothing loaded so far matches “{resultFilter.trim()}” — scroll to load more, or clear the filter.</p>
               )}

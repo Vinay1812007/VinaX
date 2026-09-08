@@ -91,11 +91,17 @@ export function relaxedQuery(q: string): string | null {
 // All search hooks: the query's abort signal is threaded to the network layer
 // (typing cancels the previous keystroke's request — P1-13) and the previous
 // result stays on screen while the next settles (no skeleton flash — P2-18).
+// v5.19.0 — results stay fresh for 10 min and cached for 30 min, so a repeat
+// query or a back-navigation renders instantly from memory.
+export const SEARCH_STALE_MS = 10 * 60_000;
+export const SEARCH_GC_MS = 30 * 60_000;
 
 export function useSearchAll(query: string) {
   const q = normalizeQuery(query);
   return useQuery({
     queryKey: ['search-all', q],
+    staleTime: SEARCH_STALE_MS,
+    gcTime: SEARCH_GC_MS,
     queryFn: ({ signal }) => searchAll(q, { signal }),
     enabled: q.length > 1,
     placeholderData: keepPreviousData,
@@ -106,6 +112,8 @@ export function useSearchSongs(query: string, enabled = true) {
   const q = normalizeQuery(query);
   return useQuery({
     queryKey: ['search-songs', q],
+    staleTime: SEARCH_STALE_MS,
+    gcTime: SEARCH_GC_MS,
     queryFn: async ({ signal }) => {
       const raw = await searchSongs(q, 30, { signal });
       if (raw.length > 0) return rankSongs(raw, { query: q, searchMode: true });
@@ -123,6 +131,8 @@ export function useSearchAlbums(query: string, enabled = true) {
   const q = normalizeQuery(query);
   return useQuery({
     queryKey: ['search-albums', q],
+    staleTime: SEARCH_STALE_MS,
+    gcTime: SEARCH_GC_MS,
     queryFn: ({ signal }) => searchAlbums(q, 20, { signal }),
     enabled: enabled && q.length > 1,
     placeholderData: keepPreviousData,

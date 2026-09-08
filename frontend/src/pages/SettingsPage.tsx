@@ -32,27 +32,57 @@ import { Chip } from '@/components/Chip';
 import { UI_LANGS } from '@/i18n';
 import type { AudioQualityPref } from '@/services/audio/engine';
 import { PageHeader } from '@/components/PageHeader';
+import { SoundSettings } from '@/components/SoundSettings';
 import { cn } from '@/utils/cn';
+import { createContext, useContext, useLayoutEffect } from 'react';
 import { ClockIcon, DownloadIcon, HelpIcon, HomeIcon, SettingsIcon, ShieldIcon, SparkleIcon } from '@/components/Icons';
 import { HOME_BLOCKS, HOME_BLOCK_KEYS, orderHomeBlocks } from '@/constants/homeBlocks';
 import { moveHomeBlock, resetHomeLayout, toggleHomeBlock } from '@/features/settings/homeLayout';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
+/**
+ * v5.19.0 — Settings search. A query at the top filters every row by its
+ * label and note (case-insensitive, all words must match); sections with
+ * no visible rows collapse; matches are highlighted.
+ */
+const SettingsSearchCtx = createContext('');
+function matchesQuery(q: string, ...texts: Array<string | undefined>): boolean {
+  if (!q) return true;
+  const hay = texts.filter(Boolean).join(' ').toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+}
+function Highlight({ text, q }: { text: string; q: string }) {
+  const w = q.trim().split(/\s+/).filter(Boolean)[0];
+  if (!w) return <>{text}</>;
+  const i = text.toLowerCase().indexOf(w.toLowerCase());
+  if (i < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, i)}
+      <mark className="bg-ember-500/30 text-inherit rounded px-0.5">{text.slice(i, i + w.length)}</mark>
+      {text.slice(i + w.length)}
+    </>
+  );
+}
+
 function Row({ label, note, children, stack }: { label: string; note?: string; children: ReactNode; stack?: boolean }) {
+  const q = useContext(SettingsSearchCtx);
+  if (!matchesQuery(q, label, note)) return null;
   // `stack` — for wide controls (color swatches, sliders, chip groups): on
   // phones the control drops BELOW the label at full width instead of
   // crushing the label column into one-word-per-line text.
   return (
     <div
+      data-settings-row
       className={cn(
         'py-3.5 border-b border-[color:var(--glass-border)] last:border-0',
         stack ? 'flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4' : 'flex items-start justify-between gap-4',
       )}
     >
       <div>
-        <p className="text-sm font-medium">{label}</p>
-        {note && <p className="text-xs text-ink-400 mt-0.5 max-w-md leading-relaxed">{note}</p>}
+        <p className="text-sm font-medium"><Highlight text={label} q={q} /></p>
+        {note && <p className="text-xs text-ink-400 mt-0.5 max-w-md leading-relaxed"><Highlight text={note} q={q} /></p>}
       </div>
       <div className={stack ? 'sm:shrink-0' : 'shrink-0'}>{children}</div>
     </div>
@@ -100,8 +130,16 @@ function Section({
   icon: ComponentType<{ className?: string }>;
   children: ReactNode;
 }) {
+  const q = useContext(SettingsSearchCtx);
+  const ref = useRef<HTMLElement>(null);
+  const [empty, setEmpty] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setEmpty(!!q && !el.querySelector('[data-settings-row]'));
+  }, [q]);
   return (
-    <section className="mb-6">
+    <section ref={ref} className={cn('mb-6', empty && 'hidden')} data-settings-section>
       <div className="flex items-center gap-2.5 px-1 mb-2.5">
         <span className="w-7 h-7 rounded-lg bg-ember-500/15 text-ember-500 flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4" />
@@ -148,6 +186,17 @@ const eraseItems = [
   'Cached artwork & audio (Cache Storage)',
 ];
 
+/** v5.19.0 — "nothing matches" line for Settings search (checked after paint). */
+function NoMatches({ q }: { q: string }) {
+  const [none, setNone] = useState(false);
+  useLayoutEffect(() => {
+    const t = window.setTimeout(() => setNone(!document.querySelector('[data-settings-row]')), 0);
+    return () => window.clearTimeout(t);
+  }, [q]);
+  if (!none) return null;
+  return <p className="mb-6 text-sm text-ink-400">No setting matches “{q}”. Try a different word — theme, alarm, quality, language.</p>;
+}
+
 /** 5.14.0 — festival skins switch with a live "today / next" line. */
 function FestivalRow() {
   const on = useSettingsStore((x) => x.festivalSkins);
@@ -167,6 +216,7 @@ function FestivalRow() {
 }
 
 export default function SettingsPage() {
+  const [settingsQuery, setSettingsQuery] = useState('');
   usePageTitle('Settings');
   const s = useSettingsStore();
   const region = useRegion();
@@ -207,8 +257,22 @@ export default function SettingsPage() {
   const collections = useLibraryStore((s) => s.collections);
 
   return (
+    <SettingsSearchCtx.Provider value={settingsQuery.trim()}>
     <div className="max-w-2xl mx-auto">
       <PageHeader title="Settings" subtitle="Manage your preferences — everything stays on this device." />
+      <div className="mb-5 relative">
+        <input
+          value={settingsQuery}
+          onChange={(e) => setSettingsQuery(e.target.value)}
+          placeholder="Search settings… (theme, sleep, language, alarm)"
+          aria-label="Search settings"
+          className="w-full glass-input pl-4 pr-10 py-2.5 rounded-full text-sm outline-none focus:ring-1 focus:ring-ink-100/40"
+        />
+        {settingsQuery && (
+          <button onClick={() => setSettingsQuery('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-100 text-sm font-bold">×</button>
+        )}
+      </div>
+      {settingsQuery && <NoMatches q={settingsQuery} />}
       {(pushSupported() || isNativePlatform()) && (
         <Section title="Notifications" icon={SparkleIcon}>
           {pushSupported() ? (
@@ -494,6 +558,8 @@ export default function SettingsPage() {
         </Row>
       </Section>
 
+      {/* v5.19.0 — on-device sound processing (its rows take part in Settings search) */}
+      <SoundSettings />
       <Section title="Recommendations" icon={SparkleIcon}>
         <Row stack label="Intensity" note="Low = mostly popular/trending. High = strongly personalized.">
           <div className="flex items-center gap-2">
@@ -762,5 +828,6 @@ export default function SettingsPage() {
         by the app and never stored. Your taste profile stays on your device.
       </p>
     </div>
+    </SettingsSearchCtx.Provider>
   );
 }

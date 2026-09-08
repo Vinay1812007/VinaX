@@ -17,11 +17,15 @@ import { toast } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
 import { CollageCover } from '@/features/library/CollageCover';
 import { trashDaysLeft } from '@/features/library/trash';
+import { allTags, matchesTags } from '@/features/library/tags';
+import { TagChips } from '@/features/library/TagEditor';
 
 /**
  * v5.17.0 — Library: pinned collections first with collage covers and emoji,
  * a "Downloaded only" chip when offline copies exist, and a Recently deleted
  * section that restores a trashed collection within seven days.
+ * v5.19.0 — a multi-select tag filter row above the playlists; each tile
+ * shows its tags as tiny chips.
  */
 export default function LibraryPage() {
   usePageTitle('Library');
@@ -35,6 +39,7 @@ export default function LibraryPage() {
   const [newName, setNewName] = useState('');
   const [importing, setImporting] = useState(false);
   const [downloadedOnly, setDownloadedOnly] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const flags = useFeatureFlags();
 
   const hasDownloads = Object.keys(downloads).length > 0;
@@ -43,14 +48,22 @@ export default function LibraryPage() {
     () => (filterOn ? favorites.filter((s) => !!downloads[s.id]) : favorites),
     [favorites, filterOn, downloads],
   );
+  // v5.19.0 — tags in use across every playlist; a selection that no longer
+  // exists (tag removed on its last playlist) silently drops out of the filter.
+  const tagsInUse = useMemo(() => allTags(collections), [collections]);
+  const activeTags = useMemo(() => selectedTags.filter((t) => tagsInUse.includes(t)), [selectedTags, tagsInUse]);
+  const toggleTag = (tag: string) =>
+    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   const shownCollections = useMemo(
     () =>
-      orderCollections(collections).map((col) => ({
-        col,
-        songs: filterOn ? col.songs.filter((s) => !!downloads[s.id]) : col.songs,
-        downloaded: hasDownloads ? col.songs.filter((s) => !!downloads[s.id]).length : 0,
-      })),
-    [collections, filterOn, hasDownloads, downloads],
+      orderCollections(collections)
+        .filter((col) => matchesTags(col, activeTags))
+        .map((col) => ({
+          col,
+          songs: filterOn ? col.songs.filter((s) => !!downloads[s.id]) : col.songs,
+          downloaded: hasDownloads ? col.songs.filter((s) => !!downloads[s.id]).length : 0,
+        })),
+    [collections, activeTags, filterOn, hasDownloads, downloads],
   );
   const shownHistory = useMemo(
     () => (filterOn ? history.filter((e) => !!downloads[e.song.id]) : history),
@@ -178,6 +191,41 @@ export default function LibraryPage() {
           </button>
         </div>
         {collections.length === 0 && <p className="text-sm text-ink-400">Group songs your way — add any song from its ⋯ menu.</p>}
+        {tagsInUse.length > 0 && (
+          <div role="group" aria-label="Filter playlists by tag" className="flex flex-wrap gap-1.5 mb-4">
+            <button
+              type="button"
+              onClick={() => setSelectedTags([])}
+              aria-pressed={activeTags.length === 0}
+              className={cn(
+                'px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors',
+                activeTags.length === 0 ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400',
+              )}
+            >
+              All
+            </button>
+            {tagsInUse.map((tag) => {
+              const on = activeTags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTag(tag)}
+                  aria-pressed={on}
+                  className={cn(
+                    'px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors',
+                    on ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400',
+                  )}
+                >
+                  #{tag}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {activeTags.length > 0 && shownCollections.length === 0 && (
+          <p className="text-sm text-ink-400 mb-4">No playlists carry {activeTags.length === 1 ? 'that tag' : 'those tags'}.</p>
+        )}
         <div className="space-y-4">
           {shownCollections.map(({ col, songs, downloaded }) => (
             <div key={col.id} className={cn('rounded-2xl border p-4', col.pinned ? 'border-ember-500/40' : 'border-ink-700')}>
@@ -198,6 +246,7 @@ export default function LibraryPage() {
                     {hasDownloads && downloaded > 0 && <span> · {downloaded} downloaded</span>}
                   </span>
                   {col.description && <span className="block text-xs text-ink-300 font-normal truncate">{col.description}</span>}
+                  <TagChips tags={col.tags} className="mt-1 font-normal" />
                 </Link>
                 <button aria-label={`Delete ${col.name}`} onClick={() => removeCollection(col.id, col.name)} className="p-2.5 rounded-full text-ink-400 hover:text-red-400 hover:bg-red-500/10 shrink-0">
                   <XIcon className="w-4 h-4" />

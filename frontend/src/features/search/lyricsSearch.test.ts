@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { Song } from '@/types';
 import type { LyricsSearchHit } from '@/services/lyrics/lrclib';
-import { looksLikeLyric, pickBest, queryWords, resolveLyricsHits, splitHighlight } from './lyricsSearch';
+import {
+  catalogueFallback,
+  firstWords,
+  looksLikeLyric,
+  mergeCatalogueFallback,
+  pickBest,
+  queryWords,
+  resolveLyricsHits,
+  splitHighlight,
+} from './lyricsSearch';
 
 const song = (id: string, title: string, subtitle = 'Artist', extra: Partial<Song> = {}): Song => ({
   kind: 'song',
@@ -62,6 +71,7 @@ describe('resolveLyricsHits', () => {
     const search = async (q: string): Promise<Song[]> => (q.startsWith('Kesariya') ? [found] : [song('z', 'Unrelated')]);
     const out = await resolveLyricsHits([hit('Kesariya', 'Arijit'), hit('Kesariya', 'Arijit (Lofi)'), hit('Nothing here')], search);
     expect(out.map((m) => m.song.id)).toEqual(['x']);
+    expect(out[0].source).toBe('lyrics');
   });
 
   it('survives a failed catalogue lookup', async () => {
@@ -91,5 +101,53 @@ describe('query helpers', () => {
   it('returns the whole snippet as one run when nothing matches', () => {
     expect(splitHighlight('la la la', 'zz')).toEqual([{ text: 'la la la', hit: false }]);
     expect(splitHighlight('', 'zz')).toEqual([]);
+  });
+});
+
+describe('catalogue fallback (v5.19.0 — songs titled by their first line)', () => {
+  it('firstWords returns the first four words only when the line is longer', () => {
+    expect(firstWords('nee kannu neeli samudram lo munigithe')).toBe('nee kannu neeli samudram');
+    expect(firstWords('nee kannu neeli samudram')).toBe('');
+    expect(firstWords('  nee   kannu ')).toBe('');
+  });
+
+  it('merges full-line results first, then head results, each song once, capped', () => {
+    const full = [song('a', 'A'), song('b', 'B')];
+    const head = [song('b', 'B'), song('c', 'C'), song('d', 'D')];
+    const out = mergeCatalogueFallback([
+      { status: 'fulfilled', value: full },
+      { status: 'fulfilled', value: head },
+    ]);
+    expect(out.map((m) => m.song.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(out.every((m) => m.source === 'catalogue' && m.hit.snippet === '')).toBe(true);
+    expect(out[0].hit.title).toBe('A');
+    expect(mergeCatalogueFallback([{ status: 'fulfilled', value: [...full, ...head, song('e', 'E'), song('f', 'F'), song('g', 'G'), song('h', 'H'), song('i', 'I')] }]).length).toBe(8);
+  });
+
+  it('ignores a rejected lookup and keeps the other', () => {
+    const out = mergeCatalogueFallback([
+      { status: 'rejected', reason: new Error('offline') },
+      { status: 'fulfilled', value: [song('z', 'Z')] },
+    ]);
+    expect(out.map((m) => m.song.id)).toEqual(['z']);
+  });
+
+  it('runs the line and its first four words in parallel and dedupes', async () => {
+    const calls: string[] = [];
+    const search = async (q: string): Promise<Song[]> => {
+      calls.push(q);
+      return q.split(' ').length > 4 ? [song('long', 'Long')] : [song('long', 'Long'), song('short', 'Short')];
+    };
+    const out = await catalogueFallback('  nee kannu   neeli samudram lo ', search);
+    expect(calls).toEqual(['nee kannu neeli samudram lo', 'nee kannu neeli samudram']);
+    expect(out.map((m) => m.song.id)).toEqual(['long', 'short']);
+  });
+
+  it('returns nothing for a blank line or when every lookup fails', async () => {
+    expect(await catalogueFallback('   ')).toEqual([]);
+    const search = async (): Promise<Song[]> => {
+      throw new Error('offline');
+    };
+    expect(await catalogueFallback('tum hi ho meri aashiqui', search)).toEqual([]);
   });
 });

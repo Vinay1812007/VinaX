@@ -1,16 +1,28 @@
 /**
  * Admin: Feature Usage + Listening Heatmap (v5.15.0).
  *   GET /api/admin/usage?days=7 →
- *     { configured, days, sampled, byType:[{type,n,devices}], byPlatform:[{platform,n}],
+ *     { configured, days, sampled, source, byType:[{type,n,devices}], byPlatform:[{platform,n}],
  *       heatmap: number[7][24] (IST weekday × hour play counts), peak:{day,hour,n} }
- * Reads a bounded sample of vinax_events (newest first) — no PII, only the
- * event type, platform and timestamp are used.
+ * v5.16.0: counts EVERY event in the window through the vinax_usage RPC
+ * (`source: 'exact'`, see the 2026-09 rollups migration). Until the RPC
+ * exists it reads a bounded sample of vinax_events (newest first) and says
+ * so (`source: 'sampled'`). No PII either way — only the event type,
+ * platform and timestamp are used, and the RPC returns aggregates only.
  */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { sbRpc, sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 interface Row { type: string | null; platform: string | null; device_id: string | null; created_at: string }
+
+/** What the vinax_usage RPC returns (jsonb). */
+export interface UsageRollup {
+  byType: Array<{ type: string; n: number; devices: number }>;
+  byPlatform: Array<{ platform: string; n: number }>;
+  heatmap: number[][];
+  peak: { day: number; hour: number; n: number } | null;
+  total: number;
+}
 
 const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -49,11 +61,16 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!isAdmin(request, env)) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false });
   const days = Math.min(30, Math.max(1, parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10) || 7));
+  const exact = await sbRpc<UsageRollup>(env, 'vinax_usage', { p_days: days });
+  if (exact && Array.isArray(exact.heatmap)) {
+    const { total, ...rest } = exact;
+    return json({ configured: true, days, sampled: total, source: 'exact', ...rest });
+  }
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
   const rows = await sbSelect<Row>(
     env,
     'vinax_events',
     `created_at=gte.${encodeURIComponent(since)}&select=type,platform,device_id,created_at&order=created_at.desc&limit=10000`,
   ).catch(() => [] as Row[]);
-  return json({ configured: true, days, sampled: rows.length, ...usageFromRows(rows) });
+  return json({ configured: true, days, sampled: rows.length, source: 'sampled', ...usageFromRows(rows) });
 };

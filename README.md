@@ -2,7 +2,7 @@
 
 **Free music streaming for India. No login. Private by design.**
 
-Live at **https://www.sirimillavinay.online** — Telugu, Hindi, Tamil and nine more languages, with an AI DJ, a full assistant (VinaX AI), synced lyrics, music videos, festival themes for the whole Indian calendar, an Android app, and a 64-tool admin console. Everything personal stays on the listener's device; the server sees anonymous, coarse telemetry only.
+Live at **https://www.sirimillavinay.online** — Telugu, Hindi, Tamil and nine more languages, with an AI DJ, a full assistant (VinaX AI), synced lyrics, music videos, festival themes for the whole Indian calendar, an Android app, and a 65-tool admin console. Everything personal stays on the listener's device; the server sees anonymous, coarse telemetry only.
 
 > **For AI agents and new contributors — read this first.** This file is the single source of truth for what VinaX is, how the repo is laid out, how it deploys, and which commands are safe to run. Everything is intentionally explicit: exact paths, exact commands, exact env-var *names* (never values).
 
@@ -69,15 +69,15 @@ There is **no CORS anywhere**. The Worker's routes claim specific paths on `www.
 ### 2.1 Listener app
 
 **Listening**
-- Search across songs, albums, artists and playlists with language chips, sort (relevance · popular · newest · longest · A→Z), filter-within-results, Play all / Queue all, voice search, keyboard-first autocomplete, trending chips (community + admin-pinned), pinned/removable recent searches, and **search by lyrics** (paste any line you remember).
-- Player: queue with drag reorder, smart shuffle, repeat, crossfade, playback speed, A-B repeat, song **bookmarks**, sleep timer (minutes with a 30-second fade-out, end of song, or after N songs), device output picker, Cast, lock-screen controls and lyrics, resume-where-you-left, kid mode (explicit filter), and **Ambient mode** in Now Playing.
+- Search across songs, albums, artists and playlists: results as you type, exact-title-first ranking, “Did you mean …?” for typos, language chips, sort (relevance · popular · newest · longest · A→Z), filter-within-results, Play all / Queue all, voice search, keyboard-first autocomplete, trending chips (community + admin-pinned), pinned recent searches, 10-minute result cache, and **search by lyrics** (paste any line you remember; falls back to title matches when the lyrics service has no hit).
+- Player: queue with drag reorder, smart shuffle, repeat, crossfade, playback speed, A-B repeat, song **bookmarks**, an on-device **equaliser** (presets + five bands), balance, mono audio and loudness normalisation (Settings → Sound; bypasses itself on sources that cannot be processed), sleep timer (minutes with a 30-second fade-out, end of song, or after N songs), device output picker, Cast, lock-screen controls and lyrics, resume-where-you-left, kid mode (explicit filter), and **Ambient mode** in Now Playing.
 - Now Playing: full-screen player with fling gestures, immersive video canvas, synced lyrics with per-song offset, film chip, "Share this moment" links that start at a timestamp, Drive mode, Karaoke, and a live lyric line under the desktop seekbar.
 - Music videos: 16:9 browse, cinematic player, picture-in-picture, full-song hand-off.
 - Charts (Top 50 global/country, Viral 50), Discover, Moods, Regions, Movies, Explore (decade radio, pick-a-year, language × mood grid, Surprise album), Languages hubs.
 
 **Personal**
-- Home: personal greeting, **Aura Mix** (AI DJ entry), quick-access grid, Continue Listening, On this day, For You This Week, On Repeat, Repeat Rewind, Daily Mixes, VinaX Daily, Because you liked "…", listening-streak card, Song of the day, seasonal/festival shelf, endless "More for you" feed. Every block can be hidden or reordered in Settings → Home layout.
-- Library (device-only): Liked Songs, **Listen Later**, playlists with pins, emoji + description, collage covers, sort, shuffle play, duplicate finder, Copy/Share as text, **Import from text** ("Title — Artist" per line), a 7-day Recently deleted with Restore, and a Downloaded-only filter in the app.
+- Home: personal greeting, **Aura Mix** (AI DJ entry), quick-access grid, Continue Listening, On this day, For You This Week, On Repeat, Repeat Rewind, Daily Mixes, VinaX Daily, Because you liked "…", listening-streak card, Song of the day, a “Coming up” festival card one to three days ahead, seasonal/festival shelf, endless "More for you" feed. Every block can be hidden or reordered in Settings → Home layout.
+- Library (device-only): Liked Songs, **Listen Later**, playlists with pins, tags (filter the library by tag), emoji + description, collage covers, sort, shuffle play, duplicate finder, Copy/Share as text, **Import from text** ("Title — Artist" per line), a 7-day Recently deleted with Restore, and a Downloaded-only filter in the app.
 - History with search, day filters, per-entry removal and scoped clears; "Your history with this song" from any song menu.
 - Stats ("Your VinaX"): weekly report versus last week, 12-week listening calendar with streaks, daily listening goal ring, Year recap with a shareable image.
 - Taste Profile: what VinaX has learned, with fine-tune dials; "Show fewer like…" and "Never play…" from any song menu, Not interested, all with Undo.
@@ -86,7 +86,7 @@ There is **no CORS anywhere**. The Worker's routes claim specific paths on `www.
 **Look and feel**
 - Themes: Dark, Light, Black (AMOLED), System, Auto (day/night); ten accents plus a **custom accent** (any hex, with a readable light-theme variant); glass level and blur sliders; Dynamic theme from artwork; Display size; High contrast; Reduce motion; density.
 - **Festival themes**: 43 festivals from Sankranti to New Year, each a distinct theme — accent ramp, tinted canvas, ribbon, glow, motif, badge, splash and living backdrop — driven by one calendar (`frontend/src/constants/festivals.ts` + `festivalThemes.ts`, `npm run gen:festivals`). Switchable in Settings.
-- Swipe a song row right to queue, left to save for later. Toasts with Undo. Command palette (⌘/Ctrl+K), keyboard shortcuts, PWA shortcuts (Search, Liked, Listen Later, VinaX AI), Data saver, Startup page.
+- Swipe a song row right to queue, left to save for later. Toasts with Undo. Command palette (⌘/Ctrl+K), keyboard shortcuts, PWA shortcuts (Search, Liked, Listen Later, VinaX AI), Data saver, Startup page, and a search box inside Settings.
 
 **Android**
 - Capacitor wrapper of the same app: background playback, media notification, offline downloads that play with no network, FCM push, in-app updater fed by `/api/version` (with an admin-set minimum build), `update.sirimillavinay.online` → latest APK.
@@ -106,7 +106,7 @@ Elsewhere in the app the same engines power the AI DJ and smart queue, the AI Pl
 
 ### 2.3 Admin console (`https://admin.sirimillavinay.online`)
 
-A static page (`frontend/public/admin/`) talking to `/api/admin/*`, gated by `ADMIN_LOGIN_PASSWORD`, with a token in session storage, auto-refresh, ⌘K search, dark and light themes, pinned tools, CSV and JSON export on every data panel. **64 tools** in eight groups:
+A static page (`frontend/public/admin/`) talking to `/api/admin/*`, gated by `ADMIN_LOGIN_PASSWORD`, with a token in session storage, auto-refresh, ⌘K search, dark and light themes, pinned tools, CSV and JSON export on every data panel. **65 tools** in eight groups:
 
 | Group | Tools |
 |---|---|
@@ -115,11 +115,11 @@ A static page (`frontend/public/admin/`) talking to `/api/admin/*`, gated by `AD
 | Catalog | Song Management, Playlist Management, Home Screen, Categories & Genres, Content Control, Catalog Lookup, Trending Pins, Song Drilldown, Skip Report, Search Synonyms, Catalog Sources, Language Order, Blocklist Import/Export |
 | Promotion | Banners & Offers, Festival Themes, Notifications, Broadcast Message, Home Greeting, Help Center FAQ, Announcement Composer |
 | Analytics | Music Analytics, Search Analytics, Location Analytics, World Listening, Insights, A/B Experiments, SEO Corpus |
-| AI & Engines | AI Monitoring, API Monitoring (lane bench), Engine Probe, AI Starter Prompts, AI Quick Actions, AI House Rules |
+| AI & Engines | AI Monitoring, API Monitoring (lane bench), Engine Probe, AI Starter Prompts, AI Quick Actions, AI House Rules, AI Tokens & Cost (per model and per day, priced by your own table) |
 | Operations | Technical Monitoring, Feedback & Bugs, Live Rooms, Edge & Endpoint Health, Data Quality, Releases & CI, Database Overview, Audit Trail, Status Note, Cron Health, Status History, Environment Checklist, Query Console (read-only, whitelisted), Release Notes, Maintenance Scheduler, Minimum App Version |
 | Settings | App Configuration, Feature Flags, Runbook, Config Backup, Pinned Tools |
 
-Everything the console publishes reaches listeners through cached public reads (`/api/appconfig?key=…`) within about a minute — no app release needed (see §7).
+Everything the console publishes reaches listeners through cached public reads (`/api/appconfig?key=…`) within about a minute — no app release needed (see §7). Broadcast Message can also go out as a push notification to closed apps and subscribed browsers.
 
 ---
 
@@ -196,7 +196,7 @@ Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` t
 |---|---|---|
 | `frontend/` | `npm run dev` | Vite dev server on :5173 |
 | `frontend/` | `npm run build` | typecheck → Vite build → prerender 31 routes → `dist/changelog.json` |
-| `frontend/` | `npm test` | Vitest (412 tests / 64 files) |
+| `frontend/` | `npm test` | Vitest (463 tests / 70 files) |
 | `frontend/` | `npm run lint` · `npm run typecheck` | eslint (`src` + `scripts`, zero warnings) · tsc — CI runs both |
 | `frontend/` | `npm run gen:festivals` | regenerate `src/styles/festivals.css`, the pre-paint window table in `index.html`, and `public/admin/festivals.js` from the festival calendar (a test fails on drift) |
 | `frontend/` | `node scripts/csp-hashes.mjs` | after `npm run build`, refresh the inline-script hashes in `public/_headers` (a test fails on drift) |
@@ -204,7 +204,7 @@ Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` t
 | `frontend/` | `npm run e2e` | Playwright smoke |
 | `frontend/` | `npm run android:debug` | Capacitor sync + Gradle debug APK |
 | `backend/` | `npm run dev` | wrangler dev on :8787 (reads `worker/.dev.vars`) |
-| `backend/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (148 tests / 22 files) · eslint · tsc — **run from `backend/`, not `backend/worker/`** |
+| `backend/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (174 tests / 25 files) · eslint · tsc — **run from `backend/`, not `backend/worker/`** |
 | `backend/` | `npm run deploy` | manual `wrangler deploy` (normally unnecessary — git auto-deploys) |
 
 ---
@@ -246,7 +246,7 @@ Every endpoint degrades honestly when a secret is missing (`not_configured` resp
 
 ### 6.2 Supabase
 
-Create a project, set the two `SUPABASE_*` secrets, then paste the idempotent SQL from `frontend/supabase/migrations/*.sql` into the SQL editor (any order). They create the tables and RPCs the analytics panels, experiments, retention cohorts, rooms, SEO corpus and username claims need. The console's **Database Overview** and **Query Console** confirm what exists.
+Create a project, set the two `SUPABASE_*` secrets, then paste the idempotent SQL from `frontend/supabase/migrations/*.sql` into the SQL editor (any order). They create the tables and RPCs the analytics panels, experiments, retention cohorts, rooms, SEO corpus and username claims need. `2026-09-vinax-rollups-and-tokens.sql` adds the exact-count RPCs (`vinax_usage`, `vinax_funnel`, `vinax_skips`) behind Feature Usage, Onboarding Funnel and Skip Report — until it is applied those panels fall back to a newest-10,000-event sample and say so — plus the `prompt_tokens`/`completion_tokens` columns that feed AI Tokens & Cost. The console's **Database Overview** and **Query Console** confirm what exists.
 
 ### 6.3 Android
 
@@ -269,6 +269,7 @@ The console writes JSON values into `vinax_config` (`POST /api/admin/appconfig`,
 | `greeting`, `broadcast`, `search-synonyms`, `catalog-sources`, `language-order`, `ai-starters`, `ai-quick`, `support-faq`, `min-version` | their panels | the single client bundle `/api/appconfig?key=client` (sanitised in `_lib/clientConfig.ts`) |
 | `maintenance-window` | Maintenance Scheduler | `/api/site-mode` (flips to maintenance and back on its own) |
 | `ai-rules` | AI House Rules | appended to the VinaX AI system prompt |
+| `ai-prices` | AI Tokens & Cost | USD per 1M tokens per model prefix; no built-in defaults |
 
 ---
 
@@ -292,10 +293,10 @@ The console writes JSON values into `vinax_config` (`POST /api/admin/appconfig`,
 
 | Suite | Where | Count | Runs in CI |
 |---|---|---|---|
-| Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 412 tests / 64 files | ✅ |
-| Backend endpoint/lib | `backend/worker/**/*.test.ts` | 148 tests / 22 files | ✅ |
+| Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 463 tests / 70 files | ✅ |
+| Backend endpoint/lib | `backend/worker/**/*.test.ts` | 174 tests / 25 files | ✅ |
 | Contracts | contrast + theme tokens, CSP hashes, festival artefact sync, router coverage, bundle budget | — | ✅ |
-| E2E smoke | `frontend/e2e/` (Playwright, built bundle, external network aborted) | — | `e2e.yml` |
+| E2E | `frontend/e2e/` (Playwright against the built bundle, external network aborted): smoke, a11y, QA sweep, admin console (all panels), VinaX AI, festival skins, 5.17 features | — | `e2e.yml` |
 | Lighthouse | `frontend/lighthouserc.json` (SEO + a11y hard-fail) | — | `lighthouse.yml` |
 
 Before pushing: `cd frontend && npm run lint && npm run typecheck && npm test && npm run build && node scripts/csp-hashes.mjs && node scripts/check-bundle-size.mjs`, and `cd backend && npm run lint && npm run typecheck && npm test`.
