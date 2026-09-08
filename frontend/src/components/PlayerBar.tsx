@@ -131,7 +131,7 @@ export function PlayerBar() {
   return (
     <>
       {/* ---- Mobile: floating mini-player card (artwork-tinted) ---- */}
-      <div className="sm:hidden px-2 pb-1.5">
+      <div className="sm:hidden px-2 pb-1.5" data-tour="player">
         <div
           className={cn(
             'np-mini relative rounded-xl overflow-hidden shadow-lg border border-glass',
@@ -189,7 +189,7 @@ export function PlayerBar() {
 
       {/* ---- Desktop bar: three-zone layout ---- */}
       {/* v5.9.0 — the bar: full width, flush with the bottom, black. */}
-      <div className="relative hidden sm:block overflow-hidden glass-bottom-player">
+      <div className="relative hidden sm:block overflow-hidden glass-bottom-player" data-tour="player">
         <div className="flex items-center gap-4 px-4 py-2.5 max-w-screen-2xl mx-auto">
           <div className="flex items-center gap-3 min-w-0 w-60 lg:w-80">
             <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="group shrink-0">

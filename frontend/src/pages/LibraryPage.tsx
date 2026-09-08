@@ -86,7 +86,7 @@ export default function LibraryPage() {
             <Link to="/later" className="btn-secondary px-3 py-2 text-xs font-bold inline-flex items-center gap-1.5">
               <BookmarkIcon className="w-4 h-4" /> Listen Later
             </Link>
-            <button onClick={() => setImporting(true)} className="btn-secondary px-3 py-2 text-xs font-bold">Import from text</button>
+            <button onClick={() => setImporting(true)} data-tour="import-text" className="btn-secondary px-3 py-2 text-xs font-bold">Import from text</button>
           </>
         }
       />

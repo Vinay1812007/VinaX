@@ -559,7 +559,7 @@ export default function SettingsPage() {
       </Section>
 
       {/* v5.19.0 — on-device sound processing (its rows take part in Settings search) */}
-      <SoundSettings />
+      <div data-tour="sound"><SoundSettings /></div>
       <Section title="Recommendations" icon={SparkleIcon}>
         <Row stack label="Intensity" note="Low = mostly popular/trending. High = strongly personalized.">
           <div className="flex items-center gap-2">

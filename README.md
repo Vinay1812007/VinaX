@@ -86,6 +86,7 @@ There is **no CORS anywhere**. The Worker's routes claim specific paths on `www.
 **Look and feel**
 - Themes: Dark, Light, Black (AMOLED), System, Auto (day/night); ten accents plus a **custom accent** (any hex, with a readable light-theme variant); glass level and blur sliders; Dynamic theme from artwork; Display size; High contrast; Reduce motion; density.
 - **Festival themes**: 43 festivals from Sankranti to New Year, each a distinct theme — accent ramp, tinted canvas, ribbon, glow, motif, badge, splash and living backdrop — driven by one calendar (`frontend/src/constants/festivals.ts` + `festivalThemes.ts`, `npm run gen:festivals`). Switchable in Settings.
+- Help & Feedback: five **live tutorials** that run inside the real app (the first starts a song), searchable guides and FAQ, the latest update card, and a feedback form. The welcome tour ends with a live walkthrough.
 - Swipe a song row right to queue, left to save for later. Toasts with Undo. Command palette (⌘/Ctrl+K), keyboard shortcuts, PWA shortcuts (Search, Liked, Listen Later, VinaX AI), Data saver, Startup page, and a search box inside Settings.
 
 **Android**

@@ -88,7 +88,12 @@ const DIST = 'dist';
 // + dedupe in libraryStore, toast actions with Undo, row swipe gestures, the
 // sleep fade in the player clock, startup-page routing and the new settings
 // fields. 169 leaves ~1.4 KB headroom; regressions still fail the build.
-const FIRST_LOAD_BUDGET = 169 * 1024; // gzipped
+// 2026-09-08: re-based 169 -> 170 (+1 KB) for v5.20.0. Measured move:
+// 168.7 -> 169.2 KB gz. The live-tutorial host (a store + a lazy mount
+// point) rides the app root so a walkthrough can be started from anywhere,
+// including the welcome tour; the runner and the tutorial content are lazy.
+// 170 leaves ~0.8 KB headroom; regressions still fail the build.
+const FIRST_LOAD_BUDGET = 170 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 // Deliberately lazy diagram/math engines (loaded only when VinaX AI renders them).

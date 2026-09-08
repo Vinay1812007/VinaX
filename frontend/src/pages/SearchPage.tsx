@@ -583,6 +583,7 @@ export default function SearchPage() {
             focusedRef.current = false;
             window.setTimeout(() => setFocused(false), 120);
           }}
+          data-tour="search-input"
           placeholder={listening ? 'Listening…' : lyricsMode ? 'Type a line you remember…' : 'Songs, albums, artists, playlists…'}
           className={`w-full glass-search rounded-2xl pl-12 pr-20 py-3.5 text-sm outline-none transition-[color,background-color,border-color,opacity,transform] focus:ring-2 focus:ring-ember-500/35 focus:shadow-[0_0_34px_-8px_rgb(var(--ember-500)/0.5)] ${listening ? 'border-ember-500 ring-2 ring-ember-500/40' : ''}`}
         />

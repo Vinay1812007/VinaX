@@ -8,6 +8,7 @@ import { getLocal, setLocal } from '@/services/storage/local';
 import { readBrowserSignals } from '@/services/location/browserSignals';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useUiStore } from '@/store/uiStore';
+import { useTutorialStore } from '@/store/tutorialStore';
 import { ensureNotificationPermission, isNativePlatform } from '@/services/native';
 import { searchSongs } from '@/services/api';
 import { trendingSeed } from '@/constants/seeds';
@@ -62,8 +63,8 @@ const TOUR: TourSlide[] = [
     icon: <HomeIcon className="w-7 h-7" />,
     title: 'A Home that learns you',
     lines: [
-      'Shelves grow out of your listening — Continue Listening, On Repeat, Because You Listened To, Fresh Finds, Hidden Gems, Decade Rewind.',
-      'Six mood boards rotate daily, and on 23 Indian festivals — Sankranti to Diwali to Christmas — the whole app dresses up on its own and a festival shelf appears.',
+      'Shelves grow out of your listening — Continue Listening, On Repeat, On this day, Because you liked, Song of the day, a streak card, Fresh Finds, Hidden Gems.',
+      'On 43 Indian festivals and special days — Sankranti to Diwali to Christmas — the whole app takes on its own look, and a “Coming up” card warns you a few days before.',
       'Make it YOUR home: Settings → Home layout lets you hide or reorder every block.',
       'Pull down anytime for a completely fresh set of picks.',
     ],
@@ -72,8 +73,8 @@ const TOUR: TourSlide[] = [
     icon: <PlayIcon className="w-7 h-7" />,
     title: 'Play, swipe, sing along',
     lines: [
-      'Tap any song — the queue builds itself around it, and drag the ☰ grip to reorder.',
-      'Swipe the mini-player to skip, swipe up for the full player with karaoke lyrics that follow the singer line by line.',
+      'Tap any song — the queue builds itself around it. Swipe a song row right to queue it, left to save it for later.',
+      'Swipe the mini-player to skip, swipe up for the full player: synced lyrics, sleep timer, A-B repeat, bookmarks and an equaliser in Settings → Sound.',
       'On Android, tapping the playback notification drops you straight into the full-screen player.',
       'Close the app mid-song, come back tomorrow — you resume exactly where you were.',
     ],
@@ -89,18 +90,18 @@ const TOUR: TourSlide[] = [
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Meet VinaX AI',
     lines: [
-      'Seven engines, each with its own strength: FLASH for everyday chat, 20B for speed, SUPER for deep thinking, INSTANT for music trivia, 120B for creativity (it runs the AI DJ), ULTRA the all-rounder, NANO 3 the song-finder.',
-      'Flip on Think for careful reasoning, or Research to pull answers from the live web.',
-      'Say “play ⟨song⟩” and the reply becomes a real mini-player, lyrics and all.',
-      'Voice chat is fully hands-free — it listens, thinks, and answers out loud.',
+      'Twenty-two engines, or Auto to let VinaX choose. Think for careful reasoning, Research for live web answers with sources.',
+      'Type / for commands: /playlist ⟨vibe⟩ builds a playlist in the chat, /now, /lyrics and /summary do what they say.',
+      'Say “play ⟨song⟩” and the reply becomes a real mini-player. Any “Title — Artist” line in a reply is playable.',
+      'Reply in Telugu, Hindi, Tamil, Tenglish or Hinglish; voice chat is fully hands-free.',
     ],
   },
   {
     icon: <SearchIcon className="w-7 h-7" />,
     title: 'Search everything from one box',
     lines: [
-      'One input finds songs, artists, albums, pages and player actions — start typing and hit enter.',
-      'Right-click (or long-press) any song anywhere: play next, add to queue, favorite, copy link.',
+      'Results appear as you type. Remember only a lyric line? Paste it — Search by lyrics finds the song.',
+      'Right-click (or long-press) any song anywhere: play next, queue, Listen later, your history with it, share.',
     ],
     shortcuts: [
       { combo: '⌘ K', label: 'palette (mac)' },
@@ -134,9 +135,9 @@ const TOUR: TourSlide[] = [
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Make it yours',
     lines: [
-      'Two glass dials in Settings — Glass effect (solid → deep glass) and Background blur (sharp → hazy) — on every device, phones included.',
-      'Ten accent colours across dark, light and AMOLED — and the app can tint itself from the playing artwork.',
-      'Home layout builder: hide the blocks you skip, move your favourites up.',
+      'Dark, Light, Black, System or Auto (day/night). Ten accents — or any colour you like with Custom accent.',
+      'Sound: a five-band equaliser, balance, mono and loudness normalisation, processed on your device.',
+      'Display size, High contrast, Data saver, a startup page, and a Home layout builder. Type in the Settings search box to find any of them.',
       'On festival days the app dresses itself for the celebration — and undresses on its own after.',
     ],
     visual: (
@@ -161,7 +162,7 @@ const TOUR: TourSlide[] = [
       'Favorites, history, downloads, stats and your whole taste profile live on this device. Nothing is uploaded, ever.',
       'Your VinaX shows your listening year — top artists, hours, streaks — computed here, shareable only if YOU choose.',
       'New phone? Settings → Move to a new device beams everything across with one QR — or export/import a file from Your Data.',
-      'That’s the tour. Press play — VinaX learns from the very first song.',
+      'That’s the tour. Next: a two-minute live walkthrough that plays a real song — or press play and go.',
     ],
   },
 ];
@@ -719,6 +720,14 @@ export function OnboardingSheet() {
                   className="px-5 py-3 rounded-full border border-ink-600 text-sm text-ink-200 hover:bg-ink-800/40 transition"
                 >
                   Back
+                </button>
+              )}
+              {step === TOUR.length - 1 && (
+                <button
+                  onClick={() => { finish(); useTutorialStore.getState().start('first-song'); }}
+                  className="flex-1 py-3.5 rounded-full btn-secondary text-[15px] font-semibold"
+                >
+                  Live walkthrough
                 </button>
               )}
               <button

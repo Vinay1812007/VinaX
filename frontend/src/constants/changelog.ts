@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.20.0': {
+    title: 'Live tutorials, a new Help page, steady lyrics',
+    changes: [
+      { type: 'new', text: 'Live tutorials — five guided walkthroughs that run inside the real app and spotlight the actual controls: Play your first song (it starts a song in your language so you can hear every control), Find any song, Ask VinaX AI, Make it yours, and Save and organise. Start them from Help, or straight after the welcome tour.' },
+      { type: 'new', text: 'Help & Feedback rebuilt: searchable guides for every feature, an updated FAQ, the latest update card, keyboard and gesture reference, and a feedback form that can include your app version and platform.' },
+      { type: 'improved', text: 'Welcome tour refreshed for everything new — lyrics search, slash commands, 22 engines, 43 festivals, the equaliser, swipe gestures and the Settings search — with a “Live walkthrough” button on the last slide.' },
+      { type: 'fixed', text: 'Full-screen player — the lyrics card now has a fixed three-line height (previous, current, next), so the seek bar and controls no longer jump up and down as lines change.' },
+    ],
+  },
   '5.19.0': {
     title: 'Sound, search and the eight follow-ups',
     changes: [
