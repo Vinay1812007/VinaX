@@ -23,7 +23,6 @@ import { initLockScreenLyrics } from '@/services/media-session/lockscreenLyrics'
 import { initDownloads } from '@/services/downloads';
 import { initSpatialNav } from '@/services/tv/spatialNav';
 import { initAlarm } from '@/services/alarm';
-import { initDjVoice } from '@/features/player/djVoice';
 import { ShortcutsModal } from '@/components/ShortcutsModal';
 import { UpdateDialog } from '@/components/UpdateDialog';
 // Boot overlays (festival splash, What's-New sheet) render at most once per
@@ -185,7 +184,7 @@ export function AppLayout() {
       initSpatialNav();
       initAlarm();
       initAudioOutputWatcher();
-      initDjVoice();
+      void import('@/features/player/djVoice').then((m) => m.initDjVoice());
       useCastStore.getState().init();
       // Android 13+: media notification needs notification permission.
       void requestNotificationPermissionOnce();

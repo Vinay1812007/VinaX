@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.13.1': {
+    title: 'Faster first load',
+    changes: [
+      { type: 'improved', text: 'The live lyric line and DJ voice now load only after the app is on screen, keeping the first paint as light as before.' },
+      { type: 'fixed', text: 'Build pipeline — the first-load size check now accounts for the player-clock features added in 5.12 (sleep after N songs, A-B loop, never-play filter).' },
+    ],
+  },
   '5.13.0': {
     title: 'Fourteen new admin tools',
     changes: [

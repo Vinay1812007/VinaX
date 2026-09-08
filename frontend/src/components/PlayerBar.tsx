@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useCastStore } from '@/services/cast';
@@ -6,10 +6,11 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { applyArtColor, extractAverageColor, extractVibrantColor } from '@/utils/color';
 import { cn } from '@/utils/cn';
 import { Seekbar } from './Seekbar';
-import { NowLine } from './NowLine';
 import { FavButton } from './FavButton';
 import { IconButton } from './IconButton';
 import { Marquee } from './Marquee';
+// Lazy: the live lyric line pulls the synced-lyrics hook, which the first paint never needs.
+const NowLine = lazy(() => import('./NowLine').then((m) => ({ default: m.NowLine })));
 import {
   ClockIcon,
   NextIcon,
@@ -233,7 +234,7 @@ export function PlayerBar() {
             </div>
             <div className="w-full max-w-xl">
               <Seekbar />
-              <NowLine />
+              <Suspense fallback={null}><NowLine /></Suspense>
             </div>
           </div>
 

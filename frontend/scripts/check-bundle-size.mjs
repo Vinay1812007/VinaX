@@ -73,7 +73,15 @@ const DIST = 'dist';
 // logic) lives in the api client, which every first-paint fetch rides, so
 // none of it can be lazy. 164 leaves ~0.9 KB headroom; regressions still
 // fail the build.
-const FIRST_LOAD_BUDGET = 164 * 1024; // gzipped
+// 2026-09-08: re-based 164 -> 166 (+2 KB) for v5.12/v5.13. Measured move:
+// 163.1 -> 164.7 KB gz after lazy-loading everything that could be lazy
+// (live lyric line, DJ voice, import sheet, Listen Later page, goal ring).
+// What remains is player-tick and queue-intake code that cannot be lazy:
+// sleep-after-N-songs and A/B loop points run inside the playback clock,
+// and the blocked-artist filter guards every queue intake (same class as
+// the kid-mode gate rebase). 166 leaves ~1.3 KB headroom; regressions
+// still fail the build.
+const FIRST_LOAD_BUDGET = 166 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 // Deliberately lazy diagram/math engines (loaded only when VinaX AI renders them).
