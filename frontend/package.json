@@ -1,7 +1,7 @@
 {
   "name": "vinax",
   "private": true,
-  "version": "5.13.1",
+  "version": "5.14.0",
   "description": "VinaX frontend — music tuned to you. No login. Private by design. (Cloudflare Pages)",
   "type": "module",
   "engines": {
@@ -20,6 +20,7 @@
     "cap:add:android": "npx cap add android && node scripts/patch-android.js",
     "android:debug": "npm run cap:sync && cd android && ./gradlew assembleDebug",
     "test": "vitest run",
+    "gen:festivals": "node scripts/gen-festivals.mjs",
     "e2e": "node scripts/e2e-smoke.mjs",
     "test:watch": "vitest"
   },

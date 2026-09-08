@@ -1,4 +1,5 @@
 import { languageLabel } from '@/constants/languages';
+import { festivalById } from '@/constants/festivals';
 
 /**
  * Personalized home message — a different greeting for every listener, every
@@ -40,17 +41,6 @@ function seed(s: string): number {
   return h;
 }
 
-const FESTIVAL_NAMES: Record<string, string> = {
-  sankranti: 'Sankranti',
-  holi: 'Holi',
-  eid: 'Eid',
-  onam: 'Onam',
-  ganesh: 'Ganesh Chaturthi',
-  dussehra: 'Dussehra',
-  diwali: 'Diwali',
-  christmas: 'Christmas',
-};
-
 function dayPartTitle(hour: number, name: string): string {
   const who = name ? `, ${name}` : '';
   if (hour >= 5 && hour < 12) return `Good morning${who}`;
@@ -64,9 +54,10 @@ export function personalMessage(i: MessageInput): PersonalMessage {
   const lang = i.topLanguage ? languageLabel(i.topLanguage) : null;
 
   // 1 · Festival days beat everything — they're rare and shared.
-  if (i.festivalId && FESTIVAL_NAMES[i.festivalId]) {
+  const fest = festivalById(i.festivalId);
+  if (fest) {
     return {
-      title: `Happy ${FESTIVAL_NAMES[i.festivalId]}${name ? `, ${name}` : ''}!`,
+      title: `${fest.greeting}${name ? `, ${name}` : ''}!`,
       subtitle: 'Festival specials are on your home today.',
     };
   }

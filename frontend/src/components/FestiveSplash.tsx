@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { resolveFestival, resolveFestivalTheme, type Festival } from '@/constants/festivals';
+import { festivalClass, resolveFestival, resolveFestivalTheme, type Festival } from '@/constants/festivals';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useFestivalOverride } from '@/features/home/useAppConfig';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { STORAGE_PREFIX } from '@/constants/storage-keys';
@@ -114,7 +115,11 @@ export function FestiveSplash() {
   // Admin override (Festival Themes panel). Until the config answers, the
   // built-in calendar drives everything exactly as before — a forced or
   // suppressed festival simply catches up a moment after boot.
-  const { data: override } = useFestivalOverride();
+  const { data: serverOverride } = useFestivalOverride();
+  // 5.14.0 — the listener's own switch (Settings → Festival themes) wins over
+  // the calendar and the console: off means the plain theme all year.
+  const skinsOn = useSettingsStore((s) => s.festivalSkins);
+  const override = useMemo(() => (skinsOn ? serverOverride : { mode: 'off' as const }), [skinsOn, serverOverride]);
   const festival = useMemo(() => resolveFestival(override), [override]);
   const todayKey = `${festival?.id ?? ''}-${new Date().toDateString()}`;
   const [visible, setVisible] = useState(
@@ -155,7 +160,7 @@ export function FestiveSplash() {
   useEffect(() => {
     const root = document.documentElement;
     const themeFest = resolveFestivalTheme(override);
-    const wanted = themeFest ? `fest-${themeFest.id === 'independence' ? 'ind' : themeFest.id}` : null;
+    const wanted = themeFest ? festivalClass(themeFest.id) : null;
     for (const c of Array.from(root.classList)) if (c.startsWith('fest-') && c !== wanted) root.classList.remove(c);
     if (wanted) root.classList.add(wanted);
     return () => {

@@ -12,6 +12,17 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.14.0': {
+    title: '43 festivals, 43 looks',
+    changes: [
+      { type: 'new', text: 'Every festival is now its own full theme — accent colour, a tinted page canvas (violet night for Diwali, pine for Christmas, dawn blue for Chhath), an ambient glow, a hand-drawn motif behind content, the top ribbon, a badge beside the logo and a living backdrop. No two festivals look alike.' },
+      { type: 'new', text: 'Twenty more days on the calendar: Valentine’s, Women’s Day, Vishu · Baisakhi · Puthandu · Bihu, Akshaya Tritiya, Buddha Purnima, Mother’s Day, Bakrid, Telangana Formation Day, Father’s Day, Guru Purnima, Friendship Day, Raksha Bandhan, Teachers’ Day, Gandhi Jayanti, Navratri, Halloween, Andhra Pradesh Formation Day, Children’s Day, Chhath Puja and Guru Nanak Jayanti. Diwali now runs Dhanteras through Bhai Dooj.' },
+      { type: 'new', text: 'Settings → Festival themes: switch the festive look off for the plain theme all year, and see what is on today or coming next.' },
+      { type: 'improved', text: 'Home greets you with each festival’s own wish, the AI knows the mood of every festival day, and recommendations lean toward the right languages and moods for all 43.' },
+      { type: 'improved', text: 'Light theme during festivals: every accent step is checked for readability on white, and the canvas takes a soft tint of the day’s colour.' },
+      { type: 'improved', text: 'Admin → Festival Themes shows a live preview card of each theme (canvas, ribbon, accent, badge) and marks force-only days.' },
+    ],
+  },
   '5.13.1': {
     title: 'Faster first load',
     changes: [

@@ -15,6 +15,7 @@ import {
   resetAppState,
 } from '@/features/settings/actions';
 import { ACCENT_OPTIONS } from '@/constants/accents';
+import { activeFestival, nextFestival } from '@/constants/festivals';
 import { applyGlassLevel } from '@/utils/theme';
 import { COUNTRIES, REGIONS } from '@/constants/regions';
 import { KEYS } from '@/constants/storage-keys';
@@ -147,6 +148,24 @@ const eraseItems = [
   'Cached artwork & audio (Cache Storage)',
 ];
 
+/** 5.14.0 — festival skins switch with a live "today / next" line. */
+function FestivalRow() {
+  const on = useSettingsStore((x) => x.festivalSkins);
+  const setOn = useSettingsStore((x) => x.setFestivalSkins);
+  const today = activeFestival();
+  const next = nextFestival();
+  const line = today
+    ? `${today.emoji} ${today.name} is on now`
+    : next
+      ? `Next: ${next.festival.emoji} ${next.festival.name} in ${next.inDays} day${next.inDays === 1 ? '' : 's'}`
+      : 'No festival on the calendar';
+  return (
+    <Row label="Festival themes" note={`Every festival brings its own look — accent, background, glow and a greeting. ${line}.`}>
+      <Toggle on={on} onChange={setOn} label="Festival themes" />
+    </Row>
+  );
+}
+
 export default function SettingsPage() {
   usePageTitle('Settings');
   const s = useSettingsStore();
@@ -256,6 +275,7 @@ export default function SettingsPage() {
             ))}
           </div>
         </Row>
+        <FestivalRow />
         <Row stack label="Accent color" note="The highlight color across buttons, links and the player. Every choice stays readable in light and dark.">
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Accent color">
             {ACCENT_OPTIONS.map((a) => (

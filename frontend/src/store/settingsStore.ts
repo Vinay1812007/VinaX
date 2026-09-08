@@ -11,6 +11,8 @@ export interface SettingsState {
   dailyGoalMinutes: number;
   /** v5.12.0 — radio-DJ voice: announces each song as it starts. */
   djVoice: boolean;
+  /** 5.14.0 — festival skins (accent, canvas, glow, splash). Off = the plain theme all year. */
+  festivalSkins: boolean;
   /** 0-100 — iOS-style adjustable glass translucency (utils/theme.ts). */
   glassLevel: number;
   /** 0-100 — background blur intensity, independent from glassLevel. */
@@ -54,6 +56,7 @@ export interface SettingsState {
   setTheme(theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto'): void;
   setDailyGoalMinutes(n: number): void;
   setDjVoice(v: boolean): void;
+  setFestivalSkins(v: boolean): void;
   setAccent(accent: string): void;
   setGlassLevel(v: number): void;
   setGlassBlur(v: number): void;
@@ -91,6 +94,7 @@ const defaults = {
   accent: 'crimson',
   dailyGoalMinutes: 0,
   djVoice: false,
+  festivalSkins: true,
   glassLevel: 40,
   glassBlur: 40,
   autoplay: true,
@@ -128,6 +132,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTheme: (theme) => set({ theme }),
       setDailyGoalMinutes: (n) => set({ dailyGoalMinutes: Math.max(0, Math.min(600, Math.round(n))) }),
       setDjVoice: (djVoice) => set({ djVoice }),
+      setFestivalSkins: (festivalSkins) => set({ festivalSkins }),
       setAccent: (accent) => set({ accent }),
       setGlassLevel: (v) => set({ glassLevel: Math.min(100, Math.max(0, Math.round(v))) }),
       setGlassBlur: (v) => set({ glassBlur: Math.min(100, Math.max(0, Math.round(v))) }),

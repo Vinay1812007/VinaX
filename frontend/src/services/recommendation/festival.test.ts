@@ -18,8 +18,8 @@ describe('activeFestivalMusic (A10)', () => {
     expect(activeFestivalMusic(new Date(2026, 5, 15))).toBeNull(); // mid-June
   });
 
-  it('is null for a visual-only festival with no music mapping', () => {
-    // Republic Day (Jan 26) fires the splash but carries no music boost.
-    expect(activeFestivalMusic(new Date(2026, 0, 26))).toBeNull();
+  it('lifts a mood for a national day (5.14.0: every festival carries a music hint)', () => {
+    // Republic Day (Jan 26) leans on energetic desh-bhakti tracks.
+    expect(activeFestivalMusic(new Date(2026, 0, 26))).toEqual({ id: 'republic', languages: ['hindi'], moods: ['energetic'] });
   });
 });

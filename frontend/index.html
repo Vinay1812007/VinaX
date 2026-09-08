@@ -49,15 +49,25 @@
         // Festival skins from the very first paint — same fest-<id> classes
         // FestiveSplash keeps applied after hydrate. Windows start one day
         // BEFORE the festival (theme-ahead) and are encoded m*100+d.
-        // KEEP IN SYNC with src/constants/festivals.ts.
-        var fd = new Date(), fv = (fd.getMonth() + 1) * 100 + fd.getDate();
-        var FW = [[112, 116, 'sankranti'], [124, 126, 'republic'], [213, 215, 'shivaratri'], [302, 304, 'holi'],
-          [317, 319, 'ugadi'], [319, 321, 'eid'], [325, 327, 'ramanavami'], [402, 405, 'easter'],
-          [511, 513, 'hanuman'], [711, 726, 'bonalu'], [813, 815, 'ind'], [820, 821, 'varalakshmi'],
-          [824, 827, 'onam'], [902, 904, 'janmashtami'], [912, 915, 'ganesh'], [1009, 1018, 'bathukamma'],
-          [1018, 1020, 'dussehra'], [1106, 1109, 'diwali'], [1112, 1114, 'nagula'], [1218, 1220, 'vaikunta'],
-          [1223, 1225, 'christmas'], [1230, 1231, 'newyear'], [101, 101, 'newyear']];
-        for (var fi = 0; fi < FW.length; fi++)
+        // GENERATED from src/constants/festivals.ts by `npm run gen:festivals`.
+        var fd = new Date(), fv = (fd.getMonth() + 1) * 100 + fd.getDate(), fOn = true;
+        try { var fst = JSON.parse(localStorage.getItem('vinax.settings.v1') || '{}').state; if (fst && fst.festivalSkins === false) fOn = false; } catch (e) {}
+        var FW = [
+          [113, 116, 'sankranti'], [125, 126, 'republic'], [213, 214, 'valentine'], [215, 215, 'shivaratri'], [303, 304, 'holi'], [308, 308, 'womensday'],
+          [318, 319, 'ugadi'], [320, 321, 'eid'], [326, 327, 'ramanavami'], [403, 405, 'easter'], [414, 414, 'vishu'], [419, 419, 'akshaya'],
+          [501, 501, 'buddha'], [510, 510, 'mothersday'], [512, 513, 'hanuman'], [527, 527, 'bakrid'], [602, 602, 'telangana'], [621, 621, 'fathersday'],
+          [712, 726, 'bonalu'], [729, 729, 'gurupurnima'], [802, 802, 'friendship'], [814, 815, 'ind'], [821, 821, 'varalakshmi'], [825, 827, 'onam'],
+          [828, 828, 'rakhi'], [903, 904, 'janmashtami'], [905, 905, 'teachers'], [913, 915, 'ganesh'], [1002, 1002, 'gandhi'], [1010, 1018, 'bathukamma'],
+          [1019, 1020, 'dussehra'], [1031, 1031, 'halloween'], [1101, 1101, 'apformation'], [1106, 1110, 'diwali'], [1113, 1114, 'nagula'], [1115, 1116, 'chhath'],
+          [1124, 1124, 'gurunanak'], [1219, 1220, 'vaikunta'], [1224, 1225, 'christmas'], [1231, 1231, 'newyear'], [101, 101, 'newyear'], [112, 112, 'sankranti'],
+          [124, 124, 'republic'], [212, 212, 'valentine'], [214, 214, 'shivaratri'], [302, 302, 'holi'], [307, 307, 'womensday'], [317, 317, 'ugadi'],
+          [319, 319, 'eid'], [325, 325, 'ramanavami'], [402, 402, 'easter'], [413, 413, 'vishu'], [418, 418, 'akshaya'], [430, 430, 'buddha'],
+          [509, 509, 'mothersday'], [511, 511, 'hanuman'], [526, 526, 'bakrid'], [601, 601, 'telangana'], [620, 620, 'fathersday'], [711, 711, 'bonalu'],
+          [728, 728, 'gurupurnima'], [801, 801, 'friendship'], [813, 813, 'ind'], [820, 820, 'varalakshmi'], [824, 824, 'onam'], [827, 827, 'rakhi'],
+          [902, 902, 'janmashtami'], [904, 904, 'teachers'], [912, 912, 'ganesh'], [1001, 1001, 'gandhi'], [1009, 1009, 'bathukamma'], [1018, 1018, 'dussehra'],
+          [1030, 1030, 'halloween'], [1031, 1031, 'apformation'], [1105, 1105, 'diwali'], [1112, 1112, 'nagula'], [1114, 1114, 'chhath'], [1123, 1123, 'gurunanak'],
+          [1218, 1218, 'vaikunta'], [1223, 1223, 'christmas'], [1230, 1230, 'newyear']];
+        for (var fi = 0; fOn && fi < FW.length; fi++)
           if (fv >= FW[fi][0] && fv <= FW[fi][1]) { document.documentElement.classList.add('fest-' + FW[fi][2]); break; }
         try {
           var raw = localStorage.getItem('vinax.settings.v1');
