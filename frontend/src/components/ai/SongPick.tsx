@@ -2,6 +2,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import type { Song } from '@/types';
 import { searchSongs } from '@/services/api';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
+import { useLibraryStore } from '@/store/libraryStore';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
 import { haptic } from '@/services/native';
@@ -192,6 +193,19 @@ export function SongPicksBar({ picks }: { picks: SongPickRef[] }) {
   const qc = useQueryClient();
   const playQueue = usePlayerStore((s) => s.playQueue);
   const enqueue = usePlayerStore((s) => s.enqueue);
+  const createCollection = useLibraryStore((s) => s.createCollection);
+  const addToCollection = useLibraryStore((s) => s.addToCollection);
+  // v5.16.0 — one tap turns the picks into a saved playlist.
+  const saveAsPlaylist = (): void => {
+    void resolveAll().then((songs) => {
+      if (!songs.length) return toast('None of these could be found');
+      const name = `AI picks · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+      const id = createCollection(name);
+      for (const s of songs) addToCollection(id, s);
+      toast(`Saved “${name}” with ${songs.length} songs`);
+      haptic('light');
+    });
+  };
 
   const resolveAll = async (): Promise<Song[]> => {
     const songs = await Promise.all(picks.map((p) => fetchPick(qc, p).catch(() => null)));
@@ -225,6 +239,9 @@ export function SongPicksBar({ picks }: { picks: SongPickRef[] }) {
         className="btn-secondary px-4 py-1.5 text-[12px] inline-flex items-center gap-1.5"
       >
         <QueueIcon className="w-3.5 h-3.5" /> Add to queue
+      </button>
+      <button onClick={saveAsPlaylist} className="btn-secondary px-3 py-1.5 text-[12px] inline-flex items-center gap-1.5" title="Save these songs as a playlist">
+        Save as playlist
       </button>
       <span className="text-[11px] text-ink-400">{picks.length} songs</span>
     </div>

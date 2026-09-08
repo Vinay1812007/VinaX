@@ -759,6 +759,9 @@ async function handleChat(
   if (mode !== 'expert' && mode !== 'translator') {
     const rules = houseRules((await readConfig(env, ['ai-rules']))['ai-rules']);
     if (rules) sys = `${sys}\n\nHOUSE NOTES (from the VinaX team — follow when relevant):\n${rules}`;
+    // v5.16.0 — follow-up chips: one trailing line the client lifts off the
+    // reply. Skipped in voice mode (spoken replies must not carry it).
+    if (mode !== 'voice') sys = `${sys}\n\nFOLLOW-UPS: after a substantive answer, end with ONE final line that starts with ">>> " followed by up to three short follow-up questions the user might ask next, separated by " | " (example: ">>> Show an example | Make it shorter | Why does that happen?"). Omit the line entirely for one-line replies, greetings, refusals, pure song lists and translations.`;
   }
   if (searchBlock) sys = `${sys}\n\nLIVE WEB RESULTS (fetched just now):\n${searchBlock}`;
   else if (webStatus === 'failed')

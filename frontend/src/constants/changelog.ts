@@ -12,6 +12,18 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.16.0': {
+    title: 'VinaX AI, thirteen new tricks',
+    changes: [
+      { type: 'new', text: 'Slash commands — type / in the composer: /playlist <vibe> builds a playlist right in the chat, /now shows what’s playing, /lyrics explains the current song, /mood <mood> starts music, /summary recaps the chat, plus /think, /web, /prompts, /export and /clear. Tab completes.' },
+      { type: 'new', text: 'Now-playing context — one tap lets the assistant see the song that’s playing (title, artist, film, year and the opening lyrics), so “who composed this?” or “what does this line mean?” just work. Paste a VinaX song link and it reads that song too.' },
+      { type: 'new', text: 'Follow-up chips — every substantial reply ends with up to three suggested next questions you can tap.' },
+      { type: 'new', text: 'Reply in your language — Auto, English, Telugu, Hindi, Tamil, Kannada, Malayalam, Tenglish or Hinglish — and a reply style: Brief, Detailed, Simple, Steps or Table. Both remembered.' },
+      { type: 'new', text: 'Shorten, Expand and Simplify any answer in one tap. Listen reads a reply aloud with your device’s voice. Pin keeps a reply at the top of the chat. Branch continues from any point in a new chat.' },
+      { type: 'new', text: 'Today for you — a small brief on the welcome screen built on your device: the date, a festival on or coming up, your listening so far, and three prompts tailored to it.' },
+      { type: 'new', text: 'Saved prompts — your own prompt library (welcome screen or /prompts). Song lists gain a Save as playlist button beside Play all and Queue all.' },
+    ],
+  },
   '5.15.0': {
     title: 'Twenty-four more admin tools',
     changes: [

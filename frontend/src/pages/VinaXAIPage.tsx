@@ -23,6 +23,14 @@ import { cn } from '@/utils/cn';
 import { RichContent } from '@/components/ai/RichContent';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useCurrentSong } from '@/store/playerStore';
+import { getSong } from '@/services/api';
+import { generatePlaylist } from '@/services/ai/playlist';
+import { matchSlash, parseSlash, type SlashCommand } from '@/features/ai/slashCommands';
+import { hideFollowupLine, splitFollowups } from '@/features/ai/followups';
+import { onSpeakingChange, readAloud, readAloudSupported } from '@/features/ai/readAloud';
+import { detectSongLinks, prefRuleMessage, songContextBlock } from '@/features/ai/replyPrefs';
+import { FollowupChips, ReplyPrefsBar, SavedPromptsSheet, SlashMenu, TodayBriefCard } from '@/components/ai/AiExtras';
 import { useClientConfig } from '@/features/home/useAppConfig';
 
 const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/vinaxai' : '/api/vinaxai';
@@ -156,6 +164,10 @@ interface Msg {
   player?: boolean;
   /** Listener feedback on this reply. */
   rating?: 'up' | 'down';
+  /** v5.16.0 — pinned to the top of the chat. */
+  pinned?: boolean;
+  /** v5.16.0 — follow-up questions the engine suggested. */
+  followups?: string[];
 }
 interface Conversation {
   id: string;
@@ -343,6 +355,16 @@ export default function VinaXAIPage(): ReactNode {
   // the deep lane (high effort); Research forces multi-source web answers.
   const [think, setThink] = useState(false);
   const [research, setResearch] = useState(false);
+  // v5.16.0 — reply preferences (remembered), now-playing context, prompt
+  // library, read-aloud state, slash menu.
+  const [replyLang, setReplyLang] = useState<string>(() => { try { return localStorage.getItem('vinax.aiReplyLang') ?? 'auto'; } catch { return 'auto'; } });
+  const [replyStyle, setReplyStyle] = useState<string>(() => { try { return localStorage.getItem('vinax.aiReplyStyle') ?? 'auto'; } catch { return 'auto'; } });
+  const [songCtx, setSongCtx] = useState(false);
+  const [promptsOpen, setPromptsOpen] = useState(false);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const currentSong = useCurrentSong();
+  useEffect(() => onSpeakingChange(setSpeakingId), []);
+  useEffect(() => { try { localStorage.setItem('vinax.aiReplyLang', replyLang); localStorage.setItem('vinax.aiReplyStyle', replyStyle); } catch { /* ignore */ } }, [replyLang, replyStyle]);
   const [imageMode, setImageMode] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
   const [busy, setBusy] = useState(false);
@@ -401,8 +423,8 @@ export default function VinaXAIPage(): ReactNode {
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   // stable-ish refs so speech callbacks read latest values
-  const stateRef = useRef({ mode, web, think, research, profile });
-  stateRef.current = { mode, web, think, research, profile };
+  const stateRef = useRef({ mode, web, think, research, profile, replyLang, replyStyle, songCtx, currentSong });
+  stateRef.current = { mode, web, think, research, profile, replyLang, replyStyle, songCtx, currentSong };
 
   useEffect(() => {
     if (!activeId) setActiveId(chats[0]?.id ?? '');
@@ -547,6 +569,22 @@ export default function VinaXAIPage(): ReactNode {
     if (busy) return;
     setActiveMessages((prev) => prev.slice(0, idx));
     setInput(content);
+  };
+
+  // v5.16.0 — reply actions: rewrite the last answer, pin, branch.
+  const rewriteLast = (how: 'shorter' | 'longer' | 'simpler'): void => {
+    if (busy) return;
+    const ask = how === 'shorter' ? 'Rewrite your last answer at half the length, keeping every fact.' : how === 'longer' ? 'Expand your last answer with more detail and examples, same structure.' : 'Rewrite your last answer in simpler words, as if for someone new to the topic.';
+    void sendRef.current(ask);
+  };
+  const togglePinMsg = (idx: number): void => setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, pinned: !m.pinned } : m)));
+  const branchFrom = (idx: number): void => {
+    const src = active;
+    if (!src) return;
+    const c: Conversation = { ...freshChat(), title: `${src.title} · branch`, messages: src.messages.slice(0, idx + 1).map((m) => ({ ...m, pinned: undefined })) };
+    setChats((prev) => [c, ...prev]);
+    setActiveId(c.id);
+    setSidebarOpen(false);
   };
 
   const setActiveMessages = (fn: (prev: Msg[]) => Msg[]): void => {
@@ -706,9 +744,59 @@ export default function VinaXAIPage(): ReactNode {
     return false;
   };
 
+  // v5.16.0 — slash commands run on the device; a few seed an engine prompt.
+  const runSlash = async (cmd: string, arg: string): Promise<boolean> => {
+    const song = stateRef.current.currentSong;
+    switch (cmd) {
+      case 'clear': newChat(); return true;
+      case 'export': setExportOpen(true); return true;
+      case 'prompts': setPromptsOpen(true); return true;
+      case 'think': setThink((v) => !v); return true;
+      case 'web': setWeb((v) => !v); return true;
+      case 'now':
+        pushExchange('/now', song ? `Now playing: ${song.title} — ${song.artists?.[0]?.name ?? song.subtitle}` : 'Nothing is playing right now.', !!song);
+        return true;
+      case 'mood':
+        if (!arg) { pushExchange('/mood', 'Tell me a mood — try “/mood chill” or “/mood energetic”.'); return true; }
+        return tryMusicCommand(`play ${arg} songs`);
+      case 'summary':
+        void sendRef.current('Summarise this conversation so far in five short bullets, then list any decisions or action items.');
+        return true;
+      case 'lyrics':
+        if (!song) { pushExchange('/lyrics', 'Play a song first, then ask again.'); return true; }
+        setSongCtx(true);
+        void sendRef.current(`Explain the meaning of “${song.title}” — what the lyrics are about, the mood, and any lines worth noticing. Keep it warm and brief.`);
+        return true;
+      case 'playlist': {
+        if (!arg) { pushExchange('/playlist', 'Describe a vibe — try “/playlist rainy evening in Telugu”.'); return true; }
+        const langs = useSettingsStore.getState().pinnedLanguages;
+        const muted = useSettingsStore.getState().mutedLanguages ?? [];
+        setActiveMessages((prev) => [...prev, { role: 'user', content: `/playlist ${arg}` }, { role: 'assistant', content: '' }]);
+        setBusy(true);
+        try {
+          const r = await generatePlaylist(arg, langs, muted);
+          const ok = r.ok ? r.playlist : null;
+          const lines = ok ? ok.songs.map((sg, i) => `${i + 1}. ${sg.title} — ${sg.artists?.[0]?.name ?? sg.subtitle}`).join('\n') : '';
+          const reply = ok && ok.songs.length ? `**${ok.name}**\n${ok.description}\n\n${lines}` : 'I couldn’t build that playlist right now — try a different vibe or a moment later.';
+          setActiveMessages((prev) => { const next = [...prev]; next[next.length - 1] = { role: 'assistant', content: reply }; return next; });
+        } catch {
+          setActiveMessages((prev) => { const next = [...prev]; next[next.length - 1] = { role: 'assistant', content: 'The playlist engine didn’t answer — try again in a moment.' }; return next; });
+        }
+        setBusy(false);
+        return true;
+      }
+      default: return false;
+    }
+  };
+
   const send = async (raw: string): Promise<void> => {
     const q = raw.trim();
     if ((!q && pending.length === 0) || busy) return;
+    const slash = pending.length === 0 ? parseSlash(q) : null;
+    if (slash) {
+      setInput('');
+      if (await runSlash(slash.cmd, slash.arg)) return;
+    }
     if (q && pending.length === 0 && (await tryMusicCommand(q))) {
       setInput('');
       return;
@@ -776,7 +864,20 @@ export default function VinaXAIPage(): ReactNode {
     // message plus (for Think) a per-message lane override to the deep engine.
     const thinkNow = !voiceLive && stateRef.current.think;
     const researchNow = !voiceLive && stateRef.current.research;
+    // v5.16.0 — reply preferences + song context (now playing, pasted links).
+    const prefRule = voiceLive ? '' : prefRuleMessage(stateRef.current.replyLang, stateRef.current.replyStyle);
+    const ctxBlocks: string[] = [];
+    if (!voiceLive) {
+      const np = stateRef.current.songCtx ? stateRef.current.currentSong : null;
+      if (np) ctxBlocks.push(await songContextBlock(np, 'now playing').catch(() => ''));
+      for (const id of detectSongLinks(q)) {
+        const sg = await getSong(id).catch(() => null);
+        if (sg) ctxBlocks.push(await songContextBlock(sg, 'song the user linked').catch(() => ''));
+      }
+    }
     const apiMessages = [
+      ...(prefRule ? [{ role: 'user' as const, content: prefRule }] : []),
+      ...ctxBlocks.filter(Boolean).map((content) => ({ role: 'user' as const, content })),
       ...(voiceLive
         ? [{ role: 'user' as const, content: 'SYSTEM RULE for this voice conversation: every reply is spoken aloud — 1-3 short conversational sentences of plain text, no markdown, no lists, no emojis.' }]
         : []),
@@ -867,7 +968,8 @@ export default function VinaXAIPage(): ReactNode {
     } finally {
       abortRef.current = null;
       setBusy(false);
-      const finalText = full.trim().replace(/\n{3,}/g, '\n\n');
+      const split = splitFollowups(full.trim().replace(/\n{3,}/g, '\n\n'));
+      const finalText = split.body;
       const finalSources = gotSources;
       const finalEngine = gotEngine;
       setActiveMessages((prev) => {
@@ -879,6 +981,7 @@ export default function VinaXAIPage(): ReactNode {
               content: finalText || '…',
               sources: finalSources.length ? finalSources : undefined,
               engine: finalEngine || undefined,
+              followups: split.followups.length ? split.followups : undefined,
             };
             break;
           }
@@ -1212,6 +1315,9 @@ export default function VinaXAIPage(): ReactNode {
       </aside>
 
       {sidebarOpen && <button aria-label="Close menu" className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />}
+      {promptsOpen && (
+        <SavedPromptsSheet draft={input} onClose={() => setPromptsOpen(false)} onUse={(t) => { setInput(t); taRef.current?.focus(); }} />
+      )}
       {voiceMode && (
         <LiveVoiceOverlay
           state={voiceState}
@@ -1410,7 +1516,9 @@ export default function VinaXAIPage(): ReactNode {
               <p className="text-sm text-ink-300 mb-5 max-w-md">
                 Ask anything, in any language. Code with tests, charts, diagrams, documents and images, live web search, voice — and songs you can play.
               </p>
+              <TodayBriefCard onPick={(t) => void send(t)} />
               <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xl">
+                <button onClick={() => setPromptsOpen(true)} className="px-3 py-1.5 rounded-full bg-ink-800 hover:bg-ink-700 text-[12px] font-bold text-ink-100 transition hover:scale-[1.03]">📌 Saved prompts</button>
                 {quickActions.map((qa) => (
                   <button
                     key={qa.label}
@@ -1439,8 +1547,18 @@ export default function VinaXAIPage(): ReactNode {
             </div>
           ) : (
             <div className="mx-auto w-full max-w-3xl px-4 py-6 space-y-5">
+              {messages.some((m) => m.pinned) && (
+                <div className="rounded-2xl border border-glass bg-[var(--tile)] px-3 py-2 text-[12px]" aria-label="Pinned replies">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1">Pinned</p>
+                  {messages.map((m, i) => m.pinned ? (
+                    <button key={i} onClick={() => document.getElementById(`ai-msg-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="block w-full text-left truncate py-0.5 text-ink-200 hover:text-ink-100">
+                      📌 {m.content.replace(/[#*`>_]/g, '').slice(0, 110)}
+                    </button>
+                  ) : null)}
+                </div>
+              )}
               {messages.map((m, i) => (
-                <div key={i} className={cn('flex gap-3 animate-fade-up', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+                <div key={i} id={`ai-msg-${i}`} className={cn('flex gap-3 animate-fade-up', m.role === 'user' ? 'justify-end' : 'justify-start')}>
                   {m.role === 'assistant' && (
                     <span
                       className={cn(
@@ -1484,7 +1602,7 @@ export default function VinaXAIPage(): ReactNode {
                               subtree the instant a reply finished, which
                               re-ran every live preview from scratch. */}
                           <div>
-                            <RichContent text={m.content} streaming={busy && i === messages.length - 1} />
+                            <RichContent text={busy && i === messages.length - 1 ? hideFollowupLine(m.content) : m.content} streaming={busy && i === messages.length - 1} />
                             {busy && i === messages.length - 1 && <span className="vx-caret" aria-hidden />}
                           </div>
                           {!busy && (
@@ -1533,10 +1651,23 @@ export default function VinaXAIPage(): ReactNode {
                                   <button onClick={continueReply} className="hover:text-ink-100">
                                     Continue
                                   </button>
+                                  <button onClick={() => rewriteLast('shorter')} className="hover:text-ink-100">Shorten</button>
+                                  <button onClick={() => rewriteLast('longer')} className="hover:text-ink-100">Expand</button>
+                                  <button onClick={() => rewriteLast('simpler')} className="hover:text-ink-100">Simplify</button>
                                 </>
                               )}
+                              {readAloudSupported() && (
+                                <button onClick={() => readAloud(`${active?.id ?? ''}:${i}`, m.content)} aria-pressed={speakingId === `${active?.id ?? ''}:${i}`} className={cn('hover:text-ink-100', speakingId === `${active?.id ?? ''}:${i}` && 'text-ember-400')}>
+                                  {speakingId === `${active?.id ?? ''}:${i}` ? 'Stop' : 'Listen'}
+                                </button>
+                              )}
+                              <button onClick={() => togglePinMsg(i)} aria-pressed={!!m.pinned} className={cn('hover:text-ink-100', m.pinned && 'text-ember-400')}>{m.pinned ? 'Unpin' : 'Pin'}</button>
+                              <button onClick={() => branchFrom(i)} className="hover:text-ink-100" title="Continue from this point in a new chat">Branch</button>
                             </div>
                           )}
+                          {!busy && i === messages.length - 1 && m.followups?.length ? (
+                            <FollowupChips items={m.followups} disabled={busy} onPick={(t) => void send(t)} />
+                          ) : null}
                         </>
                       ) : (
                         <span className="vx-dots inline-flex items-center gap-1 text-ink-300" role="status" aria-label="Thinking">
@@ -1632,7 +1763,11 @@ export default function VinaXAIPage(): ReactNode {
                 ))}
               </div>
             )}
-            <div className="flex items-end gap-1.5 bg-ink-800 rounded-3xl px-2.5 py-2 focus-within:ring-1 focus-within:ring-ink-100/40">
+            {!voiceMode && (
+              <ReplyPrefsBar lang={replyLang} style={replyStyle} songCtx={songCtx} hasSong={!!currentSong} onLang={setReplyLang} onStyle={setReplyStyle} onSongCtx={setSongCtx} />
+            )}
+            <div className="relative flex items-end gap-1.5 bg-ink-800 rounded-3xl px-2.5 py-2 focus-within:ring-1 focus-within:ring-ink-100/40">
+              <SlashMenu items={matchSlash(input)} onPick={(c: SlashCommand) => { setInput(c.arg ? `/${c.cmd} ` : `/${c.cmd}`); taRef.current?.focus(); if (!c.arg) void send(`/${c.cmd}`); }} />
               <input
                 ref={fileRef}
                 type="file"
@@ -1698,13 +1833,18 @@ export default function VinaXAIPage(): ReactNode {
                   t.style.height = `${Math.min(t.scrollHeight, 180)}px`;
                 }}
                 onKeyDown={(e) => {
+                  if (e.key === 'Tab' && input.startsWith('/') && !/\s/.test(input)) {
+                    const first = matchSlash(input)[0];
+                    if (first) { e.preventDefault(); setInput(first.arg ? `/${first.cmd} ` : `/${first.cmd}`); }
+                    return;
+                  }
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     void send(input);
                   }
                 }}
                 rows={1}
-                placeholder={imageMode ? 'Describe the image to create…' : listening ? 'Listening…' : 'Message VinaX AI…'}
+                placeholder={imageMode ? 'Describe the image to create…' : listening ? 'Listening…' : 'Message VinaX AI… (type / for commands)'}
                 aria-label="Message VinaX AI"
                 className="flex-1 bg-transparent resize-none outline-none text-sm py-1.5 max-h-44 leading-relaxed"
               />
