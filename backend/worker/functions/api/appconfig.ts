@@ -52,15 +52,28 @@ export function activeBanners(value: unknown, now = new Date()): Banner[] {
     .slice(0, 10);
 }
 
+/** Only boolean flags with sane names leave the server — anything else an
+ *  admin typo'd into the row is dropped rather than shipped to every client. */
+export function publicFlags(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(k) && typeof v === 'boolean') out[k] = v;
+    if (Object.keys(out).length >= 50) break;
+  }
+  return out;
+}
+
 export const onRequestGet = async (context: { request: Request; env: SupabaseEnv }): Promise<Response> => {
   const { request, env } = context;
   const key = new URL(request.url).searchParams.get('key') ?? '';
-  if (key !== 'banners' && key !== 'home-config' && key !== 'festival') {
+  if (key !== 'banners' && key !== 'home-config' && key !== 'festival' && key !== 'flags') {
     return new Response(JSON.stringify({ error: 'unknown_key' }), { status: 400, headers: { 'content-type': 'application/json' } });
   }
   if (!supabaseConfigured(env)) {
     if (key === 'banners') return json({ banners: [] });
     if (key === 'festival') return json({ festival: null }, 60);
+    if (key === 'flags') return json({ flags: {} }, 60);
     return json({ config: null });
   }
   const rows = await sbSelect<ConfigRow>(env, 'vinax_config', `key=eq.${encodeURIComponent(key)}&select=value&limit=1`).catch(
@@ -71,5 +84,8 @@ export const onRequestGet = async (context: { request: Request; env: SupabaseEnv
   // Festival theme override — cached only briefly so an admin force/off
   // switch reaches listeners within about a minute, not five.
   if (key === 'festival') return json({ festival: value }, 60);
+  // v5.13.0 — feature flags are kill-switches; a minute of cache is the most
+  // an admin should have to wait for one to bite.
+  if (key === 'flags') return json({ flags: publicFlags(value) }, 60);
   return json({ config: value });
 };

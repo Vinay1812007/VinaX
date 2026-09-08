@@ -4,6 +4,7 @@ import { tokenize } from './tokenize';
 import { SongPickChip, SongPicksBar, extractSongPicks, parseSongLine } from './SongPick';
 import { ChartBlock } from './ChartBlock';
 import { newToken, onPreviewMessage, openPreview, postPreview, scriptPage, type PreviewEvent } from './preview';
+import { flagOn, useFeatureFlags } from '@/features/home/useAppConfig';
 
 /**
  * Rich renderer for AI messages. Auto-detects and renders:
@@ -506,12 +507,13 @@ function CodeBlock({ lang, code }: { lang: string; code: string }): ReactNode {
   // Very large blocks skip tinting so the chat never jank-scrolls.
   const tinted = useMemo(() => (code.length > 20_000 ? code : highlightCode(code, lang)), [code, lang]);
   const lineCount = useMemo(() => code.split('\n').length, [code]);
+  const flags = useFeatureFlags(); // v5.13.0 — admin kill-switch for Run
   return (
     <div className="my-2 rounded-xl overflow-hidden border border-glass-strong bg-ink-900">
       <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
         <span className="uppercase tracking-wide">{lang || 'text'}<span className="normal-case text-ink-500"> · {lineCount} lines</span></span>
         <div className="flex items-center gap-3">
-          {RUNNABLE.has(lang) && (
+          {RUNNABLE.has(lang) && flagOn(flags, 'codeRun') && (
             <button onClick={() => setRunKey((k) => k + 1)} className="font-bold text-ember-400 hover:text-ember-300 transition">
               ▶ Run
             </button>
@@ -725,6 +727,7 @@ function CsvBlock({ code }: { code: string }): ReactNode {
 }
 
 function CodeRouter({ lang, code, closed, streaming }: { lang: string; code: string; closed: boolean; streaming: boolean }): ReactNode {
+  const flags = useFeatureFlags(); // v5.13.0 — codeRun off = plain code block, no preview
   // An unclosed fence is plain text only while the reply is still
   // streaming; once it has finished (cut off by the length budget, say)
   // it gets the full block — copy, download, run — like any other.
@@ -736,7 +739,7 @@ function CodeRouter({ lang, code, closed, streaming }: { lang: string; code: str
     );
   if (lang === 'mermaid') return <MermaidBlock code={code} />;
   if (lang === 'chart') return <ChartBlock code={code} fallback={<CodeBlock lang="json" code={code} />} />;
-  if (lang === 'html' || lang === 'svg' || lang === 'xml') return <HtmlPreview lang={lang} code={code} streaming={streaming} />;
+  if ((lang === 'html' || lang === 'svg' || lang === 'xml') && flagOn(flags, 'codeRun')) return <HtmlPreview lang={lang} code={code} streaming={streaming} />;
   if (lang === 'csv') return <CsvBlock code={code} />;
   return <CodeBlock lang={lang} code={code} />;
 }

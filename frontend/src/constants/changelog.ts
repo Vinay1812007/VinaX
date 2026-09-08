@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.13.0': {
+    title: 'Fourteen new admin tools',
+    changes: [
+      { type: 'new', text: 'Admin console \u2014 fourteen new tools: Retention Cohorts, Data Quality, Catalog Lookup, Engine Probe, SEO Corpus, Edge & Endpoint Health, Releases & CI, Database Overview, Audit Trail, Feature Flags, Runbook, Config Backup, Trending Pins and Status Note.' },
+      { type: 'new', text: 'Feature flags \u2014 the console can now switch parts of the app off for everyone within a minute, without an update. First switches: Run/Preview in VinaX AI code blocks, and Listen Together.' },
+      { type: 'new', text: 'Trending pins \u2014 the search chips can lead with up to six searches chosen by the team (a new release, a festival), with community trends filling the rest.' },
+      { type: 'improved', text: 'Edge & Endpoint Health checks the live site the way the outage monitor does \u2014 every script and stylesheet the app needs, plus the public endpoints it boots from \u2014 and points at the exact file when something is wrong.' },
+    ],
+  },
   '5.12.0': {
     title: 'Ten new ways to listen',
     changes: [

@@ -2340,12 +2340,320 @@
     stamp();
   }
 
-  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration' };
+  // ---------- v5.13.0 — fourteen more tools (retention, data quality, catalog lookup,
+  // engine probe, SEO corpus, edge health, releases, database, audit trail, feature
+  // flags, runbook, config backup, trending pins, status note) ----------
+  function cfgGet(key) { return api('/api/admin/appconfig?key=' + encodeURIComponent(key)); }
+  function cfgSet(key, value) { return postApi('/api/admin/appconfig', { key: key, value: value }); }
+  function okPill(ok, text) { return '<span class="pill" style="' + (ok ? 'color:var(--ok);border-color:var(--ok);background:var(--ok-soft)' : 'color:var(--danger);border-color:var(--danger);background:var(--danger-soft)') + '">' + esc(text) + '</span>'; }
+  function ago(iso) { if (!iso) return '—'; var m = Math.round((Date.now() - Date.parse(iso)) / 60000); if (!isFinite(m)) return '—'; if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; if (m < 1440) return Math.round(m / 60) + ' h ago'; return Math.round(m / 1440) + ' d ago'; }
+  function showFail(msg) { $('view').innerHTML = '<div class="empty">' + esc(msg || 'Could not load.') + '</div>'; }
+  function pctCell(v) {
+    var p = v == null ? null : Math.round(v <= 1 ? v * 100 : v);
+    return p == null ? '<td class="muted">—</td>' : '<td><span class="btrack" style="display:inline-block;width:70px;vertical-align:middle;margin-right:6px"><span class="bfill" style="display:block;width:' + Math.min(100, p) + '%"></span></span>' + p + '%</td>';
+  }
+
+  // 1. Retention cohorts — weekly D1/D7/D30 from the vinax_retention RPC.
+  function loadRetention() {
+    apiMemo('/api/admin/retention').then(function (d) {
+      if (!d || active !== 'retention') return;
+      if (!d.configured) { $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Retention cohorts</h3><p class="muted">The <code>vinax_retention</code> function is not installed in Supabase yet. Run the retention migration and this panel fills in on the next refresh.</p></div>'; return; }
+      var cs = d.cohorts || [];
+      var avg = function (k) { var xs = cs.map(function (c) { return c[k]; }).filter(function (v) { return v != null; }); if (!xs.length) return null; var s = xs.reduce(function (a, b) { return a + (b <= 1 ? b * 100 : b); }, 0); return Math.round(s / xs.length) + '%'; };
+      exportRows = cs; exportName = 'retention'; $('csv').hidden = !cs.length;
+      $('view').innerHTML =
+        '<div class="cards">' + card(cs.length, 'Weekly cohorts') + card(avg('d1') || '—', 'Avg day-1 return') + card(avg('d7') || '—', 'Avg day-7 return') + card(avg('d30') || '—', 'Avg day-30 return') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">Cohorts <span class="muted">· share of each week’s new listeners who came back</span></h3>' +
+        '<table><thead><tr><th>Cohort week</th><th>New listeners</th><th>Day 1</th><th>Day 7</th><th>Day 30</th></tr></thead><tbody>' +
+        (cs.length ? cs.map(function (c) { return '<tr><td>' + esc(String(c.cohort_week).slice(0, 10)) + '</td><td>' + (c.cohort_size || 0) + '</td>' + pctCell(c.d1) + pctCell(c.d7) + pctCell(c.d30) + '</tr>'; }).join('') : '<tr><td colspan="5" class="empty">No cohorts yet.</td></tr>') +
+        '</tbody></table></div>';
+    }).catch(function () { if (active === 'retention') showFail(); });
+  }
+
+  // 2. Data quality — one health number + SLO burn.
+  function loadDataQuality() {
+    apiMemo('/api/admin/dataquality').then(function (d) {
+      if (!d || active !== 'dataquality') return;
+      var m = d.metrics || {};
+      var metric = function (label, v) { return { label: label, v: v == null ? 0 : v, txt: v == null ? '—' : v + '%' }; };
+      var items = [metric('Play events with verified origin', m.originVerifiedPct), metric('Play events with a resolved country', m.countryResolvedPct), metric('AI calls that succeeded', m.aiOkPct), metric('AI calls that returned content', m.aiContentPct)];
+      $('view').innerHTML =
+        '<div class="cards">' + card(d.score == null ? '—' : d.score + '%', 'Data quality score') + card((d.sampled && d.sampled.events) || 0, 'Play events sampled') + card((d.sampled && d.sampled.aiEvents) || 0, 'AI calls sampled') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">Signals</h3>' + items.map(function (x) { return '<div class="brow"><div class="blabel">' + esc(x.label) + '</div><div class="btrack"><div class="bfill" style="width:' + x.v + '%"></div></div><div class="bval">' + x.txt + '</div></div>'; }).join('') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">Service objectives <span class="muted">· error budget burned this window</span></h3><table><thead><tr><th>SLO</th><th>Target</th><th>Actual</th><th>Budget burned</th></tr></thead><tbody>' +
+        (d.slos || []).map(function (s) { var burn = s.budgetBurnedPct; return '<tr><td>' + esc(s.name) + '</td><td>' + s.targetPct + '%</td><td>' + (s.actualPct == null ? '—' : s.actualPct + '%') + '</td><td>' + (burn == null ? '—' : okPill(burn <= 100, burn + '%')) + '</td></tr>'; }).join('') +
+        '</tbody></table></div>';
+    }).catch(function () { if (active === 'dataquality') showFail(); });
+  }
+
+  // 3. Catalog lookup — server-side multi-mirror search; copy ids for pushes / blocklist.
+  function renderCatalogSection() {
+    $('view').innerHTML =
+      '<div class="card"><h3 style="margin-top:0">Catalog lookup</h3><p class="muted" style="margin-top:0">Searches the music catalog through the Worker (same-origin, mirror fallback). Copy an id for a push, a banner link or the blocklist.</p>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><input id="cat-q" class="inp" placeholder="Song or album name…" style="flex:1;min-width:200px" /><select id="cat-kind" class="inp"><option value="song">Songs</option><option value="album">Albums</option></select><button id="cat-go">Search</button></div>' +
+      '<div id="cat-out" style="margin-top:12px"><div class="empty">Type a name and press Search.</div></div></div>';
+    var run = function () {
+      var q = $('cat-q').value.trim(); if (!q) return;
+      $('cat-out').innerHTML = '<div class="empty">Searching…</div>';
+      api('/api/admin/catalog-search?q=' + encodeURIComponent(q) + '&kind=' + $('cat-kind').value + '&limit=15').then(function (d) {
+        if (!d || active !== 'catalog') return;
+        var items = d.items || [];
+        if (!items.length) { $('cat-out').innerHTML = '<div class="empty">' + (d.error ? 'Catalog sources unavailable right now.' : 'No matches.') + '</div>'; return; }
+        $('cat-out').innerHTML = '<table><thead><tr><th></th><th>Name</th><th>Id</th><th></th></tr></thead><tbody>' + items.map(function (it) {
+          return '<tr><td>' + (it.image ? '<img class="thumb-sm" alt="" src="' + esc(it.image) + '" />' : '') + '</td><td><b>' + esc(it.name) + '</b><div class="muted">' + esc(it.subtitle) + '</div></td><td><code>' + esc(it.id) + '</code></td><td><button class="ghost" data-copy="' + esc(it.id) + '">Copy id</button></td></tr>';
+        }).join('') + '</tbody></table><p class="muted" style="font-size:11px">Source: ' + esc(d.source || 'mirror') + '</p>';
+        Array.prototype.forEach.call($('cat-out').querySelectorAll('[data-copy]'), function (b) { b.addEventListener('click', function () { try { navigator.clipboard.writeText(b.getAttribute('data-copy')); b.textContent = 'Copied ✓'; } catch (e) {} }); });
+      }).catch(function () { $('cat-out').innerHTML = '<div class="empty">Search failed.</div>'; });
+    };
+    $('cat-go').addEventListener('click', run);
+    $('cat-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
+    stamp();
+  }
+
+  // 4. Engine probe — one real completion against any lane key, status + latency.
+  var PROBE_KEYS = ['DEEPSEEK_V4_FLASH', 'CHATGPT_120_B', 'CHATGPT_20_B', 'NEMOTRON_SUPER', 'NEMOTRON_ULTRA', 'GROQ_API_KEY', 'NVIDIA_NEMOTRON_3_NANO_30B_A3B'];
+  function renderEngineProbeSection() {
+    $('view').innerHTML =
+      '<div class="card"><h3 style="margin-top:0">Engine probe</h3><p class="muted" style="margin-top:0">Sends one tiny completion through the chosen lane key and reports the upstream status and round-trip time. Use it before wiring a new model slug into a lane. Rate-limited to 10 a minute.</p>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><select id="probe-key" class="inp">' + PROBE_KEYS.map(function (k) { return '<option value="' + k + '">' + k + '</option>'; }).join('') + '</select><input id="probe-model" class="inp" placeholder="Model slug (optional — defaults to the lane’s pinned model)" style="flex:1;min-width:240px" /><button id="probe-go">Probe</button></div>' +
+      '<div id="probe-out" style="margin-top:12px"></div></div>';
+    var hist = [];
+    $('probe-go').addEventListener('click', function () {
+      var key = $('probe-key').value, model = $('probe-model').value.trim();
+      $('probe-go').disabled = true; $('probe-out').innerHTML = '<div class="empty">Probing ' + esc(key) + '…</div>';
+      api('/api/admin/enginetest?key=' + encodeURIComponent(key) + (model ? '&model=' + encodeURIComponent(model) : '')).then(function (r) {
+        $('probe-go').disabled = false;
+        if (!r) return;
+        hist.unshift(r);
+        $('probe-out').innerHTML = '<table><thead><tr><th>Key</th><th>Model</th><th>Status</th><th>Latency</th><th>Reply head</th></tr></thead><tbody>' + hist.slice(0, 12).map(function (h) {
+          return '<tr><td><code>' + esc(h.key) + '</code></td><td>' + esc(h.model || '') + '</td><td>' + okPill(h.status >= 200 && h.status < 300, h.status ? String(h.status) : (h.error || h.exception || 'no response')) + '</td><td>' + (h.ms || 0) + ' ms</td><td class="muted" style="max-width:360px;white-space:normal;word-break:break-all">' + esc((h.head || h.error || h.exception || '').slice(0, 160)) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+      }).catch(function (e) { $('probe-go').disabled = false; $('probe-out').innerHTML = '<div class="empty">' + esc(e && e.message === 'http 429' ? 'Rate limited — try again in a minute.' : 'Probe failed.') + '</div>'; });
+    });
+    stamp();
+  }
+
+  // 5. SEO corpus
+  function loadSeo() {
+    apiMemo('/api/admin/seo').then(function (d) {
+      if (!d || active !== 'seo') return;
+      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      exportRows = d.newest || []; exportName = 'seo-newest'; $('csv').hidden = !exportRows.length;
+      var sm = d.sitemap || {};
+      $('view').innerHTML =
+        '<div class="cards">' + card(d.total.toLocaleString(), 'URLs in corpus') + (d.counts || []).map(function (c) { return card(c.count.toLocaleString(), c.plural + ' · ' + c.pages + ' sitemap page' + (c.pages === 1 ? '' : 's')); }).join('') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">Sitemap index <span class="muted">· live fetch of /sitemap.xml</span></h3><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">' + okPill(sm.status === 200, sm.status === 200 ? 'reachable' : ('http ' + sm.status)) + '<span class="muted">' + (sm.entries || 0) + ' child sitemaps · ' + (sm.ms || 0) + ' ms · ' + (sm.bytes || 0) + ' bytes' + (sm.error ? ' · ' + esc(sm.error) : '') + '</span></div></div>' +
+        '<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap"><div class="card" style="flex:1;min-width:280px"><h3 style="margin-top:0">Languages <span class="muted">· newest ' + (d.sampled || 0) + ' rows</span></h3>' + bars(d.languages || [], function (x) { return esc(x.lang); }, function (x) { return x.n; }) + '</div>' +
+        '<div class="card" style="flex:1;min-width:280px"><h3 style="margin-top:0">Discovered per day</h3>' + dayChart(d.addedByDay || [], 'n') + '</div></div>' +
+        '<div class="card"><h3 style="margin-top:0">Newest entries</h3><table><thead><tr><th>Type</th><th>Name</th><th>Lang</th><th>Key</th><th>Added</th></tr></thead><tbody>' + (d.newest || []).map(function (r) { return '<tr><td><span class="pill">' + esc(r.type) + '</span></td><td>' + esc(r.name) + '</td><td>' + esc(r.lang) + '</td><td><code>' + esc(r.key) + '</code></td><td class="muted">' + ago(r.added_at) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    }).catch(function () { if (active === 'seo') showFail(); });
+  }
+
+  // 6. Edge & endpoint health — the v5.11.4 outage, as a dashboard.
+  function loadEdge() {
+    api('/api/admin/edge').then(function (d) {
+      if (!d || active !== 'edge') return;
+      stamp();
+      var sh = d.shell || {};
+      $('view').innerHTML =
+        '<div class="card" style="border-color:' + (d.healthy ? 'var(--ok)' : 'var(--danger)') + '"><div class="row" style="align-items:center;gap:12px;flex-wrap:wrap"><h3 style="margin:0">' + (d.healthy ? '✅ Edge is healthy' : '⚠️ ' + d.problems + ' problem' + (d.problems === 1 ? '' : 's') + ' found') + '</h3><span class="muted">' + esc(d.origin) + ' · checked ' + ago(d.checkedAt) + '</span><div class="spacer"></div><button id="edge-again" class="ghost">Re-check</button></div></div>' +
+        '<div class="cards">' + card(sh.status || 0, 'App shell status') + card((sh.ms || 0) + ' ms', 'Shell latency') + card(sh.cacheStatus || '—', 'Edge cache status') + card(sh.build || '—', 'Live build id') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">Assets the shell needs <span class="muted">· each must be real JavaScript/CSS, never HTML</span></h3><table><thead><tr><th>Asset</th><th>Kind</th><th>Status</th><th>Content-type</th><th>Latency</th><th>Note</th></tr></thead><tbody>' +
+        ((d.assets || []).length ? d.assets.map(function (a) { return '<tr><td><code>' + esc(a.path) + '</code></td><td>' + esc(a.kind) + '</td><td>' + okPill(a.ok, a.ok ? 'ok' : (a.status || 'fail')) + '</td><td class="muted">' + esc(a.contentType || '') + '</td><td>' + a.ms + ' ms</td><td class="muted">' + esc(a.note || '') + '</td></tr>'; }).join('') : '<tr><td colspan="6" class="empty">No assets found in the shell — the shell itself may be wrong.</td></tr>') +
+        '</tbody></table></div>' +
+        '<div class="card"><h3 style="margin-top:0">Public endpoints</h3><table><thead><tr><th>Endpoint</th><th>Path</th><th>Status</th><th>Latency</th><th>Note</th></tr></thead><tbody>' +
+        (d.endpoints || []).map(function (p) { return '<tr><td>' + esc(p.name) + '</td><td><code>' + esc(p.method + ' ' + p.path) + '</code></td><td>' + okPill(p.ok, String(p.status || 'fail')) + '</td><td>' + p.ms + ' ms</td><td class="muted">' + esc(p.note || '') + '</td></tr>'; }).join('') +
+        '</tbody></table></div>';
+      $('edge-again').addEventListener('click', function () { $('view').innerHTML = '<div class="empty">Checking…</div>'; loadEdge(); });
+    }).catch(function (e) { if (active === 'edge') showFail(e && e.message === 'http 429' ? 'Rate limited — the check fans out ~15 requests; try again in a minute.' : 'Could not run the edge check.'); });
+  }
+
+  // 7. Releases & CI
+  function loadReleases() {
+    apiMemo('/api/admin/releases').then(function (d) {
+      if (!d || active !== 'releases') return;
+      if (!d.configured) { $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Releases &amp; CI</h3><p class="muted">Set the <code>GITHUB_TOKEN</code> secret on the Worker (the same one the Android updater uses) to see releases, workflow runs and recent commits here.</p></div>'; return; }
+      var rel = d.release, live = d.live || {};
+      var liveVer = live.version || live.latest || live.tag || '—';
+      var runPill = function (r) { if (r.status !== 'completed') return '<span class="pill">' + esc(r.status) + '</span>'; return okPill(r.conclusion === 'success', r.conclusion || r.status); };
+      $('view').innerHTML =
+        '<div class="cards">' + card(rel ? esc(rel.tag) : '—', 'Latest GitHub release') + card(esc(String(liveVer)), 'Version the site reports') + card((d.runs || []).filter(function (r) { return r.conclusion === 'failure'; }).length, 'Failed runs (last 20)') + card((d.commits || []).length, 'Recent commits on main') + '</div>' +
+        (rel ? '<div class="card"><h3 style="margin-top:0">' + esc(rel.name || rel.tag) + '</h3><div class="row" style="gap:8px;flex-wrap:wrap">' + (rel.assets || []).map(function (a) { return '<span class="pill">' + esc(a.name) + '</span>'; }).join('') + '</div>' + (rel.notes ? '<pre class="codebox" style="white-space:pre-wrap;margin-top:10px">' + esc(rel.notes) + '</pre>' : '') + '</div>' : '') +
+        '<div class="card"><h3 style="margin-top:0">Workflow runs</h3><table><thead><tr><th>#</th><th>Workflow</th><th>Result</th><th>Branch</th><th>Trigger</th><th>Started</th><th></th></tr></thead><tbody>' +
+        ((d.runs || []).length ? d.runs.map(function (r) { return '<tr><td class="muted">' + r.number + '</td><td><b>' + esc(r.name) + '</b><div class="muted">' + esc(r.title) + '</div></td><td>' + runPill(r) + '</td><td><code>' + esc(r.branch) + '</code> <span class="muted">' + esc(r.sha) + '</span></td><td>' + esc(r.event) + '</td><td class="muted">' + ago(r.started) + '</td><td><a class="ghost" href="' + esc(r.url) + '" target="_blank" rel="noopener">Open</a></td></tr>'; }).join('') : '<tr><td colspan="7" class="empty">No runs.</td></tr>') +
+        '</tbody></table></div>' +
+        '<div class="card"><h3 style="margin-top:0">Recent commits</h3><table><tbody>' + (d.commits || []).map(function (c) { return '<tr><td><code>' + esc(c.sha) + '</code></td><td>' + esc(c.message) + '</td><td class="muted">' + esc(c.author) + ' · ' + ago(c.at) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    }).catch(function () { if (active === 'releases') showFail(); });
+  }
+
+  // 8. Database overview
+  function loadTables() {
+    apiMemo('/api/admin/tables').then(function (d) {
+      if (!d || active !== 'tables') return;
+      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      exportRows = d.tables; exportName = 'database'; $('csv').hidden = false;
+      var busiest = d.tables.slice().sort(function (a, b) { return (b.last24h || 0) - (a.last24h || 0); })[0];
+      $('view').innerHTML =
+        '<div class="cards">' + card((d.totalRows || 0).toLocaleString(), 'Rows across tables') + card(d.tables.length, 'Tables') + card(busiest ? busiest.name.replace('vinax_', '') : '—', 'Busiest in 24 h') + '</div>' +
+        '<div class="card"><h3 style="margin-top:0">Tables <span class="muted">· counts are live; age is the newest row</span></h3><table><thead><tr><th>Table</th><th>Rows</th><th>Last 24 h</th><th>Newest row</th><th>What it holds</th></tr></thead><tbody>' +
+        d.tables.map(function (t) { var stale = t.ageMin != null && t.ageMin > 1440 && /events|ai_events/.test(t.name); return '<tr><td><code>' + esc(t.name) + '</code></td><td>' + (t.total == null ? '<span class="muted">n/a</span>' : t.total.toLocaleString()) + '</td><td>' + (t.last24h == null ? '—' : '+' + t.last24h.toLocaleString()) + '</td><td>' + (stale ? okPill(false, ago(t.newestAt)) : '<span class="muted">' + ago(t.newestAt) + '</span>') + '</td><td class="muted">' + esc(t.note) + '</td></tr>'; }).join('') +
+        '</tbody></table></div>';
+    }).catch(function () { if (active === 'tables') showFail(); });
+  }
+
+  // 9. Audit trail — every admin action, filterable.
+  function loadAuditTrail() {
+    apiMemo('/api/admin/audit').then(function (d) {
+      if (!d || active !== 'audit') return;
+      var items = d.items || [];
+      exportRows = items; exportName = 'audit'; $('csv').hidden = !items.length;
+      var paint = function (q) {
+        var rows = items.filter(function (it) { return !q || ((it.kind || '') + ' ' + (it.text || '')).toLowerCase().indexOf(q) >= 0; });
+        $('audit-rows').innerHTML = rows.length ? rows.map(function (it) { var text = it.text || ''; if (it.kind === 'announcement') { try { var j = JSON.parse(text); text = (j.title || '') + ' — ' + (j.body || ''); } catch (e) { /* raw */ } } return '<tr><td><span class="pill">' + esc(it.kind) + '</span></td><td>' + esc(text) + '</td><td class="muted" title="' + esc(it.at) + '">' + ago(it.at) + '</td></tr>'; }).join('') : '<tr><td colspan="3" class="empty">Nothing matches.</td></tr>';
+      };
+      $('view').innerHTML = '<div class="card"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Audit trail</h3><span class="muted">' + items.length + ' entries</span><div class="spacer"></div><input id="audit-q" class="inp" placeholder="Filter…" style="min-width:200px" /></div><table style="margin-top:12px"><thead><tr><th>Kind</th><th>What</th><th>When</th></tr></thead><tbody id="audit-rows"></tbody></table></div>';
+      paint('');
+      $('audit-q').addEventListener('input', function () { paint($('audit-q').value.trim().toLowerCase()); });
+    }).catch(function () { if (active === 'audit') showFail(); });
+  }
+
+  // 10. Feature flags — kill-switches the app reads from /api/appconfig?key=flags.
+  var KNOWN_FLAGS = [
+    { key: 'codeRun', label: 'Run / Preview in VinaX AI code blocks', note: 'Off hides the ▶ Run and Open buttons under code the assistant writes.' },
+    { key: 'listenTogether', label: 'Listen Together', note: 'Off hides the Listen Together entry from the sidebar and Library.' }
+  ];
+  function renderFlagsSection() {
+    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    cfgGet('flags').then(function (d) {
+      if (active !== 'flags') return;
+      if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
+      var flags = (d && d.value && typeof d.value === 'object') ? d.value : {};
+      var known = {}; KNOWN_FLAGS.forEach(function (f) { known[f.key] = true; });
+      var custom = Object.keys(flags).filter(function (k) { return !known[k]; });
+      var toggle = function (k, on) { return '<label class="switch" data-flag="' + esc(k) + '"><span class="track' + (on ? ' on' : '') + '"><span class="knob"></span></span></label>'; };
+      $('view').innerHTML =
+        '<div class="card"><h3 style="margin-top:0">Feature flags</h3><p class="muted" style="margin-top:0">Every flag is <b>on</b> unless switched off here. Changes reach listeners within about a minute (edge cache), no app update needed.' + (d && d.updated_at ? ' Last published ' + ago(d.updated_at) + '.' : '') + '</p>' +
+        '<table><thead><tr><th>Flag</th><th>What it controls</th><th>State</th></tr></thead><tbody id="flag-rows">' +
+        KNOWN_FLAGS.map(function (f) { return '<tr><td><code>' + f.key + '</code><div class="muted">' + esc(f.label) + '</div></td><td class="muted">' + esc(f.note) + '</td><td>' + toggle(f.key, flags[f.key] !== false) + '</td></tr>'; }).join('') +
+        custom.map(function (k) { return '<tr><td><code>' + esc(k) + '</code><div class="muted">custom</div></td><td class="muted">Read by <code>useFeatureFlags()</code> in the app.</td><td>' + toggle(k, flags[k] !== false) + ' <button class="ghost" data-del="' + esc(k) + '">Remove</button></td></tr>'; }).join('') +
+        '</tbody></table>' +
+        '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><input id="flag-new" class="inp" placeholder="New flag name (letters, digits, - _)" style="min-width:220px" /><button class="ghost" id="flag-add">Add flag (off)</button><div class="spacer"></div><button id="flag-save">Publish flags</button><span class="muted" id="flag-out" style="font-size:12px"></span></div></div>';
+      var state = {}; Object.keys(flags).forEach(function (k) { state[k] = flags[k] !== false; });
+      KNOWN_FLAGS.forEach(function (f) { if (!(f.key in state)) state[f.key] = true; });
+      Array.prototype.forEach.call(document.querySelectorAll('#flag-rows [data-flag]'), function (l) { l.addEventListener('click', function () { var k = l.getAttribute('data-flag'); state[k] = !state[k]; l.querySelector('.track').classList.toggle('on', state[k]); }); });
+      Array.prototype.forEach.call(document.querySelectorAll('#flag-rows [data-del]'), function (b) { b.addEventListener('click', function () { delete state[b.getAttribute('data-del')]; b.closest('tr').remove(); }); });
+      $('flag-add').addEventListener('click', function () { var k = $('flag-new').value.trim(); if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(k)) { vxAlert('Flag names: letters, digits, - and _, starting with a letter.', { title: 'Feature flags' }); return; } state[k] = false; var out = {}; Object.keys(state).forEach(function (x) { out[x] = state[x]; }); cfgSet('flags', out).then(function () { renderFlagsSection(); }); });
+      $('flag-save').addEventListener('click', function () { var out = {}; Object.keys(state).forEach(function (x) { out[x] = state[x]; }); $('flag-out').textContent = 'Publishing…'; cfgSet('flags', out).then(function (r) { $('flag-out').textContent = r && r.ok ? 'Published ✓' : 'Failed'; }).catch(function () { $('flag-out').textContent = 'Failed'; }); });
+      stamp();
+    }).catch(function () { if (active === 'flags') showFail(); });
+  }
+
+  // 11. Runbook — operator notes that live with the console, not in someone's chat.
+  function renderRunbookSection() {
+    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    cfgGet('runbook').then(function (d) {
+      if (active !== 'runbook') return;
+      if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
+      var notes = (d && Array.isArray(d.value)) ? d.value : [];
+      var save = function (next, msg) { $('rb-out').textContent = 'Saving…'; return cfgSet('runbook', next).then(function (r) { if (r && r.ok) { notes = next; paint(); $('rb-out').textContent = msg || 'Saved ✓'; } else $('rb-out').textContent = 'Failed'; }).catch(function () { $('rb-out').textContent = 'Failed'; }); };
+      var paint = function () {
+        $('rb-list').innerHTML = notes.length ? notes.map(function (n, i) { return '<div class="card" style="margin-bottom:10px"><div class="row" style="align-items:center;gap:8px"><h3 style="margin:0">' + esc(n.title) + '</h3><span class="muted">' + ago(n.updatedAt) + '</span><div class="spacer"></div><button class="ghost" data-edit="' + i + '">Edit</button><button class="ghost" data-del="' + i + '">Delete</button></div><pre class="codebox" style="white-space:pre-wrap;margin:8px 0 0">' + esc(n.body) + '</pre></div>'; }).join('') : '<div class="empty">No notes yet. Write down what to do when things break — the next person on call will thank you.</div>';
+        Array.prototype.forEach.call($('rb-list').querySelectorAll('[data-edit]'), function (b) { b.addEventListener('click', function () { var n = notes[+b.getAttribute('data-edit')]; $('rb-title').value = n.title; $('rb-body').value = n.body; $('rb-idx').value = b.getAttribute('data-edit'); $('rb-title').focus(); }); });
+        Array.prototype.forEach.call($('rb-list').querySelectorAll('[data-del]'), function (b) { b.addEventListener('click', function () { var i = +b.getAttribute('data-del'); vxConfirm('Delete “' + notes[i].title + '”?', { title: 'Runbook', danger: true, okText: 'Delete' }).then(function (ok) { if (ok) save(notes.filter(function (_, j) { return j !== i; }), 'Deleted'); }); }); });
+      };
+      $('view').innerHTML =
+        '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Runbook</h3><p class="muted" style="margin-top:0">Incident steps, secrets locations (never the secrets), who to call. Stored in the app config store and visible only here.</p>' +
+        '<input type="hidden" id="rb-idx" value="" /><input id="rb-title" class="inp" placeholder="Title — e.g. App stuck on “Updating…”" /><textarea id="rb-body" rows="6" class="inp" style="margin-top:8px" placeholder="Steps…"></textarea>' +
+        '<div class="row" style="gap:8px;margin-top:10px"><button id="rb-save">Save note</button><button class="ghost" id="rb-clear">Clear</button><span class="muted" id="rb-out" style="font-size:12px"></span></div></div><div id="rb-list"></div>';
+      paint();
+      $('rb-clear').addEventListener('click', function () { $('rb-idx').value = ''; $('rb-title').value = ''; $('rb-body').value = ''; });
+      $('rb-save').addEventListener('click', function () {
+        var t = $('rb-title').value.trim(), b = $('rb-body').value.trim(); if (!t || !b) { $('rb-out').textContent = 'Title and steps are both needed.'; return; }
+        var idx = $('rb-idx').value === '' ? -1 : +$('rb-idx').value;
+        var note = { title: t.slice(0, 120), body: b.slice(0, 8000), updatedAt: new Date().toISOString() };
+        var next = notes.slice(); if (idx >= 0 && next[idx]) next[idx] = note; else next.unshift(note);
+        save(next.slice(0, 60)).then(function () { $('rb-idx').value = ''; $('rb-title').value = ''; $('rb-body').value = ''; });
+      });
+      stamp();
+    }).catch(function () { if (active === 'runbook') showFail(); });
+  }
+
+  // 12. Config backup — every published key as one JSON file, and back again.
+  var BACKUP_KEYS = ['banners', 'home-config', 'festival', 'status-note', 'flags', 'runbook', 'trending-pins'];
+  function renderBackupSection() {
+    $('view').innerHTML =
+      '<div class="card"><h3 style="margin-top:0">Config backup</h3><p class="muted" style="margin-top:0">Everything the console has published — banners, home layout, festival override, status note, feature flags, runbook and trending pins — as one JSON file. Restore it here after a mistake, or move it to another environment.</p>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><button id="bk-export">Download backup</button><label class="ghost" style="cursor:pointer;display:inline-flex;align-items:center;padding:6px 12px;border:1px solid var(--border);border-radius:8px">Restore from file<input id="bk-file" type="file" accept="application/json" hidden /></label><span class="muted" id="bk-out" style="font-size:12px"></span></div>' +
+      '<table style="margin-top:12px"><thead><tr><th>Key</th><th>Last published</th><th>Size</th></tr></thead><tbody id="bk-rows"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody></table></div>';
+    var snapshot = {};
+    Promise.all(BACKUP_KEYS.map(function (k) { return cfgGet(k).then(function (d) { return { key: k, d: d }; }).catch(function () { return { key: k, d: null }; }); })).then(function (rs) {
+      if (active !== 'backup') return;
+      $('bk-rows').innerHTML = rs.map(function (r) { var v = r.d && r.d.value; if (v != null) snapshot[r.key] = v; var size = v == null ? 0 : JSON.stringify(v).length; return '<tr><td><code>' + esc(r.key) + '</code></td><td class="muted">' + (r.d && r.d.updated_at ? ago(r.d.updated_at) : '—') + '</td><td class="muted">' + (size ? (size / 1024).toFixed(1) + ' KB' : 'empty') + '</td></tr>'; }).join('');
+      stamp();
+    });
+    $('bk-export').addEventListener('click', function () {
+      var blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), config: snapshot }, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = 'vinax-config-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
+    $('bk-file').addEventListener('change', function () {
+      var f = $('bk-file').files[0]; if (!f) return;
+      f.text().then(function (txt) {
+        var j; try { j = JSON.parse(txt); } catch (e) { $('bk-out').textContent = 'Not a JSON file.'; return; }
+        var cfg = j && j.config && typeof j.config === 'object' ? j.config : null; if (!cfg) { $('bk-out').textContent = 'No config block in that file.'; return; }
+        var keys = Object.keys(cfg).filter(function (k) { return BACKUP_KEYS.indexOf(k) >= 0; });
+        vxConfirm('Restore ' + keys.length + ' key' + (keys.length === 1 ? '' : 's') + ' (' + keys.join(', ') + ')? Current values are overwritten.', { title: 'Config backup', danger: true, okText: 'Restore' }).then(function (ok) {
+          if (!ok) return;
+          $('bk-out').textContent = 'Restoring…';
+          Promise.all(keys.map(function (k) { return cfgSet(k, cfg[k]); })).then(function (rs) { var bad = rs.filter(function (r) { return !r || !r.ok; }).length; $('bk-out').textContent = bad ? bad + ' key(s) failed' : 'Restored ✓'; renderBackupSection(); });
+        });
+      });
+    });
+  }
+
+  // 13. Trending pins — curated chips under the search bar, ahead of the organic list.
+  function renderTrendingPinsSection() {
+    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    Promise.all([cfgGet('trending-pins'), fetch('/api/trending-searches?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).catch(function () { return null; })]).then(function (rs) {
+      if (active !== 'trendpins') return;
+      var d = rs[0], live = rs[1];
+      if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
+      var pins = (d && Array.isArray(d.value)) ? d.value : [];
+      $('view').innerHTML =
+        '<div class="card"><h3 style="margin-top:0">Trending pins</h3><p class="muted" style="margin-top:0">Up to six searches to show first in the “Trending” chips under the search bar — a new release, a festival, a film. Organic community searches fill the remaining slots. Public within about ten minutes.</p>' +
+        '<textarea id="tp-text" rows="6" class="inp" placeholder="One search per line…">' + esc(pins.join('\n')) + '</textarea>' +
+        '<div class="row" style="gap:8px;margin-top:10px"><button id="tp-save">Publish pins</button><button class="ghost" id="tp-clear">Remove all pins</button><span class="muted" id="tp-out" style="font-size:12px"></span></div></div>' +
+        '<div class="card"><h3 style="margin-top:0">What listeners see now</h3><div class="chips">' + (live && live.queries && live.queries.length ? live.queries.map(function (q) { return '<span class="pill">' + esc(q) + '</span>'; }).join(' ') : '<span class="muted">No trending chips are being served right now.</span>') + '</div></div>';
+      var publish = function (list) { $('tp-out').textContent = 'Publishing…'; cfgSet('trending-pins', list).then(function (r) { $('tp-out').textContent = r && r.ok ? 'Published ✓' : 'Failed'; }).catch(function () { $('tp-out').textContent = 'Failed'; }); };
+      $('tp-save').addEventListener('click', function () { var list = $('tp-text').value.split('\n').map(function (s) { return s.trim().slice(0, 40); }).filter(function (s, i, a) { return s.length >= 2 && a.indexOf(s) === i; }).slice(0, 6); $('tp-text').value = list.join('\n'); publish(list); });
+      $('tp-clear').addEventListener('click', function () { $('tp-text').value = ''; publish([]); });
+      stamp();
+    }).catch(function () { if (active === 'trendpins') showFail(); });
+  }
+
+  // 14. Status note — the owner-written incident line on /api/status and the status page.
+  function renderStatusNoteSection() {
+    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    cfgGet('status-note').then(function (d) {
+      if (active !== 'statusnote') return;
+      if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
+      var v = d && d.value; var note = typeof v === 'string' ? v : (v && typeof v === 'object' && typeof v.text === 'string') ? v.text : '';
+      $('view').innerHTML =
+        '<div class="card"><h3 style="margin-top:0">Status note</h3><p class="muted" style="margin-top:0">A plain sentence for listeners during an incident (“Search is slow while a source recovers”). Shown by <code>/api/status</code> and the status page; empty means all clear.' + (d && d.updated_at ? ' Last changed ' + ago(d.updated_at) + '.' : '') + '</p>' +
+        '<textarea id="sn-text" rows="3" class="inp" maxlength="280" placeholder="All clear — leave empty">' + esc(note) + '</textarea>' +
+        '<div class="row" style="gap:8px;margin-top:10px"><button id="sn-save">Publish note</button><button class="ghost" id="sn-clear">All clear</button><a class="ghost" href="/api/status" target="_blank" rel="noopener" style="padding:6px 12px">View /api/status</a><span class="muted" id="sn-out" style="font-size:12px"></span></div></div>';
+      var publish = function (text) { $('sn-out').textContent = 'Publishing…'; cfgSet('status-note', text).then(function (r) { $('sn-out').textContent = r && r.ok ? 'Published ✓' : 'Failed'; }).catch(function () { $('sn-out').textContent = 'Failed'; }); };
+      $('sn-save').addEventListener('click', function () { publish($('sn-text').value.trim().slice(0, 280)); });
+      $('sn-clear').addEventListener('click', function () { $('sn-text').value = ''; publish(''); });
+      stamp();
+    }).catch(function () { if (active === 'statusnote') showFail(); });
+  }
+
+  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note' };
   var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true };
   // v5.7.5 — formal category reorganisation: which category each tool sits
   // under (drives the breadcrumb over the tool title) + collapsible category
   // headers whose open/closed state persists per browser.
-  var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', config: 'Settings' };
+  var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations' };
   var GRP_KEY = 'vinax_admin_navgroups';
   function closedGroups() { try { var v = JSON.parse(localStorage.getItem(GRP_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
   function applyNavGroups() {
@@ -2396,6 +2704,20 @@
     else if (active === 'banners') renderBannersSection();
     else if (active === 'festivals') renderFestivalsSection();
     else if (active === 'config') renderConfigSection();
+    else if (active === 'retention') loadRetention();
+    else if (active === 'dataquality') loadDataQuality();
+    else if (active === 'catalog') renderCatalogSection();
+    else if (active === 'engineprobe') renderEngineProbeSection();
+    else if (active === 'seo') loadSeo();
+    else if (active === 'edge') loadEdge();
+    else if (active === 'releases') loadReleases();
+    else if (active === 'tables') loadTables();
+    else if (active === 'audit') loadAuditTrail();
+    else if (active === 'flags') renderFlagsSection();
+    else if (active === 'runbook') renderRunbookSection();
+    else if (active === 'backup') renderBackupSection();
+    else if (active === 'trendpins') renderTrendingPinsSection();
+    else if (active === 'statusnote') renderStatusNoteSection();
   }
   document.addEventListener('keydown', function (e) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); }
@@ -2407,7 +2729,7 @@
   // Sections whose state lives in this browser (localStorage) — an auto-tick
   // re-render adds nothing and used to wipe in-progress edits the moment
   // focus left a field, and reset scroll every 10 s.
-  var LOCAL_SECTIONS = { songs: true, playlists: true, homescreen: true, categories: true, banners: true, festivals: true, config: true };
+  var LOCAL_SECTIONS = { songs: true, playlists: true, homescreen: true, categories: true, banners: true, festivals: true, config: true, catalog: true, engineprobe: true, edge: true, flags: true, runbook: true, backup: true, trendpins: true, statusnote: true };
   function autoTick() {
     if (formFocused()) return;
     if (LOCAL_SECTIONS[active]) return;

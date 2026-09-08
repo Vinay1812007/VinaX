@@ -76,3 +76,31 @@ export function useFestivalOverride() {
     },
   });
 }
+
+/**
+ * v5.13.0 — feature flags published from the admin console (Settings →
+ * Feature Flags). Every flag is ON unless the admin switched it off, so a
+ * missing key, a failed fetch or an offline device all behave like the
+ * default app. Read with `flagOn(flags, 'codeRun')`.
+ */
+export type FeatureFlags = Record<string, boolean>;
+
+export function flagOn(flags: FeatureFlags | undefined, key: string): boolean {
+  return flags?.[key] !== false;
+}
+
+export function useFeatureFlags(): FeatureFlags {
+  const q = useQuery({
+    queryKey: ['feature-flags'],
+    staleTime: 60_000,
+    gcTime: 30 * 60_000,
+    retry: 1,
+    queryFn: async (): Promise<FeatureFlags> => {
+      const r = await fetch(`${BASE}/api/appconfig?key=flags`);
+      if (!r.ok) return {};
+      const j = (await r.json()) as { flags?: FeatureFlags };
+      return j.flags && typeof j.flags === 'object' ? j.flags : {};
+    },
+  });
+  return q.data ?? {};
+}

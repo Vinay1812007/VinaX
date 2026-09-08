@@ -28,6 +28,7 @@ import * as m_api_admin_catalog_search from './functions/api/admin/catalog-searc
 import * as m_api_admin_content from './functions/api/admin/content';
 import * as m_api_admin_dataquality from './functions/api/admin/dataquality';
 import * as m_api_admin_digest from './functions/api/admin/digest';
+import * as m_api_admin_edge from './functions/api/admin/edge';
 import * as m_api_admin_engagement from './functions/api/admin/engagement';
 import * as m_api_admin_enginetest from './functions/api/admin/enginetest';
 import * as m_api_admin_experiments from './functions/api/admin/experiments';
@@ -44,9 +45,12 @@ import * as m_api_admin_notifylog from './functions/api/admin/notifylog';
 import * as m_api_admin_overview from './functions/api/admin/overview';
 import * as m_api_admin_push from './functions/api/admin/push';
 import * as m_api_admin_realtime from './functions/api/admin/realtime';
+import * as m_api_admin_releases from './functions/api/admin/releases';
 import * as m_api_admin_retention from './functions/api/admin/retention';
 import * as m_api_admin_rooms from './functions/api/admin/rooms';
 import * as m_api_admin_search_analytics from './functions/api/admin/search-analytics';
+import * as m_api_admin_seo from './functions/api/admin/seo';
+import * as m_api_admin_tables from './functions/api/admin/tables';
 import * as m_api_admin_technical from './functions/api/admin/technical';
 import * as m_api_admin_user from './functions/api/admin/user';
 import * as m_api_admin_users from './functions/api/admin/users';
@@ -132,6 +136,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/content': m_api_admin_content,
   '/api/admin/dataquality': m_api_admin_dataquality,
   '/api/admin/digest': m_api_admin_digest,
+  '/api/admin/edge': m_api_admin_edge,
   '/api/admin/engagement': m_api_admin_engagement,
   '/api/admin/enginetest': m_api_admin_enginetest,
   '/api/admin/experiments': m_api_admin_experiments,
@@ -148,9 +153,12 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/overview': m_api_admin_overview,
   '/api/admin/push': m_api_admin_push,
   '/api/admin/realtime': m_api_admin_realtime,
+  '/api/admin/releases': m_api_admin_releases,
   '/api/admin/retention': m_api_admin_retention,
   '/api/admin/rooms': m_api_admin_rooms,
   '/api/admin/search-analytics': m_api_admin_search_analytics,
+  '/api/admin/seo': m_api_admin_seo,
+  '/api/admin/tables': m_api_admin_tables,
   '/api/admin/technical': m_api_admin_technical,
   '/api/admin/user': m_api_admin_user,
   '/api/admin/users': m_api_admin_users,

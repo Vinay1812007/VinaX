@@ -50,9 +50,17 @@ export const onRequestGet = async (context: { env: SupabaseEnv }): Promise<Respo
     .map(([q]) => q);
   // Junk fragments ("an", "ord") survive counting when longer queries share
   // their text — drop anything that is a strict prefix of a longer entry.
-  const queries = ranked
+  const organic = ranked
     .filter((q) => !ranked.some((o) => o !== q && o.length > q.length && o.toLowerCase().startsWith(q.toLowerCase())))
     .slice(0, 8);
+  // v5.13.0 — admin-pinned chips (Catalog → Trending Pins) lead the list;
+  // organic entries fill the rest, never duplicating a pin.
+  const pins = await sbSelect<{ value: unknown }>(env, 'vinax_config', 'select=value&key=eq.trending-pins&limit=1')
+    .then((rows) => (Array.isArray(rows[0]?.value) ? (rows[0].value as unknown[]) : []))
+    .catch(() => [] as unknown[]);
+  const pinned = pins.filter((p): p is string => typeof p === 'string' && p.trim().length >= 2).map((p) => p.trim().slice(0, 40)).slice(0, 6);
+  const seen = new Set(pinned.map((p) => p.toLowerCase()));
+  const queries = [...pinned, ...organic.filter((q) => !seen.has(q.toLowerCase()))].slice(0, 8);
   return new Response(JSON.stringify({ queries }), {
     headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=600', ...CORS },
   });

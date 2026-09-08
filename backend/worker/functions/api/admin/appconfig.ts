@@ -13,7 +13,10 @@ import { sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../
 
 type Env = AdminEnv & SupabaseEnv;
 
-export const ALLOWED_KEYS = new Set(['banners', 'home-config', 'festival', 'status-note']);
+// v5.13.0: 'flags' (feature kill-switches, public), 'runbook' (operator notes,
+// admin-only), 'trending-pins' (curated search chips, merged into the public
+// trending list).
+export const ALLOWED_KEYS = new Set(['banners', 'home-config', 'festival', 'status-note', 'flags', 'runbook', 'trending-pins']);
 /** jsonb payload cap — banners may embed small base64 images. */
 const MAX_VALUE_BYTES = 900 * 1024;
 

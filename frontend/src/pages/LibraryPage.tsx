@@ -10,6 +10,7 @@ import { SongRow } from '@/components/SongRow';
 import { EmptyState } from '@/components/States';
 import { BookmarkIcon, PlusIcon, UsersIcon, XIcon, ClockIcon } from '@/components/Icons';
 import { ImportPlaylistSheet } from '@/components/ImportPlaylistSheet';
+import { flagOn, useFeatureFlags } from '@/features/home/useAppConfig';
 import { PageHeader } from '@/components/PageHeader';
 
 export default function LibraryPage() {
@@ -21,6 +22,7 @@ export default function LibraryPage() {
   const history = useHistoryStore((s) => s.entries);
   const [newName, setNewName] = useState('');
   const [importing, setImporting] = useState(false);
+  const flags = useFeatureFlags();
 
   return (
     <div className="max-w-4xl mx-auto vx-stagger">
@@ -38,7 +40,7 @@ export default function LibraryPage() {
       />
       {importing && <ImportPlaylistSheet onClose={() => setImporting(false)} />}
 
-      <Link
+      {flagOn(flags, 'listenTogether') && <Link
         to="/together"
         className="glass-panel rounded-2xl p-4 mb-8 flex items-center gap-3 hover:bg-ink-800/40 transition-colors"
       >
@@ -52,7 +54,7 @@ export default function LibraryPage() {
         <span className="text-ink-400" aria-hidden>
           ›
         </span>
-      </Link>
+      </Link>}
 
       <section className="mb-10">
         <div className="flex items-center justify-between mb-2">

@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import { useSettingsStore } from '@/store/settingsStore';
 import { NAV_GROUPS } from '@/constants/nav';
+import { flagOn, useFeatureFlags } from '@/features/home/useAppConfig';
 import { DISPLAY_VERSION } from '@/constants/version';
 import { useT } from '@/i18n';
 import { ChevronDownIcon } from './Icons';
@@ -10,6 +11,8 @@ import { ChevronDownIcon } from './Icons';
 const groups = NAV_GROUPS;
 
 export function Sidebar() {
+  // v5.13.0 — admin kill-switches (Settings → Feature Flags in the console).
+  const flags = useFeatureFlags();
   const collapsed = useSettingsStore((s) => s.sidebarCollapsed);
   const toggle = useSettingsStore((s) => s.toggleSidebar);
   const t = useT();
@@ -60,7 +63,7 @@ export function Sidebar() {
                 <p className="vx-sidebar-eyebrow px-2 mb-1.5 text-[11px] font-semibold uppercase text-ink-400">{t(g.label)}</p>
               )}
               <ul className="space-y-0.5">
-                {g.items.map(({ to, label, icon: Icon }) => (
+                {g.items.filter(({ to }) => to !== '/together' || flagOn(flags, 'listenTogether')).map(({ to, label, icon: Icon }) => (
                   <li key={to}>
                     <NavLink
                       to={to}
