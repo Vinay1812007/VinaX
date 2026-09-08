@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.17.1': {
+    title: 'Build fix',
+    changes: [
+      { type: 'fixed', text: 'Build pipeline — the release-notes export script now passes the repository lint gate.' },
+    ],
+  },
   '5.17.0': {
     title: 'Thirty-five new things across VinaX',
     changes: [
