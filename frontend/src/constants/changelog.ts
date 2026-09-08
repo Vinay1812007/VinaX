@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.18.0': {
+    title: 'A fresh look: Aurora',
+    changes: [
+      { type: 'improved', text: 'VinaX — a calmer, richer look: a soft accent glow on every page, a sidebar that shows where you are, bolder shelf titles, artwork cards that lift on hover, a hero built from your own mix’s artwork, and a finer player bar. Every theme, accent and festival skin carries over.' },
+      { type: 'improved', text: 'VinaX AI — replies read as open text with an accent rail, your messages as tinted bubbles, a floating composer with the engine and Think/Research controls in one tidy row, a compact reply toolbar with a More menu, and a welcome screen with more air.' },
+      { type: 'improved', text: 'Admin console — a redesigned shell: stronger brand block, grouped navigation with a clear active state, a lighter top bar, refined stat tiles, tables and controls, a polished login, and a health strip on Overview. Dark and light.' },
+      { type: 'improved', text: 'Docs — the README is rewritten end to end: the full feature catalogue, architecture, repository map, local development, deployment and secrets, console-published configuration, contracts, testing, automation, operations and the release process.' },
+    ],
+  },
   '5.17.1': {
     title: 'Build fix',
     changes: [

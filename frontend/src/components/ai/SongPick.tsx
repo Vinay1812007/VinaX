@@ -135,10 +135,7 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
 
   return (
     <div
-      className={cn(
-        'group/pick my-1 flex items-center gap-3 rounded-md pr-2 transition-colors',
-        song ? 'bg-ink-850 hover:bg-ink-800 cursor-pointer' : 'bg-ink-850/60',
-      )}
+      className={cn('group/pick ai-pick my-1.5 pr-2', song ? 'ai-pick-live cursor-pointer' : 'opacity-80')}
       onClick={song ? play : undefined}
       role={song ? 'button' : undefined}
       tabIndex={song ? 0 : undefined}
@@ -146,7 +143,7 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
       data-deter-context
       data-song-id={song?.id}
     >
-      <div className="relative w-12 h-12 shrink-0 overflow-hidden rounded-l-md bg-ink-800">
+      <div className="relative w-12 h-12 shrink-0 overflow-hidden rounded-l-[11px] bg-ink-800">
         {song ? (
           <img
             src={bestImage(song.images, 150)}
@@ -159,14 +156,14 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
           <span className={cn('absolute inset-0', isLoading && 'skeleton')} aria-hidden />
         )}
         {song && (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 group-hover/pick:opacity-100 transition-opacity">
+          <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 group-hover/pick:opacity-100 group-focus-visible/pick:opacity-100 transition-opacity">
             {isCurrent && isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
           </span>
         )}
       </div>
       <div className="min-w-0 flex-1 py-1.5">
-        <p className={cn('text-[13px] font-bold truncate', isCurrent && 'text-ember-400')}>{song?.title ?? pick.title}</p>
-        <p className="text-[11px] text-ink-400 truncate">{song?.subtitle ?? pick.artist}</p>
+        <p className={cn('text-[13px] font-bold truncate leading-tight', isCurrent && 'text-ember-400')}>{song?.title ?? pick.title}</p>
+        <p className="text-[11px] text-ink-400 truncate mt-0.5">{song?.subtitle ?? pick.artist}</p>
       </div>
       {song ? (
         <button
@@ -177,12 +174,12 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
             enqueue(song);
             toast(`Queued ${song.title}`);
           }}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-ink-300 hover:text-ink-100 hover:scale-105 shrink-0"
+          className="ai-icon-btn w-8 h-8"
         >
           <QueueIcon className="w-4 h-4" />
         </button>
       ) : (
-        !isLoading && <span className="text-[10px] text-ink-500 shrink-0">not found</span>
+        !isLoading && <span className="text-[10px] font-semibold text-ink-500 shrink-0 rounded-md border border-glass px-1.5 py-0.5">not found</span>
       )}
     </div>
   );
@@ -214,7 +211,7 @@ export function SongPicksBar({ picks }: { picks: SongPickRef[] }) {
   };
 
   return (
-    <div className="flex items-center gap-2 mb-2">
+    <div className="flex flex-wrap items-center gap-1.5 mb-2.5" aria-label="Song picks">
       <button
         onClick={() => {
           void resolveAll().then((songs) => {
@@ -224,7 +221,7 @@ export function SongPicksBar({ picks }: { picks: SongPickRef[] }) {
             haptic('medium');
           });
         }}
-        className="btn-primary px-4 py-1.5 text-[12px] inline-flex items-center gap-1.5"
+        className="btn-primary rounded-xl px-3.5 py-1.5 text-[12px] inline-flex items-center gap-1.5 shrink-0"
       >
         <PlayIcon className="w-3.5 h-3.5" /> Play all
       </button>
@@ -236,14 +233,14 @@ export function SongPicksBar({ picks }: { picks: SongPickRef[] }) {
             toast(`Queued ${songs.length} songs`);
           });
         }}
-        className="btn-secondary px-4 py-1.5 text-[12px] inline-flex items-center gap-1.5"
+        className="ai-chip py-[7px] shrink-0"
       >
         <QueueIcon className="w-3.5 h-3.5" /> Add to queue
       </button>
-      <button onClick={saveAsPlaylist} className="btn-secondary px-3 py-1.5 text-[12px] inline-flex items-center gap-1.5" title="Save these songs as a playlist">
+      <button onClick={saveAsPlaylist} className="ai-chip py-[7px] shrink-0" title="Save these songs as a playlist">
         Save as playlist
       </button>
-      <span className="text-[11px] text-ink-400">{picks.length} songs</span>
+      <span className="text-[11px] font-semibold text-ink-500 shrink-0 pl-1">{picks.length} songs</span>
     </div>
   );
 }

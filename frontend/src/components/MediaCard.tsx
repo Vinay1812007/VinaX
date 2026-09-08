@@ -56,11 +56,11 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
       data-deter-context
       data-song-id={song?.id}
       className={cn(
-        'group rounded-xl p-3 transition-colors duration-200 hover:bg-ink-850/80 active:scale-[0.98] animate-fade-up',
+        'group rounded-xl p-3 transition-[background-color,transform] duration-200 hover:bg-ink-850/80 hover:-translate-y-0.5 active:scale-[0.98] animate-fade-up',
         fluid ? 'w-full' : 'w-40 sm:w-44 shrink-0',
       )}
     >
-      <div className={cn('relative overflow-hidden shadow-card transition-shadow duration-300 group-hover:shadow-float', round ? 'rounded-full' : 'rounded-lg')}>
+      <div className={cn('relative overflow-hidden shadow-card ring-1 ring-white/5 transition-shadow duration-300 group-hover:shadow-float', round ? 'rounded-full' : 'rounded-xl')}>
         <img
           /* 4.19.5 image-quality pass: the 4.18.0 flat 150 cap kept PSI happy
              but read SOFT on 2x+ phones (owner report). The CDN also serves

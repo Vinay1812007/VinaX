@@ -189,7 +189,7 @@ export function PlayerBar() {
 
       {/* ---- Desktop bar: three-zone layout ---- */}
       {/* v5.9.0 — the bar: full width, flush with the bottom, black. */}
-      <div className="hidden sm:block overflow-hidden glass-bottom-player">
+      <div className="relative hidden sm:block overflow-hidden glass-bottom-player">
         <div className="flex items-center gap-4 px-4 py-2.5 max-w-screen-2xl mx-auto">
           <div className="flex items-center gap-3 min-w-0 w-60 lg:w-80">
             <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="group shrink-0">
@@ -197,7 +197,7 @@ export function PlayerBar() {
                 src={artUrl ?? FALLBACK_ART}
                 onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
                 alt=""
-                className={cn('w-14 h-14 rounded-md object-cover group-hover:opacity-80 transition-opacity shadow-md', isBuffering && 'opacity-50')}
+                className={cn('w-14 h-14 rounded-lg object-cover ring-1 ring-white/10 group-hover:opacity-80 transition-opacity shadow-md', isBuffering && 'opacity-50')}
               />
             </button>
             <div className="min-w-0">

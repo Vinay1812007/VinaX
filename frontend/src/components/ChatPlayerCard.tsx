@@ -35,9 +35,9 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
   if (!song) return <p className="whitespace-pre-wrap leading-relaxed">{fallback}</p>;
   const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   return (
-    <div className="w-72 max-w-full select-none">
+    <div className="ai-card w-80 max-w-full select-none p-3">
       <div className="flex items-center gap-3">
-        <img src={bestImage(song.images, 120)} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
+        <img src={bestImage(song.images, 120)} alt="" className="w-12 h-12 rounded-[10px] object-cover shrink-0 shadow-card" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold truncate flex items-center gap-1.5">
             {isPlaying && (
@@ -52,22 +52,22 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
           <p className="text-[11px] text-ink-400 truncate">{song.subtitle}</p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => prev()} aria-label="Previous song" className="p-1.5 text-ink-300 hover:text-ink-100 transition relative after:absolute after:inset-0 after:-m-[8px]">
+          <button onClick={() => prev()} aria-label="Previous song" className="ai-icon-btn w-8 h-8">
             <PrevIcon className="w-4 h-4" />
           </button>
           <button
             onClick={togglePlay}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="w-9 h-9 rounded-full bg-premium text-black flex items-center justify-center hover:scale-105 transition"
+            className="w-9 h-9 rounded-full bg-ember-500 text-black flex items-center justify-center hover:bg-ember-400 transition"
           >
             {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
           </button>
-          <button onClick={() => next(true)} aria-label="Next song" className="p-1.5 text-ink-300 hover:text-ink-100 transition relative after:absolute after:inset-0 after:-m-[8px]">
+          <button onClick={() => next(true)} aria-label="Next song" className="ai-icon-btn w-8 h-8">
             <NextIcon className="w-4 h-4" />
           </button>
         </div>
       </div>
-      <div className="mt-2.5 flex items-center gap-2 text-[10px] text-ink-400 tabular-nums">
+      <div className="mt-2.5 flex items-center gap-2 text-[10px] font-semibold text-ink-400 tabular-nums">
         <span>{fmt(currentTime)}</span>
         <button
           aria-label="Seek"
@@ -78,13 +78,13 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
             seek(Math.max(0, Math.min(duration, ((e.clientX - r.left) / r.width) * duration)));
           }}
         >
-          <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 rounded-full bg-white/10" />
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-1 rounded-full bg-premium" style={{ width: `${pct}%` }} />
+          <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 rounded-full bg-[var(--track)]" />
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-1 rounded-full bg-ember-500" style={{ width: `${pct}%` }} />
         </button>
         <span>{fmt(duration)}</span>
       </div>
       {(curLine ?? nextLine) != null && (
-        <div className="mt-2 border-t border-glass-strong pt-2">
+        <div className="mt-2.5 border-t border-glass pt-2">
           {curLine != null && <p className="text-[13px] font-semibold text-ink-100 leading-snug truncate">{curLine}</p>}
           {nextLine != null && <p className="text-[11px] text-ink-400 leading-snug truncate">{nextLine}</p>}
         </div>

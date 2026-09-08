@@ -74,9 +74,11 @@ export function Sidebar() {
                         cn(
                           // v5.9.0 nav: bold grey that turns white when
                           // active or hovered — no pills, no accent bar.
-                          'relative flex items-center rounded-md text-[14px] font-bold transition-colors',
-                          collapsed ? 'justify-center w-10 h-10 mx-auto' : 'gap-4 px-3 py-2',
-                          isActive ? 'text-ink-100' : 'text-ink-300 hover:text-ink-100',
+                          // v5.18.0 refresh: the active item sits on a soft tile with an
+                          // accent bar; the rest stay quiet until hovered.
+                          'relative flex items-center rounded-xl text-[14px] font-bold transition-colors',
+                          collapsed ? 'justify-center w-10 h-10 mx-auto' : 'gap-3.5 px-3 py-2',
+                          isActive ? 'vx-nav-active bg-[var(--tile)] text-ink-100' : 'text-ink-300 hover:text-ink-100 hover:bg-[var(--tile)]',
                         )
                       }
                     >

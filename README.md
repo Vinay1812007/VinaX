@@ -2,22 +2,40 @@
 
 **Free music streaming for India. No login. Private by design.**
 
-Live at **https://www.sirimillavinay.online** — Telugu, Hindi, Tamil and 9 more languages, with a bold flat visual system (v5.9.0), smart mixes, live charts, an AI DJ, synced lyrics, music videos with a full-screen video canvas (tap to hide the controls), and an Android app.
+Live at **https://www.sirimillavinay.online** — Telugu, Hindi, Tamil and nine more languages, with an AI DJ, a full assistant (VinaX AI), synced lyrics, music videos, festival themes for the whole Indian calendar, an Android app, and a 64-tool admin console. Everything personal stays on the listener's device; the server sees anonymous, coarse telemetry only.
 
-> **For AI agents / new contributors — read this first.** This file is the single source of truth for how the repo is laid out, how it deploys, and which commands are safe to run. Everything below is intentionally explicit: exact paths, exact commands, exact env-var names.
+> **For AI agents and new contributors — read this first.** This file is the single source of truth for what VinaX is, how the repo is laid out, how it deploys, and which commands are safe to run. Everything is intentionally explicit: exact paths, exact commands, exact env-var *names* (never values).
 
 ---
 
-## 1. What this repo is
+## Contents
 
-One repository, two independently deployed applications that serve **the same domain**:
+1. [What VinaX is](#1-what-vinax-is)
+2. [Feature catalogue](#2-feature-catalogue) — listener app · VinaX AI · admin console
+3. [Architecture](#3-architecture)
+4. [Repository map](#4-repository-map)
+5. [Local development](#5-local-development)
+6. [Deployment](#6-deployment) — Pages · Worker · secrets · Supabase · Android
+7. [Configuration published from the console](#7-configuration-published-from-the-console)
+8. [Architecture contracts (do not break)](#8-architecture-contracts-do-not-break)
+9. [Testing and quality gates](#9-testing-and-quality-gates)
+10. [CI and scheduled automation](#10-ci-and-scheduled-automation)
+11. [Operations and troubleshooting](#11-operations-and-troubleshooting)
+12. [Release process](#12-release-process)
+13. [Privacy posture](#13-privacy-posture)
+
+---
+
+## 1. What VinaX is
+
+One repository, two independently deployed applications on **the same domain**:
 
 | Folder | What it is | Tech | Deploys to | Trigger |
 |---|---|---|---|---|
-| [`frontend/`](frontend/) | Single-page web app (and the Android app via Capacitor) | React 19 + Vite + TypeScript + Tailwind + Zustand + TanStack Query | **Cloudflare Pages** (project `vinax`) | push to `main` touching `frontend/**` |
-| [`backend/`](backend/) | `vinax-api` edge Worker: JSON API, server-rendered SEO pages, sitemaps, image proxy, APK download, admin API, cron endpoints | Cloudflare Workers + TypeScript (no framework, no runtime npm deps) | **Cloudflare Workers** | push to `main` touching `backend/**` |
+| [`frontend/`](frontend/) | The web app (and the Android app via Capacitor) plus the static admin console | React 19 · Vite 8 · TypeScript · Tailwind · Zustand · TanStack Query | **Cloudflare Pages** (project `vinax`) | push to `main` touching `frontend/**` |
+| [`backend/`](backend/) | `vinax-api` edge Worker: JSON API, VinaX AI, edge-rendered SEO pages, sitemaps, image proxy, APK proxy, admin API, cron endpoints | Cloudflare Workers · TypeScript (no framework, no runtime npm deps) | **Cloudflare Workers** | push to `main` touching `backend/**` |
 
-There is **no CORS anywhere**: the Worker's routes claim specific paths on `www.sirimillavinay.online` (`/api/*`, `/img`, `/apk`, `/song|album|artist|playlist/*`, `/sitemap*`, plus the `update.` and `admin.` subdomain redirects) and **every other URL falls through to Pages**, which serves the static app. The frontend always calls same-origin paths.
+There is **no CORS anywhere**. The Worker's routes claim specific paths on `www.sirimillavinay.online` (`/api/*`, `/img`, `/apk`, `/song|album|artist|playlist/*`, `/sitemap*`, the 72 language-mood hub pages, plus the `update.` and `admin.` hosts) and **every other URL falls through to Pages**, which serves the static app.
 
 ```
                        www.sirimillavinay.online
@@ -29,174 +47,306 @@ There is **no CORS anywhere**: the Worker's routes claim specific paths on `www.
                  │   answers each path)              │
                  └───────┬─────────────────┬────────┘
         /api/* /img /apk │                 │  everything else
-        /song/* /album/* │                 │  ( / , /search, /assets/*, …)
-        /sitemap* …      ▼                 ▼
+        /song/* /album/* │                 │  ( / , /search, /assets/*, /admin …)
+        /sitemap* hubs   ▼                 ▼
                  ┌───────────────┐  ┌─────────────────┐
                  │  vinax-api    │  │ Cloudflare Pages│
                  │  (Worker,     │  │ (static dist/   │
                  │  backend/)    │  │ from frontend/) │
                  └──────┬────────┘  └─────────────────┘
                         │
-         ┌──────────────┼───────────────────┐
-         ▼              ▼                   ▼
-     Supabase      AI providers        HANDOFF KV
-     (Postgres)    (7 model lanes)     (one-time links)
+     ┌──────────┬───────┴────────┬──────────────┬─────────────┐
+     ▼          ▼                ▼              ▼             ▼
+  Supabase   AI providers    HANDOFF KV     GitHub        Push (Web Push
+  (Postgres) (19 model       (one-time      Releases      + FCM v1)
+             lanes)          handoff links) (APK)
 ```
 
 ---
 
-## 2. Repository map
+## 2. Feature catalogue
+
+### 2.1 Listener app
+
+**Listening**
+- Search across songs, albums, artists and playlists with language chips, sort (relevance · popular · newest · longest · A→Z), filter-within-results, Play all / Queue all, voice search, keyboard-first autocomplete, trending chips (community + admin-pinned), pinned/removable recent searches, and **search by lyrics** (paste any line you remember).
+- Player: queue with drag reorder, smart shuffle, repeat, crossfade, playback speed, A-B repeat, song **bookmarks**, sleep timer (minutes with a 30-second fade-out, end of song, or after N songs), device output picker, Cast, lock-screen controls and lyrics, resume-where-you-left, kid mode (explicit filter), and **Ambient mode** in Now Playing.
+- Now Playing: full-screen player with fling gestures, immersive video canvas, synced lyrics with per-song offset, film chip, "Share this moment" links that start at a timestamp, Drive mode, Karaoke, and a live lyric line under the desktop seekbar.
+- Music videos: 16:9 browse, cinematic player, picture-in-picture, full-song hand-off.
+- Charts (Top 50 global/country, Viral 50), Discover, Moods, Regions, Movies, Explore (decade radio, pick-a-year, language × mood grid, Surprise album), Languages hubs.
+
+**Personal**
+- Home: personal greeting, **Aura Mix** (AI DJ entry), quick-access grid, Continue Listening, On this day, For You This Week, On Repeat, Repeat Rewind, Daily Mixes, VinaX Daily, Because you liked "…", listening-streak card, Song of the day, seasonal/festival shelf, endless "More for you" feed. Every block can be hidden or reordered in Settings → Home layout.
+- Library (device-only): Liked Songs, **Listen Later**, playlists with pins, emoji + description, collage covers, sort, shuffle play, duplicate finder, Copy/Share as text, **Import from text** ("Title — Artist" per line), a 7-day Recently deleted with Restore, and a Downloaded-only filter in the app.
+- History with search, day filters, per-entry removal and scoped clears; "Your history with this song" from any song menu.
+- Stats ("Your VinaX"): weekly report versus last week, 12-week listening calendar with streaks, daily listening goal ring, Year recap with a shareable image.
+- Taste Profile: what VinaX has learned, with fine-tune dials; "Show fewer like…" and "Never play…" from any song menu, Not interested, all with Undo.
+- Listen Together rooms (host/guest sync, song requests). Device handoff (encrypted, one-time QR / 10-character code). Wake-up alarm with a playlist choice and gentle 30-second fade-in.
+
+**Look and feel**
+- Themes: Dark, Light, Black (AMOLED), System, Auto (day/night); ten accents plus a **custom accent** (any hex, with a readable light-theme variant); glass level and blur sliders; Dynamic theme from artwork; Display size; High contrast; Reduce motion; density.
+- **Festival themes**: 43 festivals from Sankranti to New Year, each a distinct theme — accent ramp, tinted canvas, ribbon, glow, motif, badge, splash and living backdrop — driven by one calendar (`frontend/src/constants/festivals.ts` + `festivalThemes.ts`, `npm run gen:festivals`). Switchable in Settings.
+- Swipe a song row right to queue, left to save for later. Toasts with Undo. Command palette (⌘/Ctrl+K), keyboard shortcuts, PWA shortcuts (Search, Liked, Listen Later, VinaX AI), Data saver, Startup page.
+
+**Android**
+- Capacitor wrapper of the same app: background playback, media notification, offline downloads that play with no network, FCM push, in-app updater fed by `/api/version` (with an admin-set minimum build), `update.sirimillavinay.online` → latest APK.
+
+### 2.2 VinaX AI (`/VinaXAI`)
+
+A full assistant with its own layout — writing, code, maths, data, research, translation and music, no login.
+
+- 22 engines (6 core: Auto, Balanced, Fast, Deep, Creative, Translator; 16 advanced) with honest per-reply engine chips; **Think** and **Research** toggles; live web search with numbered citations; model-initiated search when the engine decides it needs the web.
+- Streaming markdown with tables, task lists, code blocks (copy, download, run JS/TS, live HTML/SVG preview in a sandbox), Mermaid diagrams, charts, CSV tables, KaTeX maths.
+- Music built in: any "Title — Artist" line becomes a playable card; Play all / Queue all / **Save as playlist**; instant music commands ("play …", "queue …", "next"); a live mini-player card with singing lyrics.
+- **Slash commands** (`/playlist <vibe>`, `/now`, `/lyrics`, `/mood`, `/summary`, `/think`, `/web`, `/prompts`, `/export`, `/clear`), **now-playing context** (the assistant can see the song that is playing, or a pasted VinaX song link), **follow-up chips** after every substantial reply, reply language (Telugu, Hindi, Tamil, Tenglish, Hinglish …) and reply style (Brief, Detailed, Simple, Steps, Table).
+- Reply actions: Copy, rate, Regenerate, Continue, Shorten, Expand, Simplify, Listen (read aloud with the device voice), Pin, Branch (continue from any point in a new chat), edit-and-resend.
+- Attachments (images, text files), mic dictation and hands-free **live voice** with server TTS, multi-chat sidebar (search, pin, rename, date groups, 50 local chats), export (txt/md/pdf/json), "About you" memory, **Today for you** brief, saved prompts, admin-published starter prompts, quick actions and house notes.
+
+Elsewhere in the app the same engines power the AI DJ and smart queue, the AI Playlist page ("describe a vibe"), personalised Home shelves, Search's expert picks, lyrics romanise/translate/meaning, and the location-targeted AI daily push.
+
+### 2.3 Admin console (`https://admin.sirimillavinay.online`)
+
+A static page (`frontend/public/admin/`) talking to `/api/admin/*`, gated by `ADMIN_LOGIN_PASSWORD`, with a token in session storage, auto-refresh, ⌘K search, dark and light themes, pinned tools, CSV and JSON export on every data panel. **64 tools** in eight groups:
+
+| Group | Tools |
+|---|---|
+| Dashboards | Overview, Real-Time |
+| Audience | Live Listening, Activity Feed, Engagement, User Management, Retention Cohorts, Feature Usage, Listening Heatmap, Onboarding Funnel |
+| Catalog | Song Management, Playlist Management, Home Screen, Categories & Genres, Content Control, Catalog Lookup, Trending Pins, Song Drilldown, Skip Report, Search Synonyms, Catalog Sources, Language Order, Blocklist Import/Export |
+| Promotion | Banners & Offers, Festival Themes, Notifications, Broadcast Message, Home Greeting, Help Center FAQ, Announcement Composer |
+| Analytics | Music Analytics, Search Analytics, Location Analytics, World Listening, Insights, A/B Experiments, SEO Corpus |
+| AI & Engines | AI Monitoring, API Monitoring (lane bench), Engine Probe, AI Starter Prompts, AI Quick Actions, AI House Rules |
+| Operations | Technical Monitoring, Feedback & Bugs, Live Rooms, Edge & Endpoint Health, Data Quality, Releases & CI, Database Overview, Audit Trail, Status Note, Cron Health, Status History, Environment Checklist, Query Console (read-only, whitelisted), Release Notes, Maintenance Scheduler, Minimum App Version |
+| Settings | App Configuration, Feature Flags, Runbook, Config Backup, Pinned Tools |
+
+Everything the console publishes reaches listeners through cached public reads (`/api/appconfig?key=…`) within about a minute — no app release needed (see §7).
+
+---
+
+## 3. Architecture
+
+- **Frontend** — a Vite SPA with route-level code splitting (53 routes + 12 language hubs + 72 mood×language hubs, all lazy). State is Zustand with `persist` (`vinax.*.v1` keys, see `frontend/src/constants/storage-keys.ts`); server data is TanStack Query. Personalisation (taste profile, scoring, mixes) runs **on the device** under `src/services/personalization` and `src/services/recommendation`. The audio engine is a plain `HTMLAudioElement` with source failover, crossfade and Cast intercepts (`src/services/audio/engine.ts`). A strict **first-load bundle budget** (`frontend/scripts/check-bundle-size.mjs`) fails CI when the shell grows; new features must be lazy unless they run in the player clock or a store.
+- **Backend** — `backend/worker/index.ts` reproduces the Pages-Functions contract (`{request, env, params, next, waitUntil}`) over a hand-maintained `EXACT` route map (`worker/__tests__/routerCoverage.test.ts` enforces import ↔ route parity) plus regex `DYNAMIC` routes for SEO pages. Every endpoint is one module under `worker/functions/`. Shared code lives in `worker/functions/_lib/` (AI lanes, Supabase REST helpers, rate limiting, render, SEO, web push, FCM, client config).
+- **Catalogue** — songs come from the owner-hosted catalogue wrapper (`VinaX Music API` on Render) with the Worker's own `/api/cat` as a same-origin fallback; the client orchestrates sources with health ranking (`frontend/src/services/api/client.ts`, `constants/endpoints.ts`) and the console can switch a source off for everyone.
+- **AI** — 19 lanes across NVIDIA-hosted and Groq-hosted OpenAI-compatible endpoints, each pinned to its own key with a failover ladder (`_lib/ai.ts`, `_lib/models.ts`). Chat streams as SSE (`data: {delta|meta|done}`); prompts wrap user turns in a data fence; nothing is stored beyond anonymous per-call telemetry.
+- **Data** — Supabase Postgres via REST (service-role key on the Worker only): `vinax_events`, `vinax_users`, `vinax_feedback`, `vinax_ai_events`, `vinax_rooms`, `vinax_push_subscriptions`, `vinax_fcm_tokens`, `vinax_config`, `vinax_experiments`, `vinax_blocklist`, `vinax_seo_urls`, plus RPCs/views for analytics. One KV namespace (`HANDOFF`) holds burn-on-read device-handoff blobs.
+- **SEO** — `/song|album|artist|playlist/:id` and the hub pages are rendered at the edge by injecting content into the live SPA shell fetched from `ASSETS_HOST`; sitemaps are generated from `vinax_seo_urls`, which an hourly crawler grows. `npm run build` also prerenders 31 static routes.
+
+---
+
+## 4. Repository map
 
 ```
 .
-├── README.md                  ← you are here
-├── .github/workflows/         ← CI + cron jobs (see §7)
-├── frontend/                  ← EVERYTHING the browser downloads
-│   ├── src/                   ← React app (components, pages, store, services)
-│   │   └── services/api/      ← API client incl. boot-prefetch consumption
-│   ├── public/                ← static assets, _redirects, _headers, robots.txt
-│   ├── index.html             ← SPA shell (inline boot-prefetch script, meta tags)
-│   ├── vite.config.ts         ← build + dev proxy (/api,/img,/apk → :8787)
-│   ├── capacitor.config.ts    ← Android app wrapper config
-│   ├── android-res/, native-android/, ci/  ← Android build inputs
-│   ├── scripts/               ← prerender, bundle-size gate, e2e smoke
-│   ├── e2e/                   ← Playwright specs (run via npm run e2e)
-│   └── DEPLOYMENT.md          ← Pages deployment details
-└── backend/                   ← EVERYTHING that runs at the edge
+├── README.md                       ← you are here
+├── DEPLOYMENT.md                   ← Pages deployment notes
+├── .github/workflows/              ← CI + cron jobs (§10)
+├── frontend/                       ← EVERYTHING the browser downloads
+│   ├── src/
+│   │   ├── pages/                  ← one lazy chunk per route (HomePage, VinaXAIPage, SettingsPage …)
+│   │   ├── components/             ← shared UI (PlayerBar, TrackMenu, SongRow, MediaCard, ai/*)
+│   │   ├── features/               ← feature modules (home, ai, library, search, stats, lyrics, voice …)
+│   │   ├── services/               ← api client, audio engine, personalization, recommendation, analytics
+│   │   ├── store/                  ← zustand stores (player, settings, library, history, search, …)
+│   │   ├── constants/              ← festivals + themes, changelog, version, nav, endpoints, storage keys
+│   │   ├── styles/index.css        ← design tokens (dark/light/black), components
+│   │   └── styles/festivals.css    ← GENERATED festival skins (npm run gen:festivals)
+│   ├── public/                     ← static assets, _headers (CSP), _redirects, manifest, admin/ console
+│   │   └── admin/                  ← index.html (shell + CSS), app.js (all panels), festivals.js (GENERATED)
+│   ├── scripts/                    ← prerender, bundle budget, CSP hashes, festival generator, changelog export, e2e smoke
+│   ├── supabase/migrations/        ← idempotent SQL for the tables/RPCs the console needs
+│   ├── docs/                       ← design system, AI engine notes, operations, user guide
+│   ├── e2e/                        ← Playwright specs
+│   ├── index.html                  ← SPA shell: pre-paint theme/festival/accent script, boot prefetch
+│   ├── vite.config.ts              ← build + dev proxy (/api, /img, /apk → :8787)
+│   └── capacitor.config.ts, native-android/, android-res/, ci/   ← Android
+└── backend/                        ← EVERYTHING that runs at the edge
     ├── worker/
-    │   ├── index.ts           ← entry: router + Pages-Functions-style adapter
-    │   ├── wrangler.toml      ← name, routes, [vars], KV binding, observability
-    │   ├── functions/         ← one module per endpoint (api/, song/, sitemaps…)
-    │   │   └── _lib/          ← shared: ai lanes, render, seo, rate-limit, …
-    │   └── __tests__/         ← endpoint tests
-    ├── index.html             ← TEST FIXTURE ONLY (snapshot of the SPA shell
-    │                             for render.test.ts; runtime fetches the live
-    │                             shell from ASSETS_HOST — refresh when
-    │                             frontend/index.html meta tags change)
-    ├── README.md              ← Worker deployment details
-    └── .env.example           ← documents every secret NAME (values live in
-                                  Cloudflare, never in git)
+    │   ├── index.ts                ← entry: router + adapter (EXACT + DYNAMIC maps)
+    │   ├── wrangler.toml           ← name, routes, [vars], KV binding, observability
+    │   ├── functions/api/          ← public endpoints, api/admin/*, api/cron/*, api/cat/[[path]]
+    │   ├── functions/_lib/         ← ai, models, supabase, ratelimit, render, seo, webpush, fcm, clientConfig …
+    │   └── __tests__/              ← endpoint + reducer tests
+    ├── index.html                  ← TEST FIXTURE of the SPA shell (render tests only)
+    ├── README.md                   ← Worker notes
+    └── .env.example                ← documents every secret NAME (values live in Cloudflare)
 ```
 
-Each folder is fully self-contained: own `package.json`, own lockfile, own `tsconfig.json`, own eslint config, own tests. **Never** run npm commands at the repo root — there is no root `package.json`.
+Each folder is self-contained: own `package.json`, lockfile, `tsconfig`, eslint config and tests. **Never** run npm at the repo root — there is no root `package.json`.
 
 ---
 
-## 3. Local development
+## 5. Local development
 
-Prereqs: Node ≥ 22, npm.
+Prerequisites: Node ≥ 22, npm.
 
 ```sh
 # terminal 1 — backend (wrangler dev on http://127.0.0.1:8787)
-cd backend
-npm ci
-npm run dev
+cd backend && npm ci && npm run dev
 
 # terminal 2 — frontend (vite on http://localhost:5173)
-cd frontend
-npm ci
-npm run dev
+cd frontend && npm ci && npm run dev
 ```
 
-Vite proxies `/api` (including the self-hosted catalog at `/api/cat`), `/img` and `/apk` to `:8787`, so the full stack works locally. Local secrets go in `backend/worker/.dev.vars` (gitignored, `NAME=value` per line); the names are documented in `backend/.env.example`.
+Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` to `:8787`, so the whole stack works locally. Local secrets go in `backend/worker/.dev.vars` (gitignored, `NAME=value` per line). The admin console is at `http://localhost:5173/admin/` (log in with the `ADMIN_LOGIN_PASSWORD` you set in `.dev.vars`).
 
 ### Command reference
 
 | Where | Command | What it does |
 |---|---|---|
 | `frontend/` | `npm run dev` | Vite dev server on :5173 |
-| `frontend/` | `npm run build` | typecheck + Vite build + prerender (31 routes) → `dist/` |
-| `frontend/` | `npm test` | Vitest (322 tests) |
-| `frontend/` | `npm run lint` / `typecheck` | eslint / tsc gates (CI runs both) |
-| `frontend/` | `npm run e2e` | Playwright smoke tests |
+| `frontend/` | `npm run build` | typecheck → Vite build → prerender 31 routes → `dist/changelog.json` |
+| `frontend/` | `npm test` | Vitest (412 tests / 64 files) |
+| `frontend/` | `npm run lint` · `npm run typecheck` | eslint (`src` + `scripts`, zero warnings) · tsc — CI runs both |
+| `frontend/` | `npm run gen:festivals` | regenerate `src/styles/festivals.css`, the pre-paint window table in `index.html`, and `public/admin/festivals.js` from the festival calendar (a test fails on drift) |
+| `frontend/` | `node scripts/csp-hashes.mjs` | after `npm run build`, refresh the inline-script hashes in `public/_headers` (a test fails on drift) |
+| `frontend/` | `node scripts/check-bundle-size.mjs` | the first-load budget gate (CI runs it after build) |
+| `frontend/` | `npm run e2e` | Playwright smoke |
 | `frontend/` | `npm run android:debug` | Capacitor sync + Gradle debug APK |
-| `backend/` | `npm run dev` | wrangler dev on :8787 (reads `.dev.vars`) |
-| `backend/` | `npm run deploy` | manual `wrangler deploy` (normally not needed — git auto-deploys) |
-| `backend/` | `npm test` | Vitest (119 tests) |
-| `backend/` | `npm run lint` / `typecheck` | eslint / tsc gates (CI runs both) |
+| `backend/` | `npm run dev` | wrangler dev on :8787 (reads `worker/.dev.vars`) |
+| `backend/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (148 tests / 22 files) · eslint · tsc — **run from `backend/`, not `backend/worker/`** |
+| `backend/` | `npm run deploy` | manual `wrangler deploy` (normally unnecessary — git auto-deploys) |
 
 ---
 
-## 4. Deployment (fully automatic)
+## 6. Deployment
 
-**Push to `main`. That's the whole deployment process.**
+**Push to `main`. That is the whole deployment process.**
 
 | Piece | Watches | Pipeline |
 |---|---|---|
-| Frontend | `frontend/*` | Cloudflare Pages git integration → root directory `frontend`, build `npm run build`, output `dist` → live on all domains |
-| Backend | `backend/*` | Cloudflare Workers Builds → root directory `/backend`, deploy command `npx wrangler deploy --config worker/wrangler.toml` |
+| Frontend + admin console | `frontend/**` | Cloudflare Pages git integration → root directory `frontend`, build `npm run build`, output `dist` |
+| Worker | `backend/**` | Cloudflare Workers Builds → root directory `/backend`, deploy `npx wrangler deploy --config worker/wrangler.toml` |
 
-Manual fallbacks (rarely needed):
+Manual fallbacks:
 
 ```sh
 cd frontend && npm ci && npm run build && npx wrangler pages deploy dist --project-name vinax
 cd backend  && npm ci && npm run deploy
 ```
 
-**Domains** (`www.sirimillavinay.online`, apex, `admin.`, `update.`) stay attached to the **Pages** project — Pages is the fall-through origin the Worker passes unmatched URLs to. The Worker's route list lives in [`backend/worker/wrangler.toml`](backend/worker/wrangler.toml); after changing routes, verify them under *Cloudflare → Workers & Pages → vinax-api → Settings → Domains & Routes*.
+**Domains** (`www.sirimillavinay.online`, apex, `admin.`, `update.`) stay attached to the **Pages** project — Pages is the fall-through origin. The Worker's route list lives in `backend/worker/wrangler.toml`; after changing routes, verify under *Cloudflare → Workers & Pages → vinax-api → Settings → Domains & Routes*.
 
-### Configuration & secrets
+### 6.1 Worker configuration and secrets
 
-- Non-secret Worker config lives in `wrangler.toml` under `[vars]`: `ASSETS_HOST` (the Pages host serving the SPA shell, `vinax.pages.dev`) and `GITHUB_REPO` (used by the APK release endpoint).
-- **Secrets never live in git.** Every name is documented in [`backend/.env.example`](backend/.env.example); values are set on the Worker via `npx wrangler secret put <NAME> --config worker/wrangler.toml` or the dashboard. Currently configured: Supabase pair (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`), `ADMIN_LOGIN_PASSWORD`, VAPID keypair + subject (web push), `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET`, `CRON_SECRET`, `GITHUB_TOKEN`, `FCM_SERVICE_ACCOUNT`, and the 7 AI lane keys (`VINAX_DEEPSEEK_V4_FLASH`, `VINAX_CHATGPT_20_B`, `VINAX_CHATGPT_120_B`, `VINAX_NEMOTRON_SUPER`, `VINAX_NEMOTRON_ULTRA`, `VINAX_GROQ_API_KEY`, `VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B`). Optional/unset: `BRAVE_API_KEY` (enables web search inside VinaX AI), `NVIDIA_BASE_URL`.
-- **Bindings:** `HANDOFF` → KV namespace `vinax-handoff` (one-time encrypted device-handoff links, burn-on-read). Declared in `wrangler.toml`; the code degrades to `not_configured` if absent.
-- The frontend needs **no** env vars or secrets on Pages. `VITE_*` variables are optional public overrides only.
+Non-secret config lives in `wrangler.toml [vars]`: `ASSETS_HOST` (the Pages host serving the SPA shell, `vinax.pages.dev`) and `GITHUB_REPO` (APK release source). The `HANDOFF` KV binding is declared there too.
+
+**Secrets never live in git.** Set each with `npx wrangler secret put <NAME> --config worker/wrangler.toml` (or the dashboard). The console's **Environment Checklist** panel shows which names are set. Groups:
+
+| Group | Names | Required |
+|---|---|---|
+| Admin | `ADMIN_LOGIN_PASSWORD` | yes |
+| Data | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DEVICE_ID_SECRET`, `TELEMETRY_PEPPER` (optional) | yes |
+| Cron | `CRON_SECRET` | yes (for scheduled jobs) |
+| Push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `FCM_SERVICE_ACCOUNT`, `NOTIFY_MIN_GAP_HOURS` (var) | for push |
+| Releases | `GITHUB_TOKEN` (+ `GITHUB_REPO` var) | for the APK proxy, updater and Releases & CI panel |
+| AI | `VINAX_CHATGPT_120_B`, `VINAX_CHATGPT_20_B`, `VINAX_DEEPSEEK_V4_FLASH`, `VINAX_NEMOTRON_SUPER`, `VINAX_NEMOTRON_ULTRA`, `VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B`, `VINAX_GROQ_API_KEY`; optional `BRAVE_API_KEY` (better web search), `NVIDIA_BASE_URL` | for AI features |
+
+Every endpoint degrades honestly when a secret is missing (`not_configured` responses, panels that say what to set). The frontend needs **no** env vars on Pages; `VITE_API_BASES` / `VITE_APP_NAME` are optional public overrides.
+
+### 6.2 Supabase
+
+Create a project, set the two `SUPABASE_*` secrets, then paste the idempotent SQL from `frontend/supabase/migrations/*.sql` into the SQL editor (any order). They create the tables and RPCs the analytics panels, experiments, retention cohorts, rooms, SEO corpus and username claims need. The console's **Database Overview** and **Query Console** confirm what exists.
+
+### 6.3 Android
+
+`frontend/` builds the APK through Capacitor (`npm run android:debug` locally; `buildapk.yml` / `release.yml` in CI sign and publish releases). `/api/version` serves the update manifest (build, version, SHA-256, proxied APK URL, and `minBuild` from the console's Minimum App Version tool); `/apk` streams the latest release asset. Push to the closed app uses FCM v1 with `FCM_SERVICE_ACCOUNT`; see `frontend/docs/fcm-push-setup.md`.
 
 ---
 
-## 5. Key architecture contracts (do not break these)
+## 7. Configuration published from the console
 
-1. **Same-origin API.** The app calls relative paths (`/api/...`). Never introduce an absolute API base or CORS.
-2. **Worker routes vs Pages fall-through.** Adding a dynamic route = add the pattern in `wrangler.toml` *and* the module under `backend/worker/functions/`. `worker/index.ts` maps paths → modules with a Pages-Functions-style context (`{request, env, params, next, waitUntil}`).
-3. **SEO pages are edge-rendered.** `/song/*`, `/album/*`, `/artist/*`, `/playlist/*` and the 72 language-mood hub pages (12 languages × 6 moods, allow-list in `functions/[hub].ts`) are rendered by the Worker by injecting content into the SPA shell fetched from `ASSETS_HOST`. `backend/index.html` is only a test fixture of that shell.
-4. **Boot prefetch.** `frontend/index.html` inline-fires the cold-load trending request and parks it on `window.__vxBoot`; `src/services/api/client.ts` consumes it by **normalized path+query match**, single-use. Keep query shape (`top {lang} songs {year}`) in sync between the two files.
-5. **Cache-busting epoch.** Asset filenames carry an epoch marker (`-b3` in `vite.config.ts`). Bump it (b3 → b4) only to invalidate poisoned browser caches — it changes every asset URL at once.
-6. **Secrets discipline.** New server-side config = a Worker secret + a line in `.env.example` documenting the name. Nothing secret in `VITE_*`, nothing secret in git.
-7. **Cron auth.** `/api/cron/*` requires the `x-cron-secret` header (matched against `CRON_SECRET`). Query-string auth is intentionally not accepted.
+The console writes JSON values into `vinax_config` (`POST /api/admin/appconfig`, whitelisted keys in `backend/worker/functions/api/admin/appconfig.ts`). Listeners read them through edge-cached public endpoints, so a change lands within about a minute:
+
+| Key | Console tool | Read by |
+|---|---|---|
+| `banners`, `home-config` | Banners & Offers, Home Screen | `/api/appconfig?key=banners|home-config` |
+| `festival` | Festival Themes (auto · off · force) | `/api/appconfig?key=festival` |
+| `flags` | Feature Flags (kill-switches; on unless `false`) | `/api/appconfig?key=flags` |
+| `trending-pins` | Trending Pins | `/api/trending-searches` |
+| `status-note` | Status Note | `/api/status` |
+| `runbook` | Runbook | console only |
+| `greeting`, `broadcast`, `search-synonyms`, `catalog-sources`, `language-order`, `ai-starters`, `ai-quick`, `support-faq`, `min-version` | their panels | the single client bundle `/api/appconfig?key=client` (sanitised in `_lib/clientConfig.ts`) |
+| `maintenance-window` | Maintenance Scheduler | `/api/site-mode` (flips to maintenance and back on its own) |
+| `ai-rules` | AI House Rules | appended to the VinaX AI system prompt |
 
 ---
 
-## 6. Testing
+## 8. Architecture contracts (do not break)
+
+1. **Same-origin API.** The app calls relative paths. Never introduce an absolute API base or CORS.
+2. **Worker routes vs Pages fall-through.** A new endpoint = a module under `backend/worker/functions/` **and** an `import` + `EXACT`/`DYNAMIC` entry in `worker/index.ts` (the router-coverage test enforces parity); a new *path family* also needs a pattern in `wrangler.toml`.
+3. **SEO pages are edge-rendered** from the live shell at `ASSETS_HOST`; `backend/index.html` is only a test fixture.
+4. **Boot prefetch.** `frontend/index.html` fires the cold-load trending request and parks it on `window.__vxBoot`; the API client consumes it by normalised path match. Keep the query shape in sync.
+5. **First-load budget.** Anything added to the shell, stores, `PlayerBar`, `Sidebar`, `TrackMenu` or `SongRow` ships on first load. Lazy-load features; re-base the budget only with a written justification in `check-bundle-size.mjs`.
+6. **Generated files.** `src/styles/festivals.css`, the `FW` table in `index.html`, `public/admin/festivals.js` and `dist/changelog.json` are generated. Edit the sources (`festivals.ts`, `festivalThemes.ts`, `changelog.ts`) and run the generator; tests fail on drift.
+7. **CSP hashes.** Inline scripts in `index.html` are hash-allow-listed in `public/_headers`. After changing `index.html`, run `npm run build && node scripts/csp-hashes.mjs`.
+8. **Every change ships an update card.** Bump `frontend/package.json` + `package-lock.json` + `src/constants/version.ts` (`LATEST_VERSION`, `DISPLAY_VERSION`) and add the newest entry at the top of `CHANGELOG_V2` in `src/constants/changelog.ts` — the app shows it once after each update and the console's Release Notes panel reads it.
+9. **Secrets discipline.** New server-side config = a Worker secret + its name in `.env.example` + a row in the Environment Checklist. Nothing secret in `VITE_*`, nothing secret in git.
+10. **Cron auth.** `/api/cron/*` requires the `x-cron-secret` header. Query-string auth is intentionally rejected.
+11. **No third-party brand names** in product copy, comments or docs (the assistant is "VinaX AI", engines have owner-chosen names).
+
+---
+
+## 9. Testing and quality gates
 
 | Suite | Where | Count | Runs in CI |
 |---|---|---|---|
-| Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 322 tests / 48 files | ✅ |
-| Backend endpoint/lib | `backend/worker/**/*.test.ts` | 119 tests / 18 files | ✅ |
-| E2E smoke | `frontend/e2e/` (Playwright) | — | separate workflow |
-| Lighthouse budget | `frontend/lighthouserc.json` | — | separate workflow |
+| Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 412 tests / 64 files | ✅ |
+| Backend endpoint/lib | `backend/worker/**/*.test.ts` | 148 tests / 22 files | ✅ |
+| Contracts | contrast + theme tokens, CSP hashes, festival artefact sync, router coverage, bundle budget | — | ✅ |
+| E2E smoke | `frontend/e2e/` (Playwright, built bundle, external network aborted) | — | `e2e.yml` |
+| Lighthouse | `frontend/lighthouserc.json` (SEO + a11y hard-fail) | — | `lighthouse.yml` |
+
+Before pushing: `cd frontend && npm run lint && npm run typecheck && npm test && npm run build && node scripts/csp-hashes.mjs && node scripts/check-bundle-size.mjs`, and `cd backend && npm run lint && npm run typecheck && npm test`.
 
 ---
 
-## 7. CI / automation (`.github/workflows/`)
+## 10. CI and scheduled automation
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `ci.yml` | push to `main`, PRs | Two parallel jobs: **frontend** (lint, typecheck, test, build, bundle-size gate) and **backend** (lint, typecheck, test, `wrangler deploy --dry-run`) |
-| `e2e.yml`, `lighthouse.yml` | push/PR | Playwright smoke / performance budget |
-| `buildapk.yml`, `release.yml` | manual / tags | Android APK builds (debug + signed release), published to GitHub Releases (`/apk` on the site serves the latest) |
-| `ai-daily-push.yml`, `song-push.yml`, `weekly-digest.yml`, `synthetic-uptime.yml` | cron | POST to `https://www.sirimillavinay.online/api/cron/*` with the `x-cron-secret` header |
+| `ci.yml` | push, PR | **frontend**: lint, typecheck, test, build, bundle budget · **backend**: lint, typecheck, test |
+| `e2e.yml` · `lighthouse.yml` | push, PR | Playwright smoke · performance/SEO/a11y budgets |
+| `diagnose.yml` | manual, push | Production hydration check: fetch live HTML, assert every asset, confirm React mounted |
+| `buildapk.yml` · `release.yml` | push, manual, tags | Android APK build · signed release published to GitHub Releases |
+| `ai-daily-push.yml` | 5× daily (IST 08:00 · 13:00 · 16:00 · 21:00 · 00:00) | `/api/cron/ai-daily-push` — AI-composed, location-targeted song push |
+| `song-push.yml` | daily 19:00 IST | `/api/cron/song-push` — per-language song push |
+| `weekly-digest.yml` | Monday 09:00 IST | `/api/cron/weekly-digest` — admin overview row |
+| `status-tick.yml` · `synthetic-uptime.yml` | every 30 min | status-page probes · external uptime with a deduped issue on outage |
 
-Deployment is **not** done by GitHub Actions — Cloudflare's own git integrations handle it (see §4). CI is the quality gate; Cloudflare is the deploy pipeline.
-
----
-
-## 8. Operations & troubleshooting
-
-- **Logs:** Cloudflare → Workers & Pages → `vinax-api` → **Observability** (invocation logs are enabled and persisted; config lives in `wrangler.toml [observability]` so deploys don't reset it).
-- **Health checks:** `GET /api/version` (Worker alive; returns `no_release` until a GitHub Release exists), `GET /sitemap.xml` (sitemap index), `GET /` (Pages serving the app).
-- **A Pages build failed:** check the deployment log (Workers & Pages → vinax → Deployments). Most common cause: build ran outside `frontend/` — root directory must be `frontend`.
-- **A Worker build failed:** check Workers & Pages → vinax-api → latest build log. If it says the build token is invalid, assign a new one under Settings → Build → API token (these tokens are auto-managed; don't delete them during token cleanups).
-- **Rollback:** Workers & Pages → vinax-api → Deployments → Version History → rollback; Pages keeps every previous deployment addressable and re-promotable.
-- **Pre-restructure history:** the original single-folder repo is preserved on the [`main-backup`](../../tree/main-backup) branch.
+Deployment is **not** done by GitHub Actions — Cloudflare's git integrations deploy; CI is the quality gate. The console's **Cron Health** panel shows the last footprint of every scheduled job.
 
 ---
 
-## 9. Admin & extras
+## 11. Operations and troubleshooting
 
-- **Admin console:** `https://admin.sirimillavinay.online` (SPA served from `frontend/public/admin`, API at `/api/admin/*`, gated by `ADMIN_LOGIN_PASSWORD`); 26 tools organized under eight formal categories with collapsible sidebar groups (v5.7.5), redesigned in v5.8.0 as a formal flat token-driven console (dark + light) with no blur/glow/gradient effects; the listener sidebar carries an Ads page whose sponsored placement loads its ad script ONLY on that page, with /ads.txt and an inert head meta tag proving site ownership (v5.7.8).
-- **Android app:** Capacitor wrapper of the same frontend; `update.sirimillavinay.online` redirects to the latest APK; push via FCM when `FCM_SERVICE_ACCOUNT` is set; downloads save into the app's own folder on device storage and play fully offline (v5.7.3); the service worker keeps the offline app shell in lockstep with each deploy so no-internet launches always boot (v5.7.4).
-- **AI features:** nineteen model "lanes" (chat, quick answers, deep thinking, music Q&A, DJ/mixes, home-screen builder, search expert, and more) across the 18 owner-named engines, each pinned to its own provider + key in `backend/worker/functions/_lib/ai.ts`. Synced lyrics resolve LRCLIB-first with strict title matching (v5.7.2), falling back to catalog lyrics.
-- **Privacy posture:** no accounts, no login; telemetry device-ids are HMAC-peppered (`TELEMETRY_PEPPER`/`DEVICE_ID_SECRET`); device-to-device handoff uses one-time burn-on-read encrypted blobs in KV.
+- **Health**: `GET /api/status` (components + 90-day uptime; also the public status page), `GET /api/version`, `GET /sitemap.xml`, `GET /`. In the console: Edge & Endpoint Health, Status History, Cron Health, Environment Checklist, Data Quality, Database Overview.
+- **Logs**: Cloudflare → Workers & Pages → `vinax-api` → Observability (persisted; configured in `wrangler.toml [observability]`).
+- **Maintenance**: Status Note for a one-line notice; Maintenance Scheduler to flip the site to maintenance for a window automatically; App Configuration for an immediate manual switch.
+- **Incidents**: Feature Flags switch parts of the app off for everyone within a minute; Catalog Sources disables a failing music source; Broadcast Message tells listeners something once; Runbook holds the team's own notes.
+- **A Pages build failed**: check Workers & Pages → vinax → Deployments; the root directory must be `frontend`.
+- **A Worker build failed**: check vinax-api → latest build; if the build token is invalid, assign a new one under Settings → Build.
+- **Rollback**: Workers → Deployments → Version History; Pages keeps every deployment re-promotable.
+- **Bundle budget failed in CI**: lazy-load the new code; if it is genuinely shell/store code, re-base with a dated justification in `frontend/scripts/check-bundle-size.mjs`.
+- **CSP or festival-sync test failed**: run the generator / hash script named in the failure and commit the output.
+- **Pre-restructure history**: the original single-folder repo is on the `main-backup` branch.
+
+---
+
+## 12. Release process
+
+1. Make the change (frontend, backend, or both).
+2. Bump the version and add the update card (§8.8). Patch for fixes, minor for features.
+3. Run the gates (§9). If `index.html` changed, refresh CSP hashes; if festivals changed, run the generator.
+4. Commit and push to `main`. Pages and the Worker deploy themselves; watch the CI run.
+5. For Android, `release.yml` publishes a signed APK; `/api/version` picks it up. Use Minimum App Version only for security fixes or breaking API changes.
+
+---
+
+## 13. Privacy posture
+
+No accounts, no login. Taste, history, playlists, bookmarks, stats and AI chats live in the browser or the app on the device. Telemetry is opt-in, anonymous and coarse (country/city from the edge, never raw IP; device ids are HMAC-signed and peppered). VinaX AI sends the current message thread and an on-device taste snapshot to answer, stores nothing beyond per-call ok/latency telemetry, and never names a vendor. Device handoff uses one-time, burn-on-read encrypted blobs in KV. The admin console sees aggregates and anonymous rows only.
 
 ---
 

@@ -2240,3 +2240,275 @@ html.hc a:focus-visible, html.hc button:focus-visible { outline: 3px solid rgb(v
 
 /* v5.17.0 — ambient mode artwork breathes slowly. */
 @keyframes ambient-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+
+/* ============================================================================
+   v5.18.0 — design refresh ("Aurora"). The canvas gains a soft accent glow
+   at the top, cards get a hairline highlight, the primary button a sheen,
+   the player bar an accent hairline, and the sidebar a real active state.
+   Everything rides the existing tokens, so accents, festivals, light and
+   black themes all keep working. Festivals paint their own sky instead.
+   ========================================================================= */
+body, html.light body { background-color: transparent; }
+html { background-color: rgb(var(--ink-900)); }
+html:not([class*='fest-']) #root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(58% 42% at 14% -6%, rgb(var(--ember-500) / 0.13), transparent 62%),
+    radial-gradient(36% 30% at 92% 4%, rgb(var(--aura-cyan, 34 211 238) / 0.07), transparent 60%);
+}
+html.light:not([class*='fest-']) #root::before { opacity: 0.55; }
+html.amoled #root::before { display: none; }
+
+.vx-nav-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  height: 56%;
+  width: 3px;
+  border-radius: 3px;
+  background: rgb(var(--ember-500));
+}
+.glass-card { border-radius: var(--radius-xl); box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight); }
+.btn-primary { background-image: linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0) 58%); }
+.glass-bottom-player { border-top-color: transparent; }
+.glass-bottom-player::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgb(var(--ember-500) / 0.55) 50%, transparent 100%);
+}
+.vx-hero-title {
+  background: linear-gradient(92deg, rgb(var(--ink-100)) 0%, rgb(var(--ink-100)) 55%, rgb(var(--ember-300)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.vx-hero-art { box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.08); }
+@media (prefers-reduced-motion: no-preference) {
+  .vx-hero-art { transition: transform 420ms var(--ease-calm); }
+  .vx-hero:hover .vx-hero-art:nth-child(1) { transform: rotate(-8deg) translate(-4px, -6px); }
+  .vx-hero:hover .vx-hero-art:nth-child(3) { transform: rotate(8deg) translate(4px, -6px); }
+}
+
+/* ============================================================================
+   v5.18.0 — VinaX AI page redesign. Scoped: every rule is prefixed .ai- and
+   reads tokens only, so accent palettes and the light theme apply unchanged.
+   Layout lives in the page's Tailwind classes; this block carries only what
+   utilities cannot express (gradient text, hover-reveal, popovers, chips).
+   ========================================================================= */
+.ai-display {
+  font-size: clamp(1.875rem, 1.25rem + 2vw, 2.625rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+.ai-display-accent {
+  background: linear-gradient(92deg, rgb(var(--ember-400)), rgb(var(--tide-400)) 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.ai-card {
+  background: var(--tile);
+  border: 1px solid var(--glass-border);
+  border-radius: 1rem;
+}
+.ai-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border-strong);
+  background: var(--tile);
+  padding: 0.375rem 0.75rem;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: rgb(var(--ink-200));
+  white-space: nowrap;
+  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+}
+.ai-chip:hover:not(:disabled) {
+  border-color: rgb(var(--ember-500) / 0.55);
+  background: rgb(var(--ember-500) / 0.08);
+  color: rgb(var(--ink-100));
+}
+.ai-chip:disabled { opacity: 0.5; }
+.ai-chip-on,
+.ai-chip-on:hover:not(:disabled) {
+  border-color: rgb(var(--ember-500) / 0.6);
+  background: rgb(var(--ember-500) / 0.14);
+  color: rgb(var(--ember-300));
+}
+.ai-chip-solid,
+.ai-chip-solid:hover:not(:disabled) {
+  background: rgb(var(--ink-100));
+  border-color: rgb(var(--ink-100));
+  color: rgb(var(--ink-950));
+}
+.ai-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  color: rgb(var(--ink-300));
+  flex-shrink: 0;
+  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+}
+.ai-icon-btn:hover { background: var(--tile-hover); color: rgb(var(--ink-100)); }
+.ai-icon-btn-on,
+.ai-icon-btn-on:hover { color: rgb(var(--ember-400)); background: rgb(var(--ember-500) / 0.14); }
+.ai-user-bubble {
+  background: rgb(var(--ember-500) / 0.12);
+  border: 1px solid rgb(var(--ember-500) / 0.18);
+  color: rgb(var(--ink-100));
+}
+.ai-thread-rail {
+  width: 2px;
+  flex: 1 1 auto;
+  min-height: 0.75rem;
+  margin-top: 0.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, rgb(var(--ember-500) / 0.5), rgb(var(--ember-500) / 0));
+}
+/* Message toolbar: hidden until the message is hovered or focused on
+   pointer devices; always visible where there is no hover. */
+.ai-toolbar { opacity: 0; transition: opacity 150ms var(--ease-calm); }
+.ai-msg:hover .ai-toolbar,
+.ai-msg:focus-within .ai-toolbar,
+.ai-toolbar:has([aria-expanded='true']) { opacity: 1; }
+@media (hover: none) { .ai-toolbar { opacity: 1; } }
+.ai-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: rgb(var(--ink-400));
+  white-space: nowrap;
+  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+}
+.ai-tool:hover { background: var(--tile-hover); color: rgb(var(--ink-100)); }
+.ai-tool[aria-pressed='true'],
+.ai-tool[aria-expanded='true'] { color: rgb(var(--ember-400)); }
+.ai-popover {
+  background: var(--surface-modal);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 1rem;
+  box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.15);
+  padding: 0.375rem;
+}
+.ai-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.625rem;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  color: rgb(var(--ink-200));
+  transition: background-color 120ms var(--ease-calm), color 120ms var(--ease-calm);
+}
+.ai-menu-item:hover { background: var(--tile-hover); color: rgb(var(--ink-100)); }
+.ai-menu-item[aria-pressed='true'],
+.ai-menu-item[aria-selected='true'] { color: rgb(var(--ember-400)); }
+.ai-composer {
+  background: var(--surface-modal);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.16);
+  transition: border-color 160ms var(--ease-calm), box-shadow 160ms var(--ease-calm);
+}
+.ai-composer:focus-within {
+  border-color: rgb(var(--ember-500) / 0.5);
+  box-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.5), 0 0 0 3px rgb(var(--ember-500) / 0.14);
+}
+/* The surface carries the focus ring — the field inside must not paint the
+   global :focus-visible halo a second time. */
+.ai-composer textarea:focus-visible,
+.ai-field input:focus-visible,
+.ai-field:focus-visible,
+.ai-chip .ai-select:focus-visible { box-shadow: none; outline: none; }
+.ai-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+.ai-scroll-x::-webkit-scrollbar { display: none; }
+.ai-starter {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.875rem;
+  border: 1px solid var(--glass-border);
+  background: var(--tile);
+  color: rgb(var(--ink-200));
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+}
+.ai-starter:hover {
+  border-color: rgb(var(--ember-500) / 0.45);
+  background: rgb(var(--ember-500) / 0.06);
+  color: rgb(var(--ink-100));
+}
+.ai-side-row .ai-side-actions { opacity: 0; transition: opacity 120ms var(--ease-calm); }
+.ai-side-row:hover .ai-side-actions,
+.ai-side-row:focus-within .ai-side-actions { opacity: 1; }
+.ai-field {
+  background: var(--surface-input);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  transition: border-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
+}
+.ai-field:focus,
+.ai-field:focus-within {
+  border-color: rgb(var(--ember-500) / 0.5);
+  box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.12);
+}
+.ai-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.ai-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--tile);
+  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm);
+}
+.ai-pick-live:hover {
+  border-color: rgb(var(--ember-500) / 0.4);
+  background: var(--tile-hover);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-toolbar, .ai-chip, .ai-tool, .ai-composer, .ai-starter, .ai-pick { transition: none; }
+}

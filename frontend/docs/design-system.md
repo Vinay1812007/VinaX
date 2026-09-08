@@ -123,3 +123,28 @@ extraction is scheduled — delta audit P1-9).
 Warm, plain sentences. AI slowness is labeled, recommendations explain
 themselves ("why this song"), nothing dark-patterned: no ads, no login
 walls, no premium. The free promise renders as pride: "₹0 · free forever".
+
+## Addendum — v5.18 "Aurora" refresh
+
+The formal flat system stays the base; v5.18 layers expression back on top,
+all through existing tokens (accents, festivals, light and black themes keep
+working unchanged):
+
+- **Canvas glow** — `#root::before` paints a fixed, accent-tinted radial glow
+  at the top of every page (hidden during festivals, which paint their own
+  sky; hidden in Black). `body` is transparent; `<html>` carries the canvas.
+- **Sidebar** — the active item sits on a `--tile` surface with a 3px accent
+  bar (`.vx-nav-active`); hover uses the same tile.
+- **Shelves** — eyebrow (explanation) above a 20–22px extrabold title;
+  "Show all" is a hairline pill.
+- **Cards** — `rounded-xl` artwork with a hairline ring, a 2px hover lift;
+  `.glass-card` gains an inset top highlight.
+- **Hero** — accent-led wash, gradient title (`.vx-hero-title`) and a fan of
+  the mix's own artwork on the right (≥ sm).
+- **Player bar** — accent gradient hairline instead of a flat border.
+- **Buttons** — `.btn-primary` carries a subtle top sheen.
+- **VinaX AI** — open assistant replies with an accent rail, tinted user
+  bubbles, a floating composer, a compact message toolbar with a "More"
+  popover; page-scoped classes are prefixed `.ai-` at the end of `index.css`.
+- **Admin console** — restyled shell, stat tiles, tables and controls in
+  `public/admin/index.html`; panel markup and ids are unchanged.

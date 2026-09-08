@@ -935,12 +935,27 @@ export default function HomePage() {
       </div>
 
       {/* Aura Mix hero — the AI DJ entry point */}
-      <section className="relative overflow-hidden rounded-3xl mb-6 border border-glass bg-ink-850">
+      <section className="vx-hero relative overflow-hidden rounded-3xl mb-6 border border-glass bg-ink-850">
+        {/* v5.18.0 refresh — accent-led wash + a fan of the mix's own artwork */}
+        {heroSongs.length >= 3 && (
+          <div className="absolute right-6 md:right-10 top-1/2 -translate-y-1/2 hidden sm:flex items-center pointer-events-none" aria-hidden>
+            {heroSongs.slice(0, 3).map((hs, i) => (
+              <img
+                key={hs.id}
+                src={bestImage(hs.images, 150)}
+                alt=""
+                loading="lazy"
+                className="vx-hero-art w-24 h-24 md:w-28 md:h-28 rounded-2xl object-cover"
+                style={{ marginLeft: i ? '-2.25rem' : 0, transform: `rotate(${(i - 1) * 7}deg) translateY(${i === 1 ? -8 : 4}px)`, zIndex: i === 1 ? 2 : 1 }}
+              />
+            ))}
+          </div>
+        )}
         <div
           className="vx-hero-wash absolute inset-0 pointer-events-none opacity-70"
           style={{
             background:
-              'radial-gradient(120% 130% at 0% 0%, rgb(var(--aura-violet) / 0.32), transparent 55%), radial-gradient(110% 120% at 100% 10%, rgb(var(--aura-cyan) / 0.26), transparent 55%), radial-gradient(120% 130% at 55% 130%, rgb(var(--aura-lime) / 0.22), transparent 60%)',
+              'radial-gradient(90% 100% at 0% 0%, rgb(var(--ember-500) / 0.30), transparent 56%), radial-gradient(110% 120% at 100% 10%, rgb(var(--aura-cyan) / 0.22), transparent 55%), radial-gradient(120% 130% at 55% 130%, rgb(var(--aura-lime) / 0.22), transparent 60%)',
           }}
           aria-hidden
         />
@@ -948,7 +963,7 @@ export default function HomePage() {
           <p className="aura-eyebrow text-xs font-bold uppercase tracking-widest text-ember-300 flex items-center gap-1.5">
             <SparkleIcon className="w-3.5 h-3.5" /> AI DJ · ready
           </p>
-          <h2 className="text-3xl md:text-4xl font-extrabold mt-2">Your Aura Mix</h2>
+          <h2 className="vx-hero-title text-3xl md:text-[40px] font-extrabold tracking-[-0.03em] mt-2">Your Aura Mix</h2>
           <p className="text-sm text-ink-200/90 mt-2 max-w-md leading-relaxed">
             A fresh mix tuned to your taste, mood and languages. Press play and the AI DJ builds the rest.
           </p>

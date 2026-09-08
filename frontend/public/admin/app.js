@@ -151,12 +151,15 @@
   function memoReset() { memoCache = {}; }
   // Silent refresh: resolve null when the payload didn't change, so loaders
   // skip repainting. Still stamps freshness so the stale banner stays honest.
-  function apiMemo(path) {
+  // `key` lets two callers share one endpoint without deduping each other
+  // (the header pulse and the Overview panel both read /api/admin/overview).
+  function apiMemo(path, key) {
+    key = key || path;
     return api(path).then(function (d) {
       stamp();
       var sig = JSON.stringify(d);
-      if (memoCache[path] === sig) return null;
-      memoCache[path] = sig;
+      if (memoCache[key] === sig) return null;
+      memoCache[key] = sig;
       return d;
     });
   }
@@ -759,6 +762,32 @@
 
   // ---------- Overview ----------
   function loadOverview() { apiMemo('/api/admin/overview').then(function (d) { if (d && active === 'overview') { renderOverview(d); loadDigest(); loadGrowth(); renderQuickActions(); } }).catch(noop); }
+  // Overview health strip — built only from fields the overview payload
+  // already carries (summary.*); nothing is invented, everything defaults to 0.
+  function fmtN(n) { n = Number(n || 0); return isFinite(n) ? n.toLocaleString() : '0'; }
+  function healthStrip(s) {
+    s = s || {};
+    var errs = Number(s.errors_24h || 0);
+    var cls = errs === 0 ? 'ok' : (errs < 10 ? 'warn' : 'bad');
+    var label = errs === 0 ? 'All clear · no errors in 24h' : (fmtN(errs) + ' error' + (errs === 1 ? '' : 's') + ' in 24h');
+    var stick = (s.dau && s.mau) ? Math.round((Number(s.dau) / Math.max(1, Number(s.mau))) * 100) + '%' : '—';
+    return '<div class="health-strip" id="healthstrip">' +
+      '<span class="hz-status ' + cls + '"><span class="hz-dot"></span>' + esc(label) + '</span>' +
+      '<span class="hz-m"><b>' + fmtN(s.active_now) + '</b> listening now</span>' +
+      '<span class="hz-m"><b>' + fmtN(s.plays_today) + '</b> plays today</span>' +
+      '<span class="hz-m"><b>' + fmtN(s.new_today) + '</b> new today</span>' +
+      '<span class="hz-m"><b>' + fmtN(s.feedback_new) + '</b> new feedback</span>' +
+      '<span class="hz-m" title="Daily active ÷ monthly active"><b>' + esc(stick) + '</b> DAU / MAU</span>' +
+      '<span class="spacer"></span>' +
+      '<span class="muted">Refreshes every ' + Math.round(refreshMs / 1000) + 's</span>' +
+      '</div>';
+  }
+  // Overview companions (quick actions, growth, digest) prepend themselves to
+  // #view; keep them below the health strip when it is present.
+  function insertTop(view, markup) {
+    var hs = view.querySelector('#healthstrip');
+    if (hs) hs.insertAdjacentHTML('afterend', markup); else view.insertAdjacentHTML('afterbegin', markup);
+  }
   function renderOverview(d) {
     var s = d.summary || {};
     var deltas = d.deltas || d.summaryDeltas || {};
@@ -775,6 +804,7 @@
       return '<div class="card kpi"><span class="ki">' + icon + '</span><div class="n">' + (n == null ? 0 : n) + '</div><div class="l">' + esc(l) + '</div>' + chip(d2) + '</div>';
     }
     $('view').innerHTML =
+      healthStrip(s) +
       '<div class="cards">' +
       kc(s.active_now, 'Listening now', 'listeners', 'active_now') +
       kc(s.total_users, 'Total users', 'users', 'total_users') +
@@ -1109,7 +1139,7 @@
       }).join('');
       var delta = d.prev14 > 0 ? Math.round(((d.last14 - d.prev14) / d.prev14) * 100) : (d.last14 > 0 ? 100 : 0);
       var dTxt = (delta >= 0 ? '+' : '') + delta + '% vs previous 14 days';
-      view.insertAdjacentHTML('afterbegin',
+      insertTop(view,
         '<div class="card" id="growthbox" style="margin-bottom:14px;position:relative;overflow:visible"><h3 style="margin-top:0">New listeners <span class="muted">\u00b7 last 14 days \u00b7 <b>' + d.last14 + '</b> joined \u00b7 ' + esc(dTxt) + '</span></h3>' +
         '<div id="spk-wrap" style="display:flex;align-items:flex-end;gap:4px;height:64px;padding:6px 0;border-bottom:1px solid var(--border)">' + bars + '</div>' +
         '<span class="spk-chip" id="spk-chip"></span></div>');
@@ -1133,7 +1163,7 @@
     if (old) old.remove();
     var view = $('view');
     if (!view) return;
-    view.insertAdjacentHTML('afterbegin',
+    insertTop(view,
       '<div class="card" id="quickbox" style="margin-bottom:14px"><div class="row" style="flex-wrap:wrap;gap:8px">' +
       '<button class="ghost qa-go" data-to="notify2">\ud83d\udce3 Send notification</button>' +
       '<button class="ghost qa-go" data-to="technical">\u26a1 Site mode</button>' +
@@ -1332,7 +1362,7 @@
         var sign = pct2 > 0 ? '+' : '';
         return ' <span class="kt ' + cls + '" style="font-size:10px;padding:1px 6px;border-radius:999px">' + sign + pct2 + '%</span>';
       }
-      view.insertAdjacentHTML('afterbegin',
+      insertTop(view,
         '<div class="card" id="digestbox" style="margin-bottom:14px">' +
         '<h3 style="margin-top:0">This week <span class="muted">· since ' + esc(g.week_of || '') + (g.sampled ? ' · sampled' : '') + '</span></h3>' +
         '<div class="kpis" style="margin:0">' +
@@ -3311,7 +3341,7 @@
 
     // ---- Mini KPI strip (60s pulse) + notification trigger ----
     function kpiTick() {
-      apiMemo('/api/admin/overview').then(function (d) {
+      apiMemo('/api/admin/overview', 'kpi:overview').then(function (d) {
         if (!d || !d.summary) return;
         var s = d.summary;
         $('kpis').innerHTML =
@@ -3397,5 +3427,8 @@
   $('autoWrap').addEventListener('click', function () { setAuto(!autoRefresh); });
   $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
 
+  // Honour the saved theme before the login card paints (initEnhancements
+  // re-applies it after sign-in; this just avoids a dark flash on light).
+  try { if (localStorage.getItem('vinax_admin_light')) document.body.classList.add('lightadm'); } catch (e) {}
   if (token()) start(); else showLogin('');
 })();
