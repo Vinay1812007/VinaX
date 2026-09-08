@@ -2,7 +2,7 @@
 
 **Free music streaming for India. No login. Private by design.**
 
-Live at **https://www.sirimillavinay.online** — Telugu, Hindi, Tamil and nine more languages, with an AI DJ, a full assistant (VinaX AI), synced lyrics, music videos, festival themes for the whole Indian calendar, an Android app, and a 65-tool admin console. Everything personal stays on the listener's device; the server sees anonymous, coarse telemetry only.
+Live at **https://www.sirimillavinay.online** — Telugu, Hindi, Tamil and nine more languages, with an AI DJ, a full assistant (VinaX AI), synced lyrics, music videos, festival themes for the whole Indian calendar, live in-app tutorials, an Android app, and a 65-tool admin console. Everything personal stays on the listener's device; the server sees anonymous, coarse telemetry only.
 
 > **For AI agents and new contributors — read this first.** This file is the single source of truth for what VinaX is, how the repo is laid out, how it deploys, and which commands are safe to run. Everything is intentionally explicit: exact paths, exact commands, exact env-var *names* (never values).
 
@@ -86,8 +86,12 @@ There is **no CORS anywhere**. The Worker's routes claim specific paths on `www.
 **Look and feel**
 - Themes: Dark, Light, Black (AMOLED), System, Auto (day/night); ten accents plus a **custom accent** (any hex, with a readable light-theme variant); glass level and blur sliders; Dynamic theme from artwork; Display size; High contrast; Reduce motion; density.
 - **Festival themes**: 43 festivals from Sankranti to New Year, each a distinct theme — accent ramp, tinted canvas, ribbon, glow, motif, badge, splash and living backdrop — driven by one calendar (`frontend/src/constants/festivals.ts` + `festivalThemes.ts`, `npm run gen:festivals`). Switchable in Settings.
-- Help & Feedback: five **live tutorials** that run inside the real app (the first starts a song), searchable guides and FAQ, the latest update card, and a feedback form. The welcome tour ends with a live walkthrough.
 - Swipe a song row right to queue, left to save for later. Toasts with Undo. Command palette (⌘/Ctrl+K), keyboard shortcuts, PWA shortcuts (Search, Liked, Listen Later, VinaX AI), Data saver, Startup page, and a search box inside Settings.
+
+**Help and learning**
+- Welcome tour on first open (languages, name, an eight-slide tour that ends with a live walkthrough).
+- **Live tutorials** (Help → Live tutorials): five guided walkthroughs that run inside the real app, navigate to the right page, spotlight the actual control and can start playback — Play your first song, Find any song, Ask VinaX AI, Make it yours, Save and organise. Progress is remembered on the device.
+- Help & Feedback: searchable guides for every feature, FAQ (plus questions the console publishes), the latest update card, keyboard and gesture reference, legal links, and a feedback form that can attach app version, platform, screen size, language and theme.
 
 **Android**
 - Capacitor wrapper of the same app: background playback, media notification, offline downloads that play with no network, FCM push, in-app updater fed by `/api/version` (with an admin-set minimum build), `update.sirimillavinay.online` → latest APK.
@@ -131,6 +135,7 @@ Everything the console publishes reaches listeners through cached public reads (
 - **Catalogue** — songs come from the owner-hosted catalogue wrapper (`VinaX Music API` on Render) with the Worker's own `/api/cat` as a same-origin fallback; the client orchestrates sources with health ranking (`frontend/src/services/api/client.ts`, `constants/endpoints.ts`) and the console can switch a source off for everyone.
 - **AI** — 19 lanes across NVIDIA-hosted and Groq-hosted OpenAI-compatible endpoints, each pinned to its own key with a failover ladder (`_lib/ai.ts`, `_lib/models.ts`). Chat streams as SSE (`data: {delta|meta|done}`); prompts wrap user turns in a data fence; nothing is stored beyond anonymous per-call telemetry.
 - **Data** — Supabase Postgres via REST (service-role key on the Worker only): `vinax_events`, `vinax_users`, `vinax_feedback`, `vinax_ai_events`, `vinax_rooms`, `vinax_push_subscriptions`, `vinax_fcm_tokens`, `vinax_config`, `vinax_experiments`, `vinax_blocklist`, `vinax_seo_urls`, plus RPCs/views for analytics. One KV namespace (`HANDOFF`) holds burn-on-read device-handoff blobs.
+- **Tutorials** — `src/store/tutorialStore.ts` (tiny, first-load) holds the active walkthrough; `components/TutorialHost.tsx` lazy-mounts `TutorialRunner.tsx` at the app root, which navigates via the router, runs each step's action (for example starting a song), finds the step's target by CSS selector and spotlights it. Definitions live in `src/features/tutorials/tutorials.ts`; targets rely on stable `aria-label`s and `data-tour` anchors (`player`, `search-input`, `sound`, `import-text`).
 - **SEO** — `/song|album|artist|playlist/:id` and the hub pages are rendered at the edge by injecting content into the live SPA shell fetched from `ASSETS_HOST`; sitemaps are generated from `vinax_seo_urls`, which an hourly crawler grows. `npm run build` also prerenders 31 static routes.
 
 ---
@@ -146,7 +151,7 @@ Everything the console publishes reaches listeners through cached public reads (
 │   ├── src/
 │   │   ├── pages/                  ← one lazy chunk per route (HomePage, VinaXAIPage, SettingsPage …)
 │   │   ├── components/             ← shared UI (PlayerBar, TrackMenu, SongRow, MediaCard, ai/*)
-│   │   ├── features/               ← feature modules (home, ai, library, search, stats, lyrics, voice …)
+│   │   ├── features/               ← feature modules (home, ai, library, search, stats, lyrics, voice, tutorials …)
 │   │   ├── services/               ← api client, audio engine, personalization, recommendation, analytics
 │   │   ├── store/                  ← zustand stores (player, settings, library, history, search, …)
 │   │   ├── constants/              ← festivals + themes, changelog, version, nav, endpoints, storage keys
@@ -157,7 +162,7 @@ Everything the console publishes reaches listeners through cached public reads (
 │   ├── scripts/                    ← prerender, bundle budget, CSP hashes, festival generator, changelog export, e2e smoke
 │   ├── supabase/migrations/        ← idempotent SQL for the tables/RPCs the console needs
 │   ├── docs/                       ← design system, AI engine notes, operations, user guide
-│   ├── e2e/                        ← Playwright specs
+│   ├── e2e/                        ← end-to-end specs (+ support/ runner shim, vitest.config.ts)
 │   ├── index.html                  ← SPA shell: pre-paint theme/festival/accent script, boot prefetch
 │   ├── vite.config.ts              ← build + dev proxy (/api, /img, /apk → :8787)
 │   └── capacitor.config.ts, native-android/, android-res/, ci/   ← Android
@@ -202,7 +207,7 @@ Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` t
 | `frontend/` | `npm run gen:festivals` | regenerate `src/styles/festivals.css`, the pre-paint window table in `index.html`, and `public/admin/festivals.js` from the festival calendar (a test fails on drift) |
 | `frontend/` | `node scripts/csp-hashes.mjs` | after `npm run build`, refresh the inline-script hashes in `public/_headers` (a test fails on drift) |
 | `frontend/` | `node scripts/check-bundle-size.mjs` | the first-load budget gate (CI runs it after build) |
-| `frontend/` | `npm run e2e` | Playwright smoke |
+| `frontend/` | `npm run e2e` | build checks + the end-to-end specs (needs `dist/` — run `npm run build` first) |
 | `frontend/` | `npm run android:debug` | Capacitor sync + Gradle debug APK |
 | `backend/` | `npm run dev` | wrangler dev on :8787 (reads `worker/.dev.vars`) |
 | `backend/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (174 tests / 25 files) · eslint · tsc — **run from `backend/`, not `backend/worker/`** |
@@ -287,6 +292,7 @@ The console writes JSON values into `vinax_config` (`POST /api/admin/appconfig`,
 9. **Secrets discipline.** New server-side config = a Worker secret + its name in `.env.example` + a row in the Environment Checklist. Nothing secret in `VITE_*`, nothing secret in git.
 10. **Cron auth.** `/api/cron/*` requires the `x-cron-secret` header. Query-string auth is intentionally rejected.
 11. **No third-party brand names** in product copy, comments or docs (the assistant is "VinaX AI", engines have owner-chosen names).
+12. **Tutorial anchors.** The live tutorials find controls by `aria-label` and `data-tour` attributes (`player`, `search-input`, `sound`, `import-text`, `Play your Aura Mix`, `Message VinaX AI`, `Search settings`, `Festival themes`, `Custom accent colour`, `Listen Later`, `More options`). Renaming one breaks a step — update `src/features/tutorials/tutorials.ts` in the same change; the e2e Help spec is the place to add a check.
 
 ---
 
@@ -297,8 +303,10 @@ The console writes JSON values into `vinax_config` (`POST /api/admin/appconfig`,
 | Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 463 tests / 70 files | ✅ |
 | Backend endpoint/lib | `backend/worker/**/*.test.ts` | 174 tests / 25 files | ✅ |
 | Contracts | contrast + theme tokens, CSP hashes, festival artefact sync, router coverage, bundle budget | — | ✅ |
-| E2E | `frontend/e2e/` (Playwright against the built bundle, external network aborted): smoke, a11y, QA sweep, admin console (all panels), VinaX AI, festival skins, 5.17 features | — | `e2e.yml` |
+| E2E | `frontend/e2e/*.spec.ts` against the built bundle (external network aborted): admin console (every panel), VinaX AI, festival skins, the 5.17 feature set — 10 tests | `npm run e2e` | `e2e.yml` |
 | Lighthouse | `frontend/lighthouserc.json` (SEO + a11y hard-fail) | — | `lighthouse.yml` |
+
+How e2e runs: `npm run e2e` first executes `scripts/e2e-smoke.mjs` (asset and hydration checks), then `vitest run --config e2e/vitest.config.ts`, which serves `dist/` on a local port and drives the same Chromium (`playwright-core`, `E2E_CHROMIUM_PATH` honoured) through a small `@playwright/test`-compatible layer in `e2e/support/`. The three older specs (`smoke`, `a11y`, `qa-sweep`) are excluded: they were written for a runner that is not installed and have drifted; enable them only after updating.
 
 Before pushing: `cd frontend && npm run lint && npm run typecheck && npm test && npm run build && node scripts/csp-hashes.mjs && node scripts/check-bundle-size.mjs`, and `cd backend && npm run lint && npm run typecheck && npm test`.
 
