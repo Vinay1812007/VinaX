@@ -10,6 +10,10 @@ export interface HistoryState {
   addPlay(song: Song): void;
   markCompleted(songId: string): void;
   clearHistory(): void;
+  /** v5.17.0 — drop one play (entries are keyed by their timestamp). */
+  removeEntry(ts: number): void;
+  /** v5.17.0 — drop every play at or after `ts` ("clear last hour" / "clear today"). */
+  clearSince(ts: number): void;
 }
 
 export const useHistoryStore = create<HistoryState>()(
@@ -33,6 +37,8 @@ export const useHistoryStore = create<HistoryState>()(
         set({ entries });
       },
       clearHistory: () => set({ entries: [] }),
+      removeEntry: (ts) => set({ entries: get().entries.filter((e) => e.ts !== ts) }),
+      clearSince: (ts) => set({ entries: get().entries.filter((e) => e.ts < ts) }),
     }),
     { name: KEYS.history, storage: createJSONStorage(() => window.localStorage) },
   ),

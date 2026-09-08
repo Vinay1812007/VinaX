@@ -75,6 +75,11 @@
           var pref = st.theme || 'dark';
           // Accent before first paint too — else picked accents flash indigo.
           if (st.accent && st.accent !== 'crimson') document.documentElement.setAttribute('data-accent', st.accent);
+          // v5.17.0 — display size + high contrast before first paint (custom
+          // accent ramps are applied by the app a frame later).
+          if (st.uiScale === 'sm') document.documentElement.style.fontSize = '15px';
+          else if (st.uiScale === 'lg') document.documentElement.style.fontSize = '17.5px';
+          if (st.highContrast) document.documentElement.classList.add('hc');
           // Adjustable glass before first paint (mirrors src/utils/theme.ts).
           var gl = typeof st.glassLevel === 'number' ? Math.min(100, Math.max(0, st.glassLevel)) : 40;
           document.documentElement.style.setProperty('--glass-alpha', String(1 - 0.55 * (gl / 100)));

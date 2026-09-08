@@ -13,6 +13,16 @@ export interface SettingsState {
   djVoice: boolean;
   /** 5.14.0 — festival skins (accent, canvas, glow, splash). Off = the plain theme all year. */
   festivalSkins: boolean;
+  /** v5.17.0 — custom accent hex when `accent === 'custom'`. */
+  accentCustom: string | null;
+  /** v5.17.0 — display size: text and controls scale. */
+  uiScale: 'sm' | 'md' | 'lg';
+  /** v5.17.0 — data saver: lowest audio quality, no video canvas, lighter images. */
+  dataSaver: boolean;
+  /** v5.17.0 — which page opens first. */
+  startPage: 'home' | 'search' | 'library' | 'last';
+  /** v5.17.0 — high-contrast text and borders. */
+  highContrast: boolean;
   /** 0-100 — iOS-style adjustable glass translucency (utils/theme.ts). */
   glassLevel: number;
   /** 0-100 — background blur intensity, independent from glassLevel. */
@@ -57,6 +67,11 @@ export interface SettingsState {
   setDailyGoalMinutes(n: number): void;
   setDjVoice(v: boolean): void;
   setFestivalSkins(v: boolean): void;
+  setAccentCustom(hex: string | null): void;
+  setUiScale(v: 'sm' | 'md' | 'lg'): void;
+  setDataSaver(v: boolean): void;
+  setStartPage(v: 'home' | 'search' | 'library' | 'last'): void;
+  setHighContrast(v: boolean): void;
   setAccent(accent: string): void;
   setGlassLevel(v: number): void;
   setGlassBlur(v: number): void;
@@ -95,6 +110,11 @@ const defaults = {
   dailyGoalMinutes: 0,
   djVoice: false,
   festivalSkins: true,
+  accentCustom: null,
+  uiScale: 'md' as const,
+  dataSaver: false,
+  startPage: 'home' as const,
+  highContrast: false,
   glassLevel: 40,
   glassBlur: 40,
   autoplay: true,
@@ -133,6 +153,13 @@ export const useSettingsStore = create<SettingsState>()(
       setDailyGoalMinutes: (n) => set({ dailyGoalMinutes: Math.max(0, Math.min(600, Math.round(n))) }),
       setDjVoice: (djVoice) => set({ djVoice }),
       setFestivalSkins: (festivalSkins) => set({ festivalSkins }),
+      setAccentCustom: (accentCustom) => set({ accentCustom, accent: accentCustom ? 'custom' : 'crimson' }),
+      setUiScale: (uiScale) => set({ uiScale }),
+      // Data saver also drops the stream to the lightest quality; turning it
+      // off leaves the quality where the listener last set it.
+      setDataSaver: (dataSaver) => set(dataSaver ? { dataSaver, audioQuality: 'low' } : { dataSaver }),
+      setStartPage: (startPage) => set({ startPage }),
+      setHighContrast: (highContrast) => set({ highContrast }),
       setAccent: (accent) => set({ accent }),
       setGlassLevel: (v) => set({ glassLevel: Math.min(100, Math.max(0, Math.round(v))) }),
       setGlassBlur: (v) => set({ glassBlur: Math.min(100, Math.max(0, Math.round(v))) }),

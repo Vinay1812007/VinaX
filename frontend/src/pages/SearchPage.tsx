@@ -28,9 +28,10 @@ import {
   useInfiniteSongs,
 } from '@/features/search/useInfiniteSongs';
 import { createSttSession, probeSttSupport, sttSupported, type SttSession } from '@/features/voice/stt';
-import { useSearchStore } from '@/store/searchStore';
+import { isSongSort, SONG_SORTS, useSearchStore } from '@/store/searchStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { toast } from '@/store/toastStore';
 import { loadProfile } from '@/services/personalization/storage';
 import { topArtists } from '@/services/personalization/profile';
 import { expertSongSearch } from '@/services/ai/expert';
@@ -38,10 +39,15 @@ import type { Song } from '@/types';
 import { playAlbum, playArtist, playPlaylist } from '@/features/player/playEntity';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { letterAvatar } from '@/utils/avatar';
+import { cn } from '@/utils/cn';
 import { languageLabel } from '@/constants/languages';
 import { MOODS } from '@/constants/seeds';
 import { useTrendingNow } from '@/features/home/useHomeShelves';
 import { shouldSyncRouteToInput } from '@/features/search/routeSync';
+import { looksLikeLyric, splitHighlight } from '@/features/search/lyricsSearch';
+import { useLyricsSearch } from '@/features/search/useLyricsSearch';
+import { filterSongsLocally, SONG_SORT_LABELS, sortSongs } from '@/features/search/sortSongs';
+import { exampleQueries, SEARCH_TIP_LINE } from '@/features/search/searchTips';
 
 const TABS = ['All', 'Songs', 'Albums', 'Artists', 'Playlists'] as const;
 type Tab = (typeof TABS)[number];
@@ -72,6 +78,85 @@ function Highlight({ text, term }: { text: string; term: string }) {
   );
 }
 
+/** v5.17.0 — a small push-pin, used on pinned recents. */
+function PinGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M9 3h6l-1 6.5 3 2.5v2H7v-2l3-2.5L9 3z" />
+      <path d="M12 14v7" />
+    </svg>
+  );
+}
+
+/** v5.17.0 — one recent-search chip: tap opens it, long-press (or the pin
+ *  button) pins it to the front, × forgets it. */
+function RecentChip({
+  query,
+  pinned,
+  onOpen,
+  onTogglePin,
+  onRemove,
+}: {
+  query: string;
+  pinned: boolean;
+  onOpen: () => void;
+  onTogglePin: (viaLongPress: boolean) => void;
+  onRemove: () => void;
+}) {
+  const timer = useRef<number | null>(null);
+  const longPressed = useRef(false);
+  const cancel = () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => cancel, []);
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      <span
+        onPointerDown={() => {
+          longPressed.current = false;
+          cancel();
+          timer.current = window.setTimeout(() => {
+            longPressed.current = true;
+            onTogglePin(true);
+          }, 550);
+        }}
+        onPointerUp={cancel}
+        onPointerLeave={cancel}
+        onPointerCancel={cancel}
+        onContextMenu={(e) => {
+          // A long-press on touch also raises contextmenu — swallow it once.
+          if (longPressed.current) e.preventDefault();
+        }}
+      >
+        <Chip
+          onClick={() => {
+            if (longPressed.current) {
+              longPressed.current = false;
+              return;
+            }
+            onOpen();
+          }}
+        >
+          {pinned && <PinGlyph className="w-3 h-3 mr-1 inline-block -mt-0.5 text-ember-400" />}
+          {query}
+        </Chip>
+      </span>
+      <button
+        aria-label={pinned ? `Unpin ${query}` : `Pin ${query}`}
+        aria-pressed={pinned}
+        onClick={() => onTogglePin(false)}
+        className={cn('p-1.5 rounded-full hover:bg-ink-700/70', pinned ? 'text-ember-400' : 'text-ink-500 hover:text-ink-200')}
+      >
+        <PinGlyph className="w-3.5 h-3.5" />
+      </button>
+      <button aria-label={`Remove ${query}`} onClick={onRemove} className="p-1.5 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70 -ml-0.5">
+        <XIcon className="w-3.5 h-3.5" />
+      </button>
+    </span>
+  );
+}
+
 export default function SearchPage() {
   const { query: routeQuery } = useParams();
   const navigate = useNavigate();
@@ -95,6 +180,11 @@ export default function SearchPage() {
   const [langFilter, setLangFilter] = useState<string | null>(null);
   const [albumLang, setAlbumLang] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
+  // v5.17.0 — "Search by lyrics" mode (local to the visit; never in the URL).
+  const [lyricsMode, setLyricsMode] = useState(false);
+  const [lyricHintDismissed, setLyricHintDismissed] = useState('');
+  // v5.17.0 — local "filter these results" text on the Songs tab.
+  const [resultFilter, setResultFilter] = useState('');
   const navigationType = useNavigationType();
   const searchInputRef = useRef<HTMLInputElement>(null);
   // Focus the box only on a FRESH arrival at /search with no query — never on
@@ -112,8 +202,15 @@ export default function SearchPage() {
   usePageTitle(q ? `“${q}”` : 'Search');
 
   const recent = useSearchStore((s) => s.recent);
-  const { addRecent, removeRecent, clearRecent } = useSearchStore.getState();
+  const pinned = useSearchStore((s) => s.pinned);
+  const songSort = useSearchStore((s) => s.songSort);
+  const addRecent = useSearchStore((s) => s.addRecent);
+  const removeRecent = useSearchStore((s) => s.removeRecent);
+  const clearRecent = useSearchStore((s) => s.clearRecent);
+  const togglePin = useSearchStore((s) => s.togglePin);
+  const setSongSort = useSearchStore((s) => s.setSongSort);
   const playQueue = usePlayerStore((s) => s.playQueue);
+  const enqueueAll = usePlayerStore((s) => s.enqueueAll);
   const pinnedLangs = useSettingsStore((s) => s.pinnedLanguages);
   const mutedLangs = useSettingsStore((s) => s.mutedLanguages);
 
@@ -145,12 +242,14 @@ export default function SearchPage() {
 
   // A new search query starts a fresh round with the expert — and clears any
   // language filters chosen for the previous query, so a filtered tab never
-  // silently shows nothing (delta audit P1-12).
+  // silently shows nothing (delta audit P1-12). The local result filter
+  // (v5.17.0) resets for the same reason.
   useEffect(() => {
     setAiSongs(null);
     setAiError(null);
     setLangFilter(null);
     setAlbumLang(null);
+    setResultFilter('');
   }, [q]);
 
   const expertPanel = (aiLoading || aiError || (aiSongs?.length ?? 0) > 0) && (
@@ -232,12 +331,18 @@ export default function SearchPage() {
   }, [routeQuery]);
 
   const all = useSearchAll(q);
-  const infiniteSongs = useInfiniteSongs(q, tab === 'Songs', { search: true });
-  const albums = useInfiniteAlbums(q, tab === 'Albums'); // paged — was capped at 20 (P2-29)
-  const artists = useInfiniteArtists(q, tab === 'Artists'); // paged — was capped at 20 (P2-30)
-  const playlists = useInfinitePlaylists(q, tab === 'Playlists');
+  const infiniteSongs = useInfiniteSongs(q, tab === 'Songs' && !lyricsMode, { search: true });
+  const albums = useInfiniteAlbums(q, tab === 'Albums' && !lyricsMode); // paged — was capped at 20 (P2-29)
+  const artists = useInfiniteArtists(q, tab === 'Artists' && !lyricsMode); // paged — was capped at 20 (P2-30)
+  const playlists = useInfinitePlaylists(q, tab === 'Playlists' && !lyricsMode);
 
   const active = q.length > 1;
+  // v5.17.0 — lyric-line search: the lyrics service finds the candidates and
+  // the catalogue resolves each one to a playable song.
+  const lyricsQ = useLyricsSearch(q, lyricsMode && active);
+  const lyricMatches = lyricsQ.data;
+  const lyricSongs = useMemo(() => (lyricMatches ?? []).map((m) => m.song), [lyricMatches]);
+  const suggestLyrics = active && !lyricsMode && looksLikeLyric(q) && lyricHintDismissed !== q;
   // One memoized ranking pass per settled result set (was recomputed twice
   // per render — P2-19), in search mode: junk filter off, relevance on.
   const allSongs = all.data?.songs;
@@ -257,13 +362,25 @@ export default function SearchPage() {
     void import('@/services/analytics/telemetry').then((mm) => mm.trackSearch(q, count));
   }, [debounced, all.data]);
   const topResult = rankedAllSongs[0];
-  const allSongList = flattenSongPages(infiniteSongs.data?.pages);
+  const songPages = infiniteSongs.data?.pages;
+  const allSongList = useMemo(() => flattenSongPages(songPages), [songPages]);
   const availableLangs = [...new Set(allSongList.map((s) => s.language).filter((l): l is string => !!l && l !== 'unknown'))];
   const songList = langFilter ? allSongList.filter((s) => s.language === langFilter) : allSongList;
+  // v5.17.0 — the Songs tab shows the language-filtered list, in the chosen
+  // sort order, narrowed by the local "filter these results" text.
+  const displaySongs = useMemo(
+    () => filterSongsLocally(sortSongs(songList, songSort), resultFilter),
+    [songList, songSort, resultFilter],
+  );
   const allAlbums = flattenAlbumPages(albums.data?.pages);
   const albumLangs = [...new Set(allAlbums.map((a) => a.language).filter((l): l is string => !!l && l !== 'unknown'))];
   const albumList = albumLang ? allAlbums.filter((a) => a.language === albumLang) : allAlbums;
   const trimmed = input.trim();
+  // v5.17.0 — pinned recents first (in pin order), then the rest as recorded.
+  const recentOrdered = useMemo(
+    () => [...pinned.filter((p) => recent.includes(p)), ...recent.filter((r) => !pinned.includes(r))],
+    [recent, pinned],
+  );
   const recentMatches = useMemo(
     () => (trimmed ? recent.filter((r) => r.toLowerCase().includes(trimmed.toLowerCase()) && r !== q).slice(0, 3) : []),
     [trimmed, recent, q],
@@ -326,15 +443,23 @@ export default function SearchPage() {
     queryFn: async () => {
       const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
       const r = await fetch(`${base}/api/trending-searches`);
-      return r.ok ? ((await r.json()) as { queries: string[] }) : { queries: [] };
+      const j = r.ok ? ((await r.json()) as { queries?: string[] }) : null;
+      return { queries: Array.isArray(j?.queries) ? j.queries : [] };
     },
   });
+
+  const lyricsChip = (
+    <Chip active={lyricsMode} onClick={() => setLyricsMode((v) => !v)}>
+      <span aria-hidden className="mr-1">♪</span>
+      Search by lyrics
+    </Chip>
+  );
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="sticky top-0 z-20 -mx-4 px-4 pt-1 pb-3 bg-ink-900/95 backdrop-blur-md md:-mx-8 md:px-8">
       <h1 className="text-display tracking-tight mb-4">Search</h1>
-      {!input && (trendingQ.data?.queries.length ?? 0) > 0 && (
+      {!input && (trendingQ.data?.queries?.length ?? 0) > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <span className="text-[11px] font-bold uppercase tracking-widest text-ink-400">Top searches</span>
           {trendingQ.data?.queries.map((q) => (
@@ -383,7 +508,7 @@ export default function SearchPage() {
             focusedRef.current = false;
             window.setTimeout(() => setFocused(false), 120);
           }}
-          placeholder={listening ? 'Listening…' : 'Songs, albums, artists, playlists…'}
+          placeholder={listening ? 'Listening…' : lyricsMode ? 'Type a line you remember…' : 'Songs, albums, artists, playlists…'}
           className={`w-full glass-search rounded-2xl pl-12 pr-20 py-3.5 text-sm outline-none transition-[color,background-color,border-color,opacity,transform] focus:ring-2 focus:ring-ember-500/35 focus:shadow-[0_0_34px_-8px_rgb(var(--ember-500)/0.5)] ${listening ? 'border-ember-500 ring-2 ring-ember-500/40' : ''}`}
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
@@ -448,33 +573,75 @@ export default function SearchPage() {
           </div>
         )}
       </div>
-      {active && (
-        <div className="flex gap-2 overflow-x-auto no-scrollbar mt-3">
-          {TABS.map((t) => (
+      {(active || lyricsMode) && (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mt-3">
+          {lyricsChip}
+          {!lyricsMode && <span aria-hidden className="w-px h-5 bg-ink-700 shrink-0" />}
+          {!lyricsMode && TABS.map((t) => (
             <Chip key={t} active={tab === t} onClick={() => setTab(t)}>{t}</Chip>
           ))}
+        </div>
+      )}
+      {suggestLyrics && (
+        <div role="status" className="mt-2 flex items-center gap-2 text-xs text-ink-300">
+          <span>That reads like a lyric line.</span>
+          <button onClick={() => setLyricsMode(true)} className="font-semibold text-ember-400 hover:text-ember-300">
+            Search by lyrics →
+          </button>
+          <button aria-label="Dismiss" onClick={() => setLyricHintDismissed(q)} className="p-1 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70">
+            <XIcon className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
       </div>
 
       {!active && (
         <div>
+          {!trimmed && (
+            <section className="mb-6" aria-label="Search tips">
+              <p className="text-xs text-ink-400 mb-2">{SEARCH_TIP_LINE}</p>
+              <div className="flex flex-wrap gap-2">
+                {exampleQueries(pinnedLangs).map((ex) => (
+                  <Chip key={ex} onClick={() => applySuggestion(ex)}>{ex}</Chip>
+                ))}
+              </div>
+            </section>
+          )}
           {recent.length > 0 ? (
             <>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-semibold text-ink-300">Recent searches</p>
-                <button onClick={clearRecent} className="text-xs text-ink-400 hover:text-ink-100">Clear all</button>
+                <button
+                  onClick={() => {
+                    clearRecent();
+                    if (pinned.length) toast('Cleared — pinned searches kept');
+                  }}
+                  className="text-xs text-ink-400 hover:text-ink-100"
+                >
+                  Clear all
+                </button>
               </div>
               <div className="flex flex-wrap gap-2">
-                {recent.map((r) => (
-                  <span key={r} className="inline-flex items-center gap-1">
-                    <Chip onClick={() => applySuggestion(r)}>{r}</Chip>
-                    <button aria-label={`Remove ${r}`} onClick={() => removeRecent(r)} className="p-1.5 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70 -ml-0.5">
-                      <XIcon className="w-3.5 h-3.5" />
-                    </button>
-                  </span>
-                ))}
+                {recentOrdered.map((r) => {
+                  const isPinned = pinned.includes(r);
+                  return (
+                    <RecentChip
+                      key={r}
+                      query={r}
+                      pinned={isPinned}
+                      onOpen={() => applySuggestion(r)}
+                      onTogglePin={(viaLongPress) => {
+                        togglePin(r);
+                        if (viaLongPress) toast(isPinned ? 'Unpinned' : 'Pinned to the front');
+                      }}
+                      onRemove={() => removeRecent(r)}
+                    />
+                  );
+                })}
               </div>
+              {pinned.length === 0 && recent.length > 1 && (
+                <p className="mt-2 text-[11px] text-ink-500">Long-press a search to pin it.</p>
+              )}
             </>
           ) : (
             <EmptyState icon={<SearchIcon className="w-8 h-8" />} title="Find your next favorite" message="Search across songs, albums, artists, and playlists. Results rank toward your languages — scroll for unlimited results." />
@@ -584,7 +751,55 @@ export default function SearchPage() {
         </div>
       )}
 
-      {active && (
+      {active && lyricsMode && (
+        <div className="pt-4">
+          {lyricsQ.isLoading && <ListSkeleton />}
+          {lyricsQ.isError && <ErrorState retry={() => lyricsQ.refetch()} />}
+          {!lyricsQ.isLoading && !lyricsQ.isError && !lyricMatches && (
+            <p className="text-sm text-ink-400">Type a line you remember — a few words in a row work best.</p>
+          )}
+          {lyricMatches && lyricMatches.length === 0 && (
+            <EmptyState
+              icon={<SearchIcon className="w-8 h-8" />}
+              title="No song has those words — try a longer line."
+              message="The lyrics service matches whole phrases best — a full line beats a couple of words."
+              action={
+                <button onClick={() => setLyricsMode(false)} className="px-5 py-2.5 rounded-full btn-primary">
+                  Search titles instead
+                </button>
+              }
+            />
+          )}
+          {lyricMatches && lyricMatches.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-bold">Songs with those words</h2>
+                <button onClick={() => playQueue(lyricSongs, 0)} className="text-xs font-semibold text-ember-400 hover:text-ember-300">
+                  Play all
+                </button>
+              </div>
+              {lyricMatches.map((m, i) => (
+                <div key={m.song.id}>
+                  <SongRow song={m.song} songs={lyricSongs} index={i} />
+                  {m.hit.snippet && (
+                    <p className="pl-[3.75rem] pr-2 -mt-1 mb-2 text-xs text-ink-400 leading-relaxed">
+                      {splitHighlight(m.hit.snippet, q).map((run, j) =>
+                        run.hit ? (
+                          <mark key={j} className="bg-transparent text-ember-300 font-semibold">{run.text}</mark>
+                        ) : (
+                          <span key={j}>{run.text}</span>
+                        ),
+                      )}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
+        </div>
+      )}
+
+      {active && !lyricsMode && (
         <div className="pt-4">
           {tab === 'All' && (
             <>
@@ -688,10 +903,64 @@ export default function SearchPage() {
                   ))}
                 </div>
               )}
+              {allSongList.length > 0 && (
+                <div className="flex items-center gap-3 mb-3 flex-wrap">
+                  <label className="flex items-center gap-1.5 text-xs text-ink-400">
+                    Sort
+                    <select
+                      value={songSort}
+                      onChange={(e) => {
+                        if (isSongSort(e.target.value)) setSongSort(e.target.value);
+                      }}
+                      aria-label="Sort results"
+                      className="glass-input rounded-lg px-2 py-1 text-xs font-semibold text-ink-100 outline-none focus:ring-2 focus:ring-ember-500/35"
+                    >
+                      {SONG_SORTS.map((s) => (
+                        <option key={s} value={s}>{SONG_SORT_LABELS[s]}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="flex-1" />
+                  {displaySongs.length > 0 && (
+                    <>
+                      <button onClick={() => playQueue(displaySongs, 0)} className="text-xs font-semibold text-ember-400 hover:text-ember-300">
+                        Play all
+                      </button>
+                      <button onClick={() => enqueueAll(displaySongs)} className="text-xs font-semibold text-ink-300 hover:text-ink-100">
+                        Queue all
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              {allSongList.length >= 20 && (
+                <div className="relative mb-3">
+                  <input
+                    value={resultFilter}
+                    maxLength={80}
+                    onChange={(e) => setResultFilter(e.target.value)}
+                    aria-label="Filter these results"
+                    placeholder="Filter these results"
+                    className="glass-input w-full rounded-xl px-3 py-2 pr-9 text-sm outline-none focus:ring-2 focus:ring-ember-500/35"
+                  />
+                  {resultFilter && (
+                    <button
+                      aria-label="Clear filter"
+                      onClick={() => setResultFilter('')}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-ink-400 hover:text-ink-100 hover:bg-ink-700/70"
+                    >
+                      <XIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
               {infiniteSongs.isLoading && <ListSkeleton />}
               {infiniteSongs.isError && <ErrorState retry={() => infiniteSongs.refetch()} />}
-              {songList.map((song, i) => (
-                <SongRow key={song.id} song={song} songs={songList} index={i} />
+              {resultFilter.trim() && displaySongs.length === 0 && songList.length > 0 && (
+                <p className="text-sm text-ink-400 px-2">Nothing loaded so far matches “{resultFilter.trim()}” — scroll to load more, or clear the filter.</p>
+              )}
+              {displaySongs.map((song, i) => (
+                <SongRow key={song.id} song={song} songs={displaySongs} index={i} />
               ))}
               <InfiniteSentinel
                 onVisible={() => infiniteSongs.hasNextPage && !infiniteSongs.isFetchingNextPage && infiniteSongs.fetchNextPage()}

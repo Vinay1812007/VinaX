@@ -132,6 +132,21 @@ export default function VideoPage() {
             </p>
           )}
         </div>
+        {/* v5.17.0 — picture-in-picture: keep the clip floating while you browse */}
+        {typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && (
+          <button
+            onClick={() => {
+              const v = videoRef.current;
+              if (!v) return;
+              if (document.pictureInPictureElement) void document.exitPictureInPicture().catch(() => undefined);
+              else void v.requestPictureInPicture().catch(() => toast('Picture-in-picture is not available for this clip'));
+            }}
+            className="px-4 py-2.5 rounded-full btn-secondary text-sm font-bold shrink-0"
+            title="Picture-in-picture"
+          >
+            Pop out
+          </button>
+        )}
         {video.songIds.length > 0 && (
           <button
             onClick={() => void playFullSong()}

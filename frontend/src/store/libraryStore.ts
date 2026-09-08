@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
 import { recordFavorite } from '@/services/personalization/updater';
+import { findDuplicates } from '@/features/library/duplicates';
+import { pruneTrash, type TrashEntry } from '@/features/library/trash';
 
 /** Derived indexes for O(1) membership checks. */
 let _favIds = new Set<string>();
@@ -41,6 +43,25 @@ export interface LocalCollection {
   name: string;
   createdAt: number;
   songs: Song[];
+  /** v5.17.0 — pinned collections list first in the Library. */
+  pinned?: boolean;
+  /** v5.17.0 — optional blurb shown under the name. */
+  description?: string;
+  /** v5.17.0 — optional glyph shown on the Library tile. */
+  emoji?: string;
+}
+
+/** v5.17.0 — editable metadata beyond the name. */
+export interface CollectionMeta {
+  description?: string;
+  emoji?: string;
+}
+
+export type { TrashEntry };
+
+/** v5.17.0 — pinned first (stable), otherwise the stored order. */
+export function orderCollections(collections: LocalCollection[]): LocalCollection[] {
+  return [...collections.filter((c) => c.pinned), ...collections.filter((c) => !c.pinned)];
 }
 
 export interface SavedEntity {
@@ -61,6 +82,8 @@ export interface LibraryState {
   later: Song[];
   /** v5.12.0 — artists the listener never wants to hear (normalised lower-case names). */
   hiddenArtists: string[];
+  /** v5.17.0 — recently deleted collections, newest first; kept 7 days, max 20. */
+  trash: TrashEntry[];
 
   toggleFavorite(song: Song): void;
   isFavorite(id: string): boolean;
@@ -75,6 +98,16 @@ export interface LibraryState {
   removeFromCollection(collectionId: string, songId: string): void;
   renameCollection(id: string, name: string): void;
   moveInCollection(collectionId: string, from: number, to: number): void;
+  /** v5.17.0 — pin / unpin a collection so it lists first. */
+  togglePinCollection(id: string): void;
+  /** v5.17.0 — bring a trashed collection back (no-op when it expired). */
+  restoreCollection(id: string): void;
+  /** v5.17.0 — empty the recently-deleted list for good. */
+  purgeTrash(): void;
+  /** v5.17.0 — drop repeated songs, keeping the first occurrence; returns how many were removed. */
+  dedupeCollection(id: string): number;
+  /** v5.17.0 — set description / emoji (empty strings clear the field). */
+  updateCollectionMeta(id: string, meta: CollectionMeta): void;
   toggleLater(song: Song): void;
   isLater(id: string): boolean;
   toggleHiddenArtist(name: string): void;
@@ -90,6 +123,7 @@ export const useLibraryStore = create<LibraryState>()(
       hiddenSongIds: [],
       later: [],
       hiddenArtists: [],
+      trash: [],
       toggleLater: (song) => {
         const has = get().later.some((s) => s.id === song.id);
         set({ later: has ? get().later.filter((s) => s.id !== song.id) : [song, ...get().later].slice(0, 500) });
@@ -144,7 +178,56 @@ export const useLibraryStore = create<LibraryState>()(
         });
         return id;
       },
-      deleteCollection: (id) => set({ collections: get().collections.filter((c) => c.id !== id) }),
+      deleteCollection: (id) => {
+        const { collections, trash } = get();
+        const victim = collections.find((c) => c.id === id);
+        if (!victim) return;
+        const now = Date.now();
+        set({
+          collections: collections.filter((c) => c.id !== id),
+          trash: pruneTrash([{ collection: victim, deletedAt: now }, ...trash.filter((t) => t.collection.id !== id)], now),
+        });
+      },
+      restoreCollection: (id) => {
+        const { collections, trash } = get();
+        const entry = pruneTrash(trash).find((t) => t.collection.id === id);
+        const rest = trash.filter((t) => t.collection.id !== id);
+        if (!entry) {
+          set({ trash: rest });
+          return;
+        }
+        const restored = collections.some((c) => c.id === id) ? collections : [...collections, entry.collection];
+        set({ collections: restored, trash: rest });
+      },
+      purgeTrash: () => set({ trash: [] }),
+      togglePinCollection: (id) =>
+        set({ collections: get().collections.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c)) }),
+      dedupeCollection: (id) => {
+        const target = get().collections.find((c) => c.id === id);
+        if (!target) return 0;
+        const { unique, duplicates } = findDuplicates(target.songs);
+        if (!duplicates.length) return 0;
+        set({ collections: get().collections.map((c) => (c.id === id ? { ...c, songs: unique } : c)) });
+        return duplicates.length;
+      },
+      updateCollectionMeta: (id, meta) =>
+        set({
+          collections: get().collections.map((c) => {
+            if (c.id !== id) return c;
+            const next: LocalCollection = { ...c };
+            if (meta.description !== undefined) {
+              const d = meta.description.trim().slice(0, 280);
+              if (d) next.description = d;
+              else delete next.description;
+            }
+            if (meta.emoji !== undefined) {
+              const e = meta.emoji.trim().slice(0, 8);
+              if (e) next.emoji = e;
+              else delete next.emoji;
+            }
+            return next;
+          }),
+        }),
       addToCollection: (collectionId, song) =>
         set({
           collections: get().collections.map((c) =>
@@ -173,6 +256,16 @@ export const useLibraryStore = create<LibraryState>()(
           }),
         }),
     }),
-    { name: KEYS.library, storage: createJSONStorage(() => window.localStorage), onRehydrateStorage: () => (state) => { if (state) rebuildIndexes(state); } },
+    {
+      name: KEYS.library,
+      storage: createJSONStorage(() => window.localStorage),
+      // v5.17.0 — expired "recently deleted" entries are pruned as the
+      // persisted snapshot is merged in, so they never reach the page.
+      merge: (persisted, current) => {
+        const p = (persisted && typeof persisted === 'object' ? persisted : {}) as Partial<LibraryState>;
+        return { ...current, ...p, trash: pruneTrash(p.trash) };
+      },
+      onRehydrateStorage: () => (state) => { if (state) rebuildIndexes(state); },
+    },
   ),
 );

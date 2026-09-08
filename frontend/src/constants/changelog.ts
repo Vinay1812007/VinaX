@@ -12,6 +12,18 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.17.0': {
+    title: 'Thirty-five new things across VinaX',
+    changes: [
+      { type: 'new', text: 'Player — song bookmarks (mark a moment, jump back to it), a sleep timer that fades out over its last 30 seconds and stops on the minute, Ambient mode in Now Playing (after 45 s untouched: big artwork and a clock), Share this moment (a link that starts at that second), and picture-in-picture for music videos.' },
+      { type: 'new', text: 'Library — pin playlists, a 7-day Recently deleted with Restore, duplicate finder, sort and Shuffle play, Copy or Share a playlist as text, collage covers, playlist emoji and description, and a Downloaded-only filter in the app.' },
+      { type: 'new', text: 'Home — Because you liked “…” shelf, a listening-streak card with milestones, and a Song of the day card. Explore — decade radio, pick-a-year, a language × mood grid and Surprise album.' },
+      { type: 'new', text: 'Search — find a song by its lyrics (paste any line), sort results (popular, newest, longest, A→Z), pinned and removable recent searches, filter within results, and Play all / Queue all.' },
+      { type: 'new', text: 'Stats — a weekly report card versus last week and a 12-week listening calendar with streaks. History — search, day filters, remove any entry, Clear last hour / today.' },
+      { type: 'new', text: 'Settings — custom accent colour (any hex, with a readable light-theme variant), Display size, High contrast, Data saver, Startup page, alarm wake-with-a-playlist and Gentle wake (30-second fade-in).' },
+      { type: 'new', text: 'Everywhere — Undo on toasts (Not interested, Never play, Listen Later), swipe a song right to queue it or left to save it for later, Your history with this song in every song menu, and home-screen shortcuts (Search, Liked, Listen Later, VinaX AI).' },
+    ],
+  },
   '5.16.0': {
     title: 'VinaX AI, thirteen new tricks',
     changes: [

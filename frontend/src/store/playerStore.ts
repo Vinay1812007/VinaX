@@ -485,6 +485,20 @@ export const usePlayerStore = create<PlayerState>()(
           audioEngine.init({
             onTime: (currentTime, duration) => {
               set({ currentTime, duration });
+              // v5.17.0 — sleep timer: fade the last 30 s toward silence and
+              // stop on the minute instead of waiting for the song to end.
+              const sleepAtNow = get().sleepAt;
+              if (sleepAtNow) {
+                const left = sleepAtNow - Date.now();
+                if (left <= 0) {
+                  set({ sleepAt: null, sleepAfterTrack: false, sleepSongsLeft: 0, isPlaying: false });
+                  audioEngine.pause();
+                  audioEngine.setVolume(get().muted ? 0 : get().volume);
+                  toast('Sleep timer: playback stopped');
+                  return;
+                }
+                if (left < 30_000 && !get().muted) audioEngine.setVolume(Math.max(0.04, get().volume * (left / 30_000)));
+              }
               // v5.12.0 — A-B repeat: bounce back to A the moment B passes.
               const { loopA, loopB } = get();
               if (loopA != null && loopB != null && loopB > loopA && currentTime >= loopB) audioEngine.seek(loopA);

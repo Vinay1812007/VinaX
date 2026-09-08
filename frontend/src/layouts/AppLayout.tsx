@@ -63,6 +63,13 @@ let hasBooted = false;
  * v5.15.0 — wire the admin-published client bundle into the running app:
  * search synonyms, catalogue source switches, and the one-time broadcast.
  */
+function useLastRoute(): void {
+  const loc = useLocation();
+  useEffect(() => {
+    try { if (/^\/(?:search|library|favorites|later|history|queue|stats|explore|charts|discover|mixes|weekly|made-for-you)?$/.test(loc.pathname) || loc.pathname === '/') localStorage.setItem('vinax.last-route', loc.pathname); } catch { /* ignore */ }
+  }, [loc.pathname]);
+}
+
 function useClientConfigEffects(): void {
   const cfg = useClientConfig();
   const navigate = useNavigate();
@@ -83,6 +90,7 @@ const BROADCAST_SEEN_KEY = `${STORAGE_PREFIX}.broadcast-seen`;
 export function AppLayout() {
   const coldBoot = !hasBooted;
   useClientConfigEffects();
+  useLastRoute();
 
   const mainRef = useRef<HTMLElement>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -133,6 +141,9 @@ export function AppLayout() {
   const dynamicTheme = useSettingsStore((s) => s.dynamicTheme);
   const currentAccent = usePlayerStore((s) => s.currentAccent);
   const density = useSettingsStore((s) => s.density);
+  const accentCustom = useSettingsStore((s) => s.accentCustom);
+  const uiScale = useSettingsStore((s) => s.uiScale);
+  const highContrast = useSettingsStore((s) => s.highContrast);
   const location = useLocation();
   const navigate = useNavigate();
   const { pathname } = location;
@@ -311,6 +322,11 @@ export function AppLayout() {
       }
       document.documentElement.dataset.accent = accent;
       document.documentElement.dataset.density = density;
+      // v5.17.0 — custom accent (one hex → derived ramps), display size, high contrast.
+      // Custom accent math lives in a lazy chunk — only listeners who picked one pay for it.
+      if (accent === 'custom' && accentCustom) void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(accentCustom, resolved === 'light'));
+      document.documentElement.style.fontSize = uiScale === 'sm' ? '15px' : uiScale === 'lg' ? '17.5px' : '';
+      document.documentElement.classList.toggle('hc', highContrast);
       applyGlassLevel(glassLevel, glassBlur);
 
       // Dynamic accent (experimental, off by default): the artwork-tint math
@@ -322,13 +338,14 @@ export function AppLayout() {
         st.removeProperty('--ember-500');
         st.removeProperty('--ember-400');
         st.removeProperty('--ember-600');
+        if (accent === 'custom' && accentCustom) void import('@/utils/accentRamp').then((m) => m.applyCustomAccent(accentCustom, resolved === 'light'));
       }
     };
     apply();
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme, accent, density, glassLevel, glassBlur, dynamicTheme, currentAccent]);
+  }, [theme, accent, density, glassLevel, glassBlur, dynamicTheme, currentAccent, accentCustom, uiScale, highContrast]);
 
   // Per-route canonical + index/noindex strategy (search & personal pages noindex).
   useEffect(() => {

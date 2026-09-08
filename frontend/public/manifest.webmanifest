@@ -26,5 +26,11 @@
       "purpose": "any maskable"
     }
   ],
-  "orientation": "portrait"
+  "orientation": "portrait",
+  "shortcuts": [
+    { "name": "Search", "short_name": "Search", "url": "/search", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Liked Songs", "short_name": "Liked", "url": "/favorites", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Listen Later", "short_name": "Later", "url": "/later", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "VinaX AI", "short_name": "AI", "url": "/VinaXAI", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
 }

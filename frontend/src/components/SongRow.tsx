@@ -1,5 +1,8 @@
+import { useRef } from 'react';
 import type { Song } from '@/types';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
+import { useLibraryStore } from '@/store/libraryStore';
+import { toast } from '@/store/toastStore';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { formatDuration } from '@/utils/format';
 import { cn } from '@/utils/cn';
@@ -25,6 +28,26 @@ export function SongRow({ song, songs, index, showArt = true }: Props) {
     if (songs && index != null) playQueue(songs, index);
     else playQueue([song], 0);
   };
+  // v5.17.0 — swipe on touch screens: right = add to queue, left = Listen Later.
+  const enqueue = usePlayerStore((s) => s.enqueue);
+  const toggleLater = useLibraryStore((s) => s.toggleLater);
+  const sw = useRef({ x: 0, y: 0, on: false });
+  const onTouchStart = (e: React.TouchEvent) => { sw.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, on: true }; };
+  const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!sw.current.on) return;
+    const dx = e.touches[0].clientX - sw.current.x;
+    if (Math.abs(e.touches[0].clientY - sw.current.y) > 30) { sw.current.on = false; e.currentTarget.style.transform = ''; return; }
+    e.currentTarget.style.transform = Math.abs(dx) > 12 ? `translateX(${Math.max(-96, Math.min(96, dx * 0.6))}px)` : '';
+  };
+  const onTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.currentTarget.style.transform = '';
+    if (!sw.current.on) return;
+    sw.current.on = false;
+    const dx = e.changedTouches[0].clientX - sw.current.x;
+    if (dx > 80) { enqueue(song); toast(`Queued “${song.title}”`); }
+    else if (dx < -80) { toggleLater(song); toast('Saved to Listen Later', { action: { label: 'Undo', onClick: () => toggleLater(song) } }); }
+  };
+
 
   // Feed the right-click context menu (idempotent; cheap map write).
   rememberCtxSong(song);
@@ -35,6 +58,9 @@ export function SongRow({ song, songs, index, showArt = true }: Props) {
       tabIndex={0}
       onClick={onPlay}
       onKeyDown={(e) => e.key === 'Enter' && onPlay()}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
       data-deter-context
       data-song-id={song.id}
       className={cn(

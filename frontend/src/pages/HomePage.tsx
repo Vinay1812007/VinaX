@@ -24,6 +24,8 @@ import { IconButton } from '@/components/IconButton';
 import { MoonIcon, SearchIcon, SettingsIcon, SunIcon, SparkleIcon, PlayIcon } from '@/components/Icons';
 import { useHistoryStore } from '@/store/historyStore';
 import { onThisDay } from '@/features/home/onThisDay';
+import { localDateKey, pickDailyFavorite, useBecauseYouLiked } from '@/features/home/useBecauseYouLiked';
+import { SongOfTheDayCard, StreakCard } from '@/features/home/DailyCards';
 import { getLocal } from '@/services/storage/local';
 import { KEYS } from '@/constants/storage-keys';
 import { toast } from '@/store/toastStore';
@@ -176,6 +178,9 @@ export default function HomePage() {
   // #1 artist — mostListened is already sorted by play count.
   const becauseSeed = mostListened[0];
   const because = useBecauseYouListenedTo(becauseSeed);
+  // v5.17.0 — "Because you liked X": one favourite per day, catalog suggestions.
+  const likedSeed = useMemo(() => pickDailyFavorite(favorites, localDateKey()), [favorites]);
+  const becauseLiked = useBecauseYouLiked(likedSeed);
   const freshFinds = useFreshFinds();
   const hiddenGems = useHiddenGems();
   const nearYou = useTrendingNearYou();
@@ -278,6 +283,7 @@ export default function HomePage() {
       // New shelves — added when HomePage was expanded (Group A/B/C/D/E/F).
       qc.invalidateQueries({ queryKey: ['recently-played-albums'] }),
       qc.invalidateQueries({ queryKey: ['because-you-listened-to'] }),
+      qc.invalidateQueries({ queryKey: ['because-liked'] }),
       qc.invalidateQueries({ queryKey: ['fresh-finds'] }),
       qc.invalidateQueries({ queryKey: ['hidden-gems'] }),
       qc.invalidateQueries({ queryKey: ['trending-near-you'] }),
@@ -338,6 +344,12 @@ export default function HomePage() {
   // whichever band renders first.
   const personalBand = () => (
     <>
+      {/* v5.17.0 — streak + song of the day: compact cards, each hides itself when empty */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-6 empty:hidden">
+        <StreakCard entries={historyEntries} />
+        <SongOfTheDayCard favorites={favorites} entries={historyEntries} />
+      </div>
+
       {/* 1. Continue Listening — pick up where you left off */}
       <SongShelf title="Continue Listening" explanation="Pick up where you left off" songs={dedupe(continueListening)} seeAllTo="/history" />
 
@@ -377,6 +389,18 @@ export default function HomePage() {
           title={`Because you listened to ${becauseSeed.subtitle}`}
           explanation="More from an artist you love"
           songs={dedupe(because.data)}
+        />
+      ) : null}
+
+      {/* v5.17.0 — 8b. Because you liked “X” — suggestions seeded by one favourite, rotating daily */}
+      {likedSeed && becauseLiked.isLoading ? (
+        <ShelfSkeleton />
+      ) : likedSeed && becauseLiked.data && becauseLiked.data.length > 0 ? (
+        <SongShelf
+          title={`Because you liked “${likedSeed.title}”`}
+          explanation="Songs that sit well next to a favourite of yours"
+          songs={dedupe(becauseLiked.data)}
+          seeAllTo="/favorites"
         />
       ) : null}
 

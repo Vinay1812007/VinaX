@@ -2231,3 +2231,12 @@ html.light .btn-primary:focus-visible,
 html.light .card-play:focus-visible { outline-color: rgb(var(--ember-500)); }
 /* Menus and toasts stay solid, never translucent, on light. */
 html.light .np-mini { box-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.35); }
+
+/* v5.17.0 — high contrast: brighter secondary text, visible borders, no glass fog. */
+html.hc { --ink-300: 230 230 230; --ink-400: 205 205 205; --ink-500: 170 170 170; --glass-alpha: 0.98; }
+html.hc.light { --ink-300: 40 40 40; --ink-400: 60 60 60; --ink-500: 80 80 80; }
+html.hc .border-glass, html.hc [class*='border-ink-'] { border-color: rgb(var(--ink-500)) !important; }
+html.hc a:focus-visible, html.hc button:focus-visible { outline: 3px solid rgb(var(--ember-400)); outline-offset: 2px; }
+
+/* v5.17.0 — ambient mode artwork breathes slowly. */
+@keyframes ambient-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }

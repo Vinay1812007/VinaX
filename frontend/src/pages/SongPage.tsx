@@ -69,7 +69,12 @@ export default function SongPage() {
           </p>
           <div className="flex items-center gap-2 mt-4">
             <button
-              onClick={() => playQueue([song, ...(suggestions.data ?? [])], 0)}
+              onClick={() => {
+                playQueue([song, ...(suggestions.data ?? [])], 0);
+                // v5.17.0 — a shared "moment" link (?t=seconds) starts right there.
+                const t = Number(new URLSearchParams(window.location.search).get('t'));
+                if (t > 0) window.setTimeout(() => usePlayerStore.getState().seek(t), 900);
+              }}
               className="flex items-center gap-2 px-6 py-2.5 rounded-full btn-primary"
             >
               <PlayIcon className="w-4 h-4" /> Play

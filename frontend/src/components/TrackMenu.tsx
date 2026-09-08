@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { albumPath, artistPath, songPath } from '@/utils/slug';
 import { useNavigate } from 'react-router-dom';
 import type { Song } from '@/types';
@@ -16,8 +16,11 @@ import { downloadSong, removeDownload } from '@/services/downloads';
 import { cn } from '@/utils/cn';
 import { DotsIcon } from './Icons';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+// v5.17.0 — lazy: the memories sheet is a rare tap, never first-load code.
+const SongMemoriesSheet = lazy(() => import('./SongMemoriesSheet'));
 
 export function TrackMenu({ song }: { song: Song }) {
+  const [memories, setMemories] = useState(false);
   const [open, setOpen] = useState(false);
   // Android back closes the menu instead of leaving the page (audit P0-2).
   useDismissOnBack(open, () => setOpen(false));
@@ -61,10 +64,12 @@ export function TrackMenu({ song }: { song: Song }) {
       label: inLater ? 'Remove from Listen Later' : 'Listen later',
       action: () => {
         toggleLater(song);
-        toast(inLater ? 'Removed from Listen Later' : 'Saved to Listen Later');
+        toast(inLater ? 'Removed from Listen Later' : 'Saved to Listen Later', { action: { label: 'Undo', onClick: () => toggleLater(song) } });
       },
     },
     { label: 'Song details', action: () => navigate(songPath(song)) },
+    // v5.17.0 — your own history with this song, from on-device data.
+    { label: 'Your history with this song', action: () => setMemories(true) },
     song.album?.id ? { label: 'Go to album', action: () => navigate(albumPath(song.album!)) } : null,
     song.artists[0]?.id
       ? { label: 'Go to artist', action: () => navigate(artistPath(song.artists[0])) }
@@ -117,7 +122,7 @@ export function TrackMenu({ song }: { song: Song }) {
       label: 'Not interested',
       action: () => {
         toggleHidden(song.id);
-        toast('We’ll show this less');
+        toast('We’ll show this less', { action: { label: 'Undo', onClick: () => toggleHidden(song.id) } });
       },
     },
     song.artists[0]
@@ -139,7 +144,7 @@ export function TrackMenu({ song }: { song: Song }) {
           label: `Never play ${song.artists[0].name.slice(0, 20)}${song.artists[0].name.length > 20 ? '…' : ''}`,
           action: () => {
             toggleHiddenArtist(song.artists[0].name);
-            toast(`${song.artists[0].name} won’t play again · undo in Settings`);
+            toast(`${song.artists[0].name} won’t play again`, { action: { label: 'Undo', onClick: () => toggleHiddenArtist(song.artists[0].name) } });
           },
         }
       : null,
@@ -228,6 +233,11 @@ export function TrackMenu({ song }: { song: Song }) {
             ))}
           </div>
         </>
+      )}
+      {memories && (
+        <Suspense fallback={null}>
+          <SongMemoriesSheet song={song} onClose={() => setMemories(false)} />
+        </Suspense>
       )}
     </div>
   );

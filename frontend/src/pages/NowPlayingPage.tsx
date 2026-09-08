@@ -48,6 +48,8 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { useCastStore } from '@/services/cast';
 import { haptic } from '@/services/native';
 import { shareLink } from '@/utils/share';
+import { useBookmarkStore } from '@/store/bookmarkStore';
+import { AmbientOverlay, useIdle } from '@/components/AmbientOverlay';
 import { shareNowPlayingCard } from '@/utils/shareCard';
 import { toast } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
@@ -146,6 +148,15 @@ export default function NowPlayingPage() {
   const dynamicTheme = useSettingsStore((s) => s.dynamicTheme);
   const [showMore, setShowMore] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
+  // v5.17.0 — song bookmarks, ambient mode, data saver.
+  const currentTime = usePlayerStore((s) => s.currentTime);
+  const seek = usePlayerStore((s) => s.seek);
+  const marks = useBookmarkStore((b) => (song ? b.marks[song.id] : undefined)) ?? [];
+  const addMark = useBookmarkStore((b) => b.add);
+  const removeMark = useBookmarkStore((b) => b.remove);
+  const dataSaver = useSettingsStore((s) => s.dataSaver);
+  const [ambientArmed, setAmbientArmed] = useState(true);
+  const [ambientIdle, wakeAmbient] = useIdle(ambientArmed && isPlaying && !showMore && !showDevices);
 
   // Resso-style flow: fling the artwork up for the next song, down for the previous.
   const artSwipe = useRef<{ y: number; t: number } | null>(null);
@@ -260,7 +271,8 @@ export default function NowPlayingPage() {
 
   const artUrl = song ? bestImage(song.images, 500) : null;
   // v5.7.11 — one canvas state for both surfaces (mobile backdrop / PC square).
-  const canvas = useSongCanvas(song);
+  // v5.17.0 — data saver skips the video canvas entirely.
+  const canvas = useSongCanvas(dataSaver ? null : song);
   const canvasOn = !!canvas.src;
   // The clip went away (no video for this song, canvas toggled off, playback
   // failed) — hand the controls straight back rather than leaving a blank.
@@ -740,6 +752,22 @@ export default function NowPlayingPage() {
                 <button onClick={clearLoop} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ink-400 hover:text-ink-100">clear</button>
               )}
             </div>
+            {/* v5.17.0 — bookmarks: moments to come back to */}
+            <div className="flex items-center gap-0.5 flex-wrap" role="group" aria-label="Bookmarks">
+              <span className="text-[10px] font-bold text-ink-400 uppercase">Marks</span>
+              <button onClick={() => { addMark(song.id, currentTime); toast(`Bookmarked ${fmtTime(currentTime)}`); }} className="px-2.5 py-2 rounded-lg text-xs font-bold text-ink-400 hover:text-ink-100" title="Bookmark this moment">＋ {fmtTime(currentTime)}</button>
+              {marks.map((m) => (
+                <span key={m} className="inline-flex items-center rounded-lg bg-ink-800/70">
+                  <button onClick={() => seek(m)} className="pl-2.5 pr-1 py-2 text-xs font-semibold text-ember-400 tabular-nums" title="Jump here">{fmtTime(m)}</button>
+                  <button onClick={() => removeMark(song.id, m)} aria-label={`Remove bookmark at ${fmtTime(m)}`} className="pr-2 py-2 text-[10px] text-ink-500 hover:text-ink-100">×</button>
+                </span>
+              ))}
+            </div>
+            {/* v5.17.0 — share this exact moment, ambient mode */}
+            <div className="flex items-center gap-0.5 flex-wrap" role="group" aria-label="More options">
+              <button onClick={() => void shareLink(`${songPath(song)}?t=${Math.floor(currentTime)}`, `${song.title} at ${fmtTime(currentTime)}`).then((r) => r === 'copied' && toast('Link to this moment copied'))} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ink-400 hover:text-ink-100">Share this moment</button>
+              <button onClick={() => setAmbientArmed((v) => !v)} aria-pressed={ambientArmed} className={cn('px-2.5 py-2 rounded-lg text-xs font-semibold', ambientArmed ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')} title="After 45 s without touching anything, show a calm artwork-and-clock screen">Ambient mode {ambientArmed ? 'on' : 'off'}</button>
+            </div>
           </div>
         )}
 
@@ -978,6 +1006,7 @@ export default function NowPlayingPage() {
         </div>
       )}
       <DeviceSheet open={showDevices} onClose={() => setShowDevices(false)} />
+      {ambientIdle && song && <AmbientOverlay song={song} onWake={wakeAmbient} />}
     </div>
   );
 }

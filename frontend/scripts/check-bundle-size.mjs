@@ -81,7 +81,14 @@ const DIST = 'dist';
 // and the blocked-artist filter guards every queue intake (same class as
 // the kid-mode gate rebase). 166 leaves ~1.3 KB headroom; regressions
 // still fail the build.
-const FIRST_LOAD_BUDGET = 166 * 1024; // gzipped
+// 2026-09-08: re-based 166 -> 169 (+3 KB) for v5.17.0 (35 features). Measured
+// move: 164.7 -> 167.6 KB gz after lazy-loading what could be lazy (custom
+// accent maths, the song-memories sheet, every new page-level feature). What
+// remains is shell/store code that cannot be deferred: playlist trash + pins
+// + dedupe in libraryStore, toast actions with Undo, row swipe gestures, the
+// sleep fade in the player clock, startup-page routing and the new settings
+// fields. 169 leaves ~1.4 KB headroom; regressions still fail the build.
+const FIRST_LOAD_BUDGET = 169 * 1024; // gzipped
 const CHUNK_BUDGET = 80 * 1024; // gzipped — chunks that ship in the first load
 const LAZY_CHUNK_BUDGET = 160 * 1024; // gzipped — on-demand chunks (routes, features)
 // Deliberately lazy diagram/math engines (loaded only when VinaX AI renders them).

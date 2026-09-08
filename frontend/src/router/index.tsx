@@ -30,6 +30,22 @@ function offlineBootRedirect(): void {
 }
 offlineBootRedirect();
 
+/** v5.17.0 — Settings → Startup page: open Search / Library / where you left off. */
+function startPageRedirect(): void {
+  try {
+    if (window.location.pathname !== '/' || window.location.search || window.location.hash) return;
+    if (window.history.length > 1 && sessionStorage.getItem('vinax.booted')) return;
+    sessionStorage.setItem('vinax.booted', '1');
+    const st = (JSON.parse(localStorage.getItem('vinax.settings.v1') ?? '{}') as { state?: { startPage?: string } }).state;
+    const pref = st?.startPage ?? 'home';
+    const target = pref === 'search' ? '/search' : pref === 'library' ? '/library' : pref === 'last' ? (localStorage.getItem('vinax.last-route') || '/') : '/';
+    if (target !== '/' && /^\/[a-z-]*$/.test(target)) window.history.replaceState(null, '', target);
+  } catch {
+    /* never let a boot nicety break boot */
+  }
+}
+startPageRedirect();
+
 // Route-based code splitting: every page is its own chunk.
 const HomePage = lazy(() => import('@/pages/HomePage'));
 const DiscoverPage = lazy(() => import('@/pages/DiscoverPage'));

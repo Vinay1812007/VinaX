@@ -204,6 +204,7 @@ export default function SettingsPage() {
     }
   };
   const alarm = useAlarmStore();
+  const collections = useLibraryStore((s) => s.collections);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -243,14 +244,23 @@ export default function SettingsPage() {
             <Row label="Time">
               <input type="time" value={alarm.time} onChange={(e) => alarm.setTime(e.target.value)} className="glass-input px-3 py-1.5 rounded-lg text-sm" />
             </Row>
-            <Row label="Wake with">
-              <div className="flex gap-1.5">
+            <Row stack label="Wake with">
+              <div className="flex gap-1.5 flex-wrap">
                 {(['favorites', 'resume'] as const).map((a) => (
                   <Chip key={a} active={alarm.action === a} onClick={() => alarm.setAction(a)}>
                     {a === 'favorites' ? 'Shuffle favorites' : 'Resume'}
                   </Chip>
                 ))}
+                {/* v5.17.0 — any of your playlists */}
+                {collections.map((c) => (
+                  <Chip key={c.id} active={alarm.action === 'collection' && alarm.collectionId === c.id} onClick={() => { alarm.setAction('collection'); alarm.setCollectionId(c.id); }}>
+                    {c.name}
+                  </Chip>
+                ))}
               </div>
+            </Row>
+            <Row label="Gentle wake" note="Start quietly and rise to your volume over 30 seconds.">
+              <Toggle on={alarm.fadeIn} onChange={alarm.setFadeIn} label="Gentle wake" />
             </Row>
           </>
         )}
@@ -276,6 +286,30 @@ export default function SettingsPage() {
           </div>
         </Row>
         <FestivalRow />
+        <Row stack label="Custom accent" note="Pick any colour; VinaX derives the full palette, with a readable variant for the light theme.">
+          <div className="flex items-center gap-2">
+            <input type="color" aria-label="Custom accent colour" value={s.accentCustom ?? '#1ed760'} onChange={(e) => s.setAccentCustom(e.target.value)} className="w-9 h-9 rounded-full bg-transparent border-0 p-0 cursor-pointer" />
+            <input value={s.accentCustom ?? ''} onChange={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-fA-F]{6}$/.test(v)) s.setAccentCustom(v); }} placeholder="#1ed760" maxLength={7} className="glass-input px-3 py-1.5 rounded-lg text-sm font-mono w-28" aria-label="Custom accent hex" />
+            {s.accent === 'custom' && <Chip active={false} onClick={() => s.setAccentCustom(null)}>Use a preset</Chip>}
+          </div>
+        </Row>
+        <Row stack label="Display size" note="Text and controls, everywhere.">
+          <div className="flex gap-1.5">
+            {(['sm', 'md', 'lg'] as const).map((v) => (
+              <Chip key={v} active={s.uiScale === v} onClick={() => s.setUiScale(v)}>{v === 'sm' ? 'Small' : v === 'md' ? 'Default' : 'Large'}</Chip>
+            ))}
+          </div>
+        </Row>
+        <Row label="High contrast" note="Brighter secondary text, visible borders and a strong focus ring.">
+          <Toggle on={s.highContrast} onChange={s.setHighContrast} label="High contrast" />
+        </Row>
+        <Row stack label="Startup page" note="What opens first: Home, Search, Library, or wherever you left off.">
+          <div className="flex gap-1.5 flex-wrap">
+            {(['home', 'search', 'library', 'last'] as const).map((v) => (
+              <Chip key={v} active={s.startPage === v} onClick={() => s.setStartPage(v)}>{v === 'home' ? 'Home' : v === 'search' ? 'Search' : v === 'library' ? 'Library' : 'Where I left off'}</Chip>
+            ))}
+          </div>
+        </Row>
         <Row stack label="Accent color" note="The highlight color across buttons, links and the player. Every choice stays readable in light and dark.">
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Accent color">
             {ACCENT_OPTIONS.map((a) => (
@@ -437,6 +471,9 @@ export default function SettingsPage() {
             </button>
           </Row>
         )}
+        <Row label="Data saver" note="Lightest audio stream, no video canvas, lighter artwork. Good on mobile data.">
+          <Toggle on={s.dataSaver} onChange={s.setDataSaver} label="Data saver" />
+        </Row>
         <Row stack label="Audio quality" note="Picks the closest available stream; falls back automatically.">
           <div className="flex gap-1.5">
             {(['low', 'medium', 'high'] as AudioQualityPref[]).map((q) => (

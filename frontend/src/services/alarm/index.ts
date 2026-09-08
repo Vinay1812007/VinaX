@@ -18,10 +18,28 @@ function fireFavorites(): void {
   }
 }
 
+/** v5.17.0 — gentle wake: start near-silent and ramp to the set volume over 30 s. */
+function fadeIn(): void {
+  const p = usePlayerStore.getState();
+  const target = p.volume || 0.8;
+  const steps = 30;
+  let i = 0;
+  p.setVolume(Math.max(0.05, target * 0.08));
+  const t = window.setInterval(() => {
+    i += 1;
+    usePlayerStore.getState().setVolume(Math.min(target, Math.max(0.05, target * (i / steps))));
+    if (i >= steps) window.clearInterval(t);
+  }, 1000);
+}
+
 function fire(): void {
   const a = useAlarmStore.getState();
   const p = usePlayerStore.getState();
-  if (a.action === 'resume' && p.queue.length) {
+  if (a.fadeIn) fadeIn();
+  const col = a.action === 'collection' && a.collectionId ? useLibraryStore.getState().collections.find((c) => c.id === a.collectionId) : null;
+  if (col && col.songs.length) {
+    p.playQueue(col.songs, Math.floor(Math.random() * col.songs.length));
+  } else if (a.action === 'resume' && p.queue.length) {
     if (!p.isPlaying) p.togglePlay();
   } else {
     fireFavorites();

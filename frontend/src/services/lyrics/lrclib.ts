@@ -220,3 +220,104 @@ export async function fetchLrclibLyrics(
   }
   return result;
 }
+
+/* ------------------------------------------------------------------------ */
+/* v5.17.0 — find a song by the words you remember                           */
+/* ------------------------------------------------------------------------ */
+
+/** One lyrics-service hit for a free-text lyric line. */
+export interface LyricsSearchHit {
+  title: string;
+  artist: string;
+  album: string;
+  duration: number | null;
+  /** ~120 chars of the plain lyrics around the first matched query word. */
+  snippet: string;
+}
+
+interface LrclibSearchRecord extends LrclibRecord {
+  id?: number;
+  albumName?: string;
+  duration?: number;
+}
+
+const LYRICS_SEARCH_TTL_MS = 10 * 60_000;
+const LYRICS_SEARCH_MAX = 8;
+const LYRICS_SEARCH_CACHE_MAX = 100;
+const SNIPPET_LEN = 120;
+const lyricsSearchCache = new Map<string, { at: number; hits: LyricsSearchHit[] }>();
+
+/** Query words worth matching: lowercase, punctuation-free, at least 2 chars. */
+function lyricWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .normalize('NFC')
+    .split(/[^\p{L}\p{N}']+/u)
+    .map((w) => w.replace(/^'+|'+$/g, ''))
+    .filter((w) => w.length >= 2);
+}
+
+/** The ~120 chars of `plain` around the first occurrence of the query (or,
+ *  failing a phrase match, the earliest single query word). Newlines fold to
+ *  " / " so a snippet reads as one line under a result row. */
+function lyricSnippet(plain: string, query: string): string {
+  const flat = plain.replace(/\r?\n+/g, ' / ').replace(/\s+/g, ' ').trim();
+  if (!flat) return '';
+  const lower = flat.toLowerCase();
+  let at = lower.indexOf(query.toLowerCase().trim());
+  if (at < 0) {
+    for (const w of lyricWords(query)) {
+      const i = lower.indexOf(w);
+      if (i >= 0 && (at < 0 || i < at)) at = i;
+    }
+  }
+  if (at < 0) at = 0;
+  const start = Math.max(0, Math.min(at - Math.floor(SNIPPET_LEN / 3), flat.length - SNIPPET_LEN));
+  const end = Math.min(flat.length, start + SNIPPET_LEN);
+  let s = flat.slice(start, end).trim();
+  if (start > 0) s = `…${s}`;
+  if (end < flat.length) s = `${s}…`;
+  return s;
+}
+
+/**
+ * Free-text lyric search against the lyrics service: "the words you remember"
+ * become up to 8 title/artist candidates, each with the matching line as a
+ * snippet. Results are cached per query for 10 minutes; the request itself
+ * aborts after 8 s (getJson's AbortController) and any failure yields [].
+ */
+export async function searchLyrics(text: string): Promise<LyricsSearchHit[]> {
+  const q = text.normalize('NFC').trim().replace(/\s+/g, ' ');
+  if (!q) return [];
+  const key = q.toLowerCase();
+  const now = Date.now();
+  const cached = lyricsSearchCache.get(key);
+  if (cached && now - cached.at < LYRICS_SEARCH_TTL_MS) return cached.hits;
+
+  const list = (await getJson(`${BASE}/search?${new URLSearchParams({ q })}`, 8000)) as LrclibSearchRecord[] | null;
+  const hits: LyricsSearchHit[] = [];
+  const seen = new Set<string>();
+  for (const rec of Array.isArray(list) ? list : []) {
+    const title = rec.trackName?.trim() ?? '';
+    const plain = rec.plainLyrics?.trim() ?? '';
+    if (!title || !plain || rec.instrumental) continue;
+    const artist = rec.artistName?.trim() ?? '';
+    const dedupe = `${title.toLowerCase()} ${artist.toLowerCase()}`;
+    if (seen.has(dedupe)) continue;
+    seen.add(dedupe);
+    hits.push({
+      title,
+      artist,
+      album: rec.albumName?.trim() ?? '',
+      duration: typeof rec.duration === 'number' && rec.duration > 0 ? rec.duration : null,
+      snippet: lyricSnippet(plain, q),
+    });
+    if (hits.length >= LYRICS_SEARCH_MAX) break;
+  }
+  if (lyricsSearchCache.size >= LYRICS_SEARCH_CACHE_MAX) {
+    const oldest = lyricsSearchCache.keys().next().value;
+    if (oldest !== undefined) lyricsSearchCache.delete(oldest);
+  }
+  lyricsSearchCache.set(key, { at: now, hits });
+  return hits;
+}
