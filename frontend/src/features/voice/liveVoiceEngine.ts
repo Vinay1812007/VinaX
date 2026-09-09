@@ -116,6 +116,12 @@ export interface LiveVoiceOptions {
    *  false-trigger risk, but a caller can flip this off in one line if a
    *  device talks over itself. */
   bargeIn?: boolean;
+  /** The listener's chosen server voice, read fresh on every chunk so a
+   *  change in Settings takes effect on the next sentence rather than the
+   *  next session. Returning null means "use the device voice only" — the
+   *  server route is skipped entirely, which is also what happens when the
+   *  key serves no speech model. */
+  getServerVoice?: () => { model: string; voice: string } | null;
 }
 
 /**
@@ -739,6 +745,12 @@ export class LiveVoiceEngine {
    *  failure (error, non-audio reply, empty body, leash) — never throws. */
   private fetchServerTts(text: string): Promise<Blob | null> {
     if (typeof fetch !== 'function') return Promise.resolve(null);
+    // An explicit null = the listener picked the device voice, or the key
+    // serves no speech model. Skip the round-trip and let the browser speak.
+    // (undefined = no chooser wired at all, which keeps the old behaviour.)
+    const chosen = this.opts.getServerVoice ? this.opts.getServerVoice() : undefined;
+    if (chosen === null) return Promise.resolve(null);
+    const picked = chosen ?? { model: '', voice: '' };
     const ctrl = new AbortController();
     this.ttsFetches.add(ctrl);
     const timer = window.setTimeout(() => ctrl.abort(), SERVER_TTS_LEASH_MS);
@@ -747,7 +759,7 @@ export class LiveVoiceEngine {
       req = fetch(SERVER_TTS_PATH, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify(picked.model || picked.voice ? { text, model: picked.model, voice: picked.voice } : { text }),
         signal: ctrl.signal,
       });
     } catch {

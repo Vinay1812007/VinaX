@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.26.0': {
+    title: 'Choose the voice that answers you',
+    changes: [
+      { type: 'new', text: 'Live voice chat can now answer in a voice you choose. Settings → Voice lists the studio voices that are actually available right now, each with a short description, plus your own device’s voice. Pick one and the next sentence uses it — no restart.' },
+      { type: 'improved', text: 'The voice list is checked against what’s really available instead of being fixed in the app, so a voice that’s retired or briefly down can never leave you with silence — VinaX falls back to your device and says so.' },
+    ],
+  },
   '5.25.0': {
     title: 'VinaX AI, redesigned',
     changes: [

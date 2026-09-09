@@ -58,6 +58,8 @@ const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/vin
 /* The live free-model menu for the two engines that open a whole catalog
    instead of one fixed model (v5.21.0). Fetched only when the picker asks. */
 const MODELS_ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/aimodels' : '/api/aimodels';
+/* Which speech models the key serves right now — see functions/api/voices.ts. */
+const VOICES_ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/voices' : '/api/voices';
 /* Flip to true the day the account gets a real image model — the whole
    pipeline (endpoint, chat branch, button) is wired and waiting. */
 const IMAGES_ENABLED = false;
@@ -83,6 +85,16 @@ interface CatalogModel {
 }
 type CatalogPicks = Partial<Record<CatalogGroupId, string>>;
 const CATALOG_PICK_KEY = 'vinax.aiCatalogModels';
+/* Spoken-reply voice. 'device' = the browser's own speech engine (always
+   available, works offline); anything else is a served speech model plus a
+   persona. Stored as one string so a half-set preference is impossible. */
+const VOICE_PICK_KEY = 'vinax.aiVoice';
+const DEVICE_VOICE = 'device';
+interface VoiceCatalog {
+  configured: boolean;
+  models: CatalogModel[];
+  personas: Array<{ id: string; label: string; tone: string }>;
+}
 /** A model's own name out of its slug — vendor prefix and routing suffix are
  *  plumbing, not a name. Mirrors catalogLabel() on the server so a saved pick
  *  reads correctly on the chip before the menu has ever been fetched. */
@@ -399,6 +411,16 @@ export default function VinaXAIPage(): ReactNode {
   // and an engine nobody has opened costs nothing.
   const [catalogs, setCatalogs] = useState<Record<CatalogGroupId, CatalogModel[]>>({ grq: [], opr: [] });
   const [catalogState, setCatalogState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
+  // Voice: `${model}|${persona}`, or DEVICE_VOICE. Read once; the engine
+  // re-reads the ref on every chunk so a change applies to the next sentence.
+  const [voicePick, setVoicePick] = useState<string>(() => {
+    try {
+      return localStorage.getItem(VOICE_PICK_KEY) || DEVICE_VOICE;
+    } catch {
+      return DEVICE_VOICE;
+    }
+  });
+  const [voiceCatalog, setVoiceCatalog] = useState<VoiceCatalog | null>(null);
   const [catalogPicks, setCatalogPicks] = useState<CatalogPicks>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem(CATALOG_PICK_KEY) ?? '{}') as CatalogPicks;
@@ -542,6 +564,50 @@ export default function VinaXAIPage(): ReactNode {
         .catch(() => setCatalogState('failed'));
       return 'loading';
     });
+  }, []);
+
+  // The engine reads this on every spoken chunk, so changing the voice in
+  // Settings takes effect on the next sentence, not the next session.
+  const voicePickRef = useRef(voicePick);
+  voicePickRef.current = voicePick;
+  /** What the voice route should use for the next chunk: null means speak on
+   *  this device (the browser engine), which is also the answer when no
+   *  speech model is served. */
+  const serverVoice = useCallback((): { model: string; voice: string } | null => {
+    const v = voicePickRef.current;
+    if (!v || v === DEVICE_VOICE) return null;
+    const [model, voice] = v.split('|');
+    return model && voice ? { model, voice } : null;
+  }, []);
+
+  /** Ask the server which speech models the key actually serves. Loaded when
+   *  the settings menu first opens, so a listener who never opens it pays
+   *  nothing. An empty answer is shown as such — never a guessed voice. */
+  const loadVoices = useCallback(() => {
+    setVoiceCatalog((prev) => {
+      if (prev) return prev;
+      void fetch(VOICES_ENDPOINT)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad response'))))
+        .then((j: VoiceCatalog) =>
+          setVoiceCatalog({
+            configured: Boolean(j.configured),
+            models: Array.isArray(j.models) ? j.models : [],
+            personas: Array.isArray(j.personas) ? j.personas : [],
+          }),
+        )
+        .catch(() => setVoiceCatalog({ configured: false, models: [], personas: [] }));
+      return prev;
+    });
+  }, []);
+
+  /** Persist the chosen voice. */
+  const pickVoice = useCallback((v: string) => {
+    setVoicePick(v);
+    try {
+      localStorage.setItem(VOICE_PICK_KEY, v);
+    } catch {
+      /* private mode */
+    }
   }, []);
 
   /** Remember the model chosen inside a catalog seat, per seat. */
@@ -1244,6 +1310,7 @@ export default function VinaXAIPage(): ReactNode {
         // talking. Guarded by a grace period + echo filter in the engine. If a
         // specific device ever talks over itself, flip this to false.
         bargeIn: true,
+        getServerVoice: serverVoice,
       },
       {
         onState: (st) => {
@@ -1870,6 +1937,8 @@ export default function VinaXAIPage(): ReactNode {
               onClick={() => {
                 setSettingsOpen((v) => !v);
                 setExportOpen(false);
+                // The voice list is fetched on first open, never on page load.
+                loadVoices();
               }}
               aria-label="Chat settings"
               title="Chat settings"
@@ -1894,6 +1963,39 @@ export default function VinaXAIPage(): ReactNode {
                     onSongCtx={setSongCtx}
                   />
                 )}
+                <div className="ai-menu-sep" />
+                <p className="ai-eyebrow px-2 pb-1">Voice</p>
+                <div className="px-2 pb-1">
+                  <select
+                    value={voicePick}
+                    onChange={(e) => pickVoice(e.target.value)}
+                    aria-label="Spoken reply voice"
+                    className="ai-field w-full px-2.5 py-1.5 text-[12.5px] font-semibold outline-none ai-t1"
+                  >
+                    <option value={DEVICE_VOICE}>This device’s voice</option>
+                    {/* One option per served speech model × persona. Nothing
+                        is listed unless the key actually serves it, so a
+                        choice here can never point at a model that 404s. */}
+                    {(voiceCatalog?.models ?? []).map((m) => (
+                      <optgroup key={m.id} label={m.label}>
+                        {(voiceCatalog?.personas ?? []).map((pv) => (
+                          <option key={`${m.id}|${pv.id}`} value={`${m.id}|${pv.id}`}>
+                            {pv.label} · {pv.tone}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] ai-t3 leading-snug">
+                    {voiceCatalog === null
+                      ? 'Checking which voices are available…'
+                      : voiceCatalog.models.length
+                        ? 'Used for live voice chat. Falls back to this device if a voice is briefly unavailable. (Read aloud always uses this device.)'
+                        : voiceCatalog.configured
+                          ? 'No studio voice is available right now — replies are spoken by this device.'
+                          : 'Studio voices aren’t configured — replies are spoken by this device.'}
+                  </p>
+                </div>
                 <div className="ai-menu-sep" />
                 <p className="ai-eyebrow px-2 pb-1">Default engine</p>
                 <div className="px-2 pb-1">

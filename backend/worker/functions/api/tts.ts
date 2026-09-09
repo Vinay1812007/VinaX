@@ -13,18 +13,25 @@
  * text at a word boundary instead of failing the request.
  */
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
+import { isServedVoiceModel } from '../_lib/catalog';
 
 interface Env {
   VINAX_GROQ_API_KEY?: string;
 }
 
 const SPEECH_ENDPOINT = 'https://api.groq.com/openai/v1/audio/speech';
-/** Pinned speech model — the provider's expressive English TTS. */
+/** Default speech model — used when the caller names none, or names one the
+ *  key does not currently serve. v5.26.0: no longer the ONLY option; the
+ *  listener picks from the models the key actually serves (see
+ *  _lib/catalog.ts fetchVoiceCatalog and GET /api/voices). */
 const TTS_MODEL = 'canopylabs/orpheus-v1-english';
-/** Voice persona — served female personas: autumn / diana / hannah (male:
- *  austin / daniel / troy). autumn is the warm conversational flagship;
- *  swap this one const to re-voice the whole feature. */
+/** Default persona. Served personas on the Orpheus pair, probed live:
+ *  female autumn / diana / hannah, male austin / daniel / troy. */
 const TTS_VOICE = 'autumn';
+/** Personas the upstream accepts. A voice name is forwarded verbatim, so it
+ *  is allow-listed rather than pattern-checked — an unknown persona makes the
+ *  provider 400 the whole request, which would silence the reply. */
+const VOICES = new Set(['autumn', 'diana', 'hannah', 'austin', 'daniel', 'troy']);
 /** Upstream input hard cap (probed live). */
 const INPUT_MAX = 200;
 /** Upstream leash — time to response HEADERS; audio then streams through.
@@ -54,9 +61,20 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const key = env.VINAX_GROQ_API_KEY;
   if (!key) return json({ error: 'not_configured' }, 503);
 
-  const body = (await request.json().catch(() => null)) as { text?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { text?: unknown; model?: unknown; voice?: unknown } | null;
   const raw = typeof body?.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';
   if (!raw) return json({ error: 'text_required' }, 400);
+
+  // The listener's chosen voice, if any. Both halves are checked before use:
+  // the model against what this key SERVES right now (so a retired slug can
+  // never be posted at the provider), the persona against the allow-list
+  // above. Anything unrecognised silently falls back to the default rather
+  // than failing the request — a bad preference must not cost someone their
+  // spoken reply.
+  const wantModel = typeof body?.model === 'string' ? body.model.trim() : '';
+  const wantVoice = typeof body?.voice === 'string' ? body.voice.trim().toLowerCase() : '';
+  const model = wantModel && (await isServedVoiceModel(env, 'grq', wantModel)) ? wantModel : TTS_MODEL;
+  const voice = VOICES.has(wantVoice) ? wantVoice : TTS_VOICE;
   let text = raw;
   if (text.length > INPUT_MAX) {
     // Clip at a word boundary under the upstream cap — the client already
@@ -72,7 +90,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     upstream = await fetch(SPEECH_ENDPOINT, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model: TTS_MODEL, voice: TTS_VOICE, input: text, response_format: 'wav' }),
+      body: JSON.stringify({ model, voice, input: text, response_format: 'wav' }),
       signal: controller.signal,
     });
   } catch {

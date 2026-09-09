@@ -22,6 +22,12 @@
  */
 import { LANE_BASE, type AiEnv } from './ai';
 
+/** Slug fragments that mark a model as a TEXT-TO-SPEECH engine. The chat
+ *  filter throws these away; the voice picker is the one place they belong.
+ *  Kept deliberately narrow — a false positive here would put a chat model in
+ *  the voice menu, where it answers with an error instead of audio. */
+const VOICE_MODEL = /\btts\b|text-to-speech|-speech\b|orpheus|playai-tts/i;
+
 /** One selectable model from a provider catalog. */
 export interface CatalogModel {
   /** Exact slug to send as `model` — never prettified. */
@@ -64,6 +70,7 @@ const PREFERRED: Record<CatalogProvider, string[]> = {
 
 const TTL_MS = 15 * 60_000;
 const cache = new Map<CatalogProvider, { at: number; models: CatalogModel[] }>();
+const voiceCache = new Map<CatalogProvider, { at: number; models: CatalogModel[] }>();
 
 /** "meta-llama/llama-3.3-70b-instruct:free" -> "llama-3.3-70b-instruct".
  *  The vendor prefix and the routing suffix are plumbing, not a model name. */
@@ -147,6 +154,60 @@ export async function fetchCatalog(env: AiEnv, provider: CatalogProvider): Promi
   }
 }
 
+/** The speech models a key actually serves right now.
+ *
+ *  Voice was pinned to one hard-coded model and one hard-coded persona, so
+ *  there was no way to know whether it still existed, and no way for a
+ *  listener to choose. This asks the provider the same question the chat
+ *  picker asks — what do you serve? — and keeps only the speech engines.
+ *
+ *  An empty list is honest: it means this key serves no speech model right
+ *  now, and the caller falls back to the device's own voice rather than
+ *  posting text at a model that cannot speak. */
+export async function fetchVoiceCatalog(env: AiEnv, provider: CatalogProvider): Promise<CatalogModel[]> {
+  const hit = voiceCache.get(provider);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.models;
+  const { env: envKey, url } = SOURCE[provider];
+  const key = env[envKey];
+  if (!key) return [];
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 8000);
+  try {
+    const res = await fetch(url, { headers: { authorization: `Bearer ${key}`, accept: 'application/json' }, signal: abort.signal });
+    if (!res.ok) return hit?.models ?? [];
+    const body = (await res.json().catch(() => null)) as { data?: unknown } | null;
+    const rows = Array.isArray(body?.data) ? (body?.data as unknown[]) : [];
+    const out: CatalogModel[] = [];
+    const seen = new Set<string>();
+    for (const raw of rows) {
+      if (!raw || typeof raw !== 'object') continue;
+      const r = raw as Record<string, unknown>;
+      const id = typeof r.id === 'string' ? r.id.trim() : '';
+      if (!id || seen.has(id) || r.active === false) continue;
+      if (!VOICE_MODEL.test(id)) continue;
+      seen.add(id);
+      out.push({ id, label: catalogLabel(id), provider, context: null });
+    }
+    out.sort((a, b) => a.label.localeCompare(b.label));
+    if (!out.length && hit) return hit.models;
+    voiceCache.set(provider, { at: Date.now(), models: out });
+    return out;
+  } catch {
+    return hit?.models ?? [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** True when this key currently serves the given speech model. The voice
+ *  route uses it to refuse a slug the provider does not list, so a request
+ *  can never aim an arbitrary model id at the key. */
+export async function isServedVoiceModel(env: AiEnv, provider: CatalogProvider, model: string): Promise<boolean> {
+  if (!model || model.length > 128 || !/^[\w./:-]+$/.test(model)) return false;
+  const models = await fetchVoiceCatalog(env, provider);
+  return models.some((m) => m.id === model);
+}
+
 /** Both catalogs at once — what the engine picker and the admin Lab read. */
 export async function fullCatalog(env: AiEnv): Promise<{ grq: CatalogModel[]; opr: CatalogModel[] }> {
   const [grq, opr] = await Promise.all([fetchCatalog(env, 'grq'), fetchCatalog(env, 'opr')]);
@@ -190,7 +251,8 @@ export async function catalogDefaultModel(env: AiEnv, provider: CatalogProvider)
   return models[0].id;
 }
 
-/** Clear the isolate cache — tests only. */
+/** Clear the isolate caches — tests only. */
 export function resetCatalogCache(): void {
   cache.clear();
+  voiceCache.clear();
 }

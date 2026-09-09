@@ -7,6 +7,8 @@
 import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import {
   catalogDefaultModel,
+  fetchVoiceCatalog,
+  isServedVoiceModel,
   catalogLabel,
   fetchCatalog,
   isFreePricing,
@@ -213,5 +215,71 @@ describe('resolveCatalogModel', () => {
     expect(await resolveCatalogModel(env, 'opr', 'not a slug!')).toBeNull();
     expect(await resolveCatalogModel(env, 'opr', '')).toBeNull();
     expect(await resolveCatalogModel(env, 'opr', null)).toBeNull();
+  });
+});
+
+
+// The voice picker is the one place TTS models belong — and the one place a
+// chat model must never appear, because posting text at it returns an error
+// instead of audio.
+describe('voice catalog', () => {
+  const stub = (ids: string[]): void => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), { status: 200 }))),
+    );
+  };
+
+  it('keeps the speech models and drops everything that cannot speak', async () => {
+    stub([
+      'canopylabs/orpheus-v1-english',
+      'canopylabs/orpheus-v1-arabic-saudi',
+      'playai-tts',
+      'openai/gpt-oss-20b',
+      'qwen/qwen3.8-27b',
+      'whisper-large-v3',
+      'meta-llama/llama-prompt-guard-2-22m',
+    ]);
+    const models = await fetchVoiceCatalog({ VINAX_GROQ_API_KEY: 'k' }, 'grq');
+    expect(models.map((m) => m.id)).toEqual([
+      'canopylabs/orpheus-v1-arabic-saudi',
+      'canopylabs/orpheus-v1-english',
+      'playai-tts',
+    ]);
+  });
+
+  it('is empty without a key, and makes no call', async () => {
+    const f = vi.fn();
+    vi.stubGlobal('fetch', f);
+    expect(await fetchVoiceCatalog({}, 'grq')).toEqual([]);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it('reports an unreachable provider as no voices, never a guess', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network'))));
+    expect(await fetchVoiceCatalog({ VINAX_GROQ_API_KEY: 'k' }, 'grq')).toEqual([]);
+  });
+});
+
+describe('isServedVoiceModel', () => {
+  const env = { VINAX_GROQ_API_KEY: 'k' };
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(new Response(JSON.stringify({ data: [{ id: 'canopylabs/orpheus-v1-english' }] }), { status: 200 })),
+      ),
+    );
+  });
+
+  it('accepts a slug the key currently serves', async () => {
+    expect(await isServedVoiceModel(env, 'grq', 'canopylabs/orpheus-v1-english')).toBe(true);
+  });
+
+  it('refuses a retired, unknown or malformed slug so it never reaches the provider', async () => {
+    expect(await isServedVoiceModel(env, 'grq', 'canopylabs/orpheus-v2')).toBe(false);
+    expect(await isServedVoiceModel(env, 'grq', 'openai/gpt-oss-20b')).toBe(false);
+    expect(await isServedVoiceModel(env, 'grq', 'not a slug!')).toBe(false);
+    expect(await isServedVoiceModel(env, 'grq', '')).toBe(false);
   });
 });
