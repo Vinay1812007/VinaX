@@ -18,6 +18,7 @@ import { onRequest as hostMiddleware } from './functions/_middleware';
 // orphaned handler falls through to Pages and 405s, which a --dry-run build
 // cannot detect: that is exactly how /api/preview shipped dead in v5.11.2).
 import * as m_api_status from './functions/api/status';
+import * as m_api_aimodels from './functions/api/aimodels';
 import * as m_album_id from './functions/album/[id]';
 import * as m_api_admin_activity from './functions/api/admin/activity';
 import * as m_api_admin_ai from './functions/api/admin/ai';
@@ -178,6 +179,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/technical': m_api_admin_technical,
   '/api/admin/user': m_api_admin_user,
   '/api/admin/users': m_api_admin_users,
+  '/api/aimodels': m_api_aimodels,
   '/api/announcements': m_api_announcements,
   '/api/apk': m_api_apk,
   '/api/appconfig': m_api_appconfig,

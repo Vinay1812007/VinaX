@@ -8,7 +8,7 @@
  *      received an AI push today. Falls back to a region-wide push, then a
  *      country-wide push, then "everyone" if the geo picker can't find a
  *      fresh target.
- *   3. Asks the DJ lane (VINAX_CHATGPT_120_B, the creative engine) to pick
+ *   3. Asks the DJ lane (the creative engine — see _lib/ai.ts) to pick
  *      a real song fitting the slot × city and write a warm 12-word push
  *      line. Structured JSON output — no free-form parsing.
  *   4. Resolves the AI's song pick against the jiosaavn catalog via the

@@ -4,7 +4,7 @@
  * The client POSTs a free-text vibe ("rainy-day Telugu melodies"); we ask the
  * model for a themed list of { title, artist } picks plus a name/description;
  * the client resolves them to playable catalog tracks. Key stays server-side
- * (VINAX_CHATGPT_120_B — dj lane since v3.3.1, see the chat() call).
+ * (the dj lane's key since v3.3.1 — see the chat() call and _lib/ai.ts).
  * If no lane is configured we return 503. See functions/_lib/ai.ts.
  *
  * Variety (v3.3.1): a per-request varietySeed (nonce + IST date-hour) and the
@@ -193,7 +193,7 @@ async function handlePost(context: {
   // 31s: the client aborts at 34s — the pinned engine plus one laddered
   // generation must both fit.
   const deadlineAt = t0 + 31_000;
-  // Gather (parallel) — the fast lane (VinaX 20B) proposes real candidate songs.
+  // Gather (parallel) — the fast lane proposes real candidate songs.
   let pool: Array<{ title: string; artist: string }> = [];
   try {
     const gathered = await gather(
@@ -219,7 +219,7 @@ async function handlePost(context: {
   } catch {
     /* gather optional */
   }
-  // Curate — the dj lane (VinaX 120B) assembles + names a cohesive playlist from real songs.
+  // Curate — the dj lane assembles + names a cohesive playlist from real songs.
   const userPrompt =
     userBase +
     '\n\nCANDIDATE POOL (real songs — draw from these first; add your own only where gaps remain):\n' +

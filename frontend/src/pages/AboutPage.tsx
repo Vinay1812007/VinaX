@@ -50,7 +50,7 @@ export default function AboutPage() {
           stays with you.
         </p>
         <p>
-          There is a lot packed in: VinaX AI with seven engines plus Think, Research and hands-free
+          There is a lot packed in: VinaX AI with nineteen engines plus Think, Research and hands-free
           voice chat; synced karaoke lyrics; Listen Together rooms; offline downloads in the Android app;
           a full-screen player with Radio and Drive mode; weekly mixes; and a Ctrl+K command palette for
           power users. The design is original throughout, and music streams from independent public

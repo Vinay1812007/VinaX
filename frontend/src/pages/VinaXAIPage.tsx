@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { isNativePlatform } from '@/services/native';
 import { buildTasteSnapshot } from '@/services/ai/taste';
@@ -56,6 +56,9 @@ import {
 import { useClientConfig } from '@/features/home/useAppConfig';
 
 const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/vinaxai' : '/api/vinaxai';
+/* The live free-model menu for the two engines that open a whole catalog
+   instead of one fixed model (v5.21.0). Fetched only when the picker asks. */
+const MODELS_ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/aimodels' : '/api/aimodels';
 /* Flip to true the day the account gets a real image model — the whole
    pipeline (endpoint, chat branch, button) is wired and waiting. */
 const IMAGES_ENABLED = false;
@@ -72,36 +75,58 @@ const speechForSpoken = (md: string): string =>
     .replace(/\uFE0F/g, '')
     .slice(0, 2000);
 const STORE_KEY = 'vinax_ai_chats_v1';
+/* Which catalog a seat opens, and one model row inside it. */
+type CatalogGroupId = 'grq' | 'opr';
+interface CatalogModel {
+  id: string;
+  label: string;
+  context: number | null;
+}
+type CatalogPicks = Partial<Record<CatalogGroupId, string>>;
+const CATALOG_PICK_KEY = 'vinax.aiCatalogModels';
 
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer' | 'flash' | 'musegl' | 'ising15' | 'ising135' | 'laguna' | 'gemma4' | 'omni' | 'cgt120';
-// Engine picker (v5.10.0): six plain-English seats up front — the ones a
-// listener actually chooses between — and every other live engine under
-// Advanced, each still wearing its owner-chosen name. Ids stay stable for
-// the API; nothing about routing changed.
-const MODES: Array<{ id: Mode; label: string; hint: string; tier: 'core' | 'advanced' }> = [
+type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer' | 'flash' | 'musegl' | 'ising15' | 'laguna' | 'gemma4' | 'router';
+// Engine picker: six plain-English seats up front — the ones a listener
+// actually chooses between — and every other live engine under Advanced, each
+// still wearing its owner-chosen name. Ids stay stable for the API.
+// v5.21.0 — retuned to the rotated key set: the retired seats are gone (old
+// stored picks are remapped server-side), a general all-rounder took the
+// reserve seat, and the two seats marked `catalog` open a live list of every
+// free model that key serves (fetched from /api/aimodels).
+const MODES: Array<{ id: Mode; label: string; hint: string; tier: 'core' | 'advanced'; catalog?: CatalogGroupId }> = [
   { id: 'auto', label: 'Auto', hint: 'Picks the best engine for each question', tier: 'core' },
   { id: 'muse', label: 'Balanced', hint: 'Everyday chat · recommended', tier: 'core' },
-  { id: 'swift', label: 'Fast', hint: 'Quickest answers · VinaX CGT 20B', tier: 'core' },
+  { id: 'swift', label: 'Fast', hint: 'Quickest answers · VinaX OAI OSS 20B', tier: 'core' },
   { id: 'sage', label: 'Deep', hint: 'Careful reasoning · VinaX NVD NMTRN SUP', tier: 'core' },
   { id: 'win', label: 'Creative', hint: 'Ideas, lyrics, stories · VinaX NVD NMTRN 3.5 LTNG 30B', tier: 'core' },
   { id: 'translator', label: 'Translate', hint: 'Translation specialist · 12+ languages', tier: 'core' },
-  // Advanced — the owner's remaining live models under their own names.
+  // Advanced — the owner's live models under their own names.
   { id: 'nova', label: 'VinaX NVD NMTRN ULT', hint: 'Most powerful · complex questions', tier: 'advanced' },
-  { id: 'nano', label: 'VinaX NVD NMTRN NN30B A3B', hint: 'Light and quick · song finder', tier: 'advanced' },
-  { id: 'omni', label: 'VinaX NVD NMTRN', hint: 'Compact omni reasoner', tier: 'advanced' },
+  { id: 'nano', label: 'VinaX NVD NMTRN NN OMNI 30B', hint: 'Light and quick · song finder', tier: 'advanced' },
   { id: 'pro', label: 'VinaX DP V4 PRO', hint: 'Deep analysis · advanced reasoning', tier: 'advanced' },
   { id: 'flash', label: 'VinaX DP V4 FLASH', hint: 'Rapid generalist', tier: 'advanced' },
-  { id: 'cgt120', label: 'VinaX CGT 120B', hint: 'Heavyweight open engine', tier: 'advanced' },
-  { id: 'scholar', label: 'VinaX GRQ ALL', hint: 'Music knowledge · instant answers', tier: 'advanced' },
-  { id: 'mini', label: 'VinaX MIMX M3', hint: 'Dependable all-rounder', tier: 'advanced' },
+  { id: 'mini', label: 'VinaX MST NMTRN', hint: 'Dependable all-rounder', tier: 'advanced' },
+  { id: 'scholar', label: 'VinaX GRQ ALL', hint: 'Music knowledge · instant answers', tier: 'advanced', catalog: 'grq' },
+  { id: 'router', label: 'VinaX OPR ALL', hint: 'Free model marketplace · pick any engine', tier: 'advanced', catalog: 'opr' },
   { id: 'k3', label: 'VinaX K3', hint: 'Premium agent · heavyweight generalist', tier: 'advanced' },
-  { id: 'glimmer', label: 'VinaX DIF GEM 26B A4B IT', hint: 'Visual-creative · moods and themes', tier: 'advanced' },
-  { id: 'musegl', label: 'VinaX MUSE GMR 30B', hint: 'Playful creative sparks', tier: 'advanced' },
-  { id: 'gemma4', label: 'VinaX GEM 4 31B', hint: 'Open generalist', tier: 'advanced' },
-  { id: 'laguna', label: 'VinaX LGNA XS 2.1', hint: 'Small and swift', tier: 'advanced' },
-  { id: 'ising15', label: 'VinaX ING CALBTN 15 31B', hint: 'Rankings and comparisons', tier: 'advanced' },
-  { id: 'ising135', label: 'VinaX ING CALBTN 1 35B A3B', hint: 'Quick judgments', tier: 'advanced' },
+  { id: 'glimmer', label: 'VinaX GGL DIF GEM 26B A4B IT', hint: 'Visual-creative · moods and themes', tier: 'advanced' },
+  { id: 'musegl', label: 'VinaX MTA MUSE GMR 30B', hint: 'Playful creative sparks', tier: 'advanced' },
+  { id: 'gemma4', label: 'VinaX GGL GEM 4 31B', hint: 'Open generalist', tier: 'advanced' },
+  { id: 'laguna', label: 'VinaX PSD LGNA XS 2.1', hint: 'Small and swift', tier: 'advanced' },
+  { id: 'ising15', label: 'VinaX NVD ING CALBTN 1.5 31B', hint: 'Rankings and comparisons', tier: 'advanced' },
 ];
+// Engine ids retired by the 2026-09-09 key rotation. A listener whose stored
+// pick names one keeps their nearest living seat instead of silently landing
+// on the default (the server maps them too — this just keeps the UI honest
+// about which chip is lit).
+const RETIRED_MODE: Record<string, Mode> = { omni: 'nano', ising135: 'ising15', cgt120: 'swift', minimax: 'mini' };
+/** The model to send with a request: only the two catalog seats carry one,
+ *  and only when the listener actually picked a row (otherwise the seat runs
+ *  its own default engine). */
+const catalogModelForSend = (m: Mode, picks: CatalogPicks): string | undefined => {
+  const group = MODES.find((mm) => mm.id === m)?.catalog;
+  return group ? picks[group] : undefined;
+};
 const CORE_MODES = MODES.filter((m) => m.tier === 'core');
 const ADVANCED_MODES = MODES.filter((m) => m.tier === 'advanced');
 // Engine chip on each reply: which engine actually answered (from stream meta) —
@@ -114,28 +139,32 @@ const ENGINE_NICK: Array<[RegExp, string]> = [
   [/nemotron-3-super-120b/i, 'VinaX NVD NMTRN SUP'],
   [/deepseek-v4-pro/i, 'VinaX DP V4 PRO'],
   [/deepseek-v4-flash/i, 'VinaX DP V4 FLASH'],
-  [/minimax/i, 'VinaX MIMX M3'],
+  [/mistral-nemotron/i, 'VinaX MST NMTRN'],
   [/kimi/i, 'VinaX K3'],
-  [/diffusiongemma/i, 'VinaX DIF GEM 26B A4B IT'],
-  [/muse-glimmer/i, 'VinaX MUSE GMR 30B'],
-  [/gemma-4/i, 'VinaX GEM 4 31B'],
-  [/laguna/i, 'VinaX LGNA XS 2.1'],
-  [/ising-calibration-1\.5/i, 'VinaX ING CALBTN 15 31B'],
-  [/ising-calibration-1-35b/i, 'VinaX ING CALBTN 1 35B A3B'],
-  [/nano-omni/i, 'VinaX NVD NMTRN'],
-  // v3.7.0: openai/gpt-oss-20b now pins the chat (FLASH), fast (20B) AND dj (120B)
-  // seats — NVIDIA gpt-oss-120b hung >25s and was retired. The chip reports the
-  // engine that actually answered, keyed off the served slug, so a gpt-oss-20b reply
-  // reads "VinaX 20B" whichever seat summoned it (the muse/win pickers still present
-  // their own names — nickname != model). The gpt-oss-120b row is kept below as
-  // legacy so any old meta from before the retire still labels cleanly.
-  [/gpt-oss-120b/i, 'VinaX CGT 120B'],
-  [/gpt-oss-20b/i, 'VinaX CGT 20B'],
+  [/diffusiongemma/i, 'VinaX GGL DIF GEM 26B A4B IT'],
+  [/muse-glimmer/i, 'VinaX MTA MUSE GMR 30B'],
+  [/gemma-4/i, 'VinaX GGL GEM 4 31B'],
+  [/laguna/i, 'VinaX PSD LGNA XS 2.1'],
+  [/ising-calibration/i, 'VinaX NVD ING CALBTN 1.5 31B'],
+  [/nano-omni/i, 'VinaX NVD NMTRN NN OMNI 30B'],
+  [/llama-3\.2-90b-vision/i, 'VinaX MTA VSN 90B'],
+  [/llama-3\.2-11b-vision/i, 'VinaX MTA VSN 11B'],
+  // A marketplace pick keeps its own name: the listener chose that engine by
+  // name, so the chip must not relabel it as something else.
+  [/:free$/i, 'VinaX OPR ALL'],
+  // Retired seats — old stored replies still label cleanly.
+  [/minimax/i, 'VinaX AI'],
+  // The chip reports the engine that actually answered, keyed off the served
+  // slug — so a reply rescued by the ladder never wears the seat's name
+  // (nickname != model). The retired rows below keep old stored replies
+  // labelling cleanly instead of falling through to the generic catch-all.
+  [/gpt-oss-120b/i, 'VinaX AI'],
+  [/gpt-oss-20b/i, 'VinaX OAI OSS 20B'],
   // v5.6.2 — legacy catch-rows renamed to the owner nicknames too, so EVERY
   // chip in the app speaks the same names (old stored slugs included).
   [/nemotron-super|nemotron.super/i, 'VinaX NVD NMTRN SUP'],
   [/nemotron-3-ultra|nemotron.ultra/i, 'VinaX NVD NMTRN ULT'],
-  [/nemotron-3-nano|diffusiongemma|gemma/i, 'VinaX NVD NMTRN NN30B A3B'],
+  [/nemotron-3-nano|diffusiongemma|gemma/i, 'VinaX NVD NMTRN NN OMNI 30B'],
   // Retired slugs from repo history (inkling/qwen/old deepseeks) — generic label.
   [/inkling|qwen|deepseek/i, 'VinaX AI'],
   [/llama-3\.3-70b|llama-3\.1-8b|vision|llama/i, 'VinaX GRQ ALL'],
@@ -355,10 +384,24 @@ export default function VinaXAIPage(): ReactNode {
       // Engine ids saved by older builds map to their closest successor.
       const legacy: Record<string, Mode> = { maverick: 'muse', diffusion: 'muse', medium: 'muse', fast: 'swift', deep: 'sage', gemma: 'scholar' };
       if (legacy[saved]) return legacy[saved];
+      if (RETIRED_MODE[saved]) return RETIRED_MODE[saved];
     } catch {
       /* default */
     }
     return 'muse';
+  });
+  // The live free-model catalogs, and the listener's pick inside each. Both
+  // start empty: the menu is fetched the first time an engine list is opened,
+  // and an engine nobody has opened costs nothing.
+  const [catalogs, setCatalogs] = useState<Record<CatalogGroupId, CatalogModel[]>>({ grq: [], opr: [] });
+  const [catalogState, setCatalogState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
+  const [catalogPicks, setCatalogPicks] = useState<CatalogPicks>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CATALOG_PICK_KEY) ?? '{}') as CatalogPicks;
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch {
+      return {};
+    }
   });
   const [chatQuery, setChatQuery] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -461,8 +504,48 @@ export default function VinaXAIPage(): ReactNode {
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   // stable-ish refs so speech callbacks read latest values
-  const stateRef = useRef({ mode, web, think, research, profile, replyLang, replyStyle, songCtx, currentSong });
-  stateRef.current = { mode, web, think, research, profile, replyLang, replyStyle, songCtx, currentSong };
+  const stateRef = useRef({ mode, web, think, research, profile, replyLang, replyStyle, songCtx, currentSong, catalogPicks });
+  stateRef.current = { mode, web, think, research, profile, replyLang, replyStyle, songCtx, currentSong, catalogPicks };
+
+  // Which catalog (if any) the current seat opens, and the model chosen in it.
+  const catalogGroup = MODES.find((mm) => mm.id === mode)?.catalog ?? null;
+
+  /** Load the free-model menu once per visit, on first demand. A failure is
+   *  reported as such — the picker says the list is unavailable rather than
+   *  showing a stale or invented menu, and the seat still answers on its
+   *  default engine. */
+  const loadCatalogs = useCallback(() => {
+    setCatalogState((prev) => {
+      if (prev !== 'idle' && prev !== 'failed') return prev;
+      void fetch(MODELS_ENDPOINT)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad response'))))
+        .then((j: { groups?: Array<{ id?: string; models?: CatalogModel[] }> }) => {
+          const next: Record<CatalogGroupId, CatalogModel[]> = { grq: [], opr: [] };
+          for (const g of j.groups ?? []) {
+            if ((g.id === 'grq' || g.id === 'opr') && Array.isArray(g.models)) next[g.id] = g.models;
+          }
+          setCatalogs(next);
+          setCatalogState('ready');
+        })
+        .catch(() => setCatalogState('failed'));
+      return 'loading';
+    });
+  }, []);
+
+  /** Remember the model chosen inside a catalog seat, per seat. */
+  const pickCatalogModel = useCallback((group: CatalogGroupId, id: string) => {
+    setCatalogPicks((prev) => {
+      const next: CatalogPicks = { ...prev };
+      if (id) next[group] = id;
+      else delete next[group];
+      try {
+        localStorage.setItem(CATALOG_PICK_KEY, JSON.stringify(next));
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!activeId) setActiveId(chats[0]?.id ?? '');
@@ -946,8 +1029,12 @@ export default function VinaXAIPage(): ReactNode {
         headers: { 'content-type': 'application/json', ...(isNativePlatform() ? { 'x-vinax-client': 'app' } : {}) },
         body: JSON.stringify({
           messages: apiMessages,
-          // Think overrides the lane to the deep engine (VinaX SUPER · high effort) for this message.
+          // Think overrides the lane to the deep engine (high effort) for this message.
           mode: voiceEngineRef.current ? 'voice' : thinkNow ? 'sage' : stateRef.current.mode,
+          // Catalog seats only: the exact free model the listener picked. The
+          // server re-checks it against the provider's live free list, and
+          // every other seat ignores it entirely.
+          model: catalogModelForSend(stateRef.current.mode, stateRef.current.catalogPicks),
           // Research always searches, and multi-source rules are prepended above.
           web: stateRef.current.web || researchNow || freshTrigger,
           images: imgs,
@@ -1966,7 +2053,13 @@ export default function VinaXAIPage(): ReactNode {
               <div className="flex items-center gap-1.5 min-w-0">
               <div className="relative">
                 <button
-                  onClick={() => setEngineOpen((v) => !v)}
+                  onClick={() => {
+                    setEngineOpen((v) => !v);
+                    // The free-model menu is fetched on first open, never on
+                    // page load — a listener who stays on a fixed seat pays
+                    // nothing for engines they never look at.
+                    loadCatalogs();
+                  }}
                   aria-haspopup="listbox"
                   aria-expanded={engineOpen}
                   className={cn('ai-chip py-1.5 gap-1.5 text-ink-100', engineOpen && 'ai-chip-on')}
@@ -1986,8 +2079,9 @@ export default function VinaXAIPage(): ReactNode {
                       role="listbox"
                       aria-label="Choose engine"
                       className="ai-popover absolute bottom-full mb-2 left-0 z-50 w-72 overflow-y-auto overscroll-contain animate-fade-up"
-                      /* v5.6.2 — inline cap, immune to CSS purging: 18 engines
-                         must scroll inside the menu, never spill off-screen. */
+                      /* Inline cap, immune to CSS purging: the engine list —
+                         and the free-model menu under a catalog seat — must
+                         scroll inside the popover, never spill off-screen. */
                       style={{ maxHeight: 'min(62vh, 460px)' }}
                     >
                       <p className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-ink-500">Engine</p>
@@ -2025,7 +2119,7 @@ export default function VinaXAIPage(): ReactNode {
                             aria-selected={mode === mm.id}
                             onClick={() => {
                               setMode(mm.id);
-                              setEngineOpen(false);
+                              if (!mm.catalog) setEngineOpen(false);
                             }}
                             className="ai-menu-item justify-between gap-3 py-1.5"
                           >
@@ -2036,6 +2130,65 @@ export default function VinaXAIPage(): ReactNode {
                             {mode === mm.id && <span aria-hidden className="text-ember-400">✓</span>}
                           </button>
                         ))}
+                      {/* The two catalog seats open a whole free menu: pick the
+                          exact model, or leave it on the seat's default. */}
+                      {catalogGroup && (
+                        <div className="border-t border-glass mt-1 pt-1">
+                          <p className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-ink-500">
+                            Model · free on this engine
+                          </p>
+                          {catalogState === 'loading' && (
+                            <p className="px-2.5 pb-2 text-[11px] font-medium text-ink-400">Loading the list…</p>
+                          )}
+                          {catalogState === 'failed' && (
+                            <button
+                              onClick={loadCatalogs}
+                              className="ai-menu-item text-[11px] font-medium text-ink-400"
+                            >
+                              Couldn’t load the list — tap to retry
+                            </button>
+                          )}
+                          {catalogState === 'ready' && catalogs[catalogGroup].length === 0 && (
+                            <p className="px-2.5 pb-2 text-[11px] font-medium text-ink-400">
+                              No free models available on this engine right now.
+                            </p>
+                          )}
+                          <button
+                            role="option"
+                            aria-selected={!catalogPicks[catalogGroup]}
+                            onClick={() => {
+                              pickCatalogModel(catalogGroup, '');
+                              setEngineOpen(false);
+                            }}
+                            className="ai-menu-item justify-between gap-3 py-1.5"
+                          >
+                            <span className="block text-[12px] font-semibold truncate">Default for this engine</span>
+                            {!catalogPicks[catalogGroup] && <span aria-hidden className="text-ember-400">✓</span>}
+                          </button>
+                          {catalogs[catalogGroup].map((cm) => (
+                            <button
+                              key={cm.id}
+                              role="option"
+                              aria-selected={catalogPicks[catalogGroup] === cm.id}
+                              onClick={() => {
+                                pickCatalogModel(catalogGroup, cm.id);
+                                setEngineOpen(false);
+                              }}
+                              className="ai-menu-item justify-between gap-3 py-1.5"
+                            >
+                              <span className="min-w-0">
+                                <span className="block font-mono text-[12px] truncate">{cm.label}</span>
+                                {cm.context !== null && (
+                                  <span className="block text-[11px] font-medium text-ink-400 truncate">
+                                    {Math.round(cm.context / 1000)}k context
+                                  </span>
+                                )}
+                              </span>
+                              {catalogPicks[catalogGroup] === cm.id && <span aria-hidden className="text-ember-400">✓</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </>
                 )}

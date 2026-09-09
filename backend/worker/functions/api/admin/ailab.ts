@@ -1,5 +1,5 @@
 /**
- * AI Lab — admin-only streaming test bench for every AI lane (13 in v5.4.0).
+ * AI Lab — admin-only streaming test bench for every AI lane (19 in v5.21.0).
  *
  * POST { lane, messages: [{ role, content }...], maxTokens? } and the reply
  * streams back as SSE (meta → delta* → done), the same wire format as
@@ -12,21 +12,23 @@
  * story. maxTokens is capped at 1000 — this is a bench, not a workload.
  */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { LANE_ENV, LANE_MODEL, isGroqEndpoint, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
+import { LANE_ENV, LANE_MODEL, isExternalEndpoint, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
 import { aggregateLaneHealth, type AiEventRow } from '../../_lib/laneHealth';
 import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & AiEnv & SupabaseEnv;
 
-// v5.6.1: the bench covers EVERY lane over the owner's 18 live keys — the
-// feature lanes plus the inventory lanes that give each remaining model its
-// own probe-able row. Inventory lanes drive no features; a dead or absent
-// model fails its bench ping honestly, which is the point.
+// v5.21.0: the bench covers EVERY lane over the owner's 18 live keys — the
+// feature lanes, the two vision lanes, the free-model marketplace and the
+// inventory lanes that give each remaining key its own probe-able row.
+// Inventory lanes drive no features; a dead or absent model fails its bench
+// ping honestly, which is the point. Since every secret was re-issued on
+// 2026-09-09, this bench is how each row earns `verified: true` back.
 const LANES: readonly Lane[] = [
   'chat', 'fast', 'deep', 'scholar', 'home', 'dj', 'search',
-  'pro', 'mini', 'agent',
-  'dsflash', 'muse', 'rank', 'rank2', 'laguna', 'diffusion',
-  'omni', 'gemma4', 'oss120',
+  'pro', 'mini', 'agent', 'router',
+  'vision', 'vision90',
+  'dsflash', 'muse', 'rank', 'laguna', 'diffusion', 'gemma4',
 ];
 const MAX_TOKENS_CAP = 1000;
 
@@ -102,8 +104,8 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const payload: Record<string, unknown> = { model, messages, temperature: 0.7, max_tokens: maxTokens, stream: true };
   // gpt-oss models are reasoners: keep the thinking short so bench replies
   // arrive fast instead of burning the token budget before the answer.
-  // (NVIDIA-only knob — Groq 400s on it, probed live.)
-  if (model.includes('gpt-oss') && !isGroqEndpoint(endpoint)) payload.reasoning_effort = 'low';
+  // (Default-base-only knob — the external hosts 400 on it, probed live.)
+  if (model.includes('gpt-oss') && !isExternalEndpoint(endpoint)) payload.reasoning_effort = 'low';
   // Reasoning off for nemotron-3-nano (search primary) — the bench must see
   // the model exactly as production runs it. Model-gated no-op elsewhere.
   Object.assign(payload, reasoningOffParams(model));

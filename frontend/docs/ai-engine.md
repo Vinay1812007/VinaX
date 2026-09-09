@@ -1,20 +1,21 @@
-# VinaX Multi-Model AI Engine (v5.4.0)
+# VinaX Multi-Model AI Engine (v5.21.0)
 
-The owner's multi-model mandate (2026-08-29), implemented incrementally on the
-existing lane architecture. Nothing was rewritten; features still talk to
-**lanes**, lanes pin **models**, and a central **registry** now describes every
+The owner's multi-model mandate, implemented on the existing lane
+architecture. Nothing was rewritten to add or retire an engine: features talk
+to **lanes**, lanes pin **models**, and a central **registry** describes every
 model VinaX can reach.
 
 ## Architecture
 
 ```
 VinaX Frontend  (no keys, ever)
-      ↓ POST /api/dj · /api/home · /api/playlist · /api/assistant · …
+      ↓ POST /api/dj · /api/home · /api/playlist · /api/vinaxai · …
+      ↓ GET  /api/aimodels   ← the live free-model menu for the two catalog keys
 VinaX Worker (Cloudflare)
       ↓ lane router — functions/_lib/ai.ts
-      ↓ chat() / gather() / embed() / moderate()
+      ↓ chat() / gather() / moderate()
       ↓ per-attempt key + model + provider base
-NVIDIA NIM  /  Groq
+default inference base  /  fast external base  /  free-model marketplace
 ```
 
 Every feature keeps a deterministic non-AI fallback: the player, home shelves
@@ -24,64 +25,107 @@ and queue all work with zero AI keys configured.
 
 | Piece | File | What it is |
 | --- | --- | --- |
-| Model registry | `worker/functions/_lib/models.ts` | `AI_MODEL_REGISTRY`: all 26 owner-listed models — capabilities, env key, latency/quality/cost class, fallbacks, live-probe health notes. `training_supported: false` on every entry (hosted inference only — no training pipeline exists, and none is claimed). |
-| Lane router | `worker/functions/_lib/ai.ts` | 13 lanes; each = env key + pinned model + optional same-key secondary + cross-lane failover ladder + per-call deadline budget. |
-| Adapters | `ai.ts` | `chat()` (JSON-mode aware, reasoning-off knobs per model family), `gather()` (parallel idea pools), `embed()` (2048-dim vectors, new), `moderate()` (safety pair, new). |
-| Observability | `vinax_ai_events` (Supabase) + admin AI dashboards | model, ok, status, latency per call — unchanged, now covering the new pins. |
+| Model registry | `worker/functions/_lib/models.ts` | `AI_MODEL_REGISTRY`: every owner-listed model — capabilities, env key, latency/quality/cost class, fallbacks, health notes. `training_supported: false` on every entry (hosted inference only — no training pipeline exists, and none is claimed). |
+| Lane router | `worker/functions/_lib/ai.ts` | 19 lanes over 18 keys; each lane = env key + pinned model + optional same-key secondary + cross-lane failover ladder + per-call deadline budget. |
+| Free-model catalogs | `worker/functions/_lib/catalog.ts` | The two aggregator keys don't pin one model — their live catalogs are fetched from each provider's own `/models` list, filtered to chat-capable and zero-cost, cached 15 minutes, and served to the picker by `/api/aimodels`. |
+| Adapters | `ai.ts` | `chat()` (JSON-mode aware, reasoning-off knobs per model family), `gather()` (parallel idea pools), `moderate()`. |
+| Observability | `vinax_ai_events` (Supabase) + admin AI dashboards + AI Lab | model, ok, status, latency per call; the Lab benches every lane on its own key with no failover. |
 
-## Routing table (as deployed — every pin probed live on its own key)
+## Routing table (v5.21.0 — the owner's 2026-09-09 key set)
 
-| Lane | Env key | Model | Probe | Drives |
-| --- | --- | --- | --- | --- |
-| dj | VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B | nemotron-3.5-lightning-30b-a3b | 0.80s warm | AI DJ, Smart Radio, queue; secondary: gpt-oss-20b (same key) |
-| chat | VINAX_DEEPSEEK_V4_FLASH | gpt-oss-20b | proven | Assistant, AI playlists |
-| deep | VINAX_NEMOTRON_SUPER | nemotron-3-super-120b-a12b | 0.55s | Think button; secondary: the old 49b |
-| fast | VINAX_CHATGPT_20_B | gpt-oss-20b | proven | Quick tasks |
-| scholar | VINAX_GROQ_API_KEY | llama-3.3-70b-versatile (Groq) | ~0.12s TTFB | Music Q&A, live voice |
-| home | VINAX_NEMOTRON_ULTRA | nemotron-3-ultra-550b | slow | Premium backstop, always last |
-| search | VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B | nemotron-3-nano-30b-a3b | proven | Search-page expert |
-| pro (new) | VINAX_DEEPSEEK_V4_PRO | deepseek-v4-pro-0813 | 0.59s warm | Ladder reserve |
-| mini (new) | VINAX_MINIMAX_M3 | minimax-m3 | 0.41s warm | Ladder reserve |
-| translate (new) | VINAX_RIVA_TRANSLATE_4B_INSTRUCT_V2 | riva-translate-v2 | 0.93s | Translation (helper ready) |
-| safety (new) | VINAX_NEMOTRON_3_5_CONTENT_SAFETY | nemotron-3.5-content-safety | 0.52s | `moderate()` primary |
-| guard (new) | VINAX_LLAMA_3_1_NEMOTRON_SAFETY_GUARD_8B_V3 | safety-guard-8b-v3 | 0.53s | `moderate()` second opinion |
-| agent (new) | VINAX_KIMI_K3 | kimi-k3 | UNSTABLE | Wired, drives nothing (see below) |
-| (embed) | VINAX_NEMOTRON_3_EMBED_1B | nemotron-3-embed-1b | 0.38s, 2048-dim | `embed()` helper |
+| Lane | Env key | Model | Drives |
+| --- | --- | --- | --- |
+| dj | `VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B` | nemotron-3.5-lightning-30b-a3b | AI DJ, Smart Radio, queue; secondary: gpt-oss-20b |
+| chat | `VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B` | nemotron-3.5-lightning-30b-a3b | Assistant, AI playlists; secondary: mistral-nemotron |
+| deep | `VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B` | nemotron-3-super-120b-a12b | Think button |
+| fast | `VINAX_OAI_GPT_OSS_20B` | gpt-oss-20b | Quick tasks; secondary: lightning |
+| scholar | `VINAX_GROQ_API_KEY` | llama-3.3-70b-versatile *(+ its whole free catalog)* | Music Q&A, live voice |
+| router | `VINAX_OPENROUTER_API_KEY` | any zero-cost model in the live catalog | The free-model marketplace seat |
+| home | `VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B` | nemotron-3-ultra-550b | Premium backstop, always last |
+| search | `VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING` | nemotron-3-nano-omni-30b-a3b-reasoning | Search-page expert |
+| pro | `VINAX_DEEPSEEK_V4_PRO_0813` | deepseek-v4-pro-0813 | Ladder reserve |
+| mini | `VINAX_MISTRAL_NEMOTRON` | mistral-nemotron | General ladder reserve |
+| agent | `VINAX_KIMI_K3` | kimi-k3 | Wired, in no ladder (see below) |
+| vision | `VINAX_MTA_LMA_3_2_11B_VSN_INT` | llama-3.2-11b-vision-instruct | Image understanding |
+| vision90 | `VINAX_MTA_LMA_3_2_90B_VSN_INT` | llama-3.2-90b-vision-instruct | Deep image understanding |
+| dsflash | `VINAX_DEEPSEEK_V4_FLASH_0731` | deepseek-v4-flash-0731 | Bench only |
+| muse | `VINAX_MTA_MUSE_GLIMMER_30B` | muse-glimmer-30b | Bench only |
+| rank | `VINAX_NVD_ISING_CALIBRATION_1_5_31B` | ising-calibration-1.5-31b | Bench only |
+| laguna | `VINAX_POOLSIDE_LAGUNA_XS_2_1` | laguna-xs-2.1 | Bench only |
+| diffusion | `VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT` | diffusiongemma-26b-a4b-it | Bench only (text side) |
+| gemma4 | `VINAX_GGL_GEMMA_4_31B_IT` | gemma-4-31b-it | Bench only |
 
 General failover ladder: `fast → chat → dj → mini → pro → deep → scholar →
-search → home`. Translate/safety/guard/agent are **excluded** — a translation
-model must never answer a DJ JSON call. Below the ladder: parse-validate →
-retry-in-plain-mode → deterministic fallback (`fallbackSections`, catalog-pool
-shuffle floor, local recommender). The player survives every AI being down.
+search → router → home`. The vision lanes, the agent reserve and every bench
+lane are **excluded** — an image model must never answer a DJ JSON call.
+Below the ladder: parse-validate → retry-in-plain-mode → deterministic
+fallback (`fallbackSections`, catalog-pool shuffle floor, local recommender).
+The player survives every AI being down.
 
-## What the live probes found (2026-08-29, temp /api/modelcheck, since removed)
+## The two catalog keys
 
-Serving and now pinned: lightning, super-120b, deepseek-pro, minimax-m3,
-riva-v2, content-safety, safety-guard, embed-1b.
+Sixteen keys sign exactly one engine each. Two do not:
 
-Not pinned, with reasons recorded in the registry:
+- **scholar** opens its account's own catalog — the fast external base VinaX
+  already used for music Q&A and live voice.
+- **router** opens a marketplace of hundreds of community engines.
 
-- **kimi-k3** — served once (16.6s cold) then hung ≥18s. Wired as the `agent`
-  lane but drives no feature and sits in no ladder until it stabilizes.
-- **deepseek-v4-flash-0731**, **gemma-4-31b-it** — hang consistently (18s+, no
-  response). Their env keys still work; the flash key keeps serving
-  gpt-oss-20b for the chat lane.
-- **ising-calibration** family — 410 Gone (retired upstream). Deterministic
-  on-device ranking stays authoritative.
-- **muse-glimmer-30b, nemotron-voicechat, laguna-xs-2.1, riva-v1_1** — 404 on
-  the NIM catalog under every slug tried.
-- **synthetic-video-detector, active-speaker-detection, streampetr** — not
-  chat models; no adapter or product surface exists. Inventory only.
+For both, `_lib/catalog.ts` asks the provider for its own model list and keeps
+only what VinaX can honestly offer:
+
+- **chat-capable only** — transcription, speech, embedding, moderation and
+  image-output models ride different endpoints; listing them in a chat picker
+  would hand the listener an engine that 404s.
+- **free only** — on the marketplace that means the provider prices *both*
+  prompt and completion at zero. An unparseable or missing price counts as
+  paid, so an unknown-cost model is never offered and the key cannot quietly
+  run up a bill.
+
+`GET /api/aimodels` serves the two menus (slugs, labels, context sizes — never
+a key). In VinaX AI, choosing one of those two seats reveals a second list:
+**Model · free on this engine**. The chosen slug rides the request, and the
+Worker re-checks it against the same live free list before using it — a slug
+that isn't currently listed is refused, not forwarded.
+
+If a provider is unreachable the menu comes back empty and says so; the seat
+still answers on its default engine. There is no stale hard-coded fallback
+list, on purpose.
+
+## Key rotation — what "verified" means now
+
+Every secret was deleted and re-issued on 2026-09-09, so **every probe result
+from the previous key set is void**. The registry starts at
+`verified: false` across the board; a row earns `true` back only after the
+admin **AI Lab** pings it on the new key. Lane pins meanwhile follow the
+owner's key → model table, and the cross-lane ladder covers anything slow or
+dead — a lane that can't answer degrades to a healthy sibling instead of
+failing the feature.
+
+Retired with the old keys: `minimax-m3`, `gpt-oss-120b`,
+`nemotron-3-nano-30b-a3b`, `ising-calibration-1-35b-a3b` and the old
+`nemotron-super-49b` secondary. Arrived with the new ones:
+`mistral-nemotron`, the two vision engines on keys of their own, and the
+marketplace key. `muse-glimmer` and `laguna-xs` were re-published under new
+vendor prefixes. Retired **engine ids** are remapped client- and server-side,
+so a listener whose saved pick names one keeps a working seat.
+
+`worker/__tests__/laneRegistry.test.ts` fails the build if a lane ever points
+at a secret the registry doesn't list, if a listed secret becomes
+unreachable by any lane, or if a retired name creeps back into the wiring.
 
 ## Honesty ledger (what this is NOT)
 
 - **No model was trained, fine-tuned, evaluated offline, or deployed as a
   custom version.** Everything is hosted inference. The registry hard-codes
   `training_supported: false`; flipping it requires an actual pipeline.
-- `embed()` is wired but no feature consumes it yet — semantic search needs a
-  vector store (e.g. pgvector on the existing Supabase) as its own project.
-- `moderate()` is wired but not yet called from the chat path; wiring it into
-  `/api/vinaxai` is the natural next increment.
+- `moderate()` returns `{ unchecked: true }` for every text — no safety model
+  is reachable since those keys were retired, and the caller decides fail-open
+  vs fail-closed. It never pretends an unchecked text was checked.
+- Real image *generation* is not wired. The diffusion bench lane serves text
+  through chat-completions only; never fake a picture through it.
+- `kimi-k3` ran hot-and-cold on the retired key (one 16.6s answer, one 18s
+  hang). It is wired as the `agent` lane, drives no feature and sits in no
+  ladder until it is re-probed stable.
 - Weighted feedback, taste profiling, A/B experiments and event telemetry
   already exist in the app (on-device profile, `/api/events`,
   `/api/experiments`) and were not duplicated.
@@ -89,8 +133,8 @@ Not pinned, with reasons recorded in the registry:
 ## Adding / replacing a model (the whole point)
 
 1. Add the env secret in Cloudflare; add its entry to `AI_MODEL_REGISTRY`.
-2. Probe it live on its own key (re-create a temp modelcheck if needed —
-   pattern in git history).
+2. Probe it live on its own key from the admin **AI Lab** — the Lab takes a
+   model override, so a candidate slug is verified serving before it is pinned.
 3. If healthy: pin it to a lane in `LANE_MODEL`/`LANE_ENV` (or as a same-key
-   `LANE_SECONDARY`), update `.env.example`.
+   `LANE_SECONDARY`), and update both `.env.example` files.
 4. Features don't change — they name lanes, not models.

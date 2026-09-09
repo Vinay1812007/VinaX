@@ -90,7 +90,7 @@ const TOUR: TourSlide[] = [
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Meet VinaX AI',
     lines: [
-      'Twenty-two engines, or Auto to let VinaX choose. Think for careful reasoning, Research for live web answers with sources.',
+      'Nineteen engines, or Auto to let VinaX choose — and two of them open a whole menu of free models. Think for careful reasoning, Research for live web answers with sources.',
       'Type / for commands: /playlist ⟨vibe⟩ builds a playlist in the chat, /now, /lyrics and /summary do what they say.',
       'Say “play ⟨song⟩” and the reply becomes a real mini-player. Any “Title — Artist” line in a reply is playable.',
       'Reply in Telugu, Hindi, Tamil, Tenglish or Hinglish; voice chat is fully hands-free.',

@@ -1,9 +1,9 @@
 /** Probe any chat model slug on a lane's endpoint (per-lane provider base —
- *  scholar rides Groq, the rest NVIDIA) — status + latency.
- *  Admin-gated. Used to validate lanes before wiring them.
- *  ?key=CHATGPT_120_B|CHATGPT_20_B|DEEPSEEK_V4_FLASH|NEMOTRON_SUPER|
- *  NEMOTRON_ULTRA|GROQ_API_KEY|NVIDIA_NEMOTRON_3_NANO_30B_A3B (gen-4 names)
- *  picks which lane env key signs the call (default DEEPSEEK_V4_FLASH);
+ *  the scholar and router lanes ride their own hosts, the rest the default
+ *  base) — status + latency. Admin-gated. Used to validate lanes before
+ *  wiring them, and to re-verify every row after a key rotation.
+ *  ?key= names which lane key signs the call — see BY_SUFFIX below for the
+ *  accepted values (default LIGHTNING, the balanced/DJ key);
  *  ?model= overrides the probed slug (default: that lane's pinned model). */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimit } from '../../_lib/ratelimit';
@@ -11,14 +11,27 @@ import { LANE_MODEL, laneEndpoint, type AiEnv, type Lane } from '../../_lib/ai';
 
 type Env = AdminEnv & AiEnv;
 
+// One row per live secret (the owner's 2026-09-09 key set), keyed by a short
+// suffix so a probe URL stays typable.
 const BY_SUFFIX: Record<string, { env: keyof AiEnv; lane: Lane }> = {
-  CHATGPT_120_B: { env: 'VINAX_CHATGPT_120_B', lane: 'dj' },
-  DEEPSEEK_V4_FLASH: { env: 'VINAX_DEEPSEEK_V4_FLASH', lane: 'chat' },
-  NEMOTRON_SUPER: { env: 'VINAX_NEMOTRON_SUPER', lane: 'deep' },
-  CHATGPT_20_B: { env: 'VINAX_CHATGPT_20_B', lane: 'fast' },
+  LIGHTNING: { env: 'VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B', lane: 'dj' },
+  GPT_OSS_20B: { env: 'VINAX_OAI_GPT_OSS_20B', lane: 'fast' },
+  NEMOTRON_SUPER: { env: 'VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B', lane: 'deep' },
+  NEMOTRON_ULTRA: { env: 'VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B', lane: 'home' },
+  NEMOTRON_OMNI: { env: 'VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING', lane: 'search' },
+  DEEPSEEK_V4_PRO: { env: 'VINAX_DEEPSEEK_V4_PRO_0813', lane: 'pro' },
+  DEEPSEEK_V4_FLASH: { env: 'VINAX_DEEPSEEK_V4_FLASH_0731', lane: 'dsflash' },
+  MISTRAL_NEMOTRON: { env: 'VINAX_MISTRAL_NEMOTRON', lane: 'mini' },
+  KIMI_K3: { env: 'VINAX_KIMI_K3', lane: 'agent' },
   GROQ_API_KEY: { env: 'VINAX_GROQ_API_KEY', lane: 'scholar' },
-  NEMOTRON_ULTRA: { env: 'VINAX_NEMOTRON_ULTRA', lane: 'home' },
-  NVIDIA_NEMOTRON_3_NANO_30B_A3B: { env: 'VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B', lane: 'search' },
+  OPENROUTER_API_KEY: { env: 'VINAX_OPENROUTER_API_KEY', lane: 'router' },
+  VISION_11B: { env: 'VINAX_MTA_LMA_3_2_11B_VSN_INT', lane: 'vision' },
+  VISION_90B: { env: 'VINAX_MTA_LMA_3_2_90B_VSN_INT', lane: 'vision90' },
+  MUSE_GLIMMER: { env: 'VINAX_MTA_MUSE_GLIMMER_30B', lane: 'muse' },
+  ISING_CALIBRATION: { env: 'VINAX_NVD_ISING_CALIBRATION_1_5_31B', lane: 'rank' },
+  LAGUNA_XS: { env: 'VINAX_POOLSIDE_LAGUNA_XS_2_1', lane: 'laguna' },
+  DIFFUSIONGEMMA: { env: 'VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT', lane: 'diffusion' },
+  GEMMA_4: { env: 'VINAX_GGL_GEMMA_4_31B_IT', lane: 'gemma4' },
 };
 
 function json(o: unknown, status = 200): Response {
@@ -32,7 +45,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const limited = rateLimit(request, 'admin-enginetest', { capacity: 10, refillPerMinute: 10 }, env as never);
   if (limited) return limited;
   const url = new URL(request.url);
-  const suffix = (url.searchParams.get('key') ?? 'DEEPSEEK_V4_FLASH').toUpperCase();
+  const suffix = (url.searchParams.get('key') ?? 'LIGHTNING').toUpperCase();
   const pick = BY_SUFFIX[suffix];
   if (!pick) return json({ error: 'unknown key', keys: Object.keys(BY_SUFFIX) }, 400);
   const key = env[pick.env];

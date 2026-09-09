@@ -49,11 +49,10 @@ function installFetch(plan: FetchPlan): void {
 // Two-lane env: chat (primary for 'muse') + dj (first ladder hop). Keeping the
 // key set small makes the attempt order deterministic for assertions.
 const ENV = {
-  // Both possible chat-lane keys present so this suite is order-independent
-  // across the v5.6.4 chat-lane re-home (Flash key -> Lightning key).
-  VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key-chat',
-  VINAX_DEEPSEEK_V4_FLASH: 'test-key-chat-legacy',
-  VINAX_CHATGPT_120_B: 'test-key-dj',
+  // The chat/dj key plus the fast lane's own key (the first ladder hop after
+  // a lane's own pair) — v5.21.0 names.
+  VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key-chat',
+  VINAX_OAI_GPT_OSS_20B: 'test-key-fast',
 };
 
 let ipSeq = 0;

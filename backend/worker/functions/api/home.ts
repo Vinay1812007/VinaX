@@ -322,7 +322,7 @@ export const onRequestPost = async (context: {
   // Re-laned 2026-07-24 (v3.5.1): the home lane's 550B ULTRA proved too slow and
   // flaky for this step — live probes showed 2 of 3 calls 500'ing at ~25 s
   // against the deadline, and the one success took 21.8 s. The fast, JSON-clean
-  // dj engine (VinaX 120B) leads the curate now, with the quick Groq scholar and
+  // dj engine leads the curate now, with the quick external scholar lane and
   // the chat 120B as rapid failovers and ULTRA kept LAST in the ladder as a
   // capable long-tail backstop. Whatever the upstream weather, fallbackSections()
   // below guarantees a usable 200 — the curate only has to make Home *better*,

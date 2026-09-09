@@ -111,10 +111,10 @@ describe('onRequestPost — always-usable /api/home envelope', () => {
   let ip = 0;
   const KEYS = {
     // v5.4.0: the dj lane rides its own lightning key now.
-    VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'dj-key',
+    VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'dj-key',
     VINAX_GROQ_API_KEY: 'scholar-key',
-    VINAX_DEEPSEEK_V4_FLASH: 'chat-key',
-    VINAX_NEMOTRON_ULTRA: 'ultra-key',
+    VINAX_OAI_GPT_OSS_20B: 'fast-key',
+    VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B: 'ultra-key',
   };
   const post = (body: unknown): Promise<Response> =>
     onRequestPost({

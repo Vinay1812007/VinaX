@@ -1,67 +1,61 @@
 /**
  * Shared AI chat helper — OpenAI-compatible chat endpoints, one per lane.
- * The default base is NVIDIA NIM; a lane can pin its own provider base in
- * LANE_BASE (scholar rides Groq's OpenAI-compatible API since v2.7.3).
+ * The default base is the NVIDIA NIM catalog; a lane can pin its own provider
+ * base in LANE_BASE (the scholar lane and the new router lane each ride their
+ * own OpenAI-compatible host).
  *
  * Keys live ONLY here, as Cloudflare secrets. Configure under
  * Cloudflare -> Pages -> Settings -> Environment variables (Production).
  * The full model inventory (capabilities, health notes, env mapping) lives in
- * ./models.ts (AI_MODEL_REGISTRY, v5.4.0) — lanes below pin only VERIFIED
- * models; the registry also carries the not-yet-wired ones honestly.
+ * ./models.ts (AI_MODEL_REGISTRY) — this file wires those models into lanes.
  *
- * Lanes and their keys (gen-5 assignment, owner-directed 2026-08-29 — every
- * pin below probed live on its own key via the temp /api/modelcheck):
+ * v5.21.0 — the owner rotated EVERY secret on 2026-09-09. Old names are gone
+ * (nothing reads them any more), four models were retired and four arrived:
+ *   RETIRED  minimax-m3, gpt-oss-120b, nemotron-3-nano-30b-a3b,
+ *            ising-calibration-1-35b-a3b, llama-3.3-nemotron-super-49b
+ *   ARRIVED  mistralai/mistral-nemotron (general reserve),
+ *            meta/llama-3.2-11b-vision-instruct + -90b- (vision, own keys),
+ *            the OpenRouter aggregator key
+ *   MOVED    muse-glimmer and laguna-xs re-published under new vendor
+ *            prefixes; the search seat inherited by the nano-omni model
+ * Because every key is new, no probe result carries over: lane pins follow
+ * the owner's key -> model table, the cross-lane ladder covers anything that
+ * answers slowly, and the admin AI Lab re-verifies each row after deploy.
  *
- * VINAX_DEEPSEEK_V4_FLASH        chat    Muse (VinaX FLASH) — assistant, AI
- *                                        playlists, mood recs (gpt-oss-20b:
- *                                        the deepseek-v4-flash-0731 slug the
- *                                        key is named for HANGS upstream —
- *                                        probed twice 2026-08-29, 18s+ no
- *                                        response — so it stays unpinned)
- * VINAX_CHATGPT_20_B             fast    Swift (VinaX 20B) — fast chat,
- *                                        quick tasks, instant answers
- * VINAX_NEMOTRON_SUPER           deep    Sage (VinaX SUPER) — deep thinking,
- *                                        the Think button. Upgraded to
- *                                        nemotron-3-super-120b-a12b (probed
- *                                        0.55s); the old 49b pin stays as the
- *                                        same-key secondary.
- * VINAX_GROQ_API_KEY             scholar Scholar (VinaX INSTANT) — music
- *                                        knowledge, lyrics tools, LIVE voice
- * VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B
- *                                dj      Win (VinaX LIGHTNING) — AI DJ, Aura
- *                                        Mix, Smart Radio, smart queue. The
- *                                        owner's realtime-DJ mandate: probed
- *                                        7.3s cold / 0.8s warm, JSON-clean.
- *                                        (dj rode VINAX_CHATGPT_120_B's
- *                                        gpt-oss-20b before v5.4.0.)
- * VINAX_NEMOTRON_ULTRA           home    Nova (VinaX ULTRA) — premium
- *                                        reasoning backstop; slow — always
- *                                        LAST in latency-sensitive ladders
- * VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B
- *                                search  Expert (VinaX NANO 3) — search-page
- *                                        music expert, discovery
- * VINAX_DEEPSEEK_V4_PRO          pro     Deep reasoning reserve — advanced
- *                                        recommendations, taste analysis
- *                                        (probed 0.59s warm; cold pod can
- *                                        need a retry)
- * VINAX_MINIMAX_M3               mini    General fallback reserve (probed
- *                                        0.41s warm; healed since v2.7.2)
- * VINAX_RIVA_TRANSLATE_4B_INSTRUCT_V2
- *                                translate Lyrics/UI translation (0.9s). Its
- *                                        v1_1 fallback slug 404s upstream —
- *                                        unpinned until it exists.
- * VINAX_NEMOTRON_3_5_CONTENT_SAFETY
- *                                safety  Moderation of AI-generated text
- * VINAX_LLAMA_3_1_NEMOTRON_SAFETY_GUARD_8B_V3
- *                                guard   Safety second opinion / fallback
- * VINAX_NEMOTRON_3_EMBED_1B      (embed helper) 2048-dim vectors via
- *                                        /v1/embeddings — see embed() below
- * VINAX_KIMI_K3                  agent   Premium agent reserve — kimi-k3
- *                                        probed UNSTABLE 2026-08-29 (one
- *                                        16.6s answer, one 18s hang), so it
- *                                        is wired but NOT in any default
- *                                        ladder and pins no feature. Re-probe
- *                                        before promoting.
+ * Lanes and their keys (18 secrets, 19 lanes — dj and chat share the
+ * lightning key, which is the one engine proven at realtime JSON):
+ *
+ * VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B
+ *                                dj      AI DJ, Aura Mix, Smart Radio, smart
+ *                                        queue — and chat, the balanced seat
+ * VINAX_OAI_GPT_OSS_20B          fast    fast chat, quick tasks, instant
+ *                                        answers
+ * VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B
+ *                                deep    deep thinking, the Think button
+ * VINAX_GROQ_API_KEY             scholar music knowledge, lyrics tools, LIVE
+ *                                        voice — and its whole free catalog
+ * VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B
+ *                                home    premium reasoning backstop; slow —
+ *                                        always LAST in latency-sensitive
+ *                                        ladders
+ * VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING
+ *                                search  search-page music expert, discovery
+ * VINAX_DEEPSEEK_V4_PRO_0813     pro     deep-reasoning ladder reserve
+ * VINAX_MISTRAL_NEMOTRON         mini    general ladder reserve
+ * VINAX_KIMI_K3                  agent   premium agent reserve (kept out of
+ *                                        the default ladder)
+ * VINAX_OPENROUTER_API_KEY       router  the free-model marketplace: every
+ *                                        zero-cost chat model, selectable
+ * VINAX_MTA_LMA_3_2_11B_VSN_INT  vision  image understanding (default)
+ * VINAX_MTA_LMA_3_2_90B_VSN_INT  vision90 deep image understanding
+ * VINAX_DEEPSEEK_V4_FLASH_0731   dsflash bench lane
+ * VINAX_MTA_MUSE_GLIMMER_30B     muse    bench lane
+ * VINAX_NVD_ISING_CALIBRATION_1_5_31B
+ *                                rank    bench lane
+ * VINAX_POOLSIDE_LAGUNA_XS_2_1   laguna  bench lane
+ * VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT
+ *                                diffusion bench lane (text side only)
+ * VINAX_GGL_GEMMA_4_31B_IT       gemma4  bench lane
  *
  * NVIDIA_BASE_URL optional DEFAULT endpoint override — applies only
  * to lanes without their own LANE_BASE pin
@@ -69,35 +63,32 @@
 import { sbInsert, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 export interface AiEnv {
-  // The owner's 18 live keys (2026-08-31 cleanup — every retired secret was
-  // deleted from Cloudflare, so their fields are gone here too).
-  VINAX_DEEPSEEK_V4_FLASH?: string;
-  VINAX_CHATGPT_20_B?: string;
-  VINAX_NEMOTRON_SUPER?: string;
-  VINAX_GROQ_API_KEY?: string;
-  VINAX_CHATGPT_120_B?: string;
-  VINAX_NEMOTRON_ULTRA?: string;
-  VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B?: string;
+  // The owner's 18 live keys (2026-09-09 rotation). Every secret from the
+  // previous naming scheme was deleted upstream, so no legacy field remains.
   VINAX_KIMI_K3?: string;
-  VINAX_DEEPSEEK_V4_PRO?: string;
-  VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B?: string;
-  VINAX_MUSE_GLIMMER_30B?: string;
-  VINAX_ISING_CALIBRATION_1_5_31B?: string;
-  VINAX_ISING_CALIBRATION_1_35B_A3B?: string;
-  VINAX_LAGUNA_XS_2_1?: string;
-  VINAX_MINIMAX_M3?: string;
-  VINAX_DIFFUSIONGEMMA_26B_A4B_IT?: string;
-  VINAX_GEMMA_4_31B_IT?: string;
-  VINAX_NEMOTRON_3_NANO_30B_A3B?: string;
+  VINAX_DEEPSEEK_V4_PRO_0813?: string;
+  VINAX_DEEPSEEK_V4_FLASH_0731?: string;
+  VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B?: string;
+  VINAX_MTA_MUSE_GLIMMER_30B?: string;
+  VINAX_NVD_ISING_CALIBRATION_1_5_31B?: string;
+  VINAX_POOLSIDE_LAGUNA_XS_2_1?: string;
+  VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT?: string;
+  VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B?: string;
+  VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING?: string;
+  VINAX_GGL_GEMMA_4_31B_IT?: string;
+  VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B?: string;
+  VINAX_OAI_GPT_OSS_20B?: string;
+  VINAX_MISTRAL_NEMOTRON?: string;
+  VINAX_MTA_LMA_3_2_11B_VSN_INT?: string;
+  VINAX_MTA_LMA_3_2_90B_VSN_INT?: string;
+  VINAX_GROQ_API_KEY?: string;
+  VINAX_OPENROUTER_API_KEY?: string;
   NVIDIA_BASE_URL?: string;
 }
 
 const ENDPOINT = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
-/** The feature lanes. Every AI call runs on exactly one lane.
- * v5.4.0 adds: pro (deep-reasoning reserve), mini (general reserve),
- * translate, safety, guard (moderation pair) and agent (kimi reserve —
- * unstable, kept out of default ladders). */
+/** The feature lanes. Every AI call runs on exactly one lane. */
 export type Lane =
   | 'dj'
   | 'chat'
@@ -109,19 +100,19 @@ export type Lane =
   | 'pro'
   | 'mini'
   | 'agent'
-  // Inventory lanes — one per remaining owner model so the admin AI Lab can
-  // probe every key. v5.6.1: trimmed to the 18 keys the owner kept (the riva
-  // translators, embed, safety pair, voicechat, video, speaker and petr keys
-  // were deleted from Cloudflare 2026-08-31, so their lanes are gone).
+  // The free-model marketplace (v5.21.0): one lane, many selectable models.
+  | 'router'
+  // Vision lanes — image understanding, on their own keys since v5.21.0.
+  | 'vision'
+  | 'vision90'
+  // Inventory lanes — one per remaining owner key so the admin AI Lab can
+  // probe every secret. They drive no feature.
   | 'dsflash'
   | 'muse'
   | 'rank'
-  | 'rank2'
   | 'laguna'
   | 'diffusion'
-  | 'omni'
-  | 'gemma4'
-  | 'oss120';
+  | 'gemma4';
 
 /** Default (NVIDIA) chat-completions endpoint, honoring the env override. */
 export function defaultEndpoint(env: AiEnv): string {
@@ -129,12 +120,11 @@ export function defaultEndpoint(env: AiEnv): string {
 }
 
 /** Per-lane provider base URL (OpenAI-compatible /v1 root). Lanes not listed
- * ride the default NVIDIA base. scholar: keyed by VINAX_GROQ_API_KEY (gen-4
- * name for the Groq console key the owner introduced 2026-07-17), so the
- * lane calls Groq's OpenAI-compatible API — same Llama family, probed TTFB
- * ~120 ms vs the ~20 s the old provider needed for first tokens. */
+ * ride the default base. scholar rides the low-latency external host (~120 ms
+ * to first token); router rides the free-model marketplace host. */
 export const LANE_BASE: Partial<Record<Lane, string>> = {
   scholar: 'https://api.groq.com/openai/v1',
+  router: 'https://openrouter.ai/api/v1',
 };
 
 /** Full chat-completions URL for a lane — its own provider base when pinned,
@@ -146,25 +136,36 @@ export function laneEndpoint(env: AiEnv, lane: Lane): string {
   return base ? `${base}/chat/completions` : defaultEndpoint(env);
 }
 
-/** Groq is OpenAI-compatible but rejects NVIDIA-only knobs — probed live
- * 2026-07-17: reasoning_effort → 400 "not supported with this model" (while
+/** The scholar host is OpenAI-compatible but rejects NVIDIA-only knobs —
+ * probed live: reasoning_effort -> 400 "not supported with this model" (while
  * max_tokens, response_format json_object and SSE streaming all work as-is).
  * Gate NVIDIA-specific params on this check. */
 export function isGroqEndpoint(url: string): boolean {
   return url.includes('api.groq.com');
 }
 
-/** nemotron-3-nano reasons by DEFAULT and leaks BARE chain-of-thought into
- * the content stream (no <think> wrapper, so the SSE think-gate can't strip
- * it) — in v2.7.2 it burned the search lane's whole token budget without
- * delivering a single song. Probed live 2026-07-17 (v2.7.4): the
- * chat_template_kwargs {"thinking": false} switch turns reasoning fully OFF.
- * Model-gated so the knob never travels to any other pin or provider.
+/** The marketplace host proxies many different upstreams, so vendor-specific
+ * knobs are unsafe there too — the same gate, one host further. */
+export function isRouterEndpoint(url: string): boolean {
+  return url.includes('openrouter.ai');
+}
+
+/** True when the endpoint is NOT the NVIDIA base — i.e. vendor-specific
+ * payload knobs must be withheld. */
+export function isExternalEndpoint(url: string): boolean {
+  return isGroqEndpoint(url) || isRouterEndpoint(url);
+}
+
+/** nemotron a3b-family models reason by DEFAULT and leak BARE chain-of-thought
+ * into the content stream (no <think> wrapper, so the SSE think-gate can't
+ * strip it) — it once burned the search lane's whole token budget without
+ * delivering a single song. Probed live: the chat_template_kwargs
+ * {"thinking": false} switch turns reasoning fully OFF. Model-gated so the
+ * knob never travels to any other pin or provider.
  *
- * v5.4.0: nemotron-3.5-lightning (the new dj primary) is the same a3b
- * template family and probed VERBOSE on a one-word prompt (174-183 chars for
- * "reply ok") — the nano thinking-off switch rides its calls too, and the
- * post-deploy /api/dj live check is the acceptance test.
+ * Covers the nano family (search lane, including the -omni- variant that
+ * inherited the seat in v5.21.0) and the lightning engine (same a3b template
+ * family, probed VERBOSE on a one-word prompt).
  *
  * The qwen3 branch is defensive legacy (no lane pins qwen today). */
 export function reasoningOffParams(model: string): Record<string, unknown> {
@@ -174,115 +175,98 @@ export function reasoningOffParams(model: string): Record<string, unknown> {
   return {};
 }
 
-/** Pinned model per lane — every slug below probed live ON ITS OWN KEY via
- * the temp /api/modelcheck before pinning (v5.4.0, 2026-08-29). Health notes
- * and the full re-pin history live in git and ./models.ts.
+/** Pinned model per lane — the owner's 2026-09-09 key -> model table.
  *
- * v5.4.0 re-pin summary (owner's multi-model mandate):
- * - dj: openai/gpt-oss-20b (on VINAX_CHATGPT_120_B) -> nemotron-3.5-lightning
- *   on its OWN new key. Probed 7.3s cold / 0.80s warm, chatty-but-JSON-clean;
- *   thinking off via reasoningOffParams. gpt-oss-20b stays as the same-key
- *   secondary (probed 0.58s on the lightning key — NVIDIA keys are
- *   account-scoped).
- * - deep: llama-3.3-nemotron-super-49b -> nemotron-3-super-120b-a12b (probed
- *   0.55s on VINAX_NEMOTRON_SUPER — the owner's table names this model for
- *   the key). The 49b keeps the same-key secondary seat.
- * - NEW pro: deepseek-v4-pro-0813 (0.59s warm; first cold probe timed out,
- *   so it is a LADDER RESERVE, not a feature primary).
- * - NEW mini: minimax-m3 (0.41s warm; same cold-flake caveat, same reserve
- *   role — v2.7.2's "owner sign-off" requirement is satisfied by the owner's
- *   2026-08-29 model table naming it General AI).
- * - NEW translate/safety/guard: riva-v2 (0.93s), content-safety (0.52s),
- *   safety-guard-8b (0.53s) — special-purpose, excluded from general ladders.
- * - NEW agent: kimi-k3 — UNSTABLE (16.6s then a hang); wired for the admin
- *   bench only, no feature and no ladder until it stabilizes.
- * - NOT pinned anywhere (probed dead 2026-08-29): deepseek-v4-flash-0731 and
- *   gemma-4-31b-it HANG; ising-calibration slugs are 410 Gone; muse-glimmer,
- *   nemotron-voicechat, laguna-xs and riva-v1_1 404 on the NIM catalog. */
+ * Seat changes in v5.21.0, and why:
+ * - fast: nemotron-3-nano-30b-a3b was retired with its key, so the seat moves
+ *   to gpt-oss-20b on the key named for it. The lightning engine is the
+ *   same-key secondary, because gpt-oss-20b hung on the RETIRED key and the
+ *   new one is unprobed.
+ * - search: the nano model is gone; its omni-reasoning sibling inherits the
+ *   seat on its own key. Same template family, so reasoning still switches
+ *   off through reasoningOffParams.
+ * - mini: the MiniMax key was retired; mistral-nemotron takes the general
+ *   reserve seat.
+ * - vision / vision90: image understanding finally has its own keys instead
+ *   of borrowing a text lane's.
+ * - router: the marketplace default. Any zero-cost model in the live catalog
+ *   can override it per call (see _lib/catalog.ts).
+ * - chat stays on the lightning pair — the deepseek Flash engine hung on the
+ *   retired key, so it keeps a bench lane until it is probed serving. */
 export const LANE_MODEL: Record<Lane, string> = {
   dj: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-  // v5.6.4 — the FLASH key itself is dead (both its rows hang while the same
-  // models serve on other keys). The balanced seat moves to the proven
-  // lightning pair until the owner recreates the Flash key.
   chat: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   deep: 'nvidia/nemotron-3-super-120b-a12b',
-  fast: 'nvidia/nemotron-3-nano-30b-a3b', // fastest live engine (556ms probe)
+  fast: 'openai/gpt-oss-20b',
   scholar: 'llama-3.3-70b-versatile',
   home: 'nvidia/nemotron-3-ultra-550b-a55b',
-  search: 'nvidia/nemotron-3-nano-30b-a3b',
+  search: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
   pro: 'deepseek-ai/deepseek-v4-pro-0813',
-  mini: 'minimaxai/minimax-m3',
+  mini: 'mistralai/mistral-nemotron',
   agent: 'moonshotai/kimi-k3',
-  // Inventory bench lanes (v5.4.1) — see the Lane union note. Status at the
-  // 2026-08-29 probe: deepseek-flash + gemma-4 HANG; muse/laguna/voicechat and
-  // riva-v1_1 404; the ising ranks are 410 Gone; gpt-oss-120b hangs on NVIDIA;
-  // diffusiongemma SERVES; omni/video/speaker/petr are unprobed catalog
-  // guesses. The bench shows the live truth either way.
+  router: 'meta-llama/llama-3.3-70b-instruct:free',
+  vision: 'meta/llama-3.2-11b-vision-instruct',
+  vision90: 'meta/llama-3.2-90b-vision-instruct',
+  // Inventory bench lanes — one per remaining key, no feature depends on them.
   dsflash: 'deepseek-ai/deepseek-v4-flash-0731',
-  muse: 'nvidia/muse-glimmer-30b',
+  muse: 'meta/muse-glimmer-30b',
   rank: 'nvidia/ising-calibration-1.5-31b',
-  rank2: 'nvidia/ising-calibration-1-35b-a3b',
-  laguna: 'nvidia/laguna-xs-2.1',
+  laguna: 'poolside/laguna-xs-2.1',
   diffusion: 'google/diffusiongemma-26b-a4b-it',
-  omni: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
   gemma4: 'google/gemma-4-31b-it',
-  oss120: 'openai/gpt-oss-120b',
 };
 
 /** Per-lane SECONDARY model pin — a healthy same-key variant tried on the
  * lane's OWN key right after the pinned primary and BEFORE any cross-lane
  * ladder hop. The primary always goes first, so the moment it heals upstream
  * it reclaims the lane; the secondary keeps the lane's character while the
- * primary is degraded or hanging.
- * - dj (v5.4.0): gpt-oss-20b on the lightning key — probed 0.58s; if the new
- *   lightning primary has a bad minute the DJ stays on its own funded key
- *   with the engine that ran it before v5.4.0.
- * - deep (v5.4.0): the previous 49b primary — proven Think engine.
- * - chat/home/search/scholar: unchanged from v3.7.0. */
+ * primary is degraded or hanging. NVIDIA keys are account-scoped, so any
+ * served model works on any of those keys. */
 export const LANE_SECONDARY: Partial<Record<Lane, string>> = {
-  dj: 'nvidia/nemotron-3-nano-30b-a3b',
+  dj: 'openai/gpt-oss-20b',
   fast: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-  deep: 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
-  chat: 'nvidia/nemotron-3-ultra-550b-a55b',
-  home: 'openai/gpt-oss-20b',
-  search: 'google/diffusiongemma-26b-a4b-it',
+  deep: 'nvidia/nemotron-3-ultra-550b-a55b',
+  chat: 'mistralai/mistral-nemotron',
+  home: 'nvidia/nemotron-3-super-120b-a12b',
+  search: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+  mini: 'openai/gpt-oss-20b',
   scholar: 'llama-3.1-8b-instant',
+  vision: 'meta/llama-3.2-90b-vision-instruct',
+  vision90: 'meta/llama-3.2-11b-vision-instruct',
 };
 
 /** Env var that holds each lane's key — exported for the admin AI Lab bench. */
 export const LANE_ENV: Record<Lane, keyof AiEnv> = {
-  dj: 'VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B',
-  chat: 'VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B', // v5.6.4: Flash key dead — see LANE_MODEL note
-  deep: 'VINAX_NEMOTRON_SUPER',
-  fast: 'VINAX_CHATGPT_20_B',
+  dj: 'VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B',
+  chat: 'VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B',
+  deep: 'VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B',
+  fast: 'VINAX_OAI_GPT_OSS_20B',
   scholar: 'VINAX_GROQ_API_KEY',
-  home: 'VINAX_NEMOTRON_ULTRA',
-  // v5.6.3 — keys realigned to the owner's sheet: nano-30b-a3b rides
-  // VINAX_NEMOTRON_3_NANO_30B_A3B; the omni-reasoning model rides
-  // VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B.
-  search: 'VINAX_NEMOTRON_3_NANO_30B_A3B',
-  pro: 'VINAX_DEEPSEEK_V4_PRO',
-  mini: 'VINAX_MINIMAX_M3',
+  home: 'VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B',
+  search: 'VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING',
+  pro: 'VINAX_DEEPSEEK_V4_PRO_0813',
+  mini: 'VINAX_MISTRAL_NEMOTRON',
   agent: 'VINAX_KIMI_K3',
-  dsflash: 'VINAX_DEEPSEEK_V4_FLASH',
-  muse: 'VINAX_MUSE_GLIMMER_30B',
-  rank: 'VINAX_ISING_CALIBRATION_1_5_31B',
-  rank2: 'VINAX_ISING_CALIBRATION_1_35B_A3B',
-  laguna: 'VINAX_LAGUNA_XS_2_1',
-  diffusion: 'VINAX_DIFFUSIONGEMMA_26B_A4B_IT',
-  omni: 'VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B',
-  gemma4: 'VINAX_GEMMA_4_31B_IT',
-  oss120: 'VINAX_CHATGPT_120_B',
+  router: 'VINAX_OPENROUTER_API_KEY',
+  vision: 'VINAX_MTA_LMA_3_2_11B_VSN_INT',
+  vision90: 'VINAX_MTA_LMA_3_2_90B_VSN_INT',
+  dsflash: 'VINAX_DEEPSEEK_V4_FLASH_0731',
+  muse: 'VINAX_MTA_MUSE_GLIMMER_30B',
+  rank: 'VINAX_NVD_ISING_CALIBRATION_1_5_31B',
+  laguna: 'VINAX_POOLSIDE_LAGUNA_XS_2_1',
+  diffusion: 'VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT',
+  gemma4: 'VINAX_GGL_GEMMA_4_31B_IT',
 };
 
 /** Cross-lane failover ladder: when a lane's own key/model pair is missing or
  * dead, the next live pair takes the call — one dead key never takes a
  * feature down, it just degrades to a healthy sibling lane.
- * v5.4.0 order: fastest proven JSON generators first, the slow 550B ULTRA
- * last, and the special-purpose lanes (translate/safety/guard) plus the
- * unstable agent reserve are NEVER in the general ladder — a translation
- * model must not answer a DJ JSON call. */
-const LADDER: Lane[] = ['fast', 'chat', 'dj', 'mini', 'pro', 'deep', 'scholar', 'search', 'home'];
+ * Order: fastest proven JSON generators first, the slow 550B ULTRA last. The
+ * vision lanes, the unstable agent reserve and the bench-only inventory lanes
+ * are NEVER in the general ladder — an image model must not answer a DJ JSON
+ * call. The marketplace lane sits second-to-last: it is free and broad, but
+ * its upstreams vary, so proven keys go first. */
+const LADDER: Lane[] = ['fast', 'chat', 'dj', 'mini', 'pro', 'deep', 'scholar', 'search', 'router', 'home'];
 
 export interface LaneAttempt {
   key: string;
@@ -419,9 +403,9 @@ export async function chat(
       };
       // gpt-oss are reasoning models: cap the thinking so they respond fast and
       // don't burn the token budget before emitting the answer. Others ignore
-      // it on the NVIDIA base — but Groq 400s on reasoning_effort (probed
-      // live), so the knob never travels to a Groq endpoint.
-      if (model.includes('gpt-oss') && !isGroqEndpoint(endpoint)) payload.reasoning_effort = opts.reasoningEffort ?? 'low';
+      // it on the NVIDIA base — but the external hosts 400 on reasoning_effort
+      // (probed live), so the knob never travels off the NVIDIA base.
+      if (model.includes('gpt-oss') && !isExternalEndpoint(endpoint)) payload.reasoning_effort = opts.reasoningEffort ?? 'low';
       // nemotron a3b-family models leak BARE chain-of-thought unless reasoning
       // is switched off at the chat-template level (probed live — see
       // reasoningOffParams). Model-gated: a no-op for every other pin.

@@ -1,7 +1,9 @@
 /**
  * AI DJ — NVIDIA NIM (OpenAI-compatible) queue / next-song suggestions.
  *
- * The NVIDIA key lives ONLY server-side (VINAX_CHATGPT_120_B, a Cloudflare secret).
+ * The engine key lives ONLY server-side (the dj lane's Cloudflare secret —
+ * see LANE_ENV in _lib/ai.ts; it is never named here so a key rotation cannot
+ * leave a stale name behind in a comment).
  * The client POSTs the listener's context; we ask the model for a flowing list
  * of { title, artist, reason } picks; the client resolves them to playable
  * tracks. If no key is set we return 503 and the client stays fully local.
@@ -167,7 +169,7 @@ async function handlePost(context: {
   // plus one full laddered generation still fit under client patience.
   const deadlineAt = t0 + 31_000;
 
-  // Gather (parallel) — the fast lane (VinaX 20B, quick tasks) expands the pool
+  // Gather (parallel) — the fast lane (quick tasks) expands the pool
   // with well-known songs; merged with the client's real catalogPool for grounding.
   const poolSize = Array.isArray((reqCtx as { catalogPool?: unknown[] }).catalogPool)
     ? ((reqCtx as { catalogPool?: unknown[] }).catalogPool as unknown[]).length
@@ -200,7 +202,7 @@ async function handlePost(context: {
     /* gather is optional — the curator can work from the catalog/seed alone */
   }
 
-  // Stage 2 — the DJ lane (VinaX 120B): deeply rank + sequence into a smooth queue.
+  // Stage 2 — the DJ lane: deeply rank + sequence into a smooth queue.
   const rankInstr =
     'Build the next stretch of this listener\'s queue. Context (JSON):\n' +
     ctxJson +

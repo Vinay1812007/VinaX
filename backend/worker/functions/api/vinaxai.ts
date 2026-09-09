@@ -12,15 +12,20 @@
  * is required for the feature to work.
  */
 import {
+  LANE_ENV,
+  LANE_MODEL,
   defaultEndpoint,
+  isExternalEndpoint,
   isGroqEndpoint,
   laneAttempts,
+  laneEndpoint,
   logAiEvent,
   reasoningOffParams,
   usageFromJson,
   type AiEnv,
   type Lane,
 } from '../_lib/ai';
+import { resolveCatalogModel, type CatalogProvider } from '../_lib/catalog';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { probeFetchMarker } from '../_lib/fetchMarker';
@@ -29,7 +34,10 @@ import { houseRules, readConfig } from '../_lib/clientConfig';
 import { istNowLine } from '../_lib/time';
 import { type SupabaseEnv } from '../_lib/supabase';
 
-const VISION_MODEL = 'meta/llama-3.2-11b-vision-instruct';
+// Image understanding rides its own key + lane since v5.21.0 (the owner
+// issued dedicated vision secrets), so the slug is read from the lane table
+// instead of being duplicated here.
+const VISION_LANE: Lane = 'vision';
 const UA = 'VinaX/1.0 (+https://www.sirimillavinay.online)';
 
 // Engine ids (user-facing labels live in the client): muse — everyday default;
@@ -42,8 +50,8 @@ const UA = 'VinaX/1.0 (+https://www.sirimillavinay.online)';
 // expert — hidden Search-page music expert (Title — Artist contract; NOT in
 // the engine picker). Each engine rides one of the seven key lanes defined
 // in functions/_lib/ai.ts.
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'voice' | 'expert' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer' | 'flash' | 'musegl' | 'ising15' | 'ising135' | 'laguna' | 'gemma4' | 'omni' | 'cgt120';
-const ALL_MODES: readonly string[] = ['muse', 'swift', 'sage', 'scholar', 'win', 'nova', 'nano', 'voice', 'expert', 'auto', 'pro', 'mini', 'k3', 'translator', 'glimmer', 'flash', 'musegl', 'ising15', 'ising135', 'laguna', 'gemma4', 'omni', 'cgt120'];
+type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'voice' | 'expert' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer' | 'flash' | 'musegl' | 'ising15' | 'laguna' | 'gemma4' | 'router';
+const ALL_MODES: readonly string[] = ['muse', 'swift', 'sage', 'scholar', 'win', 'nova', 'nano', 'voice', 'expert', 'auto', 'pro', 'mini', 'k3', 'translator', 'glimmer', 'flash', 'musegl', 'ising15', 'laguna', 'gemma4', 'router'];
 // Engine ids sent by pre-2.3.0 clients (installed PWAs / APKs) — mapped to
 // their successors so builds in the wild keep working after the retirement.
 const LEGACY_MODE: Record<string, Mode> = {
@@ -53,6 +61,13 @@ const LEGACY_MODE: Record<string, Mode> = {
   gemma: 'scholar',
   maverick: 'muse',
   diffusion: 'muse',
+  // v5.21.0 retirements — the owner's 2026-09-09 key rotation removed these
+  // engines. Clients that still send the old id keep working on the nearest
+  // living seat instead of silently falling back to the default.
+  omni: 'nano',
+  ising135: 'ising15',
+  cgt120: 'swift',
+  minimax: 'mini',
 };
 // Live-voice replies are spoken back, so first-token latency is the whole game.
 // Re-laned home → scholar (v3.4.1): the 550B home engine measured ~6.7 s to
@@ -89,17 +104,17 @@ export const LANE_BY_MODE: Record<Mode, Lane> = {
   k3: 'agent',
   translator: 'fast',
   glimmer: 'diffusion',
-  // v5.6.1 — every one of the owner's 18 keys is a selectable engine. These
-  // eight ride the inventory lanes; a model that is dead upstream fails over
+  // v5.21.0 — every one of the owner's 18 keys is reachable as an engine.
+  // These ride the inventory lanes; a model that is dead upstream fails over
   // through the ladder and the reply chip names the engine that answered.
+  // 'router' is the free-model marketplace: one lane, and the listener can
+  // name any zero-cost model in its live catalog (see _lib/catalog.ts).
   flash: 'dsflash',
   musegl: 'muse',
   ising15: 'rank',
-  ising135: 'rank2',
   laguna: 'laguna',
   gemma4: 'gemma4',
-  omni: 'omni',
-  cgt120: 'oss120',
+  router: 'router',
 };
 const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   muse: 'low',
@@ -120,11 +135,9 @@ const EFFORT_BY_MODE: Record<Mode, 'low' | 'medium' | 'high'> = {
   flash: 'low',
   musegl: 'low',
   ising15: 'low',
-  ising135: 'low',
   laguna: 'low',
   gemma4: 'low',
-  omni: 'low',
-  cgt120: 'medium',
+  router: 'low',
 };
 // Capability-tuned per-seat budgets: the balanced default (muse), the short
 // quick seats (swift/nano), the Think engine's long structured answers (sage),
@@ -148,11 +161,9 @@ const MAXTOK_BY_MODE: Record<Mode, number> = {
   flash: 3000,
   musegl: 2400,
   ising15: 1600,
-  ising135: 1600,
   laguna: 1600,
   gemma4: 3000,
-  omni: 2000,
-  cgt120: 4500,
+  router: 4000,
 };
 // Per-seat sampling temperature: cooler for the precision seats (quick facts,
 // deep reasoning), warmer for the big creative engine.
@@ -175,11 +186,9 @@ const TEMP_BY_MODE: Record<Mode, number> = {
   flash: 0.7,
   musegl: 0.85,
   ising15: 0.6,
-  ising135: 0.6,
   laguna: 0.7,
   gemma4: 0.7,
-  omni: 0.7,
-  cgt120: 0.7,
+  router: 0.75,
 };
 
 // Package B1 (v3.9.7): rewritten to mirror best-in-class assistant conduct —
@@ -259,18 +268,16 @@ const MODE_FLAVOR: Partial<Record<Mode, string>> = {
   nova: `THIS ENGINE'S SEAT — the most powerful generalist, built for the complex questions. SIGNATURE STYLE — comprehensive but organized: cover what matters in a logical order, weigh trade-offs honestly, hold real nuance without hedging everything, and keep the temper even and warm. Depth earns its length; thorough never means padded. LENGTH TARGET — up to ~500 words when the question earns it, and not a sentence past what the substance fills.`,
   nano: `THIS ENGINE'S SEAT — the light, quick one with a song-finder's heart. SIGNATURE STYLE — short and friendly: bullets over paragraphs whenever there's more than one thing to say, and no reply runs longer than it must. It genuinely loves recommending actual songs — when music comes up, a few real "Title — Artist" picks beat a paragraph of description. Real, findable songs only, always.`,
   pro: `THIS ENGINE'S SEAT — the deep-analysis engine (VinaX PRO): advanced reasoning over hard, multi-factor questions. SIGNATURE STYLE — rigorous and calm: conclusion first, then a tight, well-ordered analysis; weighs trade-offs explicitly; never hand-waves. Great for strategy, tricky comparisons, math-adjacent thinking and careful code review. LENGTH TARGET — up to ~450 words when the substance earns it, never padded.`,
-  mini: `THIS ENGINE'S SEAT — the dependable all-rounder (VinaX M3): balanced answers with a steady temper. SIGNATURE STYLE — clear and friendly, light markdown, gets to the point without being brusque; a safe pair of hands for everyday questions of every kind. LENGTH TARGET — match the question; one clean paragraph for small things, ~300 words tops.`,
+  mini: `THIS ENGINE'S SEAT — the dependable all-rounder (VinaX MST NMTRN): balanced answers with a steady temper. SIGNATURE STYLE — clear and friendly, light markdown, gets to the point without being brusque; a safe pair of hands for everyday questions of every kind. LENGTH TARGET — match the question; one clean paragraph for small things, ~300 words tops.`,
   k3: `THIS ENGINE'S SEAT — the premium agent reserve (VinaX K3): a heavyweight generalist for the hardest requests. SIGNATURE STYLE — composed and thorough, structured markdown for substance, calm confidence over flourish. This engine can be slow or briefly unavailable upstream; when a sibling engine covers the call, the reply chip says so honestly. LENGTH TARGET — whatever the substance fills, never padding.`,
   translator: `THIS ENGINE'S SEAT — the translation specialist (VinaX TRANSLATE). Translate faithfully between any of VinaX's languages (Telugu, Hindi, Tamil, the other Indian languages, English): preserve meaning, tone and register; add a one-line note only when a phrase has no clean equivalent. For song-lyric requests, translate MEANING in your own words — do not reproduce the original lyric text beyond a few quoted words. Plain output: the translation first, formatting only when the user's text has structure.`,
   glimmer: `THIS ENGINE'S SEAT — the visual-creative engine (VinaX GLIMMER): moods, themes, palettes, visual concepts and descriptions. SIGNATURE STYLE — vivid, sensory, concrete; sketches ideas in words, SVG or mermaid when a picture helps. It cannot produce image FILES — say so plainly when asked and offer the richest text/SVG alternative instead.`,
   flash: `THIS ENGINE'S SEAT — the rapid generalist (VinaX DP V4 FLASH): quick, capable answers with a light touch. SIGNATURE STYLE — direct and tidy, light markdown, no padding.`,
-  musegl: `THIS ENGINE'S SEAT — the muse engine (VinaX MUSE GMR 30B): playful creative sparks — captions, hooks, names, tiny verses. SIGNATURE STYLE — bright and brief.`,
-  ising15: `THIS ENGINE'S SEAT — the calibration engine (VinaX ING CALBTN 15 31B): comparisons, rankings and scoring questions answered with visible criteria. SIGNATURE STYLE — a short table or ordered list with one-line reasons.`,
-  ising135: `THIS ENGINE'S SEAT — the light calibration engine (VinaX ING CALBTN 1 35B A3B): quick judgments and orderings. SIGNATURE STYLE — compact, criteria-first.`,
-  laguna: `THIS ENGINE'S SEAT — the small swift engine (VinaX LGNA XS 2.1): tiny questions, instant answers. SIGNATURE STYLE — a sentence or three, never more.`,
-  gemma4: `THIS ENGINE'S SEAT — the open generalist (VinaX GEM 4 31B): balanced everyday answers with a friendly, plain voice. SIGNATURE STYLE — clean paragraphs, light markdown.`,
-  omni: `THIS ENGINE'S SEAT — the omni reasoner (VinaX NVD NMTRN NN30B A3B): compact reasoning over mixed, messy questions. SIGNATURE STYLE — conclusion first, short support.`,
-  cgt120: `THIS ENGINE'S SEAT — the heavyweight open engine (VinaX CGT 120B): long-form substance, careful structure. SIGNATURE STYLE — well-organized markdown, depth without padding.`,
+  musegl: `THIS ENGINE'S SEAT — the muse engine (VinaX MTA MUSE GMR 30B): playful creative sparks — captions, hooks, names, tiny verses. SIGNATURE STYLE — bright and brief.`,
+  ising15: `THIS ENGINE'S SEAT — the calibration engine (VinaX NVD ING CALBTN 1.5 31B): comparisons, rankings and scoring questions answered with visible criteria. SIGNATURE STYLE — a short table or ordered list with one-line reasons.`,
+  laguna: `THIS ENGINE'S SEAT — the small swift engine (VinaX PSD LGNA XS 2.1): tiny questions, instant answers. SIGNATURE STYLE — a sentence or three, never more.`,
+  gemma4: `THIS ENGINE'S SEAT — the open generalist (VinaX GGL GEM 4 31B): balanced everyday answers with a friendly, plain voice. SIGNATURE STYLE — clean paragraphs, light markdown.`,
+  router: `THIS ENGINE'S SEAT — the open marketplace seat (VinaX OPR ALL): the listener picked one of the free community engines by name, so its own character leads. SIGNATURE STYLE — capable and plain: clear structure, no padding, and complete honesty when a question is past what this engine can do. Quality varies engine to engine here; never overstate confidence to cover for it.`,
   voice: `THIS IS LIVE VOICE — every word you write is spoken aloud through a phone speaker. Reply in 1-3 short conversational sentences of plain text: no markdown, no lists, no headings, no emoji, no URLs. Say numbers, dates and times the way people speak them ("nineteen ninety-five", "half past eight"), never as digits-and-symbols soup. If something lives at a link, say where to tap in the app instead of reading an address. Sound like a friendly person talking, never like a document being read.`,
 };
 
@@ -638,7 +645,7 @@ async function handleChat(
   isApp: boolean,
 ): Promise<Response> {
 
-  let body: { messages?: InMsg[]; mode?: string; web?: boolean; images?: unknown; taste?: unknown; profile?: unknown };
+  let body: { messages?: InMsg[]; mode?: string; model?: unknown; web?: boolean; images?: unknown; taste?: unknown; profile?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -695,10 +702,21 @@ async function handleChat(
   const totalImgBytes = images.reduce((n, s) => n + s.length, 0);
   if (totalImgBytes > 6_000_000) return jsonErr({ error: 'image_too_large' }, 413);
 
+  // v5.21.0 — the two aggregator seats let the listener name the exact model:
+  // 'scholar' opens the account catalog, 'router' the free marketplace. The
+  // slug is checked against that provider's LIVE free list before it is used,
+  // so a request can never route an unlisted or paid model onto the key, and
+  // it is ignored outright for every other seat (those ride pinned engines on
+  // keys of their own).
+  const catalogProvider: CatalogProvider | null = mode === 'scholar' ? 'grq' : mode === 'router' ? 'opr' : null;
+  const pickedModel = catalogProvider
+    ? await resolveCatalogModel(env, catalogProvider, typeof body.model === 'string' ? body.model : null)
+    : null;
+
   // Lane routing: the engine's own key+model pair first, then the next live
   // pairs in the cross-lane failover ladder, so one dead key or retired
   // model degrades to a healthy sibling instead of failing the chat.
-  const attempts = laneAttempts(env, LANE_BY_MODE[mode]);
+  const attempts = laneAttempts(env, LANE_BY_MODE[mode], pickedModel ?? undefined);
   if (!attempts.length) return jsonErr({ error: 'ai_not_configured' }, 503);
   const primary = attempts[0];
   const keyRole = primary.role;
@@ -796,13 +814,18 @@ async function handleChat(
     last.content = parts;
   }
 
-  // Vision runs on the NVIDIA-hosted vision model, so it must ride a key that
-  // lives on the DEFAULT base — the scholar lane's external (Groq) key can't
-  // sign an NVIDIA call. First default-base attempt wins (NVIDIA keys are
-  // account-scoped, any served model works on any key).
+  // Vision runs on a model hosted on the DEFAULT base, so it must ride a key
+  // that lives there — an external aggregator key can't sign that call.
+  // v5.21.0: the vision model finally has its OWN secret, so use it when it
+  // is configured; otherwise fall back to the first default-base attempt in
+  // the ladder (those keys are account-scoped, so any served model works on
+  // any of them) and, failing that, to the seat's own primary.
   const nvBase = defaultEndpoint(env);
-  const visionAttempt = attempts.find((a) => a.endpoint === nvBase) ?? primary;
-  const model = useVision ? VISION_MODEL : primary.model;
+  const visionKey = env[LANE_ENV[VISION_LANE]];
+  const visionAttempt = visionKey
+    ? { key: visionKey, model: LANE_MODEL[VISION_LANE], role: VISION_LANE, endpoint: laneEndpoint(env, VISION_LANE) }
+    : (attempts.find((a) => a.endpoint === nvBase) ?? primary);
+  const model = useVision ? LANE_MODEL[VISION_LANE] : primary.model;
 
   // v5.16.0 — ask the default base to append a usage chunk to the stream so
   // the AI Cost panel sees real token counts. The scholar lane's external
@@ -821,8 +844,9 @@ async function handleChat(
       stream: true,
     };
     if (usageOptIn && !isGroqEndpoint(endpoint)) p.stream_options = { include_usage: true };
-    // NVIDIA-only knob: Groq rejects reasoning_effort with a 400 (probed live).
-    if (m.includes('gpt-oss') && !isGroqEndpoint(endpoint)) p.reasoning_effort = EFFORT_BY_MODE[mode];
+    // Default-base-only knob: the external hosts reject reasoning_effort with
+    // a 400 (probed live), so it never travels off the default base.
+    if (m.includes('gpt-oss') && !isExternalEndpoint(endpoint)) p.reasoning_effort = EFFORT_BY_MODE[mode];
     // nemotron-3-nano (search/expert primary) leaks BARE chain-of-thought —
     // no <think> wrapper for the SSE gate to strip — unless its reasoning is
     // switched off at the chat-template level (probed live — see
@@ -860,7 +884,7 @@ async function handleChat(
   // sub-second external base — probed stream TTFB ~120 ms.) Each hop calls
   // ITS OWN lane endpoint: providers are mixed now.
   const plan = useVision
-    ? [{ model, key: visionAttempt.key, role: visionAttempt.role, endpoint: nvBase }]
+    ? [{ model, key: visionAttempt.key, role: visionAttempt.role, endpoint: visionAttempt.endpoint }]
     : attempts.slice(0, 4);
   let up: Response | null = null;
   for (let i = 0; i < plan.length; i += 1) {

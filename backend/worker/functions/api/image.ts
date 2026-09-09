@@ -42,15 +42,19 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
 
 const handleImage = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  // NVIDIA-hosted image endpoint — NVIDIA keys only. VINAX_GROQ_API_KEY is
-  // excluded: it's a Groq key (scholar lane) and can't sign this call.
+  // The image endpoint lives on the default (NVIDIA) base, so only a key that
+  // belongs to that account can sign the call — the two aggregator keys
+  // (scholar / router) are excluded on purpose. Any of the rest will do:
+  // those keys are account-scoped, not model-scoped. Order = the busiest
+  // keys first, so a cold account is rarely the one woken for a picture.
   const key =
-    env.VINAX_DEEPSEEK_V4_FLASH ??
-    env.VINAX_CHATGPT_120_B ??
-    env.VINAX_NEMOTRON_ULTRA ??
-    env.VINAX_NEMOTRON_SUPER ??
-    env.VINAX_CHATGPT_20_B ??
-    env.VINAX_NVIDIA_NEMOTRON_3_NANO_30B_A3B ??
+    env.VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B ??
+    env.VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B ??
+    env.VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B ??
+    env.VINAX_OAI_GPT_OSS_20B ??
+    env.VINAX_MISTRAL_NEMOTRON ??
+    env.VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING ??
+    env.VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT ??
     null;
   // No image key means the feature is unavailable, not that the client sent
   // a bad request — surface as 503 (audit finding M13).

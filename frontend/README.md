@@ -70,18 +70,21 @@ singers, lyricist, film), and *living color*: the app tints itself from
 the playing artwork.
 
 🤖 **VinaX AI — the VinaX V5 engine family** — a full chat with all
-eighteen engines selectable by name from a scrollable picker (v5.6.1, the owner's key roster): from
-**VinaX AUTO** (reads every question and picks the best engine) and the
-balanced default through **VinaX NVD NMTRN 3.5 LTNG 30 B** (the big creative
-engine that also runs the AI DJ), **VinaX NVD NMTRN SUP** (deepest
-reasoning), **VinaX NVD NMTRN ULT** (strongest all-rounder), **VinaX DP V4
-PRO** and **DLASH**, **VinaX CGT 20B/120B**, **VinaX GRQ ALL** (music
-knowledge in a blink), **VinaX MIMX M3**, **VinaX K3**, **VinaX DIF GEM**,
-**VinaX MUSE GMR 30B**, **VinaX GEM 4 31 B**, **VinaX LGNA XS 2.1**, the
-**VinaX ING CALBTN** pair and **VinaX TRANSLATE** — the engine nicknames
-are the only model names shown anywhere, admin dashboards included, and
-feature seats ride only live, probe-verified engines — a dead upstream
-model — or a dead key — is benched, never served. The owner-hosted VinaX Music
+nineteen engines selectable by name from a scrollable picker (v5.21.0, the
+owner's key roster): from **VinaX AUTO** (reads every question and picks the
+best engine) and the balanced default through **VinaX NVD NMTRN 3.5 LTNG 30B**
+(the big creative engine that also runs the AI DJ), **VinaX NVD NMTRN SUP**
+(deepest reasoning), **VinaX NVD NMTRN ULT** (strongest all-rounder), **VinaX
+DP V4 PRO** and **FLASH**, **VinaX OAI OSS 20B**, **VinaX MST NMTRN**,
+**VinaX K3**, **VinaX GGL DIF GEM**, **VinaX MTA MUSE GMR 30B**, **VinaX GGL
+GEM 4 31B**, **VinaX PSD LGNA XS 2.1**, **VinaX NVD ING CALBTN** and **VinaX
+TRANSLATE**. Two of them — **VinaX GRQ ALL** (music knowledge in a blink) and
+**VinaX OPR ALL** — open a second list instead of one fixed model: every free
+engine that key can run right now, fetched live, pickable by name, and never
+anything the provider charges for. The engine nicknames are the only model
+names shown anywhere, admin dashboards included, and every reply's chip names
+the engine that actually answered — a dead upstream model, or a dead key, is
+benched, never served. The owner-hosted VinaX Music
 API leads the music sources (v5.6.7), with the first-party catalog as its
 fallback — every source health-checked from the admin API monitor. Live web search, files and images,
 Think/Research modes, and hands-free voice chat replying in a natural studio
@@ -159,7 +162,7 @@ D-pad navigation, capability-based UI (touch/mouse/TV detected by hardware).
 `/admin` on a separate subdomain, token-gated: 18 dashboards — real-time
 listening, growth chart, search & engagement analytics, world map, user
 management with audited deletes and per-user profile export, A/B experiments,
-AI-lane health, an AI Lab bench for all seven engines, sent-notification log
+AI-lane health, an AI Lab bench for all nineteen lanes, sent-notification log
 with retract, full admin audit trail, content-control blocklist (takedowns
 propagate in minutes), weekly digest, push composer with song/album picker,
 Live/Maintenance switch, and a ⌘K palette. Light and dark, both legible.

@@ -89,7 +89,7 @@ describe('onRequestPost — variety plumbing end to end', () => {
         body: JSON.stringify(body),
       }),
       // v5.4.0: the dj lane rides its own lightning key now.
-      env: { VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key' },
+      env: { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key' },
     });
 
   it('pins the dj engine at temp 0.95 and injects nonce + avoidTitles into the prompt', async () => {

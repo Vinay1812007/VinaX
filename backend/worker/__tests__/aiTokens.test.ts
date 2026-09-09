@@ -77,20 +77,20 @@ describe('logAiEvent', () => {
 describe('chat() usage passthrough', () => {
   it('returns the provider usage alongside the content', async () => {
     installFetch(() => new Response(JSON.stringify({ choices: [{ message: { content: 'hi' } }], usage: { prompt_tokens: 40, completion_tokens: 2 } }), { status: 200 }));
-    const r = await chat({ VINAX_CHATGPT_20_B: 'k' }, [{ role: 'user', content: 'x' }], { lane: 'fast' });
+    const r = await chat({ VINAX_OAI_GPT_OSS_20B: 'k' }, [{ role: 'user', content: 'x' }], { lane: 'fast' });
     expect(r.content).toBe('hi');
     expect(r.usage).toEqual({ prompt_tokens: 40, completion_tokens: 2 });
   });
   it('leaves usage undefined when the provider sent none', async () => {
     installFetch(() => new Response(JSON.stringify({ choices: [{ message: { content: 'hi' } }] }), { status: 200 }));
-    const r = await chat({ VINAX_CHATGPT_20_B: 'k' }, [{ role: 'user', content: 'x' }], { lane: 'fast' });
+    const r = await chat({ VINAX_OAI_GPT_OSS_20B: 'k' }, [{ role: 'user', content: 'x' }], { lane: 'fast' });
     expect(r.usage).toBeUndefined();
   });
 });
 
 describe('streaming assistant usage', () => {
   const SB = { SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk' };
-  const DEFAULT_BASE_ENV = { ...SB, VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k-chat' };
+  const DEFAULT_BASE_ENV = { ...SB, VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k-chat' };
   const SCHOLAR_ONLY_ENV = { ...SB, VINAX_GROQ_API_KEY: 'k-scholar' };
 
   const sse = (chunks: string[], tail: Record<string, unknown>[] = []): Response =>

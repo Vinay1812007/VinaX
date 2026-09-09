@@ -12,6 +12,16 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.21.0': {
+    title: 'New engine line-up, and a free-model menu',
+    changes: [
+      { type: 'new', text: 'VinaX AI has a refreshed engine line-up: nineteen engines plus Auto. A new dependable all-rounder joins the list, the search and fast seats moved to newer engines, and the retired ones are remapped automatically — if your saved engine is gone, you land on its nearest replacement instead of the default.' },
+      { type: 'new', text: 'Two engines now open a whole menu of their own: pick “VinaX GRQ ALL” or “VinaX OPR ALL” and a second list appears with every free model that engine can run right now, fetched live. Choose one by name, or leave it on the engine’s default. Only models that cost nothing are ever listed.' },
+      { type: 'improved', text: 'Photo questions run on a dedicated image-understanding engine (with a heavyweight one behind it) instead of borrowing a text engine’s connection — so asking about a picture no longer competes with chat for the same lane.' },
+      { type: 'improved', text: 'Owner console — System health now checks nine engines including the new marketplace and image seats, the AI Lab benches all nineteen lanes, and the Environment Checklist lists every AI key by name so a missing one is obvious at a glance.' },
+      { type: 'fixed', text: 'Every engine reply chip names the engine that actually answered under its new name, including replies you picked from a free-model menu.' },
+    ],
+  },
   '5.20.0': {
     title: 'Live tutorials, a new Help page, steady lyrics',
     changes: [

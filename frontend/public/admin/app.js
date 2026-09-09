@@ -1461,28 +1461,28 @@
   // paints once and never clobbers a conversation in progress.
   var LAB_LANES = [
     // model = the lane's PINNED primary (must match functions/_lib/ai.ts LANE_MODEL).
-    // v5.6.1: trimmed to the owner's 18 live keys (2026-08-31 Cloudflare
-    // cleanup) and renamed to the owner's display names. 19 lanes / 18 keys —
-    // chat and dsflash share the DeepSeek Flash key.
-    { lane: 'dj', name: 'NMTRN 3.5 LTNG', nick: 'VinaX NVD NMTRN 3.5 LTNG 30 B', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
+    // v5.21.0 — rebuilt for the owner's 2026-09-09 key rotation: 19 lanes over
+    // 18 keys (dj and chat share the lightning key). Every secret is new, so
+    // this bench is how each engine earns its verified status back.
+    { lane: 'dj', name: 'NMTRN 3.5 LTNG', nick: 'VinaX NVD NMTRN 3.5 LTNG 30B', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
     { lane: 'chat', name: 'BALANCED', nick: 'VinaX Balanced (LTNG key)', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
-    { lane: 'fast', name: 'CGT 20B', nick: 'VinaX CGT 20B', model: 'nvidia/nemotron-3-nano-30b-a3b' },
+    { lane: 'fast', name: 'OSS 20B', nick: 'VinaX OAI OSS 20B', model: 'openai/gpt-oss-20b' },
     { lane: 'deep', name: 'NMTRN SUP', nick: 'VinaX NVD NMTRN SUP', model: 'nvidia/nemotron-3-super-120b-a12b' },
     { lane: 'scholar', name: 'GRQ ALL', nick: 'VinaX GRQ ALL', model: 'llama-3.3-70b-versatile' },
     { lane: 'home', name: 'NMTRN ULT', nick: 'VinaX NVD NMTRN ULT', model: 'nvidia/nemotron-3-ultra-550b-a55b' },
-    { lane: 'search', name: 'NMTRN NN30B', nick: 'VinaX NVD NMTRN NN30B A3B', model: 'nvidia/nemotron-3-nano-30b-a3b' },
+    { lane: 'search', name: 'NMTRN NN OMNI', nick: 'VinaX NVD NMTRN NN OMNI 30B', model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning' },
     { lane: 'pro', name: 'DP V4 PRO', nick: 'VinaX DP V4 PRO', model: 'deepseek-ai/deepseek-v4-pro-0813' },
-    { lane: 'mini', name: 'MIMX M3', nick: 'VinaX MIMX M3', model: 'minimaxai/minimax-m3' },
+    { lane: 'mini', name: 'MST NMTRN', nick: 'VinaX MST NMTRN', model: 'mistralai/mistral-nemotron' },
     { lane: 'agent', name: 'K3', nick: 'VinaX K3', model: 'moonshotai/kimi-k3' },
-    { lane: 'dsflash', name: 'DP V4 DLASH', nick: 'VinaX DP V4 DLASH', model: 'deepseek-ai/deepseek-v4-flash-0731' },
-    { lane: 'oss120', name: 'CGT 120B', nick: 'VinaX CGT 120B', model: 'openai/gpt-oss-120b' },
-    { lane: 'diffusion', name: 'DIF GEM', nick: 'VinaX DIF GEM 26B A4B IT', model: 'google/diffusiongemma-26b-a4b-it' },
-    { lane: 'gemma4', name: 'GEM 4 31 B', nick: 'VinaX GEM 4 31 B', model: 'google/gemma-4-31b-it' },
-    { lane: 'omni', name: 'NVD NMTRN', nick: 'VinaX NVD NMTRN', model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning' },
-    { lane: 'muse', name: 'MUSE GMR', nick: 'VinaX MUSE GMR 30B', model: 'nvidia/muse-glimmer-30b' },
-    { lane: 'laguna', name: 'LGNA XS 2.1', nick: 'VinaX LGNA XS 2.1', model: 'nvidia/laguna-xs-2.1' },
-    { lane: 'rank', name: 'ING CALBTN 15', nick: 'VinaX ING CALBTN 15 31B', model: 'nvidia/ising-calibration-1.5-31b' },
-    { lane: 'rank2', name: 'ING CALBTN 1', nick: 'VinaX ING CALBTN 1 35b A3B', model: 'nvidia/ising-calibration-1-35b-a3b' }
+    { lane: 'router', name: 'OPR ALL', nick: 'VinaX OPR ALL', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+    { lane: 'vision', name: 'VSN 11B', nick: 'VinaX MTA VSN 11B', model: 'meta/llama-3.2-11b-vision-instruct' },
+    { lane: 'vision90', name: 'VSN 90B', nick: 'VinaX MTA VSN 90B', model: 'meta/llama-3.2-90b-vision-instruct' },
+    { lane: 'dsflash', name: 'DP V4 FLASH', nick: 'VinaX DP V4 FLASH', model: 'deepseek-ai/deepseek-v4-flash-0731' },
+    { lane: 'diffusion', name: 'DIF GEM', nick: 'VinaX GGL DIF GEM 26B A4B IT', model: 'google/diffusiongemma-26b-a4b-it' },
+    { lane: 'gemma4', name: 'GEM 4 31B', nick: 'VinaX GGL GEM 4 31B', model: 'google/gemma-4-31b-it' },
+    { lane: 'muse', name: 'MUSE GMR', nick: 'VinaX MTA MUSE GMR 30B', model: 'meta/muse-glimmer-30b' },
+    { lane: 'laguna', name: 'LGNA XS 2.1', nick: 'VinaX PSD LGNA XS 2.1', model: 'poolside/laguna-xs-2.1' },
+    { lane: 'rank', name: 'ING CALBTN 1.5', nick: 'VinaX NVD ING CALBTN 1.5 31B', model: 'nvidia/ising-calibration-1.5-31b' }
   ];
   var labLane = 'chat';
   var labHist = {}; // lane -> [{ role, content, error?, meta? }] — in memory only, gone on reload
@@ -1496,23 +1496,30 @@
   // v5.6.2 — owner rule: the AI nicknames are the ONLY model names shown
   // anywhere in the app. Served slugs map to their VinaX names here.
   var AI_NICKS = [
+    // v5.21.0 names. Specific slugs first; the retired rows stay at the
+    // bottom so historical telemetry still labels cleanly.
     [/nemotron-3\.5-lightning/i, 'VinaX NVD NMTRN 3.5 LTNG 30B'],
-    [/nemotron-3-super-120b|nemotron-super-49b|nemotron.super/i, 'VinaX NVD NMTRN SUP'],
+    [/nemotron-3-super-120b|nemotron.super/i, 'VinaX NVD NMTRN SUP'],
     [/nemotron-3-ultra/i, 'VinaX NVD NMTRN ULT'],
-    [/nano-omni/i, 'VinaX NVD NMTRN'],
-    [/nemotron-3-nano/i, 'VinaX NVD NMTRN NN30B A3B'],
+    [/nano-omni/i, 'VinaX NVD NMTRN NN OMNI 30B'],
+    [/mistral-nemotron/i, 'VinaX MST NMTRN'],
     [/deepseek-v4-pro/i, 'VinaX DP V4 PRO'],
     [/deepseek-v4-flash/i, 'VinaX DP V4 FLASH'],
-    [/minimax/i, 'VinaX MIMX M3'],
     [/kimi/i, 'VinaX K3'],
-    [/diffusiongemma/i, 'VinaX DIF GEM 26B A4B IT'],
-    [/muse-glimmer/i, 'VinaX MUSE GMR 30B'],
-    [/gemma-4/i, 'VinaX GEM 4 31B'],
-    [/laguna/i, 'VinaX LGNA XS 2.1'],
-    [/ising-calibration-1\.5/i, 'VinaX ING CALBTN 15 31B'],
-    [/ising-calibration-1-35b/i, 'VinaX ING CALBTN 1 35B A3B'],
-    [/gpt-oss-120b/i, 'VinaX CGT 120B'],
-    [/gpt-oss-20b/i, 'VinaX CGT 20B'],
+    [/diffusiongemma/i, 'VinaX GGL DIF GEM 26B A4B IT'],
+    [/muse-glimmer/i, 'VinaX MTA MUSE GMR 30B'],
+    [/gemma-4/i, 'VinaX GGL GEM 4 31B'],
+    [/laguna/i, 'VinaX PSD LGNA XS 2.1'],
+    [/ising-calibration/i, 'VinaX NVD ING CALBTN 1.5 31B'],
+    [/llama-3\.2-90b-vision/i, 'VinaX MTA VSN 90B'],
+    [/llama-3\.2-11b-vision/i, 'VinaX MTA VSN 11B'],
+    [/gpt-oss-20b/i, 'VinaX OAI OSS 20B'],
+    // A marketplace pick keeps its own name — the seat chose that engine.
+    [/:free$/i, 'VinaX OPR ALL'],
+    // Retired 2026-09-09 — kept so older rows in the dashboards read cleanly.
+    [/nemotron-3-nano/i, 'VinaX NVD NMTRN NN30B A3B (retired)'],
+    [/minimax/i, 'VinaX AI (retired)'],
+    [/gpt-oss-120b/i, 'VinaX AI (retired)'],
     [/llama-3\.3-70b|llama-3\.1-8b|llama3/i, 'VinaX GRQ ALL']
   ];
   function aiNick(m) {

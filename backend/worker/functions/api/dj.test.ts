@@ -44,7 +44,7 @@ describe('onRequestPost — DJ variety + anti-repeat plumbing', () => {
       // Only the dj key: gather (fast lane) has no key and is skipped, so the
       // sole outbound call is the curate on the dj engine.
       // v5.4.0: the dj lane rides its own lightning key now.
-      env: { VINAX_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'dj-key' },
+      env: { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'dj-key' },
     });
 
   const eightFresh = Array.from({ length: 8 }, (_, i) => ({
