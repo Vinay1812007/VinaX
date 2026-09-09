@@ -492,11 +492,58 @@ export async function gather(
   env: AiEnv,
   messages: ChatMessage[],
   lanes: Lane[],
-  opts: { temperature?: number; maxTokens?: number; timeoutMs?: number; deadlineAt?: number } = {},
+  opts: GatherOpts = {},
 ): Promise<string[]> {
+  return (await gatherDetailed(env, messages, lanes, opts)).map((r) => r.content);
+}
+
+export interface GatherOpts {
+  temperature?: number;
+  maxTokens?: number;
+  timeoutMs?: number;
+  deadlineAt?: number;
+  /** Co-work mode (v5.24.0). When true each participating lane is restricted
+   *  to its OWN key — no cross-lane failover hop.
+   *
+   *  Why it matters: chat() normally walks the shared ladder, so three lanes
+   *  whose own engines are cold all degrade onto the same healthy sibling and
+   *  return three near-identical pools. That is not a panel of engines, it is
+   *  one engine billed three times. With soloLadder the roster is honest: a
+   *  lane either contributes its own perspective or abstains, and the caller
+   *  sees exactly who answered. */
+  soloLadder?: boolean;
+}
+
+/** One participant's contribution to a gather round. */
+export interface GatherResult {
+  /** The lane asked. */
+  lane: Lane;
+  /** The model that actually answered (may differ when failover is allowed). */
+  model: string | null;
+  content: string;
+  ms: number;
+}
+
+/**
+ * Cooperative gathering: run the SAME prompt on several LANES in parallel and
+ * return every non-empty response WITH the engine that produced it. Used to
+ * widen the idea/candidate pool before a single strong lane curates the final
+ * answer. Failures are skipped; latency is one slow lane, not the sum — so
+ * adding a participant costs tokens, never wall-clock.
+ *
+ * Attribution is the point of the detailed variant: a co-work round that
+ * cannot say which engines took part cannot be shown, tuned, or trusted.
+ */
+export async function gatherDetailed(
+  env: AiEnv,
+  messages: ChatMessage[],
+  lanes: Lane[],
+  opts: GatherOpts = {},
+): Promise<GatherResult[]> {
   const settled = await Promise.allSettled(
-    lanes.map((lane) =>
-      chat(env, messages, {
+    lanes.map(async (lane) => {
+      const started = Date.now();
+      const r = await chat(env, messages, {
         temperature: opts.temperature,
         maxTokens: opts.maxTokens,
         timeoutMs: opts.timeoutMs,
@@ -504,11 +551,14 @@ export async function gather(
         lane,
         json: true,
         reasoningEffort: 'low',
-      }),
-    ),
+        // An empty ladder keeps the participant on its own key+secondary.
+        ...(opts.soloLadder ? { ladder: [] as Lane[] } : {}),
+      });
+      return { lane, model: r.model, content: r.content ?? '', ms: Date.now() - started };
+    }),
   );
-  const out: string[] = [];
-  for (const s of settled) if (s.status === 'fulfilled' && s.value.content) out.push(s.value.content);
+  const out: GatherResult[] = [];
+  for (const s of settled) if (s.status === 'fulfilled' && s.value.content) out.push(s.value);
   return out;
 }
 

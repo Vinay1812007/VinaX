@@ -1831,6 +1831,89 @@
       $('lab-model-in').addEventListener('input', function () { labModelBy[labLane] = this.value.trim(); });
     }
   }
+  // ==========================================================================
+  //  Catalog model monitoring (v5.24.0)
+  //  The two aggregator keys are ONE chip each in the lane strip, but each
+  //  opens a whole catalog. This pings every free chat model those keys serve,
+  //  one row per model, so a single dead engine inside a catalog is visible
+  //  instead of hiding behind a green key.
+  //
+  //  Pings are STAGGERED on purpose. Both keys are free tiers and the agent
+  //  lane already answered 429 to a single ping — firing ~24 calls at once
+  //  would manufacture rate-limit failures that say nothing about the models.
+  // ==========================================================================
+  var labCatBusy = false;
+  var labCatAt = '';
+  var labCatHealth = {}; // slug -> 'ok' | 'warn' | 'bad'
+  var CAT_PING_GAP_MS = 350;
+  function labPaintCatAt() {
+    var el = $('lab-cat-at');
+    if (el) el.textContent = labCatAt ? 'last checked ' + labCatAt : '';
+  }
+  function labCatRows() {
+    var rows = [];
+    ['grq', 'opr'].forEach(function (gid) {
+      var lane = gid === 'grq' ? 'scholar' : 'router';
+      (labCatalog[gid] || []).forEach(function (m) {
+        rows.push({ id: m.id, label: (labCatalogPrefix[gid] || gid) + ' / ' + m.label, lane: lane });
+      });
+    });
+    return rows;
+  }
+  function labCatId(slug) { return 'lab-cat-' + slug.replace(/[^a-zA-Z0-9]/g, '_'); }
+  function labPaintCatPing(row, ok, ms, why) {
+    var el = $(labCatId(row.id));
+    if (!el) return;
+    el.className = 'lab-ping ' + (ok ? 'ok' : 'bad');
+    el.textContent = row.label + ' ' + (ok ? '\u2713 ' + ms + ' ms' : '\u2717 ' + (why || 'failed'));
+    el.title = row.id;
+  }
+  function labCatPingAll() {
+    var host = $('lab-cat-pings');
+    if (!host || labCatBusy) return;
+    var rows = labCatRows();
+    if (!rows.length) {
+      host.innerHTML = '<span class="muted" style="font-size:11px">No catalog models loaded \u2014 use \u201cReload list\u201d on a catalog lane first.</span>';
+      return;
+    }
+    labCatBusy = true;
+    host.innerHTML = rows.map(function (r) {
+      return '<span class="lab-ping" id="' + labCatId(r.id) + '">' + esc(r.label) + ' \u2026</span>';
+    }).join('');
+    var left = rows.length;
+    function done() {
+      left -= 1;
+      if (left <= 0) { labCatBusy = false; labCatAt = labNow(); labPaintCatAt(); }
+    }
+    rows.forEach(function (r, i) {
+      // Stagger: one call every CAT_PING_GAP_MS so a free-tier key is never
+      // hit with the whole catalog at once.
+      setTimeout(function () {
+        var t0 = Date.now();
+        fetch('/api/admin/ailab', {
+          method: 'POST',
+          headers: { 'x-admin-token': token(), 'content-type': 'application/json' },
+          body: JSON.stringify({ lane: r.lane, model: r.id, messages: [{ role: 'user', content: 'ping' }], maxTokens: 1 })
+        }).then(function (res) {
+          if (res.status === 401) { sessionStorage.removeItem(TOKEN_KEY); showLogin('Invalid token.'); return { ok: false, why: '401' }; }
+          var ct = res.headers.get('content-type') || '';
+          if (ct.indexOf('text/event-stream') === -1) {
+            return res.json().catch(function () { return {}; }).then(function (j) {
+              return { ok: false, why: (j && j.error ? j.error + (j.status ? ' ' + j.status : '') : 'http ' + res.status) };
+            });
+          }
+          return res.text().then(function () { return { ok: true }; });
+        }).then(function (rr) {
+          var ms = Date.now() - t0;
+          labCatHealth[r.id] = rr.ok ? (ms < 4000 ? 'ok' : 'warn') : 'bad';
+          labPaintCatPing(r, rr.ok, ms, rr.why);
+        }).catch(function () {
+          labCatHealth[r.id] = 'bad';
+          labPaintCatPing(r, false, Date.now() - t0, 'network');
+        }).then(done);
+      }, i * CAT_PING_GAP_MS);
+    });
+  }
   function renderAiLab() {
     var chips = LAB_LANES.map(function (L) {
       return '<button class="lab-chip' + (L.lane === labLane ? ' active' : '') + '" data-lane="' + esc(L.lane) + '">' +
@@ -1839,10 +1922,11 @@
     }).join('');
     $('view').innerHTML =
       '<div class="card" id="lab-root" style="max-width:860px">' +
-      '<h3 style="margin-top:0">API Monitoring <span class="muted">· all 18 keys across 19 lanes + music catalog sources — pick any model to probe, no failover, failures show honestly</span></h3>' +
+      '<h3 style="margin-top:0">API Monitoring <span class="muted">· 18 keys across 19 lanes, every free catalog model, and the music sources — no failover, failures show honestly</span></h3>' +
       '<div class="lab-chips">' + chips + '</div>' +
       '<div class="row" id="lab-model-row" style="margin-bottom:10px;flex-wrap:wrap;align-items:center;gap:8px"></div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-ping">Ping all lanes</button><span id="lab-ping-at" class="lab-ping-at"></span><span id="lab-pings" class="chips" style="margin:0"></span></div>' +
+      '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-cat">Ping catalog models</button><span id="lab-cat-at" class="lab-ping-at"></span><span id="lab-cat-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-music">Ping music APIs</button><span id="lab-music-at" class="lab-ping-at"></span><span id="lab-music-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="lab-msgs" id="lab-msgs"></div>' +
       '<textarea id="lab-in" class="lab-input" rows="3" placeholder="Test message — Enter sends, Shift+Enter for a new line"></textarea>' +
@@ -1860,6 +1944,7 @@
     $('lab-send').addEventListener('click', labSend);
     $('lab-clear').addEventListener('click', function () { labHist[labLane] = []; labPaintMsgs(); });
     $('lab-ping').addEventListener('click', labPingAll);
+    $('lab-cat').addEventListener('click', labCatPingAll);
     $('lab-music').addEventListener('click', labMusicPing);
     $('lab-in').addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); labSend(); }
@@ -1869,6 +1954,7 @@
     labPaintDots();
     labPaintPingAt();
     labPaintMusicAt();
+    labPaintCatAt();
     // First open of the Lab auto-checks lane health once — dots fill in
     // without a click; later refreshes never repaint the chat.
     if (!labAutoPinged) { labAutoPinged = true; labPingAll(); labMusicPing(); }

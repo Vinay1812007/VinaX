@@ -7,7 +7,7 @@
  * never a 500). Only a fully unconfigured AI (no keys at all) 503s, in which
  * case the client's normal shelves still render. See functions/_lib/ai.ts.
  */
-import { chat, gather, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
+import { chat, gatherDetailed, extractJson, logAiEvent, type AiEnv, type Lane } from '../_lib/ai';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { varietySeed, styleAngle } from '../_lib/variety';
@@ -289,27 +289,44 @@ export const onRequestPost = async (context: {
   // scholar's sub-second Groq Llama seeds ideas in ~1 s on a healthy key). Ideas
   // are optional — a tight 7 s cap keeps the curate's budget intact regardless.
   let ideas: Array<{ title: string; query: string }> = [];
+  // Co-work roster (v5.24.0). A front page assembled from ONE engine's ideas
+  // is that engine's taste, not the listener's. Three fast lanes propose in
+  // parallel on their own keys — the panel widens the shelf pool at no
+  // wall-clock cost, and the curate below still picks the final 4-6.
+  const IDEA_PANEL: Lane[] = ['scholar', 'search', 'chat'];
+  const contributors: Array<{ lane: string; model: string | null; ms: number; picks: number }> = [];
   try {
-    const gathered = await gather(
+    const gathered = await gatherDetailed(
       env,
       [
         { role: 'system', content: HOME_GATHER_PROMPT },
         { role: 'user', content: taste + '\n\nPropose about 8 sections as JSON.' },
       ],
-      ['scholar'],
-      { temperature: 0.95, maxTokens: 1200, timeoutMs: 7_000, deadlineAt: Math.min(deadlineAt, Date.now() + 7_000) },
+      IDEA_PANEL,
+      {
+        temperature: 0.95,
+        maxTokens: 1200,
+        timeoutMs: 7_000,
+        deadlineAt: Math.min(deadlineAt, Date.now() + 7_000),
+        // Own key only — a lane that ladders onto a sibling would echo that
+        // sibling's ideas back as a second opinion.
+        soloLadder: true,
+      },
     );
     const seen = new Set<string>();
     for (const g of gathered) {
-      for (const s of parseSections(g)) {
-        const k = s.title.toLowerCase();
+      let picks = 0;
+      for (const sec of parseSections(g.content)) {
+        const k = sec.title.toLowerCase();
         if (!seen.has(k)) {
           seen.add(k);
-          ideas.push(s);
+          ideas.push(sec);
+          picks += 1;
         }
       }
+      contributors.push({ lane: g.lane, model: g.model, ms: g.ms, picks });
     }
-    ideas = ideas.slice(0, 16);
+    ideas = ideas.slice(0, 24);
   } catch {
     /* gather optional */
   }
@@ -380,5 +397,6 @@ export const onRequestPost = async (context: {
   }
   if (r.error === 'not_configured') return json({ error: 'ai_not_configured' }, 503);
   // Always answer with usable sections — never blank, never a 500 (DQA-02).
-  return json({ sections, model: usedAi ? r.model : 'fallback' });
+  // Co-work receipt — see the DJ endpoint for the rationale.
+  return json({ sections, model: usedAi ? r.model : 'fallback', panel: contributors });
 };

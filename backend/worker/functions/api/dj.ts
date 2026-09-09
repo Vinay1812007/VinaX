@@ -9,7 +9,7 @@
  * tracks. If no key is set we return 503 and the client stays fully local.
  * See functions/_lib/ai.ts for env vars.
  */
-import { chat, gather, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
+import { chat, gatherDetailed, extractJson, logAiEvent, type AiEnv, type Lane } from '../_lib/ai';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { varietySeed, styleAngle } from '../_lib/variety';
@@ -175,29 +175,52 @@ async function handlePost(context: {
     ? ((reqCtx as { catalogPool?: unknown[] }).catalogPool as unknown[]).length
     : 0;
   let candidates: Array<{ title: string; artist: string }> = [];
+  // Co-work roster (v5.24.0). The pool used to come from ONE lane, so the
+  // queue only ever saw one engine's taste. These three run in PARALLEL on
+  // their own keys, so the panel costs tokens but not wall-clock, and three
+  // different engines disagreeing is exactly what widens the pool: each
+  // brings its own corner of the catalog before the DJ lane curates.
+  // Chosen from the post-rotation probe — the lanes that actually answer
+  // fast (search 0.69s, deep 0.80s, fast 1.2s), never a dead reserve.
+  const CANDIDATE_PANEL: Lane[] = ['fast', 'search', 'scholar'];
+  const contributors: Array<{ lane: string; model: string | null; ms: number; picks: number }> = [];
   // The catalog pool is real and instantly playable — when it's rich enough,
   // the AI gather round adds latency, not quality. Go straight to curation.
   if (poolSize < 24) try {
-    const gathered = await gather(
+    const gathered = await gatherDetailed(
       env,
       [
         { role: 'system', content: CANDIDATE_PROMPT },
         { role: 'user', content: 'Seed + session context (JSON):\n' + ctxJson + `\n\nvarietySeed: "${seed}" — treat this as a shuffle seed and vary the pool between rounds.\nstyleAngle: "${angle}" — colour a handful of candidates in this direction.\n\nList about 30 candidate songs as JSON.` },
       ],
-      ['fast'],
-      { temperature: 0.7, maxTokens: 1500, timeoutMs: 6_000, deadlineAt: Math.min(deadlineAt, Date.now() + 6_000) },
+      CANDIDATE_PANEL,
+      {
+        temperature: 0.7,
+        maxTokens: 1500,
+        timeoutMs: 6_000,
+        deadlineAt: Math.min(deadlineAt, Date.now() + 6_000),
+        // Each panellist stays on its own key: a lane that ladders onto a
+        // sibling would just echo that sibling's pool back as a second
+        // "opinion", which is worse than abstaining.
+        soloLadder: true,
+      },
     );
     const seen = new Set<string>();
     for (const g of gathered) {
-      for (const c of parseCandidates(g)) {
+      let picks = 0;
+      for (const c of parseCandidates(g.content)) {
         const k = (c.title + '|' + c.artist).toLowerCase();
         if (!seen.has(k)) {
           seen.add(k);
           candidates.push(c);
+          picks += 1;
         }
       }
+      // `picks` counts what this engine added that no earlier panellist had —
+      // its actual marginal contribution, not how much it wrote.
+      contributors.push({ lane: g.lane, model: g.model, ms: g.ms, picks });
     }
-    candidates = candidates.slice(0, 50);
+    candidates = candidates.slice(0, 60);
   } catch {
     /* gather is optional — the curator can work from the catalog/seed alone */
   }
@@ -313,5 +336,10 @@ async function handlePost(context: {
   // 500, not 502: Cloudflare swallows origin 502 bodies (serves its own error
   // page) — 500 keeps the honest JSON envelope visible to clients (DQA-02).
   if (!songs.length) return json({ error: r.error ?? 'empty', status: r.status }, 500);
-  return json({ songs, model: r.model });
+  // `panel` is the co-work receipt: which engines took part, how long each
+  // took, and how many picks each one ADDED that no other panellist had.
+  // Reported so a round can be inspected in the console instead of being an
+  // unexplained black box — and so a panellist that contributes nothing round
+  // after round can be dropped on evidence.
+  return json({ songs, model: r.model, panel: contributors });
 }

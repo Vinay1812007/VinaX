@@ -138,6 +138,32 @@ so a listener whose saved pick names one keeps a working seat.
 at a secret the registry doesn't list, if a listed secret becomes
 unreachable by any lane, or if a retired name creeps back into the wiring.
 
+## Co-work rounds
+
+`gatherDetailed()` runs the same prompt across several lanes in parallel and
+returns every non-empty answer **with the engine that produced it**. The AI DJ
+and the Home Screen Builder both use it: a panel proposes, one strong lane
+curates. Latency is the slowest panellist, never the sum, so a participant
+costs tokens and not wall-clock.
+
+| Feature | Panel | Curator |
+| --- | --- | --- |
+| AI DJ / smart queue | `fast`, `search`, `scholar` | `dj` |
+| Home Screen Builder | `scholar`, `search`, `chat` | `dj` |
+
+**`soloLadder` is what makes it a panel.** `chat()` normally walks the shared
+failover ladder, so three lanes whose own engines are cold all degrade onto
+the same healthy sibling and hand back three near-identical pools — one
+engine, billed three times, presented as a panel. With `soloLadder` each
+participant is held to its own key: it contributes its own perspective or it
+abstains. `worker/__tests__/cowork.test.ts` pins both behaviours, including a
+test that demonstrates the collapse when the flag is off.
+
+Both endpoints return a `panel` receipt — lane, model, latency, and how many
+picks each engine added that no other panellist had. That last number is the
+engine's *marginal* contribution, so a panellist that adds nothing round after
+round can be dropped on evidence rather than taste.
+
 ## Honesty ledger (what this is NOT)
 
 - **No model was trained, fine-tuned, evaluated offline, or deployed as a

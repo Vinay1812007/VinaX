@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.24.0': {
+    title: 'Several engines working together',
+    changes: [
+      { type: 'improved', text: 'The AI DJ and your Home page now ask three engines for ideas at once instead of one, then let the strongest engine pick the final line-up. More engines means a wider, less predictable pool to choose from — and because they run side by side, it takes no longer than before.' },
+      { type: 'improved', text: 'Smart queue and Home shelves draw from a bigger candidate pool (60 songs and 24 shelf ideas, up from 50 and 16), so repeats are rarer and deep cuts surface more often.' },
+      { type: 'new', text: 'Owner console — every free model behind the two menu engines can now be health-checked individually, one row per model, so a single dead engine inside a menu is visible instead of hiding behind a working key. Checks are spaced out so a free key is never rate-limited by its own health check.' },
+    ],
+  },
   '5.23.0': {
     title: 'Two engines back from the dead',
     changes: [
