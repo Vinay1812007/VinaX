@@ -5,7 +5,6 @@ import { buildTasteSnapshot } from '@/services/ai/taste';
 import { extractRecommendedFromThread } from '@/services/ai/threadMemory';
 import { searchSongs } from '@/services/api';
 import { usePlayerStore } from '@/store/playerStore';
-import { AuroraBackground } from '@/components/AuroraBackground';
 import { ChatPlayerCard } from '@/components/ChatPlayerCard';
 import { WaveformIcon } from '@/components/Icons';
 import {
@@ -1335,71 +1334,391 @@ export default function VinaXAIPage(): ReactNode {
   const canSpeech = sttReady;
 
   const greeting = greetingParts();
+  const isEmpty = messages.length === 0;
+
+  // The composer is rendered in ONE of two places — centred under the
+  // greeting on an empty chat, pinned to the bottom once a thread exists —
+  // so it is built once here and placed below. Duplicating this JSX would
+  // mean two copies of every handler.
+  const composerBlock = (
+    <div className={cn('shrink-0', isEmpty ? 'px-0' : 'px-3 sm:px-6 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]')}>
+          <div className="mx-auto w-full max-w-[720px]">
+            {pending.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2 px-1">
+                {pending.map((p, i) => (
+                  <span key={i} className="ai-chip pl-1.5 pr-1 py-1 gap-1.5">
+                    {p.kind === 'image' && p.dataUrl ? (
+                      <img src={p.dataUrl} alt="" className="w-6 h-6 rounded-md object-cover" />
+                    ) : (
+                      <span className="w-6 h-6 rounded-md bg-[var(--ai-hover)] flex items-center justify-center text-[9px] font-bold ai-t3" aria-hidden>TXT</span>
+                    )}
+                    <span className="max-w-[10rem] truncate">{p.name}</span>
+                    <button
+                      aria-label="Remove"
+                      onClick={() => setPending((prev) => prev.filter((_, k) => k !== i))}
+                      className="ai-icon-btn w-6 h-6 ai-t3"
+                    >
+                      <XIcon className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="ai-composer relative px-2.5 pt-3 pb-2">
+              <SlashMenu items={matchSlash(input)} onPick={(c: SlashCommand) => { setInput(c.arg ? `/${c.cmd} ` : `/${c.cmd}`); taRef.current?.focus(); if (!c.arg) void send(`/${c.cmd}`); }} />
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                accept="image/*,.txt,.md,.markdown,.csv,.tsv,.json,.log,.xml,.yml,.yaml,.toml,.ini,.env.example,.html,.htm,.css,.js,.jsx,.ts,.tsx,.py,.java,.kt,.c,.h,.cpp,.cs,.go,.rs,.rb,.php,.sh,.sql,.r,.swift,.dart"
+                className="hidden"
+                onChange={(e) => void onFiles(e.target.files)}
+              />
+              <textarea
+                ref={taRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  const t = e.target;
+                  t.style.height = 'auto';
+                  t.style.height = `${Math.min(t.scrollHeight, 144)}px`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Tab' && input.startsWith('/') && !/\s/.test(input)) {
+                    const first = matchSlash(input)[0];
+                    if (first) { e.preventDefault(); setInput(first.arg ? `/${first.cmd} ` : `/${first.cmd}`); }
+                    return;
+                  }
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void send(input);
+                  }
+                }}
+                rows={1}
+                placeholder={imageMode ? 'Describe the image to create…' : listening ? 'Listening…' : 'Message VinaX AI… (type / for commands)'}
+                aria-label="Message VinaX AI"
+                className="w-full bg-transparent resize-none outline-none px-2 text-[15px] leading-6 max-h-36 ai-t1 placeholder:opacity-55"
+              />
+              <div className="mt-1.5 flex items-center gap-0.5">
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  aria-label="Add photos or files"
+                  className="ai-icon-btn"
+                  title="Add photos & files"
+                >
+                  <PlusIcon className="w-[18px] h-[18px]" />
+                </button>
+                <button
+                  onClick={() => setWeb((v) => !v)}
+                  aria-pressed={web}
+                  aria-label="Web search"
+                  title="Web search"
+                  className={cn('ai-icon-btn', web && 'ai-icon-btn-on')}
+                >
+                  <GlobeIcon className="w-[18px] h-[18px]" />
+                </button>
+                {IMAGES_ENABLED && (
+                <button
+                  onClick={() => setImageMode((v) => !v)}
+                  aria-pressed={imageMode}
+                  aria-label="Create an image"
+                  title="Create an image from your next message"
+                  className={cn('ai-icon-btn text-base leading-none', imageMode && 'ai-icon-btn-on')}
+                >
+                  <span aria-hidden>🎨</span>
+                </button>
+                )}
+                {canSpeech && (
+                  <button
+                    onClick={voiceMode ? endVoice : startVoice}
+                    aria-pressed={voiceMode}
+                    aria-label="Live voice chat"
+                    title="Live voice chat"
+                    className={cn('ai-icon-btn', voiceMode && 'ai-icon-btn-on')}
+                  >
+                    <WaveformIcon className="w-[18px] h-[18px]" />
+                  </button>
+                )}
+                <span className="flex-1" />
+                {canSpeech && (
+                  <button
+                    onClick={() => (listening ? stopListening() : startListening(false))}
+                    aria-label="Voice input"
+                    aria-pressed={listening}
+                    title="Speak"
+                    className={cn('ai-icon-btn', listening && 'ai-icon-btn-on animate-pulse')}
+                  >
+                    <MicIcon className="w-[18px] h-[18px]" />
+                  </button>
+                )}
+                {busy ? (
+                  <button onClick={stop} aria-label="Stop" className="ai-send ml-1" style={{ background: 'var(--ai-text)', color: 'var(--ai-bg)' }}>
+                    <StopIcon className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => void send(input)}
+                    disabled={!input.trim() && pending.length === 0}
+                    aria-label="Send"
+                    className="ai-send ml-1"
+                  >
+                    <SendIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* mode + capability-toggle row */}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setEngineOpen((v) => !v);
+                    // The free-model menu is fetched on first open, never on
+                    // page load — a listener who stays on a fixed seat pays
+                    // nothing for engines they never look at.
+                    loadCatalogs();
+                  }}
+                  aria-haspopup="listbox"
+                  aria-expanded={engineOpen}
+                  className={cn('ai-chip py-1.5 gap-1.5 ai-t1', engineOpen && 'ai-chip-on')}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-ember-400" aria-hidden />
+                  {/* On a catalog seat the listener chose an actual model —
+                      show THAT name, so the chip never claims a generic seat
+                      is answering when a specific engine is. */}
+                  <span className="truncate max-w-[11rem]">{activeEngineLabel}</span>
+                  <ChevronDownIcon className={cn('w-3 h-3 ai-t3 transition-transform', engineOpen && 'rotate-180')} />
+                </button>
+                {engineOpen && (
+                  <>
+                    <button
+                      aria-label="Close engine menu"
+                      onClick={() => setEngineOpen(false)}
+                      className="fixed inset-0 z-40 cursor-default"
+                    />
+                    <div
+                      role="listbox"
+                      aria-label="Choose engine"
+                      /* The composer sits mid-screen on an empty chat and at
+                         the bottom once a thread starts, so the menu has to
+                         open away from the composer in each case — anchored
+                         upward always, it ran off the top of the landing. */
+                      className={cn(
+                        'ai-popover absolute left-0 z-50 w-72 overflow-y-auto overscroll-contain animate-fade-up',
+                        isEmpty ? 'top-full mt-2' : 'bottom-full mb-2',
+                      )}
+                      /* Inline cap, immune to CSS purging: the engine list —
+                         and the free-model menu under a catalog seat — must
+                         scroll inside the popover, never spill off-screen. */
+                      style={{ maxHeight: 'min(62vh, 460px)' }}
+                    >
+                      <p className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest ai-t3">Engine</p>
+                      {CORE_MODES.map((mm) => (
+                        <button
+                          key={mm.id}
+                          role="option"
+                          aria-selected={mode === mm.id}
+                          onClick={() => {
+                            setMode(mm.id);
+                            setEngineOpen(false);
+                          }}
+                          className="ai-menu-item justify-between gap-3"
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-[13px] font-bold truncate">{mm.label}</span>
+                            <span className="block text-[11px] font-medium ai-t3 truncate">{mm.hint}</span>
+                          </span>
+                          {mode === mm.id && <span aria-hidden className="text-ember-400">✓</span>}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setAdvancedOpen((v) => !v)}
+                        aria-expanded={advancedOpen}
+                        className="w-full flex items-center justify-between px-2.5 py-2 mt-1 border-t ai-hairline text-[10px] font-bold uppercase tracking-widest ai-t3 hover:ai-t1"
+                      >
+                        Advanced engines
+                        <ChevronDownIcon className={cn('w-3 h-3 transition-transform', advancedOpen && 'rotate-180')} />
+                      </button>
+                      {advancedOpen &&
+                        ADVANCED_MODES.map((mm) => (
+                          <button
+                            key={mm.id}
+                            role="option"
+                            aria-selected={mode === mm.id}
+                            onClick={() => {
+                              setMode(mm.id);
+                              if (!mm.catalog) setEngineOpen(false);
+                            }}
+                            className="ai-menu-item justify-between gap-3 py-1.5"
+                          >
+                            <span className="min-w-0">
+                              <span className="block font-mono text-[12px] truncate">{mm.label}</span>
+                              <span className="block text-[11px] font-medium ai-t3 truncate">{mm.hint}</span>
+                            </span>
+                            {mode === mm.id && <span aria-hidden className="text-ember-400">✓</span>}
+                          </button>
+                        ))}
+                      {/* The two catalog seats open a whole free menu: pick the
+                          exact model, or leave it on the seat's default. */}
+                      {catalogGroup && (
+                        <div className="border-t ai-hairline mt-1 pt-1">
+                          <p className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest ai-t3">
+                            Model · free on this engine
+                          </p>
+                          {catalogState === 'loading' && (
+                            <p className="px-2.5 pb-2 text-[11px] font-medium ai-t3">Loading the list…</p>
+                          )}
+                          {catalogState === 'failed' && (
+                            <button
+                              onClick={loadCatalogs}
+                              className="ai-menu-item text-[11px] font-medium ai-t3"
+                            >
+                              Couldn’t load the list — tap to retry
+                            </button>
+                          )}
+                          {catalogState === 'ready' && catalogs[catalogGroup].length === 0 && (
+                            <p className="px-2.5 pb-2 text-[11px] font-medium ai-t3">
+                              No free models available on this engine right now.
+                            </p>
+                          )}
+                          <button
+                            role="option"
+                            aria-selected={!catalogPicks[catalogGroup]}
+                            onClick={() => {
+                              pickCatalogModel(catalogGroup, '');
+                              setEngineOpen(false);
+                            }}
+                            className="ai-menu-item justify-between gap-3 py-1.5"
+                          >
+                            <span className="block text-[12px] font-semibold truncate">Default for this engine</span>
+                            {!catalogPicks[catalogGroup] && <span aria-hidden className="text-ember-400">✓</span>}
+                          </button>
+                          {catalogs[catalogGroup].map((cm) => (
+                            <button
+                              key={cm.id}
+                              role="option"
+                              aria-selected={catalogPicks[catalogGroup] === cm.id}
+                              onClick={() => {
+                                pickCatalogModel(catalogGroup, cm.id);
+                                setEngineOpen(false);
+                              }}
+                              className="ai-menu-item justify-between gap-3 py-1.5"
+                            >
+                              <span className="min-w-0">
+                                <span className="block font-mono text-[12px] truncate">{cm.label}</span>
+                                {cm.context !== null && (
+                                  <span className="block text-[11px] font-medium ai-t3 truncate">
+                                    {Math.round(cm.context / 1000)}k context
+                                  </span>
+                                )}
+                              </span>
+                              {catalogPicks[catalogGroup] === cm.id && <span aria-hidden className="text-ember-400">✓</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={() => setThink((v) => !v)}
+                aria-pressed={think}
+                title="Think — send the next message to the deep engine for careful reasoning"
+                className={cn('ai-chip py-1.5 shrink-0', think && 'ai-chip-solid')}
+              >
+                Think
+              </button>
+              <button
+                onClick={() => {
+                  if (!research) setWeb(true);
+                  setResearch((v) => !v);
+                }}
+                aria-pressed={research}
+                title="Research — search the live web and cross-check multiple sources"
+                className={cn('ai-chip py-1.5 shrink-0', research && 'ai-chip-solid')}
+              >
+                Research
+              </button>
+              </div>
+              <div className="flex items-center gap-2 min-w-0 text-[11px] font-semibold">
+                {micNote ? (
+                  <span className="text-amber-500 dark:text-amber-400 truncate" role="status">
+                    {micNote}
+                  </span>
+                ) : busy && think ? (
+                  <span className="text-ember-400" role="status">
+                    thinking deeply…
+                  </span>
+                ) : web ? (
+                  <span className="text-ember-400">{research ? 'Research on' : 'Web search on'}</span>
+                ) : (
+                  <span className="hidden sm:inline ai-t3 font-medium">Enter to send · Shift+Enter for a new line</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+  );
+
 
   return (
-    <div className="h-[100dvh] w-full flex text-ink-100 overflow-hidden bg-ink-900">
-      <AuroraBackground />
+    /* ai-root scopes the whole warm-neutral palette to this page — see the
+       .ai-root block in styles/index.css. The app's aurora wash is dropped
+       here on purpose: this surface is for reading, not for atmosphere. */
+    <div className="ai-root h-[100dvh] w-full flex overflow-hidden">
       {/* Sidebar */}
       <aside
         aria-label="Chats"
         className={cn(
-          'flex-col w-64 shrink-0 bg-ink-950 border-r border-glass',
+          'ai-panel flex-col w-[260px] shrink-0 border-r ai-hairline',
           sidebarOpen ? 'flex fixed inset-y-0 left-0 z-40 shadow-lift' : 'hidden',
           'md:flex md:static md:z-auto md:shadow-none',
         )}
       >
-        <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
-          <span className="w-8 h-8 rounded-xl bg-ai-accent text-black flex items-center justify-center shrink-0">
-            <SparkleIcon className="w-[18px] h-[18px]" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-extrabold tracking-tight leading-tight ai-title w-fit">VinaX AI</p>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-500 leading-tight mt-0.5">Assistant</p>
-          </div>
-          <button onClick={() => setSidebarOpen(false)} aria-label="Close menu" className="ai-icon-btn md:hidden -mr-2">
+        <div className="flex items-center gap-2 px-3.5 pt-3.5 pb-2.5">
+          <SparkleIcon className="w-[18px] h-[18px] shrink-0 text-ember-400" />
+          <p className="text-[14px] font-bold tracking-tight ai-t1 flex-1 min-w-0">VinaX AI</p>
+          <button onClick={() => setSidebarOpen(false)} aria-label="Close menu" className="ai-icon-btn md:hidden -mr-1">
             <XIcon className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-3">
-          <button
-            onClick={newChat}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 btn-primary rounded-xl text-sm font-bold shadow-float"
-          >
+        <div className="px-2.5">
+          <button onClick={newChat} className="ai-btn w-full justify-start">
             <PlusIcon className="w-4 h-4" /> New chat
           </button>
         </div>
-        <div className="px-3 pt-2.5 pb-1">
-          <label className="ai-field flex items-center gap-2 px-3 py-2 text-ink-500 focus-within:text-ink-300">
-            <SearchIcon className="w-4 h-4 shrink-0" />
+        <div className="px-2.5 pt-2 pb-1">
+          <label className="ai-field flex items-center gap-2 px-2.5 py-1.5 ai-t3 focus-within:ai-t2">
+            <SearchIcon className="w-3.5 h-3.5 shrink-0" />
             <input
               value={chatQuery}
               onChange={(e) => setChatQuery(e.target.value)}
               placeholder="Search chats"
               aria-label="Search chats"
-              className="w-full min-w-0 bg-transparent text-[13px] text-ink-100 outline-none placeholder:text-ink-500"
+              className="w-full min-w-0 bg-transparent text-[13px] outline-none ai-t1 placeholder:opacity-60"
             />
           </label>
         </div>
         <div className="flex-1 overflow-y-auto px-2 pb-2">
           {groupChats(chats, chatQuery).map(([label, list]) => (
             <div key={label}>
-              <p className="px-3 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-ink-500 flex items-center gap-1.5">
-                {label === 'Pinned' && <StarIcon className="w-3 h-3 text-ember-400" filled />}
+              <p className="ai-eyebrow px-2.5 pt-4 pb-1 flex items-center gap-1.5">
+                {label === 'Pinned' && <StarIcon className="w-3 h-3" filled />}
                 {label}
               </p>
               {list.map((c) => (
                 <div
                   key={c.id}
-                  className={cn(
-                    'ai-side-row relative flex items-center gap-0.5 pl-3 pr-1 py-1.5 rounded-xl cursor-pointer',
-                    c.id === active?.id ? 'bg-[var(--tile-hover)] text-ink-100' : 'text-ink-300 hover:bg-[var(--tile)] hover:text-ink-100',
-                  )}
+                  className={cn('ai-side-row relative', c.id === active?.id && 'ai-side-row-on')}
                   onClick={() => {
                     setActiveId(c.id);
                     setSidebarOpen(false);
                   }}
                 >
-                  {c.id === active?.id && <span className="absolute left-0 top-2.5 bottom-2.5 w-[3px] rounded-full bg-ember-500" aria-hidden />}
+                  {c.id === active?.id && <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-ember-500/70" aria-hidden />}
                   {renaming === c.id ? (
                     <input
                       autoFocus
@@ -1416,7 +1735,7 @@ export default function VinaXAIPage(): ReactNode {
                         renameChat(c.id, e.target.value);
                         setRenaming(null);
                       }}
-                      className="ai-field flex-1 min-w-0 px-2 py-1 text-[13px] font-semibold text-ink-100 outline-none"
+                      className="ai-field flex-1 min-w-0 px-2 py-1 text-[13px] font-semibold ai-t1 outline-none"
                     />
                   ) : (
                     <span
@@ -1427,7 +1746,7 @@ export default function VinaXAIPage(): ReactNode {
                       }}
                     >
                       <span className="block truncate text-[13px] font-semibold leading-tight">{c.title}</span>
-                      <span className="block text-[11px] text-ink-500 leading-tight mt-0.5">{relTime(c.updatedAt)}</span>
+                      <span className="block text-[11px] ai-t3 leading-tight mt-0.5">{relTime(c.updatedAt)}</span>
                     </span>
                   )}
                   <span className="ai-side-actions flex items-center shrink-0">
@@ -1437,7 +1756,7 @@ export default function VinaXAIPage(): ReactNode {
                         setRenaming(c.id);
                       }}
                       aria-label="Rename chat"
-                      className="ai-icon-btn w-7 h-7 text-ink-400"
+                      className="ai-icon-btn w-7 h-7 ai-t3"
                     >
                       <PencilIcon className="w-3.5 h-3.5" />
                     </button>
@@ -1447,7 +1766,7 @@ export default function VinaXAIPage(): ReactNode {
                         deleteChat(c.id);
                       }}
                       aria-label="Delete chat"
-                      className="ai-icon-btn w-7 h-7 text-ink-400 hover:text-red-400"
+                      className="ai-icon-btn w-7 h-7 ai-t3 hover:text-red-400"
                     >
                       <TrashIcon className="w-3.5 h-3.5" />
                     </button>
@@ -1458,7 +1777,7 @@ export default function VinaXAIPage(): ReactNode {
                       togglePin(c.id);
                     }}
                     aria-label={c.pinned ? 'Unpin chat' : 'Pin chat'}
-                    className={cn('ai-icon-btn w-7 h-7 shrink-0', c.pinned ? 'text-ember-400' : 'ai-side-actions text-ink-400')}
+                    className={cn('ai-icon-btn w-7 h-7 shrink-0', c.pinned ? 'text-ember-400' : 'ai-side-actions ai-t3')}
                   >
                     <StarIcon className="w-3.5 h-3.5" filled={!!c.pinned} />
                   </button>
@@ -1467,8 +1786,8 @@ export default function VinaXAIPage(): ReactNode {
             </div>
           ))}
         </div>
-        <div className="px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-glass">
-          <Link to="/" className="ai-chip py-1.5 text-ink-300" aria-label="Music">
+        <div className="px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t ai-hairline">
+          <Link to="/" className="ai-chip py-1.5 ai-t2" aria-label="Music">
             <span aria-hidden>♪</span> Music
           </Link>
         </div>
@@ -1503,23 +1822,18 @@ export default function VinaXAIPage(): ReactNode {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="flex items-center gap-2 px-3 sm:px-4 h-14 shrink-0">
+        {/* Header: the chat's name and nothing that competes with it. The
+            engine now lives beside the composer, where it is chosen, instead
+            of being repeated up here. */}
+        <header className="flex items-center gap-1.5 px-3 sm:px-4 h-13 py-2.5 shrink-0">
           <button className="ai-icon-btn md:hidden" aria-label="Menu" onClick={() => setSidebarOpen(true)}>
-            <MenuIcon className="w-5 h-5" />
+            <MenuIcon className="w-[18px] h-[18px]" />
           </button>
-          <span className="w-8 h-8 rounded-xl bg-ai-accent text-black flex items-center justify-center shrink-0 md:hidden">
-            <SparkleIcon className="w-[18px] h-[18px]" />
-          </span>
-          <div className="min-w-0 flex-1 flex items-center gap-2.5">
-            <div className="min-w-0 md:hidden">
-              <h1 className="text-[15px] font-extrabold tracking-tight leading-tight ai-title w-fit">VinaX AI</h1>
-              <p className="text-[11px] text-ink-400 leading-tight truncate">{MODES.find((mm) => mm.id === mode)?.label}{think ? ' · Think' : ''}{voiceMode ? ' · Voice' : ''}</p>
-            </div>
-            <h1 className="hidden md:block min-w-0 truncate text-[13px] font-bold text-ink-200">{active?.title ?? 'VinaX AI'}</h1>
-            <span className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-glass px-2 py-1 text-[11px] font-semibold text-ink-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-ember-400" aria-hidden />
-              {MODES.find((mm) => mm.id === mode)?.label}{think ? ' · Think' : ''}{voiceMode ? ' · Voice' : ''}
-            </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="min-w-0 truncate text-[13.5px] font-semibold ai-t2">{active?.title ?? 'VinaX AI'}</h1>
+            <p className="text-[11px] ai-t3 leading-tight truncate md:hidden">
+              {activeEngineLabel}{think ? ' · Think' : ''}{voiceMode ? ' · Voice' : ''}
+            </p>
           </div>
           <div className="relative">
             <button
@@ -1565,9 +1879,24 @@ export default function VinaXAIPage(): ReactNode {
               <SettingsIcon className="w-[18px] h-[18px]" />
             </button>
             {settingsOpen && (
-              <div className="ai-popover absolute right-0 top-full mt-1.5 z-50 w-72 p-3 space-y-3 text-left animate-fade-up">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">Default engine</p>
+              /* One settings menu, in sections, instead of settings here and
+                 three dropdowns permanently parked above the composer. */
+              <div className="ai-popover absolute right-0 top-full mt-1.5 z-50 w-[19rem] text-left animate-fade-up max-h-[75vh] overflow-y-auto">
+                <p className="ai-eyebrow px-2 pt-1.5 pb-1">Replies</p>
+                {!voiceMode && (
+                  <ReplyPrefsBar
+                    lang={replyLang}
+                    style={replyStyle}
+                    songCtx={songCtx}
+                    hasSong={!!currentSong}
+                    onLang={setReplyLang}
+                    onStyle={setReplyStyle}
+                    onSongCtx={setSongCtx}
+                  />
+                )}
+                <div className="ai-menu-sep" />
+                <p className="ai-eyebrow px-2 pb-1">Default engine</p>
+                <div className="px-2 pb-1">
                   <select
                     value={mode}
                     onChange={(e) => {
@@ -1579,7 +1908,7 @@ export default function VinaXAIPage(): ReactNode {
                         /* private mode */
                       }
                     }}
-                    className="ai-field w-full px-2.5 py-2 text-xs font-semibold outline-none"
+                    className="ai-field w-full px-2.5 py-1.5 text-[12.5px] font-semibold outline-none ai-t1"
                   >
                     <optgroup label="Engines">
                       {CORE_MODES.map((mm) => (
@@ -1597,9 +1926,10 @@ export default function VinaXAIPage(): ReactNode {
                     </optgroup>
                   </select>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">Text size</p>
-                  <div className="flex gap-1.5">
+                <div className="ai-menu-sep" />
+                <div className="ai-menu-item justify-between">
+                  <span>Text size</span>
+                  <span className="flex gap-1">
                     {(['s', 'm', 'l'] as const).map((f) => (
                       <button
                         key={f}
@@ -1612,15 +1942,16 @@ export default function VinaXAIPage(): ReactNode {
                           }
                         }}
                         aria-pressed={fontSize === f}
-                        className={cn('ai-chip px-3.5', fontSize === f && 'ai-chip-solid')}
+                        className={cn('ai-chip px-2.5 py-1', fontSize === f && 'ai-chip-solid')}
                       >
                         {f.toUpperCase()}
                       </button>
                     ))}
-                  </div>
+                  </span>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">About you</p>
+                <div className="ai-menu-sep" />
+                <p className="ai-eyebrow px-2 pb-1">About you</p>
+                <div className="px-2 pb-1">
                   <textarea
                     value={profile}
                     onChange={(e) => {
@@ -1634,12 +1965,13 @@ export default function VinaXAIPage(): ReactNode {
                     }}
                     rows={3}
                     placeholder="Name, what you do, languages you prefer, how you like answers… (stays on this device, sent with each message)"
-                    className="ai-field w-full px-2.5 py-2 text-xs outline-none resize-none placeholder:text-ink-500"
+                    className="ai-field w-full px-2.5 py-2 text-[12.5px] outline-none resize-none ai-t1 placeholder:opacity-55"
                   />
                 </div>
-                <div className="border-t border-glass pt-2 -mx-1.5">
+                <div className="ai-menu-sep" />
+                <div>
                   <button onClick={exportAll} className="ai-menu-item">
-                    <DownloadIcon className="w-4 h-4 text-ink-400" /> Export all chats (.json)
+                    <DownloadIcon className="w-4 h-4" /> Export all chats (.json)
                   </button>
                   <button
                     onClick={() => {
@@ -1650,7 +1982,7 @@ export default function VinaXAIPage(): ReactNode {
                         setSettingsOpen(false);
                       }
                     }}
-                    className="ai-menu-item text-red-400 hover:text-red-400"
+                    className="ai-menu-item ai-menu-item-danger"
                   >
                     <TrashIcon className="w-4 h-4" /> Clear all chats
                   </button>
@@ -1670,32 +2002,28 @@ export default function VinaXAIPage(): ReactNode {
             void onFiles(e.dataTransfer.files);
           }}
         >
-          {messages.length === 0 ? (
-            <div className="min-h-full flex flex-col px-5 py-8 sm:py-10">
-              <div className="my-auto mx-auto w-full max-w-[640px] flex flex-col items-center text-center">
-                <span className="w-12 h-12 rounded-2xl bg-ai-accent text-black flex items-center justify-center mb-5 shadow-float">
-                  <SparkleIcon className="w-6 h-6" />
-                </span>
-                <h2 className="ai-display text-ink-100">
-                  {userName ? (
+          {isEmpty ? (
+            /* Landing: one column, vertically centred — greeting, then the
+               composer directly beneath it (the thing you came to use), then
+               everything optional below the fold of the eye. The old layout
+               put nine chips and four cards between the greeting and the
+               input, so the input was the last thing you found. */
+            <div className="min-h-full flex flex-col justify-center px-5 py-10">
+              <div className="mx-auto w-full max-w-[720px]">
+                {/* greeting is ['Good', 'morning'|'afternoon'|'evening'] —
+                    both halves always render; only the name is conditional. */}
+                <h2 className="ai-display text-center text-balance">
+                  {greeting[0]} {greeting[1]}
+                  {userName && (
                     <>
-                      {greeting[0]} {greeting[1]}, <span className="ai-display-accent">{userName}</span>
-                    </>
-                  ) : (
-                    <>
-                      {greeting[0]} <span className="ai-display-accent">{greeting[1]}</span>
+                      , <span className="ai-display-name">{userName}</span>
                     </>
                   )}
                 </h2>
-                <p className="mt-3 text-[15px] leading-relaxed text-ink-300 max-w-lg">
-                  Ask anything, in any language. Code with tests, charts, diagrams, documents and images, live web search, voice — and songs you can play.
-                </p>
-                <div className="w-full mt-7">
-                  <TodayBriefCard onPick={(t) => void send(t)} />
-                </div>
-                <div className="mt-4 flex flex-wrap justify-center gap-1.5">
-                  <button onClick={() => setPromptsOpen(true)} className="ai-chip">
-                    <span aria-hidden>📌</span> Saved prompts
+                <div className="mt-7">{composerBlock}</div>
+                <div className="mt-6 ai-scroll-x flex items-center gap-1.5 pb-1">
+                  <button onClick={() => setPromptsOpen(true)} className="ai-chip shrink-0">
+                    Saved prompts
                   </button>
                   {quickActions.map((qa) => (
                     <button
@@ -1705,17 +2033,21 @@ export default function VinaXAIPage(): ReactNode {
                         setInput(qa.prompt);
                         taRef.current?.focus();
                       }}
-                      className="ai-chip"
+                      className="ai-chip shrink-0"
                     >
-                      <span aria-hidden>{qa.icon}</span> {qa.label}
+                      {qa.label}
                     </button>
                   ))}
                 </div>
-                <div className="mt-5 grid sm:grid-cols-2 gap-2.5 w-full">
+                <div className="mt-5">
+                  <TodayBriefCard onPick={(t) => void send(t)} />
+                </div>
+                <div className="mt-5">
+                  <p className="ai-eyebrow mb-1">Try one</p>
                   {starters.map((s) => (
                     <button key={s} onClick={() => void send(s)} className="ai-starter">
-                      <span className="flex-1 min-w-0">{s}</span>
-                      <ArrowUpRightIcon className="w-3.5 h-3.5 mt-0.5 text-ink-500 shrink-0" />
+                      <span className="min-w-0">{s}</span>
+                      <ArrowUpRightIcon className="w-3.5 h-3.5 ai-t3 shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -1725,11 +2057,11 @@ export default function VinaXAIPage(): ReactNode {
             <div className="mx-auto w-full max-w-[720px] px-4 sm:px-6 py-6 space-y-6">
               {messages.some((m) => m.pinned) && (
                 <div className="ai-card px-4 py-3 text-[12px]" aria-label="Pinned replies">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1 flex items-center gap-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest ai-t3 mb-1 flex items-center gap-1.5">
                     <PinIcon className="w-3 h-3 text-ember-400" /> Pinned
                   </p>
                   {messages.map((m, i) => m.pinned ? (
-                    <button key={i} onClick={() => document.getElementById(`ai-msg-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="block w-full text-left truncate py-1 text-ink-200 hover:text-ink-100">
+                    <button key={i} onClick={() => document.getElementById(`ai-msg-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="block w-full text-left truncate py-1 ai-t2 hover:ai-t1">
                       {m.content.replace(/[#*`>_]/g, '').slice(0, 110)}
                     </button>
                   ) : null)}
@@ -1788,12 +2120,15 @@ export default function VinaXAIPage(): ReactNode {
                   <div key={i} id={`ai-msg-${i}`} className="ai-msg flex gap-3 animate-fade-up">
                     <div className="flex flex-col items-center shrink-0 self-stretch">
                       <span
+                        /* The mark, not a filled badge: in a long thread a
+                           saturated circle per reply is the loudest thing on
+                           the page and reads as decoration, not authorship. */
                         className={cn(
-                          'w-7 h-7 rounded-full bg-ai-accent text-black flex items-center justify-center shrink-0',
+                          'w-5 h-5 flex items-center justify-center shrink-0 text-ember-400',
                           streaming && 'motion-safe:animate-[avatar-pulse_1.6s_ease-in-out_infinite]',
                         )}
                       >
-                        <SparkleIcon className="w-4 h-4" />
+                        <SparkleIcon className="w-[15px] h-[15px]" />
                       </span>
                       <span className="ai-thread-rail" aria-hidden />
                     </div>
@@ -1827,7 +2162,7 @@ export default function VinaXAIPage(): ReactNode {
                             <div className="ai-toolbar mt-2 -ml-2 flex flex-wrap items-center gap-0.5" aria-label="Reply actions">
                               {m.engine ? (
                                 <span
-                                  className="inline-flex items-center rounded-md border border-glass px-1.5 py-[3px] mr-1 ml-2 text-[10px] font-bold text-ink-500"
+                                  className="inline-flex items-center rounded-md border ai-hairline px-1.5 py-[3px] mr-1 ml-2 text-[10px] font-bold ai-t3"
                                   title="Engine that answered"
                                 >
                                   {m.engine}
@@ -1871,7 +2206,7 @@ export default function VinaXAIPage(): ReactNode {
                           ) : null}
                         </>
                       ) : (
-                        <span className="vx-dots inline-flex items-center gap-1 text-ink-300 py-2" role="status" aria-label="Thinking">
+                        <span className="vx-dots inline-flex items-center gap-1 ai-t2 py-2" role="status" aria-label="Thinking">
                           <i />
                           <i />
                           <i />
@@ -1883,7 +2218,7 @@ export default function VinaXAIPage(): ReactNode {
                         // letter avatar, NOT a favicon fetch — pulling icons from
                         // third parties would leak what you read (privacy rule 2).
                         <div className="ai-card mt-3 px-3 py-2.5">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500 mb-1.5 flex items-center gap-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider ai-t3 mb-1.5 flex items-center gap-1">
                             <GlobeIcon className="w-3 h-3" /> Sources
                           </p>
                           <div className="space-y-0.5">
@@ -1904,9 +2239,9 @@ export default function VinaXAIPage(): ReactNode {
                                   href={u}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-[var(--tile-hover)] transition-colors min-w-0"
+                                  className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-[var(--ai-hover)] transition-colors min-w-0"
                                 >
-                                  <span className="text-[10px] font-bold text-ink-500 w-6 shrink-0">[{k + 1}]</span>
+                                  <span className="text-[10px] font-bold ai-t3 w-6 shrink-0">[{k + 1}]</span>
                                   <span
                                     aria-hidden
                                     className="w-[18px] h-[18px] rounded-md flex items-center justify-center text-[10px] font-extrabold text-white shrink-0"
@@ -1914,8 +2249,8 @@ export default function VinaXAIPage(): ReactNode {
                                   >
                                     {host.charAt(0).toUpperCase()}
                                   </span>
-                                  <span className="text-[11px] font-semibold text-ink-200 truncate">{host}</span>
-                                  {path && <span className="text-[10px] text-ink-500 truncate hidden sm:inline">{path}</span>}
+                                  <span className="text-[11px] font-semibold ai-t2 truncate">{host}</span>
+                                  {path && <span className="text-[10px] ai-t3 truncate hidden sm:inline">{path}</span>}
                                 </a>
                               );
                             })}
@@ -1930,323 +2265,7 @@ export default function VinaXAIPage(): ReactNode {
           )}
         </div>
 
-        {/* Composer */}
-        <div className="shrink-0 px-3 sm:px-6 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="mx-auto w-full max-w-[720px]">
-            {pending.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2 px-1">
-                {pending.map((p, i) => (
-                  <span key={i} className="ai-chip pl-1.5 pr-1 py-1 gap-1.5">
-                    {p.kind === 'image' && p.dataUrl ? (
-                      <img src={p.dataUrl} alt="" className="w-6 h-6 rounded-md object-cover" />
-                    ) : (
-                      <span className="w-6 h-6 rounded-md bg-[var(--tile-hover)] flex items-center justify-center text-[9px] font-bold text-ink-400" aria-hidden>TXT</span>
-                    )}
-                    <span className="max-w-[10rem] truncate">{p.name}</span>
-                    <button
-                      aria-label="Remove"
-                      onClick={() => setPending((prev) => prev.filter((_, k) => k !== i))}
-                      className="ai-icon-btn w-6 h-6 text-ink-400"
-                    >
-                      <XIcon className="w-3.5 h-3.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            {!voiceMode && (
-              <ReplyPrefsBar lang={replyLang} style={replyStyle} songCtx={songCtx} hasSong={!!currentSong} onLang={setReplyLang} onStyle={setReplyStyle} onSongCtx={setSongCtx} />
-            )}
-            <div className="ai-composer relative rounded-3xl px-2.5 pt-3 pb-2">
-              <SlashMenu items={matchSlash(input)} onPick={(c: SlashCommand) => { setInput(c.arg ? `/${c.cmd} ` : `/${c.cmd}`); taRef.current?.focus(); if (!c.arg) void send(`/${c.cmd}`); }} />
-              <input
-                ref={fileRef}
-                type="file"
-                multiple
-                accept="image/*,.txt,.md,.markdown,.csv,.tsv,.json,.log,.xml,.yml,.yaml,.toml,.ini,.env.example,.html,.htm,.css,.js,.jsx,.ts,.tsx,.py,.java,.kt,.c,.h,.cpp,.cs,.go,.rs,.rb,.php,.sh,.sql,.r,.swift,.dart"
-                className="hidden"
-                onChange={(e) => void onFiles(e.target.files)}
-              />
-              <textarea
-                ref={taRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  const t = e.target;
-                  t.style.height = 'auto';
-                  t.style.height = `${Math.min(t.scrollHeight, 144)}px`;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Tab' && input.startsWith('/') && !/\s/.test(input)) {
-                    const first = matchSlash(input)[0];
-                    if (first) { e.preventDefault(); setInput(first.arg ? `/${first.cmd} ` : `/${first.cmd}`); }
-                    return;
-                  }
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void send(input);
-                  }
-                }}
-                rows={1}
-                placeholder={imageMode ? 'Describe the image to create…' : listening ? 'Listening…' : 'Message VinaX AI… (type / for commands)'}
-                aria-label="Message VinaX AI"
-                className="w-full bg-transparent resize-none outline-none px-2 text-[15px] leading-6 max-h-36 text-ink-100 placeholder:text-ink-500"
-              />
-              <div className="mt-1.5 flex items-center gap-0.5">
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  aria-label="Add photos or files"
-                  className="ai-icon-btn"
-                  title="Add photos & files"
-                >
-                  <PlusIcon className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setWeb((v) => !v)}
-                  aria-pressed={web}
-                  aria-label="Web search"
-                  title="Web search"
-                  className={cn('ai-icon-btn', web && 'ai-icon-btn-on')}
-                >
-                  <GlobeIcon className="w-5 h-5" />
-                </button>
-                {IMAGES_ENABLED && (
-                <button
-                  onClick={() => setImageMode((v) => !v)}
-                  aria-pressed={imageMode}
-                  aria-label="Create an image"
-                  title="Create an image from your next message"
-                  className={cn('ai-icon-btn text-base leading-none', imageMode && 'ai-icon-btn-on')}
-                >
-                  <span aria-hidden>🎨</span>
-                </button>
-                )}
-                {canSpeech && (
-                  <button
-                    onClick={voiceMode ? endVoice : startVoice}
-                    aria-pressed={voiceMode}
-                    aria-label="Live voice chat"
-                    title="Live voice chat"
-                    className={cn('ai-icon-btn', voiceMode && 'ai-icon-btn-on')}
-                  >
-                    <WaveformIcon className="w-5 h-5" />
-                  </button>
-                )}
-                <span className="flex-1" />
-                {canSpeech && (
-                  <button
-                    onClick={() => (listening ? stopListening() : startListening(false))}
-                    aria-label="Voice input"
-                    aria-pressed={listening}
-                    title="Speak"
-                    className={cn('ai-icon-btn', listening && 'bg-ember-500 text-black hover:bg-ember-500 hover:text-black animate-pulse')}
-                  >
-                    <MicIcon className="w-5 h-5" />
-                  </button>
-                )}
-                {busy ? (
-                  <button onClick={stop} aria-label="Stop" className="w-9 h-9 ml-1 rounded-full bg-ink-100 text-ink-950 flex items-center justify-center shrink-0">
-                    <StopIcon className="w-5 h-5" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => void send(input)}
-                    disabled={!input.trim() && pending.length === 0}
-                    aria-label="Send"
-                    className="w-9 h-9 ml-1 rounded-full bg-ember-500 text-black flex items-center justify-center shrink-0 disabled:opacity-40 hover:bg-ember-400 active:scale-95 transition"
-                  >
-                    <SendIcon className="w-5 h-5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* mode + capability-toggle row */}
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
-              <div className="flex items-center gap-1.5 min-w-0">
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setEngineOpen((v) => !v);
-                    // The free-model menu is fetched on first open, never on
-                    // page load — a listener who stays on a fixed seat pays
-                    // nothing for engines they never look at.
-                    loadCatalogs();
-                  }}
-                  aria-haspopup="listbox"
-                  aria-expanded={engineOpen}
-                  className={cn('ai-chip py-1.5 gap-1.5 text-ink-100', engineOpen && 'ai-chip-on')}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-ember-400" aria-hidden />
-                  {/* On a catalog seat the listener chose an actual model —
-                      show THAT name, so the chip never claims a generic seat
-                      is answering when a specific engine is. */}
-                  <span className="truncate max-w-[11rem]">{activeEngineLabel}</span>
-                  <ChevronDownIcon className={cn('w-3 h-3 text-ink-400 transition-transform', engineOpen && 'rotate-180')} />
-                </button>
-                {engineOpen && (
-                  <>
-                    <button
-                      aria-label="Close engine menu"
-                      onClick={() => setEngineOpen(false)}
-                      className="fixed inset-0 z-40 cursor-default"
-                    />
-                    <div
-                      role="listbox"
-                      aria-label="Choose engine"
-                      className="ai-popover absolute bottom-full mb-2 left-0 z-50 w-72 overflow-y-auto overscroll-contain animate-fade-up"
-                      /* Inline cap, immune to CSS purging: the engine list —
-                         and the free-model menu under a catalog seat — must
-                         scroll inside the popover, never spill off-screen. */
-                      style={{ maxHeight: 'min(62vh, 460px)' }}
-                    >
-                      <p className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-ink-500">Engine</p>
-                      {CORE_MODES.map((mm) => (
-                        <button
-                          key={mm.id}
-                          role="option"
-                          aria-selected={mode === mm.id}
-                          onClick={() => {
-                            setMode(mm.id);
-                            setEngineOpen(false);
-                          }}
-                          className="ai-menu-item justify-between gap-3"
-                        >
-                          <span className="min-w-0">
-                            <span className="block text-[13px] font-bold truncate">{mm.label}</span>
-                            <span className="block text-[11px] font-medium text-ink-400 truncate">{mm.hint}</span>
-                          </span>
-                          {mode === mm.id && <span aria-hidden className="text-ember-400">✓</span>}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setAdvancedOpen((v) => !v)}
-                        aria-expanded={advancedOpen}
-                        className="w-full flex items-center justify-between px-2.5 py-2 mt-1 border-t border-glass text-[10px] font-bold uppercase tracking-widest text-ink-500 hover:text-ink-100"
-                      >
-                        Advanced engines
-                        <ChevronDownIcon className={cn('w-3 h-3 transition-transform', advancedOpen && 'rotate-180')} />
-                      </button>
-                      {advancedOpen &&
-                        ADVANCED_MODES.map((mm) => (
-                          <button
-                            key={mm.id}
-                            role="option"
-                            aria-selected={mode === mm.id}
-                            onClick={() => {
-                              setMode(mm.id);
-                              if (!mm.catalog) setEngineOpen(false);
-                            }}
-                            className="ai-menu-item justify-between gap-3 py-1.5"
-                          >
-                            <span className="min-w-0">
-                              <span className="block font-mono text-[12px] truncate">{mm.label}</span>
-                              <span className="block text-[11px] font-medium text-ink-400 truncate">{mm.hint}</span>
-                            </span>
-                            {mode === mm.id && <span aria-hidden className="text-ember-400">✓</span>}
-                          </button>
-                        ))}
-                      {/* The two catalog seats open a whole free menu: pick the
-                          exact model, or leave it on the seat's default. */}
-                      {catalogGroup && (
-                        <div className="border-t border-glass mt-1 pt-1">
-                          <p className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-ink-500">
-                            Model · free on this engine
-                          </p>
-                          {catalogState === 'loading' && (
-                            <p className="px-2.5 pb-2 text-[11px] font-medium text-ink-400">Loading the list…</p>
-                          )}
-                          {catalogState === 'failed' && (
-                            <button
-                              onClick={loadCatalogs}
-                              className="ai-menu-item text-[11px] font-medium text-ink-400"
-                            >
-                              Couldn’t load the list — tap to retry
-                            </button>
-                          )}
-                          {catalogState === 'ready' && catalogs[catalogGroup].length === 0 && (
-                            <p className="px-2.5 pb-2 text-[11px] font-medium text-ink-400">
-                              No free models available on this engine right now.
-                            </p>
-                          )}
-                          <button
-                            role="option"
-                            aria-selected={!catalogPicks[catalogGroup]}
-                            onClick={() => {
-                              pickCatalogModel(catalogGroup, '');
-                              setEngineOpen(false);
-                            }}
-                            className="ai-menu-item justify-between gap-3 py-1.5"
-                          >
-                            <span className="block text-[12px] font-semibold truncate">Default for this engine</span>
-                            {!catalogPicks[catalogGroup] && <span aria-hidden className="text-ember-400">✓</span>}
-                          </button>
-                          {catalogs[catalogGroup].map((cm) => (
-                            <button
-                              key={cm.id}
-                              role="option"
-                              aria-selected={catalogPicks[catalogGroup] === cm.id}
-                              onClick={() => {
-                                pickCatalogModel(catalogGroup, cm.id);
-                                setEngineOpen(false);
-                              }}
-                              className="ai-menu-item justify-between gap-3 py-1.5"
-                            >
-                              <span className="min-w-0">
-                                <span className="block font-mono text-[12px] truncate">{cm.label}</span>
-                                {cm.context !== null && (
-                                  <span className="block text-[11px] font-medium text-ink-400 truncate">
-                                    {Math.round(cm.context / 1000)}k context
-                                  </span>
-                                )}
-                              </span>
-                              {catalogPicks[catalogGroup] === cm.id && <span aria-hidden className="text-ember-400">✓</span>}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-              <button
-                onClick={() => setThink((v) => !v)}
-                aria-pressed={think}
-                title="Think — send the next message to the deep engine for careful reasoning"
-                className={cn('ai-chip py-1.5 shrink-0', think && 'ai-chip-solid')}
-              >
-                Think
-              </button>
-              <button
-                onClick={() => {
-                  if (!research) setWeb(true);
-                  setResearch((v) => !v);
-                }}
-                aria-pressed={research}
-                title="Research — search the live web and cross-check multiple sources"
-                className={cn('ai-chip py-1.5 shrink-0', research && 'ai-chip-solid')}
-              >
-                Research
-              </button>
-              </div>
-              <div className="flex items-center gap-2 min-w-0 text-[11px] font-semibold">
-                {micNote ? (
-                  <span className="text-amber-500 dark:text-amber-400 truncate" role="status">
-                    {micNote}
-                  </span>
-                ) : busy && think ? (
-                  <span className="text-ember-400" role="status">
-                    thinking deeply…
-                  </span>
-                ) : web ? (
-                  <span className="text-ember-400">{research ? 'Research on' : 'Web search on'}</span>
-                ) : (
-                  <span className="hidden sm:inline text-ink-500 font-medium">Enter to send · Shift+Enter for a new line</span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        {!isEmpty && composerBlock}
       </div>
     </div>
   );

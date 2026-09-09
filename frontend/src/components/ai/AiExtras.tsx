@@ -72,7 +72,7 @@ export function SlashMenu({ items, onPick }: { items: SlashCommand[]; onPick: (c
   if (!items.length) return null;
   return (
     <div role="listbox" aria-label="Commands" className="ai-popover absolute left-2 right-2 bottom-full mb-2 max-h-64 overflow-auto z-20 animate-fade-up">
-      <p className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-ink-500">Commands</p>
+      <p className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest ai-t3">Commands</p>
       {items.map((c) => (
         <button
           key={c.cmd}
@@ -82,7 +82,7 @@ export function SlashMenu({ items, onPick }: { items: SlashCommand[]; onPick: (c
           className="ai-menu-item items-baseline"
         >
           <span className="font-mono text-[12px] font-bold text-ember-400 shrink-0">/{c.cmd}{c.arg ? ` <${c.arg}>` : ''}</span>
-          <span className="text-[12px] font-medium text-ink-400 truncate">{c.hint}</span>
+          <span className="text-[12px] font-medium ai-t3 truncate">{c.hint}</span>
         </button>
       ))}
     </div>
@@ -111,9 +111,9 @@ export function TodayBriefCard({ onPick }: { onPick: (t: string) => void }) {
     <div className="ai-card w-full p-4 sm:p-5 text-left">
       <div className="flex items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full bg-ember-400 shrink-0" aria-hidden />
-        <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Today for you · {brief.date}</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest ai-t3">Today for you · {brief.date}</p>
       </div>
-      {brief.lines.length > 0 && <p className="mt-1.5 text-[14px] leading-relaxed text-ink-200">{brief.lines.join(' ')}</p>}
+      {brief.lines.length > 0 && <p className="mt-1.5 text-[14px] leading-relaxed ai-t2">{brief.lines.join(' ')}</p>}
       <div className="mt-3 flex flex-wrap gap-1.5">
         {brief.prompts.map((p) => (
           <button key={p} onClick={() => onPick(p)} className="ai-chip">
@@ -138,13 +138,13 @@ export function SavedPromptsSheet({ onClose, onUse, draft }: { onClose(): void; 
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold tracking-tight">Saved prompts</h2>
-            <p className="text-xs text-ink-400 mt-0.5">Your own library, on this device. Type <b className="text-ink-200">/prompts</b> in the composer to open it any time.</p>
+            <p className="text-xs ai-t3 mt-0.5">Your own library, on this device. Type <b className="ai-t2">/prompts</b> in the composer to open it any time.</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="ai-icon-btn -mr-2 -mt-1"><XIcon className="w-4 h-4" /></button>
         </div>
         <div className="mt-4 space-y-2">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="ai-field w-full px-3.5 py-2.5 text-sm outline-none placeholder:text-ink-500" />
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Prompt text…" className="ai-field w-full px-3.5 py-2.5 text-sm outline-none resize-none placeholder:text-ink-500" />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="ai-field w-full px-3.5 py-2.5 text-sm outline-none placeholder:ai-t3" />
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Prompt text…" className="ai-field w-full px-3.5 py-2.5 text-sm outline-none resize-none placeholder:ai-t3" />
         </div>
         <div className="mt-2.5 flex justify-end">
           <button disabled={!text.trim()} onClick={() => { setList(addPrompt(text, title || undefined)); setTitle(''); setText(''); }} className="btn-primary rounded-xl px-4 py-2 text-sm disabled:opacity-50">Save prompt</button>
@@ -152,15 +152,15 @@ export function SavedPromptsSheet({ onClose, onUse, draft }: { onClose(): void; 
         <div className="mt-4 space-y-1">
           {list.length === 0 && (
             <div className="ai-card py-8 text-center">
-              <p className="text-sm font-semibold text-ink-300">Nothing saved yet.</p>
-              <p className="text-xs text-ink-500 mt-1">Prompts you save show up here.</p>
+              <p className="text-sm font-semibold ai-t2">Nothing saved yet.</p>
+              <p className="text-xs ai-t3 mt-1">Prompts you save show up here.</p>
             </div>
           )}
           {list.map((p) => (
-            <div key={p.id} className="group flex items-start gap-2 rounded-xl px-2.5 py-2 hover:bg-[var(--tile-hover)] transition-colors">
+            <div key={p.id} className="group flex items-start gap-2 rounded-xl px-2.5 py-2 hover:bg-[var(--ai-hover)] transition-colors">
               <button onClick={() => { onUse(p.text); onClose(); }} className="min-w-0 flex-1 text-left">
                 <p className="text-sm font-bold truncate">{p.title}</p>
-                <p className="text-xs text-ink-400 line-clamp-2 leading-relaxed">{p.text}</p>
+                <p className="text-xs ai-t3 line-clamp-2 leading-relaxed">{p.text}</p>
               </button>
               <button onClick={() => setList(removePrompt(p.id))} aria-label={`Delete ${p.title}`} className="ai-tool mt-0.5 shrink-0">Delete</button>
             </div>
@@ -174,30 +174,39 @@ export function SavedPromptsSheet({ onClose, onUse, draft }: { onClose(): void; 
 export function ReplyPrefsBar({
   lang, style, songCtx, hasSong, onLang, onStyle, onSongCtx,
 }: { lang: string; style: string; songCtx: boolean; hasSong: boolean; onLang: (v: string) => void; onStyle: (v: string) => void; onSongCtx: (v: boolean) => void }) {
+  // v5.25.0 — these three lived on a permanently-visible strip above the
+  // composer, where they were three more dropdowns competing with the input.
+  // They are set once and rarely changed, so they belong in the settings
+  // menu; this renders as menu rows, not as a toolbar.
   return (
-    <div className="ai-scroll-x flex items-center gap-1.5 px-1 pb-2 text-[11px]" aria-label="Reply preferences">
-      <label className="ai-chip gap-1.5 cursor-pointer py-1">
-        <span className="font-medium text-ink-400">Reply in</span>
-        <select aria-label="Reply language" value={lang} onChange={(e) => onLang(e.target.value)} className="ai-select font-bold text-ink-100 pr-3">
-          {REPLY_LANGS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-        </select>
-        <ChevronDownIcon className="w-3 h-3 -ml-3 text-ink-400 pointer-events-none" />
+    <div aria-label="Reply preferences">
+      <label className="ai-menu-item justify-between cursor-pointer">
+        <span>Reply in</span>
+        <span className="flex items-center gap-1 ai-t1">
+          <select aria-label="Reply language" value={lang} onChange={(e) => onLang(e.target.value)} className="ai-select font-semibold text-right">
+            {REPLY_LANGS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
+          <ChevronDownIcon className="w-3 h-3 pointer-events-none opacity-60" />
+        </span>
       </label>
-      <label className="ai-chip gap-1.5 cursor-pointer py-1">
-        <span className="font-medium text-ink-400">Style</span>
-        <select aria-label="Reply style" value={style} onChange={(e) => onStyle(e.target.value)} className="ai-select font-bold text-ink-100 pr-3">
-          {REPLY_STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-        </select>
-        <ChevronDownIcon className="w-3 h-3 -ml-3 text-ink-400 pointer-events-none" />
+      <label className="ai-menu-item justify-between cursor-pointer">
+        <span>Style</span>
+        <span className="flex items-center gap-1 ai-t1">
+          <select aria-label="Reply style" value={style} onChange={(e) => onStyle(e.target.value)} className="ai-select font-semibold text-right">
+            {REPLY_STYLES.map((st) => <option key={st.id} value={st.id}>{st.label}</option>)}
+          </select>
+          <ChevronDownIcon className="w-3 h-3 pointer-events-none opacity-60" />
+        </span>
       </label>
       {hasSong && (
         <button
           onClick={() => onSongCtx(!songCtx)}
           aria-pressed={songCtx}
           title="Let the assistant see the song playing now (title, artist, lyrics)"
-          className={cn('ai-chip py-1', songCtx && 'ai-chip-on')}
+          className="ai-menu-item justify-between"
         >
-          <span aria-hidden>🎵</span> Now playing {songCtx ? 'on' : 'off'}
+          <span>Use the song playing now</span>
+          <span className={cn('text-[11px] font-bold', songCtx ? 'text-ember-400' : 'ai-t3')}>{songCtx ? 'On' : 'Off'}</span>
         </button>
       )}
     </div>
@@ -244,7 +253,7 @@ export function MoreMenu({ actions }: { actions: MoreAction[] }) {
                 onClick={() => { setOpen(false); a.onClick(); }}
                 className="ai-menu-item"
               >
-                <span className="text-ink-400 shrink-0 [&>svg]:w-4 [&>svg]:h-4">{a.icon}</span>
+                <span className="ai-t3 shrink-0 [&>svg]:w-4 [&>svg]:h-4">{a.icon}</span>
                 <span className="truncate">{a.label}</span>
               </button>
             ))}

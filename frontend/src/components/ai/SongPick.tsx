@@ -163,7 +163,7 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
       </div>
       <div className="min-w-0 flex-1 py-1.5">
         <p className={cn('text-[13px] font-bold truncate leading-tight', isCurrent && 'text-ember-400')}>{song?.title ?? pick.title}</p>
-        <p className="text-[11px] text-ink-400 truncate mt-0.5">{song?.subtitle ?? pick.artist}</p>
+        <p className="text-[11px] ai-t3 truncate mt-0.5">{song?.subtitle ?? pick.artist}</p>
       </div>
       {song ? (
         <button
@@ -179,7 +179,7 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
           <QueueIcon className="w-4 h-4" />
         </button>
       ) : (
-        !isLoading && <span className="text-[10px] font-semibold text-ink-500 shrink-0 rounded-md border border-glass px-1.5 py-0.5">not found</span>
+        !isLoading && <span className="text-[10px] font-semibold ai-t3 shrink-0 rounded-md border ai-hairline px-1.5 py-0.5">not found</span>
       )}
     </div>
   );
@@ -240,7 +240,7 @@ export function SongPicksBar({ picks }: { picks: SongPickRef[] }) {
       <button onClick={saveAsPlaylist} className="ai-chip py-[7px] shrink-0" title="Save these songs as a playlist">
         Save as playlist
       </button>
-      <span className="text-[11px] font-semibold text-ink-500 shrink-0 pl-1">{picks.length} songs</span>
+      <span className="text-[11px] font-semibold ai-t3 shrink-0 pl-1">{picks.length} songs</span>
     </div>
   );
 }

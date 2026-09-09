@@ -51,7 +51,7 @@ function CopyBtn({ text, label = 'Copy' }: { text: string; label?: string }): Re
           /* clipboard unavailable */
         }
       }}
-      className="hover:text-ink-100 transition"
+      className="hover:ai-t1 transition"
     >
       {done ? 'Copied' : label}
     </button>
@@ -132,7 +132,7 @@ function inline(text: string): ReactNode[] {
     else if (tok.startsWith('$$')) out.push(<TeX key={key} tex={tok.slice(2, -2)} block />);
     else if (tok.startsWith('$')) out.push(<TeX key={key} tex={tok.slice(1, -1)} />);
     else if (tok.startsWith('**')) out.push(<strong key={key}>{tok.slice(2, -2)}</strong>);
-    else if (tok.startsWith('~~')) out.push(<del key={key} className="text-ink-400">{tok.slice(2, -2)}</del>);
+    else if (tok.startsWith('~~')) out.push(<del key={key} className="ai-t3">{tok.slice(2, -2)}</del>);
     else if (tok.startsWith('*')) out.push(<em key={key}>{tok.slice(1, -1)}</em>);
     else {
       const mm = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/.exec(tok);
@@ -161,12 +161,12 @@ const splitRow = (r: string): string[] =>
 
 function TableBlock({ head, rows }: { head: string[]; rows: string[][] }): ReactNode {
   return (
-    <div className="my-2 overflow-x-auto rounded-xl border border-glass-strong">
+    <div className="my-2 overflow-x-auto rounded-xl border ai-hairline-strong">
       <table className="w-full text-xs">
         <thead>
           <tr>
             {head.map((h, k) => (
-              <th key={k} className="text-left px-3 py-2 bg-ink-800/70 border-b border-glass-strong font-semibold whitespace-nowrap">
+              <th key={k} className="text-left px-3 py-2 bg-ink-800/70 border-b ai-hairline-strong font-semibold whitespace-nowrap">
                 {inline(h)}
               </th>
             ))}
@@ -176,7 +176,7 @@ function TableBlock({ head, rows }: { head: string[]; rows: string[][] }): React
           {rows.map((r, ri) => (
             <tr key={ri} className="odd:bg-ink-900/40">
               {r.map((c, ci) => (
-                <td key={ci} className="px-3 py-1.5 border-b border-glass align-top">
+                <td key={ci} className="px-3 py-1.5 border-b ai-hairline align-top">
                   {inline(c)}
                 </td>
               ))}
@@ -202,7 +202,7 @@ function Prose({ text }: { text: string }): ReactNode {
       continue;
     }
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) {
-      blocks.push(<hr key={blocks.length} className="my-3 border-glass-strong" />);
+      blocks.push(<hr key={blocks.length} className="my-3 ai-hairline-strong" />);
       i += 1;
       continue;
     }
@@ -242,7 +242,7 @@ function Prose({ text }: { text: string }): ReactNode {
         i += 1;
       }
       blocks.push(
-        <blockquote key={blocks.length} className="my-2 pl-3 border-l-2 border-ember-500/50 text-ink-300">
+        <blockquote key={blocks.length} className="my-2 pl-3 border-l-2 border-ember-500/50 ai-t2">
           {inline(buf.join('\n'))}
         </blockquote>,
       );
@@ -278,7 +278,7 @@ function Prose({ text }: { text: string }): ReactNode {
               >
                 {it.done ? '✓' : ''}
               </span>
-              <span className={it.done ? 'line-through text-ink-400' : ''}>{inline(it.text)}</span>
+              <span className={it.done ? 'line-through ai-t3' : ''}>{inline(it.text)}</span>
             </li>
           ))}
         </ul>,
@@ -399,7 +399,7 @@ function highlightCode(code: string, lang: string): ReactNode[] {
     const c0 = tok[0];
     if ((hash && c0 === '#') || (!hash && (tok.startsWith('//') || tok.startsWith('/*'))))
       out.push(
-        <span key={key} className="text-ink-400 italic">
+        <span key={key} className="ai-t3 italic">
           {tok}
         </span>,
       );
@@ -470,10 +470,10 @@ function JsRunner({ code, lang, onClose }: { code: string; lang: string; onClose
   }, [page, token, frameName]);
   const tsHint = (lang === 'ts' || lang === 'typescript') && lines.some((l) => /SyntaxError/.test(l.text));
   return (
-    <div className="border-t border-glass-strong">
-      <div className="flex items-center justify-between px-3 py-1 bg-ink-850 text-[11px] text-ink-300">
+    <div className="border-t ai-hairline-strong">
+      <div className="flex items-center justify-between px-3 py-1 bg-ink-850 text-[11px] ai-t2">
         <span>Output</span>
-        <button onClick={onClose} className="hover:text-ink-100">Close</button>
+        <button onClick={onClose} className="hover:ai-t1">Close</button>
       </div>
       <iframe
         ref={frameRef}
@@ -486,7 +486,7 @@ function JsRunner({ code, lang, onClose }: { code: string; lang: string; onClose
         {status === 'failed' ? (
           <div className="text-red-300">Couldn&rsquo;t reach the preview sandbox (/api/preview) — the code didn&rsquo;t run.</div>
         ) : lines.length === 0 ? (
-          <span className="text-ink-500">{status === 'live' ? 'Finished — no output.' : 'Running…'}</span>
+          <span className="ai-t3">{status === 'live' ? 'Finished — no output.' : 'Running…'}</span>
         ) : null}
         {lines.map((l, i) => (
           <div key={i} className={l.kind === 'error' ? 'text-red-300' : l.text.startsWith('✓') ? 'text-ember-400' : ''}>
@@ -494,7 +494,7 @@ function JsRunner({ code, lang, onClose }: { code: string; lang: string; onClose
           </div>
         ))}
         {tsHint && (
-          <div className="mt-1.5 text-ink-400">TypeScript isn&rsquo;t compiled before running — strip the type annotations to run this snippet.</div>
+          <div className="mt-1.5 ai-t3">TypeScript isn&rsquo;t compiled before running — strip the type annotations to run this snippet.</div>
         )}
       </pre>
     </div>
@@ -509,16 +509,16 @@ function CodeBlock({ lang, code }: { lang: string; code: string }): ReactNode {
   const lineCount = useMemo(() => code.split('\n').length, [code]);
   const flags = useFeatureFlags(); // v5.13.0 — admin kill-switch for Run
   return (
-    <div className="my-2 rounded-xl overflow-hidden border border-glass-strong bg-ink-900">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
-        <span className="uppercase tracking-wide">{lang || 'text'}<span className="normal-case text-ink-500"> · {lineCount} lines</span></span>
+    <div className="my-2 rounded-xl overflow-hidden border ai-hairline-strong bg-ink-900">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] ai-t2">
+        <span className="uppercase tracking-wide">{lang || 'text'}<span className="normal-case ai-t3"> · {lineCount} lines</span></span>
         <div className="flex items-center gap-3">
           {RUNNABLE.has(lang) && flagOn(flags, 'codeRun') && (
             <button onClick={() => setRunKey((k) => k + 1)} className="font-bold text-ember-400 hover:text-ember-300 transition">
               ▶ Run
             </button>
           )}
-          <button onClick={() => download(`vinax.${ext}`, code)} className="hover:text-ink-100 transition">
+          <button onClick={() => download(`vinax.${ext}`, code)} className="hover:ai-t1 transition">
             Download
           </button>
           <CopyBtn text={code} />
@@ -552,10 +552,10 @@ function MermaidBlock({ code }: { code: string }): ReactNode {
     };
   }, [code]);
   if (err) return <CodeBlock lang="mermaid" code={code} />;
-  if (!svg) return <div className="my-2 text-xs text-ink-400 py-3 px-1">Rendering diagram…</div>;
+  if (!svg) return <div className="my-2 text-xs ai-t3 py-3 px-1">Rendering diagram…</div>;
   return (
-    <div className="my-2 rounded-xl border border-glass-strong bg-ink-900 overflow-hidden">
-      <div className="flex justify-end px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
+    <div className="my-2 rounded-xl border ai-hairline-strong bg-ink-900 overflow-hidden">
+      <div className="flex justify-end px-3 py-1.5 bg-ink-800/70 text-[11px] ai-t2">
         <CopyBtn text={code} label="Copy source" />
       </div>
       <div className="overflow-x-auto p-3 grid place-items-center" dangerouslySetInnerHTML={{ __html: svg }} />
@@ -610,8 +610,8 @@ function HtmlPreview({ lang, code, streaming = false }: { lang: string; code: st
     setOpenNote(openPreview(srcDoc, token, title) ? '' : 'Your browser blocked the new tab — allow pop-ups for this site.');
   };
   return (
-    <div className="my-2 rounded-xl overflow-hidden border border-glass-strong bg-ink-900">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
+    <div className="my-2 rounded-xl overflow-hidden border ai-hairline-strong bg-ink-900">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] ai-t2">
         <div className="flex gap-3">
           <button
             onClick={() => {
@@ -622,17 +622,17 @@ function HtmlPreview({ lang, code, streaming = false }: { lang: string; code: st
           >
             ▶ Run
           </button>
-          <button onClick={() => setTab('code')} className={cn('transition', tab === 'code' ? 'text-ink-100 font-semibold' : 'hover:text-ink-100')}>
+          <button onClick={() => setTab('code')} className={cn('transition', tab === 'code' ? 'ai-t1 font-semibold' : 'hover:ai-t1')}>
             Code
           </button>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={open} className="hover:text-ink-100 transition">
+          <button onClick={open} className="hover:ai-t1 transition">
             Open
           </button>
           <button
             onClick={() => download(lang === 'svg' ? 'image.svg' : 'page.html', code, lang === 'svg' ? 'image/svg+xml' : 'text/html')}
-            className="hover:text-ink-100 transition"
+            className="hover:ai-t1 transition"
           >
             Download
           </button>
@@ -642,7 +642,7 @@ function HtmlPreview({ lang, code, streaming = false }: { lang: string; code: st
       {tab === 'preview' ? (
         <>
           {streaming ? (
-            <div className="h-80 grid place-items-center bg-ink-900 text-xs text-ink-400">Waiting for the reply to finish…</div>
+            <div className="h-80 grid place-items-center bg-ink-900 text-xs ai-t3">Waiting for the reply to finish…</div>
           ) : (
             <iframe
               key={runKey}
@@ -662,15 +662,15 @@ function HtmlPreview({ lang, code, streaming = false }: { lang: string; code: st
             />
           )}
           {status === 'failed' && (
-            <div className="border-t border-glass-strong bg-ink-850 px-3 py-2 text-[11px] text-red-300">
+            <div className="border-t ai-hairline-strong bg-ink-850 px-3 py-2 text-[11px] text-red-300">
               ⚠ Couldn&rsquo;t reach the preview sandbox (/api/preview) — nothing was rendered.
             </div>
           )}
           {openNote && (
-            <div className="border-t border-glass-strong bg-ink-850 px-3 py-2 text-[11px] text-amber-300">{openNote}</div>
+            <div className="border-t ai-hairline-strong bg-ink-850 px-3 py-2 text-[11px] text-amber-300">{openNote}</div>
           )}
           {errors.length > 0 && (
-            <div className="border-t border-glass-strong bg-ink-850 px-3 py-2 text-[11px] font-mono text-red-300 max-h-28 overflow-auto">
+            <div className="border-t ai-hairline-strong bg-ink-850 px-3 py-2 text-[11px] font-mono text-red-300 max-h-28 overflow-auto">
               {errors.slice(-5).map((e, i) => (
                 <div key={i}>⚠ {e.text}</div>
               ))}
@@ -691,10 +691,10 @@ function CsvBlock({ code }: { code: string }): ReactNode {
   const head = rows[0] ?? [];
   const body = rows.slice(1);
   return (
-    <div className="my-2 rounded-xl overflow-hidden border border-glass-strong">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] text-ink-300">
+    <div className="my-2 rounded-xl overflow-hidden border ai-hairline-strong">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] ai-t2">
         <span>CSV · {body.length} rows</span>
-        <button onClick={() => download('data.csv', code, 'text/csv')} className="hover:text-ink-100 transition">
+        <button onClick={() => download('data.csv', code, 'text/csv')} className="hover:ai-t1 transition">
           Download .csv
         </button>
       </div>
@@ -703,7 +703,7 @@ function CsvBlock({ code }: { code: string }): ReactNode {
           <thead>
             <tr>
               {head.map((h, k) => (
-                <th key={k} className="text-left px-3 py-2 bg-ink-900 border-b border-glass-strong font-semibold whitespace-nowrap">
+                <th key={k} className="text-left px-3 py-2 bg-ink-900 border-b ai-hairline-strong font-semibold whitespace-nowrap">
                   {h}
                 </th>
               ))}
@@ -713,7 +713,7 @@ function CsvBlock({ code }: { code: string }): ReactNode {
             {body.map((r, ri) => (
               <tr key={ri} className="odd:bg-ink-900/40">
                 {r.map((c, ci) => (
-                  <td key={ci} className="px-3 py-1.5 border-b border-glass">
+                  <td key={ci} className="px-3 py-1.5 border-b ai-hairline">
                     {c}
                   </td>
                 ))}
@@ -733,7 +733,7 @@ function CodeRouter({ lang, code, closed, streaming }: { lang: string; code: str
   // it gets the full block — copy, download, run — like any other.
   if (!closed && streaming)
     return (
-      <pre className="my-2 p-3 rounded-xl bg-ink-900 border border-glass-strong overflow-x-auto text-xs leading-relaxed font-mono">
+      <pre className="my-2 p-3 rounded-xl bg-ink-900 border ai-hairline-strong overflow-x-auto text-xs leading-relaxed font-mono">
         <code>{code}</code>
       </pre>
     );

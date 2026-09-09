@@ -180,8 +180,8 @@ function PieChart({ spec }: { spec: ChartSpec }) {
         {spec.labels.map((l, i) => (
           <li key={i} className={cn('flex items-center gap-2', hover != null && hover !== i && 'opacity-50')} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
             <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
-            <span className="truncate text-ink-200">{l}</span>
-            <span className="ml-auto tabular-nums text-ink-400">{fmtNum(data[i], spec.unit)} · {Math.round(slices[i].frac * 100)}%</span>
+            <span className="truncate ai-t2">{l}</span>
+            <span className="ml-auto tabular-nums ai-t3">{fmtNum(data[i], spec.unit)} · {Math.round(slices[i].frac * 100)}%</span>
           </li>
         ))}
       </ul>
@@ -194,10 +194,10 @@ export function ChartBlock({ code, fallback }: { code: string; fallback: React.R
   if (!spec) return <>{fallback}</>;
   return (
     <figure className="my-2 rounded-lg bg-ink-850 p-3 animate-fade-up">
-      {spec.title && <figcaption className="text-[13px] font-bold mb-2 text-ink-100">{spec.title}</figcaption>}
+      {spec.title && <figcaption className="text-[13px] font-bold mb-2 ai-t1">{spec.title}</figcaption>}
       {spec.type === 'pie' ? <PieChart spec={spec} /> : <CartesianChart spec={spec} />}
       {spec.type !== 'pie' && spec.series.length > 1 && (
-        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-300">
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] ai-t2">
           {spec.series.map((sr, i) => (
             <li key={i} className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />

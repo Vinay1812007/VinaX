@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.25.0': {
+    title: 'VinaX AI, redesigned',
+    changes: [
+      { type: 'improved', text: 'VinaX AI has been rebuilt around one idea: the thing you came to do should be the first thing you see. On a new chat the greeting and the message box now sit together in the middle of the screen, and everything optional — quick actions, your daily card, suggestions — sits quietly beneath them instead of in front of them.' },
+      { type: 'improved', text: 'A calmer surface throughout: a warm paper-and-ink palette in place of the cool greys, hairline dividers instead of stacked boxes, and colour kept for the few things that need it — the send button, what’s selected, and what has focus. Every theme and accent still applies.' },
+      { type: 'improved', text: 'Menus are tidier. “Reply in”, “Style” and “Now playing” no longer sit permanently above the message box — they’ve moved into the settings menu, which is now laid out in labelled sections. The engine list opens away from the message box wherever it sits, so it never runs off the screen.' },
+      { type: 'improved', text: 'Replies read like a document: a serif greeting, roomier lines, a quieter mark beside each reply, and your own messages in a soft bubble rather than a coloured one. Text size, chats, search and export are all where they were.' },
+    ],
+  },
   '5.24.0': {
     title: 'Several engines working together',
     changes: [

@@ -2297,194 +2297,253 @@ html.amoled #root::before { display: none; }
 }
 
 /* ============================================================================
-   v5.18.0 — VinaX AI page redesign. Scoped: every rule is prefixed .ai- and
-   reads tokens only, so accent palettes and the light theme apply unchanged.
-   Layout lives in the page's Tailwind classes; this block carries only what
-   utilities cannot express (gradient text, hover-reveal, popovers, chips).
+   v5.25.0 — VinaX AI page. A calm, editorial reading surface: a warm neutral
+   ground, hairline structure instead of filled tiles, and the accent spent
+   only where it means something (send, active, focus).
+
+   Everything is scoped under .ai-root and every rule is prefixed .ai-, so no
+   other page can be touched by it. The page paints its OWN warm surface
+   tokens — the app's cool greys read as clinical at this density — but it
+   still reads --ember-* from the global palette, so the listener's chosen
+   accent and all three themes carry through unchanged.
    ========================================================================= */
+.ai-root {
+  /* Warm near-black. Deliberately not #000: a slight warmth stops long
+     reading sessions feeling like a terminal. */
+  --ai-bg: #171614;
+  --ai-panel: #1c1b18;
+  --ai-raised: #232120;
+  --ai-line: rgba(255, 255, 255, 0.09);
+  --ai-line-soft: rgba(255, 255, 255, 0.055);
+  --ai-hover: rgba(255, 255, 255, 0.05);
+  --ai-text: #eceae5;
+  --ai-text-2: #b5b0a7;
+  --ai-text-3: #8b857b;
+  --ai-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
+  /* A serif for the greeting only. System faces, so it costs nothing to
+     load and cannot fail offline. */
+  --ai-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, ui-serif, serif;
+  background: var(--ai-bg);
+  color: var(--ai-text);
+}
+html.light .ai-root {
+  --ai-bg: #faf9f6;
+  --ai-panel: #f4f2ed;
+  --ai-raised: #ffffff;
+  --ai-line: rgba(28, 24, 18, 0.11);
+  --ai-line-soft: rgba(28, 24, 18, 0.065);
+  --ai-hover: rgba(28, 24, 18, 0.045);
+  --ai-text: #23201c;
+  --ai-text-2: #56514a;
+  --ai-text-3: #857f75;
+  --ai-shadow: 0 10px 30px -14px rgba(28, 24, 18, 0.18);
+}
+html.amoled .ai-root {
+  --ai-bg: #000000;
+  --ai-panel: #0a0908;
+  --ai-raised: #141311;
+  --ai-line: rgba(255, 255, 255, 0.11);
+  --ai-line-soft: rgba(255, 255, 255, 0.06);
+}
+
+/* ---------- Structure ---------- */
+.ai-panel { background: var(--ai-panel); }
+.ai-raised { background: var(--ai-raised); }
+.ai-hairline { border-color: var(--ai-line); }
+.ai-hairline-soft { border-color: var(--ai-line-soft); }
+.ai-t1 { color: var(--ai-text); }
+.ai-t2 { color: var(--ai-text-2); }
+.ai-t3 { color: var(--ai-text-3); }
+
+/* Section label — the only place small caps are used. */
+.ai-eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ai-text-3);
+}
+
+/* ---------- Display ---------- */
+/* The greeting. Serif, light, generously tracked-in — one clear focal point
+   instead of the old gradient-filled headline. */
 .ai-display {
-  font-size: clamp(1.875rem, 1.25rem + 2vw, 2.625rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.08;
+  font-family: var(--ai-serif);
+  font-size: clamp(2rem, 1.4rem + 2.2vw, 3.05rem);
+  font-weight: 400;
+  letter-spacing: -0.021em;
+  line-height: 1.12;
+  color: var(--ai-text);
 }
-.ai-display-accent {
-  background: linear-gradient(92deg, rgb(var(--ember-400)), rgb(var(--tide-400)) 85%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
+/* The name inside the greeting: italic serif, not a colour wash. It has to
+   survive a long or odd name (a device name pasted at onboarding, say)
+   without breaking the line box. */
+.ai-display-name {
+  font-style: italic;
+  color: var(--ai-text-2);
+  overflow-wrap: anywhere;
 }
-.ai-card {
-  background: var(--tile);
-  border: 1px solid var(--glass-border);
-  border-radius: 1rem;
+
+/* ---------- Buttons ---------- */
+.ai-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--ai-line);
+  background: transparent;
+  padding: 0.5rem 0.75rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ai-text-2);
+  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm), border-color 130ms var(--ease-calm);
 }
+.ai-btn:hover:not(:disabled) { background: var(--ai-hover); color: var(--ai-text); }
+.ai-btn:disabled { opacity: 0.45; }
+
+/* Chips carry no fill until they are ON — a wall of outlined pills reads as
+   one calm row rather than nine competing buttons. */
 .ai-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  border-radius: 12px;
-  border: 1px solid var(--glass-border-strong);
-  background: var(--tile);
-  padding: 0.375rem 0.75rem;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: rgb(var(--ink-200));
+  gap: 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid var(--ai-line);
+  background: transparent;
+  padding: 0.34rem 0.7rem;
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1.3;
+  color: var(--ai-text-2);
   white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm), border-color 130ms var(--ease-calm);
 }
-.ai-chip:hover:not(:disabled) {
-  border-color: rgb(var(--ember-500) / 0.55);
-  background: rgb(var(--ember-500) / 0.08);
-  color: rgb(var(--ink-100));
-}
-.ai-chip:disabled { opacity: 0.5; }
+.ai-chip:hover:not(:disabled) { background: var(--ai-hover); color: var(--ai-text); border-color: var(--ai-line); }
+.ai-chip:disabled { opacity: 0.45; }
 .ai-chip-on,
 .ai-chip-on:hover:not(:disabled) {
-  border-color: rgb(var(--ember-500) / 0.6);
-  background: rgb(var(--ember-500) / 0.14);
+  border-color: rgb(var(--ember-500) / 0.5);
+  background: rgb(var(--ember-500) / 0.1);
   color: rgb(var(--ember-300));
 }
 .ai-chip-solid,
 .ai-chip-solid:hover:not(:disabled) {
-  background: rgb(var(--ink-100));
-  border-color: rgb(var(--ink-100));
-  color: rgb(var(--ink-950));
+  background: var(--ai-text);
+  border-color: var(--ai-text);
+  color: var(--ai-bg);
 }
 .ai-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 9999px;
-  color: rgb(var(--ink-300));
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  color: var(--ai-text-3);
   flex-shrink: 0;
-  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm);
 }
-.ai-icon-btn:hover { background: var(--tile-hover); color: rgb(var(--ink-100)); }
+.ai-icon-btn:hover { background: var(--ai-hover); color: var(--ai-text); }
 .ai-icon-btn-on,
-.ai-icon-btn-on:hover { color: rgb(var(--ember-400)); background: rgb(var(--ember-500) / 0.14); }
-.ai-user-bubble {
-  background: rgb(var(--ember-500) / 0.12);
-  border: 1px solid rgb(var(--ember-500) / 0.18);
-  color: rgb(var(--ink-100));
-}
-.ai-thread-rail {
-  width: 2px;
-  flex: 1 1 auto;
-  min-height: 0.75rem;
-  margin-top: 0.5rem;
-  border-radius: 9999px;
-  background: linear-gradient(180deg, rgb(var(--ember-500) / 0.5), rgb(var(--ember-500) / 0));
-}
-/* Message toolbar: hidden until the message is hovered or focused on
-   pointer devices; always visible where there is no hover. */
-.ai-toolbar { opacity: 0; transition: opacity 150ms var(--ease-calm); }
-.ai-msg:hover .ai-toolbar,
-.ai-msg:focus-within .ai-toolbar,
-.ai-toolbar:has([aria-expanded='true']) { opacity: 1; }
-@media (hover: none) { .ai-toolbar { opacity: 1; } }
-.ai-tool {
+.ai-icon-btn-on:hover { color: var(--ai-text); background: var(--ai-hover); }
+/* The one saturated element on the page. */
+.ai-send {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.5rem;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
   border-radius: 0.5rem;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  color: rgb(var(--ink-400));
-  white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+  background: rgb(var(--ember-500));
+  color: #fff;
+  transition: opacity 130ms var(--ease-calm), transform 130ms var(--ease-calm);
 }
-.ai-tool:hover { background: var(--tile-hover); color: rgb(var(--ink-100)); }
-.ai-tool[aria-pressed='true'],
-.ai-tool[aria-expanded='true'] { color: rgb(var(--ember-400)); }
+html.light .ai-send { color: #fff; }
+.ai-send:disabled { opacity: 0.3; }
+.ai-send:hover:not(:disabled) { opacity: 0.9; }
+
+/* ---------- Sidebar ---------- */
+.ai-side-row {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.625rem;
+  font-size: 13.5px;
+  color: var(--ai-text-2);
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-calm), color 120ms var(--ease-calm);
+}
+.ai-side-row:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-side-row-on,
+.ai-side-row-on:hover { background: var(--ai-hover); color: var(--ai-text); font-weight: 600; }
+.ai-side-row .ai-side-actions { opacity: 0; transition: opacity 120ms var(--ease-calm); }
+.ai-side-row:hover .ai-side-actions,
+.ai-side-row:focus-within .ai-side-actions { opacity: 1; }
+@media (hover: none) { .ai-side-row .ai-side-actions { opacity: 1; } }
+
+/* ---------- Surfaces ---------- */
+.ai-card {
+  background: transparent;
+  border: 1px solid var(--ai-line);
+  border-radius: 0.875rem;
+}
 .ai-popover {
-  background: var(--surface-modal);
-  border: 1px solid var(--glass-border-strong);
-  border-radius: 1rem;
-  box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.15);
-  padding: 0.375rem;
+  background: var(--ai-raised);
+  border: 1px solid var(--ai-line);
+  border-radius: 0.875rem;
+  box-shadow: var(--ai-shadow);
+  padding: 0.3125rem;
 }
 .ai-menu-item {
   display: flex;
   width: 100%;
   align-items: center;
   gap: 0.625rem;
-  padding: 0.5rem 0.625rem;
-  border-radius: 0.625rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.5rem;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 550;
   text-align: left;
-  color: rgb(var(--ink-200));
-  transition: background-color 120ms var(--ease-calm), color 120ms var(--ease-calm);
+  color: var(--ai-text-2);
+  transition: background-color 110ms var(--ease-calm), color 110ms var(--ease-calm);
 }
-.ai-menu-item:hover { background: var(--tile-hover); color: rgb(var(--ink-100)); }
+.ai-menu-item:hover { background: var(--ai-hover); color: var(--ai-text); }
 .ai-menu-item[aria-pressed='true'],
-.ai-menu-item[aria-selected='true'] { color: rgb(var(--ember-400)); }
+.ai-menu-item[aria-selected='true'] { color: var(--ai-text); font-weight: 650; }
+.ai-menu-sep { height: 1px; margin: 0.3125rem 0.5rem; background: var(--ai-line-soft); }
+/* Destructive rows: .ai-menu-item sets its own colour, so a Tailwind text
+   utility on the same element loses to it. This carries the intent instead. */
+.ai-menu-item-danger,
+.ai-menu-item-danger:hover { color: rgb(239 68 68); }
+html.light .ai-menu-item-danger,
+html.light .ai-menu-item-danger:hover { color: rgb(185 28 28); }
+
+/* ---------- Composer ---------- */
 .ai-composer {
-  background: var(--surface-modal);
-  border: 1px solid var(--glass-border-strong);
-  box-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.16);
-  transition: border-color 160ms var(--ease-calm), box-shadow 160ms var(--ease-calm);
+  background: var(--ai-raised);
+  border: 1px solid var(--ai-line);
+  border-radius: 1rem;
+  box-shadow: none;
+  transition: border-color 150ms var(--ease-calm), box-shadow 150ms var(--ease-calm);
 }
 .ai-composer:focus-within {
-  border-color: rgb(var(--ember-500) / 0.5);
-  box-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.5), 0 0 0 3px rgb(var(--ember-500) / 0.14);
+  border-color: rgb(var(--ember-500) / 0.45);
+  box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.1);
 }
-/* The surface carries the focus ring — the field inside must not paint the
-   global :focus-visible halo a second time. */
 .ai-composer textarea:focus-visible,
 .ai-field input:focus-visible,
 .ai-field:focus-visible,
-.ai-chip .ai-select:focus-visible { box-shadow: none; outline: none; }
-.ai-scroll-x {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch;
-}
-.ai-scroll-x::-webkit-scrollbar { display: none; }
-.ai-starter {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.625rem;
-  width: 100%;
-  text-align: left;
-  padding: 0.75rem 0.875rem;
-  border-radius: 0.875rem;
-  border: 1px solid var(--glass-border);
-  background: var(--tile);
-  color: rgb(var(--ink-200));
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
-}
-.ai-starter:hover {
-  border-color: rgb(var(--ember-500) / 0.45);
-  background: rgb(var(--ember-500) / 0.06);
-  color: rgb(var(--ink-100));
-}
-.ai-side-row .ai-side-actions { opacity: 0; transition: opacity 120ms var(--ease-calm); }
-.ai-side-row:hover .ai-side-actions,
-.ai-side-row:focus-within .ai-side-actions { opacity: 1; }
+.ai-select:focus-visible { box-shadow: none; outline: none; }
 .ai-field {
-  background: var(--surface-input);
-  border: 1px solid var(--glass-border);
-  border-radius: 0.75rem;
-  transition: border-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
+  background: transparent;
+  border: 1px solid var(--ai-line);
+  border-radius: 0.5rem;
+  transition: border-color 130ms var(--ease-calm);
 }
 .ai-field:focus,
-.ai-field:focus-within {
-  border-color: rgb(var(--ember-500) / 0.5);
-  box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.12);
-}
+.ai-field:focus-within { border-color: rgb(var(--ember-500) / 0.45); }
 .ai-select {
   appearance: none;
   -webkit-appearance: none;
@@ -2496,19 +2555,87 @@ html.amoled #root::before { display: none; }
   color: inherit;
   cursor: pointer;
 }
+
+/* ---------- Suggestions ---------- */
+/* Underlined rows, not cards: four bordered boxes competed with the composer
+   for the eye. These sit quietly beneath it. */
+.ai-starter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.125rem;
+  border: 0;
+  border-bottom: 1px solid var(--ai-line-soft);
+  background: transparent;
+  color: var(--ai-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  transition: color 130ms var(--ease-calm), padding-left 130ms var(--ease-calm);
+}
+.ai-starter:hover { color: var(--ai-text); padding-left: 0.375rem; }
+.ai-starter:last-child { border-bottom: 0; }
+
+/* ---------- Messages ---------- */
+.ai-user-bubble {
+  background: var(--ai-hover);
+  border: 1px solid var(--ai-line-soft);
+  color: var(--ai-text);
+}
+.ai-thread-rail {
+  width: 1px;
+  flex: 1 1 auto;
+  min-height: 0.75rem;
+  margin-top: 0.5rem;
+  background: var(--ai-line);
+}
+.ai-toolbar { opacity: 0; transition: opacity 140ms var(--ease-calm); }
+.ai-msg:hover .ai-toolbar,
+.ai-msg:focus-within .ai-toolbar,
+.ai-toolbar:has([aria-expanded='true']) { opacity: 1; }
+@media (hover: none) { .ai-toolbar { opacity: 1; } }
+.ai-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.45rem;
+  border-radius: 0.4rem;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ai-text-3);
+  white-space: nowrap;
+  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm);
+}
+.ai-tool:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-tool[aria-pressed='true'],
+.ai-tool[aria-expanded='true'] { color: var(--ai-text); }
+
+/* ---------- Misc ---------- */
+.ai-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+.ai-scroll-x::-webkit-scrollbar { display: none; }
 .ai-pick {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border-radius: 12px;
-  border: 1px solid var(--glass-border);
-  background: var(--tile);
-  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm);
+  border-radius: 0.75rem;
+  border: 1px solid var(--ai-line);
+  background: transparent;
+  transition: background-color 130ms var(--ease-calm), border-color 130ms var(--ease-calm);
 }
-.ai-pick-live:hover {
-  border-color: rgb(var(--ember-500) / 0.4);
-  background: var(--tile-hover);
-}
+.ai-pick-live:hover { border-color: var(--ai-line); background: var(--ai-hover); }
+/* The page paints its own ground, so the app's ambient wash must not show
+   through it. */
+.ai-root .ai-ambient { background: none; }
 @media (prefers-reduced-motion: reduce) {
-  .ai-toolbar, .ai-chip, .ai-tool, .ai-composer, .ai-starter, .ai-pick { transition: none; }
+  .ai-toolbar, .ai-chip, .ai-tool, .ai-composer, .ai-starter, .ai-pick, .ai-side-row, .ai-btn { transition: none; }
 }
