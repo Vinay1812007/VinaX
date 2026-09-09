@@ -33,6 +33,11 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
         {
           id: 'grq',
           label: 'VinaX GRQ ALL',
+          // `prefix` is the operational name of the upstream, used by the
+          // owner console to render each row as "<prefix> / <model>" so the
+          // provider a slug belongs to is never ambiguous while benching.
+          // Listener-facing surfaces use `label` instead.
+          prefix: 'groq',
           hint: 'Instant answers · music knowledge',
           configured: Boolean(env.VINAX_GROQ_API_KEY),
           models: grq,
@@ -40,6 +45,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
         {
           id: 'opr',
           label: 'VinaX OPR ALL',
+          prefix: 'openrouter',
           hint: 'Free model marketplace',
           configured: Boolean(env.VINAX_OPENROUTER_API_KEY),
           models: opr,

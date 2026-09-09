@@ -25,7 +25,7 @@ import {
   type AiEnv,
   type Lane,
 } from '../_lib/ai';
-import { resolveCatalogModel, type CatalogProvider } from '../_lib/catalog';
+import { catalogDefaultModel, resolveCatalogModel, type CatalogProvider } from '../_lib/catalog';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { probeFetchMarker } from '../_lib/fetchMarker';
@@ -709,8 +709,14 @@ async function handleChat(
   // it is ignored outright for every other seat (those ride pinned engines on
   // keys of their own).
   const catalogProvider: CatalogProvider | null = mode === 'scholar' ? 'grq' : mode === 'router' ? 'opr' : null;
+  // With no explicit pick, the seat still must not use the lane's fixed pin:
+  // a catalog key serves a moving catalog, and a retired slug answers 404 for
+  // every caller (which is exactly how both catalog lanes went dark). Resolve
+  // the default from the live free list instead, and fall back to the lane
+  // pin only if the provider told us nothing.
   const pickedModel = catalogProvider
-    ? await resolveCatalogModel(env, catalogProvider, typeof body.model === 'string' ? body.model : null)
+    ? ((await resolveCatalogModel(env, catalogProvider, typeof body.model === 'string' ? body.model : null)) ??
+      (await catalogDefaultModel(env, catalogProvider)))
     : null;
 
   // Lane routing: the engine's own key+model pair first, then the next live

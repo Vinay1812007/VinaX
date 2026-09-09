@@ -39,8 +39,8 @@ and queue all work with zero AI keys configured.
 | chat | `VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B` | nemotron-3.5-lightning-30b-a3b | Assistant, AI playlists; secondary: mistral-nemotron |
 | deep | `VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B` | nemotron-3-super-120b-a12b | Think button |
 | fast | `VINAX_OAI_GPT_OSS_20B` | gpt-oss-20b | Quick tasks; secondary: lightning |
-| scholar | `VINAX_GROQ_API_KEY` | llama-3.3-70b-versatile *(+ its whole free catalog)* | Music Q&A, live voice |
-| router | `VINAX_OPENROUTER_API_KEY` | any zero-cost model in the live catalog | The free-model marketplace seat |
+| scholar | `VINAX_GROQ_API_KEY` | **resolved live** from the free catalog | Music Q&A, live voice |
+| router | `VINAX_OPENROUTER_API_KEY` | **resolved live** from the free catalog | The free-model marketplace seat |
 | home | `VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B` | nemotron-3-ultra-550b | Premium backstop, always last |
 | search | `VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING` | nemotron-3-nano-omni-30b-a3b-reasoning | Search-page expert |
 | pro | `VINAX_DEEPSEEK_V4_PRO_0813` | deepseek-v4-pro-0813 | Ladder reserve |
@@ -55,9 +55,14 @@ and queue all work with zero AI keys configured.
 | diffusion | `VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT` | diffusiongemma-26b-a4b-it | Bench only (text side) |
 | gemma4 | `VINAX_GGL_GEMMA_4_31B_IT` | gemma-4-31b-it | Bench only |
 
-General failover ladder: `fast → chat → dj → mini → pro → deep → scholar →
-search → router → home`. The vision lanes, the agent reserve and every bench
-lane are **excluded** — an image model must never answer a DJ JSON call.
+General failover ladder: `chat → search → deep → fast → dj → scholar → mini →
+pro → home`. The order comes from the post-rotation probe, not from intent:
+lanes that actually answered go first, the two reserves that came back
+unreachable sink below them, and the 550B home lane stays last because it
+needed 25s for a 4-token ping. The vision lanes, the agent reserve, `router`
+and every bench lane are **excluded** — an image model must never answer a DJ
+JSON call, and a catalog lane has no fixed slug for the synchronous ladder to
+trust.
 Below the ladder: parse-validate → retry-in-plain-mode → deterministic
 fallback (`fallbackSections`, catalog-pool shuffle floor, local recommender).
 The player survives every AI being down.
@@ -81,9 +86,20 @@ only what VinaX can honestly offer:
   paid, so an unknown-cost model is never offered and the key cannot quietly
   run up a bill.
 
-`GET /api/aimodels` serves the two menus (slugs, labels, context sizes — never
-a key). In VinaX AI, choosing one of those two seats reveals a second list:
-**Model · free on this engine**. The chosen slug rides the request, and the
+**A catalog lane must never carry a fixed pin.** This is the lesson of
+v5.23.0: both catalog lanes were pinned to a specific slug, the providers
+retired those slugs, and every call to either lane answered `404` — the keys
+were fine the whole time. The model is now resolved from the live free list
+on every path that can await it (the assistant, the admin bench, health),
+with a preference order matched as a *substring* so a re-published id still
+resolves. When the provider offers nothing, the resolver returns `null` and
+the caller reports the lane unavailable rather than guessing a slug.
+
+`GET /api/aimodels` serves the two menus (slugs, labels, context sizes, and
+the upstream's `prefix` — never a key). In VinaX AI, choosing one of those two
+seats reveals a second list: **Model · free on this engine**. In the owner
+console every row reads `<upstream> / <model>` so the provider a slug belongs
+to is unambiguous while benching. The chosen slug rides the request, and the
 Worker re-checks it against the same live free list before using it — a slug
 that isn't currently listed is refused, not forwarded.
 
@@ -93,13 +109,22 @@ list, on purpose.
 
 ## Key rotation — what "verified" means now
 
-Every secret was deleted and re-issued on 2026-09-09, so **every probe result
-from the previous key set is void**. The registry starts at
-`verified: false` across the board; a row earns `true` back only after the
-admin **AI Lab** pings it on the new key. Lane pins meanwhile follow the
-owner's key → model table, and the cross-lane ladder covers anything slow or
-dead — a lane that can't answer degrades to a healthy sibling instead of
-failing the feature.
+Every secret was deleted and re-issued on 2026-09-09, so every probe result
+from the previous key set was void. The registry was reset to
+`verified: false` and re-earned from the first post-rotation sweep:
+
+| Result | Lanes |
+| --- | --- |
+| Serving | chat/dj (0.63–3.9s), search (0.69s), deep (0.80s), muse (0.80s), laguna (0.65s), fast (1.2s), rank (1.2s), vision 11B (0.69s), gemma4 (8.3s), home (**25.1s**) |
+| Key fine, model dead | scholar and router — both pinned to slugs the provider had retired; fixed by resolving live |
+| Unreachable | pro, mini, vision90, dsflash, diffusion |
+| Rate-limited | agent (HTTP 429 — the key authenticates; this is a quota state, not a dead model) |
+
+Two things worth reading off that table. `muse-glimmer` and `laguna-xs` serve
+under their new vendor prefixes — the slugs that used to 404 are alive again.
+And the marketplace's free list carries several engines that are unreachable
+on the default base, so it is a genuine fallback for them, not just a
+curiosity.
 
 Retired with the old keys: `minimax-m3`, `gpt-oss-120b`,
 `nemotron-3-nano-30b-a3b`, `ising-calibration-1-35b-a3b` and the old

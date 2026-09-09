@@ -13,6 +13,7 @@
  */
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { LANE_ENV, LANE_MODEL, isExternalEndpoint, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
+import { catalogDefaultModel, type CatalogProvider } from '../../_lib/catalog';
 import { aggregateLaneHealth, type AiEventRow } from '../../_lib/laneHealth';
 import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
 
@@ -94,7 +95,12 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // ever pinned (the registry's core honesty rule).
   const overrideModel =
     typeof body.model === 'string' && /^[\w./:-]{1,128}$/.test(body.model) ? body.model : null;
-  const model = overrideModel ?? LANE_MODEL[lane];
+  // A catalog lane has no trustworthy fixed pin — resolve its current default
+  // from the live free list so the bench probes what production would use,
+  // not a slug the provider retired. An explicit override always wins.
+  const catalogProvider: CatalogProvider | null = lane === 'scholar' ? 'grq' : lane === 'router' ? 'opr' : null;
+  const model =
+    overrideModel ?? (catalogProvider ? ((await catalogDefaultModel(env, catalogProvider)) ?? LANE_MODEL[lane]) : LANE_MODEL[lane]);
   const key = env[LANE_ENV[lane]];
   if (!key) return json({ error: 'not_configured', status: 0, head: `${LANE_ENV[lane]} is not set`, lane, model });
 

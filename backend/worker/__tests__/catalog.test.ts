@@ -6,6 +6,7 @@
  */
 import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import {
+  catalogDefaultModel,
   catalogLabel,
   fetchCatalog,
   isFreePricing,
@@ -72,6 +73,83 @@ describe('parseCatalog', () => {
   it('returns an empty list for a malformed body instead of guessing', () => {
     expect(parseCatalog('grq', null)).toEqual([]);
     expect(parseCatalog('grq', { data: 'nope' })).toEqual([]);
+  });
+});
+
+// Every row below is a real entry from the owner's 2026-09-09 working lists.
+// These are the models that must NOT reach a chat picker: offering one hands
+// the listener an engine that 404s or answers with audio.
+describe('parseCatalog — the real catalogs', () => {
+  it('drops the non-chat rows the account actually lists', () => {
+    const grq = parseCatalog('grq', {
+      data: [
+        { id: 'allam-2-7b' },
+        { id: 'groq/compound' },
+        { id: 'groq/compound-mini' },
+        { id: 'meta-llama/llama-prompt-guard-2-22m' },
+        { id: 'meta-llama/llama-prompt-guard-2-86m' },
+        { id: 'openai/gpt-oss-120b' },
+        { id: 'openai/gpt-oss-20b' },
+        { id: 'openai/gpt-oss-safeguard-20b' },
+        { id: 'qwen/qwen3.6-27b' },
+        { id: 'qwen/qwen3.8-27b' },
+      ],
+    });
+    expect(grq.map((m) => m.id)).toEqual([
+      'allam-2-7b',
+      'groq/compound',
+      'groq/compound-mini',
+      'openai/gpt-oss-120b',
+      'openai/gpt-oss-20b',
+      'qwen/qwen3.6-27b',
+      'qwen/qwen3.8-27b',
+    ]);
+  });
+
+  it('drops the marketplace embedding, rerank, safety and audio rows', () => {
+    const free = { prompt: '0', completion: '0' };
+    const opr = parseCatalog('opr', {
+      data: [
+        { id: 'nvidia/nemotron-3-super:free', pricing: free },
+        { id: 'google/gemma-4-31b:free', pricing: free },
+        { id: 'liquidai/lfm2.5-embedding-350m:free', pricing: free },
+        { id: 'nvidia/nemotron-3-embed-1b:free', pricing: free },
+        { id: 'nvidia/llama-nemotron-rerank-vl1b-v2:free', pricing: free },
+        { id: 'nvidia/nemotron-3.5-content-safety:free', pricing: free },
+        { id: 'deepgram/flux-tts:free', pricing: free },
+        // Audio out, and its slug says nothing — only the modality does.
+        { id: 'fishaudio/s2.1-pro:free', pricing: free, architecture: { output_modalities: ['audio'] } },
+      ],
+    });
+    expect(opr.map((m) => m.id)).toEqual(['google/gemma-4-31b:free', 'nvidia/nemotron-3-super:free']);
+  });
+});
+
+describe('catalogDefaultModel', () => {
+  const stub = (ids: string[], provider: 'grq' | 'opr'): void => {
+    const data = ids.map((id) => (provider === 'opr' ? { id, pricing: { prompt: '0', completion: '0' } } : { id }));
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ data }), { status: 200 }))));
+  };
+
+  it('takes the preferred engine when the catalog offers one', async () => {
+    stub(['allam-2-7b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'], 'grq');
+    expect(await catalogDefaultModel({ VINAX_GROQ_API_KEY: 'k' }, 'grq')).toBe('openai/gpt-oss-20b');
+  });
+
+  it('falls back to whatever the catalog does offer rather than a guess', async () => {
+    stub(['some/unheard-of-engine'], 'grq');
+    expect(await catalogDefaultModel({ VINAX_GROQ_API_KEY: 'k' }, 'grq')).toBe('some/unheard-of-engine');
+  });
+
+  it('matches a preference as a substring, so a re-published slug still resolves', async () => {
+    stub(['vendor/x:free', 'nvidia/nemotron-3-super-120b-a12b:free'], 'opr');
+    expect(await catalogDefaultModel({ VINAX_OPENROUTER_API_KEY: 'k' }, 'opr')).toBe('nvidia/nemotron-3-super-120b-a12b:free');
+  });
+
+  it('returns null — never a guessed slug — when the provider offers nothing', async () => {
+    stub([], 'grq');
+    expect(await catalogDefaultModel({ VINAX_GROQ_API_KEY: 'k' }, 'grq')).toBeNull();
+    expect(await catalogDefaultModel({}, 'opr')).toBeNull();
   });
 });
 

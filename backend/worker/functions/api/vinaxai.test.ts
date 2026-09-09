@@ -3,7 +3,7 @@
  *  quietly skipped 2026, so "best films of 2026" answered from stale memory. */
 import { describe, expect, it } from 'vitest';
 import { LANE_BY_MODE, needsFreshInfo } from './vinaxai';
-import { LANE_MODEL } from '../_lib/ai';
+import { LANE_BASE, LANE_MODEL } from '../_lib/ai';
 
 describe('needsFreshInfo', () => {
   it('triggers on the current year (2026), not just future years', () => {
@@ -34,9 +34,15 @@ describe('voice reply lane (v3.4.1 latency fix)', () => {
     expect(LANE_BY_MODE.voice).not.toBe('home');
   });
 
+  // v5.23.0 — this used to assert an exact slug, which broke the moment the
+  // provider retired it (and the lane 404'd in production before the test
+  // ever noticed). The property that actually matters is the one asserted
+  // here: voice rides a lane on a FAST EXTERNAL base, and never the 550B.
   it('the voice lane serves a fast external model, never the 550B ultra', () => {
-    expect(LANE_MODEL[LANE_BY_MODE.voice]).toBe('llama-3.3-70b-versatile');
-    expect(LANE_MODEL[LANE_BY_MODE.voice]).not.toContain('nemotron-3-ultra');
+    const lane = LANE_BY_MODE.voice;
+    expect(LANE_BASE[lane], 'voice must ride a lane with its own external base').toBeTruthy();
+    expect(LANE_MODEL[lane]).not.toContain('nemotron-3-ultra');
+    expect(LANE_MODEL[lane]).not.toContain('550b');
   });
 
   it('keeps nova (the powerful deep-answer seat) on the home lane — only voice moved', () => {

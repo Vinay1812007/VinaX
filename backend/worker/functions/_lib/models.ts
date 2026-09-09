@@ -97,7 +97,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'high', output_format: 'json', chat_capable: true,
     fallback_models: ['deepseek-v4-pro-0813', 'nemotron-3-super-120b-a12b', 'mistral-nemotron'],
     verified: false, ...T,
-    notes: 'Agent reserve. Ran hot-and-cold on the retired key (one 16.6s answer, one 18s hang) — kept out of the default ladder until it is re-probed on the new key.',
+    notes: 'Probed 2026-09-09: HTTP 429 — the key authenticates but the account is rate-limited, so this is a quota state, not a dead model. Agent reserve; kept out of the default ladder.',
   },
   'deepseek-v4-pro-0813': {
     id: 'deepseek-ai/deepseek-v4-pro-0813', envKey: 'VINAX_DEEPSEEK_V4_PRO_0813', display_name: 'VinaX DP V4 PRO', provider: 'nvidia',
@@ -106,7 +106,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'high', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-super-120b-a12b', 'mistral-nemotron'],
     verified: false, ...T,
-    notes: 'PRO identity seat, ladder reserve. Was unreachable on the retired key — re-probe on the new one before promoting it to a feature primary.',
+    notes: 'Probed 2026-09-09: UNREACHABLE (no HTTP response) on the new key. Ladder reserve only — the ladder now places it below every lane that answered.',
   },
   'deepseek-v4-flash-0731': {
     id: 'deepseek-ai/deepseek-v4-flash-0731', envKey: 'VINAX_DEEPSEEK_V4_FLASH_0731', display_name: 'VinaX DP V4 FLASH', provider: 'nvidia',
@@ -115,7 +115,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b', 'nemotron-3.5-lightning-30b-a3b'],
     verified: false, ...T,
-    notes: 'Bench lane only. It hung on the retired key, which is why the balanced chat seat rides the lightning pair; re-probe here before moving chat back.',
+    notes: 'Probed 2026-09-09: UNREACHABLE on the new key too. Bench lane only; the balanced chat seat stays on the lightning pair.',
   },
   'nemotron-3.5-lightning-30b-a3b': {
     id: 'nvidia/nemotron-3.5-lightning-30b-a3b', envKey: 'VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B', display_name: 'VinaX NVD NMTRN 3.5 LTNG 30B', provider: 'nvidia',
@@ -123,8 +123,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['reasoning', 'generation', 'ranking'], latency_class: 'realtime', quality_class: 'high',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b', 'mistral-nemotron'],
-    verified: false, ...T,
-    notes: 'The proven realtime engine (7.3s cold / 0.80s warm, JSON-clean on the retired key) — dj + chat primary. Thinking off via reasoningOffParams.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09 on the new key: 3.9s cold / 0.63s warm, JSON-clean. dj + chat primary. Thinking off via reasoningOffParams.',
   },
   'muse-glimmer-30b': {
     id: 'meta/muse-glimmer-30b', envKey: 'VINAX_MTA_MUSE_GLIMMER_30B', display_name: 'VinaX MTA MUSE GMR 30B', provider: 'nvidia',
@@ -132,8 +132,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['creative', 'generation'], latency_class: 'medium', quality_class: 'high',
     cost_class: 'medium', output_format: 'text', chat_capable: true,
     fallback_models: ['gemma-4-31b-it', 'gpt-oss-20b'],
-    verified: false, ...T,
-    notes: 'Re-published under a new vendor prefix on 2026-09-09 (the old prefix 404d) — bench lane until the new slug is probed serving.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09: 0.80s under the new vendor prefix — the slug that 404d before now serves. Bench lane.',
   },
   'ising-calibration-1.5-31b': {
     id: 'nvidia/ising-calibration-1.5-31b', envKey: 'VINAX_NVD_ISING_CALIBRATION_1_5_31B', display_name: 'VinaX NVD ING CALBTN 1.5 31B', provider: 'nvidia',
@@ -141,8 +141,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['ranking', 'classification'], latency_class: 'fast', quality_class: 'high',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3.5-lightning-30b-a3b'],
-    verified: false, ...T,
-    notes: 'Bench lane. Deterministic client-side ranking stays authoritative either way — this model only ever advises.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09: 1.2s on the new key — the family that was 410 Gone is serving again. Bench lane; deterministic client-side ranking stays authoritative.',
   },
   'laguna-xs-2.1': {
     id: 'poolside/laguna-xs-2.1', envKey: 'VINAX_POOLSIDE_LAGUNA_XS_2_1', display_name: 'VinaX PSD LGNA XS 2.1', provider: 'nvidia',
@@ -150,8 +150,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['classification', 'generation'], latency_class: 'realtime', quality_class: 'light',
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b'],
-    verified: false, ...T,
-    notes: 'Re-published under a new vendor prefix on 2026-09-09 (the old prefix 404d) — bench lane until the new slug is probed serving.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09: 0.65s under the new vendor prefix — the slug that 404d before now serves. Bench lane.',
   },
   'diffusiongemma-26b-a4b-it': {
     id: 'google/diffusiongemma-26b-a4b-it', envKey: 'VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT', display_name: 'VinaX GGL DIF GEM 26B A4B IT', provider: 'nvidia',
@@ -160,7 +160,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'text', chat_capable: true,
     fallback_models: ['muse-glimmer-30b', 'gemma-4-31b-it'],
     verified: false, ...T,
-    notes: 'Served through chat-completions on the retired key. Real image generation is NOT wired — never fake it through the text endpoint.',
+    notes: 'Probed 2026-09-09: UNREACHABLE on the new key. Bench lane. Real image generation is NOT wired — never fake it through the text endpoint.',
   },
   'nemotron-3-ultra-550b-a55b': {
     id: 'nvidia/nemotron-3-ultra-550b-a55b', envKey: 'VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B', display_name: 'VinaX NVD NMTRN ULT', provider: 'nvidia',
@@ -168,8 +168,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['reasoning', 'generation'], latency_class: 'slow', quality_class: 'premium',
     cost_class: 'high', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-super-120b-a12b', 'mistral-nemotron'],
-    verified: false, ...T,
-    notes: 'Measured slow/flaky at big JSON under deadline — keep it LAST in latency-sensitive ladders, never first.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09: SERVES but took 25.1s for a 4-token ping. Premium backstop only — it must stay LAST in every latency-sensitive ladder.',
   },
   'nemotron-3-nano-omni-30b-a3b-reasoning': {
     id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', envKey: 'VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING', display_name: 'VinaX NVD NMTRN NN OMNI 30B', provider: 'nvidia',
@@ -177,8 +177,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['multimodal', 'reasoning', 'classification'], latency_class: 'fast', quality_class: 'medium',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3.5-lightning-30b-a3b', 'gpt-oss-20b'],
-    verified: false, ...T,
-    notes: 'Search-lane primary since v5.21.0 — it inherits the seat from the retired nemotron-3-nano-30b-a3b. Same a3b template family, so it MUST carry reasoningOffParams or it leaks bare chain-of-thought.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09: 0.69s. Search-lane primary, inheriting the seat from the retired nemotron-3-nano-30b-a3b. Same a3b template family, so it MUST carry reasoningOffParams or it leaks bare chain-of-thought.',
   },
   'gemma-4-31b-it': {
     id: 'google/gemma-4-31b-it', envKey: 'VINAX_GGL_GEMMA_4_31B_IT', display_name: 'VinaX GGL GEM 4 31B', provider: 'nvidia',
@@ -186,8 +186,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['generation', 'classification'], latency_class: 'fast', quality_class: 'medium',
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b', 'mistral-nemotron'],
-    verified: false, ...T,
-    notes: 'Bench lane — it hung on the retired key. Re-probe on the new one.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09: SERVES in 8.3s on the new key (it hung on the retired one). Slow — bench lane, not a feature primary.',
   },
   'nemotron-3-super-120b-a12b': {
     id: 'nvidia/nemotron-3-super-120b-a12b', envKey: 'VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B', display_name: 'VinaX NVD NMTRN SUP', provider: 'nvidia',
@@ -195,8 +195,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['reasoning', 'generation'], latency_class: 'medium', quality_class: 'high',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-ultra-550b-a55b', 'mistral-nemotron'],
-    verified: false, ...T,
-    notes: 'Deep (Think) lane primary — answered a probe in 0.55s on the retired key.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09: 0.80s. Deep (Think) lane primary.',
   },
   'gpt-oss-20b': {
     id: 'openai/gpt-oss-20b', envKey: 'VINAX_OAI_GPT_OSS_20B', display_name: 'VinaX OAI OSS 20B', provider: 'nvidia',
@@ -204,8 +204,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['generation', 'reasoning', 'classification'], latency_class: 'fast', quality_class: 'medium',
     cost_class: 'low', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3.5-lightning-30b-a3b', 'mistral-nemotron'],
-    verified: false, ...T,
-    notes: 'Fast-lane primary on its own new key. It hung on the retired key, so the lane carries the lightning engine as its same-key secondary and the ladder covers the rest.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09 on its new key: 1.2s. Healthy here, unlike on the retired key — fast-lane primary, with the lightning engine as same-key secondary.',
   },
   'mistral-nemotron': {
     id: 'mistralai/mistral-nemotron', envKey: 'VINAX_MISTRAL_NEMOTRON', display_name: 'VinaX MST NMTRN', provider: 'nvidia',
@@ -214,7 +214,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b', 'nemotron-3.5-lightning-30b-a3b'],
     verified: false, ...T,
-    notes: 'NEW 2026-09-09 — takes the general-reserve seat the retired MiniMax key held. Unprobed: ladder reserve only until the AI Lab pings it.',
+    notes: 'Probed 2026-09-09: UNREACHABLE (no HTTP response) on its new key. Kept as the general reserve seat but demoted in the ladder until it answers.',
   },
   'llama-3.2-11b-vision-instruct': {
     id: 'meta/llama-3.2-11b-vision-instruct', envKey: 'VINAX_MTA_LMA_3_2_11B_VSN_INT', display_name: 'VinaX MTA VSN 11B', provider: 'nvidia',
@@ -222,8 +222,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['vision', 'multimodal', 'generation'], latency_class: 'fast', quality_class: 'medium',
     cost_class: 'medium', output_format: 'text', chat_capable: true,
     fallback_models: ['llama-3.2-90b-vision-instruct'],
-    verified: false, ...T,
-    notes: 'NEW dedicated key 2026-09-09 — the vision model finally signs its own calls instead of borrowing a text lane key.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09 on its own new key: 0.69s. The vision seat finally signs its own calls instead of borrowing a text lane key.',
   },
   'llama-3.2-90b-vision-instruct': {
     id: 'meta/llama-3.2-90b-vision-instruct', envKey: 'VINAX_MTA_LMA_3_2_90B_VSN_INT', display_name: 'VinaX MTA VSN 90B', provider: 'nvidia',
@@ -232,7 +232,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'high', output_format: 'text', chat_capable: true,
     fallback_models: ['llama-3.2-11b-vision-instruct'],
     verified: false, ...T,
-    notes: 'NEW 2026-09-09 — the heavyweight vision seat; the 11B key stays the default so photo questions answer fast.',
+    notes: 'Probed 2026-09-09: UNREACHABLE (no HTTP response). The 11B key is the vision default and covers it; re-probe before relying on this one.',
   },
 
   'grq-catalog': {
@@ -241,8 +241,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['generation', 'reasoning'], latency_class: 'realtime', quality_class: 'high',
     cost_class: 'low', output_format: 'json', chat_capable: true, catalog_key: true,
     fallback_models: ['mistral-nemotron', 'gpt-oss-20b'],
-    verified: false, ...T,
-    notes: 'The whole free catalog is discovered live from the provider /models list (see _lib/catalog.ts) and every chat model in it is selectable. The id above is only the default pin; llama-3.1-8b-instant is the same-key secondary.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09: the KEY works, but the pinned llama-3.3-70b-versatile (and its llama-3.1-8b-instant secondary) had been RETIRED upstream, so every call 404d. Fixed in v5.23.0 by resolving the model from the live free list instead of pinning one — a catalog key must never carry a fixed slug. The id above is only the synchronous-ladder fallback.',
   },
   'opr-catalog': {
     id: 'meta-llama/llama-3.3-70b-instruct:free', envKey: 'VINAX_OPENROUTER_API_KEY', display_name: 'VinaX OPR ALL', provider: 'opr',
@@ -250,8 +250,8 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     capabilities: ['generation', 'reasoning', 'creative'], latency_class: 'medium', quality_class: 'high',
     cost_class: 'low', output_format: 'json', chat_capable: true, catalog_key: true,
     fallback_models: ['mistral-nemotron', 'gpt-oss-20b'],
-    verified: false, ...T,
-    notes: 'NEW 2026-09-09. Only models the provider prices at zero for both prompt and completion are listed (see _lib/catalog.ts) — a paid slug is never selectable, so this key cannot run up a bill.',
+    verified: true, ...T,
+    notes: 'Probed 2026-09-09: the KEY works; the guessed default slug 404d, same root cause as the other catalog lane and fixed the same way (live resolution, never a fixed pin). Only models the provider prices at zero for BOTH prompt and completion are listed, so this key cannot run up a bill. Its free list carries several engines that are unreachable on the default base.',
   },
 };
 

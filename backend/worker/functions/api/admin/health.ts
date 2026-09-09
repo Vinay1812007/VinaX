@@ -13,6 +13,7 @@ import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimit } from '../../_lib/ratelimit';
 import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { LANE_MODEL, laneEndpoint, type AiEnv } from '../../_lib/ai';
+import { catalogDefaultModel } from '../../_lib/catalog';
 
 type Env = AdminEnv & SupabaseEnv & AiEnv;
 
@@ -56,15 +57,22 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   // refresh loop can't burn upstream quota (audit: unthrottled).
   const limited = rateLimit(request, 'admin-health', { capacity: 4, refillPerMinute: 2 }, env as never);
   if (limited) return limited;
+  // The two catalog lanes serve a moving catalog, so health must ping the
+  // model they would ACTUALLY use right now — a fixed pin here reported a
+  // 404 that said nothing about whether the key works.
+  const [scholarModel, routerModel] = await Promise.all([
+    catalogDefaultModel(env, 'grq'),
+    catalogDefaultModel(env, 'opr'),
+  ]);
   const [dj, chat, sage, swift, scholar, home, search, router, vision, lastEvents] = await Promise.all([
     pingKey('VinaX LTNG · AI DJ · radio · smart queue', env.VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B, LANE_MODEL.dj, laneEndpoint(env, 'dj')),
     pingKey('VinaX Balanced · chat · playlists', env.VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B, LANE_MODEL.chat, laneEndpoint(env, 'chat')),
     pingKey('VinaX NMTRN SUP · deep reasoning', env.VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B, LANE_MODEL.deep, laneEndpoint(env, 'deep')),
     pingKey('VinaX OSS 20B · fast answers', env.VINAX_OAI_GPT_OSS_20B, LANE_MODEL.fast, laneEndpoint(env, 'fast')),
-    pingKey('VinaX GRQ ALL · music knowledge · live voice', env.VINAX_GROQ_API_KEY, LANE_MODEL.scholar, laneEndpoint(env, 'scholar')),
+    pingKey('VinaX GRQ ALL · music knowledge · live voice', env.VINAX_GROQ_API_KEY, scholarModel ?? LANE_MODEL.scholar, laneEndpoint(env, 'scholar')),
     pingKey('VinaX NMTRN ULT · home builder', env.VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B, LANE_MODEL.home, laneEndpoint(env, 'home')),
     pingKey('VinaX NMTRN NN OMNI · search music expert', env.VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING, LANE_MODEL.search, laneEndpoint(env, 'search')),
-    pingKey('VinaX OPR ALL · free model marketplace', env.VINAX_OPENROUTER_API_KEY, LANE_MODEL.router, laneEndpoint(env, 'router')),
+    pingKey('VinaX OPR ALL · free model marketplace', env.VINAX_OPENROUTER_API_KEY, routerModel ?? LANE_MODEL.router, laneEndpoint(env, 'router')),
     pingKey('VinaX VSN 11B · image understanding', env.VINAX_MTA_LMA_3_2_11B_VSN_INT, LANE_MODEL.vision, laneEndpoint(env, 'vision')),
     sbSelect<{ created_at?: string }>(env, 'vinax_events', 'select=created_at&order=created_at.desc&limit=1'),
   ]);

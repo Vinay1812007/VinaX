@@ -43,7 +43,24 @@ const SOURCE: Record<CatalogProvider, { env: keyof AiEnv; url: string }> = {
 };
 
 /** Slug fragments that mark a model as NOT a chat-completions engine. */
-const NON_CHAT = /whisper|tts|text-to-speech|speech|transcri|embed|rerank|moderat|guard|prompt-?shield|image|diffusion|video|sdxl|flux/i;
+/** Slug fragments that mark a model as NOT a chat-completions engine.
+ *  Every term here was earned by a real catalog row: the audio, embedding,
+ *  rerank and classifier models both providers list alongside their chat
+ *  models would 404 (or answer nonsense) if a chat picker offered them.
+ *  `safety` covers the content-safety classifiers; `guard` covers the
+ *  prompt-guard and safeguard families. */
+const NON_CHAT =
+  /whisper|tts|text-to-speech|speech|transcri|embed|rerank|moderat|guard|safety|prompt-?shield|image|diffusion|video|sdxl|flux/i;
+
+/** Preferred default for each catalog key, most-wanted first, matched as a
+ *  SUBSTRING of the slug. Substrings on purpose: these catalogs re-publish
+ *  models under new ids without notice, and a hard-coded exact slug is what
+ *  put a dead pin on both catalog lanes in the first place. Anything not
+ *  listed still works — it just isn't the automatic pick. */
+const PREFERRED: Record<CatalogProvider, string[]> = {
+  grq: ['gpt-oss-20b', 'gpt-oss-120b', 'qwen3.8', 'qwen3.6', 'compound-mini', 'compound'],
+  opr: ['nemotron-3-super', 'nemotron-3-ultra', 'gemma-4-31b', 'nemotron-3.5-lightning', 'nemotron-3-nano-omni', 'gemma-4'],
+};
 
 const TTL_MS = 15 * 60_000;
 const cache = new Map<CatalogProvider, { at: number; models: CatalogModel[] }>();
@@ -150,6 +167,27 @@ export async function resolveCatalogModel(
   if (!slug || slug.length > 128 || !/^[\w./:-]+$/.test(slug)) return null;
   const models = await fetchCatalog(env, provider);
   return models.some((m) => m.id === slug) ? slug : null;
+}
+
+/** The model a catalog lane should use when nobody picked one.
+ *
+ *  A catalog key does not serve a fixed model, so pinning one in the lane
+ *  table is a standing bug: the moment the provider retires that slug the
+ *  whole lane answers 404, which is exactly what happened to both catalog
+ *  lanes. This resolves the default from the LIVE free list instead —
+ *  preference order first, then whatever the catalog actually offers.
+ *
+ *  Returns null when the key is missing or the provider gave us nothing
+ *  usable. Callers must treat that as "this lane is not available right now"
+ *  rather than falling back to a guessed slug. */
+export async function catalogDefaultModel(env: AiEnv, provider: CatalogProvider): Promise<string | null> {
+  const models = await fetchCatalog(env, provider);
+  if (!models.length) return null;
+  for (const want of PREFERRED[provider]) {
+    const hit = models.find((m) => m.id.toLowerCase().includes(want));
+    if (hit) return hit.id;
+  }
+  return models[0].id;
 }
 
 /** Clear the isolate cache — tests only. */

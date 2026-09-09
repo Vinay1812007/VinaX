@@ -51,9 +51,16 @@ describe('lane wiring', () => {
   });
 
   it('keeps the retired engines and secret names out of the wiring entirely', () => {
-    const retired = ['minimax', 'gpt-oss-120b', 'nemotron-3-nano-30b-a3b', 'ising-calibration-1-35b', 'nemotron-super-49b'];
+    // gpt-oss-120b is deliberately NOT here: it was retired on the default
+    // base but is on the scholar key's current working list, where it is the
+    // same-key secondary. A slug is only "retired" per provider.
+    const retired = ['minimax', 'nemotron-3-nano-30b-a3b', 'ising-calibration-1-35b', 'nemotron-super-49b'];
     const wiring = JSON.stringify({ LANE_MODEL, LANE_SECONDARY, LANE_ENV });
     for (const slug of retired) expect(wiring, `${slug} is still wired`).not.toContain(slug);
+    // The two slugs the provider retired under us, which took both catalog
+    // lanes down with a 404. They must never come back as a fixed pin.
+    for (const dead of ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'])
+      expect(wiring, `${dead} was retired upstream and must not be pinned`).not.toContain(dead);
     // Pre-rotation secret names share these fragments and no longer exist.
     for (const name of ['VINAX_CHATGPT_', 'VINAX_NVIDIA_', 'VINAX_NEMOTRON_', 'VINAX_MINIMAX_'])
       expect(wiring, `${name}* is a retired secret name`).not.toContain(name);

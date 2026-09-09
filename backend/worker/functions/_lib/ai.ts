@@ -198,13 +198,22 @@ export const LANE_MODEL: Record<Lane, string> = {
   chat: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   deep: 'nvidia/nemotron-3-super-120b-a12b',
   fast: 'openai/gpt-oss-20b',
-  scholar: 'llama-3.3-70b-versatile',
+  // v5.23.0 — the previous pins (llama-3.3-70b-versatile / -3.1-8b-instant)
+  // were RETIRED by the provider and answered 404 on every call. Catalog
+  // lanes should not carry a fixed pin at all: the resolved default now comes
+  // from the live free list (catalogDefaultModel in _lib/catalog.ts). These
+  // two entries are only the last-resort value for the synchronous chat()
+  // ladder, and both are on the provider's current working list.
+  scholar: 'openai/gpt-oss-20b',
   home: 'nvidia/nemotron-3-ultra-550b-a55b',
   search: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
   pro: 'deepseek-ai/deepseek-v4-pro-0813',
   mini: 'mistralai/mistral-nemotron',
   agent: 'moonshotai/kimi-k3',
-  router: 'meta-llama/llama-3.3-70b-instruct:free',
+  // Resolved live per request — see the scholar note. The marketplace
+  // re-publishes slugs constantly, so this value is deliberately never
+  // trusted on its own: every call site resolves the catalog first.
+  router: 'nvidia/nemotron-3-super:free',
   vision: 'meta/llama-3.2-11b-vision-instruct',
   vision90: 'meta/llama-3.2-90b-vision-instruct',
   // Inventory bench lanes — one per remaining key, no feature depends on them.
@@ -230,7 +239,7 @@ export const LANE_SECONDARY: Partial<Record<Lane, string>> = {
   home: 'nvidia/nemotron-3-super-120b-a12b',
   search: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   mini: 'openai/gpt-oss-20b',
-  scholar: 'llama-3.1-8b-instant',
+  scholar: 'openai/gpt-oss-120b',
   vision: 'meta/llama-3.2-90b-vision-instruct',
   vision90: 'meta/llama-3.2-11b-vision-instruct',
 };
@@ -261,12 +270,20 @@ export const LANE_ENV: Record<Lane, keyof AiEnv> = {
 /** Cross-lane failover ladder: when a lane's own key/model pair is missing or
  * dead, the next live pair takes the call — one dead key never takes a
  * feature down, it just degrades to a healthy sibling lane.
- * Order: fastest proven JSON generators first, the slow 550B ULTRA last. The
- * vision lanes, the unstable agent reserve and the bench-only inventory lanes
- * are NEVER in the general ladder — an image model must not answer a DJ JSON
- * call. The marketplace lane sits second-to-last: it is free and broad, but
- * its upstreams vary, so proven keys go first. */
-const LADDER: Lane[] = ['fast', 'chat', 'dj', 'mini', 'pro', 'deep', 'scholar', 'search', 'router', 'home'];
+ *
+ * v5.23.0 order, set from the 2026-09-09 post-rotation probe rather than from
+ * intent: the lanes that actually answered go first (chat 625ms, search
+ * 688ms, deep 801ms, fast 1.2s, dj 3.9s), the two reserves that came back
+ * unreachable on the new keys sink below them, and the 550B home lane stays
+ * last because it answered in 25s. A dead reserve high in the ladder costs
+ * every rescued call a wasted hop, which is what the old order was doing.
+ *
+ * The vision lanes, the agent reserve and the bench-only inventory lanes are
+ * NEVER in the general ladder — an image model must not answer a DJ JSON
+ * call. `router` is out too: chat() is synchronous about model choice and a
+ * catalog lane has no trustworthy fixed slug, so it is only used where the
+ * catalog can be resolved first (the assistant, the bench, health). */
+const LADDER: Lane[] = ['chat', 'search', 'deep', 'fast', 'dj', 'scholar', 'mini', 'pro', 'home'];
 
 export interface LaneAttempt {
   key: string;

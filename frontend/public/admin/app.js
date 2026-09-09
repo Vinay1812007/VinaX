@@ -1492,6 +1492,7 @@
   // a candidate replacement is VERIFIED SERVING before it is ever pinned —
   // the registry's core honesty rule.
   var labCatalog = { grq: [], opr: [] };
+  var labCatalogPrefix = { grq: 'groq', opr: 'openrouter' }; // upstream name shown per row
   var labCatalogState = 'idle'; // idle | loading | ready | failed
   var labModelBy = {};          // lane -> slug override ('' = use the pin)
   var labHist = {}; // lane -> [{ role, content, error?, meta? }] — in memory only, gone on reload
@@ -1785,7 +1786,10 @@
         var groups = (j && j.groups) || [];
         labCatalog = { grq: [], opr: [] };
         groups.forEach(function (g) {
-          if ((g.id === 'grq' || g.id === 'opr') && g.models) labCatalog[g.id] = g.models;
+          if ((g.id === 'grq' || g.id === 'opr') && g.models) {
+            labCatalog[g.id] = g.models;
+            if (g.prefix) labCatalogPrefix[g.id] = g.prefix;
+          }
         });
         labCatalogState = 'ready';
       })
@@ -1801,15 +1805,18 @@
     var cur = labModelBy[labLane] || '';
     if (info.catalog) {
       var list = labCatalog[info.catalog] || [];
-      var opts = '<option value="">Pinned default \u00b7 ' + esc(labShortModel(info.model)) + '</option>' +
+      // "<upstream> / <model name>" — the owner asked for the provider to be
+      // visible on every row, so a slug is never ambiguous while benching.
+      var pfx = labCatalogPrefix[info.catalog] || info.catalog;
+      var opts = '<option value="">' + esc(pfx) + ' / auto \u00b7 today\u2019s default</option>' +
         list.map(function (m) {
-          var label = m.label + (m.context ? ' \u00b7 ' + Math.round(m.context / 1000) + 'k' : '');
+          var label = pfx + ' / ' + m.label + (m.context ? ' \u00b7 ' + Math.round(m.context / 1000) + 'k' : '');
           return '<option value="' + esc(m.id) + '"' + (m.id === cur ? ' selected' : '') + '>' + esc(label) + '</option>';
         }).join('');
       var note = labCatalogState === 'loading' ? 'loading the free list\u2026'
         : labCatalogState === 'failed' ? 'list unavailable \u2014 the key or provider is unreachable'
-        : list.length ? list.length + ' free model(s) on this key'
-        : 'no free models reported on this key';
+        : list.length ? list.length + ' free chat model(s) \u00b7 auto picks a live one, never a fixed slug'
+        : 'no free chat models reported on this key';
       host.innerHTML = '<label class="muted" style="font-size:11px" for="lab-model-sel">Model</label>' +
         '<select id="lab-model-sel" style="min-width:280px">' + opts + '</select>' +
         '<span class="muted" style="font-size:11px">' + esc(note) + '</span>' +

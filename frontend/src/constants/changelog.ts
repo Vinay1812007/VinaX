@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.23.0': {
+    title: 'Two engines back from the dead',
+    changes: [
+      { type: 'fixed', text: 'The two menu engines answered nothing at all — each was locked to one specific model, and the services had since retired those models, so every request failed. They now read the live list and use a model that actually exists, so a retirement upstream can never take them down again.' },
+      { type: 'fixed', text: 'The free-model menus no longer offer engines that can’t chat — the speech, embedding, ranking and safety models that sit alongside them in the same list are filtered out, so every engine you can pick is one that answers.' },
+      { type: 'improved', text: 'When an engine is busy, VinaX now hands your question to the engines proven fastest that day instead of a fixed order — so a rescued answer arrives sooner.' },
+      { type: 'improved', text: 'Owner console — each free model is listed as “provider / model”, so it is always clear which service a model belongs to, and the engine list is checked against what is live right now.' },
+    ],
+  },
   '5.22.0': {
     title: 'The free-model menu, finished on both sides',
     changes: [
