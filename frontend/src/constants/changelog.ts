@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.22.0': {
+    title: 'The free-model menu, finished on both sides',
+    changes: [
+      { type: 'improved', text: 'VinaX AI — once you pick a model from a free menu, the engine button names that model instead of the seat, so you can always see which engine is about to answer. It reads correctly the moment the page opens, without waiting for the list to load.' },
+      { type: 'new', text: 'Owner console — API Monitoring can now probe any model, not just the pinned one: the two catalog engines get a dropdown of every free model their key serves, and every other lane gets a slug box for trying a candidate engine on its own key. “Ping all lanes” tests whatever each lane is currently set to.' },
+    ],
+  },
   '5.21.0': {
     title: 'New engine line-up, and a free-model menu',
     changes: [

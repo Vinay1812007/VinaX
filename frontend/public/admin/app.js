@@ -1468,13 +1468,13 @@
     { lane: 'chat', name: 'BALANCED', nick: 'VinaX Balanced (LTNG key)', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
     { lane: 'fast', name: 'OSS 20B', nick: 'VinaX OAI OSS 20B', model: 'openai/gpt-oss-20b' },
     { lane: 'deep', name: 'NMTRN SUP', nick: 'VinaX NVD NMTRN SUP', model: 'nvidia/nemotron-3-super-120b-a12b' },
-    { lane: 'scholar', name: 'GRQ ALL', nick: 'VinaX GRQ ALL', model: 'llama-3.3-70b-versatile' },
+    { lane: 'scholar', name: 'GRQ ALL', nick: 'VinaX GRQ ALL', model: 'llama-3.3-70b-versatile', catalog: 'grq' },
     { lane: 'home', name: 'NMTRN ULT', nick: 'VinaX NVD NMTRN ULT', model: 'nvidia/nemotron-3-ultra-550b-a55b' },
     { lane: 'search', name: 'NMTRN NN OMNI', nick: 'VinaX NVD NMTRN NN OMNI 30B', model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning' },
     { lane: 'pro', name: 'DP V4 PRO', nick: 'VinaX DP V4 PRO', model: 'deepseek-ai/deepseek-v4-pro-0813' },
     { lane: 'mini', name: 'MST NMTRN', nick: 'VinaX MST NMTRN', model: 'mistralai/mistral-nemotron' },
     { lane: 'agent', name: 'K3', nick: 'VinaX K3', model: 'moonshotai/kimi-k3' },
-    { lane: 'router', name: 'OPR ALL', nick: 'VinaX OPR ALL', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+    { lane: 'router', name: 'OPR ALL', nick: 'VinaX OPR ALL', model: 'meta-llama/llama-3.3-70b-instruct:free', catalog: 'opr' },
     { lane: 'vision', name: 'VSN 11B', nick: 'VinaX MTA VSN 11B', model: 'meta/llama-3.2-11b-vision-instruct' },
     { lane: 'vision90', name: 'VSN 90B', nick: 'VinaX MTA VSN 90B', model: 'meta/llama-3.2-90b-vision-instruct' },
     { lane: 'dsflash', name: 'DP V4 FLASH', nick: 'VinaX DP V4 FLASH', model: 'deepseek-ai/deepseek-v4-flash-0731' },
@@ -1485,6 +1485,15 @@
     { lane: 'rank', name: 'ING CALBTN 1.5', nick: 'VinaX NVD ING CALBTN 1.5 31B', model: 'nvidia/ising-calibration-1.5-31b' }
   ];
   var labLane = 'chat';
+  // v5.22.0 — the bench can probe a lane on a model OTHER than its pin. For
+  // the two catalog lanes that is a dropdown of every free model the key
+  // actually serves (fetched from /api/aimodels, the same list the app's
+  // engine picker uses); for every other lane it is a free-text slug box, so
+  // a candidate replacement is VERIFIED SERVING before it is ever pinned —
+  // the registry's core honesty rule.
+  var labCatalog = { grq: [], opr: [] };
+  var labCatalogState = 'idle'; // idle | loading | ready | failed
+  var labModelBy = {};          // lane -> slug override ('' = use the pin)
   var labHist = {}; // lane -> [{ role, content, error?, meta? }] — in memory only, gone on reload
   var labBusy = false;
   var labPingBusy = false;
@@ -1545,7 +1554,7 @@
     if (!host) return;
     var hist = labHist[labLane] || [];
     if (!hist.length) {
-      host.innerHTML = '<div class="empty">No messages on this lane yet — type below. Replies come straight from the pinned engine, no failover.</div>';
+      host.innerHTML = '<div class="empty">No messages on this lane yet — type below. Replies come straight from this lane\'s own key and the model chosen above, with no failover.</div>';
       return;
     }
     host.innerHTML = hist.map(function (m) {
@@ -1573,7 +1582,8 @@
       host.scrollTop = host.scrollHeight;
     }
     var t0 = Date.now();
-    var meta = { model: labInfo(lane).model, lane: lane, ttfb: null, total: null, chars: 0, at: labNow() };
+    var override = labModelBy[lane] || '';
+    var meta = { model: override || labInfo(lane).model, lane: lane, ttfb: null, total: null, chars: 0, at: labNow() };
     var full = '';
     var aborted = false;
     var outMsgs = hist.filter(function (m) { return !m.error; }).slice(-16).map(function (m) { return { role: m.role, content: m.content }; });
@@ -1591,7 +1601,9 @@
     fetch('/api/admin/ailab', {
       method: 'POST',
       headers: { 'x-admin-token': token(), 'content-type': 'application/json' },
-      body: JSON.stringify({ lane: lane, messages: outMsgs, maxTokens: 1000 })
+      body: JSON.stringify(override
+        ? { lane: lane, messages: outMsgs, maxTokens: 1000, model: override }
+        : { lane: lane, messages: outMsgs, maxTokens: 1000 })
     }).then(function (res) {
       if (res.status === 401) { sessionStorage.removeItem(TOKEN_KEY); labBusy = false; showLogin('Invalid token.'); return null; }
       var ct = res.headers.get('content-type') || '';
@@ -1679,10 +1691,16 @@
     var left = LAB_LANES.length;
     LAB_LANES.forEach(function (L) {
       var t0 = Date.now();
+      // Ping whatever the lane is currently set to probe: the pinned model,
+      // or the override chosen above it — so a candidate slug can be health-
+      // checked in the same sweep as everything else.
+      var ov = labModelBy[L.lane] || '';
+      var pingBody = { lane: L.lane, messages: [{ role: 'user', content: 'ping' }], maxTokens: 1 };
+      if (ov) pingBody.model = ov;
       fetch('/api/admin/ailab', {
         method: 'POST',
         headers: { 'x-admin-token': token(), 'content-type': 'application/json' },
-        body: JSON.stringify({ lane: L.lane, messages: [{ role: 'user', content: 'ping' }], maxTokens: 1 })
+        body: JSON.stringify(pingBody)
       }).then(function (res) {
         if (res.status === 401) { sessionStorage.removeItem(TOKEN_KEY); showLogin('Invalid token.'); return { ok: false, why: '401' }; }
         var ct = res.headers.get('content-type') || '';
@@ -1755,6 +1773,57 @@
       })
       .then(function () { labMusicBusy = false; labMusicAt = labNow(); labPaintMusicAt(); });
   }
+  /** Fetch the two free-model menus once per Lab session. An unreachable
+   *  provider is reported as such — the bench never shows an invented list. */
+  function labLoadCatalog() {
+    if (labCatalogState === 'loading' || labCatalogState === 'ready') return;
+    labCatalogState = 'loading';
+    labPaintModelRow();
+    fetch('/api/aimodels')
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)); })
+      .then(function (j) {
+        var groups = (j && j.groups) || [];
+        labCatalog = { grq: [], opr: [] };
+        groups.forEach(function (g) {
+          if ((g.id === 'grq' || g.id === 'opr') && g.models) labCatalog[g.id] = g.models;
+        });
+        labCatalogState = 'ready';
+      })
+      .catch(function () { labCatalogState = 'failed'; })
+      .then(function () { labPaintModelRow(); });
+  }
+  /** The model control for the CURRENT lane: a free-model dropdown on the two
+   *  catalog lanes, a slug box everywhere else. */
+  function labPaintModelRow() {
+    var host = $('lab-model-row');
+    if (!host) return;
+    var info = labInfo(labLane);
+    var cur = labModelBy[labLane] || '';
+    if (info.catalog) {
+      var list = labCatalog[info.catalog] || [];
+      var opts = '<option value="">Pinned default \u00b7 ' + esc(labShortModel(info.model)) + '</option>' +
+        list.map(function (m) {
+          var label = m.label + (m.context ? ' \u00b7 ' + Math.round(m.context / 1000) + 'k' : '');
+          return '<option value="' + esc(m.id) + '"' + (m.id === cur ? ' selected' : '') + '>' + esc(label) + '</option>';
+        }).join('');
+      var note = labCatalogState === 'loading' ? 'loading the free list\u2026'
+        : labCatalogState === 'failed' ? 'list unavailable \u2014 the key or provider is unreachable'
+        : list.length ? list.length + ' free model(s) on this key'
+        : 'no free models reported on this key';
+      host.innerHTML = '<label class="muted" style="font-size:11px" for="lab-model-sel">Model</label>' +
+        '<select id="lab-model-sel" style="min-width:280px">' + opts + '</select>' +
+        '<span class="muted" style="font-size:11px">' + esc(note) + '</span>' +
+        '<button class="ghost" id="lab-model-reload" style="padding:3px 10px;font-size:11px">Reload list</button>';
+      $('lab-model-sel').addEventListener('change', function () { labModelBy[labLane] = this.value; });
+      $('lab-model-reload').addEventListener('click', function () { labCatalogState = 'idle'; labLoadCatalog(); });
+    } else {
+      host.innerHTML = '<label class="muted" style="font-size:11px" for="lab-model-in">Model</label>' +
+        '<input id="lab-model-in" type="text" spellcheck="false" style="min-width:280px" ' +
+        'placeholder="' + esc(info.model) + '" value="' + esc(cur) + '">' +
+        '<span class="muted" style="font-size:11px">blank = the pinned model \u00b7 type a slug to probe a candidate on this key</span>';
+      $('lab-model-in').addEventListener('input', function () { labModelBy[labLane] = this.value.trim(); });
+    }
+  }
   function renderAiLab() {
     var chips = LAB_LANES.map(function (L) {
       return '<button class="lab-chip' + (L.lane === labLane ? ' active' : '') + '" data-lane="' + esc(L.lane) + '">' +
@@ -1763,8 +1832,9 @@
     }).join('');
     $('view').innerHTML =
       '<div class="card" id="lab-root" style="max-width:860px">' +
-      '<h3 style="margin-top:0">API Monitoring <span class="muted">· all 18 models across 19 lanes + music catalog sources — no failover, failures show honestly</span></h3>' +
+      '<h3 style="margin-top:0">API Monitoring <span class="muted">· all 18 keys across 19 lanes + music catalog sources — pick any model to probe, no failover, failures show honestly</span></h3>' +
       '<div class="lab-chips">' + chips + '</div>' +
+      '<div class="row" id="lab-model-row" style="margin-bottom:10px;flex-wrap:wrap;align-items:center;gap:8px"></div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-ping">Ping all lanes</button><span id="lab-ping-at" class="lab-ping-at"></span><span id="lab-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-music">Ping music APIs</button><span id="lab-music-at" class="lab-ping-at"></span><span id="lab-music-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="lab-msgs" id="lab-msgs"></div>' +
@@ -1777,6 +1847,7 @@
         labLane = b.getAttribute('data-lane');
         Array.prototype.forEach.call(document.querySelectorAll('.lab-chip'), function (x) { x.classList.toggle('active', x === b); });
         labPaintMsgs();
+        labPaintModelRow();
       });
     });
     $('lab-send').addEventListener('click', labSend);
@@ -1786,6 +1857,8 @@
     $('lab-in').addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); labSend(); }
     });
+    labPaintModelRow();
+    labLoadCatalog();
     labPaintDots();
     labPaintPingAt();
     labPaintMusicAt();

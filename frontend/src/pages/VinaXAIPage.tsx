@@ -84,6 +84,11 @@ interface CatalogModel {
 }
 type CatalogPicks = Partial<Record<CatalogGroupId, string>>;
 const CATALOG_PICK_KEY = 'vinax.aiCatalogModels';
+/** A model's own name out of its slug — vendor prefix and routing suffix are
+ *  plumbing, not a name. Mirrors catalogLabel() on the server so a saved pick
+ *  reads correctly on the chip before the menu has ever been fetched. */
+const slugLabel = (id: string): string =>
+  (id.includes('/') ? id.slice(id.lastIndexOf('/') + 1) : id).replace(/:(free|beta|extended|nitro|floor)$/i, '').trim() || id;
 
 type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer' | 'flash' | 'musegl' | 'ising15' | 'laguna' | 'gemma4' | 'router';
 // Engine picker: six plain-English seats up front — the ones a listener
@@ -509,6 +514,14 @@ export default function VinaXAIPage(): ReactNode {
 
   // Which catalog (if any) the current seat opens, and the model chosen in it.
   const catalogGroup = MODES.find((mm) => mm.id === mode)?.catalog ?? null;
+  const pickedCatalogModel = catalogGroup ? (catalogPicks[catalogGroup] ?? '') : '';
+  // What the composer chip reads: the seat's name normally, but the chosen
+  // model's own name once one is picked from a free menu.
+  // Derived from the slug, not from the fetched list, so a pick saved in an
+  // earlier session labels correctly without waiting on a network round-trip.
+  const activeEngineLabel = pickedCatalogModel
+    ? slugLabel(pickedCatalogModel)
+    : (MODES.find((mm) => mm.id === mode)?.label ?? 'Engine');
 
   /** Load the free-model menu once per visit, on first demand. A failure is
    *  reported as such — the picker says the list is unavailable rather than
@@ -2065,7 +2078,10 @@ export default function VinaXAIPage(): ReactNode {
                   className={cn('ai-chip py-1.5 gap-1.5 text-ink-100', engineOpen && 'ai-chip-on')}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-ember-400" aria-hidden />
-                  <span>{MODES.find((mm) => mm.id === mode)?.label}</span>
+                  {/* On a catalog seat the listener chose an actual model —
+                      show THAT name, so the chip never claims a generic seat
+                      is answering when a specific engine is. */}
+                  <span className="truncate max-w-[11rem]">{activeEngineLabel}</span>
                   <ChevronDownIcon className={cn('w-3 h-3 text-ink-400 transition-transform', engineOpen && 'rotate-180')} />
                 </button>
                 {engineOpen && (
