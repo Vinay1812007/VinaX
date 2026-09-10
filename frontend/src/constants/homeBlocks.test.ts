@@ -57,3 +57,9 @@ describe('settingsStore home builder actions', () => {
     expect(useSettingsStore.getState().homeOrder).toStrictEqual([]);
   });
 });
+
+describe('restored layouts', () => {
+  it('renders a saved block once even when an imported layout contains duplicates', () => {
+    expect(orderHomeBlocks(['personal', 'personal', 'quick']).filter((x) => x === 'personal')).toHaveLength(1);
+  });
+});

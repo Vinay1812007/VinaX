@@ -7,6 +7,7 @@
  * The ADMIN reads/writes through this route (token-gated). Clients read the
  * published values through the public /api/appconfig route (cached, no auth).
  */
+import { validHomeConfig } from '../../_lib/homeConfig';
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import { sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
@@ -64,6 +65,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const key = typeof body.key === 'string' ? body.key : '';
   if (!ALLOWED_KEYS.has(key)) return json({ error: 'unknown_key' }, 400);
   if (body.value === undefined) return json({ error: 'bad_request' }, 400);
+  if (key === 'home-config' && !validHomeConfig(body.value)) return json({ error: 'invalid_home_config' }, 400);
   const serialized = JSON.stringify(body.value);
   if (serialized.length > MAX_VALUE_BYTES) return json({ error: 'too_large' }, 413);
   const ok = await sbUpsert(env, 'vinax_config', { key, value: body.value, updated_at: new Date().toISOString() }, 'key');

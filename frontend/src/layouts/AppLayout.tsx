@@ -374,7 +374,7 @@ export function AppLayout() {
   }, [pathname]);
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden">
+    <div className="vx-shell h-dvh flex flex-col overflow-hidden">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:z-[100] focus:top-3 focus:left-3 focus:px-4 focus:py-2 focus:rounded-full focus:bg-ember-500 focus:text-black focus:font-bold"

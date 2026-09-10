@@ -42,3 +42,9 @@ describe('dedupeShelves', () => {
     expect(out.map((sh) => sh.map((x) => x.id))).toEqual([['a', 'b'], ['c'], ['d']]);
   });
 });
+
+it('keeps visible shelves stable when React renders the page again', () => {
+  const songs = [s('a'), s('b')];
+  expect(createShelfDeduper()(songs)).toEqual(songs);
+  expect(createShelfDeduper()(songs)).toEqual(songs);
+});

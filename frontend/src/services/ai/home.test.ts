@@ -99,3 +99,25 @@ describe('getAiHomeSections — avoidShelves plumbing', () => {
     expect(stored[0].title).toBe('Baseline');
   });
 });
+
+describe('AI response quality', () => {
+  it('trims, bounds, and removes blank and duplicate shelf suggestions', async () => {
+    vi.stubGlobal('fetch', async () => ({ ok: true, json: async () => ({ sections: [
+      { title: '  Evening  ', query: ' telugu melody ' },
+      { title: 'EVENING', query: 'different query' },
+      { title: 'Other', query: 'telugu melody' },
+      { title: ' ', query: 'empty title' },
+      { title: 'Good title', query: ' ' },
+    ] }) }));
+    expect(await getAiHomeSections({})).toEqual([{ title: 'Evening', query: 'telugu melody' }]);
+  });
+  it('provides a deadline signal to avoid blocking the local fallback indefinitely', async () => {
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
+      signal = init.signal as AbortSignal;
+      throw new DOMException('Timed out', 'TimeoutError');
+    });
+    expect(await getAiHomeSections({})).toEqual([]);
+    expect(signal).toBeInstanceOf(AbortSignal);
+  });
+});

@@ -767,9 +767,10 @@
   function fmtN(n) { n = Number(n || 0); return isFinite(n) ? n.toLocaleString() : '0'; }
   function healthStrip(s) {
     s = s || {};
+    var hasErrors = typeof s.errors_24h === 'number';
     var errs = Number(s.errors_24h || 0);
-    var cls = errs === 0 ? 'ok' : (errs < 10 ? 'warn' : 'bad');
-    var label = errs === 0 ? 'All clear · no errors in 24h' : (fmtN(errs) + ' error' + (errs === 1 ? '' : 's') + ' in 24h');
+    var cls = !hasErrors ? 'warn' : errs === 0 ? 'ok' : (errs < 10 ? 'warn' : 'bad');
+    var label = !hasErrors ? 'Error telemetry unavailable' : errs === 0 ? 'No reported errors in 24h' : (fmtN(errs) + ' error' + (errs === 1 ? '' : 's') + ' in 24h');
     var stick = (s.dau && s.mau) ? Math.round((Number(s.dau) / Math.max(1, Number(s.mau))) * 100) + '%' : '—';
     return '<div class="health-strip" id="healthstrip">' +
       '<span class="hz-status ' + cls + '"><span class="hz-dot"></span>' + esc(label) + '</span>' +
@@ -788,6 +789,16 @@
     var hs = view.querySelector('#healthstrip');
     if (hs) hs.insertAdjacentHTML('afterend', markup); else view.insertAdjacentHTML('afterbegin', markup);
   }
+  function operationsBrief(s) {
+    var errors = typeof s.errors_24h === 'number' ? s.errors_24h : null;
+    var feedback = typeof s.feedback_new === 'number' ? s.feedback_new : null;
+    var headline = errors === null ? 'Waiting for operational signals' : errors > 0 ? 'A few things need your attention' : 'Make the next listening session better';
+    return '<section class="ops-brief"><div><span class="ops-eyebrow">VINAX / CONTROL ROOM</span><h2>' + esc(headline) + '</h2><p>Your audience, music experience and release tools in one place.</p></div>' +
+      '<div class="ops-actions"><a href="#technical"><b>' + (errors === null ? '—' : fmtN(errors)) + '</b><span>Errors · last 24 hours →</span></a>' +
+      '<a href="#feedback"><b>' + (feedback === null ? '—' : fmtN(feedback)) + '</b><span>New feedback →</span></a>' +
+      '<a href="#homescreen"><b>Home studio</b><span>Curate the listener experience →</span></a>' +
+      '<a href="#releases"><b>Release centre</b><span>Inspect builds and versions →</span></a></div></section>';
+  }
   function renderOverview(d) {
     var s = d.summary || {};
     var deltas = d.deltas || d.summaryDeltas || {};
@@ -804,7 +815,7 @@
       return '<div class="card kpi"><span class="ki">' + icon + '</span><div class="n">' + (n == null ? 0 : n) + '</div><div class="l">' + esc(l) + '</div>' + chip(d2) + '</div>';
     }
     $('view').innerHTML =
-      healthStrip(s) +
+      operationsBrief(s) + healthStrip(s) +
       '<div class="cards">' +
       kc(s.active_now, 'Listening now', 'listeners', 'active_now') +
       kc(s.total_users, 'Total users', 'users', 'total_users') +
@@ -2121,6 +2132,9 @@
   }
   var hsCfg = null; // [{id, enabled}] in display order
   var hsLoaded = false;
+  var hsPublished = '';
+  var hsLoadError = false;
+  var hsSaving = false;
   function normalizeHomeCfg(value) {
     var known = {};
     var out = [];
@@ -2141,34 +2155,52 @@
       $('view').innerHTML = '<div class="empty">Loading published config…</div>';
       api('/api/admin/appconfig?key=home-config').then(function (d) {
         hsCfg = normalizeHomeCfg(d && d.value);
+        hsPublished = JSON.stringify(hsCfg);
+        hsLoadError = false;
         if (active === 'homescreen') renderHomescreenSection();
       }).catch(function () {
         hsCfg = defaultHomeCfg();
+        hsLoadError = true;
         if (active === 'homescreen') renderHomescreenSection();
       });
       return;
     }
     if (!hsCfg) hsCfg = defaultHomeCfg();
+    var dirty = JSON.stringify(hsCfg) !== hsPublished;
+    var preview = hsCfg.filter(function (b) { return b.enabled; });
     var rows = hsCfg.map(function (s, i) {
       return '<div class="hs-row' + (s.enabled ? '' : ' disabled') + '" data-id="' + esc(s.id) + '">' +
         '<span class="hs-ord">' + (i + 1) + '</span>' +
         '<span style="flex:1;font-weight:600">' + esc(blockName(s.id)) + ' <span class="muted" style="font-size:11px;font-weight:400">' + esc(s.id) + '</span></span>' +
         '<span class="row" style="gap:6px"><button class="ghost icon-btn hs-up" data-id="' + esc(s.id) + '" title="Move up" aria-label="Move up"' + (i === 0 ? ' disabled' : '') + '>▲</button><button class="ghost icon-btn hs-dn" data-id="' + esc(s.id) + '" title="Move down" aria-label="Move down"' + (i === hsCfg.length - 1 ? ' disabled' : '') + '>▼</button></span>' +
-        '<span class="row" style="gap:8px"><label class="switch"><span class="track ' + (s.enabled ? 'on' : '') + '"><span class="knob"></span></span><input type="checkbox" hidden class="hs-tog" data-id="' + esc(s.id) + '"' + (s.enabled ? ' checked' : '') + ' /></label></span>' +
+        '<span class="row" style="gap:8px"><label class="switch"><span class="track ' + (s.enabled ? 'on' : '') + '"><span class="knob"></span></span><input type="checkbox" aria-label="Show home shelf" class="hs-tog" data-id="' + esc(s.id) + '"' + (s.enabled ? ' checked' : '') + ' /></label></span>' +
         '</div>';
     }).join('');
     $('view').innerHTML =
       '<div class="stub-banner"><h4>Live — published to every client</h4>' +
       '<p>Order + visibility below are the <b>server defaults</b> for the app\'s Home (edge-cached ≤5 min). A listener\'s own Settings → Home layout still wins on their device; blocks disabled here are hidden for everyone.</p></div>' +
-      '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Home blocks</h3>' + rows +
+      (hsLoadError ? '<div class="stub-banner"><h4>Published layout could not be loaded</h4><p>Retry before editing so you do not overwrite an unseen configuration.</p><button id="hs-retry">Retry loading</button></div>' : '') +
+      '<div class="hs-studio"><div class="card"><span class="ops-eyebrow">LAYOUT STARTERS</span><h3>Design a better first impression</h3><p class="muted">Choose a starting point, refine the order, then publish when ready.</p><div class="row" style="flex-wrap:wrap"><button class="ghost hs-preset" data-preset="balanced">Balanced</button><button class="ghost hs-preset" data-preset="discovery">Discovery first</button><button class="ghost hs-preset" data-preset="focused">Focused</button></div></div>' +
+      '<div class="card hs-preview"><span class="ops-eyebrow">STRUCTURE PREVIEW · ' + preview.length + ' SHELVES</span><h3>Your daily soundtrack</h3><div class="hs-preview-hero">Aura Mix · always visible</div>' + preview.map(function (b, i) { return '<div class="hs-preview-row"><span>' + (i + 1) + '</span>' + esc(blockName(b.id)) + '</div>'; }).join('') + '</div></div>' +
+      '<div class="card" style="margin-bottom:14px"><div class="row"><h3 style="margin-top:0">Home blocks</h3><span class="spacer"></span><span class="pill">' + (dirty ? 'Unpublished changes' : 'Matches published layout') + '</span></div>' + rows +
       '<div class="row" style="margin-top:12px;gap:8px">' +
         '<span class="spacer" style="flex:1"></span>' +
-        '<button id="hs-save">Publish</button>' +
+        '<button id="hs-save"' + (hsLoadError || hsSaving || !dirty ? ' disabled' : '') + '>Publish layout</button>' +
         '<button class="ghost" id="hs-reset">Reset to defaults</button>' +
         '<span class="muted" id="hs-out" style="font-size:12px"></span>' +
       '</div></div>' +
-      '<h3>Published JSON</h3>' +
+      '<h3>Draft JSON</h3>' +
       '<pre id="hs-json" class="codebox" style="max-height:280px">' + esc(JSON.stringify({ blocks: hsCfg }, null, 2)) + '</pre>';
+    if ($('hs-retry')) $('hs-retry').addEventListener('click', function () { hsLoaded = false; renderHomescreenSection(); });
+    Array.prototype.forEach.call(document.querySelectorAll('.hs-preset'), function (b) {
+      b.addEventListener('click', function () {
+        var mode = b.getAttribute('data-preset');
+        var first = mode === 'discovery' ? ['discovery', 'artists', 'moods', 'personal'] : mode === 'focused' ? ['quick', 'personal', 'loved', 'daypicks'] : ['quick', 'personal', 'discovery', 'daypicks'];
+        var ids = first.concat(HOME_BLOCKS_APP.map(function (x) { return x.id; }).filter(function (id) { return first.indexOf(id) < 0; }));
+        hsCfg = ids.map(function (id) { return { id: id, enabled: mode !== 'focused' || first.indexOf(id) >= 0 }; });
+        renderHomescreenSection();
+      });
+    });
     Array.prototype.forEach.call(document.querySelectorAll('.hs-up'), function (b) {
       b.addEventListener('click', function () {
         var id = b.getAttribute('data-id');
@@ -2184,8 +2216,7 @@
       });
     });
     Array.prototype.forEach.call(document.querySelectorAll('.hs-tog'), function (chk) {
-      var track = chk.parentNode.querySelector('.track');
-      track.addEventListener('click', function () {
+      chk.addEventListener('change', function () {
         var id = chk.getAttribute('data-id');
         var s = hsCfg.filter(function (x) { return x.id === id; })[0];
         if (s) { s.enabled = !s.enabled; renderHomescreenSection(); }
@@ -2193,14 +2224,19 @@
     });
     $('hs-save').addEventListener('click', function () {
       var btn = $('hs-save');
-      if (btn.disabled) return;
+      if (btn.disabled || hsSaving) return;
+      hsSaving = true;
       btn.disabled = true;
       $('hs-out').textContent = 'Publishing…';
-      postApi('/api/admin/appconfig', { key: 'home-config', value: { blocks: hsCfg } }).then(function (r) {
-        btn.disabled = false;
+      var submitted = JSON.stringify(hsCfg);
+      postApi('/api/admin/appconfig', { key: 'home-config', value: { blocks: JSON.parse(submitted) } }).then(function (r) {
+        hsSaving = false;
+        if (r && r.ok) hsPublished = submitted;
+        if (active !== 'homescreen') return;
+        renderHomescreenSection();
         $('hs-out').textContent = r && r.ok ? 'Published ✓ (live within ~5 min)' : 'Publish failed' + (r && r.error ? ' — ' + r.error : '');
         setTimeout(function () { var o = $('hs-out'); if (o) o.textContent = ''; }, 4000);
-      }).catch(function () { btn.disabled = false; $('hs-out').textContent = 'Publish failed — network'; });
+      }).catch(function () { hsSaving = false; if (active !== 'homescreen') return; renderHomescreenSection(); if ($('hs-out')) $('hs-out').textContent = 'Publish failed — network'; });
     });
     $('hs-reset').addEventListener('click', function () {
       vxConfirm('Reset to the app defaults (all blocks on, default order)? Publish to make it live.', { title: 'Home Screen', okText: 'Reset' }).then(function (ok) {

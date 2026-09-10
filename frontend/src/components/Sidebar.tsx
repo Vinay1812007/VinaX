@@ -20,7 +20,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'hidden md:flex flex-col shrink-0 my-2 ml-2 rounded-lg glass-sidebar overflow-y-auto overflow-x-hidden no-scrollbar sticky top-0 max-h-dvh transition-[width] duration-200 ease-out',
+        'vx-sidebar hidden md:flex flex-col shrink-0 my-2 ml-2 rounded-lg glass-sidebar overflow-y-auto overflow-x-hidden no-scrollbar sticky top-0 max-h-dvh transition-[width] duration-200 ease-out',
         collapsed ? 'w-[4.5rem]' : 'w-60',
       )}
     >

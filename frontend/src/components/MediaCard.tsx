@@ -56,7 +56,7 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
       data-deter-context
       data-song-id={song?.id}
       className={cn(
-        'group rounded-xl p-3 transition-[background-color,transform] duration-200 hover:bg-ink-850/80 hover:-translate-y-0.5 active:scale-[0.98] animate-fade-up',
+        'vx-media-card group rounded-xl p-3 transition-[background-color,transform] duration-200 hover:bg-ink-850/80 hover:-translate-y-0.5 active:scale-[0.98] animate-fade-up',
         fluid ? 'w-full' : 'w-40 sm:w-44 shrink-0',
       )}
     >

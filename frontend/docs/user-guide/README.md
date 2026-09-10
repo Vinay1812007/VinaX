@@ -4,6 +4,7 @@ Short, practical guides to the parts of VinaX that reward reading a
 paragraph or two. Everything is user-facing; nothing here needs a
 developer to make sense of.
 
+- [Getting started and Home Studio](./getting-started.md) — choose your discovery balance, arrange Home and build a playlist.
 - [Replay & Resume](./replay-and-resume.md) — how VinaX remembers
   where you were in a song, and what the Continue Listening / On
   Repeat / Repeat Rewind shelves actually mean.

@@ -1,0 +1,385 @@
+/* Studio: shared structure and rhythm; all colors follow the active theme. */
+.vx-shell {
+  background: rgb(var(--ink-950));
+}
+.vx-shell #main-content {
+  background:
+    linear-gradient(150deg, rgb(var(--ember-500) / 0.045), transparent 36%), rgb(var(--ink-900));
+  border: 1px solid var(--glass-border);
+  border-radius: 24px 0 0 0;
+  margin-top: 10px;
+}
+.vx-sidebar {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.vx-sidebar nav {
+  padding-bottom: 24px;
+}
+.vx-sidebar-eyebrow {
+  margin-top: 14px;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+.vx-sidebar nav a {
+  min-height: 42px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.vx-nav-active {
+  box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.16);
+  background: rgb(var(--ember-500) / 0.1);
+}
+.vx-sidebar-footer {
+  margin-top: 24px;
+}
+.vx-home {
+  padding-top: 4px;
+}
+.vx-home h1 {
+  letter-spacing: -0.05em;
+  font-size: clamp(28px, 3.2vw, 44px);
+  line-height: 1.15;
+}
+.vx-home .vx-hero {
+  min-height: 310px;
+  border-radius: 24px;
+  background: linear-gradient(120deg, rgb(var(--ember-500) / 0.12), rgb(var(--ink-850)) 68%);
+  border: 1px solid rgb(var(--ember-500) / 0.18);
+}
+.vx-home .vx-hero-title {
+  color: rgb(var(--ink-100));
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  font-size: clamp(32px, 3.6vw, 52px);
+  line-height: 1.06;
+  letter-spacing: -0.055em;
+}
+.vx-home .vx-hero-wash {
+  opacity: 0.3;
+}
+.vx-home .vx-hero-art {
+  width: clamp(96px, 12vw, 168px);
+  height: clamp(96px, 12vw, 168px);
+  border-radius: 16px;
+}
+.vx-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  font-weight: 800;
+  color: rgb(var(--ember-400));
+  margin-bottom: 7px;
+}
+.vx-studio {
+  margin: 24px 0;
+  padding: 22px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 18px;
+  background: rgb(var(--ink-850));
+}
+.vx-studio-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.vx-studio h2,
+.vx-listening-guide h2 {
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+.vx-segment {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: rgb(var(--ink-950) / 0.45);
+}
+.vx-segment button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgb(var(--ink-300));
+}
+.vx-segment button[aria-pressed='true'] {
+  background: rgb(var(--ink-800));
+  color: rgb(var(--ink-100));
+  box-shadow: 0 1px 5px #0002;
+}
+.vx-layout-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.vx-studio-hint {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: rgb(var(--ink-400));
+}
+.vx-studio-hint a {
+  color: rgb(var(--ink-200));
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-left: 6px;
+}
+.vx-layout-editor {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--glass-border);
+}
+.vx-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.vx-preset-grid button {
+  text-align: left;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 12px;
+  padding: 16px;
+  background: rgb(var(--ink-900));
+}
+.vx-preset-grid button:hover {
+  border-color: rgb(var(--ember-500));
+}
+.vx-preset-grid strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+.vx-preset-grid span {
+  display: block;
+  font-size: 11px;
+  color: rgb(var(--ink-400));
+  line-height: 1.6;
+}
+.vx-layout-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+.vx-layout-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 12px;
+}
+.vx-layout-row label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.vx-layout-row input {
+  accent-color: rgb(var(--ember-500));
+  width: 16px;
+  height: 16px;
+}
+.vx-layout-row > div {
+  display: flex;
+}
+.vx-layout-row button {
+  width: 36px;
+  height: 42px;
+  font-size: 18px;
+}
+.vx-layout-row button:disabled {
+  opacity: 0.25;
+}
+.vx-text-action {
+  margin-top: 18px;
+  min-height: 40px;
+  color: rgb(var(--ember-400));
+  font-size: 12px;
+  font-weight: 700;
+}
+.vx-listening-guide {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 24px 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--glass-border-strong);
+}
+.vx-listening-guide p:not(.vx-eyebrow) {
+  font-size: 12px;
+  color: rgb(var(--ink-400));
+  margin-top: 8px;
+  line-height: 1.7;
+}
+.vx-guide-actions {
+  display: flex;
+  flex-direction: column;
+}
+.vx-guide-actions a,
+.vx-guide-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  gap: 10px;
+  min-height: 42px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.vx-guide-actions span {
+  color: rgb(var(--ember-400));
+}
+.vx-shelf {
+  margin-bottom: 36px;
+}
+.vx-media-card {
+  border: 1px solid transparent;
+}
+.vx-media-card:hover {
+  border-color: var(--glass-border);
+}
+.vx-welcome-progress {
+  height: 3px;
+  background: rgb(var(--ink-700));
+  border-radius: 5px;
+  margin: 16px 0 24px;
+  overflow: hidden;
+}
+.vx-welcome-progress span {
+  display: block;
+  height: 100%;
+  background: rgb(var(--ember-500));
+}
+@media (min-width: 1280px) {
+  .vx-sidebar:not(.w-\[4\.5rem\]) {
+    width: 224px;
+  }
+}
+@media (max-width: 767px) {
+  .vx-shell #main-content {
+    margin-top: 0;
+    border: 0;
+    border-radius: 0;
+  }
+  .vx-home .vx-hero {
+    min-height: auto;
+    border-radius: 18px;
+  }
+  .vx-studio {
+    padding: 17px;
+  }
+  .vx-studio-bar {
+    gap: 12px;
+  }
+  .vx-studio-bar > div:first-child {
+    width: 100%;
+  }
+  .vx-segment {
+    margin-left: 0;
+    flex: 1;
+  }
+  .vx-segment button {
+    flex: 1;
+    padding: 0 8px;
+  }
+  .vx-layout-toggle {
+    font-size: 0;
+    gap: 4px;
+  }
+  .vx-preset-grid {
+    grid-template-columns: 1fr;
+  }
+  .vx-preset-grid button {
+    padding: 12px 14px;
+  }
+  .vx-layout-list {
+    grid-template-columns: 1fr;
+  }
+  .vx-listening-guide {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vx-home *,
+  .vx-sidebar * {
+    scroll-behavior: auto;
+    transition: none;
+    animation: none;
+  }
+}
+.vx-playlist-studio {
+  padding-top: 24px;
+}
+.vx-playlist-studio h1 {
+  font-size: clamp(32px, 4vw, 50px);
+  letter-spacing: -0.05em;
+  max-width: 650px;
+  line-height: 1.08;
+}
+.vx-prompt-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 30px 0;
+}
+.vx-prompt-grid button {
+  padding: 20px 16px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 16px;
+  background: rgb(var(--ink-850));
+  text-align: left;
+}
+.vx-prompt-grid button:hover {
+  border-color: rgb(var(--ember-500));
+  background: rgb(var(--ember-500) / 0.05);
+}
+.vx-prompt-grid svg {
+  color: rgb(var(--ember-400));
+  margin-bottom: 24px;
+}
+.vx-prompt-grid strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.vx-prompt-grid span {
+  font-size: 11px;
+  color: rgb(var(--ink-400));
+  line-height: 1.6;
+  display: block;
+}
+.vx-playlist-studio textarea {
+  line-height: 1.8;
+  padding: 16px;
+}
+@media (max-width: 600px) {
+  .vx-prompt-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.vx-playlist-studio h1 { white-space: normal; overflow: visible; }
+
+.vx-playlist-studio textarea.glass-input { border-radius: 16px; }
+.vx-hero-record { position: absolute; right: 5%; top: 50%; transform: translateY(-50%) rotate(12deg); width: clamp(180px, 22vw, 275px); aspect-ratio: 1; border-radius: 50%; border: 1px solid rgb(var(--ink-600) / .4); background: repeating-radial-gradient(circle, rgb(var(--ink-950)) 0 3px, rgb(var(--ink-800)) 4px, rgb(var(--ink-950)) 5px 8px); box-shadow: 0 20px 50px #0004; display: grid; place-items: center; }
+.vx-hero-record > div { width: 40%; aspect-ratio: 1; border-radius: 50%; background: rgb(var(--ember-500)); color: rgb(var(--ink-950)); display: flex; align-items: center; justify-content: center; flex-direction: column; }
+.vx-hero-record span { font-weight: 800; font-size: 42px; line-height: 1.1; }
+.vx-hero-record small { font-size: 6px; letter-spacing: .14em; font-weight: 800; margin-top: 6px; }
+@media (max-width: 639px) { .vx-hero-record { display: none; } }

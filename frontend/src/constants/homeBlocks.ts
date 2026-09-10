@@ -36,6 +36,13 @@ export const HOME_BLOCK_KEYS: readonly string[] = HOME_BLOCKS.map((b) => b.key);
  * blocks missing from the saved order append in default position.
  */
 export function orderHomeBlocks(saved: readonly string[], defaultOrder: readonly string[] = HOME_BLOCK_KEYS): string[] {
-  const valid = saved.filter((k) => defaultOrder.includes(k));
+  const valid = [...new Set(saved.filter((k) => defaultOrder.includes(k)))];
   return [...valid, ...defaultOrder.filter((k) => !valid.includes(k))];
 }
+
+/** Listener presets keep the same stable block IDs as the admin defaults. */
+export const HOME_PRESETS = [
+  { id: 'balanced', label: 'Balanced', hint: 'Your favourites, with room to explore', order: ['quick', 'personal', 'discovery', 'daypicks'], hidden: [] },
+  { id: 'discovery', label: 'Discovery', hint: 'Fresh finds and new artists first', order: ['discovery', 'artists', 'moods', 'personal'], hidden: ['charts', 'feed'] },
+  { id: 'focused', label: 'Focused', hint: 'A shorter home with your essentials', order: ['quick', 'personal', 'loved', 'daypicks'], hidden: ['charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'feed'] },
+] as const;

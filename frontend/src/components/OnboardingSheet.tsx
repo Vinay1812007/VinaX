@@ -20,8 +20,6 @@ import {
   SparkleIcon,
   HomeIcon,
   PlayIcon,
-  SearchIcon,
-  UsersIcon,
   HeartIcon,
   ChevronDownIcon,
 } from './Icons';
@@ -50,119 +48,40 @@ interface TourSlide {
  */
 const TOUR: TourSlide[] = [
   {
-    icon: <SparkleIcon className="w-7 h-7" />,
-    title: 'Welcome to VinaX',
-    lines: [
-      'Free forever. No account, no login, no paywall — press play and go.',
-      'Telugu, Hindi, Tamil and nine more languages, plus English — tuned to what you actually play.',
-      'Your taste lives on this device and never leaves it. That’s the whole design.',
-      'No ads anywhere — not on the website, not in the app, and never in Kid mode.',
-    ],
-  },
-  {
     icon: <HomeIcon className="w-7 h-7" />,
-    title: 'A Home that learns you',
+    title: 'Your next favourite starts here',
     lines: [
-      'Shelves grow out of your listening — Continue Listening, On Repeat, On this day, Because you liked, Song of the day, a streak card, Fresh Finds, Hidden Gems.',
-      'On 43 Indian festivals and special days — Sankranti to Diwali to Christmas — the whole app takes on its own look, and a “Coming up” card warns you a few days before.',
-      'Make it YOUR home: Settings → Home layout lets you hide or reorder every block.',
-      'Pull down anytime for a completely fresh set of picks.',
+      'Press Play my mix on Home for a soundtrack based on your languages and listening.',
+      'Choose Familiar, Balanced or Discover to shape your recommendations.',
+      'Open Edit home to try a layout, reorder shelves or keep only your essentials.',
     ],
   },
   {
     icon: <PlayIcon className="w-7 h-7" />,
-    title: 'Play, swipe, sing along',
+    title: 'One song is all it takes',
     lines: [
-      'Tap any song — the queue builds itself around it. Swipe a song row right to queue it, left to save it for later.',
-      'Swipe the mini-player to skip, swipe up for the full player: synced lyrics, sleep timer, A-B repeat, bookmarks and an equaliser in Settings → Sound.',
-      'On Android, tapping the playback notification drops you straight into the full-screen player.',
-      'Close the app mid-song, come back tomorrow — you resume exactly where you were.',
+      'Search for a song or artist, then press play. Save favourites to help your taste take shape.',
+      'Open the player for lyrics and playback controls. Your queue shows what comes next.',
+      'Long-press a song to play it next, save it for later or add it to a playlist.',
     ],
-    shortcuts: [
-      { combo: 'Space', label: 'play / pause' },
-      { combo: 'N', label: 'next' },
-      { combo: 'P', label: 'prev' },
-      { combo: '← →', label: 'seek 10s' },
-      { combo: 'F', label: 'favorite' },
-    ],
+    shortcuts: [{ combo: 'Space', label: 'play / pause' }, { combo: 'N', label: 'next song' }, { combo: 'F', label: 'favourite' }],
   },
   {
     icon: <SparkleIcon className="w-7 h-7" />,
-    title: 'Meet VinaX AI',
+    title: 'Give your music a direction',
     lines: [
-      'Nineteen engines, or Auto to let VinaX choose — and two of them open a whole menu of free models. Think for careful reasoning, Research for live web answers with sources.',
-      'Type / for commands: /playlist ⟨vibe⟩ builds a playlist in the chat, /now, /lyrics and /summary do what they say.',
-      'Say “play ⟨song⟩” and the reply becomes a real mini-player. Any “Title — Artist” line in a reply is playable.',
-      'Reply in Telugu, Hindi, Tamil, Tenglish or Hinglish; voice chat is fully hands-free.',
+      'Try AI Playlist with “a mellow Telugu mix for a rainy evening”.',
+      'Use Taste Profile for more control over energy, discovery and release era.',
+      'AI features send relevant context to the service. Your library and taste profile are stored on this device; optional usage sharing is controlled in Settings.',
     ],
-  },
-  {
-    icon: <SearchIcon className="w-7 h-7" />,
-    title: 'Search everything from one box',
-    lines: [
-      'Results appear as you type. Remember only a lyric line? Paste it — Search by lyrics finds the song.',
-      'Right-click (or long-press) any song anywhere: play next, queue, Listen later, your history with it, share.',
-    ],
-    shortcuts: [
-      { combo: '⌘ K', label: 'palette (mac)' },
-      { combo: 'Ctrl K', label: 'palette (win/linux)' },
-    ],
-    visual: (
-      <div className="mt-3 mx-auto max-w-[280px] rounded-xl border border-ink-700/70 bg-ink-950/60 p-2.5">
-        <div className="flex items-center gap-2 rounded-lg bg-ink-900/70 px-2.5 py-1.5">
-          <SearchIcon className="w-3.5 h-3.5 text-ink-400" />
-          <span className="text-[11px] text-ink-400">Search songs, pages, actions…</span>
-          <span className="ml-auto inline-flex items-center gap-0.5">
-            <KeyChip>⌘</KeyChip>
-            <KeyChip>K</KeyChip>
-          </span>
-        </div>
-        <div className="mt-1.5 px-2.5 py-1 text-[10.5px] text-ink-500">Try: play tum hi ho · settings · queue</div>
-      </div>
-    ),
-  },
-  {
-    icon: <UsersIcon className="w-7 h-7" />,
-    title: 'Listen Together',
-    lines: [
-      'One tap makes a room; share the code and friends are in within seconds.',
-      'Everyone hears the same second — synced to about a beat.',
-      'Guests request songs straight into your queue; you stay the DJ.',
-      'Done? “End for all” closes the room for everyone at once.',
-    ],
-  },
-  {
-    icon: <SparkleIcon className="w-7 h-7" />,
-    title: 'Make it yours',
-    lines: [
-      'Dark, Light, Black, System or Auto (day/night). Ten accents — or any colour you like with Custom accent.',
-      'Sound: a five-band equaliser, balance, mono and loudness normalisation, processed on your device.',
-      'Display size, High contrast, Data saver, a startup page, and a Home layout builder. Type in the Settings search box to find any of them.',
-      'On festival days the app dresses itself for the celebration — and undresses on its own after.',
-    ],
-    visual: (
-      <div className="mt-3 mx-auto max-w-[280px] rounded-xl border border-ink-700/70 bg-ink-950/50 backdrop-blur-md p-3 space-y-2">
-        <div className="flex items-center justify-between text-[11px] text-ink-300">
-          <span className="font-bold">Glass effect</span>
-          <span className="text-ink-500">SOLID · GLASS</span>
-        </div>
-        <div className="h-1 rounded-full bg-ink-800 relative"><span className="absolute inset-y-0 left-0 w-[40%] rounded-full bg-ember-500" /></div>
-        <div className="flex items-center justify-between text-[11px] text-ink-300">
-          <span className="font-bold">Background blur</span>
-          <span className="text-ink-500">SHARP · HAZY</span>
-        </div>
-        <div className="h-1 rounded-full bg-ink-800 relative"><span className="absolute inset-y-0 left-0 w-[40%] rounded-full bg-tide-500" /></div>
-      </div>
-    ),
   },
   {
     icon: <HeartIcon className="w-7 h-7" />,
-    title: 'Yours means yours',
+    title: 'Ready when you are',
     lines: [
-      'Favorites, history, downloads, stats and your whole taste profile live on this device. Nothing is uploaded, ever.',
-      'Your VinaX shows your listening year — top artists, hours, streaks — computed here, shareable only if YOU choose.',
-      'New phone? Settings → Move to a new device beams everything across with one QR — or export/import a file from Your Data.',
-      'That’s the tour. Next: a two-minute live walkthrough that plays a real song — or press play and go.',
+      'Find your saved music in Library and invite friends from Listen Together.',
+      'Settings has sound, appearance, accessibility and data export. Export a backup before clearing browser storage.',
+      'Start a guided walkthrough now, or explore at your own pace. Help has the tours whenever you need them.',
     ],
   },
 ];
@@ -526,7 +445,7 @@ export function OnboardingSheet() {
               <img src="/icons/icon.svg" alt="" className="w-10 h-10 rounded-xl" />
               <div>
                 <h2 id="vx-onboarding-title" className="text-[26px] leading-tight font-extrabold tracking-tight text-gradient">Music tuned to you</h2>
-                <p className="text-xs text-ink-400">Free, no login, private by design. Your taste never leaves this device.</p>
+                <p className="text-xs text-ink-400">A personal listening space. Choose your languages to get started.</p>
               </div>
             </div>
             <label className="block mt-4 mb-1 text-sm text-ink-300" htmlFor="vx-name">
@@ -545,9 +464,9 @@ export function OnboardingSheet() {
                   : 'glass-input w-full px-4 py-2.5 rounded-xl text-sm'
               }
             />
-            {nameErr && <p className="mt-1.5 text-xs text-red-300">Name is mandatory — tell us what to call you.</p>}
+            {nameErr && <p className="mt-1.5 text-xs text-red-300">Enter a name for your listening profile.</p>}
             <label className="block mt-3 mb-1 text-sm text-ink-300" htmlFor="vx-username">
-              Pick a username <span className="text-ink-400 font-normal">(unique — auto-suggested, edit if you like)</span>
+              Pick a username <span className="text-ink-400 font-normal">(suggested for you)</span>
             </label>
             <div className="relative">
               <span aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-400">@</span>
@@ -671,7 +590,7 @@ export function OnboardingSheet() {
           <>
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">
-                {step + 1} / {TOUR.length}
+                YOUR QUICK START · {step + 1} / {TOUR.length}
               </span>
               <button
                 onClick={finish}
@@ -680,6 +599,7 @@ export function OnboardingSheet() {
                 Skip
               </button>
             </div>
+            <div className="vx-welcome-progress" aria-hidden><span style={{ width: `${((step + 1) / TOUR.length) * 100}%` }} /></div>
             <div className="text-center mb-4">
               <div
                 className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3 bg-ember-500/15 text-ember-300"

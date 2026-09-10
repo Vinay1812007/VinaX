@@ -71,6 +71,7 @@ export async function getAiHomeSections(context: Record<string, unknown>): Promi
   const avoidShelves = loadShown().map((s) => ({ title: s.title, query: s.query }));
   try {
     res = await fetch(ENDPOINT, {
+      signal: AbortSignal.timeout(6_000),
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-vinax-client': isNativePlatform() ? 'app' : 'web' },
       body: JSON.stringify({ context, avoidShelves }),
@@ -81,7 +82,9 @@ export async function getAiHomeSections(context: Record<string, unknown>): Promi
   if (!res.ok) return [];
   const data = (await res.json().catch(() => null)) as { sections?: AiSection[] } | null;
   const sections = Array.isArray(data?.sections)
-    ? data.sections.filter((s) => s && typeof s.title === 'string' && typeof s.query === 'string').slice(0, 6)
+    ? data.sections.filter((s) => s && typeof s.title === 'string' && typeof s.query === 'string')
+        .map((s) => ({ title: s.title.trim().slice(0, 90), query: s.query.trim().slice(0, 180) }))
+        .filter((s, i, all) => s.title && s.query && all.findIndex((x) => x.title.toLowerCase() === s.title.toLowerCase() || x.query.toLowerCase() === s.query.toLowerCase()) === i).slice(0, 6)
     : [];
   // Record what the listener will actually see so the NEXT build steers around it.
   if (sections.length) recordShown(sections);
@@ -251,7 +254,9 @@ export async function getHomeSections(context: Record<string, unknown>): Promise
     ...loadShown().map((s) => s.title.trim().toLowerCase()),
     ...ai.map((s) => s.title.trim().toLowerCase()),
   ]);
-  const local = designLocalSections(context as DesignCtx, 6 - ai.length, avoid);
+  const aiTitles = new Set(ai.map((s) => s.title.toLowerCase()));
+  const local = designLocalSections(context as DesignCtx, 6, avoid)
+    .filter((s) => !aiTitles.has(s.title.toLowerCase())).slice(0, 6 - ai.length);
   if (local.length) recordShown(local);
   return [...ai, ...local];
 }

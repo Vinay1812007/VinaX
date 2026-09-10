@@ -39,12 +39,15 @@ function dayKey(): string {
  */
 export function useAiHome() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
+  const muted = useSettingsStore((s) => s.mutedLanguages);
+  const explore = useSettingsStore((s) => s.exploreMode);
+  const intensity = useSettingsStore((s) => s.recommendationIntensity);
   const hasTaste = useHistoryStore((s) => s.entries.length > 0);
   // New nonce on every mount → opening the Home tab rebuilds the sections.
   const [visitNonce] = useState(() => Date.now());
   return useQuery<AiHomeShelf[]>({
-    queryKey: ['ai-home', visitNonce, dayKey(), profileStamp(), pinned],
-    enabled: hasTaste,
+    queryKey: ['ai-home', visitNonce, dayKey(), profileStamp(), pinned, muted, explore, intensity],
+    enabled: hasTaste || pinned.length > 0,
     staleTime: 0,
     gcTime: 60_000,
     refetchOnMount: 'always',
@@ -64,7 +67,8 @@ export function useAiHome() {
         topArtists: topArtists(profile, 10).map((a) => a.affinity.name),
         topLanguages: topLanguages(profile, 4).map((l) => l.id),
         topSongs,
-        preferredLanguages: pinned,
+        preferredLanguages: pinned.filter((lang) => !muted.includes(lang)),
+        discoveryStyle: explore ? 'Discover new artists and lesser-known picks' : intensity > 0.8 ? 'Lean into familiar artists and favourites' : 'Balance familiar music with fresh releases',
         freshnessSeed: visitNonce,
         ...session,
         recentlyPlayed: entries.slice(0, 10).map((e) => `${e.song.title} — ${e.song.subtitle}`),
@@ -90,35 +94,39 @@ export function useAiHome() {
           // Rotate upstream pages by the per-mount visit nonce (was date%3, which
           // repeated for days) so every Home open pulls a fresh page slice.
           const pg = rotatePage(sec.query, visitNonce, idx, 3);
-          const raw = rankSongs(await searchSongsPage(sec.query, pg, 18));
+          const raw = rankSongs(await searchSongsPage(sec.query, pg, 18)).filter((s) => !s.language || !muted.includes(s.language));
           // Language lock: the listener's pinned languages, else their top
           // languages — an unlocked shelf used to admit whatever the search
-          // returned. Relax back to raw only if the lock would starve the shelf.
+          // returned. Unknown languages may fill gaps; known off-language songs never do.
           const lockLangs = pinned.length ? pinned : ctx.topLanguages;
           const locked = lockLangs.length ? raw.filter((s) => s.language != null && lockLangs.includes(s.language)) : raw;
-          const onLang = locked.length >= 4 ? locked : raw;
-          // Canonical dedup across every shelf of this visit.
-          const unique = onLang.filter((s) => {
-            const k = songKey(s);
-            if (visitKeys.has(k)) return false;
-            visitKeys.add(k);
-            return true;
-          });
+          const onLang = lockLangs.length ? [...locked, ...raw.filter((s) => !s.language)] : raw;
           // A9 — sink mood-clashing picks so the shelf reads to its title, then
           // prefer songs not shown lately (by id AND by canonical identity).
-          const onMood = reorderByShelfMood(sec.title, unique);
+          const onMood = reorderByShelfMood(sec.title, onLang);
           const biased = biasUnseenFirst(onMood, seenIds);
           const freshFirst = [
             ...biased.filter((s) => !served.has(songKey(s))),
             ...biased.filter((s) => served.has(songKey(s))),
           ];
-          const songs = freshFirst.slice(0, 12);
-          return { title: sec.title, songs };
+          return { title: sec.title, songs: freshFirst };
         }),
       );
       const shelves = results
         .filter((r): r is PromiseFulfilledResult<AiHomeShelf> => r.status === 'fulfilled' && r.value.songs.length >= 4)
-        .map((r) => r.value);
+        .flatMap((r) => {
+          const shelfKeys = new Set(visitKeys);
+          const songs = r.value.songs.filter((song) => {
+            const key = songKey(song);
+            if (shelfKeys.has(key)) return false;
+            shelfKeys.add(key);
+            return true;
+          }).slice(0, 12);
+          // A discarded shelf must not reserve songs it never displays.
+          if (songs.length < 4) return [];
+          songs.forEach((song) => visitKeys.add(songKey(song)));
+          return [{ ...r.value, songs }];
+        });
       // Remember what this visit surfaced so the next open leans elsewhere —
       // by id (Home's own memory) and by canonical identity (the memory
       // shared with the AI DJ and next-song).

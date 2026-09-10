@@ -12,6 +12,16 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.31.0': {
+    title: 'Your music. Your space.',
+    changes: [
+      { type: 'new', text: 'Home Studio puts Familiar, Balanced and Discover controls beside your music, with three layout presets and shelf editing right on Home.' },
+      { type: 'new', text: 'Playlist Studio offers ideas in your chosen language. Pick a moment, edit the prompt and build your mix.' },
+      { type: 'improved', text: 'A refreshed listening workspace, a four-step welcome and a getting-started checklist make it easier to find your next favourite.' },
+      { type: 'improved', text: 'The owner console adds an operational brief and a home layout preview with presets and draft status.' },
+      { type: 'fixed', text: 'Home shelves stay visible after rerenders, slow AI requests fall back to local shelf design, and next-song sequencing alternates artists more reliably in small catalogs.' },
+    ],
+  },
   '5.30.0': {
     title: 'A tighter, music-first VinaX',
     changes: [

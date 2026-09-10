@@ -1,0 +1,29 @@
+/* Control Room — semantic surfaces support dark and light admin themes. */
+:root { --radius: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 22px; --text-3: #929bac; }
+body.lightadm { --text-3: #626e80; }
+header { background: var(--surface); min-height: 70px; }
+nav { padding-top: 20px; }
+nav button[data-sec] { min-height: 36px; border-radius: 8px; }
+main { background: radial-gradient(ellipse at 90% 0%, var(--accent-tint), transparent 45%); }
+.card { border-radius: 14px; padding: 20px; }
+.card.kpi { border-top: 2px solid var(--border-strong); }
+.card.kpi .n { font-size: 30px; font-weight: 650; letter-spacing: -.04em; }
+.ops-brief { border: 1px solid var(--border-strong); border-radius: 20px; background: linear-gradient(120deg, var(--accent-tint), var(--surface)); padding: 28px; margin-bottom: 20px; }
+.ops-eyebrow { color: var(--accent-text); font-size: 10px; font-weight: 700; letter-spacing: .16em; }
+.ops-brief h2 { font-size: clamp(24px, 2.6vw, 36px); line-height: 1.2; letter-spacing: -.045em; margin: 12px 0; max-width: 700px; }
+.ops-brief p { color: var(--text-2); margin: 0; }
+.ops-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 24px; }
+.ops-actions a { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--surface); text-decoration: none; color: var(--text); }
+.ops-actions a:hover { border-color: var(--accent); }
+.ops-actions b { font-size: 19px; letter-spacing: -.02em; }
+.ops-actions span { font-size: 11px; color: var(--text-2); }
+.hs-studio { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; align-items: start; }
+.hs-preview { max-height: 360px; overflow: auto; }
+.hs-preview-hero { background: var(--accent-soft); color: var(--accent-text); padding: 22px 16px; border-radius: 10px; margin-bottom: 12px; font-weight: 600; }
+.hs-preview-row { display: flex; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.hs-preview-row span { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.hs-row .switch .track { display: none; }
+.hs-row .switch { width: 36px; height: 36px; display: grid; place-items: center; }
+.hs-row .switch input { position: static; opacity: 1; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+@media (max-width: 900px) { .ops-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .ops-brief { padding: 20px; } .hs-studio { grid-template-columns: 1fr; } .ops-actions a { padding: 12px; } .card { padding: 16px; } }

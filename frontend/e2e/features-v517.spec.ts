@@ -115,6 +115,8 @@ async function visit(page: Page, path: string, probe: RegExp): Promise<void> {
 
 /** DOM-level click on the first/last "More options" button (hover-revealed). */
 async function openMoreOptions(page: Page, which: 'first' | 'last'): Promise<void> {
+  // The shared rail can show the song before the lazy player page mounts.
+  await page.waitForSelector('button[aria-label="More options"]', { state: 'attached' });
   const ok = await page.evaluate((w) => {
     const bs = [...document.querySelectorAll<HTMLButtonElement>('button[aria-label="More options"]')];
     const b = w === 'first' ? bs[0] : bs[bs.length - 1];

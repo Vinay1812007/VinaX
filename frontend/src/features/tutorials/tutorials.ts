@@ -57,6 +57,19 @@ const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
 export const TUTORIALS: Tutorial[] = [
   {
+    id: 'home-studio',
+    title: 'Make Home your own',
+    blurb: 'Choose a recommendation style, arrange your shelves and create a playlist.',
+    minutes: 1,
+    emoji: '✨',
+    steps: [
+      { route: '/', target: '[data-tour="recommendation-style"]', title: 'Set your discovery balance', body: 'Familiar leans into your taste, Balanced blends in broader picks, and Discover invites new artists. The choice saves on this device and guides future recommendations.', placement: 'bottom' },
+      { route: '/', target: '[data-tour="home-studio"]', title: 'A home that fits you', body: 'Open Edit home to choose a preset or move and hide shelves individually. Changes save automatically. Restore default layout brings the original arrangement back.', placement: 'bottom' },
+      { route: '/ai-playlist', target: '#playlist-idea', title: 'Give your next mix a direction', body: 'Choose a starting point above or describe a mood, artist or moment. Edit the idea, then press Build my playlist. Nothing plays until you choose Play.', placement: 'bottom' },
+      { route: '/', title: 'Keep shaping your sound', body: 'Save songs you love, revisit your Taste Profile and change your Home whenever you like. Your favourites and history stay in Library.' },
+    ],
+  },
+  {
     id: 'first-song',
     title: 'Play your first song',
     blurb: 'Start music, meet the player, like a song, open the full screen.',
@@ -65,7 +78,7 @@ export const TUTORIALS: Tutorial[] = [
     playsMusic: true,
     steps: [
       { route: '/', title: 'Welcome — let’s play something', body: 'This walkthrough runs inside the real app. It will start a song in your first language so you can hear what every control does.', tip: 'You can stop at any time with Esc or Skip.' },
-      { route: '/', target: '[aria-label="Play your Aura Mix"]', title: 'Your Aura Mix', body: 'This button plays a mix tuned to your taste, mood and languages. The AI DJ keeps the queue going after it. Press Next and the tutorial starts a song for you.', placement: 'bottom' },
+      { route: '/', target: '[aria-label="Play your Aura Mix"]', title: 'Your Aura Mix', body: 'This button plays a mix tuned to your taste, mood and languages. When automatic continuation is enabled, VinaX adds related music after it. Press Next and the tutorial starts a song for you.', placement: 'bottom' },
       { target: '[data-tour="player"]', title: 'The player bar', body: 'Now playing lives here: play/pause, next, previous, shuffle and repeat, plus the seek bar. Tap the artwork or title for the full-screen player.', action: async () => { await playTutorialSong(); await wait(700); }, placement: 'top' },
       { target: '[data-tour="player"] [aria-label="Add to favorites"], [data-tour="player"] [aria-label="Remove from favorites"]', title: 'Like it', body: 'The heart saves a song to Liked Songs and teaches your taste profile — on this device only. Try it now; you can unlike it any time.', placement: 'top' },
       { route: '/now-playing', target: '[aria-label="More options"]', title: 'Full-screen player', body: 'Flick the artwork up for the next song, down for the previous one. Double-tap the edges to seek. More options holds the sleep timer, A-B repeat, bookmarks, playback speed and “Share this moment”.', action: async () => { await wait(600); }, placement: 'top' },

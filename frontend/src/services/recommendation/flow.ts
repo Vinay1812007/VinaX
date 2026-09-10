@@ -283,7 +283,7 @@ export function scoreAndSequence(buckets: FlowBuckets, limit: number, affinity?:
       pool.push({
         song,
         key,
-        artist: primaryArtist(song).toLowerCase(),
+        artist: normName(primaryArtist(song)),
         score: base - i * 0.45 + jitter(8) + bonus,
       });
     });
@@ -302,7 +302,10 @@ export function scoreAndSequence(buckets: FlowBuckets, limit: number, affinity?:
       pickIdx = i;
       break;
     }
-    if (pickIdx === -1) pickIdx = 0; // constraints unsatisfiable — take best
+    // Relax the total cap before adjacency. A small catalog should still
+    // alternate artists whenever another artist remains available.
+    if (pickIdx === -1) pickIdx = pool.findIndex((c) => !c.artist || c.artist !== prevArtist);
+    if (pickIdx === -1) pickIdx = 0;
     const [picked] = pool.splice(pickIdx, 1);
     out.push(picked.song);
     prevArtist = picked.artist;

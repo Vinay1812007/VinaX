@@ -154,7 +154,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
     // Familiar ↔ adventurous: adventurous lifts discovery sources and demotes
     // the over-familiar; familiar does the reverse. Symmetric around neutral.
     const adv = (dials.adventurous - 0.5) * 2;
-    const discovery = c.source === 'rediscovery' || c.source === 'trending' || c.source === 'related';
+    const discovery = c.source === 'explore' || c.source === 'rediscovery' || c.source === 'trending' || c.source === 'related';
     score += adv * ((discovery ? 0.05 : 0) - rawArtW * 0.06);
     // Classics ↔ recent: map release age to a signed recency axis (+new, −old).
     if (year) {

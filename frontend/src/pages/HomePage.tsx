@@ -1,3 +1,4 @@
+import { HomeStudio, ListeningGuide } from '@/features/home/HomeStudio';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { HOME_BLOCK_KEYS, orderHomeBlocks } from '@/constants/homeBlocks';
@@ -205,7 +206,8 @@ export default function HomePage() {
   // Cross-shelf de-dupe: each shelf shows only songs not already shown above it.
   const dedupe = createShelfDeduper();
   const memories = useMemo(() => onThisDay(historyEntries), [historyEntries]);
-  const heroSongs = daily.data?.length ? daily.data : trendingNow.data?.length ? trendingNow.data : feedSongs;
+  const personalMix = mixes.data?.find((mix) => mix.kind === 'made-for-you')?.songs;
+  const heroSongs = personalMix?.length ? personalMix : daily.data?.length ? daily.data : trendingNow.data?.length ? trendingNow.data : feedSongs;
 
   // Quick-play home-screen widget: the widget launches the app with
   // ?widget=play (cold start) or flags sessionStorage via appUrlOpen (warm
@@ -815,7 +817,7 @@ export default function HomePage() {
 
   return (
    <PullToRefresh onRefresh={handleRefresh}>
-    <div className="max-w-screen-2xl mx-auto vx-stagger">
+    <div className="max-w-screen-2xl mx-auto vx-stagger vx-home">
       {/* Home header: brand (mobile) + quick theme & settings (all sizes) */}
       <div className="sticky top-0 z-30 -mx-5 px-5 mb-4 pt-[max(0.375rem,var(--safe-top))] pb-2.5 flex items-center justify-between bg-[rgb(var(--ink-950)/0.7)] backdrop-blur-xl border-b border-glass md:static md:z-auto md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none md:border-0 md:pt-1 md:pb-0">
         <div className="md:hidden vx-brand flex items-center gap-2.5">
@@ -827,10 +829,9 @@ export default function HomePage() {
         <div className="hidden md:flex items-center gap-6 min-w-0">
           <div className="min-w-0">
             <p className="text-xl font-bold tracking-tight truncate">
-              Welcome back
-              {userName ? `, ${userName}` : ''}
+              Your listening space
             </p>
-            <p className="text-[11px] text-ink-400">Tuned to you · private by design</p>
+            <p className="text-[11px] text-ink-400">Home · curated around you</p>
           </div>
           <Link
             to="/search"
@@ -854,9 +855,104 @@ export default function HomePage() {
           </IconButton>
         </div>
       </div>
-      <PushPromptCard />
       <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
-      <GetAppBanner />
+
+      {/* Hero — full-bleed colour wash that fades into the page */}
+      <div className={`-mx-5 md:-mx-10 -mt-6 lg:mt-0 mb-6 px-5 md:px-10 pt-6 pb-4 bg-gradient-to-b ${
+        ({
+          morning: 'from-transparent to-transparent',
+          afternoon: 'from-transparent to-transparent',
+          evening: 'from-transparent to-transparent',
+          'late-night': 'from-transparent to-transparent',
+        } as Record<string, string>)[dayPartLabel()] ?? 'from-transparent to-transparent'
+      }`}>
+        <p className="text-[11px] font-extrabold tracking-[0.22em] text-ember-400 uppercase mb-1.5">
+          {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} · made for you
+        </p>
+        <h1 className="text-3xl md:text-[38px] font-extrabold tracking-tight">{hello.title}</h1>
+        <p className="text-ink-200 mt-1.5 text-sm font-medium">{clientCfg?.greeting?.text ?? hello.subtitle}</p>
+        <p className="text-ink-300 mt-1 text-sm">
+          {region?.country ? `Tuned for ${region.country}` : 'Tuned to you'} · recommendations that grow with you
+          {weekEntries.length > 0 && (
+            <span className="text-ink-400"> · this week: {weekEntries.length} plays ≈ {weekMinutes} min</span>
+          )}
+          {getStreak() > 1 && <span className="text-ember-400 font-semibold"> · 🔥 {getStreak()}-day streak</span>}
+        </p>
+        <div className="flex gap-2 mt-4 flex-wrap">
+          <button
+            onClick={() => {
+              const pool = [...(trending.data ?? []), ...feedSongs, ...continueListening];
+              if (!pool.length) {
+                toast('Still loading — try again in a second');
+                return;
+              }
+              const i = Math.floor(Math.random() * pool.length);
+              playQueueFeed(pool, i);
+              toast(`Surprise: ${pool[i].title}`);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full btn-premium text-sm font-bold"
+          >
+            <SparkleIcon className="w-4 h-4" /> Surprise me
+          </button>
+          <Chip onClick={() => navigate('/charts')}>Charts</Chip>
+          <Chip onClick={() => navigate('/moods')}>Moods</Chip>
+          <Chip onClick={() => navigate('/regions')}>Regions</Chip>
+          <Chip onClick={() => navigate('/made-for-you')}>Made For You</Chip>
+        </div>
+      </div>
+
+      {/* Aura Mix hero — the AI DJ entry point */}
+      <section className="vx-hero relative overflow-hidden rounded-3xl mb-6 border border-glass bg-ink-850">
+        {/* v5.18.0 refresh — accent-led wash + a fan of the mix's own artwork */}
+        {heroSongs.length < 3 && <div className="vx-hero-record" aria-hidden="true"><div><span>V</span><small>VINAX / DAILY MIX</small></div></div>}
+        {heroSongs.length >= 3 && (
+          <div className="absolute right-6 md:right-10 top-1/2 -translate-y-1/2 hidden sm:flex items-center pointer-events-none" aria-hidden>
+            {heroSongs.slice(0, 3).map((hs, i) => (
+              <img
+                key={hs.id}
+                src={bestImage(hs.images, 150)}
+                alt=""
+                loading="lazy"
+                className="vx-hero-art w-24 h-24 md:w-28 md:h-28 rounded-2xl object-cover"
+                style={{ marginLeft: i ? '-2.25rem' : 0, transform: `rotate(${(i - 1) * 7}deg) translateY(${i === 1 ? -8 : 4}px)`, zIndex: i === 1 ? 2 : 1 }}
+              />
+            ))}
+          </div>
+        )}
+        <div
+          className="vx-hero-wash absolute inset-0 pointer-events-none opacity-70"
+          style={{
+            background:
+              'radial-gradient(90% 100% at 0% 0%, rgb(var(--ember-500) / 0.30), transparent 56%), radial-gradient(110% 120% at 100% 10%, rgb(var(--aura-cyan) / 0.22), transparent 55%), radial-gradient(120% 130% at 55% 130%, rgb(var(--aura-lime) / 0.22), transparent 60%)',
+          }}
+          aria-hidden
+        />
+        <div className="relative p-6 md:p-10 sm:max-w-[65%]">
+          <p className="aura-eyebrow text-xs font-bold uppercase tracking-widest text-ember-300 flex items-center gap-1.5">
+            <SparkleIcon className="w-3.5 h-3.5" /> YOUR DAILY SOUNDTRACK
+          </p>
+          <h2 className="vx-hero-title text-3xl md:text-[40px] font-extrabold tracking-[-0.03em] mt-2">Find your next<br className="hidden md:block" /> favourite feeling.</h2>
+          <p className="text-sm text-ink-200/90 mt-2 max-w-md leading-relaxed">
+            Your Aura Mix brings together familiar voices and fresh discoveries. Built around your listening, ready when you are.
+          </p>
+          <div className="mt-5 flex items-center gap-2.5">
+            <button
+              onClick={() => heroSongs.length && playQueueFeed(heroSongs, 0)}
+              disabled={!heroSongs.length}
+              aria-label="Play your Aura Mix"
+              className="inline-flex items-center gap-2 px-7 py-3 rounded-full btn-primary shadow-glow transition hover:bg-ember-400 active:scale-95 disabled:opacity-50"
+            >
+              <PlayIcon className="w-4 h-4 ml-0.5" /> Play my mix
+            </button>
+            <button
+              onClick={() => navigate('/made-for-you')}
+              className="px-5 py-3 rounded-full btn-secondary text-sm"
+            >
+              Made for you
+            </button>
+          </div>
+        </div>
+      </section>
 
       {continueListening.length >= 2 && (
         <section aria-label="Jump back in" className="mb-5">
@@ -891,103 +987,9 @@ export default function HomePage() {
           </div>
         </section>
       )}
-      <DownloadCta />
 
-      {/* Hero — full-bleed colour wash that fades into the page */}
-      <div className={`-mx-5 md:-mx-10 -mt-6 lg:mt-0 mb-6 px-5 md:px-10 pt-6 pb-4 bg-gradient-to-b ${
-        ({
-          morning: 'from-transparent to-transparent',
-          afternoon: 'from-transparent to-transparent',
-          evening: 'from-transparent to-transparent',
-          'late-night': 'from-transparent to-transparent',
-        } as Record<string, string>)[dayPartLabel()] ?? 'from-transparent to-transparent'
-      }`}>
-        <p className="text-[11px] font-extrabold tracking-[0.22em] text-ember-400 uppercase mb-1.5">
-          {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} · made for you
-        </p>
-        <h1 className="text-3xl md:text-[38px] font-extrabold tracking-tight">{hello.title}</h1>
-        <p className="text-ink-200 mt-1.5 text-sm font-medium">{clientCfg?.greeting?.text ?? hello.subtitle}</p>
-        <p className="text-ink-300 mt-1 text-sm">
-          {region?.country ? `Tuned for ${region.country}` : 'Tuned to you'} · no account, all local
-          {weekEntries.length > 0 && (
-            <span className="text-ink-400"> · this week: {weekEntries.length} plays ≈ {weekMinutes} min</span>
-          )}
-          {getStreak() > 1 && <span className="text-ember-400 font-semibold"> · 🔥 {getStreak()}-day streak</span>}
-        </p>
-        <div className="flex gap-2 mt-4 flex-wrap">
-          <button
-            onClick={() => {
-              const pool = [...(trending.data ?? []), ...feedSongs, ...continueListening];
-              if (!pool.length) {
-                toast('Still loading — try again in a second');
-                return;
-              }
-              const i = Math.floor(Math.random() * pool.length);
-              playQueueFeed(pool, i);
-              toast(`Surprise: ${pool[i].title}`);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full btn-premium text-sm font-bold"
-          >
-            <SparkleIcon className="w-4 h-4" /> Surprise me
-          </button>
-          <Chip onClick={() => navigate('/charts')}>Charts</Chip>
-          <Chip onClick={() => navigate('/moods')}>Moods</Chip>
-          <Chip onClick={() => navigate('/regions')}>Regions</Chip>
-          <Chip onClick={() => navigate('/made-for-you')}>Made For You</Chip>
-        </div>
-      </div>
-
-      {/* Aura Mix hero — the AI DJ entry point */}
-      <section className="vx-hero relative overflow-hidden rounded-3xl mb-6 border border-glass bg-ink-850">
-        {/* v5.18.0 refresh — accent-led wash + a fan of the mix's own artwork */}
-        {heroSongs.length >= 3 && (
-          <div className="absolute right-6 md:right-10 top-1/2 -translate-y-1/2 hidden sm:flex items-center pointer-events-none" aria-hidden>
-            {heroSongs.slice(0, 3).map((hs, i) => (
-              <img
-                key={hs.id}
-                src={bestImage(hs.images, 150)}
-                alt=""
-                loading="lazy"
-                className="vx-hero-art w-24 h-24 md:w-28 md:h-28 rounded-2xl object-cover"
-                style={{ marginLeft: i ? '-2.25rem' : 0, transform: `rotate(${(i - 1) * 7}deg) translateY(${i === 1 ? -8 : 4}px)`, zIndex: i === 1 ? 2 : 1 }}
-              />
-            ))}
-          </div>
-        )}
-        <div
-          className="vx-hero-wash absolute inset-0 pointer-events-none opacity-70"
-          style={{
-            background:
-              'radial-gradient(90% 100% at 0% 0%, rgb(var(--ember-500) / 0.30), transparent 56%), radial-gradient(110% 120% at 100% 10%, rgb(var(--aura-cyan) / 0.22), transparent 55%), radial-gradient(120% 130% at 55% 130%, rgb(var(--aura-lime) / 0.22), transparent 60%)',
-          }}
-          aria-hidden
-        />
-        <div className="relative p-6 md:p-8">
-          <p className="aura-eyebrow text-xs font-bold uppercase tracking-widest text-ember-300 flex items-center gap-1.5">
-            <SparkleIcon className="w-3.5 h-3.5" /> AI DJ · ready
-          </p>
-          <h2 className="vx-hero-title text-3xl md:text-[40px] font-extrabold tracking-[-0.03em] mt-2">Your Aura Mix</h2>
-          <p className="text-sm text-ink-200/90 mt-2 max-w-md leading-relaxed">
-            A fresh mix tuned to your taste, mood and languages. Press play and the AI DJ builds the rest.
-          </p>
-          <div className="mt-5 flex items-center gap-2.5">
-            <button
-              onClick={() => heroSongs.length && playQueueFeed(heroSongs, 0)}
-              disabled={!heroSongs.length}
-              aria-label="Play your Aura Mix"
-              className="inline-flex items-center gap-2 px-7 py-3 rounded-full btn-primary shadow-glow transition hover:bg-ember-400 active:scale-95 disabled:opacity-50"
-            >
-              <PlayIcon className="w-4 h-4 ml-0.5" /> Play
-            </button>
-            <button
-              onClick={() => navigate('/made-for-you')}
-              className="px-5 py-3 rounded-full btn-secondary text-sm"
-            >
-              Made for you
-            </button>
-          </div>
-        </div>
-      </section>
+      <HomeStudio availableOrder={serverOrder.filter((key) => !serverHidden.includes(key))} />
+      <ListeningGuide />
 
       {/* Fusion layer (4.12.0) — language rail + tile-grid
           quick grid over the existing shelves. Pure recomposition of data the
@@ -1004,6 +1006,10 @@ export default function HomePage() {
           </Link>
         ))}
       </div>
+
+      <GetAppBanner />
+      <DownloadCta />
+      <PushPromptCard />
 
       {/* Owner-published promo banner (admin → Banner & Promotion). */}
       <PromoBanner className="mb-8" />
