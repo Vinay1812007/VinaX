@@ -11,6 +11,10 @@ import type { ApprovalMode } from '../config/args.js';
 import { compact } from '../agent/context.js';
 import { starterInstructions } from '../context/discovery.js';
 import { glyphs, paint } from './render.js';
+import type { MenuItem } from './menu.js';
+import type { TerminalApp } from './app.js';
+import { pickApprovalMode, pickEngine, pickModel, pickSession } from './pickers.js';
+import { listSessions } from '../session/store.js';
 import type { SessionController } from '../commands/controller.js';
 
 export interface SlashOutcome {
@@ -43,14 +47,34 @@ export const SLASH_COMMANDS: Array<{ name: string; args?: string; help: string }
   { name: '/exit', help: 'Leave VinaX CLI' },
 ];
 
-/** Names for autocomplete. */
+/** Names for completion, still used by the non-interactive paths. */
 export function completions(prefix: string): string[] {
   return SLASH_COMMANDS.map((c) => c.name).filter((n) => n.startsWith(prefix));
 }
 
+/**
+ * The slash catalogue as menu items.
+ *
+ * The command list stays the single source of truth; the live picker is just
+ * another view of it, so a command can never appear in one and not the other.
+ */
+export function slashMenuItems(): Array<MenuItem<string>> {
+  return SLASH_COMMANDS.map((c) => ({
+    id: c.name,
+    label: c.name,
+    description: c.help,
+    keywords: c.args ?? '',
+    value: c.name,
+  }));
+}
+
 const APPROVALS: ApprovalMode[] = ['ask', 'auto-edit', 'full-auto'];
 
-export async function handleSlash(line: string, ctl: SessionController): Promise<SlashOutcome> {
+export async function handleSlash(
+  line: string,
+  ctl: SessionController,
+  app?: TerminalApp | null,
+): Promise<SlashOutcome> {
   if (!line.startsWith('/')) return { handled: false };
   const [rawCmd, ...rest] = line.trim().split(/\s+/);
   const cmd = rawCmd.toLowerCase();
@@ -83,6 +107,17 @@ export async function handleSlash(line: string, ctl: SessionController): Promise
       return { handled: true, exit: true };
 
     case '/engine': {
+      if (!arg && app) {
+        const meta = await ctl.meta();
+        if (!meta) return { handled: true };
+        const chosen = await pickEngine(app, meta, ctl.config.engine);
+        if (!chosen) return { handled: true };
+        const engine = meta.engines.find((e) => e.id === chosen);
+        ctl.config.engine = chosen;
+        if (!engine?.acceptsModel) ctl.config.model = null;
+        out.print(`${paint(theme, 'green', g.ok)} Engine changed to ${engine?.label ?? chosen}`);
+        return { handled: true };
+      }
       if (!arg) {
         out.print(`Engine: ${ctl.config.engine}`);
         return { handled: true };
@@ -108,6 +143,17 @@ export async function handleSlash(line: string, ctl: SessionController): Promise
       const engine = meta?.engines.find((e) => e.id === ctl.config.engine);
       if (!engine?.acceptsModel) {
         out.print(`The ${engine?.label ?? ctl.config.engine} engine does not take a model id. Switch to a model-selectable engine first (/models).`);
+        return { handled: true };
+      }
+      if (!arg && app) {
+        const groups = await ctl.catalogGroups();
+        const chosen = await pickModel(app, groups, engine.catalog, ctl.config.model);
+        if (!chosen) {
+          if (!groups.length) out.print('That engine has no models available right now.');
+          return { handled: true };
+        }
+        ctl.config.model = chosen;
+        out.print(`${paint(theme, 'green', g.ok)} Model set to ${chosen}`);
         return { handled: true };
       }
       if (!arg) {
@@ -136,6 +182,14 @@ export async function handleSlash(line: string, ctl: SessionController): Promise
     }
 
     case '/permissions': {
+      if (!arg && app) {
+        const chosen = await pickApprovalMode(app, ctl.permissions.approvalMode);
+        if (!chosen) return { handled: true };
+        ctl.permissions.setMode(chosen);
+        ctl.config.approval = chosen;
+        out.print(`${paint(theme, 'green', g.ok)} Approval mode set to ${chosen}`);
+        return { handled: true };
+      }
       if (!arg) {
         out.print(`Approval mode: ${ctl.permissions.approvalMode}`);
         const grants = ctl.permissions.grantedScopes();
@@ -216,6 +270,17 @@ export async function handleSlash(line: string, ctl: SessionController): Promise
     }
 
     case '/resume': {
+      if (!arg && app) {
+        const rows = await listSessions();
+        const chosen = await pickSession(app, rows);
+        if (!chosen) {
+          if (!rows.length) out.print('No saved sessions yet.');
+          return { handled: true };
+        }
+        const ok = await ctl.resume(chosen);
+        out.print(ok ? `${paint(theme, 'green', g.ok)} Resumed session ${chosen}` : `No session called ${chosen}.`);
+        return { handled: true };
+      }
       if (!arg) {
         out.print('Usage: /resume <session-id>. See /sessions for the list.');
         return { handled: true };

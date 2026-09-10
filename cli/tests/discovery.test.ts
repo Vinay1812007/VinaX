@@ -6,7 +6,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { collectInstructions, contextBlock, discover, starterInstructions } from '../src/context/discovery.js';
 import { detectTheme, renderDiff, renderMarkdown } from '../src/terminal/render.js';
-import { renderRequest } from '../src/terminal/prompt.js';
+import { approvalDetail, approvalItems } from '../src/terminal/prompt.js';
 import { globToRegExp, loadIgnores, matchGlob } from '../src/project/ignore.js';
 import { cleanup, gitRun, hasGit, initRepo, tempDir, writeFiles } from './helpers.js';
 
@@ -205,37 +205,42 @@ describe('terminal rendering', () => {
     expect(out).not.toContain('\u001b[');
   });
 
-  it('shows the exact action, and offers reject as the default', () => {
-    const out = renderRequest({
+  it('offers the exact action, with reject present as the safe answer', () => {
+    const items = approvalItems({
       kind: 'execute', title: 'Run command?', detail: ['  npm test', '', 'Working directory:', '  /home/u/project'],
       risk: 'routine', scopeKey: 'run:npm', scopeLabel: 'Allow npm commands this session',
-    }, plain);
-    expect(out).toContain('Run command?');
-    expect(out).toContain('npm test');
-    expect(out).toContain('/home/u/project');
-    expect(out).toContain('1. Allow once');
-    expect(out).toContain('2. Allow npm commands this session');
-    expect(out).toContain('3. Reject');
+    });
+    expect(items.map((i) => i.value)).toEqual(['once', 'session', 'reject']);
+    expect(items[1].label).toBe('Allow npm commands this session');
+  });
+
+  it('shows the real command and working directory, not a summary', () => {
+    const detail = approvalDetail({
+      kind: 'execute', title: 'Run command?', detail: ['  npm test', '', 'Working directory:', '  /home/u/project'],
+      risk: 'routine', scopeKey: 'run:npm', scopeLabel: 'Allow npm commands this session',
+    });
+    expect(detail.join('\n')).toContain('npm test');
+    expect(detail.join('\n')).toContain('/home/u/project');
   });
 
   it('offers NO session grant for a critical action, and says why it is being asked', () => {
-    const out = renderRequest({
-      kind: 'execute', title: 'Run command?', detail: ['  sudo rm -rf /'],
-      risk: 'critical', scopeKey: 'x', scopeLabel: 'Allow this session',
-    }, plain);
-    expect(out).toContain('high-impact action');
-    expect(out).not.toContain('Allow this session');
-    expect(out).toContain('2. Reject');
+    const req = {
+      kind: 'execute' as const, title: 'Run command?', detail: ['  sudo rm -rf /'],
+      risk: 'critical' as const, scopeKey: 'x', scopeLabel: 'Allow this session',
+    };
+    const items = approvalItems(req);
+    expect(items.map((i) => i.value)).toEqual(['once', 'reject']);
+    expect(items.some((i) => i.label === 'Allow this session')).toBe(false);
+    expect(approvalDetail(req).join('\n')).toContain('high-impact action');
   });
 
-  it('renders an edit prompt as a real diff', () => {
-    const out = renderRequest({
+  it('carries the real diff for an edit', () => {
+    const detail = approvalDetail({
       kind: 'write', title: 'Modify src/api/client.ts?',
       detail: ['+1 −1', '', '@@ -1 +1 @@', '-const timeout = 1000;', '+const timeout = 5000;'],
       risk: 'routine', scopeKey: 'edit:project', scopeLabel: 'Allow project edits this session',
-    }, plain);
-    expect(out).toContain('Modify src/api/client.ts?');
-    expect(out).toContain('-const timeout = 1000;');
-    expect(out).toContain('+const timeout = 5000;');
+    });
+    expect(detail.join('\n')).toContain('-const timeout = 1000;');
+    expect(detail.join('\n')).toContain('+const timeout = 5000;');
   });
 });

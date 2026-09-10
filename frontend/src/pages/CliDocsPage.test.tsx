@@ -180,6 +180,40 @@ describe('the CLI documentation page', () => {
     expect((container.querySelector('#mcp') as HTMLElement).textContent).toContain('same permission system');
   });
 
+  it('documents the keyboard controls that make the CLI usable', () => {
+    const { container } = renderPage();
+    const kb = container.querySelector('#keyboard') as HTMLElement;
+    expect(kb, 'a Keyboard controls section must exist').not.toBeNull();
+    const text = kb.textContent ?? '';
+    for (const key of ['Up / Down', 'Left / Right', 'Enter', 'Tab', 'Esc', 'Ctrl+C', 'Ctrl+J', 'Ctrl+D']) {
+      expect(text, key).toContain(key);
+    }
+    expect(text).toContain('does not send one message per line');
+  });
+
+  it('documents the live menus and the selectors each command opens', () => {
+    const { container } = renderPage();
+    const menus = container.querySelector('#menus') as HTMLElement;
+    expect(menus).not.toBeNull();
+    const text = menus.textContent ?? '';
+    expect(text).toContain('opens immediately');
+    for (const cmd of ['/engine', '/model', '/permissions', '/resume']) {
+      expect(text, cmd).toContain(cmd);
+    }
+    // The direct forms must remain documented for scripts and habit.
+    expect(text).toContain('/permissions auto-edit');
+  });
+
+  it('shows approvals as an arrow-key selector, not a numbered list', () => {
+    const { container } = renderPage();
+    const text = (container.querySelector('#permission-prompts') as HTMLElement).textContent ?? '';
+    expect(text).toContain('arrow keys');
+    expect(text).toContain('Esc and Ctrl+C both reject');
+    // The old typed prompt is gone.
+    expect(text).not.toContain('1. Allow once');
+    expect(text).not.toContain('3. Reject');
+  });
+
   it('carries a complete command reference', () => {
     const { container } = renderPage();
     const ref = (container.querySelector('#command-reference') as HTMLElement).textContent ?? '';
