@@ -92,10 +92,18 @@ test('welcome brief, slash commands, prefs in the request, reply actions, pin an
   const box = page.locator('textarea[aria-label="Message VinaX AI"]');
   await expect(box).toBeVisible({ timeout: 15_000 });
 
-  // Welcome brief + prefs bar + saved-prompts entry point.
+  // Welcome brief + saved-prompts entry point.
   await expect.poll(() => bodyText(page), { timeout: 10_000 }).toMatch(/today for you/i);
   expect(await bodyText(page)).toMatch(/saved prompts/i);
-  expect(await bodyText(page)).toMatch(/reply in[\s\S]*style/i);
+
+  // Reply preferences moved OUT of a bar permanently parked above the composer
+  // and INTO the chat-settings menu (v5.25.0). This assertion still checked the
+  // old placement and had been failing ever since; it now opens the menu, which
+  // is where a listener actually finds these controls today.
+  const settings = page.locator('button[aria-label="Chat settings"]');
+  await settings.click();
+  await expect.poll(() => bodyText(page), { timeout: 5_000 }).toMatch(/reply in[\s\S]*style/i);
+  await settings.click();
 
   // Slash menu filters commands as you type.
   await box.fill('/pl');
@@ -110,9 +118,12 @@ test('welcome brief, slash commands, prefs in the request, reply actions, pin an
   await expect.poll(() => bodyText(page)).toMatch(/nothing is playing right now/i);
   expect(posted, '/now never reaches the backend').toHaveLength(0);
 
-  // Reply preferences ride along as a rule in the first message.
+  // Reply preferences ride along as a rule in the first message. The controls
+  // live in the chat-settings menu since v5.25.0, so open it to reach them.
+  await settings.click();
   await page.selectOption('select[aria-label="Reply language"]', 'telugu');
   await page.selectOption('select[aria-label="Reply style"]', 'brief');
+  await settings.click();
   await box.fill('Give me two songs');
   await box.press('Enter');
   await expect.poll(() => bodyText(page), { timeout: 10_000 }).toMatch(/short answer/i);
