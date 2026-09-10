@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.27.0': {
+    title: 'Read aloud in your chosen voice',
+    changes: [
+      { type: 'improved', text: 'The Read-aloud button on a reply now speaks in the voice you picked in Settings → Voice, the same one live voice chat uses — so the setting means what it says everywhere. Long replies are read straight through, with the next part fetched while the current one plays.' },
+      { type: 'fixed', text: 'If a studio voice is briefly unavailable, the reply is still read out by your device instead of going silent — and never read twice.' },
+    ],
+  },
   '5.26.0': {
     title: 'Choose the voice that answers you',
     changes: [

@@ -27,7 +27,7 @@ import { getSong } from '@/services/api';
 import { generatePlaylist } from '@/services/ai/playlist';
 import { matchSlash, parseSlash, type SlashCommand } from '@/features/ai/slashCommands';
 import { hideFollowupLine, splitFollowups } from '@/features/ai/followups';
-import { onSpeakingChange, readAloud, readAloudSupported } from '@/features/ai/readAloud';
+import { onSpeakingChange, readAloud, readAloudSupported, setReadAloudVoice } from '@/features/ai/readAloud';
 import { detectSongLinks, prefRuleMessage, songContextBlock } from '@/features/ai/replyPrefs';
 import {
   ArrowUpRightIcon,
@@ -579,6 +579,14 @@ export default function VinaXAIPage(): ReactNode {
     const [model, voice] = v.split('|');
     return model && voice ? { model, voice } : null;
   }, []);
+
+  // Read aloud speaks through the same chosen voice as live chat. Registered
+  // once; the getter reads the ref, so a change in Settings applies to the
+  // next chunk rather than the next reply.
+  useEffect(() => {
+    setReadAloudVoice(serverVoice);
+    return () => setReadAloudVoice(null);
+  }, [serverVoice]);
 
   /** Ask the server which speech models the key actually serves. Loaded when
    *  the settings menu first opens, so a listener who never opens it pays
@@ -1990,7 +1998,7 @@ export default function VinaXAIPage(): ReactNode {
                     {voiceCatalog === null
                       ? 'Checking which voices are available…'
                       : voiceCatalog.models.length
-                        ? 'Used for live voice chat. Falls back to this device if a voice is briefly unavailable. (Read aloud always uses this device.)'
+                        ? 'Used for live voice chat and for Read aloud on a reply. Falls back to this device if a voice is briefly unavailable.'
                         : voiceCatalog.configured
                           ? 'No studio voice is available right now — replies are spoken by this device.'
                           : 'Studio voices aren’t configured — replies are spoken by this device.'}
