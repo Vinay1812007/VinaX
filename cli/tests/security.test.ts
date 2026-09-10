@@ -4,7 +4,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { containedIn, makeWorkspace, resolvePath } from '../src/security/paths.js';
 import { containsSecret, envForModel, isProtectedPath, redact } from '../src/security/secrets.js';
 import { classifyArgv, classifyShell, programName, splitShell } from '../src/security/risk.js';
@@ -29,7 +29,23 @@ describe('workspace boundary', () => {
     const ws = await makeWorkspace(workspace);
     const r = await resolvePath(ws, 'src/index.ts');
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.display).toBe(join('src', 'index.ts'));
+    if (r.ok) expect(r.display).toBe('src/index.ts');
+  });
+
+  it('reports display paths with forward slashes on EVERY platform', async () => {
+    // The model emits src/index.ts wherever it is running; handing it back a
+    // backslashed path on one platform only is an inconsistency it has to
+    // absorb for no benefit, and it leaks into tool results, the edit journal
+    // and the final summary.
+    const ws = await makeWorkspace(workspace);
+    const r = await resolvePath(ws, 'nested/deep/file.ts');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.display).toBe('nested/deep/file.ts');
+      expect(r.display).not.toContain('\\');
+      // …while the path actually used on disk keeps the platform's own form.
+      expect(r.path).toContain(sep);
+    }
   });
 
   it('REJECTS ../ traversal out of the workspace', async () => {
@@ -53,12 +69,23 @@ describe('workspace boundary', () => {
     if (!r.ok) expect(r.reason).toBe('symlink_escape');
   });
 
-  it('REJECTS a symlink to a system directory', async () => {
+  // Creating a symlink to an absolute system path is POSIX-shaped: on Windows
+  // /etc does not exist and unprivileged symlink creation behaves differently,
+  // so that platform gets its own equivalent below.
+  it.runIf(process.platform !== 'win32')('REJECTS a symlink to a system directory', async () => {
     const ws = await makeWorkspace(workspace);
     await symlink('/etc', join(workspace, 'link'), 'dir');
     const r = await resolvePath(ws, 'link/hosts');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe('symlink_escape');
+  });
+
+  it.runIf(process.platform === 'win32')('REJECTS an absolute path to a Windows system directory', async () => {
+    const ws = await makeWorkspace(workspace);
+    for (const p of ['C:\\Windows\\System32\\drivers\\etc\\hosts', 'C:\\Windows']) {
+      const r = await resolvePath(ws, p);
+      expect(r.ok, p).toBe(false);
+    }
   });
 
   it('REJECTS a NESTED symlink escape (link to a link to outside)', async () => {

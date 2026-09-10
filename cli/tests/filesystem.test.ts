@@ -314,7 +314,7 @@ describe('editing', () => {
   it('records every change in the journal for undo', async () => {
     await applyPatchTool(args({ path: 'src/util.ts', oldText: '"demo"', newText: '"x"' }), ctx);
     await writeFileTool(args({ path: 'src/added.ts', content: 'export {};\n' }), ctx);
-    expect(ctx.journal.changedFiles()).toEqual([join('src', 'util.ts'), join('src', 'added.ts')]);
+    expect(ctx.journal.changedFiles()).toEqual(['src/util.ts', 'src/added.ts']);
   });
 });
 

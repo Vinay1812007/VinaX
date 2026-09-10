@@ -4,9 +4,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { applyProjectConfig, DEFAULTS, resolveConfig, type VinaxConfig } from '../src/config/config.js';
 import { paths, vinaxHome } from '../src/config/paths.js';
+import { containedIn } from '../src/security/paths.js';
 import { cleanup, tempDir } from './helpers.js';
 
 let root = '';
@@ -162,10 +163,12 @@ describe('configuration directory', () => {
   });
 
   it('puts sessions, logs, cache and MCP config under one directory', () => {
-    const p = paths({ VINAX_HOME: '/tmp/custom-vinax' });
-    expect(p.sessions.startsWith(p.home)).toBe(true);
-    expect(p.logs.startsWith(p.home)).toBe(true);
-    expect(p.cache.startsWith(p.home)).toBe(true);
-    expect(p.mcp.startsWith(p.home)).toBe(true);
+    const home = resolve('/tmp/custom-vinax');
+    const p = paths({ VINAX_HOME: home });
+    // Compare by containment, not by string prefix: join() normalizes
+    // separators, so a raw POSIX home would never prefix a Windows child.
+    for (const child of [p.sessions, p.logs, p.cache, p.mcp]) {
+      expect(containedIn(home, child), child).toBe(true);
+    }
   });
 });

@@ -20,6 +20,20 @@
 import { realpath } from 'node:fs/promises';
 import { isAbsolute, join, normalize, parse, relative, resolve, sep } from 'node:path';
 
+/**
+ * Workspace-relative display form, always forward-slashed.
+ *
+ * The model works in a cross-platform text world and emits `src/index.ts`
+ * whatever machine it is talking to. Handing it `src\\index.ts` on Windows and
+ * `src/index.ts` everywhere else is an inconsistency it has to absorb for no
+ * benefit — and it leaks into tool results, the edit journal and the final
+ * summary. One form, everywhere. Path RESOLUTION still uses the platform's own
+ * separators; this is only how a path is shown and recorded.
+ */
+function toDisplay(rel: string): string {
+  return rel.split(sep).join('/');
+}
+
 export interface Workspace {
   /** Primary root — the git root, or the working directory when there is none. */
   root: string;
@@ -116,8 +130,7 @@ export async function resolvePath(
 
   for (const root of ws.roots) {
     if (containedIn(root, real)) {
-      const display = relative(root, real) || '.';
-      return { ok: true, path: real, display, root };
+      return { ok: true, path: real, display: toDisplay(relative(root, real)) || '.', root };
     }
   }
 
@@ -153,8 +166,7 @@ export async function makeWorkspace(root: string, extra: string[] = []): Promise
 export function displayPath(ws: Workspace, abs: string): string {
   for (const root of ws.roots) {
     if (containedIn(root, abs)) {
-      const rel = relative(root, abs);
-      return rel || parse(root).base;
+      return toDisplay(relative(root, abs)) || parse(root).base;
     }
   }
   return abs;

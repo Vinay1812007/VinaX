@@ -231,7 +231,7 @@ history rewriting, and any recursive directory delete.
 
 ```sh
 cd cli
-npm test              # 299 tests / 13 files
+npm test              # 300 tests / 13 files
 npm run lint
 npm run typecheck
 ```

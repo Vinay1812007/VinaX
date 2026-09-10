@@ -70,7 +70,10 @@ describe('run_command', () => {
     const detail = ctx.asked[0].detail.join('\n');
     expect(ctx.asked[0].title).toBe('Run command?');
     expect(detail).toContain('hello.js');
-    expect(detail).toContain(root);
+    // The prompt shows the REAL working directory. On Windows the system temp
+    // path arrives as an 8.3 short name (RUNNER~1) which realpath expands, so
+    // compare against the resolved workspace root rather than the raw one.
+    expect(detail).toContain(ctx.ws.root);
   });
 
   it('does NOT run when the user rejects', async () => {
