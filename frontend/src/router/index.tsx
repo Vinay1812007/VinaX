@@ -95,6 +95,9 @@ const ContactPage = lazy(() => import('@/pages/ContactPage'));
 const DmcaPage = lazy(() => import('@/pages/DmcaPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const VinaXAIPage = lazy(() => import('@/pages/VinaXAIPage'));
+// Public VinaX CLI documentation. Its own top-level route (like /VinaXAI) and
+// lazily loaded, so it costs the player shell nothing on first load.
+const CliDocsPage = lazy(() => import('@/pages/CliDocsPage'));
 // v5.7.6 — Ads placeholder page (sponsored placements configured later).
 const AdsPage = lazy(() => import('@/pages/AdsPage'));
 // v5.7.9 — music videos: browse + cinematic player.
@@ -102,6 +105,17 @@ const VideosPage = lazy(() => import('@/pages/VideosPage'));
 const VideoPage = lazy(() => import('@/pages/VideoPage'));
 
 export const router = createBrowserRouter([
+  {
+    path: '/VinaXAI/cli/docs',
+    element: (
+      <SiteGate>
+        <Suspense fallback={<div className="min-h-[100dvh] grid place-items-center bg-ink-950 text-ink-300">Loading VinaX CLI documentation…</div>}>
+          <CliDocsPage />
+        </Suspense>
+      </SiteGate>
+    ),
+    errorElement: <RouteError />,
+  },
   {
     path: '/VinaXAI',
     element: (

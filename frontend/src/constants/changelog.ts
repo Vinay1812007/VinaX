@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.28.0': {
+    title: 'VinaX in your terminal',
+    changes: [
+      { type: 'new', text: 'VinaX CLI — the VinaX coding agent, in your terminal. Point it at a project and ask in plain words: it reads and searches your files, edits them, runs your tests and builds, reads what really came back, keeps going when something fails, and commits and pushes when you say so. It works on your own machine, and it needs no keys of any kind.' },
+      { type: 'new', text: 'You decide how much it may do on its own. By default it reads freely and asks before it changes anything — showing you the exact command, the real diff, or the exact branch and commits about to be pushed. Two looser modes are available, and even the most automatic one still stops and asks before anything that could damage your machine or your credentials.' },
+      { type: 'new', text: 'Full documentation is now published at VinaX AI → CLI, covering installation, permissions, Git, sessions, automation and the complete command reference.' },
+    ],
+  },
   '5.27.0': {
     title: 'Read aloud in your chosen voice',
     changes: [

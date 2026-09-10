@@ -11,7 +11,7 @@ Live at **https://www.sirimillavinay.online** — Telugu, Hindi, Tamil and nine 
 ## Contents
 
 1. [What VinaX is](#1-what-vinax-is)
-2. [Feature catalogue](#2-feature-catalogue) — listener app · VinaX AI · admin console
+2. [Feature catalogue](#2-feature-catalogue) — listener app · VinaX AI · admin console · VinaX CLI
 3. [Architecture](#3-architecture)
 4. [Repository map](#4-repository-map)
 5. [Local development](#5-local-development)
@@ -34,6 +34,7 @@ One repository, two independently deployed applications on **the same domain**:
 |---|---|---|---|---|
 | [`frontend/`](frontend/) | The web app (and the Android app via Capacitor) plus the static admin console | React 19 · Vite 8 · TypeScript · Tailwind · Zustand · TanStack Query | **Cloudflare Pages** (project `vinax`) | push to `main` touching `frontend/**` |
 | [`backend/`](backend/) | `vinax-api` edge Worker: JSON API, VinaX AI, edge-rendered SEO pages, sitemaps, image proxy, APK proxy, admin API, cron endpoints | Cloudflare Workers · TypeScript (no framework, no runtime npm deps) | **Cloudflare Workers** | push to `main` touching `backend/**` |
+| [`cli/`](cli/) | **VinaX CLI** — the terminal coding agent (`vinax`): reads, edits, runs, tests, commits and pushes on the user's own machine | Node.js ≥ 22 · TypeScript · ESM · zero runtime deps | published as an npm package (not auto-deployed) | manual |
 
 There is **no CORS anywhere**. The Worker's routes claim specific paths on `www.sirimillavinay.online` (`/api/*`, `/img`, `/apk`, `/song|album|artist|playlist/*`, `/sitemap*`, the 72 language-mood hub pages, plus the `update.` and `admin.` hosts) and **every other URL falls through to Pages**, which serves the static app.
 
@@ -109,6 +110,20 @@ A full assistant with its own layout — writing, code, maths, data, research, t
 
 Elsewhere in the app the same engines power the AI DJ and smart queue, the AI Playlist page ("describe a vibe"), personalised Home shelves, Search's expert picks, lyrics romanise/translate/meaning, and the location-targeted AI daily push.
 
+### 2.3 VinaX CLI (`cli/`, the `vinax` command)
+
+The VinaX coding agent as a terminal program — the same engines, working on a developer's own machine instead of in a browser.
+
+- **It does the work.** Reads and searches the project, edits files, runs the tests and the build, reads the real output, iterates when something fails, checks the diff, stages, commits and pushes. It does not tell the user which commands to type.
+- **Permissions, not trust.** Three modes — `ask` (default), `auto-edit`, `full-auto`. Every prompt shows the exact action: the real command and directory, the real diff, the real remote and branch and commit count. Privilege escalation, destructive system commands, credential stores, remote repository writes and anything outside the approved workspace are confirmed in **every** mode, including `full-auto`.
+- **Local device access, bounded.** The workspace is the git root (or the working directory); `--add-dir` adds more. Every path is resolved through its symlinks and compared by path segments, so no traversal, link or device path escapes it.
+- **Secrets.** `.env`, private keys, service accounts and credential directories are never read without explicit approval, and every tool result is scrubbed for key blocks, authorization headers, tokens and passwords before it leaves the machine.
+- **Git as a first-class tool**, using the user's own git and credential helper. There is no `reset --hard`, no `clean`, no force push and no history rewriting in the tool set at all.
+- **Local sessions** (JSONL in `~/.vinax`, crash-resistant, resumable), structured context compaction, `/undo` for VinaX's own edits, live task status, `@file` references, 19 slash commands, `--json` JSONL output with stable exit codes, and local stdio MCP servers that go through the same permission policy as the built-ins.
+- **No AI provider keys on the user's machine.** The CLI talks to the VinaX Worker; the Worker talks to the engines.
+
+Public documentation: **`/VinaXAI/cli/docs`**. Developer notes: [`cli/README.md`](cli/README.md).
+
 ### 2.3 Admin console (`https://admin.sirimillavinay.online`)
 
 A static page (`frontend/public/admin/`) talking to `/api/admin/*`, gated by `ADMIN_LOGIN_PASSWORD`, with a token in session storage, auto-refresh, ⌘K search, dark and light themes, pinned tools, CSV and JSON export on every data panel. **65 tools** in eight groups:
@@ -132,6 +147,7 @@ Everything the console publishes reaches listeners through cached public reads (
 
 - **Frontend** — a Vite SPA with route-level code splitting (53 routes + 12 language hubs + 72 mood×language hubs, all lazy). State is Zustand with `persist` (`vinax.*.v1` keys, see `frontend/src/constants/storage-keys.ts`); server data is TanStack Query. Personalisation (taste profile, scoring, mixes) runs **on the device** under `src/services/personalization` and `src/services/recommendation`. The audio engine is a plain `HTMLAudioElement` with source failover, crossfade and Cast intercepts (`src/services/audio/engine.ts`). A strict **first-load bundle budget** (`frontend/scripts/check-bundle-size.mjs`) fails CI when the shell grows; new features must be lazy unless they run in the player clock or a store.
 - **Backend** — `backend/worker/index.ts` reproduces the Pages-Functions contract (`{request, env, params, next, waitUntil}`) over a hand-maintained `EXACT` route map (`worker/__tests__/routerCoverage.test.ts` enforces import ↔ route parity) plus regex `DYNAMIC` routes for SEO pages. Every endpoint is one module under `worker/functions/`. Shared code lives in `worker/functions/_lib/` (AI lanes, Supabase REST helpers, rate limiting, render, SEO, web push, FCM, client config).
+- **VinaX CLI** — a Node process, so it may call the VinaX HTTPS API directly (the same-origin rule governs the *browser* app only; no CORS is involved and `VINAX_API_BASE` exists for this package alone). It speaks a versioned protocol, `vinax-cli/1`, to its own Worker route family (`/api/vinaxcli/{meta,agent,search}`): the CLI sends the conversation, the tool results and the project context; the Worker owns the agent system prompt, the tool vocabulary, argument validation and every key. The model cannot execute anything, the Worker cannot touch a device, and only the local CLI can — after its permission policy agrees. Tool calls are normalized on the Worker (native `tool_calls` where an engine supports them, a strict server-controlled text form otherwise), so the CLI never sees provider-specific syntax.
 - **Catalogue** — songs come from the owner-hosted catalogue wrapper (`VinaX Music API` on Render) with the Worker's own `/api/cat` as a same-origin fallback; the client orchestrates sources with health ranking (`frontend/src/services/api/client.ts`, `constants/endpoints.ts`) and the console can switch a source off for everyone.
 - **AI** — 19 lanes over 18 keys across three OpenAI-compatible hosts (the default inference base, a fast external base, and a free-model marketplace), each pinned to its own key with a failover ladder (`_lib/ai.ts`, `_lib/models.ts`). The two aggregator keys don't pin a model: their free catalogs are discovered live (`_lib/catalog.ts`, served by `/api/aimodels`) and the listener picks the exact engine. Chat streams as SSE (`data: {delta|meta|done}`); prompts wrap user turns in a data fence; nothing is stored beyond anonymous per-call telemetry.
 - **Data** — Supabase Postgres via REST (service-role key on the Worker only): `vinax_events`, `vinax_users`, `vinax_feedback`, `vinax_ai_events`, `vinax_rooms`, `vinax_push_subscriptions`, `vinax_fcm_tokens`, `vinax_config`, `vinax_experiments`, `vinax_blocklist`, `vinax_seo_urls`, plus RPCs/views for analytics. One KV namespace (`HANDOFF`) holds burn-on-read device-handoff blobs.
@@ -166,16 +182,27 @@ Everything the console publishes reaches listeners through cached public reads (
 │   ├── index.html                  ← SPA shell: pre-paint theme/festival/accent script, boot prefetch
 │   ├── vite.config.ts              ← build + dev proxy (/api, /img, /apk → :8787)
 │   └── capacitor.config.ts, native-android/, android-res/, ci/   ← Android
-└── backend/                        ← EVERYTHING that runs at the edge
-    ├── worker/
-    │   ├── index.ts                ← entry: router + adapter (EXACT + DYNAMIC maps)
-    │   ├── wrangler.toml           ← name, routes, [vars], KV binding, observability
-    │   ├── functions/api/          ← public endpoints, api/admin/*, api/cron/*, api/cat/[[path]]
-    │   ├── functions/_lib/         ← ai, models, supabase, ratelimit, render, seo, webpush, fcm, clientConfig …
-    │   └── __tests__/              ← endpoint + reducer tests
-    ├── index.html                  ← TEST FIXTURE of the SPA shell (render tests only)
-    ├── README.md                   ← Worker notes
-    └── .env.example                ← documents every secret NAME (values live in Cloudflare)
+├── backend/                        ← EVERYTHING that runs at the edge
+│   ├── worker/
+│   │   ├── index.ts                ← entry: router + adapter (EXACT + DYNAMIC maps)
+│   │   ├── wrangler.toml           ← name, routes, [vars], KV binding, observability
+│   │   ├── functions/api/          ← public endpoints, api/vinaxcli/*, api/admin/*, api/cron/*, api/cat/[[path]]
+│   │   ├── functions/_lib/         ← ai, models, catalog, cliprotocol, cliprompt, clistream, cliengines, websearch, supabase, ratelimit …
+│   │   └── __tests__/              ← endpoint + reducer tests
+│   ├── index.html                  ← TEST FIXTURE of the SPA shell (render tests only)
+│   ├── README.md                   ← Worker notes
+│   └── .env.example                ← documents every secret NAME (values live in Cloudflare)
+└── cli/                            ← VinaX CLI — the `vinax` terminal agent
+    ├── src/
+    │   ├── cli.ts                  ← the binary: parse, dispatch, exit code
+    │   ├── agent/                  ← the tool loop, task ledger, context compaction
+    │   ├── tools/                  ← filesystem, process, git, mcp
+    │   ├── permissions/            ← ask / auto-edit / full-auto
+    │   ├── security/               ← workspace boundaries, secrets, command risk
+    │   ├── session/                ← local JSONL sessions, run journal, undo
+    │   └── terminal/               ← rendering, approval prompts, slash commands
+    ├── tests/                      ← 13 suites incl. a compiled-binary end-to-end run
+    └── README.md                   ← CLI developer notes
 ```
 
 Each folder is self-contained: own `package.json`, lockfile, `tsconfig`, eslint config and tests. **Never** run npm at the repo root — there is no root `package.json`.
@@ -192,6 +219,10 @@ cd backend && npm ci && npm run dev
 
 # terminal 2 — frontend (vite on http://localhost:5173)
 cd frontend && npm ci && npm run dev
+
+# terminal 3 — VinaX CLI, pointed at the local Worker (only when working on cli/)
+cd cli && npm ci
+VINAX_API_BASE=http://127.0.0.1:8787 npm run dev
 ```
 
 Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` to `:8787`, so the whole stack works locally. Local secrets go in `backend/worker/.dev.vars` (gitignored, `NAME=value` per line). The admin console is at `http://localhost:5173/admin/` (log in with the `ADMIN_LOGIN_PASSWORD` you set in `.dev.vars`).
@@ -201,8 +232,8 @@ Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` t
 | Where | Command | What it does |
 |---|---|---|
 | `frontend/` | `npm run dev` | Vite dev server on :5173 |
-| `frontend/` | `npm run build` | typecheck → Vite build → prerender 31 routes → `dist/changelog.json` |
-| `frontend/` | `npm test` | Vitest (463 tests / 70 files) |
+| `frontend/` | `npm run build` | typecheck → Vite build → prerender 32 routes → `dist/changelog.json` |
+| `frontend/` | `npm test` | Vitest (501 tests / 72 files) |
 | `frontend/` | `npm run lint` · `npm run typecheck` | eslint (`src` + `scripts`, zero warnings) · tsc — CI runs both |
 | `frontend/` | `npm run gen:festivals` | regenerate `src/styles/festivals.css`, the pre-paint window table in `index.html`, and `public/admin/festivals.js` from the festival calendar (a test fails on drift) |
 | `frontend/` | `node scripts/csp-hashes.mjs` | after `npm run build`, refresh the inline-script hashes in `public/_headers` (a test fails on drift) |
@@ -210,8 +241,12 @@ Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` t
 | `frontend/` | `npm run e2e` | build checks + the end-to-end specs (needs `dist/` — run `npm run build` first) |
 | `frontend/` | `npm run android:debug` | Capacitor sync + Gradle debug APK |
 | `backend/` | `npm run dev` | wrangler dev on :8787 (reads `worker/.dev.vars`) |
-| `backend/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (174 tests / 25 files) · eslint · tsc — **run from `backend/`, not `backend/worker/`** |
+| `backend/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (262 tests / 29 files) · eslint · tsc — **run from `backend/`, not `backend/worker/`** |
 | `backend/` | `npm run deploy` | manual `wrangler deploy` (normally unnecessary — git auto-deploys) |
+| `cli/` | `npm run dev` | run `src/cli.ts` directly (Node type-stripping, no build step) |
+| `cli/` | `npm run build` | tsc → `dist/`, then the shebang check that keeps the binary runnable |
+| `cli/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (300 tests / 13 files) · eslint · tsc — **`npm run build` first**, the e2e suite drives `dist/cli.js` |
+| `cli/` | `npm pack --dry-run` | what would actually ship (a test asserts tests/sources/configs are excluded) |
 
 ---
 
@@ -292,7 +327,9 @@ The console writes JSON values into `vinax_config` (`POST /api/admin/appconfig`,
 9. **Secrets discipline.** New server-side config = a Worker secret + its name in `.env.example` + a row in the Environment Checklist. Nothing secret in `VITE_*`, nothing secret in git.
 10. **Cron auth.** `/api/cron/*` requires the `x-cron-secret` header. Query-string auth is intentionally rejected.
 11. **No third-party brand names** in product copy, comments or docs (the assistant is "VinaX AI", engines have owner-chosen names).
-12. **Tutorial anchors.** The live tutorials find controls by `aria-label` and `data-tour` attributes (`player`, `search-input`, `sound`, `import-text`, `Play your Aura Mix`, `Message VinaX AI`, `Search settings`, `Festival themes`, `Custom accent colour`, `Listen Later`, `More options`). Renaming one breaks a step — update `src/features/tutorials/tutorials.ts` in the same change; the e2e Help spec is the place to add a check.
+12. **VinaX CLI owns no keys, and no client owns the agent prompt.** The CLI never holds an AI provider credential — it calls `/api/vinaxcli/*` and the Worker calls the engines. The coding-agent system prompt lives server-side in `backend/worker/functions/_lib/cliprompt.ts`; a client-supplied `system` field is rejected outright and a `system` role inside `messages` is dropped. `VINAX_API_BASE` is for `cli/` and development tooling only and must never reach the browser frontend (contract 1 still stands).
+13. **A repository may never widen VinaX's access.** A project `.vinax/config.json` can make VinaX stricter — a tighter approval mode, web off, lower ceilings — and is honoured; anything more permissive is ignored and the user is told. Project instruction files (`VINAX.md`, `.vinax/instructions.md`, `AGENTS.md`) are conventions, not privileges, and tool output — files, logs, compiler errors, READMEs, web pages — is data, never instructions. `cli/tests/config.test.ts` and the backend `vinaxcli` suite hold this.
+14. **Tutorial anchors.** The live tutorials find controls by `aria-label` and `data-tour` attributes (`player`, `search-input`, `sound`, `import-text`, `Play your Aura Mix`, `Message VinaX AI`, `Search settings`, `Festival themes`, `Custom accent colour`, `Listen Later`, `More options`). Renaming one breaks a step — update `src/features/tutorials/tutorials.ts` in the same change; the e2e Help spec is the place to add a check.
 
 ---
 
@@ -300,15 +337,16 @@ The console writes JSON values into `vinax_config` (`POST /api/admin/appconfig`,
 
 | Suite | Where | Count | Runs in CI |
 |---|---|---|---|
-| Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 463 tests / 70 files | ✅ |
-| Backend endpoint/lib | `backend/worker/**/*.test.ts` | 174 tests / 25 files | ✅ |
+| Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 501 tests / 72 files | ✅ |
+| Backend endpoint/lib | `backend/worker/**/*.test.ts` | 262 tests / 29 files | ✅ |
 | Contracts | contrast + theme tokens, CSP hashes, festival artefact sync, router coverage, bundle budget | — | ✅ |
-| E2E | `frontend/e2e/*.spec.ts` against the built bundle (external network aborted): admin console (every panel), VinaX AI, festival skins, the 5.17 feature set — 10 tests | `npm run e2e` | `e2e.yml` |
+| VinaX CLI | `cli/tests/*.test.ts` | 300 tests / 13 files | ✅ (`cli.yml`, Linux · macOS · Windows) |
+| E2E | `frontend/e2e/*.spec.ts` against the built bundle (external network aborted): admin console (every panel), VinaX AI, festival skins, the 5.17 feature set, the CLI documentation route — 16 tests | `npm run e2e` | `e2e.yml` |
 | Lighthouse | `frontend/lighthouserc.json` (SEO + a11y hard-fail) | — | `lighthouse.yml` |
 
 How e2e runs: `npm run e2e` first executes `scripts/e2e-smoke.mjs` (asset and hydration checks), then `vitest run --config e2e/vitest.config.ts`, which serves `dist/` on a local port and drives the same Chromium (`playwright-core`, `E2E_CHROMIUM_PATH` honoured) through a small `@playwright/test`-compatible layer in `e2e/support/`. The three older specs (`smoke`, `a11y`, `qa-sweep`) are excluded: they were written for a runner that is not installed and have drifted; enable them only after updating.
 
-Before pushing: `cd frontend && npm run lint && npm run typecheck && npm test && npm run build && node scripts/csp-hashes.mjs && node scripts/check-bundle-size.mjs`, and `cd backend && npm run lint && npm run typecheck && npm test`.
+Before pushing: `cd frontend && npm run lint && npm run typecheck && npm test && npm run build && node scripts/csp-hashes.mjs && node scripts/check-bundle-size.mjs`, and `cd backend && npm run lint && npm run typecheck && npm test`, and — when `cli/` changed — `cd cli && npm run lint && npm run typecheck && npm run build && npm test`.
 
 ---
 
@@ -317,6 +355,7 @@ Before pushing: `cd frontend && npm run lint && npm run typecheck && npm test &&
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ci.yml` | push, PR | **frontend**: lint, typecheck, test, build, bundle budget · **backend**: lint, typecheck, test |
+| `cli.yml` | push, PR touching `cli/**` or `backend/**` | **VinaX CLI** on Linux, macOS and Windows with Node 22: lint, typecheck, build, full suite (incl. the compiled-binary end-to-end run) |
 | `e2e.yml` · `lighthouse.yml` | push, PR | Playwright smoke · performance/SEO/a11y budgets |
 | `diagnose.yml` | manual, push | Production hydration check: fetch live HTML, assert every asset, confirm React mounted |
 | `buildapk.yml` · `release.yml` | push, manual, tags | Android APK build · signed release published to GitHub Releases |
@@ -346,11 +385,12 @@ Deployment is **not** done by GitHub Actions — Cloudflare's git integrations d
 
 ## 12. Release process
 
-1. Make the change (frontend, backend, or both).
+1. Make the change (frontend, backend, CLI, or any combination).
 2. Bump the version and add the update card (§8.8). Patch for fixes, minor for features.
 3. Run the gates (§9). If `index.html` changed, refresh CSP hashes; if festivals changed, run the generator.
 4. Commit and push to `main`. Pages and the Worker deploy themselves; watch the CI run.
 5. For Android, `release.yml` publishes a signed APK; `/api/version` picks it up. Use Minimum App Version only for security fixes or breaking API changes.
+6. **VinaX CLI** has its own version (`cli/package.json` + `cli/src/version.ts`, kept in step by a test) and is *not* auto-deployed — publishing it is a separate, deliberate step, and only with credentials and package ownership already configured. A protocol change keeps the old id in `SUPPORTED_PROTOCOLS` on the Worker until installed clients have had time to update; `vinax doctor` reports a mismatch plainly. See [`cli/README.md`](cli/README.md) §9.
 
 ---
 
