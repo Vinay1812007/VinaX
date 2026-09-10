@@ -255,7 +255,7 @@ Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` t
 | `backend/` | `npm run deploy` | manual `wrangler deploy` (normally unnecessary — git auto-deploys) |
 | `cli/` | `npm run dev` | run `src/cli.ts` directly (Node type-stripping, no build step) |
 | `cli/` | `npm run build` | tsc → `dist/`, then the shebang check that keeps the binary runnable |
-| `cli/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (401 tests / 16 files) · eslint · tsc — **`npm run build` first**, the e2e suite drives `dist/cli.js` |
+| `cli/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (406 tests / 16 files) · eslint · tsc — **`npm run build` first**, the e2e suite drives `dist/cli.js` |
 | `cli/` | `npm pack --dry-run` | what would actually ship (a test asserts tests/sources/configs are excluded) |
 | `cli/` | `npm install -g .` | install the CLI from source (prepack builds it first) |
 
@@ -351,7 +351,7 @@ The console writes JSON values into `vinax_config` (`POST /api/admin/appconfig`,
 | Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 507 tests / 74 files | ✅ |
 | Backend endpoint/lib | `backend/worker/**/*.test.ts` | 262 tests / 29 files | ✅ |
 | Contracts | contrast + theme tokens, CSP hashes, festival artefact sync, router coverage, bundle budget | — | ✅ |
-| VinaX CLI | `cli/tests/*.test.ts` | 401 tests / 16 files | ✅ (`cli.yml`, Linux · macOS · Windows) |
+| VinaX CLI | `cli/tests/*.test.ts` | 406 tests / 16 files | ✅ (`cli.yml`, Linux · macOS · Windows) |
 | E2E | `frontend/e2e/*.spec.ts` against the built bundle (external network aborted): admin console (every panel), VinaX AI, festival skins, the 5.17 feature set, the CLI documentation route — 16 tests | `npm run e2e` | `e2e.yml` |
 | Lighthouse | `frontend/lighthouserc.json` (SEO + a11y hard-fail) | — | `lighthouse.yml` |
 

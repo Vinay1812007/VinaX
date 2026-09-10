@@ -390,7 +390,7 @@ history rewriting, and any recursive directory delete.
 
 ```sh
 cd cli
-npm test              # 401 tests / 16 files
+npm test              # 406 tests / 16 files
 npm run lint
 npm run typecheck
 ```

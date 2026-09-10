@@ -702,3 +702,67 @@ describe('giving the terminal back', () => {
     expect(h.chunks.join('')).toBe('');
   });
 });
+
+describe('terminal width and resizing', () => {
+  /** A screen whose width the test can change, as a resize would. */
+  const resizable = (start: number) => {
+    const chunks: string[] = [];
+    let cols = start;
+    const s = new Screen({ write: (t) => chunks.push(t), columns: () => cols, interactive: true });
+    return { s, chunks, setCols: (n: number) => { cols = n; }, text: (): string => stripAnsi(chunks.join('')) };
+  };
+
+  it('reports the width it was given, with a sane floor', () => {
+    for (const w of [40, 80, 120, 160]) {
+      expect(resizable(w).s.columns).toBe(w);
+    }
+    // A terminal narrower than anything usable still must not produce
+    // negative padding or divide-by-zero geometry.
+    expect(resizable(5).s.columns).toBeGreaterThanOrEqual(20);
+  });
+
+  it('repaints without crashing at every width, narrow to wide', () => {
+    const long = 'VinaX is running a fairly long activity label that will certainly wrap on a narrow terminal';
+    for (const w of [40, 80, 120, 160]) {
+      const r = resizable(w);
+      r.s.setTransient(['› ' + long, '  ask · auto · web off']);
+      r.setCols(w);
+      expect(() => r.s.resize()).not.toThrow();
+      expect(r.text()).toContain('VinaX is running');
+    }
+  });
+
+  it('leaves no stale fragment when the terminal narrows', () => {
+    const r = resizable(160);
+    r.s.setTransient(['› a line that comfortably fits at 160 columns']);
+    r.setCols(40);
+    r.chunks.length = 0;
+    r.s.resize();
+    // A resize cannot know the old geometry, so it clears downward and
+    // repaints rather than trying to erase by a row count that is now wrong.
+    const raw = r.chunks.join('');
+    expect(raw).toContain('[J');
+    expect(stripAnsi(raw)).toContain('a line that comfortably fits');
+  });
+
+  it('truncates activity and menu rows to the available width', () => {
+    const long = 'x'.repeat(300);
+    for (const w of [40, 80, 120, 160]) {
+      expect(displayWidth(truncateToWidth(long, w))).toBeLessThanOrEqual(w);
+    }
+  });
+
+  it('the app survives a resize while a menu is open', () => {
+    const h = makeApp();
+    h.app.start();
+    void h.app.choose({
+      title: 'Choose VinaX engine',
+      items: Array.from({ length: 12 }, (_, i) => ({ id: String(i), label: `engine-${i}`, description: 'a fairly long description of this engine', value: i })),
+    });
+    for (const w of [40, 80, 120, 160]) {
+      Object.defineProperty(h.app.screen, 'columns', { get: () => w, configurable: true });
+      expect(() => h.app.screen.resize()).not.toThrow();
+    }
+    h.app.stop();
+  });
+});
