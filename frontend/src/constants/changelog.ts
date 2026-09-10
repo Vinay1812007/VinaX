@@ -12,29 +12,11 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
-  '5.29.0': {
-    title: 'VinaX CLI, rebuilt around the keyboard',
+  '5.30.0': {
+    title: 'A tighter, music-first VinaX',
     changes: [
-      { type: 'new', text: 'The terminal experience is a real keyboard application now. Type / and the command menu opens straight away and narrows as you keep typing — no key needed to find out what is there. /engine, /model, /permissions and /resume each open a list you move through with the arrow keys.' },
-      { type: 'new', text: 'Approvals are chosen with the arrow keys instead of typed as a number, and they still show the exact command, the real diff, or the real branch and commits before you decide. Esc always means reject, so the safe answer is the one you get by not deciding.' },
-      { type: 'improved', text: 'Arrow keys, Home, End and the usual editing shortcuts work properly while you type, including on macOS Terminal — previously they could insert stray characters instead of moving the cursor. Pasting several lines pastes them rather than sending one message per line, and emoji no longer corrupt the line.' },
-      { type: 'improved', text: 'While VinaX works, one line animates in place and is replaced by its result — “Ran npm test · 4.7s” — instead of leaving a trail behind. Your terminal scrollback stays yours: VinaX draws inline, so you can scroll, select and copy exactly as before.' },
-      { type: 'fixed', text: 'A reply could appear twice: once as it streamed in, and again in full when the turn finished. It now appears exactly once.' },
-    ],
-  },
-  '5.28.1': {
-    title: 'Honest install instructions for VinaX CLI',
-    changes: [
-      { type: 'fixed', text: 'The VinaX CLI page told you to install with npm, but the package has not been published to the registry yet, so that command failed with a “not found” error. The page now leads with the method that actually works — clone, build, install — and says plainly that the npm command is coming, rather than sending you to a command that cannot succeed.' },
-      { type: 'new', text: 'A troubleshooting section for that exact error, explaining what it means, how to confirm it in one command, and why the usual folk remedies — running the install as an administrator, or turning off npm’s security checks — do not help and should not be used.' },
-    ],
-  },
-  '5.28.0': {
-    title: 'VinaX in your terminal',
-    changes: [
-      { type: 'new', text: 'VinaX CLI — the VinaX coding agent, in your terminal. Point it at a project and ask in plain words: it reads and searches your files, edits them, runs your tests and builds, reads what really came back, keeps going when something fails, and commits and pushes when you say so. It works on your own machine, and it needs no keys of any kind.' },
-      { type: 'new', text: 'You decide how much it may do on its own. By default it reads freely and asks before it changes anything — showing you the exact command, the real diff, or the exact branch and commits about to be pushed. Two looser modes are available, and even the most automatic one still stops and asks before anything that could damage your machine or your credentials.' },
-      { type: 'new', text: 'Full documentation is now published at VinaX AI → CLI, covering installation, permissions, Git, sessions, automation and the complete command reference.' },
+      { type: 'improved', text: 'The terminal developer tool has been retired, and everything it brought with it is gone from the app, the site and the service. Nothing listeners use has changed — the player, VinaX AI, search, lyrics, playlists and downloads all work exactly as before.' },
+      { type: 'improved', text: 'With that surface removed, the app ships less code and the service answers fewer routes, so pages load a little quicker and there is less to go wrong.' },
     ],
   },
   '5.27.0': {

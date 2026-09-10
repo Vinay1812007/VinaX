@@ -98,9 +98,6 @@ import * as m_api_vinaxai from './functions/api/vinaxai';
 // VinaX CLI — the terminal coding agent's own API family. Deliberately its
 // own routes: the assistant endpoint answers a person, these drive a process
 // that can write to a developer's disk.
-import * as m_api_vinaxcli_meta from './functions/api/vinaxcli/meta';
-import * as m_api_vinaxcli_agent from './functions/api/vinaxcli/agent';
-import * as m_api_vinaxcli_search from './functions/api/vinaxcli/search';
 import * as m_apk from './functions/apk';
 import * as m_artist_id from './functions/artist/[id]';
 import * as m_img from './functions/img';
@@ -220,9 +217,6 @@ const EXACT: Record<string, Mod> = {
   '/api/username': m_api_username,
   '/api/version': m_api_version,
   '/api/vinaxai': m_api_vinaxai,
-  '/api/vinaxcli/meta': m_api_vinaxcli_meta,
-  '/api/vinaxcli/agent': m_api_vinaxcli_agent,
-  '/api/vinaxcli/search': m_api_vinaxcli_search,
   '/apk': m_apk,
   '/img': m_img,
   '/sitemap-albums.xml': m_sitemap_albums_xml,
