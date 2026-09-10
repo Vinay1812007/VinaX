@@ -13,7 +13,7 @@
  *
  * WHAT COMES BACK IS UNTRUSTED. These are arbitrary pages from the open web,
  * fetched and stripped of markup. Callers must hand the text to a model as
- * DATA, inside a fence, never as instructions — see _lib/cliprompt.ts.
+ * DATA, inside a fence, never as instructions.
  */
 
 /** Env slice this module reads. */

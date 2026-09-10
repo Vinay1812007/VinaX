@@ -1865,11 +1865,6 @@ export default function VinaXAIPage(): ReactNode {
           <Link to="/" className="ai-chip py-1.5 ai-t2" aria-label="Music">
             <span aria-hidden>♪</span> Music
           </Link>
-          {/* VinaX CLI — the terminal agent. Lives here rather than in the
-              header so it is discoverable without competing with the chat. */}
-          <Link to="/VinaXAI/cli/docs" className="ai-chip py-1.5 ai-t2 mt-1.5" aria-label="VinaX CLI documentation">
-            <span aria-hidden>{'>_'}</span> CLI
-          </Link>
         </div>
       </aside>
 
