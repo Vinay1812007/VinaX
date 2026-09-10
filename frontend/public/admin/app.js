@@ -2149,6 +2149,24 @@
     HOME_BLOCKS_APP.forEach(function (s) { if (!known[s.id]) out.push({ id: s.id, enabled: true }); });
     return out;
   }
+  function homeDiffHtml(current, published) {
+    if (!published) return '';
+    var before = [];
+    try { before = JSON.parse(published) || []; } catch (e) { return ''; }
+    var oldBy = {}; before.forEach(function (b, i) { oldBy[b.id] = { enabled: b.enabled !== false, order: i }; });
+    var changes = [];
+    (current || []).forEach(function (b, i) {
+      var old = oldBy[b.id];
+      if (!old) changes.push({ label: blockName(b.id), detail: 'added at position ' + (i + 1) });
+      else {
+        if (old.order !== i) changes.push({ label: blockName(b.id), detail: 'moved from ' + (old.order + 1) + ' to ' + (i + 1) });
+        if (old.enabled !== (b.enabled !== false)) changes.push({ label: blockName(b.id), detail: b.enabled ? 'enabled' : 'hidden' });
+      }
+    });
+    before.forEach(function (b) { if (!(current || []).some(function (x) { return x.id === b.id; })) changes.push({ label: blockName(b.id), detail: 'removed' }); });
+    if (!changes.length) return '';
+    return '<div class="card hs-diff"><div class="row"><h3 style="margin:0">Draft changes</h3><span class="spacer"></span><span class="pill">' + changes.length + ' change' + (changes.length === 1 ? '' : 's') + '</span></div><p class="muted" style="margin:8px 0 12px">Review what will change for listeners when you publish.</p>' + changes.map(function (c) { return '<div class="hs-diff-row"><b>' + esc(c.label) + '</b><span class="spacer"></span><span class="muted">' + esc(c.detail) + '</span></div>'; }).join('') + '</div>';
+  }
   function renderHomescreenSection() {
     if (!hsLoaded) {
       hsLoaded = true;
@@ -2189,6 +2207,7 @@
         '<button class="ghost" id="hs-reset">Reset to defaults</button>' +
         '<span class="muted" id="hs-out" style="font-size:12px"></span>' +
       '</div></div>' +
+      homeDiffHtml(hsCfg, hsPublished) +
       '<h3>Draft JSON</h3>' +
       '<pre id="hs-json" class="codebox" style="max-height:280px">' + esc(JSON.stringify({ blocks: hsCfg }, null, 2)) + '</pre>';
     if ($('hs-retry')) $('hs-retry').addEventListener('click', function () { hsLoaded = false; renderHomescreenSection(); });
@@ -3122,6 +3141,53 @@
         '<p class="muted" style="font-size:11px">Names only — values never leave the Worker. Set with <code>wrangler secret put NAME</code>.</p>';
     }).catch(function () { if (active === 'envcheck') showFail(); });
   }
+  // 15b. Operations center — one glance across the signals an operator needs
+  // before shipping a change or responding to an incident.
+  function loadOpsCenter() {
+    Promise.all([
+      api('/api/admin/cron').catch(function () { return null; }),
+      api('/api/admin/envcheck').catch(function () { return null; }),
+      api('/api/status').catch(function () { return null; })
+    ]).then(function (all) {
+      if (active !== 'opscenter') return;
+      var cron = all[0] || {}, env = all[1] || {}, status = all[2] || {};
+      var jobs = Array.isArray(cron.jobs) ? cron.jobs : [];
+      var components = Array.isArray(status.components) ? status.components : [];
+      var overdue = jobs.filter(function (j) { return j.ok === false; }).length;
+      var down = components.filter(function (c) { return c.status === 'down'; }).length;
+      var missing = Array.isArray(env.missingRequired) ? env.missingRequired.length : 0;
+      var overall = down ? 'Action needed' : overdue || missing ? 'Watch closely' : (status.overall || 'Operational');
+      var overallOk = !down && !overdue && !missing;
+      $('view').innerHTML =
+        '<div class="ops-center-hero"><div><span class="ops-eyebrow">VINAX / OPERATIONS CENTER</span><h2>' + esc(overall) + '</h2><p class="muted">A calm preflight for uptime, schedules and runtime configuration.</p></div><button class="ghost" id="ops-refresh">Refresh signals</button></div>' +
+        '<div class="cards ops-center-cards">' + card(components.length ? components.length - down + '/' + components.length : '—', 'Services healthy') + card(overdue, 'Overdue jobs') + card(missing, 'Required secrets missing') + card(overallOk ? 'Ready' : 'Review', 'Release posture') + '</div>' +
+        '<div class="ops-center-grid"><div class="card"><div class="row"><h3 style="margin-top:0">Service pulse</h3><span class="spacer"></span><span class="muted">' + (status.generatedAt ? 'checked ' + ago(status.generatedAt) : 'no timestamp') + '</span></div>' + (components.length ? components.map(function (c) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (c.status === 'up' ? 'ok' : 'bad') + '"></span><b>' + esc(c.name || c.id) + '</b><span class="spacer"></span>' + okPill(c.status === 'up', c.status || 'unknown') + (c.latencyMs != null ? '<span class="muted">' + c.latencyMs + ' ms</span>' : '') + '</div>'; }).join('') : '<div class="empty">Status endpoint returned no components.</div>') + '</div>' +
+        '<div class="card"><div class="row"><h3 style="margin-top:0">Scheduled work</h3><span class="spacer"></span><a class="ghost" href="#cron">Open cron health</a></div>' + (jobs.length ? jobs.map(function (j) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (j.ok === false ? 'bad' : 'ok') + '"></span><b>' + esc(j.label || j.id) + '</b><span class="spacer"></span>' + okPill(j.ok !== false, j.ok === false ? 'overdue' : 'on time') + '<span class="muted">' + (j.lastAt ? ago(j.lastAt) : 'never') + '</span></div>'; }).join('') : '<div class="empty">No schedule telemetry yet.</div>') + '</div></div>' +
+        '<div class="card"><div class="row"><h3 style="margin-top:0">Preflight shortcuts</h3><span class="spacer"></span><span class="muted">safe links — no changes are made</span></div><div class="ops-shortcuts"><a href="#envcheck"><b>Environment checklist</b><span>' + (missing ? missing + ' required item' + (missing === 1 ? '' : 's') + ' to resolve' : 'All required names present') + '</span></a><a href="#statushist"><b>Status history</b><span>Review the 90-day reliability trail</span></a><a href="#releases"><b>Releases &amp; CI</b><span>Inspect the latest build and workflow</span></a><a href="#audit"><b>Audit trail</b><span>See who changed configuration</span></a></div></div>';
+      $('ops-refresh').addEventListener('click', loadOpsCenter);
+      stamp();
+    });
+  }
+  // 15c. Audience segments — turn the existing insights payload into clear
+  // operator audiences without exposing individual listener identities.
+  var audienceSegment = 'all';
+  function loadAudienceSegments() {
+    apiMemo('/api/admin/insights?days=' + rangeDays).then(function (d) {
+      if (!d || active !== 'segments') return;
+      renderAudienceSegments(d);
+    }).catch(function () { if (active === 'segments') showFail(); });
+  }
+  function renderAudienceSegments(d) {
+    // Reuse the same loader path after a filter click; memoized data keeps this
+    // interaction local and avoids another Worker request.
+    var s = d.segments || {}, labels = { all: 'All listeners', new: 'New this week', returning: 'Returning listeners', power: 'Power listeners', inactive: 'At risk' };
+    var values = { all: s.total || s.listeners || d.sampled || 0, new: s.new_7d || s.new || s.newUsers || 0, returning: s.returning_7d || s.returning || 0, power: s.power_users || s.power || 0, inactive: s.inactive_30d || s.inactive || 0 };
+    var top = Array.isArray(d.topListeners) ? d.topListeners : [], shown = audienceSegment === 'all' ? top : top.slice(0, Math.max(1, Math.round(top.length / 2)));
+    setExport('audience-segments', shown);
+    $('view').innerHTML = '<div class="ops-center-hero"><div><span class="ops-eyebrow">VINAX / AUDIENCE STUDIO</span><h2>Know who to design for next</h2><p class="muted">Useful cohorts for programming, messaging and retention work. Counts are aggregate and anonymous.</p></div><span class="pill">Last ' + rangeDays + ' days</span></div><div class="seg" id="aud-segs">' + Object.keys(labels).map(function (k) { return '<button data-audseg="' + k + '"' + (k === audienceSegment ? ' class="active"' : '') + '>' + labels[k] + '</button>'; }).join('') + '</div><div class="cards segment-cards">' + Object.keys(labels).filter(function (k) { return k !== 'all'; }).map(function (k) { return card(Number(values[k] || 0).toLocaleString(), labels[k]); }).join('') + '</div><div class="card"><div class="row"><h3 style="margin-top:0">' + esc(labels[audienceSegment]) + '</h3><span class="spacer"></span><button class="ghost" id="aud-export">Export visible</button></div>' + (shown.length ? '<table><thead><tr><th>Listener</th><th>Platform</th><th>Plays</th><th>Last active</th></tr></thead><tbody>' + shown.map(function (u) { return '<tr><td>' + esc(u.name || u.user_name || 'Anonymous') + '</td><td>' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</td><td>' + Number(u.plays || u.play_count || 0).toLocaleString() + '</td><td class="muted">' + (u.last_seen ? ago(u.last_seen) : '—') + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No listener rows in this cohort yet.</div>') + '</div>';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-audseg]'), function (b) { b.addEventListener('click', function () { audienceSegment = b.getAttribute('data-audseg'); renderAudienceSegments(d); }); });
+    $('aud-export').addEventListener('click', downloadCsv); stamp();
+  }
   // 16. Query console.
   function renderQuerySection() {
     var TABLES = ['vinax_events', 'vinax_ai_events', 'vinax_feedback', 'vinax_users', 'vinax_rooms', 'vinax_experiments', 'vinax_blocklist', 'vinax_config', 'vinax_seo_urls'];
@@ -3180,9 +3246,14 @@
     cfgEditor({
       sec: 'broadcast', key: 'broadcast', title: 'Broadcast message', clearable: true, empty: null, saveLabel: 'Send to everyone',
       help: 'A one-time toast every listener sees the next time the app is open (each broadcast id shows once per device). Optional in-app link (a path like <code>/later</code>). Optional window. Tick “Also push” to reach closed apps and subscribed browsers through notifications.',
-      form: function (v) { v = v || {}; return lbl('Message', inp('bc-text', v.text || '', 'New: Listen Later — save songs for later from any menu', 'style="width:100%" maxlength="240"')) + lbl('Link (optional, in-app path)', inp('bc-link', v.link || '', '/later', 'style="width:280px"')) + '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><input type="checkbox" id="bc-push" /> Also push as a notification (closed apps + browsers)</label>' + '<div class="row" style="gap:12px;flex-wrap:wrap"><div>' + lbl('From (optional)', inp('bc-start', isoLocal(v.start), '', 'type="datetime-local"')) + '</div><div>' + lbl('Until (optional)', inp('bc-end', isoLocal(v.end), '', 'type="datetime-local"')) + '</div></div>'; },
+      form: function (v) { v = v || {}; return '<div class="broadcast-composer"><div>' + lbl('Message', inp('bc-text', v.text || '', 'New: Listen Later — save songs for later from any menu', 'style="width:100%" maxlength="240"')) + lbl('Link (optional, in-app path)', inp('bc-link', v.link || '', '/later', 'style="width:280px"')) + '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><input type="checkbox" id="bc-push" /> Also push as a notification (closed apps + browsers)</label>' + '<div class="row" style="gap:12px;flex-wrap:wrap"><div>' + lbl('From (optional)', inp('bc-start', isoLocal(v.start), '', 'type="datetime-local"')) + '</div><div>' + lbl('Until (optional)', inp('bc-end', isoLocal(v.end), '', 'type="datetime-local"')) + '</div></div></div><div class="broadcast-preview" aria-label="Broadcast preview"><span class="ops-eyebrow">LISTENER PREVIEW</span><div class="broadcast-device"><div class="broadcast-device-top">VinaX <span>now</span></div><strong id="bc-preview-text">' + esc(v.text || 'Your message will appear here') + '</strong><span id="bc-preview-link" class="muted">' + esc(v.link || 'No link') + '</span></div><p class="muted" style="font-size:11px">Preview updates as you type. Publishing remains a separate action.</p></div></div>'; },
       read: function () { var t = $('bc-text').value.trim(); if (!t) throw new Error('Message is required'); var o = { id: 'b' + Date.now().toString(36), text: t.slice(0, 240) }; var l = $('bc-link').value.trim(); if (l) { if (l.charAt(0) !== '/') throw new Error('Link must be an in-app path starting with /'); o.link = l.slice(0, 200); } var s = fromLocal($('bc-start').value), e = fromLocal($('bc-end').value); if (s) o.start = s; if (e) o.end = e; return o; },
       after: function (v) { return v && v.text ? '<div class="card"><b>Live broadcast:</b> “' + esc(v.text) + '” <span class="muted">· id ' + esc(v.id || '') + '</span></div>' : ''; },
+      wire: function () {
+        function paint() { var t = $('bc-preview-text'), l = $('bc-preview-link'); if (t) t.textContent = $('bc-text').value.trim() || 'Your message will appear here'; if (l) l.textContent = $('bc-link').value.trim() || 'No link'; }
+        ['bc-text', 'bc-link'].forEach(function (id) { var el = $(id); if (el) el.addEventListener('input', paint); });
+        paint();
+      },
       // v5.19.0 — optional push through the same composer path the Notifications tool uses.
       onSaved: function (v) {
         var cb = $('bc-push'); if (!cb || !cb.checked) return;
@@ -3285,12 +3356,12 @@
   }
   function fmtN(n) { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n); }
 
-  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools', aicost: 'AI Tokens & Cost' };
+  var TITLES = { overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', segments: 'Audience Segments', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', opscenter: 'Operations Center', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools', aicost: 'AI Tokens & Cost' };
   var USES_RANGE = { location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true, usage: true, heatmap: true, funnel: true, songstats: true, skips: true, aicost: true };
   // v5.7.5 — formal category reorganisation: which category each tool sits
   // under (drives the breadcrumb over the tool title) + collapsible category
   // headers whose open/closed state persists per browser.
-  var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines' };
+  var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', segments: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', opscenter: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines' };
   var GRP_KEY = 'vinax_admin_navgroups';
   function closedGroups() { try { var v = JSON.parse(localStorage.getItem(GRP_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
   function applyNavGroups() {
@@ -3358,6 +3429,7 @@
     else if (active === 'usage') loadUsage();
     else if (active === 'heatmap') loadHeatmap();
     else if (active === 'funnel') loadFunnel();
+    else if (active === 'segments') loadAudienceSegments();
     else if (active === 'songstats') renderSongStatsSection();
     else if (active === 'skips') loadSkips();
     else if (active === 'synonyms') renderSynonymsSection();
@@ -3368,6 +3440,7 @@
     else if (active === 'aiquick') renderAiQuickSection();
     else if (active === 'airules') renderAiRulesSection();
     else if (active === 'cron') loadCron();
+    else if (active === 'opscenter') loadOpsCenter();
     else if (active === 'statushist') loadStatusHistory();
     else if (active === 'envcheck') loadEnvCheck();
     else if (active === 'query') renderQuerySection();

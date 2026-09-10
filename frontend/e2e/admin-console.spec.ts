@@ -53,6 +53,7 @@ const MOCK: Record<string, unknown> = {
   '/api/admin/songstats': { configured: true, days: 30, q: 'kesariya', match: { id: 'abc123', title: 'Kesariya', artist: 'Arijit Singh', image: '' }, candidates: [{ id: 'x1', title: 'Kesariya (Dance Mix)', artist: 'Arijit Singh', image: '', n: 4 }], totals: { plays: 120, skips: 14, completes: 90, favorites: 20, listeners: 70 }, byDay: [{ day: iso(48).slice(0, 10), plays: 50, skips: 5 }, { day: iso(24).slice(0, 10), plays: 70, skips: 9 }], countries: [{ country: 'IN', n: 100 }, { country: 'US', n: 20 }], platforms: [{ platform: 'android', n: 90 }, { platform: 'web', n: 30 }], skipRate: 12 },
   '/api/admin/skips': { configured: true, days: 7, min: 5, sampled: 4000, items: [{ id: 's1', title: 'Skippy Song', artist: 'Someone', image: '', plays: 40, skips: 28, rate: 70 }] },
   '/api/admin/cron': { configured: true, checkedAt: iso(0), jobs: [{ id: 'ai-daily-push', label: 'AI daily push', schedule: '5x a day', note: 'writes an ai-push event', lastAt: iso(3), ageMin: 180, ok: true, maxAgeMin: 540, readable: true }, { id: 'seo-crawl', label: 'SEO crawl', schedule: 'hourly', note: 'grows corpus', lastAt: iso(9), ageMin: 540, ok: false, maxAgeMin: 180, readable: true }] },
+  '/api/admin/insights': { configured: true, sampled: 4200, segments: { total: 4200, new_7d: 680, returning_7d: 2100, power_users: 340, inactive_30d: 510 }, topListeners: [{ name: 'Listener one', platform: 'android', plays: 42, last_seen: iso(2) }, { name: 'Listener two', platform: 'web', plays: 31, last_seen: iso(8) }] },
   '/api/admin/envcheck': { checkedAt: iso(0), items: [{ name: 'SUPABASE_URL', group: 'Data', required: true, note: 'store', set: true }, { name: 'CRON_SECRET', group: 'Cron', required: true, note: 'cron', set: false }, { name: 'BRAVE_API_KEY', group: 'AI', required: false, note: 'search', set: false }], missingRequired: ['CRON_SECRET'] },
   '/api/admin/query': { configured: true, table: 'vinax_events', columns: ['created_at', 'type', 'platform'], rows: [{ created_at: iso(1), type: 'play', platform: 'web' }, { created_at: iso(2), type: 'search', platform: 'android' }], truncated: false },
   '/api/admin/content': { blocked: [{ song_id: 'b1', song_title: 'Blocked One', reason: 'test' }], topSongs: [] },
@@ -94,6 +95,8 @@ const PROBES: Record<string, RegExp> = {
   aiquick: /songs \| suggest songs for/i,
   airules: /diwali mixes/i,
   cron: /ai daily push[\s\S]*overdue/i,
+  opscenter: /operations center[\s\S]*service pulse/i,
+  segments: /audience studio[\s\S]*new this week/i,
   statushist: /90-day uptime[\s\S]*website/i,
   envcheck: /missing required[\s\S]*cron_secret/i,
   query: /query console/i,
@@ -279,6 +282,7 @@ test('home presets stay in draft until publication, with an accurate preview', a
   await expect(page.locator('.hs-preview')).toBeVisible();
   await page.locator('[data-preset="focused"]').click();
   await expect(page.locator('.hs-preview-row')).toHaveCount(4);
+  await expect(page.locator('.hs-diff')).toContainText(/draft changes/i);
   expect(backend.posted).not.toContain('home-config');
   await expect.poll(() => viewText(page)).toMatch(/unpublished changes/i);
   await page.locator('#hs-save').click();
@@ -288,5 +292,30 @@ test('home presets stay in draft until publication, with an accurate preview', a
   expect(cfg.blocks.filter((x) => x.enabled).map((x) => x.id)).toEqual(['quick', 'personal', 'loved', 'daypicks']);
   await page.locator('main').evaluate((el) => { (el as HTMLElement).style.scrollBehavior = 'auto'; el.scrollTop = 0; });
   await page.screenshot({ path: 'test-results/admin-studio.png', fullPage: true });
+  expect(errors).toEqual([]);
+});
+
+test('operations center, audience segments and broadcast preview are actionable', async ({ page }) => {
+  await login(page);
+  const errors = collectErrors(page);
+  await mockBackend(page);
+  await openAdmin(page);
+
+  await openSection(page, 'opscenter');
+  await expect(page.locator('.ops-center-hero')).toBeVisible();
+  await expect(page.locator('.ops-signal')).toHaveCount(4);
+  await expect(page.locator('body')).toContainText(/overdue jobs/i);
+
+  await openSection(page, 'segments');
+  await expect(page.locator('#aud-segs')).toBeVisible();
+  await expect(page.locator('body')).toContainText(/new this week/i);
+  await page.locator('[data-audseg="power"]').click();
+  await expect(page.locator('#view')).toContainText(/power listeners/i);
+
+  await openSection(page, 'broadcast');
+  await page.locator('#bc-text').fill('Preview this update');
+  await page.locator('#bc-link').fill('/discover');
+  await expect(page.locator('#bc-preview-text')).toHaveText('Preview this update');
+  await expect(page.locator('#bc-preview-link')).toHaveText('/discover');
   expect(errors).toEqual([]);
 });
