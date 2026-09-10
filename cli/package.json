@@ -1,9 +1,9 @@
 {
   "name": "vinax-cli",
   "version": "0.1.0",
-  "private": true,
-  "description": "VinaX CLI — the VinaX coding agent in your terminal. Reads, edits, runs and commits on your own machine.",
+  "description": "VinaX CLI \u2014 the VinaX coding agent in your terminal. Reads, edits, runs and commits on your own machine.",
   "type": "module",
+  "license": "UNLICENSED",
   "engines": {
     "node": ">=22"
   },
@@ -22,6 +22,19 @@
     "dist",
     "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vinay1812007/VinaX.git",
+    "directory": "cli"
+  },
+  "homepage": "https://www.sirimillavinay.online/VinaXAI/cli/docs/",
+  "bugs": {
+    "url": "https://github.com/Vinay1812007/VinaX/issues"
+  },
+  "author": "Vinay1812007 (https://github.com/Vinay1812007)",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
     "dev": "node --experimental-strip-types src/cli.ts",
@@ -30,15 +43,20 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests scripts --max-warnings 0",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "prepack": "npm run build"
   },
   "keywords": [
     "vinax",
+    "vinax-cli",
+    "vinax-ai",
     "cli",
     "coding-agent",
-    "terminal"
+    "ai-agent",
+    "terminal",
+    "developer-tools",
+    "automation"
   ],
-  "license": "UNLICENSED",
   "dependencies": {},
   "devDependencies": {
     "@eslint/js": "^10.0.1",

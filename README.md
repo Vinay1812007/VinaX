@@ -34,7 +34,7 @@ One repository, two independently deployed applications on **the same domain**:
 |---|---|---|---|---|
 | [`frontend/`](frontend/) | The web app (and the Android app via Capacitor) plus the static admin console | React 19 · Vite 8 · TypeScript · Tailwind · Zustand · TanStack Query | **Cloudflare Pages** (project `vinax`) | push to `main` touching `frontend/**` |
 | [`backend/`](backend/) | `vinax-api` edge Worker: JSON API, VinaX AI, edge-rendered SEO pages, sitemaps, image proxy, APK proxy, admin API, cron endpoints | Cloudflare Workers · TypeScript (no framework, no runtime npm deps) | **Cloudflare Workers** | push to `main` touching `backend/**` |
-| [`cli/`](cli/) | **VinaX CLI** — the terminal coding agent (`vinax`): reads, edits, runs, tests, commits and pushes on the user's own machine | Node.js ≥ 22 · TypeScript · ESM · zero runtime deps | published as an npm package (not auto-deployed) | manual |
+| [`cli/`](cli/) | **VinaX CLI** — the terminal coding agent (`vinax`): reads, edits, runs, tests, commits and pushes on the user's own machine | Node.js ≥ 22 · TypeScript · ESM · zero runtime deps | npm registry (**not published yet** — install from source) | `vinax-cli-v*` tag |
 
 There is **no CORS anywhere**. The Worker's routes claim specific paths on `www.sirimillavinay.online` (`/api/*`, `/img`, `/apk`, `/song|album|artist|playlist/*`, `/sitemap*`, the 72 language-mood hub pages, plus the `update.` and `admin.` hosts) and **every other URL falls through to Pages**, which serves the static app.
 
@@ -121,6 +121,16 @@ The VinaX coding agent as a terminal program — the same engines, working on a 
 - **Git as a first-class tool**, using the user's own git and credential helper. There is no `reset --hard`, no `clean`, no force push and no history rewriting in the tool set at all.
 - **Local sessions** (JSONL in `~/.vinax`, crash-resistant, resumable), structured context compaction, `/undo` for VinaX's own edits, live task status, `@file` references, 19 slash commands, `--json` JSONL output with stable exit codes, and local stdio MCP servers that go through the same permission policy as the built-ins.
 - **No AI provider keys on the user's machine.** The CLI talks to the VinaX Worker; the Worker talks to the engines.
+
+**Installing it.** `npm install -g vinax-cli` returns **E404** today: the package is publishable but has not been published to the registry yet (the name is free, not taken — `npm view vinax-cli` confirms it). Until the first release, install from source:
+
+```sh
+git clone https://github.com/Vinay1812007/VinaX.git
+cd VinaX/cli && npm ci && npm run build && npm install -g .
+vinax --version && vinax doctor
+```
+
+Releasing is a `vinax-cli-v*` tag, gated by [`.github/workflows/cli-publish.yml`](.github/workflows/cli-publish.yml), which refuses to publish when the tag, `cli/package.json` and `cli/src/version.ts` disagree. The first publication has to be a manual `npm publish` by an account that can claim the name — npm Trusted Publishing cannot be configured for a package that does not exist yet. See [`cli/README.md`](cli/README.md) §1a.
 
 Public documentation: **`/VinaXAI/cli/docs`**. Developer notes: [`cli/README.md`](cli/README.md).
 
@@ -233,7 +243,7 @@ Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` t
 |---|---|---|
 | `frontend/` | `npm run dev` | Vite dev server on :5173 |
 | `frontend/` | `npm run build` | typecheck → Vite build → prerender 32 routes → `dist/changelog.json` |
-| `frontend/` | `npm test` | Vitest (501 tests / 72 files) |
+| `frontend/` | `npm test` | Vitest (504 tests / 73 files) |
 | `frontend/` | `npm run lint` · `npm run typecheck` | eslint (`src` + `scripts`, zero warnings) · tsc — CI runs both |
 | `frontend/` | `npm run gen:festivals` | regenerate `src/styles/festivals.css`, the pre-paint window table in `index.html`, and `public/admin/festivals.js` from the festival calendar (a test fails on drift) |
 | `frontend/` | `node scripts/csp-hashes.mjs` | after `npm run build`, refresh the inline-script hashes in `public/_headers` (a test fails on drift) |
@@ -245,8 +255,9 @@ Vite proxies `/api` (including the catalogue at `/api/cat`), `/img` and `/apk` t
 | `backend/` | `npm run deploy` | manual `wrangler deploy` (normally unnecessary — git auto-deploys) |
 | `cli/` | `npm run dev` | run `src/cli.ts` directly (Node type-stripping, no build step) |
 | `cli/` | `npm run build` | tsc → `dist/`, then the shebang check that keeps the binary runnable |
-| `cli/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (300 tests / 13 files) · eslint · tsc — **`npm run build` first**, the e2e suite drives `dist/cli.js` |
+| `cli/` | `npm test` · `npm run lint` · `npm run typecheck` | Vitest (320 tests / 13 files) · eslint · tsc — **`npm run build` first**, the e2e suite drives `dist/cli.js` |
 | `cli/` | `npm pack --dry-run` | what would actually ship (a test asserts tests/sources/configs are excluded) |
+| `cli/` | `npm install -g .` | install the CLI from source (prepack builds it first) |
 
 ---
 
@@ -337,10 +348,10 @@ The console writes JSON values into `vinax_config` (`POST /api/admin/appconfig`,
 
 | Suite | Where | Count | Runs in CI |
 |---|---|---|---|
-| Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 501 tests / 72 files | ✅ |
+| Frontend unit/component | `frontend/src/**/*.test.ts(x)` | 504 tests / 73 files | ✅ |
 | Backend endpoint/lib | `backend/worker/**/*.test.ts` | 262 tests / 29 files | ✅ |
 | Contracts | contrast + theme tokens, CSP hashes, festival artefact sync, router coverage, bundle budget | — | ✅ |
-| VinaX CLI | `cli/tests/*.test.ts` | 300 tests / 13 files | ✅ (`cli.yml`, Linux · macOS · Windows) |
+| VinaX CLI | `cli/tests/*.test.ts` | 320 tests / 13 files | ✅ (`cli.yml`, Linux · macOS · Windows) |
 | E2E | `frontend/e2e/*.spec.ts` against the built bundle (external network aborted): admin console (every panel), VinaX AI, festival skins, the 5.17 feature set, the CLI documentation route — 16 tests | `npm run e2e` | `e2e.yml` |
 | Lighthouse | `frontend/lighthouserc.json` (SEO + a11y hard-fail) | — | `lighthouse.yml` |
 
@@ -355,6 +366,7 @@ Before pushing: `cd frontend && npm run lint && npm run typecheck && npm test &&
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ci.yml` | push, PR | **frontend**: lint, typecheck, test, build, bundle budget · **backend**: lint, typecheck, test |
+| `cli-publish.yml` | `vinax-cli-v*` tag, manual | Publishes **vinax-cli** to npm: verifies the tag matches both versions, refuses a version already on the registry, runs every gate, installs the tarball and runs it, then publishes with provenance via trusted publishing (no stored token) |
 | `cli.yml` | push, PR touching `cli/**` or `backend/**` | **VinaX CLI** on Linux, macOS and Windows with Node 22: lint, typecheck, build, full suite (incl. the compiled-binary end-to-end run) |
 | `e2e.yml` · `lighthouse.yml` | push, PR | Playwright smoke · performance/SEO/a11y budgets |
 | `diagnose.yml` | manual, push | Production hydration check: fetch live HTML, assert every asset, confirm React mounted |
@@ -390,7 +402,7 @@ Deployment is **not** done by GitHub Actions — Cloudflare's git integrations d
 3. Run the gates (§9). If `index.html` changed, refresh CSP hashes; if festivals changed, run the generator.
 4. Commit and push to `main`. Pages and the Worker deploy themselves; watch the CI run.
 5. For Android, `release.yml` publishes a signed APK; `/api/version` picks it up. Use Minimum App Version only for security fixes or breaking API changes.
-6. **VinaX CLI** has its own version (`cli/package.json` + `cli/src/version.ts`, kept in step by a test) and is *not* auto-deployed — publishing it is a separate, deliberate step, and only with credentials and package ownership already configured. A protocol change keeps the old id in `SUPPORTED_PROTOCOLS` on the Worker until installed clients have had time to update; `vinax doctor` reports a mismatch plainly. See [`cli/README.md`](cli/README.md) §9.
+6. **VinaX CLI** ships on its own tag, not with the app. Bump `cli/package.json` + `cli/src/version.ts` together, push a `vinax-cli-v<version>` tag, and `cli-publish.yml` does the rest. It has its own version (`cli/package.json` + `cli/src/version.ts`, kept in step by a test) and is *not* auto-deployed — publishing it is a separate, deliberate step, and only with credentials and package ownership already configured. A protocol change keeps the old id in `SUPPORTED_PROTOCOLS` on the Worker until installed clients have had time to update; `vinax doctor` reports a mismatch plainly. See [`cli/README.md`](cli/README.md) §9.
 
 ---
 

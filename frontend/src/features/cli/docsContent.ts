@@ -51,12 +51,16 @@ export const DOC_SECTIONS: DocSection[] = [
     title: 'Installation',
     group: 'Getting started',
     blocks: [
-      p('VinaX CLI is a Node package. Install it globally to get the vinax command everywhere:'),
+      note('VinaX CLI is not on the npm registry yet, so `npm install -g vinax-cli` does not work and will fail with E404. Install from source using the steps below — that method works today and will keep working after the npm release.'),
+      p('Install from source. This clones the repository, builds the CLI and puts the vinax command on your PATH:'),
+      code('git clone https://github.com/Vinay1812007/VinaX.git\ncd VinaX/cli\nnpm ci\nnpm run build\nnpm install -g .'),
+      p('Check it worked:'),
+      code('vinax --version\nvinax doctor'),
+      p('`vinax doctor` confirms your Node version, that it can reach the VinaX service, that the protocol matches, which engines are available, and whether Git is present. It prints no secrets.'),
+      p('Once VinaX CLI is published to npm, installing will be a single command and this page will say so:'),
       code('npm install -g vinax-cli'),
-      p('Or run it from a clone of the VinaX repository:'),
-      code('cd cli\nnpm ci\nnpm run build\nnode dist/cli.js --help'),
-      p('Check that everything it needs is in place:'),
-      code('vinax doctor'),
+      p('To update a source install, pull and rebuild:'),
+      code('cd VinaX && git pull\ncd cli && npm ci && npm run build && npm install -g .'),
     ],
   },
   {
@@ -574,6 +578,7 @@ esac`),
     blocks: [
       table([
         ['What you see', 'What to do'],
+        ['npm error 404 … vinax-cli', 'The package is not on the registry yet. Install from source — see Installation. This is expected, not a fault on your machine.'],
         ['Could not reach the VinaX service', 'Check your network. For local development, set VINAX_API_BASE.'],
         ['That engine is not configured', 'Run vinax models and pick another, or use --engine auto.'],
         ['That model is not in the live catalogue', 'Run /models for the current list — free catalogues change.'],
@@ -586,6 +591,23 @@ esac`),
       p('For more detail on any failure:'),
       code('vinax --debug -p "…"'),
       p('Debug mode is verbose, and still redacts secrets.'),
+    ],
+  },
+  {
+    id: 'npm-404',
+    title: 'npm says it cannot find vinax-cli',
+    group: 'Help',
+    blocks: [
+      p('If you run the npm install command and see this:'),
+      code(`npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/vinax-cli
+npm error 404 The requested resource 'vinax-cli@*' could not be found`, 'text'),
+      p('…then npm looked in the registry and found no such package. Today that is the expected answer: VinaX CLI has not been published to npm yet. Nothing is wrong with your machine, and there is nothing to fix locally.'),
+      p('Install from source instead — see Installation. That is the supported method until the registry release.'),
+      p('If you want to confirm the diagnosis for yourself:'),
+      code('npm config get registry\nnpm view vinax-cli\nnode --version'),
+      p('The registry should be https://registry.npmjs.org/ and Node should be 22 or newer. `npm view vinax-cli` returning E404 confirms the package is simply not published.'),
+      note('Do not work around this with `sudo`, and do not disable npm\u2019s TLS or signature checking. Neither has anything to do with a package that does not exist, and both leave your machine worse off.'),
     ],
   },
   {

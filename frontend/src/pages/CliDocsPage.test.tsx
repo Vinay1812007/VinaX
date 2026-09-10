@@ -71,11 +71,46 @@ describe('the CLI documentation page', () => {
     }
   });
 
-  it('documents installation', () => {
+  it('documents installation HONESTLY — npm is not published yet, so source install leads', () => {
     const { container } = renderPage();
     const install = container.querySelector('#installation') as HTMLElement;
-    expect(install.textContent).toContain('npm install -g vinax-cli');
-    expect(install.textContent).toContain('vinax doctor');
+    const text = install.textContent ?? '';
+    // The page must not imply the registry install works today; users hitting
+    // E404 and finding docs that say it should work is the worst outcome.
+    expect(text).toContain('not on the npm registry yet');
+    expect(text).toContain('E404');
+    // …and it must give them a method that does work.
+    expect(text).toContain('git clone https://github.com/Vinay1812007/VinaX.git');
+    expect(text).toContain('npm install -g .');
+    expect(text).toContain('vinax --version');
+    expect(text).toContain('vinax doctor');
+  });
+
+  it('still names the eventual npm command, so the page is ready for the release', () => {
+    const { container } = renderPage();
+    expect((container.querySelector('#installation') as HTMLElement).textContent).toContain('npm install -g vinax-cli');
+  });
+
+  it('explains the E404 users are actually hitting, and refuses the dangerous "fixes"', () => {
+    const { container } = renderPage();
+    const section = container.querySelector('#npm-404') as HTMLElement;
+    expect(section, 'an npm E404 section must exist').not.toBeNull();
+    const text = section.textContent ?? '';
+    expect(text).toContain('registry.npmjs.org/vinax-cli');
+    expect(text).toContain('has not been published to npm yet');
+    expect(text).toContain('nothing to fix locally');
+    expect(text).toContain('npm config get registry');
+    // Never the two pieces of folk advice that make things worse.
+    expect(text).toContain('Do not work around this with');
+    expect(text).toMatch(/do not disable npm.{0,3}s TLS/i);
+  });
+
+  it('never recommends sudo or disabling TLS anywhere on the page', () => {
+    const { container } = renderPage();
+    const whole = container.textContent ?? '';
+    expect(whole).not.toContain('sudo npm install');
+    expect(whole).not.toContain('--no-strict-ssl');
+    expect(whole).not.toContain('strict-ssl false');
   });
 
   it('documents the requirements, including that no provider key is needed', () => {

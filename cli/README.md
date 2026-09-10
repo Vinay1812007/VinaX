@@ -9,15 +9,16 @@ is at <https://www.sirimillavinay.online/VinaXAI/cli/docs>.
 ## Contents
 
 1. [What it is](#1-what-it-is)
-2. [Architecture](#2-architecture)
-3. [Directory structure](#3-directory-structure)
-4. [Local development](#4-local-development)
-5. [The protocol](#5-the-protocol)
-6. [Security model](#6-security-model)
-7. [Testing](#7-testing)
-8. [Building and packaging](#8-building-and-packaging)
-9. [Release process](#9-release-process)
-10. [Troubleshooting](#10-troubleshooting)
+2. [Installing it](#1a-installing-it)
+3. [Architecture](#2-architecture)
+4. [Directory structure](#3-directory-structure)
+5. [Local development](#4-local-development)
+6. [The protocol](#5-the-protocol)
+7. [Security model](#6-security-model)
+8. [Testing](#7-testing)
+9. [Building and packaging](#8-building-and-packaging)
+10. [Release process](#9-release-process)
+11. [Troubleshooting](#10-troubleshooting)
 
 ---
 
@@ -41,6 +42,87 @@ maintain them:
 - **Nothing in a repository can widen its own access.** Project config may
   only make VinaX stricter; project instruction files are conventions, not
   privileges; tool output is data, never instructions.
+
+---
+
+## 1a. Installing it
+
+> **Registry status: not published yet.** `npm install -g vinax-cli` fails with
+> **E404** today, because the package has never been published — the name is
+> free and unclaimed, not taken by someone else. Verify for yourself with
+> `npm view vinax-cli`. Install from source until the first release lands.
+
+**From source (works today):**
+
+```sh
+git clone https://github.com/Vinay1812007/VinaX.git
+cd VinaX/cli
+npm ci
+npm run build
+npm install -g .
+vinax --version
+vinax doctor
+```
+
+`npm install -g .` runs the `prepack` script, so the build happens even if you
+skip `npm run build`.
+
+**From npm (after the first release):**
+
+```sh
+npm install -g vinax-cli
+```
+
+### Publishing a release
+
+The package is publishable — `private` is gone, `publishConfig.access` is
+`public`, and `prepack` rebuilds `dist/` so a stale or missing build can never
+be published.
+
+The **first** publication must be done manually by someone with an npm account
+that owns (or can claim) the `vinax-cli` name, because npm Trusted Publishing
+cannot be configured for a package that does not exist yet:
+
+```sh
+npm login
+npm whoami          # confirm the right account
+
+cd cli
+npm publish --access public
+```
+
+Do not paste an npm token into chat, into a file, or into this repository.
+
+After that first publish, configure **Trusted Publishing** on npmjs.com for
+the `vinax-cli` package, pointing at this repository and
+`.github/workflows/cli-publish.yml`. Every later release then needs no token at
+all — tag and push:
+
+```sh
+# versions must already agree in cli/package.json and cli/src/version.ts
+git tag vinax-cli-v0.1.1
+git push origin vinax-cli-v0.1.1
+```
+
+The workflow refuses to publish if the tag disagrees with either version, if
+the version is already on the registry, or if any gate fails. It publishes with
+`--provenance`, so the package carries a verifiable link back to the commit and
+workflow that built it. `workflow_dispatch` runs every gate without publishing.
+
+### Registry troubleshooting
+
+| Symptom | What it means |
+|---|---|
+| `npm error 404 … vinax-cli` | The package is not published. Expected today; install from source. |
+| `npm view vinax-cli` → E404 | Same thing, confirmed directly against the registry. |
+| Wrong registry | `npm config get registry` must be `https://registry.npmjs.org/`. |
+| `EBADENGINE` | Node is older than 22. `node --version`. |
+| `npm publish` → `E402`/`ENEEDAUTH` | Not logged in, or the account cannot publish this name. `npm whoami`. |
+
+Never use `sudo npm install -g` as a fix, and never disable npm's TLS or
+signature checking. Neither addresses a package that does not exist, and both
+leave the machine worse off. If global installs need root, set a user-owned
+npm prefix instead.
 
 ---
 
@@ -231,7 +313,7 @@ history rewriting, and any recursive directory delete.
 
 ```sh
 cd cli
-npm test              # 300 tests / 13 files
+npm test              # 320 tests / 13 files
 npm run lint
 npm run typecheck
 ```
@@ -283,8 +365,10 @@ The published package contains `dist/`, `README.md` and `package.json`. The
 `package` suite asserts that tests, sources, configs, lockfiles, `.env` files
 and source maps are all absent.
 
-**Do not publish to npm** unless publishing credentials and package ownership
-are already explicitly configured for this package.
+Publishing is covered in [Installing it](#1a-installing-it): the first release
+is a manual `npm publish` by an account that owns the name, and every release
+after that goes through `cli-publish.yml` on a `vinax-cli-v*` tag with no token
+stored in this repository.
 
 ---
 
@@ -306,6 +390,7 @@ are already explicitly configured for this package.
 
 | Symptom | Cause |
 |---|---|
+| `npm install -g vinax-cli` → E404 | Not published yet. Install from source — see [Installing it](#1a-installing-it). |
 | `command not found: vinax` | Not installed globally, or run `node dist/cli.js` from `cli/`. |
 | `protocol_mismatch` | The CLI and the Worker disagree. Update one; `vinax doctor` says which. |
 | `engine_unavailable` | That engine's key is not configured on the Worker. `--engine auto` routes around it. |
