@@ -1,0 +1,123 @@
+# Deploy the Worker from CI — a fallback for Cloudflare's Workers Builds.
+#
+# Why this exists: on 2026-09-10 every Workers Build failed at ~1.2s with
+#
+#     The build token selected for this build has been deleted or rolled
+#
+# The build never reached the source, so no backend change could deploy, and
+# nothing in the repository could fix it — the token lives in the Cloudflare
+# dashboard. That is a single point of failure outside version control, which
+# is a bad place for the only path to production to live.
+#
+# This workflow is the second path. It runs the same gates and then the same
+# `wrangler deploy` the Cloudflare integration would have run.
+#
+# IT IS INERT UNTIL CONFIGURED. With no CLOUDFLARE_API_TOKEN secret it reports
+# that it is not set up and succeeds, so it can never turn CI red for a
+# repository that is happy with the git integration.
+#
+# To enable:
+#   1. Cloudflare dashboard → My Profile → API Tokens → Create Token
+#      → "Edit Cloudflare Workers" template, scoped to this account.
+#   2. GitHub → Settings → Secrets and variables → Actions:
+#        secret  CLOUDFLARE_API_TOKEN   = the token
+#        secret  CLOUDFLARE_ACCOUNT_ID  = the id in your dashboard URL
+#   3. Push to main touching backend/**, or run this workflow by hand.
+#
+# Deployment stays idempotent: deploying the same commit twice is harmless, so
+# this running alongside a working Workers Builds integration is safe.
+#
+# Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/worker-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run every gate and stop before deploying'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never let two deploys of the same Worker race each other.
+  group: worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Check whether deployment is configured
+        id: config
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN is not set, so this workflow will not deploy. That is fine while Cloudflare Workers Builds is working. See the header of this file to enable the fallback."
+          fi
+
+      - run: npm ci
+
+      # The same gates the Cloudflare build would never get to run, because it
+      # failed before cloning.
+      - name: Lint
+        if: steps.config.outputs.configured == 'true'
+        run: npm run lint
+
+      - name: Typecheck
+        if: steps.config.outputs.configured == 'true'
+        run: npm run typecheck
+
+      - name: Test
+        if: steps.config.outputs.configured == 'true'
+        run: npm test
+
+      - name: Build check (dry run)
+        if: steps.config.outputs.configured == 'true'
+        run: npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/wrangler-dry
+
+      - name: Deploy
+        if: steps.config.outputs.configured == 'true' && inputs.dry_run != true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config worker/wrangler.toml
+
+      # Prove the deploy actually took, rather than trusting the exit code.
+      - name: Verify the Worker is answering
+        if: steps.config.outputs.configured == 'true' && inputs.dry_run != true
+        run: |
+          for i in 1 2 3 4 5; do
+            CODE="$(curl -s -o /dev/null -w '%{http_code}' https://www.sirimillavinay.online/api/vinaxcli/meta || echo 000)"
+            if [ "$CODE" = "200" ]; then
+              echo "Worker is serving (/api/vinaxcli/meta -> 200)."
+              exit 0
+            fi
+            echo "attempt $i: /api/vinaxcli/meta -> $CODE, waiting"
+            sleep 10
+          done
+          echo "::error::The Worker did not answer 200 after deploying."
+          exit 1
