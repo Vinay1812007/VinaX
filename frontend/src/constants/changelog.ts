@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.28.1': {
+    title: 'Honest install instructions for VinaX CLI',
+    changes: [
+      { type: 'fixed', text: 'The VinaX CLI page told you to install with npm, but the package has not been published to the registry yet, so that command failed with a “not found” error. The page now leads with the method that actually works — clone, build, install — and says plainly that the npm command is coming, rather than sending you to a command that cannot succeed.' },
+      { type: 'new', text: 'A troubleshooting section for that exact error, explaining what it means, how to confirm it in one command, and why the usual folk remedies — running the install as an administrator, or turning off npm’s security checks — do not help and should not be used.' },
+    ],
+  },
   '5.28.0': {
     title: 'VinaX in your terminal',
     changes: [

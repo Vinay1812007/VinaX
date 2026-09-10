@@ -11,4 +11,8 @@ if (!head.startsWith('#!/usr/bin/env node')) {
   process.exit(1);
 }
 chmodSync(entry, 0o755);
-console.log(`postbuild: ${entry} is executable`);
+// stderr, not stdout: this now runs as a `prepack` lifecycle script, and
+// `npm pack --json` / `npm publish --json` emit machine-readable JSON on
+// stdout. A progress line printed there corrupts the very output that CI and
+// the package tests parse.
+console.error(`postbuild: ${entry} is executable`);
