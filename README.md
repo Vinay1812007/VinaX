@@ -277,6 +277,8 @@ cd frontend && npm ci && npm run build && npx wrangler pages deploy dist --proje
 cd backend  && npm ci && npm run deploy
 ```
 
+**If a Worker build fails at ~2 seconds with "the build token has been deleted or rolled"**, the Cloudflare build never reached the source and nothing in this repository can fix it: replace the token at *Workers & Pages → vinax-api → Settings → Build → API token*, then retry. Because that token is a single point of failure living outside version control, [`worker-deploy.yml`](.github/workflows/worker-deploy.yml) is a second path — it runs the backend gates and the same `wrangler deploy` from CI. It is **inert until configured**: with no `CLOUDFLARE_API_TOKEN` secret it reports that and succeeds, so it never turns CI red. Enable it by adding the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets; deploys are idempotent, so it is safe to have both paths live.
+
 **Domains** (`www.sirimillavinay.online`, apex, `admin.`, `update.`) stay attached to the **Pages** project — Pages is the fall-through origin. The Worker's route list lives in `backend/worker/wrangler.toml`; after changing routes, verify under *Cloudflare → Workers & Pages → vinax-api → Settings → Domains & Routes*.
 
 ### 6.1 Worker configuration and secrets
@@ -366,6 +368,7 @@ Before pushing: `cd frontend && npm run lint && npm run typecheck && npm test &&
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ci.yml` | push, PR | **frontend**: lint, typecheck, test, build, bundle budget · **backend**: lint, typecheck, test |
+| `worker-deploy.yml` | push to `main` touching `backend/**`, manual | Fallback Worker deploy: backend gates then `wrangler deploy`, then verifies the Worker answers 200. Inert unless `CLOUDFLARE_API_TOKEN` is set |
 | `cli-publish.yml` | `vinax-cli-v*` tag, manual | Publishes **vinax-cli** to npm: verifies the tag matches both versions, refuses a version already on the registry, runs every gate, installs the tarball and runs it, then publishes with provenance via trusted publishing (no stored token) |
 | `cli.yml` | push, PR touching `cli/**` or `backend/**` | **VinaX CLI** on Linux, macOS and Windows with Node 22: lint, typecheck, build, full suite (incl. the compiled-binary end-to-end run) |
 | `e2e.yml` · `lighthouse.yml` | push, PR | Playwright smoke · performance/SEO/a11y budgets |
@@ -387,7 +390,7 @@ Deployment is **not** done by GitHub Actions — Cloudflare's git integrations d
 - **Maintenance**: Status Note for a one-line notice; Maintenance Scheduler to flip the site to maintenance for a window automatically; App Configuration for an immediate manual switch.
 - **Incidents**: Feature Flags switch parts of the app off for everyone within a minute; Catalog Sources disables a failing music source; Broadcast Message tells listeners something once; Runbook holds the team's own notes.
 - **A Pages build failed**: check Workers & Pages → vinax → Deployments; the root directory must be `frontend`.
-- **A Worker build failed**: check vinax-api → latest build; if the build token is invalid, assign a new one under Settings → Build.
+- **A Worker build failed**: check vinax-api → latest build. A failure at ~2s saying *"the build token selected for this build has been deleted or rolled"* means the build never reached your code — assign a **new** token under Settings → Build → API token (selecting the same dead one and retrying fails identically), then retry. If the integration keeps breaking, enable `worker-deploy.yml` and deploy from CI instead.
 - **Rollback**: Workers → Deployments → Version History; Pages keeps every deployment re-promotable.
 - **Bundle budget failed in CI**: lazy-load the new code; if it is genuinely shell/store code, re-base with a dated justification in `frontend/scripts/check-bundle-size.mjs`.
 - **CSP or festival-sync test failed**: run the generator / hash script named in the failure and commit the output.
