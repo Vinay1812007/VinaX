@@ -196,7 +196,7 @@ cli/
 │   ├── permissions/            the policy engine
 │   ├── security/               workspace boundaries, secrets, command risk
 │   ├── session/                JSONL sessions, the run journal, undo
-│   ├── terminal/               rendering, prompts, slash commands
+│   ├── terminal/               app, keys, editor, menu, screen, activity
 │   ├── project/                globs and ignore rules
 │   └── utils/                  exit codes, text helpers
 ├── tests/                      13 suites, incl. a full end-to-end agent run
@@ -235,6 +235,83 @@ It must never appear in the browser frontend, which calls same-origin relative
 paths and has no CORS. A project config that tries to set `apiBase` is refused
 and the user is told — a repository does not get to redirect somebody else's
 agent traffic.
+
+---
+
+## 4a. The interactive terminal
+
+VinaX CLI is a keyboard application, not a `readline` prompt. The architecture
+exists because interactive stdin and stdout previously had several owners —
+readline drew the prompt, the agent printed status, a tool streamed command
+output — and none of them knew about the others.
+
+```
+agent / tool event  →  TerminalApp state  →  render()  →  Screen  →  minimal ANSI
+```
+
+| Module | Responsibility |
+|---|---|
+| `terminal/ansi.ts` | Every escape sequence, in one place, plus the restore list |
+| `terminal/keys.ts` | Raw bytes → named keys. Pure, no stdin reference |
+| `terminal/width.ts` | Graphemes and display columns |
+| `terminal/editor.ts` | The input line: cursor, editing, history |
+| `terminal/menu.ts` | One menu abstraction for every selector |
+| `terminal/activity.ts` | Spinner lifecycle, elapsed time, tool descriptions |
+| `terminal/screen.ts` | The ONLY thing that moves the cursor |
+| `terminal/app.ts` | Owns stdin; dispatches keys; coordinates rendering |
+
+**Not** an alternate-screen application. VinaX draws inline, so the transcript
+stays in normal scrollback and the user can scroll, select and copy it.
+
+### Raw mode lifecycle
+
+`start()` enables raw mode and bracketed paste; `stop()` undoes both, shows the
+cursor and clears the live region. It runs from every exit path — normal,
+`/exit`, Ctrl+C, Ctrl+D, SIGTERM, an uncaught exception — and is idempotent.
+Raw mode is never enabled without a TTY.
+
+### Key decoding
+
+A terminal sends `ESC [ A` for Up — or `ESC O A` in application cursor mode,
+which macOS Terminal.app and iTerm use by default. A decoder that only knows
+the first form is exactly why arrows appear to type `^[[A`. Both are handled,
+along with split sequences, xterm modifier parameters, `ESC b` / `ESC f`, and
+bracketed paste.
+
+A lone ESC is ambiguous — Escape, or the first byte of an arrow still in
+flight. The decoder holds it and the app resolves it after 50 ms, so the
+timing policy lives in the app and `keys.ts` stays pure and exactly testable.
+
+### Transient vs permanent
+
+Permanent output is the transcript. Transient output is the prompt, an open
+menu and the running activity line. `Screen` lifts the transient region before
+writing anything permanent and repaints it afterwards, which is what stops a
+command's stdout smearing the prompt.
+
+A running activity redraws ONE line. When it finishes, the transient line is
+erased and a single permanent line replaces it (`✓ Ran npm test · 4.7s`) — no
+dead spinner frames in scrollback.
+
+### Testing strategy
+
+- `tests/terminal-keys.test.ts` feeds exact byte sequences and asserts the
+  decoded keys, including that no escape ever reaches the text.
+- `tests/terminal-ui.test.ts` drives the editor, menu, slash picker and
+  activity through injected streams and an injected clock. No real timers.
+- `tests/interactive.test.ts` runs the REAL session loop against a mock server
+  with piped streams, feeding actual key sequences. It holds the regression
+  that matters most: **a streamed answer appears exactly once.**
+
+### If a development crash leaves your terminal odd
+
+The implementation restores raw mode, the cursor and bracketed paste on every
+exit path, so this should not happen. If a crash mid-development ever does
+leave a shell behaving strangely:
+
+```sh
+reset          # or: stty sane; printf '\033[?25h\033[?2004l'
+```
 
 ---
 
@@ -313,7 +390,7 @@ history rewriting, and any recursive directory delete.
 
 ```sh
 cd cli
-npm test              # 320 tests / 13 files
+npm test              # 401 tests / 16 files
 npm run lint
 npm run typecheck
 ```
@@ -332,7 +409,10 @@ The suites, and what each is really for:
 | `git` | Real repositories, real commits, a real push to a bare remote |
 | `session` | JSONL recovery from a torn write, undo, duplicate-call protection |
 | `mcp` | A real stdio server, and that its tools get no extra privileges |
-| `discovery` | Startup facts, instruction files, ignore rules, rendering |
+| `discovery` | Startup facts, instruction files, ignore rules, approvals |
+| `terminal-keys` | Byte sequences → keys, on every terminal form |
+| `terminal-ui` | Editor, menu, slash picker, activity, screen |
+| `interactive` | The real session loop; the duplicate-answer regression |
 | `package` | Version sync, help completeness, `npm pack` contents |
 | `e2e-agent` | The **compiled binary** fixing a real broken project |
 

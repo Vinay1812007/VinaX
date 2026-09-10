@@ -231,6 +231,16 @@ export class SessionController {
     this.out.print(renderDiff(clip(redact(text), 20_000).text, this.theme));
   }
 
+  /** The live free-model catalogue, or an empty list when it cannot be read. */
+  async catalogGroups(): Promise<import('../api/client.js').CatalogGroup[]> {
+    try {
+      return await this.deps.api.catalog(this.deps.signal());
+    } catch (e) {
+      this.out.problem(`Could not load the live model menu: ${e instanceof Error ? e.message : String(e)}`);
+      return [];
+    }
+  }
+
   async showModels(): Promise<void> {
     const meta = await this.meta();
     if (!meta) return;

@@ -15,7 +15,6 @@
  *   on exit            every child VinaX started is killed, so no dev server
  *                      or test worker outlives the session.
  */
-import { createInterface, type Interface } from 'node:readline';
 import { resolve } from 'node:path';
 import { VinaxApi } from '../api/client.js';
 import { parseArgs, type ParsedArgs } from '../config/args.js';
@@ -32,9 +31,10 @@ import type { Turn } from '../agent/context.js';
 import { McpRegistry } from '../tools/mcp/client.js';
 import { killAllChildren } from '../tools/process/runner.js';
 import { detectTheme, glyphs, paint, sessionHeader, type Theme } from '../terminal/render.js';
-import { JsonOutput, TerminalOutput, type Output } from '../terminal/output.js';
+import { InteractiveOutput, JsonOutput, TerminalOutput, type Output } from '../terminal/output.js';
 import { createPrompter } from '../terminal/prompt.js';
-import { completions, handleSlash } from '../terminal/slash.js';
+import { TerminalApp } from '../terminal/app.js';
+import { slashMenuItems, handleSlash } from '../terminal/slash.js';
 import { SessionController } from './controller.js';
 import { EXIT, type ExitCode } from '../utils/exit.js';
 import { CLI_VERSION } from '../version.js';
@@ -51,6 +51,8 @@ export interface Bootstrapped {
   newTurnSignal: () => AbortController;
   /** Cancel the turn in flight, if any. Safe to call at the prompt. */
   abortTurn: () => void;
+  /** The interactive terminal, when there is one. */
+  app: TerminalApp | null;
   mcp: McpRegistry | null;
   notes: string[];
 }
@@ -68,7 +70,19 @@ function flagsFrom(args: ParsedArgs): Partial<VinaxConfig> {
   return flags;
 }
 
-export async function bootstrap(args: ParsedArgs): Promise<Bootstrapped> {
+export interface BootstrapOverrides {
+  /**
+   * Supply the terminal instead of deriving it from process.stdin.
+   *
+   * A test seam, and the only way to exercise the real interactive loop
+   * without a pseudo-terminal. Deliberately a parameter rather than an
+   * environment variable: an env var that forced raw mode could be set by
+   * accident and would hang a user's pipeline.
+   */
+  app?: TerminalApp;
+}
+
+export async function bootstrap(args: ParsedArgs, overrides: BootstrapOverrides = {}): Promise<Bootstrapped> {
   const cwd = resolve(args.cwd ?? process.cwd());
   let controller: AbortController = new AbortController();
   const bootSignal = controller.signal;
@@ -78,12 +92,16 @@ export async function bootstrap(args: ParsedArgs): Promise<Bootstrapped> {
   const { config, notes: configNotes } = await resolveConfig({ root: ws.root, flags: flagsFrom(args) });
 
   const theme = detectTheme({ color: config.color });
-  const out: Output =
-    args.output === 'json'
+  const interactiveTty =
+    args.output === 'interactive' && Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+
+  // One terminal owner, created only when there is a terminal to own.
+  const app = overrides.app ?? (interactiveTty ? new TerminalApp({ theme, interactive: true }) : null);
+  const out: Output = app
+    ? new InteractiveOutput(app, theme)
+    : args.output === 'json'
       ? new JsonOutput()
-      : new TerminalOutput(args.output === 'text' ? { ...theme, color: theme.color } : theme, {
-          showCommandOutput: args.output === 'interactive',
-        });
+      : new TerminalOutput(theme, { showCommandOutput: false });
 
   const api = new VinaxApi({ apiBase: config.apiBase });
   await ensureDirs();
@@ -104,7 +122,6 @@ export async function bootstrap(args: ParsedArgs): Promise<Bootstrapped> {
   ledger.branch = discovery.branch;
   const conversation: Turn[] = [];
 
-  const interactive = args.output === 'interactive' && Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
   const session = await SessionStore.create({
     workspace: ws.root,
     branch: discovery.branch,
@@ -121,8 +138,8 @@ export async function bootstrap(args: ParsedArgs): Promise<Bootstrapped> {
   const abortTurn = (): void => controller.abort();
 
   // Built with no prompter on purpose. A non-interactive run must be unable
-  // to block on a question, and runInteractive() attaches one explicitly.
-  void interactive;
+  // to block on a question; runInteractive() attaches one once it owns a
+  // terminal to ask through.
   const permissions = new PermissionEngine({
     mode: config.approval,
     onDecision: (req, decision) => {
@@ -140,12 +157,7 @@ export async function bootstrap(args: ParsedArgs): Promise<Bootstrapped> {
     out, theme, conversation, signal: currentSignal,
   });
 
-  return { controller: ctl, theme, out, config, currentSignal, newTurnSignal, abortTurn, mcp, notes };
-}
-
-/** Attach the interactive prompter, now that there is a terminal to ask through. */
-function attachPrompter(boot: Bootstrapped, ask: (q: string) => Promise<string>): void {
-  boot.controller.permissions.setPrompter(createPrompter(boot.theme, ask));
+  return { controller: ctl, theme, out, config, currentSignal, newTurnSignal, abortTurn, app, mcp, notes };
 }
 
 /** Map a run outcome onto the documented exit codes. */
@@ -216,29 +228,44 @@ export async function runOnce(boot: Bootstrapped, prompt: string, json: boolean)
   }
 }
 
-/** The interactive session. */
+/**
+ * The interactive session.
+ *
+ * TerminalApp owns stdin and the live region; this loop only decides what to
+ * ask for next. Note what is NOT here any more: no readline, no completer, no
+ * second SIGINT handler competing with the app's, and — the bug this replaces
+ * — no reprinting of the final answer after it has already streamed.
+ */
 export async function runInteractive(boot: Bootstrapped): Promise<ExitCode> {
-  const { out, theme, controller: ctl } = boot;
+  const { out, theme, controller: ctl, app } = boot;
   const g = glyphs(theme);
+  if (!app) return EXIT.usage;
 
-  const rl: Interface = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    // Slash-command autocomplete. Deliberately only for slash commands: file
-    // completion inside a natural-language prompt gets in the way far more
-    // often than it helps.
-    completer: (line: string): [string[], string] => {
-      const at = line.lastIndexOf('/');
-      if (at !== 0) return [[], line];
-      const hits = completions(line.trim());
-      return [hits.length ? hits : [], line];
-    },
-    historySize: 200,
+  let running = false;
+
+  // ONE interrupt owner. The app routes Ctrl+C here; during a turn it cancels
+  // the turn, and at the prompt the app handles clear/exit itself.
+  app.setInterruptHandler(() => {
+    if (!running) return false;
+    boot.abortTurn();
+    killAllChildren();
+    app.endActivity('interrupted', 'Interrupted');
+    out.print(paint(theme, 'yellow', `${g.warn} Stopped this turn. The session is still open.`));
+    return true;
   });
 
-  const ask = (question: string): Promise<string> =>
-    new Promise<string>((resolveAnswer) => rl.question(question, resolveAnswer));
-  attachPrompter(boot, ask);
+  app.setSlashCommands(slashMenuItems());
+  app.start();
+  ctl.permissions.setPrompter(createPrompter(app));
+  const syncStatus = (): void => {
+    app.setStatus({
+      approval: ctl.config.approval,
+      engine: ctl.config.engine,
+      web: ctl.config.web,
+      ...(ctl.discovery.branch ? { branch: ctl.discovery.branch } : {}),
+    });
+  };
+  syncStatus();
 
   out.print(
     sessionHeader(theme, {
@@ -254,60 +281,45 @@ export async function runInteractive(boot: Bootstrapped): Promise<ExitCode> {
   for (const n of boot.notes) out.print(paint(theme, 'yellow', `${g.warn} ${n}`));
   if (ctl.discovery.instructionFiles.length) {
     out.print(paint(theme, 'grey', `  Project instructions: ${ctl.discovery.instructionFiles.join(', ')}`));
-    out.print('');
   }
   if (ctl.discovery.dirtyFiles.length) {
     out.print(
       paint(theme, 'grey', `  ${ctl.discovery.dirtyFiles.length} file(s) already modified before this session — VinaX will leave them alone.`),
     );
-    out.print('');
   }
 
-  let running = false;
-  let lastInterrupt = 0;
   let exitCode: ExitCode = EXIT.ok;
-
-  const onSigint = (): void => {
-    if (running) {
-      // Cancel the turn: aborting the signal ends the HTTP stream, and the
-      // process runner kills the child tree it is waiting on.
-      boot.abortTurn();
-      killAllChildren();
-      out.print('');
-      out.print(paint(theme, 'yellow', `${g.warn} Interrupted. VinaX has stopped this turn; the session is still open.`));
-      return;
-    }
-    const now = Date.now();
-    if (now - lastInterrupt < 2000) {
-      rl.close();
-      return;
-    }
-    lastInterrupt = now;
-    out.print('');
-    out.print(paint(theme, 'grey', '  Press Ctrl+C again, or type /exit, to leave VinaX CLI.'));
-    rl.prompt();
-  };
-  process.on('SIGINT', onSigint);
-  rl.on('SIGINT', onSigint);
 
   try {
     for (;;) {
-      const line = (await ask(`${paint(theme, 'bold', 'VinaX')} ${g.bullet} `)).trim();
-      if (!line) continue;
+      const line = await app.readLine();
+      if (line === null) break; // Ctrl+D on an empty line, or a second Ctrl+C
+      const trimmed = line.trim();
+      if (!trimmed) continue;
 
-      const slash = await handleSlash(line, ctl);
+      const slash = await handleSlash(trimmed, ctl, app);
+      syncStatus();
       if (slash.exit) break;
       if (slash.handled) continue;
 
       running = true;
+      const interactiveOut = out instanceof InteractiveOutput ? out : null;
+      interactiveOut?.resetTurn();
       let outcome: RunOutcome;
       try {
-        outcome = await turn(boot, line);
+        outcome = await turn(boot, trimmed);
       } finally {
         running = false;
       }
 
-      if (outcome.finalText) (out as TerminalOutput).renderReply?.(outcome.finalText);
+      // THE DUPLICATE-ANSWER FIX. The streamed deltas ARE the visible answer;
+      // printing finalText afterwards showed the same reply twice. Only fall
+      // back to printing it when nothing was streamed — an engine that
+      // answered without deltas, or a run that ended before the first token.
+      if (outcome.finalText && !interactiveOut?.streamedAnything()) {
+        (out as TerminalOutput).renderReply?.(outcome.finalText);
+      }
+
       ctl.printSummary(outcome);
       if (outcome.reason === 'permission_denied') {
         out.print(paint(theme, 'grey', '  Change what VinaX may do with /permissions, then ask again.'));
@@ -316,16 +328,17 @@ export async function runInteractive(boot: Bootstrapped): Promise<ExitCode> {
         out.print(paint(theme, 'grey', '  Say "continue" to carry on from where it stopped.'));
       }
       exitCode = exitCodeFor(outcome);
+      syncStatus();
       await ctl.session?.checkpoint();
     }
   } finally {
-    process.off('SIGINT', onSigint);
-    rl.close();
+    // Every exit path restores the terminal: raw mode off, cursor shown,
+    // bracketed paste disabled, children reaped.
+    app.stop();
     await ctl.session?.finish('completed');
     boot.mcp?.stopAll();
     killAllChildren();
   }
-  out.print('');
   return exitCode === EXIT.interrupted ? EXIT.ok : exitCode;
 }
 

@@ -104,8 +104,59 @@ Access     ask
 Web        Off
 
 • /help for commands, Ctrl+C to interrupt, /exit to leave`, 'text'),
-      p('As VinaX works, each action appears on its own line as it happens — what it read, what it ran, what it changed. Nothing is claimed before it has happened.'),
-      p('Ctrl+C during a turn stops that turn: the model request is cancelled and any command VinaX started is stopped, along with everything that command started. You are returned to the prompt with the session intact. Ctrl+C at the prompt, twice, exits.'),
+      p('As VinaX works, each action appears on its own line as it happens — what it read, what it ran, what it changed. A step in progress animates on a single line and is replaced by its result, so the transcript keeps the outcome and not a trail of dead spinner frames:'),
+      code(`Running npm test...
+
+Ran npm test · 4.7s`, 'text'),
+      p('Your terminal behaves normally throughout. VinaX draws inline rather than taking over the screen, so you can scroll back, select and copy everything exactly as usual.'),
+      p('Ctrl+C during a turn stops that turn: the model request is cancelled and any command VinaX started is stopped, along with everything that command started. You are returned to the prompt with the session intact. Ctrl+C at the prompt clears what you have typed; again on an empty line exits.'),
+    ],
+  },
+  {
+    id: 'keyboard',
+    title: 'Keyboard controls',
+    group: 'Using VinaX CLI',
+    blocks: [
+      p('VinaX CLI is a keyboard application. Arrow keys move, Enter chooses, Esc backs out.'),
+      table([
+        ['Key', 'What it does'],
+        ['Up / Down', 'Move through a menu; with no menu open, your prompt history'],
+        ['Left / Right', 'Move the cursor within what you are typing'],
+        ['Enter', 'Send your message, or choose the highlighted item'],
+        ['Tab', 'Complete the highlighted command'],
+        ['Esc', 'Close a menu; on an approval, reject'],
+        ['Home / End', 'Start or end of the line'],
+        ['Ctrl+A / Ctrl+E', 'Start or end of the line'],
+        ['Ctrl+U / Ctrl+K', 'Delete before / after the cursor'],
+        ['Ctrl+W', 'Delete the previous word'],
+        ['Alt+Left / Alt+Right', 'Move a word at a time'],
+        ['Ctrl+J', 'Insert a newline without sending'],
+        ['Ctrl+C', 'Interrupt the current turn; at an empty prompt, exit'],
+        ['Ctrl+D', 'Exit, when the prompt is empty'],
+      ]),
+      p('Pasting several lines pastes them — it does not send one message per line.'),
+    ],
+  },
+  {
+    id: 'menus',
+    title: 'Menus and selectors',
+    group: 'Using VinaX CLI',
+    blocks: [
+      p('Type / and the command menu opens immediately, narrowing as you keep typing. No key is needed to discover what is available:'),
+      code(`> /per
+
+  > /permissions   Change approval mode
+
+  Up/Down select · Enter choose · Tab complete · Esc close`, 'text'),
+      p('These commands open a selector when you give them no argument:'),
+      table([
+        ['Command', 'Opens'],
+        ['/engine', 'The engines available right now, fetched live'],
+        ['/model', 'The live model catalogue, on engines that take one'],
+        ['/permissions', 'Ask, Auto edit or Full auto, with what each allows'],
+        ['/resume', 'Your saved sessions, newest first'],
+      ]),
+      p('The direct forms still work, for habit and for scripts: /engine fast, /permissions auto-edit, /resume <id>.'),
     ],
   },
   {
@@ -174,9 +225,11 @@ Web        Off
   Working directory:
   /home/user/project
 
-  1. Allow once
-  2. Allow npm commands this session
-  3. Reject`, 'text'),
+  > Allow once
+    Allow npm commands this session
+    Reject
+
+  Up/Down navigate · Enter confirm · y allow · n reject · Esc reject`, 'text'),
       p('For an edit, you see the real diff before you agree to it:'),
       code(`◆ Modify src/api/client.ts?
 
@@ -184,9 +237,9 @@ Web        Off
   -const timeout = 1000;
   +const timeout = 5000;
 
-  1. Allow once
-  2. Allow project edits this session
-  3. Reject`, 'text'),
+  > Allow once
+    Allow project edits this session
+    Reject`, 'text'),
       p('For a push, you see exactly what is about to leave your machine:'),
       code(`◆ Push changes?
 
@@ -196,10 +249,10 @@ Web        Off
 
   This changes the remote repository.
 
-  1. Allow once
-  2. Allow normal pushes this session
-  3. Reject`, 'text'),
-      p('Pressing Enter without choosing means reject. A high-impact action is never offered a blanket session grant.'),
+  > Allow once
+    Allow normal pushes this session
+    Reject`, 'text'),
+      p('Choose with the arrow keys and Enter, or press y to allow once and n to reject. Esc and Ctrl+C both reject — the safe answer is the one you get by not deciding. A high-impact action is never offered a blanket session grant.'),
     ],
   },
   {
@@ -416,18 +469,18 @@ Web        Off
         ['Command', 'What it does'],
         ['/help', 'List the commands'],
         ['/models', 'Engines and the live model menus'],
-        ['/model <id>', 'Choose a model, on engines that take one'],
-        ['/engine <id>', 'Switch engine'],
+        ['/model [id]', 'Choose a model — opens the live catalogue with no argument'],
+        ['/engine [id]', 'Switch engine — opens a selector with no argument'],
         ['/web on|off', 'Turn live web search on or off'],
         ['/status', 'What VinaX is doing, and what it has done'],
         ['/diff', 'Show the working-tree diff'],
-        ['/permissions [mode]', 'Show or change the approval mode'],
+        ['/permissions [mode]', 'Change the approval mode — opens a selector with no argument'],
         ['/files', 'Files VinaX has changed this session'],
         ['/compact', 'Summarise the conversation to free context'],
         ['/undo', 'Undo the most recent VinaX edit'],
         ['/clear', 'Start a fresh conversation'],
         ['/sessions', 'List saved sessions'],
-        ['/resume <id>', 'Resume a saved session'],
+        ['/resume [id]', 'Resume a session — opens a selector with no argument'],
         ['/init', 'Write a starter VINAX.md'],
         ['/mcp', 'Show configured external tool servers'],
         ['/doctor', 'Check the local setup'],
