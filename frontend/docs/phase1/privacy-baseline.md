@@ -14,8 +14,15 @@ first name (optional, local greeting), VinaX AI chat history, onboarding/tour fl
   counters — coarse country from CF edge header; **IP never stored**.
 - Listen Together: room code, display name, device UUID, playback state — deleted on
   session end; heartbeats expire in 12 s.
-- No cookies. No third-party trackers. Cloudflare Insights beacon is currently **blocked by
-  our own CSP** (script-src) — decision: keep blocked or remove the injection in Phase 5.
+- Session insights (v5.32.0 — only with the SAME explicit consent toggle, production builds
+  only): heatmaps + session replays via a third-party session-analytics tag
+  (`src/services/analytics/sessionInsights.ts`; CSP hosts `*.clarity.ms`, `c.bing.com`).
+  **All on-screen text is masked client-side** (`data-clarity-mask` on `<body>`), so titles,
+  names, history and AI chats never leave the device; the consent signal denies ad storage.
+  The provider sets its own analytics cookies — for consenting listeners only.
+- Without consent: no cookies, no third-party trackers. Cloudflare Insights beacon is
+  currently **blocked by our own CSP** (script-src) — decision: keep blocked or remove the
+  injection in Phase 5.
 
 ## 2. Server-side stores (Supabase)
 
@@ -28,8 +35,9 @@ exists anywhere. Admin dashboard is token-gated (`ADMIN_TOKEN`).
 1. **No accounts, ever** — no signup, login, OAuth, or mandatory identity of any kind.
 2. **Personalization is computed and stored on-device** — recommendation signals never
    leave the device except as the bounded anonymous snapshot above.
-3. **No third-party trackers/ads/fingerprinting**; first-party analytics remain opt-in,
-   aggregate-only, IP-free.
+3. **No third-party trackers/ads/fingerprinting without consent**; first-party analytics
+   remain opt-in, aggregate-only, IP-free. The single third-party exception — session
+   insights — rides the same onboarding opt-in and must keep every on-screen text masked.
 4. **Export & erase** stay one tap away (Settings → Your Data) and must keep working.
 5. **Any new off-device signal** requires: anonymity, opt-in, documentation in this file —
    BEFORE it ships.
@@ -42,4 +50,5 @@ exists anywhere. Admin dashboard is token-gated (`ADMIN_TOKEN`).
 DMCA/contact routes live; terms state third-party catalog sourcing; privacy page reflects
 the inventory above (re-verify wording in Phase 3 trust-pages pass). GDPR/DPDP stance:
 no personal data processed server-side beyond ephemeral room display names → no consent
-banner required; telemetry consent is still explicit in onboarding.
+banner required; telemetry consent is still explicit in onboarding, and that same opt-in is
+the consent for session-insights cookies (none are set without it).

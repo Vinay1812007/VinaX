@@ -13,13 +13,18 @@
 # v5.7.7: the Google ad hosts in script-src / connect-src / frame-src exist
 #   ONLY for the /ads page, which injects the ad script on mount. No other
 #   page loads them; removing the /ads feature should remove these hosts too.
+# v5.32.0: https://*.clarity.ms (script-src + connect-src) and https://c.bing.com
+#   (connect-src) serve the OPT-IN session-insights tag
+#   (src/services/analytics/sessionInsights.ts). It loads only for listeners
+#   who opted into analytics at onboarding; removing that feature should remove
+#   these hosts too.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
   Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()
-  Content-Security-Policy: default-src 'self'; connect-src 'self' https://cloudflareinsights.com https://vinax-saavan-api.onrender.com https://saavn.dev https://*.sumit.co https://nepotuneapi.vercel.app https://jiosaavn-api-privatecv8.b4a.run https://lrclib.net https://*.sirimillavinay.online https://*.saavncdn.com https://nominatim.openstreetmap.org https://www.gstatic.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://csi.gstatic.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google; media-src https: blob:; img-src https: data: blob:; script-src 'self' 'inline-speculation-rules' 'sha256-cWmgHmAHDOOv+b6alJDj2lXCSZia3zOehGpeIeLQGAY=' 'sha256-74se5rD8O9zMcXI8qV53XW20VhgJF6wnJY9uNJyOGw8=' 'sha256-RRc+X/dt9126MJ8ZSKlMeSSXRwods6RmTBC99CU3Udk=' 'sha256-UGEqqrmdNlqhP7Ka0DU5J8ZIBBETQWHm3Xz7H+fkI0g=' https://www.gstatic.com https://static.cloudflareinsights.com https://pagead2.googlesyndication.com https://tpc.googlesyndication.com https://googleads.g.doubleclick.net https://www.googletagservices.com https://adservice.google.com https://ep2.adtrafficquality.google; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com https://ep2.adtrafficquality.google; form-action 'self'; manifest-src 'self'
+  Content-Security-Policy: default-src 'self'; connect-src 'self' https://cloudflareinsights.com https://vinax-saavan-api.onrender.com https://saavn.dev https://*.sumit.co https://nepotuneapi.vercel.app https://jiosaavn-api-privatecv8.b4a.run https://lrclib.net https://*.sirimillavinay.online https://*.saavncdn.com https://nominatim.openstreetmap.org https://www.gstatic.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://csi.gstatic.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.clarity.ms https://c.bing.com; media-src https: blob:; img-src https: data: blob:; script-src 'self' 'inline-speculation-rules' 'sha256-cWmgHmAHDOOv+b6alJDj2lXCSZia3zOehGpeIeLQGAY=' 'sha256-74se5rD8O9zMcXI8qV53XW20VhgJF6wnJY9uNJyOGw8=' 'sha256-RRc+X/dt9126MJ8ZSKlMeSSXRwods6RmTBC99CU3Udk=' 'sha256-UGEqqrmdNlqhP7Ka0DU5J8ZIBBETQWHm3Xz7H+fkI0g=' https://www.gstatic.com https://static.cloudflareinsights.com https://pagead2.googlesyndication.com https://tpc.googlesyndication.com https://googleads.g.doubleclick.net https://www.googletagservices.com https://adservice.google.com https://ep2.adtrafficquality.google https://*.clarity.ms; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com https://ep2.adtrafficquality.google; form-action 'self'; manifest-src 'self'
 
 # `immutable` deliberately DROPPED (2026-08-21): during the stuck-shell outage
 # the SPA HTML got cached under /assets/*.js URLs, and `immutable` told
