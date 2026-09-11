@@ -304,6 +304,84 @@ html.amoled .ai-root {
   line-height: 1.7;
   min-height: 76px;
 }
+.ai-attachment-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.ai-attachment-notice {
+  margin: 6px 4px 10px;
+  padding: 10px 12px;
+  border: 1px solid rgb(var(--ember-400) / 0.28);
+  border-radius: 12px;
+  color: rgb(var(--ink-200));
+  background: rgb(var(--ember-500) / 0.08);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ai-attachment-chip {
+  max-width: min(100%, 21rem);
+}
+.ai-upload-menu {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  bottom: calc(100% + 8px);
+  display: none;
+  width: 150px;
+  padding: 5px;
+  border: 1px solid var(--ai-line);
+  border-radius: 12px;
+  background: var(--ai-raised);
+  box-shadow: 0 14px 34px #0005;
+}
+.ai-upload-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  text-align: left;
+  color: var(--ai-text-2);
+  font-size: 13px;
+}
+.ai-upload-menu button:hover {
+  background: var(--ai-hover);
+  color: var(--ai-text);
+}
+.ai-upload-menu-open {
+  display: block;
+}
+.ai-composer .relative:focus-within .ai-upload-menu,
+.ai-composer .relative:hover .ai-upload-menu {
+  display: block;
+}
+.ai-drop-overlay {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 10px;
+  border: 2px dashed rgb(var(--ember-400) / 0.7);
+  border-radius: 22px;
+  background: rgb(var(--ai-bg) / 0.92);
+  backdrop-filter: blur(10px);
+}
+.ai-drop-overlay > div {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: var(--ai-text);
+}
+.ai-drop-overlay svg {
+  color: rgb(var(--ember-400));
+}
+.ai-drop-overlay span {
+  color: var(--ai-text-2);
+  font-size: 13px;
+}
 .ai-chip,
 .ai-btn {
   min-height: 36px;

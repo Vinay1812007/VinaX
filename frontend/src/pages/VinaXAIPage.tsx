@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
 import { Link } from 'react-router-dom';
 import { isNativePlatform } from '@/services/native';
 import { buildTasteSnapshot } from '@/services/ai/taste';
@@ -13,11 +21,25 @@ import {
   prepareLocalRecognition,
   type LiveVoiceState,
 } from '@/features/voice/liveVoiceEngine';
-import { createSttSession, probeSttSupport, sttSupported, type SttSession } from '@/features/voice/stt';
+import {
+  createSttSession,
+  probeSttSupport,
+  sttSupported,
+  type SttSession,
+} from '@/features/voice/stt';
 import { pickSynthVoice } from '@/features/voice/pickSynthVoice';
 import { applyThemeClasses, resolveTheme } from '@/utils/theme';
 import { LiveVoiceOverlay } from '@/features/voice/LiveVoiceOverlay';
-import { SparkleIcon, GlobeIcon, PlusIcon, XIcon, SearchIcon, DownloadIcon, SettingsIcon, ChevronDownIcon } from '@/components/Icons';
+import {
+  SparkleIcon,
+  GlobeIcon,
+  PlusIcon,
+  XIcon,
+  SearchIcon,
+  DownloadIcon,
+  SettingsIcon,
+  ChevronDownIcon,
+} from '@/components/Icons';
 import { cn } from '@/utils/cn';
 import { RichContent } from '@/components/ai/RichContent';
 import { usePageMeta } from '@/hooks/usePageMeta';
@@ -27,7 +49,12 @@ import { getSong } from '@/services/api';
 import { generatePlaylist } from '@/services/ai/playlist';
 import { matchSlash, parseSlash, type SlashCommand } from '@/features/ai/slashCommands';
 import { hideFollowupLine, splitFollowups } from '@/features/ai/followups';
-import { onSpeakingChange, readAloud, readAloudSupported, setReadAloudVoice } from '@/features/ai/readAloud';
+import {
+  onSpeakingChange,
+  readAloud,
+  readAloudSupported,
+  setReadAloudVoice,
+} from '@/features/ai/readAloud';
 import { detectSongLinks, prefRuleMessage, songContextBlock } from '@/features/ai/replyPrefs';
 import {
   ArrowUpRightIcon,
@@ -53,17 +80,34 @@ import {
   type MoreAction,
 } from '@/components/ai/AiExtras';
 import { useClientConfig } from '@/features/home/useAppConfig';
+import {
+  ATTACHMENT_ACCEPT,
+  attachmentText,
+  droppedFiles,
+  pickerFiles,
+  prepareAttachments,
+  type Attachment,
+  type FileSelection,
+} from '@/features/ai/attachments';
 
-const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/vinaxai' : '/api/vinaxai';
+const ENDPOINT = isNativePlatform()
+  ? 'https://www.sirimillavinay.online/api/vinaxai'
+  : '/api/vinaxai';
 /* The live free-model menu for the two engines that open a whole catalog
    instead of one fixed model (v5.21.0). Fetched only when the picker asks. */
-const MODELS_ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/aimodels' : '/api/aimodels';
+const MODELS_ENDPOINT = isNativePlatform()
+  ? 'https://www.sirimillavinay.online/api/aimodels'
+  : '/api/aimodels';
 /* Which speech models the key serves right now — see functions/api/voices.ts. */
-const VOICES_ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/voices' : '/api/voices';
+const VOICES_ENDPOINT = isNativePlatform()
+  ? 'https://www.sirimillavinay.online/api/voices'
+  : '/api/voices';
 /* Flip to true the day the account gets a real image model — the whole
    pipeline (endpoint, chat branch, button) is wired and waiting. */
 const IMAGES_ENABLED = false;
-const IMG_ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/image' : '/api/image';
+const IMG_ENDPOINT = isNativePlatform()
+  ? 'https://www.sirimillavinay.online/api/image'
+  : '/api/image';
 
 const speechForSpoken = (md: string): string =>
   md
@@ -99,9 +143,30 @@ interface VoiceCatalog {
  *  plumbing, not a name. Mirrors catalogLabel() on the server so a saved pick
  *  reads correctly on the chip before the menu has ever been fetched. */
 const slugLabel = (id: string): string =>
-  (id.includes('/') ? id.slice(id.lastIndexOf('/') + 1) : id).replace(/:(free|beta|extended|nitro|floor)$/i, '').trim() || id;
+  (id.includes('/') ? id.slice(id.lastIndexOf('/') + 1) : id)
+    .replace(/:(free|beta|extended|nitro|floor)$/i, '')
+    .trim() || id;
 
-type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'auto' | 'pro' | 'mini' | 'k3' | 'translator' | 'glimmer' | 'flash' | 'musegl' | 'ising15' | 'laguna' | 'gemma4' | 'router';
+type Mode =
+  | 'muse'
+  | 'swift'
+  | 'sage'
+  | 'scholar'
+  | 'win'
+  | 'nova'
+  | 'nano'
+  | 'auto'
+  | 'pro'
+  | 'mini'
+  | 'k3'
+  | 'translator'
+  | 'glimmer'
+  | 'flash'
+  | 'musegl'
+  | 'ising15'
+  | 'laguna'
+  | 'gemma4'
+  | 'router';
 // Engine picker: six plain-English seats up front — the ones a listener
 // actually chooses between — and every other live engine under Advanced, each
 // still wearing its owner-chosen name. Ids stay stable for the API.
@@ -109,33 +174,96 @@ type Mode = 'muse' | 'swift' | 'sage' | 'scholar' | 'win' | 'nova' | 'nano' | 'a
 // stored picks are remapped server-side), a general all-rounder took the
 // reserve seat, and the two seats marked `catalog` open a live list of every
 // free model that key serves (fetched from /api/aimodels).
-const MODES: Array<{ id: Mode; label: string; hint: string; tier: 'core' | 'advanced'; catalog?: CatalogGroupId }> = [
+const MODES: Array<{
+  id: Mode;
+  label: string;
+  hint: string;
+  tier: 'core' | 'advanced';
+  catalog?: CatalogGroupId;
+}> = [
   { id: 'auto', label: 'Auto', hint: 'Picks the best engine for each question', tier: 'core' },
   { id: 'muse', label: 'Balanced', hint: 'Everyday chat · recommended', tier: 'core' },
   { id: 'swift', label: 'Fast', hint: 'Quickest answers · VinaX OAI OSS 20B', tier: 'core' },
   { id: 'sage', label: 'Deep', hint: 'Careful reasoning · VinaX NVD NMTRN SUP', tier: 'core' },
-  { id: 'win', label: 'Creative', hint: 'Ideas, lyrics, stories · VinaX NVD NMTRN 3.5 LTNG 30B', tier: 'core' },
-  { id: 'translator', label: 'Translate', hint: 'Translation specialist · 12+ languages', tier: 'core' },
+  {
+    id: 'win',
+    label: 'Creative',
+    hint: 'Ideas, lyrics, stories · VinaX NVD NMTRN 3.5 LTNG 30B',
+    tier: 'core',
+  },
+  {
+    id: 'translator',
+    label: 'Translate',
+    hint: 'Translation specialist · 12+ languages',
+    tier: 'core',
+  },
   // Advanced — the owner's live models under their own names.
-  { id: 'nova', label: 'VinaX NVD NMTRN ULT', hint: 'Most powerful · complex questions', tier: 'advanced' },
-  { id: 'nano', label: 'VinaX NVD NMTRN NN OMNI 30B', hint: 'Light and quick · song finder', tier: 'advanced' },
-  { id: 'pro', label: 'VinaX DP V4 PRO', hint: 'Deep analysis · advanced reasoning', tier: 'advanced' },
+  {
+    id: 'nova',
+    label: 'VinaX NVD NMTRN ULT',
+    hint: 'Most powerful · complex questions',
+    tier: 'advanced',
+  },
+  {
+    id: 'nano',
+    label: 'VinaX NVD NMTRN NN OMNI 30B',
+    hint: 'Light and quick · song finder',
+    tier: 'advanced',
+  },
+  {
+    id: 'pro',
+    label: 'VinaX DP V4 PRO',
+    hint: 'Deep analysis · advanced reasoning',
+    tier: 'advanced',
+  },
   { id: 'flash', label: 'VinaX DP V4 FLASH', hint: 'Rapid generalist', tier: 'advanced' },
   { id: 'mini', label: 'VinaX MST NMTRN', hint: 'Dependable all-rounder', tier: 'advanced' },
-  { id: 'scholar', label: 'VinaX GRQ ALL', hint: 'Music knowledge · instant answers', tier: 'advanced', catalog: 'grq' },
-  { id: 'router', label: 'VinaX OPR ALL', hint: 'Free model marketplace · pick any engine', tier: 'advanced', catalog: 'opr' },
+  {
+    id: 'scholar',
+    label: 'VinaX GRQ ALL',
+    hint: 'Music knowledge · instant answers',
+    tier: 'advanced',
+    catalog: 'grq',
+  },
+  {
+    id: 'router',
+    label: 'VinaX OPR ALL',
+    hint: 'Free model marketplace · pick any engine',
+    tier: 'advanced',
+    catalog: 'opr',
+  },
   { id: 'k3', label: 'VinaX K3', hint: 'Premium agent · heavyweight generalist', tier: 'advanced' },
-  { id: 'glimmer', label: 'VinaX GGL DIF GEM 26B A4B IT', hint: 'Visual-creative · moods and themes', tier: 'advanced' },
-  { id: 'musegl', label: 'VinaX MTA MUSE GMR 30B', hint: 'Playful creative sparks', tier: 'advanced' },
+  {
+    id: 'glimmer',
+    label: 'VinaX GGL DIF GEM 26B A4B IT',
+    hint: 'Visual-creative · moods and themes',
+    tier: 'advanced',
+  },
+  {
+    id: 'musegl',
+    label: 'VinaX MTA MUSE GMR 30B',
+    hint: 'Playful creative sparks',
+    tier: 'advanced',
+  },
   { id: 'gemma4', label: 'VinaX GGL GEM 4 31B', hint: 'Open generalist', tier: 'advanced' },
   { id: 'laguna', label: 'VinaX PSD LGNA XS 2.1', hint: 'Small and swift', tier: 'advanced' },
-  { id: 'ising15', label: 'VinaX NVD ING CALBTN 1.5 31B', hint: 'Rankings and comparisons', tier: 'advanced' },
+  {
+    id: 'ising15',
+    label: 'VinaX NVD ING CALBTN 1.5 31B',
+    hint: 'Rankings and comparisons',
+    tier: 'advanced',
+  },
 ];
 // Engine ids retired by the 2026-09-09 key rotation. A listener whose stored
 // pick names one keeps their nearest living seat instead of silently landing
 // on the default (the server maps them too — this just keeps the UI honest
 // about which chip is lit).
-const RETIRED_MODE: Record<string, Mode> = { omni: 'nano', ising135: 'ising15', cgt120: 'swift', minimax: 'mini' };
+const RETIRED_MODE: Record<string, Mode> = {
+  omni: 'nano',
+  ising135: 'ising15',
+  cgt120: 'swift',
+  minimax: 'mini',
+};
 /** The model to send with a request: only the two catalog seats carry one,
  *  and only when the listener actually picked a row (otherwise the seat runs
  *  its own default engine). */
@@ -275,7 +403,12 @@ const uid = (): string =>
   typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-const freshChat = (): Conversation => ({ id: uid(), title: 'New chat', messages: [], updatedAt: Date.now() });
+const freshChat = (): Conversation => ({
+  id: uid(),
+  title: 'New chat',
+  messages: [],
+  updatedAt: Date.now(),
+});
 
 // v5.18.0 — presentational helpers for the redesigned shell: the sidebar
 // row's "last touched" stamp and the welcome greeting split so the time
@@ -310,9 +443,7 @@ function stripImagesForPersist(chats: Conversation[]): Conversation[] {
   return chats.map((c) => ({
     ...c,
     messages: c.messages.map((m) =>
-      m.images && m.images.length
-        ? { ...m, images: m.images.map(() => '') }
-        : m,
+      m.images && m.images.length ? { ...m, images: m.images.map(() => '') } : m,
     ),
   }));
 }
@@ -325,32 +456,27 @@ function persist(chats: Conversation[]): void {
   }
 }
 
-// ---------- file helpers ----------
-const readAsDataURL = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result));
-    fr.onerror = () => reject(new Error('read failed'));
-    fr.readAsDataURL(file);
-  });
-const readAsText = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result));
-    fr.onerror = () => reject(new Error('read failed'));
-    fr.readAsText(file);
-  });
-
 // small inline icons not in the shared set
 const MicIcon = ({ className }: { className?: string }): ReactNode => (
   <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
     <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
-    <path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path
+      d="M5 11a7 7 0 0 0 14 0M12 18v3"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
   </svg>
 );
 const SendIcon = ({ className }: { className?: string }): ReactNode => (
   <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
-    <path d="M12 20V5M6 11l6-6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      d="M12 20V5M6 11l6-6 6 6"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 const StopIcon = ({ className }: { className?: string }): ReactNode => (
@@ -365,16 +491,16 @@ const MenuIcon = ({ className }: { className?: string }): ReactNode => (
 );
 const TrashIcon = ({ className }: { className?: string }): ReactNode => (
   <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
-    <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 
-interface Pending {
-  kind: 'image' | 'text';
-  name: string;
-  dataUrl?: string;
-  text?: string;
-}
 export default function VinaXAIPage(): ReactNode {
   const [chats, setChats] = useState<Conversation[]>(() => {
     const saved = loadChats();
@@ -398,7 +524,14 @@ export default function VinaXAIPage(): ReactNode {
       const saved = localStorage.getItem('vinax.aiDefaultMode') ?? '';
       if (MODES.some((mm) => mm.id === saved)) return saved as Mode;
       // Engine ids saved by older builds map to their closest successor.
-      const legacy: Record<string, Mode> = { maverick: 'muse', diffusion: 'muse', medium: 'muse', fast: 'swift', deep: 'sage', gemma: 'scholar' };
+      const legacy: Record<string, Mode> = {
+        maverick: 'muse',
+        diffusion: 'muse',
+        medium: 'muse',
+        fast: 'swift',
+        deep: 'sage',
+        gemma: 'scholar',
+      };
       if (legacy[saved]) return legacy[saved];
       if (RETIRED_MODE[saved]) return RETIRED_MODE[saved];
     } catch {
@@ -409,7 +542,10 @@ export default function VinaXAIPage(): ReactNode {
   // The live free-model catalogs, and the listener's pick inside each. Both
   // start empty: the menu is fetched the first time an engine list is opened,
   // and an engine nobody has opened costs nothing.
-  const [catalogs, setCatalogs] = useState<Record<CatalogGroupId, CatalogModel[]>>({ grq: [], opr: [] });
+  const [catalogs, setCatalogs] = useState<Record<CatalogGroupId, CatalogModel[]>>({
+    grq: [],
+    opr: [],
+  });
   const [catalogState, setCatalogState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
   // Voice: `${model}|${persona}`, or DEVICE_VOICE. Read once; the engine
   // re-reads the ref on every chunk so a change applies to the next sentence.
@@ -464,21 +600,46 @@ export default function VinaXAIPage(): ReactNode {
   const [research, setResearch] = useState(false);
   // v5.16.0 — reply preferences (remembered), now-playing context, prompt
   // library, read-aloud state, slash menu.
-  const [replyLang, setReplyLang] = useState<string>(() => { try { return localStorage.getItem('vinax.aiReplyLang') ?? 'auto'; } catch { return 'auto'; } });
-  const [replyStyle, setReplyStyle] = useState<string>(() => { try { return localStorage.getItem('vinax.aiReplyStyle') ?? 'auto'; } catch { return 'auto'; } });
+  const [replyLang, setReplyLang] = useState<string>(() => {
+    try {
+      return localStorage.getItem('vinax.aiReplyLang') ?? 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  const [replyStyle, setReplyStyle] = useState<string>(() => {
+    try {
+      return localStorage.getItem('vinax.aiReplyStyle') ?? 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
   const [songCtx, setSongCtx] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const currentSong = useCurrentSong();
   useEffect(() => onSpeakingChange(setSpeakingId), []);
-  useEffect(() => { try { localStorage.setItem('vinax.aiReplyLang', replyLang); localStorage.setItem('vinax.aiReplyStyle', replyStyle); } catch { /* ignore */ } }, [replyLang, replyStyle]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('vinax.aiReplyLang', replyLang);
+      localStorage.setItem('vinax.aiReplyStyle', replyStyle);
+    } catch {
+      /* ignore */
+    }
+  }, [replyLang, replyStyle]);
   const [imageMode, setImageMode] = useState(false);
-  const [pending, setPending] = useState<Pending[]>([]);
+  const [pending, setPending] = useState<Attachment[]>([]);
+  const [attachmentNotice, setAttachmentNotice] = useState('');
+  const [dropActive, setDropActive] = useState(false);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const themePref = useSettingsStore((st) => st.theme);
   useEffect(() => {
     // Standalone route: the main layout's theme effect never runs here.
-    applyThemeClasses(resolveTheme(themePref, window.matchMedia('(prefers-color-scheme: dark)').matches));
+    applyThemeClasses(
+      resolveTheme(themePref, window.matchMedia('(prefers-color-scheme: dark)').matches),
+    );
   }, [themePref]);
   // v5.10.1 — no deterrence on the AI page: text selects, images drag,
   // right-click opens the browser menu (the document listeners in
@@ -527,11 +688,34 @@ export default function VinaXAIPage(): ReactNode {
   const dictNoResultRef = useRef<number>(0);
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   // stable-ish refs so speech callbacks read latest values
-  const stateRef = useRef({ mode, web, think, research, profile, replyLang, replyStyle, songCtx, currentSong, catalogPicks });
-  stateRef.current = { mode, web, think, research, profile, replyLang, replyStyle, songCtx, currentSong, catalogPicks };
+  const stateRef = useRef({
+    mode,
+    web,
+    think,
+    research,
+    profile,
+    replyLang,
+    replyStyle,
+    songCtx,
+    currentSong,
+    catalogPicks,
+  });
+  stateRef.current = {
+    mode,
+    web,
+    think,
+    research,
+    profile,
+    replyLang,
+    replyStyle,
+    songCtx,
+    currentSong,
+    catalogPicks,
+  };
 
   // Which catalog (if any) the current seat opens, and the model chosen in it.
   const catalogGroup = MODES.find((mm) => mm.id === mode)?.catalog ?? null;
@@ -556,7 +740,8 @@ export default function VinaXAIPage(): ReactNode {
         .then((j: { groups?: Array<{ id?: string; models?: CatalogModel[] }> }) => {
           const next: Record<CatalogGroupId, CatalogModel[]> = { grq: [], opr: [] };
           for (const g of j.groups ?? []) {
-            if ((g.id === 'grq' || g.id === 'opr') && Array.isArray(g.models)) next[g.id] = g.models;
+            if ((g.id === 'grq' || g.id === 'opr') && Array.isArray(g.models))
+              next[g.id] = g.models;
           }
           setCatalogs(next);
           setCatalogState('ready');
@@ -664,7 +849,8 @@ export default function VinaXAIPage(): ReactNode {
   const active = useMemo(() => chats.find((c) => c.id === activeId) ?? chats[0], [chats, activeId]);
 
   // Browser tab mirrors the open conversation, like any serious chat app.
-  const chatTitle = active && active.messages.length && active.title !== 'New chat' ? active.title : null;
+  const chatTitle =
+    active && active.messages.length && active.title !== 'New chat' ? active.title : null;
   usePageMeta({
     title: chatTitle ?? 'VinaX AI — ask anything',
     description:
@@ -677,7 +863,10 @@ export default function VinaXAIPage(): ReactNode {
   // replace the quick-action chips (Admin → AI Quick Actions).
   const clientCfg = useClientConfig();
   const quickActions = useMemo(
-    () => (clientCfg?.aiQuick.length ? clientCfg.aiQuick.map((q) => ({ ...q, mode: q.mode as Mode | undefined })) : QUICK_ACTIONS),
+    () =>
+      clientCfg?.aiQuick.length
+        ? clientCfg.aiQuick.map((q) => ({ ...q, mode: q.mode as Mode | undefined }))
+        : QUICK_ACTIONS,
     [clientCfg],
   );
   const starters = useMemo(() => {
@@ -702,11 +891,15 @@ export default function VinaXAIPage(): ReactNode {
     setChats((prev) => prev.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c)));
 
   const renameChat = (id: string, title: string): void =>
-    setChats((prev) => prev.map((c) => (c.id === id ? { ...c, title: title.trim() || c.title } : c)));
+    setChats((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, title: title.trim() || c.title } : c)),
+    );
 
   const chatToMarkdown = (c: Conversation): string =>
     `# ${c.title}\n\n` +
-    c.messages.map((m) => (m.role === 'user' ? `**You:** ${m.content}` : `**VinaX AI:**\n\n${m.content}`)).join('\n\n---\n\n');
+    c.messages
+      .map((m) => (m.role === 'user' ? `**You:** ${m.content}` : `**VinaX AI:**\n\n${m.content}`))
+      .join('\n\n---\n\n');
 
   const downloadFile = (name: string, text: string, mime: string): void => {
     const a = document.createElement('a');
@@ -724,7 +917,9 @@ export default function VinaXAIPage(): ReactNode {
       return;
     }
     if (kind === 'txt') {
-      const txt = active.messages.map((m) => `${m.role === 'user' ? 'You' : 'VinaX AI'}: ${m.content}`).join('\n\n');
+      const txt = active.messages
+        .map((m) => `${m.role === 'user' ? 'You' : 'VinaX AI'}: ${m.content}`)
+        .join('\n\n');
       downloadFile(`${stem}.txt`, txt, 'text/plain');
       return;
     }
@@ -735,7 +930,11 @@ export default function VinaXAIPage(): ReactNode {
     w.document.write(
       `<html><head><title>${esc(active.title)}</title><style>body{font-family:-apple-system,system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.6}h1{font-size:1.4rem}.u{font-weight:700;margin-top:1.2rem}.a{white-space:pre-wrap;margin-top:.4rem}</style></head><body><h1>${esc(active.title)}</h1>` +
         active.messages
-          .map((m) => (m.role === 'user' ? `<p class="u">You: ${esc(m.content)}</p>` : `<div class="a">${esc(m.content)}</div>`))
+          .map((m) =>
+            m.role === 'user'
+              ? `<p class="u">You: ${esc(m.content)}</p>`
+              : `<div class="a">${esc(m.content)}</div>`,
+          )
           .join('') +
         '</body></html>',
     );
@@ -756,7 +955,11 @@ export default function VinaXAIPage(): ReactNode {
   };
 
   const rateReply = (idx: number, rating: 'up' | 'down'): void => {
-    setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, rating: m.rating === rating ? undefined : rating } : m)));
+    setActiveMessages((prev) =>
+      prev.map((m, k) =>
+        k === idx ? { ...m, rating: m.rating === rating ? undefined : rating } : m,
+      ),
+    );
   };
 
   const regenerate = (): void => {
@@ -765,7 +968,11 @@ export default function VinaXAIPage(): ReactNode {
     const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
     if (!lastUser) return;
     const previousReply = [...msgs].reverse().find((m) => m.role === 'assistant')?.content ?? '';
-    void sendRef.current(lastUser.content, { history: msgs.slice(0, msgs.lastIndexOf(lastUser)), previousReply, user: lastUser });
+    void sendRef.current(lastUser.content, {
+      history: msgs.slice(0, msgs.lastIndexOf(lastUser)),
+      previousReply,
+      user: lastUser,
+    });
   };
 
   const continueReply = (): void => {
@@ -781,14 +988,24 @@ export default function VinaXAIPage(): ReactNode {
   // v5.16.0 — reply actions: rewrite the last answer, pin, branch.
   const rewriteLast = (how: 'shorter' | 'longer' | 'simpler'): void => {
     if (busy) return;
-    const ask = how === 'shorter' ? 'Rewrite your last answer at half the length, keeping every fact.' : how === 'longer' ? 'Expand your last answer with more detail and examples, same structure.' : 'Rewrite your last answer in simpler words, as if for someone new to the topic.';
+    const ask =
+      how === 'shorter'
+        ? 'Rewrite your last answer at half the length, keeping every fact.'
+        : how === 'longer'
+          ? 'Expand your last answer with more detail and examples, same structure.'
+          : 'Rewrite your last answer in simpler words, as if for someone new to the topic.';
     void sendRef.current(ask);
   };
-  const togglePinMsg = (idx: number): void => setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, pinned: !m.pinned } : m)));
+  const togglePinMsg = (idx: number): void =>
+    setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, pinned: !m.pinned } : m)));
   const branchFrom = (idx: number): void => {
     const src = active;
     if (!src) return;
-    const c: Conversation = { ...freshChat(), title: `${src.title} · branch`, messages: src.messages.slice(0, idx + 1).map((m) => ({ ...m, pinned: undefined })) };
+    const c: Conversation = {
+      ...freshChat(),
+      title: `${src.title} · branch`,
+      messages: src.messages.slice(0, idx + 1).map((m) => ({ ...m, pinned: undefined })),
+    };
     setChats((prev) => [c, ...prev]);
     setActiveId(c.id);
     setSidebarOpen(false);
@@ -796,7 +1013,9 @@ export default function VinaXAIPage(): ReactNode {
 
   const setActiveMessages = (fn: (prev: Msg[]) => Msg[]): void => {
     setChats((prev) =>
-      prev.map((c) => (c.id === (active?.id ?? '') ? { ...c, messages: fn(c.messages), updatedAt: Date.now() } : c)),
+      prev.map((c) =>
+        c.id === (active?.id ?? '') ? { ...c, messages: fn(c.messages), updatedAt: Date.now() } : c,
+      ),
     );
   };
 
@@ -840,12 +1059,17 @@ export default function VinaXAIPage(): ReactNode {
     setActiveMessages((prev) => [
       ...prev,
       { role: 'user', content: userText },
-      player ? { role: 'assistant', content: reply, player: true } : { role: 'assistant', content: reply },
+      player
+        ? { role: 'assistant', content: reply, player: true }
+        : { role: 'assistant', content: reply },
     ]);
   };
 
   const tryMusicCommand = async (text: string): Promise<boolean> => {
-    const t = text.toLowerCase().replace(/[.!?]+$/, '').trim();
+    const t = text
+      .toLowerCase()
+      .replace(/[.!?]+$/, '')
+      .trim();
     const say = (line: string): void => {
       pushExchange(text, line, true);
       voiceEngineRef.current?.speakDirect(line);
@@ -884,7 +1108,9 @@ export default function VinaXAIPage(): ReactNode {
     const playPattern = /^(?:play|queue|start|put on|shuffle|similar to|more like)\s+(.+)$/i;
     const cmd = playPattern.exec(text.trim());
     if (cmd) {
-      const verb = (cmd[0].match(/^(play|queue|start|put on|shuffle|similar to|more like)/i)?.[1] ?? 'play').toLowerCase();
+      const verb = (
+        cmd[0].match(/^(play|queue|start|put on|shuffle|similar to|more like)/i)?.[1] ?? 'play'
+      ).toLowerCase();
       let rest = cmd[1].trim();
       // Strip trailing filler ("play X song / music / now / please")
       rest = rest.replace(/\s+(?:song|music|now|please)$/i, '').trim();
@@ -914,7 +1140,9 @@ export default function VinaXAIPage(): ReactNode {
           const rawResults = await searchSongs(rest, verb === 'shuffle' ? 15 : 8);
           let results = rawResults;
           if (langFilter) {
-            const matches = results.filter((s) => (s.language ?? '').toLowerCase().startsWith(langFilter));
+            const matches = results.filter((s) =>
+              (s.language ?? '').toLowerCase().startsWith(langFilter),
+            );
             if (matches.length) results = matches; // fall through to unfiltered if no language match
           }
           if (excludeArtist) {
@@ -955,48 +1183,103 @@ export default function VinaXAIPage(): ReactNode {
   const runSlash = async (cmd: string, arg: string): Promise<boolean> => {
     const song = stateRef.current.currentSong;
     switch (cmd) {
-      case 'clear': newChat(); return true;
-      case 'export': setExportOpen(true); return true;
-      case 'prompts': setPromptsOpen(true); return true;
-      case 'think': setThink((v) => !v); return true;
-      case 'web': setWeb((v) => !v); return true;
+      case 'clear':
+        newChat();
+        return true;
+      case 'export':
+        setExportOpen(true);
+        return true;
+      case 'prompts':
+        setPromptsOpen(true);
+        return true;
+      case 'think':
+        setThink((v) => !v);
+        return true;
+      case 'web':
+        setWeb((v) => !v);
+        return true;
       case 'now':
-        pushExchange('/now', song ? `Now playing: ${song.title} — ${song.artists?.[0]?.name ?? song.subtitle}` : 'Nothing is playing right now.', !!song);
+        pushExchange(
+          '/now',
+          song
+            ? `Now playing: ${song.title} — ${song.artists?.[0]?.name ?? song.subtitle}`
+            : 'Nothing is playing right now.',
+          !!song,
+        );
         return true;
       case 'mood':
-        if (!arg) { pushExchange('/mood', 'Tell me a mood — try “/mood chill” or “/mood energetic”.'); return true; }
+        if (!arg) {
+          pushExchange('/mood', 'Tell me a mood — try “/mood chill” or “/mood energetic”.');
+          return true;
+        }
         return tryMusicCommand(`play ${arg} songs`);
       case 'summary':
-        void sendRef.current('Summarise this conversation so far in five short bullets, then list any decisions or action items.');
+        void sendRef.current(
+          'Summarise this conversation so far in five short bullets, then list any decisions or action items.',
+        );
         return true;
       case 'lyrics':
-        if (!song) { pushExchange('/lyrics', 'Play a song first, then ask again.'); return true; }
+        if (!song) {
+          pushExchange('/lyrics', 'Play a song first, then ask again.');
+          return true;
+        }
         setSongCtx(true);
-        void sendRef.current(`Explain the meaning of “${song.title}” — what the lyrics are about, the mood, and any lines worth noticing. Keep it warm and brief.`);
+        void sendRef.current(
+          `Explain the meaning of “${song.title}” — what the lyrics are about, the mood, and any lines worth noticing. Keep it warm and brief.`,
+        );
         return true;
       case 'playlist': {
-        if (!arg) { pushExchange('/playlist', 'Describe a vibe — try “/playlist rainy evening in Telugu”.'); return true; }
+        if (!arg) {
+          pushExchange('/playlist', 'Describe a vibe — try “/playlist rainy evening in Telugu”.');
+          return true;
+        }
         const langs = useSettingsStore.getState().pinnedLanguages;
         const muted = useSettingsStore.getState().mutedLanguages ?? [];
-        setActiveMessages((prev) => [...prev, { role: 'user', content: `/playlist ${arg}` }, { role: 'assistant', content: '' }]);
+        setActiveMessages((prev) => [
+          ...prev,
+          { role: 'user', content: `/playlist ${arg}` },
+          { role: 'assistant', content: '' },
+        ]);
         setBusy(true);
         try {
           const r = await generatePlaylist(arg, langs, muted);
           const ok = r.ok ? r.playlist : null;
-          const lines = ok ? ok.songs.map((sg, i) => `${i + 1}. ${sg.title} — ${sg.artists?.[0]?.name ?? sg.subtitle}`).join('\n') : '';
-          const reply = ok && ok.songs.length ? `**${ok.name}**\n${ok.description}\n\n${lines}` : 'I couldn’t build that playlist right now — try a different vibe or a moment later.';
-          setActiveMessages((prev) => { const next = [...prev]; next[next.length - 1] = { role: 'assistant', content: reply }; return next; });
+          const lines = ok
+            ? ok.songs
+                .map((sg, i) => `${i + 1}. ${sg.title} — ${sg.artists?.[0]?.name ?? sg.subtitle}`)
+                .join('\n')
+            : '';
+          const reply =
+            ok && ok.songs.length
+              ? `**${ok.name}**\n${ok.description}\n\n${lines}`
+              : 'I couldn’t build that playlist right now — try a different vibe or a moment later.';
+          setActiveMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { role: 'assistant', content: reply };
+            return next;
+          });
         } catch {
-          setActiveMessages((prev) => { const next = [...prev]; next[next.length - 1] = { role: 'assistant', content: 'The playlist engine didn’t answer — try again in a moment.' }; return next; });
+          setActiveMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = {
+              role: 'assistant',
+              content: 'The playlist engine didn’t answer — try again in a moment.',
+            };
+            return next;
+          });
         }
         setBusy(false);
         return true;
       }
-      default: return false;
+      default:
+        return false;
     }
   };
 
-  const send = async (raw: string, retry?: { history: Msg[]; previousReply: string; user: Msg }): Promise<void> => {
+  const send = async (
+    raw: string,
+    retry?: { history: Msg[]; previousReply: string; user: Msg },
+  ): Promise<void> => {
     const conversation = retry?.history ?? messages;
     const q = raw.trim();
     if ((!q && pending.length === 0) || busy) return;
@@ -1016,7 +1299,11 @@ export default function VinaXAIPage(): ReactNode {
       setInput('');
       setImageMode(false);
       setBusy(true);
-      setActiveMessages((prev) => [...prev, { role: 'user', content: q }, { role: 'assistant', content: '' }]);
+      setActiveMessages((prev) => [
+        ...prev,
+        { role: 'user', content: q },
+        { role: 'assistant', content: '' },
+      ]);
       try {
         const r = await fetch(IMG_ENDPOINT, {
           method: 'POST',
@@ -1041,23 +1328,32 @@ export default function VinaXAIPage(): ReactNode {
       } catch {
         setActiveMessages((prev) => {
           const next = [...prev];
-          next[next.length - 1] = { role: 'assistant', content: 'The image engine didn’t answer — try once more in a moment.' };
+          next[next.length - 1] = {
+            role: 'assistant',
+            content: 'The image engine didn’t answer — try once more in a moment.',
+          };
           return next;
         });
       }
       setBusy(false);
       return;
     }
-    const imgs = retry ? retry.user.images ?? [] : pending.filter((p) => p.kind === 'image' && p.dataUrl).map((p) => p.dataUrl as string);
-    const textFiles = retry ? [] : pending.filter((p) => p.kind === 'text' && p.text);
+    const imgs = retry
+      ? (retry.user.images ?? [])
+      : pending.filter((p) => p.kind === 'image' && p.dataUrl).map((p) => p.dataUrl as string);
     let content = q;
-    for (const f of textFiles) content += `\n\n--- ${f.name} ---\n${(f.text ?? '').slice(0, 40_000)}`;
+    if (!retry)
+      for (const f of pending.filter((p) => p.kind === 'text')) content += attachmentText(f);
 
     setInput('');
     setPending([]);
     if (taRef.current) taRef.current.style.height = 'auto';
 
-    const userMsg: Msg = { role: 'user', content: content || '(image)', images: imgs.length ? imgs : undefined };
+    const userMsg: Msg = {
+      role: 'user',
+      content: content || '(image)',
+      images: imgs.length ? imgs : undefined,
+    };
     setActiveMessages(() => [...conversation, userMsg, { role: 'assistant', content: '' }]);
     setChats((prev) =>
       prev.map((c) =>
@@ -1073,7 +1369,9 @@ export default function VinaXAIPage(): ReactNode {
     const thinkNow = !voiceLive && stateRef.current.think;
     const researchNow = !voiceLive && stateRef.current.research;
     // v5.16.0 — reply preferences + song context (now playing, pasted links).
-    const prefRule = voiceLive ? '' : prefRuleMessage(stateRef.current.replyLang, stateRef.current.replyStyle);
+    const prefRule = voiceLive
+      ? ''
+      : prefRuleMessage(stateRef.current.replyLang, stateRef.current.replyStyle);
     const ctxBlocks: string[] = [];
     if (!voiceLive) {
       const np = stateRef.current.songCtx ? stateRef.current.currentSong : null;
@@ -1087,20 +1385,44 @@ export default function VinaXAIPage(): ReactNode {
       ...(prefRule ? [{ role: 'user' as const, content: prefRule }] : []),
       ...ctxBlocks.filter(Boolean).map((content) => ({ role: 'user' as const, content })),
       ...(voiceLive
-        ? [{ role: 'user' as const, content: 'SYSTEM RULE for this voice conversation: every reply is spoken aloud — 1-3 short conversational sentences of plain text, no markdown, no lists, no emojis.' }]
+        ? [
+            {
+              role: 'user' as const,
+              content:
+                'SYSTEM RULE for this voice conversation: every reply is spoken aloud — 1-3 short conversational sentences of plain text, no markdown, no lists, no emojis.',
+            },
+          ]
         : []),
       ...(thinkNow
-        ? [{ role: 'user' as const, content: 'SYSTEM RULE for this reply: reason it through privately first, then present a short structured summary of the key steps followed by a clear final answer. Raw chain-of-thought never appears in the reply.' }]
+        ? [
+            {
+              role: 'user' as const,
+              content:
+                'SYSTEM RULE for this reply: reason it through privately first, then present a short structured summary of the key steps followed by a clear final answer. Raw chain-of-thought never appears in the reply.',
+            },
+          ]
         : []),
       ...(researchNow
-        ? [{ role: 'user' as const, content: 'SYSTEM RULE for this reply: research mode. Work from the web results, cross-check at least two independent sources, flag where they disagree, and tie each key fact to the source that backs it.' }]
+        ? [
+            {
+              role: 'user' as const,
+              content:
+                'SYSTEM RULE for this reply: research mode. Work from the web results, cross-check at least two independent sources, flag where they disagree, and tie each key fact to the source that backs it.',
+            },
+          ]
         : []),
       ...conversation,
       userMsg,
-      ...(retry?.previousReply ? [
-        { role: 'assistant' as const, content: retry.previousReply.slice(0, 12000) },
-        { role: 'user' as const, content: 'Regenerate your answer to my last question. Take a meaningfully different approach, preserve correct facts, and avoid the songs you just recommended. Deliver the new answer directly.' },
-      ] : []),
+      ...(retry?.previousReply
+        ? [
+            { role: 'assistant' as const, content: retry.previousReply.slice(0, 12000) },
+            {
+              role: 'user' as const,
+              content:
+                'Regenerate your answer to my last question. Take a meaningfully different approach, preserve correct facts, and avoid the songs you just recommended. Deliver the new answer directly.',
+            },
+          ]
+        : []),
     ].map((mm) => ({ role: mm.role, content: mm.content }));
     const controller = new AbortController();
     abortRef.current = controller;
@@ -1113,11 +1435,17 @@ export default function VinaXAIPage(): ReactNode {
     // instead of the model's training-time snapshot. The heuristic used to
     // live server-side but was moved here so users always see the "web on"
     // badge when a live-web hop happens (see server-side audit finding M18).
-    const freshTrigger = /\b(today|tonight|yesterday|this (?:week|month|year|weekend|season)|right now|as of (?:now|today)|breaking(?: news)?|who won|live scores?|box office|standings|weather|price of|stock price|202[6-9]|latest|recently released)\b/i.test(q);
+    const freshTrigger =
+      /\b(today|tonight|yesterday|this (?:week|month|year|weekend|season)|right now|as of (?:now|today)|breaking(?: news)?|who won|live scores?|box office|standings|weather|price of|stock price|202[6-9]|latest|recently released)\b/i.test(
+        q,
+      );
     try {
       const res = await fetch(ENDPOINT, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...(isNativePlatform() ? { 'x-vinax-client': 'app' } : {}) },
+        headers: {
+          'content-type': 'application/json',
+          ...(isNativePlatform() ? { 'x-vinax-client': 'app' } : {}),
+        },
         body: JSON.stringify({
           messages: apiMessages,
           // Think overrides the lane to the deep engine (high effort) for this message.
@@ -1132,7 +1460,15 @@ export default function VinaXAIPage(): ReactNode {
           // B5 — the snapshot plus this thread's own memory: everything the
           // assistant already recommended in this conversation, so "give me
           // more" turns reach into fresh territory instead of looping.
-          taste: { ...buildTasteSnapshot(), alreadyRecommendedThisChat: extractRecommendedFromThread(retry ? [...conversation, { role: 'assistant', content: retry.previousReply }] : conversation, 32) },
+          taste: {
+            ...buildTasteSnapshot(),
+            alreadyRecommendedThisChat: extractRecommendedFromThread(
+              retry
+                ? [...conversation, { role: 'assistant', content: retry.previousReply }]
+                : conversation,
+              32,
+            ),
+          },
           profile: stateRef.current.profile || undefined,
         }),
         signal: controller.signal,
@@ -1380,26 +1716,28 @@ export default function VinaXAIPage(): ReactNode {
     setVoiceNotice('');
   };
 
-  const onFiles = async (files: FileList | null): Promise<void> => {
-    if (!files) return;
-    const add: Pending[] = [];
-    for (const file of Array.from(files).slice(0, 8)) {
-      if (file.type.startsWith('image/')) {
-        try {
-          add.push({ kind: 'image', name: file.name, dataUrl: await readAsDataURL(file) });
-        } catch {
-          /* skip unreadable image */
-        }
-      } else if (file.size < 2_000_000) {
-        try {
-          add.push({ kind: 'text', name: file.name, text: await readAsText(file) });
-        } catch {
-          /* skip unreadable file */
-        }
-      }
+  const addFiles = async (selection: FileSelection): Promise<void> => {
+    if (!selection.files.length && !selection.notices.length) return;
+    setAttachmentBusy(true);
+    try {
+      const result = await prepareAttachments(selection, pending);
+      setPending(result.attachments);
+      setAttachmentNotice(result.notices.join(' '));
+      window.setTimeout(() => setAttachmentNotice(''), 9000);
+    } finally {
+      setAttachmentBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
-    setPending((prev) => [...prev, ...add].slice(0, 8));
-    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const onFiles = (files: FileList | File[]): void => {
+    void addFiles(pickerFiles(files));
+  };
+
+  const onDropFiles = (event: DragEvent): void => {
+    event.preventDefault();
+    setDropActive(false);
+    void droppedFiles(event.dataTransfer).then(addFiles);
   };
 
   // Voice everywhere (v3.3.0): web uses the Web Speech API; the Android app
@@ -1421,328 +1759,449 @@ export default function VinaXAIPage(): ReactNode {
   // so it is built once here and placed below. Duplicating this JSX would
   // mean two copies of every handler.
   const composerBlock = (
-    <div className={cn('shrink-0', isEmpty ? 'px-0' : 'px-3 sm:px-6 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]')}>
-          <div className="mx-auto w-full max-w-[720px]">
-            {pending.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2 px-1">
-                {pending.map((p, i) => (
-                  <span key={i} className="ai-chip pl-1.5 pr-1 py-1 gap-1.5">
-                    {p.kind === 'image' && p.dataUrl ? (
-                      <img src={p.dataUrl} alt="" className="w-6 h-6 rounded-md object-cover" />
-                    ) : (
-                      <span className="w-6 h-6 rounded-md bg-[var(--ai-hover)] flex items-center justify-center text-[9px] font-bold ai-t3" aria-hidden>TXT</span>
-                    )}
-                    <span className="max-w-[10rem] truncate">{p.name}</span>
-                    <button
-                      aria-label="Remove"
-                      onClick={() => setPending((prev) => prev.filter((_, k) => k !== i))}
-                      className="ai-icon-btn w-6 h-6 ai-t3"
-                    >
-                      <XIcon className="w-3.5 h-3.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="ai-composer relative px-2.5 pt-3 pb-2">
-              <SlashMenu items={matchSlash(input)} onPick={(c: SlashCommand) => { setInput(c.arg ? `/${c.cmd} ` : `/${c.cmd}`); taRef.current?.focus(); if (!c.arg) void send(`/${c.cmd}`); }} />
-              <input
-                ref={fileRef}
-                type="file"
-                multiple
-                accept="image/*,.txt,.md,.markdown,.csv,.tsv,.json,.log,.xml,.yml,.yaml,.toml,.ini,.env.example,.html,.htm,.css,.js,.jsx,.ts,.tsx,.py,.java,.kt,.c,.h,.cpp,.cs,.go,.rs,.rb,.php,.sh,.sql,.r,.swift,.dart"
-                className="hidden"
-                onChange={(e) => void onFiles(e.target.files)}
-              />
-              <textarea
-                ref={taRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  const t = e.target;
-                  t.style.height = 'auto';
-                  t.style.height = `${Math.min(t.scrollHeight, 144)}px`;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Tab' && input.startsWith('/') && !/\s/.test(input)) {
-                    const first = matchSlash(input)[0];
-                    if (first) { e.preventDefault(); setInput(first.arg ? `/${first.cmd} ` : `/${first.cmd}`); }
-                    return;
-                  }
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void send(input);
-                  }
-                }}
-                rows={1}
-                placeholder={imageMode ? 'Describe the image to create…' : listening ? 'Listening…' : 'Message VinaX AI… (type / for commands)'}
-                aria-label="Message VinaX AI"
-                className="w-full bg-transparent resize-none outline-none px-2 text-[15px] leading-6 max-h-36 ai-t1 placeholder:opacity-55"
-              />
-              <div className="mt-1.5 flex items-center gap-0.5">
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  aria-label="Add photos or files"
-                  className="ai-icon-btn"
-                  title="Add photos & files"
-                >
-                  <PlusIcon className="w-[18px] h-[18px]" />
-                </button>
-                <button
-                  onClick={() => setWeb((v) => !v)}
-                  aria-pressed={web}
-                  aria-label="Web search"
-                  title="Web search"
-                  className={cn('ai-icon-btn', web && 'ai-icon-btn-on')}
-                >
-                  <GlobeIcon className="w-[18px] h-[18px]" />
-                </button>
-                {IMAGES_ENABLED && (
-                <button
-                  onClick={() => setImageMode((v) => !v)}
-                  aria-pressed={imageMode}
-                  aria-label="Create an image"
-                  title="Create an image from your next message"
-                  className={cn('ai-icon-btn text-base leading-none', imageMode && 'ai-icon-btn-on')}
-                >
-                  <span aria-hidden>🎨</span>
-                </button>
-                )}
-                {canSpeech && (
-                  <button
-                    onClick={voiceMode ? endVoice : startVoice}
-                    aria-pressed={voiceMode}
-                    aria-label="Live voice chat"
-                    title="Live voice chat"
-                    className={cn('ai-icon-btn', voiceMode && 'ai-icon-btn-on')}
-                  >
-                    <WaveformIcon className="w-[18px] h-[18px]" />
-                  </button>
-                )}
-                <span className="flex-1" />
-                {canSpeech && (
-                  <button
-                    onClick={() => (listening ? stopListening() : startListening(false))}
-                    aria-label="Voice input"
-                    aria-pressed={listening}
-                    title="Speak"
-                    className={cn('ai-icon-btn', listening && 'ai-icon-btn-on animate-pulse')}
-                  >
-                    <MicIcon className="w-[18px] h-[18px]" />
-                  </button>
-                )}
-                {busy ? (
-                  <button onClick={stop} aria-label="Stop" className="ai-send ml-1" style={{ background: 'var(--ai-text)', color: 'var(--ai-bg)' }}>
-                    <StopIcon className="w-4 h-4" />
-                  </button>
+    <div
+      className={cn(
+        'shrink-0',
+        isEmpty ? 'px-0' : 'px-3 sm:px-6 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+      )}
+    >
+      <div className="mx-auto w-full max-w-[720px]">
+        {attachmentBusy && (
+          <div className="ai-attachment-status ai-t2" role="status">
+            <span className="vx-wave-loader" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            Reading selected files…
+          </div>
+        )}
+        {attachmentNotice && (
+          <div className="ai-attachment-notice" role="status">
+            {attachmentNotice}
+          </div>
+        )}
+        {pending.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2 px-1">
+            {pending.map((p, i) => (
+              <span
+                key={p.key}
+                className="ai-chip ai-attachment-chip pl-1.5 pr-1 py-1 gap-1.5"
+                title={p.path}
+              >
+                {p.kind === 'image' && p.dataUrl ? (
+                  <img src={p.dataUrl} alt="" className="w-6 h-6 rounded-md object-cover" />
                 ) : (
-                  <button
-                    onClick={() => void send(input)}
-                    disabled={!input.trim() && pending.length === 0}
-                    aria-label="Send"
-                    className="ai-send ml-1"
+                  <span
+                    className="w-6 h-6 rounded-md bg-[var(--ai-hover)] flex items-center justify-center text-[9px] font-bold ai-t3"
+                    aria-hidden
                   >
-                    <SendIcon className="w-4 h-4" />
-                  </button>
+                    TXT
+                  </span>
                 )}
+                <span className="max-w-[12rem] truncate">{p.path}</span>
+                    <button
+                      aria-label={`Remove ${p.path}`}
+                  onClick={() => setPending((prev) => prev.filter((_, k) => k !== i))}
+                  className="ai-icon-btn w-6 h-6 ai-t3"
+                >
+                  <XIcon className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="ai-composer relative px-2.5 pt-3 pb-2">
+          <SlashMenu
+            items={matchSlash(input)}
+            onPick={(c: SlashCommand) => {
+              setInput(c.arg ? `/${c.cmd} ` : `/${c.cmd}`);
+              taRef.current?.focus();
+              if (!c.arg) void send(`/${c.cmd}`);
+            }}
+          />
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            accept={ATTACHMENT_ACCEPT}
+            className="hidden"
+            onChange={(e) => onFiles(e.target.files ? Array.from(e.target.files) : [])}
+          />
+          <input
+            ref={folderRef}
+            type="file"
+            multiple
+            {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+            accept={ATTACHMENT_ACCEPT}
+            className="hidden"
+            onChange={(e) => onFiles(e.target.files ? Array.from(e.target.files) : [])}
+          />
+          <textarea
+            ref={taRef}
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              const t = e.target;
+              t.style.height = 'auto';
+              t.style.height = `${Math.min(t.scrollHeight, 144)}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Tab' && input.startsWith('/') && !/\s/.test(input)) {
+                const first = matchSlash(input)[0];
+                if (first) {
+                  e.preventDefault();
+                  setInput(first.arg ? `/${first.cmd} ` : `/${first.cmd}`);
+                }
+                return;
+              }
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void send(input);
+              }
+            }}
+            rows={1}
+            placeholder={
+              imageMode
+                ? 'Describe the image to create…'
+                : listening
+                  ? 'Listening…'
+                  : 'Message VinaX AI… (type / for commands)'
+            }
+            aria-label="Message VinaX AI"
+            className="w-full bg-transparent resize-none outline-none px-2 text-[15px] leading-6 max-h-36 ai-t1 placeholder:opacity-55"
+          />
+          <div className="mt-1.5 flex items-center gap-0.5">
+            <div className="relative">
+              <button
+                onClick={() => setUploadMenuOpen((open) => !open)}
+                aria-label="Upload files or folder"
+                aria-expanded={uploadMenuOpen}
+                aria-haspopup="menu"
+                className="ai-icon-btn"
+                title="Upload files or folder"
+              >
+                <PlusIcon className="w-[18px] h-[18px]" />
+              </button>
+              <div
+                className={cn('ai-upload-menu', uploadMenuOpen && 'ai-upload-menu-open')}
+                role="menu"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setUploadMenuOpen(false);
+                    fileRef.current?.click();
+                  }}
+                >
+                  Upload files
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setUploadMenuOpen(false);
+                    folderRef.current?.click();
+                  }}
+                >
+                  Upload folder
+                </button>
               </div>
             </div>
+            <button
+              onClick={() => setWeb((v) => !v)}
+              aria-pressed={web}
+              aria-label="Web search"
+              title="Web search"
+              className={cn('ai-icon-btn', web && 'ai-icon-btn-on')}
+            >
+              <GlobeIcon className="w-[18px] h-[18px]" />
+            </button>
+            {IMAGES_ENABLED && (
+              <button
+                onClick={() => setImageMode((v) => !v)}
+                aria-pressed={imageMode}
+                aria-label="Create an image"
+                title="Create an image from your next message"
+                className={cn('ai-icon-btn text-base leading-none', imageMode && 'ai-icon-btn-on')}
+              >
+                <span aria-hidden>🎨</span>
+              </button>
+            )}
+            {canSpeech && (
+              <button
+                onClick={voiceMode ? endVoice : startVoice}
+                aria-pressed={voiceMode}
+                aria-label="Live voice chat"
+                title="Live voice chat"
+                className={cn('ai-icon-btn', voiceMode && 'ai-icon-btn-on')}
+              >
+                <WaveformIcon className="w-[18px] h-[18px]" />
+              </button>
+            )}
+            <span className="flex-1" />
+            {canSpeech && (
+              <button
+                onClick={() => (listening ? stopListening() : startListening(false))}
+                aria-label="Voice input"
+                aria-pressed={listening}
+                title="Speak"
+                className={cn('ai-icon-btn', listening && 'ai-icon-btn-on animate-pulse')}
+              >
+                <MicIcon className="w-[18px] h-[18px]" />
+              </button>
+            )}
+            {busy ? (
+              <button
+                onClick={stop}
+                aria-label="Stop"
+                className="ai-send ml-1"
+                style={{ background: 'var(--ai-text)', color: 'var(--ai-bg)' }}
+              >
+                <StopIcon className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => void send(input)}
+                disabled={!input.trim() && pending.length === 0}
+                aria-label="Send"
+                className="ai-send ml-1"
+              >
+                <SendIcon className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
 
-            {/* mode + capability-toggle row */}
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
-              <div className="flex items-center gap-1.5 min-w-0">
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setEngineOpen((v) => !v);
-                    // The free-model menu is fetched on first open, never on
-                    // page load — a listener who stays on a fixed seat pays
-                    // nothing for engines they never look at.
-                    loadCatalogs();
-                  }}
-                  aria-haspopup="listbox"
-                  aria-expanded={engineOpen}
-                  className={cn('ai-chip py-1.5 gap-1.5 ai-t1', engineOpen && 'ai-chip-on')}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-ember-400" aria-hidden />
-                  {/* On a catalog seat the listener chose an actual model —
+        {/* mode + capability-toggle row */}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setEngineOpen((v) => !v);
+                  // The free-model menu is fetched on first open, never on
+                  // page load — a listener who stays on a fixed seat pays
+                  // nothing for engines they never look at.
+                  loadCatalogs();
+                }}
+                aria-haspopup="listbox"
+                aria-expanded={engineOpen}
+                className={cn('ai-chip py-1.5 gap-1.5 ai-t1', engineOpen && 'ai-chip-on')}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-ember-400" aria-hidden />
+                {/* On a catalog seat the listener chose an actual model —
                       show THAT name, so the chip never claims a generic seat
                       is answering when a specific engine is. */}
-                  <span className="truncate max-w-[11rem]">{activeEngineLabel}</span>
-                  <ChevronDownIcon className={cn('w-3 h-3 ai-t3 transition-transform', engineOpen && 'rotate-180')} />
-                </button>
-                {engineOpen && (
-                  <>
-                    <button
-                      aria-label="Close engine menu"
-                      onClick={() => setEngineOpen(false)}
-                      className="fixed inset-0 z-40 cursor-default"
-                    />
-                    <div
-                      role="listbox"
-                      aria-label="Choose engine"
-                      /* The composer sits mid-screen on an empty chat and at
+                <span className="truncate max-w-[11rem]">{activeEngineLabel}</span>
+                <ChevronDownIcon
+                  className={cn('w-3 h-3 ai-t3 transition-transform', engineOpen && 'rotate-180')}
+                />
+              </button>
+              {engineOpen && (
+                <>
+                  <button
+                    aria-label="Close engine menu"
+                    onClick={() => setEngineOpen(false)}
+                    className="fixed inset-0 z-40 cursor-default"
+                  />
+                  <div
+                    role="listbox"
+                    aria-label="Choose engine"
+                    /* The composer sits mid-screen on an empty chat and at
                          the bottom once a thread starts, so the menu has to
                          open away from the composer in each case — anchored
                          upward always, it ran off the top of the landing. */
-                      className={cn(
-                        'ai-popover absolute left-0 z-50 w-72 overflow-y-auto overscroll-contain animate-fade-up',
-                        isEmpty ? 'top-full mt-2' : 'bottom-full mb-2',
-                      )}
-                      /* Inline cap, immune to CSS purging: the engine list —
+                    className={cn(
+                      'ai-popover absolute left-0 z-50 w-72 overflow-y-auto overscroll-contain animate-fade-up',
+                      isEmpty ? 'top-full mt-2' : 'bottom-full mb-2',
+                    )}
+                    /* Inline cap, immune to CSS purging: the engine list —
                          and the free-model menu under a catalog seat — must
                          scroll inside the popover, never spill off-screen. */
-                      style={{ maxHeight: 'min(62vh, 460px)' }}
+                    style={{ maxHeight: 'min(62vh, 460px)' }}
+                  >
+                    <p className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest ai-t3">
+                      Engine
+                    </p>
+                    {CORE_MODES.map((mm) => (
+                      <button
+                        key={mm.id}
+                        role="option"
+                        aria-selected={mode === mm.id}
+                        onClick={() => {
+                          setMode(mm.id);
+                          setEngineOpen(false);
+                        }}
+                        className="ai-menu-item justify-between gap-3"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-bold truncate">{mm.label}</span>
+                          <span className="block text-[11px] font-medium ai-t3 truncate">
+                            {mm.hint}
+                          </span>
+                        </span>
+                        {mode === mm.id && (
+                          <span aria-hidden className="text-ember-400">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setAdvancedOpen((v) => !v)}
+                      aria-expanded={advancedOpen}
+                      className="w-full flex items-center justify-between px-2.5 py-2 mt-1 border-t ai-hairline text-[10px] font-bold uppercase tracking-widest ai-t3 hover:ai-t1"
                     >
-                      <p className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest ai-t3">Engine</p>
-                      {CORE_MODES.map((mm) => (
+                      Advanced engines
+                      <ChevronDownIcon
+                        className={cn('w-3 h-3 transition-transform', advancedOpen && 'rotate-180')}
+                      />
+                    </button>
+                    {advancedOpen &&
+                      ADVANCED_MODES.map((mm) => (
                         <button
                           key={mm.id}
                           role="option"
                           aria-selected={mode === mm.id}
                           onClick={() => {
                             setMode(mm.id);
-                            setEngineOpen(false);
+                            if (!mm.catalog) setEngineOpen(false);
                           }}
-                          className="ai-menu-item justify-between gap-3"
+                          className="ai-menu-item justify-between gap-3 py-1.5"
                         >
                           <span className="min-w-0">
-                            <span className="block text-[13px] font-bold truncate">{mm.label}</span>
-                            <span className="block text-[11px] font-medium ai-t3 truncate">{mm.hint}</span>
+                            <span className="block font-mono text-[12px] truncate">{mm.label}</span>
+                            <span className="block text-[11px] font-medium ai-t3 truncate">
+                              {mm.hint}
+                            </span>
                           </span>
-                          {mode === mm.id && <span aria-hidden className="text-ember-400">✓</span>}
+                          {mode === mm.id && (
+                            <span aria-hidden className="text-ember-400">
+                              ✓
+                            </span>
+                          )}
                         </button>
                       ))}
-                      <button
-                        onClick={() => setAdvancedOpen((v) => !v)}
-                        aria-expanded={advancedOpen}
-                        className="w-full flex items-center justify-between px-2.5 py-2 mt-1 border-t ai-hairline text-[10px] font-bold uppercase tracking-widest ai-t3 hover:ai-t1"
-                      >
-                        Advanced engines
-                        <ChevronDownIcon className={cn('w-3 h-3 transition-transform', advancedOpen && 'rotate-180')} />
-                      </button>
-                      {advancedOpen &&
-                        ADVANCED_MODES.map((mm) => (
-                          <button
-                            key={mm.id}
-                            role="option"
-                            aria-selected={mode === mm.id}
-                            onClick={() => {
-                              setMode(mm.id);
-                              if (!mm.catalog) setEngineOpen(false);
-                            }}
-                            className="ai-menu-item justify-between gap-3 py-1.5"
-                          >
-                            <span className="min-w-0">
-                              <span className="block font-mono text-[12px] truncate">{mm.label}</span>
-                              <span className="block text-[11px] font-medium ai-t3 truncate">{mm.hint}</span>
-                            </span>
-                            {mode === mm.id && <span aria-hidden className="text-ember-400">✓</span>}
-                          </button>
-                        ))}
-                      {/* The two catalog seats open a whole free menu: pick the
+                    {/* The two catalog seats open a whole free menu: pick the
                           exact model, or leave it on the seat's default. */}
-                      {catalogGroup && (
-                        <div className="border-t ai-hairline mt-1 pt-1">
-                          <p className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest ai-t3">
-                            Model · free on this engine
+                    {catalogGroup && (
+                      <div className="border-t ai-hairline mt-1 pt-1">
+                        <p className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest ai-t3">
+                          Model · free on this engine
+                        </p>
+                        {catalogState === 'loading' && (
+                          <p className="px-2.5 pb-2 text-[11px] font-medium ai-t3">
+                            Loading the list…
                           </p>
-                          {catalogState === 'loading' && (
-                            <p className="px-2.5 pb-2 text-[11px] font-medium ai-t3">Loading the list…</p>
-                          )}
-                          {catalogState === 'failed' && (
-                            <button
-                              onClick={loadCatalogs}
-                              className="ai-menu-item text-[11px] font-medium ai-t3"
-                            >
-                              Couldn’t load the list — tap to retry
-                            </button>
-                          )}
-                          {catalogState === 'ready' && catalogs[catalogGroup].length === 0 && (
-                            <p className="px-2.5 pb-2 text-[11px] font-medium ai-t3">
-                              No free models available on this engine right now.
-                            </p>
-                          )}
+                        )}
+                        {catalogState === 'failed' && (
                           <button
+                            onClick={loadCatalogs}
+                            className="ai-menu-item text-[11px] font-medium ai-t3"
+                          >
+                            Couldn’t load the list — tap to retry
+                          </button>
+                        )}
+                        {catalogState === 'ready' && catalogs[catalogGroup].length === 0 && (
+                          <p className="px-2.5 pb-2 text-[11px] font-medium ai-t3">
+                            No free models available on this engine right now.
+                          </p>
+                        )}
+                        <button
+                          role="option"
+                          aria-selected={!catalogPicks[catalogGroup]}
+                          onClick={() => {
+                            pickCatalogModel(catalogGroup, '');
+                            setEngineOpen(false);
+                          }}
+                          className="ai-menu-item justify-between gap-3 py-1.5"
+                        >
+                          <span className="block text-[12px] font-semibold truncate">
+                            Default for this engine
+                          </span>
+                          {!catalogPicks[catalogGroup] && (
+                            <span aria-hidden className="text-ember-400">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                        {catalogs[catalogGroup].map((cm) => (
+                          <button
+                            key={cm.id}
                             role="option"
-                            aria-selected={!catalogPicks[catalogGroup]}
+                            aria-selected={catalogPicks[catalogGroup] === cm.id}
                             onClick={() => {
-                              pickCatalogModel(catalogGroup, '');
+                              pickCatalogModel(catalogGroup, cm.id);
                               setEngineOpen(false);
                             }}
                             className="ai-menu-item justify-between gap-3 py-1.5"
                           >
-                            <span className="block text-[12px] font-semibold truncate">Default for this engine</span>
-                            {!catalogPicks[catalogGroup] && <span aria-hidden className="text-ember-400">✓</span>}
-                          </button>
-                          {catalogs[catalogGroup].map((cm) => (
-                            <button
-                              key={cm.id}
-                              role="option"
-                              aria-selected={catalogPicks[catalogGroup] === cm.id}
-                              onClick={() => {
-                                pickCatalogModel(catalogGroup, cm.id);
-                                setEngineOpen(false);
-                              }}
-                              className="ai-menu-item justify-between gap-3 py-1.5"
-                            >
-                              <span className="min-w-0">
-                                <span className="block font-mono text-[12px] truncate">{cm.label}</span>
-                                {cm.context !== null && (
-                                  <span className="block text-[11px] font-medium ai-t3 truncate">
-                                    {Math.round(cm.context / 1000)}k context
-                                  </span>
-                                )}
+                            <span className="min-w-0">
+                              <span className="block font-mono text-[12px] truncate">
+                                {cm.label}
                               </span>
-                              {catalogPicks[catalogGroup] === cm.id && <span aria-hidden className="text-ember-400">✓</span>}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-              <button
-                onClick={() => setThink((v) => !v)}
-                aria-pressed={think}
-                title="Think — send the next message to the deep engine for careful reasoning"
-                className={cn('ai-chip py-1.5 shrink-0', think && 'ai-chip-solid')}
-              >
-                Think
-              </button>
-              <button
-                onClick={() => {
-                  if (!research) setWeb(true);
-                  setResearch((v) => !v);
-                }}
-                aria-pressed={research}
-                title="Research — search the live web and cross-check multiple sources"
-                className={cn('ai-chip py-1.5 shrink-0', research && 'ai-chip-solid')}
-              >
-                Research
-              </button>
-              </div>
-              <div className="flex items-center gap-2 min-w-0 text-[11px] font-semibold">
-                {micNote ? (
-                  <span className="text-amber-500 dark:text-amber-400 truncate" role="status">
-                    {micNote}
-                  </span>
-                ) : busy && think ? (
-                  <span className="text-ember-400" role="status">
-                    thinking deeply…
-                  </span>
-                ) : web ? (
-                  <span className="text-ember-400">{research ? 'Research on' : 'Web search on'}</span>
-                ) : (
-                  <span className="hidden sm:inline ai-t3 font-medium">Enter to send · Shift+Enter for a new line</span>
-                )}
-              </div>
+                              {cm.context !== null && (
+                                <span className="block text-[11px] font-medium ai-t3 truncate">
+                                  {Math.round(cm.context / 1000)}k context
+                                </span>
+                              )}
+                            </span>
+                            {catalogPicks[catalogGroup] === cm.id && (
+                              <span aria-hidden className="text-ember-400">
+                                ✓
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
+            <button
+              onClick={() => setThink((v) => !v)}
+              aria-pressed={think}
+              title="Think — send the next message to the deep engine for careful reasoning"
+              className={cn('ai-chip py-1.5 shrink-0', think && 'ai-chip-solid')}
+            >
+              Think
+            </button>
+            <button
+              onClick={() => {
+                if (!research) setWeb(true);
+                setResearch((v) => !v);
+              }}
+              aria-pressed={research}
+              title="Research — search the live web and cross-check multiple sources"
+              className={cn('ai-chip py-1.5 shrink-0', research && 'ai-chip-solid')}
+            >
+              Research
+            </button>
+          </div>
+          <div className="flex items-center gap-2 min-w-0 text-[11px] font-semibold">
+            {micNote ? (
+              <span className="text-amber-500 dark:text-amber-400 truncate" role="status">
+                {micNote}
+              </span>
+            ) : busy && think ? (
+              <span className="text-ember-400" role="status">
+                thinking deeply…
+              </span>
+            ) : web ? (
+              <span className="text-ember-400">{research ? 'Research on' : 'Web search on'}</span>
+            ) : (
+              <span className="hidden sm:inline ai-t3 font-medium">
+                Enter to send · Shift+Enter for a new line
+              </span>
+            )}
           </div>
         </div>
+      </div>
+    </div>
   );
-
 
   return (
     /* Astra conversation surface, with theme-aware reading contrast. */
@@ -1759,7 +2218,11 @@ export default function VinaXAIPage(): ReactNode {
         <div className="flex items-center gap-2 px-3.5 pt-3.5 pb-2.5">
           <SparkleIcon className="w-[18px] h-[18px] shrink-0 text-ember-400" />
           <p className="text-[14px] font-bold tracking-tight ai-t1 flex-1 min-w-0">VinaX AI</p>
-          <button onClick={() => setSidebarOpen(false)} aria-label="Close menu" className="ai-icon-btn md:hidden -mr-1">
+          <button
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+            className="ai-icon-btn md:hidden -mr-1"
+          >
             <XIcon className="w-4 h-4" />
           </button>
         </div>
@@ -1796,7 +2259,12 @@ export default function VinaXAIPage(): ReactNode {
                     setSidebarOpen(false);
                   }}
                 >
-                  {c.id === active?.id && <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-ember-500/70" aria-hidden />}
+                  {c.id === active?.id && (
+                    <span
+                      className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-ember-500/70"
+                      aria-hidden
+                    />
+                  )}
                   {renaming === c.id ? (
                     <input
                       autoFocus
@@ -1823,8 +2291,12 @@ export default function VinaXAIPage(): ReactNode {
                         setRenaming(c.id);
                       }}
                     >
-                      <span className="block truncate text-[13px] font-semibold leading-tight">{c.title}</span>
-                      <span className="block text-[11px] ai-t3 leading-tight mt-0.5">{relTime(c.updatedAt)}</span>
+                      <span className="block truncate text-[13px] font-semibold leading-tight">
+                        {c.title}
+                      </span>
+                      <span className="block text-[11px] ai-t3 leading-tight mt-0.5">
+                        {relTime(c.updatedAt)}
+                      </span>
                     </span>
                   )}
                   <span className="ai-side-actions flex items-center shrink-0">
@@ -1855,7 +2327,10 @@ export default function VinaXAIPage(): ReactNode {
                       togglePin(c.id);
                     }}
                     aria-label={c.pinned ? 'Unpin chat' : 'Pin chat'}
-                    className={cn('ai-icon-btn w-7 h-7 shrink-0', c.pinned ? 'text-ember-400' : 'ai-side-actions ai-t3')}
+                    className={cn(
+                      'ai-icon-btn w-7 h-7 shrink-0',
+                      c.pinned ? 'text-ember-400' : 'ai-side-actions ai-t3',
+                    )}
                   >
                     <StarIcon className="w-3.5 h-3.5" filled={!!c.pinned} />
                   </button>
@@ -1871,9 +2346,22 @@ export default function VinaXAIPage(): ReactNode {
         </div>
       </aside>
 
-      {sidebarOpen && <button aria-label="Close menu" className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && (
+        <button
+          aria-label="Close menu"
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       {promptsOpen && (
-        <SavedPromptsSheet draft={input} onClose={() => setPromptsOpen(false)} onUse={(t) => { setInput(t); taRef.current?.focus(); }} />
+        <SavedPromptsSheet
+          draft={input}
+          onClose={() => setPromptsOpen(false)}
+          onUse={(t) => {
+            setInput(t);
+            taRef.current?.focus();
+          }}
+        />
       )}
       {voiceMode && (
         <LiveVoiceOverlay
@@ -1904,13 +2392,21 @@ export default function VinaXAIPage(): ReactNode {
             engine now lives beside the composer, where it is chosen, instead
             of being repeated up here. */}
         <header className="flex items-center gap-1.5 px-3 sm:px-4 h-13 py-2.5 shrink-0">
-          <button className="ai-icon-btn md:hidden" aria-label="Menu" onClick={() => setSidebarOpen(true)}>
+          <button
+            className="ai-icon-btn md:hidden"
+            aria-label="Menu"
+            onClick={() => setSidebarOpen(true)}
+          >
             <MenuIcon className="w-[18px] h-[18px]" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="min-w-0 truncate text-[13.5px] font-semibold ai-t2">{active?.title ?? 'VinaX AI'}</h1>
+            <h1 className="min-w-0 truncate text-[13.5px] font-semibold ai-t2">
+              {active?.title ?? 'VinaX AI'}
+            </h1>
             <p className="text-[11px] ai-t3 leading-tight truncate md:hidden">
-              {activeEngineLabel}{think ? ' · Think' : ''}{voiceMode ? ' · Voice' : ''}
+              {activeEngineLabel}
+              {think ? ' · Think' : ''}
+              {voiceMode ? ' · Voice' : ''}
             </p>
           </div>
           <div className="relative">
@@ -1937,7 +2433,11 @@ export default function VinaXAIPage(): ReactNode {
                     }}
                     className="ai-menu-item"
                   >
-                    {k === 'txt' ? 'Plain text (.txt)' : k === 'md' ? 'Markdown (.md)' : 'PDF (print)'}
+                    {k === 'txt'
+                      ? 'Plain text (.txt)'
+                      : k === 'md'
+                        ? 'Markdown (.md)'
+                        : 'PDF (print)'}
                   </button>
                 ))}
               </div>
@@ -2108,13 +2608,29 @@ export default function VinaXAIPage(): ReactNode {
         {/* Messages */}
         <div
           ref={listRef}
-          className={cn('flex-1 overflow-y-auto ai-ambient', fontSize === 's' ? 'text-[13px]' : fontSize === 'l' ? 'text-[17px]' : 'text-[15px]')}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
+          className={cn(
+            'flex-1 overflow-y-auto ai-ambient',
+            fontSize === 's' ? 'text-[13px]' : fontSize === 'l' ? 'text-[17px]' : 'text-[15px]',
+          )}
+          onDragEnter={(e) => {
             e.preventDefault();
-            void onFiles(e.dataTransfer.files);
+            setDropActive(true);
           }}
+          onDragOver={(e) => e.preventDefault()}
+          onDragLeave={(e) => {
+            if (e.currentTarget === e.target) setDropActive(false);
+          }}
+          onDrop={onDropFiles}
         >
+          {dropActive && (
+            <div className="ai-drop-overlay" role="status" aria-live="polite">
+              <div>
+                <PlusIcon className="w-7 h-7" />
+                <strong>Drop files or a folder</strong>
+                <span>Images, text, code and CSV files are supported</span>
+              </div>
+            </div>
+          )}
           {isEmpty ? (
             /* Landing: one column, vertically centred — greeting, then the
                composer directly beneath it (the thing you came to use), then
@@ -2125,7 +2641,9 @@ export default function VinaXAIPage(): ReactNode {
               <div className="mx-auto w-full max-w-[720px]">
                 {/* greeting is ['Good', 'morning'|'afternoon'|'evening'] —
                     both halves always render; only the name is conditional. */}
-                <div className="ai-astra-mark" aria-hidden="true"><SparkleIcon className="w-8 h-8" /></div>
+                <div className="ai-astra-mark" aria-hidden="true">
+                  <SparkleIcon className="w-8 h-8" />
+                </div>
                 <p className="ai-astra-kicker">VINAX AI / ASTRA</p>
                 <h2 className="ai-display text-center text-balance">
                   {greeting[0]} {greeting[1]}
@@ -2160,12 +2678,14 @@ export default function VinaXAIPage(): ReactNode {
                 </div>
                 <div className="mt-5">
                   <p className="ai-eyebrow mb-1">Try one</p>
-                  <div className="ai-starter-grid">{starters.map((s) => (
-                    <button key={s} onClick={() => void send(s)} className="ai-starter">
-                      <span className="min-w-0">{s}</span>
-                      <ArrowUpRightIcon className="w-3.5 h-3.5 ai-t3 shrink-0" />
-                    </button>
-                  ))}</div>
+                  <div className="ai-starter-grid">
+                    {starters.map((s) => (
+                      <button key={s} onClick={() => void send(s)} className="ai-starter">
+                        <span className="min-w-0">{s}</span>
+                        <ArrowUpRightIcon className="w-3.5 h-3.5 ai-t3 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2176,11 +2696,21 @@ export default function VinaXAIPage(): ReactNode {
                   <p className="text-[10px] font-bold uppercase tracking-widest ai-t3 mb-1 flex items-center gap-1.5">
                     <PinIcon className="w-3 h-3 text-ember-400" /> Pinned
                   </p>
-                  {messages.map((m, i) => m.pinned ? (
-                    <button key={i} onClick={() => document.getElementById(`ai-msg-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="block w-full text-left truncate py-1 ai-t2 hover:ai-t1">
-                      {m.content.replace(/[#*`>_]/g, '').slice(0, 110)}
-                    </button>
-                  ) : null)}
+                  {messages.map((m, i) =>
+                    m.pinned ? (
+                      <button
+                        key={i}
+                        onClick={() =>
+                          document
+                            .getElementById(`ai-msg-${i}`)
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        }
+                        className="block w-full text-left truncate py-1 ai-t2 hover:ai-t1"
+                      >
+                        {m.content.replace(/[#*`>_]/g, '').slice(0, 110)}
+                      </button>
+                    ) : null,
+                  )}
                 </div>
               )}
               {messages.map((m, i) => {
@@ -2190,7 +2720,11 @@ export default function VinaXAIPage(): ReactNode {
                 const speaking = speakingId === speakKey;
                 if (m.role === 'user') {
                   return (
-                    <div key={i} id={`ai-msg-${i}`} className="ai-msg flex flex-col items-end animate-fade-up">
+                    <div
+                      key={i}
+                      id={`ai-msg-${i}`}
+                      className="ai-msg flex flex-col items-end animate-fade-up"
+                    >
                       <div
                         className="ai-user-bubble max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-br-md px-4 py-2.5 leading-relaxed"
                         onDoubleClick={() => editPrompt(i, m.content)}
@@ -2199,7 +2733,12 @@ export default function VinaXAIPage(): ReactNode {
                         {m.images?.length ? (
                           <div className="flex flex-wrap gap-2 mb-2">
                             {m.images.map((src, k) => (
-                              <img key={k} src={src} alt="attachment" className="w-24 h-24 object-cover rounded-lg" />
+                              <img
+                                key={k}
+                                src={src}
+                                alt="attachment"
+                                className="w-24 h-24 object-cover rounded-lg"
+                              />
                             ))}
                           </div>
                         ) : null}
@@ -2220,17 +2759,40 @@ export default function VinaXAIPage(): ReactNode {
                   more.push(
                     { label: 'Regenerate', icon: <RefreshIcon />, onClick: regenerate },
                     { label: 'Continue', icon: <ContinueIcon />, onClick: continueReply },
-                    { label: 'Shorten', icon: <ShortenIcon />, onClick: () => rewriteLast('shorter') },
+                    {
+                      label: 'Shorten',
+                      icon: <ShortenIcon />,
+                      onClick: () => rewriteLast('shorter'),
+                    },
                     { label: 'Expand', icon: <ExpandIcon />, onClick: () => rewriteLast('longer') },
-                    { label: 'Simplify', icon: <SimplifyIcon />, onClick: () => rewriteLast('simpler') },
+                    {
+                      label: 'Simplify',
+                      icon: <SimplifyIcon />,
+                      onClick: () => rewriteLast('simpler'),
+                    },
                   );
                 }
                 if (readAloudSupported()) {
-                  more.push({ label: speaking ? 'Stop' : 'Listen', icon: <SpeakerIcon />, onClick: () => readAloud(speakKey, m.content), active: speaking });
+                  more.push({
+                    label: speaking ? 'Stop' : 'Listen',
+                    icon: <SpeakerIcon />,
+                    onClick: () => readAloud(speakKey, m.content),
+                    active: speaking,
+                  });
                 }
                 more.push(
-                  { label: m.pinned ? 'Unpin' : 'Pin', icon: <PinIcon />, onClick: () => togglePinMsg(i), active: !!m.pinned },
-                  { label: 'Branch', icon: <BranchIcon />, onClick: () => branchFrom(i), title: 'Continue from this point in a new chat' },
+                  {
+                    label: m.pinned ? 'Unpin' : 'Pin',
+                    icon: <PinIcon />,
+                    onClick: () => togglePinMsg(i),
+                    active: !!m.pinned,
+                  },
+                  {
+                    label: 'Branch',
+                    icon: <BranchIcon />,
+                    onClick: () => branchFrom(i),
+                    title: 'Continue from this point in a new chat',
+                  },
                 );
                 return (
                   <div key={i} id={`ai-msg-${i}`} className="ai-msg flex gap-3 animate-fade-up">
@@ -2241,7 +2803,8 @@ export default function VinaXAIPage(): ReactNode {
                            the page and reads as decoration, not authorship. */
                         className={cn(
                           'w-5 h-5 flex items-center justify-center shrink-0 text-ember-400',
-                          streaming && 'motion-safe:animate-[avatar-pulse_1.6s_ease-in-out_infinite]',
+                          streaming &&
+                            'motion-safe:animate-[avatar-pulse_1.6s_ease-in-out_infinite]',
                         )}
                       >
                         <SparkleIcon className="w-[15px] h-[15px]" />
@@ -2252,7 +2815,12 @@ export default function VinaXAIPage(): ReactNode {
                       {m.images?.length ? (
                         <div className="flex flex-wrap gap-2 mb-2">
                           {m.images.map((src, k) => (
-                            <img key={k} src={src} alt="attachment" className="w-24 h-24 object-cover rounded-lg" />
+                            <img
+                              key={k}
+                              src={src}
+                              alt="attachment"
+                              className="w-24 h-24 object-cover rounded-lg"
+                            />
                           ))}
                         </div>
                       ) : null}
@@ -2271,11 +2839,17 @@ export default function VinaXAIPage(): ReactNode {
                               subtree the instant a reply finished, which
                               re-ran every live preview from scratch. */}
                           <div>
-                            <RichContent text={streaming ? hideFollowupLine(m.content) : m.content} streaming={streaming} />
+                            <RichContent
+                              text={streaming ? hideFollowupLine(m.content) : m.content}
+                              streaming={streaming}
+                            />
                             {streaming && <span className="vx-caret" aria-hidden />}
                           </div>
                           {!busy && (
-                            <div className="ai-toolbar mt-2 -ml-2 flex flex-wrap items-center gap-0.5" aria-label="Reply actions">
+                            <div
+                              className="ai-toolbar mt-2 -ml-2 flex flex-wrap items-center gap-0.5"
+                              aria-label="Reply actions"
+                            >
                               {m.engine ? (
                                 <span
                                   className="inline-flex items-center rounded-md border ai-hairline px-1.5 py-[3px] mr-1 ml-2 text-[10px] font-bold ai-t3"
@@ -2318,12 +2892,25 @@ export default function VinaXAIPage(): ReactNode {
                             </div>
                           )}
                           {!busy && last && m.followups?.length ? (
-                            <FollowupChips items={m.followups} disabled={busy} onPick={(t) => void send(t)} />
+                            <FollowupChips
+                              items={m.followups}
+                              disabled={busy}
+                              onPick={(t) => void send(t)}
+                            />
                           ) : null}
                         </>
                       ) : (
-                        <span className="inline-flex items-center gap-3 ai-t2 py-2 text-sm" role="status">
-                          <span className="vx-wave-loader" aria-hidden="true"><i /><i /><i /><i /><i /></span>
+                        <span
+                          className="inline-flex items-center gap-3 ai-t2 py-2 text-sm"
+                          role="status"
+                        >
+                          <span className="vx-wave-loader" aria-hidden="true">
+                            <i />
+                            <i />
+                            <i />
+                            <i />
+                            <i />
+                          </span>
                           Preparing your answer
                         </span>
                       )}
@@ -2343,7 +2930,8 @@ export default function VinaXAIPage(): ReactNode {
                               try {
                                 const parsed = new URL(u);
                                 host = parsed.hostname.replace(/^www\./, '');
-                                path = parsed.pathname.length > 1 ? parsed.pathname.slice(0, 40) : '';
+                                path =
+                                  parsed.pathname.length > 1 ? parsed.pathname.slice(0, 40) : '';
                               } catch {
                                 /* show the raw string */
                               }
@@ -2356,7 +2944,9 @@ export default function VinaXAIPage(): ReactNode {
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-[var(--ai-hover)] transition-colors min-w-0"
                                 >
-                                  <span className="text-[10px] font-bold ai-t3 w-6 shrink-0">[{k + 1}]</span>
+                                  <span className="text-[10px] font-bold ai-t3 w-6 shrink-0">
+                                    [{k + 1}]
+                                  </span>
                                   <span
                                     aria-hidden
                                     className="w-[18px] h-[18px] rounded-md flex items-center justify-center text-[10px] font-extrabold text-white shrink-0"
@@ -2364,8 +2954,14 @@ export default function VinaXAIPage(): ReactNode {
                                   >
                                     {host.charAt(0).toUpperCase()}
                                   </span>
-                                  <span className="text-[11px] font-semibold ai-t2 truncate">{host}</span>
-                                  {path && <span className="text-[10px] ai-t3 truncate hidden sm:inline">{path}</span>}
+                                  <span className="text-[11px] font-semibold ai-t2 truncate">
+                                    {host}
+                                  </span>
+                                  {path && (
+                                    <span className="text-[10px] ai-t3 truncate hidden sm:inline">
+                                      {path}
+                                    </span>
+                                  )}
                                 </a>
                               );
                             })}

@@ -4,6 +4,7 @@
 
 - New Astra visual system across the app shell, sidebar, mobile navigation, Home, media cards, player bar and now-playing rail.
 - Orbital Aura Mix composition, discovery shortcuts and a redesigned AI workspace with a central composer and prompt cards.
+- VinaX AI now accepts individual files, whole folders and drag-and-drop uploads. Images, text, code and CSV files are supported; folder paths are preserved, generated directories are skipped, and the UI explains size, format and context limits.
 - Waveform loading states, hover feedback and progressive scroll reveals where the browser supports CSS view timelines. Reduced-motion disables these effects. Light, AMOLED, custom accents and high-contrast settings remain available.
 - **Refresh discovery** on Home rotates the daily mix and recommendation query seed, invalidates the ranking cache and remembers the previous hero picks. Favourites and listening history are retained.
 
