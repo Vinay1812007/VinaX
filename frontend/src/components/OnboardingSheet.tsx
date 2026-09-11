@@ -5,6 +5,7 @@ import { KEYS } from '@/constants/storage-keys';
 // Dynamic-imported inside finish() so the heavy changelog module doesn't
 // land in first-load (WhatsNewSheet.tsx does the same for the same reason).
 import { getLocal, setLocal } from '@/services/storage/local';
+import { initSessionInsights } from '@/services/analytics/sessionInsights';
 import { readBrowserSignals } from '@/services/location/browserSignals';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useUiStore } from '@/store/uiStore';
@@ -326,6 +327,9 @@ export function OnboardingSheet() {
     if (picked.length) useSettingsStore.getState().setPinnedLanguages(picked);
     // Register this (anonymous) device + name with the backend, if consented.
     void import('@/services/analytics/telemetry').then((m) => m.registerUser());
+    // AppLayout's idle init ran before consent existed — start insights now so
+    // a fresh opt-in is covered from this session, not the next reload.
+    initSessionInsights();
     // Open the taste-seed step and fetch a dozen trending songs in the top
     // picked language. If the catalog is unreachable or returns too few, we
     // silently skip straight to the tour — the seed step never blocks setup.
@@ -546,7 +550,7 @@ export function OnboardingSheet() {
                     onChange={(e) => setConsent(e.target.checked)}
                     className="mt-0.5 accent-ember-500"
                   />
-                  <span>Share anonymous usage (city-level location, no account) to help improve VinaX. You can change this anytime.</span>
+                  <span>Share anonymous usage (city-level location, no account) and session insights with all on-screen text masked, to help improve VinaX. You can change this anytime.</span>
                 </label>
               </>
             )}

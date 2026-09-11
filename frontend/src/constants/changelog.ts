@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '5.32.0': {
+    title: 'Opt-in session insights',
+    changes: [
+      { type: 'new', text: 'If you chose to share anonymous usage, VinaX now also collects anonymous session insights — heatmaps and replays of taps, scrolls and screens — so confusing spots get found and fixed faster. All text on screen is masked on your device first, so song titles, your name, your history and your AI chats are never included.' },
+      { type: 'improved', text: 'The Privacy page and the onboarding choice now spell out exactly what sharing covers. If you didn’t opt in, nothing changes and nothing extra loads.' },
+    ],
+  },
   '5.31.0': {
     title: 'Your music. Your space.',
     changes: [

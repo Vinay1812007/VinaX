@@ -20,6 +20,7 @@ import { OfflineBanner } from '@/components/OfflineBanner';
 import { OnboardingSheet } from '@/components/OnboardingSheet';
 import { AnnouncementBridge } from '@/components/AnnouncementBridge';
 import { initTelemetry } from '@/services/analytics/telemetry';
+import { initSessionInsights } from '@/services/analytics/sessionInsights';
 import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
 import { closeTopOverlay } from '@/hooks/useDismissOnBack';
 import { recallScroll, rememberScroll, restoreWhenTall } from '@/features/nav/scrollMemory';
@@ -217,6 +218,7 @@ export function AppLayout() {
     onIdle(() => {
       installDeterrence();
       initTelemetry();
+      initSessionInsights();
       void loadBlocklist();
       initLockScreenLyrics();
       initSpatialNav();

@@ -8,7 +8,7 @@ export default function PrivacyPage() {
   usePageTitle('Privacy');
   return (
     <div className="max-w-2xl mx-auto pb-10">
-      <PageHeader title="Privacy" subtitle="Private by design — the short version is: your listening is yours. Last updated July 2026." />
+      <PageHeader title="Privacy" subtitle="Private by design — the short version is: your listening is yours. Last updated September 2026." />
       <div className="text-sm text-ink-200 leading-relaxed">
         <H>What stays on your device</H>
         <p>
@@ -23,6 +23,13 @@ export default function PrivacyPage() {
           your app version, platform and city-level location. <strong>IP addresses are never stored.</strong> No names,
           no emails, no precise location, no advertising identifiers — those don&rsquo;t exist here. Opting out stops
           this entirely, anytime.
+        </p>
+        <p className="mt-2">
+          The same opt-in also turns on anonymous session insights: heatmaps and replays of how the app is used
+          (taps, scrolls and which screens load), processed by an analytics provider so we can find confusing spots
+          and fix them. <strong>All text on screen is masked on your device before anything is sent</strong> — song
+          titles, your name, your history and your AI chats never appear in them. This provider sets its own
+          analytics cookies, and only if you opted in; if you didn&rsquo;t, it never loads.
         </p>
         <H>Push notifications</H>
         <p>
@@ -45,8 +52,8 @@ export default function PrivacyPage() {
         </p>
         <H>Trackers and ads — the honest version</H>
         <p>
-          VinaX sets no tracking cookies and runs no third-party analytics: your taste profile, history and
-          favorites never leave your device. <b>There are no ads anywhere</b> — not on the website, not in the
+          Unless you opt in above, VinaX sets no tracking cookies and runs no third-party analytics — and even if
+          you do, your taste profile, history and favorites never leave your device. <b>There are no ads anywhere</b> — not on the website, not in the
           Android app, and never in Kid mode — so there are no ad cookies, no ad networks, and nothing VinaX
           stores about your listening is ever shared with any advertiser.
         </p>

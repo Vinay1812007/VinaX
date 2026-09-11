@@ -30,7 +30,8 @@ function deviceId(): string {
   return id;
 }
 
-function consented(): boolean {
+/** The onboarding analytics opt-in — also gates session insights (sessionInsights.ts). */
+export function consented(): boolean {
   return getLocal<boolean>(KEYS.analyticsConsent, false) === true;
 }
 
