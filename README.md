@@ -6,14 +6,13 @@ VinaX combines music discovery, playback, lyrics, playlists and AI assistance in
 
 [Listen](https://www.sirimillavinay.online) · [Deployment guide](DEPLOYMENT.md) · [User guide](frontend/docs/user-guide/README.md)
 
-## What's new in 5.31
+## What's new in Astra 6.0
 
-- A refreshed listening workspace with a larger Aura Mix hero, consistent surfaces and clearer navigation.
-- **Home Studio:** Familiar, Balanced and Discover recommendation controls; Balanced, Discovery and Focused layouts; shelf visibility and ordering directly on Home.
-- **Playlist Studio:** mood-based starting points adapted to your first selected language, an editable prompt and clear generation feedback.
-- **A shorter welcome:** four practical steps, an optional live walkthrough and a Home checklist that reflects real listening progress.
-- **Control Room:** an operational overview, actionable shortcuts, home layout presets, a structure preview and draft/published status.
-- Reliability fixes for disappearing shelves, duplicate layout keys, slow AI shelf requests and repetitive next-song sequencing in small catalogs.
+Astra refreshes the customer workspace, VinaX AI and the owner console with a space-inspired design, clearer typography, loading states and reduced-motion-aware interactions. Home now includes an explicit **Refresh discovery** action.
+
+Next-song and emergency top-up paths share canonical duplicate and language checks, AI DJ searches rotate their source pages and taste artists, and AI playlists exclude recent generations while resolving catalog searches in parallel. Chat regeneration uses the correct conversation context and asks for a different approach.
+
+See [the complete Astra upgrade and checking guide](ASTRA_UPGRADE.md) for changes, limitations and the post-deployment walkthrough.
 
 ## Listening features
 

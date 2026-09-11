@@ -46,7 +46,8 @@ export function HeaderSkeleton() {
 
 export function PageSkeleton() {
   return (
-    <div className="pt-4">
+    <div className="pt-4" role="status" aria-label="Loading your listening space">
+      <div className="vx-load-status"><span className="vx-wave-loader" aria-hidden="true"><i /><i /><i /><i /><i /></span>Getting your music ready</div>
       <div className="skeleton h-8 w-56 mb-8" />
       <ShelfSkeleton />
       <ShelfSkeleton />

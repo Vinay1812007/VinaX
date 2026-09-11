@@ -67,7 +67,7 @@ export default function AIPlaylistPage() {
     if (res.reason === 'not_configured')
       setError('AI features are not enabled on this server yet.');
     else if (res.reason === 'empty')
-      setError('Could not find enough matching songs — try rephrasing your idea.');
+      setError('No fresh matches this time — try another artist, era or mood.');
     else setError('Something went wrong. Please try again.');
   };
 
@@ -129,6 +129,8 @@ export default function AIPlaylistPage() {
           {loading ? 'Building your playlist…' : 'Build my playlist'}
         </button>
       </div>
+
+      {loading && <div className="vx-load-status" role="status"><span className="vx-wave-loader" aria-hidden="true"><i /><i /><i /><i /><i /></span>Finding fresh songs that fit your idea…</div>}
 
       {error && (
         <EmptyState

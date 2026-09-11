@@ -1,3 +1,6 @@
+import { useDiscoveryStore } from '@/store/discoveryStore';
+import { freshSongs } from '@/services/recommendation/freshness';
+import { servedKeySet } from '@/services/recommendation/flow';
 import { useQuery } from '@tanstack/react-query';
 import type { Song } from '@/types';
 import { searchSongsPage } from '@/services/api';
@@ -33,9 +36,11 @@ function seededPick<T>(arr: T[], seed: string, n: number): T[] {
  */
 export function useDailyMix() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
-  const seed = todaySeed();
+  const round = useDiscoveryStore((s) => s.round);
+  const muted = useSettingsStore((s) => s.mutedLanguages);
+  const seed = `${todaySeed()}-${round}`;
   return useQuery({
-    queryKey: ['vinax-daily', seed, pinned],
+    queryKey: ['vinax-daily', seed, pinned, muted],
     staleTime: 6 * 60 * 60_000,
     queryFn: async (): Promise<Song[]> => {
       const profile = loadProfile();
@@ -59,9 +64,9 @@ export function useDailyMix() {
         }
       }
       const lib = useLibraryStore.getState();
-      const ranked = rankSongs(pool).filter((x) => !isSongBlocked(x, lib));
+      const ranked = rankSongs(freshSongs(pool, { excludeKeys: servedKeySet(), muted, blocked: (s) => isSongBlocked(s, lib) }));
       const onLang = pinned.length ? ranked.filter((x) => x.language != null && pinned.includes(x.language)) : ranked;
-      return seededPick(onLang.length >= 8 ? onLang : ranked, seed + 'x', 20);
+      return seededPick(onLang, seed + 'x', 20);
     },
   });
 }

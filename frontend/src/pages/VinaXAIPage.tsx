@@ -764,8 +764,8 @@ export default function VinaXAIPage(): ReactNode {
     if (busy || msgs.length < 2) return;
     const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
     if (!lastUser) return;
-    setActiveMessages((prev) => prev.slice(0, prev.lastIndexOf(lastUser)));
-    void sendRef.current(lastUser.content);
+    const previousReply = [...msgs].reverse().find((m) => m.role === 'assistant')?.content ?? '';
+    void sendRef.current(lastUser.content, { history: msgs.slice(0, msgs.lastIndexOf(lastUser)), previousReply, user: lastUser });
   };
 
   const continueReply = (): void => {
@@ -996,21 +996,22 @@ export default function VinaXAIPage(): ReactNode {
     }
   };
 
-  const send = async (raw: string): Promise<void> => {
+  const send = async (raw: string, retry?: { history: Msg[]; previousReply: string; user: Msg }): Promise<void> => {
+    const conversation = retry?.history ?? messages;
     const q = raw.trim();
     if ((!q && pending.length === 0) || busy) return;
-    const slash = pending.length === 0 ? parseSlash(q) : null;
+    const slash = !retry && pending.length === 0 ? parseSlash(q) : null;
     if (slash) {
       setInput('');
       if (await runSlash(slash.cmd, slash.arg)) return;
     }
-    if (q && pending.length === 0 && (await tryMusicCommand(q))) {
+    if (!retry && q && pending.length === 0 && (await tryMusicCommand(q))) {
       setInput('');
       return;
     }
 
     // 🎨 image mode: one prompt → one picture, rendered in the chat.
-    if (imageMode) {
+    if (imageMode && !retry) {
       if (!q) return;
       setInput('');
       setImageMode(false);
@@ -1047,8 +1048,8 @@ export default function VinaXAIPage(): ReactNode {
       setBusy(false);
       return;
     }
-    const imgs = pending.filter((p) => p.kind === 'image' && p.dataUrl).map((p) => p.dataUrl as string);
-    const textFiles = pending.filter((p) => p.kind === 'text' && p.text);
+    const imgs = retry ? retry.user.images ?? [] : pending.filter((p) => p.kind === 'image' && p.dataUrl).map((p) => p.dataUrl as string);
+    const textFiles = retry ? [] : pending.filter((p) => p.kind === 'text' && p.text);
     let content = q;
     for (const f of textFiles) content += `\n\n--- ${f.name} ---\n${(f.text ?? '').slice(0, 40_000)}`;
 
@@ -1057,7 +1058,7 @@ export default function VinaXAIPage(): ReactNode {
     if (taRef.current) taRef.current.style.height = 'auto';
 
     const userMsg: Msg = { role: 'user', content: content || '(image)', images: imgs.length ? imgs : undefined };
-    setActiveMessages((prev) => [...prev, userMsg, { role: 'assistant', content: '' }]);
+    setActiveMessages(() => [...conversation, userMsg, { role: 'assistant', content: '' }]);
     setChats((prev) =>
       prev.map((c) =>
         c.id === (active?.id ?? '') && (c.title === 'New chat' || !c.messages.length)
@@ -1094,8 +1095,12 @@ export default function VinaXAIPage(): ReactNode {
       ...(researchNow
         ? [{ role: 'user' as const, content: 'SYSTEM RULE for this reply: research mode. Work from the web results, cross-check at least two independent sources, flag where they disagree, and tie each key fact to the source that backs it.' }]
         : []),
-      ...messages,
+      ...conversation,
       userMsg,
+      ...(retry?.previousReply ? [
+        { role: 'assistant' as const, content: retry.previousReply.slice(0, 12000) },
+        { role: 'user' as const, content: 'Regenerate your answer to my last question. Take a meaningfully different approach, preserve correct facts, and avoid the songs you just recommended. Deliver the new answer directly.' },
+      ] : []),
     ].map((mm) => ({ role: mm.role, content: mm.content }));
     const controller = new AbortController();
     abortRef.current = controller;
@@ -1127,7 +1132,7 @@ export default function VinaXAIPage(): ReactNode {
           // B5 — the snapshot plus this thread's own memory: everything the
           // assistant already recommended in this conversation, so "give me
           // more" turns reach into fresh territory instead of looping.
-          taste: { ...buildTasteSnapshot(), alreadyRecommendedThisChat: extractRecommendedFromThread(messages) },
+          taste: { ...buildTasteSnapshot(), alreadyRecommendedThisChat: extractRecommendedFromThread(retry ? [...conversation, { role: 'assistant', content: retry.previousReply }] : conversation, 32) },
           profile: stateRef.current.profile || undefined,
         }),
         signal: controller.signal,
@@ -1740,9 +1745,7 @@ export default function VinaXAIPage(): ReactNode {
 
 
   return (
-    /* ai-root scopes the whole warm-neutral palette to this page — see the
-       .ai-root block in styles/index.css. The app's aurora wash is dropped
-       here on purpose: this surface is for reading, not for atmosphere. */
+    /* Astra conversation surface, with theme-aware reading contrast. */
     <div className="ai-root h-[100dvh] w-full flex overflow-hidden">
       {/* Sidebar */}
       <aside
@@ -2122,6 +2125,8 @@ export default function VinaXAIPage(): ReactNode {
               <div className="mx-auto w-full max-w-[720px]">
                 {/* greeting is ['Good', 'morning'|'afternoon'|'evening'] —
                     both halves always render; only the name is conditional. */}
+                <div className="ai-astra-mark" aria-hidden="true"><SparkleIcon className="w-8 h-8" /></div>
+                <p className="ai-astra-kicker">VINAX AI / ASTRA</p>
                 <h2 className="ai-display text-center text-balance">
                   {greeting[0]} {greeting[1]}
                   {userName && (
@@ -2130,6 +2135,7 @@ export default function VinaXAIPage(): ReactNode {
                     </>
                   )}
                 </h2>
+                <p className="ai-astra-subtitle">Where should we take your ideas today?</p>
                 <div className="mt-7">{composerBlock}</div>
                 <div className="mt-6 ai-scroll-x flex items-center gap-1.5 pb-1">
                   <button onClick={() => setPromptsOpen(true)} className="ai-chip shrink-0">
@@ -2154,12 +2160,12 @@ export default function VinaXAIPage(): ReactNode {
                 </div>
                 <div className="mt-5">
                   <p className="ai-eyebrow mb-1">Try one</p>
-                  {starters.map((s) => (
+                  <div className="ai-starter-grid">{starters.map((s) => (
                     <button key={s} onClick={() => void send(s)} className="ai-starter">
                       <span className="min-w-0">{s}</span>
                       <ArrowUpRightIcon className="w-3.5 h-3.5 ai-t3 shrink-0" />
                     </button>
-                  ))}
+                  ))}</div>
                 </div>
               </div>
             </div>
@@ -2316,10 +2322,9 @@ export default function VinaXAIPage(): ReactNode {
                           ) : null}
                         </>
                       ) : (
-                        <span className="vx-dots inline-flex items-center gap-1 ai-t2 py-2" role="status" aria-label="Thinking">
-                          <i />
-                          <i />
-                          <i />
+                        <span className="inline-flex items-center gap-3 ai-t2 py-2 text-sm" role="status">
+                          <span className="vx-wave-loader" aria-hidden="true"><i /><i /><i /><i /><i /></span>
+                          Preparing your answer
                         </span>
                       )}
                       {m.sources?.length ? (

@@ -1,3 +1,6 @@
+import { useDiscoveryStore } from '@/store/discoveryStore';
+import { invalidateRecommendationCache } from '@/services/recommendation/engine';
+import { recordServed, songKey } from '@/services/recommendation/flow';
 import { HomeStudio, ListeningGuide } from '@/features/home/HomeStudio';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -264,7 +267,11 @@ export default function HomePage() {
   // Query re-fetches each one and swaps the UI in place — the P2R indicator
   // waits until all in-flight fetches resolve before releasing.
   const qc = useQueryClient();
+  const [refreshingDiscovery, setRefreshingDiscovery] = useState(false);
   const handleRefresh = () => {
+    recordServed(heroSongs.map(songKey));
+    useDiscoveryStore.getState().refresh();
+    invalidateRecommendationCache();
     // Package A5 — explicit refresh wipes the session-scoped dedup memory
     // so the same shelves get a genuinely fresh set of picks.
     resetShelfDeduper();
@@ -829,9 +836,9 @@ export default function HomePage() {
         <div className="hidden md:flex items-center gap-6 min-w-0">
           <div className="min-w-0">
             <p className="text-xl font-bold tracking-tight truncate">
-              Your listening space
+              Your sound universe
             </p>
-            <p className="text-[11px] text-ink-400">Home · curated around you</p>
+            <p className="text-[11px] text-ink-400">ASTRA / YOUR LISTENING SPACE</p>
           </div>
           <Link
             to="/search"
@@ -904,7 +911,7 @@ export default function HomePage() {
       {/* Aura Mix hero — the AI DJ entry point */}
       <section className="vx-hero relative overflow-hidden rounded-3xl mb-6 border border-glass bg-ink-850">
         {/* v5.18.0 refresh — accent-led wash + a fan of the mix's own artwork */}
-        {heroSongs.length < 3 && <div className="vx-hero-record" aria-hidden="true"><div><span>V</span><small>VINAX / DAILY MIX</small></div></div>}
+        {heroSongs.length < 3 && <div className="vx-hero-record" aria-hidden="true"><div><span>V</span><small>VINAX / ASTRA</small></div></div>}
         {heroSongs.length >= 3 && (
           <div className="absolute right-6 md:right-10 top-1/2 -translate-y-1/2 hidden sm:flex items-center pointer-events-none" aria-hidden>
             {heroSongs.slice(0, 3).map((hs, i) => (
@@ -929,9 +936,9 @@ export default function HomePage() {
         />
         <div className="relative p-6 md:p-10 sm:max-w-[65%]">
           <p className="aura-eyebrow text-xs font-bold uppercase tracking-widest text-ember-300 flex items-center gap-1.5">
-            <SparkleIcon className="w-3.5 h-3.5" /> YOUR DAILY SOUNDTRACK
+            <SparkleIcon className="w-3.5 h-3.5" /> AURA MIX / MADE FOR YOU
           </p>
-          <h2 className="vx-hero-title text-3xl md:text-[40px] font-extrabold tracking-[-0.03em] mt-2">Find your next<br className="hidden md:block" /> favourite feeling.</h2>
+          <h2 className="vx-hero-title text-3xl md:text-[40px] font-extrabold tracking-[-0.03em] mt-2">A new orbit.<br className="hidden md:block" /> Your kind of music.</h2>
           <p className="text-sm text-ink-200/90 mt-2 max-w-md leading-relaxed">
             Your Aura Mix brings together familiar voices and fresh discoveries. Built around your listening, ready when you are.
           </p>
@@ -953,6 +960,21 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
+        <p className="text-sm text-ink-400" role="status">{refreshingDiscovery ? 'Finding a fresh direction…' : 'Ready for a different discovery?'}</p>
+        <button className="vx-fresh-button" disabled={refreshingDiscovery} onClick={async () => {
+          setRefreshingDiscovery(true);
+          try { await handleRefresh(); toast('Discovery rotation updated. Available picks will refresh.'); }
+          catch { toast('Could not refresh right now. Try again shortly.'); }
+          finally { setRefreshingDiscovery(false); }
+        }}><SparkleIcon className="w-4 h-4" />{refreshingDiscovery ? 'Refreshing…' : 'Refresh discovery'}</button>
+      </div>
+      <nav className="vx-journeys" aria-label="Explore your sound">
+        <Link to="/VinaXAI"><SparkleIcon /><div><strong>Meet VinaX AI</strong><span>Ask, create, explore</span></div></Link>
+        <Link to="/made-for-you"><PlayIcon /><div><strong>Your discovery orbit</strong><span>Mixes shaped by your listening</span></div></Link>
+        <Link to="/moods"><SearchIcon /><div><strong>Find a feeling</strong><span>A soundtrack for every headspace</span></div></Link>
+      </nav>
 
       {continueListening.length >= 2 && (
         <section aria-label="Jump back in" className="mb-5">

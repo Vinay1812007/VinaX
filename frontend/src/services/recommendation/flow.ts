@@ -23,6 +23,8 @@ import { inferMood, moodMatchScore, type Mood } from './mood';
 /** One shared cross-surface served-memory (DJ + next-song + Home). */
 const SERVED_KEY = 'vinax.flow.served.v1';
 const SERVED_CAP = 300;
+const SERVED_TTL = 7 * 24 * 60 * 60_000;
+let servedMemory: ServedEntry[] = [];
 
 /** Titles that are never songs — they poison queues when a search returns them. */
 const JUNK_TITLE = /\b(dialogue|dialogues|bgm|jukebox|trailer|teaser|promo|ringtone|commentary)\b/i;
@@ -33,7 +35,7 @@ const VERSION_TAG =
 
 /** Primary credited artist for a song — the identity half of the canonical key. */
 export function primaryArtist(s: Song): string {
-  return s.artists[0]?.name ?? s.subtitle.split(',')[0] ?? '';
+  return s.artists?.[0]?.name ?? s.subtitle?.split(',')[0] ?? '';
 }
 
 /**
@@ -66,12 +68,15 @@ interface ServedEntry {
 }
 
 function loadServed(): ServedEntry[] {
+  let raw: unknown = servedMemory;
   try {
-    const raw = JSON.parse(window.localStorage.getItem(SERVED_KEY) || '[]') as ServedEntry[];
-    return Array.isArray(raw) ? raw.filter((e) => e && typeof e.k === 'string') : [];
-  } catch {
-    return [];
-  }
+    const stored = window.localStorage.getItem(SERVED_KEY);
+    if (stored != null) raw = JSON.parse(stored);
+  } catch { /* retain session memory when storage is unavailable */ }
+  const cutoff = Date.now() - SERVED_TTL;
+  return Array.isArray(raw)
+    ? raw.filter((e): e is ServedEntry => e && typeof e.k === 'string' && Number.isFinite(e.t) && e.t > cutoff).slice(0, SERVED_CAP)
+    : [];
 }
 
 /** The shared served-identity set — consult it before surfacing anything. */
@@ -93,7 +98,8 @@ export function recordServed(keys: string[]): void {
         dedup.push(e);
       }
     }
-    window.localStorage.setItem(SERVED_KEY, JSON.stringify(dedup.slice(0, SERVED_CAP)));
+    servedMemory = dedup.slice(0, SERVED_CAP);
+    window.localStorage.setItem(SERVED_KEY, JSON.stringify(servedMemory));
   } catch {
     /* storage unavailable — memory-less rounds still work, just less varied */
   }

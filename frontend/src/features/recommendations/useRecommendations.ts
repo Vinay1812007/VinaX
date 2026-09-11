@@ -1,3 +1,4 @@
+import { useDiscoveryStore } from '@/store/discoveryStore';
 import { useQuery } from '@tanstack/react-query';
 import { buildRecommendations } from '@/services/recommendation/engine';
 import type { Mix, RecommendationContext } from '@/services/recommendation/types';
@@ -16,7 +17,7 @@ export function getRecommendationContext(): RecommendationContext {
   // Package A1 — the current-session mood arc from the rolling play window.
   const sv = getSessionVector();
   return {
-    salt: SESSION_SALT,
+    salt: SESSION_SALT + useDiscoveryStore.getState().round * 7919,
     profile: loadProfile(),
     hour: new Date().getHours(),
     region: resolvedRegion(),
@@ -40,12 +41,13 @@ export function getRecommendationContext(): RecommendationContext {
 
 /** All personalized shelves — computed locally, memoized by profile state. */
 export function useRecommendations() {
+  const round = useDiscoveryStore((s) => s.round);
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const muted = useSettingsStore((s) => s.mutedLanguages);
   const intensity = useSettingsStore((s) => s.recommendationIntensity);
   const explore = useSettingsStore((s) => s.exploreMode);
   return useQuery<Mix[]>({
-    queryKey: ['mixes', profileStamp(), new Date().getHours(), pinned, muted, intensity, explore, SESSION_SALT],
+    queryKey: ['mixes', profileStamp(), new Date().getHours(), pinned, muted, intensity, explore, SESSION_SALT, round],
     queryFn: () => buildRecommendations(getRecommendationContext()),
     staleTime: 10 * 60_000,
   });

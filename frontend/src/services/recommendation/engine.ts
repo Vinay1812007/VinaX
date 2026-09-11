@@ -2,6 +2,9 @@ import { gatherCandidates } from './candidates';
 import { rankCandidates, scoreCandidate } from './scoring';
 import { buildMixes } from './mixes';
 import { rotateTop } from './variety';
+import { freshSongs } from './freshness';
+import { servedKeySet, songKey } from './flow';
+import { trendingSeed } from '@/constants/seeds';
 import { explainTopReasons } from './explanations';
 import { useReasonStore } from '@/store/reasonStore';
 import type { Mix, RecommendationContext, ScoredCandidate } from './types';
@@ -99,7 +102,9 @@ export async function buildRecommendations(ctx: RecommendationContext): Promise<
   if (memo && memo.key === key && Date.now() - memo.at < MEMO_TTL_MS) return memo.mixes;
   const candidates = await gatherCandidates(ctx);
   const ranked = rankCandidates(candidates, ctx);
-  const mixes = buildMixes(ranked, ctx);
+  const served = servedKeySet();
+  const freshRanked = [...ranked.filter((s) => !served.has(songKey(s.candidate.song))), ...ranked.filter((s) => served.has(songKey(s.candidate.song)))];
+  const mixes = buildMixes(freshRanked, ctx);
   // C4 — every song placed on a shelf gets its honest "why" line.
   const placed = new Set(mixes.flatMap((m) => m.songs.map((s) => s.id)));
   publishReasons(ranked.filter((s) => placed.has(s.candidate.song.id)));
@@ -123,8 +128,19 @@ export async function similarToSong(
   // `exclude` is the anti-repeat set (recently played + current queue) — these
   // ids are dropped from the candidate pool so the auto-queue stops looping the
   // same songs.
-  const ex = exclude ?? new Set<string>();
+  const ex = new Set([songId, ...(exclude ?? [])]);
+  const seed = ctx.coPlaySeed ?? ctx.history.find((h) => h.song.id === songId)?.song;
+  const language = ctx.tuneIntent === 'different-language'
+    ? ctx.pinnedLanguages.find((l) => l !== seed?.language) ?? null
+    : (seed?.language && seed.language !== 'unknown' ? seed.language : ctx.pinnedLanguages[0]) ?? null;
+  const hardKeys = new Set(ctx.history.slice(0, 60).map((h) => songKey(h.song)));
+  if (seed) hardKeys.add(songKey(seed));
+  const admit = (songs: import('@/types').Song[], useServed = false) => freshSongs(songs, {
+    excludeIds: ex, excludeKeys: new Set([...hardKeys, ...(useServed ? servedKeySet() : [])]),
+    language, muted: ctx.mutedLanguages,
+  });
   _lastSource = 'instant';
+  let deadline: number | undefined;
   // AI DJ (opt-in): when enabled, let the AI build the continuation; fall back to
   // the local related-tracks engine on any failure or empty result.
   try {
@@ -133,9 +149,9 @@ export async function similarToSong(
     // 12s, this round falls through to the instant local engine instead.
     const aiSongs = await Promise.race([
       aiSimilarSongs(songId, ctx, 14),
-      new Promise<never[]>((resolveRace) => window.setTimeout(() => resolveRace([]), 12_000)),
+      new Promise<never[]>((resolveRace) => { deadline = window.setTimeout(() => resolveRace([]), 12_000); }),
     ]);
-    const fresh = aiSongs.filter((song) => !ex.has(song.id));
+    const fresh = admit(aiSongs);
     if (fresh.length) {
       // Blend the AI's flow/intent ordering with the local taste score, then
       // diversify: earlier AI picks get a gentle nudge, but a track you'd skip
@@ -151,30 +167,28 @@ export async function similarToSong(
         _lastSource = 'ai';
         // Seed-rotate the leading picks so consecutive continuations from the
         // same seed differ (the salt is random per extend call).
-        return rotateTop(diversify(scored, ctx.intensity), ctx.salt);
+        return diversify(rotateTop(scored, ctx.salt), ctx.intensity);
       }
     }
   } catch {
     /* fall through to the local engine */
+  } finally {
+    if (deadline != null) window.clearTimeout(deadline);
   }
-  const { getSongSuggestions } = await import('@/services/api');
+  const { getSongSuggestions, searchSongsPage } = await import('@/services/api');
   try {
-    const songs = await getSongSuggestions(songId, 18);
-    // rankCandidates already tier-shuffles by salt; rotateTop then rotates the
-    // very top band too, so the leading next-song picks aren't frozen when a
-    // few candidates sit alone in their own score tiers.
-    const picks = rotateTop(
-      diversify(
-        rankCandidates(
-          songs
-            .filter((song) => !ex.has(song.id))
-            .map((song) => ({ song, source: 'related' as const })),
-          ctx,
-        ),
-        ctx.intensity,
-      ),
-      ctx.salt,
-    );
+    const page = 1 + (Math.abs(ctx.salt) % 4);
+    const alternative = ctx.history.filter((h) => h.completed && h.song.id !== songId);
+    const neighbor = alternative.length ? alternative[Math.abs(ctx.salt) % Math.min(alternative.length, 12)].song : null;
+    const batches = await Promise.allSettled([
+      getSongSuggestions(songId, 60),
+      neighbor ? getSongSuggestions(neighbor.id, 30) : Promise.resolve([]),
+      searchSongsPage(trendingSeed(language ?? 'hindi', ctx.salt), page, 30),
+    ]);
+    const songs = batches.flatMap((b) => b.status === 'fulfilled' ? b.value : []);
+    const picks = diversify(rotateTop(rankCandidates(
+      admit(songs, true).map((song) => ({ song, source: 'related' as const })), ctx,
+    ), ctx.salt, 20), ctx.intensity);
     // C4 — the instant local queue gets "why" lines too (AI lines, when the AI
     // path served instead, were already set and are never overwritten).
     publishReasons(picks);

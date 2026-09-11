@@ -1,6 +1,6 @@
 import type { Song } from '@/types';
 import type { RecommendationContext } from '@/services/recommendation/types';
-import { getSong, getSongSuggestions, searchSongs } from '@/services/api';
+import { getSong, getSongSuggestions, searchSongs, searchSongsPage } from '@/services/api';
 import {
   canonicalKey,
   hardFilter,
@@ -265,7 +265,9 @@ export async function aiSimilarSongs(
 
   // ---- Stage 1: harvest four real-catalog buckets in parallel ----
   const seedArtist = seed ? primaryArtist(seed) : '';
-  const tasteArtist = topArtists(ctx.profile, 3).map((a) => a.affinity.name)[0] ?? '';
+  const tasteArtists = topArtists(ctx.profile, 8).map((a) => a.affinity.name);
+  const tasteArtist = tasteArtists.length ? tasteArtists[Math.abs(ctx.salt) % tasteArtists.length] : '';
+  const discoveryPage = 1 + (Math.abs(ctx.salt) % 4);
   const completed = ctx.history.filter((e) => e.completed && e.song.id !== seedId);
   let altSeed: Song | null = null;
   if (completed.length) {
@@ -299,7 +301,7 @@ export async function aiSimilarSongs(
     tasteArtist && tasteArtist !== seedArtist
       ? searchSongs(`${tasteArtist} ${langWord} ${moodWord} best songs`.replace(/\s+/g, ' ').trim(), 8).catch(() => [] as Song[])
       : Promise.resolve([] as Song[]),
-    lockLang ? searchSongs(`${moodWord ? moodWord + ' ' : 'trending '}${lockLang} songs`.trim(), 12).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
+    lockLang ? searchSongsPage(`${moodWord ? moodWord + ' ' : 'trending '}${lockLang} songs`.trim(), discoveryPage, 24).catch(() => [] as Song[]) : Promise.resolve([] as Song[]),
   ]);
 
   // ---- Stage 2: hard rules, one dedup set across all buckets ----

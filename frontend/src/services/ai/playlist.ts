@@ -1,3 +1,6 @@
+import { canonicalKey, songKey, servedKeySet, recordServed } from '@/services/recommendation/flow';
+import { freshSongs } from '@/services/recommendation/freshness';
+import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import type { Song } from '@/types';
 import { searchSongs } from '@/services/api';
 import { isNativePlatform } from '@/services/native';
@@ -31,7 +34,7 @@ const AVOID_KEY = 'vinax.aiplaylist.avoid.v1';
 // exhaust the memory in a couple of weeks and see the same titles resurface.
 const AVOID_CAP = 100;
 
-/** Last ~60 titles this feature generated, newest first. */
+/** Last 100 titles this feature generated, newest first. */
 export function loadAvoidTitles(): string[] {
   try {
     const raw = JSON.parse(window.localStorage.getItem(AVOID_KEY) || '[]') as unknown;
@@ -43,7 +46,7 @@ export function loadAvoidTitles(): string[] {
   }
 }
 
-/** Merge freshly generated titles in (newest first), dedupe, cap at 60. */
+/** Merge freshly generated titles in (newest first), dedupe, cap at 100. */
 export function recordAvoidTitles(titles: string[]): void {
   try {
     const merged = [...titles, ...loadAvoidTitles()];
@@ -62,42 +65,38 @@ export function recordAvoidTitles(titles: string[]): void {
 }
 
 /** Loose title key so near-identical catalog titles guard each other. */
-const titleKey = (t: string): string => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const titleKey = (t: string): string => canonicalKey(t, '');
 
-/** Resolve AI { title, artist } picks to playable catalog songs, deduped +
- *  muted-filtered. Optional avoid[]: soft anti-repeat — the upstream search
- *  ranks by popularity, so fuzzy titles collapse onto the same canonical hits
- *  run after run; preferring an unused hit (and only falling back to a used
- *  one) keeps consecutive generations visibly different (v3.3.1). */
+/** Resolve catalog picks in bounded parallel batches, preserving the curator's
+ * order. Repeat exclusions are hard rules, including alternate releases. */
 export async function resolveSuggestions(
   suggestions: Suggestion[],
   limit: number,
   muted: string[],
   avoid: string[] = [],
+  languages: string[] = [],
 ): Promise<Song[]> {
   const out: Song[] = [];
   const seen = new Set<string>();
   const seenTitles = new Set<string>();
   const avoidKeys = new Set(avoid.map(titleKey));
-  for (const s of suggestions) {
-    if (out.length >= limit) break;
-    try {
-      const results = await searchSongs(`${s.title} ${s.artist}`, 5);
-      // Exclude already-picked ids AND already-picked catalog titles: without
-      // this, near-duplicate suggestions converge on the same top search hit
-      // (or the same recording under a second id) and the playlist collapses.
-      const ok = (r: Song): boolean =>
-        !seen.has(r.id) &&
-        !seenTitles.has(titleKey(r.title)) &&
-        !(r.language != null && muted.includes(r.language));
-      const pick = results.find((r) => ok(r) && !avoidKeys.has(titleKey(r.title))) ?? results.find(ok);
+  const served = servedKeySet();
+  const library = useLibraryStore.getState();
+  const valid = suggestions.filter((s) => s && typeof s.title === 'string' && typeof s.artist === 'string').slice(0, 40);
+  for (let i = 0; i < valid.length && out.length < limit; i += 4) {
+    const batch = await Promise.allSettled(valid.slice(i, i + 4).map((s) => searchSongs(`${s.title} ${s.artist}`, 5)));
+    for (const result of batch) {
+      if (out.length >= limit) break;
+      if (result.status !== 'fulfilled') continue;
+      const results = freshSongs(result.value, {
+        excludeKeys: served, muted, blocked: (song) => isSongBlocked(song, library),
+      }).filter((song) => !languages.length || (song.language != null && languages.includes(song.language)));
+      const pick = results.find((song) => !seen.has(song.id) && !seenTitles.has(titleKey(song.title)) && !avoidKeys.has(titleKey(song.title)));
       if (pick) {
         seen.add(pick.id);
         seenTitles.add(titleKey(pick.title));
         out.push(pick);
       }
-    } catch {
-      /* skip this suggestion */
     }
   }
   return out;
@@ -137,13 +136,14 @@ export async function generatePlaylist(
   const suggestions = Array.isArray(data?.songs) ? (data as { songs: Suggestion[] }).songs : [];
   if (!suggestions.length) return { ok: false, reason: 'empty' };
 
-  const songs = await resolveSuggestions(suggestions, 25, muted, avoidTitles);
+  const songs = await resolveSuggestions(suggestions, 25, muted, avoidTitles, languages);
   if (!songs.length) return { ok: false, reason: 'empty' };
 
   // Remember what this generation used — the resolved catalog titles (what
   // the listener actually saw; different model titles can collapse onto the
   // same catalog hit) AND the model's own titles — so the next run for the
   // same vibe is steered toward genuinely different picks.
+  recordServed(songs.map(songKey));
   recordAvoidTitles([...songs.map((s) => s.title), ...suggestions.map((s) => s.title)]);
 
   return {

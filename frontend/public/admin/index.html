@@ -12,7 +12,7 @@
          'self' + Supabase for direct client hits (currently unused by this
          console, kept as a hedge for future direct queries). -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org" />
-    <title>VinaX Control Room</title>
+    <title>VinaX Astra · Control Room</title>
 
     <!-- Leaflet (vendored — CSP script-src is 'self') for the World map. -->
     <link rel="stylesheet" href="/admin/leaflet/leaflet.css" />
@@ -605,6 +605,7 @@
             <button class="ghost" id="json" title="Download this panel as JSON">JSON</button>
             <button class="ghost" id="report" title="Copy a day report to the clipboard">Report</button>
             <button class="ghost" id="notify" title="Browser alert when new errors appear">Alerts</button>
+            <button class="ghost" id="density" aria-pressed="false" title="Toggle compact layout">Compact</button>
             <button class="ghost" id="theme" title="Light / dark">Theme</button>
             <button class="ghost" id="refresh" title="Refresh now">Refresh</button>
             <button class="ghost" id="logout">Sign out</button>

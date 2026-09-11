@@ -23,7 +23,7 @@ const FIELDS: Array<[string, number]> = [
   ['recentlyPlayed', 10],
   // Package B5 — songs this very conversation already recommended (client-derived
   // from the thread's assistant turns); rule 4 forbids re-serving them.
-  ['alreadyRecommendedThisChat', 12],
+  ['alreadyRecommendedThisChat', 32],
 ];
 
 /** Sanitize a client-sent taste payload into a bounded profile block, or null. */

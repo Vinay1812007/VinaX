@@ -243,12 +243,14 @@ export const usePlayerStore = create<PlayerState>()(
       }
 
       async function appendSimilar(seed: Song): Promise<boolean> {
-        const [{ similarToSong }, { loadProfile }, { useLibraryStore, isSongBlocked }, { resolvedRegion }] =
+        const [{ similarToSong }, { loadProfile }, { useLibraryStore, isSongBlocked }, { resolvedRegion }, { freshSongs }, { recordServed, servedKeySet, songKey }] =
           await Promise.all([
             import('@/services/recommendation/engine'),
             import('@/services/personalization/storage'),
             import('./libraryStore'),
             import('./settingsStore'),
+            import('@/services/recommendation/freshness'),
+            import('@/services/recommendation/flow'),
           ]);
         const settings = useSettingsStore.getState();
         const profile = loadProfile();
@@ -271,12 +273,6 @@ export const usePlayerStore = create<PlayerState>()(
         // last ~60 tracks (profile.recentSongIds).
         const exclude = new Set<string>([...queueIds, ...profile.recentSongIds]);
         let scored = await similarToSong(seed.id, ctx, exclude);
-        // Safety net: if the strict filter empties the pool, relax to just the
-        // current queue so playback never stalls (older tracks may resurface,
-        // but it won't loop the same handful).
-        if (!scored.length) {
-          scored = await similarToSong(seed.id, ctx, new Set(queueIds));
-        }
         const existing = new Set(queueIds);
         const existingTitles = new Set(get().queue.map(normTitle).filter((t) => t.length > 0));
         // Enforce language: the continuation must match the playing song's
@@ -313,14 +309,11 @@ export const usePlayerStore = create<PlayerState>()(
         // every continuation, radio and autoplay, not only the home feeds.
         const lib = useLibraryStore.getState();
         pool = dedupeSongs(stripExplicit(pool)).filter((s) => !isSongBlocked(s, lib));
-        const fresh = pool.slice(0, 6);
+        const excludedKeys = new Set([...get().queue.map(songKey), ...ctx.history.slice(0, 60).map((h) => songKey(h.song))]);
+        const fresh = freshSongs(pool, { excludeKeys: excludedKeys, muted: settings.mutedLanguages }).slice(0, 6);
         if (tune) for (const s of fresh) tuneSuggested.add(s.id);
-        // Top up from a direct on-language search so the queue stays 100% in the
-        // target language even when the recommender returns too few on-language tracks.
-        // Always guarantee a non-empty queue: when suggestions + AI come up short
-        // (e.g. a brand-new song with no catalog 'related' tracks), top up from a
-        // trending search in the best available language, relaxing to any
-        // non-muted track as a last resort so the queue never ends abruptly.
+        // Expand the catalog when the recommender is short. Never bypass
+        // identity, language or blocked-song rules to pad an exhausted queue.
         if (fresh.length < 6) {
           try {
             const [{ searchSongsPage }, { trendingSeed }] = await Promise.all([
@@ -339,22 +332,14 @@ export const usePlayerStore = create<PlayerState>()(
             for (const page of [1 + (salt % 4), 1, 2, 3]) {
               if (fresh.length >= 6) break;
               const extra = await searchSongsPage(query(page), page, 20);
-              for (const s of extra) {
-                if (fresh.length >= 6) break;
-                if (have.has(s.id)) continue;
-                if (s.language != null && mutedSet.has(s.language)) continue;
-                if (fillLang && s.language !== fillLang) continue;
-                fresh.push(s);
-                have.add(s.id);
-              }
-            }
-            // Pass 2 (last resort): accept any non-muted track so we never stall.
-            if (!fresh.length) {
-              const extra = await searchSongsPage(query(0), 1, 20);
-              for (const s of extra) {
-                if (fresh.length >= 6) break;
-                if (have.has(s.id)) continue;
-                if (s.language != null && mutedSet.has(s.language)) continue;
+              const admitted = freshSongs(extra, {
+                excludeIds: have,
+                excludeKeys: new Set([...excludedKeys, ...servedKeySet(), ...fresh.map(songKey)]),
+                language: fillLang,
+                muted: [...mutedSet],
+                blocked: (s) => isSongBlocked(s, lib),
+              });
+              for (const s of admitted.slice(0, 6 - fresh.length)) {
                 fresh.push(s);
                 have.add(s.id);
               }
@@ -366,7 +351,10 @@ export const usePlayerStore = create<PlayerState>()(
         const before = get().queue.length;
         const { lastQueueSource } = await import('@/services/recommendation/engine');
         const combined = dedupeSongs([...get().queue, ...stripExplicit(fresh)]);
-        if (combined.length > before) set({ queue: combined, queueSource: lastQueueSource() });
+        if (combined.length > before) {
+          recordServed(combined.slice(before).map(songKey));
+          set({ queue: combined, queueSource: lastQueueSource() });
+        }
         return combined.length > before;
       }
 

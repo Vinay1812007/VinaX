@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import App from './App';
 import './styles/index.css';
 import './styles/studio.css';
+import './styles/astra.css';
 import './styles/festivals.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

@@ -96,7 +96,7 @@ describe('resolveSuggestions — no convergence on one search hit', () => {
     expect(out.map((s) => s.id)).toEqual(['dup-1', 'alt-2', 'alt-3']);
   });
 
-  it('prefers hits the recent generations have not used, falling back rather than dropping', async () => {
+  it('excludes recent generations even when the catalog has no fresh alternative', async () => {
     vi.mocked(searchSongs)
       // Popularity-ranked: the avoided canonical hit first, a fresh one second.
       .mockResolvedValueOnce([song('pop-1', 'Canonical Hit'), song('new-1', 'Fresh Cut')])
@@ -112,6 +112,6 @@ describe('resolveSuggestions — no convergence on one search hit', () => {
       [],
       ['Canonical Hit', 'Canonical Hit Two'],
     );
-    expect(out.map((s) => s.id)).toEqual(['new-1', 'pop-2']);
+    expect(out.map((s) => s.id)).toEqual(['new-1']);
   });
 });

@@ -38,6 +38,12 @@ function ratio(a: RGB, b: RGB): number {
 }
 
 const dark = tokensOf(':root');
+const astraCss = readFileSync(resolve(__dirname, '../styles/astra.css'), 'utf8');
+const astraBody = astraCss.match(/html:not\(\.light\):not\(\.amoled\):not\(\.hc\)\s*\{([^}]*)\}/)?.[1] ?? '';
+const astraDark = { ...dark };
+for (const m of astraBody.matchAll(/--([\w-]+):\s*(\d+)\s+(\d+)\s+(\d+)\s*;/g)) {
+  astraDark[m[1]] = [Number(m[2]), Number(m[3]), Number(m[4])];
+}
 // The light block inherits anything it doesn't override from :root.
 const light = { ...dark, ...tokensOf('html.light') };
 
@@ -63,6 +69,7 @@ const UI_TIERS: Array<[string, string[], number]> = [
 describe.each([
   ['dark', dark],
   ['light', light],
+  ['astra dark', astraDark],
 ])('%s theme contrast', (_name, t) => {
   it.each(TEXT_TIERS)('text %s on [%s] ≥ %s:1', (token, surfaces, min) => {
     for (const surface of surfaces) {

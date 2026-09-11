@@ -793,11 +793,13 @@
     var errors = typeof s.errors_24h === 'number' ? s.errors_24h : null;
     var feedback = typeof s.feedback_new === 'number' ? s.feedback_new : null;
     var headline = errors === null ? 'Waiting for operational signals' : errors > 0 ? 'A few things need your attention' : 'Make the next listening session better';
-    return '<section class="ops-brief"><div><span class="ops-eyebrow">VINAX / CONTROL ROOM</span><h2>' + esc(headline) + '</h2><p>Your audience, music experience and release tools in one place.</p></div>' +
+    return '<section class="ops-brief"><div><span class="ops-eyebrow">VINAX ASTRA / CONTROL ROOM</span><h2>' + esc(headline) + '</h2><p>Your audience, music experience and release tools in one place.</p></div>' +
       '<div class="ops-actions"><a href="#technical"><b>' + (errors === null ? '—' : fmtN(errors)) + '</b><span>Errors · last 24 hours →</span></a>' +
       '<a href="#feedback"><b>' + (feedback === null ? '—' : fmtN(feedback)) + '</b><span>New feedback →</span></a>' +
       '<a href="#homescreen"><b>Home studio</b><span>Curate the listener experience →</span></a>' +
-      '<a href="#releases"><b>Release centre</b><span>Inspect builds and versions →</span></a></div></section>';
+      '<a href="#releases"><b>Release centre</b><span>Inspect builds and versions →</span></a>' +
+      '<a href="#ai"><b>AI intelligence</b><span>Review engines and request health →</span></a>' +
+      '<a href="#skips"><b>Discovery quality</b><span>See where listeners skip →</span></a></div></section>';
   }
   function renderOverview(d) {
     var s = d.summary || {};
@@ -2766,7 +2768,7 @@
     { key: 'listenTogether', label: 'Listen Together', note: 'Off hides the Listen Together entry from the sidebar and Library.' }
   ];
   function renderFlagsSection() {
-    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
     cfgGet('flags').then(function (d) {
       if (active !== 'flags') return;
       if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
@@ -2793,7 +2795,7 @@
 
   // 11. Runbook — operator notes that live with the console, not in someone's chat.
   function renderRunbookSection() {
-    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
     cfgGet('runbook').then(function (d) {
       if (active !== 'runbook') return;
       if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
@@ -2855,7 +2857,7 @@
 
   // 13. Trending pins — curated chips under the search bar, ahead of the organic list.
   function renderTrendingPinsSection() {
-    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
     Promise.all([cfgGet('trending-pins'), fetch('/api/trending-searches?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).catch(function () { return null; })]).then(function (rs) {
       if (active !== 'trendpins') return;
       var d = rs[0], live = rs[1];
@@ -2875,7 +2877,7 @@
 
   // 14. Status note — the owner-written incident line on /api/status and the status page.
   function renderStatusNoteSection() {
-    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
     cfgGet('status-note').then(function (d) {
       if (active !== 'statusnote') return;
       if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
@@ -2902,7 +2904,7 @@
   // Small config editor scaffold: loads a key, renders a form via `form(value)`,
   // wires `#<id>-save` to `read()` → publish. Keeps every editor ~20 lines.
   function cfgEditor(opts) {
-    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
     cfgGet(opts.key).then(function (d) {
       if (active !== opts.sec) return;
       var value = d && d.configured ? d.value : null;
@@ -3159,7 +3161,7 @@
       var overall = down ? 'Action needed' : overdue || missing ? 'Watch closely' : (status.overall || 'Operational');
       var overallOk = !down && !overdue && !missing;
       $('view').innerHTML =
-        '<div class="ops-center-hero"><div><span class="ops-eyebrow">VINAX / OPERATIONS CENTER</span><h2>' + esc(overall) + '</h2><p class="muted">A calm preflight for uptime, schedules and runtime configuration.</p></div><button class="ghost" id="ops-refresh">Refresh signals</button></div>' +
+        '<div class="ops-center-hero"><div><span class="ops-eyebrow">VINAX ASTRA / OPERATIONS CENTER</span><h2>' + esc(overall) + '</h2><p class="muted">Service health, scheduled work and release readiness.</p></div><button class="ghost" id="ops-refresh">Refresh signals</button></div>' +
         '<div class="cards ops-center-cards">' + card(components.length ? components.length - down + '/' + components.length : '—', 'Services healthy') + card(overdue, 'Overdue jobs') + card(missing, 'Required secrets missing') + card(overallOk ? 'Ready' : 'Review', 'Release posture') + '</div>' +
         '<div class="ops-center-grid"><div class="card"><div class="row"><h3 style="margin-top:0">Service pulse</h3><span class="spacer"></span><span class="muted">' + (status.generatedAt ? 'checked ' + ago(status.generatedAt) : 'no timestamp') + '</span></div>' + (components.length ? components.map(function (c) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (c.status === 'up' ? 'ok' : 'bad') + '"></span><b>' + esc(c.name || c.id) + '</b><span class="spacer"></span>' + okPill(c.status === 'up', c.status || 'unknown') + (c.latencyMs != null ? '<span class="muted">' + c.latencyMs + ' ms</span>' : '') + '</div>'; }).join('') : '<div class="empty">Status endpoint returned no components.</div>') + '</div>' +
         '<div class="card"><div class="row"><h3 style="margin-top:0">Scheduled work</h3><span class="spacer"></span><a class="ghost" href="#cron">Open cron health</a></div>' + (jobs.length ? jobs.map(function (j) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (j.ok === false ? 'bad' : 'ok') + '"></span><b>' + esc(j.label || j.id) + '</b><span class="spacer"></span>' + okPill(j.ok !== false, j.ok === false ? 'overdue' : 'on time') + '<span class="muted">' + (j.lastAt ? ago(j.lastAt) : 'never') + '</span></div>'; }).join('') : '<div class="empty">No schedule telemetry yet.</div>') + '</div></div>' +
@@ -3362,6 +3364,22 @@
   // under (drives the breadcrumb over the tool title) + collapsible category
   // headers whose open/closed state persists per browser.
   var CATS = { overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', segments: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', opscenter: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines' };
+  var densityButton = $('density');
+  if (densityButton) {
+    var compact = false;
+    try { compact = localStorage.getItem('vinax.admin.compact') === '1'; } catch (e) {}
+    function applyDensity() {
+      document.body.classList.toggle('astra-compact', compact);
+      densityButton.setAttribute('aria-pressed', String(compact));
+      densityButton.textContent = compact ? 'Comfortable' : 'Compact';
+    }
+    applyDensity();
+    densityButton.addEventListener('click', function () {
+      compact = !compact;
+      applyDensity();
+      try { localStorage.setItem('vinax.admin.compact', compact ? '1' : '0'); } catch (e) {}
+    });
+  }
   var GRP_KEY = 'vinax_admin_navgroups';
   function closedGroups() { try { var v = JSON.parse(localStorage.getItem(GRP_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
   function applyNavGroups() {
@@ -3501,7 +3519,7 @@
     var v = $('view'); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
     $('range').hidden = !USES_RANGE[sec];
     $('csv').hidden = true;
-    $('view').innerHTML = '<div class="empty">Loading…</div>';
+    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
     if (sec === 'users') userOffset = 0;
     refreshActive();
     startAuto();

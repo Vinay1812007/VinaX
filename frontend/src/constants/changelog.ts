@@ -12,6 +12,17 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '6.0.0': {
+    title: 'Astra — a new orbit for your music',
+    changes: [
+      { type: 'new', text: 'Astra brings a space-inspired listening workspace, orbital mix artwork, a refreshed player and navigation, and a focused VinaX AI conversation surface.' },
+      { type: 'new', text: 'Refresh discovery changes your recommendation seed and daily mix without clearing your listening history or favourites.' },
+      { type: 'improved', text: 'Waveform loading, card motion and supported scroll reveals follow your reduced-motion preference. Light and AMOLED themes remain available.' },
+      { type: 'fixed', text: 'Next-song and fallback queues now share canonical duplicate checks, respect language and blocked-song rules, and search wider catalog pools.' },
+      { type: 'fixed', text: 'AI playlist generations exclude recent picks and alternate releases, with faster catalog resolution. Regenerate retries the correct chat question with a fresh approach.' },
+      { type: 'improved', text: 'The owner console gains Astra surfaces, animated panel loading, a saved compact layout preference, and shortcuts to AI and discovery quality reports.' },
+    ],
+  },
   '5.32.0': {
     title: 'Opt-in session insights',
     changes: [

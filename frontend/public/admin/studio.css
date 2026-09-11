@@ -50,3 +50,41 @@ main { background: radial-gradient(ellipse at 90% 0%, var(--accent-tint), transp
 @media (max-width: 900px) { .ops-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .ops-center-grid, .broadcast-composer { grid-template-columns: 1fr; } .ops-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .ops-brief { padding: 20px; } .hs-studio { grid-template-columns: 1fr; } .ops-actions a { padding: 12px; } .card { padding: 16px; } .ops-center-hero { padding: 20px; flex-direction: column; } .ops-shortcuts { grid-template-columns: 1fr; } }
+
+/* Astra command center — a shared visual system for every owner tool. */
+:root { --bg: #060a13; --surface: #101827; --surface-2: #162135; --surface-3: #1d2c44; --border: #26354c; --border-strong: #354c6c; --text: #edf3ff; --text-2: #bccbe0; --text-3: #98aac4; --accent: #62dccb; --accent-strong: #3ebfab; --accent-text: #8ae9dc; --accent-soft: #62dccb18; --accent-tint: #62dccb0b; }
+body.lightadm { --bg: #edf2f9; --surface: #fff; --surface-2: #f4f7fc; --surface-3: #e5edf8; --border: #d8e1ee; --border-strong: #b7c9dc; --text: #162137; --text-2: #415673; --text-3: #586d88; --accent: #087b6f; --accent-strong: #066359; --accent-text: #08695f; --accent-soft: #087b6f16; --accent-tint: #087b6f0a; }
+body { font-size: 14px; }
+header { background: var(--surface); border-bottom: 1px solid var(--border); }
+nav { background: linear-gradient(180deg, var(--surface), var(--bg)); }
+nav button[data-sec] { min-height: 42px; padding: 10px 14px; border-radius: 12px; font-size: 14px; transition: background .2s, color .2s; }
+nav button[data-sec].active { box-shadow: inset 3px 0 var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+.nav-group-label { font-size: 12px; letter-spacing: .12em; }
+main { background: radial-gradient(ellipse at 100% 0, var(--accent-soft), transparent 55%), var(--bg); scrollbar-gutter: stable; }
+.toolbar { padding-bottom: 20px; }
+#secTitle { font-size: clamp(28px, 3vw, 40px); letter-spacing: -.05em; }
+.card { border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 10px 32px #0000000c; }
+.card.kpi { background: linear-gradient(135deg, var(--accent-tint), var(--surface)); border-top: 1px solid var(--border-strong); position: relative; overflow: hidden; }
+.card.kpi::after { content: ''; position: absolute; top: 20px; right: 0; height: 36px; width: 3px; background: var(--accent); border-radius: 4px; }
+.card.kpi .n { font-size: 36px; font-variant-numeric: tabular-nums; }
+.card .l, .ops-actions span, .ops-shortcuts span, .ops-signal, .muted { font-size: 13px; }
+.ops-brief, .ops-center-hero { border-radius: 24px; background: radial-gradient(ellipse at 100% 30%, var(--accent-soft), transparent 70%), var(--surface); box-shadow: inset 0 1px var(--highlight); }
+.ops-eyebrow { font-size: 12px; letter-spacing: .17em; }
+.ops-actions a, .ops-shortcuts a { border-radius: 16px; min-height: 90px; transition: transform .2s, border-color .2s; }
+.ops-actions a:hover, .ops-shortcuts a:hover { transform: translateY(-3px); }
+thead th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; font-size: 12px; }
+td { padding-top: 14px; padding-bottom: 14px; font-size: 14px; }
+button.ghost, .inp { border-radius: 10px; min-height: 36px; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.astra-admin-loading { display: grid; gap: 20px; padding: 24px 0; }
+.astra-admin-loading p { display: flex; align-items: center; gap: 12px; color: var(--text-2); }
+.astra-admin-loading p::before { content: ''; width: 20px; height: 20px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: astra-admin-spin 1s linear infinite; }
+.astra-admin-loading .cards > div { height: 128px; border-radius: 20px; background: linear-gradient(100deg, var(--surface) 30%, var(--surface-3) 50%, var(--surface) 70%); background-size: 250% 100%; animation: astra-admin-shimmer 1.8s ease-in-out infinite; }
+body.astra-compact .card { padding: 14px; border-radius: 14px; }
+body.astra-compact td { padding-top: 8px; padding-bottom: 8px; }
+body.astra-compact nav button[data-sec] { min-height: 34px; padding-top: 6px; padding-bottom: 6px; }
+@keyframes astra-admin-spin { to { transform: rotate(360deg); } }
+@keyframes astra-admin-shimmer { to { background-position: -200% 0; } }
+@media (max-width: 760px) { .ops-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ops-brief { padding: 20px; } #density { display: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+@media (min-width: 901px) { .ops-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
