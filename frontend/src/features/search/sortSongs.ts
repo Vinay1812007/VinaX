@@ -53,7 +53,9 @@ export function sortSongs(songs: Song[], sort: SongSort): Song[] {
       });
     }
     case 'az':
-      return [...songs].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }));
+      return [...songs].sort((a, b) =>
+        a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }),
+      );
     default:
       return songs;
   }
@@ -61,12 +63,17 @@ export function sortSongs(songs: Song[], sort: SongSort): Song[] {
 
 /** Local "filter these results": title, subtitle or any credited artist. */
 export function filterSongsLocally(songs: Song[], text: string): Song[] {
-  const needle = text.trim().toLowerCase();
-  if (!needle) return songs;
-  return songs.filter(
-    (s) =>
-      s.title.toLowerCase().includes(needle) ||
-      s.subtitle.toLowerCase().includes(needle) ||
-      s.artists.some((a) => a.name.toLowerCase().includes(needle)),
-  );
+  const fold = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  const words = fold(text).trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return songs;
+  return songs.filter((s) => {
+    const haystack = fold(
+      [s.title, s.subtitle, s.album?.name ?? '', ...s.artists.map((a) => a.name)].join(' '),
+    );
+    return words.every((word) => haystack.includes(word));
+  });
 }

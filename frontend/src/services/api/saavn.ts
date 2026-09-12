@@ -156,9 +156,12 @@ export function searchAll(query: string, opts?: { signal?: AbortSignal }): Promi
         .map(normalizePlaylist)
         .filter((p): p is Playlist => p !== null);
       if (!songs.length && !albums.length && !artists.length && !playlists.length) {
-        // Some wrappers 200-with-empty on /search; treat as miss so the
-        // orchestrator can try a provider that actually implements it.
-        return null;
+        // A supported, explicitly empty list is a valid zero-result search.
+        // Unsupported shapes still try the next provider.
+        const hasResultList = [d.songs, d.albums, d.artists, d.playlists].some(
+          (group) => Array.isArray(group?.results) || Array.isArray(group?.data),
+        );
+        if (!hasResultList) return null;
       }
       return { songs, albums, artists, playlists };
     },

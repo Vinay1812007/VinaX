@@ -6,6 +6,15 @@
  */
 import type { Song } from '@/types';
 
+function fold(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
 /** Title text before any "(From …)" / "[…]" suffix, lower-cased. */
 function coreTitle(lower: string): string {
   const paren = lower.indexOf(' (');
@@ -20,7 +29,9 @@ function coreTitle(lower: string): string {
  *  query word, 0 = no literal match. Exported for tests. */
 export function matchTier(title: string, query: string, words: readonly string[]): number {
   if (!query) return 0;
-  const lower = title.toLowerCase();
+  const lower = fold(title);
+  query = fold(query);
+  words = words.map(fold);
   const core = coreTitle(lower);
   if (lower === query || core === query) return 3;
   if (lower.startsWith(query)) return 2;
@@ -33,9 +44,13 @@ export function matchTier(title: string, query: string, words: readonly string[]
  * query words; a small nudge for songs in the listener's pinned languages
  * (never enough to jump a tier); everything else keeps its incoming order.
  */
-export function rerankSongs(songs: Song[], query: string, pinnedLanguages: readonly string[]): Song[] {
+export function rerankSongs(
+  songs: Song[],
+  query: string,
+  pinnedLanguages: readonly string[],
+): Song[] {
   if (songs.length < 2) return songs;
-  const q = query.normalize('NFC').toLowerCase().trim().replace(/\s+/g, ' ');
+  const q = fold(query);
   const words = q ? q.split(' ').filter((w) => w.length >= 2) : [];
   const pinned = new Set(pinnedLanguages);
   const boostable = q.length > 0 || pinned.size > 0;

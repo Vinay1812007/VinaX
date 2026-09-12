@@ -489,6 +489,7 @@
       @media (min-width: 1880px) { body { zoom: 1.1; } main > * { max-width: 1400px; } #app { grid-template-columns: 260px minmax(0, 1fr); } }
     </style>
     <link rel="stylesheet" href="/admin/studio.css" />
+      <link rel="stylesheet" href="/admin/workspace.css" />
   </head>
   <body>
     <div id="login" class="login">
@@ -517,7 +518,8 @@
                browser) and show their tool count. Categories are ordered by
                daily workflow: watch → audience → catalog → promotion →
                reports → AI → operations → settings. -->
-          <button class="nav-group-label" data-group="Dashboards" aria-expanded="true">Dashboards <span class="ng-n">2</span><span class="ng-chev">▾</span></button>
+          <button class="nav-group-label" data-group="Dashboards" aria-expanded="true">Dashboards <span class="ng-n">3</span><span class="ng-chev">▾</span></button>
+          <button data-sec="workspace" data-cat="Dashboards">Operations Workspace</button>
           <button data-sec="overview" data-cat="Dashboards" class="active">Overview</button>
           <button data-sec="realtime" data-cat="Dashboards">Real-Time</button>
           <button class="nav-group-label" data-group="Audience" aria-expanded="true">Audience <span class="ng-n">9</span><span class="ng-chev">▾</span></button>
@@ -624,6 +626,7 @@
 
     <script src="/admin/leaflet/leaflet.js"></script>
     <script src="/admin/festivals.js"></script>
+    <script src="/admin/workspace.js"></script>
     <script src="/admin/app.js"></script>
   </body>
 </html>

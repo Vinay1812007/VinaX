@@ -6,6 +6,10 @@ VinaX combines music discovery, playback, lyrics, playlists and AI assistance in
 
 [Listen](https://www.sirimillavinay.online) · [Deployment guide](DEPLOYMENT.md) · [User guide](frontend/docs/user-guide/README.md)
 
+## Discovery Room upgrade
+
+Search now has a new discovery layout, 15 listener additions, and improved matching and pagination. The owner console gains an Operations Workspace with 13 capabilities for metrics, search recovery, task tracking, and handovers. See [the feature and validation guide](DISCOVERY_UPGRADE.md) for scope and local-storage limitations.
+
 ## What's new in Astra 6.0
 
 Astra refreshes the customer workspace, VinaX AI and the owner console with a space-inspired design, clearer typography, loading states and reduced-motion-aware interactions. Home now includes an explicit **Refresh discovery** action.

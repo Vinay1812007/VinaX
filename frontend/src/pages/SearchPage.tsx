@@ -1,3 +1,8 @@
+import { SearchWorkspace, SavedSearches } from '@/features/search/SearchWorkspace';
+import { refineSongs } from '@/features/search/workspace';
+import { useSearchWorkspaceStore, type SearchPreset } from '@/store/searchWorkspaceStore';
+import { useLibraryStore } from '@/store/libraryStore';
+import { useHistoryStore } from '@/store/historyStore';
 import { isNativePlatform } from '@/services/native';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,11 +17,7 @@ import { ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
 import { ClockIcon, PlayIcon, SearchIcon, SparkleIcon, XIcon } from '@/components/Icons';
-import {
-  normalizeQuery,
-  rankSongs,
-  useSearchAll,
-} from '@/features/search/useSearch';
+import { normalizeQuery, rankSongs, useSearchAll } from '@/features/search/useSearch';
 import {
   flattenAlbumPages,
   flattenArtistPages,
@@ -27,7 +28,12 @@ import {
   useInfinitePlaylists,
   useInfiniteSongs,
 } from '@/features/search/useInfiniteSongs';
-import { createSttSession, probeSttSupport, sttSupported, type SttSession } from '@/features/voice/stt';
+import {
+  createSttSession,
+  probeSttSupport,
+  sttSupported,
+  type SttSession,
+} from '@/features/voice/stt';
 import { isSongSort, SONG_SORTS, useSearchStore } from '@/store/searchStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -85,7 +91,16 @@ function Highlight({ text, term }: { text: string; term: string }) {
 /** v5.17.0 — a small push-pin, used on pinned recents. */
 function PinGlyph({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
       <path d="M9 3h6l-1 6.5 3 2.5v2H7v-2l3-2.5L9 3z" />
       <path d="M12 14v7" />
     </svg>
@@ -154,11 +169,18 @@ function RecentChip({
           aria-label={pinned ? `Unpin ${query}` : `Pin ${query}`}
           aria-pressed={pinned}
           onClick={() => onTogglePin(false)}
-          className={cn('p-1 rounded-full hover:bg-ink-700/70 [@media(hover:none)]:hidden', pinned ? 'text-ember-400' : 'text-ink-500 hover:text-ink-200')}
+          className={cn(
+            'p-1 rounded-full hover:bg-ink-700/70 [@media(hover:none)]:hidden',
+            pinned ? 'text-ember-400' : 'text-ink-500 hover:text-ink-200',
+          )}
         >
           <PinGlyph className="w-3.5 h-3.5" />
         </button>
-        <button aria-label={`Remove ${query}`} onClick={onRemove} className="p-1 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70">
+        <button
+          aria-label={`Remove ${query}`}
+          onClick={onRemove}
+          className="p-1 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70"
+        >
           <XIcon className="w-3 h-3" />
         </button>
       </span>
@@ -172,6 +194,10 @@ function QuickRow({ song, onPlay, dim }: { song: Song; onPlay: () => void; dim: 
   return (
     <button
       type="button"
+      onClick={(e) => {
+        if (e.detail === 0 && !dim) onPlay();
+      }}
+      disabled={dim}
       onPointerDown={(e) => {
         e.preventDefault(); // keep the box focused so the panel stays open
         pointer.current = { x: e.clientX, y: e.clientY };
@@ -181,9 +207,17 @@ function QuickRow({ song, onPlay, dim }: { song: Song; onPlay: () => void; dim: 
         pointer.current = null;
         if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12) onPlay();
       }}
-      className={cn('w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-ink-800/60 transition-opacity', dim && 'opacity-50')}
+      className={cn(
+        'w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-ink-800/60 transition-opacity',
+        dim && 'opacity-50',
+      )}
     >
-      <img src={bestImage(song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-9 h-9 rounded-md object-cover shrink-0" />
+      <img
+        src={bestImage(song.images, 150)}
+        onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+        alt=""
+        className="w-9 h-9 rounded-md object-cover shrink-0"
+      />
       <span className="min-w-0 flex-1">
         <span className="block text-sm truncate">{song.title}</span>
         <span className="block text-xs text-ink-400 truncate">{song.subtitle}</span>
@@ -213,6 +247,13 @@ export default function SearchPage() {
   useEffect(() => {
     void probeSttSupport().then(setVoiceReady);
   }, []);
+  const filters = useSearchWorkspaceStore((s) => s.filters);
+  const compactResults = useSearchWorkspaceStore((s) => s.compact);
+  const favorites = useLibraryStore((s) => s.favorites);
+  const history = useHistoryStore((s) => s.entries);
+  const favoriteIds = useMemo(() => new Set(favorites.map((s) => s.id)), [favorites]);
+  const heardIds = useMemo(() => new Set(history.map((e) => e.song.id)), [history]);
+  const restoredLanguage = useRef<string | null>(null);
   const [langFilter, setLangFilter] = useState<string | null>(null);
   const [albumLang, setAlbumLang] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
@@ -237,7 +278,9 @@ export default function SearchPage() {
   // v5.19.0 — a COMMITTED query (Enter, chip, suggestion, voice, deep link)
   // skips the typing debounce: the request — and its skeleton — start on the
   // same frame as the commit. Live typing still settles through `debounced`.
-  const [commitQ, setCommitQ] = useState<string | null>(() => (routeQuery ? normalizeQuery(routeQuery) : null));
+  const [commitQ, setCommitQ] = useState<string | null>(() =>
+    routeQuery ? normalizeQuery(routeQuery) : null,
+  );
   const typedNow = normalizeQuery(input);
   const q = commitQ !== null && typedNow === commitQ ? commitQ : normalizeQuery(debounced);
   usePageTitle(q ? `“${q}”` : 'Search');
@@ -276,7 +319,8 @@ export default function SearchPage() {
       setAiSongs(res.songs);
       return;
     }
-    if (res.reason === 'not_configured') setAiError('AI features are not enabled on this server yet.');
+    if (res.reason === 'not_configured')
+      setAiError('AI features are not enabled on this server yet.');
     else if (res.reason === 'empty') setAiError('The music expert came up empty — try rephrasing.');
     else setAiError('Something went wrong. Please try again.');
   };
@@ -288,7 +332,8 @@ export default function SearchPage() {
   useEffect(() => {
     setAiSongs(null);
     setAiError(null);
-    setLangFilter(null);
+    setLangFilter(restoredLanguage.current);
+    restoredLanguage.current = null;
     setAlbumLang(null);
     setResultFilter('');
   }, [q]);
@@ -385,7 +430,7 @@ export default function SearchPage() {
     }
   }, [routeQuery]);
 
-  const all = useSearchAll(q);
+  const all = useSearchAll(q, !lyricsMode);
   const infiniteSongs = useInfiniteSongs(q, tab === 'Songs' && !lyricsMode, { search: true });
   const albums = useInfiniteAlbums(q, tab === 'Albums' && !lyricsMode); // paged — was capped at 20 (P2-29)
   const artists = useInfiniteArtists(q, tab === 'Artists' && !lyricsMode); // paged — was capped at 20 (P2-30)
@@ -405,13 +450,17 @@ export default function SearchPage() {
   // v5.19.0 — then the literal-match tiers (exact title → starts-with → all
   // words) with a nudge for pinned languages, on top of the taste pass.
   const rankedAllSongs = useMemo(
-    () => (allSongs ? rerankSongs(rankSongs(allSongs, { query: q, searchMode: true }), q, pinnedLangs) : []),
+    () =>
+      allSongs
+        ? rerankSongs(rankSongs(allSongs, { query: q, searchMode: true }), q, pinnedLangs)
+        : [],
     [allSongs, q, pinnedLangs],
   );
   // v5.19.0 — a settled full search seeds the quick-results cache, so
   // re-typing (or returning to) this query previews instantly, no request.
   useEffect(() => {
-    if (allSongs && !allPlaceholder && q.length >= 2) putCachedQuick(q, rankedAllSongs.slice(0, QUICK_LIMIT));
+    if (allSongs && !allPlaceholder && q.length >= 2)
+      putCachedQuick(q, rankedAllSongs.slice(0, QUICK_LIMIT));
   }, [allSongs, allPlaceholder, q, rankedAllSongs]);
 
   // Search analytics: one event per settled query, with its result count.
@@ -425,25 +474,45 @@ export default function SearchPage() {
   const topResult = rankedAllSongs[0];
   const songPages = infiniteSongs.data?.pages;
   const allSongList = useMemo(() => flattenSongPages(songPages), [songPages]);
-  const availableLangs = [...new Set(allSongList.map((s) => s.language).filter((l): l is string => !!l && l !== 'unknown'))];
+  const availableLangs = [
+    ...new Set(
+      allSongList.map((s) => s.language).filter((l): l is string => !!l && l !== 'unknown'),
+    ),
+  ];
   const songList = langFilter ? allSongList.filter((s) => s.language === langFilter) : allSongList;
   // v5.17.0 — the Songs tab shows the language-filtered list, in the chosen
   // sort order, narrowed by the local "filter these results" text.
   const displaySongs = useMemo(
-    () => filterSongsLocally(sortSongs(songList, songSort), resultFilter),
-    [songList, songSort, resultFilter],
+    () =>
+      refineSongs(
+        filterSongsLocally(sortSongs(songList, songSort), resultFilter),
+        filters,
+        favoriteIds,
+        heardIds,
+      ),
+    [songList, songSort, resultFilter, filters, favoriteIds, heardIds],
   );
   const allAlbums = flattenAlbumPages(albums.data?.pages);
-  const albumLangs = [...new Set(allAlbums.map((a) => a.language).filter((l): l is string => !!l && l !== 'unknown'))];
+  const albumLangs = [
+    ...new Set(allAlbums.map((a) => a.language).filter((l): l is string => !!l && l !== 'unknown')),
+  ];
   const albumList = albumLang ? allAlbums.filter((a) => a.language === albumLang) : allAlbums;
   const trimmed = input.trim();
   // v5.17.0 — pinned recents first (in pin order), then the rest as recorded.
   const recentOrdered = useMemo(
-    () => [...pinned.filter((p) => recent.includes(p)), ...recent.filter((r) => !pinned.includes(r))],
+    () => [
+      ...pinned.filter((p) => recent.includes(p)),
+      ...recent.filter((r) => !pinned.includes(r)),
+    ],
     [recent, pinned],
   );
   const recentMatches = useMemo(
-    () => (trimmed ? recent.filter((r) => r.toLowerCase().includes(trimmed.toLowerCase()) && r !== q).slice(0, 3) : []),
+    () =>
+      trimmed
+        ? recent
+            .filter((r) => r.toLowerCase().includes(trimmed.toLowerCase()) && r !== q)
+            .slice(0, 3)
+        : [],
     [trimmed, recent, q],
   );
   const titleSuggest = useMemo(() => {
@@ -460,10 +529,14 @@ export default function SearchPage() {
     }
     return out;
   }, [rankedAllSongs, trimmed]);
-  const showSuggest = focused && trimmed.length >= 1 && (recentMatches.length > 0 || titleSuggest.length > 0);
+  const showSuggest =
+    focused && trimmed.length >= 1 && (recentMatches.length > 0 || titleSuggest.length > 0);
   // Keyboard-first autocomplete (P2-30): ↑/↓ walk the combined list, Enter
   // picks the highlighted entry (or commits the typed text), Esc dismisses.
-  const suggList = useMemo(() => [...recentMatches, ...titleSuggest], [recentMatches, titleSuggest]);
+  const suggList = useMemo(
+    () => [...recentMatches, ...titleSuggest],
+    [recentMatches, titleSuggest],
+  );
   const [suggSel, setSuggSel] = useState(-1);
   useEffect(() => setSuggSel(-1), [trimmed, focused]);
 
@@ -471,8 +544,17 @@ export default function SearchPage() {
   // suggestions, 250 ms after the (normalised) text settles, previous request
   // aborted, URL untouched. Off in lyrics mode and while the box is blurred.
   const quick = useQuickResults(focused && !lyricsMode ? typedNow : '');
-  const quickSongs = useMemo(() => rerankSongs(quick.songs, quick.key, pinnedLangs), [quick.songs, quick.key, pinnedLangs]);
-  const showQuick = focused && !lyricsMode && typedNow.length >= 2 && (quickSongs.length > 0 || quick.loading);
+  const quickSongs = useMemo(
+    () =>
+      rerankSongs(
+        rankSongs(quick.songs, { query: quick.key, searchMode: true }),
+        quick.key,
+        pinnedLangs,
+      ),
+    [quick.songs, quick.key, pinnedLangs],
+  );
+  const showQuick =
+    focused && !lyricsMode && typedNow.length >= 2 && (quickSongs.length > 0 || quick.loading);
   const showPanel = showSuggest || showQuick;
 
   // v5.19.0 — "Did you mean …?" once a committed query settles with no songs:
@@ -486,7 +568,10 @@ export default function SearchPage() {
   const dymBar = dym ? (
     <p role="status" className="mb-4 text-sm text-ink-300">
       Did you mean{' '}
-      <button onClick={() => applySuggestion(dym)} className="font-bold text-ember-400 hover:text-ember-300">
+      <button
+        onClick={() => applySuggestion(dym)}
+        className="font-bold text-ember-400 hover:text-ember-300"
+      >
         {dym}
       </button>
       ?
@@ -523,168 +608,340 @@ export default function SearchPage() {
     setListening(true);
   };
 
+  const openPreset = (preset: SearchPreset) => {
+    useSearchWorkspaceStore.getState().setFilters(preset.filters);
+    setSongSort(preset.sort);
+    restoredLanguage.current = normalizeQuery(preset.query) !== q ? preset.language : null;
+    setLangFilter(preset.language);
+    setTab('Songs');
+    setLyricsMode(false);
+    applySuggestion(preset.query);
+  };
+
   const lyricsChip = (
     <Chip active={lyricsMode} onClick={() => setLyricsMode((v) => !v)}>
-      <span aria-hidden className="mr-1">♪</span>
+      <span aria-hidden className="mr-1">
+        ♪
+      </span>
       Search by lyrics
     </Chip>
   );
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="sticky top-0 z-20 -mx-4 px-4 pt-1 pb-3 bg-ink-900/95 backdrop-blur-md md:-mx-8 md:px-8">
-      <h1 className="text-display tracking-tight mb-4">Search</h1>
-      {!input && (trendingQ.data?.queries?.length ?? 0) > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-ink-400">Top searches</span>
-          {trendingQ.data?.queries.map((q) => (
+    <div className={cn('search-experience mx-auto', active && 'is-searching')}>
+      <header className="search-hero">
+        <div className="search-hero-copy">
+          <span className="search-eyebrow">THE DISCOVERY ROOM</span>
+          <h1>
+            {active ? (
+              'Your search, your way.'
+            ) : (
+              <>
+                Find your
+                <br />
+                <em>next obsession.</em>
+              </>
+            )}
+          </h1>
+          <p>A song you love. A sound you haven't met. It starts here.</p>
+          <div className="search-hero-links">
             <button
-              key={q}
-              onClick={() => applySuggestion(q)}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass hover:bg-ink-700 hover:text-ink-100 transition"
+              onClick={() => {
+                setLyricsMode(true);
+                searchInputRef.current?.focus();
+              }}
             >
-              {q}
+              ♪ Find a lyric
             </button>
-          ))}
-        </div>
-      )}
-      <div className="relative">
-        <SearchIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
-        <input
-          ref={searchInputRef}
-          value={input}
-          maxLength={120}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (showSuggest && e.key === 'ArrowDown') {
-              e.preventDefault();
-              setSuggSel((v) => (v + 1) % suggList.length);
-            } else if (showSuggest && e.key === 'ArrowUp') {
-              e.preventDefault();
-              setSuggSel((v) => (v <= 0 ? suggList.length - 1 : v - 1));
-            } else if (e.key === 'Escape' && showPanel) {
-              setFocused(false);
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              const picked = suggSel >= 0 ? suggList[suggSel] : null;
-              if (picked) applySuggestion(picked);
-              else commitSearch(input);
-            }
-          }}
-          role="combobox"
-          aria-expanded={showPanel}
-          aria-controls="search-suggest"
-          aria-activedescendant={suggSel >= 0 ? `sugg-${suggSel}` : undefined}
-          onFocus={() => {
-            focusedRef.current = true;
-            setFocused(true);
-          }}
-          onBlur={() => {
-            focusedRef.current = false;
-            window.setTimeout(() => setFocused(false), 120);
-          }}
-          data-tour="search-input"
-          placeholder={listening ? 'Listening…' : lyricsMode ? 'Type a line you remember…' : 'Songs, albums, artists, playlists…'}
-          className={`w-full glass-search rounded-2xl pl-12 pr-20 py-3.5 text-sm outline-none transition-[color,background-color,border-color,opacity,transform] focus:ring-2 focus:ring-ember-500/35 focus:shadow-[0_0_34px_-8px_rgb(var(--ember-500)/0.5)] ${listening ? 'border-ember-500 ring-2 ring-ember-500/40' : ''}`}
-        />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-          {input && (
-            <button aria-label="Clear" onClick={() => setInput('')} className="p-2.5 text-ink-400 hover:text-ink-100 rounded-full hover:bg-ink-700/70">
-              <XIcon className="w-4 h-4" />
-            </button>
-          )}
-          {voiceReady && (
-            <button
-              aria-label={listening ? 'Listening…' : 'Voice search'}
-              onClick={startVoice}
-              className={`relative p-2.5 rounded-full hover:bg-ink-700/70 ${listening ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100'}`}
-            >
-              {listening && (
-                <>
-                  <span className="absolute inset-0 rounded-full bg-ember-500/30 animate-ping" />
-                  <span className="absolute inset-[-6px] rounded-full border border-ember-500/40 animate-pulse" />
-                </>
-              )}
-              <svg viewBox="0 0 24 24" fill={listening ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="relative w-4 h-4">
-                <rect x="9" y="2" width="6" height="12" rx="3" />
-                <path d="M5 10a7 7 0 0014 0M12 17v5" />
-              </svg>
-            </button>
-          )}
-        </div>
-        {showPanel && (
-          <div className="absolute left-0 right-0 top-full mt-2 z-30 bg-ink-850 border border-ink-700/70 shadow-float rounded-2xl py-2 max-h-[28rem] overflow-y-auto">
-          <div id="search-suggest" role="listbox" aria-label="Search suggestions" hidden={!showSuggest}>
-            {suggList.map((text, i) => {
-              const isRecent = i < recentMatches.length;
-              const Icon = isRecent ? ClockIcon : SearchIcon;
-              return (
-                <button
-                  key={`${isRecent ? 'r' : 't'}-${text}`}
-                  id={`sugg-${i}`}
-                  role="option"
-                  aria-selected={suggSel === i}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    suggPointer.current = { x: e.clientX, y: e.clientY };
-                  }}
-                  onPointerUp={(e) => {
-                    const p = suggPointer.current;
-                    suggPointer.current = null;
-                    if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12) applySuggestion(text);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-ink-800/60 ${suggSel === i ? 'bg-ink-800/80' : ''}`}
-                >
-                  <Icon className="w-4 h-4 text-ink-400 shrink-0" />
-                  <span className="text-sm truncate">
-                    <Highlight text={text} term={trimmed} />
-                  </span>
-                </button>
-              );
-            })}
+            <Link to="/ai-playlist">✧ Build a mood mix ↗</Link>
           </div>
-          {showQuick && (
-            <section aria-label="Quick results" aria-busy={quick.loading} className={cn(showSuggest && 'mt-1 pt-1 border-t border-ink-700/60')}>
-              <p className="px-4 pt-1 pb-1 text-[11px] font-bold uppercase tracking-widest text-ink-400">Quick results</p>
-              {quickSongs.length === 0 && quick.loading && <ListSkeleton rows={3} />}
-              {quickSongs.map((song, i) => (
-                <QuickRow key={song.id} song={song} dim={quick.stale} onPlay={() => playQueue(quickSongs, i)} />
-              ))}
-            </section>
+        </div>
+        <div className="search-record-art" aria-hidden="true">
+          <div className="search-record-sleeve">
+            <span>
+              VINA X<br />
+              SELECTS
+            </span>
+            <div className="search-record">
+              <i />
+            </div>
+            <small>YOUR WORLD. ON REPEAT.</small>
+          </div>
+          <span className="search-art-caption">GOOD MUSIC HAS NO BOUNDARIES</span>
+        </div>
+      </header>
+      <div className="search-sticky sticky top-0 z-20 pt-3 pb-3 bg-ink-900/95 backdrop-blur-md">
+        <div className="relative">
+          <SearchIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
+          <input
+            ref={searchInputRef}
+            value={input}
+            maxLength={120}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (showSuggest && e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSuggSel((v) => (v + 1) % suggList.length);
+              } else if (showSuggest && e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSuggSel((v) => (v <= 0 ? suggList.length - 1 : v - 1));
+              } else if (e.key === 'Escape' && showPanel) {
+                setFocused(false);
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const picked = suggSel >= 0 ? suggList[suggSel] : null;
+                if (picked) applySuggestion(picked);
+                else commitSearch(input);
+              }
+            }}
+            aria-label="Search music"
+            role="combobox"
+            aria-expanded={showPanel}
+            aria-controls="search-suggest"
+            aria-activedescendant={suggSel >= 0 ? `sugg-${suggSel}` : undefined}
+            onFocus={() => {
+              focusedRef.current = true;
+              setFocused(true);
+            }}
+            onBlur={() => {
+              focusedRef.current = false;
+              window.setTimeout(() => setFocused(false), 120);
+            }}
+            data-tour="search-input"
+            placeholder={
+              listening
+                ? 'Listening…'
+                : lyricsMode
+                  ? 'Type a line you remember…'
+                  : 'Songs, albums, artists, playlists…'
+            }
+            className={`w-full glass-search rounded-2xl pl-12 pr-20 py-3.5 text-sm outline-none transition-[color,background-color,border-color,opacity,transform] focus:ring-2 focus:ring-ember-500/35 focus:shadow-[0_0_34px_-8px_rgb(var(--ember-500)/0.5)] ${listening ? 'border-ember-500 ring-2 ring-ember-500/40' : ''}`}
+          />
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+            {input && (
+              <button
+                aria-label="Clear"
+                onClick={() => {
+                  setInput('');
+                  setCommitQ(null);
+                  lastRouteApplied.current = null;
+                  navigate('/search', { replace: true });
+                }}
+                className="p-2.5 text-ink-400 hover:text-ink-100 rounded-full hover:bg-ink-700/70"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            )}
+            {voiceReady && (
+              <button
+                aria-label={listening ? 'Listening…' : 'Voice search'}
+                onClick={startVoice}
+                className={`relative p-2.5 rounded-full hover:bg-ink-700/70 ${listening ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100'}`}
+              >
+                {listening && (
+                  <>
+                    <span className="absolute inset-0 rounded-full bg-ember-500/30 animate-ping" />
+                    <span className="absolute inset-[-6px] rounded-full border border-ember-500/40 animate-pulse" />
+                  </>
+                )}
+                <svg
+                  viewBox="0 0 24 24"
+                  fill={listening ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  className="relative w-4 h-4"
+                >
+                  <rect x="9" y="2" width="6" height="12" rx="3" />
+                  <path d="M5 10a7 7 0 0014 0M12 17v5" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {showPanel && (
+            <div className="absolute left-0 right-0 top-full mt-2 z-30 bg-ink-850 border border-ink-700/70 shadow-float rounded-2xl py-2 max-h-[28rem] overflow-y-auto">
+              <div
+                id="search-suggest"
+                role="listbox"
+                aria-label="Search suggestions"
+                hidden={!showSuggest}
+              >
+                {suggList.map((text, i) => {
+                  const isRecent = i < recentMatches.length;
+                  const Icon = isRecent ? ClockIcon : SearchIcon;
+                  return (
+                    <button
+                      key={`${isRecent ? 'r' : 't'}-${text}`}
+                      id={`sugg-${i}`}
+                      role="option"
+                      aria-selected={suggSel === i}
+                      onClick={(e) => {
+                        if (e.detail === 0) applySuggestion(text);
+                      }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        suggPointer.current = { x: e.clientX, y: e.clientY };
+                      }}
+                      onPointerUp={(e) => {
+                        const p = suggPointer.current;
+                        suggPointer.current = null;
+                        if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12)
+                          applySuggestion(text);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-ink-800/60 ${suggSel === i ? 'bg-ink-800/80' : ''}`}
+                    >
+                      <Icon className="w-4 h-4 text-ink-400 shrink-0" />
+                      <span className="text-sm truncate">
+                        <Highlight text={text} term={trimmed} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {showQuick && (
+                <section
+                  aria-label="Quick results"
+                  aria-busy={quick.loading}
+                  className={cn(showSuggest && 'mt-1 pt-1 border-t border-ink-700/60')}
+                >
+                  <p className="px-4 pt-1 pb-1 text-[11px] font-bold uppercase tracking-widest text-ink-400">
+                    Quick results
+                  </p>
+                  {quickSongs.length === 0 && quick.loading && <ListSkeleton rows={3} />}
+                  {quickSongs.map((song, i) => (
+                    <QuickRow
+                      key={song.id}
+                      song={song}
+                      dim={quick.stale}
+                      onPlay={() => playQueue(quickSongs, i)}
+                    />
+                  ))}
+                </section>
+              )}
+            </div>
           )}
+        </div>
+        {(active || lyricsMode || !trimmed) && (
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mt-3">
+            {lyricsChip}
+            {!lyricsMode && <span aria-hidden className="w-px h-5 bg-ink-700 shrink-0" />}
+            {!lyricsMode &&
+              TABS.map((t) => (
+                <Chip
+                  key={t}
+                  active={tab === t}
+                  onClick={() => {
+                    setTab(t);
+                    searchInputRef.current?.focus();
+                  }}
+                >
+                  {t}
+                </Chip>
+              ))}
+          </div>
+        )}
+        {suggestLyrics && (
+          <div role="status" className="mt-2 flex items-center gap-2 text-xs text-ink-300">
+            <span>That reads like a lyric line.</span>
+            <button
+              onClick={() => setLyricsMode(true)}
+              className="font-semibold text-ember-400 hover:text-ember-300"
+            >
+              Search by lyrics →
+            </button>
+            <button
+              aria-label="Dismiss"
+              onClick={() => setLyricHintDismissed(q)}
+              className="p-1 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70"
+            >
+              <XIcon className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </div>
-      {(active || lyricsMode) && (
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mt-3">
-          {lyricsChip}
-          {!lyricsMode && <span aria-hidden className="w-px h-5 bg-ink-700 shrink-0" />}
-          {!lyricsMode && TABS.map((t) => (
-            <Chip key={t} active={tab === t} onClick={() => setTab(t)}>{t}</Chip>
-          ))}
-        </div>
-      )}
-      {suggestLyrics && (
-        <div role="status" className="mt-2 flex items-center gap-2 text-xs text-ink-300">
-          <span>That reads like a lyric line.</span>
-          <button onClick={() => setLyricsMode(true)} className="font-semibold text-ember-400 hover:text-ember-300">
-            Search by lyrics →
-          </button>
-          <button aria-label="Dismiss" onClick={() => setLyricHintDismissed(q)} className="p-1 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70">
-            <XIcon className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-      </div>
 
       {!active && (
-        <div>
+        <div className="search-discovery">
+          <SavedSearches onOpen={openPreset} />
+          <section className="search-browse" aria-label="Browse a vibe">
+            <div className="search-section-heading">
+              <h2>Where do you want to go?</h2>
+              <Link to="/moods">Explore moods ↗</Link>
+            </div>
+            <div className="search-vibe-grid">
+              {[
+                {
+                  title: 'After hours',
+                  detail: 'Slow down. Tune in.',
+                  query: 'late night chill melodies',
+                  art: 'night',
+                  glyph: '☾',
+                },
+                {
+                  title: 'The golden years',
+                  detail: 'Forever on repeat.',
+                  query: `${pinnedLangs[0] || 'Telugu'} 90s hits`,
+                  art: 'gold',
+                  glyph: '◎',
+                },
+                {
+                  title: 'Full volume',
+                  detail: 'Find your second wind.',
+                  query: 'workout energetic hits',
+                  art: 'energy',
+                  glyph: '↗',
+                },
+                {
+                  title: 'Heart on sleeve',
+                  detail: 'For all the feelings.',
+                  query: `${pinnedLangs[0] || 'Telugu'} love melodies`,
+                  art: 'love',
+                  glyph: '♡',
+                },
+              ].map((v) => (
+                <button
+                  key={v.art}
+                  className={`search-vibe search-vibe-${v.art}`}
+                  onClick={() => applySuggestion(v.query)}
+                >
+                  <span className="search-vibe-glyph" aria-hidden="true">
+                    {v.glyph}
+                  </span>
+                  <strong>{v.title}</strong>
+                  <small>{v.detail}</small>
+                  <span className="search-vibe-arrow" aria-hidden="true">
+                    ↗
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+          {!!trendingQ.data?.queries.length && (
+            <section className="search-trending-queries" aria-label="Trending searches">
+              <div className="search-section-heading">
+                <h2>In the conversation</h2>
+                <span>Trending searches</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {trendingQ.data.queries.slice(0, 8).map((term, i) => (
+                  <button key={term} onClick={() => applySuggestion(term)}>
+                    <span>{String(i + 1).padStart(2, '0')}</span>
+                    {term}
+                    <span aria-hidden>↗</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {!trimmed && (
             <section className="mb-6" aria-label="Search tips">
               <p className="text-xs text-ink-400 mb-2">{SEARCH_TIP_LINE}</p>
               <div className="flex flex-wrap gap-2">
                 {exampleQueries(pinnedLangs).map((ex) => (
-                  <Chip key={ex} onClick={() => applySuggestion(ex)}>{ex}</Chip>
+                  <Chip key={ex} onClick={() => applySuggestion(ex)}>
+                    {ex}
+                  </Chip>
                 ))}
               </div>
             </section>
@@ -722,11 +979,17 @@ export default function SearchPage() {
                 })}
               </div>
               {pinned.length === 0 && recent.length > 1 && (
-                <p className="mt-2 text-[11px] text-ink-500">Long-press (or hover) a search to pin it.</p>
+                <p className="mt-2 text-[11px] text-ink-500">
+                  Long-press (or hover) a search to pin it.
+                </p>
               )}
             </>
           ) : (
-            <EmptyState icon={<SearchIcon className="w-8 h-8" />} title="Find your next favorite" message="Search across songs, albums, artists, and playlists. Results rank toward your languages — scroll for unlimited results." />
+            <EmptyState
+              icon={<SearchIcon className="w-8 h-8" />}
+              title="Your next favorite starts here"
+              message="Try a title, an artist, or a few lyrics. Save a search shortcut from the Songs tab to return to your favorite filters."
+            />
           )}
 
           <div className="mt-7 rounded-2xl glass-card px-4 py-3.5">
@@ -739,7 +1002,9 @@ export default function SearchPage() {
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-bold">Ask AI for songs</span>
-                <span className="block text-xs text-ink-400 truncate">Describe a mood, an era, a memory — a music expert answers</span>
+                <span className="block text-xs text-ink-400 truncate">
+                  Describe a mood, an era, a memory — a music expert answers
+                </span>
               </span>
             </button>
             {aiOpen && (
@@ -777,14 +1042,18 @@ export default function SearchPage() {
             </span>
             <span className="min-w-0">
               <span className="block text-sm font-bold">Chat with VinaX AI</span>
-              <span className="block text-xs text-ink-400 truncate">Find songs, talk music, ask anything — full chat with web search</span>
+              <span className="block text-xs text-ink-400 truncate">
+                Find songs, talk music, ask anything — full chat with web search
+              </span>
             </span>
           </Link>
 
           {(() => {
             // Package D4 — cold-box suggestions straight from the on-device
             // taste profile: one tap searches an artist you actually play.
-            const mine = topArtists(loadProfile(), 8).map((a) => a.affinity.name).filter(Boolean);
+            const mine = topArtists(loadProfile(), 8)
+              .map((a) => a.affinity.name)
+              .filter(Boolean);
             return mine.length >= 2 ? (
               <section className="mt-7">
                 <p className="text-sm font-semibold text-ink-300 mb-3">From your artists</p>
@@ -804,7 +1073,9 @@ export default function SearchPage() {
             <div className="flex flex-wrap gap-2">
               {MOODS.map((m) => (
                 <Chip key={m.id} onClick={() => setInput(m.query)}>
-                  <span aria-hidden className="mr-1">{m.emoji}</span>
+                  <span aria-hidden className="mr-1">
+                    {m.emoji}
+                  </span>
                   {m.label}
                 </Chip>
               ))}
@@ -838,7 +1109,9 @@ export default function SearchPage() {
           {lyricsQ.isLoading && <ListSkeleton />}
           {lyricsQ.isError && <ErrorState retry={() => lyricsQ.refetch()} />}
           {!lyricsQ.isLoading && !lyricsQ.isError && !lyricMatches && (
-            <p className="text-sm text-ink-400">Type a line you remember — a few words in a row work best.</p>
+            <p className="text-sm text-ink-400">
+              Type a line you remember — a few words in a row work best.
+            </p>
           )}
           {lyricMatches && lyricMatches.length === 0 && (
             <EmptyState
@@ -846,7 +1119,10 @@ export default function SearchPage() {
               title="No song has those words — try a longer line."
               message="The lyrics service matches whole phrases best — a full line beats a couple of words."
               action={
-                <button onClick={() => setLyricsMode(false)} className="px-5 py-2.5 rounded-full btn-primary">
+                <button
+                  onClick={() => setLyricsMode(false)}
+                  className="px-5 py-2.5 rounded-full btn-primary"
+                >
                   Search titles instead
                 </button>
               }
@@ -856,26 +1132,35 @@ export default function SearchPage() {
             <section>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-lg font-bold">Songs with those words</h2>
-                <button onClick={() => playQueue(lyricSongs, 0)} className="text-xs font-semibold text-ember-400 hover:text-ember-300">
+                <button
+                  onClick={() => playQueue(lyricSongs, 0)}
+                  className="text-xs font-semibold text-ember-400 hover:text-ember-300"
+                >
                   Play all
                 </button>
               </div>
               {lyricMatches.every((m) => m.source === 'catalogue') && (
-                <p className="mb-2 text-xs text-ink-400">The lyrics service had no match — these titles begin with those words.</p>
+                <p className="mb-2 text-xs text-ink-400">
+                  The lyrics service had no match — these titles begin with those words.
+                </p>
               )}
               {lyricMatches.map((m, i) => (
                 <div key={m.song.id}>
                   <SongRow song={m.song} songs={lyricSongs} index={i} />
                   {m.source === 'catalogue' && (
                     <p className="pl-[3.75rem] pr-2 -mt-1 mb-2">
-                      <span className="inline-block rounded-full border border-ink-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-400">Matched by title</span>
+                      <span className="inline-block rounded-full border border-ink-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-400">
+                        Matched by title
+                      </span>
                     </p>
                   )}
                   {m.source === 'lyrics' && m.hit.snippet && (
                     <p className="pl-[3.75rem] pr-2 -mt-1 mb-2 text-xs text-ink-400 leading-relaxed">
                       {splitHighlight(m.hit.snippet, q).map((run, j) =>
                         run.hit ? (
-                          <mark key={j} className="bg-transparent text-ember-300 font-semibold">{run.text}</mark>
+                          <mark key={j} className="bg-transparent text-ember-300 font-semibold">
+                            {run.text}
+                          </mark>
                         ) : (
                           <span key={j}>{run.text}</span>
                         ),
@@ -896,14 +1181,24 @@ export default function SearchPage() {
               {all.isLoading && <ListSkeleton />}
               {all.isError && <ErrorState retry={() => all.refetch()} />}
               {dymBar}
-              {allPlaceholder && <div aria-hidden className="skeleton h-1 w-full rounded-full mb-4" />}
+              {allPlaceholder && (
+                <div aria-hidden className="skeleton h-1 w-full rounded-full mb-4" />
+              )}
               {all.data && (
-                <div aria-busy={allPlaceholder} className={cn('space-y-7 transition-opacity', allPlaceholder && 'opacity-40')}>
+                <div
+                  aria-busy={allPlaceholder}
+                  className={cn('space-y-7 transition-opacity', allPlaceholder && 'opacity-40')}
+                >
                   {topResult && (
                     <section>
                       <h2 className="text-lg font-bold mb-2">Top Result</h2>
-                      <div className="rounded-2xl border border-ink-700 bg-ink-850/60 p-4 flex items-center gap-4">
-                        <img src={bestImage(topResult.images, 300)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-20 h-20 rounded-xl object-cover shadow-lg" />
+                      <div className="search-top-result rounded-2xl border border-ink-700 bg-ink-850/60 p-4 flex items-center gap-4">
+                        <img
+                          src={bestImage(topResult.images, 300)}
+                          onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+                          alt=""
+                          className="w-20 h-20 rounded-xl object-cover shadow-lg"
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="text-lg font-bold truncate">{topResult.title}</p>
                           <p className="text-sm text-ink-300 truncate">{topResult.subtitle}</p>
@@ -924,8 +1219,11 @@ export default function SearchPage() {
                       {rankedAllSongs.slice(1, 8).map((song, i) => (
                         <SongRow key={song.id} song={song} songs={rankedAllSongs} index={i + 1} />
                       ))}
-                      <button onClick={() => setTab('Songs')} className="mt-2 text-xs font-semibold text-ember-400 px-2">
-                        See all songs (endless) →
+                      <button
+                        onClick={() => setTab('Songs')}
+                        className="mt-2 text-xs font-semibold text-ember-400 px-2"
+                      >
+                        Explore all songs →
                       </button>
                     </section>
                   )}
@@ -934,7 +1232,15 @@ export default function SearchPage() {
                       <h2 className="text-lg font-bold mb-2">Albums</h2>
                       <div className="flex gap-3 overflow-x-auto no-scrollbar">
                         {all.data.albums.map((a) => (
-                          <MediaCard key={a.id} to={albumPath(a)} image={bestImage(a.images)} images={a.images} title={a.title} subtitle={a.subtitle} onPlay={() => void playAlbum(a.id, a.title)} />
+                          <MediaCard
+                            key={a.id}
+                            to={albumPath(a)}
+                            image={bestImage(a.images)}
+                            images={a.images}
+                            title={a.title}
+                            subtitle={a.subtitle}
+                            onPlay={() => void playAlbum(a.id, a.title)}
+                          />
                         ))}
                       </div>
                     </section>
@@ -944,7 +1250,20 @@ export default function SearchPage() {
                       <h2 className="text-lg font-bold mb-2">Artists</h2>
                       <div className="flex gap-3 overflow-x-auto no-scrollbar">
                         {all.data.artists.map((a) => (
-                          <MediaCard key={a.id} to={artistPath(a)} image={bestImage(a.images) === FALLBACK_ART ? letterAvatar(a.name) : bestImage(a.images)} images={a.images} title={a.name} subtitle="Artist" round onPlay={() => void playArtist(a.id, a.name)} />
+                          <MediaCard
+                            key={a.id}
+                            to={artistPath(a)}
+                            image={
+                              bestImage(a.images) === FALLBACK_ART
+                                ? letterAvatar(a.name)
+                                : bestImage(a.images)
+                            }
+                            images={a.images}
+                            title={a.name}
+                            subtitle="Artist"
+                            round
+                            onPlay={() => void playArtist(a.id, a.name)}
+                          />
                         ))}
                       </div>
                     </section>
@@ -954,40 +1273,61 @@ export default function SearchPage() {
                       <h2 className="text-lg font-bold mb-2">Playlists</h2>
                       <div className="flex gap-3 overflow-x-auto no-scrollbar">
                         {all.data.playlists.map((p) => (
-                          <MediaCard key={p.id} to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={p.subtitle} onPlay={() => void playPlaylist(p.id, p.title)} />
+                          <MediaCard
+                            key={p.id}
+                            to={playlistPath(p)}
+                            image={bestImage(p.images)}
+                            images={p.images}
+                            title={p.title}
+                            subtitle={p.subtitle}
+                            onPlay={() => void playPlaylist(p.id, p.title)}
+                          />
                         ))}
                       </div>
                     </section>
                   )}
-                  {rankedAllSongs.length === 0 && all.data.albums.length === 0 && all.data.artists.length === 0 && all.data.playlists.length === 0 && (
-                    <>
-                      <EmptyState
-                        icon={<SearchIcon className="w-8 h-8" />}
-                        title="No results"
-                        message={`Nothing matched “${q}”. Try a shorter or transliterated spelling — or ask the AI.`}
-                        action={
-                          <button
-                            onClick={() => void askExpert(q)}
-                            disabled={aiLoading}
-                            className="px-5 py-2.5 rounded-full btn-primary disabled:opacity-50"
-                          >
-                            {aiLoading ? '✨ Asking the expert…' : '✨ Ask AI instead'}
-                          </button>
-                        }
-                      />
-                      {expertPanel}
-                    </>
-                  )}
+                  {rankedAllSongs.length === 0 &&
+                    all.data.albums.length === 0 &&
+                    all.data.artists.length === 0 &&
+                    all.data.playlists.length === 0 && (
+                      <>
+                        <EmptyState
+                          icon={<SearchIcon className="w-8 h-8" />}
+                          title="No results"
+                          message={`Nothing matched “${q}”. Try a shorter or transliterated spelling — or ask the AI.`}
+                          action={
+                            <button
+                              onClick={() => void askExpert(q)}
+                              disabled={aiLoading}
+                              className="px-5 py-2.5 rounded-full btn-primary disabled:opacity-50"
+                            >
+                              {aiLoading ? '✨ Asking the expert…' : '✨ Ask AI instead'}
+                            </button>
+                          }
+                        />
+                        {expertPanel}
+                      </>
+                    )}
                 </div>
               )}
             </>
           )}
 
           {tab === 'Songs' && (
-            <>
+            <div
+              className={compactResults ? 'search-song-results is-compact' : 'search-song-results'}
+            >
+              <SearchWorkspace
+                query={q}
+                songs={displaySongs}
+                total={allSongList.length}
+                language={langFilter}
+              />
               {availableLangs.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
-                  <Chip active={!langFilter} onClick={() => setLangFilter(null)}>All languages</Chip>
+                  <Chip active={!langFilter} onClick={() => setLangFilter(null)}>
+                    All languages
+                  </Chip>
                   {availableLangs.map((l) => (
                     <Chip key={l} active={langFilter === l} onClick={() => setLangFilter(l)}>
                       {languageLabel(l)}
@@ -1008,24 +1348,32 @@ export default function SearchPage() {
                       className="glass-input rounded-lg px-2 py-1 text-xs font-semibold text-ink-100 outline-none focus:ring-2 focus:ring-ember-500/35"
                     >
                       {SONG_SORTS.map((s) => (
-                        <option key={s} value={s}>{SONG_SORT_LABELS[s]}</option>
+                        <option key={s} value={s}>
+                          {SONG_SORT_LABELS[s]}
+                        </option>
                       ))}
                     </select>
                   </label>
                   <span className="flex-1" />
                   {displaySongs.length > 0 && (
                     <>
-                      <button onClick={() => playQueue(displaySongs, 0)} className="text-xs font-semibold text-ember-400 hover:text-ember-300">
+                      <button
+                        onClick={() => playQueue(displaySongs, 0)}
+                        className="text-xs font-semibold text-ember-400 hover:text-ember-300"
+                      >
                         Play all
                       </button>
-                      <button onClick={() => enqueueAll(displaySongs)} className="text-xs font-semibold text-ink-300 hover:text-ink-100">
+                      <button
+                        onClick={() => enqueueAll(displaySongs)}
+                        className="text-xs font-semibold text-ink-300 hover:text-ink-100"
+                      >
                         Queue all
                       </button>
                     </>
                   )}
                 </div>
               )}
-              {allSongList.length >= 20 && (
+              {allSongList.length > 0 && (
                 <div className="relative mb-3">
                   <input
                     value={resultFilter}
@@ -1048,25 +1396,56 @@ export default function SearchPage() {
               )}
               {infiniteSongs.isLoading && <ListSkeleton />}
               {infiniteSongs.isError && <ErrorState retry={() => infiniteSongs.refetch()} />}
-              {infiniteSongs.data && !infiniteSongs.isFetching && allSongList.length === 0 && dymBar}
+              {infiniteSongs.data &&
+                !infiniteSongs.isFetching &&
+                allSongList.length === 0 &&
+                dymBar}
               {resultFilter.trim() && displaySongs.length === 0 && songList.length > 0 && (
-                <p className="text-sm text-ink-400 px-2">Nothing loaded so far matches “{resultFilter.trim()}” — scroll to load more, or clear the filter.</p>
+                <p className="text-sm text-ink-400 px-2">
+                  Nothing loaded so far matches “{resultFilter.trim()}” — scroll to load more, or
+                  clear the filter.
+                </p>
+              )}
+              {!infiniteSongs.isLoading && !infiniteSongs.isError && displaySongs.length === 0 && (
+                <div className="search-no-matches" role="status">
+                  <h3>No matching songs yet</h3>
+                  <p>
+                    {allSongList.length
+                      ? 'Try clearing a refinement, switching languages, or loading more songs.'
+                      : 'Try another title, artist, or spelling.'}
+                  </p>
+                </div>
               )}
               {displaySongs.map((song, i) => (
                 <SongRow key={song.id} song={song} songs={displaySongs} index={i} />
               ))}
               <InfiniteSentinel
-                onVisible={() => infiniteSongs.hasNextPage && !infiniteSongs.isFetchingNextPage && infiniteSongs.fetchNextPage()}
+                onVisible={() =>
+                  infiniteSongs.hasNextPage &&
+                  !infiniteSongs.isFetchingNextPage &&
+                  infiniteSongs.fetchNextPage()
+                }
                 disabled={!infiniteSongs.hasNextPage}
                 loading={infiniteSongs.isFetchingNextPage}
               />
-            </>
+              {infiniteSongs.hasNextPage && (
+                <button
+                  className="search-load-more"
+                  disabled={infiniteSongs.isFetchingNextPage}
+                  onClick={() => void infiniteSongs.fetchNextPage()}
+                >
+                  Load more songs
+                </button>
+              )}
+            </div>
           )}
           {tab === 'Albums' && (
             <>
               {albumLangs.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
-                  <Chip active={!albumLang} onClick={() => setAlbumLang(null)}>All languages</Chip>
+                  <Chip active={!albumLang} onClick={() => setAlbumLang(null)}>
+                    All languages
+                  </Chip>
                   {albumLangs.map((l) => (
                     <Chip key={l} active={albumLang === l} onClick={() => setAlbumLang(l)}>
                       {languageLabel(l)}
@@ -1075,7 +1454,18 @@ export default function SearchPage() {
                 </div>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {albumList.map((a) => <MediaCard key={a.id} to={albumPath(a)} image={bestImage(a.images)} images={a.images} title={a.title} subtitle={a.subtitle} fluid onPlay={() => void playAlbum(a.id, a.title)} />)}
+                {albumList.map((a) => (
+                  <MediaCard
+                    key={a.id}
+                    to={albumPath(a)}
+                    image={bestImage(a.images)}
+                    images={a.images}
+                    title={a.title}
+                    subtitle={a.subtitle}
+                    fluid
+                    onPlay={() => void playAlbum(a.id, a.title)}
+                  />
+                ))}
               </div>
               <InfiniteSentinel
                 onVisible={() => void albums.fetchNextPage()}
@@ -1087,7 +1477,23 @@ export default function SearchPage() {
           {tab === 'Artists' && (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {flattenArtistPages(artists.data?.pages).map((a) => <MediaCard key={a.id} to={artistPath(a)} image={bestImage(a.images) === FALLBACK_ART ? letterAvatar(a.name) : bestImage(a.images)} images={a.images} title={a.name} subtitle="Artist" round fluid onPlay={() => void playArtist(a.id, a.name)} />)}
+                {flattenArtistPages(artists.data?.pages).map((a) => (
+                  <MediaCard
+                    key={a.id}
+                    to={artistPath(a)}
+                    image={
+                      bestImage(a.images) === FALLBACK_ART
+                        ? letterAvatar(a.name)
+                        : bestImage(a.images)
+                    }
+                    images={a.images}
+                    title={a.name}
+                    subtitle="Artist"
+                    round
+                    fluid
+                    onPlay={() => void playArtist(a.id, a.name)}
+                  />
+                ))}
               </div>
               <InfiniteSentinel
                 onVisible={() => void artists.fetchNextPage()}
@@ -1099,7 +1505,18 @@ export default function SearchPage() {
           {tab === 'Playlists' && (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {flattenPlaylistPages(playlists.data?.pages).map((p) => <MediaCard key={p.id} to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={p.subtitle} fluid onPlay={() => void playPlaylist(p.id, p.title)} />)}
+                {flattenPlaylistPages(playlists.data?.pages).map((p) => (
+                  <MediaCard
+                    key={p.id}
+                    to={playlistPath(p)}
+                    image={bestImage(p.images)}
+                    images={p.images}
+                    title={p.title}
+                    subtitle={p.subtitle}
+                    fluid
+                    onPlay={() => void playPlaylist(p.id, p.title)}
+                  />
+                ))}
               </div>
               <InfiniteSentinel
                 onVisible={() => void playlists.fetchNextPage()}

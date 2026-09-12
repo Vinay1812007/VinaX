@@ -11,10 +11,7 @@ import { stripExplicit } from '@/services/kidMode';
  *  (U+0300–036F) — Devanagari/Telugu/Tamil vowel signs live in their own
  *  blocks and are untouched, so Indic queries are never mangled. */
 function fold(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
 /** Text-relevance boost (delta audit P2-28): how well a song matches what
@@ -81,9 +78,7 @@ export function normalizeQuery(q: string): string {
  *  a new angle. */
 export function relaxedQuery(q: string): string | null {
   const relaxed = normalizeQuery(
-    q
-      .replace(/[(){}[\]"'!?.,:;]+/g, ' ')
-      .replace(/([a-z])\1{2,}/gi, '$1'),
+    q.replace(/[(){}[\]"'!?.,:;]+/g, ' ').replace(/([a-z])\1{2,}/gi, '$1'),
   );
   return relaxed && relaxed !== normalizeQuery(q) ? relaxed : null;
 }
@@ -96,14 +91,25 @@ export function relaxedQuery(q: string): string | null {
 export const SEARCH_STALE_MS = 10 * 60_000;
 export const SEARCH_GC_MS = 30 * 60_000;
 
-export function useSearchAll(query: string) {
+export function useSearchAll(query: string, enabled = true) {
   const q = normalizeQuery(query);
   return useQuery({
     queryKey: ['search-all', q],
     staleTime: SEARCH_STALE_MS,
     gcTime: SEARCH_GC_MS,
-    queryFn: ({ signal }) => searchAll(q, { signal }),
-    enabled: q.length > 1,
+    queryFn: async ({ signal }) => {
+      const result = await searchAll(q, { signal });
+      if (
+        result.songs.length ||
+        result.albums.length ||
+        result.artists.length ||
+        result.playlists.length
+      )
+        return result;
+      const relaxed = relaxedQuery(q);
+      return relaxed ? searchAll(relaxed, { signal }) : result;
+    },
+    enabled: enabled && q.length > 1,
     placeholderData: keepPreviousData,
   });
 }
@@ -120,7 +126,10 @@ export function useSearchSongs(query: string, enabled = true) {
       // Typo rescue (P1-11): one relaxed retry before showing "no results".
       const relaxed = relaxedQuery(q);
       if (!relaxed) return [];
-      return rankSongs(await searchSongs(relaxed, 30, { signal }), { query: relaxed, searchMode: true });
+      return rankSongs(await searchSongs(relaxed, 30, { signal }), {
+        query: relaxed,
+        searchMode: true,
+      });
     },
     enabled: enabled && q.length > 1,
     placeholderData: keepPreviousData,

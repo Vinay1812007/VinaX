@@ -35,13 +35,13 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Listen',
     items: [
       { to: '/', label: 'Home', icon: HomeIcon },
+      { to: '/search', label: 'Search', icon: SearchIcon },
       { to: '/VinaXAI', label: 'VinaX AI', icon: SparkleIcon },
       { to: '/discover', label: 'Discover', icon: CompassIcon },
       { to: '/charts', label: 'Charts', icon: WaveIcon },
       { to: '/made-for-you', label: 'Made For You', icon: SparkleIcon },
       { to: '/weekly', label: 'Your Week', icon: SparkleIcon },
       { to: '/ai-playlist', label: 'AI Playlist', icon: SparkleIcon },
-      { to: '/search', label: 'Search', icon: SearchIcon },
     ],
   },
   {

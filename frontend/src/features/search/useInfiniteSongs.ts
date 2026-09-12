@@ -1,6 +1,11 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { Album, Artist, Playlist, Song } from '@/types';
-import { searchAlbumsPage, searchArtistsPage, searchPlaylistsPage, searchSongsPage } from '@/services/api';
+import {
+  searchAlbumsPage,
+  searchArtistsPage,
+  searchPlaylistsPage,
+  searchSongsPage,
+} from '@/services/api';
 import { useSettingsStore } from '@/store/settingsStore';
 import { normalizeQuery, rankSongs, SEARCH_GC_MS, SEARCH_STALE_MS } from './useSearch';
 import { rerankSongs } from './rerank';
@@ -22,14 +27,21 @@ export function useInfiniteSongs(query: string, enabled = true, opts?: { search?
     queryKey: ['inf-songs', q, search ? 's' : 'x'],
     enabled: enabled && q.length > 1,
     initialPageParam: 1,
-    queryFn: async ({ pageParam, signal }) => {
-      const page = rankSongs(await searchSongsPage(q, pageParam, 25, { signal }), search ? { query: q, searchMode: true } : {});
-      // v5.19.0 — literal-match tiers per page (exact title, starts-with, all
-      // words) so the song you typed heads its page; rendered pages never jump.
-      return search ? rerankSongs(page, q, useSettingsStore.getState().pinnedLanguages) : page;
-    },
+    // Keep provider pages raw in the cache so filters cannot terminate pagination.
+    queryFn: ({ pageParam, signal }) => searchSongsPage(q, pageParam, 25, { signal }),
+    select: (data) => ({
+      ...data,
+      pages: data.pages.map((raw) => {
+        const page = rankSongs(raw, search ? { query: q, searchMode: true } : {});
+        return search ? rerankSongs(page, q, useSettingsStore.getState().pinnedLanguages) : page;
+      }),
+    }),
     getNextPageParam: (lastPage, allPages) =>
-      lastPage.length >= (search ? 5 : 15) && allPages.length < 40 ? allPages.length + 1 : undefined,
+      lastPage.length >= (search ? 5 : 15) &&
+      allPages.length < 40 &&
+      !pageAddedNothing(lastPage, allPages)
+        ? allPages.length + 1
+        : undefined,
     staleTime: SEARCH_STALE_MS,
     gcTime: SEARCH_GC_MS,
   });
@@ -43,7 +55,9 @@ export function useInfiniteAlbums(query: string, enabled = true) {
     initialPageParam: 1,
     queryFn: ({ pageParam, signal }) => searchAlbumsPage(q, pageParam, 20, { signal }),
     getNextPageParam: (lastPage, allPages) =>
-      lastPage.length >= 10 && allPages.length < 12 ? allPages.length + 1 : undefined,
+      lastPage.length >= 10 && allPages.length < 12 && !pageAddedNothing(lastPage, allPages)
+        ? allPages.length + 1
+        : undefined,
     staleTime: SEARCH_STALE_MS,
     gcTime: SEARCH_GC_MS,
   });
@@ -52,8 +66,16 @@ export function useInfiniteAlbums(query: string, enabled = true) {
 /** True when `lastPage` added nothing new. Some mirrors ignore the page param
  *  and serve page 1 forever — that must read as end-of-results, not an
  *  infinite loop of identical fetches. Exported for tests. */
-export function pageAddedNothing<T extends { id: string }>(lastPage: T[], allPages: T[][]): boolean {
-  const prior = new Set(allPages.slice(0, -1).flat().map((x) => x.id));
+export function pageAddedNothing<T extends { id: string }>(
+  lastPage: T[],
+  allPages: T[][],
+): boolean {
+  const prior = new Set(
+    allPages
+      .slice(0, -1)
+      .flat()
+      .map((x) => x.id),
+  );
   return lastPage.every((x) => prior.has(x.id));
 }
 
