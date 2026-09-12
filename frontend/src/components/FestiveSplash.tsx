@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { festivalClass, resolveFestival, resolveFestivalTheme, type Festival } from '@/constants/festivals';
+import { festivalVisual, type FestivalConfetti } from '@/constants/festivalVisuals';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useFestivalOverride } from '@/features/home/useAppConfig';
 import { getLocal, setLocal } from '@/services/storage/local';
@@ -14,8 +15,13 @@ interface Piece {
   size: number;
   color: string;
   rotate: number;
-  round: boolean;
+  shape: FestivalConfetti;
 }
+
+const festVars = (visual: ReturnType<typeof festivalVisual>): CSSProperties => ({
+  '--fest-image': `url("${visual.image}")`,
+  '--fest-image-position': visual.position ?? 'center',
+} as CSSProperties);
 
 /** 24-spoke Ashoka Chakra, drawn inline — spins slowly via CSS. */
 function Chakra() {
@@ -41,8 +47,9 @@ function Chakra() {
  * the app content, and neutralised by the global reduced-motion cascade.
  */
 function IndependenceBackdrop() {
+  const visual = festivalVisual('independence');
   return (
-    <div className="fest-sky" aria-hidden>
+    <div className="fest-sky" style={festVars(visual)} aria-hidden>
       <div className="fest-flag">
         {Array.from({ length: 9 }, (_, i) => (
           <i key={i} style={{ animationDelay: `${i * 0.14}s` }} />
@@ -52,7 +59,7 @@ function IndependenceBackdrop() {
       {Array.from({ length: 14 }, (_, i) => (
         <b
           key={i}
-          className={`fest-ball fb${i % 3}`}
+          className={`fest-ball fest-shape-ribbon fb${i % 3}`}
           style={{
             left: `${(i * 73 + 9) % 96}%`,
             width: 14 + ((i * 5) % 18),
@@ -68,7 +75,8 @@ function IndependenceBackdrop() {
 
 /**
  * Generic living backdrop (festival redesign, 5.2.x): every festival now has
- * its own ambience — emoji particles rising (diyas, lanterns, fireworks),
+ * its own ambience — photographic backdrops with shape-based particles rising
+ * (lamps, lanterns, fireworks),
  * falling (marigolds, snow, colour powder) or drifting across (kites,
  * peacock feathers), over a per-festival glow painted by `.fest-sky::before`
  * in the stylesheet. Deterministic arithmetic (no Math.random) keeps renders
@@ -76,35 +84,35 @@ function IndependenceBackdrop() {
  */
 function FestBackdrop({ festival }: { festival: Festival }) {
   const bd = festival.backdrop;
-  const pieces = useMemo(() => {
+  const visual = festivalVisual(festival.id);
+  const shape = visual.confetti;
+  const pieces = (() => {
     if (!bd) return [];
     const base = bd.density ?? 14;
     const count = typeof window !== 'undefined' && window.innerWidth < 640 ? Math.round(base * 0.6) : base;
     return Array.from({ length: count }, (_, i) => ({
-      glyph: bd.p[i % bd.p.length],
+      shape,
       left: (i * 61 + 7) % 94,
       size: 14 + ((i * 7) % 16),
       delay: (i * 2.3) % 12,
       duration: 11 + (i % 6) * 2.8,
       sway: i % 2 === 0 ? 1 : -1,
     }));
-  }, [bd]);
+  })();
   if (!bd) return null;
   return (
-    <div className="fest-sky" aria-hidden>
+    <div className="fest-sky" style={festVars(visual)} aria-hidden>
       {pieces.map((p, i) => (
         <span
           key={i}
-          className={`fxp fxp-${bd.motion}${p.sway > 0 ? '' : ' fxp-alt'}`}
+          className={`fxp fxp-${bd.motion} fxp-shape-${p.shape}${p.sway > 0 ? '' : ' fxp-alt'}`}
           style={{
             left: `${p.left}%`,
             fontSize: p.size,
             animationDelay: `${p.delay}s`,
             animationDuration: `${p.duration}s`,
           }}
-        >
-          {p.glyph}
-        </span>
+        />
       ))}
     </div>
   );
@@ -139,6 +147,7 @@ export function FestiveSplash() {
 
   const pieces = useMemo<Piece[]>(() => {
     if (!festival) return [];
+    const visual = festivalVisual(festival.id);
     // 4.17.9 boot-cost pass: confetti density scales with the screen that
     // shows it — phones get 40 pieces, larger screens 64.
     const pieceCount = window.innerWidth < 640 ? 40 : 64;
@@ -149,12 +158,12 @@ export function FestiveSplash() {
       size: 6 + Math.random() * 8,
       color: festival.colors[Math.floor(Math.random() * festival.colors.length)],
       rotate: Math.random() * 360,
-      round: Math.random() > 0.5,
+      shape: visual.confetti,
     }));
   }, [festival]);
 
   // Festival skin: EVERY festival themes the whole app — accent ramp + top
-  // ribbon + brand badge + ambient glow — via one html class (fest-<id>) the
+  // ribbon + photo backdrop + ambient glow — via one html class (fest-<id>) the
   // stylesheet keys on. The skin runs from the day BEFORE the festival
   // through its last day (or per the admin override), then auto-reverts.
   useEffect(() => {
@@ -216,16 +225,20 @@ export function FestiveSplash() {
       className={`fixed inset-0 z-[90] flex items-center justify-center bg-ink-950/95 overflow-hidden pointer-events-none transition-opacity duration-500 ${leaving ? 'opacity-0' : 'opacity-100'}`}
       aria-hidden
     >
+      <div
+        className="fest-splash-photo"
+        style={festVars(festivalVisual(festival.id))}
+        aria-hidden
+      />
       {pieces.map((p, i) => (
         <span
           key={i}
-          className="absolute top-[-4%] animate-confetti will-change-transform"
+          className={`absolute top-[-4%] animate-confetti will-change-transform fest-confetti fest-shape-${p.shape}`}
           style={{
             left: `${p.left}%`,
             width: p.size,
-            height: p.size * (p.round ? 1 : 0.45),
+            height: p.size,
             background: p.color,
-            borderRadius: p.round ? '50%' : '2px',
             animationDelay: `${p.delay}s`,
             animationDuration: `${p.duration}s`,
             transform: `rotate(${p.rotate}deg)`,
@@ -233,9 +246,9 @@ export function FestiveSplash() {
         />
       ))}
       <div className="text-center animate-fade-up">
-        <div className="text-6xl mb-4">{festival.emoji}</div>
+        <div className="fest-splash-rule" aria-hidden />
         <p className="text-3xl font-bold tracking-tight">{festival.greeting}!</p>
-        <p className="text-sm text-ink-300 mt-2">from VinaX</p>
+        <p className="text-sm text-ink-300 mt-2">{festival.name}</p>
       </div>
     </div>
    </>

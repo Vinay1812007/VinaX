@@ -2204,7 +2204,7 @@ export default function VinaXAIPage(): ReactNode {
   );
 
   return (
-    /* Astra conversation surface, with theme-aware reading contrast. */
+    /* VinaX conversation surface, with theme-aware reading contrast. */
     <div className="ai-root h-[100dvh] w-full flex overflow-hidden">
       {/* Sidebar */}
       <aside
@@ -2644,7 +2644,7 @@ export default function VinaXAIPage(): ReactNode {
                 <div className="ai-astra-mark" aria-hidden="true">
                   <SparkleIcon className="w-8 h-8" />
                 </div>
-                <p className="ai-astra-kicker">VINAX AI / ASTRA</p>
+                <p className="ai-astra-kicker">VINAX AI / MUSIC GUIDE</p>
                 <h2 className="ai-display text-center text-balance">
                   {greeting[0]} {greeting[1]}
                   {userName && (

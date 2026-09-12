@@ -1,4 +1,4 @@
-/* Astra 2050. Semantic surfaces preserve listener accents and light/AMOLED modes. */
+/* VinaX semantic surfaces preserve listener accents and light/AMOLED modes. */
 html:not(.light):not(.amoled):not(.hc) {
   --ink-950: 5 8 17;
   --ink-900: 10 15 27;

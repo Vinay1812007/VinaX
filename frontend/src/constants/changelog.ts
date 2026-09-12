@@ -13,14 +13,14 @@ export interface VersionInfo {
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '6.0.0': {
-    title: 'Astra — a new orbit for your music',
+    title: 'A new listening space for your music',
     changes: [
-      { type: 'new', text: 'Astra brings a space-inspired listening workspace, orbital mix artwork, a refreshed player and navigation, and a focused VinaX AI conversation surface.' },
+      { type: 'new', text: 'VinaX brings a refreshed listening workspace, mix artwork, navigation and a focused VinaX AI conversation surface.' },
       { type: 'new', text: 'Refresh discovery changes your recommendation seed and daily mix without clearing your listening history or favourites.' },
       { type: 'improved', text: 'Waveform loading, card motion and supported scroll reveals follow your reduced-motion preference. Light and AMOLED themes remain available.' },
       { type: 'fixed', text: 'Next-song and fallback queues now share canonical duplicate checks, respect language and blocked-song rules, and search wider catalog pools.' },
       { type: 'fixed', text: 'AI playlist generations exclude recent picks and alternate releases, with faster catalog resolution. Regenerate retries the correct chat question with a fresh approach.' },
-      { type: 'improved', text: 'The owner console gains Astra surfaces, animated panel loading, a saved compact layout preference, and shortcuts to AI and discovery quality reports.' },
+      { type: 'improved', text: 'The owner console gains a refreshed visual system, animated panel loading, a saved compact layout preference, and shortcuts to AI and discovery quality reports.' },
     ],
   },
   '5.32.0': {
@@ -176,12 +176,12 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '5.14.0': {
     title: '43 festivals, 43 looks',
     changes: [
-      { type: 'new', text: 'Every festival is now its own full theme — accent colour, a tinted page canvas (violet night for Diwali, pine for Christmas, dawn blue for Chhath), an ambient glow, a hand-drawn motif behind content, the top ribbon, a badge beside the logo and a living backdrop. No two festivals look alike.' },
+      { type: 'new', text: 'Every festival now has its own full theme with a real photographic backdrop, tinted page canvas, ambient glow, hand-drawn motif, top ribbon and motion treatment.' },
       { type: 'new', text: 'Twenty more days on the calendar: Valentine’s, Women’s Day, Vishu · Baisakhi · Puthandu · Bihu, Akshaya Tritiya, Buddha Purnima, Mother’s Day, Bakrid, Telangana Formation Day, Father’s Day, Guru Purnima, Friendship Day, Raksha Bandhan, Teachers’ Day, Gandhi Jayanti, Navratri, Halloween, Andhra Pradesh Formation Day, Children’s Day, Chhath Puja and Guru Nanak Jayanti. Diwali now runs Dhanteras through Bhai Dooj.' },
       { type: 'new', text: 'Settings → Festival themes: switch the festive look off for the plain theme all year, and see what is on today or coming next.' },
       { type: 'improved', text: 'Home greets you with each festival’s own wish, the AI knows the mood of every festival day, and recommendations lean toward the right languages and moods for all 43.' },
       { type: 'improved', text: 'Light theme during festivals: every accent step is checked for readability on white, and the canvas takes a soft tint of the day’s colour.' },
-      { type: 'improved', text: 'Admin → Festival Themes shows a live preview card of each theme (canvas, ribbon, accent, badge) and marks force-only days.' },
+      { type: 'improved', text: 'Admin → Festival Themes shows a live photo preview of each theme (canvas, ribbon, accent and motion) and marks force-only days.' },
     ],
   },
   '5.13.1': {

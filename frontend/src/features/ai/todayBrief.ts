@@ -29,10 +29,10 @@ export function buildTodayBrief(now = new Date()): TodayBrief {
   const Lang = lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : 'Telugu';
 
   if (fest) {
-    lines.push(`${fest.emoji} ${fest.name} is today.`);
+    lines.push(`${fest.name} is today.`);
     prompts.push(`Make me a ${fest.name} playlist in ${Lang}`);
   } else if (next && next.inDays <= 7) {
-    lines.push(`${next.festival.emoji} ${next.festival.name} in ${next.inDays} day${next.inDays === 1 ? '' : 's'}.`);
+    lines.push(`${next.festival.name} in ${next.inDays} day${next.inDays === 1 ? '' : 's'}.`);
     prompts.push(`Plan a ${next.festival.name} party playlist`);
   }
   if (mins > 0) lines.push(`${mins} min of music so far today.`);

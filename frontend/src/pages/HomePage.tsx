@@ -838,7 +838,7 @@ export default function HomePage() {
             <p className="text-xl font-bold tracking-tight truncate">
               Your sound universe
             </p>
-            <p className="text-[11px] text-ink-400">ASTRA / YOUR LISTENING SPACE</p>
+            <p className="text-[11px] text-ink-400">YOUR LISTENING SPACE</p>
           </div>
           <Link
             to="/search"
@@ -911,7 +911,7 @@ export default function HomePage() {
       {/* Aura Mix hero — the AI DJ entry point */}
       <section className="vx-hero relative overflow-hidden rounded-3xl mb-6 border border-glass bg-ink-850">
         {/* v5.18.0 refresh — accent-led wash + a fan of the mix's own artwork */}
-        {heroSongs.length < 3 && <div className="vx-hero-record" aria-hidden="true"><div><span>V</span><small>VINAX / ASTRA</small></div></div>}
+        {heroSongs.length < 3 && <div className="vx-hero-record" aria-hidden="true"><div><span>V</span><small>VINAX / LISTENING SPACE</small></div></div>}
         {heroSongs.length >= 3 && (
           <div className="absolute right-6 md:right-10 top-1/2 -translate-y-1/2 hidden sm:flex items-center pointer-events-none" aria-hidden>
             {heroSongs.slice(0, 3).map((hs, i) => (

@@ -1,5 +1,5 @@
 export interface FestivalBackdrop {
-  /** Emoji particles the ambient backdrop animates. */
+  /** Legacy particle palette retained for calendar compatibility. */
   p: string[];
   /** How the particles move: rise from below, fall from above, or drift across. */
   motion: 'rise' | 'fall' | 'drift';
@@ -30,7 +30,7 @@ export interface Festival {
  *
  * This file is the ONE source of truth for the calendar. Its companion,
  * `festivalThemes.ts`, carries the visual skin per id (accent, canvas tint,
- * glow, motif, badge). `npm run gen:festivals` turns both into:
+ * glow and motif). `npm run gen:festivals` turns both into:
  *   - src/styles/festivals.css         (html.fest-<id> skins, dark + light)
  *   - the pre-paint window table in index.html (first paint, no flash)
  *   - public/admin/festivals.js        (the admin console's picker data)

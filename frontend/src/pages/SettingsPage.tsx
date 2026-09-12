@@ -204,9 +204,9 @@ function FestivalRow() {
   const today = activeFestival();
   const next = nextFestival();
   const line = today
-    ? `${today.emoji} ${today.name} is on now`
+    ? `${today.name} is on now`
     : next
-      ? `Next: ${next.festival.emoji} ${next.festival.name} in ${next.inDays} day${next.inDays === 1 ? '' : 's'}`
+      ? `Next: ${next.festival.name} in ${next.inDays} day${next.inDays === 1 ? '' : 's'}`
       : 'No festival on the calendar';
   return (
     <Row label="Festival themes" note={`Every festival brings its own look — accent, background, glow and a greeting. ${line}.`}>

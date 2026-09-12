@@ -51,7 +51,7 @@ main { background: radial-gradient(ellipse at 90% 0%, var(--accent-tint), transp
 @media (max-width: 900px) { .ops-center-grid, .broadcast-composer { grid-template-columns: 1fr; } .ops-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .ops-brief { padding: 20px; } .hs-studio { grid-template-columns: 1fr; } .ops-actions a { padding: 12px; } .card { padding: 16px; } .ops-center-hero { padding: 20px; flex-direction: column; } .ops-shortcuts { grid-template-columns: 1fr; } }
 
-/* Astra command center — a shared visual system for every owner tool. */
+/* VinaX command center — a shared visual system for every owner tool. */
 :root { --bg: #060a13; --surface: #101827; --surface-2: #162135; --surface-3: #1d2c44; --border: #26354c; --border-strong: #354c6c; --text: #edf3ff; --text-2: #bccbe0; --text-3: #98aac4; --accent: #62dccb; --accent-strong: #3ebfab; --accent-text: #8ae9dc; --accent-soft: #62dccb18; --accent-tint: #62dccb0b; }
 body.lightadm { --bg: #edf2f9; --surface: #fff; --surface-2: #f4f7fc; --surface-3: #e5edf8; --border: #d8e1ee; --border-strong: #b7c9dc; --text: #162137; --text-2: #415673; --text-3: #586d88; --accent: #087b6f; --accent-strong: #066359; --accent-text: #08695f; --accent-soft: #087b6f16; --accent-tint: #087b6f0a; }
 body { font-size: 14px; }

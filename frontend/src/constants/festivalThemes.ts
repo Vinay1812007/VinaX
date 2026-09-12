@@ -4,7 +4,7 @@
  * The generator (`scripts/gen-festivals.mjs`) turns each entry into a full
  * `html.fest-<id>` theme: the accent ramp (dark + AA-safe light), a tinted
  * page canvas, the 3px top ribbon, an ambient glow, a CSS-drawn motif layer
- * behind content, and the badge beside the brand. Nothing here is read at
+ * behind content and the photo treatment. Nothing here is read at
  * runtime — the app ships the generated CSS, so there is zero JS cost.
  *
  * Every festival is meant to FEEL different: pick a distinct accent hue, a

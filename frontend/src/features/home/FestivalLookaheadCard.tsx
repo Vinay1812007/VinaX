@@ -7,6 +7,7 @@ import { toast } from '@/store/toastStore';
 import { PlayIcon, SettingsIcon } from '@/components/Icons';
 import { localDateKey } from '@/features/home/useBecauseYouLiked';
 import { festivalLookahead, ribbonGradient } from '@/features/home/festivalLookahead';
+import { festivalVisual } from '@/constants/festivalVisuals';
 
 /**
  * v5.19.0 — "Coming up" card in Home's personal band: the next festival when
@@ -21,6 +22,7 @@ export function FestivalLookaheadCard() {
   const info = useMemo(() => festivalLookahead(new Date(`${dateKey}T12:00:00`), skinsOn), [dateKey, skinsOn]);
   const [busy, setBusy] = useState(false);
   if (!info) return null;
+  const visual = festivalVisual(info.festival.id);
 
   const play = async () => {
     if (busy) return;
@@ -43,7 +45,11 @@ export function FestivalLookaheadCard() {
     <div className="glass-card rounded-2xl p-4 relative overflow-hidden min-w-0">
       <span aria-hidden className="absolute inset-x-0 top-0 h-[3px]" style={{ background: ribbonGradient(info.ribbon) }} />
       <div className="flex items-center gap-3.5">
-        <span className="text-[30px] leading-none shrink-0" aria-hidden>{info.festival.emoji}</span>
+        <span
+          className="w-14 h-14 rounded-2xl shrink-0 bg-cover bg-center border border-white/15 shadow-lg"
+          style={{ backgroundImage: `url("${visual.image}")`, backgroundPosition: visual.position }}
+          aria-hidden
+        />
         <span className="min-w-0 flex-1">
           <span className="block text-[10px] font-extrabold tracking-[0.18em] uppercase" style={{ color: info.accent }}>Coming up</span>
           <span className="block text-[15px] font-extrabold leading-tight truncate">{info.title}</span>

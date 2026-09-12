@@ -793,7 +793,7 @@
     var errors = typeof s.errors_24h === 'number' ? s.errors_24h : null;
     var feedback = typeof s.feedback_new === 'number' ? s.feedback_new : null;
     var headline = errors === null ? 'Waiting for operational signals' : errors > 0 ? 'A few things need your attention' : 'Make the next listening session better';
-    return '<section class="ops-brief"><div><span class="ops-eyebrow">VINAX ASTRA / CONTROL ROOM</span><h2>' + esc(headline) + '</h2><p>Your audience, music experience and release tools in one place.</p></div>' +
+    return '<section class="ops-brief"><div><span class="ops-eyebrow">VINAX / CONTROL ROOM</span><h2>' + esc(headline) + '</h2><p>Your audience, music experience and release tools in one place.</p></div>' +
       '<div class="ops-actions"><a href="#technical"><b>' + (errors === null ? '—' : fmtN(errors)) + '</b><span>Errors · last 24 hours →</span></a>' +
       '<a href="#feedback"><b>' + (feedback === null ? '—' : fmtN(feedback)) + '</b><span>New feedback →</span></a>' +
       '<a href="#homescreen"><b>Home studio</b><span>Curate the listener experience →</span></a>' +
@@ -2518,7 +2518,7 @@
       }).catch(function () { var o = $('ft-out'); if (o) o.textContent = 'Publish failed \u2014 network'; });
     }
     var statusLine = effective
-      ? effective.emoji + ' <b>' + esc(effective.name) + '</b>' + (mode === 'force' ? ' <span class="pill">forced</span>' : ' <span class="pill">auto \u00b7 calendar</span>')
+      ? '<span class="fest-status-photo" style="display:inline-block;width:32px;height:22px;vertical-align:middle;margin-right:8px;border-radius:6px;background-size:cover;background-position:' + esc(effective.imagePosition || 'center') + ';background-image:url(' + JSON.stringify(effective.image || '') + ')"></span><b>' + esc(effective.name) + '</b>' + (mode === 'force' ? ' <span class="pill">forced</span>' : ' <span class="pill">auto \u00b7 calendar</span>')
       : (mode === 'off' ? 'Default theme <span class="pill">festivals off</span>' : 'Default theme <span class="pill">auto \u00b7 no festival today</span>');
     var cards = FEST_LIST.map(function (f) {
       var isForced = forcedId === f.id;
@@ -2526,16 +2526,17 @@
       var sw = f.colors.map(function (c) {
         return '<i style="display:inline-block;width:14px;height:14px;border-radius:4px;margin-right:3px;background:' + esc(c) + ';border:1px solid rgba(255,255,255,.18)"></i>';
       }).join('');
-      // Mini preview: the festival's own canvas, ribbon, accent button and badge.
+      // Mini preview: the festival's own photo, canvas, ribbon and accent button.
       var preview = '<div style="position:relative;border-radius:10px;overflow:hidden;height:64px;background:' + esc(f.canvas) + ';border:1px solid rgba(255,255,255,.08);margin:8px 0 10px">' +
+        '<div style="position:absolute;inset:0;background-image:linear-gradient(180deg,rgba(5,7,15,.05),rgba(5,7,15,.72)),url(' + JSON.stringify(f.image || '') + ');background-size:cover;background-position:' + esc(f.imagePosition || 'center') + ';opacity:.8"></div>' +
         '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:' + esc(f.ribbon) + '"></div>' +
-        '<div style="position:absolute;left:10px;top:14px;font-weight:900;font-size:12px;color:#fff;letter-spacing:.2px">VinaX <span style="font-size:11px">' + esc(f.badge || '') + '</span></div>' +
+        '<div style="position:absolute;left:10px;top:14px;font-weight:900;font-size:12px;color:#fff;letter-spacing:.2px">VinaX</div>' +
         '<div style="position:absolute;left:10px;bottom:10px;height:8px;width:46%;border-radius:999px;background:rgba(255,255,255,.12)"></div>' +
         '<div style="position:absolute;right:10px;bottom:8px;padding:4px 10px;border-radius:999px;background:' + esc(f.accent) + ';color:#000;font-size:10px;font-weight:800">Play</div>' +
         '</div>';
       return '<div class="card" style="padding:14px 16px' + (isForced ? ';box-shadow:inset 0 0 0 1.5px var(--accent)' : '') + '">' +
         '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px">' +
-          '<span style="font-size:20px">' + f.emoji + '</span><span style="flex:1;min-width:0">' + esc(f.name) + '</span>' +
+          '<span class="fest-card-photo" style="display:block;width:32px;height:32px;flex:0 0 32px;border-radius:8px;background-image:url(' + JSON.stringify(f.image || '') + ');background-position:' + esc(f.imagePosition || 'center') + ';background-size:cover;border:1px solid rgba(255,255,255,.16)"></span><span style="flex:1;min-width:0">' + esc(f.name) + '</span>' +
           (isForced ? '<span class="pill">forced</span>' : (isAuto ? '<span class="pill">active today</span>' : (f.forceOnly ? '<span class="pill">force-only</span>' : ''))) +
         '</div>' +
         '<div class="muted" style="font-size:11.5px;margin:6px 0 2px">' + esc(f.when) + '</div>' +
@@ -2549,9 +2550,9 @@
     }).join('');
     $('view').innerHTML =
       '<div class="stub-banner"><h4>Festival Themes \u2014 live control</h4>' +
-      '<p>Every festival is a full theme: greeting splash + confetti, accent colors, top ribbon, an ambient glow and a living backdrop (diyas, kites, petals, snow\u2026). The app follows its built-in calendar by default. ' +
+      '<p>Every festival is a full theme: a real photo backdrop, greeting splash, shape based confetti, accent colors, top ribbon, ambient glow and a living motif. The app follows its built-in calendar by default. ' +
       'From here you can <b>force</b> any festival for every listener right now, switch everything <b>off</b>, or return to <b>auto</b>. ' +
-      '' + FEST_LIST.length + ' festivals, each its own theme (accent, canvas, glow, motif, badge). Lunar dates are 2026 \u2014 refresh them yearly in <code>src/constants/festivals.ts</code>, then run <code>npm run gen:festivals</code>.</p></div>' +
+      '' + FEST_LIST.length + ' festivals, each its own theme (photo, accent, canvas, glow, motif and motion). Lunar dates are 2026 \u2014 refresh them yearly in <code>src/constants/festivals.ts</code>, then run <code>npm run gen:festivals</code>.</p></div>' +
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Listeners currently see</h3>' +
       '<p style="font-size:15px;margin:6px 0 12px">' + statusLine + '</p>' +
       '<div class="row" style="gap:10px;flex-wrap:wrap">' +
@@ -2657,10 +2658,11 @@
 
   // 4. Engine probe — one real completion against any lane key, status + latency.
   var PROBE_KEYS = ['DEEPSEEK_V4_FLASH', 'CHATGPT_120_B', 'CHATGPT_20_B', 'NEMOTRON_SUPER', 'NEMOTRON_ULTRA', 'GROQ_API_KEY', 'NVIDIA_NEMOTRON_3_NANO_30B_A3B'];
+  function probeLabel(k) { return String(k).replace(/^CHATGPT_/, 'COMMERCIAL_'); }
   function renderEngineProbeSection() {
     $('view').innerHTML =
       '<div class="card"><h3 style="margin-top:0">Engine probe</h3><p class="muted" style="margin-top:0">Sends one tiny completion through the chosen lane key and reports the upstream status and round-trip time. Use it before wiring a new model slug into a lane. Rate-limited to 10 a minute.</p>' +
-      '<div class="row" style="gap:8px;flex-wrap:wrap"><select id="probe-key" class="inp">' + PROBE_KEYS.map(function (k) { return '<option value="' + k + '">' + k + '</option>'; }).join('') + '</select><input id="probe-model" class="inp" placeholder="Model slug (optional — defaults to the lane’s pinned model)" style="flex:1;min-width:240px" /><button id="probe-go">Probe</button></div>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><select id="probe-key" class="inp">' + PROBE_KEYS.map(function (k) { return '<option value="' + k + '">' + probeLabel(k) + '</option>'; }).join('') + '</select><input id="probe-model" class="inp" placeholder="Model slug (optional — defaults to the lane’s pinned model)" style="flex:1;min-width:240px" /><button id="probe-go">Probe</button></div>' +
       '<div id="probe-out" style="margin-top:12px"></div></div>';
     var hist = [];
     $('probe-go').addEventListener('click', function () {
@@ -2671,7 +2673,7 @@
         if (!r) return;
         hist.unshift(r);
         $('probe-out').innerHTML = '<table><thead><tr><th>Key</th><th>Model</th><th>Status</th><th>Latency</th><th>Reply head</th></tr></thead><tbody>' + hist.slice(0, 12).map(function (h) {
-          return '<tr><td><code>' + esc(h.key) + '</code></td><td>' + esc(h.model || '') + '</td><td>' + okPill(h.status >= 200 && h.status < 300, h.status ? String(h.status) : (h.error || h.exception || 'no response')) + '</td><td>' + (h.ms || 0) + ' ms</td><td class="muted" style="max-width:360px;white-space:normal;word-break:break-all">' + esc((h.head || h.error || h.exception || '').slice(0, 160)) + '</td></tr>';
+          return '<tr><td><code>' + esc(probeLabel(h.key)) + '</code></td><td>' + esc(h.model || '') + '</td><td>' + okPill(h.status >= 200 && h.status < 300, h.status ? String(h.status) : (h.error || h.exception || 'no response')) + '</td><td>' + (h.ms || 0) + ' ms</td><td class="muted" style="max-width:360px;white-space:normal;word-break:break-all">' + esc((h.head || h.error || h.exception || '').slice(0, 160)) + '</td></tr>';
         }).join('') + '</tbody></table>';
       }).catch(function (e) { $('probe-go').disabled = false; $('probe-out').innerHTML = '<div class="empty">' + esc(e && e.message === 'http 429' ? 'Rate limited — try again in a minute.' : 'Probe failed.') + '</div>'; });
     });
@@ -3086,9 +3088,9 @@
   function renderAiQuickSection() {
     cfgEditor({
       sec: 'aiquick', key: 'ai-quick', title: 'AI quick actions', clearable: true, empty: [],
-      help: 'The chips on VinaX AI’s welcome screen (max 8). One per line as <code>emoji | Label | Prompt text | mode</code>; mode is optional (auto, muse, swift, sage, win, translator). Leave empty to keep the built-in eight.',
-      form: function (v) { var lines = (Array.isArray(v) ? v : []).map(function (q) { return [q.icon || '', q.label || '', q.prompt || '', q.mode || ''].join(' | '); }); return '<textarea id="qa-text" class="inp" rows="9" style="width:100%">' + esc(lines.join('\n')) + '</textarea>'; },
-      read: function () { return $('qa-text').value.split('\n').map(function (l) { var p = l.split('|').map(function (x) { return x.trim(); }); if (p.length < 3 || !p[1] || !p[2]) return null; var o = { icon: p[0].slice(0, 4), label: p[1].slice(0, 20), prompt: p[2].slice(0, 200) + ' ' }; if (p[3]) o.mode = p[3].slice(0, 20); return o; }).filter(Boolean).slice(0, 8); },
+      help: 'The chips on VinaX AI’s welcome screen (max 8). One per line as <code>Label | Prompt text | mode</code>; mode is optional (auto, muse, swift, sage, win, translator). Leave empty to keep the built-in eight.',
+      form: function (v) { var lines = (Array.isArray(v) ? v : []).map(function (q) { return [q.label || '', q.prompt || '', q.mode || ''].join(' | '); }); return '<textarea id="qa-text" class="inp" rows="9" style="width:100%">' + esc(lines.join('\n')) + '</textarea>'; },
+      read: function () { return $('qa-text').value.split('\n').map(function (l) { var p = l.split('|').map(function (x) { return x.trim(); }); if (p.length < 2 || !p[0] || !p[1]) return null; var o = { label: p[0].slice(0, 20), prompt: p[1].slice(0, 200) + ' ' }; if (p[2]) o.mode = p[2].slice(0, 20); return o; }).filter(Boolean).slice(0, 8); },
     });
   }
   // 12. AI house rules.
@@ -3161,7 +3163,7 @@
       var overall = down ? 'Action needed' : overdue || missing ? 'Watch closely' : (status.overall || 'Operational');
       var overallOk = !down && !overdue && !missing;
       $('view').innerHTML =
-        '<div class="ops-center-hero"><div><span class="ops-eyebrow">VINAX ASTRA / OPERATIONS CENTER</span><h2>' + esc(overall) + '</h2><p class="muted">Service health, scheduled work and release readiness.</p></div><button class="ghost" id="ops-refresh">Refresh signals</button></div>' +
+        '<div class="ops-center-hero"><div><span class="ops-eyebrow">VINAX / OPERATIONS CENTER</span><h2>' + esc(overall) + '</h2><p class="muted">Service health, scheduled work and release readiness.</p></div><button class="ghost" id="ops-refresh">Refresh signals</button></div>' +
         '<div class="cards ops-center-cards">' + card(components.length ? components.length - down + '/' + components.length : '—', 'Services healthy') + card(overdue, 'Overdue jobs') + card(missing, 'Required secrets missing') + card(overallOk ? 'Ready' : 'Review', 'Release posture') + '</div>' +
         '<div class="ops-center-grid"><div class="card"><div class="row"><h3 style="margin-top:0">Service pulse</h3><span class="spacer"></span><span class="muted">' + (status.generatedAt ? 'checked ' + ago(status.generatedAt) : 'no timestamp') + '</span></div>' + (components.length ? components.map(function (c) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (c.status === 'up' ? 'ok' : 'bad') + '"></span><b>' + esc(c.name || c.id) + '</b><span class="spacer"></span>' + okPill(c.status === 'up', c.status || 'unknown') + (c.latencyMs != null ? '<span class="muted">' + c.latencyMs + ' ms</span>' : '') + '</div>'; }).join('') : '<div class="empty">Status endpoint returned no components.</div>') + '</div>' +
         '<div class="card"><div class="row"><h3 style="margin-top:0">Scheduled work</h3><span class="spacer"></span><a class="ghost" href="#cron">Open cron health</a></div>' + (jobs.length ? jobs.map(function (j) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (j.ok === false ? 'bad' : 'ok') + '"></span><b>' + esc(j.label || j.id) + '</b><span class="spacer"></span>' + okPill(j.ok !== false, j.ok === false ? 'overdue' : 'on time') + '<span class="muted">' + (j.lastAt ? ago(j.lastAt) : 'never') + '</span></div>'; }).join('') : '<div class="empty">No schedule telemetry yet.</div>') + '</div></div>' +

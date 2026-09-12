@@ -10,4 +10,4 @@ export const LATEST_VERSION = '6.0.0';
  * version shows in the UI (Settings, About, What's New). Internal semver
  * (LATEST_VERSION) keeps driving update checks and release hygiene.
  */
-export const DISPLAY_VERSION = 'VinaX Astra 6.0';
+export const DISPLAY_VERSION = 'VinaX 6.0';
