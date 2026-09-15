@@ -20,6 +20,9 @@ import { isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetS
 import { kidModeOn, stripExplicit } from '@/services/kidMode';
 import { getRecommendationContext } from '@/services/recommendation/context';
 import { recommendNextSongs } from '@/services/recommendation/engine';
+import { freshSongs } from '@/services/recommendation/freshness';
+import { songKey } from '@/services/recommendation/songIdentity';
+import { isSongBlocked, useLibraryStore } from './libraryStore';
 
 export type RepeatMode = 'off' | 'one' | 'all';
 
@@ -131,7 +134,6 @@ let sleepTimer: number | null = null;
 const refetchedSongs = new Set<string>();
 let _lastResumedSec = -1; // throttle: write at most once per 5-second mark
 let lastUnavailableToastAt = 0;
-let recommendationPromise: Promise<boolean> | null = null;
 
 /** Exactly what persist() writes to localStorage (see partialize). */
 type PersistedPlayerState = Pick<PlayerState, 'queue' | 'index' | 'repeat' | 'shuffle' | 'volume' | 'muted' | 'rate'>;
@@ -139,29 +141,42 @@ type PersistedPlayerState = Pick<PlayerState, 'queue' | 'index' | 'repeat' | 'sh
 export const usePlayerStore = create<PlayerState>()(
   persist(
     (set, get) => {
+      let queueVersion = 0;
+      let transition = 0;
+      let radio = false;
+      let recommendationJob: { version: number; promise: Promise<boolean> } | null = null;
+      const canExtend = () => (radio || useSettingsStore.getState().autoplay) && !get().followMode && get().repeat === 'off';
+      function invalidateQueue(): void { queueVersion += 1; transition += 1; }
       async function appendRecommendations(seed: Song): Promise<boolean> {
-        if (recommendationPromise) return recommendationPromise;
-        recommendationPromise = (async () => {
+        if (recommendationJob?.version === queueVersion) return recommendationJob.promise;
+        const version = queueVersion;
+        const promise = (async () => {
           try {
             const { queue } = get();
-            const songs = await recommendNextSongs(seed, getRecommendationContext(seed, 'next'), {
+            const songs = await recommendNextSongs(seed, getRecommendationContext(seed, radio ? 'radio' : 'playlist'), {
               limit: 8,
               excludeIds: queue.map((song) => song.id),
+              excludeKeys: queue.map(songKey),
             });
-            if (!songs.length) return false;
+            if (!songs.length || version !== queueVersion || !canExtend()) return false;
             const current = get().queue;
-            const existing = new Set(current.map((song) => song.id));
-            const additions = songs.filter((song) => !existing.has(song.id));
+            if (!current.length) return false;
+            const additions = freshSongs(stripExplicit(songs), {
+              excludeIds: new Set(current.map(song => song.id)), excludeKeys: new Set(current.map(songKey)),
+              muted: useSettingsStore.getState().mutedLanguages, blocked: song => isSongBlocked(song, useLibraryStore.getState()),
+            });
             if (!additions.length) return false;
             set({ queue: [...current, ...additions] });
+            preloadUpcoming();
             return true;
           } catch {
             return false;
           } finally {
-            recommendationPromise = null;
+            if (recommendationJob?.version === version) recommendationJob = null;
           }
         })();
-        return recommendationPromise;
+        recommendationJob = { version, promise };
+        return promise;
       }
 
       function preloadUpcoming(): void {
@@ -174,6 +189,7 @@ export const usePlayerStore = create<PlayerState>()(
       }
 
       function startTrack(song: Song, autoplay: boolean): void {
+        transition += 1;
         // Reset the resume-write throttle so the first timeupdate on the NEW
         // song can save immediately — without this the previous song's 5s
         // bucket suppresses the initial write on a same-second boundary.
@@ -238,7 +254,7 @@ export const usePlayerStore = create<PlayerState>()(
         preloadUpcoming();
         // Keep a small tail ready for autoplay and playlist continuation. The
         // async fetch never blocks starting the current song.
-        if (useSettingsStore.getState().autoplay && get().queue.length - get().index <= 2 && !get().followMode) {
+        if (autoplay && canExtend() && get().queue.length - get().index <= 2) {
           void appendRecommendations(song);
         }
       }
@@ -323,6 +339,7 @@ export const usePlayerStore = create<PlayerState>()(
       }
 
       function pauseCurrent(): void {
+        transition += 1;
         if (!get().isPlaying) return;
         if (castInterceptPlayPause()) {
           set({ isPlaying: false });
@@ -461,7 +478,7 @@ export const usePlayerStore = create<PlayerState>()(
 
         playQueue: (songs, startIndex = 0) => {
           if (!songs.length) return;
-          const selectedIndex = Math.min(Math.max(0, startIndex), songs.length - 1);
+          const selectedIndex = Number.isFinite(startIndex) ? Math.min(Math.max(0, Math.floor(startIndex)), songs.length - 1) : 0;
           const seed = songs[selectedIndex];
           // C2 — kid mode: an explicit-flagged song never starts playback.
           if (seed.explicit && kidModeOn()) {
@@ -469,6 +486,8 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           resetSkipGuard(); // manual play — the user vouches for the sources
+          invalidateQueue();
+          radio = false;
           const queue = stripExplicit(songs);
           const index = queue.indexOf(seed);
           sessionPlayed.clear();
@@ -555,6 +574,7 @@ export const usePlayerStore = create<PlayerState>()(
         removeAt: (i) => {
           const { queue, index, isPlaying } = get();
           if (i < 0 || i >= queue.length) return;
+          invalidateQueue();
           const removingCurrent = i === index;
           const next = queue.filter((_, idx) => idx !== i);
           if (next.length === 0) {
@@ -590,6 +610,7 @@ export const usePlayerStore = create<PlayerState>()(
           // Only the future can be swept — the playing song and history stay.
           const next = queueAfterClearFrom(queue, index, i);
           if (!next) return;
+          invalidateQueue();
           const dropped = queue.length - next.length;
           set({ queue: next });
           toast(`Cleared ${dropped} upcoming ${dropped === 1 ? 'song' : 'songs'}`);
@@ -603,6 +624,8 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         clearQueue: () => {
+          invalidateQueue();
+          radio = false;
           if (sleepTimer != null) { window.clearTimeout(sleepTimer); sleepTimer = null; }
           refetchedSongs.clear();
           audioEngine.pause();
@@ -610,6 +633,7 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         togglePlay: () => {
+          transition += 1;
           const { isPlaying, queue, index } = get();
           const song = queue[index];
           if (!song) return;
@@ -642,15 +666,17 @@ export const usePlayerStore = create<PlayerState>()(
               nextIndex = 0;
             } else {
               const current = queue[index];
-              if (current && useSettingsStore.getState().autoplay && !get().followMode) {
+              if (current && canExtend()) {
+                const version = queueVersion;
+                const ticket = ++transition;
                 // Pause immediately so the existing player contract remains
                 // synchronous; resume automatically once the async tail is
                 // available.
                 set({ isPlaying: false });
                 audioEngine.pause();
                 void appendRecommendations(current).then((added) => {
-                  if (added) get().next(false);
-                  else { set({ isPlaying: false }); }
+                  if (version !== queueVersion || ticket !== transition || get().queue[get().index]?.id !== current.id || !canExtend()) return;
+                  if (added || get().index < get().queue.length - 1) get().next(false);
                 });
               } else {
                 set({ isPlaying: false });
@@ -668,6 +694,8 @@ export const usePlayerStore = create<PlayerState>()(
           if (!seed) return;
           const queue = stripExplicit([seed]);
           if (!queue.length) return;
+          invalidateQueue();
+          radio = true;
           sessionPlayed.clear();
           set({ queue, index: 0, currentTime: 0, isPlaying: true });
           startTrack(seed, true);
@@ -675,6 +703,7 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         prev: () => {
+          transition += 1;
           const { queue, index, currentTime } = get();
           if (!queue.length) return;
           haptic('light');

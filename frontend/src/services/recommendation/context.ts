@@ -36,6 +36,7 @@ export function getRecommendationContext(seedSong: Song | null = null, surface: 
     seedSong,
     surface,
     userProfile: buildUserRecommendationProfile(profile, favorites, history),
-    sessionProfile: buildSessionRecommendationProfile(history.slice(0, Math.max(10, sv.size)).map((entry) => entry.song)),
+    sessionProfile: buildSessionRecommendationProfile(history.slice(0, sv.size).map((entry) => entry.song)),
+    coPlaySeed: seedSong,
   };
 }

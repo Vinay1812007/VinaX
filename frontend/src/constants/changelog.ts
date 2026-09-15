@@ -915,7 +915,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       },
       {
         type: 'improved',
-        text: 'The play button on every album/song card is smaller and less obtrusive on touch. Instead of a big accent-filled chip covering the artwork, you get a small frosted circle in the corner with a soft bottom scrim. On desktop, hovering the card grows the chip and fills it with the accent — the pattern Spotify and Apple Music use.',
+        text: 'The play button on every album/song card is smaller and less obtrusive on touch. Instead of a big accent-filled chip covering the artwork, you get a small frosted circle in the corner with a soft bottom scrim. On desktop, hovering the card grows the chip and fills it with the accent for a cleaner, faster browse experience.',
       },
       {
         type: 'improved',

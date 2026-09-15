@@ -6,6 +6,7 @@ import { LANGUAGES } from '@/constants/languages';
 import { kidModeOn } from '@/services/kidMode';
 import type { Candidate, RecommendationContext } from './types';
 import type { Song } from '@/types';
+import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 
 const REDISCOVERY_AGE_MS = 14 * 86_400_000;
 
@@ -163,6 +164,7 @@ export async function gatherCandidates(ctx: RecommendationContext): Promise<Cand
   };
 
   return [...pool, ...rediscovery]
+    .filter((c) => !isSongBlocked(c.song, useLibraryStore.getState()))
     .filter((c) => !isJunkTrack(c.song))
     .filter((c) => !isMuted(c.song))
     // C2 — kid mode: explicit-flagged songs never enter the candidate pool.
@@ -170,5 +172,5 @@ export async function gatherCandidates(ctx: RecommendationContext): Promise<Cand
 }
 
 export async function generateNextCandidates(seed: Song, ctx: RecommendationContext): Promise<Candidate[]> {
-  return gatherCandidates({ ...ctx, seedSong: seed, surface: 'next' });
+  return gatherCandidates({ ...ctx, seedSong: seed, surface: ctx.surface ?? 'next' });
 }

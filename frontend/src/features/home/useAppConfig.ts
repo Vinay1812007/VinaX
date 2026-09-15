@@ -86,6 +86,7 @@ export function useFeatureFlags(): FeatureFlags {
 
 /** v5.15.0 — everything the admin console publishes for the app, in one read. */
 export interface ClientConfig {
+  homeLayout?: unknown;
   greeting: { text: string } | null;
   broadcast: { id: string; text: string; link?: string } | null;
   synonyms: Record<string, string>;
@@ -108,6 +109,7 @@ export function useClientConfig(): ClientConfig | null {
       if (!r.ok) return null;
       const j = (await r.json()) as Partial<ClientConfig>;
       return {
+        homeLayout: j.homeLayout,
         greeting: j.greeting ?? null,
         broadcast: j.broadcast ?? null,
         synonyms: j.synonyms && typeof j.synonyms === 'object' ? j.synonyms : {},

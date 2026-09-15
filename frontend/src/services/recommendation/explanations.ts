@@ -14,7 +14,15 @@ export function explainReasons(reasons: ReasonComponent[]): string {
     case 'related':
       return top.detail ? `Similar to “${top.detail}”` : 'Similar to your recent listens';
     case 'low-skip':
-      return 'Songs you rarely skip';
+      return top.weight < 0 ? 'Less likely after a recent skip' : 'Songs you rarely skip';
+    case 'genre': return 'Fits the genres you enjoy';
+    case 'vibe': return 'A similar atmosphere';
+    case 'energy': return 'A comfortable energy transition';
+    case 'tempo': return 'A similar pace';
+    case 'dialect': return 'Matches your regional listening';
+    case 'likes': return 'One of your favorites';
+    case 'history': return 'Recently played';
+    case 'diversity': return 'A different voice in your mix';
     case 'rediscovery':
       return 'You loved this a while back';
     case 'trending':

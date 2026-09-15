@@ -2,6 +2,8 @@ import { useDiscoveryStore } from '@/store/discoveryStore';
 import { invalidateRecommendationCache } from '@/services/recommendation/engine';
 import { recordServed, songKey } from '@/services/recommendation/songIdentity';
 import { ListeningGuide } from '@/features/home/ListeningGuide';
+import { HomeStudio } from '@/features/home/HomeStudio';
+import { HOME_DESIGN_KEY, loadHomeDesign, validateHomeDesign, type HomeDesign } from '@/services/recommendation/homeDesign';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useClientConfig } from '@/features/home/useAppConfig';
@@ -133,6 +135,7 @@ function SongShelf({ title, explanation, songs, seeAllTo }: { title: string; exp
 // titles — every listener now gets their own line on top of it.
 
 export default function HomePage() {
+  const [homeDesign, setHomeDesign] = useState<HomeDesign | null>(loadHomeDesign);
   usePageTitle('Home');
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const theme = useSettingsStore((s) => s.theme);
@@ -786,10 +789,12 @@ export default function HomePage() {
     'quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods',
     'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed',
   ];
-  const visibleHome =
+  const defaultOrder =
     shelfOrder === 'discovery-first'
       ? HOME_BLOCK_KEYS.map((k) => (k === 'personal' ? 'discovery' : k === 'discovery' ? 'personal' : k))
       : HOME_BLOCK_KEYS;
+  const design = validateHomeDesign(homeDesign ?? clientCfg?.homeLayout ?? { order: defaultOrder });
+  const visibleHome = design.order.filter(key => !design.hidden.includes(key));
   // Progressive mount v2 (4.18.3, PSI TBT pass): v1 (4.17.0) mounted the
   // first two blocks immediately and ALL remaining ~10 blocks in one idle
   // callback — a single giant long task (hundreds of DOM nodes + effects)
@@ -814,7 +819,7 @@ export default function HomePage() {
         <div className="hidden md:flex items-center gap-6 min-w-0">
           <div className="min-w-0">
             <p className="text-xl font-bold tracking-tight truncate">
-              Your sound universe
+              Your listening space
             </p>
             <p className="text-[11px] text-ink-400">YOUR LISTENING SPACE</p>
           </div>
@@ -916,9 +921,9 @@ export default function HomePage() {
           <p className="aura-eyebrow text-xs font-bold uppercase tracking-widest text-ember-300 flex items-center gap-1.5">
             <SparkleIcon className="w-3.5 h-3.5" /> AURA MIX / MADE FOR YOU
           </p>
-          <h2 className="vx-hero-title text-3xl md:text-[40px] font-extrabold tracking-[-0.03em] mt-2">A new orbit.<br className="hidden md:block" /> Your kind of music.</h2>
+          <h2 className="vx-hero-title text-3xl md:text-[40px] font-extrabold tracking-[-0.03em] mt-2">{design.title}</h2>
           <p className="text-sm text-ink-200/90 mt-2 max-w-md leading-relaxed">
-            Your Aura Mix brings together familiar voices and fresh discoveries. Built around your listening, ready when you are.
+            {design.description}
           </p>
           <div className="mt-5 flex items-center gap-2.5">
             <button
@@ -938,6 +943,12 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <HomeStudio design={design} onApply={value => {
+        const checked = validateHomeDesign(value); setHomeDesign(checked);
+        try { localStorage.setItem(HOME_DESIGN_KEY, JSON.stringify(checked)); toast('Your Home layout is saved'); }
+        catch { toast('Layout applied for this visit. Device storage is unavailable.'); }
+      }} onReset={() => { setHomeDesign(null); try { localStorage.removeItem(HOME_DESIGN_KEY); } catch { /* session reset still works */ } }} />
 
       <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
         <p className="text-sm text-ink-400" role="status">{refreshingDiscovery ? 'Finding a fresh direction…' : 'Ready for a different discovery?'}</p>

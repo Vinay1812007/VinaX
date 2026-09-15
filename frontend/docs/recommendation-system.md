@@ -1,6 +1,6 @@
 # Local recommendation system
 
-VinaX recommendations are generated on-device and share one pipeline across Home shelves, autoplay/next-song, radio, and playlist continuation:
+VinaX recommendations use a local-first hybrid pipeline and share one flow across Home shelves, autoplay/next-song, radio, and playlist continuation:
 
 1. **Profiles** build reusable song, user, and session vectors. Song vectors include mood, vibe, language, dialect/sub-language, genre, energy, tempo, and artist identity. User vectors combine decayed plays/completions, likes, skips, favorites, and history. Session vectors describe the current listening run.
 2. **Candidate generation** combines seed-song suggestions, related songs, favorite artists/albums, history rediscovery, language trends, and optional unexplored-language discovery. Provider failures only shrink the pool.
@@ -34,4 +34,4 @@ All feature values are normalised to 0–1. The canonical values live in `src/se
 
 ## AI routing and fallback
 
-`src/services/ai/recommendations.ts` talks to the existing `/api/vinaxai` abstraction using model aliases, so provider credentials and concrete model IDs remain server-owned. Metadata classification prefers the low-latency seats (`nano`, `mini`, `swift`, `flash`, `musegl`, `router`). Final continuation ranking prefers stronger seats (`pro`, `sage`, `nova`, `muse`, `scholar`, `router`). A small local health ledger orders aliases by observed latency and recent failures; each request has a task-specific timeout and automatically tries the next alias. Structured responses are cached for 30 days (bounded to 500 songs). If every model is unavailable or returns invalid JSON, the deterministic profile/scoring/re-ranking path remains fully functional.
+`src/services/ai/recommendations.ts` calls the first-party `/api/curate` adapter. The worker keeps provider credentials and concrete model IDs server-owned, and routes each task through the existing lane abstraction. Metadata classification prefers low-latency lanes (`fast`, `chat`, `search`, `scholar`); final continuation ranking prefers stronger lanes (`dj`, `scholar`, `home`, `chat`). The worker health ledger orders lanes by observed latency and recent failures, while the lane ladder automatically falls back when a provider is unavailable or slow. Structured metadata is cached for 30 days (bounded to 500 songs). If every model is unavailable or returns invalid JSON, the deterministic profile/scoring/re-ranking path remains fully functional.

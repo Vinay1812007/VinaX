@@ -16,6 +16,7 @@ type Env = AdminEnv & SupabaseEnv;
 // admin-only), 'trending-pins' (curated search chips, merged into the public
 // trending list).
 export const ALLOWED_KEYS = new Set([
+  'home-layout',
   'banners', 'festival', 'status-note', 'flags', 'runbook', 'trending-pins',
   // v5.15.0 — client bundle keys (see _lib/clientConfig.ts) + server-side knobs
   'greeting', 'broadcast', 'search-synonyms', 'catalog-sources', 'language-order', 'ai-starters', 'ai-quick', 'support-faq', 'min-version', 'maintenance-window', 'ai-rules',

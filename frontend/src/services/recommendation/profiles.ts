@@ -73,7 +73,7 @@ function inferred(values: Array<[RegExp, string]>, text: string): string[] {
 }
 
 function finite(value: unknown): number | null {
-  const n = typeof value === 'number' ? value : Number(value);
+  const n = typeof value === 'number' ? value : NaN;
   return Number.isFinite(n) ? n : null;
 }
 

@@ -19,6 +19,7 @@ import { onRequest as hostMiddleware } from './functions/_middleware';
 // cannot detect: that is exactly how /api/preview shipped dead in v5.11.2).
 import * as m_api_status from './functions/api/status';
 import * as m_api_aimodels from './functions/api/aimodels';
+import * as m_api_curate from './functions/api/curate';
 import * as m_api_voices from './functions/api/voices';
 import * as m_album_id from './functions/album/[id]';
 import * as m_api_admin_activity from './functions/api/admin/activity';
@@ -182,6 +183,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/user': m_api_admin_user,
   '/api/admin/users': m_api_admin_users,
   '/api/aimodels': m_api_aimodels,
+  '/api/curate': m_api_curate,
   '/api/voices': m_api_voices,
   '/api/announcements': m_api_announcements,
   '/api/apk': m_api_apk,

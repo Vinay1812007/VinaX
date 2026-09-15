@@ -9,6 +9,7 @@
 import { sbSelect, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 export const CLIENT_KEYS = [
+  'home-layout',
   'greeting', 'broadcast', 'search-synonyms', 'catalog-sources', 'language-order',
   'ai-starters', 'ai-quick', 'support-faq', 'min-version', 'maintenance-window',
 ] as const;
@@ -49,6 +50,7 @@ const inWindow = (start: unknown, end: unknown, now: Date): boolean => {
 const SLUG = /^[a-z][a-z0-9_-]{0,39}$/;
 
 export interface ClientConfig {
+  homeLayout?: { title: string; description: string; order: string[]; hidden: string[] };
   greeting: { text: string } | null;
   broadcast: { id: string; text: string; link?: string } | null;
   synonyms: Record<string, string>;
@@ -106,7 +108,11 @@ export function publicClientConfig(raw: Record<string, unknown>, now = new Date(
   const mv = obj(raw['min-version']);
   const minBuild = mv && Number.isInteger(mv.build) && (mv.build as number) > 0 ? (mv.build as number) : null;
 
-  return { greeting, broadcast, synonyms, disabledSources, languageOrder, aiStarters, aiQuick, faq, minBuild };
+  const home = obj(raw['home-layout']);
+  const keys = ['quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed'];
+  const cleanKeys = (v: unknown) => Array.isArray(v) ? [...new Set(v.filter((k): k is string => typeof k === 'string' && keys.includes(k)))] : [];
+  const homeLayout = home ? { title: str(home.title, 60), description: str(home.description, 160), order: cleanKeys(home.order), hidden: cleanKeys(home.hidden).slice(0, 11) } : undefined;
+  return { greeting, broadcast, synonyms, disabledSources, languageOrder, aiStarters, aiQuick, faq, minBuild, ...(homeLayout ? { homeLayout } : {}) };
 }
 
 /** Maintenance window: { start, end, note } in ISO; active when now is inside. */
