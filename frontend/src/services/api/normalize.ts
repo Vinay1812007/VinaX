@@ -22,9 +22,21 @@ function str(...vals: unknown[]): string {
   return '';
 }
 
-function num(v: unknown): number | null {
-  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN;
-  return Number.isFinite(n) ? n : null;
+function num(...vals: unknown[]): number | null {
+  for (const v of vals) {
+    const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN;
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function list(...vals: unknown[]): string[] {
+  const out: string[] = [];
+  for (const value of vals) {
+    if (Array.isArray(value)) out.push(...value.filter((v): v is string => typeof v === 'string'));
+    else if (typeof value === 'string') out.push(...value.split(/[,|;]/));
+  }
+  return [...new Set(out.map((v) => v.trim()).filter(Boolean))];
 }
 
 function upscaleImage(url: string): string {
@@ -128,6 +140,15 @@ export function normalizeSong(raw: any): Song | null {
     explicit: raw.explicitContent === true || raw.explicitContent === 1 || raw.explicit_content === '1',
     hasLyrics: raw.hasLyrics === true || raw.has_lyrics === 'true',
     playCount: num(raw.playCount ?? raw.play_count),
+    dialect: str(raw.dialect, raw.more_info?.dialect) || null,
+    subLanguage: str(raw.subLanguage, raw.sub_language, raw.sublanguage, raw.more_info?.subLanguage) || null,
+    genre: str(raw.genre, raw.more_info?.genre) || null,
+    genres: list(raw.genres, raw.more_info?.genres),
+    vibe: str(raw.vibe, raw.more_info?.vibe) || null,
+    vibes: list(raw.vibes, raw.more_info?.vibes),
+    mood: str(raw.mood, raw.more_info?.mood) || null,
+    energy: num(raw.energy, raw.more_info?.energy),
+    tempo: num(raw.tempo, raw.tempoBpm, raw.bpm, raw.more_info?.tempo, raw.more_info?.bpm),
   };
 }
 

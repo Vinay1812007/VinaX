@@ -35,6 +35,16 @@ export interface Song {
   explicit: boolean;
   hasLyrics: boolean;
   playCount: number | null;
+  /** Optional catalog metadata used by the local recommendation engine. */
+  dialect?: string | null;
+  subLanguage?: string | null;
+  genre?: string | null;
+  genres?: string[];
+  vibe?: string | null;
+  vibes?: string[];
+  mood?: string | null;
+  energy?: number | null;
+  tempo?: number | null;
 }
 
 export interface Album {

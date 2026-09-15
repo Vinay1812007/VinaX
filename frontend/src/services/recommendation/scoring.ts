@@ -11,6 +11,9 @@ import { energyOfSong } from '@/services/personalization/session';
 import { coPlayAffinity, coPlayIndexFor } from './coplay';
 import type { Candidate, ReasonComponent, RecommendationContext, ScoredCandidate } from './types';
 import { inferMood, moodMatchScore } from './mood';
+import { buildSongProfile, overlap } from './profiles';
+import { RECOMMENDATION_WEIGHTS } from './weights';
+import { rerankCandidates } from './reranking';
 
 const SOURCE_BOOST: Record<Candidate['source'], number> = {
   related: 0.18,
@@ -48,6 +51,60 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
   const personalBlend = (0.3 + 0.7 * confidence) * (0.4 + 0.6 * ctx.intensity);
 
   let score = 0;
+  const candidateProfile = buildSongProfile(song);
+  const seedProfile = ctx.seedSong ? buildSongProfile(ctx.seedSong) : null;
+  const user = ctx.userProfile;
+
+  // Content similarity against the current seed/session. These terms are
+  // intentionally independent, so a dialect or genre can be tuned without
+  // changing the rest of the model.
+  if (seedProfile) {
+    const mood = moodMatchScore(candidateProfile.mood, seedProfile.mood);
+    const moodTerm = mood * RECOMMENDATION_WEIGHTS.mood;
+    score += moodTerm;
+    if (moodTerm > 0.02) reasons.push({ kind: 'mood', weight: moodTerm, detail: seedProfile.mood });
+    const vibeTerm = overlap(candidateProfile.vibes, seedProfile.vibes) * RECOMMENDATION_WEIGHTS.vibe;
+    const genreTerm = overlap(candidateProfile.genres, seedProfile.genres) * RECOMMENDATION_WEIGHTS.genre;
+    if (vibeTerm > 0.02) reasons.push({ kind: 'vibe', weight: vibeTerm });
+    if (genreTerm > 0.02) reasons.push({ kind: 'genre', weight: genreTerm });
+    score += vibeTerm + genreTerm;
+    if (candidateProfile.language && candidateProfile.language === seedProfile.language) score += RECOMMENDATION_WEIGHTS.language;
+    if (candidateProfile.dialect && candidateProfile.dialect === seedProfile.dialect) {
+      score += RECOMMENDATION_WEIGHTS.dialect;
+      reasons.push({ kind: 'dialect', weight: RECOMMENDATION_WEIGHTS.dialect, detail: candidateProfile.dialect });
+    }
+    if (candidateProfile.subLanguage && candidateProfile.subLanguage === seedProfile.subLanguage) score += RECOMMENDATION_WEIGHTS.dialect * 0.65;
+    const energyTerm = (1 - Math.abs(candidateProfile.energy - seedProfile.energy)) * RECOMMENDATION_WEIGHTS.energy;
+    const tempoTerm = (1 - Math.min(1, Math.abs(candidateProfile.tempo - seedProfile.tempo) / 80)) * RECOMMENDATION_WEIGHTS.tempo;
+    score += energyTerm + tempoTerm;
+    if (energyTerm > 0.02) reasons.push({ kind: 'energy', weight: energyTerm });
+    if (tempoTerm > 0.02) reasons.push({ kind: 'tempo', weight: tempoTerm });
+  }
+
+  if (user) {
+    const genreAffinity = candidateProfile.genres.reduce((m, g) => Math.max(m, user.genres[g] ?? 0), 0);
+    const vibeAffinity = candidateProfile.vibes.reduce((m, v) => Math.max(m, user.vibes[v] ?? 0), 0);
+    const maxGenre = Math.max(1, ...Object.values(user.genres));
+    const maxVibe = Math.max(1, ...Object.values(user.vibes));
+    score += (genreAffinity / maxGenre) * RECOMMENDATION_WEIGHTS.genre * 0.6;
+    score += (vibeAffinity / maxVibe) * RECOMMENDATION_WEIGHTS.vibe * 0.6;
+    if (candidateProfile.dialect && user.dialects[candidateProfile.dialect]) score += RECOMMENDATION_WEIGHTS.dialect * 0.4;
+    if (candidateProfile.subLanguage && user.subLanguages[candidateProfile.subLanguage]) score += RECOMMENDATION_WEIGHTS.dialect * 0.25;
+    if (user.avgEnergy != null) score += (1 - Math.abs(candidateProfile.energy - user.avgEnergy)) * RECOMMENDATION_WEIGHTS.energy * 0.35;
+    if (user.avgTempo != null) score += (1 - Math.min(1, Math.abs(candidateProfile.tempo - user.avgTempo) / 80)) * RECOMMENDATION_WEIGHTS.tempo * 0.35;
+    if (user.likedSongIds.has(song.id)) {
+      score += RECOMMENDATION_WEIGHTS.likes;
+      reasons.push({ kind: 'likes', weight: RECOMMENDATION_WEIGHTS.likes });
+    }
+    if (user.skippedSongIds.has(song.id)) {
+      score -= RECOMMENDATION_WEIGHTS.skips;
+      reasons.push({ kind: 'low-skip', weight: -RECOMMENDATION_WEIGHTS.skips });
+    }
+    if (user.recentSongIds.has(song.id)) {
+      score -= RECOMMENDATION_WEIGHTS.history;
+      reasons.push({ kind: 'history', weight: -RECOMMENDATION_WEIGHTS.history });
+    }
+  }
 
   const langW = languageWeight(profile, song.language);
   const pinned = song.language != null && ctx.pinnedLanguages.includes(song.language);
@@ -80,7 +137,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
     score += 0.05 * personalBlend;
   }
 
-  const pop = song.playCount ? Math.min(Math.log10(song.playCount + 1) / 8, 1) * 0.15 : 0.04;
+  const pop = song.playCount ? Math.min(Math.log10(song.playCount + 1) / 8, 1) * RECOMMENDATION_WEIGHTS.popularity * 3 : 0.04;
   reasons.push({ kind: 'popularity', weight: pop });
   score += pop;
 
@@ -133,7 +190,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
 
   // Freshness: light boost for recent releases (novelty without dominating).
   const year = song.year ? Number(song.year) : null;
-  if (year && year >= new Date().getFullYear() - 1) score += 0.04;
+  if (year && year >= new Date().getFullYear() - 1) score += RECOMMENDATION_WEIGHTS.freshness;
 
   // Package A10 — festival/season boost: during a festival window, lift songs in
   // its languages or mood a touch. Silent (like freshness) — it colours ranking
@@ -213,5 +270,5 @@ export function rankCandidates(candidates: Candidate[], ctx: RecommendationConte
     if (scored.score > 0) out.push(scored);
   }
   out.sort((a, b) => b.score - a.score);
-  return shuffleTiers(out, ctx.salt);
+  return rerankCandidates(shuffleTiers(out, ctx.salt), ctx);
 }

@@ -31,6 +31,9 @@ export interface TasteProfile {
   };
   /** Recently played song ids — repetition guard for recommendations. */
   recentSongIds: string[];
+  /** Song-level negative/positive memories used by recommendations. */
+  skippedSongIds?: string[];
+  likedSongIds?: string[];
   /** Per-language play counts bucketed by 6h slice (0=night,1=morning,2=afternoon,3=evening). */
   hourBuckets: Record<string, number[]>;
   /** Package A3 — "Show fewer like this". Artist keys the user explicitly
@@ -85,6 +88,8 @@ export function createEmptyProfile(now = Date.now()): TasteProfile {
     hourBuckets: {},
     totals: { plays: 0, completes: 0, skips: 0, favorites: 0, queueAdds: 0 },
     recentSongIds: [],
+    skippedSongIds: [],
+    likedSongIds: [],
     softMuted: {},
   };
 }

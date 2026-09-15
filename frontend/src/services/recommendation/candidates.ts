@@ -5,6 +5,7 @@ import { trendingSeed } from '@/constants/seeds';
 import { LANGUAGES } from '@/constants/languages';
 import { kidModeOn } from '@/services/kidMode';
 import type { Candidate, RecommendationContext } from './types';
+import type { Song } from '@/types';
 
 const REDISCOVERY_AGE_MS = 14 * 86_400_000;
 
@@ -34,6 +35,33 @@ async function safe<T>(p: Promise<T>, fallback: T): Promise<T> {
  */
 export async function gatherCandidates(ctx: RecommendationContext): Promise<Candidate[]> {
   const tasks: Array<Promise<Candidate[]>> = [];
+
+  // Seed-first pool for autoplay/radio/playlist continuation. Keeping this
+  // ahead of broad shelves makes the next song feel connected immediately,
+  // while the rest of the gatherer supplies discovery and fallback options.
+  if (ctx.seedSong) {
+    const seed = ctx.seedSong;
+    tasks.push(
+      safe(getSongSuggestions(seed.id, 30), []).then((songs) =>
+        songs.map((song) => ({ song, source: 'related' as const, seedTitle: seed.title })),
+      ),
+    );
+    const artist = seed.artists[0]?.name;
+    if (artist) {
+      tasks.push(
+        safe(searchSongsPage(artist, 1, 20), []).then((songs) =>
+          songs.map((song) => ({ song, source: 'favorite-artist' as const, seedTitle: artist })),
+        ),
+      );
+    }
+    if (seed.language && !ctx.mutedLanguages.includes(seed.language)) {
+      tasks.push(
+        safe(searchSongsPage(`${seed.language} ${seed.genre ?? ''}`.trim(), 1, 15), []).then((songs) =>
+          songs.map((song) => ({ song, source: 'trending' as const, seedTitle: seed.language ?? undefined })),
+        ),
+      );
+    }
+  }
 
   // 1. Related to recent listens (strongest signal).
   const recentSongs = ctx.history.slice(0, 6);
@@ -139,4 +167,8 @@ export async function gatherCandidates(ctx: RecommendationContext): Promise<Cand
     .filter((c) => !isMuted(c.song))
     // C2 — kid mode: explicit-flagged songs never enter the candidate pool.
     .filter((c) => !(c.song.explicit && kidModeOn()));
+}
+
+export async function generateNextCandidates(seed: Song, ctx: RecommendationContext): Promise<Candidate[]> {
+  return gatherCandidates({ ...ctx, seedSong: seed, surface: 'next' });
 }

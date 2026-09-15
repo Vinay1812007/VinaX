@@ -70,6 +70,7 @@ export function recordSkip(song: Song, playedSec: number): void {
   withProfile((p) => {
     bumpAll(p, song, -0.75, 'skip');
     p.totals.skips += 1;
+    p.skippedSongIds = [song.id, ...(p.skippedSongIds ?? []).filter((id) => id !== song.id)].slice(0, 120);
   });
   logEvent('skip', song, playedSec);
 }
@@ -79,6 +80,8 @@ export function recordFavorite(song: Song, favored: boolean): void {
     bumpAll(p, song, favored ? 3 : -3, 'play');
     p.totals.favorites += favored ? 1 : -1;
     if (p.totals.favorites < 0) p.totals.favorites = 0;
+    const ids = p.likedSongIds ?? [];
+    p.likedSongIds = favored ? [song.id, ...ids.filter((id) => id !== song.id)].slice(0, 200) : ids.filter((id) => id !== song.id);
   });
   if (favored) logEvent('favorite', song);
 }

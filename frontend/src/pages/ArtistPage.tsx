@@ -22,6 +22,7 @@ export default function ArtistPage() {
   const { data: artist, isLoading, isError, refetch } = useArtist(id);
   const topSongs = useInfiniteArtistSongs(id);
   const playQueue = usePlayerStore((s) => s.playQueue);
+  const startRadio = usePlayerStore((s) => s.startRadio);
   const canonicalPath = artist ? artistPath(artist) : undefined;
   useCanonicalRedirect(canonicalPath);
   usePageMeta({
@@ -57,6 +58,9 @@ export default function ArtistPage() {
             <div className="flex flex-wrap items-center gap-3 mt-4">
               <button onClick={() => playQueue(songs, 0)} className="flex items-center gap-2 px-6 min-h-touch rounded-full btn-primary">
                 <PlayIcon className="w-4 h-4" /> Play top songs
+              </button>
+              <button onClick={() => startRadio(songs[0])} className="flex items-center gap-2 px-4 min-h-touch rounded-full btn-secondary">
+                Song radio
               </button>
             </div>
           )}

@@ -2,6 +2,7 @@ import type { HistoryEntry, RegionInfo, Song } from '@/types';
 import type { Mood } from './mood';
 import type { FestivalMusic } from './festival';
 import type { TasteProfile } from '@/services/personalization/profile';
+import type { UserRecommendationProfile, SessionRecommendationProfile } from './profiles';
 
 export type CandidateSource =
   | 'related'
@@ -33,7 +34,15 @@ export type ReasonKind =
   | 'mood'
   | 'session'
   | 'region'
-  | 'discovery';
+  | 'discovery'
+  | 'dialect'
+  | 'genre'
+  | 'vibe'
+  | 'energy'
+  | 'tempo'
+  | 'history'
+  | 'likes'
+  | 'diversity';
 
 export interface ReasonComponent {
   kind: ReasonKind;
@@ -103,4 +112,9 @@ export interface RecommendationContext {
   /** Package A4 — explore mode (Settings, default off): adds a ~15% discovery
    *  slot of trending-in-unheard-languages picks to the taste-generic shelves. */
   explore?: boolean;
+  /** Optional seed/surface metadata used by autoplay, radio and continuation. */
+  seedSong?: Song | null;
+  surface?: 'home' | 'next' | 'radio' | 'playlist';
+  userProfile?: UserRecommendationProfile;
+  sessionProfile?: SessionRecommendationProfile;
 }

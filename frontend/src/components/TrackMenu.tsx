@@ -27,7 +27,7 @@ export function TrackMenu({ song }: { song: Song }) {
   const [flipUp, setFlipUp] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
-  const { enqueue, enqueueNext } = usePlayerStore.getState();
+  const { enqueue, enqueueNext, startRadio } = usePlayerStore.getState();
   const collections = useLibraryStore((s) => s.collections);
   const addToCollection = useLibraryStore((s) => s.addToCollection);
   const createCollection = useLibraryStore((s) => s.createCollection);
@@ -56,6 +56,7 @@ export function TrackMenu({ song }: { song: Song }) {
 
 
   const items: Array<{ label: string; action: () => void } | null> = [
+    { label: 'Start song radio', action: () => startRadio(song) },
     { label: 'Play next', action: () => enqueueNext(song) },
     { label: 'Add to queue', action: () => enqueue(song) },
     // v5.12.0 — Listen Later: the one-tap "come back to this" list.

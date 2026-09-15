@@ -18,6 +18,8 @@ import { useCastStore, castInterceptPlayPause, castInterceptSeek, castMime } fro
 import { bestImage } from '@/utils/images';
 import { isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
 import { kidModeOn, stripExplicit } from '@/services/kidMode';
+import { getRecommendationContext } from '@/services/recommendation/context';
+import { recommendNextSongs } from '@/services/recommendation/engine';
 
 export type RepeatMode = 'off' | 'one' | 'all';
 
@@ -65,6 +67,7 @@ export interface PlayerState {
   clearQueue(): void;
   togglePlay(): void;
   next(manual?: boolean): void;
+  startRadio(song?: Song): void;
   prev(): void;
   seek(seconds: number): void;
   setVolume(v: number): void;
@@ -128,6 +131,7 @@ let sleepTimer: number | null = null;
 const refetchedSongs = new Set<string>();
 let _lastResumedSec = -1; // throttle: write at most once per 5-second mark
 let lastUnavailableToastAt = 0;
+let recommendationPromise: Promise<boolean> | null = null;
 
 /** Exactly what persist() writes to localStorage (see partialize). */
 type PersistedPlayerState = Pick<PlayerState, 'queue' | 'index' | 'repeat' | 'shuffle' | 'volume' | 'muted' | 'rate'>;
@@ -135,6 +139,31 @@ type PersistedPlayerState = Pick<PlayerState, 'queue' | 'index' | 'repeat' | 'sh
 export const usePlayerStore = create<PlayerState>()(
   persist(
     (set, get) => {
+      async function appendRecommendations(seed: Song): Promise<boolean> {
+        if (recommendationPromise) return recommendationPromise;
+        recommendationPromise = (async () => {
+          try {
+            const { queue } = get();
+            const songs = await recommendNextSongs(seed, getRecommendationContext(seed, 'next'), {
+              limit: 8,
+              excludeIds: queue.map((song) => song.id),
+            });
+            if (!songs.length) return false;
+            const current = get().queue;
+            const existing = new Set(current.map((song) => song.id));
+            const additions = songs.filter((song) => !existing.has(song.id));
+            if (!additions.length) return false;
+            set({ queue: [...current, ...additions] });
+            return true;
+          } catch {
+            return false;
+          } finally {
+            recommendationPromise = null;
+          }
+        })();
+        return recommendationPromise;
+      }
+
       function preloadUpcoming(): void {
         const { queue, index, shuffle } = get();
         if (shuffle) return; // unknown next under shuffle
@@ -207,6 +236,11 @@ export const usePlayerStore = create<PlayerState>()(
           }, 1200);
         }
         preloadUpcoming();
+        // Keep a small tail ready for autoplay and playlist continuation. The
+        // async fetch never blocks starting the current song.
+        if (useSettingsStore.getState().autoplay && get().queue.length - get().index <= 2 && !get().followMode) {
+          void appendRecommendations(song);
+        }
       }
 
       function maybeRecordSkip(manual: boolean): void {
@@ -607,13 +641,37 @@ export const usePlayerStore = create<PlayerState>()(
             if (repeat === 'all') {
               nextIndex = 0;
             } else {
-              set({ isPlaying: false });
-              audioEngine.pause();
+              const current = queue[index];
+              if (current && useSettingsStore.getState().autoplay && !get().followMode) {
+                // Pause immediately so the existing player contract remains
+                // synchronous; resume automatically once the async tail is
+                // available.
+                set({ isPlaying: false });
+                audioEngine.pause();
+                void appendRecommendations(current).then((added) => {
+                  if (added) get().next(false);
+                  else { set({ isPlaying: false }); }
+                });
+              } else {
+                set({ isPlaying: false });
+                audioEngine.pause();
+              }
               return;
             }
           }
           set({ index: nextIndex, currentTime: 0 });
           startTrack(queue[nextIndex], true);
+        },
+
+        startRadio: (song) => {
+          const seed = song ?? get().queue[get().index];
+          if (!seed) return;
+          const queue = stripExplicit([seed]);
+          if (!queue.length) return;
+          sessionPlayed.clear();
+          set({ queue, index: 0, currentTime: 0, isPlaying: true });
+          startTrack(seed, true);
+          void appendRecommendations(seed);
         },
 
         prev: () => {
