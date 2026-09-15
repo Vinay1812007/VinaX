@@ -35,9 +35,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { SoundSettings } from '@/components/SoundSettings';
 import { cn } from '@/utils/cn';
 import { createContext, useContext, useLayoutEffect } from 'react';
-import { ClockIcon, DownloadIcon, HelpIcon, HomeIcon, SettingsIcon, ShieldIcon, SparkleIcon } from '@/components/Icons';
-import { HOME_BLOCKS, HOME_BLOCK_KEYS, orderHomeBlocks } from '@/constants/homeBlocks';
-import { moveHomeBlock, resetHomeLayout, toggleHomeBlock } from '@/features/settings/homeLayout';
+import { ClockIcon, DownloadIcon, HelpIcon, SettingsIcon, ShieldIcon, SparkleIcon } from '@/components/Icons';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
@@ -435,9 +433,6 @@ export default function SettingsPage() {
         <Row label="Autoplay" note="Start playback immediately when you pick a song.">
           <Toggle on={s.autoplay} onChange={s.setAutoplay} label="Autoplay" />
         </Row>
-        <Row label="Auto-queue similar" note="When the queue ends, keep the vibe going with similar tracks.">
-          <Toggle on={s.autoqueueSimilar} onChange={s.setAutoqueueSimilar} label="Auto-queue similar" />
-        </Row>
         <Row label="Keep screen on in player" note="Holds a screen wake lock while the full-screen player is open and playing.">
           <Toggle on={s.keepScreenOn} onChange={s.setKeepScreenOn} label="Keep screen on in player" />
         </Row>
@@ -626,57 +621,6 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
-      </Section>
-
-      {/* Home builder (4.16.0) — hide or reorder the big Home blocks. */}
-      <Section title="Home layout" icon={HomeIcon}>
-        <div className="flex items-start justify-between gap-3 py-3.5 border-b border-[color:var(--glass-border)]">
-          <p className="text-xs text-ink-400 leading-relaxed">
-            Build your own Home: switch blocks off or move them up and down. The greeting, Aura Mix and
-            language rail always stay on top. Applies on this device only.
-          </p>
-          <button
-            onClick={() => {
-              resetHomeLayout();
-              toast('Home layout reset to default');
-            }}
-            className="shrink-0 px-3 py-1.5 rounded-full glass-button text-xs font-semibold"
-          >
-            Reset layout
-          </button>
-        </div>
-        {orderHomeBlocks(s.homeOrder).map((key, i, arr) => {
-          const def = HOME_BLOCKS.find((b) => b.key === key);
-          if (!def) return null;
-          const on = !s.hiddenHome.includes(key);
-          return (
-            <div key={key} className="flex items-center gap-2 py-2.5 border-b border-[color:var(--glass-border)] last:border-0">
-              <div className="flex flex-col gap-0.5">
-                <button
-                  aria-label={`Move ${def.label} up`}
-                  disabled={i === 0}
-                  onClick={() => moveHomeBlock(key, -1, HOME_BLOCK_KEYS)}
-                  className="w-7 h-6 rounded-md glass-button text-[11px] leading-none disabled:opacity-30"
-                >
-                  ▲
-                </button>
-                <button
-                  aria-label={`Move ${def.label} down`}
-                  disabled={i === arr.length - 1}
-                  onClick={() => moveHomeBlock(key, 1, HOME_BLOCK_KEYS)}
-                  className="w-7 h-6 rounded-md glass-button text-[11px] leading-none disabled:opacity-30"
-                >
-                  ▼
-                </button>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className={cn('text-sm font-medium truncate', !on && 'text-ink-400 line-through')}>{def.label}</p>
-                <p className="text-xs text-ink-400 truncate">{def.hint}</p>
-              </div>
-              <Toggle on={on} onChange={() => toggleHomeBlock(key)} label={`Show ${def.label}`} />
-            </div>
-          );
-        })}
       </Section>
 
       <div className="mb-6 rounded-2xl p-5 glass-card relative overflow-hidden">

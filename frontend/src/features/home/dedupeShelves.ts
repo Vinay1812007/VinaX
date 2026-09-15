@@ -2,7 +2,7 @@ import type { Song } from '@/types';
 
 /** Each render owns its ledger. Never persist during React render: doing so
  * makes the next render hide the very shelves the previous render displayed.
- * Cross-visit freshness is handled by homeVariety after queries resolve. */
+ * Shared song identity tracks recently displayed catalog music. */
 export function createShelfDeduper(): (songs: Song[]) => Song[] {
   const seen = new Set<string>();
   return (songs) => songs.filter((song) => {

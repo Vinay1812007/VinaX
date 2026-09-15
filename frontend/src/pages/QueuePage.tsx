@@ -3,19 +3,11 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
-import { useReasonStore } from '@/store/reasonStore';
 import { EmptyState } from '@/components/States';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
 import { XIcon, QueueIcon, ChevronDownIcon, GripIcon } from '@/components/Icons';
-import { TUNE_OPTIONS, type TuneIntent } from '@/services/recommendation/tune';
 
-const TUNES: Array<{ intent: TuneIntent; label: string }> = TUNE_OPTIONS.filter((o) => o.id !== 'surprise').map(
-  (o) => ({ intent: o.id, label: o.label }),
-);
-
-/** Canvas 4d — Queue with the AI DJ: tuning chips, teal now-playing card,
- *  and "Up next — and why" rows carrying the DJ's real reasons. */
 export default function QueuePage() {
   usePageTitle('Queue');
   const queue = usePlayerStore((s) => s.queue);
@@ -26,9 +18,7 @@ export default function QueuePage() {
   const clearFrom = usePlayerStore((s) => s.clearFrom);
   const sortUpcoming = usePlayerStore((s) => s.sortUpcoming);
   const moveInQueue = usePlayerStore((s) => s.moveInQueue);
-  const tuneQueue = usePlayerStore((s) => s.tuneQueue);
   const song = useCurrentSong();
-  const reasons = useReasonStore((s) => s.reasons);
   const upNext = queue.slice(index + 1);
 
   // ---- Drag-to-reorder (pointer events, zero deps) -----------------------
@@ -102,22 +92,12 @@ export default function QueuePage() {
     toast(`Saved ${n} songs to “${name.trim()}”`);
   };
 
-  const tune = (intent: TuneIntent, label: string): void => {
-    tuneQueue(intent);
-    toast(`${label} — retuning what's next`);
-  };
-  const surprise = (): void => {
-    const pick = TUNES[Math.floor(Math.random() * TUNES.length)];
-    tuneQueue(pick.intent);
-    toast('Surprise coming up ✦');
-  };
-
   if (!queue.length) {
     return (
       <EmptyState
         icon={<QueueIcon className="w-8 h-8" />}
         title="Queue is empty"
-        message="Play something and the AI DJ will build around it."
+        message="Play a song, album or playlist to start your queue."
         action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
       />
     );
@@ -128,7 +108,7 @@ export default function QueuePage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[26px] font-extrabold tracking-tight">Queue</h1>
-          <p className="text-xs font-semibold text-ink-400 mb-4">AI DJ · builds around what&rsquo;s playing</p>
+          <p className="text-xs font-semibold text-ink-400 mb-4">Your selected songs, in order</p>
         </div>
         {queue.length >= 2 && (
           <button
@@ -138,26 +118,6 @@ export default function QueuePage() {
             Save as playlist
           </button>
         )}
-      </div>
-
-      {/* tune chips */}
-      <div className="flex flex-wrap items-center gap-2 mb-5">
-        <button
-          onClick={surprise}
-          className="h-[38px] px-4 rounded-full text-xs font-extrabold text-ink-100 border border-ember-400/30 transition active:scale-95"
-          style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.22), rgba(96,165,250,0.14))' }}
-        >
-          ✦ Surprise me
-        </button>
-        {TUNES.map((t) => (
-          <button
-            key={t.intent}
-            onClick={() => tune(t.intent, t.label)}
-            className="h-[38px] px-4 rounded-full text-xs font-bold bg-[var(--tile)] border border-[var(--glass-border)] text-ink-200 hover:bg-[var(--tile-hover)] transition active:scale-95"
-          >
-            {t.label}
-          </button>
-        ))}
       </div>
 
       {/* now playing */}
@@ -189,7 +149,7 @@ export default function QueuePage() {
 
       {/* up next — and why */}
       <div className="flex items-center justify-between mb-2.5 gap-2">
-        <h2 className="text-base font-extrabold">Up next — and why</h2>
+        <h2 className="text-base font-extrabold">Up next</h2>
         {/* D5 — sort the upcoming stretch; the playing song never moves. */}
         {upNext.length >= 3 && (
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar" role="group" aria-label="Sort upcoming songs">
@@ -217,12 +177,11 @@ export default function QueuePage() {
         )}
       </div>
       {upNext.length === 0 ? (
-        <p className="text-sm text-ink-400">Nothing queued — tap a tune chip and the DJ fills it.</p>
+        <p className="text-sm text-ink-400">Nothing queued — add songs using Play next or Add to queue.</p>
       ) : (
         <ul className="space-y-2">
           {upNext.map((s, i) => {
             const realIndex = index + 1 + i;
-            const why = reasons[s.id] ?? 'Fits the vibe you’ve been building';
             const dragging = dragFrom === i;
             const dropTarget = dragFrom !== null && dragOver === i && dragFrom !== i;
             return (
@@ -287,7 +246,6 @@ export default function QueuePage() {
                     <XIcon className="w-4 h-4" />
                   </button>
                 </div>
-                <p className="vx-reason mt-2 rounded-[11px] px-2.5 py-1.5 text-[11px] font-semibold truncate">{why}</p>
               </li>
             );
           })}

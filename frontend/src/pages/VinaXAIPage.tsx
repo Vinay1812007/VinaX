@@ -1102,14 +1102,13 @@ export default function VinaXAIPage(): ReactNode {
     //   queue X                      — enqueues X after the current song
     //   start X / put on X           — synonyms of play
     //   shuffle X / shuffle songs by X — plays a shuffled batch matching X
-    //   similar to X / more like X    — startRadio() on the first match
     //   play X in <language>          — filters results by language
     //   play X without <artist>       — drops any result by that artist
-    const playPattern = /^(?:play|queue|start|put on|shuffle|similar to|more like)\s+(.+)$/i;
+    const playPattern = /^(?:play|queue|start|put on|shuffle)\s+(.+)$/i;
     const cmd = playPattern.exec(text.trim());
     if (cmd) {
       const verb = (
-        cmd[0].match(/^(play|queue|start|put on|shuffle|similar to|more like)/i)?.[1] ?? 'play'
+        cmd[0].match(/^(play|queue|start|put on|shuffle)/i)?.[1] ?? 'play'
       ).toLowerCase();
       let rest = cmd[1].trim();
       // Strip trailing filler ("play X song / music / now / please")
@@ -1160,9 +1159,6 @@ export default function VinaXAIPage(): ReactNode {
             const shuffled = [...results].sort(() => Math.random() - 0.5);
             player.playQueue(shuffled, 0);
             say(`Shuffling ${shuffled.length} tracks from ${rest}.`);
-          } else if (verb === 'similar to' || verb === 'more like') {
-            player.startRadio(results[0]);
-            say(`Starting a radio like ${results[0].title}.`);
           } else {
             player.playQueue(results, 0);
             const langBit = langFilter ? ` (in ${langFilter})` : '';

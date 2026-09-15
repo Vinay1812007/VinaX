@@ -12,7 +12,7 @@ const esc = (s) =>
 const ROUTES = [
   // Home description must sit in Bing's 25–160 char window (BWT flagged the
   // old 205-char version, 2026-08-17). This one is ~152.
-  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is a free, no-login music streaming app for India — Telugu, Hindi, Tamil and 9 more languages with smart mixes, live charts, AI DJ and synced lyrics.', h1: 'VinaX — Free Music Streaming for India' },
+  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is a free, no-login music streaming app for India — Telugu, Hindi, Tamil and 9 more languages with smart mixes, live charts, playlists and synced lyrics.', h1: 'VinaX — Free Music Streaming for India' },
   { p: '/discover', t: 'Discover', d: 'Fresh picks, trending songs and ready-made mixes across languages and moods.', h1: 'Discover new music' },
   { p: '/charts', t: 'Top Charts', d: 'The most popular songs right now, by language — updated daily.', h1: 'Top Charts', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/charts#page', name: 'Top Charts', url: 'https://www.sirimillavinay.online/charts', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/top-songs', t: 'Top Songs — Most Popular Right Now', d: 'The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, no login, updated continuously.', h1: 'Top Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/top-songs#page', name: 'Top Songs on VinaX', url: 'https://www.sirimillavinay.online/top-songs', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },

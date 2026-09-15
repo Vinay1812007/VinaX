@@ -11,13 +11,10 @@
 ## Recommendation changes
 
 - One shared song-admission helper checks canonical song identity, IDs, language, muted languages, blocked songs, junk titles and very short tracks. Alternate releases such as remasters no longer bypass canonical exclusions.
-- The fallback continuation searches up to three independent sources: the current song, another completed song and rotating language catalog pages. Artist sequencing happens after seed rotation so a shuffle cannot undo the artist-diversity pass.
-- AI DJ discovery pages and taste artists rotate with the request seed.
-- Final queue top-ups use the same exclusion rules. They no longer silently switch to another language when the catalog is exhausted.
-- Served-song memory expires after seven days, is capped at 300 identities and has a session fallback when browser storage is unavailable. The last 60 history songs and the current queue stay excluded from continuations independently.
+- Served-song memory expires after seven days, is capped at 300 identities and has a session fallback when browser storage is unavailable. Shared identity helps catalog shelves and playlists avoid repeats.
 - AI playlists enforce recent-title and shared-identity exclusions, selected languages and blocklists. Catalog searches run four at a time and preserve model ordering. A short or empty result is preferable to padding with repeated or off-language songs.
 
-A finite or unavailable catalog can still produce fewer songs or no continuation. Home may retain familiar songs when fresh inventory is insufficient; this release does not promise unlimited unique music.
+AI DJ, automatic next-song recommendations and listener/admin Home builders have been removed. Playback follows the selected queue. Home may retain familiar songs when fresh inventory is insufficient; this release does not promise unlimited unique music.
 
 ## VinaX AI
 

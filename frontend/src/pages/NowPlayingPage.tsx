@@ -6,7 +6,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useReasonStore } from '@/store/reasonStore';
-import { TUNE_OPTIONS } from '@/services/recommendation/tune';
 import { getMoodPin } from '@/services/personalization/session';
 import { clearMoodPin, pinMood } from '@/features/player/moodPin';
 import type { Mood } from '@/services/recommendation/mood';
@@ -139,10 +138,9 @@ export default function NowPlayingPage() {
   const streamKbps = usePlayerStore((s) => s.streamKbps);
   const {
     togglePlay, next, prev, cycleRepeat, toggleShuffle, setRate, setVolume, toggleMute,
-    setSleepTimer, setSleepAfterTrack, playAt, startRadio, tuneQueue, setSleepSongs, setLoopPoint, clearLoop,
+    setSleepTimer, setSleepAfterTrack, playAt, setSleepSongs, setLoopPoint, clearLoop,
   } = usePlayerStore.getState();
   const reasons = useReasonStore((s) => s.reasons);
-  const queueSource = usePlayerStore((s) => s.queueSource);
 
   const setCurrentAccent = usePlayerStore((s) => s.setCurrentAccent);
   const dynamicTheme = useSettingsStore((s) => s.dynamicTheme);
@@ -637,12 +635,6 @@ export default function NowPlayingPage() {
         {/* Secondary action row */}
         <div className="flex items-center justify-between mt-4">
           <button
-            onClick={() => startRadio(song)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs btn-secondary"
-          >
-            <SparkleIcon className="w-4 h-4" /> Radio
-          </button>
-          <button
             onClick={() => navigate('/drive')}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs btn-secondary"
           >
@@ -814,26 +806,6 @@ export default function NowPlayingPage() {
         </div>
         {rightTab === 'queue' && (
         <>
-        {/* Tune this queue */}
-        <div className="mt-6 lg:mt-1">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-2">Tune this queue</h2>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            {TUNE_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => {
-                  tuneQueue(opt.id);
-                  toast(`Tuning: ${opt.label}…`);
-                }}
-                aria-label={`Tune queue: ${opt.label}`}
-                className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100 active:scale-95"
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* C5 — pin a mood: overrides the inferred session mood for 45 min */}
         <div className="mt-5">
           <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-2">
@@ -880,24 +852,13 @@ export default function NowPlayingPage() {
           <div className="flex items-center justify-between mb-2">
             <span className="flex items-center gap-2">
               <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400">Up Next</h2>
-              {upNext.length > 0 && (
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-ink-800/70 border border-glass',
-                    queueSource === 'ai' ? 'text-ember-300' : 'text-ink-300',
-                  )}
-                  title={queueSource === 'ai' ? 'This continuation was curated by the AI DJ' : 'The AI was busy — these are instant local picks tuned to your taste'}
-                >
-                  <SparkleIcon className="w-3 h-3" /> {queueSource === 'ai' ? 'AI DJ' : 'Instant picks'}
-                </span>
-              )}
             </span>
             <Link to="/queue" className="text-xs font-semibold text-ember-400">Full queue</Link>
           </div>
           {upNext.length === 0 && (
             <p className="text-sm text-ink-400 flex items-center gap-1.5">
               <SparkleIcon className="w-4 h-4 text-ember-400 shrink-0" />
-              The AI DJ lines up what plays next — picks land here in a moment.
+              Add songs with Play next or Add to queue.
             </p>
           )}
           {upNext.map((s, i) => (

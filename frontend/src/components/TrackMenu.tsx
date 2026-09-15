@@ -27,7 +27,7 @@ export function TrackMenu({ song }: { song: Song }) {
   const [flipUp, setFlipUp] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
-  const { enqueue, enqueueNext, startRadio } = usePlayerStore.getState();
+  const { enqueue, enqueueNext } = usePlayerStore.getState();
   const collections = useLibraryStore((s) => s.collections);
   const addToCollection = useLibraryStore((s) => s.addToCollection);
   const createCollection = useLibraryStore((s) => s.createCollection);
@@ -37,7 +37,7 @@ export function TrackMenu({ song }: { song: Song }) {
   const toggleHiddenArtist = useLibraryStore((s) => s.toggleHiddenArtist);
   const downloaded = useDownloadsStore((s) => !!s.items[song.id]);
   const downloading = useDownloadsStore((s) => !!s.downloading[song.id]);
-  // Package C4 — the honest "why am I seeing this?" line (AI DJ or local scorer).
+  // Package C4 — the honest "why am I seeing this?" line from catalog recommendations.
   const whyLine = useReasonStore((s) => s.reasons[song.id]);
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -58,7 +58,6 @@ export function TrackMenu({ song }: { song: Song }) {
   const items: Array<{ label: string; action: () => void } | null> = [
     { label: 'Play next', action: () => enqueueNext(song) },
     { label: 'Add to queue', action: () => enqueue(song) },
-    { label: 'Start radio', action: () => startRadio(song) },
     // v5.12.0 — Listen Later: the one-tap "come back to this" list.
     {
       label: inLater ? 'Remove from Listen Later' : 'Listen later',
@@ -140,7 +139,8 @@ export function TrackMenu({ song }: { song: Song }) {
     song.artists[0]?.name
       ? {
           // v5.12.0 — hard block: this artist never plays from any feed,
-          // radio or autoplay again until removed in Settings → Playback.
+          // artist is excluded from future catalog recommendations until removed
+          // in Settings → Playback.
           label: `Never play ${song.artists[0].name.slice(0, 20)}${song.artists[0].name.length > 20 ? '…' : ''}`,
           action: () => {
             toggleHiddenArtist(song.artists[0].name);

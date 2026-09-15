@@ -1,6 +1,5 @@
 /**
- * Deep session context shared by every AI surface (AI DJ, home builder,
- * VinaX AI, AI Playlist) — the personalization layer the owner asked for:
+ * Deep session context shared by VinaX AI and AI Playlist — the personalization layer the owner asked for:
  * the model no longer sees only "evening"; it sees the day-of-week vibe,
  * the listener's live energy, and the festival the app is celebrating.
  *
@@ -9,7 +8,7 @@
  * listening history. No network, no identifiers.
  *
  * Deliberately does NOT import constants/festivals — that module rides in a
- * lazy chunk, and this file sits in the first-load dj/taste graph. The
+ * lazy chunk, and this file sits in the taste snapshot graph. The
  * prepaint script in index.html sets the fest-<id> class before React
  * mounts, so reading the class alone is already reliable.
  */

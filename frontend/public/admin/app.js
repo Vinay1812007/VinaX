@@ -796,7 +796,6 @@
     return '<section class="ops-brief"><div><span class="ops-eyebrow">VINAX / CONTROL ROOM</span><h2>' + esc(headline) + '</h2><p>Your audience, music experience and release tools in one place.</p></div>' +
       '<div class="ops-actions"><a href="#technical"><b>' + (errors === null ? '—' : fmtN(errors)) + '</b><span>Errors · last 24 hours →</span></a>' +
       '<a href="#feedback"><b>' + (feedback === null ? '—' : fmtN(feedback)) + '</b><span>New feedback →</span></a>' +
-      '<a href="#homescreen"><b>Home studio</b><span>Curate the listener experience →</span></a>' +
       '<a href="#releases"><b>Release centre</b><span>Inspect builds and versions →</span></a>' +
       '<a href="#ai"><b>AI intelligence</b><span>Review engines and request health →</span></a>' +
       '<a href="#skips"><b>Discovery quality</b><span>See where listeners skip →</span></a></div></section>';
@@ -2107,166 +2106,6 @@
     stamp();
   }
 
-  // ---------- Home Screen Management (server-backed via /api/admin/appconfig) ----------
-  // These are the app's REAL Home block keys (src/constants/homeBlocks.ts) —
-  // the old catalog used invented ids that matched nothing client-side, so
-  // nothing saved here could ever propagate.
-  var HOME_BLOCKS_APP = [
-    { id: 'quick', name: 'Quick access grid' },
-    { id: 'personal', name: 'Your music shelves' },
-    { id: 'discovery', name: 'Discovery shelves' },
-    { id: 'charts', name: 'Top 50 cards' },
-    { id: 'seasonal', name: 'Seasonal shelf' },
-    { id: 'moods', name: 'Mood playlists' },
-    { id: 'genres', name: 'Genre collections' },
-    { id: 'artists', name: 'Trending artists' },
-    { id: 'albums', name: 'Trending albums' },
-    { id: 'daypicks', name: 'Time-of-day picks' },
-    { id: 'loved', name: 'Recently loved' },
-    { id: 'feed', name: 'Endless feed' }
-  ];
-  function defaultHomeCfg() {
-    return HOME_BLOCKS_APP.map(function (s) { return { id: s.id, enabled: true }; });
-  }
-  function blockName(id) {
-    var b = HOME_BLOCKS_APP.filter(function (x) { return x.id === id; })[0];
-    return b ? b.name : id;
-  }
-  var hsCfg = null; // [{id, enabled}] in display order
-  var hsLoaded = false;
-  var hsPublished = '';
-  var hsLoadError = false;
-  var hsSaving = false;
-  function normalizeHomeCfg(value) {
-    var known = {};
-    var out = [];
-    if (value && Array.isArray(value.blocks)) {
-      value.blocks.forEach(function (b) {
-        if (b && typeof b.id === 'string' && !known[b.id] && HOME_BLOCKS_APP.some(function (x) { return x.id === b.id; })) {
-          known[b.id] = true;
-          out.push({ id: b.id, enabled: b.enabled !== false });
-        }
-      });
-    }
-    HOME_BLOCKS_APP.forEach(function (s) { if (!known[s.id]) out.push({ id: s.id, enabled: true }); });
-    return out;
-  }
-  function homeDiffHtml(current, published) {
-    if (!published) return '';
-    var before = [];
-    try { before = JSON.parse(published) || []; } catch (e) { return ''; }
-    var oldBy = {}; before.forEach(function (b, i) { oldBy[b.id] = { enabled: b.enabled !== false, order: i }; });
-    var changes = [];
-    (current || []).forEach(function (b, i) {
-      var old = oldBy[b.id];
-      if (!old) changes.push({ label: blockName(b.id), detail: 'added at position ' + (i + 1) });
-      else {
-        if (old.order !== i) changes.push({ label: blockName(b.id), detail: 'moved from ' + (old.order + 1) + ' to ' + (i + 1) });
-        if (old.enabled !== (b.enabled !== false)) changes.push({ label: blockName(b.id), detail: b.enabled ? 'enabled' : 'hidden' });
-      }
-    });
-    before.forEach(function (b) { if (!(current || []).some(function (x) { return x.id === b.id; })) changes.push({ label: blockName(b.id), detail: 'removed' }); });
-    if (!changes.length) return '';
-    return '<div class="card hs-diff"><div class="row"><h3 style="margin:0">Draft changes</h3><span class="spacer"></span><span class="pill">' + changes.length + ' change' + (changes.length === 1 ? '' : 's') + '</span></div><p class="muted" style="margin:8px 0 12px">Review what will change for listeners when you publish.</p>' + changes.map(function (c) { return '<div class="hs-diff-row"><b>' + esc(c.label) + '</b><span class="spacer"></span><span class="muted">' + esc(c.detail) + '</span></div>'; }).join('') + '</div>';
-  }
-  function renderHomescreenSection() {
-    if (!hsLoaded) {
-      hsLoaded = true;
-      $('view').innerHTML = '<div class="empty">Loading published config…</div>';
-      api('/api/admin/appconfig?key=home-config').then(function (d) {
-        hsCfg = normalizeHomeCfg(d && d.value);
-        hsPublished = JSON.stringify(hsCfg);
-        hsLoadError = false;
-        if (active === 'homescreen') renderHomescreenSection();
-      }).catch(function () {
-        hsCfg = defaultHomeCfg();
-        hsLoadError = true;
-        if (active === 'homescreen') renderHomescreenSection();
-      });
-      return;
-    }
-    if (!hsCfg) hsCfg = defaultHomeCfg();
-    var dirty = JSON.stringify(hsCfg) !== hsPublished;
-    var preview = hsCfg.filter(function (b) { return b.enabled; });
-    var rows = hsCfg.map(function (s, i) {
-      return '<div class="hs-row' + (s.enabled ? '' : ' disabled') + '" data-id="' + esc(s.id) + '">' +
-        '<span class="hs-ord">' + (i + 1) + '</span>' +
-        '<span style="flex:1;font-weight:600">' + esc(blockName(s.id)) + ' <span class="muted" style="font-size:11px;font-weight:400">' + esc(s.id) + '</span></span>' +
-        '<span class="row" style="gap:6px"><button class="ghost icon-btn hs-up" data-id="' + esc(s.id) + '" title="Move up" aria-label="Move up"' + (i === 0 ? ' disabled' : '') + '>▲</button><button class="ghost icon-btn hs-dn" data-id="' + esc(s.id) + '" title="Move down" aria-label="Move down"' + (i === hsCfg.length - 1 ? ' disabled' : '') + '>▼</button></span>' +
-        '<span class="row" style="gap:8px"><label class="switch"><span class="track ' + (s.enabled ? 'on' : '') + '"><span class="knob"></span></span><input type="checkbox" aria-label="Show home shelf" class="hs-tog" data-id="' + esc(s.id) + '"' + (s.enabled ? ' checked' : '') + ' /></label></span>' +
-        '</div>';
-    }).join('');
-    $('view').innerHTML =
-      '<div class="stub-banner"><h4>Live — published to every client</h4>' +
-      '<p>Order + visibility below are the <b>server defaults</b> for the app\'s Home (edge-cached ≤5 min). A listener\'s own Settings → Home layout still wins on their device; blocks disabled here are hidden for everyone.</p></div>' +
-      (hsLoadError ? '<div class="stub-banner"><h4>Published layout could not be loaded</h4><p>Retry before editing so you do not overwrite an unseen configuration.</p><button id="hs-retry">Retry loading</button></div>' : '') +
-      '<div class="hs-studio"><div class="card"><span class="ops-eyebrow">LAYOUT STARTERS</span><h3>Design a better first impression</h3><p class="muted">Choose a starting point, refine the order, then publish when ready.</p><div class="row" style="flex-wrap:wrap"><button class="ghost hs-preset" data-preset="balanced">Balanced</button><button class="ghost hs-preset" data-preset="discovery">Discovery first</button><button class="ghost hs-preset" data-preset="focused">Focused</button></div></div>' +
-      '<div class="card hs-preview"><span class="ops-eyebrow">STRUCTURE PREVIEW · ' + preview.length + ' SHELVES</span><h3>Your daily soundtrack</h3><div class="hs-preview-hero">Aura Mix · always visible</div>' + preview.map(function (b, i) { return '<div class="hs-preview-row"><span>' + (i + 1) + '</span>' + esc(blockName(b.id)) + '</div>'; }).join('') + '</div></div>' +
-      '<div class="card" style="margin-bottom:14px"><div class="row"><h3 style="margin-top:0">Home blocks</h3><span class="spacer"></span><span class="pill">' + (dirty ? 'Unpublished changes' : 'Matches published layout') + '</span></div>' + rows +
-      '<div class="row" style="margin-top:12px;gap:8px">' +
-        '<span class="spacer" style="flex:1"></span>' +
-        '<button id="hs-save"' + (hsLoadError || hsSaving || !dirty ? ' disabled' : '') + '>Publish layout</button>' +
-        '<button class="ghost" id="hs-reset">Reset to defaults</button>' +
-        '<span class="muted" id="hs-out" style="font-size:12px"></span>' +
-      '</div></div>' +
-      homeDiffHtml(hsCfg, hsPublished) +
-      '<h3>Draft JSON</h3>' +
-      '<pre id="hs-json" class="codebox" style="max-height:280px">' + esc(JSON.stringify({ blocks: hsCfg }, null, 2)) + '</pre>';
-    if ($('hs-retry')) $('hs-retry').addEventListener('click', function () { hsLoaded = false; renderHomescreenSection(); });
-    Array.prototype.forEach.call(document.querySelectorAll('.hs-preset'), function (b) {
-      b.addEventListener('click', function () {
-        var mode = b.getAttribute('data-preset');
-        var first = mode === 'discovery' ? ['discovery', 'artists', 'moods', 'personal'] : mode === 'focused' ? ['quick', 'personal', 'loved', 'daypicks'] : ['quick', 'personal', 'discovery', 'daypicks'];
-        var ids = first.concat(HOME_BLOCKS_APP.map(function (x) { return x.id; }).filter(function (id) { return first.indexOf(id) < 0; }));
-        hsCfg = ids.map(function (id) { return { id: id, enabled: mode !== 'focused' || first.indexOf(id) >= 0 }; });
-        renderHomescreenSection();
-      });
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('.hs-up'), function (b) {
-      b.addEventListener('click', function () {
-        var id = b.getAttribute('data-id');
-        var i = hsCfg.findIndex(function (s) { return s.id === id; });
-        if (i > 0) { var t = hsCfg[i - 1]; hsCfg[i - 1] = hsCfg[i]; hsCfg[i] = t; renderHomescreenSection(); }
-      });
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('.hs-dn'), function (b) {
-      b.addEventListener('click', function () {
-        var id = b.getAttribute('data-id');
-        var i = hsCfg.findIndex(function (s) { return s.id === id; });
-        if (i >= 0 && i < hsCfg.length - 1) { var t = hsCfg[i + 1]; hsCfg[i + 1] = hsCfg[i]; hsCfg[i] = t; renderHomescreenSection(); }
-      });
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('.hs-tog'), function (chk) {
-      chk.addEventListener('change', function () {
-        var id = chk.getAttribute('data-id');
-        var s = hsCfg.filter(function (x) { return x.id === id; })[0];
-        if (s) { s.enabled = !s.enabled; renderHomescreenSection(); }
-      });
-    });
-    $('hs-save').addEventListener('click', function () {
-      var btn = $('hs-save');
-      if (btn.disabled || hsSaving) return;
-      hsSaving = true;
-      btn.disabled = true;
-      $('hs-out').textContent = 'Publishing…';
-      var submitted = JSON.stringify(hsCfg);
-      postApi('/api/admin/appconfig', { key: 'home-config', value: { blocks: JSON.parse(submitted) } }).then(function (r) {
-        hsSaving = false;
-        if (r && r.ok) hsPublished = submitted;
-        if (active !== 'homescreen') return;
-        renderHomescreenSection();
-        $('hs-out').textContent = r && r.ok ? 'Published ✓ (live within ~5 min)' : 'Publish failed' + (r && r.error ? ' — ' + r.error : '');
-        setTimeout(function () { var o = $('hs-out'); if (o) o.textContent = ''; }, 4000);
-      }).catch(function () { hsSaving = false; if (active !== 'homescreen') return; renderHomescreenSection(); if ($('hs-out')) $('hs-out').textContent = 'Publish failed — network'; });
-    });
-    $('hs-reset').addEventListener('click', function () {
-      vxConfirm('Reset to the app defaults (all blocks on, default order)? Publish to make it live.', { title: 'Home Screen', okText: 'Reset' }).then(function (ok) {
-        if (ok) { hsCfg = defaultHomeCfg(); renderHomescreenSection(); }
-      });
-    });
-    stamp();
-  }
-
   // ---------- Categories & Genres ----------
   var catFilter = '';
   function renderCategoriesSection() {
@@ -2826,10 +2665,10 @@
   }
 
   // 12. Config backup — every published key as one JSON file, and back again.
-  var BACKUP_KEYS = ['banners', 'home-config', 'festival', 'status-note', 'flags', 'runbook', 'trending-pins'];
+  var BACKUP_KEYS = ['banners', 'festival', 'status-note', 'flags', 'runbook', 'trending-pins'];
   function renderBackupSection() {
     $('view').innerHTML =
-      '<div class="card"><h3 style="margin-top:0">Config backup</h3><p class="muted" style="margin-top:0">Everything the console has published — banners, home layout, festival override, status note, feature flags, runbook and trending pins — as one JSON file. Restore it here after a mistake, or move it to another environment.</p>' +
+      '<div class="card"><h3 style="margin-top:0">Config backup</h3><p class="muted" style="margin-top:0">Everything the console has published — banners, festival override, status note, feature flags, runbook and trending pins — as one JSON file. Restore it here after a mistake, or move it to another environment.</p>' +
       '<div class="row" style="gap:8px;flex-wrap:wrap"><button id="bk-export">Download backup</button><label class="ghost" style="cursor:pointer;display:inline-flex;align-items:center;padding:6px 12px;border:1px solid var(--border);border-radius:8px">Restore from file<input id="bk-file" type="file" accept="application/json" hidden /></label><span class="muted" id="bk-out" style="font-size:12px"></span></div>' +
       '<table style="margin-top:12px"><thead><tr><th>Key</th><th>Last published</th><th>Size</th></tr></thead><tbody id="bk-rows"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody></table></div>';
     var snapshot = {};
@@ -3360,12 +3199,12 @@
   }
   function fmtN(n) { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n); }
 
-  var TITLES = { workspace: 'Operations Workspace', overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', homescreen: 'Home Screen Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', segments: 'Audience Segments', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', opscenter: 'Operations Center', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools', aicost: 'AI Tokens & Cost' };
+  var TITLES = { workspace: 'Operations Workspace', overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', segments: 'Audience Segments', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', opscenter: 'Operations Center', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools', aicost: 'AI Tokens & Cost' };
   var USES_RANGE = { workspace: true, location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true, usage: true, heatmap: true, funnel: true, songstats: true, skips: true, aicost: true };
   // v5.7.5 — formal category reorganisation: which category each tool sits
   // under (drives the breadcrumb over the tool title) + collapsible category
   // headers whose open/closed state persists per browser.
-  var CATS = { workspace: 'Dashboards', overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', segments: 'Audience', songs: 'Catalog', playlists: 'Catalog', homescreen: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', opscenter: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines' };
+  var CATS = { workspace: 'Dashboards', overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', segments: 'Audience', songs: 'Catalog', playlists: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', opscenter: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines' };
   var densityButton = $('density');
   if (densityButton) {
     var compact = false;
@@ -3428,7 +3267,6 @@
     else if (active === 'ailab') loadAiLab();
     else if (active === 'songs') renderSongsSection();
     else if (active === 'playlists') renderPlaylistsSection();
-    else if (active === 'homescreen') renderHomescreenSection();
     else if (active === 'categories') renderCategoriesSection();
     else if (active === 'banners') renderBannersSection();
     else if (active === 'festivals') renderFestivalsSection();
@@ -3485,7 +3323,7 @@
   // Sections whose state lives in this browser (localStorage) — an auto-tick
   // re-render adds nothing and used to wipe in-progress edits the moment
   // focus left a field, and reset scroll every 10 s.
-  var LOCAL_SECTIONS = { songs: true, playlists: true, homescreen: true, categories: true, banners: true, festivals: true, config: true, catalog: true, engineprobe: true, edge: true, flags: true, runbook: true, backup: true, trendpins: true, statusnote: true, songstats: true, synonyms: true, sources: true, langorder: true, blocklistio: true, aistarters: true, aiquick: true, airules: true, query: true, relnotes: true, maintwin: true, minver: true, broadcast: true, greeting: true, faq: true, announce: true, pins: true, statushist: true, envcheck: true };
+  var LOCAL_SECTIONS = { songs: true, playlists: true, categories: true, banners: true, festivals: true, config: true, catalog: true, engineprobe: true, edge: true, flags: true, runbook: true, backup: true, trendpins: true, statusnote: true, songstats: true, synonyms: true, sources: true, langorder: true, blocklistio: true, aistarters: true, aiquick: true, airules: true, query: true, relnotes: true, maintwin: true, minver: true, broadcast: true, greeting: true, faq: true, announce: true, pins: true, statushist: true, envcheck: true };
   function autoTick() {
     if (formFocused()) return;
     if (LOCAL_SECTIONS[active]) return;

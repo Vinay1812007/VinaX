@@ -1,13 +1,11 @@
 /**
- * Admin app-config store — the backend Banner & Promotion and Home Screen
- * Management were stubbed against ("TODO: wire GET/PUT"). One generic
+ * Admin app-config store for Banner & Promotion and related settings. One generic
  * key→jsonb table (vinax_config, see supabase/schema.sql) with an allowlist
  * of keys, so a future section costs one entry here, not a new endpoint.
  *
  * The ADMIN reads/writes through this route (token-gated). Clients read the
  * published values through the public /api/appconfig route (cached, no auth).
  */
-import { validHomeConfig } from '../../_lib/homeConfig';
 import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import { sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
@@ -18,7 +16,7 @@ type Env = AdminEnv & SupabaseEnv;
 // admin-only), 'trending-pins' (curated search chips, merged into the public
 // trending list).
 export const ALLOWED_KEYS = new Set([
-  'banners', 'home-config', 'festival', 'status-note', 'flags', 'runbook', 'trending-pins',
+  'banners', 'festival', 'status-note', 'flags', 'runbook', 'trending-pins',
   // v5.15.0 — client bundle keys (see _lib/clientConfig.ts) + server-side knobs
   'greeting', 'broadcast', 'search-synonyms', 'catalog-sources', 'language-order', 'ai-starters', 'ai-quick', 'support-faq', 'min-version', 'maintenance-window', 'ai-rules',
   // v5.16.0 — operator-entered model prices for the AI Cost panel (admin-only)
@@ -65,7 +63,6 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const key = typeof body.key === 'string' ? body.key : '';
   if (!ALLOWED_KEYS.has(key)) return json({ error: 'unknown_key' }, 400);
   if (body.value === undefined) return json({ error: 'bad_request' }, 400);
-  if (key === 'home-config' && !validHomeConfig(body.value)) return json({ error: 'invalid_home_config' }, 400);
   const serialized = JSON.stringify(body.value);
   if (serialized.length > MAX_VALUE_BYTES) return json({ error: 'too_large' }, 413);
   const ok = await sbUpsert(env, 'vinax_config', { key, value: body.value, updated_at: new Date().toISOString() }, 'key');

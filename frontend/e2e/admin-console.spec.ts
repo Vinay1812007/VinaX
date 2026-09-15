@@ -21,7 +21,6 @@ function initialConfig(): Record<string, unknown> {
     'trending-pins': ['Kesariya', 'Naatu Naatu'],
     'status-note': 'All systems normal.',
     banners: [],
-    'home-config': {},
     festival: {},
     'search-synonyms': { arr: 'A. R. Rahman' },
     'catalog-sources': { 'vinax-render': false },
@@ -195,6 +194,7 @@ test('every nav section renders a panel with no page or console errors', async (
 
   const sections = await page.$$eval('#nav button[data-sec]', (els) => els.map((e) => e.getAttribute('data-sec') ?? ''));
   expect(sections.length, 'nav sections present').toBeGreaterThanOrEqual(64);
+  expect(sections).not.toContain('homescreen');
 
   const failures: string[] = [];
   for (const sec of sections) {
@@ -270,28 +270,6 @@ test('synonyms and broadcast publish through appconfig; pinning a tool adds it t
   await page.evaluate(() => document.querySelector<HTMLButtonElement>('[data-pintoggle="cron"]')?.click());
   await expect(page.locator('#nav-pins button[data-sec="cron"]')).toBeAttached();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vinax_admin_pins') ?? '[]'))).toEqual(['cron']);
-  expect(errors).toEqual([]);
-});
-
-test('home presets stay in draft until publication, with an accurate preview', async ({ page }) => {
-  await login(page);
-  const backend = await mockBackend(page);
-  const errors = collectErrors(page);
-  await openAdmin(page);
-  await openSection(page, 'homescreen');
-  await expect(page.locator('.hs-preview')).toBeVisible();
-  await page.locator('[data-preset="focused"]').click();
-  await expect(page.locator('.hs-preview-row')).toHaveCount(4);
-  await expect(page.locator('.hs-diff')).toContainText(/draft changes/i);
-  expect(backend.posted).not.toContain('home-config');
-  await expect.poll(() => viewText(page)).toMatch(/unpublished changes/i);
-  await page.locator('#hs-save').click();
-  await expect.poll(() => backend.posted).toContain('home-config');
-  await expect.poll(() => viewText(page)).toMatch(/matches published layout/i);
-  const cfg = backend.cfg['home-config'] as { blocks: { id: string; enabled: boolean }[] };
-  expect(cfg.blocks.filter((x) => x.enabled).map((x) => x.id)).toEqual(['quick', 'personal', 'loved', 'daypicks']);
-  await page.locator('main').evaluate((el) => { (el as HTMLElement).style.scrollBehavior = 'auto'; el.scrollTop = 0; });
-  await page.screenshot({ path: 'test-results/admin-studio.png', fullPage: true });
   expect(errors).toEqual([]);
 });
 

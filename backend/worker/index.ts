@@ -73,13 +73,11 @@ import * as m_api_cron_ai_daily_push from './functions/api/cron/ai-daily-push';
 import * as m_api_cron_seo_crawl from './functions/api/cron/seo-crawl';
 import * as m_api_cron_song_push from './functions/api/cron/song-push';
 import * as m_api_cron_weekly_digest from './functions/api/cron/weekly-digest';
-import * as m_api_dj from './functions/api/dj';
 import * as m_api_events from './functions/api/events';
 import * as m_api_experiments from './functions/api/experiments';
 import * as m_api_feedback from './functions/api/feedback';
 import * as m_api_geo from './functions/api/geo';
 import * as m_api_handoff from './functions/api/handoff';
-import * as m_api_home from './functions/api/home';
 import * as m_api_image from './functions/api/image';
 import * as m_api_lyrics_tools from './functions/api/lyrics-tools';
 import * as m_api_playlist from './functions/api/playlist';
@@ -194,13 +192,11 @@ const EXACT: Record<string, Mod> = {
   '/api/cron/seo-crawl': m_api_cron_seo_crawl,
   '/api/cron/song-push': m_api_cron_song_push,
   '/api/cron/weekly-digest': m_api_cron_weekly_digest,
-  '/api/dj': m_api_dj,
   '/api/events': m_api_events,
   '/api/experiments': m_api_experiments,
   '/api/feedback': m_api_feedback,
   '/api/geo': m_api_geo,
   '/api/handoff': m_api_handoff,
-  '/api/home': m_api_home,
   '/api/image': m_api_image,
   '/api/lyrics-tools': m_api_lyrics_tools,
   '/api/playlist': m_api_playlist,

@@ -1,6 +1,6 @@
 import { useDiscoveryStore } from '@/store/discoveryStore';
 import { freshSongs } from '@/services/recommendation/freshness';
-import { servedKeySet } from '@/services/recommendation/flow';
+import { servedKeySet } from '@/services/recommendation/songIdentity';
 import { useQuery } from '@tanstack/react-query';
 import type { Song } from '@/types';
 import { searchSongsPage } from '@/services/api';

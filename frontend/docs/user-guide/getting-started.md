@@ -6,21 +6,11 @@ Choose a name, a username and your listening languages on the welcome screen. Th
 
 Press **Play my mix** on Home, or search for an artist you love. Save a favourite with the heart. The Home checklist updates as you play, save and try the walkthrough; established listeners do not need to keep completing onboarding tasks.
 
-## Choose your discovery balance
+## Your queue
 
-Home Studio has three choices:
+Albums and playlists play their selected songs in order. Use Play next or Add to queue in a song menu, then reorder or remove songs on the Queue page. Playback stops at the end unless repeat is enabled.
 
-- **Familiar** gives your established taste more influence.
-- **Balanced** blends your taste with broader picks.
-- **Discover** invites exploration into your recommendations.
-
-The choice saves on this device and guides future recommendations. It does not replace the songs already in your queue. Open **Taste Profile** for finer control over energy, release era and discovery preferences.
-
-## Build a home that fits
-
-Choose **Edit home**. Try **Balanced**, **Discovery** or **Focused**, then use the checkboxes and arrow buttons to show, hide or move shelves. Everything saves automatically. **Restore default layout** clears your custom arrangement.
-
-Some shelves only appear when there is enough music or listening history. Shelves disabled by the site owner cannot be turned back on locally. Use **Show me around** for a guided tour of the controls.
+Home displays catalog shelves; its layout is managed by the app. Taste Profile and Settings still control your listening preferences.
 
 ## Turn a moment into a playlist
 

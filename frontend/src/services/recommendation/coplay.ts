@@ -3,7 +3,7 @@ import type { HistoryEntry, Song } from '@/types';
 /**
  * On-device item similarity from CO-PLAY (roadmap O.3): artists this listener
  * actually plays together in the same sitting pull each other's songs up in
- * radio and auto-queue. Pure local history in, numbers out — no server, no
+ * catalog recommendations. Pure local history in, numbers out — no server, no
  * cohorts, nothing uploaded (the founding invariant).
  *
  * Sessions = runs of plays separated by ≤30-minute gaps. Within a session,

@@ -2,7 +2,6 @@
  * Public, cached read side of the admin config store (vinax_config).
  *
  *   GET /api/appconfig?key=banners      → { banners: [...active only] }
- *   GET /api/appconfig?key=home-config  → { config: {...} | null }
  *   GET /api/appconfig?key=festival     → { festival: {mode,id} | null }
  *
  * Served with s-maxage=300 so every client hit lands on the edge cache;
@@ -71,7 +70,7 @@ export const onRequestGet = async (context: { request: Request; env: SupabaseEnv
   // v5.15.0 — one bundle for everything the app reads at boot (greeting,
   // broadcast, search synonyms, source switches, AI starters, FAQ, min build).
   if (key === 'client') return json(publicClientConfig(await readConfig(env, CLIENT_KEYS)), 60);
-  if (key !== 'banners' && key !== 'home-config' && key !== 'festival' && key !== 'flags') {
+  if (key !== 'banners' && key !== 'festival' && key !== 'flags') {
     return new Response(JSON.stringify({ error: 'unknown_key' }), { status: 400, headers: { 'content-type': 'application/json' } });
   }
   if (!supabaseConfigured(env)) {

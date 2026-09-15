@@ -1,4 +1,4 @@
-import { canonicalKey, songKey, servedKeySet, recordServed } from '@/services/recommendation/flow';
+import { canonicalKey, songKey, servedKeySet, recordServed } from '@/services/recommendation/songIdentity';
 import { freshSongs } from '@/services/recommendation/freshness';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import type { Song } from '@/types';

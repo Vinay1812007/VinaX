@@ -91,23 +91,8 @@ html:not(.light):not(.amoled):not(.hc) {
 .vx-hero-record small {
   font-size: 9px;
 }
-.vx-studio {
-  border-radius: 24px;
-  background: linear-gradient(130deg, rgb(var(--ink-850)), rgb(var(--ink-900)));
-}
-.vx-segment button,
-.vx-studio-hint,
-.vx-layout-toggle,
-.vx-layout-row,
 .vx-text-action {
   font-size: 14px;
-}
-.vx-segment button[aria-pressed='true'] {
-  background: rgb(var(--ember-500) / 0.14);
-  color: rgb(var(--ember-300));
-}
-html.light .vx-segment button[aria-pressed='true'] {
-  color: rgb(var(--ember-600));
 }
 .vx-media-card {
   border-radius: 18px;

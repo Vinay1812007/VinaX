@@ -58,9 +58,6 @@ export default function ArtistPage() {
               <button onClick={() => playQueue(songs, 0)} className="flex items-center gap-2 px-6 min-h-touch rounded-full btn-primary">
                 <PlayIcon className="w-4 h-4" /> Play top songs
               </button>
-              <button onClick={() => usePlayerStore.getState().startRadio(songs[0])} className="flex items-center gap-2 px-6 min-h-touch rounded-full border border-ink-600 text-ink-100 font-bold hover:bg-ink-800 active:scale-95 transition-transform">
-                <PlayIcon className="w-4 h-4" /> Start Radio
-              </button>
             </div>
           )}
           <div className="mt-3">

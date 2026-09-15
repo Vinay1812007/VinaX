@@ -9,7 +9,7 @@ model VinaX can reach.
 
 ```
 VinaX Frontend  (no keys, ever)
-      ↓ POST /api/dj · /api/home · /api/playlist · /api/vinaxai · …
+      ↓ POST /api/playlist · /api/vinaxai · …
       ↓ GET  /api/aimodels   ← the live free-model menu for the two catalog keys
 VinaX Worker (Cloudflare)
       ↓ lane router — functions/_lib/ai.ts
@@ -35,7 +35,7 @@ and queue all work with zero AI keys configured.
 
 | Lane | Env key | Model | Drives |
 | --- | --- | --- | --- |
-| dj | `VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B` | nemotron-3.5-lightning-30b-a3b | AI DJ, Smart Radio, queue; secondary: gpt-oss-20b |
+| dj | `VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B` | nemotron-3.5-lightning-30b-a3b | Creative chat and playlists; secondary: gpt-oss-20b |
 | chat | `VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B` | nemotron-3.5-lightning-30b-a3b | Assistant, AI playlists; secondary: mistral-nemotron |
 | deep | `VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B` | nemotron-3-super-120b-a12b | Think button |
 | fast | `VINAX_OAI_GPT_OSS_20B` | gpt-oss-20b | Quick tasks; secondary: lightning |
@@ -138,31 +138,9 @@ so a listener whose saved pick names one keeps a working seat.
 at a secret the registry doesn't list, if a listed secret becomes
 unreachable by any lane, or if a retired name creeps back into the wiring.
 
-## Co-work rounds
+## Retired music features
 
-`gatherDetailed()` runs the same prompt across several lanes in parallel and
-returns every non-empty answer **with the engine that produced it**. The AI DJ
-and the Home Screen Builder both use it: a panel proposes, one strong lane
-curates. Latency is the slowest panellist, never the sum, so a participant
-costs tokens and not wall-clock.
-
-| Feature | Panel | Curator |
-| --- | --- | --- |
-| AI DJ / smart queue | `fast`, `search`, `scholar` | `dj` |
-| Home Screen Builder | `scholar`, `search`, `chat` | `dj` |
-
-**`soloLadder` is what makes it a panel.** `chat()` normally walks the shared
-failover ladder, so three lanes whose own engines are cold all degrade onto
-the same healthy sibling and hand back three near-identical pools — one
-engine, billed three times, presented as a panel. With `soloLadder` each
-participant is held to its own key: it contributes its own perspective or it
-abstains. `worker/__tests__/cowork.test.ts` pins both behaviours, including a
-test that demonstrates the collapse when the flag is off.
-
-Both endpoints return a `panel` receipt — lane, model, latency, and how many
-picks each engine added that no other panellist had. That last number is the
-engine's *marginal* contribution, so a panellist that adds nothing round after
-round can be dropped on evidence rather than taste.
+AI DJ, automatic next-song recommendations and the Home Screen Builder have been removed. The `/api/dj` and `/api/home` routes no longer exist. The internal lane names `dj` and `home` remain shared by chat modes and playlist generation; they do not enable the removed features.
 
 ## Honesty ledger (what this is NOT)
 

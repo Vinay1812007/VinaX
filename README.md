@@ -14,7 +14,7 @@ Search now has a new discovery layout, 15 listener additions, and improved match
 
 Astra refreshes the customer workspace, VinaX AI and the owner console with a space-inspired design, clearer typography, loading states and reduced-motion-aware interactions. Home now includes an explicit **Refresh discovery** action.
 
-Next-song and emergency top-up paths share canonical duplicate and language checks, AI DJ searches rotate their source pages and taste artists, and AI playlists exclude recent generations while resolving catalog searches in parallel. Chat regeneration uses the correct conversation context and asks for a different approach.
+Playback follows the selected album, playlist or manual queue. AI DJ, automatic next-song recommendations, AI Home shelves and listener Home layout editing have been removed. AI playlists exclude recent generations while resolving catalog searches in parallel. Chat regeneration uses the correct conversation context and asks for a different approach.
 
 See [the complete Astra upgrade and checking guide](ASTRA_UPGRADE.md) for changes, limitations and the post-deployment walkthrough.
 
@@ -31,7 +31,7 @@ See [the complete Astra upgrade and checking guide](ASTRA_UPGRADE.md) for change
 | Android | Native playback integrations and downloads; availability differs from the browser |
 | Accessibility | Keyboard shortcuts, reduced motion, theme choices, text sizing and contrast settings |
 
-Music and AI results depend on the configured providers. Local recommendations and shelf design provide fallbacks when AI is unavailable; playing uncached music still requires a working catalog and network.
+Music and AI results depend on the configured providers. Catalog shelves use local recommendations; playing uncached music still requires a working catalog and network.
 
 ## How personalization works
 
@@ -74,7 +74,7 @@ frontend/
   src/components/             Shared player, navigation and welcome UI
   src/features/home/          Home shelves, Studio and personalization hooks
   src/pages/                  Routed music and AI experiences
-  src/services/recommendation/ Ranking, filtering and next-song sequencing
+  src/services/recommendation/ Catalog ranking, filtering and song identity
   src/services/personalization/ Device-local taste and session signals
   src/styles/                 Theme tokens and Studio presentation
   public/admin/               Standalone owner console

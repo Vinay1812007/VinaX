@@ -1,6 +1,6 @@
 # VinaX
 
-> No-login music-streaming web app (PWA) and Android app. Personalization lives on your device; an AI DJ builds queues, with synced lyrics, offline downloads and shared listening. Tuned for regional and Indian music — Telugu, Hindi, Tamil and more.
+> No-login music-streaming web app (PWA) and Android app. Personalization lives on your device; play albums and playlists in order, with synced lyrics, offline downloads and shared listening. Tuned for regional and Indian music — Telugu, Hindi, Tamil and more.
 
 ## Pages
 

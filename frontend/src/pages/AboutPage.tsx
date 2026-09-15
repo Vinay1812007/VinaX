@@ -37,7 +37,7 @@ export default function AboutPage() {
         <p>
           <em>VinaX</em> is music tuned to you — free forever, with no login and no account. It plays
           across 12 Indian languages and English, learns what you love right here on your device, and
-          hands you a home screen, an AI DJ and a smart search that all feel personal from the very
+          hands you a music library and a smart search that all feel personal from the very
           first song.
         </p>
         <p>
@@ -52,7 +52,7 @@ export default function AboutPage() {
         <p>
           There is a lot packed in: VinaX AI with nineteen engines plus Think, Research and hands-free
           voice chat; synced karaoke lyrics; Listen Together rooms; offline downloads in the Android app;
-          a full-screen player with Radio and Drive mode; weekly mixes; and a Ctrl+K command palette for
+          a full-screen player with Drive mode; weekly mixes; and a Ctrl+K command palette for
           power users. The design is original throughout, and music streams from independent public
           catalogs with automatic failover, so one hiccup never takes the app down.
         </p>

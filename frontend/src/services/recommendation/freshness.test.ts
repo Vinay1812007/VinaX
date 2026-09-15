@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Song } from '@/types';
 import { freshSongs } from './freshness';
-import { recordServed, servedKeySet, songKey } from './flow';
+import { recordServed, servedKeySet, songKey } from './songIdentity';
 
 const track = (id: string, title = id, language = 'telugu'): Song => ({
   kind: 'song',

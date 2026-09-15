@@ -1,7 +1,7 @@
 /**
  * Compact listener-taste snapshot shared by every conversational AI surface
- * (VinaX AI, the settings assistant, AI Playlist). It mirrors the AI DJ's
- * conditioning signals — language, time-of-day vibe, favourites, most-played
+ * (VinaX AI, the settings assistant, AI Playlist). It combines listening
+ * signals — language, time-of-day vibe, favourites, most-played
  * and recency — in a small, privacy-bounded payload built entirely from
  * on-device data. No ids, no timestamps: just human-readable song lines.
  */

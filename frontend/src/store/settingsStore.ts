@@ -28,7 +28,6 @@ export interface SettingsState {
   /** 0-100 — background blur intensity, independent from glassLevel. */
   glassBlur: number;
   autoplay: boolean;
-  autoqueueSimilar: boolean;
   keepScreenOn: boolean;
   lockScreenLyrics: boolean;
   crossfade: boolean;
@@ -56,12 +55,6 @@ export interface SettingsState {
   pinnedLanguages: string[];
   mutedLanguages: string[];
   sidebarCollapsed: boolean;
-  /** Home builder (4.16.0): hidden block keys (see constants/homeBlocks).
-   *  Mutations live in features/settings/homeLayout.ts (lazy chunk) — this
-   *  first-load store only carries the state Home reads. */
-  hiddenHome: string[];
-  /** Home builder: custom block order; [] = default order. */
-  homeOrder: string[];
   /** v5.19.0 — sound effects master switch (Web Audio chain; graph code is a
    *  lazy chunk — services/audio/effects.ts). Off = plain element playback. */
   soundEffects: boolean;
@@ -89,7 +82,6 @@ export interface SettingsState {
   setGlassLevel(v: number): void;
   setGlassBlur(v: number): void;
   setAutoplay(v: boolean): void;
-  setAutoqueueSimilar(v: boolean): void;
   setKeepScreenOn(v: boolean): void;
   setLockScreenLyrics(v: boolean): void;
   setCrossfade(v: boolean): void;
@@ -148,7 +140,6 @@ const defaults = {
   glassLevel: 40,
   glassBlur: 40,
   autoplay: true,
-  autoqueueSimilar: true,
   keepScreenOn: true,
   lockScreenLyrics: true,
   crossfade: true,
@@ -171,8 +162,6 @@ const defaults = {
   pinnedLanguages: [] as string[],
   mutedLanguages: [] as string[],
   sidebarCollapsed: false,
-  hiddenHome: [] as string[],
-  homeOrder: [] as string[],
   soundEffects: false,
   eqGains: [0, 0, 0, 0, 0] as number[],
   eqPreset: 'flat',
@@ -200,7 +189,6 @@ export const useSettingsStore = create<SettingsState>()(
       setGlassLevel: (v) => set({ glassLevel: Math.min(100, Math.max(0, Math.round(v))) }),
       setGlassBlur: (v) => set({ glassBlur: Math.min(100, Math.max(0, Math.round(v))) }),
       setAutoplay: (autoplay) => set({ autoplay }),
-      setAutoqueueSimilar: (autoqueueSimilar) => set({ autoqueueSimilar }),
       setKeepScreenOn: (keepScreenOn) => set({ keepScreenOn }),
       setLockScreenLyrics: (lockScreenLyrics) => set({ lockScreenLyrics }),
       setCrossfade: (crossfade) => set({ crossfade }),
@@ -250,15 +238,24 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: KEYS.settings,
-      version: 2,
+      version: 3,
       // One-time migrations: turn off artwork-tinting (v1) and reset to the
       // single brand accent (v2) when the old picker was removed. The picker
       // RETURNED in 4.7.0 with per-accent light ramps — v2 stays as-is so
       // long-time devices keep the default until they choose again.
+      // v3 removes retired queue/layout preferences and generated Home caches.
       migrate: (persisted: unknown, version: number) => {
         const state = (persisted ?? {}) as Partial<SettingsState>;
         if (version < 1) state.dynamicTheme = false;
         if (version < 2) state.accent = 'crimson';
+        const legacy = state as Partial<SettingsState> & Record<string, unknown>;
+        delete legacy.autoqueueSimilar;
+        delete legacy.hiddenHome;
+        delete legacy.homeOrder;
+        try {
+          window.localStorage.removeItem('vinax.home.shown.v1');
+          window.localStorage.removeItem('vinax.aihome.recent.v1');
+        } catch { /* storage may be unavailable */ }
         return state as SettingsState;
       },
       storage: createJSONStorage(() => window.localStorage),

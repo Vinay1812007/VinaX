@@ -12,8 +12,8 @@ Run before declaring a release week "green". ✅ = verified this cycle.
 2. Search → play a song → full player → seek/pause/next → lock-screen controls
    (metadata, ±10 s, next/prev).
 3. Synced lyrics: open, karaoke fill tracks, immersive mode, close.
-4. Queue: AI DJ continuation arrives; "Tune this queue" chips change picks each press;
-   Up Next badge shows AI DJ / Instant picks correctly.
+4. Queue: selected album or playlist tracks remain in order; Play next, reorder and
+   remove controls work, and playback stops at the end unless repeat is enabled.
 5. VinaX AI: send prompt (streaming caret → clean render), engine switch, web search,
    voice mode (orb states), chat title in tab.
 6. Listen Together: host + guest phone via invite link — audio starts on tap, ~1 s sync,

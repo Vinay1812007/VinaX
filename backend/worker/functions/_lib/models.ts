@@ -92,7 +92,7 @@ const T = { training_supported: false as const, fine_tuning_supported: false as 
 export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
   'kimi-k3': {
     id: 'moonshotai/kimi-k3', envKey: 'VINAX_KIMI_K3', display_name: 'VinaX K3', provider: 'nvidia',
-    role: 'Main AI / agent — chat, complex requests, home-screen reasoning, playlist planning',
+    role: 'Main AI / agent — chat, complex requests, playlist planning',
     capabilities: ['reasoning', 'generation'], latency_class: 'medium', quality_class: 'premium',
     cost_class: 'high', output_format: 'json', chat_capable: true,
     fallback_models: ['deepseek-v4-pro-0813', 'nemotron-3-super-120b-a12b', 'mistral-nemotron'],
@@ -101,7 +101,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
   },
   'deepseek-v4-pro-0813': {
     id: 'deepseek-ai/deepseek-v4-pro-0813', envKey: 'VINAX_DEEPSEEK_V4_PRO_0813', display_name: 'VinaX DP V4 PRO', provider: 'nvidia',
-    role: 'Deep reasoning — advanced recommendations, taste analysis, DJ decision-making',
+    role: 'Deep reasoning — advanced recommendations, taste analysis, playlist planning',
     capabilities: ['reasoning', 'generation'], latency_class: 'slow', quality_class: 'premium',
     cost_class: 'high', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-super-120b-a12b', 'mistral-nemotron'],
@@ -119,7 +119,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
   },
   'nemotron-3.5-lightning-30b-a3b': {
     id: 'nvidia/nemotron-3.5-lightning-30b-a3b', envKey: 'VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B', display_name: 'VinaX NVD NMTRN 3.5 LTNG 30B', provider: 'nvidia',
-    role: 'High-speed reasoning — real-time AI DJ, next-song ranking, queue decisions, balanced chat',
+    role: 'High-speed reasoning — balanced chat and playlist planning',
     capabilities: ['reasoning', 'generation', 'ranking'], latency_class: 'realtime', quality_class: 'high',
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b', 'mistral-nemotron'],

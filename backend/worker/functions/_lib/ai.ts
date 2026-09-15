@@ -26,8 +26,8 @@
  * lightning key, which is the one engine proven at realtime JSON):
  *
  * VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B
- *                                dj      AI DJ, Aura Mix, Smart Radio, smart
- *                                        queue — and chat, the balanced seat
+ *                                dj      creative chat and playlist generation
+ *                                        (legacy lane identifier)
  * VINAX_OAI_GPT_OSS_20B          fast    fast chat, quick tasks, instant
  *                                        answers
  * VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B

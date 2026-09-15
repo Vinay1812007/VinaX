@@ -148,7 +148,7 @@ export function SoundSettings() {
           <Toggle on={s.normalize} onChange={s.setNormalize} label="Loudness normalisation" disabled={!on} />
         </Row>
 
-        <Row label="Status" note={status.bypassed && on ? 'This track is streamed in a way the effects chain can’t read; it plays untouched. The next song will try again.' : undefined}>
+        <Row label="Status" note={status.bypassed && on ? 'This track is streamed in a way the effects chain can’t read; it plays untouched.' : undefined}>
           <span
             role="status"
             aria-live="polite"

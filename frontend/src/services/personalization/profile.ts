@@ -46,7 +46,7 @@ export interface TasteProfile {
 /**
  * Package C3 — the taste dials. Each is a 0..1 position where 0.5 is neutral
  * ("let my listening decide"). They bias the on-device scorer directly and are
- * summarized as one-liners for the AI DJ / Home / chat. Never uploaded.
+ * summarized as one-liners for catalog recommendations and chat. Never uploaded.
  */
 export interface TasteSliders {
   /** 0 = stick to familiar favourites · 1 = adventurous, discovery-first. */

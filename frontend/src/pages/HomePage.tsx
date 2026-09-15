@@ -1,11 +1,10 @@
 import { useDiscoveryStore } from '@/store/discoveryStore';
 import { invalidateRecommendationCache } from '@/services/recommendation/engine';
-import { recordServed, songKey } from '@/services/recommendation/flow';
-import { HomeStudio, ListeningGuide } from '@/features/home/HomeStudio';
+import { recordServed, songKey } from '@/services/recommendation/songIdentity';
+import { ListeningGuide } from '@/features/home/ListeningGuide';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { HOME_BLOCK_KEYS, orderHomeBlocks } from '@/constants/homeBlocks';
-import { useClientConfig, useServerHomeConfig } from '@/features/home/useAppConfig';
+import { useClientConfig } from '@/features/home/useAppConfig';
 import { PromoBanner } from '@/components/PromoBanner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
@@ -45,7 +44,6 @@ import {
 import { useYourArtists } from '@/features/home/useYourArtists';
 import { useDailyMix } from '@/features/home/useDailyMix';
 import { useWeeklyMix } from '@/features/weekly/useWeeklyMix';
-import { useAiHome } from '@/features/home/useAiHome';
 import {
   useMostListened,
   useOnRepeat,
@@ -154,7 +152,6 @@ export default function HomePage() {
   const trendingNow = useTrendingNow();
   const newReleases = useNewReleases();
   const popular = usePopular();
-  const aiHome = useAiHome();
   const favorites = useLibraryStore((s) => s.favorites);
   const timeShelf = useTimeOfDayShelf();
   const mixes = useRecommendations();
@@ -166,11 +163,6 @@ export default function HomePage() {
   const secondLang = pinned[1] && pinned[1] !== primaryLang ? pinned[1] : null;
   const trendingSecond = useTrendingForLanguage(secondLang ?? primaryLang);
   const decadeRewind = useMoodShelf(`90s ${primaryLang} hits`, primaryLang, 12);
-  // Home builder (4.16.0): hidden/ordered blocks from Settings → Home layout.
-  const hiddenHome = useSettingsStore((s) => s.hiddenHome);
-  const homeOrder = useSettingsStore((s) => s.homeOrder);
-  // Admin-published server defaults (Home Screen Management).
-  const { data: serverHomeCfg } = useServerHomeConfig();
   const playQueueFeed = usePlayerStore((s) => s.playQueue);
   const feed = useUnlimitedFeed();
   const feedSongs = flattenSongPages(feed.data?.pages);
@@ -287,7 +279,6 @@ export default function HomePage() {
       // matched nothing, so those two shelves never refreshed on pull.
       qc.invalidateQueries({ queryKey: ['vinax-daily'] }),
       qc.invalidateQueries({ queryKey: ['weekly-mix'] }),
-      qc.invalidateQueries({ queryKey: ['ai-home'] }),
       qc.invalidateQueries({ queryKey: ['unlimited-feed'] }),
       qc.invalidateQueries({ queryKey: ['mixes'] }),
       // New shelves — added when HomePage was expanded (Group A/B/C/D/E/F).
@@ -416,13 +407,6 @@ export default function HomePage() {
         />
       ) : null}
 
-      {/* AI-designed shelves from taste + time-of-day */}
-      {aiHome.isLoading ? (
-        <ShelfSkeleton />
-      ) : (
-        aiHome.data?.map((shelf) => <SongShelf key={shelf.title} title={shelf.title} songs={dedupe(shelf.songs)} />)
-      )}
-
       {/* 9. Recommendations mixes (existing) */}
       {mixes.isLoading && <ShelfSkeleton />}
       {mixes.data?.slice(0, 2).map((mix) => (
@@ -544,8 +528,7 @@ export default function HomePage() {
     </>
   );
 
-  // ---- Home builder (4.16.0): every big block below is orderable/hideable
-  // from Settings -> Home layout. Thunks (not pre-built elements) so the
+  // Home sections use deferred rendering. Thunks (not pre-built elements) so the
   // cross-shelf dedupe still runs in DISPLAY order. The hero, language rail
   // and quick-jump strip above stay fixed - they are the app's identity.
   const homeBlocks: Record<string, () => ReactNode> = {
@@ -799,19 +782,14 @@ export default function HomePage() {
     ),
   };
   // Default order honors the home-shelf-order experiment (personal <-> discovery).
-  const experimentOrder =
+  const HOME_BLOCK_KEYS = [
+    'quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods',
+    'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed',
+  ];
+  const visibleHome =
     shelfOrder === 'discovery-first'
       ? HOME_BLOCK_KEYS.map((k) => (k === 'personal' ? 'discovery' : k === 'discovery' ? 'personal' : k))
       : HOME_BLOCK_KEYS;
-  // Admin-published defaults (Home Screen Management): the server order is
-  // the default when the listener hasn't customized theirs; server-disabled
-  // blocks are hidden for everyone (union with the listener's own hidden).
-  const serverBlocks = serverHomeCfg?.blocks;
-  const serverOrder = serverBlocks?.length ? orderHomeBlocks(serverBlocks.map((b) => b.id), experimentOrder) : experimentOrder;
-  const serverHidden = serverBlocks?.filter((b) => b.enabled === false).map((b) => b.id) ?? [];
-  const visibleHome = orderHomeBlocks(homeOrder, serverOrder).filter(
-    (k) => !hiddenHome.includes(k) && !serverHidden.includes(k),
-  );
   // Progressive mount v2 (4.18.3, PSI TBT pass): v1 (4.17.0) mounted the
   // first two blocks immediately and ALL remaining ~10 blocks in one idle
   // callback — a single giant long task (hundreds of DOM nodes + effects)
@@ -908,7 +886,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Aura Mix hero — the AI DJ entry point */}
+      {/* Aura Mix hero — plays the displayed mix */}
       <section className="vx-hero relative overflow-hidden rounded-3xl mb-6 border border-glass bg-ink-850">
         {/* v5.18.0 refresh — accent-led wash + a fan of the mix's own artwork */}
         {heroSongs.length < 3 && <div className="vx-hero-record" aria-hidden="true"><div><span>V</span><small>VINAX / LISTENING SPACE</small></div></div>}
@@ -1010,7 +988,6 @@ export default function HomePage() {
         </section>
       )}
 
-      <HomeStudio availableOrder={serverOrder.filter((key) => !serverHidden.includes(key))} />
       <ListeningGuide />
 
       {/* Fusion layer (4.12.0) — language rail + tile-grid

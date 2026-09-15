@@ -18,7 +18,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       { type: 'new', text: 'VinaX brings a refreshed listening workspace, mix artwork, navigation and a focused VinaX AI conversation surface.' },
       { type: 'new', text: 'Refresh discovery changes your recommendation seed and daily mix without clearing your listening history or favourites.' },
       { type: 'improved', text: 'Waveform loading, card motion and supported scroll reveals follow your reduced-motion preference. Light and AMOLED themes remain available.' },
-      { type: 'fixed', text: 'Next-song and fallback queues now share canonical duplicate checks, respect language and blocked-song rules, and search wider catalog pools.' },
+      { type: 'fixed', text: 'Removed AI DJ, automatic next-song recommendations and Home builder controls. Albums and playlists now keep their selected queue; playback stops when it ends unless repeat is on.' },
       { type: 'fixed', text: 'AI playlist generations exclude recent picks and alternate releases, with faster catalog resolution. Regenerate retries the correct chat question with a fresh approach.' },
       { type: 'improved', text: 'The owner console gains a refreshed visual system, animated panel loading, a saved compact layout preference, and shortcuts to AI and discovery quality reports.' },
     ],

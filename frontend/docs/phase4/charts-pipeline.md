@@ -4,7 +4,7 @@
 per language), re-ranked client-side toward the listener's pinned languages.
 
 **Refresh cadence.** TanStack Query staleTime governs in-session freshness (minutes);
-each visit re-queries; the Home builder AI re-themes sections per visit via freshnessSeed.
+each visit re-queries the catalog shelves; Home uses the app's fixed catalog layout.
 Crawler-facing freshness: sitemap children regenerate daily (edge cache 24h) and the
 sitemap index advertises today's lastmod on every fetch.
 

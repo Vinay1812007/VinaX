@@ -5,7 +5,7 @@
  *
  * Why: 2026-08-18 total catalog outage — saavn.sumit.co started answering
  * 429 (rate-limited) and nepotuneapi.vercel.app 402 (Vercel bill), taking
- * down shelves, search, next-song and the AI DJ at once. Every community
+ * down shelves, search and playlist resolution at once. Every community
  * mirror is somebody else's weekend project; this one scales with the site
  * and cannot be turned off from outside. External mirrors remain in the
  * client's fallback ladder BEHIND this base.

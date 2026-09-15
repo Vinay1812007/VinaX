@@ -1,11 +1,9 @@
 /**
  * Shared listener-taste handling for the conversational AI endpoints.
- * The AI DJ and Home builder receive rich context already; this brings the
- * SAME conditions (language rule, vibe/mood match, taste anchoring, variety,
- * era blend) to VinaX AI, the settings assistant and AI Playlist.
+ * Applies language, mood, taste and variety constraints to chat and playlists.
  */
 
-export const MUSIC_CONDUCT = `MUSIC RECOMMENDATION CONDUCT — any time the listener wants songs, playlists, artists or anything musical, hold to the same professional standards the app's DJ holds:
+export const MUSIC_CONDUCT = `MUSIC RECOMMENDATION CONDUCT — any time the listener wants songs, playlists, artists or anything musical, follow these music selection standards:
 1. LANGUAGE FIRST (the rule that outranks the rest): a request that names or implies a language keeps nearly every pick in that language; otherwise stay inside preferredLanguages, and avoidLanguages are never picked.
 2. Meet the asked-for vibe exactly — sad stays sad, party stays party, slow stays slow, romantic stays romantic — and order the picks so energy moves deliberately: settle, build, one peak, ease. No sawtoothing.
 3. Anchor on their taste — topSongs, topArtists and likedSongs first — then reach into adjacent discovery: familiar with a fresh edge.

@@ -5,8 +5,6 @@ import { searchSongs } from '@/services/api';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { resolveTheme } from '@/utils/theme';
-import { TUNE_OPTIONS } from '@/services/recommendation/tune';
-import { toast } from '@/store/toastStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { NAV_GROUPS } from '@/constants/nav';
@@ -95,23 +93,6 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
           const s = useSettingsStore.getState();
           const resolved = resolveTheme(s.theme, window.matchMedia('(prefers-color-scheme: dark)').matches);
           s.setTheme(resolved === 'light' ? 'dark' : 'light');
-        },
-      },
-      {
-        id: 'a-surprise',
-        label: 'Surprise me',
-        hint: 'AI DJ',
-        kind: 'action',
-        run: () => {
-          const st = p();
-          if (!st.queue.length) {
-            toast('Play something first — then I can surprise you');
-            return;
-          }
-          const pool = TUNE_OPTIONS.filter((o) => o.id !== 'surprise');
-          const pick = pool[Math.floor(Math.random() * pool.length)];
-          st.tuneQueue(pick.id);
-          toast('Surprise coming up ✦');
         },
       },
     ];

@@ -46,7 +46,7 @@ Pages serves static assets. Worker routes own API, image/APK proxy and configure
 1. Run the frontend and backend lint, typecheck and test commands in the root README.
 2. Build the frontend, check its bundle budget and run the browser suite against `dist/`.
 3. Confirm CI for the exact commit, then inspect Pages and Worker deployment results.
-4. Check live `/api/health`, Home, search, playback, next-song, lyrics and `/admin/`. Test a new browser profile and a returning listener, desktop and mobile, light and dark themes.
+4. Check live `/api/health`, Home, search, album/playlist playback, queue completion, lyrics and `/admin/`. Test a new browser profile and a returning listener, desktop and mobile, light and dark themes.
 5. Confirm the displayed app version and check the admin operational panels. Unavailable data does not count as a healthy signal.
 6. For Android, verify native playback/downloads and release signing before creating a `v*` tag. Tagging triggers the signed APK workflow.
 

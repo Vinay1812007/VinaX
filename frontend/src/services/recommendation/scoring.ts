@@ -63,7 +63,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
   score += artW;
 
   // Roadmap O.3 — co-play similarity: candidates by artists this listener
-  // plays in the same sitting as the SEED's artists (radio/auto-queue set
+  // plays in the same sitting as the seed's artists (catalog recommendation set
   // ctx.coPlaySeed). Entirely on-device; index memoized per history state.
   if (ctx.coPlaySeed && ctx.history.length >= 8) {
     const affinity = coPlayAffinity(coPlayIndexFor(ctx.history), ctx.coPlaySeed, song);

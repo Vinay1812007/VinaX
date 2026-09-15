@@ -16,10 +16,8 @@ import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
 import { useCastStore, castInterceptPlayPause, castInterceptSeek, castMime } from '@/services/cast';
 import { bestImage } from '@/utils/images';
-import { dedupeSongs, isValidSong, normTitle, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
+import { isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
 import { kidModeOn, stripExplicit } from '@/services/kidMode';
-import { tuneScoreAdjust, type TuneIntent } from '@/services/recommendation/tune';
-import { inferMood } from '@/services/recommendation/mood';
 
 export type RepeatMode = 'off' | 'one' | 'all';
 
@@ -44,22 +42,16 @@ export interface PlayerState {
   loopB: number | null;
   currentAccent: string | null;
   streamKbps: number | null;
-  /** True while following a Listen Together host — suppresses AI auto-extend. */
+  /** True while following a Listen Together host. */
   followMode: boolean;
-  /** Active 'tune this queue' intent, reshaping the AI continuation. */
-  tuneIntent: TuneIntent | null;
-  /** Who built the latest continuation: the AI curator or instant local picks. */
-  queueSource: 'ai' | 'instant';
 
   initEngine(): void;
   setSleepSongs(n: number): void;
   setLoopPoint(which: 'A' | 'B'): void;
   clearLoop(): void;
   playQueue(songs: Song[], startIndex?: number): void;
-  tuneQueue(intent: TuneIntent): void;
   playSong(song: Song): void;
   playAt(index: number): void;
-  startRadio(song: Song): void;
   enqueue(song: Song): void;
   enqueueNext(song: Song): void;
   enqueueAll(songs: Song[]): void;
@@ -131,7 +123,6 @@ function saveResume(id: string, sec: number, duration: number): void {
   } catch { /* ignore */ }
 }
 let crossfadeArmed = false;
-let appendPromise: Promise<boolean> | null = null;
 let sleepTimer: number | null = null;
 /** Song ids we've already tried to refetch fresh URLs for (avoid loops). */
 const refetchedSongs = new Set<string>();
@@ -140,11 +131,6 @@ let lastUnavailableToastAt = 0;
 
 /** Exactly what persist() writes to localStorage (see partialize). */
 type PersistedPlayerState = Pick<PlayerState, 'queue' | 'index' | 'repeat' | 'shuffle' | 'volume' | 'muted' | 'rate'>;
-
-// Songs already offered by "Tune this queue" presses this session — skipped
-// on later presses so every tap deals fresh cards instead of the same
-// deterministic top picks. Resets when the pool runs thin.
-const tuneSuggested = new Set<string>();
 
 export const usePlayerStore = create<PlayerState>()(
   persist(
@@ -221,16 +207,6 @@ export const usePlayerStore = create<PlayerState>()(
           }, 1200);
         }
         preloadUpcoming();
-
-        // Endless, automatic continuation: within 2 tracks of the end, extend
-        // the queue with similar picks (AI DJ when configured, else local).
-        // Playing a single song becomes an instant AI-built queue.
-        if (autoplay && useSettingsStore.getState().autoqueueSimilar) {
-          const cur = get();
-          if (cur.index >= cur.queue.length - 2) {
-            void extendQueue(song).catch(() => false);
-          }
-        }
       }
 
       function maybeRecordSkip(manual: boolean): void {
@@ -240,134 +216,6 @@ export const usePlayerStore = create<PlayerState>()(
           recordSkip(song, currentTime);
           void import('@/services/analytics/telemetry').then((m) => m.trackSkip(song));
         }
-      }
-
-      async function appendSimilar(seed: Song): Promise<boolean> {
-        const [{ similarToSong }, { loadProfile }, { useLibraryStore, isSongBlocked }, { resolvedRegion }, { freshSongs }, { recordServed, servedKeySet, songKey }] =
-          await Promise.all([
-            import('@/services/recommendation/engine'),
-            import('@/services/personalization/storage'),
-            import('./libraryStore'),
-            import('./settingsStore'),
-            import('@/services/recommendation/freshness'),
-            import('@/services/recommendation/flow'),
-          ]);
-        const settings = useSettingsStore.getState();
-        const profile = loadProfile();
-        const queueIds = get().queue.map((s) => s.id);
-        const ctx = {
-          profile,
-          salt: Math.floor(Math.random() * 1_000_000),
-          hour: new Date().getHours(),
-          region: resolvedRegion(),
-          pinnedLanguages: settings.pinnedLanguages,
-          mutedLanguages: settings.mutedLanguages,
-          intensity: settings.recommendationIntensity,
-          favorites: useLibraryStore.getState().favorites,
-          history: useHistoryStore.getState().entries,
-          tuneIntent: get().tuneIntent,
-          sessionMood: inferMood(seed),
-          coPlaySeed: seed,
-        };
-        // Anti-repeat: never re-queue what's already queued OR played in the
-        // last ~60 tracks (profile.recentSongIds).
-        const exclude = new Set<string>([...queueIds, ...profile.recentSongIds]);
-        let scored = await similarToSong(seed.id, ctx, exclude);
-        const existing = new Set(queueIds);
-        const existingTitles = new Set(get().queue.map(normTitle).filter((t) => t.length > 0));
-        // Enforce language: the continuation must match the playing song's
-        // language (or the single pinned language). Keeps the queue on-language
-        // even if the AI or upstream search drifts. Relaxes only if nothing
-        // on-language is available, so playback never stalls.
-        const seedLang = seed.language && seed.language !== 'unknown' ? seed.language : null;
-        const targetLang = seedLang ?? (settings.pinnedLanguages.length === 1 ? settings.pinnedLanguages[0] : null);
-        // Apply the active 'tune this queue' intent deterministically (era /
-        // language nudges) on top of the AI ordering.
-        const tune = ctx.tuneIntent ?? null;
-        if (tune) {
-          // Every press must feel like a new hand: random jitter rotates the
-          // mid-field, and songs offered by earlier presses are skipped until
-          // the pool runs thin — then the memory clears and rotation restarts.
-          for (const sc of scored) sc.score += tuneScoreAdjust(sc.candidate.song, tune, seedLang) + Math.random() * 6;
-          scored.sort((a, b) => b.score - a.score);
-          const unseen = scored.filter((sc) => !tuneSuggested.has(sc.candidate.song.id));
-          if (unseen.length >= 6) scored = unseen;
-          else tuneSuggested.clear();
-        }
-        const effectiveTargetLang = tune === 'different-language' ? null : targetLang;
-        let pool = scored.map((s) => s.candidate.song).filter((s) => !existing.has(s.id) && !existingTitles.has(normTitle(s)));
-        if (effectiveTargetLang) {
-          // HARD on-language gate: never queue a different language than the
-          // playing song's (or the single pinned) language.
-          pool = pool.filter((s) => s.language === effectiveTargetLang);
-        } else if (settings.pinnedLanguages.length > 1) {
-          const pinnedSet = new Set(settings.pinnedLanguages);
-          const onPinned = pool.filter((s) => s.language != null && pinnedSet.has(s.language));
-          if (onPinned.length) pool = onPinned;
-        }
-        // v5.12.0 — "Never play" artists and hidden songs are dropped from
-        // every continuation, radio and autoplay, not only the home feeds.
-        const lib = useLibraryStore.getState();
-        pool = dedupeSongs(stripExplicit(pool)).filter((s) => !isSongBlocked(s, lib));
-        const excludedKeys = new Set([...get().queue.map(songKey), ...ctx.history.slice(0, 60).map((h) => songKey(h.song))]);
-        const fresh = freshSongs(pool, { excludeKeys: excludedKeys, muted: settings.mutedLanguages }).slice(0, 6);
-        if (tune) for (const s of fresh) tuneSuggested.add(s.id);
-        // Expand the catalog when the recommender is short. Never bypass
-        // identity, language or blocked-song rules to pad an exhausted queue.
-        if (fresh.length < 6) {
-          try {
-            const [{ searchSongsPage }, { trendingSeed }] = await Promise.all([
-              import('@/services/api'),
-              import('@/constants/seeds'),
-            ]);
-            const mutedSet = new Set(settings.mutedLanguages);
-            const fillLang =
-              tune === 'different-language'
-                ? (settings.pinnedLanguages.find((l) => l !== seedLang) ?? null)
-                : (effectiveTargetLang ?? seedLang ?? settings.pinnedLanguages[0] ?? null);
-            const have = new Set<string>([...existing, ...profile.recentSongIds, ...fresh.map((s) => s.id)]);
-            const salt = Math.floor(Math.random() * 1_000_000);
-            const query = (p: number): string => trendingSeed(fillLang ?? 'hindi', salt + p);
-            // Pass 1: prefer the fill language.
-            for (const page of [1 + (salt % 4), 1, 2, 3]) {
-              if (fresh.length >= 6) break;
-              const extra = await searchSongsPage(query(page), page, 20);
-              const admitted = freshSongs(extra, {
-                excludeIds: have,
-                excludeKeys: new Set([...excludedKeys, ...servedKeySet(), ...fresh.map(songKey)]),
-                language: fillLang,
-                muted: [...mutedSet],
-                blocked: (s) => isSongBlocked(s, lib),
-              });
-              for (const s of admitted.slice(0, 6 - fresh.length)) {
-                fresh.push(s);
-                have.add(s.id);
-              }
-            }
-          } catch {
-            /* best-effort top-up */
-          }
-        }
-        const before = get().queue.length;
-        const { lastQueueSource } = await import('@/services/recommendation/engine');
-        const combined = dedupeSongs([...get().queue, ...stripExplicit(fresh)]);
-        if (combined.length > before) {
-          recordServed(combined.slice(before).map(songKey));
-          set({ queue: combined, queueSource: lastQueueSource() });
-        }
-        return combined.length > before;
-      }
-
-      /** Coalesce concurrent queue-extend requests into a single in-flight call
-          so the proactive (near-end) and end-of-queue paths never double-append. */
-      function extendQueue(seed: Song, force = false): Promise<boolean> {
-        // While following a host, never build our own queue — the host drives.
-        if (get().followMode) return Promise.resolve(false);
-        if (!force && appendPromise) return appendPromise;
-        appendPromise = appendSimilar(seed).finally(() => {
-          appendPromise = null;
-        });
-        return appendPromise;
       }
 
       function skipUnavailable(): void {
@@ -416,6 +264,11 @@ export const usePlayerStore = create<PlayerState>()(
         const unplayed = queue
           .map((s, i) => ({ s, i }))
           .filter(({ s, i }) => i !== index && !sessionPlayed.has(s.id));
+        if (!unplayed.length && get().repeat !== 'all') return queue.length;
+        if (!unplayed.length) {
+          sessionPlayed.clear();
+          sessionPlayed.add(queue[index].id);
+        }
         const pool = unplayed.length ? unplayed : queue.map((s, i) => ({ s, i })).filter(({ i }) => i !== index);
         return pool[Math.floor(Math.random() * pool.length)]?.i ?? index;
       }
@@ -464,8 +317,6 @@ export const usePlayerStore = create<PlayerState>()(
         currentAccent: null,
         streamKbps: null,
         followMode: false,
-        tuneIntent: null,
-        queueSource: 'ai',
 
         initEngine: () => {
           if (engineInitialized) return;
@@ -576,18 +427,19 @@ export const usePlayerStore = create<PlayerState>()(
 
         playQueue: (songs, startIndex = 0) => {
           if (!songs.length) return;
-          // AI DJ drives the queue on EVERY play: start the tapped song and let
-          // the AI build the continuation, instead of following the source list.
-          const seed = songs[Math.min(Math.max(0, startIndex), songs.length - 1)];
+          const selectedIndex = Math.min(Math.max(0, startIndex), songs.length - 1);
+          const seed = songs[selectedIndex];
           // C2 — kid mode: an explicit-flagged song never starts playback.
           if (seed.explicit && kidModeOn()) {
             toast('Kid mode is on — that song is marked explicit');
             return;
           }
           resetSkipGuard(); // manual play — the user vouches for the sources
-          set({ queue: [seed], index: 0, currentTime: 0, loopA: null, loopB: null });
+          const queue = stripExplicit(songs);
+          const index = queue.indexOf(seed);
+          sessionPlayed.clear();
+          set({ queue: [...queue], index, currentTime: 0, loopA: null, loopB: null });
           startTrack(seed, true);
-          void extendQueue(seed).catch(() => false);
         },
 
         playSong: (song) => get().playQueue([song], 0),
@@ -599,15 +451,6 @@ export const usePlayerStore = create<PlayerState>()(
           else set({ loopA: Math.max(0, currentTime - 10), loopB: currentTime });
         },
         clearLoop: () => set({ loopA: null, loopB: null }),
-        tuneQueue: (intent) => {
-          const { queue, index } = get();
-          const current = queue[index];
-          if (!current) return;
-          // Keep what's played + the current track; rebuild the rest with the intent.
-          set({ tuneIntent: intent, queue: queue.slice(0, index + 1) });
-          void extendQueue(current, true).catch(() => false);
-        },
-
         playAt: (index) => {
           const { queue } = get();
           if (index < 0 || index >= queue.length) return;
@@ -615,20 +458,6 @@ export const usePlayerStore = create<PlayerState>()(
           maybeRecordSkip(true);
           set({ index, currentTime: 0, loopA: null, loopB: null });
           startTrack(queue[index], true);
-        },
-
-        startRadio: (song) => {
-          if (song.explicit && kidModeOn()) {
-            toast('Kid mode is on — that song is marked explicit');
-            return;
-          }
-          resetSkipGuard(); // manual play
-          set({ queue: [song], index: 0, currentTime: 0, shuffle: false });
-          startTrack(song, true);
-          toast(`Radio started from “${song.title}”`);
-          void appendSimilar(song).catch(() => {
-            toast("Could not load similar tracks");
-          });
         },
 
         enqueue: (song) => {
@@ -770,19 +599,6 @@ export const usePlayerStore = create<PlayerState>()(
           maybeRecordSkip(manual);
           let nextIndex: number;
           if (shuffle && queue.length > 1) {
-            // Shuffled through everything → pull in fresh DJ picks before
-            // re-shuffling, so shuffle never loops the same handful of songs.
-            const exhausted = !queue.some((s, i) => i !== index && !sessionPlayed.has(s.id));
-            if (exhausted && !manual && useSettingsStore.getState().autoqueueSimilar) {
-              void extendQueue(queue[index])
-                .catch(() => false)
-                .then(() => {
-                  const idx = pickShuffleIndex();
-                  set({ index: idx, currentTime: 0 });
-                  startTrack(get().queue[idx], true);
-                });
-              return;
-            }
             nextIndex = pickShuffleIndex();
           } else {
             nextIndex = index + 1;
@@ -790,19 +606,6 @@ export const usePlayerStore = create<PlayerState>()(
           if (nextIndex >= queue.length) {
             if (repeat === 'all') {
               nextIndex = 0;
-            } else if (useSettingsStore.getState().autoqueueSimilar && !manual) {
-              const current = queue[index];
-              void extendQueue(current).catch(() => {
-                toast("Could not load similar tracks");
-                return false;
-              }).then((added) => {
-                if (added) get().next(false);
-                else {
-                  set({ isPlaying: false });
-                  audioEngine.pause();
-                }
-              });
-              return;
             } else {
               set({ isPlaying: false });
               audioEngine.pause();

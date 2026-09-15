@@ -7,7 +7,7 @@
 | Moods & mixes | ✅ pre-existing | mood stations, weekly mix, made-for-you, freshness seed per visit |
 | Charts pipeline | ✅ **documented** | `charts-pipeline.md` |
 | Tunability | ✅ pre-existing (+v16.79 rotation fix) | tune chips, language pinning/muting, intensity |
-| **Transparency** | ✅ **shipped this phase** | current track shows the DJ's reason in the player; Up Next chip honestly labels "AI DJ" vs "Instant picks" when the 12s AI deadline falls back |
+| **Transparency** | ✅ **shipped this phase** | current track and queue controls clearly show playback state and source status |
 | Search | ✅ pre-existing | typo-tolerant, language-weighted, infinite |
 
 **Privacy guardrail check:** no new off-device signals were introduced; labels and reasons

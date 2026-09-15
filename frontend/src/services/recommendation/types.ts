@@ -1,5 +1,4 @@
 import type { HistoryEntry, RegionInfo, Song } from '@/types';
-import type { TuneIntent } from './tune';
 import type { Mood } from './mood';
 import type { FestivalMusic } from './festival';
 import type { TasteProfile } from '@/services/personalization/profile';
@@ -85,8 +84,6 @@ export interface RecommendationContext {
   history: HistoryEntry[];
   /** Per-session rotation salt — varies seeds/order so recs feel fresh each time. */
   salt: number;
-  /** Active 'tune this queue' intent, if the listener requested one. */
-  tuneIntent?: TuneIntent | null;
   /** Inferred mood of the current session/seed, for mood continuity. */
   sessionMood?: Mood | null;
   /** Roadmap O.3 — the seed song for co-play similarity: candidates by
