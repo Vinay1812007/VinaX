@@ -5,12 +5,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const chatMock = vi.fn();
+const gatherMock = vi.fn(async (): Promise<string[]> => []);
 vi.mock('../_lib/ai', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../_lib/ai')>();
-  return { ...actual, chat: (...args: unknown[]) => chatMock(...args), logAiEvent: () => Promise.resolve() };
+  return { ...actual, chat: (...args: unknown[]) => chatMock(...args), gather: (...args: unknown[]) => gatherMock(...(args as [])), logAiEvent: () => Promise.resolve() };
 });
 
-import { canonKey, onRequestPost, parsePicks } from './dj';
+import { canonKey, onRequestPost, parseCandidates, parsePicks } from './dj';
 
 const pool = [
   { id: 'p1', title: 'Samajavaragamana', artist: 'Sid Sriram', language: 'telugu' },
@@ -27,7 +28,7 @@ const post = async (body: unknown) => {
   return { status: res.status, json: (await res.json()) as Record<string, unknown> };
 };
 
-beforeEach(() => chatMock.mockReset());
+beforeEach(() => { chatMock.mockReset(); gatherMock.mockReset(); gatherMock.mockResolvedValue([]); });
 
 describe('parsePicks', () => {
   it('keeps only pool songs, in model order, without repeats, with clipped notes', () => {
@@ -88,5 +89,52 @@ describe('POST /api/dj', () => {
     expect((await post({ context: { seedSong: 'x' }, pool })).status).toBe(503);
     chatMock.mockResolvedValue({ content: '{"songs":[{"title":"Nope","artist":"Nobody"}]}', model: 'm', status: 200, error: null });
     expect((await post({ context: { seedSong: 'x' }, pool })).status).toBe(500);
+  });
+});
+
+describe('v6.5.0 — discoveries (off-pool proposals)', () => {
+  const answer = JSON.stringify({
+    intro: 'Fresh round',
+    songs: [
+      { songId: 'p2', title: 'Butta Bomma', artist: 'Armaan Malik', reason: 'opener', fromPool: true },
+      { songId: '', title: 'Ninnu Kori', artist: 'Sid Sriram', reason: 'new voice', segue: 'Something new', confidence: 0.6, fromPool: false },
+      { title: 'Samajavaragamana', artist: 'Sid Sriram', reason: 'back to the pool' },
+      { title: 'Second Discovery', artist: 'Someone' },
+      { title: 'Third Discovery', artist: 'Someone Else' },
+      { title: 'Recently Heard Song', artist: 'X' },
+    ],
+  });
+
+  it('parsePicks keeps proposals only when allowed, capped, flagged and never one the listener just heard', () => {
+    const strict = parsePicks(answer, pool, 8);
+    expect(strict.songs.map((s) => s.title)).toEqual(['Butta Bomma', 'Samajavaragamana']);
+    expect(strict.songs.every((s) => s.fromPool)).toBe(true);
+    const open = parsePicks(answer, pool, 8, 2, 'recently heard song — x');
+    expect(open.songs.map((s) => [s.title, s.fromPool])).toEqual([['Butta Bomma', true], ['Ninnu Kori', false], ['Samajavaragamana', true], ['Second Discovery', false]]);
+    expect(open.songs[1]).toMatchObject({ songId: null, reason: 'new voice', segue: 'Something new', confidence: 0.6 });
+  });
+
+  it('parseCandidates reads a gather answer and drops junk', () => {
+    expect(parseCandidates(JSON.stringify({ candidates: [{ title: 'A', artist: 'B' }, { title: '', artist: 'C' }, 'x', { title: 'D' }] }))).toEqual([{ title: 'A', artist: 'B' }]);
+    expect(parseCandidates('not json')).toEqual([]);
+  });
+
+  it('the route returns flagged proposals only for discover requests and gathers candidates for a thin pool', async () => {
+    chatMock.mockResolvedValue({ content: answer, model: 'm', keyRole: 'dj' });
+    gatherMock.mockResolvedValue([JSON.stringify({ candidates: [{ title: 'Gathered One', artist: 'G' }, { title: 'Butta Bomma', artist: 'Armaan Malik' }] })]);
+    const plain = await post({ context: { seedSong: 'x' }, pool, count: 6 });
+    expect(plain.status).toBe(200);
+    expect((plain.json.songs as Array<{ fromPool: boolean }>).every((s) => s.fromPool)).toBe(true);
+    expect(gatherMock).not.toHaveBeenCalled();
+    const open = await post({ context: { seedSong: 'x', avoidSongs: ['Recently Heard Song — X'] }, pool, count: 6, discover: true, maxDiscover: 2 });
+    expect(open.status).toBe(200);
+    const songs = open.json.songs as Array<{ title: string; fromPool: boolean; songId: string | null }>;
+    expect(songs.filter((s) => !s.fromPool).map((s) => s.title)).toEqual(['Ninnu Kori', 'Second Discovery']);
+    expect(songs.find((s) => !s.fromPool)?.songId).toBeNull();
+    expect(gatherMock).toHaveBeenCalledOnce();
+    const prompt = (chatMock.mock.calls[1] as unknown as [unknown, Array<{ content: string }>])[1][1].content;
+    expect(prompt).toContain('DISCOVERIES ALLOWED');
+    expect(prompt).toContain('Gathered One');
+    expect(prompt).not.toContain('SUPPLEMENTARY CANDIDATES from a music expert — real songs, use them as discoveries only when they fit (JSON):\n[{"title":"Butta Bomma"');
   });
 });

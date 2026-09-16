@@ -38,11 +38,12 @@ for (const size of [{ width: 1440, height: 1000, theme: 'dark' }, { width: 390, 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     await page.goto('/ai-playlist');
+    const generated = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/playlist');
     await page.locator('.vx-prompt-grid button').first().click();
+    // v6.5.0 — an example prompt fills the box AND starts building at once.
     await expect(page.locator('#playlist-idea')).toHaveValue(/Telugu/);
-    // Selecting a suggestion should let listeners edit before generating.
     await expect(page.locator('#playlist-idea')).toHaveValue(/focused afternoon/);
-    expect(await page.locator('.vx-playlist-studio').innerText()).not.toContain('Building your playlist');
+    await generated;
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/playlist-studio-${size.width}.png` });
     expect(errors).toEqual([]);

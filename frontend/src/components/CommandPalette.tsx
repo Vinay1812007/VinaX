@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Song } from '@/types';
 import { searchSongs } from '@/services/api';
 import { usePlayerStore } from '@/store/playerStore';
+import { toast } from '@/store/toastStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { resolveTheme } from '@/utils/theme';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -84,6 +85,21 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       { id: 'a-shuffle', label: 'Toggle shuffle', hint: 'Player', kind: 'action', run: () => p().toggleShuffle() },
       { id: 'a-repeat', label: 'Cycle repeat', hint: 'Player', kind: 'action', run: () => p().cycleRepeat() },
       { id: 'a-mute', label: 'Mute / Unmute', hint: 'Player', kind: 'action', run: () => p().toggleMute() },
+      {
+        id: 'a-surprise',
+        label: 'Surprise me',
+        hint: 'AI DJ · retune the queue',
+        kind: 'action',
+        run: () => {
+          const st = p();
+          if (!st.queue.length) {
+            toast('Play something first — then I can surprise you');
+            return;
+          }
+          st.tuneQueue('surprise');
+          toast('Surprise coming up ✦');
+        },
+      },
       {
         id: 'a-theme',
         label: 'Toggle theme',

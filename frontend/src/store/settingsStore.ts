@@ -49,6 +49,9 @@ export interface SettingsState {
   aiDj: boolean;
   /** v6.2.0 — "Designed for you": AI-designed shelves on Home. */
   aiHomeShelves: boolean;
+  /** v6.5.0 — the DJ drives every play: tapping a song starts it and the DJ
+   *  builds the continuation, instead of following the tapped list. */
+  djTakeover: boolean;
   /** Package C2 — Kid mode: hides explicit-flagged songs and switches to a
    *  separate taste profile. Favorites/downloads/settings stay shared. */
   kidMode: boolean;
@@ -103,6 +106,7 @@ export interface SettingsState {
   setExploreMode(v: boolean): void;
   setAiDj(v: boolean): void;
   setAiHomeShelves(v: boolean): void;
+  setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
   setAllowRegionInference(v: boolean): void;
   setManualCountry(c: string | null): void;
@@ -163,6 +167,7 @@ const defaults = {
   exploreMode: false,
   aiDj: true,
   aiHomeShelves: true,
+  djTakeover: true,
   kidMode: false,
   allowRegionInference: true,
   manualCountry: null,
@@ -215,6 +220,7 @@ export const useSettingsStore = create<SettingsState>()(
       setExploreMode: (exploreMode) => set({ exploreMode }),
       setAiDj: (aiDj) => set({ aiDj }),
       setAiHomeShelves: (aiHomeShelves) => set({ aiHomeShelves }),
+      setDjTakeover: (djTakeover) => set({ djTakeover }),
       setKidMode: (kidMode) => set({ kidMode }),
       setAllowRegionInference: (allowRegionInference) => set({ allowRegionInference }),
       setManualCountry: (manualCountry) => set({ manualCountry }),

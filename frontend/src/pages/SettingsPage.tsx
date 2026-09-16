@@ -633,8 +633,11 @@ export default function SettingsPage() {
             <span className="text-xs text-ink-400 w-8 tabular-nums">{Math.round(s.recommendationIntensity * 100)}%</span>
           </div>
         </Row>
-        <Row label="AI DJ" note="Lets the VinaX DJ engine sequence what plays next from songs the app already picked for you — an energy arc, no repeats, a reason for every song. Off keeps the on-device order. Never invents songs.">
+        <Row label="AI DJ" note="Lets the VinaX DJ engine sequence what plays next — an energy arc, no repeats, a reason for every song — and suggest a few songs beyond the app’s own picks, each checked against the catalogue before it can play. Off keeps the on-device order.">
           <Toggle on={s.aiDj} onChange={s.setAiDj} label="AI DJ" />
+        </Row>
+        <Row label="DJ builds every queue" note="Tap any song — in an album, a playlist or a shelf — and it starts alone while the DJ builds what follows from it. Off makes playback follow the list you tapped. Queue Builder plans and songs you queue by hand are never replaced.">
+          <Toggle on={s.djTakeover} onChange={s.setDjTakeover} label="DJ builds every queue" />
         </Row>
         <Row label="AI-designed shelves on Home" note="A “Designed for you” block with shelves the AI titles from your taste and the time of day, filled from the catalogue. Off hides it.">
           <Toggle on={s.aiHomeShelves} onChange={s.setAiHomeShelves} label="AI-designed shelves" />

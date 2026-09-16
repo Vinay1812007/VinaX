@@ -31,7 +31,7 @@ const SHOWN_KEY = 'vinax.home.ai-shelves.shown.v1';
 const SHOWN_SONGS_KEY = 'vinax.home.ai-shelves.songs.v1';
 const SHOWN_CAP = 30;
 const SHOWN_SONGS_CAP = 200;
-/** Fresh per app load: consecutive opens in one session reuse the cached build; a new load varies. */
+/** Fallback visit nonce (the hook passes a fresh one per Home open since 6.5). */
 export const HOME_VISIT_NONCE = Math.floor(Math.random() * 1_000_000);
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -108,12 +108,12 @@ export function recordShownSongs(songs: Song[]): void {
 }
 
 /** Ask the model for shelf definitions. Empty on any failure — Home keeps its ordinary shelves. */
-export async function designHomeShelves(signal?: AbortSignal): Promise<AiShelfDefinition[]> {
+export async function designHomeShelves(signal?: AbortSignal, visitNonce: number = HOME_VISIT_NONCE): Promise<AiShelfDefinition[]> {
   const raw = await requestCurator(
     'shelves',
     {
       taste: buildTasteSnapshot(),
-      visitNonce: HOME_VISIT_NONCE,
+      visitNonce,
       shelfTypes: SHELF_TYPES,
       avoidShelves: loadShownShelves().map((s) => ({ title: s.title, query: s.query })),
     },

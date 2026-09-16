@@ -51,6 +51,7 @@ import { useBookmarkStore } from '@/store/bookmarkStore';
 import { AmbientOverlay, useIdle } from '@/components/AmbientOverlay';
 import { shareNowPlayingCard } from '@/utils/shareCard';
 import { toast } from '@/store/toastStore';
+import { TuneChips } from '@/features/queue/TuneChips';
 import { cn } from '@/utils/cn';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
@@ -754,6 +755,11 @@ export default function NowPlayingPage() {
                   <button onClick={() => removeMark(song.id, m)} aria-label={`Remove bookmark at ${fmtTime(m)}`} className="pr-2 py-2 text-[10px] text-ink-500 hover:text-ink-100">×</button>
                 </span>
               ))}
+            </div>
+            {/* v6.5.0 — tune this queue */}
+            <div className="w-full">
+              <span className="block text-[10px] font-bold text-ink-400 uppercase mb-1.5">Tune this queue</span>
+              <TuneChips compact />
             </div>
             {/* v5.17.0 — share this exact moment, ambient mode */}
             <div className="flex items-center gap-0.5 flex-wrap" role="group" aria-label="More options">

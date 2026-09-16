@@ -23,6 +23,7 @@ import { recommendNextSongs } from '@/services/recommendation/engine';
 import { freshSongs } from '@/services/recommendation/freshness';
 import { songKey } from '@/services/recommendation/songIdentity';
 import { isSongBlocked, useLibraryStore } from './libraryStore';
+import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
 
 export type RepeatMode = 'off' | 'one' | 'all';
 
@@ -49,13 +50,23 @@ export interface PlayerState {
   streamKbps: number | null;
   /** True while following a Listen Together host. */
   followMode: boolean;
+  /** v6.5.0 — the active "Tune this queue" intent (cleared by a fresh play). */
+  tuneIntent: TuneIntent | null;
 
   initEngine(): void;
   setSleepSongs(n: number): void;
   setLoopPoint(which: 'A' | 'B'): void;
   clearLoop(): void;
-  playQueue(songs: Song[], startIndex?: number): void;
+  /**
+   * Start playback. With the DJ takeover setting on (default), any list of
+   * two or more songs is treated as a seed: the tapped song starts and the
+   * AI DJ builds what follows (the 3.9 behaviour). `keepList` forces the
+   * tapped list to become the queue (Queue Builder plans, explicit queues).
+   */
+  playQueue(songs: Song[], startIndex?: number, opts?: { keepList?: boolean }): void;
   playSong(song: Song): void;
+  /** v6.5.0 — reshape what comes next: keeps what played and the current song, rebuilds the rest for the intent. */
+  tuneQueue(intent: TuneIntent): void;
   playAt(index: number): void;
   enqueue(song: Song): void;
   enqueueNext(song: Song): void;
@@ -166,6 +177,7 @@ export const usePlayerStore = create<PlayerState>()(
               limit: 8,
               excludeIds: queue.map((song) => song.id),
               excludeKeys: queue.map(songKey),
+              tune: get().tuneIntent,
             });
             if (!songs.length || version !== queueVersion || !canExtend()) return false;
             const current = get().queue;
@@ -381,6 +393,7 @@ export const usePlayerStore = create<PlayerState>()(
         currentAccent: null,
         streamKbps: null,
         followMode: false,
+        tuneIntent: null,
 
         initEngine: () => {
           if (engineInitialized) return;
@@ -489,7 +502,7 @@ export const usePlayerStore = create<PlayerState>()(
           }
         },
 
-        playQueue: (songs, startIndex = 0) => {
+        playQueue: (songs, startIndex = 0, opts = {}) => {
           if (!songs.length) return;
           const selectedIndex = Number.isFinite(startIndex) ? Math.min(Math.max(0, Math.floor(startIndex)), songs.length - 1) : 0;
           const seed = songs[selectedIndex];
@@ -500,15 +513,43 @@ export const usePlayerStore = create<PlayerState>()(
           }
           resetSkipGuard(); // manual play — the user vouches for the sources
           invalidateQueue();
-          radio = false;
+          autoIds.clear();
+          sessionPlayed.clear();
+          // v6.5.0 — DJ takeover: the tapped song is the seed and the DJ
+          // builds the continuation (startTrack asks for it at once because
+          // the queue is one song long). Off, or when the caller insists on
+          // its list, playback follows the tapped list as before.
+          const settings = useSettingsStore.getState();
+          const takeover = settings.djTakeover && settings.autoplay && !opts.keepList && !get().followMode && get().repeat === 'off';
+          radio = takeover;
+          if (takeover) {
+            set({ queue: [seed], index: 0, currentTime: 0, loopA: null, loopB: null, tuneIntent: null });
+            startTrack(seed, true);
+            return;
+          }
           const queue = stripExplicit(songs);
           const index = queue.indexOf(seed);
-          sessionPlayed.clear();
-          set({ queue: [...queue], index, currentTime: 0, loopA: null, loopB: null });
+          set({ queue: [...queue], index, currentTime: 0, loopA: null, loopB: null, tuneIntent: null });
           startTrack(seed, true);
         },
 
         playSong: (song) => get().playQueue([song], 0),
+
+        tuneQueue: (intent) => {
+          if (!isTuneIntent(intent)) return;
+          const { queue, index } = get();
+          const current = queue[index];
+          if (!current) return;
+          const resolved: TuneIntent = intent === 'surprise' ? randomTune() : intent;
+          // Keep what played and the current song; everything after is rebuilt.
+          invalidateQueue();
+          radio = true; // a tuned continuation is endless, like radio
+          for (const s of queue.slice(index + 1)) autoIds.delete(s.id);
+          set({ queue: queue.slice(0, index + 1), tuneIntent: resolved });
+          void appendRecommendations(current).then((added) => {
+            if (!added && get().queue.length === index + 1) toast('Could not retune right now — try again in a moment');
+          });
+        },
         setSleepSongs: (n) => set({ sleepSongsLeft: Math.max(0, Math.round(n)), sleepAfterTrack: false, sleepAt: null }),
         setLoopPoint: (which) => {
           const { currentTime, loopA, loopB } = get();
@@ -724,7 +765,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (!clean.length) return;
           if (mode === 'replace') {
             autoIds.clear();
-            get().playQueue(clean, 0);
+            get().playQueue(clean, 0, { keepList: true });
             return;
           }
           const { queue, index } = get();
@@ -745,7 +786,7 @@ export const usePlayerStore = create<PlayerState>()(
           invalidateQueue();
           radio = true;
           sessionPlayed.clear();
-          set({ queue, index: 0, currentTime: 0, isPlaying: true });
+          set({ queue, index: 0, currentTime: 0, isPlaying: true, tuneIntent: null });
           startTrack(seed, true);
           void appendRecommendations(seed);
         },
