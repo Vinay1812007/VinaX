@@ -93,7 +93,7 @@ export default function AIPlaylistPage() {
       />
       <div className="vx-prompt-grid">
         {examples.map((example) => (
-          <button key={example.title} disabled={loading} onClick={() => setPrompt(example.prompt)}>
+          <button key={example.title} disabled={loading} onClick={() => { setPrompt(example.prompt); run(example.prompt); }}>
             <SparkleIcon className="w-5 h-5" />
             <strong>{example.title}</strong>
             <span>{example.detail}</span>

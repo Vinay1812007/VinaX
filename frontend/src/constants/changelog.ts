@@ -12,6 +12,16 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '6.5.0': {
+    title: 'The DJ takes the wheel',
+    changes: [
+      { type: 'new', text: 'Tap any song and the DJ builds the rest: the song you chose starts alone and what follows is picked around it, from an album, a playlist or a shelf. Prefer the old way? Settings → Recommendations → “DJ builds every queue”. Queue Builder plans and songs you queue by hand are never replaced.' },
+      { type: 'new', text: 'Tune this queue: one tap makes what comes next more energetic, more chill, more romantic, more melody, more beats, devotional, heartbreak, classics, new, same language, a different language — or a surprise. On the Queue page, in the player’s extras and in the command palette.' },
+      { type: 'improved', text: 'The DJ can now bring in a few songs beyond VinaX’s own picks each round. Every suggestion is looked up in the catalogue and kept only when the title and artist really match, it speaks your queue’s language and passes the usual checks — an invented title never plays. The DJ also gets a rotating slice of candidates and a fresh creative focus every round, so two rounds from the same song differ.' },
+      { type: 'improved', text: '“Designed for you” is rebuilt every time you open Home: idea engines pitch shelves, the DJ engine curates them, and if the engines are slow you still get on-taste shelves in your languages. Each shelf reads a different page of the catalogue per visit and shows songs you have not seen first.' },
+      { type: 'improved', text: 'Playlist Studio: tapping an example idea builds the playlist straight away.' },
+    ],
+  },
   '6.4.0': {
     title: 'Your taste, remembered more precisely',
     changes: [

@@ -27,7 +27,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   localStorage.clear();
   resetAdaptive();
-  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, mutedLanguages: [] });
+  useSettingsStore.setState({ kidMode: false, crossfade: false, resumePlayback: false, mutedLanguages: [], djTakeover: false });
   useLibraryStore.setState({ favorites: [], collections: [], saved: [], hiddenSongIds: [], later: [], hiddenArtists: [], trash: [] });
   useHistoryStore.setState({ entries: [] });
   usePlayerStore.setState({ queue: [], index: 0, repeat: 'off', shuffle: false, currentTime: 0, duration: 0, isPlaying: false });

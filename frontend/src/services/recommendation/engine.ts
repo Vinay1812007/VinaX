@@ -14,6 +14,7 @@ import { stripExplicit } from '@/services/kidMode';
 import { useSettingsStore } from '@/store/settingsStore';
 import { queryClient } from '@/services/queryClient';
 import type { ArcShape } from './sequencer';
+import { tunePromptHint, tuneScoreAdjust, tuneShape, type TuneIntent } from './tune';
 
 function aiContext(ctx: RecommendationContext): string {
   return JSON.stringify({ surface: ctx.surface, seed: ctx.seedSong?.title, mood: ctx.sessionMood, energy: ctx.sessionEnergy,
@@ -111,6 +112,8 @@ export interface NextRecommendationOptions {
   limit?: number;
   excludeIds?: string[];
   excludeKeys?: string[];
+  /** v6.5.0 — an active "Tune this queue" intent: reshapes the score, the arc, the language lock and the DJ brief. */
+  tune?: TuneIntent | null;
 }
 
 /** Shared continuation entry point for autoplay, radio and playlist queues. */
@@ -129,6 +132,14 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   const admittedIds = new Set(admitted.map(s => s.id));
   let ranked = rankCandidates(candidates.filter(c => admittedIds.has(c.song.id)).map((candidate) => ({ ...candidate, song: enrichedById.get(candidate.song.id) ?? candidate.song })), { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next' });
   ranked = await blendAi(ranked, { ...ctx, seedSong: seed });
+  const seedLang = seed.language && seed.language !== 'unknown' ? seed.language : null;
+  const tune = options.tune ?? null;
+  if (tune) {
+    // v6.5.0 — the on-device half of a tune: a deterministic nudge per song
+    // (era, language, energy, title cues) so the intent holds even when the
+    // DJ is unavailable. Mood-only intents lean on the DJ brief below.
+    ranked = ranked.map((item) => ({ ...item, score: item.score + tuneScoreAdjust(item.candidate.song, tune, seedLang) })).sort((a, b) => b.score - a.score);
+  }
   // v6.3.0 — the arc sequencer orders the ranked pool from real signals
   // (energy, mood, artist spacing, era, language lock, transition memory)
   // instead of taking the top N as they come. The ranking stays the taste
@@ -142,14 +153,20 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   // Lazy: this engine rides the first-load player store; the sequencer and
   // the session-context reader are only needed once a queue is extended.
   const [{ sequenceSongs, arcErrorOf }, { readListenerEnergy }] = await Promise.all([import('./sequencer'), import('@/services/ai/sessionContext')]);
-  const shape = shapeFor(readListenerEnergy(ctx.history, ctx.hour));
+  const shape = (tune && tuneShape(tune)) || shapeFor(readListenerEnergy(ctx.history, ctx.hour));
   const sureIds = new Set([...ctx.favorites.map((s) => s.id), ...ctx.history.slice(0, 60).map((e) => e.song.id)]);
   const discoveryIds = new Set(ranked.filter((item) => item.candidate.source === 'explore').map((item) => item.candidate.song.id));
-  const lock = seed.language && seed.language !== 'unknown' ? seed.language : null;
   // Language rule: the queue speaks the seed's language. In explore mode it
   // may take an occasional detour into another language the listener plays.
+  // "Switch language" moves the lock to another language the listener plays
+  // (the pinned list first, then whatever the pool offers).
+  const switchTo = tune === 'different-language'
+    ? ctx.pinnedLanguages.find((l) => l !== seedLang) ?? orderedPool.map((s) => s.language).find((l) => l && l !== 'unknown' && l !== seedLang) ?? null
+    : null;
+  const lock = switchTo ?? seedLang;
   const otherLanguages = ctx.pinnedLanguages.filter((l) => l !== lock);
-  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: ctx.explore ? 'prefer' : 'lock', otherLanguages, discovery: ctx.explore ? 0.3 : 0.15, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
+  const explore = ctx.explore || tune === 'surprise';
+  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: explore && tune !== 'same-language' ? 'prefer' : 'lock', otherLanguages, discovery: explore ? 0.3 : 0.15, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
   const songs: Song[] = arc.songs.map((s) => s.song);
   // A language-locked pool can run short; top up in ranked order.
   for (const song of orderedPool) {
@@ -165,11 +182,22 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   // flag, or when the DJ is slow/down/unconfigured, the deterministic order
   // above ships unchanged.
   if (aiDjEnabled() && songs.length >= 3) {
-    const pool = ranked.map((item) => item.candidate.song).filter((s) => s.id !== seed.id && !excluded.has(s.id)).slice(0, 25);
     // The DJ client is a lazy chunk: this engine rides the first-load player
     // store, and the DJ only matters once a queue is actually being extended.
-    const { djSequence } = await import('@/services/ai/dj');
-    const set = await djSequence(seed, { ...ctx, seedSong: seed }, pool, limit, undefined, { shape });
+    const { djSequence, samplePool } = await import('@/services/ai/dj');
+    // v6.5.0 — a rotating slice of the ranked pool (top ranks always, the
+    // rest sampled) so consecutive rounds hand the DJ different material.
+    const pool = samplePool(ranked.map((item) => item.candidate.song).filter((s) => s.id !== seed.id && !excluded.has(s.id)).slice(0, 40), 10, 30);
+    const queuedKeys = new Set([songKey(seed), ...(options.excludeKeys ?? []), ...ctx.history.slice(0, 20).map((e) => songKey(e.song))]);
+    const library = useLibraryStore.getState();
+    // v6.5.0 — the generative half: the DJ may propose a few songs from
+    // outside the pool; each is verified in the catalogue and must pass the
+    // same gates as everything else before it can be queued.
+    const gate = {
+      language: explore && tune !== 'same-language' ? null : lock,
+      admit: (song: Song) => !excluded.has(song.id) && !queuedKeys.has(songKey(song)) && !(song.language && ctx.mutedLanguages.includes(song.language)) && !isSongBlocked(song, library) && stripExplicit([song]).length === 1,
+    };
+    const set = await djSequence(seed, { ...ctx, seedSong: seed }, pool, limit, undefined, { shape, discover: true, gate, ...(tune ? { tune: tunePromptHint(tune) } : {}) });
     if (set && set.picks.length >= Math.min(3, limit)) {
       const used = new Set<string>();
       const sequenced: Song[] = [];
@@ -177,9 +205,10 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
       for (const s of songs) if (sequenced.length < limit && !used.has(s.id)) { used.add(s.id); sequenced.push(s); }
       // The DJ's order is accepted only when it keeps the arc at least as
       // tight as the local one (within a small tolerance); its reasons and
-      // segues are kept either way.
-      if (arcErrorOf(sequenced, seed, shape) <= arc.arcError + 0.08) {
-        publishDebug(ranked, sequenced.slice(0, limit), 'ai', new Map(set.picks.map((p) => [p.song.id, p.confidence])));
+      // segues are kept either way. A tune relaxes the tolerance: the
+      // listener asked for a change of direction.
+      if (arcErrorOf(sequenced, seed, shape) <= arc.arcError + (tune ? 0.2 : 0.08)) {
+        publishDebug(ranked, sequenced.slice(0, limit), 'ai', new Map(set.picks.map((p) => [p.song.id, p.confidence])), new Set(set.picks.filter((p) => p.discovered).map((p) => p.song.id)));
         return sequenced.slice(0, limit);
       }
     }
@@ -188,14 +217,14 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
 }
 
 /** v6.4.0 — development-only score breakdowns for the recs debug panel (no-op unless enabled). */
-function publishDebug(ranked: ScoredCandidate[], chosen: Song[], source: 'local' | 'ai', confidence?: Map<string, number>): void {
+function publishDebug(ranked: ScoredCandidate[], chosen: Song[], source: 'local' | 'ai', confidence?: Map<string, number>, discovered?: Set<string>): void {
   void import('@/store/recsDebugStore').then((m) => {
     if (!m.recsDebugEnabled()) return;
     const byId = new Map(ranked.map((r) => [r.candidate.song.id, r]));
     m.useRecsDebugStore.getState().publish(
       chosen.map((song, i) => {
         const r = byId.get(song.id);
-        return { position: i + 1, song, finalScore: r?.score ?? 0, source: r?.candidate.source ?? 'unknown', components: r?.reasons ?? [], picker: source, confidence: confidence?.get(song.id) };
+        return { position: i + 1, song, finalScore: r?.score ?? 0, source: r?.candidate.source ?? (discovered?.has(song.id) ? 'dj-discovery' : 'unknown'), components: r?.reasons ?? [], picker: source, confidence: confidence?.get(song.id) };
       }),
     );
   }).catch(() => undefined);

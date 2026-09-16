@@ -5,6 +5,17 @@ architecture. Nothing was rewritten to add or retire an engine: features talk
 to **lanes**, lanes pin **models**, and a central **registry** describes every
 model VinaX can reach.
 
+## v6.5.0 — generative DJ, Tune this queue, Home rebuilt per open
+
+| Feature | Where | What it does | What it may not do |
+|---|---|---|---|
+| DJ takeover | `store/playerStore.ts` `playQueue` | With the `djTakeover` setting on, a tapped list becomes a seed: the tapped song starts, the continuation is requested at once | Replace a Queue Builder plan (`keepList`), run with autoplay off, in follow mode or with repeat on |
+| Generative DJ | `POST /api/dj { discover: true, maxDiscover }` → `services/ai/dj.ts` `resolvePicks` | Up to 4 off-pool proposals per round, each resolved through `searchSongs` and kept only when `matchesProposal` (identity or title words + credited artist), the language gate and the engine's admission gate all pass | Trust a first search hit, an id outside the pool, a junk title, another language, a muted/blocked/queued song |
+| Rotating pool + focus | `samplePool`, `pickDiscoveryFocus` | Top 10 ranks always, 20 sampled from the next 30; one of 12 creative directions per round | — |
+| Tune this queue | `services/recommendation/tune.ts`, `playerStore.tuneQueue`, `features/queue/TuneChips.tsx` | Keeps what played and the current song, rebuilds the rest: score nudge, arc shape, language lock (Switch language), `tuneInstruction` to the DJ, relaxed arc tolerance | Persist across a fresh play |
+| Home per open | `features/home/useAiHome.ts`, `homeVariety.ts`, `_lib/homeShelves.ts` | Per-mount nonce, `staleTime: 0`; scholar + fast pitch, dj curates, pitches then `fallbackShelves` as floors; `rotatePage` + `biasUnseenFirst` per shelf | Answer 503 while any engine is configured |
+
+
 ## v6.3.0 — arc sequencing, transition memory, adaptive re-plan, Queue Builder
 
 | Piece | File | Role |

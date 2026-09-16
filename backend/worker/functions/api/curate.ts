@@ -1,13 +1,16 @@
 /** Structured music tasks on the existing key/model lane router. */
-import { chat, extractJson, type AiEnv, type Lane } from '../_lib/ai';
+import { chat, extractJson, logAiEvent, type AiEnv, type Lane } from '../_lib/ai';
 import { rateLimit, methodNotAllowed } from '../_lib/ratelimit';
+import { type SupabaseEnv } from '../_lib/supabase';
+import { designShelves } from '../_lib/homeShelves';
 
 export const TASK_ROUTES = {
   metadata: { lanes: ['fast', 'chat', 'search', 'scholar'] as Lane[], budget: 5500, tokens: 1800 },
   ranking: { lanes: ['dj', 'scholar', 'home', 'chat'] as Lane[], budget: 7000, tokens: 1200 },
   home: { lanes: ['dj', 'scholar', 'chat', 'home'] as Lane[], budget: 9000, tokens: 900 },
   // v6.2.0 — AI-designed Home shelves: titled sections with a catalogue query each.
-  shelves: { lanes: ['dj', 'chat', 'fast', 'home'] as Lane[], budget: 9000, tokens: 700 },
+  // v6.5.0 — served by _lib/homeShelves (pitch → curate → deterministic fallback); the row keeps the task registered.
+  shelves: { lanes: ['dj', 'chat', 'fast', 'home'] as Lane[], budget: 12000, tokens: 900 },
 };
 const health = new Map<Lane, { latency: number; failed: boolean; at: number }>();
 const headers = { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type, x-vinax-client' };
@@ -22,7 +25,7 @@ const contracts = {
   home: 'Return {"title":"short original VinaX headline","description":"one sentence","order":["shelf key",...]}. Build a listening Home from these allowed shelf keys: quick, personal, aihome, discovery, charts, seasonal, moods, genres, artists, albums, daypicks, loved, feed. Include each key exactly once, ordering around the listener request and taste. Never output HTML, CSS, scripts, external URLs, competitor brands or model names. Title max 60 characters, description max 160.',
 };
 
-export async function onRequestPost({ request, env }: { request: Request; env: AiEnv }): Promise<Response> {
+export async function onRequestPost({ request, env, waitUntil }: { request: Request; env: AiEnv & SupabaseEnv; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> {
   const limited = rateLimit(request, 'curate', { capacity: 12, refillPerMinute: 6 });
   if (limited) return limited;
   try {
@@ -34,6 +37,19 @@ export async function onRequestPost({ request, env }: { request: Request; env: A
     const task = body.task as keyof typeof TASK_ROUTES;
     const route = TASK_ROUTES[task];
     const now = Date.now();
+    if (task === 'shelves') {
+      // v6.5.0 — the Home Builder: idea pitches in parallel, one curate, and
+      // an on-taste fallback so Home always gets shelves while any engine is
+      // configured. Only a totally unconfigured AI still answers 503.
+      const isApp = request.headers.get('x-vinax-client') === 'app';
+      const r = await designShelves(env, body.data as Record<string, unknown>, route.budget);
+      if (r.error !== 'not_configured') {
+        const log = logAiEvent(env, { feature: 'home', model: r.model ? `${r.model}${r.keyRole ? ` @${r.keyRole}` : ''}` : null, ok: r.sections.length > 0, status: r.status ?? null, error: r.error ?? (r.usedAi ? null : 'fallback'), client: isApp ? 'app' : 'web', latency_ms: Date.now() - now, prompt_tokens: r.usage?.prompt_tokens, completion_tokens: r.usage?.completion_tokens });
+        if (typeof waitUntil === 'function') waitUntil(log);
+      }
+      if (r.error === 'not_configured') return json({ error: 'ai_not_configured' }, 503);
+      return r.sections.length ? json({ data: { sections: r.sections, model: r.model } }) : json({ error: r.error ?? 'invalid_output' }, 502);
+    }
     // Short-lived health observations; expired failures recover automatically.
     const penalty = (lane: Lane) => { const h = health.get(lane); return h && now - h.at < 60_000 ? (h.failed ? 10_000 : h.latency / 10) : 0; };
     const lanes = [...route.lanes].sort((a, b) => penalty(a) - penalty(b));

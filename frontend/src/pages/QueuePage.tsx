@@ -8,11 +8,14 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { EmptyState } from '@/components/States';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
+import { TuneChips } from '@/features/queue/TuneChips';
+import { useSettingsStore } from '@/store/settingsStore';
 import { XIcon, QueueIcon, ChevronDownIcon, GripIcon } from '@/components/Icons';
 
 export default function QueuePage() {
   usePageTitle('Queue');
   const queue = usePlayerStore((s) => s.queue);
+  const djTakeover = useSettingsStore((s) => s.djTakeover);
   const index = usePlayerStore((s) => s.index);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const playAt = usePlayerStore((s) => s.playAt);
@@ -120,7 +123,7 @@ export default function QueuePage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[26px] font-extrabold tracking-tight">Queue</h1>
-          <p className="text-xs font-semibold text-ink-400 mb-4">Your selected songs, in order</p>
+          <p className="text-xs font-semibold text-ink-400 mb-4">{djTakeover ? 'AI DJ · builds around what’s playing' : 'Your selected songs, in order'}</p>
         </div>
         <div className="flex gap-2 shrink-0 mt-1">
           <button onClick={() => setBuilding(true)} className="px-4 py-2 rounded-full btn-primary text-xs font-bold">Build a queue</button>
@@ -132,6 +135,12 @@ export default function QueuePage() {
         </div>
       </div>
       {building && <Suspense fallback={null}><QueueBuilderSheet onClose={() => setBuilding(false)} /></Suspense>}
+
+      {/* v6.5.0 — tune chips */}
+      <section aria-label="Tune this queue" className="mb-5">
+        <h2 className="text-[11px] font-extrabold tracking-[0.22em] text-ink-400 uppercase mb-2">Tune this queue</h2>
+        <TuneChips />
+      </section>
 
       {/* now playing */}
       {song && (
