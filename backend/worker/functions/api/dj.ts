@@ -221,8 +221,8 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
           { role: 'system', content: CANDIDATE_PROMPT },
           { role: 'user', content: `Seed + session context (JSON):\n${ctxJson}\n\nvarietySeed: "${seed}" — vary the list between rounds. List about 20 candidate songs as JSON.` },
         ],
-        ['fast'],
-        { temperature: 0.7, maxTokens: 900, timeoutMs: 5_000, deadlineAt: Math.min(deadlineAt, Date.now() + 5_000) },
+        ['scholar'],
+        { temperature: 0.7, maxTokens: 900, timeoutMs: 3_500, deadlineAt: Math.min(deadlineAt, Date.now() + 3_500) },
       );
       const seen = new Set(pool.map((p) => canonKey(p.title, p.artist)));
       for (const g of gathered) {
@@ -256,7 +256,7 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
     // another 11 s. The Groq scholar lane answers the same JSON in 1–3 s, so
     // it leads, the dj engine is the first failover, and the secondary is
     // skipped — a set lands in a few seconds instead of a 408 at 26 s.
-    { temperature: 0.8, lane: 'scholar', json: true, maxTokens: wantSegues ? 1500 : 1000, reasoningEffort: 'low', timeoutMs: 11_000, firstTimeoutMs: 8_000, skipSecondary: true, ladder: ['dj', 'fast', 'chat', 'home'], deadlineAt },
+    { temperature: 0.8, lane: 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 11_000, firstTimeoutMs: 9_000, skipSecondary: true, ladder: ['dj', 'fast', 'chat', 'home'], deadlineAt },
   );
   // Structural anti-repeat for proposals: whatever the model claims, a title
   // the listener just heard or was already offered never comes back.

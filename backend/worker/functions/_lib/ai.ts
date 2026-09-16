@@ -460,7 +460,7 @@ export async function chat(
       console.log(`[ai] lane=${role} model=${model} status=${res.status} ms=${Date.now() - startedAt}`);
       if (res.ok) {
         const data = (await res.json().catch(() => null)) as
-          | { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }>; usage?: unknown }
+          | { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown }; finish_reason?: unknown }>; usage?: unknown }
           | null;
         const msg = data?.choices?.[0]?.message;
         const usage = usageFromJson(data) ?? undefined;
@@ -476,11 +476,18 @@ export async function chat(
         };
         const content = clean(msg?.content) ?? clean(msg?.reasoning_content);
         if (content) return { content, model, keyRole: role, ...(usage ? { usage } : {}) };
-        // 200 but blank — fail over to the next lane pair.
+        // 200 but blank — fail over to the next lane pair. Say why: a
+        // reasoning model that spent the whole token budget thinking shows
+        // up here as finish=length with a long `reasoning` field.
+        const c0 = data?.choices?.[0];
+        console.log(`[ai] blank lane=${role} model=${model} finish=${String(c0?.finish_reason ?? '?')} keys=${msg ? Object.keys(msg).join(',') : 'none'} reasoning_len=${typeof msg?.reasoning === 'string' ? msg.reasoning.length : 0} completion=${usage?.completion_tokens ?? '?'}`);
         lastStatus = 200;
         break;
       }
       lastStatus = res.status;
+      // The provider's own words, clipped (error envelopes carry no secrets).
+      const errBody = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      console.log(`[ai] error lane=${role} model=${model} status=${res.status} json=${useJson} body=${errBody}`);
       // JSON mode unsupported on this model -> retry it once in plain mode.
       if (res.status === 400 && useJson) continue;
       // Anything else (dead/exhausted key 401/402/403/429, unknown model
