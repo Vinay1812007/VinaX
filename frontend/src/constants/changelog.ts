@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '6.2.0': {
+    title: 'The AI DJ is back — and it talks',
+    changes: [
+      { type: 'new', text: 'AI DJ: when autoplay or radio keeps the music going, the VinaX DJ engine sequences what plays next from songs the app already chose for you — an energy arc, no artist twice in a row, and a one-line reason for every pick. It never invents songs; if it is slow or unavailable, your on-device order plays as before. Turn it off under Settings → Recommendations.' },
+      { type: 'new', text: 'DJ voice now says what the DJ wrote: a short spoken segue as each song starts, in the voice you chose under Settings → Voice, with your device’s voice as the offline fallback. The music dips while the DJ talks and comes right back.' },
+      { type: 'new', text: '“Designed for you” on Home: a block of shelves the AI titles from your taste, the time of day and the season, filled from the catalogue and different on every half-day. Hide it in Home Studio or switch it off in Settings.' },
+      { type: 'improved', text: 'The owner console can turn the AI DJ and AI shelves off for everyone with two new feature flags, and the “Designed for you” block joins the Home layout editor.' },
+    ],
+  },
   '6.1.0': {
     title: 'Safer backups, truer imports, a lighter Home',
     changes: [

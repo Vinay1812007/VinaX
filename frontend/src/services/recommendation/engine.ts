@@ -11,6 +11,8 @@ import { freshSongs } from './freshness';
 import { rerankCandidates } from './reranking';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { stripExplicit } from '@/services/kidMode';
+import { useSettingsStore } from '@/store/settingsStore';
+import { queryClient } from '@/services/queryClient';
 
 function aiContext(ctx: RecommendationContext): string {
   return JSON.stringify({ surface: ctx.surface, seed: ctx.seedSong?.title, mood: ctx.sessionMood, energy: ctx.sessionEnergy,
@@ -135,9 +137,32 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
     if (songs.length >= limit) break;
   }
   publishReasons(ranked.filter((item) => songs.some((song) => song.id === item.candidate.song.id)));
-  // Stronger routed models get a bounded, optional final say for continuation
-  // surfaces. Any timeout/invalid JSON returns the deterministic ordering.
+  // v6.2.0 — the AI DJ gets a bounded, optional final say over the ORDER of
+  // the admitted pool (never over what is in it). Off by setting or owner
+  // flag, or when the DJ is slow/down/unconfigured, the deterministic order
+  // above ships unchanged.
+  if (aiDjEnabled() && songs.length >= 3) {
+    const pool = ranked.map((item) => item.candidate.song).filter((s) => s.id !== seed.id && !excluded.has(s.id)).slice(0, 25);
+    // The DJ client is a lazy chunk: this engine rides the first-load player
+    // store, and the DJ only matters once a queue is actually being extended.
+    const { djSequence } = await import('@/services/ai/dj');
+    const set = await djSequence(seed, { ...ctx, seedSong: seed }, pool, limit);
+    if (set && set.picks.length >= Math.min(3, limit)) {
+      const used = new Set<string>();
+      const sequenced: Song[] = [];
+      for (const p of set.picks) if (!used.has(p.song.id)) { used.add(p.song.id); sequenced.push(p.song); }
+      for (const s of songs) if (sequenced.length < limit && !used.has(s.id)) { used.add(s.id); sequenced.push(s); }
+      return sequenced.slice(0, limit);
+    }
+  }
   return songs;
+}
+
+/** Listener switch AND owner flag (read from the cached config; a missing flag means on). */
+function aiDjEnabled(): boolean {
+  if (!useSettingsStore.getState().aiDj) return false;
+  const flags = queryClient.getQueryData<Record<string, boolean>>(['feature-flags']);
+  return flags?.aiDj !== false;
 }
 
 export async function startRadioRecommendations(seed: Song, ctx: RecommendationContext, limit = 30): Promise<Song[]> {

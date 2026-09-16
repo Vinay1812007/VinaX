@@ -58,6 +58,8 @@ import {
 } from '@/features/home/usePersonalShelves';
 import { useFreshFinds, useHiddenGems, useTrendingNearYou } from '@/features/home/useDiscoveryShelves';
 import { useTrendingAlbums, useTrendingArtists } from '@/features/home/useTrendingShelves';
+import { useAiHomeShelves } from '@/features/home/useAiHomeShelves';
+import { flagOn, useFeatureFlags } from '@/features/home/useAppConfig';
 import { moodRotationOfTheDay, useMoodShelf } from '@/features/home/useMoodShelves';
 import { GENRE_SHELVES } from '@/features/home/useGenreShelves';
 import { useSeasonalShelf } from '@/features/home/useSeasonalShelf';
@@ -328,6 +330,25 @@ function PersonalBlock() {
         </Shelf>
       )}
     </>
+  );
+}
+
+/** v6.2.0 — "Designed for you": AI-titled shelves resolved against the catalogue. Renders nothing until they exist. */
+function AiHomeBlock() {
+  const dedupe = useShelfDedupe('aihome');
+  const flags = useFeatureFlags();
+  const allowed = flagOn(flags, 'aiHome');
+  const shelves = useAiHomeShelves(allowed);
+  if (!allowed || !shelves.data?.length) {
+    return shelves.isLoading && allowed ? <ShelfSkeleton /> : null;
+  }
+  return (
+    <section aria-label="Designed for you" className="mb-2">
+      <p className="text-[11px] font-extrabold tracking-[0.22em] text-ember-400 uppercase mb-3">Designed for you · AI shelves</p>
+      {shelves.data.map((shelf) => (
+        <SongShelf key={shelf.title} title={shelf.title} explanation={shelf.why} songs={dedupe(shelf.songs)} seeAllTo={`/search/${encodeURIComponent(shelf.query)}`} />
+      ))}
+    </section>
   );
 }
 
@@ -713,6 +734,7 @@ function FeedBlock() {
 const HOME_BLOCKS: Record<HomeSection, () => ReactNode> = {
   quick: QuickBlock,
   personal: PersonalBlock,
+  aihome: AiHomeBlock,
   discovery: DiscoveryBlock,
   charts: ChartsBlock,
   seasonal: SeasonalBlock,
@@ -727,7 +749,7 @@ const HOME_BLOCKS: Record<HomeSection, () => ReactNode> = {
 
 // Default order honors the home-shelf-order experiment (personal <-> discovery).
 const HOME_BLOCK_KEYS: HomeSection[] = [
-  'quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods',
+  'quick', 'personal', 'aihome', 'discovery', 'charts', 'seasonal', 'moods',
   'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed',
 ];
 
@@ -856,6 +878,7 @@ export default function HomePage() {
       qc.invalidateQueries({ queryKey: ['seasonal'] }),
       qc.invalidateQueries({ queryKey: ['mood-shelf'] }),
       qc.invalidateQueries({ queryKey: ['genre-shelf'] }),
+      qc.invalidateQueries({ queryKey: ['ai-home-shelves'] }),
     ]);
   };
 

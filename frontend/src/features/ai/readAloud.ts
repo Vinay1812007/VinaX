@@ -68,11 +68,23 @@ const CHUNK_LEASH_MS = 5000;
  *  on this device", which is also the answer when no speech model is served. */
 type VoiceGetter = () => { model: string; voice: string } | null;
 let getVoice: VoiceGetter | null = null;
+/** v6.2.0 — app-wide fallback (the DJ voice registers one at boot that reads
+ *  the persisted Settings → Voice choice), used whenever no page has wired
+ *  its own getter. */
+let fallbackVoice: VoiceGetter | null = null;
 
 /** Wire the Settings → Voice choice in. Read fresh per chunk, so changing the
  *  voice mid-reply applies to the rest of it. */
 export function setReadAloudVoice(fn: VoiceGetter | null): void {
   getVoice = fn;
+}
+
+export function setReadAloudVoiceFallback(fn: VoiceGetter | null): void {
+  fallbackVoice = fn;
+}
+
+function currentVoice(): { model: string; voice: string } | null {
+  return getVoice ? getVoice() : fallbackVoice ? fallbackVoice() : null;
 }
 
 /** Everything cancellable about the current server-voice turn. */
@@ -220,7 +232,7 @@ export function readAloud(id: string, md: string): void {
   stopReadAloud();
   const text = speakableText(md);
   if (!text) return;
-  const pick = getVoice ? getVoice() : null;
+  const pick = currentVoice();
   turn += 1;
   const mine = turn;
   emit(id);

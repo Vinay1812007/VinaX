@@ -527,7 +527,7 @@ export default function SettingsPage() {
             </div>
           </Row>
         )}
-        <Row label="DJ voice" note="A short spoken intro as each song starts — “Now playing … by …”. Uses your device’s own voice, nothing leaves the phone.">
+        <Row label="DJ voice" note="The DJ talks as each song starts: the AI DJ’s own segue line when it sequenced the queue, otherwise “Now playing … by …”. Speaks in the voice you chose under Voice (the studio voice sends the line to the service); your device’s voice is the offline fallback. The music ducks while the DJ talks.">
           <Toggle on={s.djVoice} onChange={s.setDjVoice} label="DJ voice" />
         </Row>
         <Row stack label="Daily listening goal" note="A ring on Your VinaX fills as you listen through the day.">
@@ -632,6 +632,12 @@ export default function SettingsPage() {
             />
             <span className="text-xs text-ink-400 w-8 tabular-nums">{Math.round(s.recommendationIntensity * 100)}%</span>
           </div>
+        </Row>
+        <Row label="AI DJ" note="Lets the VinaX DJ engine sequence what plays next from songs the app already picked for you — an energy arc, no repeats, a reason for every song. Off keeps the on-device order. Never invents songs.">
+          <Toggle on={s.aiDj} onChange={s.setAiDj} label="AI DJ" />
+        </Row>
+        <Row label="AI-designed shelves on Home" note="A “Designed for you” block with shelves the AI titles from your taste and the time of day, filled from the catalogue. Off hides it.">
+          <Toggle on={s.aiHomeShelves} onChange={s.setAiHomeShelves} label="AI-designed shelves" />
         </Row>
         <Row label="Explore mode" note="Reserve a corner of your shelves for songs deliberately unlike your usual — trending picks from languages you haven’t tried.">
           <Toggle on={s.exploreMode} onChange={s.setExploreMode} label="Explore mode" />
