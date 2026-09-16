@@ -42,7 +42,10 @@ export type ReasonKind =
   | 'tempo'
   | 'history'
   | 'likes'
-  | 'diversity';
+  | 'diversity'
+  /** v6.4.0 */
+  | 'song'
+  | 'day';
 
 export interface ReasonComponent {
   kind: ReasonKind;
@@ -82,6 +85,8 @@ export interface Mix {
 }
 
 export interface RecommendationContext {
+  /** v6.4.0 — 0 = Sunday; defaults to today when absent. */
+  dayOfWeek?: number;
   profile: TasteProfile;
   hour: number;
   region: RegionInfo | null;

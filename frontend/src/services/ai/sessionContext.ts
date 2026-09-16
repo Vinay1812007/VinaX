@@ -13,7 +13,21 @@
  * mounts, so reading the class alone is already reliable.
  */
 
+/** v6.4.0 — a named session state, INFERRED from behaviour and clock; never a claim about feelings. */
+export type SessionState = 'CALM' | 'FOCUSED' | 'ENERGETIC' | 'RESTLESS' | 'WAVERING' | 'LOCKED_IN' | 'LATE_NIGHT' | 'MORNING' | 'PARTY' | 'WIND_DOWN';
+
 export interface SessionContext {
+  /** v6.4.0 — one of the named states above (derived; see sessionStateOf). */
+  sessionState: SessionState;
+  /** v6.4.0 — skips among the last eight plays. */
+  recentSkipCount: number;
+  /** v6.4.0 — 0..1 completion share among the last eight plays (1 when nothing played). */
+  recentCompletionRate: number;
+  /** v6.4.0 — minutes since the first play of the current sitting (≤ 30-minute gaps), 0 when idle. */
+  sessionDurationMin: number;
+  /** v6.4.0 — language / lead artist of the most recent play, when known. */
+  recentLanguage?: string;
+  recentArtist?: string;
   timeOfDay: string;
   /** India-aware hour × weekday vibe ("saturday night / party & dance"). */
   sessionVibe: string;
@@ -90,6 +104,39 @@ function currentFestivalId(): string | null {
 interface HistoryLike {
   completed?: boolean;
   ts: number;
+  song?: { language?: string | null; artists?: Array<{ name: string }>; subtitle?: string };
+}
+
+const SITTING_GAP_MS = 30 * 60_000;
+
+/** Minutes covered by the current sitting: consecutive plays ≤ 30 min apart, ending now-ish. */
+export function sessionDurationMinutes(history: HistoryLike[], now = Date.now()): number {
+  if (!history.length || now - history[0].ts > SITTING_GAP_MS) return 0;
+  let start = history[0].ts;
+  for (let i = 1; i < history.length; i += 1) {
+    if (history[i - 1].ts - history[i].ts > SITTING_GAP_MS) break;
+    start = history[i].ts;
+  }
+  return Math.max(0, Math.round((now - start) / 60_000));
+}
+
+/**
+ * v6.4.0 — the named state. Behaviour first (skip streaks, completion
+ * streaks), then the clock. Deliberately coarse: this is context for
+ * ranking, not a verdict on the listener's mood.
+ */
+export function sessionStateOf(args: { hour: number; day: number; skips: number; completionRate: number; plays: number; sittingMin: number }): SessionState {
+  const { hour, day, skips, completionRate, plays, sittingMin } = args;
+  const weekendNight = (day === 5 || day === 6) && hour >= 20;
+  if (plays >= 2 && skips >= 4) return 'RESTLESS';
+  if (plays >= 2 && skips >= 2) return 'WAVERING';
+  if (hour >= 22 || hour < 5) return sittingMin >= 45 ? 'WIND_DOWN' : 'LATE_NIGHT';
+  if (weekendNight) return 'PARTY';
+  if (hour >= 5 && hour < 10) return 'MORNING';
+  if (plays >= 4 && completionRate >= 0.85) return 'LOCKED_IN';
+  if (sittingMin >= 60 && completionRate >= 0.7) return 'FOCUSED';
+  if (hour >= 17 && hour < 22 && (day === 5 || day === 6)) return 'ENERGETIC';
+  return 'CALM';
 }
 
 /** Live energy read from the last few plays: skip-streaks read as restless,
@@ -120,7 +167,18 @@ export function buildSessionContext(history: HistoryLike[] = [], now = new Date(
   else if (h < 20) sessionVibe = isWeekend ? 'weekend evening / social, lively' : 'evening unwind / shed the workday';
   else if ((d === 5 || d === 6) && h >= 20) sessionVibe = 'friday-saturday night / party, dance, celebration';
   else sessionVibe = 'night / warm, melodic, easing down';
+  const recent = history.slice(0, 8);
+  const skips = recent.filter((e) => e.completed === false).length;
+  const completionRate = recent.length ? recent.filter((e) => e.completed !== false).length / recent.length : 1;
+  const sittingMin = sessionDurationMinutes(history, now.getTime());
+  const last = history[0]?.song;
   const ctx: SessionContext = {
+    sessionState: sessionStateOf({ hour: h, day: d, skips, completionRate, plays: recent.length, sittingMin }),
+    recentSkipCount: skips,
+    recentCompletionRate: Math.round(completionRate * 100) / 100,
+    sessionDurationMin: sittingMin,
+    ...(last?.language && last.language !== 'unknown' ? { recentLanguage: last.language } : {}),
+    ...(last?.artists?.[0]?.name || last?.subtitle ? { recentArtist: (last.artists?.[0]?.name ?? last.subtitle?.split(',')[0] ?? '').trim() } : {}),
     timeOfDay,
     sessionVibe,
     dayOfWeek: DAYS[d],

@@ -21,6 +21,7 @@ export function getRecommendationContext(seedSong: Song | null = null, surface: 
     salt: SESSION_SALT + useDiscoveryStore.getState().round * 7919,
     profile,
     hour: new Date().getHours(),
+    dayOfWeek: new Date().getDay(),
     region: resolvedRegion(),
     pinnedLanguages: settings.pinnedLanguages,
     mutedLanguages: settings.mutedLanguages,

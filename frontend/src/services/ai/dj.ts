@@ -24,7 +24,8 @@ const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/dj'
 const SURFACED_KEY = 'vinax.dj.surfaced.v1';
 const SURFACED_CAP = 300;
 const AVOID_SEND = 120;
-const LEASH_MS = 14_000;
+/** Bounded wait for the DJ: playback never hangs on the model (spec: 8–12 s). */
+const LEASH_MS = 12_000;
 
 let aiAvailable: boolean | null = null; // false after a 503: the key is not configured on this deployment
 let retryAfter = 0;
@@ -33,6 +34,8 @@ export interface DjPick {
   song: Song;
   reason: string;
   segue: string;
+  /** 0..1 — the DJ's own belief in the hand-off (0.5 when it gave none). */
+  confidence: number;
 }
 
 export interface DjSet {
@@ -112,22 +115,27 @@ export function resetDjAvailability(): void {
   retryAfter = 0;
 }
 
-interface WirePick { title?: unknown; artist?: unknown; reason?: unknown; segue?: unknown }
+interface WirePick { songId?: unknown; title?: unknown; artist?: unknown; reason?: unknown; segue?: unknown; confidence?: unknown }
 
-/** Map the model's picks back onto the pool — strictly by canonical identity. */
+/**
+ * Map the model's picks back onto the pool: by the pool song's id first,
+ * then by canonical title + artist. An id that is not in the pool is never
+ * trusted — the song must already be one the app gathered and admitted.
+ */
 export function resolveFromPool(picks: WirePick[], pool: Song[], limit: number): DjPick[] {
+  const byId = new Map(pool.map((s) => [s.id, s]));
   const byKey = new Map<string, Song>();
   for (const s of pool) byKey.set(canonicalKey(s.title, primaryArtist(s)), s);
   const used = new Set<string>();
   const out: DjPick[] = [];
   for (const p of picks) {
     if (out.length >= limit) break;
-    if (!p || typeof p.title !== 'string' || typeof p.artist !== 'string') continue;
-    const key = canonicalKey(p.title, p.artist);
-    const song = byKey.get(key);
-    if (!song || used.has(key)) continue;
-    used.add(key);
-    out.push({ song, reason: typeof p.reason === 'string' ? p.reason.slice(0, 120) : '', segue: typeof p.segue === 'string' ? p.segue.slice(0, 160) : '' });
+    if (!p) continue;
+    const song = (typeof p.songId === 'string' && byId.get(p.songId)) || (typeof p.title === 'string' && typeof p.artist === 'string' ? byKey.get(canonicalKey(p.title, p.artist)) : undefined);
+    if (!song || used.has(song.id)) continue;
+    used.add(song.id);
+    const confidence = typeof p.confidence === 'number' && Number.isFinite(p.confidence) ? Math.max(0, Math.min(1, p.confidence)) : 0.5;
+    out.push({ song, reason: typeof p.reason === 'string' ? p.reason.slice(0, 120) : '', segue: typeof p.segue === 'string' ? p.segue.slice(0, 160) : '', confidence });
   }
   return out;
 }
@@ -156,7 +164,7 @@ export async function djSequence(seed: Song | null, ctx: RecommendationContext, 
       headers: { 'content-type': 'application/json', 'x-vinax-client': isNativePlatform() ? 'app' : 'web' },
       body: JSON.stringify({
         context: { ...buildDjContext(seed, ctx), ...(hints.shape ? { arcShape: hints.shape } : {}), ...(hints.goal ? { listenerGoal: hints.goal.slice(0, 160) } : {}) },
-        pool: pool.slice(0, 40).map((s) => ({ title: s.title, artist: primaryArtist(s), language: s.language })),
+        pool: pool.slice(0, 40).map((s) => ({ id: s.id, title: s.title, artist: primaryArtist(s), language: s.language })),
         count: Math.max(1, Math.min(20, limit)),
       }),
       signal: controller.signal,

@@ -33,8 +33,13 @@ export interface SequenceOptions {
   /** Stop once the sum of durations reaches this (seconds); 0 = no budget. */
   durationSec?: number;
   limit?: number;
-  /** Hard language lock (song.language must match); null = none. */
+  /** Target language; null = none. */
   language?: string | null;
+  /** 'lock' (default) drops other languages; 'prefer' keeps them but charges a cost, so a
+   *  few can drift in when the arc and the listener's other languages justify it. */
+  languagePolicy?: 'lock' | 'prefer';
+  /** Other languages the listener plays (only matters under 'prefer'). */
+  otherLanguages?: string[];
   /** 0..1 — share of slots that may go to `discovery` candidates. */
   discovery?: number;
   /** Ids the caller considers "sure" picks (favourites, most played) — used by the lift shape. */
@@ -115,7 +120,7 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
   pool.forEach((song, rank) => {
     if (!song?.id || seen.has(song.id)) return;
     if (seed && song.id === seed.id) return;
-    if (opts.language && song.language && song.language !== opts.language) return;
+    if (opts.language && song.language && song.language !== opts.language && (opts.languagePolicy ?? 'lock') === 'lock') return;
     seen.add(song.id);
     items.push({ song, energy: songEnergy(song), mood: inferMood(song), rank });
   });
@@ -160,6 +165,16 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
       const dec = decadeOf(c.song);
       if (prevDecade !== null && dec !== null) cost += Math.min(3, Math.abs(dec - prevDecade)) * 0.25;
       cost += (c.rank / Math.max(items.length, 1)) * 1.0; // taste prior
+      // Language drift ('prefer' policy): an off-target song pays a cost —
+      // small for a language the listener also plays, large otherwise — and
+      // never lands right after another off-target song, so the queue can
+      // wander for a song and come back rather than switch languages.
+      if (opts.language && c.song.language && c.song.language !== opts.language) {
+        const familiar = opts.otherLanguages?.includes(c.song.language);
+        const prevOff = !!(prev?.language && prev.language !== opts.language);
+        cost += (familiar ? 1.1 : 2.5) + (prevOff ? 3 : 0);
+        why.push(`a ${c.song.language} detour`);
+      }
       if (shape === 'lift' && opts.sureIds?.has(c.song.id)) {
         cost -= 1.2;
         why.push('a sure favourite');

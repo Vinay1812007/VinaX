@@ -88,6 +88,12 @@ function useClientConfigEffects(): void {
 }
 const BROADCAST_SEEN_KEY = `${STORAGE_PREFIX}.broadcast-seen`;
 
+import { recsDebugEnabled } from '@/store/recsDebugStore';
+
+const RecsDebugPanel = lazy(() => import('@/features/recommendation/RecsDebugPanel').then((m) => ({ default: m.RecsDebugPanel })));
+// Read once: the debug view is opt-in (?debug=recs / localStorage flag) or a dev build.
+const recsDebugWanted = recsDebugEnabled();
+
 export function AppLayout() {
   const coldBoot = !hasBooted;
   useClientConfigEffects();
@@ -416,6 +422,7 @@ export function AppLayout() {
       <PlayerErrorBoundary silent>
         <NowPlayingAnnouncer />
         <NextUpCard />
+      {recsDebugWanted && <Suspense fallback={null}><RecsDebugPanel /></Suspense>}
       </PlayerErrorBoundary>
       <OnboardingSheet />
       <AnnouncementBridge />

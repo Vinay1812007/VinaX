@@ -21,8 +21,12 @@ export const RECOMMENDATION_WEIGHTS = Object.freeze({
   popularity: 0.05,
   freshness: 0.04,
   diversity: 0.2,
+  /** v6.4.0 — per-song affinity (finishing the same song repeatedly). */
+  songAffinity: 0.12,
+  /** v6.4.0 — weekday rhythm. */
+  dayOfWeek: 0.04,
 } as const);
 
-export const SCORING_WEIGHTS_VERSION = '1.0.0';
+export const SCORING_WEIGHTS_VERSION = '1.1.0';
 
 export type RecommendationWeightKey = keyof typeof RECOMMENDATION_WEIGHTS;

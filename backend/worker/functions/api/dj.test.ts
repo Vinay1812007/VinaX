@@ -13,10 +13,10 @@ vi.mock('../_lib/ai', async (importOriginal) => {
 import { canonKey, onRequestPost, parsePicks } from './dj';
 
 const pool = [
-  { title: 'Samajavaragamana', artist: 'Sid Sriram', language: 'telugu' },
-  { title: 'Butta Bomma', artist: 'Armaan Malik', language: 'telugu' },
-  { title: 'Inkem Inkem Inkem Kaavaale', artist: 'Sid Sriram', language: 'telugu' },
-  { title: 'Ramuloo Ramulaa', artist: 'Anurag Kulkarni', language: 'telugu' },
+  { id: 'p1', title: 'Samajavaragamana', artist: 'Sid Sriram', language: 'telugu' },
+  { id: 'p2', title: 'Butta Bomma', artist: 'Armaan Malik', language: 'telugu' },
+  { id: 'p3', title: 'Inkem Inkem Inkem Kaavaale', artist: 'Sid Sriram', language: 'telugu' },
+  { id: 'p4', title: 'Ramuloo Ramulaa', artist: 'Anurag Kulkarni', language: 'telugu' },
 ];
 const env = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k' };
 let ip = 0;
@@ -47,6 +47,16 @@ describe('parsePicks', () => {
     expect(out.intro).toBe('Here we go');
     expect(out.songs.map((s) => s.title)).toEqual(['Butta Bomma', 'Samajavaragamana']);
     expect(out.songs[1].segue).toBe('And now');
+    expect(out.songs.map((s) => s.songId)).toEqual(['p2', 'p1']);
+    expect(out.songs[0].confidence).toBe(0.5); // none given → neutral
+  });
+  it('matches by pool id first and never trusts an id outside the pool', () => {
+    const out = parsePicks(
+      JSON.stringify({ songs: [{ songId: 'p4', title: 'wrong title', artist: 'wrong', reason: 'id wins', confidence: 0.9 }, { songId: 'not-in-pool', title: 'Butta Bomma', artist: 'Armaan Malik', confidence: 1.4 }, { songId: 'ghost', title: 'Ghost', artist: 'Nobody' }] }),
+      pool,
+      8,
+    );
+    expect(out.songs.map((s) => [s.songId, s.title, s.confidence])).toEqual([['p4', 'Ramuloo Ramulaa', 0.9], ['p2', 'Butta Bomma', 1]]);
   });
   it('canonKey ignores version tags, punctuation and extra credits', () => {
     expect(canonKey('Kesariya (From "Brahmastra")', 'Arijit Singh, Pritam')).toBe(canonKey('Kesariya', 'Arijit Singh'));

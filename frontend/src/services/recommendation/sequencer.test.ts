@@ -107,3 +107,25 @@ describe('arcErrorOf', () => {
     expect(arcErrorOf([], seed, 'build')).toBe(0);
   });
 });
+
+describe('language policy', () => {
+  const tel = (id: string, e: number) => song(id, `T ${id}`, `A${id}`, { energy: e });
+  const hin = (id: string, e: number) => song(id, `H ${id}`, `B${id}`, { energy: e, language: 'hindi' });
+  it("'lock' drops other languages; 'prefer' allows an occasional familiar-language detour but never two in a row", () => {
+    // Four target-language songs to two others, so alternation is always possible.
+    const pool = [tel('t1', 0.5), hin('h1', 0.5), tel('t2', 0.5), hin('h2', 0.5), tel('t3', 0.5), tel('t4', 0.5)];
+    const locked = sequenceSongs(pool, { language: 'telugu' });
+    expect(locked.songs.every((s) => s.song.language === 'telugu')).toBe(true);
+    // limit 5: once the target language runs out, a second detour is forced — that is not what this checks.
+    const drift = sequenceSongs(pool, { language: 'telugu', languagePolicy: 'prefer', otherLanguages: ['hindi'], limit: 5 });
+    const langs = drift.songs.map((s) => s.song.language);
+    expect(langs.slice(0, 3).filter((l) => l === 'telugu').length).toBe(3); // target first
+    for (let i = 1; i < langs.length; i += 1) if (langs[i] === 'hindi') expect(langs[i - 1]).toBe('telugu');
+    expect(drift.songs.find((s) => s.song.language === 'hindi')?.why).toMatch(/hindi detour/);
+  });
+  it("'prefer' charges an unfamiliar language much more than a familiar one", () => {
+    const pool = [tel('t1', 0.5), hin('h1', 0.5), song('m1', 'M', 'C', { energy: 0.5, language: 'malayalam' })];
+    const r = sequenceSongs(pool, { language: 'telugu', languagePolicy: 'prefer', otherLanguages: ['hindi'] });
+    expect(r.songs.map((s) => s.song.language)).toEqual(['telugu', 'hindi', 'malayalam']);
+  });
+});

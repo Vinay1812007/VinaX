@@ -146,7 +146,10 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   const sureIds = new Set([...ctx.favorites.map((s) => s.id), ...ctx.history.slice(0, 60).map((e) => e.song.id)]);
   const discoveryIds = new Set(ranked.filter((item) => item.candidate.source === 'explore').map((item) => item.candidate.song.id));
   const lock = seed.language && seed.language !== 'unknown' ? seed.language : null;
-  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, discovery: ctx.explore ? 0.3 : 0.15, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
+  // Language rule: the queue speaks the seed's language. In explore mode it
+  // may take an occasional detour into another language the listener plays.
+  const otherLanguages = ctx.pinnedLanguages.filter((l) => l !== lock);
+  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: ctx.explore ? 'prefer' : 'lock', otherLanguages, discovery: ctx.explore ? 0.3 : 0.15, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
   const songs: Song[] = arc.songs.map((s) => s.song);
   // A language-locked pool can run short; top up in ranked order.
   for (const song of orderedPool) {
@@ -156,6 +159,7 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   publishReasons(ranked.filter((item) => songs.some((song) => song.id === item.candidate.song.id)));
   // Arc reasons are more specific than scorer reasons; let them win.
   useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why).map((s) => [s.song.id, s.why]));
+  publishDebug(ranked, songs, 'local');
   // v6.2.0 — the AI DJ gets a bounded, optional final say over the ORDER of
   // the admitted pool (never over what is in it). Off by setting or owner
   // flag, or when the DJ is slow/down/unconfigured, the deterministic order
@@ -174,10 +178,27 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
       // The DJ's order is accepted only when it keeps the arc at least as
       // tight as the local one (within a small tolerance); its reasons and
       // segues are kept either way.
-      if (arcErrorOf(sequenced, seed, shape) <= arc.arcError + 0.08) return sequenced.slice(0, limit);
+      if (arcErrorOf(sequenced, seed, shape) <= arc.arcError + 0.08) {
+        publishDebug(ranked, sequenced.slice(0, limit), 'ai', new Map(set.picks.map((p) => [p.song.id, p.confidence])));
+        return sequenced.slice(0, limit);
+      }
     }
   }
   return songs;
+}
+
+/** v6.4.0 — development-only score breakdowns for the recs debug panel (no-op unless enabled). */
+function publishDebug(ranked: ScoredCandidate[], chosen: Song[], source: 'local' | 'ai', confidence?: Map<string, number>): void {
+  void import('@/store/recsDebugStore').then((m) => {
+    if (!m.recsDebugEnabled()) return;
+    const byId = new Map(ranked.map((r) => [r.candidate.song.id, r]));
+    m.useRecsDebugStore.getState().publish(
+      chosen.map((song, i) => {
+        const r = byId.get(song.id);
+        return { position: i + 1, song, finalScore: r?.score ?? 0, source: r?.candidate.source ?? 'unknown', components: r?.reasons ?? [], picker: source, confidence: confidence?.get(song.id) };
+      }),
+    );
+  }).catch(() => undefined);
 }
 
 /** Arc shape from the listener-energy read (same signal the AI DJ gets). */
