@@ -131,7 +131,11 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
     muted: ctx.mutedLanguages, blocked: song => isSongBlocked(song, useLibraryStore.getState()) });
   const admittedIds = new Set(admitted.map(s => s.id));
   let ranked = rankCandidates(candidates.filter(c => admittedIds.has(c.song.id)).map((candidate) => ({ ...candidate, song: enrichedById.get(candidate.song.id) ?? candidate.song })), { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next' });
-  ranked = await blendAi(ranked, { ...ctx, seedSong: seed });
+  // v6.5.2 — the AI re-rank and the AI DJ both order the same pool; running
+  // both in series doubled the wait before a continuation could ship (live:
+  // ~10 s of ranking timeouts, then the DJ). When the DJ is on, it is the
+  // AI voice for this stretch; the re-rank only runs when the DJ is off.
+  if (!aiDjEnabled()) ranked = await blendAi(ranked, { ...ctx, seedSong: seed });
   const seedLang = seed.language && seed.language !== 'unknown' ? seed.language : null;
   const tune = options.tune ?? null;
   if (tune) {
