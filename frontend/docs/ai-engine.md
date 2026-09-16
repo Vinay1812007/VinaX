@@ -5,6 +5,16 @@ architecture. Nothing was rewritten to add or retire an engine: features talk
 to **lanes**, lanes pin **models**, and a central **registry** describes every
 model VinaX can reach.
 
+## v6.2.0 — AI DJ, DJ voice and AI-designed Home shelves
+
+| Feature | Route | Lane and ladder | What the model may do | What it may NOT do |
+| --- | --- | --- | --- | --- |
+| AI DJ (queue continuation) | `POST /api/dj` | `dj` → chat → fast → scholar → home; 16 s budget | Order a pool of real, pre-filtered songs; write a reason and a spoken segue per pick and a set intro | Add a song outside the pool (dropped by canonical key); see listener identifiers; block playback (the client keeps its own order on any failure or after a 14 s leash) |
+| AI-designed shelves | `POST /api/curate` task `shelves` | `dj` → chat → fast → home; 9 s budget | Propose 4–6 shelf titles + catalogue queries + one-line reasons, steered away from the last 30 shown | Return markup, URLs or brand names (rejected client-side); fill shelves itself (the catalogue does) |
+| DJ voice | `POST /api/tts` (existing) | scholar key, Orpheus voices | Speak the DJ's segue in the chosen studio voice | Run without consent: it is the listener's DJ-voice switch, device voice offline |
+
+Kill-switches: feature flags `aiDj` and `aiHome` (owner console → Feature flags), listener settings **AI DJ** and **AI-designed shelves on Home**. Both features degrade to the deterministic recommender; the DJ client marks the service unavailable for the session after a 503 and backs off 60 s after any other error.
+
 ## Architecture
 
 ```

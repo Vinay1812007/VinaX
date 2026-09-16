@@ -44,6 +44,11 @@ export interface SettingsState {
   recommendationIntensity: number;
   /** Package A4 — explore mode: a ~15% discovery slot on taste-generic shelves. */
   exploreMode: boolean;
+  /** v6.2.0 — AI DJ: the queue's next stretch is sequenced by the DJ engine
+   *  (from real, already-filtered candidates); off = local recommender only. */
+  aiDj: boolean;
+  /** v6.2.0 — "Designed for you": AI-designed shelves on Home. */
+  aiHomeShelves: boolean;
   /** Package C2 — Kid mode: hides explicit-flagged songs and switches to a
    *  separate taste profile. Favorites/downloads/settings stay shared. */
   kidMode: boolean;
@@ -96,6 +101,8 @@ export interface SettingsState {
   setReduceMotion(v: boolean): void;
   setRecommendationIntensity(v: number): void;
   setExploreMode(v: boolean): void;
+  setAiDj(v: boolean): void;
+  setAiHomeShelves(v: boolean): void;
   setKidMode(v: boolean): void;
   setAllowRegionInference(v: boolean): void;
   setManualCountry(c: string | null): void;
@@ -154,6 +161,8 @@ const defaults = {
   reduceMotion: false,
   recommendationIntensity: 0.7,
   exploreMode: false,
+  aiDj: true,
+  aiHomeShelves: true,
   kidMode: false,
   allowRegionInference: true,
   manualCountry: null,
@@ -204,6 +213,8 @@ export const useSettingsStore = create<SettingsState>()(
       setRecommendationIntensity: (v) =>
         set({ recommendationIntensity: Math.min(1, Math.max(0, v)) }),
       setExploreMode: (exploreMode) => set({ exploreMode }),
+      setAiDj: (aiDj) => set({ aiDj }),
+      setAiHomeShelves: (aiHomeShelves) => set({ aiHomeShelves }),
       setKidMode: (kidMode) => set({ kidMode }),
       setAllowRegionInference: (allowRegionInference) => set({ allowRegionInference }),
       setManualCountry: (manualCountry) => set({ manualCountry }),

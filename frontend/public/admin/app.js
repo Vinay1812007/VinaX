@@ -2606,7 +2606,9 @@
   // 10. Feature flags — kill-switches the app reads from /api/appconfig?key=flags.
   var KNOWN_FLAGS = [
     { key: 'codeRun', label: 'Run / Preview in VinaX AI code blocks', note: 'Off hides the ▶ Run and Open buttons under code the assistant writes.' },
-    { key: 'listenTogether', label: 'Listen Together', note: 'Off hides the Listen Together entry from the sidebar and Library.' }
+    { key: 'listenTogether', label: 'Listen Together', note: 'Off hides the Listen Together entry from the sidebar and Library.' },
+    { key: 'aiDj', label: 'AI DJ', note: 'Off stops the queue from asking the AI DJ to sequence what plays next; the local recommender still runs.' },
+    { key: 'aiHome', label: 'AI-designed Home shelves', note: 'Off hides the “Designed for you” block on Home for everyone.' }
   ];
   function renderFlagsSection() {
     $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
@@ -3118,8 +3120,8 @@
   // Home Layout Studio — the admin’s safe production default. Listener-side
   // Home Studio remains private and can preview AI layouts without publishing.
   function renderHomeBuilderSection() {
-    var defaults = { title: 'Your next favorite starts here.', description: 'Familiar voices, fresh discoveries. A mix that grows with you.', order: ['quick','personal','discovery','charts','seasonal','moods','genres','artists','albums','daypicks','loved','feed'], hidden: [] };
-    var LABELS = { quick: 'Quick picks', personal: 'Made for you', discovery: 'Fresh discoveries', charts: 'Charts', seasonal: 'Seasonal listening', moods: 'Moods', genres: 'Genres', artists: 'Artists', albums: 'Albums', daypicks: 'For your day', loved: 'Favorites', feed: 'More to explore' };
+    var defaults = { title: 'Your next favorite starts here.', description: 'Familiar voices, fresh discoveries. A mix that grows with you.', order: ['quick','personal','aihome','discovery','charts','seasonal','moods','genres','artists','albums','daypicks','loved','feed'], hidden: [] };
+    var LABELS = { quick: 'Quick picks', personal: 'Made for you', aihome: 'Designed for you (AI shelves)', discovery: 'Fresh discoveries', charts: 'Charts', seasonal: 'Seasonal listening', moods: 'Moods', genres: 'Genres', artists: 'Artists', albums: 'Albums', daypicks: 'For your day', loved: 'Favorites', feed: 'More to explore' };
     cfgGet('home-layout').then(function (d) {
       var value = d && d.value && typeof d.value === 'object' ? d.value : defaults;
       var order = Array.isArray(value.order) ? value.order.filter(function (x) { return defaults.order.indexOf(x) >= 0; }) : defaults.order.slice();

@@ -2,7 +2,7 @@ import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
 
 /** Task budgets; models and fallback lanes are configured in the server router. */
-export const RECOMMENDATION_AI_ROUTING = { metadataTimeoutMs: 6200, rankingTimeoutMs: 7800, homeTimeoutMs: 9800 };
+export const RECOMMENDATION_AI_ROUTING = { metadataTimeoutMs: 6200, rankingTimeoutMs: 7800, homeTimeoutMs: 9800, shelvesTimeoutMs: 9800 };
 const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/curate' : '/api/curate';
 const CACHE_KEY = 'vinax.recommendation.ai-metadata.v2';
 const TTL = 30 * 86_400_000;
@@ -19,13 +19,13 @@ const label = (v: unknown): string | undefined => typeof v === 'string' && v.tri
 const labels = (v: unknown) => (Array.isArray(v) ? v : [v]).map(label).filter((s): s is string => !!s).slice(0, 6);
 const numeric = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : undefined;
 
-export async function requestCurator(task: 'metadata' | 'ranking' | 'home', data: unknown, signal?: AbortSignal): Promise<unknown> {
-  if (task !== 'home' && Date.now() < retryAfter) return null;
+export async function requestCurator(task: 'metadata' | 'ranking' | 'home' | 'shelves', data: unknown, signal?: AbortSignal): Promise<unknown> {
+  if (task !== 'home' && task !== 'shelves' && Date.now() < retryAfter) return null;
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
   if (signal?.aborted) controller.abort();
-  const ms = task === 'metadata' ? RECOMMENDATION_AI_ROUTING.metadataTimeoutMs : task === 'ranking' ? RECOMMENDATION_AI_ROUTING.rankingTimeoutMs : RECOMMENDATION_AI_ROUTING.homeTimeoutMs;
+  const ms = task === 'metadata' ? RECOMMENDATION_AI_ROUTING.metadataTimeoutMs : task === 'ranking' ? RECOMMENDATION_AI_ROUTING.rankingTimeoutMs : task === 'shelves' ? RECOMMENDATION_AI_ROUTING.shelvesTimeoutMs : RECOMMENDATION_AI_ROUTING.homeTimeoutMs;
   const timer = setTimeout(abort, ms);
   try {
     const res = await fetch(ENDPOINT, {

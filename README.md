@@ -6,6 +6,10 @@ VinaX combines music discovery, playback, lyrics, playlists and AI assistance in
 
 [Listen](https://www.sirimillavinay.online) · [Deployment guide](DEPLOYMENT.md) · [User guide](frontend/docs/user-guide/README.md)
 
+## What's new in 6.2 — AI DJ, talking DJ voice, AI-designed Home shelves
+
+The AI DJ returns on the lane router: when autoplay or radio continues the queue, the DJ engine sequences the next stretch **from candidates the on-device recommender already gathered and filtered** (language lock, blocklists, canonical de-dup) — an energy arc, no artist twice in a row, a one-line reason per pick and a spoken segue. It never invents a song; a pick outside the pool is discarded, and when the service is slow, down or unconfigured the deterministic order ships. **DJ voice** speaks those segues in the listener's chosen studio voice (device voice offline), ducking the music while it talks. **Designed for you** is a Home block of AI-titled shelves resolved against the catalogue, refreshed per half-day with anti-repeat memory. Listener switches: Settings → Recommendations; owner kill-switches: feature flags `aiDj` and `aiHome`; the block is `aihome` in Home layouts. See [frontend/docs/ai-engine.md](frontend/docs/ai-engine.md).
+
 ## What's new in 6.1
 
 Reliability and data safety first: a versioned backup format with a Backup Center (preview, merge or replace, undo), an import review step for text playlists, Unicode-safe song matching, cancellable imports, truthful username claims, and a fix for the looping Android download link. Home now loads only the shelves in view and respects owner-disabled shelves; listening minutes follow one shared rule. New in the Library: in-playlist search, multi-select edits with Undo, and smart collections. See [UPGRADE_6_1.md](UPGRADE_6_1.md) for details, verification and limitations.
@@ -18,7 +22,7 @@ Search now has a new discovery layout, 15 listener additions, and improved match
 
 Astra refreshes the customer workspace, VinaX AI and the owner console with a space-inspired design, clearer typography, loading states and reduced-motion-aware interactions. Home now includes an explicit **Refresh discovery** action.
 
-Playback follows the selected album, playlist or manual queue. AI DJ and automatic next-song recommendations have been removed. Home Studio (the listener-side layout editor, with optional AI-suggested arrangements) remains available on Home; see **Home customization** below for how it combines with the owner's published layout. AI playlists exclude recent generations while resolving catalog searches in parallel. Chat regeneration uses the correct conversation context and asks for a different approach.
+Playback follows the selected album, playlist or manual queue; with autoplay or radio on, the queue is extended by the on-device recommender and, since 6.2, sequenced by the AI DJ (see above). Home Studio (the listener-side layout editor, with optional AI-suggested arrangements) remains available on Home; see **Home customization** below for how it combines with the owner's published layout. AI playlists exclude recent generations while resolving catalog searches in parallel. Chat regeneration uses the correct conversation context and asks for a different approach.
 
 See [the complete Astra upgrade and checking guide](ASTRA_UPGRADE.md) for changes, limitations and the post-deployment walkthrough.
 
@@ -41,7 +45,7 @@ Music and AI results depend on the configured providers. Catalog shelves use loc
 
 VinaX builds a taste profile from listening activity on the device. Its ranking combines language and artist affinity, popularity, listening context, skips and discovery preferences. Queue construction filters candidates, deduplicates song identities and sequences artists for variety. When a small catalog makes the artist cap impossible, it relaxes that cap before allowing consecutive songs by the same artist.
 
-Home combines catalog-backed shelves with locally generated queries. Each Home block owns its catalog requests: the Aura Mix hero and the first two blocks load immediately, every later block loads only when it scrolls near the viewport, and a hidden block never requests anything. Songs are de-duplicated across shelves in display order, and selected-language shelves do not fill shortages with known off-language songs. New listeners can receive personalized shelves after choosing languages, before building history.
+Home combines catalog-backed shelves with locally generated queries, plus the optional AI-designed "Designed for you" block (`aihome`). Each Home block owns its catalog requests: the Aura Mix hero and the first two blocks load immediately, every later block loads only when it scrolls near the viewport, and a hidden block never requests anything. Songs are de-duplicated across shelves in display order, and selected-language shelves do not fill shortages with known off-language songs. New listeners can receive personalized shelves after choosing languages, before building history.
 
 **Familiar** increases the influence of established taste. **Balanced** blends taste with broader picks. **Discover** enables exploration slots. These controls guide recommendations; they do not promise a particular song or change tracks already queued.
 
