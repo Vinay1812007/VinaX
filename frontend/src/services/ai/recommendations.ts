@@ -14,12 +14,20 @@ export interface AiSongMetadata {
 interface Entry { at: number; fingerprint: string; metadata: AiSongMetadata }
 const pending = new Map<string, Promise<AiSongMetadata[]>>();
 let retryAfter = 0;
+/** v6.5.1 — set when the route itself is missing (404/405: the deployed
+ *  backend predates this client). Every curate task stays quiet for ten
+ *  minutes instead of spending a full leash per Home open and per queue
+ *  extension on a backend that cannot answer. */
+let routeMissingUntil = 0;
+/** Test hook. */
+export function resetCuratorBackoff(): void { retryAfter = 0; routeMissingUntil = 0; }
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const label = (v: unknown): string | undefined => typeof v === 'string' && v.trim() ? v.trim().toLowerCase().slice(0, 60) : undefined;
 const labels = (v: unknown) => (Array.isArray(v) ? v : [v]).map(label).filter((s): s is string => !!s).slice(0, 6);
 const numeric = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : undefined;
 
 export async function requestCurator(task: 'metadata' | 'ranking' | 'home' | 'shelves', data: unknown, signal?: AbortSignal): Promise<unknown> {
+  if (Date.now() < routeMissingUntil) return null;
   if (task !== 'home' && task !== 'shelves' && Date.now() < retryAfter) return null;
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -32,6 +40,7 @@ export async function requestCurator(task: 'metadata' | 'ranking' | 'home' | 'sh
       method: 'POST', headers: { 'content-type': 'application/json', 'x-vinax-client': isNativePlatform() ? 'app' : 'web' },
       body: JSON.stringify({ task, data }), signal: controller.signal,
     });
+    if (res.status === 404 || res.status === 405) { routeMissingUntil = Date.now() + 10 * 60_000; return null; }
     if (!res.ok) throw new Error('Curator unavailable');
     return object(await res.json()).data ?? null;
   } catch {

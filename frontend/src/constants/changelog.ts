@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '6.5.1': {
+    title: 'Keeping the lights green',
+    changes: [
+      { type: 'fixed', text: 'When the server behind VinaX is older than the app, the AI DJ and the AI shelves now step aside quietly for ten minutes instead of waiting on every song and every Home open. Your queue keeps flowing from the on-device engine.' },
+      { type: 'fixed', text: 'Builds: the Android build no longer asks the SDK for a package that no longer exists, the web bundle gate reflects what actually ships, and a rejected deployment token is reported by name.' },
+    ],
+  },
   '6.5.0': {
     title: 'The DJ takes the wheel',
     changes: [
