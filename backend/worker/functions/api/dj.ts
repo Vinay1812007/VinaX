@@ -39,6 +39,7 @@ HOW TO BUILD THE SET
 5. listenerEnergy is your dashboard: "restless" means change direction with surer, well-loved tracks; "wavering" means re-anchor with a favourite; "returning after a break" opens warm and familiar; "locked in" means sustain and lift one gentle notch at a time.
 6. When festivalContext is present, let two or three picks carry that festival's mood naturally, never a takeover.
 7. Respect tuneInstruction (if present) as the highest-priority adjustment.
+8. arcShape (if present) names the energy arc the app wants: steady (settle, one gentle peak, ease off), build (climb steadily), wind-down (descend), wave (rise and fall twice), lift (come up a notch quickly with sure favourites, then hold). listenerGoal (if present) is what the listener asked the Queue Builder for — honour it inside the pool.
 
 OUTPUT — JSON only, exactly this shape:
 {"intro":"one warm spoken sentence introducing this stretch, max 22 words, no song titles","songs":[{"title":"exact pool title","artist":"exact pool artist","reason":"why it fits and how it flows, max 12 words","segue":"one natural spoken line a DJ would say as this song starts, max 20 words, may name the song and artist"}]}

@@ -221,6 +221,8 @@ export function AppLayout() {
       initSessionInsights();
       // Measured listening time for Stats (pauses/seeks excluded).
       void import('@/services/analytics/listenClock').then((m) => m.initListenClock());
+      // v6.3.0 — remember which hand-offs the listener finished or skipped.
+      void import('@/services/recommendation/transitionTracker').then((m) => m.initTransitionTracker());
       // A username chosen while offline stays "pending" until the service
       // confirms it — retry now and on every reconnect.
       void import('@/features/identity/handleClaim').then((m) => m.installClaimRetry());

@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
+
+const QueueBuilderSheet = lazy(() => import('@/features/queue/QueueBuilderSheet').then((m) => ({ default: m.QueueBuilderSheet })));
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
@@ -20,6 +22,8 @@ export default function QueuePage() {
   const moveInQueue = usePlayerStore((s) => s.moveInQueue);
   const song = useCurrentSong();
   const upNext = queue.slice(index + 1);
+  // v6.3.0 — Queue Builder.
+  const [building, setBuilding] = useState(false);
 
   // ---- Drag-to-reorder (pointer events, zero deps) -----------------------
   // dragFrom/dragOver are 0-based positions within upNext; the store call
@@ -94,12 +98,20 @@ export default function QueuePage() {
 
   if (!queue.length) {
     return (
-      <EmptyState
-        icon={<QueueIcon className="w-8 h-8" />}
-        title="Queue is empty"
-        message="Play a song, album or playlist to start your queue."
-        action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
-      />
+      <>
+        {building && <Suspense fallback={null}><QueueBuilderSheet onClose={() => setBuilding(false)} /></Suspense>}
+        <EmptyState
+          icon={<QueueIcon className="w-8 h-8" />}
+          title="Queue is empty"
+          message="Play a song, album or playlist to start your queue — or let VinaX build one from your taste."
+          action={
+            <span className="flex flex-wrap gap-2 justify-center">
+              <button onClick={() => setBuilding(true)} className="px-5 py-2.5 rounded-full btn-primary">Build a queue</button>
+              <Link to="/" className="px-5 py-2.5 rounded-full btn-secondary">Browse Home</Link>
+            </span>
+          }
+        />
+      </>
     );
   }
 
@@ -110,15 +122,16 @@ export default function QueuePage() {
           <h1 className="text-[26px] font-extrabold tracking-tight">Queue</h1>
           <p className="text-xs font-semibold text-ink-400 mb-4">Your selected songs, in order</p>
         </div>
-        {queue.length >= 2 && (
-          <button
-            onClick={saveAsPlaylist}
-            className="shrink-0 mt-1 px-4 py-2 rounded-full glass-button text-xs font-bold"
-          >
-            Save as playlist
-          </button>
-        )}
+        <div className="flex gap-2 shrink-0 mt-1">
+          <button onClick={() => setBuilding(true)} className="px-4 py-2 rounded-full btn-primary text-xs font-bold">Build a queue</button>
+          {queue.length >= 2 && (
+            <button onClick={saveAsPlaylist} className="px-4 py-2 rounded-full glass-button text-xs font-bold">
+              Save as playlist
+            </button>
+          )}
+        </div>
       </div>
+      {building && <Suspense fallback={null}><QueueBuilderSheet onClose={() => setBuilding(false)} /></Suspense>}
 
       {/* now playing */}
       {song && (

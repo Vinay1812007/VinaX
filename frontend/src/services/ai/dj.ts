@@ -137,7 +137,14 @@ export function resolveFromPool(picks: WirePick[], pool: Song[], limit: number):
  * when the DJ is unavailable, slow, or answered with fewer than three usable
  * picks — the caller keeps its own order in every such case.
  */
-export async function djSequence(seed: Song | null, ctx: RecommendationContext, pool: Song[], limit: number, signal?: AbortSignal): Promise<DjSet | null> {
+export interface DjHints {
+  /** The arc the local sequencer is aiming for (steady / build / wind-down / wave / lift). */
+  shape?: string;
+  /** A plain-words goal from the Queue Builder ("30 minutes, upbeat, for a drive"). */
+  goal?: string;
+}
+
+export async function djSequence(seed: Song | null, ctx: RecommendationContext, pool: Song[], limit: number, signal?: AbortSignal, hints: DjHints = {}): Promise<DjSet | null> {
   if (!djAvailable() || pool.length < 3) return null;
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -148,7 +155,7 @@ export async function djSequence(seed: Song | null, ctx: RecommendationContext, 
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-vinax-client': isNativePlatform() ? 'app' : 'web' },
       body: JSON.stringify({
-        context: buildDjContext(seed, ctx),
+        context: { ...buildDjContext(seed, ctx), ...(hints.shape ? { arcShape: hints.shape } : {}), ...(hints.goal ? { listenerGoal: hints.goal.slice(0, 160) } : {}) },
         pool: pool.slice(0, 40).map((s) => ({ title: s.title, artist: primaryArtist(s), language: s.language })),
         count: Math.max(1, Math.min(20, limit)),
       }),
