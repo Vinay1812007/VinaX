@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '6.5.2': {
+    title: 'The DJ gets the time it needs',
+    changes: [
+      { type: 'fixed', text: 'The AI DJ was giving up before the engine could answer: it now waits up to 30 seconds from the moment a song starts (the engine typically needs 12–20), and it only asks for spoken lines when the DJ voice is on, which halves the work. AI shelves and AI ranking got the same breathing room.' },
+    ],
+  },
   '6.5.1': {
     title: 'Keeping the lights green',
     changes: [

@@ -50,7 +50,7 @@ HOW TO BUILD THE SET
 8. arcShape (if present) names the energy arc the app wants: steady (settle, one gentle peak, ease off), build (climb steadily), wind-down (descend), wave (rise and fall twice), lift (come up a notch quickly with sure favourites, then hold). listenerGoal (if present) is what the listener asked the Queue Builder for — honour it inside the pool.
 
 OUTPUT — JSON only, exactly this shape:
-{"intro":"one warm spoken sentence introducing this stretch, max 22 words, no song titles","songs":[{"songId":"the pool entry's id, copied exactly","title":"exact pool title","artist":"exact pool artist","reason":"why it fits and how it flows, max 12 words, e.g. similar energy, same language vocals, smoother transition","segue":"one natural spoken line a DJ would say as this song starts, max 20 words, may name the song and artist","confidence":0.0,"fromPool":true}]}
+{"intro":"one warm spoken sentence introducing this stretch, max 22 words, no song titles","songs":[{"songId":"the pool entry's id, copied exactly","title":"exact pool title","artist":"exact pool artist","reason":"why it fits and how it flows, max 12 words, e.g. similar energy, same language vocals, smoother transition","segue":"one natural spoken line a DJ would say as this song starts, max 20 words, may name the song and artist (an empty string when the brief says segues are not needed)","confidence":0.0,"fromPool":true}]}
 confidence is your 0..1 belief that this pick flows well from the previous one. Return exactly the requested number of songs when the pool allows. Copy songId, title and artist EXACTLY as they appear in the pool and set fromPool to true for them.`;
 
 const DISCOVERY_BRIEF = (n: number): string =>
@@ -175,7 +175,7 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
   if (Number(request.headers.get('content-length')) > 48_000) return json({ error: 'too_large' }, 413);
   const text = await request.text();
   if (text.length > 48_000) return json({ error: 'too_large' }, 413);
-  let body: { context?: unknown; pool?: unknown; count?: unknown; discover?: unknown; maxDiscover?: unknown };
+  let body: { context?: unknown; pool?: unknown; count?: unknown; discover?: unknown; maxDiscover?: unknown; wantSegues?: unknown };
   try {
     body = JSON.parse(text) as typeof body;
   } catch {
@@ -194,20 +194,26 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
   const count = Math.max(1, Math.min(20, Math.floor(typeof body.count === 'number' ? body.count : 8)));
   const discover = body.discover === true;
   const maxDiscover = discover ? Math.max(0, Math.min(6, Math.floor(typeof body.maxDiscover === 'number' ? body.maxDiscover : 4))) : 0;
+  // v6.5.2 — spoken segues are only useful when the DJ voice is on; skipping
+  // them roughly halves the output the engine has to write.
+  const wantSegues = body.wantSegues !== false;
 
   const t0 = Date.now();
   const seed = varietySeed();
   const angle = styleAngle(seed);
   const opener = pickBySeed(OPENERS, seed, 'opener');
-  // The client's leash is 20 s and it asks the moment a song starts; a cold
-  // engine plus one failover still fits, with the gather capped separately.
-  const deadlineAt = t0 + 16_000;
+  // v6.5.2 — measured live on 2026-09-16: the pinned engine needs 12–20 s for
+  // a full JSON set (the playlist route, same lane, lands in ~20 s), and a
+  // 16 s budget with 4.5 s / 9 s leashes timed out on every attempt (408).
+  // The client asks the moment a song starts and waits up to 30 s, so a
+  // 26 s budget keeps one real attempt plus one failover inside it.
+  const deadlineAt = t0 + 26_000;
   const ctxJson = JSON.stringify(ctx);
   // v6.5.0 — a thin pool gets supplementary real-song candidates from the
   // fast lane (3.9's gather round), so the curate has more to draw from.
   // Optional: a slow or empty gather costs at most 5 s and never fails the set.
   let candidates: Candidate[] = [];
-  if (discover && pool.length < 24) {
+  if (discover && pool.length < 12) {
     try {
       const gathered = await gather(
         env,
@@ -236,14 +242,16 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
     `Listener context (JSON):\n${ctxJson}\n\nPOOL — real songs, guaranteed playable (JSON):\n${JSON.stringify(pool)}\n\n` +
     (maxDiscover > 0 ? `${DISCOVERY_BRIEF(maxDiscover)}\n` + (candidates.length ? `SUPPLEMENTARY CANDIDATES from a music expert — real songs, use them as discoveries only when they fit (JSON):\n${JSON.stringify(candidates)}\n` : '') + '\n' : '') +
     `Return exactly ${Math.min(count, pool.length + maxDiscover)} songs, sequenced as a set. varietySeed: "${seed}" — a fresh round must differ from the last one for the same seed. ` +
-    `styleAngle: "${angle}" — let it colour one or two picks. Opening feel: ${opener}. JSON only.`;
+    `styleAngle: "${angle}" — let it colour one or two picks. Opening feel: ${opener}. ` +
+    (wantSegues ? '' : 'Segues are NOT needed this round: set every "segue" to "". ') +
+    'JSON only.';
   const r = await chat(
     env,
     [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: user },
     ],
-    { temperature: 0.8, lane: 'dj', json: true, maxTokens: 1500, reasoningEffort: 'low', timeoutMs: 9_000, firstTimeoutMs: 4_500, ladder: ['chat', 'fast', 'scholar', 'home'], deadlineAt },
+    { temperature: 0.8, lane: 'dj', json: true, maxTokens: wantSegues ? 1500 : 1000, reasoningEffort: 'low', timeoutMs: 11_000, firstTimeoutMs: 13_000, ladder: ['fast', 'scholar', 'chat', 'home'], deadlineAt },
   );
   // Structural anti-repeat for proposals: whatever the model claims, a title
   // the listener just heard or was already offered never comes back.

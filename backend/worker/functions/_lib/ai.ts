@@ -432,6 +432,7 @@ export async function chat(
       if (useJson) payload.response_format = { type: 'json_object' };
 
       const controller = new AbortController();
+      const startedAt = Date.now();
       const leash = attemptNo === 1 ? (opts.firstTimeoutMs ?? opts.timeoutMs ?? 20_000) : (opts.timeoutMs ?? 20_000);
       const timer = setTimeout(() => controller.abort(), Math.min(leash, remainingMs));
       let res: Response;
@@ -445,10 +446,14 @@ export async function chat(
       } catch {
         // Network error or timeout: fail over to the next lane pair.
         clearTimeout(timer);
+        console.log(`[ai] lane=${role} model=${model} status=timeout ms=${Date.now() - startedAt} leash=${Math.min(leash, remainingMs)}`);
         lastStatus = 0;
         break;
       }
       clearTimeout(timer);
+      // v6.5.2 — one compact line per attempt so `wrangler tail` shows which
+      // engine answered, how fast, or why it did not (no secrets, no prompt).
+      console.log(`[ai] lane=${role} model=${model} status=${res.status} ms=${Date.now() - startedAt}`);
       if (res.ok) {
         const data = (await res.json().catch(() => null)) as
           | { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }>; usage?: unknown }

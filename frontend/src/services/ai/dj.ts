@@ -11,6 +11,7 @@ import { getMoodPin } from '@/services/personalization/session';
 import { inferMood } from '@/services/recommendation/mood';
 import { useReasonStore } from '@/store/reasonStore';
 import { useDjStore } from '@/store/djStore';
+import { useSettingsStore } from '@/store/settingsStore';
 
 /**
  * v6.2.0 / v6.5.0 — the AI DJ client.
@@ -32,8 +33,9 @@ const SURFACED_CAP = 300;
 const AVOID_SEND = 120;
 /** Bounded wait for the DJ. The first continuation is requested the moment a
  *  song starts, so the model has most of that song to answer; playback never
- *  hangs on it. */
-const LEASH_MS = 20_000;
+ *  hangs on it. v6.5.2: 30 s — the engines were measured needing 12–20 s for
+ *  a full set, and the server budget is 26 s. */
+const LEASH_MS = 30_000;
 /** Most off-pool proposals resolved per round (each costs a catalogue search). */
 const MAX_DISCOVER = 4;
 /** Rotating creative focus, one per round (3.9 behaviour): keeps consecutive
@@ -306,6 +308,9 @@ export async function djSequence(seed: Song | null, ctx: RecommendationContext, 
         count: Math.max(1, Math.min(20, limit)),
         discover: hints.discover === true,
         maxDiscover: MAX_DISCOVER,
+        // Spoken segues only matter when the DJ voice is on; skipping them
+        // halves what the engine has to write.
+        wantSegues: useSettingsStore.getState().djVoice === true,
       }),
       signal: controller.signal,
     });

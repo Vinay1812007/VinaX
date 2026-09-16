@@ -2,7 +2,10 @@ import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
 
 /** Task budgets; models and fallback lanes are configured in the server router. */
-export const RECOMMENDATION_AI_ROUTING = { metadataTimeoutMs: 6200, rankingTimeoutMs: 7800, homeTimeoutMs: 9800, shelvesTimeoutMs: 9800 };
+// v6.5.2 — client leashes sit above the server budgets (metadata 5.5 s,
+// ranking 9 s, home 9 s, shelves 14 s) so an answer that is on its way is
+// never aborted a second before it lands.
+export const RECOMMENDATION_AI_ROUTING = { metadataTimeoutMs: 6500, rankingTimeoutMs: 10_500, homeTimeoutMs: 10_500, shelvesTimeoutMs: 16_000 };
 const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/curate' : '/api/curate';
 const CACHE_KEY = 'vinax.recommendation.ai-metadata.v2';
 const TTL = 30 * 86_400_000;
