@@ -1,179 +1,111 @@
-# Import & Export Your Data
+# Backups: export, restore, and moving devices
 
-*Last updated: v3.8. Applies to web, PWA and Android.*
+*Last updated: VinaX 6.1. Applies to web, PWA and Android.*
 
 VinaX is a **login-free, private-by-design** app. Everything you build
-up as a listener — favorites, history, taste profile, pinned
-languages, playlists, downloads — lives on your device.
+up as a listener lives on your device. A backup is how you keep it safe
+and carry it somewhere else.
 
-That's great for privacy. But it means moving to a new phone, a new
-browser, or a fresh install would normally start you from zero. So
-VinaX gives you two doors:
+Both live under **Settings → Your Data**. The **Backup Center** there
+shows what a backup holds right now, what it leaves out, and when you
+last exported or restored.
 
-- **Export** — snapshot everything to a small JSON file you own.
-- **Import** — restore a snapshot on any other device.
+---
 
-Both live under **Settings → Your Data**.
+## What a backup includes
+
+A backup is one JSON file (`vinax-backup-<date>.json`, format
+`vinax-backup`, schema 2). It holds these categories:
+
+| Category | What it means |
+|---|---|
+| Settings & preferences | Theme, accent, playback, sound, languages, accessibility, recommendation choices |
+| Library | Favourites, playlists (with tags, pins, descriptions), Listen Later, saved albums/artists, hidden songs |
+| Smart collections | Your saved rules |
+| Listening history | Your last 150 plays, with completion marks and measured minutes |
+| Taste profile | The on-device taste summary and the Kid-mode profile |
+| Saved & recent searches | Saved search presets, pinned and recent searches |
+| Song bookmarks | Moments you marked inside songs |
+| Home layout | Shelf order, hidden shelves and headline from Home Studio |
+| Name & username | Your display name and the username you chose |
+| Alarm, lyrics, streak & app preferences | Wake-up alarm, lyric sync offsets, karaoke history, streak, sidebar groups, saved AI prompts, AI reply preferences |
+| VinaX AI chats | Conversation history (attachments are never stored) |
+
+## What it leaves out, and why
+
+- **Downloaded audio and download paths** — files stay on the device that
+  saved them; a backup only knows which songs you saved, not the audio.
+- **Device identity and the service-issued token** — identity is per
+  install. Use **Move to a new device** to carry it across.
+- **Listen Together host keys** — credentials for rooms you host here.
+- **Usage-sharing consent** — asked again per device; sharing stays off
+  after a restore until you turn it on.
+- **Queue, playback position and caches** — rebuilt on the next open.
+- **Update reminders and What's New read state** — device-specific.
+
+The username in a backup is a *claim*, not a fact: after a restore VinaX
+re-confirms it with the service. If it was taken in the meantime you are
+asked to choose another.
 
 ---
 
 ## Export
 
-Settings → Your Data → **Export everything**.
+Settings → Your Data → **Export** (or **Backup Center → Export a backup
+now**). The file downloads (web) or lands in your Downloads (Android).
+Typical size: 50 KB – 3 MB.
 
-Tap the button. VinaX collects every scrap of data it stores locally,
-packs it into one file called `vinax-profile-<date>.json`, and
-downloads it (web) or offers a Share sheet (Android).
+## Restore
 
-### What's in the file
+### From the Backup Center (recommended)
 
-| Section | What it means | Sensitive? |
-|---|---|---|
-| `favorites` | Songs you've hearted | Reveals taste |
-| `history` | Play log (last 60 days affect taste) | Reveals what you play, when |
-| `libraryPlaylists` | Playlists you've saved | Reveals collections |
-| `pinnedLanguages` | Language chips you follow | Preference only |
-| `profile` | Computed taste weights (genres, moods, hours) | Aggregated summary |
-| `settings` | Theme, accent, density, audio quality, sleep timer, sidebar | Preference only |
-| `resume` | Where you left off in each track | Behaviour |
-| `stats` | Streak counter, listening totals | Aggregate |
-| `downloads` metadata | Which songs you've downloaded (not the audio) | Reveals taste |
+1. Settings → Your Data → **Backup Center → Choose a backup file…**
+2. VinaX reads the file and shows every category it contains next to what
+   is on this device. Damaged categories are listed and left out; older
+   export formats are migrated automatically.
+3. Choose **Merge** or **Replace**:
+   - **Merge** keeps everything on this device and adds what the file has.
+     The same song, playlist, bookmark or saved search is never added
+     twice; settings and the Home layout from the file win.
+   - **Replace** makes the chosen categories exactly what the file holds.
+4. Untick any category you do not want, optionally **Download a safety
+   copy first**, then restore. The app reloads.
+5. Changed your mind? Open the Backup Center again in the same tab and
+   use **Undo that restore**. (The undo copy lives in the tab until you
+   close it.)
 
-The file does **NOT** include:
+If the device is out of storage, nothing is written and you are told so —
+a restore is all-or-nothing.
 
-- Cached audio files (those stay on the device you downloaded them on)
-- Push subscriptions (each device registers its own)
-- Any per-device identifier (the app doesn't have one that leaves the
-  device)
-- Anything about the AI conversations you had
+### Quick restore
 
-### Where the file goes
-
-- **Android**: opens the system Share sheet. Save to Files, send to
-  yourself over email, drop into cloud storage, AirDrop to a Mac —
-  your choice.
-- **Web / PWA**: browser download. Ends up wherever your browser puts
-  downloads (usually the Downloads folder).
-
-### File size
-
-Typical: **50 KB – 2 MB**, depending on how long you've been using
-VinaX. Big enough to email; small enough to fit in a QR code (if
-you're clever with an intermediary encoder).
+Settings → Your Data → **Restore a backup (quick)** replaces the
+categories in the file without a preview. Onboarding's *"Already have a
+VinaX profile? Import it."* does the same for a fresh install.
 
 ---
 
-## Import
+## Moving to a new phone
 
-Two paths.
-
-### 1. On the welcome / onboarding screen (fresh install)
-
-When you first install VinaX or clear its data, the welcome sheet has
-a small link near the bottom: **"Already have a VinaX profile?
-Import it."** Tap it, choose the `.json` file, done — your favorites,
-history, language pins and taste profile land in the new install
-before you even see the Home shelf.
-
-Behind the scenes, the file is validated (a bad or truncated file is
-rejected with a clear message, not silently ignored) and merged into
-local storage under the same keys the app already uses.
-
-### 2. From Settings on an existing install
-
-Settings → Your Data → **Import from file**.
-
-**Warning**: importing on an existing install **replaces** what you
-already have on the current device. If you want to *merge* rather
-than *replace*, the app currently doesn't do that — you'd need to
-export your current data first as a backup.
-
----
-
-## Common flows
-
-### "New phone — move my library over."
-
-1. On the old phone: Settings → Your Data → Export. Share the file to
-   yourself (email, cloud storage, AirDrop, whatever).
-2. Install VinaX on the new phone.
-3. On the welcome screen tap **"Already have a VinaX profile? Import
-   it."** Choose the file.
-4. Everything shows up. Start playing.
-
-### "Web to Android app."
-
-Same flow. The export from `sirimillavinay.online` in a browser is
-byte-for-byte compatible with the Android APK, and vice versa.
-
-### "I want a monthly backup."
-
-There is no auto-backup — see the "Roadmap" section below. For now:
-Settings → Your Data → Export, save the file wherever you keep your
-backups. Recommended cadence is monthly for most listeners.
-
-### "Two people share a phone."
-
-Not really supported — VinaX has no user accounts. You could export
-each person's data, wipe the app, and import whichever profile is
-active for the session, but it's clunky. If this is important to you,
-please open an issue on GitHub and we'll consider a "profile switcher"
-feature.
+**Settings → Your Data → Move to a new device** creates an encrypted,
+one-use QR handoff. Unlike a backup file, it also carries your device
+token, confirmed username and usage-sharing choice, so the new phone is
+the old one as far as the service is concerned.
 
 ---
 
 ## Erase everything
 
-Settings → Your Data → **Erase everything**.
-
-Nuclear option. Wipes:
-
-- All favorites, history, playlists, pinned languages, resume
-  positions, taste profile, stats, downloads metadata.
-- All settings back to defaults.
-- Push subscriptions (unsubscribes from web push on this device).
-- The onboarding flag (so the welcome screen shows again on next
-  launch).
-- The "last seen What's New" fingerprint (so the current version's
-  What's New sheet shows once on next launch).
-
-What it does **NOT** wipe:
-
-- Downloaded audio files still on disk (Android only — cleared via
-  Settings → Storage instead).
-- Service-worker cache of the app shell (browser handles this via its
-  own "Clear site data").
-
-Once done, VinaX behaves exactly like a fresh install.
+Settings → Your Data → **Reset app state** wipes everything VinaX stores
+on this device (the list shown in the app comes from the live storage
+registry, so it is always complete) and reloads. Downloaded audio files on
+Android and the browser's app-shell cache are managed separately.
 
 ---
 
 ## Privacy and security notes
 
-- The export file contains no encryption. If your listening history
-  is sensitive to you, store the file somewhere you'd store other
+- The export file is not encrypted. Store it where you keep other
   personal notes.
-- We recommend **not** posting the file publicly — it doesn't include
-  any identifiers per se, but the pattern of what you play (rare
-  regional artists, specific playlists) can be identifying to someone
-  who knows you.
-- The `taste profile` object is a computed aggregate — it doesn't
-  contain individual play events beyond what's already in `history`.
-- No server ever sees this file. Import happens entirely in your
-  browser or in the Capacitor WebView on your phone; there's no
-  upload step.
-
----
-
-## Roadmap (not shipped yet)
-
-Two features people ask for regularly:
-
-- **Automatic monthly export** to a folder you choose. Not shipped
-  because it needs OS-level file-write permission we haven't wired.
-- **Merge-mode import** that unions two profiles rather than
-  replacing. Not shipped because "how to handle conflicting settings"
-  needs a design pass.
-
-If either is important to you, file an issue on GitHub with your
-use case — that's how prioritization happens.
+- No server ever sees the file: export and restore happen entirely on
+  your device.

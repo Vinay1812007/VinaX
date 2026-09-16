@@ -13,7 +13,7 @@ const play = (s: Song, daysAgo: number, completed = true): HistoryEntry => ({ so
 describe('weeklyReport (v5.17.0)', () => {
   it('returns zeroed summaries for empty history', () => {
     const r = weeklyReport([], now);
-    expect(r.thisWeek).toEqual({ minutes: 0, songs: 0, newArtists: 0, topArtist: null, topLanguage: null });
+    expect(r.thisWeek).toEqual({ minutes: 0, estimated: false, songs: 0, newArtists: 0, topArtist: null, topLanguage: null });
     expect(r.delta).toEqual({ minutes: 0, songs: 0, newArtists: 0 });
   });
 

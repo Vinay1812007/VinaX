@@ -14,6 +14,8 @@ export interface HistoryState {
   removeEntry(ts: number): void;
   /** v5.17.0 — drop every play at or after `ts` ("clear last hour" / "clear today"). */
   clearSince(ts: number): void;
+  /** Add measured playback seconds to the most recent play of `songId` (listen clock). */
+  addListened(songId: string, seconds: number): void;
 }
 
 export const useHistoryStore = create<HistoryState>()(
@@ -37,6 +39,16 @@ export const useHistoryStore = create<HistoryState>()(
         set({ entries });
       },
       clearHistory: () => set({ entries: [] }),
+      addListened: (songId, seconds) => {
+        if (!(seconds > 0) || !Number.isFinite(seconds)) return;
+        const entries = get().entries;
+        const idx = entries.findIndex((e) => e.song.id === songId);
+        if (idx < 0) return;
+        const next = [...entries];
+        const cur = next[idx];
+        next[idx] = { ...cur, listenedSec: Math.round(((cur.listenedSec ?? 0) + seconds) * 10) / 10 };
+        set({ entries: next });
+      },
       removeEntry: (ts) => set({ entries: get().entries.filter((e) => e.ts !== ts) }),
       clearSince: (ts) => set({ entries: get().entries.filter((e) => e.ts < ts) }),
     }),

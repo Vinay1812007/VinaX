@@ -12,6 +12,21 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '6.1.0': {
+    title: 'Safer backups, truer imports, a lighter Home',
+    changes: [
+      { type: 'new', text: 'Backup Center in Settings → Your Data shows exactly what a backup holds, what it leaves out, and when you last exported. Restore from a file with a preview of each category, choose Merge or Replace, keep a safety copy, and undo a restore from the same tab.' },
+      { type: 'new', text: 'Importing a playlist from text now shows a review step: every line is marked Matched, Closest match or Not found before anything is saved. Swap in an alternative, retry with an edited line, skip, or look at the original text.' },
+      { type: 'new', text: 'Smart collections in your Library: saved rules over the music on this device — language, artist, length, favourites, recently played, year — with a live preview. They keep themselves up to date and travel in backups.' },
+      { type: 'new', text: 'Inside a playlist: search by title, artist or album, select several songs, then copy, move or remove them. Every removal and move has Undo.' },
+      { type: 'improved', text: 'Home loads faster: only the shelves you can see ask the catalogue for music, and shelves that are hidden — by you or by VinaX — never do. Your shelf order stays yours; shelves VinaX turns off stay off.' },
+      { type: 'improved', text: 'Listening minutes now follow one rule everywhere. New plays are measured while you listen; older plays are estimated and marked ≈, and the Stats page says when the 150-play history limit cuts a window short.' },
+      { type: 'fixed', text: 'Backups no longer include your device token, room host keys or download paths, and a damaged file or a full device leaves your data untouched instead of half-restored.' },
+      { type: 'fixed', text: 'AI song cards and text imports match Telugu, Hindi and other scripts correctly and never quietly accept an unrelated first result. Cancelling an import really cancels it.' },
+      { type: 'fixed', text: 'A username chosen while offline shows as waiting to be confirmed and is retried when you reconnect, instead of being shown as confirmed. Two people on the same network can no longer overwrite each other\u2019s username.' },
+      { type: 'fixed', text: 'The Android download link on the update address no longer loops.' },
+    ],
+  },
   '6.0.0': {
     title: 'A new listening space for your music',
     changes: [

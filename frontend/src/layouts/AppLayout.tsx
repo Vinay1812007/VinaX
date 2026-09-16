@@ -219,6 +219,11 @@ export function AppLayout() {
       installDeterrence();
       initTelemetry();
       initSessionInsights();
+      // Measured listening time for Stats (pauses/seeks excluded).
+      void import('@/services/analytics/listenClock').then((m) => m.initListenClock());
+      // A username chosen while offline stays "pending" until the service
+      // confirms it — retry now and on every reconnect.
+      void import('@/features/identity/handleClaim').then((m) => m.installClaimRetry());
       void loadBlocklist();
       initLockScreenLyrics();
       initSpatialNav();

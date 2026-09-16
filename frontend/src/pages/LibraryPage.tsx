@@ -19,6 +19,12 @@ import { CollageCover } from '@/features/library/CollageCover';
 import { trashDaysLeft } from '@/features/library/trash';
 import { allTags, matchesTags } from '@/features/library/tags';
 import { TagChips } from '@/features/library/TagEditor';
+import { useSmartCollectionStore } from '@/store/smartCollectionStore';
+import { describeRules, evaluateSmartCollection } from '@/features/library/smartCollections';
+import { languageLabel } from '@/constants/languages';
+import { lazy, Suspense } from 'react';
+
+const SmartCollectionSheet = lazy(() => import('@/features/library/SmartCollectionSheet').then((m) => ({ default: m.SmartCollectionSheet })));
 
 /**
  * v5.17.0 — Library: pinned collections first with collage covers and emoji,
@@ -38,6 +44,14 @@ export default function LibraryPage() {
   const history = useHistoryStore((s) => s.entries);
   const [newName, setNewName] = useState('');
   const [importing, setImporting] = useState(false);
+  // v6.1.0 — smart collections (rules over the local library).
+  const [smartOpen, setSmartOpen] = useState(false);
+  const smart = useSmartCollectionStore((s) => s.rules);
+  const later = useLibraryStore((s) => s.later);
+  const smartCounts = useMemo(
+    () => Object.fromEntries(smart.map((c) => [c.id, evaluateSmartCollection(c, { favorites, collections, later, history }).length])),
+    [smart, favorites, collections, later, history],
+  );
   const [downloadedOnly, setDownloadedOnly] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const flags = useFeatureFlags();
@@ -259,6 +273,37 @@ export default function LibraryPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="mb-10">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-title">Smart collections</h2>
+          <button onClick={() => setSmartOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold btn-secondary">
+            <PlusIcon className="w-3.5 h-3.5" /> New
+          </button>
+        </div>
+        <p className="text-xs text-ink-500 mb-3">Saved rules — language, artist, length, favourites, recently played — that build a playlist from your local library and keep it up to date. They use the metadata your library already holds.</p>
+        {smartOpen && (
+          <Suspense fallback={null}>
+            <SmartCollectionSheet onClose={() => setSmartOpen(false)} />
+          </Suspense>
+        )}
+        {smart.length === 0 ? (
+          <p className="text-sm text-ink-400">No smart collections yet — try “Telugu favourites played this month”.</p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {smart.map((c) => (
+              <Link key={c.id} to={`/smart/${c.id}`} className="rounded-2xl border border-ink-700 p-3 hover:bg-ink-800/40 transition-colors">
+                <span className="block font-semibold truncate">
+                  {c.emoji && <span className="mr-1.5" aria-hidden>{c.emoji}</span>}
+                  {c.name}
+                </span>
+                <span className="block text-xs text-ink-400 truncate">{describeRules(c.rules, languageLabel)}</span>
+                <span className="block text-xs text-ink-500 mt-0.5">{smartCounts[c.id] ?? 0} song{(smartCounts[c.id] ?? 0) === 1 ? '' : 's'} right now</span>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="mb-10">

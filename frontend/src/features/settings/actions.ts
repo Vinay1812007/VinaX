@@ -1,5 +1,5 @@
-import { KEYS } from '@/constants/storage-keys';
-import { clearAllVinaxStorage, getLocal, setLocal } from '@/services/storage/local';
+import { clearAllVinaxStorage } from '@/services/storage/local';
+import { applyBackup, applyTransferPayload, createBackup, createTransferPayload, parseBackup, recordBackupEvent, serializeBackup, type BackupCategoryId } from './backup';
 import { clearEvents } from '@/services/storage/idb';
 import { resetProfile } from '@/services/personalization/storage';
 import { invalidateRecommendationCache } from '@/services/recommendation/engine';
@@ -36,47 +36,66 @@ export async function resetAppState(): Promise<void> {
   window.location.assign('/');
 }
 
-/** Export every local preference + the taste profile as portable JSON. */
+/**
+ * Export the listener's portable data as a versioned backup file
+ * (features/settings/backup.ts). Credentials, device identity, caches and
+ * download paths are never included — see BACKUP_EXCLUSIONS.
+ */
 export function exportProfileJson(): string {
-  const data: Record<string, unknown> = { exportedAt: new Date().toISOString(), app: 'vinax' };
-  for (const [name, key] of Object.entries(KEYS)) {
-    data[name] = getLocal<unknown>(key, null);
-  }
-  return JSON.stringify(data, null, 2);
+  return serializeBackup(createBackup());
 }
 
 export function downloadProfileExport(): void {
-  const blob = new Blob([exportProfileJson()], { type: 'application/json' });
+  const file = createBackup();
+  const json = serializeBackup(file);
+  const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `vinax-profile-${Date.now()}.json`;
+  a.download = `vinax-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  recordBackupEvent({
+    lastExportAt: Date.now(),
+    lastExportBytes: json.length,
+    lastExportCategories: Object.keys(file.categories) as BackupCategoryId[],
+  });
 }
 
-export function importProfileJson(json: string): boolean {
-  try {
-    const data = JSON.parse(json) as Record<string, unknown>;
-    if (data.app !== 'vinax' && data.app !== 'tarang') return false;
+export type ImportOutcome =
+  | { ok: true; applied: BackupCategoryId[]; pendingHandle: string | null; warnings: string[] }
+  | { ok: false; error: string; rejected?: Array<{ label: string; error: string }> };
 
-    // Validate: only allow known keys (from KEYS + export metadata)
-    const allowedKeys = new Set(['app', 'exportedAt', ...Object.keys(KEYS)]);
-    if (Object.keys(data).some((k) => !allowedKeys.has(k))) {
-      throw new Error('Invalid profile: unknown keys detected');
-    }
-
-    // Size-limit: reject payloads over 5 MB
-    if (json.length > 5 * 1024 * 1024) {
-      throw new Error('Profile too large (max 5 MB)');
-    }
-
-    for (const [name, key] of Object.entries(KEYS)) {
-      if (data[name] != null) setLocal(key, data[name]);
-    }
-    window.location.reload();
-    return true;
-  } catch {
-    return false;
+/**
+ * Validate a backup file and restore it wholesale (replace mode). A malformed
+ * file — or one with any malformed category — changes nothing; a storage
+ * failure rolls back and reports. Only a fully applied restore reloads.
+ */
+export function importProfileJson(json: string, opts: { reload?: boolean } = {}): ImportOutcome {
+  const parsed = parseBackup(json);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  if (parsed.rejected.length) {
+    return {
+      ok: false,
+      error: `${parsed.rejected.length} section${parsed.rejected.length === 1 ? ' is' : 's are'} damaged — nothing was restored.`,
+      rejected: parsed.rejected.map((r) => ({ label: r.label, error: r.error })),
+    };
   }
+  const res = applyBackup(parsed, { mode: 'replace' });
+  if (!res.ok) return { ok: false, error: res.message };
+  if (opts.reload !== false) window.location.reload();
+  return { ok: true, applied: res.applied, pendingHandle: res.pendingHandle, warnings: parsed.warnings };
+}
+
+/** Device handoff payload: the backup PLUS device identity (see createTransferPayload). */
+export function exportTransferJson(): string {
+  return JSON.stringify(createTransferPayload());
+}
+
+/** Apply a device handoff payload; reloads on success. */
+export function importTransferJson(json: string): { ok: true } | { ok: false; error: string } {
+  const res = applyTransferPayload(json);
+  if (!res.ok) return { ok: false, error: 'message' in res ? res.message : res.error };
+  window.location.reload();
+  return { ok: true };
 }

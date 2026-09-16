@@ -23,6 +23,9 @@ export const KEYS = {
   /** Unique lowercase handle claimed via /api/username at onboarding —
    *  display names collide, the handle never does. */
   userHandle: `${STORAGE_PREFIX}.user-handle`,
+  /** A handle the listener chose that the service has NOT confirmed yet
+   *  (offline / server error / refused as taken) — see features/identity. */
+  userHandlePending: `${STORAGE_PREFIX}.user-handle-pending.v1`,
   analyticsConsent: `${STORAGE_PREFIX}.analytics-consent`,
   downloads: `${STORAGE_PREFIX}.downloads.v1`,
   alarm: `${STORAGE_PREFIX}.alarm.v1`,

@@ -11,13 +11,9 @@ import { calendarCells } from '@/features/stats/calendar';
 import type { CalendarCell } from '@/features/stats/calendar';
 import { cn } from '@/utils/cn';
 import type { HistoryEntry } from '@/types';
+import { coverageNote, formatHours, historyCoverage, listeningTotal, HISTORY_CAP } from '@/features/stats/listening';
 
 const BAR_COLORS = ['#22d3ee', '#60a5fa', '#a78bfa', '#67e8f9', '#c4b5fd'];
-
-function fmtHours(totalSec: number): string {
-  const h = totalSec / 3600;
-  return h >= 10 ? String(Math.round(h)) : h.toFixed(1);
-}
 
 /** v5.17.0 — up/down delta pill for the weekly report card. */
 function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
@@ -33,10 +29,11 @@ function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
 /** v5.17.0 — Weekly report card: this week against the seven days before. */
 function WeeklyReportCard({ entries }: { entries: HistoryEntry[] }) {
   const report = useMemo(() => weeklyReport(entries), [entries]);
-  const { thisWeek, lastWeek, delta } = report;
+  const { thisWeek, lastWeek, delta, coverage } = report;
   if (thisWeek.songs === 0 && lastWeek.songs === 0) return null;
+  const note = coverageNote(coverage, 'the comparison');
   const tiles: Array<{ label: string; value: string; delta: number; suffix?: string }> = [
-    { label: 'MINUTES', value: String(thisWeek.minutes), delta: delta.minutes, suffix: ' min' },
+    { label: thisWeek.estimated ? 'MINUTES (EST.)' : 'MINUTES', value: `${thisWeek.estimated ? '≈' : ''}${thisWeek.minutes}`, delta: delta.minutes, suffix: ' min' },
     { label: 'SONGS', value: String(thisWeek.songs), delta: delta.songs },
     { label: 'NEW ARTISTS', value: String(thisWeek.newArtists), delta: delta.newArtists },
   ];
@@ -59,6 +56,12 @@ function WeeklyReportCard({ entries }: { entries: HistoryEntry[] }) {
           </div>
         ))}
       </div>
+      {(thisWeek.estimated || note) && (
+        <p className="mt-2 text-[11px] text-ink-400">
+          {thisWeek.estimated && 'Minutes marked ≈ are estimated from track lengths for plays recorded before VinaX measured playback. '}
+          {note}
+        </p>
+      )}
       <dl className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
         <div className="min-w-0">
           <dt className="text-[10px] font-bold tracking-widest text-ink-400">TOP ARTIST</dt>
@@ -106,8 +109,11 @@ function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
     <section aria-label="Listening calendar">
       <div className="flex items-baseline justify-between gap-3 mb-2.5">
         <h2 className="text-base font-extrabold">Listening calendar</h2>
-        <span className="text-[11px] font-semibold text-ink-400">{cal.activeDays} active days · 12 weeks</span>
+        <span className="text-[11px] font-semibold text-ink-400">{cal.activeDays} active days · 12 weeks{cal.estimated ? ' · minutes ≈ estimated' : ''}</span>
       </div>
+      {coverageNote(cal.coverage, 'this calendar') && (
+        <p className="mb-2 text-[11px] text-ink-400">{coverageNote(cal.coverage, 'this calendar')}</p>
+      )}
       <div className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-3 overflow-x-auto">
         <div className="flex gap-1.5 min-w-max">
           <div className="grid grid-rows-7 gap-[3px] pt-[14px]">
@@ -171,10 +177,10 @@ export default function StatsPage() {
   const stats = useMemo(() => {
     const artistCount = new Map<string, number>();
     const langCount = new Map<string, number>();
-    let seconds = 0;
+    // One shared rule for listening time (features/stats/listening.ts).
+    const total = listeningTotal(entries);
     for (const e of entries) {
       const s = e.song;
-      seconds += s.duration ?? 0;
       const artist = s.artists?.[0]?.name ?? s.subtitle?.split(',')[0]?.trim() ?? 'Unknown';
       artistCount.set(artist, (artistCount.get(artist) ?? 0) + 1);
       const lang = s.language ? s.language[0].toUpperCase() + s.language.slice(1) : 'Other';
@@ -188,7 +194,9 @@ export default function StatsPage() {
     const totalLang = langRows.reduce((n, [, c]) => n + c, 0) || 1;
     return {
       plays: entries.length,
-      hours: fmtHours(seconds),
+      hours: formatHours(total),
+      estimated: total.estimated,
+      capped: historyCoverage(entries, -Infinity).capped,
       artists: artistCount.size,
       topArtists,
       maxArtist: topArtists[0]?.[1] ?? 1,
@@ -200,7 +208,7 @@ export default function StatsPage() {
   const best = getBestStreak();
 
   const share = (): void => {
-    const text = `My VinaX: ${stats.plays} plays · ${stats.hours}h listened · ${streak}-day streak 🎵 sirimillavinay.online`;
+    const text = `My VinaX: ${stats.plays} plays · ${stats.hours} listened · ${streak}-day streak 🎵 sirimillavinay.online`;
     if (navigator.share) {
       void navigator.share({ text }).catch(() => undefined);
     } else {
@@ -224,7 +232,10 @@ export default function StatsPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[26px] font-extrabold tracking-tight">Your VinaX</h1>
-          <p className="text-xs font-semibold text-ink-400">Computed on this device · never uploaded</p>
+          <p className="text-xs font-semibold text-ink-400">
+            Computed on this device · never uploaded
+            {stats.capped && ` · history keeps your last ${HISTORY_CAP} plays`}
+          </p>
         </div>
         <button
           onClick={share}
@@ -240,8 +251,8 @@ export default function StatsPage() {
       {/* stat grid */}
       <div className="grid grid-cols-2 gap-2">
         {[
-          [String(stats.plays), 'PLAYS'],
-          [`${stats.hours}h`, 'LISTENED'],
+          [String(stats.plays), stats.capped ? `LAST ${HISTORY_CAP} PLAYS` : 'PLAYS'],
+          [stats.hours, stats.estimated ? 'LISTENED (EST.)' : 'LISTENED'],
           [String(favorites.length), 'FAVORITES'],
           [String(stats.artists), 'ARTISTS'],
         ].map(([n, l]) => (

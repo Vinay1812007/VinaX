@@ -1,4 +1,5 @@
 import type { HistoryEntry, Song } from '@/types';
+import { listeningTotal } from '@/features/stats/listening';
 
 /**
  * v5.12.0 — "On this day": what you were playing on this date in earlier
@@ -61,12 +62,7 @@ export function onThisDay(entries: HistoryEntry[], now = Date.now(), min = 4, ma
 export function minutesToday(entries: HistoryEntry[], now = Date.now()): number {
   const d = new Date(now);
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  let seconds = 0;
-  for (const e of entries) {
-    if (typeof e?.ts !== 'number' || e.ts < start) continue;
-    const dur = e.song?.duration ?? 0;
-    // A completed play counts in full; a skip is credited a third of the track.
-    seconds += e.completed ? dur : Math.min(dur, Math.max(30, dur / 3));
-  }
-  return Math.round(seconds / 60);
+  // Shared rule (features/stats/listening.ts): measured when available,
+  // otherwise full for a completed play and a third for an unfinished one.
+  return listeningTotal(entries, start).minutes;
 }

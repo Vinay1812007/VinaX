@@ -62,6 +62,12 @@ export interface CollectionMeta {
 
 export type { TrashEntry };
 
+/** v6.1.0 — a song taken out of a collection, with where it sat (for undo). */
+export interface RemovedEntry {
+  song: Song;
+  index: number;
+}
+
 /** v5.17.0 — pinned first (stable), otherwise the stored order. */
 export function orderCollections(collections: LocalCollection[]): LocalCollection[] {
   return [...collections.filter((c) => c.pinned), ...collections.filter((c) => !c.pinned)];
@@ -113,6 +119,12 @@ export interface LibraryState {
   updateCollectionMeta(id: string, meta: CollectionMeta): void;
   /** v5.19.0 — replace a collection's tags (normalised; an empty list clears the field). */
   setCollectionTags(id: string, tags: string[] | string): void;
+  /** v6.1.0 — add many songs (already-present ids are skipped); returns how many were added. */
+  addManyToCollection(collectionId: string, songs: Song[]): number;
+  /** v6.1.0 — remove many songs; returns the removed entries with their positions so the edit can be undone. */
+  removeManyFromCollection(collectionId: string, songIds: string[]): RemovedEntry[];
+  /** v6.1.0 — put removed entries back at their original positions (undo). */
+  restoreToCollection(collectionId: string, entries: RemovedEntry[]): void;
   toggleLater(song: Song): void;
   isLater(id: string): boolean;
   toggleHiddenArtist(name: string): void;
@@ -251,6 +263,55 @@ export const useLibraryStore = create<LibraryState>()(
               ? { ...c, songs: [...c.songs, song] }
               : c,
           ),
+        }),
+      addManyToCollection: (collectionId, songs) => {
+        let added = 0;
+        set({
+          collections: get().collections.map((c) => {
+            if (c.id !== collectionId) return c;
+            const have = new Set(c.songs.map((s) => s.id));
+            const fresh: Song[] = [];
+            for (const song of songs) {
+              if (have.has(song.id)) continue;
+              have.add(song.id);
+              fresh.push(song);
+            }
+            added = fresh.length;
+            return fresh.length ? { ...c, songs: [...c.songs, ...fresh] } : c;
+          }),
+        });
+        return added;
+      },
+      removeManyFromCollection: (collectionId, songIds) => {
+        const ids = new Set(songIds);
+        const removed: RemovedEntry[] = [];
+        set({
+          collections: get().collections.map((c) => {
+            if (c.id !== collectionId) return c;
+            const kept: Song[] = [];
+            c.songs.forEach((song, index) => {
+              if (ids.has(song.id)) removed.push({ song, index });
+              else kept.push(song);
+            });
+            return removed.length ? { ...c, songs: kept } : c;
+          }),
+        });
+        return removed;
+      },
+      restoreToCollection: (collectionId, entries) =>
+        set({
+          collections: get().collections.map((c) => {
+            if (c.id !== collectionId) return c;
+            const songs = [...c.songs];
+            const present = new Set(songs.map((s) => s.id));
+            // Re-insert in ascending original position so later indexes stay valid.
+            for (const e of [...entries].sort((a, b) => a.index - b.index)) {
+              if (present.has(e.song.id)) continue;
+              present.add(e.song.id);
+              songs.splice(Math.min(e.index, songs.length), 0, e.song);
+            }
+            return { ...c, songs };
+          }),
         }),
       removeFromCollection: (collectionId, songId) =>
         set({

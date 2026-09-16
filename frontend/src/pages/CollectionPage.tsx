@@ -19,12 +19,17 @@ import { SORT_OPTIONS, shuffled, sortSongs, type CollectionSort } from '@/featur
 import { canShareText, collectionToText, copyText, shareText } from '@/features/library/collectionText';
 import { allTags } from '@/features/library/tags';
 import { TagChips, TagEditor } from '@/features/library/TagEditor';
+import { filterSongs, songCount } from '@/features/library/collectionEdit';
+import type { RemovedEntry } from '@/store/libraryStore';
 
 /**
  * v5.17.0 — collection page: collage cover, inline name/emoji/description
  * editing, pin, view-only sort, shuffle play, duplicate finder, copy/share as
  * text and a "Downloaded only" filter when offline copies exist.
  * v5.19.0 — tags in the Edit form (chips, suggestions from other playlists).
+ * v6.1.0 — in-collection text search, multi-select with copy / move /
+ * remove, and Undo for every destructive edit. Edits act on the STORED list
+ * (ids), so a sorted or filtered view never changes the playback order.
  */
 export default function CollectionPage() {
   const { id } = useParams();
@@ -35,13 +40,20 @@ export default function CollectionPage() {
   const {
     renameCollection,
     deleteCollection,
-    removeFromCollection,
     moveInCollection,
     togglePinCollection,
     dedupeCollection,
     updateCollectionMeta,
     setCollectionTags,
+    addManyToCollection,
+    removeManyFromCollection,
+    restoreToCollection,
   } = useLibraryStore.getState();
+  // v6.1.0 — search + multi-select state.
+  const [query, setQuery] = useState('');
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [targetId, setTargetId] = useState('');
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(collection?.name ?? '');
   const [emoji, setEmoji] = useState(collection?.emoji ?? '');
@@ -61,9 +73,11 @@ export default function CollectionPage() {
   const duplicates = useMemo(() => findDuplicates(songs).duplicates.length, [songs]);
   const visible = useMemo(() => {
     const base = downloadedOnly && hasDownloads ? songs.filter((s) => !!downloads[s.id]) : songs;
-    return sortSongs(base, sort);
-  }, [songs, sort, downloadedOnly, hasDownloads, downloads]);
-  const reorderable = sort === 'added' && !(downloadedOnly && hasDownloads);
+    return sortSongs(filterSongs(base, query), sort);
+  }, [songs, sort, downloadedOnly, hasDownloads, downloads, query]);
+  const filtering = query.trim() !== '';
+  const reorderable = sort === 'added' && !(downloadedOnly && hasDownloads) && !filtering;
+  const otherCollections = useMemo(() => allCollections.filter((c) => c.id !== id), [allCollections, id]);
 
   if (!collection) {
     return (
@@ -130,6 +144,66 @@ export default function CollectionPage() {
     const ok = await shareText(collection.name, collectionToText(songs));
     if (ok) toast('Shared');
   };
+  // ---- v6.1.0 multi-select actions (every destructive one is undoable) ----
+  const selectedIds = [...selected].filter((sid) => songs.some((s) => s.id === sid));
+  const selectedSongs = songs.filter((s) => selected.has(s.id));
+  const exitSelect = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  const toggleSelected = (sid: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(sid)) next.delete(sid);
+      else next.add(sid);
+      return next;
+    });
+  const selectAllVisible = () => setSelected(new Set(visible.map((s) => s.id)));
+  const undoRemoval = (removed: RemovedEntry[]) => {
+    restoreToCollection(collection.id, removed);
+    toast(`Restored ${songCount(removed.length)}`);
+  };
+  const removeSelected = () => {
+    const removed = removeManyFromCollection(collection.id, selectedIds);
+    if (!removed.length) return;
+    exitSelect();
+    toast(`Removed ${songCount(removed.length)} from “${collection.name}”`, { action: { label: 'Undo', onClick: () => undoRemoval(removed) }, duration: 7000 });
+  };
+  const copySelected = () => {
+    const target = otherCollections.find((c) => c.id === targetId);
+    if (!target) return;
+    const added = addManyToCollection(target.id, selectedSongs);
+    const skipped = selectedSongs.length - added;
+    exitSelect();
+    toast(
+      added ? `Copied ${songCount(added)} to “${target.name}”${skipped ? ` · ${skipped} already there` : ''}` : `“${target.name}” already has ${selectedSongs.length === 1 ? 'that song' : 'those songs'}`,
+      added ? { action: { label: 'Undo', onClick: () => { removeManyFromCollection(target.id, selectedSongs.map((s) => s.id).filter((sid) => !target.songs.some((t) => t.id === sid))); toast('Copy undone'); } }, duration: 7000 } : undefined,
+    );
+  };
+  const moveSelected = () => {
+    const target = otherCollections.find((c) => c.id === targetId);
+    if (!target) return;
+    const before = new Set(target.songs.map((t) => t.id));
+    const added = addManyToCollection(target.id, selectedSongs);
+    const removed = removeManyFromCollection(collection.id, selectedIds);
+    exitSelect();
+    toast(`Moved ${songCount(removed.length)} to “${target.name}”${added < removed.length ? ` · ${removed.length - added} already there` : ''}`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          restoreToCollection(collection.id, removed);
+          removeManyFromCollection(target.id, removed.map((r) => r.song.id).filter((sid) => !before.has(sid)));
+          toast('Move undone');
+        },
+      },
+      duration: 7000,
+    });
+  };
+  const removeOne = (song: { id: string; title: string }) => {
+    const removed = removeManyFromCollection(collection.id, [song.id]);
+    toast(`Removed “${song.title}”`, { action: { label: 'Undo', onClick: () => undoRemoval(removed) }, duration: 6000 });
+  };
+
   const pinLabel = collection.pinned ? 'Unpin' : 'Pin';
   const secondaryBtn = 'flex items-center gap-2 px-4 py-2.5 rounded-full border border-ink-600 text-sm font-semibold hover:border-ink-400 disabled:opacity-50';
 
@@ -235,6 +309,23 @@ export default function CollectionPage() {
 
       {songs.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
+          <label htmlFor="collection-search" className="sr-only">Search in this playlist</label>
+          <input
+            id="collection-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search in this playlist"
+            className="glass-input flex-1 min-w-[10rem] px-3 py-1.5 rounded-xl text-xs"
+          />
+          <button
+            type="button"
+            onClick={() => (selecting ? exitSelect() : setSelecting(true))}
+            aria-pressed={selecting}
+            className={cn('px-3 py-1.5 rounded-full border text-xs font-semibold min-h-[36px]', selecting ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400')}
+          >
+            {selecting ? 'Done' : 'Select'}
+          </button>
           <label className="flex items-center gap-2 text-xs text-ink-400">
             Sort
             <select
@@ -261,18 +352,68 @@ export default function CollectionPage() {
             </button>
           )}
           {!reorderable && <span className="text-[11px] text-ink-500">View only — the stored order is unchanged.</span>}
+          {filtering && (
+            <span className="text-[11px] text-ink-500" role="status">
+              {visible.length ? `${songCount(visible.length)} match` : 'No songs match'} “{query.trim()}”
+            </span>
+          )}
+        </div>
+      )}
+
+      {selecting && (
+        <div role="region" aria-label="Selected songs" className="glass-panel rounded-2xl px-3 py-2.5 mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold" aria-live="polite">{selectedIds.length} selected</span>
+          <button type="button" onClick={selectAllVisible} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 min-h-[36px]">
+            Select all shown
+          </button>
+          <label htmlFor="collection-target" className="sr-only">Target playlist</label>
+          <select
+            id="collection-target"
+            value={targetId}
+            onChange={(e) => setTargetId(e.target.value)}
+            className="bg-ink-800 border border-ink-600 rounded-xl px-3 py-1.5 text-xs text-ink-100 outline-none focus:border-ember-500 min-h-[36px]"
+          >
+            <option value="">Choose a playlist…</option>
+            {otherCollections.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <button type="button" onClick={copySelected} disabled={!selectedIds.length || !targetId} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 disabled:opacity-40 min-h-[36px]">
+            Copy
+          </button>
+          <button type="button" onClick={moveSelected} disabled={!selectedIds.length || !targetId} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 disabled:opacity-40 min-h-[36px]">
+            Move
+          </button>
+          <button type="button" onClick={removeSelected} disabled={!selectedIds.length} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold text-ink-300 hover:border-red-400 hover:text-red-300 disabled:opacity-40 min-h-[36px]">
+            Remove
+          </button>
+          {!otherCollections.length && <span className="text-[11px] text-ink-500">Create another playlist to copy or move songs.</span>}
         </div>
       )}
 
       {!songs.length ? (
         <EmptyState icon={<LibraryIcon className="w-8 h-8" />} title="No songs yet" message="Add songs from any song's ⋯ menu → Add to this playlist." />
       ) : !visible.length ? (
-        <EmptyState icon={<DownloadIcon className="w-8 h-8" />} title="Nothing downloaded here yet" message="Turn off the Downloaded only filter, or download this collection." />
+        filtering ? (
+          <EmptyState title="No matches" message={`Nothing in “${collection.name}” matches “${query.trim()}”.`} action={<button onClick={() => setQuery('')} className="px-5 py-2.5 rounded-full btn-primary">Clear search</button>} />
+        ) : (
+          <EmptyState icon={<DownloadIcon className="w-8 h-8" />} title="Nothing downloaded here yet" message="Turn off the Downloaded only filter, or download this collection." />
+        )
       ) : (
         <div className="space-y-1">
           {visible.map((song, i) => (
-            <div key={`${song.id}-${i}`} className="flex items-center gap-2.5 glass-card rounded-xl p-2">
-              <span className="w-5 text-center text-xs text-ink-500 shrink-0">{i + 1}</span>
+            <div key={`${song.id}-${i}`} className={cn('flex items-center gap-2.5 glass-card rounded-xl p-2', selecting && selected.has(song.id) && 'ring-1 ring-ember-400')}>
+              {selecting ? (
+                <input
+                  type="checkbox"
+                  checked={selected.has(song.id)}
+                  onChange={() => toggleSelected(song.id)}
+                  aria-label={`Select ${song.title}`}
+                  className="w-5 h-5 shrink-0 accent-[rgb(var(--ember-400))]"
+                />
+              ) : (
+                <span className="w-5 text-center text-xs text-ink-500 shrink-0">{i + 1}</span>
+              )}
               <button onClick={() => usePlayerStore.getState().playQueue(visible, i)} className="shrink-0" aria-label={`Play ${song.title}`}>
                 <img src={bestImage(song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" decoding="async" className="w-10 h-10 rounded-lg object-cover" />
               </button>
@@ -291,9 +432,11 @@ export default function CollectionPage() {
                   <button aria-label="Move down" disabled={i === visible.length - 1} onClick={() => moveInCollection(collection.id, i, i + 1)} className="p-1.5 text-ink-400 hover:text-ink-100 disabled:opacity-25 shrink-0">↓</button>
                 </>
               )}
-              <button aria-label="Remove from playlist" onClick={() => { removeFromCollection(collection.id, song.id); toast('Removed'); }} className="p-1.5 text-ink-400 hover:text-red-300 shrink-0">
-                <XIcon className="w-4 h-4" />
-              </button>
+              {!selecting && (
+                <button aria-label={`Remove ${song.title} from playlist`} onClick={() => removeOne(song)} className="p-2 text-ink-400 hover:text-red-300 shrink-0 min-w-[36px] min-h-[36px] grid place-items-center">
+                  <XIcon className="w-4 h-4" />
+                </button>
+              )}
             </div>
           ))}
         </div>

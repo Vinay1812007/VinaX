@@ -87,6 +87,7 @@ const RecapPage = lazy(() => import('@/pages/RecapPage'));
 const OfflinePage = lazy(() => import('@/pages/OfflinePage'));
 const ListenTogetherPage = lazy(() => import('@/pages/ListenTogetherPage'));
 const CollectionPage = lazy(() => import('@/pages/CollectionPage'));
+const SmartCollectionPage = lazy(() => import('@/pages/SmartCollectionPage'));
 const KaraokePage = lazy(() => import('@/pages/KaraokePage'));
 const QuizPage = lazy(() => import('@/pages/QuizPage'));
 const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'));
@@ -174,6 +175,7 @@ export const router = createBrowserRouter([
       { path: 'offline', element: <OfflinePage /> },
       { path: 'together', element: <ListenTogetherPage /> },
       { path: 'collection/:id', element: <CollectionPage /> },
+      { path: 'smart/:id', element: <SmartCollectionPage /> },
       { path: 'karaoke', element: <KaraokePage /> },
       { path: 'quiz', element: <QuizPage /> },
       { path: 'download', element: <DownloadPage /> },

@@ -4,27 +4,27 @@
  * Display names collide ("VINAY MAC" × 3 devices in User Management), so
  * onboarding now also claims a USERNAME: a unique, lowercase handle stored on
  * the device's vinax_users row. No accounts involved — the handle is bound to
- * the same device identity the telemetry pipeline uses (signed device id when
- * the client has one, ip+ua-derived otherwise, exactly like /api/events).
+ * the same device identity the telemetry pipeline uses (see _lib/identity.ts:
+ * a signed device id when the client has one, otherwise an id derived from
+ * the client's own install uuid, otherwise a fresh random id — never an id
+ * shared by every client behind one network + browser build).
  *
  *   GET  /api/username?u=<handle>            → { available: boolean }
- *   POST /api/username { username, name?, signed_device_id? }
+ *   POST /api/username { username, name?, signed_device_id?, deviceId?, current_username? }
  *        → 200 { ok, username, signed_device_id_next? }
  *        → 409 { error: "taken", suggestions: [...] }   (already exists)
  *        → 400 { error: "invalid" }                     (bad format)
+ *        → 503 { error: "unavailable" }                 (store unreachable)
  *
  * Uniqueness is enforced case-insensitively: application-level check here
  * plus the partial unique index added in the vinax_users migration
  * (create unique index on lower(username)) as the race-proof backstop.
  */
-import { sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
-import { deriveServerDeviceId, signDeviceId, verifyDeviceId } from '../_lib/deviceid';
+import { sbSelect, sbSelectRes, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
+import { mintFreshIdentity, resolveIdentity, type IdentityEnv, type ResolvedIdentity } from '../_lib/identity';
 import { rateLimit } from '../_lib/ratelimit';
 
-interface Env extends SupabaseEnv {
-  DEVICE_ID_SECRET?: string;
-  TELEMETRY_PEPPER?: string;
-}
+type Env = SupabaseEnv & IdentityEnv;
 
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
@@ -58,23 +58,47 @@ async function suggest(env: Env, base: string): Promise<string[]> {
   return out;
 }
 
-/** Same identity resolution as /api/events: signed id wins, ip+ua fallback. */
-async function resolveDevice(
+/** The handle stored on a device row: null = no handle, undefined = read failed. */
+async function handleOf(env: Env, deviceId: string): Promise<string | null | undefined> {
+  const res = await sbSelectRes<{ username: string | null }>(
+    env,
+    'vinax_users',
+    `device_id=eq.${encodeURIComponent(deviceId)}&select=username&limit=1`,
+  );
+  if (!res.ok) return undefined;
+  return res.rows[0]?.username ?? null;
+}
+
+/**
+ * Resolve who is claiming, then make sure the upsert can only touch a row
+ * that belongs to THIS client. When the resolved row already carries a
+ * handle the client does not recognise as its own, the identity is abandoned
+ * for a fresh one — so a second listener behind the same network (or an
+ * unrelated client that landed on a legacy shared id) can never overwrite
+ * the first listener's username. Returns null when the store is unreachable.
+ */
+async function resolveClaimer(
   request: Request,
   env: Env,
-  claimedSigned: unknown,
-): Promise<{ deviceId: string; issued: string | null; verified: boolean }> {
-  const secret = env.DEVICE_ID_SECRET ?? env.TELEMETRY_PEPPER ?? 'vinax-default-pepper-set-me';
-  const signed = typeof claimedSigned === 'string' ? claimedSigned.slice(0, 256) : '';
-  const verified = signed ? await verifyDeviceId(signed, secret) : null;
-  if (verified) return { deviceId: verified, issued: null, verified: true };
-  const ip =
-    request.headers.get('cf-connecting-ip') ??
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    'unknown';
-  const ua = request.headers.get('user-agent') ?? 'unknown';
-  const deviceId = await deriveServerDeviceId(secret, ip, ua);
-  return { deviceId, issued: await signDeviceId(deviceId, secret), verified: false };
+  body: Record<string, unknown>,
+): Promise<ResolvedIdentity | null> {
+  const id = await resolveIdentity(request, env, body);
+  const existing = await handleOf(env, id.deviceId);
+  if (existing === undefined) return null;
+  if (!existing) return id;
+  const current = normalize(body.current_username);
+  const claimed = normalize(body.username);
+  // The row is this client's when it names the handle already stored there,
+  // or is re-claiming that very handle.
+  if (existing === current || existing === claimed) return id;
+  // A device that PROVED its token and named no current handle (an older app
+  // build, or one whose local copy was cleared) is renaming itself: the token
+  // is its proof and it keeps its row. Anything else — an unverified client,
+  // or a verified one whose stored handle disagrees with what it believes it
+  // owns — is a different listener and gets its own identity.
+  const currentProvided = typeof body.current_username === 'string' && body.current_username.trim() !== '';
+  if (id.verified && !currentProvided) return id;
+  return mintFreshIdentity(env);
 }
 
 /** Availability probe — used live while the listener types. */
@@ -88,7 +112,7 @@ export const onRequestGet = async (ctx: { request: Request; env: Env }): Promise
   return json({ available: (await ownerOf(env, username)) === null });
 };
 
-/** Claim — called once from onboarding's Continue. Idempotent per device. */
+/** Claim — called from onboarding's Continue and retried by the client until confirmed. Idempotent per device. */
 export const onRequestPost = async (ctx: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = ctx;
   if (!supabaseConfigured(env)) return json({ ok: true, unchecked: true });
@@ -99,11 +123,13 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   const username = normalize(body.username);
   if (!username) return json({ error: 'invalid' }, 400);
 
-  const { deviceId, issued, verified } = await resolveDevice(request, env, body.signed_device_id);
+  const claimer = await resolveClaimer(request, env, body);
+  if (!claimer) return json({ error: 'unavailable' }, 503);
+  const { deviceId, issued, verified } = claimer;
   const owner = await ownerOf(env, username);
   // An existing handle may only be re-claimed by a device that PROVES it is
-  // the owner via a valid signed id. Ip+ua-derived identity is not proof —
-  // two browsers on one machine (e.g. incognito) share it, which let the
+  // the owner via a valid signed id. A derived identity is not proof — two
+  // browsers on one machine (e.g. incognito) can share it, which let the
   // same handle be "created" twice. Unverified claimers always get 409.
   if (owner && !(verified && owner === deviceId)) {
     return json({ error: 'taken', suggestions: await suggest(env, username) }, 409);

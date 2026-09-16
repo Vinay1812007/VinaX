@@ -1,15 +1,20 @@
 import type { HistoryEntry } from '@/types';
+import { creditedSeconds, historyCoverage, type HistoryCoverage } from './listening';
 
 /**
  * v5.17.0 — Weekly report card: this week (rolling 7 days) against the 7 days
  * before it, from on-device history only. Pure, so it is unit-tested.
  *
- * Minutes follow the daily-goal rule: a completed play counts in full, an
- * unfinished one is credited a third of the track (30s floor). "New artists"
- * are names that appear in the window and never before it.
+ * Minutes follow the shared listening rule (./listening.ts): measured
+ * playback when the player recorded it, otherwise a completed play counts in
+ * full and an unfinished one a third of the track (30s floor). "New artists"
+ * are names that appear in the window and never before it. `coverage` says
+ * whether the 150-play history cap cut the two-week comparison short.
  */
 export interface WeekSummary {
   minutes: number;
+  /** True when any play in the week was estimated rather than measured. */
+  estimated: boolean;
   songs: number;
   newArtists: number;
   topArtist: string | null;
@@ -21,6 +26,8 @@ export interface WeeklyReport {
   lastWeek: WeekSummary;
   /** this − last, so positive means "up". */
   delta: { minutes: number; songs: number; newArtists: number };
+  /** Does retained history reach back the full two weeks? */
+  coverage: HistoryCoverage;
 }
 
 const DAY = 86_400_000;
@@ -36,10 +43,6 @@ export function entryLanguage(e: HistoryEntry): string | null {
   return l[0].toUpperCase() + l.slice(1);
 }
 
-function creditedSeconds(e: HistoryEntry): number {
-  const dur = e.song.duration ?? 0;
-  return e.completed ? dur : Math.min(dur, Math.max(30, dur / 3));
-}
 
 function topKey(counts: Map<string, number>): string | null {
   let best: string | null = null;
@@ -64,9 +67,12 @@ function summarise(entries: HistoryEntry[], from: number, to: number): WeekSumma
     else if (e.ts < from) seenBefore.add(entryArtist(e));
   }
   let seconds = 0;
+  let estimated = false;
   const fresh = new Set<string>();
   for (const e of inWindow) {
-    seconds += creditedSeconds(e);
+    const c = creditedSeconds(e);
+    seconds += c.seconds;
+    if (!c.measured) estimated = true;
     const a = entryArtist(e);
     artists.set(a, (artists.get(a) ?? 0) + 1);
     if (!seenBefore.has(a)) fresh.add(a);
@@ -75,6 +81,7 @@ function summarise(entries: HistoryEntry[], from: number, to: number): WeekSumma
   }
   return {
     minutes: Math.round(seconds / 60),
+    estimated,
     songs: inWindow.length,
     newArtists: fresh.size,
     topArtist: topKey(artists),
@@ -93,5 +100,6 @@ export function weeklyReport(entries: HistoryEntry[], now = Date.now()): WeeklyR
       songs: thisWeek.songs - lastWeek.songs,
       newArtists: thisWeek.newArtists - lastWeek.newArtists,
     },
+    coverage: historyCoverage(entries, now - 2 * WEEK),
   };
 }

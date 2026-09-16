@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { isNativePlatform } from '@/services/native';
-import { exportProfileJson, importProfileJson } from '@/features/settings/actions';
+import { exportTransferJson, importTransferJson } from '@/features/settings/actions';
 import { generatePassphrase, looksLikePassphrase, openProfile, sealProfile } from '@/features/settings/handoff';
 import { DevicesIcon } from '@/components/Icons';
 
@@ -62,7 +62,7 @@ export default function HandoffPage() {
       // the fragment / manual code. A salt doesn't need secrecy; per-transfer
       // uniqueness is what makes precomputed tables useless.
       const saltId = generatePassphrase().slice(0, 2).join('-');
-      const sealed = await sealProfile(exportProfileJson(), words, saltId);
+      const sealed = await sealProfile(exportTransferJson(), words, saltId);
       const res = await fetch(`${API_BASE}/api/handoff`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -123,8 +123,8 @@ export default function HandoffPage() {
         setRecv('wrong-words');
         return;
       }
-      if (!importProfileJson(json)) setRecv('error');
-      // importProfileJson reloads the app on success — nothing more to do.
+      if (!importTransferJson(json).ok) setRecv('error');
+      // importTransferJson reloads the app on success — nothing more to do.
     } catch {
       setRecv('error');
     }

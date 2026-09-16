@@ -18,6 +18,69 @@ export function setLocal<T>(key: string, value: T): void {
   }
 }
 
+export type StorageFailure = { ok: false; error: 'quota' | 'unavailable'; message: string; rolledBack: boolean };
+export type StorageWriteResult = { ok: true; written: number } | StorageFailure;
+
+function classify(e: unknown): 'quota' | 'unavailable' {
+  const err = e as { name?: string; code?: number } | null;
+  const name = err?.name ?? '';
+  if (name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED' || err?.code === 22 || err?.code === 1014) return 'quota';
+  return 'unavailable';
+}
+
+/**
+ * All-or-nothing localStorage write. Every entry is written in order (a
+ * `null` value removes the key); if any write throws — quota exceeded,
+ * private mode, storage disabled — every key touched so far is restored to
+ * its previous value and the failure is REPORTED instead of swallowed. The
+ * silent setLocal() above is right for hot-path preference writes; a restore
+ * of the listener's whole library must never half-apply and then say "done".
+ */
+export function writeLocalBatch(entries: ReadonlyArray<readonly [key: string, raw: string | null]>): StorageWriteResult {
+  let storage: Storage;
+  try {
+    storage = window.localStorage;
+    if (!storage) throw new Error('no storage');
+  } catch {
+    return { ok: false, error: 'unavailable', message: 'Device storage is not available in this browser mode.', rolledBack: true };
+  }
+  const previous: Array<readonly [string, string | null]> = [];
+  for (const [key, raw] of entries) {
+    let before: string | null = null;
+    try {
+      before = storage.getItem(key);
+    } catch {
+      /* treat as absent */
+    }
+    try {
+      if (raw === null) storage.removeItem(key);
+      else storage.setItem(key, raw);
+      previous.push([key, before]);
+    } catch (e) {
+      const error = classify(e);
+      let rolledBack = true;
+      for (const [k, v] of previous.reverse()) {
+        try {
+          if (v === null) storage.removeItem(k);
+          else storage.setItem(k, v);
+        } catch {
+          rolledBack = false;
+        }
+      }
+      return {
+        ok: false,
+        error,
+        message:
+          error === 'quota'
+            ? 'This device is out of storage space for VinaX. Nothing was changed.'
+            : 'Device storage refused the write. Nothing was changed.',
+        rolledBack,
+      };
+    }
+  }
+  return { ok: true, written: entries.length };
+}
+
 export function removeLocal(key: string): void {
   try {
     window.localStorage.removeItem(key);
