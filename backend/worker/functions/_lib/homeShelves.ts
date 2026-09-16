@@ -134,7 +134,9 @@ export async function designShelves(env: AiEnv, data: Record<string, unknown>, b
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: `${body}\n\nCANDIDATE SHELVES pitched by idea models (pick, refine or replace; JSON):\n${JSON.stringify(ideas)}\n\nDesign this listener's Home now. JSON only.` },
     ],
-    { temperature: 0.9, lane: 'dj', ladder: ['fast', 'chat', 'home'], json: true, maxTokens: 900, reasoningEffort: 'low', firstTimeoutMs: 7_000, timeoutMs: 6_000, deadlineAt },
+    // Scholar pitched in 1.3 s live while the dj engine timed out at 7 s; the
+    // curate leads with scholar so Home lands in seconds, not at the leash.
+    { temperature: 0.9, lane: 'scholar', ladder: ['dj', 'fast', 'chat'], json: true, maxTokens: 900, reasoningEffort: 'low', firstTimeoutMs: 6_000, timeoutMs: 6_000, skipSecondary: true, deadlineAt },
   );
   let sections = r.error ? [] : filterAvoided(parseShelves(r.content), data.avoidShelves);
   let usedAi = sections.length >= 2;

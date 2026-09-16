@@ -298,7 +298,7 @@ export interface LaneAttempt {
  * its same-key secondary pin (when one exists), then the cross-lane ladder.
  * Each attempt carries its lane's endpoint so mixed-provider failover signs
  * every hop against the right base. */
-export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, ladder?: Lane[]): LaneAttempt[] {
+export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, ladder?: Lane[], skipSecondary = false): LaneAttempt[] {
   const out: LaneAttempt[] = [];
   const add = (l: Lane, model?: string): void => {
     const key = env[LANE_ENV[l]];
@@ -309,7 +309,7 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
   add(lane, modelOverride);
   // Same-lane secondary: keeps the lane's character when the pinned primary
   // is degraded — consulted before any cross-lane ladder hop.
-  const secondary = LANE_SECONDARY[lane];
+  const secondary = skipSecondary ? undefined : LANE_SECONDARY[lane];
   const ownKey = env[LANE_ENV[lane]];
   if (secondary && ownKey && !out.some((a) => a.model === secondary)) {
     out.push({ key: ownKey, model: secondary, role: lane, endpoint: laneEndpoint(env, lane) });
@@ -384,6 +384,10 @@ export async function chat(
      * or unresponsive pinned model gets a fair shot without starving the
      * failover ladder of budget. Laddered attempts use timeoutMs. */
     firstTimeoutMs?: number;
+    /** v6.5.2 — skip the lane's same-key secondary pin: when the lane's host
+     *  is the slow part (measured live: both NVIDIA pins timing out back to
+     *  back), the ladder's first cross-host lane should get the budget. */
+    skipSecondary?: boolean;
     /** Per-call failover order override — time-critical big-JSON jobs put the
      * fastest reliable generator first. Default: the global key ladder. */
     ladder?: Lane[];
@@ -397,7 +401,7 @@ export async function chat(
   const lane = opts.lane ?? 'chat';
   // The lane's own key+model first, then the cross-lane failover ladder — a
   // dead or missing key degrades gracefully instead of failing the feature.
-  const attempts = laneAttempts(env, lane, opts.model, opts.ladder);
+  const attempts = laneAttempts(env, lane, opts.model, opts.ladder, opts.skipSecondary === true);
   if (!attempts.length) return { content: null, model: null, error: 'not_configured' };
   const wantJson = opts.json === true;
   let lastStatus = 0;

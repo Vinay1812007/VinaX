@@ -251,7 +251,12 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: user },
     ],
-    { temperature: 0.8, lane: 'dj', json: true, maxTokens: wantSegues ? 1500 : 1000, reasoningEffort: 'low', timeoutMs: 11_000, firstTimeoutMs: 13_000, ladder: ['fast', 'scholar', 'chat', 'home'], deadlineAt },
+    // Live tail 2026-09-16: the NVIDIA dj engine answers a set in 8–13 s and
+    // times out about half the time; its same-host secondary then burns
+    // another 11 s. The Groq scholar lane answers the same JSON in 1–3 s, so
+    // it leads, the dj engine is the first failover, and the secondary is
+    // skipped — a set lands in a few seconds instead of a 408 at 26 s.
+    { temperature: 0.8, lane: 'scholar', json: true, maxTokens: wantSegues ? 1500 : 1000, reasoningEffort: 'low', timeoutMs: 11_000, firstTimeoutMs: 8_000, skipSecondary: true, ladder: ['dj', 'fast', 'chat', 'home'], deadlineAt },
   );
   // Structural anti-repeat for proposals: whatever the model claims, a title
   // the listener just heard or was already offered never comes back.

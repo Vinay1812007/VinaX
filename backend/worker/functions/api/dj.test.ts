@@ -79,10 +79,13 @@ describe('POST /api/dj', () => {
     expect(status).toBe(200);
     expect(json.intro).toBe('Settling in.');
     expect((json.songs as Array<{ title: string }>).map((s) => s.title)).toEqual(['Ramuloo Ramulaa', 'Inkem Inkem Inkem Kaavaale']);
-    // The pool travels in the user message; the lane is the DJ lane.
-    const [, messages, opts] = chatMock.mock.calls[0] as [unknown, Array<{ content: string }>, { lane: string }];
+    // The pool travels in the user message; the fast scholar lane leads and
+    // the DJ engine is the first failover (v6.5.2, measured live).
+    const [, messages, opts] = chatMock.mock.calls[0] as [unknown, Array<{ content: string }>, { lane: string; ladder: string[]; skipSecondary?: boolean }];
     expect(messages[1].content).toContain('Ramuloo Ramulaa');
-    expect(opts.lane).toBe('dj');
+    expect(opts.lane).toBe('scholar');
+    expect(opts.ladder[0]).toBe('dj');
+    expect(opts.skipSecondary).toBe(true);
   });
   it('answers 503 when no engine is configured and 500 when the model returns nothing usable', async () => {
     chatMock.mockResolvedValue({ content: null, error: 'not_configured' });
