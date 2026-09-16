@@ -99,6 +99,23 @@ jobs:
         if: steps.config.outputs.configured == 'true'
         run: npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/wrangler-dry
 
+      # A deleted or rolled token fails inside `wrangler deploy` with a
+      # generic "Authentication error [code: 10000]". Check it first and say
+      # exactly which secret to rotate (2026-09-16: the token had been invalid
+      # since 2026-09-11 and every backend change since 6.0 stayed undeployed).
+      - name: Verify the Cloudflare token
+        if: steps.config.outputs.configured == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if ! npx wrangler whoami > /tmp/whoami.txt 2>&1; then
+            cat /tmp/whoami.txt
+            echo "::error title=Cloudflare token rejected::The CLOUDFLARE_API_TOKEN secret is invalid, expired or rolled. Create a new token (My Profile → API Tokens → Edit Cloudflare Workers template, this account), update the CLOUDFLARE_API_TOKEN secret under Settings → Secrets and variables → Actions, then re-run this workflow. Until then the production Worker stays at its last deployed version."
+            exit 1
+          fi
+          grep -qi "logged in\|Account ID" /tmp/whoami.txt || { cat /tmp/whoami.txt; echo "::error::wrangler could not identify the account with this token."; exit 1; }
+
       - name: Deploy
         if: steps.config.outputs.configured == 'true' && inputs.dry_run != true
         env:

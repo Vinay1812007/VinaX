@@ -313,6 +313,12 @@ export async function djSequence(seed: Song | null, ctx: RecommendationContext, 
       aiAvailable = false;
       return null;
     }
+    // v6.5.1 — the route is missing: the deployed backend predates this
+    // client. Stay quiet for ten minutes rather than re-trying every round.
+    if (res.status === 404 || res.status === 405) {
+      retryAfter = Date.now() + 10 * 60_000;
+      return null;
+    }
     if (!res.ok) {
       retryAfter = Date.now() + 60_000;
       return null;

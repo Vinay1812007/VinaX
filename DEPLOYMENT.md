@@ -37,6 +37,16 @@ npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/vinax-
 npm run deploy
 ```
 
+### Runbook: the app is newer than the API (AI DJ, AI shelves, curate all silent)
+
+Symptom: the web app on Pages is current (its `changelog.json` shows the latest version) but `GET /api/version` reports an old version, `POST /api/curate` answers `405`, and `POST /api/dj` hangs or returns the SPA shell. Cause: no Worker deploy has landed. As of 2026-09-16 both paths were down at once — Cloudflare Workers Builds has reported a deleted/rolled build token since 2026-09-10, and the GitHub fallback's `CLOUDFLARE_API_TOKEN` secret has been rejected (`Invalid access token [code: 9109]`) since 2026-09-11, so every backend change since 6.0 stayed undeployed while the app kept shipping.
+
+Fix, in order of preference:
+
+1. **Rotate the GitHub fallback token** (five minutes, fixes every future push): Cloudflare dashboard → My Profile → API Tokens → Create Token → *Edit Cloudflare Workers* template, scoped to this account → copy it → GitHub → Settings → Secrets and variables → Actions → update `CLOUDFLARE_API_TOKEN` (and confirm `CLOUDFLARE_ACCOUNT_ID`). Then Actions → **Deploy Worker** → *Run workflow*. The workflow now verifies the token first and names this secret when it is rejected.
+2. **Repair Workers Builds**: Cloudflare dashboard → Workers & Pages → `vinax-api` → Settings → Build → reconnect the repository / regenerate the build token. Until then the "Workers Builds: vinax-api" check on every commit stays red; it is informational once path 1 works.
+3. **Deploy by hand** from a machine that is logged in (`npx wrangler whoami` shows the account): `cd backend && npm run deploy`. Then confirm `GET https://www.sirimillavinay.online/api/version` reports the new version and `POST /api/curate` no longer answers `405`.
+
 The **Deploy Worker** GitHub workflow provides a second deployment path when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are configured. Without credentials it skips deployment. If Cloudflare reports a deleted or rolled build token, repair that token in Cloudflare or configure the existing GitHub fallback; a source change alone cannot fix the token.
 
 Pages serves static assets. Worker routes own API, image/APK proxy and configured SEO routes. Verify both deployments because successfully publishing one does not update the other.

@@ -45,6 +45,13 @@ jobs:
         with: { distribution: "temurin", java-version: "21" }
 
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          # The action's default is "tools platform-tools"; the legacy "tools"
+          # package was removed from the SDK repository and sdkmanager now
+          # exits 1 on it ("Failed to find package 'tools'"), failing every
+          # build before Gradle starts (2026-09-16). Gradle fetches the
+          # build-tools and platform it needs on its own.
+          packages: platform-tools
 
       - name: Add Android platform
         run: npx cap add android
