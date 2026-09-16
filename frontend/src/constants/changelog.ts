@@ -12,6 +12,16 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '6.4.0': {
+    title: 'Your taste, remembered more precisely',
+    changes: [
+      { type: 'improved', text: 'VinaX now remembers songs you keep finishing, the days you listen most and the energy you tend to complete, and uses them alongside your languages and artists. One binge or a burst of favourites can no longer take over your taste: every signal is capped and older listening fades gently (two weeks for likes, a month for skips).' },
+      { type: 'improved', text: 'The DJ now explains each pick with a short reason and its own confidence, and every song it names is checked against the songs VinaX actually gathered — never taken on trust. It answers within twelve seconds or your on-device order plays.' },
+      { type: 'improved', text: 'In Explore mode the queue may take a short detour into another language you play, then come back — never two detours in a row, and never when Explore is off.' },
+      { type: 'improved', text: '“Designed for you” shelves now carry a type and a description, remember the last 200 songs they showed so the next build feels new, and vary per app load while staying personal.' },
+      { type: 'new', text: 'Developers: add ?debug=recs to the address to see every recommendation’s score breakdown and whether the AI DJ or the local engine chose it.' },
+    ],
+  },
   '6.3.0': {
     title: 'A queue that reads the room',
     changes: [

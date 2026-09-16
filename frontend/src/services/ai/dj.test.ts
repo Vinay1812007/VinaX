@@ -53,12 +53,13 @@ describe('buildDjContext', () => {
 describe('resolveFromPool', () => {
   it('maps picks back by canonical identity and drops anything not in the pool', () => {
     const out = resolveFromPool(
-      [{ title: 'butta bomma (from ala vaikunthapurramuloo)', artist: 'Armaan Malik, Others', reason: 'r1', segue: 's1' }, { title: 'Made up', artist: 'X' }, { title: 'Samajavaragamana', artist: 'Sid Sriram' }, { title: 'Butta Bomma', artist: 'Armaan Malik' }],
+      [{ title: 'butta bomma (from ala vaikunthapurramuloo)', artist: 'Armaan Malik, Others', reason: 'r1', segue: 's1', confidence: 0.8 }, { title: 'Made up', artist: 'X' }, { songId: '1', title: 'x', artist: 'y' }, { songId: 'nope', title: 'Butta Bomma', artist: 'Armaan Malik' }, { songId: 'ghost' }],
       pool,
       8,
     );
     expect(out.map((p) => p.song.id)).toEqual(['2', '1']);
-    expect(out[0]).toMatchObject({ reason: 'r1', segue: 's1' });
+    expect(out[0]).toMatchObject({ reason: 'r1', segue: 's1', confidence: 0.8 });
+    expect(out[1].confidence).toBe(0.5);
   });
 });
 

@@ -42,8 +42,8 @@ HOW TO BUILD THE SET
 8. arcShape (if present) names the energy arc the app wants: steady (settle, one gentle peak, ease off), build (climb steadily), wind-down (descend), wave (rise and fall twice), lift (come up a notch quickly with sure favourites, then hold). listenerGoal (if present) is what the listener asked the Queue Builder for — honour it inside the pool.
 
 OUTPUT — JSON only, exactly this shape:
-{"intro":"one warm spoken sentence introducing this stretch, max 22 words, no song titles","songs":[{"title":"exact pool title","artist":"exact pool artist","reason":"why it fits and how it flows, max 12 words","segue":"one natural spoken line a DJ would say as this song starts, max 20 words, may name the song and artist"}]}
-Return exactly the requested number of songs when the pool allows. Copy title and artist EXACTLY as they appear in the pool.`;
+{"intro":"one warm spoken sentence introducing this stretch, max 22 words, no song titles","songs":[{"songId":"the pool entry's id, copied exactly","title":"exact pool title","artist":"exact pool artist","reason":"why it fits and how it flows, max 12 words, e.g. similar energy, same language vocals, smoother transition","segue":"one natural spoken line a DJ would say as this song starts, max 20 words, may name the song and artist","confidence":0.0}]}
+confidence is your 0..1 belief that this pick flows well from the previous one. Return exactly the requested number of songs when the pool allows. Copy songId, title and artist EXACTLY as they appear in the pool.`;
 
 const CORS_HEADERS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -68,14 +68,20 @@ export function canonKey(title: string, artist: string): string {
   return `${t}|${a}`;
 }
 
-export interface PoolSong { title: string; artist: string; language?: string | null }
-export interface DjPick { title: string; artist: string; reason: string; segue: string }
+export interface PoolSong { id?: string; title: string; artist: string; language?: string | null }
+export interface DjPick { songId: string | null; title: string; artist: string; reason: string; segue: string; confidence: number }
 
 const clip = (v: unknown, n: number): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 
-/** Parse the model output; keep only picks that exist in the pool, in the model's order, no repeats. */
+/**
+ * Parse the model output; keep only picks that exist in the pool, in the
+ * model's order, no repeats. A pick is matched by its pool id first (the
+ * contract), then by canonical title + artist (older answers, id typos) —
+ * never by trusting the id alone: an id that is not in the pool is dropped.
+ */
 export function parsePicks(content: string | null, pool: PoolSong[], count: number): { intro: string; songs: DjPick[] } {
   const parsed = extractJson<{ intro?: unknown; songs?: unknown }>(content);
+  const byId = new Map(pool.filter((p) => p.id).map((p) => [p.id as string, p]));
   const byKey = new Map(pool.map((p) => [canonKey(p.title, p.artist), p]));
   const used = new Set<string>();
   const songs: DjPick[] = [];
@@ -83,14 +89,16 @@ export function parsePicks(content: string | null, pool: PoolSong[], count: numb
   for (const raw of list) {
     if (!raw || typeof raw !== 'object') continue;
     const r = raw as Record<string, unknown>;
+    const id = clip(r.songId ?? r.id, 128);
     const title = clip(r.title, 200);
     const artist = clip(r.artist, 200);
-    if (!title || !artist) continue;
-    const key = canonKey(title, artist);
-    const hit = byKey.get(key);
-    if (!hit || used.has(key)) continue;
+    const hit = (id && byId.get(id)) || (title && artist ? byKey.get(canonKey(title, artist)) : undefined);
+    if (!hit) continue;
+    const key = canonKey(hit.title, hit.artist);
+    if (used.has(key)) continue;
     used.add(key);
-    songs.push({ title: hit.title, artist: hit.artist, reason: clip(r.reason, 120), segue: clip(r.segue, 160) });
+    const conf = typeof r.confidence === 'number' && Number.isFinite(r.confidence) ? Math.max(0, Math.min(1, r.confidence)) : 0.5;
+    songs.push({ songId: hit.id ?? null, title: hit.title, artist: hit.artist, reason: clip(r.reason, 120), segue: clip(r.segue, 160), confidence: conf });
     if (songs.length >= count) break;
   }
   return { intro: clip(parsed?.intro, 200), songs };
@@ -133,7 +141,7 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
   const pool: PoolSong[] = Array.isArray(body.pool)
     ? (body.pool as unknown[])
         .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
-        .map((p) => ({ title: clip(p.title, 200), artist: clip(p.artist, 200), language: typeof p.language === 'string' ? p.language.slice(0, 40) : null }))
+        .map((p) => ({ ...(clip(p.id, 128) ? { id: clip(p.id, 128) } : {}), title: clip(p.title, 200), artist: clip(p.artist, 200), language: typeof p.language === 'string' ? p.language.slice(0, 40) : null }))
         .filter((p) => p.title && p.artist)
         .slice(0, 60)
     : [];
@@ -145,7 +153,7 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
   const seed = varietySeed();
   const angle = styleAngle(seed);
   const opener = pickBySeed(OPENERS, seed, 'opener');
-  const deadlineAt = t0 + 16_000;
+  const deadlineAt = t0 + 12_000;
   const user =
     `Listener context (JSON):\n${JSON.stringify(ctx)}\n\nPOOL — the only songs you may return (JSON):\n${JSON.stringify(pool)}\n\n` +
     `Return exactly ${Math.min(count, pool.length)} songs from the pool, sequenced as a set. varietySeed: "${seed}" — a fresh round must differ from the last one for the same seed. ` +
@@ -156,7 +164,7 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: user },
     ],
-    { temperature: 0.8, lane: 'dj', json: true, maxTokens: 1400, reasoningEffort: 'low', timeoutMs: 9_000, firstTimeoutMs: 4_500, ladder: ['chat', 'fast', 'scholar', 'home'], deadlineAt },
+    { temperature: 0.8, lane: 'dj', json: true, maxTokens: 1400, reasoningEffort: 'low', timeoutMs: 8_000, firstTimeoutMs: 4_000, ladder: ['chat', 'fast', 'scholar', 'home'], deadlineAt },
   );
   const { intro, songs } = r.error ? { intro: '', songs: [] as DjPick[] } : parsePicks(r.content, pool, count);
   if (r.error !== 'not_configured') {

@@ -2,6 +2,8 @@
  * The taste profile is the entire "account": a decayed affinity model stored
  * locally, never uploaded anywhere. Deterministic and explainable.
  */
+import { DECAY, MAX_AFFINITY } from './eventWeights';
+
 export interface Affinity {
   score: number;
   plays: number;
@@ -20,6 +22,12 @@ export interface TasteProfile {
   updatedAt: number;
   languages: Record<string, Affinity>;
   artists: Record<string, ArtistAffinity>;
+  /** v6.4.0 — per-song affinity (capped at 300 songs, least-recent dropped). Optional: pre-6.4 profiles load unchanged. */
+  songs?: Record<string, Affinity>;
+  /** v6.4.0 — plays per weekday (0 = Sunday). */
+  dayHistogram?: number[];
+  /** v6.4.0 — running energy preference from completed plays: sum and count. */
+  energyPref?: { sum: number; n: number };
   /** Plays per hour-of-day, for time-of-day shelves and insights. */
   hourHistogram: number[];
   totals: {
@@ -69,13 +77,9 @@ export type SliderKey = keyof TasteSliders;
 // (the Taste Profile page and the AI payload builders) ever touch that runtime,
 // so keeping it out holds the first-load bundle flat. Only the TYPES stay here.
 
-const HALF_LIFE_DAYS = 14;
-// Negative-preference decay is slower than positive — a skip should sting
-// longer than a play should reward. Package A2 upgrades applyDecay to
-// exponentially fade `skips` at this half-life so a year-old skip doesn't
-// keep demoting an artist forever.
-const SKIP_HALF_LIFE_DAYS = 30;
+// Half-lives live in ./eventWeights (v6.4.0) so tuning has one home.
 const DAY_MS = 86_400_000;
+const SONG_CAP = 300;
 
 export function createEmptyProfile(now = Date.now()): TasteProfile {
   return {
@@ -99,18 +103,31 @@ export function createEmptyProfile(now = Date.now()): TasteProfile {
  *  signals (`skips`) fade at SKIP_HALF_LIFE_DAYS (30d) — skips sting longer
  *  than plays reward. Also GCs expired softMuted entries from A3. */
 export function applyDecay(profile: TasteProfile, now = Date.now()): void {
+  applyTimeDecay(profile, now);
+}
+
+/**
+ * v6.4.0 — the decay clock, exported under its own name. Positive scores
+ * halve every `positiveHalfLifeDays` since the profile was last touched,
+ * skips every `skipHalfLifeDays`; song affinities decay with the rest.
+ * Idempotent within a six-hour window so hot paths do not churn.
+ */
+export function applyTimeDecay(
+  profile: TasteProfile,
+  now = Date.now(),
+  halfLives: { positiveHalfLifeDays: number; skipHalfLifeDays: number } = DECAY,
+): void {
   const elapsedDays = (now - profile.updatedAt) / DAY_MS;
   if (elapsedDays <= 0.25) return;
-  const posFactor = Math.pow(0.5, elapsedDays / HALF_LIFE_DAYS);
-  const negFactor = Math.pow(0.5, elapsedDays / SKIP_HALF_LIFE_DAYS);
-  for (const a of Object.values(profile.languages)) {
+  const posFactor = Math.pow(0.5, elapsedDays / halfLives.positiveHalfLifeDays);
+  const negFactor = Math.pow(0.5, elapsedDays / halfLives.skipHalfLifeDays);
+  const fade = (a: Affinity): void => {
     a.score *= posFactor;
     a.skips *= negFactor;
-  }
-  for (const a of Object.values(profile.artists)) {
-    a.score *= posFactor;
-    a.skips *= negFactor;
-  }
+  };
+  for (const a of Object.values(profile.languages)) fade(a);
+  for (const a of Object.values(profile.artists)) fade(a);
+  if (profile.songs) for (const a of Object.values(profile.songs)) fade(a);
   // GC expired soft-mutes (natural expiry — no half-life needed, the `until`
   // timestamp handles it). Optional field, tolerant of undefined.
   if (profile.softMuted) {
@@ -120,6 +137,19 @@ export function applyDecay(profile: TasteProfile, now = Date.now()): void {
   }
   profile.updatedAt = now;
 }
+
+/**
+ * v6.4.0 — an affinity's score as of `now`, decayed from ITS OWN last signal
+ * rather than the profile's last write, for callers that want a per-item
+ * view (debug panels, "why this song"). Pure; the stored value is untouched.
+ */
+export function getDecayedAffinity(a: Affinity | undefined, now = Date.now(), halfLifeDays = DECAY.positiveHalfLifeDays): number {
+  if (!a) return 0;
+  const days = Math.max(0, (now - a.lastTs) / DAY_MS);
+  return a.score * Math.pow(0.5, days / halfLifeDays);
+}
+
+const capped = (score: number): number => Math.max(0, Math.min(MAX_AFFINITY, score));
 
 function ensureAffinity<T extends Affinity>(map: Record<string, T>, key: string, init: T): T {
   if (!map[key]) map[key] = init;
@@ -137,7 +167,7 @@ export function bumpLanguage(
 ): void {
   if (!language) return;
   const a = ensureAffinity(profile.languages, language, blank(now));
-  a.score = Math.max(0, a.score + delta);
+  a.score = capped(a.score + delta);
   a.lastTs = now;
   if (kind === 'play') a.plays += 1;
   if (kind === 'complete') a.completes += 1;
@@ -162,12 +192,72 @@ export function bumpArtist(
     delete profile.artists[nameKey];
   }
   const a = ensureAffinity(profile.artists, key, { ...blank(now), name: artistName });
-  a.score = Math.max(0, a.score + delta);
+  a.score = capped(a.score + delta);
   a.lastTs = now;
   a.name = artistName || a.name;
   if (kind === 'play') a.plays += 1;
   if (kind === 'complete') a.completes += 1;
   if (kind === 'skip') a.skips += 1;
+}
+
+/** v6.4.0 — per-song affinity, capped at SONG_CAP entries (least recent dropped). */
+export function bumpSong(profile: TasteProfile, songId: string, delta: number, kind: 'play' | 'complete' | 'skip', now = Date.now()): void {
+  if (!songId) return;
+  if (!profile.songs) profile.songs = {};
+  const a = ensureAffinity(profile.songs, songId, blank(now));
+  a.score = capped(a.score + delta);
+  a.lastTs = now;
+  if (kind === 'play') a.plays += 1;
+  if (kind === 'complete') a.completes += 1;
+  if (kind === 'skip') a.skips += 1;
+  const keys = Object.keys(profile.songs);
+  if (keys.length > SONG_CAP) {
+    const drop = keys.sort((x, y) => profile.songs![x].lastTs - profile.songs![y].lastTs).slice(0, keys.length - SONG_CAP);
+    for (const k of drop) delete profile.songs[k];
+  }
+}
+
+/** 0..1 — how much this listener likes THIS song, relative to their strongest song. */
+export function songWeight(profile: TasteProfile, songId: string): number {
+  const a = profile.songs?.[songId];
+  if (!a || a.score <= 0) return 0;
+  const max = Math.max(...Object.values(profile.songs ?? {}).map((x) => x.score), 1);
+  return a.score / max;
+}
+
+/** v6.4.0 — weekday histogram (0 = Sunday). */
+export function bumpDay(profile: TasteProfile, day: number): void {
+  if (!profile.dayHistogram || profile.dayHistogram.length !== 7) profile.dayHistogram = [0, 0, 0, 0, 0, 0, 0];
+  profile.dayHistogram[((day % 7) + 7) % 7] += 1;
+}
+
+/** 0..1 — how much of this listener's play volume lands on `day`, relative to their busiest day. */
+export function dayOfWeekWeight(profile: TasteProfile, day: number): number {
+  const h = profile.dayHistogram;
+  if (!h || h.length !== 7) return 0;
+  const max = Math.max(...h, 1);
+  return (h[((day % 7) + 7) % 7] ?? 0) / max;
+}
+
+/** v6.4.0 — running energy preference from completed plays. */
+export function bumpEnergyPref(profile: TasteProfile, energy: number): void {
+  if (!Number.isFinite(energy)) return;
+  const e = profile.energyPref ?? { sum: 0, n: 0 };
+  // Exponential-ish window: keep the last ~50 completions' worth of weight.
+  if (e.n >= 50) {
+    e.sum = e.sum * (49 / 50) + energy;
+  } else {
+    e.sum += energy;
+    e.n += 1;
+  }
+  profile.energyPref = e;
+}
+
+/** Preferred energy 0..1 from completed plays, or null before five completions. */
+export function preferredEnergy(profile: TasteProfile): number | null {
+  const e = profile.energyPref;
+  if (!e || e.n < 5) return null;
+  return Math.max(0, Math.min(1, e.sum / e.n));
 }
 
 export function rememberRecent(profile: TasteProfile, songId: string): void {

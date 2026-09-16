@@ -58,7 +58,7 @@ import {
 } from '@/features/home/usePersonalShelves';
 import { useFreshFinds, useHiddenGems, useTrendingNearYou } from '@/features/home/useDiscoveryShelves';
 import { useTrendingAlbums, useTrendingArtists } from '@/features/home/useTrendingShelves';
-import { useAiHomeShelves } from '@/features/home/useAiHomeShelves';
+import { useAiHome } from '@/features/home/useAiHome';
 import { flagOn, useFeatureFlags } from '@/features/home/useAppConfig';
 import { moodRotationOfTheDay, useMoodShelf } from '@/features/home/useMoodShelves';
 import { GENRE_SHELVES } from '@/features/home/useGenreShelves';
@@ -338,7 +338,7 @@ function AiHomeBlock() {
   const dedupe = useShelfDedupe('aihome');
   const flags = useFeatureFlags();
   const allowed = flagOn(flags, 'aiHome');
-  const shelves = useAiHomeShelves(allowed);
+  const shelves = useAiHome(allowed);
   if (!allowed || !shelves.data?.length) {
     return shelves.isLoading && allowed ? <ShelfSkeleton /> : null;
   }
@@ -346,7 +346,7 @@ function AiHomeBlock() {
     <section aria-label="Designed for you" className="mb-2">
       <p className="text-[11px] font-extrabold tracking-[0.22em] text-ember-400 uppercase mb-3">Designed for you · AI shelves</p>
       {shelves.data.map((shelf) => (
-        <SongShelf key={shelf.title} title={shelf.title} explanation={shelf.why} songs={dedupe(shelf.songs)} seeAllTo={`/search/${encodeURIComponent(shelf.query)}`} />
+        <SongShelf key={shelf.title} title={shelf.title} explanation={shelf.description || shelf.reason} songs={dedupe(shelf.songs)} seeAllTo={`/search/${encodeURIComponent(shelf.query)}`} />
       ))}
     </section>
   );

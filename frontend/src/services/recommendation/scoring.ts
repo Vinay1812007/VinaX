@@ -2,9 +2,12 @@ import {
   artistLastSeen,
   artistSkipScore,
   artistWeight,
+  dayOfWeekWeight,
   languageWeight,
   lowSkipScore,
+  preferredEnergy,
   profileConfidence,
+  songWeight,
   timeOfDayWeight,
 } from '@/services/personalization/profile';
 import { energyOfSong } from '@/services/personalization/session';
@@ -145,6 +148,29 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
   const todW = timeOfDayWeight(profile, song.language, ctx.hour) * 0.08 * personalBlend;
   if (todW > 0.02) reasons.push({ kind: 'time', weight: todW });
   score += todW;
+
+  // v6.4.0 — song affinity: a song you keep finishing earns its own term,
+  // distinct from its artist (a favourite album track vs. the artist's catalogue).
+  const sw = songWeight(profile, song.id) * RECOMMENDATION_WEIGHTS.songAffinity * personalBlend;
+  if (sw > 0.02) reasons.push({ kind: 'song', weight: sw });
+  score += sw;
+
+  // v6.4.0 — day-of-week rhythm: a small lift on the days this listener plays most
+  // (weekend-heavy listeners get their weekend sound on weekends).
+  const dw = dayOfWeekWeight(profile, ctx.dayOfWeek ?? new Date().getDay()) * RECOMMENDATION_WEIGHTS.dayOfWeek * personalBlend;
+  if (dw > 0.02) reasons.push({ kind: 'day', weight: dw });
+  score += dw;
+
+  // v6.4.0 — persisted energy preference (from completed plays) when the
+  // session-derived average is not available yet.
+  if (user && user.avgEnergy == null) {
+    const pref = preferredEnergy(profile);
+    if (pref != null) {
+      const et = (1 - Math.abs(candidateProfile.energy - pref)) * RECOMMENDATION_WEIGHTS.energy * 0.3 * personalBlend;
+      if (et > 0.02) reasons.push({ kind: 'energy', weight: et, detail: 'your usual energy' });
+      score += et;
+    }
+  }
 
   // Mood continuity: nudge toward candidates whose inferred mood matches the
   // session's mood (session-based, so it applies even for a cold profile).
