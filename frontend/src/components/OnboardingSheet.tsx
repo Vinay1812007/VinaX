@@ -15,6 +15,8 @@ import { searchSongs } from '@/services/api';
 import { trendingSeed } from '@/constants/seeds';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { useLibraryStore } from '@/store/libraryStore';
+import { toast } from '@/store/toastStore';
+import { claimHandle, pendingClaim, USERNAME_RE } from '@/features/identity/handleClaim';
 import type { Song } from '@/types';
 import { Chip } from './Chip';
 import {
@@ -98,10 +100,16 @@ export function OnboardingSheet() {
   const location = useLocation();
   const navigate = useNavigate();
   const [firstRun, setFirstRun] = useState(() => !getLocal<boolean>(KEYS.onboarded, false));
-  // Existing listeners from before usernames existed: reopen ONLY the welcome
-  // step once so they claim a handle, then close without re-running the tour.
+  // Existing listeners from before usernames existed — and listeners whose
+  // chosen handle the service REFUSED — reopen ONLY the welcome step so they
+  // claim a handle, then close without re-running the tour. A claim that is
+  // merely waiting for the network does not reopen anything: it retries on
+  // its own (features/identity/handleClaim).
   const [handleOnly, setHandleOnly] = useState(
-    () => getLocal<boolean>(KEYS.onboarded, false) && !getLocal<string>(KEYS.userHandle, ''),
+    () =>
+      getLocal<boolean>(KEYS.onboarded, false) &&
+      !getLocal<string>(KEYS.userHandle, '') &&
+      pendingClaim()?.status !== 'pending',
   );
   // The sheet steps aside on /handoff so a first-run device can complete the
   // QR "Move to a new device" import (which reloads with the old device's
@@ -115,10 +123,15 @@ export function OnboardingSheet() {
   const [consent, setConsent] = useState<boolean>(true);
   const [nameErr, setNameErr] = useState(false);
   // Unique handle — mandatory, because display names collide across listeners.
-  const [handle, setHandle] = useState<string>(() => getLocal<string>(KEYS.userHandle, ''));
+  const [handle, setHandle] = useState<string>(
+    () => getLocal<string>(KEYS.userHandle, '') || pendingClaim()?.username || '',
+  );
   const [handleEdited, setHandleEdited] = useState(false);
-  const [handleErr, setHandleErr] = useState<string | null>(null);
-  const [handleSuggestions, setHandleSuggestions] = useState<string[]>([]);
+  const [handleErr, setHandleErr] = useState<string | null>(() => {
+    const p = pendingClaim();
+    return p?.status === 'taken' ? `@${p.username} already exists — pick another username.` : null;
+  });
+  const [handleSuggestions, setHandleSuggestions] = useState<string[]>(() => pendingClaim()?.suggestions ?? []);
   const [claiming, setClaiming] = useState(false);
   // Live availability, checked while the listener types (debounced).
   const [handleAvail, setHandleAvail] = useState<'checking' | 'free' | 'taken' | null>(null);
@@ -139,7 +152,11 @@ export function OnboardingSheet() {
     try {
       const text = await f.text();
       const { importProfileJson } = await import('@/features/settings/actions');
-      if (!importProfileJson(text)) setImportErr(true);
+      const out = importProfileJson(text);
+      if (!out.ok) {
+        setImportErr(true);
+        toast(out.error, { duration: 6000 });
+      }
     } catch {
       setImportErr(true);
     }
@@ -264,37 +281,6 @@ export function OnboardingSheet() {
     if (!handleEdited) setHandle(v.trim().length >= 2 ? genHandle(v) : '');
   };
 
-  /** Claim the unique handle server-side. Returns the saved handle or null. */
-  const claimHandle = async (username: string, displayName: string): Promise<string | null> => {
-    try {
-      const base = isNativePlatform() ? 'https://www.sirimillavinay.online/api/username' : '/api/username';
-      const res = await fetch(base, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          name: displayName,
-          signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined,
-        }),
-      });
-      if (res.status === 409) {
-        const j = (await res.json().catch(() => null)) as { suggestions?: string[] } | null;
-        setHandleErr(`@${username} already exists — pick another username.`);
-        setHandleSuggestions(j?.suggestions ?? []);
-        return null;
-      }
-      const j = (await res.json().catch(() => null)) as
-        | { ok?: boolean; username?: string; signed_device_id_next?: string }
-        | null;
-      if (j?.signed_device_id_next) setLocal(KEYS.signedDeviceId, j.signed_device_id_next);
-      // Network/server hiccup: don't block onboarding forever — accept locally,
-      // the handle re-claims on the next app open (handleOnly reopens if unsaved).
-      return j?.ok ? (j.username ?? username) : username;
-    } catch {
-      return username;
-    }
-  };
-
   const continueFromWelcome = async () => {
     const trimmed = name.trim();
     if (trimmed.length < 2) {
@@ -303,7 +289,7 @@ export function OnboardingSheet() {
     }
     setNameErr(false);
     const username = handle.trim().toLowerCase();
-    if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+    if (!USERNAME_RE.test(username)) {
       setHandleErr('Username is mandatory — 3–20 letters, numbers or _ only.');
       return;
     }
@@ -313,10 +299,24 @@ export function OnboardingSheet() {
     }
     setHandleErr(null);
     setClaiming(true);
-    const saved = await claimHandle(username, trimmed);
+    const outcome = await claimHandle(username, trimmed);
     setClaiming(false);
-    if (!saved) return; // taken — error + suggestions are on screen
-    setLocal(KEYS.userHandle, saved);
+    if (outcome.status === 'taken') {
+      setHandleErr(`@${username} already exists — pick another username.`);
+      setHandleSuggestions(outcome.suggestions);
+      return;
+    }
+    // 'confirmed' stored the handle; 'pending' parked it for retry. Either
+    // way onboarding continues — a flaky network must not block the tour,
+    // but it must not pretend the name is confirmed either.
+    if (outcome.status === 'pending') {
+      toast(
+        outcome.reason === 'offline'
+          ? `You're offline — @${username} will be confirmed when you reconnect.`
+          : `Couldn't confirm @${username} yet — VinaX will keep trying.`,
+        { duration: 5000 },
+      );
+    }
     setLocal(KEYS.userName, trimmed);
     if (handleOnly) {
       // Pre-username listener: handle claimed, nothing else to redo.

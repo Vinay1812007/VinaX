@@ -1,5 +1,6 @@
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
+import { installId } from '@/services/identity/installId';
 import { isNativePlatform, platformName } from '@/services/native';
 import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
@@ -18,17 +19,6 @@ const ENDPOINT = isNativePlatform()
 const PLATFORM = platformName();
 const HEARTBEAT_MS = 25_000;
 
-function deviceId(): string {
-  let id = getLocal<string>(KEYS.deviceId, '');
-  if (!id) {
-    id =
-      globalThis.crypto && 'randomUUID' in globalThis.crypto
-        ? globalThis.crypto.randomUUID()
-        : `d_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    setLocal(KEYS.deviceId, id);
-  }
-  return id;
-}
 
 /** The onboarding analytics opt-in — also gates session insights (sessionInsights.ts). */
 export function consented(): boolean {
@@ -68,7 +58,7 @@ async function send(type: string, song?: Song | null, extra?: Record<string, unk
       },
       keepalive: true,
       body: JSON.stringify({
-        deviceId: deviceId(),
+        deviceId: installId(),
         // H-SRV-6 loop closure: echo the HMAC-signed id the server issued on
         // first contact. Without it the server derives an ip+ua id on EVERY
         // post, so one listener appeared as a fresh "user" after every

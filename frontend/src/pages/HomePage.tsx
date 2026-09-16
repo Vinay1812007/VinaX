@@ -3,8 +3,11 @@ import { invalidateRecommendationCache } from '@/services/recommendation/engine'
 import { recordServed, songKey } from '@/services/recommendation/songIdentity';
 import { ListeningGuide } from '@/features/home/ListeningGuide';
 import { HomeStudio } from '@/features/home/HomeStudio';
-import { HOME_DESIGN_KEY, loadHomeDesign, validateHomeDesign, type HomeDesign } from '@/services/recommendation/homeDesign';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { HOME_DESIGN_KEY, loadHomeDesign, validateHomeDesign, type HomeDesign, type HomeSection } from '@/services/recommendation/homeDesign';
+import { composeHomeLayout } from '@/features/home/homeLayout';
+import { resetShelfLedger, setShelfBlockOrder, useShelfDedupe } from '@/features/home/shelfLedger';
+import { formatMinutes, listeningTotal } from '@/features/stats/listening';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useClientConfig } from '@/features/home/useAppConfig';
 import { PromoBanner } from '@/components/PromoBanner';
@@ -19,7 +22,7 @@ import { ShelfSkeleton, CardGridSkeleton } from '@/components/Skeletons';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
 import { flattenSongPages } from '@/features/search/useInfiniteSongs';
 import { useUnlimitedFeed } from '@/features/home/useUnlimitedFeed';
-import { createShelfDeduper, resetShelfDeduper } from '@/features/home/dedupeShelves';
+import { resetShelfDeduper } from '@/features/home/dedupeShelves';
 import { Chip } from '@/components/Chip';
 import { GetAppBanner } from '@/components/GetAppBanner';
 import { PushPromptCard } from '@/components/PushPromptCard';
@@ -131,185 +134,24 @@ function SongShelf({ title, explanation, songs, seeAllTo }: { title: string; exp
   );
 }
 
-// The old static greeting() lives on inside personalMessage's day-part
-// titles — every listener now gets their own line on top of it.
-
-export default function HomePage() {
-  const [homeDesign, setHomeDesign] = useState<HomeDesign | null>(loadHomeDesign);
-  usePageTitle('Home');
-  const pinned = useSettingsStore((s) => s.pinnedLanguages);
-  const theme = useSettingsStore((s) => s.theme);
-  const setTheme = useSettingsStore((s) => s.setTheme);
+/**
+ * Home blocks are self-contained components: every catalogue query a block
+ * needs lives INSIDE it. Only blocks in the composed layout render at all
+ * (an owner- or listener-hidden shelf never fetches), and blocks beyond the
+ * first two mount through DeferredBlock as they scroll near, so an
+ * unscrolled Home asks the catalogue for the hero plus two blocks — not for
+ * every shelf on the page. Cross-shelf de-duplication runs through the
+ * shared ledger (features/home/shelfLedger.ts) in display order.
+ */
+function QuickBlock() {
   const navigate = useNavigate();
-  const region = useRegion();
-  const historyEntries = useHistoryStore((s) => s.entries);
-
-  // This week's listening, from local history only.
-  const weekAgo = Date.now() - 7 * 86_400_000;
-  const weekEntries = historyEntries.filter((e) => e.ts >= weekAgo);
-  const weekMinutes = Math.round(weekEntries.reduce((acc, e) => acc + (e.song.duration ?? 180), 0) / 60);
+  const playQueueFeed = usePlayerStore((s) => s.playQueue);
   const continueListening = useContinueListening();
-  const yourArtists = useYourArtists();
+  const favorites = useLibraryStore((s) => s.favorites);
+  const onRepeat = useOnRepeat();
   const daily = useDailyMix();
   const weekly = useWeeklyMix();
-  const trendingNow = useTrendingNow();
-  const newReleases = useNewReleases();
-  const popular = usePopular();
-  const favorites = useLibraryStore((s) => s.favorites);
-  const timeShelf = useTimeOfDayShelf();
-  const mixes = useRecommendations();
-  const primaryLang = pinned[0] ?? 'hindi';
-  const trending = useTrendingForLanguage(primaryLang);
-  // More generated shelves (4.16.0): a decade rewind in the primary language
-  // and trending from the listener's SECOND pinned language. Hook order stays
-  // static — the second-language query just goes unused when there isn't one.
-  const secondLang = pinned[1] && pinned[1] !== primaryLang ? pinned[1] : null;
-  const trendingSecond = useTrendingForLanguage(secondLang ?? primaryLang);
-  const decadeRewind = useMoodShelf(`90s ${primaryLang} hits`, primaryLang, 12);
-  const playQueueFeed = usePlayerStore((s) => s.playQueue);
-  const feed = useUnlimitedFeed();
-  const feedSongs = flattenSongPages(feed.data?.pages);
-  // ---- New personalized, discovery, mood, genre, seasonal shelves ----
   const mostListened = useMostListened();
-  const onRepeat = useOnRepeat();
-  const repeatRewind = useRepeatRewind();
-  const recentAlbums = useRecentlyPlayedAlbums();
-  // Seed "Because you listened to …" from the top-played song by the user's
-  // #1 artist — mostListened is already sorted by play count.
-  const becauseSeed = mostListened[0];
-  const because = useBecauseYouListenedTo(becauseSeed);
-  // v5.17.0 — "Because you liked X": one favourite per day, catalog suggestions.
-  const likedSeed = useMemo(() => pickDailyFavorite(favorites, localDateKey()), [favorites]);
-  const becauseLiked = useBecauseYouLiked(likedSeed);
-  const freshFinds = useFreshFinds();
-  const hiddenGems = useHiddenGems();
-  const nearYou = useTrendingNearYou();
-  const trendingArtists = useTrendingArtists();
-  const trendingAlbums = useTrendingAlbums();
-  const seasonal = useSeasonalShelf();
-  const moods = moodRotationOfTheDay(6);
-  // Six mood queries at fixed positions so Rules of Hooks are respected. The
-  // rotation is stable within a UTC day so hook order is stable.
-  const moodA = useMoodShelf(moods[0].query, primaryLang, 8);
-  const moodB = useMoodShelf(moods[1].query, primaryLang, 8);
-  const moodC = useMoodShelf(moods[2].query, primaryLang, 8);
-  const moodD = useMoodShelf(moods[3].query, primaryLang, 8);
-  const moodE = useMoodShelf(moods[4].query, primaryLang, 8);
-  const moodF = useMoodShelf(moods[5].query, primaryLang, 8);
-  const moodQueries = [moodA, moodB, moodC, moodD, moodE, moodF];
-  // Roadmap O.2 — first live A/B: home shelf order. Resolves to 'control'
-  // (today's exact layout) until the experiment exists AND this device's
-  // deterministic bucket lands in an allocated variant.
-  const shelfOrder = homeShelfOrder(useExperiment(EXP_HOME_SHELF_ORDER));
-  // Cross-shelf de-dupe: each shelf shows only songs not already shown above it.
-  const dedupe = createShelfDeduper();
-  const memories = useMemo(() => onThisDay(historyEntries), [historyEntries]);
-  const personalMix = mixes.data?.find((mix) => mix.kind === 'made-for-you')?.songs;
-  const heroSongs = personalMix?.length ? personalMix : daily.data?.length ? daily.data : trendingNow.data?.length ? trendingNow.data : feedSongs;
-
-  // Quick-play home-screen widget: the widget launches the app with
-  // ?widget=play (cold start) or flags sessionStorage via appUrlOpen (warm
-  // start). Either way: auto-start the Aura Mix once hero songs land, once.
-  const widgetPlayed = useRef(false);
-  useEffect(() => {
-    if (widgetPlayed.current || !heroSongs.length) return;
-    let want = false;
-    try {
-      want =
-        sessionStorage.getItem('vinax.widget-play') === '1' ||
-        new URLSearchParams(window.location.search).get('widget') === 'play';
-    } catch {
-      /* private mode */
-    }
-    if (!want) return;
-    widgetPlayed.current = true;
-    try {
-      sessionStorage.removeItem('vinax.widget-play');
-      window.history.replaceState(null, '', window.location.pathname);
-    } catch {
-      /* best effort */
-    }
-    playQueueFeed(heroSongs, 0);
-  }, [heroSongs, playQueueFeed]);
-
-  const userName = getLocal<string>(KEYS.userName, '');
-  // Personalized hero message — on-device only (name, history, streak,
-  // profile, festival calendar). Memoized on the stable day-level inputs so
-  // it never flips mid-session.
-  const hello = useMemo(() => {
-    const now = new Date();
-    const profile = loadProfile();
-    const lastTs = historyEntries[0]?.ts ?? null;
-    return personalMessage({
-      name: userName,
-      hour: now.getHours(),
-      dayOfWeek: now.getDay(),
-      dateKey: now.toISOString().slice(0, 10),
-      totalPlays: historyEntries.length,
-      weekPlays: weekEntries.length,
-      weekMinutes,
-      streakDays: getStreak(),
-      daysSinceLastListen: lastTs ? (Date.now() - lastTs) / 86_400_000 : Infinity,
-      topLanguage: topLanguages(profile, 1)[0]?.id ?? null,
-      topArtist: topArtists(profile, 1)[0]?.affinity.name ?? null,
-      festivalId: activeFestivalMusic(now)?.id ?? null,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- day-stable inputs
-  }, [userName, historyEntries.length]);
-  const [notifOpen, setNotifOpen] = useState(false);
-
-  // Pull-to-refresh: invalidate every query the shelves depend on. TanStack
-  // Query re-fetches each one and swaps the UI in place — the P2R indicator
-  // waits until all in-flight fetches resolve before releasing.
-  const qc = useQueryClient();
-  const [refreshingDiscovery, setRefreshingDiscovery] = useState(false);
-  const handleRefresh = () => {
-    recordServed(heroSongs.map(songKey));
-    useDiscoveryStore.getState().refresh();
-    invalidateRecommendationCache();
-    // Package A5 — explicit refresh wipes the session-scoped dedup memory
-    // so the same shelves get a genuinely fresh set of picks.
-    resetShelfDeduper();
-    return Promise.all([
-      qc.invalidateQueries({ queryKey: ['trending'] }),
-      qc.invalidateQueries({ queryKey: ['trending-now'] }),
-      qc.invalidateQueries({ queryKey: ['new-releases'] }),
-      qc.invalidateQueries({ queryKey: ['new-releases-lang'] }),
-      qc.invalidateQueries({ queryKey: ['popular'] }),
-      qc.invalidateQueries({ queryKey: ['time-of-day'] }),
-      // 'vinax-daily' / 'mixes' are the REAL keys (useDailyMix /
-      // useRecommendations) — the old 'daily-mix' / 'recommendations' here
-      // matched nothing, so those two shelves never refreshed on pull.
-      qc.invalidateQueries({ queryKey: ['vinax-daily'] }),
-      qc.invalidateQueries({ queryKey: ['weekly-mix'] }),
-      qc.invalidateQueries({ queryKey: ['unlimited-feed'] }),
-      qc.invalidateQueries({ queryKey: ['mixes'] }),
-      // New shelves — added when HomePage was expanded (Group A/B/C/D/E/F).
-      qc.invalidateQueries({ queryKey: ['recently-played-albums'] }),
-      qc.invalidateQueries({ queryKey: ['because-you-listened-to'] }),
-      qc.invalidateQueries({ queryKey: ['because-liked'] }),
-      qc.invalidateQueries({ queryKey: ['fresh-finds'] }),
-      qc.invalidateQueries({ queryKey: ['hidden-gems'] }),
-      qc.invalidateQueries({ queryKey: ['trending-near-you'] }),
-      qc.invalidateQueries({ queryKey: ['trending-albums'] }),
-      qc.invalidateQueries({ queryKey: ['trending-artists-src'] }),
-      qc.invalidateQueries({ queryKey: ['seasonal'] }),
-      qc.invalidateQueries({ queryKey: ['mood-shelf'] }),
-      qc.invalidateQueries({ queryKey: ['genre-shelf'] }),
-    ]);
-  };
-
-  // Fusion layer data (4.12.0): quick-grid tiles from feeds the page already
-  // holds, and the language rail from pinned + hub languages (pinned first).
-  // v5.15.0 — the console can set a default language order for the rail
-  // (Admin → Language Order); pinned languages always come first.
-  const clientCfg = useClientConfig();
-  const langOrder = clientCfg?.languageOrder ?? [];
-  const rank = (l: string) => { const i = langOrder.indexOf(l); return i < 0 ? 999 : i; };
-  const railLangs = [
-    ...pinned,
-    ...(HUB_LANGUAGES as readonly string[]).filter((l) => !pinned.includes(l)).sort((a, b) => rank(a) - rank(b)),
-  ].slice(0, 12);
   const quickTiles = [
     continueListening.length && {
       label: 'Continue Listening',
@@ -342,11 +184,57 @@ export default function HomePage() {
       go: () => navigate('/history'),
     },
   ].filter((t): t is { label: string; image: string; go: () => void } => !!t).slice(0, 6);
+  return (
+      <>
+      {quickTiles.length >= 2 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-7">
+          {quickTiles.map((t) => (
+            <button
+              key={t.label}
+              onClick={t.go}
+              className="group flex items-center gap-3 rounded-xl glass-card overflow-hidden pr-3 text-left hover:bg-ink-800/40 transition"
+            >
+              <img
+                src={t.image}
+                onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+                alt=""
+                loading="lazy"
+                className="w-12 h-12 md:w-14 md:h-14 object-cover shrink-0"
+              />
+              <span className="text-[13px] font-bold truncate flex-1">{t.label}</span>
+              <span className="w-8 h-8 rounded-full btn-primary hidden md:grid place-items-center text-[11px] opacity-0 group-hover:opacity-100 transition shrink-0">
+                ▶
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      </>
+  );
+}
 
-  // The two reorderable home bands (roadmap O.2). Closures rather than
-  // pre-built elements so the cross-shelf dedupe runs in DISPLAY order
-  // whichever band renders first.
-  const personalBand = () => (
+function PersonalBlock() {
+  const dedupe = useShelfDedupe('personal');
+  const historyEntries = useHistoryStore((s) => s.entries);
+  const favorites = useLibraryStore((s) => s.favorites);
+  const continueListening = useContinueListening();
+  const memories = useMemo(() => onThisDay(historyEntries), [historyEntries]);
+  const recentAlbums = useRecentlyPlayedAlbums();
+  const weekly = useWeeklyMix();
+  const mostListened = useMostListened();
+  const onRepeat = useOnRepeat();
+  const repeatRewind = useRepeatRewind();
+  // Seed "Because you listened to …" from the top-played song by the user's
+  // #1 artist — mostListened is already sorted by play count.
+  const becauseSeed = mostListened[0];
+  const because = useBecauseYouListenedTo(becauseSeed);
+  // v5.17.0 — "Because you liked X": one favourite per day, catalog suggestions.
+  const likedSeed = useMemo(() => pickDailyFavorite(favorites, localDateKey()), [favorites]);
+  const becauseLiked = useBecauseYouLiked(likedSeed);
+  const mixes = useRecommendations();
+  const daily = useDailyMix();
+  const yourArtists = useYourArtists();
+  return (
     <>
       {/* v5.17.0 — streak + song of the day: compact cards, each hides itself when empty.
           v5.19.0 — plus a "Coming up" festival card when one is 1–3 days away. */}
@@ -441,8 +329,27 @@ export default function HomePage() {
       )}
     </>
   );
+}
 
-  const discoveryBand = () => (
+function DiscoveryBlock() {
+  const dedupe = useShelfDedupe('discovery');
+  const region = useRegion();
+  const pinned = useSettingsStore((s) => s.pinnedLanguages);
+  const primaryLang = pinned[0] ?? 'hindi';
+  // More generated shelves (4.16.0): a decade rewind in the primary language
+  // and trending from the listener's SECOND pinned language. Hook order stays
+  // static — the second-language query just goes unused when there isn't one.
+  const secondLang = pinned[1] && pinned[1] !== primaryLang ? pinned[1] : null;
+  const nearYou = useTrendingNearYou();
+  const trendingNow = useTrendingNow();
+  const trending = useTrendingForLanguage(primaryLang);
+  const newReleases = useNewReleases();
+  const popular = usePopular();
+  const freshFinds = useFreshFinds();
+  const hiddenGems = useHiddenGems();
+  const decadeRewind = useMoodShelf(`90s ${primaryLang} hits`, primaryLang, 12);
+  const trendingSecond = useTrendingForLanguage(secondLang ?? primaryLang);
+  return (
     <>
       {/* 11. Trending Near You */}
       {nearYou.isLoading ? (
@@ -530,41 +437,11 @@ export default function HomePage() {
       )}
     </>
   );
+}
 
-  // Home sections use deferred rendering. Thunks (not pre-built elements) so the
-  // cross-shelf dedupe still runs in DISPLAY order. The hero, language rail
-  // and quick-jump strip above stay fixed - they are the app's identity.
-  const homeBlocks: Record<string, () => ReactNode> = {
-    quick: () => (
-      <>
-      {quickTiles.length >= 2 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-7">
-          {quickTiles.map((t) => (
-            <button
-              key={t.label}
-              onClick={t.go}
-              className="group flex items-center gap-3 rounded-xl glass-card overflow-hidden pr-3 text-left hover:bg-ink-800/40 transition"
-            >
-              <img
-                src={t.image}
-                onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                alt=""
-                loading="lazy"
-                className="w-12 h-12 md:w-14 md:h-14 object-cover shrink-0"
-              />
-              <span className="text-[13px] font-bold truncate flex-1">{t.label}</span>
-              <span className="w-8 h-8 rounded-full btn-primary hidden md:grid place-items-center text-[11px] opacity-0 group-hover:opacity-100 transition shrink-0">
-                ▶
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-      </>
-    ),
-    personal: () => personalBand(),
-    discovery: () => discoveryBand(),
-    charts: () => (
+function ChartsBlock() {
+  const region = useRegion();
+  return (
       <>
       {/* 17. Top 50 Global / Top 50 Country / Viral 50 — nav cards to /charts */}
       <section aria-label="Charts" className="mb-8">
@@ -598,16 +475,37 @@ export default function HomePage() {
         </div>
       </section>
       </>
-    ),
-    seasonal: () => (
+  );
+}
+
+function SeasonalBlock() {
+  const dedupe = useShelfDedupe('seasonal');
+  const seasonal = useSeasonalShelf();
+  return (
       <>
       {/* 18. Seasonal shelf — only when a season/event matches "now" */}
       {seasonal.season && seasonal.data && seasonal.data.length > 0 && (
         <SongShelf title={seasonal.season.title} explanation="For the moment" songs={dedupe(seasonal.data)} />
       )}
       </>
-    ),
-    moods: () => (
+  );
+}
+
+function MoodsBlock() {
+  const dedupe = useShelfDedupe('moods');
+  const playQueueFeed = usePlayerStore((s) => s.playQueue);
+  const primaryLang = useSettingsStore((s) => s.pinnedLanguages[0] ?? 'hindi');
+  const moods = moodRotationOfTheDay(6);
+  // Six mood queries at fixed positions so Rules of Hooks are respected. The
+  // rotation is stable within a UTC day so hook order is stable.
+  const moodA = useMoodShelf(moods[0].query, primaryLang, 8);
+  const moodB = useMoodShelf(moods[1].query, primaryLang, 8);
+  const moodC = useMoodShelf(moods[2].query, primaryLang, 8);
+  const moodD = useMoodShelf(moods[3].query, primaryLang, 8);
+  const moodE = useMoodShelf(moods[4].query, primaryLang, 8);
+  const moodF = useMoodShelf(moods[5].query, primaryLang, 8);
+  const moodQueries = [moodA, moodB, moodC, moodD, moodE, moodF];
+  return (
       <>
       {/* 19. Mood Playlists — a grid of 6 mood shelves, 8 songs each */}
       {moodQueries.some((q) => q.data && q.data.length > 0) && (
@@ -673,8 +571,11 @@ export default function HomePage() {
         </section>
       )}
       </>
-    ),
-    genres: () => (
+  );
+}
+
+function GenresBlock() {
+  return (
       <>
       {/* 20. Genre Collections — compact horizontal row of chip-cards */}
       <section className="mb-8">
@@ -692,8 +593,12 @@ export default function HomePage() {
         </div>
       </section>
       </>
-    ),
-    artists: () => (
+  );
+}
+
+function ArtistsBlock() {
+  const trendingArtists = useTrendingArtists();
+  return (
       <>
       {/* 21. Trending Artists (round MediaCards) */}
       {trendingArtists.data && trendingArtists.data.length >= 3 && (
@@ -712,8 +617,12 @@ export default function HomePage() {
         </Shelf>
       )}
       </>
-    ),
-    albums: () => (
+  );
+}
+
+function AlbumsBlock() {
+  const trendingAlbums = useTrendingAlbums();
+  return (
       <>
       {/* 22. Trending Albums */}
       {trendingAlbums.data && trendingAlbums.data.length > 0 && (
@@ -731,8 +640,13 @@ export default function HomePage() {
         </Shelf>
       )}
       </>
-    ),
-    daypicks: () => (
+  );
+}
+
+function DayPicksBlock() {
+  const dedupe = useShelfDedupe('daypicks');
+  const timeShelf = useTimeOfDayShelf();
+  return (
       <>
       {/* Time-of-day picks */}
       {timeShelf.isLoading ? (
@@ -741,14 +655,25 @@ export default function HomePage() {
         <SongShelf title={timeShelf.title} explanation={`Based on your ${dayPartLabel()} sessions`} songs={dedupe(timeShelf.data ?? [])} />
       )}
       </>
-    ),
-    loved: () => (
+  );
+}
+
+function LovedBlock() {
+  const dedupe = useShelfDedupe('loved');
+  const favorites = useLibraryStore((s) => s.favorites);
+  return (
       <>
       {/* 23. Recently Loved */}
       <SongShelf title="Recently Loved" explanation="Your latest favorites" songs={dedupe(favorites.slice(0, 12))} seeAllTo="/favorites" />
       </>
-    ),
-    feed: () => (
+  );
+}
+
+function FeedBlock() {
+  const playQueueFeed = usePlayerStore((s) => s.playQueue);
+  const feed = useUnlimitedFeed();
+  const feedSongs = flattenSongPages(feed.data?.pages);
+  return (
       <>
       {/* Endless feed: keep scrolling to load more songs forever. */}
       <section className="mt-2">
@@ -782,19 +707,177 @@ export default function HomePage() {
         )}
       </section>
       </>
-    ),
+  );
+}
+
+const HOME_BLOCKS: Record<HomeSection, () => ReactNode> = {
+  quick: QuickBlock,
+  personal: PersonalBlock,
+  discovery: DiscoveryBlock,
+  charts: ChartsBlock,
+  seasonal: SeasonalBlock,
+  moods: MoodsBlock,
+  genres: GenresBlock,
+  artists: ArtistsBlock,
+  albums: AlbumsBlock,
+  daypicks: DayPicksBlock,
+  loved: LovedBlock,
+  feed: FeedBlock,
+};
+
+// Default order honors the home-shelf-order experiment (personal <-> discovery).
+const HOME_BLOCK_KEYS: HomeSection[] = [
+  'quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods',
+  'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed',
+];
+
+// The old static greeting() lives on inside personalMessage's day-part
+// titles — every listener now gets their own line on top of it.
+
+export default function HomePage() {
+  const [homeDesign, setHomeDesign] = useState<HomeDesign | null>(loadHomeDesign);
+  // A fresh visit starts with an empty cross-shelf ledger.
+  useState(() => resetShelfLedger());
+  usePageTitle('Home');
+  const pinned = useSettingsStore((s) => s.pinnedLanguages);
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
+  const navigate = useNavigate();
+  const region = useRegion();
+  const historyEntries = useHistoryStore((s) => s.entries);
+
+  // This week's listening, from local history only — one shared rule
+  // (features/stats/listening.ts), labelled as an estimate when it is one.
+  const weekAgo = Date.now() - 7 * 86_400_000;
+  const weekEntries = historyEntries.filter((e) => e.ts >= weekAgo);
+  const weekTotal = listeningTotal(historyEntries, weekAgo);
+  const continueListening = useContinueListening();
+  // Above-the-fold data: the Aura Mix hero and its fallbacks. Every other
+  // catalogue query lives inside the block that shows it.
+  const daily = useDailyMix();
+  const trendingNow = useTrendingNow();
+  const mixes = useRecommendations();
+  const playQueueFeed = usePlayerStore((s) => s.playQueue);
+  // Roadmap O.2 — first live A/B: home shelf order. Resolves to 'control'
+  // (today's exact layout) until the experiment exists AND this device's
+  // deterministic bucket lands in an allocated variant.
+  const shelfOrder = homeShelfOrder(useExperiment(EXP_HOME_SHELF_ORDER));
+  const personalMix = mixes.data?.find((mix) => mix.kind === 'made-for-you')?.songs;
+  const heroSongs = personalMix?.length ? personalMix : daily.data?.length ? daily.data : trendingNow.data?.length ? trendingNow.data : continueListening;
+
+  // Quick-play home-screen widget: the widget launches the app with
+  // ?widget=play (cold start) or flags sessionStorage via appUrlOpen (warm
+  // start). Either way: auto-start the Aura Mix once hero songs land, once.
+  const widgetPlayed = useRef(false);
+  useEffect(() => {
+    if (widgetPlayed.current || !heroSongs.length) return;
+    let want = false;
+    try {
+      want =
+        sessionStorage.getItem('vinax.widget-play') === '1' ||
+        new URLSearchParams(window.location.search).get('widget') === 'play';
+    } catch {
+      /* private mode */
+    }
+    if (!want) return;
+    widgetPlayed.current = true;
+    try {
+      sessionStorage.removeItem('vinax.widget-play');
+      window.history.replaceState(null, '', window.location.pathname);
+    } catch {
+      /* best effort */
+    }
+    playQueueFeed(heroSongs, 0);
+  }, [heroSongs, playQueueFeed]);
+
+  const userName = getLocal<string>(KEYS.userName, '');
+  // Personalized hero message — on-device only (name, history, streak,
+  // profile, festival calendar). Memoized on the stable day-level inputs so
+  // it never flips mid-session.
+  const hello = useMemo(() => {
+    const now = new Date();
+    const profile = loadProfile();
+    const lastTs = historyEntries[0]?.ts ?? null;
+    return personalMessage({
+      name: userName,
+      hour: now.getHours(),
+      dayOfWeek: now.getDay(),
+      dateKey: now.toISOString().slice(0, 10),
+      totalPlays: historyEntries.length,
+      weekPlays: weekEntries.length,
+      weekMinutes: weekTotal.minutes,
+      streakDays: getStreak(),
+      daysSinceLastListen: lastTs ? (Date.now() - lastTs) / 86_400_000 : Infinity,
+      topLanguage: topLanguages(profile, 1)[0]?.id ?? null,
+      topArtist: topArtists(profile, 1)[0]?.affinity.name ?? null,
+      festivalId: activeFestivalMusic(now)?.id ?? null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- day-stable inputs
+  }, [userName, historyEntries.length]);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  // Pull-to-refresh: invalidate every query the shelves depend on. TanStack
+  // Query re-fetches each mounted one and swaps the UI in place; blocks that
+  // have not mounted yet simply fetch fresh data when they do. The P2R
+  // indicator waits until all in-flight fetches resolve before releasing.
+  const qc = useQueryClient();
+  const [refreshingDiscovery, setRefreshingDiscovery] = useState(false);
+  const handleRefresh = () => {
+    recordServed(heroSongs.map(songKey));
+    useDiscoveryStore.getState().refresh();
+    invalidateRecommendationCache();
+    // Package A5 — explicit refresh wipes the session-scoped dedup memory
+    // so the same shelves get a genuinely fresh set of picks.
+    resetShelfDeduper();
+    resetShelfLedger();
+    return Promise.all([
+      qc.invalidateQueries({ queryKey: ['trending'] }),
+      qc.invalidateQueries({ queryKey: ['trending-now'] }),
+      qc.invalidateQueries({ queryKey: ['new-releases'] }),
+      qc.invalidateQueries({ queryKey: ['new-releases-lang'] }),
+      qc.invalidateQueries({ queryKey: ['popular'] }),
+      qc.invalidateQueries({ queryKey: ['time-of-day'] }),
+      // 'vinax-daily' / 'mixes' are the REAL keys (useDailyMix /
+      // useRecommendations) — the old 'daily-mix' / 'recommendations' here
+      // matched nothing, so those two shelves never refreshed on pull.
+      qc.invalidateQueries({ queryKey: ['vinax-daily'] }),
+      qc.invalidateQueries({ queryKey: ['weekly-mix'] }),
+      qc.invalidateQueries({ queryKey: ['unlimited-feed'] }),
+      qc.invalidateQueries({ queryKey: ['mixes'] }),
+      // New shelves — added when HomePage was expanded (Group A/B/C/D/E/F).
+      qc.invalidateQueries({ queryKey: ['recently-played-albums'] }),
+      qc.invalidateQueries({ queryKey: ['because-you-listened-to'] }),
+      qc.invalidateQueries({ queryKey: ['because-liked'] }),
+      qc.invalidateQueries({ queryKey: ['fresh-finds'] }),
+      qc.invalidateQueries({ queryKey: ['hidden-gems'] }),
+      qc.invalidateQueries({ queryKey: ['trending-near-you'] }),
+      qc.invalidateQueries({ queryKey: ['trending-albums'] }),
+      qc.invalidateQueries({ queryKey: ['trending-artists-src'] }),
+      qc.invalidateQueries({ queryKey: ['seasonal'] }),
+      qc.invalidateQueries({ queryKey: ['mood-shelf'] }),
+      qc.invalidateQueries({ queryKey: ['genre-shelf'] }),
+    ]);
   };
-  // Default order honors the home-shelf-order experiment (personal <-> discovery).
-  const HOME_BLOCK_KEYS = [
-    'quick', 'personal', 'discovery', 'charts', 'seasonal', 'moods',
-    'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed',
-  ];
+
+  // Fusion layer data (4.12.0): the language rail from pinned + hub
+  // languages (pinned first). v5.15.0 — the console can set a default
+  // language order for the rail (Admin → Language Order).
+  const clientCfg = useClientConfig();
+  const langOrder = clientCfg?.languageOrder ?? [];
+  const rank = (l: string) => { const i = langOrder.indexOf(l); return i < 0 ? 999 : i; };
+  const railLangs = [
+    ...pinned,
+    ...(HUB_LANGUAGES as readonly string[]).filter((l) => !pinned.includes(l)).sort((a, b) => rank(a) - rank(b)),
+  ].slice(0, 12);
+
   const defaultOrder =
     shelfOrder === 'discovery-first'
       ? HOME_BLOCK_KEYS.map((k) => (k === 'personal' ? 'discovery' : k === 'discovery' ? 'personal' : k))
       : HOME_BLOCK_KEYS;
-  const design = validateHomeDesign(homeDesign ?? clientCfg?.homeLayout ?? { order: defaultOrder });
-  const visibleHome = design.order.filter(key => !design.hidden.includes(key));
+  // Listener order wins; owner-disabled shelves stay disabled (homeLayout.ts).
+  const layout = composeHomeLayout(homeDesign, clientCfg?.homeLayout, defaultOrder);
+  const design = layout.design;
+  setShelfBlockOrder(layout.visible);
   // Progressive mount v2 (4.18.3, PSI TBT pass): v1 (4.17.0) mounted the
   // first two blocks immediately and ALL remaining ~10 blocks in one idle
   // callback — a single giant long task (hundreds of DOM nodes + effects)
@@ -802,8 +885,8 @@ export default function HomePage() {
   // per-block via DeferredBlock as they scroll within ~800px of the
   // viewport, so an unscrolled load mounts almost nothing extra and a
   // scrolling user pays one small task per block instead of one huge one.
-  // The queries all run from mount either way (hooks live above), so data
-  // is usually ready the moment a block appears.
+  // Since each block owns its queries, a deferred block also FETCHES only
+  // when it mounts.
 
   return (
    <PullToRefresh onRefresh={handleRefresh}>
@@ -864,14 +947,15 @@ export default function HomePage() {
         <p className="text-ink-300 mt-1 text-sm">
           {region?.country ? `Tuned for ${region.country}` : 'Tuned to you'} · recommendations that grow with you
           {weekEntries.length > 0 && (
-            <span className="text-ink-400"> · this week: {weekEntries.length} plays ≈ {weekMinutes} min</span>
+            <span className="text-ink-400"> · this week: {weekEntries.length} plays · {formatMinutes(weekTotal)}</span>
           )}
           {getStreak() > 1 && <span className="text-ember-400 font-semibold"> · 🔥 {getStreak()}-day streak</span>}
         </p>
         <div className="flex gap-2 mt-4 flex-wrap">
           <button
             onClick={() => {
-              const pool = [...(trending.data ?? []), ...feedSongs, ...continueListening];
+              // Songs the page already holds — no extra catalogue call for a surprise.
+              const pool = [...heroSongs, ...(trendingNow.data ?? []), ...continueListening];
               if (!pool.length) {
                 toast('Still loading — try again in a second');
                 return;
@@ -944,7 +1028,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <HomeStudio design={design} onApply={value => {
+      <HomeStudio design={design} locked={layout.ownerHidden} onApply={value => {
         const checked = validateHomeDesign(value); setHomeDesign(checked);
         try { localStorage.setItem(HOME_DESIGN_KEY, JSON.stringify(checked)); toast('Your Home layout is saved'); }
         catch { toast('Layout applied for this visit. Device storage is unavailable.'); }
@@ -1024,11 +1108,10 @@ export default function HomePage() {
       {/* Owner-published promo banner (admin → Banner & Promotion). */}
       <PromoBanner className="mb-8" />
 
-      {visibleHome.map((k, i) => (
-        <Fragment key={k}>
-          {i < 2 ? homeBlocks[k]?.() : <DeferredBlock render={homeBlocks[k]} />}
-        </Fragment>
-      ))}
+      {layout.visible.map((k, i) => {
+        const Block = HOME_BLOCKS[k];
+        return i < 2 ? <Block key={k} /> : <DeferredBlock key={k} render={() => <Block />} />;
+      })}
     </div>
    </PullToRefresh>
   );

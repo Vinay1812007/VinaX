@@ -6,6 +6,10 @@ VinaX combines music discovery, playback, lyrics, playlists and AI assistance in
 
 [Listen](https://www.sirimillavinay.online) · [Deployment guide](DEPLOYMENT.md) · [User guide](frontend/docs/user-guide/README.md)
 
+## What's new in 6.1
+
+Reliability and data safety first: a versioned backup format with a Backup Center (preview, merge or replace, undo), an import review step for text playlists, Unicode-safe song matching, cancellable imports, truthful username claims, and a fix for the looping Android download link. Home now loads only the shelves in view and respects owner-disabled shelves; listening minutes follow one shared rule. New in the Library: in-playlist search, multi-select edits with Undo, and smart collections. See [UPGRADE_6_1.md](UPGRADE_6_1.md) for details, verification and limitations.
+
 ## Discovery Room upgrade
 
 Search now has a new discovery layout, 15 listener additions, and improved matching and pagination. The owner console gains an Operations Workspace with 13 capabilities for metrics, search recovery, task tracking, and handovers. See [the feature and validation guide](DISCOVERY_UPGRADE.md) for scope and local-storage limitations.
@@ -14,7 +18,7 @@ Search now has a new discovery layout, 15 listener additions, and improved match
 
 Astra refreshes the customer workspace, VinaX AI and the owner console with a space-inspired design, clearer typography, loading states and reduced-motion-aware interactions. Home now includes an explicit **Refresh discovery** action.
 
-Playback follows the selected album, playlist or manual queue. AI DJ, automatic next-song recommendations, AI Home shelves and listener Home layout editing have been removed. AI playlists exclude recent generations while resolving catalog searches in parallel. Chat regeneration uses the correct conversation context and asks for a different approach.
+Playback follows the selected album, playlist or manual queue. AI DJ and automatic next-song recommendations have been removed. Home Studio (the listener-side layout editor, with optional AI-suggested arrangements) remains available on Home; see **Home customization** below for how it combines with the owner's published layout. AI playlists exclude recent generations while resolving catalog searches in parallel. Chat regeneration uses the correct conversation context and asks for a different approach.
 
 See [the complete Astra upgrade and checking guide](ASTRA_UPGRADE.md) for changes, limitations and the post-deployment walkthrough.
 
@@ -37,13 +41,27 @@ Music and AI results depend on the configured providers. Catalog shelves use loc
 
 VinaX builds a taste profile from listening activity on the device. Its ranking combines language and artist affinity, popularity, listening context, skips and discovery preferences. Queue construction filters candidates, deduplicates song identities and sequences artists for variety. When a small catalog makes the artist cap impossible, it relaxes that cap before allowing consecutive songs by the same artist.
 
-Home combines catalog-backed shelves with AI-designed queries. The AI request has a six-second client deadline; local templates can take over when it fails. Parallel catalog requests are deduplicated in shelf order, and selected-language shelves do not fill shortages with known off-language songs. New listeners can receive personalized shelves after choosing languages, before building history.
+Home combines catalog-backed shelves with locally generated queries. Each Home block owns its catalog requests: the Aura Mix hero and the first two blocks load immediately, every later block loads only when it scrolls near the viewport, and a hidden block never requests anything. Songs are de-duplicated across shelves in display order, and selected-language shelves do not fill shortages with known off-language songs. New listeners can receive personalized shelves after choosing languages, before building history.
 
 **Familiar** increases the influence of established taste. **Balanced** blends taste with broader picks. **Discover** enables exploration slots. These controls guide recommendations; they do not promise a particular song or change tracks already queued.
 
+### Home customization
+
+Three inputs decide the Home layout, in this order:
+
+1. **Listener layout** — saved from Home Studio on this device (shelf order, hidden shelves, headline). When present, its order and headline win.
+2. **Owner layout** — published from the owner console (`home-layout`). Used when the listener has not saved one. Shelves the owner turns off are removed for everyone and cannot be re-enabled from Home Studio; they show as locked there.
+3. **Default order** — the built-in order, possibly swapped by the shelf-order experiment.
+
+Hidden shelves are the union of the owner's and the listener's choices. A newly published owner change reaches the app on the next config refresh (about a minute) and is enforced even over an older saved listener layout. If a layout would hide everything, the listener's hides are ignored and only the owner's rules apply.
+
+### Listening statistics
+
+Home, Stats, the weekly report, the listening calendar, the daily goal ring and the AI daily brief share one rule (`features/stats/listening.ts`). Plays recorded since 6.1 carry a measured duration (pauses and seeks excluded, replays included). Older plays are estimated — a completed play counts the full track, an unfinished one a third — and every estimate is shown with ≈. History keeps the last 150 plays, so weekly and 12-week figures say when that limit cuts the window short. Nothing is back-filled.
+
 ## Privacy and data
 
-The library, history, settings and taste profile are stored locally. Clearing browser/app data can remove them: export a backup in **Settings → Your Data** first. Device transfer and import are available from Settings and onboarding.
+The library, history, settings and taste profile are stored locally. Clearing browser/app data can remove them: export a backup in **Settings → Your Data** first. The backup is a versioned JSON file (`vinax-backup`, schema 2) holding settings, library, smart collections, history, taste profile, saved and recent searches, bookmarks, Home layout, name and username, alarm and app preferences, and AI chats. It never holds downloaded audio or download paths, the device identity or service token, Listen Together host keys, usage-sharing consent, the queue, or caches. Older exports are migrated on restore; a damaged file or a full device changes nothing. The **Backup Center** previews a file against the device and restores by merge or replace, with undo. Device-to-device transfer (**Move to a new device**) is the one path that also carries the device token and confirmed username.
 
 “Local profile” does not mean no network data is sent. AI requests include relevant taste/session context; catalog requests include search terms; usernames are checked with the service; optional telemetry follows the usage-sharing setting. Review the in-app privacy page and server configuration for your deployment. Never put API keys or service-role credentials in frontend environment variables.
 
@@ -91,7 +109,7 @@ backend/
 
 Open `/admin/` and authenticate with the configured owner credentials. The console includes audience and music analytics, feedback, AI monitoring, content controls, feature flags, release information and operational tools.
 
-In **Home Screen Management**, choose a preset, inspect the structure preview, then refine shelf order and visibility. Edits are drafts until **Publish layout** succeeds. Published defaults can take up to five minutes to reach clients. Listener ordering takes precedence locally; shelves disabled by the owner remain disabled. The Worker rejects malformed, unknown or duplicate home block IDs.
+In **Home Layout Studio**, set the headline, reorder shelves and untick any shelf to turn it off for everyone. Order changes save as you go; the headline and visibility are published with **Publish layout**. Published defaults reach clients within about a minute (the app's config cache) and are enforced even over a listener's saved layout: listener ordering takes precedence locally, shelves disabled by the owner remain disabled. At least one shelf must stay on. The Worker rejects malformed, unknown or duplicate home block IDs.
 
 The preview shows structure, not actual personalized music or final device rendering. Missing telemetry is shown as unavailable, rather than evidence that the system is healthy.
 
@@ -105,6 +123,8 @@ npm test
 npm run build
 node scripts/check-bundle-size.mjs
 npm run e2e
+# Home request-load guard (prints per-endpoint tallies with E2E_PRINT_REQUESTS=1)
+npx vitest run --config e2e/vitest.config.ts e2e/home-requests.spec.ts
 ```
 
 ```sh

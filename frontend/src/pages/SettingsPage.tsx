@@ -38,6 +38,11 @@ import { createContext, useContext, useLayoutEffect } from 'react';
 import { ClockIcon, DownloadIcon, HelpIcon, SettingsIcon, ShieldIcon, SparkleIcon } from '@/components/Icons';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { handleStatus, retryPendingClaim, type HandleStatus } from '@/features/identity/handleClaim';
+import { useUiStore } from '@/store/uiStore';
+import { lazy, Suspense } from 'react';
+
+const BackupCenter = lazy(() => import('@/features/settings/BackupCenter').then((m) => ({ default: m.BackupCenter })));
 
 /**
  * v5.19.0 — Settings search. A query at the top filters every row by its
@@ -167,6 +172,10 @@ const ERASE_LABELS: Record<string, string> = {
   lastSeenVersion: 'What\u2019s-New read state',
   deviceId: 'Anonymous device id',
   userName: 'Your name',
+  userHandle: 'Your username',
+  userHandlePending: 'Username waiting to be confirmed',
+  signedDeviceId: 'Service-issued device token',
+  updateSnooze: '\u201cUpdate later\u201d choice',
   analyticsConsent: 'Analytics consent choice',
   downloads: 'Downloads index',
   alarm: 'Wake alarm',
@@ -195,6 +204,57 @@ function NoMatches({ q }: { q: string }) {
   return <p className="mb-6 text-sm text-ink-400">No setting matches “{q}”. Try a different word — theme, alarm, quality, language.</p>;
 }
 
+/**
+ * Username row — says exactly what the service knows. A handle chosen while
+ * offline is "waiting", never shown as confirmed; a refused one asks for a
+ * new choice (reopens the welcome step's handle picker).
+ */
+function UsernameRow() {
+  const [status, setStatus] = useState<HandleStatus>(handleStatus);
+  const [busy, setBusy] = useState(false);
+  const openTour = useUiStore((x) => x.openTour);
+  useEffect(() => {
+    const refresh = () => setStatus(handleStatus());
+    window.addEventListener('online', refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener('online', refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
+  const retry = async () => {
+    setBusy(true);
+    const out = await retryPendingClaim();
+    setBusy(false);
+    setStatus(handleStatus());
+    if (out?.status === 'confirmed') toast(`@${out.username} is confirmed`);
+    else if (out?.status === 'taken') toast(`@${out.username} is taken — choose another`);
+    else if (out) toast('Still could not reach the service — will retry when you reconnect');
+  };
+  const label = status.state === 'none' ? 'No username yet' : `@${status.handle}`;
+  const note =
+    status.state === 'confirmed'
+      ? 'Confirmed by the service. Unique to you across VinaX.'
+      : status.state === 'pending'
+        ? `Chosen ${new Date(status.since).toLocaleDateString()} but not confirmed yet — VinaX retries when you are online.`
+        : status.state === 'taken'
+          ? 'That username was already taken when VinaX tried to confirm it. Pick another.'
+          : 'Usernames are claimed from the welcome step.';
+  return (
+    <Row label={label} note={note}>
+      {status.state === 'pending' ? (
+        <button onClick={() => void retry()} disabled={busy} className="px-4 py-2 rounded-full glass-button text-sm disabled:opacity-50">
+          {busy ? 'Confirming…' : 'Confirm now'}
+        </button>
+      ) : status.state === 'taken' || status.state === 'none' ? (
+        <button onClick={openTour} className="px-4 py-2 rounded-full glass-button text-sm">Choose</button>
+      ) : (
+        <span className="text-xs font-semibold text-emerald-400 px-2 py-2">Confirmed</span>
+      )}
+    </Row>
+  );
+}
+
 /** 5.14.0 — festival skins switch with a live "today / next" line. */
 function FestivalRow() {
   const on = useSettingsStore((x) => x.festivalSkins);
@@ -220,7 +280,8 @@ export default function SettingsPage() {
   const region = useRegion();
   const fileRef = useRef<HTMLInputElement>(null);
   const [notifPerm, setNotifPerm] = useState<'granted' | 'denied' | 'unsupported' | 'unknown'>('unknown');
-  const [eraseOpen, setEraseOpen] = useState(false); // C7 deletion receipt
+  const [eraseOpen, setEraseOpen] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false); // C7 deletion receipt
   useDismissOnBack(eraseOpen, () => setEraseOpen(false));
   const eraseRef = useRef<HTMLDivElement>(null);
   useFocusTrap(eraseRef, eraseOpen, () => setEraseOpen(false));
@@ -683,28 +744,41 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="Your Data" icon={DownloadIcon}>
+        <UsernameRow />
         <Row label="Move to a new device" note="Encrypted QR handoff — scan on the new phone and everything comes across. Parked 10 minutes, burned after one use.">
           <Link to="/handoff" className="px-4 py-2 rounded-full glass-button text-sm inline-block">Start</Link>
         </Row>
-        <Row label="Export profile & settings" note="Portable JSON of all local data — favorites, history, profile, preferences.">
-          <button onClick={downloadProfileExport} className="px-4 py-2 rounded-full glass-button text-sm">Export</button>
+        <Row label="Backup Center" note="See exactly what a backup includes and leaves out, when you last exported, and restore from a file with a merge-or-replace preview and undo.">
+          <button onClick={() => setBackupOpen(true)} className="px-4 py-2 rounded-full glass-button text-sm">Open</button>
         </Row>
-        <Row label="Import profile & settings">
+        {backupOpen && (
+          <Suspense fallback={null}>
+            <BackupCenter onClose={() => setBackupOpen(false)} />
+          </Suspense>
+        )}
+        <Row label="Export a backup" note="A versioned JSON file of your portable data: settings, library, smart collections, history, taste profile, saved searches, bookmarks, Home layout, name and username. Never includes downloaded audio, device identity, host keys or caches.">
+          <button onClick={() => { downloadProfileExport(); toast('Backup file downloaded'); }} className="px-4 py-2 rounded-full glass-button text-sm">Export</button>
+        </Row>
+        <Row label="Restore a backup (quick)" note="Replaces the same categories on this device. A damaged file changes nothing; older exports are migrated. Use the Backup Center to preview or merge.">
           <>
             <input
               ref={fileRef}
               type="file"
               accept="application/json"
               className="hidden"
+              aria-label="Choose a VinaX backup file"
               onChange={async (e) => {
                 const f = e.target.files?.[0];
-                if (f) {
-                  const ok = importProfileJson(await f.text());
-                  if (!ok) toast('Invalid import file — not a VinaX export.');
+                e.target.value = '';
+                if (!f) return;
+                const out = importProfileJson(await f.text());
+                if (!out.ok) {
+                  const detail = out.rejected?.[0] ? ` ${out.rejected[0].label}: ${out.rejected[0].error}` : '';
+                  toast(`${out.error}${detail}`, { duration: 7000 });
                 }
               }}
             />
-            <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-full glass-button text-sm">Import</button>
+            <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-full glass-button text-sm">Restore</button>
           </>
         </Row>
         <Row label="Clear history"><button onClick={clearHistory} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>

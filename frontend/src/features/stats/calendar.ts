@@ -1,4 +1,5 @@
 import type { HistoryEntry } from '@/types';
+import { creditedSeconds, historyCoverage, type HistoryCoverage } from './listening';
 
 /**
  * v5.17.0 — Listening calendar: a 12-week, Monday-first heatmap of minutes per
@@ -27,6 +28,10 @@ export interface CalendarData {
   longestStreak: number;
   /** Days with any listening inside the grid. */
   activeDays: number;
+  /** Whether the 150-play history cap cut the 12-week window short. */
+  coverage: HistoryCoverage;
+  /** True when any minute in the grid was estimated rather than measured. */
+  estimated: boolean;
 }
 
 const DAY = 86_400_000;
@@ -43,10 +48,6 @@ function startOfDay(ts: number): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
-function creditedSeconds(e: HistoryEntry): number {
-  const dur = e.song?.duration ?? 0;
-  return e.completed ? dur : Math.min(dur, Math.max(30, dur / 3));
-}
 
 /** Minutes listened per local day, for every entry. */
 export function minutesByDay(entries: HistoryEntry[]): Map<string, number> {
@@ -54,7 +55,7 @@ export function minutesByDay(entries: HistoryEntry[]): Map<string, number> {
   for (const e of entries) {
     if (typeof e?.ts !== 'number' || !e.song) continue;
     const k = localDayKey(e.ts);
-    secs.set(k, (secs.get(k) ?? 0) + creditedSeconds(e));
+    secs.set(k, (secs.get(k) ?? 0) + creditedSeconds(e).seconds);
   }
   const out = new Map<string, number>();
   for (const [k, s] of secs) out.set(k, Math.round(s / 60));
@@ -115,5 +116,15 @@ export function calendarCells(entries: HistoryEntry[], now = Date.now(), weeks =
   const active = new Set<string>();
   for (const [k, m] of byDay) if (m > 0) active.add(k);
   const streaks = listeningStreaks(active, now);
-  return { cells, weeks, maxMinutes, currentStreak: streaks.current, longestStreak: streaks.longest, activeDays };
+  const estimated = entries.some((e) => typeof e?.ts === 'number' && !!e.song && e.ts >= firstMonday && !creditedSeconds(e).measured);
+  return {
+    cells,
+    weeks,
+    maxMinutes,
+    currentStreak: streaks.current,
+    longestStreak: streaks.longest,
+    activeDays,
+    coverage: historyCoverage(entries, firstMonday),
+    estimated,
+  };
 }

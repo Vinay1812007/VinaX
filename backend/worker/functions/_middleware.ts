@@ -15,6 +15,10 @@
 
 const CANONICAL_HOST = 'www.sirimillavinay.online';
 
+/** Paths that stream (or self-redirect to) the APK — never bounced again. */
+export const isApkDownloadPath = (pathname: string): boolean =>
+  /^\/(?:api\/)?apk\/?$/.test(pathname);
+
 export const onRequest = async (context: {
   request: Request;
   next: () => Promise<Response>;
@@ -26,6 +30,10 @@ export const onRequest = async (context: {
     return Response.redirect(url.toString(), 301);
   }
   if (host.startsWith('update.')) {
+    // The download route itself must reach its handler: redirecting EVERY
+    // path on the update host (including /api/apk) sent the browser back to
+    // the same URL forever, so "Download the app" never produced a file.
+    if (isApkDownloadPath(url.pathname)) return context.next();
     return Response.redirect(`${url.origin}/api/apk`, 302);
   }
   // Admin subdomain: send the bare root to the (token-gated) dashboard app.

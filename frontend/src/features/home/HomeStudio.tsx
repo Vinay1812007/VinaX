@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_HOME, HOME_SECTIONS, generateHomeDesign, type HomeDesign } from '@/services/recommendation/homeDesign';
+import { DEFAULT_HOME, HOME_SECTIONS, generateHomeDesign, type HomeDesign, type HomeSection } from '@/services/recommendation/homeDesign';
 import { SparkleIcon } from '@/components/Icons';
 
-export function HomeStudio({ design, onApply, onReset }: { design: HomeDesign; onApply: (value: HomeDesign) => void; onReset: () => void }) {
+/**
+ * `locked` — shelves the owner turned off for everyone. They show greyed and
+ * unchecked, cannot be re-enabled here, and Apply never un-hides them (the
+ * composed layout enforces the union of owner + listener hides anyway).
+ */
+export function HomeStudio({ design, onApply, onReset, locked = [] }: { design: HomeDesign; onApply: (value: HomeDesign) => void; onReset: () => void; locked?: HomeSection[] }) {
   const [draft, setDraft] = useState(design);
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
@@ -34,10 +39,14 @@ export function HomeStudio({ design, onApply, onReset }: { design: HomeDesign; o
         <label htmlFor="home-headline">Featured headline</label><input id="home-headline" value={draft.title} maxLength={60} onChange={e => setDraft({ ...draft, title: e.target.value })} />
         <ol className="home-studio-shelves" aria-label="Shelf order preview">{draft.order.map((key, index) => <li key={key}>
           <span className="home-studio-number">{String(index + 1).padStart(2, '0')}</span>
-          <label><input type="checkbox" checked={!draft.hidden.includes(key)} onChange={e => setDraft({ ...draft, hidden: e.target.checked ? draft.hidden.filter(k => k !== key) : [...draft.hidden, key] })} />{HOME_SECTIONS[key]}</label>
+          <label className={locked.includes(key) ? 'home-studio-locked' : undefined}>
+            <input type="checkbox" checked={!draft.hidden.includes(key) && !locked.includes(key)} disabled={locked.includes(key)} aria-describedby={locked.includes(key) ? `home-locked-${key}` : undefined} onChange={e => setDraft({ ...draft, hidden: e.target.checked ? draft.hidden.filter(k => k !== key) : [...draft.hidden, key] })} />
+            {HOME_SECTIONS[key]}
+            {locked.includes(key) && <span id={`home-locked-${key}`} className="home-studio-lock-note"> · turned off by VinaX</span>}
+          </label>
           <button aria-label={`Move ${HOME_SECTIONS[key]} up`} disabled={index === 0} onClick={() => move(index, -1)}>↑</button><button aria-label={`Move ${HOME_SECTIONS[key]} down`} disabled={index === draft.order.length - 1} onClick={() => move(index, 1)}>↓</button>
         </li>)}</ol>
-        <div className="home-studio-actions"><button className="btn-primary" disabled={busy || draft.hidden.length === draft.order.length} onClick={() => { onApply(draft); setNotice('Your layout is applied.'); }}>Apply to my Home</button><button className="btn-secondary" onClick={() => { request.current?.abort(); setBusy(false); onReset(); setNotice('Default Home restored.'); }}>Restore default</button></div>
+        <div className="home-studio-actions"><button className="btn-primary" disabled={busy || draft.order.every(k => draft.hidden.includes(k) || locked.includes(k))} onClick={() => { onApply(draft); setNotice('Your layout is applied.'); }}>Apply to my Home</button><button className="btn-secondary" onClick={() => { request.current?.abort(); setBusy(false); onReset(); setNotice('Default Home restored.'); }}>Restore default</button></div>
       </div>
     </div>
   </details>;

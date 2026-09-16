@@ -106,6 +106,13 @@ export interface HistoryEntry {
   song: Song;
   ts: number;
   completed: boolean;
+  /**
+   * Seconds of playback the player actually clocked for this play (pauses
+   * and seeks excluded, replays included). Absent on plays recorded before
+   * measurement existed — those are ESTIMATED from the track length, never
+   * back-filled (features/stats/listening.ts).
+   */
+  listenedSec?: number;
 }
 
 /** Formal film projection over soundtrack albums (ADR-001 / catalog audit §3).

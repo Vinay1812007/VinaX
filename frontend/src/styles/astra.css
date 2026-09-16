@@ -565,3 +565,7 @@ html.hc .ai-root {
     --ai-line: currentColor;
   }
 }
+/* Home Studio — shelves the owner turned off for everyone: visible, greyed, not toggleable. */
+.home-studio-shelves label.home-studio-locked { color: rgb(var(--ink-500)); }
+.home-studio-shelves label.home-studio-locked input { cursor: not-allowed; }
+.home-studio-lock-note { color: rgb(var(--ink-500)); font-size: 11px; white-space: nowrap; }
