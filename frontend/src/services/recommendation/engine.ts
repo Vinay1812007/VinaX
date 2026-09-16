@@ -13,6 +13,7 @@ import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { stripExplicit } from '@/services/kidMode';
 import { useSettingsStore } from '@/store/settingsStore';
 import { queryClient } from '@/services/queryClient';
+import type { ArcShape } from './sequencer';
 
 function aiContext(ctx: RecommendationContext): string {
   return JSON.stringify({ surface: ctx.surface, seed: ctx.seedSong?.title, mood: ctx.sessionMood, energy: ctx.sessionEnergy,
@@ -128,15 +129,33 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   const admittedIds = new Set(admitted.map(s => s.id));
   let ranked = rankCandidates(candidates.filter(c => admittedIds.has(c.song.id)).map((candidate) => ({ ...candidate, song: enrichedById.get(candidate.song.id) ?? candidate.song })), { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next' });
   ranked = await blendAi(ranked, { ...ctx, seedSong: seed });
-  const songs: Song[] = [];
+  // v6.3.0 — the arc sequencer orders the ranked pool from real signals
+  // (energy, mood, artist spacing, era, language lock, transition memory)
+  // instead of taking the top N as they come. The ranking stays the taste
+  // prior; the arc shape follows the live listener-energy read.
+  const orderedPool: Song[] = [];
   for (const item of ranked) {
     const song = item.candidate.song;
-    if (song.id === seed.id || excluded.has(song.id)) continue;
-    if (songs.some((s) => s.id === song.id)) continue;
-    songs.push(song);
+    if (song.id === seed.id || excluded.has(song.id) || orderedPool.some((s) => s.id === song.id)) continue;
+    orderedPool.push(song);
+  }
+  // Lazy: this engine rides the first-load player store; the sequencer and
+  // the session-context reader are only needed once a queue is extended.
+  const [{ sequenceSongs, arcErrorOf }, { readListenerEnergy }] = await Promise.all([import('./sequencer'), import('@/services/ai/sessionContext')]);
+  const shape = shapeFor(readListenerEnergy(ctx.history, ctx.hour));
+  const sureIds = new Set([...ctx.favorites.map((s) => s.id), ...ctx.history.slice(0, 60).map((e) => e.song.id)]);
+  const discoveryIds = new Set(ranked.filter((item) => item.candidate.source === 'explore').map((item) => item.candidate.song.id));
+  const lock = seed.language && seed.language !== 'unknown' ? seed.language : null;
+  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, discovery: ctx.explore ? 0.3 : 0.15, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
+  const songs: Song[] = arc.songs.map((s) => s.song);
+  // A language-locked pool can run short; top up in ranked order.
+  for (const song of orderedPool) {
     if (songs.length >= limit) break;
+    if (!songs.some((s) => s.id === song.id)) songs.push(song);
   }
   publishReasons(ranked.filter((item) => songs.some((song) => song.id === item.candidate.song.id)));
+  // Arc reasons are more specific than scorer reasons; let them win.
+  useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why).map((s) => [s.song.id, s.why]));
   // v6.2.0 — the AI DJ gets a bounded, optional final say over the ORDER of
   // the admitted pool (never over what is in it). Off by setting or owner
   // flag, or when the DJ is slow/down/unconfigured, the deterministic order
@@ -146,16 +165,26 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
     // The DJ client is a lazy chunk: this engine rides the first-load player
     // store, and the DJ only matters once a queue is actually being extended.
     const { djSequence } = await import('@/services/ai/dj');
-    const set = await djSequence(seed, { ...ctx, seedSong: seed }, pool, limit);
+    const set = await djSequence(seed, { ...ctx, seedSong: seed }, pool, limit, undefined, { shape });
     if (set && set.picks.length >= Math.min(3, limit)) {
       const used = new Set<string>();
       const sequenced: Song[] = [];
       for (const p of set.picks) if (!used.has(p.song.id)) { used.add(p.song.id); sequenced.push(p.song); }
       for (const s of songs) if (sequenced.length < limit && !used.has(s.id)) { used.add(s.id); sequenced.push(s); }
-      return sequenced.slice(0, limit);
+      // The DJ's order is accepted only when it keeps the arc at least as
+      // tight as the local one (within a small tolerance); its reasons and
+      // segues are kept either way.
+      if (arcErrorOf(sequenced, seed, shape) <= arc.arcError + 0.08) return sequenced.slice(0, limit);
     }
   }
   return songs;
+}
+
+/** Arc shape from the listener-energy read (same signal the AI DJ gets). */
+export function shapeFor(energy: string): ArcShape {
+  if (energy.startsWith('restless') || energy.startsWith('wavering')) return 'lift';
+  if (energy.includes('late hours')) return 'wind-down';
+  return 'steady';
 }
 
 /** Listener switch AND owner flag (read from the cached config; a missing flag means on). */

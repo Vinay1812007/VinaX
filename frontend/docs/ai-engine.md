@@ -5,6 +5,17 @@ architecture. Nothing was rewritten to add or retire an engine: features talk
 to **lanes**, lanes pin **models**, and a central **registry** describes every
 model VinaX can reach.
 
+## v6.3.0 — arc sequencing, transition memory, adaptive re-plan, Queue Builder
+
+| Piece | File | Role |
+| --- | --- | --- |
+| Arc sequencer | `services/recommendation/sequencer.ts` | Deterministic, greedy: orders an admitted pool toward a target energy arc (`steady` / `build` / `wind-down` / `wave` / `lift`) using song energy, mood continuity, artist and album spacing, era proximity, language lock, discovery share, sure-pick bias and transition memory; optional duration budget. |
+| Transition memory | `services/recommendation/transitions.ts` + `transitionTracker.ts` | Records how each hand-off A → B went (≥ 70 % heard = completed, < 30 % = skipped) by song pair and artist pair; decayed, capped, device-local. Feeds the sequencer as a −1..1 score. |
+| Adaptive re-plan | `services/recommendation/adaptive.ts` | Two skips inside the recommender's auto tail re-sequence the rest with the `lift` shape and favourites first; hand-queued songs are untouched; 90 s cooldown. |
+| Queue Builder | `services/recommendation/queuePlanner.ts` + `features/queue/QueueBuilderSheet.tsx` | Gathers real candidates (seed-first or taste-wide), admits them through the standard gates and a mood filter, ranks, sequences to shape + minutes, optionally asks the DJ for an intro and reasons, and previews before `applyPlan` replaces or appends. |
+
+The DJ contract gained two optional context fields, `arcShape` and `listenerGoal`; the engine passes the arc shape it is aiming for and accepts the DJ's order only when `arcErrorOf(order)` stays within 0.08 of the local sequence.
+
 ## v6.2.0 — AI DJ, DJ voice and AI-designed Home shelves
 
 | Feature | Route | Lane and ladder | What the model may do | What it may NOT do |

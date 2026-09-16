@@ -71,6 +71,13 @@ export interface PlayerState {
   togglePlay(): void;
   next(manual?: boolean): void;
   startRadio(song?: Song): void;
+  /** v6.3.0 — songs the recommender appended (not hand-queued), after the current one. */
+  autoTail(): Song[];
+  isAutoQueued(id: string): boolean;
+  /** v6.3.0 — swap the recommender's tail for a new order, keeping hand-queued songs in place. */
+  replaceAutoTail(songs: Song[]): void;
+  /** v6.3.0 — Queue Builder: install a planned queue, replacing everything or appending after the current song. */
+  applyPlan(songs: Song[], mode: 'replace' | 'append'): void;
   prev(): void;
   seek(seconds: number): void;
   setVolume(v: number): void;
@@ -145,6 +152,8 @@ export const usePlayerStore = create<PlayerState>()(
       let transition = 0;
       let radio = false;
       let recommendationJob: { version: number; promise: Promise<boolean> } | null = null;
+      /** Ids the recommender appended (never persisted; a reload starts clean). */
+      const autoIds = new Set<string>();
       const canExtend = () => (radio || useSettingsStore.getState().autoplay) && !get().followMode && get().repeat === 'off';
       function invalidateQueue(): void { queueVersion += 1; transition += 1; }
       async function appendRecommendations(seed: Song): Promise<boolean> {
@@ -166,6 +175,7 @@ export const usePlayerStore = create<PlayerState>()(
               muted: useSettingsStore.getState().mutedLanguages, blocked: song => isSongBlocked(song, useLibraryStore.getState()),
             });
             if (!additions.length) return false;
+            for (const song of additions) autoIds.add(song.id);
             set({ queue: [...current, ...additions] });
             preloadUpcoming();
             return true;
@@ -265,6 +275,8 @@ export const usePlayerStore = create<PlayerState>()(
         if (manual && song && duration > 0 && currentTime / duration < SKIP_THRESHOLD) {
           recordSkip(song, currentTime);
           void import('@/services/analytics/telemetry').then((m) => m.trackSkip(song));
+          // v6.3.0 — two skips inside the recommender's tail re-plan the rest of it.
+          void import('@/services/recommendation/adaptive').then((m) => m.noteSkipAndMaybeReplan(song));
         }
       }
 
@@ -290,6 +302,7 @@ export const usePlayerStore = create<PlayerState>()(
         if (song) {
           recordComplete(song, duration);
           useHistoryStore.getState().markCompleted(song.id);
+          void import('@/services/recommendation/adaptive').then((m) => m.noteCompleted());
         }
         // v5.12.0 — sleep after N songs counts down here; the last one stops.
         const songsDone = sleepSongsLeft > 0 ? sleepSongsLeft - 1 : 0;
@@ -687,6 +700,41 @@ export const usePlayerStore = create<PlayerState>()(
           }
           set({ index: nextIndex, currentTime: 0 });
           startTrack(queue[nextIndex], true);
+        },
+
+        autoTail: () => {
+          const { queue, index } = get();
+          return queue.slice(index + 1).filter((s) => autoIds.has(s.id));
+        },
+        isAutoQueued: (id) => autoIds.has(id),
+        replaceAutoTail: (songs) => {
+          const { queue, index } = get();
+          const head = queue.slice(0, index + 1);
+          const manualTail = queue.slice(index + 1).filter((s) => !autoIds.has(s.id));
+          const seen = new Set([...head, ...manualTail].map((s) => s.id));
+          const fresh = songs.filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true)));
+          for (const s of queue.slice(index + 1)) if (autoIds.has(s.id)) autoIds.delete(s.id);
+          for (const s of fresh) autoIds.add(s.id);
+          invalidateQueue();
+          set({ queue: [...head, ...manualTail, ...fresh] });
+          preloadUpcoming();
+        },
+        applyPlan: (songs, mode) => {
+          const clean = stripExplicit(songs);
+          if (!clean.length) return;
+          if (mode === 'replace') {
+            autoIds.clear();
+            get().playQueue(clean, 0);
+            return;
+          }
+          const { queue, index } = get();
+          const head = queue.slice(0, index + 1);
+          const seen = new Set(head.map((s) => s.id));
+          const fresh = clean.filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true)));
+          for (const s of queue.slice(index + 1)) autoIds.delete(s.id);
+          invalidateQueue();
+          set({ queue: [...head, ...fresh] });
+          preloadUpcoming();
         },
 
         startRadio: (song) => {

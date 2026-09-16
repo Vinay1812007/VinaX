@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '6.3.0': {
+    title: 'A queue that reads the room',
+    changes: [
+      { type: 'new', text: 'Queue Builder: tell VinaX how long, what mood, how the energy should move and how adventurous to be, and preview the whole plan — every song with its energy and a reason — before it replaces the queue or joins after the current song. Find it on the Queue page.' },
+      { type: 'improved', text: 'What plays next now follows an energy arc built from each song’s own signals: mood continuity, no artist twice in a row, eras kept together, your language locked in, and hand-offs you finished before preferred over ones you skipped. The AI DJ’s order is kept only when it holds that arc.' },
+      { type: 'improved', text: 'Skip two suggested songs in a row and the rest of the suggested stretch is re-planned on the spot with surer favourites first. Songs you queued by hand are never touched.' },
+      { type: 'improved', text: 'VinaX now remembers which song-to-song hand-offs you finished or skipped, on this device only, and uses that memory when it sequences.' },
+    ],
+  },
   '6.2.0': {
     title: 'The AI DJ is back — and it talks',
     changes: [
