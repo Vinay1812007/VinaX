@@ -426,7 +426,12 @@ export async function chat(
       // don't burn the token budget before emitting the answer. Others ignore
       // it on the NVIDIA base — but the external hosts 400 on reasoning_effort
       // (probed live), so the knob never travels off the NVIDIA base.
-      if (model.includes('gpt-oss') && !isExternalEndpoint(endpoint)) payload.reasoning_effort = opts.reasoningEffort ?? 'low';
+      // v6.5.2 — measured live on the Groq host: without this knob gpt-oss-20b
+      // spent its whole completion budget reasoning (finish=length, 6–8k
+      // characters of reasoning, empty content) on every DJ set, and JSON
+      // mode failed with json_validate_failed. Groq documents reasoning_effort
+      // for the gpt-oss models; only the marketplace router still withholds it.
+      if (model.includes('gpt-oss') && !isRouterEndpoint(endpoint)) payload.reasoning_effort = opts.reasoningEffort ?? 'low';
       // nemotron a3b-family models leak BARE chain-of-thought unless reasoning
       // is switched off at the chat-template level (probed live — see
       // reasoningOffParams). Model-gated: a no-op for every other pin.
