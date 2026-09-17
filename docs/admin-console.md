@@ -16,7 +16,7 @@ The console is a standalone static page, not part of the main app bundle. It shi
 | `frontend/public/admin/studio.css` | Styles for the studio-style editors |
 | `frontend/public/admin/leaflet/` | A vendored map library for the World Map section |
 
-The page is marked `noindex, nofollow`. Its content security policy allows scripts only from its own origin, which is why `theme-boot.js` is an external file and why there are no inline scripts. `index.html` and `app.js` are served with `Cache-Control: no-cache` (`frontend/public/_headers`). A request to the root of an `admin.` host is redirected to `/admin/` by `backend/worker/functions/_middleware.ts`.
+The page is marked `noindex, nofollow`. Its content security policy allows scripts only from its own origin, which is why `theme-boot.js` is an external file and why there are no inline scripts. Every un-hashed console file (`index.html`, `app.js`, `workspace.js`, `theme-boot.js`, `studio.css`, `workspace.css`) is served with `Cache-Control: no-cache` (`frontend/public/_headers`), so a returning owner never gets a new page with a stale stylesheet or boot script. A request to the root of an `admin.` host is redirected to `/admin/` by `backend/worker/functions/_middleware.ts`.
 
 The console talks to the Worker with same-origin requests to `/api/admin/*`. It never imports app code or app CSS.
 
@@ -49,7 +49,6 @@ Mutating routes call `logAdminAudit()` (`_lib/adminAudit.ts`), which writes a ro
 
 ## Layout and theme
 
-<!-- VERIFY-ADMIN -->
 On disk at the time of writing, the console has no top bar. The shell is one grid: a left sidebar spanning the full height, and on the right a stale-data banner, the main panel and a footer. The sidebar holds, top to bottom: the brand link and a collapse button; a Live group with three counters (listening now, plays today, errors) refreshed every minute; the section navigation with a filter field; a View group (date range where a section uses one, the auto-refresh switch and interval, row density, compact layout, theme); an Actions group (refresh, error alerts, copy a day report, download the panel as JSON, download a table as CSV where there is one); and Sign out. From 1024px up the sidebar can collapse to an icon rail, remembered in `localStorage` as `vinax_admin_sidebar`. Below 1024px it is an off-canvas drawer opened by a floating menu button. The main panel starts with a toolbar showing the section's category, its title and the last-updated time. The embedded stylesheet copies the listener app's token values (ink surfaces, hairline borders, the violet accent ramp, 8px controls, 12px cards, 16px panels, 40px buttons and 36px small controls, the same self-hosted typeface). Dark is the default; `html.light` re-maps the tokens. The theme button stores the choice as `vinax_admin_theme`; with no stored choice the console follows the system colour scheme, and `theme-boot.js` applies the result before first paint so there is no flash.
 
 Keyboard: `Ctrl`/`Cmd` + `K` opens a command palette listing every section. Outside form fields, `1`–`9` jump to Overview, Live Listening, Activity Feed, Location Analytics, Music Analytics, Insights, User Management, Technical Monitoring and AI Monitoring, and `R` refreshes the current section. The current section is mirrored in the URL hash (for example `/admin/#flags`) and remembered for the next visit.
@@ -146,5 +145,4 @@ What to know when using it:
 - One shared token; no per-operator identity in the audit trail.
 - The failed-attempt throttle is per Worker isolate, not global.
 - Browser-local sections do not follow the operator to another browser.
-- The layout paragraph marked `VERIFY-ADMIN` describes a console that is being restyled; re-read `index.html` before relying on it.
 - Browser end-to-end coverage for the console is in `frontend/e2e/admin-console.spec.ts`; see [testing.md](testing.md).

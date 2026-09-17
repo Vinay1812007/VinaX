@@ -12,6 +12,21 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '7.1.0': {
+    title: 'VinaX 7.1 — the next five, a new VinaX AI, and a calmer control room',
+    changes: [
+      { type: 'new', text: 'The next five. Whatever is playing, VinaX lines up the next five songs in that song’s language: the strongest, most familiar hand-off first, then related songs introduced gradually — matched on mood, energy, era, genre, voice, composer style and what you have been reaching for. Up Next now reads Song – Movie/Album – Artist.' },
+      { type: 'fixed', text: 'Pin a mood works. Tapping a mood on the player used to change nothing you could see; it now rebuilds Up Next straight away with songs found for that mood, in your queue’s language. Tap it again to go back to your usual mix. Songs you queued yourself stay where they are.' },
+      { type: 'new', text: 'VinaX AI, rebuilt. One searchable menu lists every model — the VinaX engines and every live catalogue model, with context size shown. A new Agent mode uses models that can search the web and run code on their own, and shows what they are doing as they work. Settings is now a proper dialog with tabs: General, Replies, Voice, Data and Shortcuts. The chat opens with the composer in the middle, replies read as clean text, and the chat list folds away.' },
+      { type: 'improved', text: 'Nothing was removed from VinaX AI: threads, search, pin and branch, saved prompts, attachments, voice, read aloud, follow-ups, sources and music commands are all there — the page is simply lighter and no longer redraws while you type.' },
+      { type: 'improved', text: 'Home greets you by first name. A long device name no longer fills three lines at the top.' },
+      { type: 'improved', text: 'One song, one place on Home: another version of a song already on an earlier shelf no longer takes a slot further down.' },
+      { type: 'fixed', text: 'Usage sharing is now truly your choice: it is off unless you switch it on, and you can change it any time in Settings → Region & Privacy. Before, the box was ticked for you and there was nowhere to change it.' },
+      { type: 'fixed', text: 'Chips are easier to tap: the smaller chips introduced in 7.0.1 were missing their touch padding.' },
+      { type: 'improved', text: 'Owner console: the top bar is gone — every control now lives in the left sidebar, which folds to an icon rail on desktop and slides in on phones. The VinaX logo takes you back to the overview, and the console now wears the same dark and light themes as the app.' },
+      { type: 'improved', text: 'A fresh welcome tour, tutorials and Help that describe VinaX as it is today, and rewritten documentation for anyone running their own copy.' },
+    ],
+  },
   '7.0.1': {
     title: 'A tidier top bar, calmer menus, Trending for you',
     changes: [
