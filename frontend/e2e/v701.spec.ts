@@ -84,7 +84,7 @@ test('top bar: no search box, Home actions live in it; Discover offers Ads on a 
   expect(await bar.getByRole('link', { name: /search/i }).count()).toBe(0);
   await page.screenshot({ path: 'test-results/v701-home-412.png' });
   await page.goto('/search');
-  expect(await page.getByRole('combobox', { name: 'Search music' }).count()).toBe(1);
+  await expect(page.getByRole('combobox', { name: 'Search music' })).toHaveCount(1); // the page's own field is the only search box
   await page.screenshot({ path: 'test-results/v701-search-412.png' });
   await page.goto('/discover');
   await expect(page.getByRole('navigation', { name: 'Browse music' }).getByRole('link', { name: 'Ads' })).toBeVisible();
