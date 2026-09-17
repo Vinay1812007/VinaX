@@ -1,0 +1,818 @@
+/* ============================================================================
+   v7.1 — VinaX AI chat surface.
+
+   Loaded by the AI page chunk only (imported from pages/VinaXAIPage.tsx, never
+   from main.tsx), so none of this is paid for on first load. It layers on the
+   long-standing .ai-* primitives in index.css / flow.css (tokens, chips,
+   buttons, popovers) and owns everything the v7.1 layout added.
+
+   Rules of the house:
+   - every selector starts with .ai-
+   - identity comes from VinaX tokens only: the --ember-* accent the listener
+     chose, the --vx-* surfaces of the Flow canvas, Manrope
+   - motion is transform / opacity only, 200 ms at most, and OFF under reduced
+     motion (the last block in this file; .ai-root is also covered globally)
+   ========================================================================= */
+
+/* The settings dialog is portalled to <body>, outside .ai-root — it needs the
+   same tokens to read the same way. */
+.ai-scope {
+  --ai-bg: var(--vx-bg-base);
+  --ai-panel: var(--vx-surface);
+  --ai-raised: var(--vx-surface-raised);
+  --ai-line: var(--vx-border);
+  --ai-line-soft: var(--vx-border);
+  --ai-hover: var(--vx-bg-hover);
+  --ai-text: var(--vx-text-primary);
+  --ai-text-2: var(--vx-text-secondary);
+  --ai-text-3: var(--vx-text-muted);
+  --ai-shadow: var(--vx-shadow-overlay);
+  color: var(--ai-text);
+}
+
+/* Breakpoint visibility. Not Tailwind's `hidden md:flex`: .ai-icon-btn and
+   .ai-chip set their own `display`, and which of the two wins depends on
+   stylesheet order — these do not. */
+@media (max-width: 639px) { .ai-from-sm { display: none !important; } }
+@media (min-width: 640px) { .ai-below-sm { display: none !important; } }
+@media (max-width: 767px) { .ai-from-md { display: none !important; } }
+@media (min-width: 768px) { .ai-below-md { display: none !important; } }
+
+/* ---------- Shell ---------- */
+.ai-shell {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+.ai-main {
+  position: relative;
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  flex-direction: column;
+}
+.ai-root .ai-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 3.25rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 0;
+}
+.ai-root .ai-header h1 {
+  font-size: 13.5px;
+}
+/* One centred reading column for the thread, the composer and the empty
+   state alike, so nothing jumps sideways when the first message is sent. */
+.ai-column {
+  width: 100%;
+  max-width: 46rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+@media (min-width: 640px) {
+  .ai-column { padding-inline: 1.5rem; }
+}
+
+/* ---------- Stage: empty (centred) vs conversation (docked) ---------- */
+.ai-stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 0%;
+  min-height: 0;
+  flex-direction: column;
+}
+.ai-scroller {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ai-scroller[hidden] { display: none; }
+/* Empty chat: the stage itself scrolls, and auto margins (not
+   justify-content: center) do the centring — so on a short phone the top of
+   the greeting is still reachable instead of being clipped above the fold. */
+.ai-stage-empty {
+  overflow-y: auto;
+  padding-block: 1.5rem;
+}
+.ai-stage-empty > .ai-greeting { margin-top: auto; }
+.ai-stage-empty > .ai-suggest { margin-bottom: auto; }
+
+.ai-greeting {
+  text-align: center;
+  padding-bottom: 1.5rem;
+}
+.ai-greeting-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: 1.125rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(var(--ember-400) / 0.28);
+  background: rgb(var(--ember-500) / 0.08);
+  color: rgb(var(--ember-400));
+}
+.ai-root .ai-greeting .ai-display {
+  font-size: clamp(1.75rem, 1.2rem + 2.4vw, 2.6rem);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+}
+.ai-root .ai-greeting .ai-display-name {
+  font-style: normal;
+  background: linear-gradient(100deg, rgb(var(--ember-300)), rgb(var(--ember-500)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ai-greeting-sub {
+  margin-top: 0.625rem;
+  font-size: 15px;
+  color: var(--ai-text-2);
+}
+
+.ai-suggest { padding-top: 1rem; }
+.ai-suggest-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+@media (max-width: 479px) {
+  .ai-suggest-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.ai-suggestion {
+  min-height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--ai-line);
+  border-radius: 0.875rem;
+  background: transparent;
+  color: var(--ai-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: left;
+  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm);
+}
+.ai-suggestion:hover {
+  background: var(--ai-hover);
+  color: var(--ai-text);
+}
+.ai-brief {
+  margin-top: 1rem;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ai-text-3);
+  text-align: center;
+}
+.ai-brief-label {
+  font-weight: 700;
+  color: var(--ai-text-2);
+}
+.ai-quick-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+  padding-bottom: 0.25rem;
+}
+@media (min-width: 640px) {
+  .ai-quick-row { justify-content: center; flex-wrap: wrap; }
+}
+.ai-root .ai-chip-quiet {
+  min-height: 2rem;
+  border-color: transparent;
+  color: var(--ai-text-3);
+  font-size: 12.5px;
+}
+
+/* ---------- Thread ---------- */
+.ai-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-block: 1.5rem 2rem;
+}
+.ai-root .ai-msg {
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+/* The listener: a compact bubble on the right. */
+.ai-msg-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.ai-root .ai-user-bubble {
+  max-width: min(85%, 34rem);
+  padding: 0.5rem 0.875rem;
+  border: 0;
+  border-radius: 1.125rem 1.125rem 0.375rem 1.125rem;
+  background: var(--ai-raised);
+  line-height: 1.55;
+}
+/* The assistant: plain flowing text, no bubble — just the VinaX mark where
+   the reply starts. */
+.ai-msg-assistant {
+  display: flex;
+  gap: 0.75rem;
+}
+.ai-msg-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.75em;
+  color: rgb(var(--ember-400));
+}
+@media (max-width: 479px) {
+  .ai-msg-assistant { gap: 0.5rem; }
+}
+
+.ai-thinking {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75em;
+  color: var(--ai-text-2);
+  font-size: 0.93em;
+}
+.ai-thinking-text { animation: ai-fade 180ms var(--ease-calm) both; }
+
+/* A soft caret while the reply streams: it breathes rather than blinks. */
+.ai-caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-left: 0.3em;
+  vertical-align: 0.05em;
+  border-radius: 9999px;
+  background: rgb(var(--ember-400));
+  animation: ai-breathe 1.2s ease-in-out infinite;
+}
+.ai-engine-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.375rem;
+  padding: 3px 6px;
+  border: 1px solid var(--ai-line);
+  border-radius: 0.375rem;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ai-text-3);
+}
+
+/* ---------- Agent activity ---------- */
+.ai-activity { margin-bottom: 0.625rem; }
+.ai-activity-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  min-height: 2rem;
+  margin-left: -0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  color: var(--ai-text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm);
+}
+.ai-activity-head:hover {
+  background: var(--ai-hover);
+  color: var(--ai-text);
+}
+.ai-activity-chevron {
+  color: var(--ai-text-3);
+  transition: transform 160ms var(--ease-calm);
+}
+.ai-activity-list {
+  margin: 0.125rem 0 0 0.1875rem;
+  padding: 0.125rem 0 0.125rem 0.75rem;
+  border-left: 1px solid var(--ai-line);
+  list-style: none;
+}
+.ai-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.1875rem 0;
+  color: var(--ai-text-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+  animation: ai-rise 180ms var(--ease-calm) both;
+}
+
+/* ---------- Composer ---------- */
+.ai-composer-wrap {
+  flex-shrink: 0;
+  width: 100%;
+}
+.ai-composer-docked { padding: 0.25rem 0 max(0.625rem, env(safe-area-inset-bottom)); }
+.ai-root .ai-composer {
+  position: relative;
+  padding: 0.75rem 0.625rem 0.5rem;
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 36px #0000001f;
+}
+.ai-root .ai-composer .ai-composer-input {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  max-height: 12rem; /* 8 rows × 1.5rem */
+  padding: 0 0.5rem;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font-size: 16px; /* 16px keeps phone browsers from zooming the page on focus */
+  line-height: 1.5rem;
+}
+.ai-composer-input::placeholder { color: var(--ai-text-3); opacity: 0.85; }
+.ai-composer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  min-width: 0;
+}
+.ai-round { border-radius: 9999px; position: relative; }
+.ai-plus { transition: transform 160ms var(--ease-calm); }
+.ai-plus-open { transform: rotate(45deg); }
+.ai-dot {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 9999px;
+  background: rgb(var(--ember-400));
+}
+.ai-root .ai-agent-toggle {
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+}
+.ai-chip-blocked,
+.ai-chip-blocked:hover:not(:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: transparent;
+  color: var(--ai-text-3);
+}
+.ai-root .ai-model-chip {
+  max-width: min(11rem, 34vw);
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+  color: var(--ai-text);
+}
+.ai-model-chevron {
+  color: var(--ai-text-3);
+  transition: transform 160ms var(--ease-calm);
+}
+.ai-root .ai-send {
+  border-radius: 9999px;
+  margin-left: 0.125rem;
+}
+.ai-root .ai-send-stop {
+  background: var(--ai-text);
+  color: var(--ai-bg);
+}
+.ai-composer-status {
+  min-height: 1.125rem;
+  margin-top: 0.375rem;
+  padding-inline: 0.75rem;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.125rem;
+  color: var(--ai-text-3);
+  text-align: center;
+  text-wrap: balance;
+}
+.ai-tools-menu {
+  position: absolute;
+  left: 0;
+  z-index: 50;
+  width: 13.5rem;
+}
+.ai-tools-menu-up { bottom: calc(100% + 0.5rem); }
+.ai-tools-menu-down { top: calc(100% + 0.5rem); }
+.ai-drop-overlay { background: color-mix(in srgb, var(--ai-bg) 92%, transparent); }
+
+/* ---------- Model menu ---------- */
+.ai-model-menu {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+/* Floating: placed in viewport coordinates by placeMenu() (left / width /
+   top|bottom / max-height arrive inline), so it can never leave the screen. */
+.ai-model-menu-pop {
+  position: fixed;
+  z-index: 50;
+}
+.ai-model-menu-inline {
+  width: 100%;
+  max-height: 20rem;
+  margin-top: 0.5rem;
+}
+.ai-model-search {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--ai-line);
+}
+.ai-model-search input {
+  flex: 1 1 0%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ai-text);
+  font-size: 16px;
+  line-height: 1.5rem;
+}
+@media (min-width: 640px) {
+  .ai-model-search input { font-size: 13.5px; }
+}
+.ai-model-search input:focus-visible { box-shadow: none; outline: none; }
+.ai-model-search input::placeholder { color: var(--ai-text-3); }
+.ai-model-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem 0.3125rem 0.375rem;
+  outline: none;
+  scroll-padding-block: 2rem 0.5rem;
+}
+.ai-model-heading {
+  position: sticky;
+  top: -0.25rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.5rem 0.25rem;
+  background: var(--ai-raised);
+  color: var(--ai-text-3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.ai-model-count {
+  font-weight: 600;
+  letter-spacing: 0;
+  opacity: 0.8;
+}
+.ai-model-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0.3125rem 0.5rem;
+  border-radius: 0.5rem;
+  color: var(--ai-text-2);
+  cursor: pointer;
+}
+.ai-model-option-active {
+  background: var(--ai-hover);
+  color: var(--ai-text);
+}
+.ai-model-option[aria-selected='true'] { color: var(--ai-text); }
+.ai-model-check {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 0.875rem;
+  color: rgb(var(--ember-400));
+}
+.ai-model-note {
+  display: block;
+  width: 100%;
+  padding: 0.25rem 0.5rem 0.5rem;
+  color: var(--ai-text-3);
+  font-size: 11.5px;
+  font-weight: 500;
+  text-align: left;
+}
+.ai-model-note-btn { border-radius: 0.5rem; }
+.ai-model-note-btn:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-model-foot {
+  flex-shrink: 0;
+  display: none;
+  padding: 0.375rem 0.75rem;
+  border-top: 1px solid var(--ai-line);
+  color: var(--ai-text-3);
+  font-size: 10.5px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ai-model-foot { display: block; }
+}
+.ai-model-foot kbd,
+.ai-shortcut kbd {
+  display: inline-block;
+  min-width: 1.25rem;
+  margin-right: 0.1875rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--ai-line);
+  border-radius: 0.3125rem;
+  background: var(--ai-hover);
+  color: var(--ai-text-2);
+  font: 600 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
+.ai-badge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid var(--ai-line);
+  border-radius: 0.3125rem;
+  color: var(--ai-text-3);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.ai-badge-accent {
+  border-color: rgb(var(--ember-500) / 0.45);
+  background: rgb(var(--ember-500) / 0.1);
+  color: rgb(var(--ember-300));
+}
+html.light .ai-badge-accent { color: rgb(var(--ember-500)); }
+
+/* ---------- Sidebar ---------- */
+.ai-sidebar {
+  position: fixed;
+  inset-block: 0;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: min(18rem, 86vw);
+  border-right: 1px solid var(--ai-line);
+  box-shadow: var(--ai-shadow);
+  /* Closed: off-screen AND out of the tab order / accessibility tree. The
+     visibility flip waits for the slide-out to finish. */
+  visibility: hidden;
+  transform: translateX(-100%);
+  transition: transform 180ms var(--ease-calm), visibility 0s linear 180ms;
+}
+.ai-sidebar-open {
+  visibility: visible;
+  transform: none;
+  transition: transform 180ms var(--ease-calm);
+}
+.ai-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgb(0 0 0 / 0.5);
+  animation: ai-fade 180ms ease-out both;
+}
+@media (min-width: 768px) {
+  .ai-sidebar {
+    position: static;
+    z-index: auto;
+    flex-shrink: 0;
+    width: 16.25rem;
+    box-shadow: none;
+    visibility: visible;
+    transform: none;
+    transition: none;
+  }
+  .ai-sidebar-collapsed { display: none; }
+}
+.ai-root .ai-side-row { padding: 0.125rem 0.25rem 0.125rem 0; cursor: default; }
+.ai-side-open {
+  flex: 1 1 0%;
+  min-width: 0;
+  padding: 0.3125rem 0.25rem 0.3125rem 0.625rem;
+  border-radius: 0.5rem;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* Row actions take no room until they are wanted, so a title is not
+   truncated to make space for buttons nobody can see. Always there on touch;
+   reachable by keyboard because focusing the row reveals them. */
+@media (hover: hover) {
+  .ai-root .ai-side-row .ai-side-actions { display: none; }
+  .ai-root .ai-side-row:hover .ai-side-actions,
+  .ai-root .ai-side-row:focus-within .ai-side-actions { display: inline-flex; opacity: 1; }
+}
+.ai-side-row-on .ai-side-open { box-shadow: inset 2px 0 0 rgb(var(--ember-500) / 0.7); }
+
+/* ---------- Toast ---------- */
+.ai-toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(26rem, calc(100vw - 2rem));
+  padding: 0.5rem 0.625rem 0.5rem 0.875rem;
+  border: 1px solid var(--ai-line);
+  border-radius: 0.875rem;
+  background: var(--ai-raised);
+  box-shadow: var(--ai-shadow);
+  color: var(--ai-text);
+  font-size: 13px;
+  font-weight: 550;
+  translate: -50% 0;
+}
+.ai-toast-undo {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  color: rgb(var(--ember-400));
+  font-weight: 700;
+}
+.ai-toast-undo:hover { background: var(--ai-hover); }
+
+/* ---------- Settings dialog ---------- */
+.ai-settings-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.ai-tablist {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--ai-line);
+}
+.ai-tablist::-webkit-scrollbar { display: none; }
+.ai-tab {
+  flex-shrink: 0;
+  min-height: 2.25rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--ai-text-3);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  transition: background-color 130ms var(--ease-calm), color 130ms var(--ease-calm);
+}
+.ai-tab:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-tab[aria-selected='true'] {
+  background: var(--ai-hover);
+  color: var(--ai-text);
+}
+.ai-tabpanel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 16rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  outline: none;
+  padding-right: 0.125rem;
+}
+.ai-tabpanel:focus-visible { box-shadow: inset 0 0 0 2px rgb(var(--ember-500) / 0.4); border-radius: 0.5rem; }
+@media (min-width: 640px) {
+  .ai-settings-body { flex-direction: row; gap: 1.25rem; }
+  .ai-tablist {
+    flex-direction: column;
+    width: 9rem;
+    overflow: visible;
+    padding: 0 0.75rem 0 0;
+    border-bottom: 0;
+    border-right: 1px solid var(--ai-line);
+  }
+  .ai-tabpanel { height: 24rem; max-height: 60dvh; }
+}
+.ai-set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.625rem 0;
+}
+.ai-set-block { padding: 0.625rem 0; }
+.ai-set-row + .ai-set-row,
+.ai-set-row + .ai-set-block,
+.ai-set-block + .ai-set-row,
+.ai-set-block + .ai-set-block { border-top: 1px solid var(--ai-line-soft); }
+.ai-settings .ai-menu-item { padding-inline: 0; font-size: 13.5px; color: var(--ai-text); }
+.ai-settings .ai-menu-item:hover { background: transparent; }
+.ai-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--ai-line);
+  background: var(--ai-hover);
+}
+.ai-switch[aria-checked='true'] {
+  border-color: rgb(var(--ember-500));
+  background: rgb(var(--ember-500));
+}
+.ai-switch-thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 3px #0005;
+  transition: transform 160ms var(--ease-calm);
+}
+.ai-switch[aria-checked='true'] .ai-switch-thumb { transform: translateX(1rem); }
+.ai-btn-danger,
+.ai-btn-danger:hover:not(:disabled) { color: rgb(239 68 68); border-color: rgb(239 68 68 / 0.35); }
+html.light .ai-btn-danger,
+html.light .ai-btn-danger:hover:not(:disabled) { color: rgb(185 28 28); }
+.ai-confirm {
+  padding: 0.75rem;
+  border: 1px solid rgb(239 68 68 / 0.35);
+  border-radius: 0.75rem;
+}
+.ai-shortcuts { margin: 0; }
+.ai-shortcut {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.4375rem 0;
+  font-size: 13px;
+}
+.ai-shortcut + .ai-shortcut { border-top: 1px solid var(--ai-line-soft); }
+.ai-shortcut dt { flex-shrink: 0; width: 8.5rem; }
+.ai-shortcut dd { margin: 0; color: var(--ai-text-2); }
+
+/* ---------- Motion (transform / opacity only, ≤ 200 ms) ---------- */
+@keyframes ai-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ai-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ai-pop {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+/* The mark while the assistant thinks: a slow breath, not a bounce. Each
+   cycle is long, but it is opacity + scale only and stops under reduced
+   motion; nothing on the page MOVES for more than 200 ms. */
+@keyframes ai-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.ai-enter { animation: ai-rise 180ms var(--ease-calm) both; }
+.ai-pop { animation: ai-pop 140ms var(--ease-calm) both; transform-origin: bottom left; }
+.ai-model-menu-pop.ai-pop { transform-origin: bottom right; }
+.ai-model-menu-down.ai-pop { transform-origin: top right; }
+.ai-tools-menu-down.ai-pop { transform-origin: top left; }
+.ai-pulse { animation: ai-breathe 1.6s ease-in-out infinite; }
+
+/* Reply actions fade in on hover / focus; always there on touch. */
+.ai-root .ai-toolbar { transition: opacity 140ms var(--ease-calm); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-scope *,
+  .ai-enter,
+  .ai-pop,
+  .ai-pulse,
+  .ai-caret,
+  .ai-scrim,
+  .ai-sidebar,
+  .ai-sidebar-open,
+  .ai-thinking-text,
+  .ai-activity-row,
+  .ai-switch-thumb,
+  .ai-plus,
+  .ai-model-chevron,
+  .ai-activity-chevron {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+html.reduce-motion .ai-scope *,
+html.reduce-motion .ai-enter,
+html.reduce-motion .ai-pop,
+html.reduce-motion .ai-pulse,
+html.reduce-motion .ai-caret,
+html.reduce-motion .ai-scrim,
+html.reduce-motion .ai-sidebar,
+html.reduce-motion .ai-sidebar-open {
+  animation: none !important;
+  transition: none !important;
+}

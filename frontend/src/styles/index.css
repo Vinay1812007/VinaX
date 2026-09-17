@@ -2085,12 +2085,6 @@ html.light .ai-send { color: #fff; }
 .ai-menu-item[aria-pressed='true'],
 .ai-menu-item[aria-selected='true'] { color: var(--ai-text); font-weight: 650; }
 .ai-menu-sep { height: 1px; margin: 0.3125rem 0.5rem; background: var(--ai-line-soft); }
-/* Destructive rows: .ai-menu-item sets its own colour, so a Tailwind text
-   utility on the same element loses to it. This carries the intent instead. */
-.ai-menu-item-danger,
-.ai-menu-item-danger:hover { color: rgb(239 68 68); }
-html.light .ai-menu-item-danger,
-html.light .ai-menu-item-danger:hover { color: rgb(185 28 28); }
 
 /* ---------- Composer ---------- */
 .ai-composer {
@@ -2128,41 +2122,11 @@ html.light .ai-menu-item-danger:hover { color: rgb(185 28 28); }
   cursor: pointer;
 }
 
-/* ---------- Suggestions ---------- */
-/* Underlined rows, not cards: four bordered boxes competed with the composer
-   for the eye. These sit quietly beneath it. */
-.ai-starter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  width: 100%;
-  text-align: left;
-  padding: 0.6rem 0.125rem;
-  border: 0;
-  border-bottom: 1px solid var(--ai-line-soft);
-  background: transparent;
-  color: var(--ai-text-2);
-  font-size: 13.5px;
-  font-weight: 500;
-  line-height: 1.4;
-  transition: color 130ms var(--ease-calm), padding-left 130ms var(--ease-calm);
-}
-.ai-starter:hover { color: var(--ai-text); padding-left: 0.375rem; }
-.ai-starter:last-child { border-bottom: 0; }
-
 /* ---------- Messages ---------- */
 .ai-user-bubble {
   background: var(--ai-hover);
   border: 1px solid var(--ai-line-soft);
   color: var(--ai-text);
-}
-.ai-thread-rail {
-  width: 1px;
-  flex: 1 1 auto;
-  min-height: 0.75rem;
-  margin-top: 0.5rem;
-  background: var(--ai-line);
 }
 .ai-toolbar { opacity: 0; transition: opacity 140ms var(--ease-calm); }
 .ai-msg:hover .ai-toolbar,
@@ -2209,7 +2173,7 @@ html.light .ai-menu-item-danger:hover { color: rgb(185 28 28); }
    through it. */
 .ai-root .ai-ambient { background: none; }
 @media (prefers-reduced-motion: reduce) {
-  .ai-toolbar, .ai-chip, .ai-tool, .ai-composer, .ai-starter, .ai-pick, .ai-side-row, .ai-btn { transition: none; }
+  .ai-toolbar, .ai-chip, .ai-tool, .ai-composer, .ai-pick, .ai-side-row, .ai-btn { transition: none; }
 }
 
 

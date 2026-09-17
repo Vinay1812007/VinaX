@@ -38,6 +38,33 @@ export interface CatalogModel {
   provider: CatalogProvider;
   /** Provider-reported context window, when it reports one. */
   context: number | null;
+  /** True for an agentic system — one that searches the web and runs code by
+   *  itself while it answers. Set from AGENT_MODEL_SLUGS only; the client
+   *  never guesses this from a name. Additive: older clients ignore it. */
+  agent: boolean;
+}
+
+/** The agentic systems VinaX knows about, per catalog key, by EXACT model
+ *  name — the slug with its vendor prefix and routing suffix removed (what
+ *  catalogLabel() returns), so a provider re-publishing the same system under
+ *  a prefixed id keeps its badge.
+ *
+ *  Deliberately an explicit allow-list rather than a pattern: "agent" is a
+ *  promise to the listener (this engine will go and look things up, and the
+ *  chat shows its working), so a model earns the badge only after it has been
+ *  seen to report its tool runs on the stream. A slug that is not listed here
+ *  is a plain chat model, whatever its name suggests. Add a row when a new
+ *  agentic system has been verified; remove it when the provider retires it
+ *  (a retired slug simply stops appearing in the live catalog, so a stale row
+ *  here is harmless — the flag only decorates models that are actually served). */
+export const AGENT_MODEL_SLUGS: Record<CatalogProvider, readonly string[]> = {
+  grq: ['compound', 'compound-mini'],
+  opr: [],
+};
+
+/** Whether a served slug is one of the known agentic systems. */
+export function isAgentModel(provider: CatalogProvider, id: string): boolean {
+  return AGENT_MODEL_SLUGS[provider].includes(catalogLabel(id.trim()).toLowerCase());
 }
 
 export type CatalogProvider = 'grq' | 'opr';
@@ -48,7 +75,6 @@ const SOURCE: Record<CatalogProvider, { env: keyof AiEnv; url: string }> = {
   opr: { env: 'VINAX_OPENROUTER_API_KEY', url: `${LANE_BASE.router}/models` },
 };
 
-/** Slug fragments that mark a model as NOT a chat-completions engine. */
 /** Slug fragments that mark a model as NOT a chat-completions engine.
  *  Every term here was earned by a real catalog row: the audio, embedding,
  *  rerank and classifier models both providers list alongside their chat
@@ -119,7 +145,7 @@ export function parseCatalog(provider: CatalogProvider, body: unknown): CatalogM
     const ctxRaw = r.context_length ?? r.context_window;
     const context = typeof ctxRaw === 'number' && Number.isFinite(ctxRaw) ? Math.round(ctxRaw) : null;
     seen.add(id);
-    out.push({ id, label: catalogLabel(id), provider, context });
+    out.push({ id, label: catalogLabel(id), provider, context, agent: isAgentModel(provider, id) });
   }
   return out.sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -186,7 +212,7 @@ export async function fetchVoiceCatalog(env: AiEnv, provider: CatalogProvider): 
       if (!id || seen.has(id) || r.active === false) continue;
       if (!VOICE_MODEL.test(id)) continue;
       seen.add(id);
-      out.push({ id, label: catalogLabel(id), provider, context: null });
+      out.push({ id, label: catalogLabel(id), provider, context: null, agent: false });
     }
     out.sort((a, b) => a.label.localeCompare(b.label));
     if (!out.length && hit) return hit.models;

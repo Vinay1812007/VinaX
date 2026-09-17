@@ -6,6 +6,8 @@
  */
 import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import {
+  AGENT_MODEL_SLUGS,
+  isAgentModel,
   catalogDefaultModel,
   fetchVoiceCatalog,
   isServedVoiceModel,
@@ -16,6 +18,7 @@ import {
   resetCatalogCache,
   resolveCatalogModel,
 } from '../functions/_lib/catalog';
+import { onRequestGet as aiModelsGet } from '../functions/api/aimodels';
 
 beforeEach(() => resetCatalogCache());
 afterEach(() => vi.unstubAllGlobals());
@@ -281,5 +284,65 @@ describe('isServedVoiceModel', () => {
     expect(await isServedVoiceModel(env, 'grq', 'openai/gpt-oss-20b')).toBe(false);
     expect(await isServedVoiceModel(env, 'grq', 'not a slug!')).toBe(false);
     expect(await isServedVoiceModel(env, 'grq', '')).toBe(false);
+  });
+});
+
+/**
+ * v7.1 — agent flag. "Agent" is a promise to the listener (this engine looks
+ * things up and shows its working), so it comes from an explicit allow-list on
+ * the server and is never inferred from a name by the client.
+ */
+describe('agent flag', () => {
+  it('is true only for the allow-listed agentic systems, prefixed or bare', () => {
+    const models = parseCatalog('grq', {
+      data: [{ id: 'vendor/compound' }, { id: 'compound-mini' }, { id: 'vendor/plain-20b' }, { id: 'vendor/compound-pro' }],
+    });
+    const flags = Object.fromEntries(models.map((m) => [m.id, m.agent]));
+    expect(flags).toEqual({
+      'vendor/compound': true,
+      'compound-mini': true,
+      'vendor/plain-20b': false,
+      'vendor/compound-pro': false,
+    });
+  });
+
+  it('every row carries a boolean, and the list is scoped per catalog key', () => {
+    const free = { prompt: '0', completion: '0' };
+    const opr = parseCatalog('opr', { data: [{ id: 'vendor/compound:free', pricing: free }, { id: 'vendor/chat:free', pricing: free }] });
+    expect(opr.map((m) => m.agent)).toEqual([false, false]);
+    expect(isAgentModel('grq', 'COMPOUND')).toBe(true);
+    expect(isAgentModel('opr', 'compound')).toBe(false);
+    expect(AGENT_MODEL_SLUGS.grq.length).toBeGreaterThan(0);
+  });
+
+  it('GET /api/aimodels returns the flag on every model', async () => {
+    vi.stubGlobal(
+      'fetch',
+      // One body for both keys: the marketplace filter keeps only the priced-
+      // at-zero row, the account catalog keeps all three.
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: [
+                { id: 'vendor/compound', context_window: 131072 },
+                { id: 'plain-8b-instant' },
+                { id: 'vendor/free-chat:free', pricing: { prompt: '0', completion: '0' } },
+              ],
+            }),
+            { status: 200 },
+          ),
+        ),
+      ),
+    );
+    const res = await aiModelsGet({
+      request: new Request('https://x.test/api/aimodels', { headers: { 'cf-connecting-ip': '10.9.0.1' } }),
+      env: { VINAX_GROQ_API_KEY: 'k', VINAX_OPENROUTER_API_KEY: 'k' },
+    });
+    const body = (await res.json()) as { groups: Array<{ id: string; models: Array<{ id: string; agent: boolean; context: number | null }> }> };
+    const all = body.groups.flatMap((g) => g.models);
+    expect(all.length).toBe(4);
+    for (const m of all) expect(typeof m.agent).toBe('boolean');
+    expect(all.filter((m) => m.agent).map((m) => m.id)).toEqual(['vendor/compound']);
   });
 });

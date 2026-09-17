@@ -347,6 +347,146 @@ const CORS: Record<string, string> = {
   'access-control-allow-headers': 'content-type, x-vinax-client',
 };
 
+/* ---------------------------------------------------------------------------
+   Agent steps (v7.1). Some catalogue engines are agentic systems: they search
+   the web and run code by themselves, and report each tool run on the stream
+   (`executed_tools` on a delta or on the final message). The chat shows that
+   working as a short activity list, so the Worker forwards a COMPACT summary
+   of each run as its own additive frame:
+
+     data: {"step":{"tool":"search","label":"Searched the web for “…”"}}
+
+   What never leaves the Worker: the tool's raw output, the code it ran, full
+   URLs (a visited page is reduced to its host, so nothing in a query string
+   or userinfo can leak), control characters, or more than MAX_AGENT_STEPS
+   rows. Clients that predate the frame ignore it — they only read `delta`,
+   `meta` and `done`.
+   ------------------------------------------------------------------------ */
+export type AgentTool = 'search' | 'code' | 'visit' | 'other';
+export interface AgentStep {
+  tool: AgentTool;
+  label: string;
+}
+export const MAX_AGENT_STEPS = 12;
+const STEP_LABEL_MAX = 120;
+
+function agentToolKind(kind: string): AgentTool {
+  const k = kind.toLowerCase();
+  if (k.includes('search')) return 'search';
+  if (/python|code|interpret|exec/.test(k)) return 'code';
+  if (/visit|brows|open_?url|fetch|navigate/.test(k)) return 'visit';
+  return 'other';
+}
+
+/** Host of a URL, or '' when it is not an http(s) URL. Userinfo, path, query
+ *  and fragment are all dropped. */
+function hostOf(raw: string): string {
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    return u.hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+/** Plain, single-line, URL-free text clipped to the label budget. */
+function cleanStepText(raw: string, max: number): string {
+  const flat = [...raw]
+    .map((ch) => (ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127 ? ' ' : ch))
+    .join('')
+    // Any URL inside free text is reduced to its host as well.
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, (m) => hostOf(m) || 'a link')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
+}
+
+/** A tool's arguments arrive as a JSON string or an object; anything else is
+ *  treated as "no arguments". */
+function stepArgs(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  if (typeof raw !== 'string' || raw.length > 20_000) return {};
+  try {
+    const j: unknown = JSON.parse(raw);
+    return j && typeof j === 'object' && !Array.isArray(j) ? (j as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** One upstream `executed_tools` row → the compact step the client may see,
+ *  or null when the row is not a tool run at all. Pure; exported for tests. */
+export function sanitiseAgentStep(raw: unknown): AgentStep | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const kindRaw = typeof r.type === 'string' && r.type !== 'function' ? r.type : typeof r.name === 'string' ? r.name : '';
+  const fn = r.function as { name?: unknown; arguments?: unknown } | undefined;
+  const kind = kindRaw || (typeof fn?.name === 'string' ? fn.name : '');
+  if (!kind) return null;
+  const tool = agentToolKind(kind);
+  const args = stepArgs(r.arguments ?? fn?.arguments);
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  let label: string;
+  if (tool === 'search') {
+    const q = cleanStepText(str(args.query) || str(args.q), 80);
+    label = q ? `Searched the web for “${q}”` : 'Searched the web';
+  } else if (tool === 'code') {
+    // The code itself is never forwarded — only that a run happened.
+    label = 'Ran code';
+  } else if (tool === 'visit') {
+    const host = hostOf(str(args.url) || str(args.link));
+    label = host ? `Read ${host}` : 'Opened a page';
+  } else {
+    label = 'Used a tool';
+  }
+  return { tool, label: cleanStepText(label, STEP_LABEL_MAX) };
+}
+
+/** Collects the steps of one request: de-duplicates the rows an upstream
+ *  repeats (a run is announced when it starts and again when it finishes) and
+ *  stops at MAX_AGENT_STEPS. `collect` returns only the NEW steps to send. */
+export function createAgentStepCollector(max = MAX_AGENT_STEPS): {
+  collect: (chunk: unknown) => AgentStep[];
+  nextSource: () => void;
+  count: () => number;
+} {
+  const seen = new Set<string>();
+  let source = 0;
+  let sent = 0;
+  return {
+    collect(chunk: unknown): AgentStep[] {
+      if (sent >= max || !chunk || typeof chunk !== 'object') return [];
+      const choice = (chunk as { choices?: unknown }).choices;
+      const first = Array.isArray(choice) ? (choice[0] as Record<string, unknown> | undefined) : undefined;
+      if (!first || typeof first !== 'object') return [];
+      const out: AgentStep[] = [];
+      for (const holder of [first.delta, first.message]) {
+        const rows = (holder as { executed_tools?: unknown } | null | undefined)?.executed_tools;
+        if (!Array.isArray(rows)) continue;
+        // A hostile or broken upstream must not make this loop long.
+        for (const row of rows.slice(0, 64)) {
+          if (sent >= max) break;
+          const step = sanitiseAgentStep(row);
+          if (!step) continue;
+          const idx = (row as { index?: unknown }).index;
+          const key = typeof idx === 'number' && Number.isFinite(idx) ? `${source}#${idx}` : `${step.tool}|${step.label}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          sent += 1;
+          out.push(step);
+        }
+      }
+      return out;
+    },
+    /** A new upstream body (restart or failover): its row indexes start over. */
+    nextSource(): void {
+      source += 1;
+    },
+    count: () => sent,
+  };
+}
+
 /** Ceiling for one whole streamed reply. The per-attempt leash only covers time
  *  to response headers; this is what ends an upstream that stalls mid-body. */
 const STREAM_BUDGET_MS = 90_000;
@@ -790,9 +930,13 @@ async function handleChat(
       // text had already been forwarded — the final event then says so rather
       // than presenting half an answer as complete.
       const cutBox: { truncated: boolean } = { truncated: false };
+      // Agent steps: one collector for the whole request, so the cap and the
+      // de-duplication hold across a restart or a failover drain.
+      const agentSteps = createAgentStepCollector();
       const drain = async (body: ReadableStream<Uint8Array>, fetchMode: 'arm' | 'strip'): Promise<string> => {
         const reader = body.getReader();
         const decoder = new TextDecoder();
+        agentSteps.nextSource();
         let buf = '';
         let full = '';
         // Reasoning engines (deep lane) can open the content stream with a
@@ -881,6 +1025,9 @@ async function handleChat(
               if (!data || data === '[DONE]') continue;
               try {
                 const j = JSON.parse(data) as { choices?: Array<{ delta?: { content?: unknown } }> };
+                // Agentic engines report their tool runs beside the text.
+                // Additive frames; a plain chat chunk yields none.
+                for (const step of agentSteps.collect(j)) send({ step });
                 const delta = j.choices?.[0]?.delta?.content;
                 if (typeof delta === 'string' && delta) onDelta(delta);
                 // The usage chunk (opt-in on the default base, unasked on the
