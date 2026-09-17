@@ -298,7 +298,7 @@ export interface LaneAttempt {
  * its same-key secondary pin (when one exists), then the cross-lane ladder.
  * Each attempt carries its lane's endpoint so mixed-provider failover signs
  * every hop against the right base. */
-export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, ladder?: Lane[]): LaneAttempt[] {
+export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, ladder?: Lane[], skipSecondary = false): LaneAttempt[] {
   const out: LaneAttempt[] = [];
   const add = (l: Lane, model?: string): void => {
     const key = env[LANE_ENV[l]];
@@ -309,7 +309,7 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
   add(lane, modelOverride);
   // Same-lane secondary: keeps the lane's character when the pinned primary
   // is degraded — consulted before any cross-lane ladder hop.
-  const secondary = LANE_SECONDARY[lane];
+  const secondary = skipSecondary ? undefined : LANE_SECONDARY[lane];
   const ownKey = env[LANE_ENV[lane]];
   if (secondary && ownKey && !out.some((a) => a.model === secondary)) {
     out.push({ key: ownKey, model: secondary, role: lane, endpoint: laneEndpoint(env, lane) });
@@ -384,6 +384,10 @@ export async function chat(
      * or unresponsive pinned model gets a fair shot without starving the
      * failover ladder of budget. Laddered attempts use timeoutMs. */
     firstTimeoutMs?: number;
+    /** v6.5.2 — skip the lane's same-key secondary pin: when the lane's host
+     *  is the slow part (measured live: both NVIDIA pins timing out back to
+     *  back), the ladder's first cross-host lane should get the budget. */
+    skipSecondary?: boolean;
     /** Per-call failover order override — time-critical big-JSON jobs put the
      * fastest reliable generator first. Default: the global key ladder. */
     ladder?: Lane[];
@@ -397,7 +401,7 @@ export async function chat(
   const lane = opts.lane ?? 'chat';
   // The lane's own key+model first, then the cross-lane failover ladder — a
   // dead or missing key degrades gracefully instead of failing the feature.
-  const attempts = laneAttempts(env, lane, opts.model, opts.ladder);
+  const attempts = laneAttempts(env, lane, opts.model, opts.ladder, opts.skipSecondary === true);
   if (!attempts.length) return { content: null, model: null, error: 'not_configured' };
   const wantJson = opts.json === true;
   let lastStatus = 0;
@@ -422,7 +426,12 @@ export async function chat(
       // don't burn the token budget before emitting the answer. Others ignore
       // it on the NVIDIA base — but the external hosts 400 on reasoning_effort
       // (probed live), so the knob never travels off the NVIDIA base.
-      if (model.includes('gpt-oss') && !isExternalEndpoint(endpoint)) payload.reasoning_effort = opts.reasoningEffort ?? 'low';
+      // v6.5.2 — measured live on the Groq host: without this knob gpt-oss-20b
+      // spent its whole completion budget reasoning (finish=length, 6–8k
+      // characters of reasoning, empty content) on every DJ set, and JSON
+      // mode failed with json_validate_failed. Groq documents reasoning_effort
+      // for the gpt-oss models; only the marketplace router still withholds it.
+      if (model.includes('gpt-oss') && !isRouterEndpoint(endpoint)) payload.reasoning_effort = opts.reasoningEffort ?? 'low';
       // nemotron a3b-family models leak BARE chain-of-thought unless reasoning
       // is switched off at the chat-template level (probed live — see
       // reasoningOffParams). Model-gated: a no-op for every other pin.
@@ -432,6 +441,7 @@ export async function chat(
       if (useJson) payload.response_format = { type: 'json_object' };
 
       const controller = new AbortController();
+      const startedAt = Date.now();
       const leash = attemptNo === 1 ? (opts.firstTimeoutMs ?? opts.timeoutMs ?? 20_000) : (opts.timeoutMs ?? 20_000);
       const timer = setTimeout(() => controller.abort(), Math.min(leash, remainingMs));
       let res: Response;
@@ -445,14 +455,22 @@ export async function chat(
       } catch {
         // Network error or timeout: fail over to the next lane pair.
         clearTimeout(timer);
+        console.log(`[ai] lane=${role} model=${model} status=timeout ms=${Date.now() - startedAt} leash=${Math.min(leash, remainingMs)}`);
         lastStatus = 0;
         break;
       }
-      clearTimeout(timer);
+      // The leash stays armed through the BODY read below: an engine that sends
+      // headers and then stalls would otherwise hold the route open to the
+      // platform limit, because nothing else enforces deadlineAt mid-read. An
+      // abort there surfaces as a blank answer and the ladder walks on.
+      // v6.5.2 — one compact line per attempt so `wrangler tail` shows which
+      // engine answered, how fast, or why it did not (no secrets, no prompt).
+      console.log(`[ai] lane=${role} model=${model} status=${res.status} ms=${Date.now() - startedAt}`);
       if (res.ok) {
         const data = (await res.json().catch(() => null)) as
-          | { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown } }>; usage?: unknown }
+          | { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown }; finish_reason?: unknown }>; usage?: unknown }
           | null;
+        clearTimeout(timer);
         const msg = data?.choices?.[0]?.message;
         const usage = usageFromJson(data) ?? undefined;
         // Reasoning models (deep lane) may wrap chain-of-thought in
@@ -467,11 +485,19 @@ export async function chat(
         };
         const content = clean(msg?.content) ?? clean(msg?.reasoning_content);
         if (content) return { content, model, keyRole: role, ...(usage ? { usage } : {}) };
-        // 200 but blank — fail over to the next lane pair.
+        // 200 but blank — fail over to the next lane pair. Say why: a
+        // reasoning model that spent the whole token budget thinking shows
+        // up here as finish=length with a long `reasoning` field.
+        const c0 = data?.choices?.[0];
+        console.log(`[ai] blank lane=${role} model=${model} finish=${String(c0?.finish_reason ?? '?')} keys=${msg ? Object.keys(msg).join(',') : 'none'} reasoning_len=${typeof msg?.reasoning === 'string' ? msg.reasoning.length : 0} completion=${usage?.completion_tokens ?? '?'}`);
         lastStatus = 200;
         break;
       }
       lastStatus = res.status;
+      // The provider's own words, clipped (error envelopes carry no secrets).
+      const errBody = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      clearTimeout(timer);
+      console.log(`[ai] error lane=${role} model=${model} status=${res.status} json=${useJson} body=${errBody}`);
       // JSON mode unsupported on this model -> retry it once in plain mode.
       if (res.status === 400 && useJson) continue;
       // Anything else (dead/exhausted key 401/402/403/429, unknown model

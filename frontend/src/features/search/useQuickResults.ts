@@ -47,7 +47,10 @@ export function useQuickResults(key: string): QuickResults {
           setState({ key, songs });
         })
         .catch(() => {
-          /* aborted or offline — the preview simply doesn't appear */
+          // Aborted: a newer keystroke owns the panel. Failed (offline, upstream
+          // down): clear it — otherwise the previous query's songs stay on
+          // screen, undimmed, under text they were never results for.
+          if (!controller.signal.aborted) setState({ key, songs: [] });
         })
         .finally(() => {
           if (!controller.signal.aborted) setLoadingKey('');

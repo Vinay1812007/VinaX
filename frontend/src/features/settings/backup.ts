@@ -2,10 +2,21 @@ import { KEYS } from '@/constants/storage-keys';
 import { LATEST_VERSION } from '@/constants/version';
 import { getLocal, setLocal, writeLocalBatch, type StorageFailure } from '@/services/storage/local';
 import { HOME_DESIGN_KEY, validateHomeDesign } from '@/services/recommendation/homeDesign';
-import { pruneTrash } from '@/features/library/trash';
+import { pruneTrash, type TrashEntry } from '@/features/library/trash';
 import { normalizeTags } from '@/features/library/tags';
 import { USERNAME_RE } from '@/features/identity/handleClaim';
 import { SMART_COLLECTIONS_KEY, sanitizeSmartCollections } from '@/features/library/smartCollections';
+import { normalizeProfile } from '@/services/personalization/profile';
+import { sanitizeAlarm, sanitizeLyricOffsets } from '@/services/storage/sanitize';
+import { pickSettings, useSettingsStore } from '@/store/settingsStore';
+import { useLibraryStore } from '@/store/libraryStore';
+import { useSmartCollectionStore } from '@/store/smartCollectionStore';
+import { useHistoryStore } from '@/store/historyStore';
+import { useSearchStore } from '@/store/searchStore';
+import { useSearchWorkspaceStore } from '@/store/searchWorkspaceStore';
+import { useBookmarkStore } from '@/store/bookmarkStore';
+import { useAlarmStore } from '@/store/alarmStore';
+import { useLyricsOffsetStore } from '@/store/lyricsOffsetStore';
 import type { HistoryEntry, Song } from '@/types';
 
 /**
@@ -57,6 +68,18 @@ interface KeySpec {
 
 export type CategoryValues = Record<string, unknown>;
 
+/** How a sanitize pass should treat size caps, and where to report a cut. */
+export interface SanitizeContext {
+  /**
+   * Reading THIS device's own data for a merge: nothing is cut. A cap exists
+   * to bound what a file can bring in — applying it to what the listener
+   * already has would silently drop their data before the merge even starts.
+   */
+  uncapped?: boolean;
+  /** Called when a cap cut a list short, so the preview can say so. */
+  warn?(message: string): void;
+}
+
 export interface BackupCategory {
   id: BackupCategoryId;
   label: string;
@@ -64,7 +87,7 @@ export interface BackupCategory {
   description: string;
   keys: KeySpec[];
   /** Cleans a category's values; returns an error message when the SHAPE is wrong. */
-  sanitize(values: CategoryValues): { values: CategoryValues } | { error: string };
+  sanitize(values: CategoryValues, ctx?: SanitizeContext): { values: CategoryValues } | { error: string };
   /** Human summary of what a (sanitized) category holds, for previews. */
   summarize(values: CategoryValues): string;
   /** Union an incoming category into the current one (used by merge restores). */
@@ -75,6 +98,15 @@ export interface BackupCategory {
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v: unknown, max = 500): string | null => (typeof v === 'string' ? v.slice(0, max) : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+/** Only web URLs travel: no `javascript:`, `data:`, `file:` or device paths; over-long strings are dropped, not cut. */
+const httpUrl = (v: unknown, max = 2000): string | null => (typeof v === 'string' && v.length <= max && /^https?:\/\//i.test(v) ? v : null);
+
+/** Apply a size cap — unless reading the device's own data — and report a cut. */
+function capped<T>(list: T[], max: number, what: string, ctx?: SanitizeContext): T[] {
+  if (ctx?.uncapped || list.length <= max) return list;
+  ctx?.warn?.(`${what}: the file holds ${list.length}, only the first ${max} can be restored.`);
+  return list.slice(0, max);
+}
 
 /** A song that will not crash any screen: id + title are mandatory, the rest is defaulted. */
 export function sanitizeSong(v: unknown): Song | null {
@@ -86,7 +118,7 @@ export function sanitizeSong(v: unknown): Song | null {
     Array.isArray(list)
       ? list
           .filter(isObj)
-          .map((x) => ({ quality: str(x.quality, 40) ?? '', url: str(x.url, 2000) ?? '' }))
+          .map((x) => ({ quality: str(x.quality, 40) ?? '', url: httpUrl(x.url) ?? '' }))
           .filter((x) => x.url)
       : [];
   const artists = Array.isArray(v.artists)
@@ -96,7 +128,7 @@ export function sanitizeSong(v: unknown): Song | null {
           id: str(a.id, 128) ?? '',
           name: str(a.name, 200) ?? '',
           ...(str(a.role, 40) ? { role: str(a.role, 40) as string } : {}),
-          ...(typeof a.image === 'string' || a.image === null ? { image: a.image as string | null } : {}),
+          ...(typeof a.image === 'string' || a.image === null ? { image: httpUrl(a.image) } : {}),
         }))
         .filter((a) => a.name)
     : [];
@@ -131,8 +163,8 @@ export function sanitizeSong(v: unknown): Song | null {
   return song;
 }
 
-const songList = (v: unknown, cap: number): Song[] =>
-  Array.isArray(v) ? v.map(sanitizeSong).filter((s): s is Song => !!s).slice(0, cap) : [];
+const songList = (v: unknown, cap: number, what: string, ctx?: SanitizeContext): Song[] =>
+  Array.isArray(v) ? capped(v.map(sanitizeSong).filter((s): s is Song => !!s), cap, what, ctx) : [];
 
 const uniqueById = <T extends { id: string }>(items: T[]): T[] => {
   const seen = new Set<string>();
@@ -146,6 +178,28 @@ function envelope(v: unknown): { state: Record<string, unknown>; version: number
 }
 const wrap = (state: Record<string, unknown>, version: number) => ({ state, version });
 
+/**
+ * The persist version each envelope is written with. The FILE's number is
+ * never trusted: sanitize already produced the current shape, and a version
+ * the running store does not expect makes it discard the whole record (no
+ * migrate) or skip/rerun migrations. Read lazily from the stores themselves
+ * so this cannot drift from their `version:` option.
+ */
+const STORE_VERSIONS: Record<string, () => number | undefined> = {
+  [KEYS.settings]: () => useSettingsStore.persist.getOptions().version,
+  [KEYS.library]: () => useLibraryStore.persist.getOptions().version,
+  [SMART_COLLECTIONS_KEY]: () => useSmartCollectionStore.persist.getOptions().version,
+  [KEYS.history]: () => useHistoryStore.persist.getOptions().version,
+  [KEYS.search]: () => useSearchStore.persist.getOptions().version,
+  [SEARCH_WORKSPACE_KEY]: () => useSearchWorkspaceStore.persist.getOptions().version,
+  [BOOKMARKS_KEY]: () => useBookmarkStore.persist.getOptions().version,
+  [KEYS.alarm]: () => useAlarmStore.persist.getOptions().version,
+  [KEYS.lyricsOffset]: () => useLyricsOffsetStore.persist.getOptions().version,
+};
+export const storeVersion = (key: string): number => STORE_VERSIONS[key]?.() ?? 0;
+/** Settings alone keep an OLDER file version (never a newer one) so the store's migrate still runs on it. */
+const settingsVersion = (fileVersion: number): number => Math.max(0, Math.min(Math.floor(fileVersion), storeVersion(KEYS.settings)));
+
 interface Collection {
   id: string;
   name: string;
@@ -157,12 +211,12 @@ interface Collection {
   tags?: string[];
 }
 
-function sanitizeCollection(v: unknown): Collection | null {
+function sanitizeCollection(v: unknown, ctx?: SanitizeContext): Collection | null {
   if (!isObj(v)) return null;
   const id = str(v.id, 64);
   const name = str(v.name, 120);
   if (!id || !name) return null;
-  const c: Collection = { id, name, createdAt: num(v.createdAt) ?? Date.now(), songs: songList(v.songs, 2000) };
+  const c: Collection = { id, name, createdAt: num(v.createdAt) ?? Date.now(), songs: songList(v.songs, 2000, `Playlist "${name}"`, ctx) };
   if (v.pinned === true) c.pinned = true;
   const d = str(v.description, 280);
   if (d) c.description = d;
@@ -180,10 +234,18 @@ function sanitizeHistoryEntry(v: unknown): HistoryEntry | null {
   const song = sanitizeSong(v.song);
   const ts = num(v.ts);
   if (!song || ts === null) return null;
-  return { song, ts, completed: v.completed === true };
+  const entry: HistoryEntry = { song, ts, completed: v.completed === true };
+  // Measured listening time (stats, calendar, weekly report) — without it a
+  // restored history falls back to estimates. Capped at six hours per play.
+  const listened = num(v.listenedSec);
+  if (listened !== null && listened >= 0) entry.listenedSec = Math.min(listened, MAX_LISTENED_SEC);
+  // v7.0.0 — the explicit skip mark travels only as a real boolean.
+  if (v.skipped === true || v.skipped === false) entry.skipped = v.skipped;
+  return entry;
 }
 
 const HISTORY_CAP = 150;
+const MAX_LISTENED_SEC = 21_600;
 
 // ------------------------------------------------------------- categories --
 const settingsCategory: BackupCategory = {
@@ -196,10 +258,11 @@ const settingsCategory: BackupCategory = {
     if (values[KEYS.settings] !== undefined) {
       const env = envelope(values[KEYS.settings]);
       if (!env) return { error: 'Settings are not in the expected shape.' };
+      // Only known keys of the right type (store/settingsStore pickSettings).
       // Device-bound bits never travel: the inferred region is re-detected.
-      const { inferredRegion: _drop, ...state } = env.state;
+      const { inferredRegion: _drop, ...state } = pickSettings(env.state);
       void _drop;
-      out[KEYS.settings] = wrap(state, env.version);
+      out[KEYS.settings] = wrap(state, settingsVersion(env.version));
     }
     if (values[KEYS.region] !== undefined) {
       if (values[KEYS.region] !== null && !isObj(values[KEYS.region])) return { error: 'Region preference is malformed.' };
@@ -221,34 +284,44 @@ const libraryCategory: BackupCategory = {
   label: 'Library',
   description: 'Favourites, playlists (with tags, pins and descriptions), Listen Later, saved albums/artists and hidden songs.',
   keys: [{ key: KEYS.library }],
-  sanitize: (values) => {
+  sanitize: (values, ctx) => {
     const env = envelope(values[KEYS.library]);
     if (!env) return { error: 'Library data is not in the expected shape.' };
     const s = env.state;
     for (const field of ['favorites', 'collections', 'saved', 'hiddenSongIds', 'later', 'hiddenArtists']) {
       if (s[field] !== undefined && !Array.isArray(s[field])) return { error: `Library field "${field}" is not a list.` };
     }
+    const strings = (x: unknown): string[] => (Array.isArray(x) ? x : []).filter((v): v is string => typeof v === 'string');
+    // Trashed playlists are restorable as-is, so they get the same cleaning as live ones.
+    const trash = (Array.isArray(s.trash) ? s.trash : [])
+      .filter(isObj)
+      .map((t) => ({ collection: sanitizeCollection(t.collection, ctx), deletedAt: num(t.deletedAt) }))
+      .filter((t): t is TrashEntry => !!t.collection && t.deletedAt !== null);
     const state = {
-      favorites: uniqueById(songList(s.favorites, 5000)),
-      collections: uniqueById((Array.isArray(s.collections) ? s.collections : []).map(sanitizeCollection).filter((c): c is Collection => !!c).slice(0, 500)),
-      saved: (Array.isArray(s.saved) ? s.saved : [])
-        .filter(isObj)
-        .map((e) => ({
-          id: str(e.id, 128) ?? '',
-          kind: e.kind === 'album' || e.kind === 'artist' || e.kind === 'playlist' ? e.kind : null,
-          title: str(e.title, 300) ?? '',
-          subtitle: str(e.subtitle, 400) ?? '',
-          image: typeof e.image === 'string' ? e.image : null,
-          savedAt: num(e.savedAt) ?? Date.now(),
-        }))
-        .filter((e) => e.id && e.kind && e.title)
-        .slice(0, 2000),
-      hiddenSongIds: (Array.isArray(s.hiddenSongIds) ? s.hiddenSongIds : []).filter((x): x is string => typeof x === 'string').slice(0, 500),
-      later: uniqueById(songList(s.later, 500)),
-      hiddenArtists: (Array.isArray(s.hiddenArtists) ? s.hiddenArtists : []).filter((x): x is string => typeof x === 'string').slice(0, 500),
-      trash: pruneTrash(Array.isArray(s.trash) ? (s.trash as never[]) : []),
+      favorites: uniqueById(songList(s.favorites, 5000, 'Favourites', ctx)),
+      collections: uniqueById(capped((Array.isArray(s.collections) ? s.collections : []).map((c) => sanitizeCollection(c, ctx)).filter((c): c is Collection => !!c), 500, 'Playlists', ctx)),
+      saved: capped(
+        (Array.isArray(s.saved) ? s.saved : [])
+          .filter(isObj)
+          .map((e) => ({
+            id: str(e.id, 128) ?? '',
+            kind: e.kind === 'album' || e.kind === 'artist' || e.kind === 'playlist' ? e.kind : null,
+            title: str(e.title, 300) ?? '',
+            subtitle: str(e.subtitle, 400) ?? '',
+            image: httpUrl(e.image),
+            savedAt: num(e.savedAt) ?? Date.now(),
+          }))
+          .filter((e) => e.id && e.kind && e.title),
+        2000,
+        'Saved albums and artists',
+        ctx,
+      ),
+      hiddenSongIds: capped(strings(s.hiddenSongIds), 500, 'Hidden songs', ctx),
+      later: uniqueById(songList(s.later, 500, 'Listen Later', ctx)),
+      hiddenArtists: capped(strings(s.hiddenArtists), 500, 'Never-play artists', ctx),
+      trash: pruneTrash(trash),
     };
-    return { values: { [KEYS.library]: wrap(state, env.version) } };
+    return { values: { [KEYS.library]: wrap(state, storeVersion(KEYS.library)) } };
   },
   summarize: (values) => {
     const s = envelope(values[KEYS.library])?.state ?? {};
@@ -283,12 +356,13 @@ const libraryCategory: BackupCategory = {
           favorites: byId(list(A.favorites), list(B.favorites)),
           collections,
           saved,
-          hiddenSongIds: strs(list(A.hiddenSongIds), list(B.hiddenSongIds)).slice(0, 500),
-          later: byId(list(A.later), list(B.later)).slice(0, 500),
-          hiddenArtists: strs(list(A.hiddenArtists), list(B.hiddenArtists)).slice(0, 500),
+          // Ceilings bound what a file can ADD; they never drop below what this device already holds.
+          hiddenSongIds: strs(list(A.hiddenSongIds), list(B.hiddenSongIds)).slice(0, Math.max(500, list(A.hiddenSongIds).length)),
+          later: byId(list(A.later), list(B.later)).slice(0, Math.max(500, list(A.later).length)),
+          hiddenArtists: strs(list(A.hiddenArtists), list(B.hiddenArtists)).slice(0, Math.max(500, list(A.hiddenArtists).length)),
           trash: list(A.trash),
         },
-        Math.max(a.version, b.version),
+        storeVersion(KEYS.library),
       ),
     };
   },
@@ -306,7 +380,7 @@ const smartCollectionsCategory: BackupCategory = {
     if (!env || (env.state.rules !== undefined && !Array.isArray(env.state.rules))) return { error: 'Smart collections are not in the expected shape.' };
     // Definitions are migrated to the current rule version on the way in.
     const rules = sanitizeSmartCollections(env.state.rules);
-    return { values: { [SMART_COLLECTIONS_KEY]: wrap({ rules }, env.version) } };
+    return { values: { [SMART_COLLECTIONS_KEY]: wrap({ rules }, storeVersion(SMART_COLLECTIONS_KEY)) } };
   },
   summarize: (values) => {
     const rules = envelope(values[SMART_COLLECTIONS_KEY])?.state.rules;
@@ -319,7 +393,7 @@ const smartCollectionsCategory: BackupCategory = {
     if (!a) return incoming;
     if (!b) return current;
     const rules = uniqueById([...(a.state.rules as { id: string }[]), ...(b.state.rules as { id: string }[])]).slice(0, 100);
-    return { [SMART_COLLECTIONS_KEY]: wrap({ rules }, Math.max(a.version, b.version)) };
+    return { [SMART_COLLECTIONS_KEY]: wrap({ rules }, storeVersion(SMART_COLLECTIONS_KEY)) };
   },
 };
 
@@ -328,11 +402,11 @@ const historyCategory: BackupCategory = {
   label: 'Listening history',
   description: `Your last ${HISTORY_CAP} plays, with completion marks.`,
   keys: [{ key: KEYS.history }],
-  sanitize: (values) => {
+  sanitize: (values, ctx) => {
     const env = envelope(values[KEYS.history]);
     if (!env || (env.state.entries !== undefined && !Array.isArray(env.state.entries))) return { error: 'History is not in the expected shape.' };
-    const entries = (Array.isArray(env.state.entries) ? env.state.entries : []).map(sanitizeHistoryEntry).filter((e): e is HistoryEntry => !!e).slice(0, HISTORY_CAP);
-    return { values: { [KEYS.history]: wrap({ entries }, env.version) } };
+    const entries = capped((Array.isArray(env.state.entries) ? env.state.entries : []).map(sanitizeHistoryEntry).filter((e): e is HistoryEntry => !!e), HISTORY_CAP, 'Listening history', ctx);
+    return { values: { [KEYS.history]: wrap({ entries }, storeVersion(KEYS.history)) } };
   },
   summarize: (values) => {
     const n = (envelope(values[KEYS.history])?.state.entries as unknown[] | undefined)?.length ?? 0;
@@ -343,12 +417,25 @@ const historyCategory: BackupCategory = {
     const b = envelope(incoming[KEYS.history]);
     if (!a) return incoming;
     if (!b) return current;
-    const seen = new Set<string>();
-    const entries = [...(a.state.entries as HistoryEntry[]), ...(b.state.entries as HistoryEntry[])]
-      .filter((e) => (seen.has(`${e.ts}|${e.song.id}`) ? false : (seen.add(`${e.ts}|${e.song.id}`), true)))
-      .sort((x, y) => y.ts - x.ts)
-      .slice(0, HISTORY_CAP);
-    return { [KEYS.history]: wrap({ entries }, Math.max(a.version, b.version)) };
+    // The same play on both sides is ONE play: this device's entry is kept,
+    // enriched with whichever side measured more of it.
+    const byPlay = new Map<string, HistoryEntry>();
+    for (const e of [...(a.state.entries as HistoryEntry[]), ...(b.state.entries as HistoryEntry[])]) {
+      const id = `${e.ts}|${e.song.id}`;
+      const twin = byPlay.get(id);
+      if (!twin) {
+        byPlay.set(id, e);
+        continue;
+      }
+      const merged: HistoryEntry = { ...twin, completed: twin.completed || e.completed };
+      const listened = Math.max(twin.listenedSec ?? -1, e.listenedSec ?? -1);
+      if (listened >= 0) merged.listenedSec = listened;
+      if (merged.completed) delete merged.skipped;
+      else if (twin.skipped === undefined && e.skipped !== undefined) merged.skipped = e.skipped;
+      byPlay.set(id, merged);
+    }
+    const entries = [...byPlay.values()].sort((x, y) => y.ts - x.ts).slice(0, HISTORY_CAP);
+    return { [KEYS.history]: wrap({ entries }, storeVersion(KEYS.history)) };
   },
 };
 
@@ -363,7 +450,8 @@ const tasteCategory: BackupCategory = {
       const v = values[key];
       if (v === undefined || v === null) continue;
       if (!isObj(v) || v.version !== 1) return { error: 'Taste profile has an unknown version.' };
-      out[key] = v;
+      // Every map, histogram, total and id list is coerced to the shape the scorer expects.
+      out[key] = normalizeProfile(v);
     }
     return { values: out };
   },
@@ -374,6 +462,16 @@ const tasteCategory: BackupCategory = {
     const langs = isObj(p.languages) ? Object.keys(p.languages).length : 0;
     return `${num(totals.plays) ?? 0} plays learned · ${langs} language${langs === 1 ? '' : 's'}${values[KEYS.profileKid] ? ' · Kid-mode profile' : ''}`;
   },
+  // Two decayed models cannot be added together honestly; the one that has
+  // learned from more plays is kept, per profile (this device wins a tie).
+  merge: (current, incoming) => {
+    const out: CategoryValues = { ...incoming, ...current };
+    const plays = (v: unknown): number => (isObj(v) && isObj(v.totals) ? num(v.totals.plays) ?? 0 : -1);
+    for (const key of [KEYS.profile, KEYS.profileKid]) {
+      if (current[key] !== undefined && incoming[key] !== undefined) out[key] = plays(current[key]) >= plays(incoming[key]) ? current[key] : incoming[key];
+    }
+    return out;
+  },
 };
 
 const searchesCategory: BackupCategory = {
@@ -381,22 +479,27 @@ const searchesCategory: BackupCategory = {
   label: 'Saved & recent searches',
   description: 'Saved search presets, pinned and recent searches, and the compact results preference.',
   keys: [{ key: KEYS.search }, { key: SEARCH_WORKSPACE_KEY }],
-  sanitize: (values) => {
+  sanitize: (values, ctx) => {
     const out: CategoryValues = {};
     if (values[KEYS.search] !== undefined) {
       const env = envelope(values[KEYS.search]);
       if (!env) return { error: 'Recent searches are not in the expected shape.' };
-      const strs = (x: unknown, cap: number) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string').slice(0, cap) : []);
-      out[KEYS.search] = wrap({ recent: strs(env.state.recent, 50), pinned: strs(env.state.pinned, 5), songSort: str(env.state.songSort, 20) ?? 'relevance' }, env.version);
+      const strs = (x: unknown, cap: number, what: string) => (Array.isArray(x) ? capped(x.filter((s): s is string => typeof s === 'string'), cap, what, ctx) : []);
+      out[KEYS.search] = wrap(
+        { recent: strs(env.state.recent, 50, 'Recent searches'), pinned: strs(env.state.pinned, 5, 'Pinned searches'), songSort: str(env.state.songSort, 20) ?? 'relevance' },
+        storeVersion(KEYS.search),
+      );
     }
     if (values[SEARCH_WORKSPACE_KEY] !== undefined) {
       const env = envelope(values[SEARCH_WORKSPACE_KEY]);
       if (!env || (env.state.presets !== undefined && !Array.isArray(env.state.presets))) return { error: 'Saved searches are not in the expected shape.' };
-      const presets = (Array.isArray(env.state.presets) ? env.state.presets : [])
-        .filter(isObj)
-        .filter((p) => typeof p.id === 'string' && typeof p.name === 'string' && typeof p.query === 'string')
-        .slice(0, 20);
-      out[SEARCH_WORKSPACE_KEY] = wrap({ compact: env.state.compact === true, presets }, env.version);
+      const presets = capped(
+        (Array.isArray(env.state.presets) ? env.state.presets : []).filter(isObj).filter((p) => typeof p.id === 'string' && typeof p.name === 'string' && typeof p.query === 'string'),
+        20,
+        'Saved searches',
+        ctx,
+      );
+      out[SEARCH_WORKSPACE_KEY] = wrap({ compact: env.state.compact === true, presets }, storeVersion(SEARCH_WORKSPACE_KEY));
     }
     return { values: out };
   },
@@ -411,14 +514,14 @@ const searchesCategory: BackupCategory = {
     const b = envelope(incoming[SEARCH_WORKSPACE_KEY]);
     if (a && b) {
       const presets = uniqueById([...(a.state.presets as { id: string }[]), ...(b.state.presets as { id: string }[])]).slice(0, 20);
-      out[SEARCH_WORKSPACE_KEY] = wrap({ compact: a.state.compact === true, presets }, Math.max(a.version, b.version));
+      out[SEARCH_WORKSPACE_KEY] = wrap({ compact: a.state.compact === true, presets }, storeVersion(SEARCH_WORKSPACE_KEY));
     } else if (b) out[SEARCH_WORKSPACE_KEY] = incoming[SEARCH_WORKSPACE_KEY];
     const c = envelope(current[KEYS.search]);
     const d = envelope(incoming[KEYS.search]);
     if (c && d) {
       const pinned = [...new Set([...(c.state.pinned as string[]), ...(d.state.pinned as string[])])].slice(0, 5);
       const recent = [...new Set([...(c.state.recent as string[]), ...(d.state.recent as string[])])].slice(0, 50);
-      out[KEYS.search] = wrap({ recent, pinned, songSort: c.state.songSort }, Math.max(c.version, d.version));
+      out[KEYS.search] = wrap({ recent, pinned, songSort: c.state.songSort }, storeVersion(KEYS.search));
     } else if (d) out[KEYS.search] = incoming[KEYS.search];
     return out;
   },
@@ -429,16 +532,16 @@ const bookmarksCategory: BackupCategory = {
   label: 'Song bookmarks',
   description: 'Moments you marked inside songs.',
   keys: [{ key: BOOKMARKS_KEY }],
-  sanitize: (values) => {
+  sanitize: (values, ctx) => {
     const env = envelope(values[BOOKMARKS_KEY]);
     if (!env || (env.state.marks !== undefined && !isObj(env.state.marks))) return { error: 'Bookmarks are not in the expected shape.' };
     const marks: Record<string, number[]> = {};
     for (const [id, list] of Object.entries(isObj(env.state.marks) ? env.state.marks : {})) {
       if (!Array.isArray(list)) continue;
-      const secs = [...new Set(list.filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0).map(Math.round))].sort((x, y) => x - y).slice(0, 12);
+      const secs = capped([...new Set(list.filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0).map(Math.round))].sort((x, y) => x - y), 12, 'Bookmarks on one song', ctx);
       if (secs.length) marks[id.slice(0, 128)] = secs;
     }
-    return { values: { [BOOKMARKS_KEY]: wrap({ marks }, env.version) } };
+    return { values: { [BOOKMARKS_KEY]: wrap({ marks }, storeVersion(BOOKMARKS_KEY)) } };
   },
   summarize: (values) => {
     const marks = envelope(values[BOOKMARKS_KEY])?.state.marks;
@@ -458,7 +561,7 @@ const bookmarksCategory: BackupCategory = {
       for (const s of list) if (!merged.some((m) => Math.abs(m - s) < 3)) merged.push(s);
       marks[id] = merged.sort((x, y) => x - y).slice(0, 12);
     }
-    return { [BOOKMARKS_KEY]: wrap({ marks }, Math.max(a.version, b.version)) };
+    return { [BOOKMARKS_KEY]: wrap({ marks }, storeVersion(BOOKMARKS_KEY)) };
   },
 };
 
@@ -479,6 +582,8 @@ const homeLayoutCategory: BackupCategory = {
     const hidden = Array.isArray(v.hidden) ? v.hidden.length : 0;
     return `Custom order · ${hidden} hidden shelf${hidden === 1 ? '' : 'ves'}`;
   },
+  // A layout is one deliberate arrangement, not a list to union: merging keeps this device's.
+  merge: (current, incoming) => (current[HOME_DESIGN_KEY] !== undefined ? current : incoming),
 };
 
 const identityCategory: BackupCategory = {
@@ -510,6 +615,8 @@ const identityCategory: BackupCategory = {
   },
 };
 
+const LIST_CAPS = { karaoke: 12, prefs: 50 } as const;
+
 const extrasCategory: BackupCategory = {
   id: 'extras',
   label: 'Alarm, lyrics, streak & app preferences',
@@ -527,7 +634,7 @@ const extrasCategory: BackupCategory = {
     { key: 'vinax.aiReplyLang', raw: true },
     { key: 'vinax.aiReplyStyle', raw: true },
   ],
-  sanitize: (values) => {
+  sanitize: (values, ctx) => {
     const out: CategoryValues = {};
     for (const spec of extrasCategory.keys) {
       const v = values[spec.key];
@@ -540,20 +647,24 @@ const extrasCategory: BackupCategory = {
       if (spec.key === KEYS.alarm) {
         const env = envelope(v);
         if (!env) return { error: 'Alarm settings are malformed.' };
-        out[spec.key] = v;
+        // "HH:MM", real booleans and a known action — the scheduler splits `time`.
+        out[spec.key] = wrap({ ...sanitizeAlarm(env.state) }, storeVersion(KEYS.alarm));
       } else if (spec.key === KEYS.lyricsOffset) {
         const env = envelope(v);
         if (!env || (env.state.offsets !== undefined && !isObj(env.state.offsets))) return { error: 'Lyric offsets are malformed.' };
-        out[spec.key] = v;
+        out[spec.key] = wrap({ offsets: sanitizeLyricOffsets(env.state.offsets) }, storeVersion(KEYS.lyricsOffset));
       } else if (spec.key === KEYS.karaoke) {
         if (!Array.isArray(v)) return { error: 'Karaoke history is malformed.' };
-        out[spec.key] = v.filter(isObj).map((s) => ({ song: sanitizeSong(s.song), at: num(s.at) ?? Date.now() })).filter((s) => s.song).slice(0, 12);
+        out[spec.key] = capped(v.filter(isObj).map((s) => ({ song: sanitizeSong(s.song), at: num(s.at) ?? Date.now() })).filter((s) => s.song), LIST_CAPS.karaoke, 'Karaoke history', ctx);
       } else if (spec.key === STREAK_KEY) {
         if (!isObj(v) || num(v.count) === null || typeof v.lastDay !== 'string') return { error: 'Streak data is malformed.' };
-        out[spec.key] = { count: v.count, lastDay: v.lastDay, best: num(v.best) ?? v.count };
-      } else if (spec.key === NAV_GROUPS_KEY || spec.key === SAVED_PROMPTS_KEY) {
+        out[spec.key] = { count: v.count, lastDay: v.lastDay.slice(0, 10), best: num(v.best) ?? v.count };
+      } else if (spec.key === NAV_GROUPS_KEY) {
         if (!Array.isArray(v)) return { error: 'App preference list is malformed.' };
-        out[spec.key] = v.slice(0, 50);
+        out[spec.key] = capped(v.filter((g): g is string => typeof g === 'string').map((g) => g.slice(0, 80)), LIST_CAPS.prefs, 'Sidebar groups', ctx);
+      } else if (spec.key === SAVED_PROMPTS_KEY) {
+        if (!Array.isArray(v)) return { error: 'App preference list is malformed.' };
+        out[spec.key] = capped(v.filter(isObj).filter((x) => typeof x.text === 'string'), LIST_CAPS.prefs, 'Saved prompts', ctx);
       }
     }
     return { values: out };
@@ -569,6 +680,49 @@ const extrasCategory: BackupCategory = {
     if (Array.isArray(values[SAVED_PROMPTS_KEY])) parts.push(`${(values[SAVED_PROMPTS_KEY] as unknown[]).length} saved prompts`);
     return parts.join(' · ') || 'Nothing saved';
   },
+  /**
+   * Key by key, because these are unrelated things sharing a category:
+   * lists are unioned (this device first), per-song offsets keep this
+   * device's value, the streak keeps whichever side is more recent with the
+   * best of both, and the alarm — one deliberate setting — stays as it is
+   * here. The text preferences follow the file, like settings do.
+   */
+  merge: (current, incoming) => {
+    const out: CategoryValues = { ...current, ...incoming };
+    if (current[KEYS.alarm] !== undefined) out[KEYS.alarm] = current[KEYS.alarm];
+    const offA = envelope(current[KEYS.lyricsOffset]);
+    const offB = envelope(incoming[KEYS.lyricsOffset]);
+    if (offA && offB) out[KEYS.lyricsOffset] = wrap({ offsets: { ...(offB.state.offsets as Record<string, number>), ...(offA.state.offsets as Record<string, number>) } }, storeVersion(KEYS.lyricsOffset));
+    const sessions = (v: unknown) => (Array.isArray(v) ? (v as Array<{ song: Song; at: number }>) : []);
+    if (current[KEYS.karaoke] !== undefined || incoming[KEYS.karaoke] !== undefined) {
+      const seen = new Set<string>();
+      out[KEYS.karaoke] = [...sessions(current[KEYS.karaoke]), ...sessions(incoming[KEYS.karaoke])]
+        .sort((x, y) => y.at - x.at)
+        .filter((x) => (seen.has(x.song.id) ? false : (seen.add(x.song.id), true)))
+        .slice(0, LIST_CAPS.karaoke);
+    }
+    const a = current[STREAK_KEY];
+    const b = incoming[STREAK_KEY];
+    if (isObj(a) && isObj(b)) {
+      // lastDay is YYYY-MM-DD, so string order is date order.
+      const later = String(b.lastDay) > String(a.lastDay) ? b : a;
+      out[STREAK_KEY] = { count: later.count, lastDay: later.lastDay, best: Math.max(num(a.best) ?? 0, num(b.best) ?? 0, num(a.count) ?? 0, num(b.count) ?? 0) };
+    }
+    if (Array.isArray(current[NAV_GROUPS_KEY]) && Array.isArray(incoming[NAV_GROUPS_KEY])) {
+      // The ceiling never drops below what this device already holds.
+      const mine = current[NAV_GROUPS_KEY] as string[];
+      out[NAV_GROUPS_KEY] = [...new Set([...mine, ...(incoming[NAV_GROUPS_KEY] as string[])])].slice(0, Math.max(LIST_CAPS.prefs, mine.length));
+    }
+    if (Array.isArray(current[SAVED_PROMPTS_KEY]) && Array.isArray(incoming[SAVED_PROMPTS_KEY])) {
+      const seen = new Set<string>();
+      const idOf = (x: Record<string, unknown>) => (typeof x.id === 'string' && x.id ? `id:${x.id}` : `text:${String(x.text)}`);
+      const mine = current[SAVED_PROMPTS_KEY] as Record<string, unknown>[];
+      out[SAVED_PROMPTS_KEY] = [...mine, ...(incoming[SAVED_PROMPTS_KEY] as Record<string, unknown>[])]
+        .filter((x) => (seen.has(idOf(x)) ? false : (seen.add(idOf(x)), true)))
+        .slice(0, Math.max(LIST_CAPS.prefs, mine.length));
+    }
+    return out;
+  },
 };
 
 const aiChatsCategory: BackupCategory = {
@@ -576,11 +730,11 @@ const aiChatsCategory: BackupCategory = {
   label: 'VinaX AI chats',
   description: 'Your conversation history (attachments are never stored).',
   keys: [{ key: KEYS.aiChats }],
-  sanitize: (values) => {
+  sanitize: (values, ctx) => {
     const v = values[KEYS.aiChats];
     if (v === undefined || v === null) return { values: {} };
     if (!Array.isArray(v)) return { error: 'AI chat history is malformed.' };
-    return { values: { [KEYS.aiChats]: v.filter(isObj).filter((c) => typeof c.id === 'string' && Array.isArray(c.messages)).slice(0, 50) } };
+    return { values: { [KEYS.aiChats]: capped(v.filter(isObj).filter((c) => typeof c.id === 'string' && Array.isArray(c.messages)), 50, 'VinaX AI chats', ctx) } };
   },
   summarize: (values) => {
     const n = Array.isArray(values[KEYS.aiChats]) ? (values[KEYS.aiChats] as unknown[]).length : 0;
@@ -748,7 +902,11 @@ export function parseBackup(json: string): ParseResult {
   for (const cat of BACKUP_CATEGORIES) {
     const values = categories[cat.id];
     if (!values) continue;
-    const clean = cat.sanitize(values);
+    const clean = cat.sanitize(values, {
+      warn: (message) => {
+        if (!warnings.includes(message)) warnings.push(message);
+      },
+    });
     if ('error' in clean) {
       rejected.push({ id: cat.id, label: cat.label, error: clean.error });
       continue;
@@ -775,20 +933,30 @@ export interface ApplyOptions {
   mode: RestoreMode;
   /** Categories to restore; default = every valid category in the file. */
   categories?: readonly BackupCategoryId[];
+  /**
+   * Extra raw writes (`null` removes) appended to the SAME all-or-nothing
+   * batch, after the categories — the device handoff uses it so identity keys
+   * and the backup land together or not at all.
+   */
+  extraEntries?: ReadonlyArray<readonly [key: string, raw: string | null]>;
 }
 
 export type ApplyResult =
   | { ok: true; applied: BackupCategoryId[]; keysWritten: number; pendingHandle: string | null }
   | (StorageFailure & { applied: [] });
 
-/** Current on-device values for a category (for merge + preview). */
-export function currentCategoryValues(cat: BackupCategory): CategoryValues {
+/**
+ * Current on-device values for a category (for merge + preview). A merge
+ * passes `{ uncapped: true }`: the import caps bound what a FILE may bring
+ * in and must never trim what the listener already has on this device.
+ */
+export function currentCategoryValues(cat: BackupCategory, ctx?: SanitizeContext): CategoryValues {
   const values: CategoryValues = {};
   for (const spec of cat.keys) {
     const v = readKey(spec);
     if (v !== undefined) values[spec.key] = v;
   }
-  const clean = cat.sanitize(values);
+  const clean = cat.sanitize(values, ctx);
   return 'error' in clean ? {} : clean.values;
 }
 
@@ -807,7 +975,7 @@ export function applyBackup(parsed: ParsedBackup, opts: ApplyOptions): ApplyResu
     const cat = categoryById(report.id);
     if (!cat) continue;
     let values = report.values;
-    if (opts.mode === 'merge' && cat.merge) values = cat.merge(currentCategoryValues(cat), values);
+    if (opts.mode === 'merge' && cat.merge) values = cat.merge(currentCategoryValues(cat, { uncapped: true }), values);
     if (cat.id === 'identity') {
       // The username is a CLAIM, not a fact: it is re-confirmed with the
       // service (features/identity) unless this device already holds it.
@@ -836,10 +1004,96 @@ export function applyBackup(parsed: ParsedBackup, opts: ApplyOptions): ApplyResu
     }
     applied.push(cat.id);
   }
+  if (opts.extraEntries) entries.push(...opts.extraEntries);
   const res = writeLocalBatch(entries);
   if (!res.ok) return { ...res, applied: [] };
   recordBackupEvent({ lastImportAt: Date.now(), lastImportMode: opts.mode, lastImportCategories: applied });
   return { ok: true, applied, keysWritten: res.written, pendingHandle };
+}
+
+// ------------------------------------------------------------------- undo --
+/** Where the pre-restore safety copy lives until the tab closes. */
+export const RESTORE_UNDO_KEY = 'vinax.backup.undo.v1';
+
+export interface UndoSnapshot {
+  at: number;
+  entries: Array<[string, string | null]>;
+}
+
+export function readUndo(): UndoSnapshot | null {
+  try {
+    const raw = sessionStorage.getItem(RESTORE_UNDO_KEY);
+    const v = raw ? (JSON.parse(raw) as UndoSnapshot) : null;
+    return v && Array.isArray(v.entries) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearUndo(): void {
+  try {
+    sessionStorage.removeItem(RESTORE_UNDO_KEY);
+  } catch {
+    /* nothing kept */
+  }
+}
+
+/**
+ * Snapshot the raw keys a restore of `ids` will touch; false when the browser
+ * cannot keep it. A failed attempt also REMOVES any older snapshot: left in
+ * place, "Undo" after this restore would silently roll back to the state
+ * before an EARLIER one. Restoring identity also writes the pending-username
+ * key, which belongs to no category — it is captured too.
+ */
+export function keepUndo(ids: readonly BackupCategoryId[]): boolean {
+  const entries: Array<[string, string | null]> = [];
+  const grab = (key: string): void => {
+    try {
+      entries.push([key, localStorage.getItem(key)]);
+    } catch {
+      /* unreadable key: nothing to restore */
+    }
+  };
+  for (const cat of BACKUP_CATEGORIES) {
+    if (!ids.includes(cat.id)) continue;
+    for (const spec of cat.keys) grab(spec.key);
+    if (cat.id === 'identity') grab(KEYS.userHandlePending);
+  }
+  try {
+    sessionStorage.setItem(RESTORE_UNDO_KEY, JSON.stringify({ at: Date.now(), entries } satisfies UndoSnapshot));
+    return true;
+  } catch {
+    clearUndo();
+    return false;
+  }
+}
+
+export type RestoreResult = ApplyResult & { undoKept: boolean };
+
+/**
+ * applyBackup with a safety copy around it. The previous snapshot is read
+ * FIRST: if the write fails nothing changed on the device, so that earlier
+ * snapshot is still the right undo and is put back instead of being lost.
+ */
+export function restoreWithUndo(parsed: ParsedBackup, opts: ApplyOptions): RestoreResult {
+  let previous: string | null = null;
+  try {
+    previous = sessionStorage.getItem(RESTORE_UNDO_KEY);
+  } catch {
+    /* no earlier snapshot readable */
+  }
+  const undoKept = keepUndo(opts.categories ?? parsed.categories.map((c) => c.id));
+  const res = applyBackup(parsed, opts);
+  if (!res.ok) {
+    try {
+      if (previous === null) sessionStorage.removeItem(RESTORE_UNDO_KEY);
+      else sessionStorage.setItem(RESTORE_UNDO_KEY, previous);
+    } catch {
+      clearUndo();
+    }
+    return { ...res, undoKept: false };
+  }
+  return { ...res, undoKept };
 }
 
 // ------------------------------------------------------------------- meta --
@@ -896,8 +1150,8 @@ export function applyTransferPayload(json: string): ApplyResult | { ok: false; e
   } catch {
     /* parseBackup already accepted the JSON */
   }
-  const res = applyBackup(parsed, { mode: 'replace' });
-  if (!res.ok) return res;
+  // Identity keys ride in the SAME batch as the backup: a quota error on the
+  // last key must not leave a restored library under the wrong device identity.
   const entries: Array<readonly [string, string | null]> = [];
   for (const key of TRANSFER_KEYS) {
     const v = transfer[key];
@@ -911,7 +1165,5 @@ export function applyTransferPayload(json: string): ApplyResult | { ok: false; e
     }
     if (typeof v === 'string' || typeof v === 'boolean') entries.push([key, JSON.stringify(v)]);
   }
-  const w = writeLocalBatch(entries);
-  if (!w.ok) return { ...w, applied: [] };
-  return res;
+  return applyBackup(parsed, { mode: 'replace', extraEntries: entries });
 }

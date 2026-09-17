@@ -108,11 +108,38 @@ const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60
 function CanvasProgress() {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
-  const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
+  // scaleX instead of width: compositor-only, no layout 4×/s over the blurred canvas.
   return (
     <div className="mt-3 h-[3px] rounded-full bg-white/25 overflow-hidden">
-      <div className="h-full bg-white/85" style={{ width: `${pct}%` }} />
+      <div
+        className="h-full w-full origin-left bg-white/85 transition-transform duration-300"
+        style={{ transform: `scaleX(${progress})` }}
+      />
     </div>
+  );
+}
+
+/**
+ * "＋ 1:23" bookmark button. Its label shows the clock, so it is the ONE place
+ * in the extras panel that follows playback time — as a leaf, on whole
+ * seconds, instead of a page-level subscription that re-rendered the entire
+ * player four times a second. The exact position is read at click time.
+ */
+function BookmarkNowButton({ songId }: { songId: string }) {
+  const second = usePlayerStore((s) => Math.floor(s.currentTime));
+  return (
+    <button
+      onClick={() => {
+        const at = usePlayerStore.getState().currentTime;
+        useBookmarkStore.getState().add(songId, at);
+        toast(`Bookmarked ${fmtTime(at)}`);
+      }}
+      className="px-2.5 py-2 rounded-lg text-xs font-bold text-ink-400 hover:text-ink-100"
+      title="Bookmark this moment"
+    >
+      ＋ {fmtTime(second)}
+    </button>
   );
 }
 
@@ -148,10 +175,8 @@ export default function NowPlayingPage() {
   const [showMore, setShowMore] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
   // v5.17.0 — song bookmarks, ambient mode, data saver.
-  const currentTime = usePlayerStore((s) => s.currentTime);
   const seek = usePlayerStore((s) => s.seek);
   const marks = useBookmarkStore((b) => (song ? b.marks[song.id] : undefined)) ?? [];
-  const addMark = useBookmarkStore((b) => b.add);
   const removeMark = useBookmarkStore((b) => b.remove);
   const dataSaver = useSettingsStore((s) => s.dataSaver);
   const [ambientArmed, setAmbientArmed] = useState(true);
@@ -405,7 +430,7 @@ export default function NowPlayingPage() {
   };
 
   return (
-    <div ref={sheetRef} className="relative -mx-5 md:-mx-10 -mt-6 px-5 md:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[100dvh] -mb-44 md:-mb-28 overflow-hidden" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd}>
+    <div ref={sheetRef} className="vx-now-playing relative -mx-4 md:-mx-8 px-5 md:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[100dvh] -mb-44 md:-mb-28 overflow-hidden" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd}>
       {/* Backdrop: the album art, heavily blurred + scaled, under a theme-adaptive
           darkening gradient (Apple-Music full-player look). Reuses the loaded art. */}
       <div className="absolute inset-0 -z-10" aria-hidden>
@@ -684,7 +709,7 @@ export default function NowPlayingPage() {
               <IconButton label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} size="sm">
                 <VolumeIcon className="w-4 h-4" muted={muted} />
               </IconButton>
-              <input type="range" aria-label="Volume" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={(e) => setVolume(Number(e.target.value))} className="w-24" style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties} />
+              <input type="range" aria-label="Volume" aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`} min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={(e) => setVolume(Number(e.target.value))} className="w-24" style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties} />
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-bold text-ink-400 uppercase">Speed</span>
@@ -748,7 +773,7 @@ export default function NowPlayingPage() {
             {/* v5.17.0 — bookmarks: moments to come back to */}
             <div className="flex items-center gap-0.5 flex-wrap" role="group" aria-label="Bookmarks">
               <span className="text-[10px] font-bold text-ink-400 uppercase">Marks</span>
-              <button onClick={() => { addMark(song.id, currentTime); toast(`Bookmarked ${fmtTime(currentTime)}`); }} className="px-2.5 py-2 rounded-lg text-xs font-bold text-ink-400 hover:text-ink-100" title="Bookmark this moment">＋ {fmtTime(currentTime)}</button>
+              <BookmarkNowButton songId={song.id} />
               {marks.map((m) => (
                 <span key={m} className="inline-flex items-center rounded-lg bg-ink-800/70">
                   <button onClick={() => seek(m)} className="pl-2.5 pr-1 py-2 text-xs font-semibold text-ember-400 tabular-nums" title="Jump here">{fmtTime(m)}</button>
@@ -763,7 +788,7 @@ export default function NowPlayingPage() {
             </div>
             {/* v5.17.0 — share this exact moment, ambient mode */}
             <div className="flex items-center gap-0.5 flex-wrap" role="group" aria-label="More options">
-              <button onClick={() => void shareLink(`${songPath(song)}?t=${Math.floor(currentTime)}`, `${song.title} at ${fmtTime(currentTime)}`).then((r) => r === 'copied' && toast('Link to this moment copied'))} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ink-400 hover:text-ink-100">Share this moment</button>
+              <button onClick={() => { const at = usePlayerStore.getState().currentTime; void shareLink(`${songPath(song)}?t=${Math.floor(at)}`, `${song.title} at ${fmtTime(at)}`).then((r) => r === 'copied' && toast('Link to this moment copied')); }} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ink-400 hover:text-ink-100">Share this moment</button>
               <button onClick={() => setAmbientArmed((v) => !v)} aria-pressed={ambientArmed} className={cn('px-2.5 py-2 rounded-lg text-xs font-semibold', ambientArmed ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')} title="After 45 s without touching anything, show a calm artwork-and-clock screen">Ambient mode {ambientArmed ? 'on' : 'off'}</button>
             </div>
           </div>
@@ -775,7 +800,7 @@ export default function NowPlayingPage() {
 
         <div
           className={cn(
-            'flex flex-col min-w-0 transition-opacity duration-300',
+            'vx-player-context flex flex-col min-w-0 transition-opacity duration-300',
             chromeHidden && 'opacity-0 pointer-events-none',
           )}
           aria-hidden={chromeHidden}

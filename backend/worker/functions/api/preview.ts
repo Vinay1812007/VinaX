@@ -30,6 +30,7 @@
  * that throw in an opaque origin (the single most common way an AI-written
  * page dies on line 1).
  */
+import { readCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 
 /** Largest page we will echo. */
@@ -142,32 +143,6 @@ export function instrument(html: string, token: string): string {
 
 const plain = (body: string, status: number): Response =>
   new Response(body, { status, headers: { 'cache-control': 'no-store' } });
-
-/** Read at most `cap` bytes; null means the body ran past the cap. */
-async function readCapped(body: ReadableStream<Uint8Array> | null, cap: number): Promise<Uint8Array | null> {
-  if (!body) return new Uint8Array(0);
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    total += value.byteLength;
-    if (total > cap) {
-      await reader.cancel().catch(() => undefined);
-      return null;
-    }
-    chunks.push(value);
-  }
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const c of chunks) {
-    out.set(c, at);
-    at += c.byteLength;
-  }
-  return out;
-}
 
 /**
  * Only the app may drive this endpoint. Sec-Fetch-Site is set by the browser

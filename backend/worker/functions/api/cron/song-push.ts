@@ -168,7 +168,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
   const lastPush = await sbSelect<{ created_at: string }>(
     env,
     'vinax_events',
-    'type=eq.song-push&select=created_at&order=created_at.desc&limit=1',
+    'type=eq.song-push&device_id=eq.admin&select=created_at&order=created_at.desc&limit=1',
   ).catch(() => []);
   if (lastPush[0] && Date.now() - new Date(lastPush[0].created_at).getTime() < 20 * 3_600_000) {
     return json({ ok: false, reason: 'throttled_daily' }, 200);

@@ -31,3 +31,13 @@ describe('recommendation profiles', () => {
     expect(session.avgEnergy).not.toBeNull();
   });
 });
+
+describe('v7.0.0 — untrusted persisted songs', () => {
+  it('builds a profile from a song whose artists field is malformed instead of throwing', async () => {
+    const { buildSongProfile, buildUserRecommendationProfile } = await import('./profiles');
+    const { createEmptyProfile } = await import('../personalization/profile');
+    const broken = { kind: 'song', id: 'x', title: 'Broken', subtitle: 'Someone', artists: { primary: [{ id: 'a', name: 'Someone' }] }, album: null, images: [], audio: [], duration: 200, language: 'telugu', year: null, explicit: false, hasLyrics: false, playCount: null } as unknown as import('../../types').Song;
+    expect(buildSongProfile(broken).artistNames).toEqual([]);
+    expect(() => buildUserRecommendationProfile(createEmptyProfile(0), [broken], [{ song: broken, ts: 1, completed: true }])).not.toThrow();
+  });
+});

@@ -179,3 +179,14 @@ export function castInterceptSeek(seconds: number): boolean {
   }
   return false;
 }
+
+/** Volume goes to the receiver while casting — the local element stays silent. */
+export function castInterceptVolume(v: number): boolean {
+  const { connected } = useCastStore.getState();
+  if (connected && player && controller) {
+    player.volumeLevel = Math.min(1, Math.max(0, v));
+    controller.setVolumeLevel();
+    return true; // Intercepted
+  }
+  return false;
+}

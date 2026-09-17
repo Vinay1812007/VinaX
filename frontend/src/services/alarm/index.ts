@@ -3,9 +3,18 @@ import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { isNativePlatform } from '@/services/native';
 import { toast } from '@/store/toastStore';
+import { audioEngine } from '@/services/audio/engine';
 
 const NOTIF_ID = 7777;
-const today = (): string => new Date().toISOString().slice(0, 10);
+
+/** Day key in the device's LOCAL calendar — the alarm time is local, so a UTC
+ *  key rolled over mid-morning east of Greenwich (05:30 in India) and either
+ *  re-fired the alarm or treated tomorrow's as already fired. */
+export function localDayKey(d: Date = new Date()): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+const today = (): string => localDayKey();
 
 function fireFavorites(): void {
   const favs = useLibraryStore.getState().favorites;
@@ -18,17 +27,43 @@ function fireFavorites(): void {
   }
 }
 
-/** v5.17.0 — gentle wake: start near-silent and ramp to the set volume over 30 s. */
-function fadeIn(): void {
+const FADE_STEPS = 30;
+let fadeTimer: number | null = null;
+
+/**
+ * v5.17.0 — gentle wake: start near-silent and ramp to the set volume over 30 s.
+ * The ramp drives the ENGINE only. It used to go through the store's
+ * setVolume, which persisted 31 intermediate values — closing the app
+ * mid-ramp left the listener's volume stuck near silent. The store volume is
+ * the destination and is never rewritten; if it changes mid-ramp the listener
+ * took over and the ramp stands down.
+ */
+export function fadeIn(): void {
+  if (fadeTimer != null) window.clearInterval(fadeTimer);
   const p = usePlayerStore.getState();
-  const target = p.volume || 0.8;
-  const steps = 30;
+  // An alarm has to be heard: a zeroed or muted player is raised once, up front.
+  if (!p.volume) p.setVolume(0.8);
+  if (p.muted) p.toggleMute();
+  const target = usePlayerStore.getState().volume;
   let i = 0;
-  p.setVolume(Math.max(0.05, target * 0.08));
-  const t = window.setInterval(() => {
+  audioEngine.setVolume(Math.max(0.05, target * 0.08));
+  fadeTimer = window.setInterval(() => {
+    const stop = (): void => {
+      if (fadeTimer != null) window.clearInterval(fadeTimer);
+      fadeTimer = null;
+    };
+    const now = usePlayerStore.getState().volume;
+    if (now !== target) {
+      stop(); // the listener moved the volume — theirs wins, already applied
+      return;
+    }
     i += 1;
-    usePlayerStore.getState().setVolume(Math.min(target, Math.max(0.05, target * (i / steps))));
-    if (i >= steps) window.clearInterval(t);
+    if (i >= FADE_STEPS) {
+      stop();
+      audioEngine.setVolume(now);
+      return;
+    }
+    audioEngine.setVolume(Math.min(target, Math.max(0.05, target * (i / FADE_STEPS))));
   }, 1000);
 }
 

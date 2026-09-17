@@ -80,7 +80,7 @@ export default function SmartCollectionPage() {
       {editing && <SmartCollectionSheet existing={def} onClose={() => setEditing(false)} />}
       <div className="mb-1">
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-extrabold flex-1 truncate">
+          <h1 className="text-page-title flex-1 min-w-0 truncate">
             {def.emoji && <span className="mr-2" aria-hidden>{def.emoji}</span>}
             {def.name}
           </h1>

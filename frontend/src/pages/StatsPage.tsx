@@ -231,7 +231,7 @@ export default function StatsPage() {
       {/* header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-[26px] font-extrabold tracking-tight">Your VinaX</h1>
+          <h1 className="text-page-title">Your VinaX</h1>
           <p className="text-xs font-semibold text-ink-400">
             Computed on this device · never uploaded
             {stats.capped && ` · history keeps your last ${HISTORY_CAP} plays`}
@@ -256,7 +256,7 @@ export default function StatsPage() {
           [String(favorites.length), 'FAVORITES'],
           [String(stats.artists), 'ARTISTS'],
         ].map(([n, l]) => (
-          <div key={l} className="rounded-[18px] bg-[var(--tile)] border border-[var(--glass-border)] p-4">
+          <div key={l} className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
             <p className="text-[26px] font-extrabold leading-tight">{n}</p>
             <p className="text-[11px] font-bold tracking-widest text-ink-400">{l}</p>
           </div>

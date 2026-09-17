@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
 import type { Song } from '@/types';
+
+const { searchSongs } = vi.hoisted(() => ({ searchSongs: vi.fn() }));
+vi.mock('@/services/api/saavn', () => ({ searchSongs }));
+
+import { QUICK_DEBOUNCE_MS, useQuickResults } from './useQuickResults';
 import {
   clearQuickCache,
   fetchQuickResults,
@@ -64,5 +71,62 @@ describe('quick results cache (v5.19.0)', () => {
     });
     await expect(fetchQuickResults('late', ctrl.signal, search)).rejects.toMatchObject({ name: 'AbortError' });
     expect(getCachedQuick('late')).toBeNull();
+  });
+});
+
+describe('useQuickResults', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    clearQuickCache();
+    searchSongs.mockReset();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const settle = async () => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(QUICK_DEBOUNCE_MS);
+    });
+  };
+
+  it('shows the songs for the settled key', async () => {
+    searchSongs.mockResolvedValue([song('a'), song('b')]);
+    const { result } = renderHook(({ k }) => useQuickResults(k), { initialProps: { k: 'kesariya' } });
+    expect(result.current.loading).toBe(true);
+    await settle();
+    expect(result.current).toMatchObject({ key: 'kesariya', loading: false, stale: false });
+    expect(result.current.songs.map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it("drops the previous query's songs when the next fetch fails", async () => {
+    searchSongs.mockResolvedValueOnce([song('a')]);
+    const { result, rerender } = renderHook(({ k }) => useQuickResults(k), { initialProps: { k: 'kesariya' } });
+    await settle();
+    expect(result.current.songs).toHaveLength(1);
+
+    searchSongs.mockRejectedValueOnce(new Error('offline'));
+    rerender({ k: 'pushpa' });
+    expect(result.current.stale).toBe(true); // old songs, dimmed, while loading
+    await settle();
+    expect(result.current).toMatchObject({ key: 'pushpa', songs: [], loading: false, stale: false });
+  });
+
+  it('an aborted request (the listener typed on) leaves the panel alone', async () => {
+    searchSongs.mockResolvedValueOnce([song('a')]);
+    const { result, rerender } = renderHook(({ k }) => useQuickResults(k), { initialProps: { k: 'kesariya' } });
+    await settle();
+
+    searchSongs.mockImplementationOnce(
+      (_q: string, _n: number, opts?: { signal?: AbortSignal }) =>
+        new Promise<Song[]>((_, reject) => {
+          opts?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        }),
+    );
+    rerender({ k: 'push' });
+    await settle(); // request for "push" in flight
+    searchSongs.mockResolvedValueOnce([song('p')]);
+    rerender({ k: 'pushpa' }); // aborts it
+    expect(result.current.songs.map((s) => s.id)).toEqual(['a']);
+    await settle();
+    expect(result.current.songs.map((s) => s.id)).toEqual(['p']);
   });
 });

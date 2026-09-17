@@ -46,6 +46,14 @@ public class VinaxMediaPlugin extends Plugin {
         }
     }
 
+    /** Drop the static reference when this bridge dies, so the service never
+     *  relays into a destroyed WebView (and the activity is not leaked). */
+    @Override
+    protected void handleOnDestroy() {
+        if (VinaxMediaService.plugin == this) VinaxMediaService.plugin = null;
+        super.handleOnDestroy();
+    }
+
     /** Called by the service when a transport control is pressed. */
     public void emitAction(String action) {
         JSObject data = new JSObject();

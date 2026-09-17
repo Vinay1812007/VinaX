@@ -6,6 +6,7 @@ import {
   firstWords,
   looksLikeLyric,
   mergeCatalogueFallback,
+  norm,
   pickBest,
   queryWords,
   resolveLyricsHits,
@@ -149,5 +150,32 @@ describe('catalogue fallback (v5.19.0 — songs titled by their first line)', ()
       throw new Error('offline');
     };
     expect(await catalogueFallback('tum hi ho meri aashiqui', search)).toEqual([]);
+  });
+});
+
+describe('Indic scripts survive tokenising (vowel signs and viramas are marks)', () => {
+  it('keeps Hindi and Telugu words whole', () => {
+    expect(queryWords('तुम ही हो')).toEqual(['तुम', 'ही', 'हो']);
+    expect(queryWords('నువ్వే నువ్వే, ప్రేమ!')).toEqual(['నువ్వే', 'నువ్వే', 'ప్రేమ']);
+    expect(looksLikeLyric('तुम ही हो अब तुम ही हो')).toBe(true);
+  });
+
+  it('norm keeps Indic vowel signs but still folds Latin accents', () => {
+    expect(norm('दिल')).not.toBe(norm('दाल'));
+    expect(norm('దిల్')).toBe('దిల్');
+    expect(norm('ప్రేమ')).not.toBe(norm('ప్రేమా'));
+    expect(norm('Señorita!')).toBe('senorita');
+    expect(norm('నువ్\u200cవే')).toBe(norm('నువ్వే')); // a joiner never decides a match
+  });
+
+  it('pickBest tells two Hindi titles apart by their vowel signs', () => {
+    const hit: LyricsSearchHit = { title: 'दिल', artist: '', album: '', duration: 0, snippet: '' };
+    const picked = pickBest(hit, [song('wrong', 'दाल'), song('right', 'दिल')]);
+    expect(picked?.id).toBe('right');
+  });
+
+  it('highlights a whole Hindi word in a snippet', () => {
+    const runs = splitHighlight('तुम ही हो', 'ही');
+    expect(runs.filter((r) => r.hit).map((r) => r.text)).toEqual(['ही']);
   });
 });

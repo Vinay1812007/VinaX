@@ -1,3 +1,4 @@
+import { HeroMedia } from '@/components/HeroMedia';
 import { useParams } from 'react-router-dom';
 import { albumPath, extractId } from '@/utils/slug';
 import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
@@ -33,14 +34,14 @@ export default function AlbumPage() {
   });
   useJsonLd(album && [buildAlbumJsonLd(album), buildAlbumBreadcrumbs(album)]);
 
-  if (isLoading) return <div className="max-w-4xl mx-auto"><HeaderSkeleton /><ListSkeleton /></div>;
+  if (isLoading) return <div className="max-w-screen-xl mx-auto"><HeaderSkeleton /><ListSkeleton /></div>;
   if (isError || !album) return <ErrorState retry={() => refetch()} />;
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-6 mb-8">
+    <div className="max-w-screen-xl mx-auto">
+      <HeroMedia>
         <img src={bestImage(album.images, 500)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-44 h-44 sm:w-52 sm:h-52 rounded-2xl object-cover shadow-float" data-deter-context />
-        <div>
+        <div className="min-w-0 break-words">
           <p className="text-xs uppercase tracking-widest text-ink-400 font-semibold mb-1.5">Album</p>
           <h1 className="text-display tracking-tight">{album.title}</h1>
           <p className="text-sm text-ink-300 mt-2">{album.subtitle}</p>
@@ -66,7 +67,7 @@ export default function AlbumPage() {
             <SaveButton entity={{ id: album.id, kind: 'album', title: album.title, subtitle: album.subtitle, image: bestImage(album.images, 300) }} />
           </div>
         </div>
-      </div>
+      </HeroMedia>
       {album.songs.length === 0 ? (
         <EmptyState title="Track list unavailable" message="We couldn’t load this album’s tracks right now. Please try again in a moment." />
       ) : (

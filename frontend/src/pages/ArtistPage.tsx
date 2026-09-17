@@ -1,3 +1,4 @@
+import { HeroMedia } from '@/components/HeroMedia';
 import { useParams } from 'react-router-dom';
 import { albumPath, artistPath, extractId } from '@/utils/slug';
 import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
@@ -36,7 +37,7 @@ export default function ArtistPage() {
   });
   useJsonLd(artist && [buildArtistJsonLd(artist), buildArtistBreadcrumbs(artist)]);
 
-  if (isLoading) return <div className="max-w-4xl mx-auto"><HeaderSkeleton /><ListSkeleton /></div>;
+  if (isLoading) return <div className="max-w-screen-xl mx-auto"><HeaderSkeleton /><ListSkeleton /></div>;
   if (isError || !artist) return <ErrorState retry={() => refetch()} />;
 
   const paged = topSongs.data?.pages.flat() ?? [];
@@ -48,10 +49,10 @@ export default function ArtistPage() {
   });
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-6 mb-8">
+    <div className="max-w-screen-xl mx-auto">
+      <HeroMedia>
         <img src={bestImage(artist.images, 500)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-44 h-44 sm:w-52 sm:h-52 rounded-full object-cover shadow-float" data-deter-context />
-        <div>
+        <div className="min-w-0 break-words">
           <p className="text-xs uppercase tracking-widest text-ink-400 font-semibold mb-1.5">Artist</p>
           <h1 className="text-display tracking-tight">{artist.name}</h1>
           {songs.length > 0 && (
@@ -68,7 +69,7 @@ export default function ArtistPage() {
             <SaveButton entity={{ id: artist.id, kind: 'artist', title: artist.name, subtitle: 'Artist', image: bestImage(artist.images, 300) }} />
           </div>
         </div>
-      </div>
+      </HeroMedia>
 
       {songs.length > 0 && (
         <section className="mb-8">
@@ -85,7 +86,7 @@ export default function ArtistPage() {
       {topSongs.isLoading && songs.length === 0 && <ListSkeleton />}
 
       {artist.albums.length > 0 && (
-        <Shelf title="Albums">
+        <Shelf title="Albums" layout="grid">
           {artist.albums.map((a) => (
             <MediaCard key={a.id} to={albumPath(a)} image={bestImage(a.images)} images={a.images} title={a.title} subtitle={a.year ?? ''} onPlay={() => void playAlbum(a.id, a.title)} />
           ))}

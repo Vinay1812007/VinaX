@@ -23,7 +23,11 @@ export function pruneTrash(entries: TrashEntry[] | undefined, now = Date.now()):
         typeof e === 'object' &&
         !!e.collection &&
         typeof e.collection.id === 'string' &&
+        typeof e.collection.name === 'string' &&
+        // A trashed collection is restored as-is; one without a song list would crash the Library.
+        Array.isArray(e.collection.songs) &&
         typeof e.deletedAt === 'number' &&
+        Number.isFinite(e.deletedAt) &&
         now - e.deletedAt < TRASH_TTL_MS,
     )
     .sort((a, b) => b.deletedAt - a.deletedAt)

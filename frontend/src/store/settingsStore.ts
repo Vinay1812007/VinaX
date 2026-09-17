@@ -3,6 +3,18 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { RegionInfo } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
 import type { AudioQualityPref } from '@/services/audio/engine';
+import { guardedLocalStorage } from '@/services/storage/local';
+
+export type DiscoveryMode = 'familiar' | 'balanced' | 'discover';
+
+export function isDiscoveryMode(v: unknown): v is DiscoveryMode {
+  return v === 'familiar' || v === 'balanced' || v === 'discover';
+}
+
+/** The effective mode, tolerant of a settings record restored from before 7.0 (no `discoveryMode`). */
+export function resolveDiscoveryMode(s: { discoveryMode?: unknown; exploreMode?: unknown }): DiscoveryMode {
+  return isDiscoveryMode(s.discoveryMode) ? s.discoveryMode : s.exploreMode === true ? 'discover' : 'balanced';
+}
 
 export interface SettingsState {
   theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto';
@@ -44,6 +56,13 @@ export interface SettingsState {
   recommendationIntensity: number;
   /** Package A4 — explore mode: a ~15% discovery slot on taste-generic shelves. */
   exploreMode: boolean;
+  /**
+   * v7.0.0 — Familiar / Balanced / Discover: how far recommendations roam.
+   * Changes ranking (novelty vs. familiarity), the discovery share of a
+   * queue, language drift and the exploration slots on Home. `exploreMode`
+   * is kept in step (true ⇔ 'discover') so older backups and readers work.
+   */
+  discoveryMode: DiscoveryMode;
   /** v6.2.0 — AI DJ: the queue's next stretch is sequenced by the DJ engine
    *  (from real, already-filtered candidates); off = local recommender only. */
   aiDj: boolean;
@@ -104,6 +123,7 @@ export interface SettingsState {
   setReduceMotion(v: boolean): void;
   setRecommendationIntensity(v: number): void;
   setExploreMode(v: boolean): void;
+  setDiscoveryMode(v: DiscoveryMode): void;
   setAiDj(v: boolean): void;
   setAiHomeShelves(v: boolean): void;
   setDjTakeover(v: boolean): void;
@@ -165,6 +185,7 @@ const defaults = {
   reduceMotion: false,
   recommendationIntensity: 0.7,
   exploreMode: false,
+  discoveryMode: 'balanced' as DiscoveryMode,
   aiDj: true,
   aiHomeShelves: true,
   djTakeover: true,
@@ -183,6 +204,74 @@ const defaults = {
   balance: 0,
   normalize: false,
 };
+
+/** The persisted preference fields (no actions). */
+export type SettingsData = typeof defaults;
+
+const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
+  theme: ['dark', 'light', 'system', 'amoled', 'auto'],
+  uiScale: ['sm', 'md', 'lg'],
+  startPage: ['home', 'search', 'library', 'last'],
+  density: ['comfortable', 'compact'],
+  audioQuality: ['low', 'medium', 'high'],
+  lyricsSize: ['sm', 'md', 'lg', 'xl'],
+  uiLanguage: ['en', 'te', 'hi', 'ta'],
+  discoveryMode: ['familiar', 'balanced', 'discover'],
+};
+const SETTINGS_RANGES: Partial<Record<keyof SettingsData, readonly [number, number]>> = {
+  dailyGoalMinutes: [0, 600],
+  glassLevel: [0, 100],
+  glassBlur: [0, 100],
+  recommendationIntensity: [0, 1],
+  balance: [-1, 1],
+};
+const NULLABLE_TEXT: ReadonlySet<string> = new Set(['accentCustom', 'manualCountry', 'manualRegionLabel']);
+
+function pickRegion(v: unknown): RegionInfo | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const r = v as Record<string, unknown>;
+  const text = (x: unknown) => (typeof x === 'string' ? x.slice(0, 80) : null);
+  const source = r.source === 'edge' || r.source === 'browser' || r.source === 'manual' ? r.source : 'unknown';
+  return { country: text(r.country), regionLabel: text(r.regionLabel), source };
+}
+
+/**
+ * Whitelist a stored / restored settings record: only keys the app defines,
+ * only when the value has the type the app expects (numbers finite and in
+ * range, lists of strings, known enum members) — never a function and never
+ * a key the defaults do not know. Anything else is left to the caller's
+ * base (current state or defaults), so a hand-edited or damaged record can
+ * no longer put `"crossfade": "yes"` or `"eqGains": {}` into the live store.
+ */
+export function pickSettings(incoming: unknown): Partial<SettingsData> {
+  const out: Record<string, unknown> = {};
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return out as Partial<SettingsData>;
+  const rec = incoming as Record<string, unknown>;
+  for (const key of Object.keys(defaults) as Array<keyof SettingsData>) {
+    const want: unknown = defaults[key];
+    const got = rec[key];
+    if (got === undefined || typeof got === 'function') continue;
+    if (NULLABLE_TEXT.has(key)) {
+      if (got === null || typeof got === 'string') out[key] = typeof got === 'string' ? got.slice(0, 80) : null;
+    } else if (key === 'inferredRegion') {
+      if (got === null || typeof got === 'object') out[key] = pickRegion(got);
+    } else if (Array.isArray(want)) {
+      if (!Array.isArray(got)) continue;
+      out[key] = key === 'eqGains' ? clampEq(got as number[]) : got.filter((x): x is string => typeof x === 'string').slice(0, 100);
+    } else if (typeof want === 'number') {
+      if (typeof got !== 'number' || !Number.isFinite(got)) continue;
+      const range = SETTINGS_RANGES[key];
+      out[key] = range ? Math.max(range[0], Math.min(range[1], got)) : got;
+    } else if (typeof got === typeof want) {
+      const allowed = SETTINGS_ENUMS[key];
+      if (allowed && !allowed.includes(got as string)) continue;
+      out[key] = typeof got === 'string' ? got.slice(0, 80) : got;
+    }
+  }
+  // A record from before 7.0 has the explore switch but no discovery mode.
+  if (out.discoveryMode === undefined && typeof rec.exploreMode === 'boolean') out.discoveryMode = resolveDiscoveryMode(rec);
+  return out as Partial<SettingsData>;
+}
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
@@ -217,7 +306,11 @@ export const useSettingsStore = create<SettingsState>()(
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       setRecommendationIntensity: (v) =>
         set({ recommendationIntensity: Math.min(1, Math.max(0, v)) }),
-      setExploreMode: (exploreMode) => set({ exploreMode }),
+      setExploreMode: (exploreMode) => set({ exploreMode, discoveryMode: exploreMode ? 'discover' : 'balanced' }),
+      setDiscoveryMode: (mode) => {
+        const discoveryMode = isDiscoveryMode(mode) ? mode : 'balanced';
+        set({ discoveryMode, exploreMode: discoveryMode === 'discover' });
+      },
       setAiDj: (aiDj) => set({ aiDj }),
       setAiHomeShelves: (aiHomeShelves) => set({ aiHomeShelves }),
       setDjTakeover: (djTakeover) => set({ djTakeover }),
@@ -255,7 +348,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: KEYS.settings,
-      version: 3,
+      version: 4,
       // One-time migrations: turn off artwork-tinting (v1) and reset to the
       // single brand accent (v2) when the old picker was removed. The picker
       // RETURNED in 4.7.0 with per-accent light ramps — v2 stays as-is so
@@ -265,6 +358,8 @@ export const useSettingsStore = create<SettingsState>()(
         const state = (persisted ?? {}) as Partial<SettingsState>;
         if (version < 1) state.dynamicTheme = false;
         if (version < 2) state.accent = 'crimson';
+        // v4 (7.0.0) — the explore switch became the three-way discovery mode.
+        if (version < 4 || !isDiscoveryMode(state.discoveryMode)) state.discoveryMode = state.exploreMode ? 'discover' : 'balanced';
         const legacy = state as Partial<SettingsState> & Record<string, unknown>;
         delete legacy.autoqueueSimilar;
         delete legacy.hiddenHome;
@@ -275,7 +370,10 @@ export const useSettingsStore = create<SettingsState>()(
         } catch { /* storage may be unavailable */ }
         return state as SettingsState;
       },
-      storage: createJSONStorage(() => window.localStorage),
+      storage: createJSONStorage(() => guardedLocalStorage),
+      // The stored record is never trusted: start from the live defaults and
+      // take only known keys of the right type (see pickSettings).
+      merge: (persisted, current) => ({ ...current, ...pickSettings(persisted) }),
     },
   ),
 );

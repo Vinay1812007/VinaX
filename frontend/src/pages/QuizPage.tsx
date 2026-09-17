@@ -132,13 +132,35 @@ export default function QuizPage() {
             streak. Picks are drawn from your recent plays and the charts.
           </p>
         )}
-        <button
-          onClick={begin}
-          disabled={pool.length < 4}
-          className="btn-premium w-full py-3.5 rounded-full font-bold text-base disabled:opacity-50"
-        >
-          {pool.length < 4 ? 'Loading songs…' : finished ? 'Play again' : 'Start quiz'}
-        </button>
+        {pool.length >= 4 || trending.isLoading ? (
+          <button
+            type="button"
+            onClick={begin}
+            disabled={pool.length < 4}
+            className="btn-premium w-full py-3.5 rounded-full font-bold text-base disabled:opacity-50"
+          >
+            {pool.length < 4 ? 'Loading songs…' : finished ? 'Play again' : 'Start quiz'}
+          </button>
+        ) : (
+          // The charts request settled without enough songs for four options.
+          // This used to sit on "Loading songs…" forever; say what happened
+          // and offer the retry.
+          <div role="alert">
+            <p className="text-sm text-ink-300 mb-3">
+              {trending.isError
+                ? 'We couldn’t reach the music servers to load quiz songs. Check your connection and try again.'
+                : 'Not enough songs to build a round yet — play a few songs, or try again.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => void trending.refetch()}
+              disabled={trending.isFetching}
+              className="btn-premium w-full py-3.5 rounded-full font-bold text-base disabled:opacity-50"
+            >
+              {trending.isFetching ? 'Loading songs…' : 'Retry'}
+            </button>
+          </div>
+        )}
         <Link to="/explore" className="block mt-4 text-sm text-ink-400 hover:text-ink-100">
           Back to Explore
         </Link>

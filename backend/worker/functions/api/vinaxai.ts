@@ -27,13 +27,14 @@ import {
 } from '../_lib/ai';
 import { catalogDefaultModel, resolveCatalogModel, type CatalogProvider } from '../_lib/catalog';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
+import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { probeFetchMarker } from '../_lib/fetchMarker';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { houseRules, readConfig } from '../_lib/clientConfig';
 import { istNowLine } from '../_lib/time';
 import { type SupabaseEnv } from '../_lib/supabase';
-import { liveSearch, timeoutSignal } from '../_lib/websearch';
+import { liveSearch } from '../_lib/websearch';
 
 // Image understanding rides its own key + lane since v5.21.0 (the owner
 // issued dedicated vision secrets), so the slug is read from the lane table
@@ -346,6 +347,15 @@ const CORS: Record<string, string> = {
   'access-control-allow-headers': 'content-type, x-vinax-client',
 };
 
+/** Ceiling for one whole streamed reply. The per-attempt leash only covers time
+ *  to response headers; this is what ends an upstream that stalls mid-body. */
+const STREAM_BUDGET_MS = 90_000;
+/** A failover drain that starts late still gets at least this long. */
+const STREAM_MIN_DRAIN_MS = 15_000;
+
+/** Request-body ceiling: the 6 MB inline-image budget plus a long pasted thread. */
+const MAX_BODY_BYTES = 12_000_000;
+
 function jsonErr(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -413,12 +423,12 @@ async function handleChat(
   isApp: boolean,
 ): Promise<Response> {
 
-  let body: { messages?: InMsg[]; mode?: string; model?: unknown; web?: boolean; images?: unknown; taste?: unknown; profile?: unknown };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return jsonErr({ error: 'bad_request' }, 400);
-  }
+  // Capped read. Sized for the 6 MB inline-image budget enforced below plus a
+  // long thread of pasted documents (the client sends the whole conversation).
+  const read = await readJsonCapped<{ messages?: InMsg[]; mode?: string; model?: unknown; web?: boolean; images?: unknown; taste?: unknown; profile?: unknown } | null>(request, MAX_BODY_BYTES);
+  if (!read.ok) return read.reason === 'too_large' ? jsonErr({ error: 'too_large' }, 413) : jsonErr({ error: 'bad_request' }, 400);
+  if (!read.value || typeof read.value !== 'object') return jsonErr({ error: 'bad_request' }, 400);
+  const body = read.value;
 
   const rawMode = typeof body.mode === 'string' ? body.mode : '';
   const pickedMode: Mode = ALL_MODES.includes(rawMode) ? (rawMode as Mode) : (LEGACY_MODE[rawMode] ?? 'muse');
@@ -629,13 +639,25 @@ async function handleChat(
     return p;
   };
 
-  const callStream = (m: string, k: string, endpoint: string, messages: OutMsg[], ms = 30_000): Promise<Response> =>
-    fetch(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${k}` },
-      body: JSON.stringify(payloadFor(m, endpoint, messages)),
-      signal: timeoutSignal(ms),
-    });
+  // `ms` is a leash on TIME TO RESPONSE HEADERS only. Each attempt owns its
+  // controller and the timer is cleared the moment headers arrive — a shared
+  // never-cleared timeout signal used to keep ticking into the body and cut a
+  // long answer off mid-sentence at the leash. A stream that then stalls is
+  // the drain's job (STREAM_BUDGET_MS), not this timer's.
+  const callStream = async (m: string, k: string, endpoint: string, messages: OutMsg[], ms = 30_000): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ms);
+    try {
+      return await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${k}` },
+        body: JSON.stringify(payloadFor(m, endpoint, messages)),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
 
   const t0 = Date.now();
   // Track the model + lane role that ACTUALLY served the request. The old
@@ -760,6 +782,14 @@ async function handleChat(
       // an empty-stream rescue is a second upstream call, and both bill).
       // Null until at least one upstream reported usage.
       const usageBox: { prompt: number; completion: number; seen: boolean } = { prompt: 0, completion: 0, seen: false };
+      // Overall stream budget: one deadline for the whole reply, so a stuck
+      // upstream is cut instead of holding the connection open forever. A
+      // failover drain that starts late still gets a usable minimum window.
+      const streamDeadline = Date.now() + STREAM_BUDGET_MS;
+      // Set when a drain was cut (budget or a mid-stream upstream error) AFTER
+      // text had already been forwarded — the final event then says so rather
+      // than presenting half an answer as complete.
+      const cutBox: { truncated: boolean } = { truncated: false };
       const drain = async (body: ReadableStream<Uint8Array>, fetchMode: 'arm' | 'strip'): Promise<string> => {
         const reader = body.getReader();
         const decoder = new TextDecoder();
@@ -779,6 +809,15 @@ async function handleChat(
         let pending = '';
         let gate: 'probe' | 'think' | 'pass' = 'probe';
         let stopForFetch = false;
+        let cut = false;
+        const budgetId = setTimeout(
+          () => {
+            cut = true;
+            // Cancelling settles the pending read, so the loop below exits.
+            reader.cancel().catch(() => undefined);
+          },
+          Math.max(STREAM_MIN_DRAIN_MS, streamDeadline - Date.now()),
+        );
         const forward = (text: string): void => {
           // Models often open with stray whitespace/newlines — swallow them
           // until real content starts so answers begin cleanly.
@@ -831,7 +870,7 @@ async function handleChat(
         try {
           for (;;) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done || cut) break;
             buf += decoder.decode(value, { stream: true });
             let nl: number;
             while ((nl = buf.indexOf('\n')) >= 0) {
@@ -861,6 +900,9 @@ async function handleChat(
           }
         } catch {
           /* upstream aborted mid-stream */
+          cut = true;
+        } finally {
+          clearTimeout(budgetId);
         }
         if (stopForFetch) {
           try {
@@ -874,6 +916,9 @@ async function handleChat(
         // A stream that ended inside <think> is discarded: an unclosed
         // chain-of-thought is not an answer; the empty-stream failover runs.
         if (gate === 'probe' && pending) forward(pending);
+        // Partial text + a cut stream = a truncated answer. A cut with nothing
+        // forwarded stays an empty stream, which the failover ladder handles.
+        if (cut && full) cutBox.truncated = true;
         return full;
       };
 
@@ -962,7 +1007,8 @@ async function handleChat(
         }
       }
 
-      send({ done: true });
+      // `truncated` is additive: clients that only read `done` are unaffected.
+      send(cutBox.truncated ? { done: true, truncated: true } : { done: true });
       controller.close();
       if (waitUntil) {
         waitUntil(
@@ -971,7 +1017,7 @@ async function handleChat(
             model: `${usedModel} @${usedRole}`,
             ok: !!full,
             status: 200,
-            error: full ? null : 'empty',
+            error: full ? (cutBox.truncated ? 'stream_truncated' : null) : 'empty',
             client: isApp ? 'app' : 'web',
             latency_ms: Date.now() - t0,
             ...(usageBox.seen ? { prompt_tokens: usageBox.prompt, completion_tokens: usageBox.completion } : {}),

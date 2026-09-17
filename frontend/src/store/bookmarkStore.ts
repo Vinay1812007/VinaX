@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { STORAGE_PREFIX } from '@/constants/storage-keys';
+import { guardedLocalStorage } from '@/services/storage/local';
 
 /**
  * v5.17.0 — moments inside songs. A bookmark is a timestamp (seconds) on a
@@ -38,6 +39,6 @@ export const useBookmarkStore = create<BookmarkState>()(
         set({ marks });
       },
     }),
-    { name: `${STORAGE_PREFIX}.bookmarks.v1`, storage: createJSONStorage(() => window.localStorage) },
+    { name: `${STORAGE_PREFIX}.bookmarks.v1`, storage: createJSONStorage(() => guardedLocalStorage) },
   ),
 );

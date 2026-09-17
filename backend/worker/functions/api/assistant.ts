@@ -5,6 +5,7 @@
  */
 import { chat, logAiEvent, type AiEnv } from '../_lib/ai';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
+import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { istNowLine } from '../_lib/time';
@@ -32,6 +33,10 @@ const CORS: Record<string, string> = {
   'access-control-allow-methods': 'POST, OPTIONS',
   'access-control-allow-headers': 'content-type, x-vinax-client',
 };
+
+/** Request-body ceiling. Only the last 12 turns (600 chars each) are used, but
+ *  older app builds post the whole thread — so the cap leaves room for that. */
+const MAX_BODY_BYTES = 64_000;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -74,12 +79,11 @@ async function handlePost(context: {
   const isApp = request.headers.get('x-vinax-client') === 'app';
   const limited = rateLimit(request, 'assistant', { capacity: 20, refillPerMinute: 10 });
   if (limited) return limited;
-  let body: { messages?: InMsg[]; taste?: unknown };
-  try {
-    body = (await request.json()) as { messages?: InMsg[]; taste?: unknown };
-  } catch {
-    return json({ error: 'bad_request' }, 400);
-  }
+  // Capped read — content-length is absent on a chunked body, so the read caps too.
+  const read = await readJsonCapped<{ messages?: InMsg[]; taste?: unknown } | null>(request, MAX_BODY_BYTES);
+  if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
+  if (!read.value || typeof read.value !== 'object') return json({ error: 'bad_request' }, 400);
+  const body = read.value;
   const history = (Array.isArray(body.messages) ? body.messages : [])
     .filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string')
     .slice(-12)

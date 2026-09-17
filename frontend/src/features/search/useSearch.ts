@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { diversify, musicalOnly } from '@/services/recommendation/quality';
 import type { Song } from '@/types';
 import { searchAll, searchSongs, searchAlbums } from '@/services/api';
-import { languageWeight } from '@/services/personalization/profile';
+import { artistWeight, languageWeight } from '@/services/personalization/profile';
 import { loadProfile } from '@/services/personalization/storage';
 import { useSettingsStore } from '@/store/settingsStore';
 import { stripExplicit } from '@/services/kidMode';
@@ -11,7 +11,12 @@ import { stripExplicit } from '@/services/kidMode';
  *  (U+0300–036F) — Devanagari/Telugu/Tamil vowel signs live in their own
  *  blocks and are untouched, so Indic queries are never mangled. */
 function fold(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  // Joiners (U+200C/U+200D) are dropped here too: they change how a word
+  // renders, not which word it is, so they must never break a comparison.
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f\u200c\u200d]/g, '');
 }
 
 /** Text-relevance boost (delta audit P2-28): how well a song matches what
@@ -57,6 +62,15 @@ export function rankSongs(songs: Song[], opts: RankOpts = {}): Song[] {
       score += languageWeight(profile, song.language) * 0.4;
       if (song.language && pinnedLanguages.includes(song.language)) score += 0.25;
       score += relevance(query, song) * 0.8;
+      // Shelves (no typed query) also lean towards the listener's artists; a
+      // search keeps to what was typed.
+      if (!searchMode)
+        score +=
+          artistWeight(
+            profile,
+            song.artists.map((a) => a.id),
+            song.artists.map((a) => a.name),
+          ) * 0.3;
       return { song, score };
     })
     .sort((a, b) => b.score - a.score)
@@ -64,11 +78,47 @@ export function rankSongs(songs: Song[], opts: RankOpts = {}): Song[] {
   return searchMode ? ranked : diversify(ranked);
 }
 
+/**
+ * The settings `rankSongs` reads at call time, as one stable string. Shelf
+ * hooks rank inside their queryFn, so the ranked list is what gets cached —
+ * without this in the query key, muting a language, re-pinning or switching
+ * kid mode on kept serving the old ranking until the cache expired.
+ */
+export function useRankSettingsKey(): string {
+  const muted = useSettingsStore((s) => s.mutedLanguages);
+  const pinned = useSettingsStore((s) => s.pinnedLanguages);
+  const kid = useSettingsStore((s) => s.kidMode);
+  return rankSettingsKey(muted, pinned, kid);
+}
+
+/** Pure form of the key above (order-insensitive for muted languages, where
+ *  order means nothing; pinned order is a ranking input and is kept). */
+export function rankSettingsKey(
+  muted: readonly string[],
+  pinned: readonly string[],
+  kid: boolean,
+): string {
+  return `m:${[...muted].sort().join(',')}|p:${pinned.join(',')}|k:${kid ? 1 : 0}`;
+}
+
+// Invisible characters that ride along with pasted text: zero-width space,
+// word joiner, BOM / zero-width no-break space, soft hyphen. ZWJ / ZWNJ
+// (U+200D / U+200C) are NOT here — Indic conjuncts are spelt with them, so the
+// query sent upstream keeps them; only the comparison folds drop them.
+const INVISIBLE = /[\u200b\u2060\ufeff\u00ad]/g;
+
 /** Canonical query form (delta audit P1-11): case- and whitespace-folded so
  *  "Arijit", "arijit" and "ARIJIT " share one cache entry and one network
- *  request. NFC keeps composed Indic text stable. */
+ *  request. NFKC keeps composed Indic text stable and folds compatibility
+ *  forms (fullwidth Latin, ligatures) to what a keyboard would have typed. */
 export function normalizeQuery(q: string): string {
-  return q.normalize('NFC').toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 120);
+  return q
+    .normalize('NFKC')
+    .replace(INVISIBLE, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 120);
 }
 
 /** Zero-result rescue: a gentler variant of the query — punctuation dropped,

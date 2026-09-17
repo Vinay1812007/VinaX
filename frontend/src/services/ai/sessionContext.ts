@@ -13,6 +13,8 @@
  * mounts, so reading the class alone is already reliable.
  */
 
+import { isSkippedPlay } from '@/utils/plays';
+
 /** v6.4.0 — a named session state, INFERRED from behaviour and clock; never a claim about feelings. */
 export type SessionState = 'CALM' | 'FOCUSED' | 'ENERGETIC' | 'RESTLESS' | 'WAVERING' | 'LOCKED_IN' | 'LATE_NIGHT' | 'MORNING' | 'PARTY' | 'WIND_DOWN';
 
@@ -103,6 +105,9 @@ function currentFestivalId(): string | null {
 
 interface HistoryLike {
   completed?: boolean;
+  /** v7.0.0 — explicit skip flag; see utils/plays. */
+  skipped?: boolean;
+  listenedSec?: number;
   ts: number;
   song?: { language?: string | null; artists?: Array<{ name: string }>; subtitle?: string };
 }
@@ -144,7 +149,7 @@ export function sessionStateOf(args: { hour: number; day: number; skips: number;
 export function readListenerEnergy(history: HistoryLike[], hour: number): string {
   const recent = history.slice(0, 8);
   if (!recent.length) return hour < 5 || hour >= 22 ? 'fresh session late — start mellow' : 'fresh session — open inviting and easy';
-  const skips = recent.filter((e) => e.completed === false).length;
+  const skips = recent.filter(isSkippedPlay).length;
   const lastGap = Date.now() - recent[0].ts;
   if (skips >= 4) return 'restless — recent picks are missing; change direction and lift the energy';
   if (skips >= 2) return 'wavering — mix in a safe favourite to re-anchor, then build';
@@ -168,8 +173,11 @@ export function buildSessionContext(history: HistoryLike[] = [], now = new Date(
   else if ((d === 5 || d === 6) && h >= 20) sessionVibe = 'friday-saturday night / party, dance, celebration';
   else sessionVibe = 'night / warm, melodic, easing down';
   const recent = history.slice(0, 8);
-  const skips = recent.filter((e) => e.completed === false).length;
-  const completionRate = recent.length ? recent.filter((e) => e.completed !== false).length / recent.length : 1;
+  // v7.0.0 — a skip is a skip, not "anything unfinished": the song playing
+  // right now and a song paused halfway used to be counted against the read.
+  const skips = recent.filter(isSkippedPlay).length;
+  const judged = recent.filter((e) => e.completed === true || isSkippedPlay(e));
+  const completionRate = judged.length ? judged.filter((e) => e.completed === true).length / judged.length : 1;
   const sittingMin = sessionDurationMinutes(history, now.getTime());
   const last = history[0]?.song;
   const ctx: SessionContext = {

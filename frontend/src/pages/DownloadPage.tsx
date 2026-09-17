@@ -14,7 +14,7 @@ export default function DownloadPage() {
   return (
     <div className="max-w-md mx-auto text-center pt-6">
       <img src="/icons/icon.svg" alt="" className="w-24 h-24 rounded-3xl mx-auto shadow-2xl" />
-      <h1 className="text-3xl font-bold tracking-tight mt-5">
+      <h1 className="text-page-title font-bold tracking-tight mt-5">
         VinaX<span className="text-ember-500">.</span> for Android
       </h1>
       <p className="text-sm text-ink-300 mt-2">Music tuned to you — free, no account, private by design.</p>

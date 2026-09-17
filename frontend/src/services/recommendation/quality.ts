@@ -26,7 +26,7 @@ export function diversify(songs: Song[], maxPerAlbum = 2): Song[] {
     const normTitle = s.title
       .toLowerCase()
       .replace(/\(.*?\)|\[.*?\]/g, '')
-      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ')
       .trim();
     if (normTitle && seenTitles.has(normTitle)) continue;
     const albumName = ((s.album as { name?: string | null } | null | undefined)?.name ?? '').toLowerCase();

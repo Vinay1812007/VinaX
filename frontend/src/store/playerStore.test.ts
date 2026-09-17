@@ -15,7 +15,7 @@ vi.mock('@/services/personalization/updater', () => ({
 vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false }));
 vi.mock('@/services/cast', () => ({
   useCastStore: { getState: () => ({ connected: false }) },
-  castInterceptPlayPause: () => false, castInterceptSeek: () => false, castMime: vi.fn(),
+  castInterceptPlayPause: () => false, castInterceptSeek: () => false, castInterceptVolume: () => false, castMime: vi.fn(),
 }));
 vi.mock('@/utils/streak', () => ({ bumpStreak: vi.fn() }));
 const recommendMock = vi.fn(async (_seed: Song, _ctx: unknown, _opts?: { tune?: string | null }): Promise<Song[]> => []);

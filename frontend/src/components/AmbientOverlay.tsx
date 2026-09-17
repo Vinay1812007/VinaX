@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Song } from '@/types';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 
@@ -40,7 +41,9 @@ export function AmbientOverlay({ song, onWake }: { song: Song; onWake: () => voi
     return () => window.clearInterval(t);
   }, []);
   const art = bestImage(song.images, 500);
-  return (
+  // Portalled: `fixed inset-0` must mean the viewport, not whatever containing
+  // block the page around it happens to create.
+  return createPortal(
     <div
       role="presentation"
       onClick={onWake}
@@ -54,6 +57,7 @@ export function AmbientOverlay({ song, onWake }: { song: Song; onWake: () => voi
       </div>
       <p className="text-5xl font-extrabold tabular-nums tracking-tight text-white/80">{now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
       <p className="text-[11px] text-white/40">Tap anywhere to bring the controls back</p>
-    </div>
+    </div>,
+    document.body,
   );
 }

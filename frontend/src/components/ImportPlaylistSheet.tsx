@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { Sheet } from '@/components/Sheet';
 import { fetchPickMatch, parseSongLine, pickQueryKey, type MatchResult, type SongPickRef } from '@/components/ai/SongPick';
 import { cn } from '@/utils/cn';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
@@ -86,7 +84,6 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
   const [review, setReview] = useState<ReviewItem[] | null>(null);
   const [editing, setEditing] = useState<Record<number, string>>({});
   const [showRaw, setShowRaw] = useState<Record<number, boolean>>({});
-  const ref = useRef<HTMLDivElement>(null);
   const runRef = useRef<Run | null>(null);
   const createCollection = useLibraryStore((s) => s.createCollection);
   const addManyToCollection = useLibraryStore((s) => s.addManyToCollection);
@@ -102,8 +99,6 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
     cancelRun();
     onClose();
   };
-  useFocusTrap(ref, true, close);
-  useDismissOnBack(true, close);
   // Unmount (route change, parent re-render without the sheet) aborts too.
   useEffect(() => () => runRef.current?.controller.abort(), []);
 
@@ -180,17 +175,8 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
     { matched: 0, uncertain: 0, missing: 0 },
   );
 
-  // Portal: see note in SmartCollectionSheet — fixed overlays must not live inside a transformed page section.
-  return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={close}>
-      <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="import-playlist-title"
-        className="w-full sm:max-w-2xl glass-modal rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto animate-fade-up"
-        onClick={(e) => e.stopPropagation()}
-      >
+  return (
+    <Sheet onClose={close} labelledBy="import-playlist-title" size="2xl">
         <h2 id="import-playlist-title" className="text-lg font-bold">{review ? 'Review your import' : 'Import a playlist'}</h2>
 
         {!review ? (
@@ -313,7 +299,6 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
             </div>
           </>
         )}
-      </div>
-    </div>
-  , document.body);
+    </Sheet>
+  );
 }

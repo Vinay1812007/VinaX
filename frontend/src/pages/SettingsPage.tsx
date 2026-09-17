@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useSettingsStore } from '@/store/settingsStore';
+import { useSettingsStore, type DiscoveryMode } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useRegion } from '@/features/location/useRegion';
 import {
   clearCachedMetadata,
-  clearFavorites,
-  clearHistory,
-  clearPersonalization,
+  clearFavoritesWithUndo,
+  clearHistoryWithUndo,
   clearQueue,
+  confirmClearPersonalization,
   downloadProfileExport,
   importProfileJson,
+  readBackupFile,
   resetAppState,
 } from '@/features/settings/actions';
 import { ACCENT_OPTIONS } from '@/constants/accents';
@@ -68,6 +69,18 @@ function Highlight({ text, q }: { text: string; q: string }) {
     </>
   );
 }
+
+/** v7.0.0 — the three discovery modes; each note says what the mode really changes. */
+const DISCOVERY_OPTIONS: Array<{ value: DiscoveryMode; label: string }> = [
+  { value: 'familiar', label: 'Familiar' },
+  { value: 'balanced', label: 'Balanced' },
+  { value: 'discover', label: 'Discover' },
+];
+const DISCOVERY_NOTES: Record<DiscoveryMode, string> = {
+  familiar: 'Known ground: your favourites and songs you finished come back into the mix, new artists are rare, and the queue stays in its language.',
+  balanced: 'Mostly your taste, with about one new artist in every four or five songs. What you skip and finish in a sitting tips it either way.',
+  discover: 'Roams further: never-played artists rank higher and fill close to half of a queue, the queue may take a short detour into another language you play, and Home adds picks from languages you haven’t tried.',
+};
 
 function Row({ label, note, children, stack }: { label: string; note?: string; children: ReactNode; stack?: boolean }) {
   const q = useContext(SettingsSearchCtx);
@@ -642,8 +655,12 @@ export default function SettingsPage() {
         <Row label="AI-designed shelves on Home" note="A “Designed for you” block with shelves the AI titles from your taste and the time of day, filled from the catalogue. Off hides it.">
           <Toggle on={s.aiHomeShelves} onChange={s.setAiHomeShelves} label="AI-designed shelves" />
         </Row>
-        <Row label="Explore mode" note="Reserve a corner of your shelves for songs deliberately unlike your usual — trending picks from languages you haven’t tried.">
-          <Toggle on={s.exploreMode} onChange={s.setExploreMode} label="Explore mode" />
+        <Row stack label="Discovery" note={DISCOVERY_NOTES[s.discoveryMode]}>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Discovery mode">
+            {DISCOVERY_OPTIONS.map((o) => (
+              <Chip key={o.value} active={s.discoveryMode === o.value} onClick={() => s.setDiscoveryMode(o.value)}>{o.label}</Chip>
+            ))}
+          </div>
         </Row>
         <Row label="Kid mode" note="Hides songs the catalog marks explicit — everywhere — and keeps a separate taste profile so a child’s listening never shapes yours. Favorites and downloads stay shared. Only as good as the catalog’s explicit flags.">
           <Toggle
@@ -780,7 +797,12 @@ export default function SettingsPage() {
                 const f = e.target.files?.[0];
                 e.target.value = '';
                 if (!f) return;
-                const out = importProfileJson(await f.text());
+                const read = await readBackupFile(f);
+                if (!read.ok) {
+                  toast(read.error, { duration: 7000 });
+                  return;
+                }
+                const out = importProfileJson(read.text);
                 if (!out.ok) {
                   const detail = out.rejected?.[0] ? ` ${out.rejected[0].label}: ${out.rejected[0].error}` : '';
                   toast(`${out.error}${detail}`, { duration: 7000 });
@@ -790,14 +812,14 @@ export default function SettingsPage() {
             <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-full glass-button text-sm">Restore</button>
           </>
         </Row>
-        <Row label="Clear history"><button onClick={clearHistory} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
-        <Row label="Clear favorites"><button onClick={clearFavorites} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
+        <Row label="Clear history"><button onClick={clearHistoryWithUndo} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
+        <Row label="Clear favorites"><button onClick={clearFavoritesWithUndo} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
         <Row label="Clear queue"><button onClick={clearQueue} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
         <Row label="Clear cached metadata" note="Drops the in-memory API cache; data refetches on demand.">
           <button onClick={clearCachedMetadata} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button>
         </Row>
         <Row label="Clear personalization profile" note="Erases taste profile + event log. Favorites stay.">
-          <button onClick={() => void clearPersonalization()} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button>
+          <button onClick={() => void confirmClearPersonalization()} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button>
         </Row>
         <Row label="Reset app state" note="Erases everything VinaX stores on this device and reloads.">
           <button

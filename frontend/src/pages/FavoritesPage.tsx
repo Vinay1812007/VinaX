@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { SongRow } from '@/components/SongRow';
+import { VirtualChunks } from '@/components/VirtualChunks';
 import { EmptyState } from '@/components/States';
 import { Chip } from '@/components/Chip';
 import { PlayIcon, ShuffleIcon, DownloadIcon, HeartIcon } from '@/components/Icons';
@@ -15,6 +16,10 @@ import { toast } from '@/store/toastStore';
 import { useSessionState } from '@/hooks/useSessionState';
 
 type SortMode = 'recent' | 'title' | 'artist';
+
+/** .vx-track-row min-height — the off-screen size estimate for list chunks. */
+const SONG_ROW_HEIGHT = 68;
+const songKey = (song: Song): string => song.id;
 
 function sortSongs(songs: Song[], mode: SortMode): Song[] {
   if (mode === 'recent') return songs;
@@ -31,6 +36,8 @@ export default function FavoritesPage() {
   const shuffle = usePlayerStore((s) => s.shuffle);
   const [sort, setSort] = useSessionState<SortMode>('vinax.favorites.sort.v1', 'recent');
   const sorted = useMemo(() => sortSongs(favorites, sort), [favorites, sort]);
+  // Stable per `sorted`, so list chunks (and the memoised rows) skip re-rendering on unrelated page state.
+  const renderRow = useCallback((song: Song, i: number) => <SongRow song={song} songs={sorted} index={i} />, [sorted]);
   const [dlBusy, setDlBusy] = useState(false);
   const [dlDone, setDlDone] = useState(0);
   const downloadAll = async () => {
@@ -92,7 +99,7 @@ export default function FavoritesPage() {
           action={<Link to="/discover" className="px-5 py-2.5 rounded-full btn-primary">Discover music</Link>}
         />
       ) : (
-        sorted.map((song, i) => <SongRow key={song.id} song={song} songs={sorted} index={i} />)
+        <VirtualChunks items={sorted} keyOf={songKey} renderItem={renderRow} rowHeight={SONG_ROW_HEIGHT} />
       )}
     </div>
   );

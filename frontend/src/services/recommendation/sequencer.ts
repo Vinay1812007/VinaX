@@ -144,6 +144,8 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
     const last3 = [...recentSongs.slice(-3), ...out.slice(-3).map((o) => o.song)].slice(-3);
     const lastArtists = last3.map(leadArtist);
     const lastAlbum = prev ? albumOf(prev) : '';
+    const prevLead = prev ? leadArtist(prev) : '';
+    const prevEnergy = out.length ? out[out.length - 1].energy : seed ? startEnergy : null;
     const prevDecade = prev ? decadeOf(prev) : null;
     const discoveryAllowed = discoveryUsed < Math.floor(discoveryShare * n + 0.5);
     let bestIdx = -1;
@@ -161,7 +163,14 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
       const artist = leadArtist(c.song);
       if (artist && lastArtists[lastArtists.length - 1] === artist) cost += 4; // never back to back
       else if (artist && lastArtists.includes(artist)) cost += 1.5;
+      // v7.0.0 — a featured credit counts too: the previous lead singing second
+      // on this one is still the same voice twice in a row (softer than a lead repeat).
+      else if (prevLead && c.song.artists.slice(1).some((a) => a.name.trim().toLowerCase() === prevLead)) cost += 1;
       if (lastAlbum && albumOf(c.song) === lastAlbum) cost += 1;
+      // v7.0.0 — transition smoothness: the arc target moves gently, but a
+      // single hand-off may still lurch (a lullaby straight into a dance cut).
+      // Steps beyond a third of the scale pay for the excess.
+      if (prevEnergy !== null) cost += Math.max(0, Math.abs(c.energy - prevEnergy) - 0.35) * 2.5;
       const dec = decadeOf(c.song);
       if (prevDecade !== null && dec !== null) cost += Math.min(3, Math.abs(dec - prevDecade)) * 0.25;
       cost += (c.rank / Math.max(items.length, 1)) * 1.0; // taste prior

@@ -8,7 +8,7 @@ import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
 import { VideoCard } from './VideosPage';
 import { ListSkeleton } from '@/components/Skeletons';
-import { EmptyState } from '@/components/States';
+import { EmptyState, ErrorState } from '@/components/States';
 import { PlayIcon } from '@/components/Icons';
 
 /**
@@ -20,9 +20,21 @@ import { PlayIcon } from '@/components/Icons';
  * playable 720p preview clip is the fallback, labeled as a preview, with a
  * one-tap bridge to the full audio track through the normal player.
  */
+/** Mirrors the real page: 16:9 stage, title block, then the related list. */
+function VideoSkeleton() {
+  return (
+    <div className="max-w-4xl mx-auto" role="status" aria-label="Loading video">
+      <div className="skeleton aspect-video rounded-3xl" />
+      <div className="skeleton h-6 w-2/3 mt-5" />
+      <div className="skeleton h-4 w-1/3 mt-2 mb-8" />
+      <ListSkeleton rows={4} />
+    </div>
+  );
+}
+
 export default function VideoPage() {
   const { id } = useParams();
-  const { data: video, isLoading } = useQuery({
+  const { data: video, isLoading, isError, refetch } = useQuery({
     queryKey: ['video', id],
     queryFn: () => getVideo(id ?? ''),
     enabled: !!id,
@@ -78,7 +90,9 @@ export default function VideoPage() {
     }
   };
 
-  if (isLoading) return <ListSkeleton rows={8} />;
+  if (isLoading) return <VideoSkeleton />;
+  // A network failure is not "removed from the catalog" — offer the retry.
+  if (isError && !video) return <ErrorState retry={() => void refetch()} />;
   if (!video) {
     return <EmptyState title="Video unavailable" message="This video could not be loaded. It may have been removed from the catalog." />;
   }

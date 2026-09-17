@@ -18,7 +18,9 @@ export const onRequestGet = async (context: { env: SupabaseEnv }): Promise<Respo
   const rows = await sbSelect<{ message: string | null }>(
     env,
     'vinax_events',
-    'type=eq.site-mode&select=message&order=created_at.desc&limit=1',
+    // device_id=eq.admin: only the admin console's own rows are honoured, so a
+    // forged telemetry row could never flip the site even if one got in.
+    'type=eq.site-mode&device_id=eq.admin&select=message&order=created_at.desc&limit=1',
   ).catch(() => []);
   // v5.15.0 — a scheduled window (Admin → Maintenance Scheduler) flips the
   // site to maintenance on its own and back again, no one awake required.

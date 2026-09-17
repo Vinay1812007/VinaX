@@ -33,9 +33,12 @@ export function ListSkeleton({ rows = 8 }: { rows?: number }) {
 
 export function HeaderSkeleton() {
   return (
-    <div className="flex items-end gap-6 mb-8">
-      <div className="skeleton w-40 h-40 sm:w-52 sm:h-52 rounded-2xl shrink-0" />
-      <div className="flex-1">
+    // Mirrors the real hero (.vx-entity-hero on Album / Artist / Playlist): a
+    // column with centred 160px art on phones, an end-aligned row with fluid
+    // art from md up — so nothing jumps when the data lands.
+    <div className="vx-entity-hero" role="status" aria-label="Loading">
+      <div className="skeleton shrink-0 aspect-square w-40 self-center md:self-auto md:w-[clamp(144px,18vw,224px)] rounded-xl" />
+      <div className="flex-1 w-full min-w-0">
         <div className="skeleton h-4 w-20 mb-3" />
         <div className="skeleton h-8 w-2/3 mb-3" />
         <div className="skeleton h-4 w-1/3" />
@@ -57,7 +60,9 @@ export function PageSkeleton() {
 
 export function CardGridSkeleton({ cards = 12 }: { cards?: number }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1">
+    // auto-fill, not breakpoint counts: columns follow the space actually left
+    // after the sidebar and the now-playing rail, not the viewport width.
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-1">
       {Array.from({ length: cards }).map((_, i) => (
         <div key={i} className="p-2.5">
           <div className="skeleton aspect-square rounded-xl" />

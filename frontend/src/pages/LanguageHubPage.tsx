@@ -14,12 +14,13 @@ import { InfiniteSentinel } from '@/components/InfiniteSentinel';
 import { usePlayerStore } from '@/store/playerStore';
 import { SongRow } from '@/components/SongRow';
 import { ListSkeleton } from '@/components/Skeletons';
+import { ErrorState, InlineError } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import { MOOD_HUBS } from '@/constants/hubs';
 import type { Song } from '@/types/music';
 
 
-function HubSection({ heading, songs, loading }: { heading: string; songs: Song[] | undefined; loading: boolean }) {
+function HubSection({ heading, songs, loading, error, retry }: { heading: string; songs: Song[] | undefined; loading: boolean; error: boolean; retry: () => void }) {
   const playQueue = usePlayerStore((s) => s.playQueue);
   return (
     <section className="mb-8">
@@ -37,6 +38,9 @@ function HubSection({ heading, songs, loading }: { heading: string; songs: Song[
         )}
       </div>
       {loading && <ListSkeleton />}
+      {/* One section failing is a quiet inline retry; the page-level error
+          state is reserved for when nothing on the hub could load. */}
+      {error && !songs?.length && <InlineError retry={retry} />}
       {(songs ?? []).slice(0, 10).map((song, i) => (
         <SongRow key={song.id} song={song} songs={songs ?? []} index={i} />
       ))}
@@ -62,6 +66,9 @@ export default function LanguageHubPage({ language }: { language: string }) {
   const more = useInfiniteSongs(`${label} songs`);
   const shelfIds = new Set([...(trending.data ?? []), ...(fresh.data ?? [])].map((s) => s.id));
   const moreSongs = flattenSongPages(more.data?.pages).filter((s) => !shelfIds.has(s.id));
+  // Both headline shelves failed with nothing cached: say so, once, with a retry
+  // (this page used to render its header over a silent blank).
+  const shelvesFailed = trending.isError && fresh.isError && !trending.data?.length && !fresh.data?.length;
 
   usePageMeta({
     title: `${label} Songs — Latest Hits & Trending`,
@@ -94,8 +101,20 @@ export default function LanguageHubPage({ language }: { language: string }) {
         </p>
       </header>
 
-      <HubSection heading="Trending now" songs={trending.data} loading={trending.isLoading} />
-      <HubSection heading="New releases" songs={fresh.data} loading={fresh.isLoading} />
+      {shelvesFailed ? (
+        <ErrorState
+          retry={() => {
+            void trending.refetch();
+            void fresh.refetch();
+            if (more.isError) void more.refetch();
+          }}
+        />
+      ) : (
+        <>
+          <HubSection heading="Trending now" songs={trending.data} loading={trending.isLoading} error={trending.isError} retry={() => void trending.refetch()} />
+          <HubSection heading="New releases" songs={fresh.data} loading={fresh.isLoading} error={fresh.isError} retry={() => void fresh.refetch()} />
+        </>
+      )}
 
       {(artists.data?.length ?? 0) >= 4 && (
         <section className="mb-8">

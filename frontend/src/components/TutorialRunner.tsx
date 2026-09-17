@@ -4,6 +4,7 @@ import { useTutorialStore } from '@/store/tutorialStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { tutorialById } from '@/features/tutorials/tutorials';
 import { cn } from '@/utils/cn';
+import { scrollBehavior } from '@/utils/motion';
 
 /**
  * v5.20.0 — the live tutorial runner. Lazy chunk, mounted at the app root by
@@ -65,7 +66,7 @@ export default function TutorialRunner() {
       }
       if (cancelled || id !== runId.current) return;
       if (el) {
-        el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+        el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: scrollBehavior() });
         await new Promise((r) => window.setTimeout(r, 250));
       }
       setReady(true);
@@ -120,7 +121,10 @@ export default function TutorialRunner() {
 
   // Card placement: beside the spotlight when there is one, else centred.
   const cardW = Math.min(380, window.innerWidth - 24);
-  let cardStyle: React.CSSProperties = { left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: cardW };
+  // Centred with `inset-0 m-auto h-fit`, NOT a translate: the card's enter
+  // animation animates `transform`, which overrode an inline translate and
+  // threw the card off-centre for the length of the animation.
+  let cardStyle: React.CSSProperties = { width: cardW };
   if (rect) {
     const below = current.placement !== 'top' && rect.top + rect.height + 220 < window.innerHeight;
     const above = current.placement === 'top' || !below;
@@ -145,7 +149,11 @@ export default function TutorialRunner() {
       <div
         ref={cardRef}
         tabIndex={-1}
-        className={cn('fixed glass-modal rounded-3xl p-5 shadow-2xl outline-none animate-fade-up', !ready && 'opacity-90')}
+        className={cn(
+          'fixed glass-modal rounded-3xl p-5 shadow-2xl outline-none animate-fade-up max-h-[calc(100dvh-24px)] overflow-y-auto',
+          !rect && 'inset-0 m-auto h-fit max-w-[calc(100vw-24px)]',
+          !ready && 'opacity-90',
+        )}
         style={cardStyle}
       >
         <div className="flex items-center justify-between gap-3 mb-2">

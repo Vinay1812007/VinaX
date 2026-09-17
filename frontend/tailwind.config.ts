@@ -61,9 +61,16 @@ export default {
       },
       fontSize: {
         // VinaX type scale — expressive display sizes, compact metadata.
-        'display': ['2rem', { lineHeight: '2.25rem', letterSpacing: '-0.02em', fontWeight: '700' }],
-        'title': ['1.375rem', { lineHeight: '1.75rem', letterSpacing: '-0.01em', fontWeight: '700' }],
-        'meta': ['0.8125rem', { lineHeight: '1.125rem' }],
+        display: ['var(--vx-type-display)', { lineHeight: '1.12', letterSpacing: '-0.035em', fontWeight: '750' }],
+        title: ['var(--vx-type-section)', { lineHeight: '1.4', letterSpacing: '-0.025em', fontWeight: '700' }],
+        meta: ['var(--vx-type-meta)', { lineHeight: '1.5' }],
+        // Page-level h1 — exactly what PageHeader renders (`.vx-page-header h1`
+        // reads the same token, tracking included), so hand-rolled page titles
+        // cannot drift from it.
+        'page-title': ['var(--vx-type-page)', { lineHeight: '1.2', letterSpacing: '-0.035em', fontWeight: '750' }],
+        'card-title': ['var(--vx-type-card)', { lineHeight: '1.4', fontWeight: '650' }],
+        body: ['var(--vx-type-body)', { lineHeight: '1.6' }],
+        caption: ['var(--vx-type-caption)', { lineHeight: '1.5' }],
       },
       boxShadow: {
         // Soft, premium elevation — layered (contact + ambient) for realism.
@@ -113,7 +120,12 @@ export default {
       animation: {
         shimmer: 'shimmer 1.4s linear infinite',
         'pulse-bar': 'pulse-bar 0.9s ease-in-out infinite',
-        'fade-up': 'fade-up 0.25s ease-out both',
+        // `backwards`, never `both`: a forwards fill leaves `transform:
+        // translateY(0)` on the element for good, which makes it a containing
+        // block + stacking context — every `fixed` overlay inside a page was
+        // positioned against the page instead of the viewport. The end state
+        // equals the natural style, so nothing needs to be held.
+        'fade-up': 'fade-up 0.25s ease-out backwards',
         marquee: 'marquee 12s linear infinite',
         confetti: 'confetti 2.4s linear both',
         'aurora-a': 'aurora-a 22s ease-in-out infinite',

@@ -154,6 +154,12 @@ async function serveOfflineAudio(req, url) {
   }
 }
 
+/** True for navigations the single-page app answers — everything except the
+ *  standalone admin / status pages and API routes on the same origin. */
+function isAppRoute(pathname) {
+  return !/^\/(admin|status|api)(\/|$)/.test(pathname);
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -192,7 +198,11 @@ self.addEventListener('fetch', (event) => {
           // install-time copy pointing at pruned chunks.
           try {
             const ct = (res.headers.get('content-type') || '').toLowerCase();
-            if (res.ok && ct.indexOf('text/html') !== -1) {
+            // Only the SPA's own HTML may become the shell: /admin/ and
+            // /status/ are separate pages (caching one as '/' made an offline
+            // launch render the wrong app), and a redirected response is some
+            // other URL's body.
+            if (res.ok && !res.redirected && isAppRoute(url.pathname) && ct.indexOf('text/html') !== -1) {
               const copy = res.clone();
               caches.open(CACHE).then((c) => c.put('/', copy)).catch(() => undefined);
             }

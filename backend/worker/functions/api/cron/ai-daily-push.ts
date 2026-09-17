@@ -170,7 +170,7 @@ async function pickTarget(env: Env): Promise<GeoTarget> {
   const recent = await sbSelect<{ message: string | null }>(
     env,
     'vinax_events',
-    `type=eq.ai-push&created_at=gte.${encodeURIComponent(since)}&select=message&limit=200`,
+    `type=eq.ai-push&device_id=eq.admin&created_at=gte.${encodeURIComponent(since)}&select=message&limit=200`,
   ).catch(() => []);
   const usedKeys = new Set<string>();
   for (const r of recent) {
@@ -482,7 +482,7 @@ export const onRequest = async (context: CronContext): Promise<Response> => {
     const recent = await sbSelect<{ created_at: string }>(
       env,
       'vinax_events',
-      `type=eq.ai-push&created_at=gte.${encodeURIComponent(throttleFloor)}&select=created_at&limit=1`,
+      `type=eq.ai-push&device_id=eq.admin&created_at=gte.${encodeURIComponent(throttleFloor)}&select=created_at&limit=1`,
     ).catch(() => []);
     if (recent.length) return json({ ok: false, reason: 'throttled_150min', hint: 'workflow_dispatch → force:true to bypass' }, 200);
   }

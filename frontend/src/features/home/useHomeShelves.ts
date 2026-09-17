@@ -1,22 +1,26 @@
 import { useQuery } from '@tanstack/react-query';
 import { searchSongs, searchSongsPage } from '@/services/api';
 import { trendingSeed, timeOfDaySeed, newReleasesSeed, popularSeed } from '@/constants/seeds';
-import { rankSongs } from '@/features/search/useSearch';
+import { rankSongs, useRankSettingsKey } from '@/features/search/useSearch';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useHistoryStore } from '@/store/historyStore';
 import type { Song } from '@/types';
 
+// Shelves cache the list AS RANKED, and the ranking reads the muted / pinned
+// languages and kid mode — so `rankKey` is part of every key below.
 export function useTrendingForLanguage(language: string) {
+  const rankKey = useRankSettingsKey();
   return useQuery({
-    queryKey: ['trending', language],
+    queryKey: ['trending', language, rankKey],
     queryFn: async () => rankSongs(await searchSongs(trendingSeed(language), 20)),
     staleTime: 15 * 60_000,
   });
 }
 
 export function useNewForLanguage(language: string) {
+  const rankKey = useRankSettingsKey();
   return useQuery({
-    queryKey: ['new-releases-lang', language],
+    queryKey: ['new-releases-lang', language, rankKey],
     queryFn: async () => rankSongs(await searchSongs(newReleasesSeed(language), 20)),
     staleTime: 15 * 60_000,
   });
@@ -74,8 +78,9 @@ export function useTrendingNow() {
   const muted = useSettingsStore((s) => s.mutedLanguages);
   const bucket = visitBucket();
   const salt = rotateBucket() + bucket;
+  const rankKey = useRankSettingsKey();
   return useQuery({
-    queryKey: ['trending-now', langs, muted, bucket],
+    queryKey: ['trending-now', langs, muted, bucket, rankKey],
     queryFn: () => multiLangPool(langs, trendingSeed, salt, muted),
     staleTime: 15 * 60_000,
     gcTime: 30 * 60_000,
@@ -89,8 +94,9 @@ export function useNewReleases() {
   const muted = useSettingsStore((s) => s.mutedLanguages);
   const bucket = visitBucket();
   const salt = rotateBucket() + bucket;
+  const rankKey = useRankSettingsKey();
   return useQuery({
-    queryKey: ['new-releases', langs, muted, bucket],
+    queryKey: ['new-releases', langs, muted, bucket, rankKey],
     queryFn: () => multiLangPool(langs, newReleasesSeed, salt, muted),
     staleTime: 15 * 60_000,
     gcTime: 30 * 60_000,
@@ -104,8 +110,9 @@ export function usePopular() {
   const muted = useSettingsStore((s) => s.mutedLanguages);
   const bucket = visitBucket();
   const salt = rotateBucket() + bucket;
+  const rankKey = useRankSettingsKey();
   return useQuery({
-    queryKey: ['popular', langs, muted, bucket],
+    queryKey: ['popular', langs, muted, bucket, rankKey],
     queryFn: () => multiLangPool(langs, popularSeed, salt, muted),
     staleTime: 15 * 60_000,
     gcTime: 30 * 60_000,
@@ -117,8 +124,9 @@ export function useTimeOfDayShelf() {
   const lang = pinned[0] ?? 'hindi';
   const hour = new Date().getHours();
   const seed = timeOfDaySeed(hour, lang);
+  const rankKey = useRankSettingsKey();
   const query = useQuery({
-    queryKey: ['time-of-day', seed.query],
+    queryKey: ['time-of-day', seed.query, rankKey],
     queryFn: async () => rankSongs(await searchSongs(seed.query, 15)),
     staleTime: 30 * 60_000,
   });

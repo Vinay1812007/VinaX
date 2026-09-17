@@ -2,6 +2,7 @@ import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useDjStore } from '@/store/djStore';
 import { audioEngine } from '@/services/audio/engine';
+import { useCastStore } from '@/services/cast';
 import { onSpeakingChange, readAloud, setReadAloudVoiceFallback, stopReadAloud } from '@/features/ai/readAloud';
 
 /** Same key and shape VinaX AI stores the Settings → Voice choice under: `model|persona`, or 'device'. */
@@ -41,14 +42,44 @@ export function announcementFor(song: { title: string; subtitle: string; artists
   return artist ? `Now playing ${song.title}, by ${artist}` : `Now playing ${song.title}`;
 }
 
+/** Longest the music may stay ducked for one line: ~90 ms a character on top
+ *  of a 4 s allowance for the voice to start, never past 30 s. A flat 20 s
+ *  when the line's length is unknown. */
+export function duckWatchdogMs(lineLength: number | null): number {
+  if (lineLength == null || lineLength <= 0) return 20_000;
+  return Math.min(30_000, 4_000 + 90 * lineLength);
+}
+
+let duckTimer: number | null = null;
+/** Length of the line being spoken, set just before readAloud() ducks. */
+let pendingLineLength: number | null = null;
+
+function clearDuckTimer(): void {
+  if (duckTimer != null) {
+    window.clearTimeout(duckTimer);
+    duckTimer = null;
+  }
+}
+
 function duck(on: boolean): void {
   const s = usePlayerStore.getState();
   if (on && !ducked && !s.muted) {
     ducked = true;
     audioEngine.setVolume(Math.max(0.04, s.volume * DUCK_LEVEL));
+    // Watchdog: a speech engine that never reports `end` (no voices installed,
+    // a backgrounded WebView) must not leave the music ducked for good.
+    clearDuckTimer();
+    duckTimer = window.setTimeout(() => {
+      duckTimer = null;
+      duck(false);
+    }, duckWatchdogMs(pendingLineLength));
   } else if (!on && ducked) {
     ducked = false;
-    audioEngine.setVolume(s.muted ? 0 : s.volume);
+    clearDuckTimer();
+    // Restore the STORE volume — mute is carried by the element's own muted
+    // flag, so writing 0 here would leave a later un-mute silent. While
+    // casting, the local element must stay inaudible under the receiver.
+    audioEngine.setVolume(useCastStore.getState().connected ? 0 : s.volume);
   }
 }
 
@@ -68,6 +99,7 @@ export function initDjVoice(): void {
     lastAnnounced = song.id;
     const line = announcementFor(song, useDjStore.getState().segues[song.id]);
     stopReadAloud();
+    pendingLineLength = line.length;
     readAloud(`dj:${song.id}`, line);
   });
 }

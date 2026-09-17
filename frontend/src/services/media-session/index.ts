@@ -238,6 +238,9 @@ export function updateMediaMetadata(song: Song | null): void {
     void artworkDataUrl(artUrl)
       .catch(() => null)
       .then((dataUri) => {
+        // The decode can outlive the song: a late cover for A must not land
+        // under B's title (or re-push after the session was cleared).
+        if (_song?.id !== song.id) return;
         _artwork = dataUri ?? '';
         pushNativeMetadata();
       });

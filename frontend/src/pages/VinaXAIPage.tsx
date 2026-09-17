@@ -80,6 +80,7 @@ import {
   type MoreAction,
 } from '@/components/ai/AiExtras';
 import { useClientConfig } from '@/features/home/useAppConfig';
+import { scrollBehavior } from '@/utils/motion';
 import {
   ATTACHMENT_ACCEPT,
   attachmentText,
@@ -1426,6 +1427,7 @@ export default function VinaXAIPage(): ReactNode {
     let full = '';
     let gotSources: string[] = [];
     let gotEngine = '';
+    let cutShort = false;
     // Time-sensitive queries — "who won today", "202X releases", live scores,
     // weather — auto-flip web search on so the reply gets fresh sources
     // instead of the model's training-time snapshot. The heuristic used to
@@ -1487,8 +1489,11 @@ export default function VinaXAIPage(): ReactNode {
             const j = JSON.parse(chunk.slice(5).trim()) as {
               delta?: string;
               done?: boolean;
+              truncated?: boolean;
               meta?: { sources?: string[]; model?: string };
             };
+            // v7.0.0 — the service says when a reply was cut short mid-stream.
+            if (j.truncated === true) cutShort = true;
             if (j.meta?.sources?.length) gotSources = j.meta.sources;
             if (j.meta?.model) gotEngine = nickForModel(j.meta.model);
             if (typeof j.delta === 'string') {
@@ -1517,7 +1522,7 @@ export default function VinaXAIPage(): ReactNode {
       abortRef.current = null;
       setBusy(false);
       const split = splitFollowups(full.trim().replace(/\n{3,}/g, '\n\n'));
-      const finalText = split.body;
+      const finalText = cutShort && split.body ? `${split.body}\n\n_This answer was cut short — ask me to continue._` : split.body;
       const finalSources = gotSources;
       const finalEngine = gotEngine;
       setActiveMessages((prev) => {
@@ -2699,7 +2704,7 @@ export default function VinaXAIPage(): ReactNode {
                         onClick={() =>
                           document
                             .getElementById(`ai-msg-${i}`)
-                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            ?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
                         }
                         className="block w-full text-left truncate py-1 ai-t2 hover:ai-t1"
                       >

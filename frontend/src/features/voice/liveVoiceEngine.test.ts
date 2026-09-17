@@ -286,6 +286,14 @@ describe('isLikelyEcho (B6 barge-in echo filter)', () => {
   it('is punctuation/case insensitive', () => {
     expect(isLikelyEcho('HELLO, THERE!', 'well hello there friend')).toBe(true);
   });
+  it('hears Hindi and Telugu speech as speech, not as nothing', () => {
+    // A real barge-in in Hindi over an English reply must not read as echo.
+    expect(isLikelyEcho('रुको, कुछ और बजाओ', 'here are three romantic songs')).toBe(false);
+    expect(isLikelyEcho('ఆపు, వేరే పాట', 'ఇవిగో మూడు పాటలు')).toBe(false);
+    // …while the assistant's own Hindi reply coming back through the speaker still is.
+    expect(isLikelyEcho('तीन रोमांटिक गाने', 'ये रहे तीन रोमांटिक गाने, सुनिए!')).toBe(true);
+    expect(isLikelyEcho('दिल', 'दाल')).toBe(false);
+  });
 });
 
 describe('pauseSpeaking (B6 barge-in state machine)', () => {

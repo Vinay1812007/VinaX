@@ -61,8 +61,11 @@ function startOfToday(): number {
 export default function HistoryPage() {
   usePageTitle('History');
   const entries = useHistoryStore((s) => s.entries);
-  const clearHistory = useHistoryStore((s) => s.clearHistory);
   const removeEntry = useHistoryStore((s) => s.removeEntry);
+  // Whole-history clear is undoable (snapshot → clear → toast with Undo).
+  // Loaded on demand, like the onboarding restore: the settings actions
+  // module carries the backup code and has no place in this page's chunk.
+  const clearHistoryWithUndo = () => void import('@/features/settings/actions').then((m) => m.clearHistoryWithUndo());
   const clearSince = useHistoryStore((s) => s.clearSince);
   const playQueue = usePlayerStore((s) => s.playQueue);
   // Package D6 — language + date filters, and Play all acts on what you see.
@@ -122,7 +125,7 @@ export default function HistoryPage() {
             >
               <PlayIcon className="w-3.5 h-3.5" /> {filtering ? `Play these ${shownSongs.length}` : 'Play all'}
             </button>
-            <button onClick={clearHistory} className="px-4 min-h-touch rounded-full border border-ink-600 text-sm text-ink-200 hover:border-red-400 hover:text-red-300 active:scale-95 transition-transform">
+            <button onClick={clearHistoryWithUndo} className="px-4 min-h-touch rounded-full border border-ink-600 text-sm text-ink-200 hover:border-red-400 hover:text-red-300 active:scale-95 transition-transform">
               Clear
             </button>
           </>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import { cn } from '@/utils/cn';
+import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import type { LiveVoiceState } from './liveVoiceEngine';
 
 interface Props {
@@ -40,6 +41,9 @@ export function LiveVoiceOverlay({
 }: Props) {
   const orbRef = useRef<HTMLButtonElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Mounted only while a live session is open: hardware back ends the session
+  // instead of popping the route underneath a still-listening microphone.
+  useDismissOnBack(true, onEnd);
   useEffect(() => {
     // Older Safari (<16) and pre-2023 Firefox lack CanvasRenderingContext2D.roundRect;
     // feature-detect once outside the RAF loop so we can fall back to plain

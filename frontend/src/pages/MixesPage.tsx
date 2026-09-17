@@ -2,7 +2,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { Shelf } from '@/components/Shelf';
 import { SongRow } from '@/components/SongRow';
 import { ShelfSkeleton } from '@/components/Skeletons';
-import { EmptyState } from '@/components/States';
+import { EmptyState, ErrorState } from '@/components/States';
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
 import { usePlayerStore } from '@/store/playerStore';
 import { PlayIcon } from '@/components/Icons';
@@ -21,7 +21,8 @@ const MIX_KIND_ICONS: Record<string, string> = {
 
 export default function MixesPage() {
   usePageTitle('Mixes');
-  const { data: mixes, isLoading } = useRecommendations();
+  const { data: mixes, isLoading, isError, refetch } = useRecommendations();
+  const failed = isError && !mixes?.length;
   const playQueue = usePlayerStore((s) => s.playQueue);
 
   return (
@@ -42,7 +43,10 @@ export default function MixesPage() {
         </>
       )}
 
-      {!isLoading && (!mixes || mixes.length === 0) && (
+      {/* A failed request is not "warming up" — say so and offer the retry. */}
+      {failed && <ErrorState retry={() => void refetch()} />}
+
+      {!isLoading && !failed && (!mixes || mixes.length === 0) && (
         <EmptyState
           title="Your mixes are warming up"
           message="Play a few songs, favourite what you love, and your mixes will appear here within a few interactions."

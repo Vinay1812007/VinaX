@@ -18,7 +18,8 @@ export const onRequestGet = async (context: { env: SupabaseEnv }): Promise<Respo
   const rows = await sbSelect<{ message: string | null }>(
     env,
     'vinax_events',
-    `type=eq.announcement&created_at=gte.${encodeURIComponent(since)}&select=message&order=created_at.desc&limit=5`,
+    // device_id=eq.admin: only rows the admin console / cron wrote are served.
+    `type=eq.announcement&device_id=eq.admin&created_at=gte.${encodeURIComponent(since)}&select=message&order=created_at.desc&limit=5`,
   ).catch(() => []);
   const announcements: unknown[] = [];
   for (const r of rows) {

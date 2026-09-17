@@ -8,15 +8,18 @@ import { Chip } from '@/components/Chip';
 import { Shelf } from '@/components/Shelf';
 import { MediaCard } from '@/components/MediaCard';
 import { ShelfSkeleton } from '@/components/Skeletons';
+import { InlineError } from '@/components/States';
 import { useTrendingForLanguage } from '@/features/home/useHomeShelves';
 import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
 import { languageLabel } from '@/constants/languages';
 
 function RegionalShelf({ language, regionLabel }: { language: string; regionLabel: string }) {
-  const { data, isLoading } = useTrendingForLanguage(language);
+  const { data, isLoading, isError, refetch } = useTrendingForLanguage(language);
   const playQueue = usePlayerStore((s) => s.playQueue);
   if (isLoading) return <ShelfSkeleton />;
+  // A failed shelf used to vanish (`return null`); only an EMPTY one may.
+  if (isError && !data?.length) return <InlineError label={`${regionLabel} · ${languageLabel(language)}`} retry={() => void refetch()} />;
   if (!data?.length) return null;
   return (
     <Shelf title={`${regionLabel} · ${languageLabel(language)}`} explanation="Popular in this region">

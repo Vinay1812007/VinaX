@@ -1,6 +1,7 @@
 import type { Song } from '@/types';
 import { gatherCandidates, generateNextCandidates } from './candidates';
-import { rankCandidates } from './scoring';
+import { buildScoringFrame, rankCandidates } from './scoring';
+import { validateSequence } from './validation';
 import { getRecommendationContext } from './context';
 import { enrichSongs } from '@/services/ai/recommendations';
 import { freshSongs } from './freshness';
@@ -71,10 +72,19 @@ export async function planQueue(req: PlanRequest): Promise<QueuePlan> {
   const byId = new Map(enriched.map((s) => [s.id, s]));
   const ranked = rankCandidates(admitted.map((c) => ({ ...c, song: byId.get(c.song.id) ?? c.song })), { ...ctx, seedSong: seed });
   const pool = ranked.map((r) => r.candidate.song);
-  const discoveryIds = new Set(ranked.filter((r) => r.candidate.source === 'explore' || r.candidate.source === 'trending').map((r) => r.candidate.song.id));
+  // v7.0.0 — "discovery" means an artist this listener has never played (or an
+  // explore pick), the same definition the next-song pipeline uses; it used to
+  // be "anything from a trending search", which counted the listener's own
+  // favourite artists as discoveries whenever they were trending.
+  const known = buildScoringFrame({ ...ctx, seedSong: seed }).knownArtists;
+  const discoveryIds = new Set(ranked.filter((r) => r.candidate.source === 'explore' || !known.has((r.candidate.song.artists[0]?.name ?? '').trim().toLowerCase())).map((r) => r.candidate.song.id));
   const sureIds = new Set([...lib.favorites.map((s) => s.id), ...history.map((e) => e.song.id)]);
   const targetSec = Math.max(5, Math.min(240, req.minutes)) * 60;
   const arc = sequenceSongs(pool.slice(0, 60), { seed, shape: req.shape, durationSec: targetSec, limit: Math.min(60, Math.ceil(targetSec / 150)), language: req.language ?? null, discovery: DISCOVERY_SHARE[req.discovery], discoveryIds, sureIds, recent: history.slice(0, 3).map((e) => e.song) });
+  // The plan passes the same final rules as any queue (one cut per song, mutes,
+  // blocks); the arc's order is kept, a rejected song simply leaves it.
+  const allowed = new Set(validateSequence(arc.songs.map((s) => s.song), { seed, limit: arc.songs.length, artistCap: Math.max(2, Math.ceil(arc.songs.length / 4)), mutedLanguages: useSettingsStore.getState().mutedLanguages, blocked: (s) => isSongBlocked(s, lib) }).songs.map((s) => s.id));
+  arc.songs = arc.songs.filter((s) => allowed.has(s.song.id));
   let intro: string | null = null;
   let djTouched = false;
   let songs = arc.songs;

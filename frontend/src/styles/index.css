@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ============================================================================
-   VinaX — Living Glass v1.4.0 (consolidated stylesheet)
+   VinaX Flow — foundations and feature primitives
 
    This file replaces five stacked design eras (v3.7 aurora, v3.8 modern
    minimal, flat re-skin, Noir Bloom, Glass 2.0 / 4.0). One source of truth:
@@ -36,17 +36,59 @@
    ========================================================================= */
 :root {
   color-scheme: dark;
+  --vx-bg-base: rgb(var(--ink-950));
+  --vx-bg-elevated: rgb(var(--ink-900));
+  --vx-bg-hover: rgb(var(--ink-800));
+  --vx-surface: rgb(var(--ink-900));
+  --vx-surface-raised: rgb(var(--ink-850));
+  --vx-border: var(--glass-border);
+  --vx-text-primary: rgb(var(--ink-100));
+  --vx-text-secondary: rgb(var(--ink-300));
+  --vx-text-muted: rgb(var(--ink-400));
+  --vx-accent: rgb(var(--ember-500));
+  --vx-accent-hover: rgb(var(--ember-400));
+  --vx-on-accent: #0b0b0c;
+  --vx-focus: rgb(var(--ember-400));
+  --vx-danger: #fda4af;
+  --vx-success: #86efac;
+  --vx-art-accent: rgb(var(--art));
+  --vx-radius-control: 8px;
+  --vx-radius-card: 12px;
+  --vx-radius-panel: 16px;
+  --vx-shadow-overlay: 0 16px 48px #0004;
+  --vx-motion-fast: 140ms;
+  --vx-motion-normal: 200ms;
+  --vx-type-display: clamp(2rem, 3vw, 3rem);
+  --vx-type-page: clamp(1.75rem, 2.5vw, 2.25rem);
+  --vx-type-section: 1.25rem;
+  --vx-type-card: .9375rem;
+  --vx-type-body: .9375rem;
+  --vx-type-meta: .8125rem;
+  --vx-type-caption: .75rem;
+  --vx-space-1: 4px;
+  --vx-space-2: 8px;
+  --vx-space-3: 12px;
+  --vx-space-4: 16px;
+  --vx-space-5: 20px;
+  --vx-space-6: 24px;
+  --vx-space-8: 32px;
+  --vx-space-10: 40px;
+  --vx-space-12: 48px;
+  --vx-space-16: 64px;
 
   /* Surface scale — v5.9.0 flat black look: pure-black chrome (sidebar,
      player, nav) over a #121212 canvas, #181818 / #282828 card tiers,
      #b3b3b3 secondary text, white primary. AAA on --ink-900 with --ink-100. */
-  --ink-950: 0 0 0;
-  --ink-900: 18 18 18;
-  --ink-850: 24 24 24;
-  --ink-800: 40 40 40;
+  --ink-950: 11 11 12;
+  --ink-900: 18 18 20;
+  --ink-850: 24 24 27;
+  --ink-800: 34 34 38;
   --ink-700: 51 51 51;
   --ink-600: 83 83 83;
-  --ink-500: 114 114 114;
+  /* ink-500 is used as TEXT (captions, counts, hints), so it must clear AA:
+     144 144 150 measures 5.9:1 on ink-900 and 5.0:1 on ink-800 (4.5 needed).
+     The previous 114 114 114 measured 3.9 / 3.3. Asserted in contrast.test.ts. */
+  --ink-500: 144 144 150;
   --ink-400: 167 167 167;
   --ink-300: 179 179 179;
   --ink-200: 222 222 222;
@@ -55,17 +97,17 @@
   /* Brand ramps. ember = primary CTAs, focus rings, active state.
      tide = supporting affordances (chips, subtle links, secondary gradients).
      Accent-theme selectors below override these at runtime. */
-  --ember-600: 22 156 70;
-  --ember-500: 29 185 84;
-  --ember-400: 30 215 96;
-  --ember-300: 100 232 150;
-  --tide-500: 30 215 96;
-  --tide-400: 100 232 150;
+  --ember-600: 139 92 246;
+  --ember-500: 167 139 250;
+  --ember-400: 196 181 253;
+  --ember-300: 221 214 254;
+  --tide-500: 167 139 250;
+  --tide-400: 196 181 253;
 
   /* --art: living accent extracted from the currently playing artwork.
      Set at runtime by src/layouts/AppLayout.tsx; defaults to the accent so
      the very first page load doesn't leak a stale hue. */
-  --art: 29 185 84;
+  --art: 167 139 250;
 
   /* Art-tint alphas — used by light-mode glass surfaces to wash the frost
      with the current artwork's dominant color. Kept as tokens so future
@@ -77,9 +119,9 @@
 
   /* Aura palette — used by the home-page hero wash + settings glow. Kept
      as a small named subset so component code stays readable. */
-  --aura-violet: 30 215 96;
-  --aura-cyan: 100 232 150;
-  --aura-lime: 29 185 84;
+  --aura-violet: 167 139 250;
+  --aura-cyan: 196 181 253;
+  --aura-lime: 167 139 250;
 
   /* Glass material — iOS-style ADJUSTABLE translucency (Settings → Glass
      effect). --glass-alpha is the single dial: 1 = the classic solid look,
@@ -113,25 +155,25 @@
      translucency fallbacks (prefers-reduced-transparency, @supports not
      backdrop-filter) fall back to --surface-solid. */
   --surface-solid: rgb(18 18 18);
-  --surface-input: rgb(40 40 40);
+  --surface-input: var(--vx-surface-raised);
   --surface-navbar: rgb(0 0 0);
-  --surface-sidebar: rgb(0 0 0);
-  --surface-modal: rgb(40 40 40);
-  --surface-player: rgb(0 0 0);
+  --surface-sidebar: rgb(var(--ink-950));
+  --surface-modal: var(--vx-surface-raised);
+  --surface-player: rgb(var(--ink-950));
 
   /* Gradients — single-hue, no rainbow stops (the hero + text-gradient
      carry the only real spectrum in the app). */
-  --gradient-primary: linear-gradient(180deg, rgb(30 215 96), rgb(29 185 84));
+  --gradient-primary: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)));
   --gradient-secondary: linear-gradient(180deg, rgb(51 51 51), rgb(40 40 40));
-  --gradient-premium: linear-gradient(180deg, rgb(30 215 96), rgb(29 185 84));
-  --gradient-aurora: linear-gradient(120deg, rgb(30 215 96), rgb(100 232 150) 70%);
+  --gradient-premium: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)));
+  --gradient-aurora: linear-gradient(120deg, rgb(var(--ember-500)), rgb(var(--ember-400)));
 
   /* Radii — three real values only, plus pill. v5.8.1 formal pass: tightened
      (8/12/16/20 → 6/8/12/14) so surfaces read crisp and professional. */
-  --radius-sm: 6px;
+  --radius-sm: 8px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --radius-xl: 14px;
+  --radius-xl: 16px;
   --radius-pill: 9999px;
 
   /* Elevation. --shadow-soft is for card contact, --shadow-glow is the
@@ -173,6 +215,9 @@
    with cool-tinted hairlines. Every glass primitive re-themes automatically. */
 html.light {
   color-scheme: light;
+  --vx-on-accent: #fff;
+  --vx-danger: #be123c;
+  --vx-success: #166534;
 
   --ink-950: 255 255 255;
   --ink-900: 247 247 247;
@@ -180,7 +225,9 @@ html.light {
   --ink-800: 229 229 229;
   --ink-700: 212 212 212;
   --ink-600: 148 154 168;
-  --ink-500: 132 138 152;
+  /* 5.4:1 on ink-900, 4.6:1 on ink-800 (was 132 138 152 — 3.2 / 2.8). Stays
+     one step lighter than ink-400 so the ramp remains monotonic. */
+  --ink-500: 96 102 118;
   /* 92 98 114 (not a straight inversion): the muted-text tier must clear
      WCAG AA on BOTH the page canvas (ink-900, 5.44:1) and card surfaces
      (ink-800, 4.61:1). The previous 116 122 138 measured 3.83:1. */
@@ -194,12 +241,12 @@ html.light {
      shifts ~2 shades darker; ember-400 (the text tier, 87 call sites) and
      tide-400 clear 4.5:1 on ink-900 AND ink-800. Asserted in
      src/__tests__/contrast.test.ts. */
-  --ember-600: 9 66 34;
-  --ember-500: 13 92 47;
-  --ember-400: 16 112 56;
-  --ember-300: 20 132 66;
-  --tide-500: 13 92 47;
-  --tide-400: 16 112 56;
+  --ember-600: 76 29 149;
+  --ember-500: 91 33 182;
+  --ember-400: 109 40 217;
+  --ember-300: 124 58 237;
+  --tide-500: 91 33 182;
+  --tide-400: 109 40 217;
 
   --glass-bg: rgb(255 255 255 / var(--glass-alpha));
   --glass-bg-strong: rgb(248 250 253 / var(--glass-alpha));
@@ -255,7 +302,7 @@ html.amoled {
   --glass-bg-muted: rgb(3 3 5);
   --surface-solid: rgb(0 0 0);
   --surface-navbar: rgb(0 0 0);
-  --surface-sidebar: rgb(0 0 0);
+  --surface-sidebar: rgb(var(--ink-950));
   --surface-player: rgb(3 3 5);
   --surface-modal: rgb(6 6 9);
 }
@@ -399,7 +446,10 @@ p { text-wrap: pretty; }
   border-radius: 6px;
   box-shadow: 0 0 0 5px rgb(var(--ember-500) / 0.32);
 }
-input:focus-visible,
+/* TEXT-LIKE inputs only. This used to be a bare `input:focus-visible`, which
+   also erased the ring on sliders, checkboxes and radios — keyboard users had
+   no idea where they were. Those get their own rings at the end of this file. */
+input:not([type='range']):not([type='checkbox']):not([type='radio']):focus-visible,
 textarea:focus-visible {
   outline: none;
   box-shadow: none;
@@ -431,36 +481,36 @@ textarea:focus-visible {
   border-radius: var(--radius-lg);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+  box-shadow: none;
 }
 .glass-strong {
   background: var(--glass-bg-strong);
   border-top: 1px solid var(--glass-border);
   -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
-  box-shadow: var(--glass-shadow-strong), inset 0 1px 0 var(--glass-highlight);
+  box-shadow: none;
 }
 
 .glass-card {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  border-radius: 1.25rem;
-  box-shadow: var(--glass-shadow);
-  transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.3s var(--ease-calm),
+  border-radius: var(--vx-radius-card);
+  box-shadow: none;
+  transition: background-color var(--vx-motion-normal) ease, border-color var(--vx-motion-normal) ease, box-shadow 0.3s var(--ease-calm),
     transform 0.3s var(--ease-calm);
 }
 .glass-panel {
   background: var(--glass-bg-muted);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  transition: background-color 0.4s ease, border-color 0.4s ease;
+  transition: background-color var(--vx-motion-normal) ease, border-color var(--vx-motion-normal) ease;
 }
 .glass-navbar {
   background: var(--surface-navbar);
   border-bottom: 1px solid var(--glass-border);
   -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
-  transition: background-color 0.4s ease, border-color 0.4s ease;
+  transition: background-color var(--vx-motion-normal) ease, border-color var(--vx-motion-normal) ease;
 }
 .glass-bottom-player {
   background: var(--surface-player);
@@ -478,7 +528,7 @@ textarea:focus-visible {
 .glass-modal {
   background: var(--surface-modal);
   border: 1px solid var(--glass-border);
-  border-radius: 1.75rem;
+  border-radius: var(--vx-radius-panel);
   box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.6);
   -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
@@ -486,7 +536,7 @@ textarea:focus-visible {
 .glass-sheet {
   background: var(--surface-modal);
   border-top: 1px solid var(--glass-border);
-  border-radius: 1.75rem 1.75rem 0 0;
+  border-radius: var(--vx-radius-panel) var(--vx-radius-panel) 0 0;
   box-shadow: 0 -16px 48px -16px rgba(0, 0, 0, 0.55);
   padding-bottom: max(1rem, var(--safe-bottom));
   -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
@@ -594,16 +644,17 @@ button {
     border-color 0.18s var(--ease-calm);
 }
 button:disabled { cursor: not-allowed; }
-button:active:not(:disabled) { transform: scale(0.97); }
+button:active:not(:disabled) { filter: brightness(.96); }
 
 .btn-primary,
 .btn-premium {
   position: relative;
   overflow: hidden;
   background: rgb(var(--ember-500));
-  color: rgb(var(--ink-100));
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  color: var(--vx-on-accent);
+  min-height: 44px;
+  font-weight: 700;
+  letter-spacing: 0;
   border: 1px solid rgb(var(--ember-500));
   border-radius: var(--radius-md);
   white-space: nowrap;
@@ -618,7 +669,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .btn-primary:active,
 .btn-premium:active {
   transform: scale(0.98);
-  background: rgb(var(--ember-600));
+  background: rgb(var(--ember-500));
 }
 .btn-primary:disabled,
 .btn-premium:disabled {
@@ -646,29 +697,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
 }
 .btn-secondary:active { transform: scale(0.98); }
 
-/* Press bloom — a radial ripple that swells on :active. GPU-cheap
-   (opacity + transform only), respects reduced motion below. */
-.btn-primary::after,
-.btn-secondary::after,
-.btn-premium::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(130px circle at 50% 50%, rgba(255, 255, 255, 0.35), transparent 62%);
-  opacity: 0;
-  transform: scale(0.4);
-  transition: opacity 0.4s ease, transform 0.45s var(--ease-calm);
-  pointer-events: none;
-}
-.btn-primary:active::after,
-.btn-secondary:active::after,
-.btn-premium:active::after {
-  opacity: 1;
-  transform: scale(1);
-  transition-duration: 0s;
-}
-
 button:disabled,
 .btn-primary:disabled,
 .btn-secondary:disabled,
@@ -678,21 +706,6 @@ button:disabled,
   transform: none;
   filter: none;
   box-shadow: none;
-}
-
-/* Global elevation on any control tagged with the shared accent utility. */
-button.bg-ember-500,
-a.bg-ember-500 {
-  box-shadow: 0 7px 20px -10px rgb(var(--ember-500) / 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
-}
-@media (hover: hover) and (pointer: fine) {
-  button.bg-ember-500:hover,
-  a.bg-ember-500:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 13px 30px -10px rgb(var(--ember-500) / 0.72),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  }
 }
 
 /* ============================================================================
@@ -778,7 +791,7 @@ input[type='range']::-moz-range-progress { @apply h-1.5 rounded-full bg-ember-50
 input[type='range']::-moz-range-thumb { @apply w-4 h-4 border-0 rounded-full bg-ember-500 shadow-md; }
 
 /* Touch: larger slider hit areas (seekbar + volume). */
-html.pointer-coarse input[type='range'] { min-height: 28px; }
+html.pointer-coarse input[type='range'] { min-height: 44px; }
 html.pointer-coarse .overflow-x-auto { scrollbar-width: none; }
 html.pointer-coarse .overflow-x-auto::-webkit-scrollbar { display: none; }
 
@@ -894,9 +907,6 @@ html.light .vx-sidebar-footer {
 html.light .np-mini {
   background: var(--glass-bg-strong);
   border-color: rgba(0, 0, 0, 0.08);
-}
-html.light .np-mini > div {
-  background: rgba(255, 255, 255, 0.35);
 }
 
 /* Song-change bloom on the mini-player — toggled by PlayerBar on song.id
@@ -1136,14 +1146,17 @@ html.light .vx-reason {
 /* Scroll-driven reveal (progressive enhancement — no JS). */
 @supports (animation-timeline: view()) {
   .reveal {
-    animation: reveal-up 0.6s ease-out both;
+    /* `backwards`, not `both`: a held `transform` turns the element into a
+       containing block + stacking context (fixed overlays and menus inside it
+       mis-position). The end keyframe equals the natural style. */
+    animation: reveal-up 0.6s ease-out backwards;
     animation-timeline: view();
     animation-range: entry 0% entry 35%;
   }
 }
 
 /* Staggered mount reveal — first 8 children cascade in. */
-.vx-stagger > * { animation: vxRise 0.5s var(--ease-calm) both; }
+.vx-stagger > * { animation: vxRise 0.5s var(--ease-calm) backwards; }
 .vx-stagger > *:nth-child(1) { animation-delay: 0.02s; }
 .vx-stagger > *:nth-child(2) { animation-delay: 0.06s; }
 .vx-stagger > *:nth-child(3) { animation-delay: 0.1s; }
@@ -1181,89 +1194,6 @@ html.light .vx-reason {
 }
 
 /* ============================================================================
-   Media-card play chip. Touch: small, frosted, non-obtrusive so it doesn't
-   fight the artwork. Pointer-with-hover: hidden until group hover, then
-   fades up, grows to 44px and fills with the accent — the familiar streaming-app
-   Music pattern users expect. Paired with .card-scrim for legibility over
-   any artwork. Live -art tint is picked up by parent when set.
-   ========================================================================= */
-.card-play {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  color: #fff;
-  background: rgb(0 0 0 / 0.55);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.35);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  border: 1px solid rgb(255 255 255 / 0.14);
-  transition:
-    transform 200ms var(--ease-calm),
-    background-color 200ms var(--ease-calm),
-    border-color 200ms var(--ease-calm),
-    box-shadow 200ms var(--ease-calm),
-    opacity 200ms var(--ease-calm),
-    width 200ms var(--ease-calm),
-    height 200ms var(--ease-calm);
-}
-.card-play svg { width: 16px; height: 16px; }
-.card-play:active { transform: scale(0.9); }
-
-/* Bottom scrim: gives the chip legibility over bright artwork. Always on
-   for touch, appears on hover for pointer devices. */
-.card-scrim {
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  height: 3.5rem;
-  pointer-events: none;
-  background: linear-gradient(
-    to top,
-    rgb(0 0 0 / 0.48),
-    rgb(0 0 0 / 0.18) 55%,
-    transparent
-  );
-  transition: opacity 200ms var(--ease-calm);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .card-play {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  .group:hover .card-play,
-  .group:focus-within .card-play {
-    opacity: 1;
-    transform: none;
-    width: 44px;
-    height: 44px;
-    background: rgb(var(--ember-500));
-    border-color: rgb(var(--ember-500));
-    box-shadow: 0 8px 24px -6px rgb(var(--ember-500) / 0.55);
-  }
-  .group:hover .card-play svg,
-  .group:focus-within .card-play svg { width: 20px; height: 20px; }
-
-  .card-scrim { opacity: 0; }
-  .group:hover .card-scrim,
-  .group:focus-within .card-scrim { opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .card-play, .card-play svg, .card-scrim { transition: none; }
-}
-
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .card-play { background: rgb(0 0 0 / 0.7); }
-}
-
-/* ============================================================================
    Karaoke lyric surfaces — the sweep + the three visibility tiers.
    ========================================================================= */
 [data-line] {
@@ -1291,14 +1221,14 @@ html.light .vx-reason {
     -webkit-text-fill-color: transparent;
     transition: --kfill 180ms linear;
     animation: lyr-pop 0.4s var(--ease-calm) both;
-    filter: drop-shadow(0 6px 18px rgb(var(--lyric-active) / 0.28));
+    filter: none;
   }
 }
 html.light .karaoke-fill { filter: none; }
 
 .vx-lyric-active {
   color: rgb(var(--lyric-active));
-  text-shadow: 0 0 24px rgb(var(--lyric-active) / 0.35);
+  text-shadow: none;
 }
 .vx-lyric-active:has(.karaoke-fill) { text-shadow: none; }
 .vx-lyric-dim { color: rgb(var(--lyric-dim)); }
@@ -1488,24 +1418,6 @@ html.light .np-mini {
   box-shadow:
     0 14px 34px -12px rgb(var(--art) / 0.38),
     0 4px 12px rgba(15, 20, 30, 0.06);
-}
-
-/* ============================================================================
-   Cascade contract — theme.test.ts locks the LAST textual occurrence of
-   these tokens (regex on the raw file). The block below re-declares the
-   canonical defaults so accent-attribute selectors and media queries above
-   don't shadow them in text. At runtime the higher-specificity accent
-   selectors still win, so accent themes remain fully functional.
-   ========================================================================= */
-:root {
-  --ember-400: 30 215 96;
-  --ember-500: 29 185 84;
-  --tide-400: 100 232 150;
-  --glass-blur: 6px;
-  --gradient-primary: linear-gradient(180deg, rgb(30 215 96), rgb(29 185 84));
-}
-html.light {
-  --glass-bg: rgb(255 255 255);
 }
 
 /* ============================================================================
@@ -1735,13 +1647,13 @@ html.reduce-motion *::after {
     --glass-border: rgba(255, 255, 255, 0.22);
     --glass-border-strong: rgba(255, 255, 255, 0.34);
     --ink-400: 168 177 192;
-    --ink-500: 130 140 156;
+    --ink-500: 156 160 170;
   }
   html.light {
     --glass-border: rgba(15, 20, 30, 0.28);
     --glass-border-strong: rgba(15, 20, 30, 0.4);
     --ink-400: 66 72 88;
-    --ink-500: 96 104 120;
+    --ink-500: 84 90 106;
   }
 }
 
@@ -1942,251 +1854,6 @@ html.light .fest-sky { opacity: 0.55; }
 
 
 /* ============================================================================
-   Polish pass (5.1.0) — small app-wide refinements.
-   1. Smooth in-page scrolling on the primary scroller (anchors, "back to
-      top"), motion-safe only.
-   2. Toast entrances get a touch of spring so they feel alive, not abrupt.
-   ========================================================================= */
-@media (prefers-reduced-motion: no-preference) {
-  main { scroll-behavior: smooth; }
-}
-
-/* ============================================================================
-   v5.8.1 — Formal pass (owner request: "clean, professional, formal").
-   A visual-system layer, not a rewrite: layouts and features stay where
-   listeners know them; this block flattens the effects on top of the same
-   tokens. Rules: no glow, no bloom, no floating lifts, no aurora blobs,
-   one solid accent, tight radii, short calm motion. Appended last so it
-   wins the cascade over the primitives above at equal specificity.
-   ========================================================================= */
-.glass-card { border-radius: var(--radius-lg); box-shadow: none; }
-.glass-modal { border-radius: 1rem; box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.5); }
-.glass-sheet { border-radius: 1rem 1rem 0 0; box-shadow: 0 -8px 24px -16px rgba(0, 0, 0, 0.45); }
-.glass { box-shadow: none; }
-.glass-strong { box-shadow: none; }
-.glass-bottom-player { box-shadow: none; }
-.np-mini { border-radius: var(--radius-lg); }
-
-/* Cards: a hairline + tone change on hover instead of a floating lift. */
-@media (hover: hover) and (pointer: fine) {
-  a.glass-card:hover,
-  button.glass-card:hover,
-  .card-lift:hover,
-  .glass-lift:hover {
-    transform: none;
-    box-shadow: none;
-    border-color: var(--glass-border-strong);
-    background: var(--glass-bg-hover);
-  }
-  .glass-hover:hover { box-shadow: none; }
-  .lift:hover { transform: none; box-shadow: none; }
-}
-
-/* Buttons: solid, flat, no press bloom, no accent halo. */
-.btn-primary::after,
-.btn-secondary::after,
-.btn-premium::after { display: none; }
-button.bg-ember-500,
-a.bg-ember-500 { box-shadow: none; }
-@media (hover: hover) and (pointer: fine) {
-  button.bg-ember-500:hover,
-  a.bg-ember-500:hover { transform: none; box-shadow: none; filter: brightness(1.06); }
-}
-button:active:not(:disabled) { transform: scale(0.985); }
-
-/* Type: confident, not shouty. */
-.text-display { font-weight: 700; letter-spacing: -0.025em; line-height: 1.08; }
-
-/* Accent surfaces go solid; the wordmarks keep their identity. */
-.bg-ai-accent { background: rgb(var(--ember-500)); box-shadow: none; }
-.ai-ambient { background: none; }
-.bg-premium { background: rgb(var(--ember-500)); }
-.hero-animated { animation: none; background-size: 100% 100%; }
-
-/* Navigation: flat active states, no halo, no gradient pill. */
-.nav-pill-active { box-shadow: none; border-color: rgb(var(--ember-500) / 0.18); }
-html.light .nav-pill-active { box-shadow: none; }
-.vx-dock-active { background: rgb(var(--art)); box-shadow: none; animation: none; }
-.vx-dock-active svg { animation: none; }
-.vx-dock { box-shadow: none; }
-html.light .vx-dock { box-shadow: none; }
-.vx-ai-pulse { animation: none; filter: none; }
-.vx-ai-pulse::before { display: none; }
-
-/* Ambience: the animated aurora blobs and hero wash retire — the canvas is
-   a calm flat surface. (AuroraBackground still mounts; it just paints nothing.) */
-.vx-blob { display: none; }
-.vx-hero-wash { opacity: 0; }
-
-/* Motion: entrances stay, but short and subtle. */
-.vx-stagger > * { animation-duration: 0.28s; }
-.vx-stagger > *:nth-child(n) { animation-delay: 0s; }
-.vx-stagger > *:nth-child(2) { animation-delay: 0.03s; }
-.vx-stagger > *:nth-child(3) { animation-delay: 0.06s; }
-.vx-stagger > *:nth-child(4) { animation-delay: 0.09s; }
-.vx-stagger > *:nth-child(5) { animation-delay: 0.12s; }
-.vx-stagger > *:nth-child(6) { animation-delay: 0.15s; }
-.vx-stagger > *:nth-child(7) { animation-delay: 0.18s; }
-.vx-stagger > *:nth-child(8) { animation-delay: 0.21s; }
-
-/* Inputs: crisp focus ring, no soft halo. */
-.glass-input:focus,
-.glass-input:focus-within,
-.glass-search:focus,
-.glass-search:focus-within { box-shadow: 0 0 0 2px rgb(var(--ember-500) / 0.28); }
-.input-error { box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.2); }
-.input-success { box-shadow: 0 0 0 2px rgba(124, 227, 139, 0.2); }
-input[type='range']:hover::-webkit-slider-thumb { transform: scale(1.1); box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.14); }
-
-/* ============================================================================
-   v5.9.0 — the flat black look. Black chrome, #121212 canvas, one green
-   accent, pill buttons with black text, bold type, cards that lift a green
-   play button on hover. Declared last so it wins every earlier era.
-   ========================================================================= */
-.btn-primary,
-.btn-premium {
-  color: #000;
-  font-weight: 700;
-  border-radius: var(--radius-pill);
-  letter-spacing: 0;
-}
-.btn-primary:hover,
-.btn-premium:hover { transform: scale(1.04); }
-.btn-primary:active,
-.btn-premium:active { transform: scale(0.98); }
-.btn-secondary {
-  border-radius: var(--radius-pill);
-  font-weight: 700;
-  background: transparent;
-  border-color: rgb(var(--ink-500));
-  color: rgb(var(--ink-100));
-}
-.btn-secondary:hover {
-  background: transparent;
-  border-color: rgb(var(--ink-100));
-  transform: scale(1.04);
-}
-.bg-premium { background: #fff; color: #000; }
-.text-gradient {
-  background: none;
-  -webkit-text-fill-color: currentColor;
-  color: rgb(var(--ink-100));
-}
-
-/* Sidebar + player: black, square-cornered shell panels. */
-.glass-sidebar {
-  background: var(--surface-sidebar);
-  border: 0;
-  box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-.glass-bottom-player {
-  background: var(--surface-player);
-  border-top: 1px solid rgb(var(--ink-800));
-  box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-.glass-bottom-player::before { display: none; }
-.nav-pill-active {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-.np-play-desktop { background: #fff; color: #000; box-shadow: none; }
-html.light .np-play-desktop { background: #000; color: #fff; }
-
-/* Cards: quiet until hover, then a #282828 tile and the green play button
-   rises from the artwork's corner. */
-.card-play {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: 48px;
-  height: 48px;
-  border-radius: 9999px;
-  background: rgb(var(--ember-500));
-  color: #000;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 8px rgba(0, 0, 0, 0.3);
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.15s ease;
-}
-.card-play svg { width: 20px; height: 20px; margin-left: 2px; }
-.card-play:hover { background: rgb(var(--ember-400)); transform: scale(1.04); }
-.card-play:active { transform: scale(0.96); }
-.group:hover .card-play,
-.group:focus-within .card-play { opacity: 1; transform: translateY(0); }
-@media (hover: none) {
-  .card-play { opacity: 1; transform: none; width: 40px; height: 40px; }
-}
-.card-scrim { display: none; }
-
-/* Mobile dock: a solid black tab bar with labels under icons. */
-.vx-dock { box-shadow: none; }
-.vx-dock-active { background: transparent; color: rgb(var(--ink-100)); }
-.vx-dock-active svg { animation: none; }
-.vx-dock-item:active { transform: scale(0.94); }
-
-/* Mini player keeps its artwork tint; the hairline reads white on it. */
-.np-mini { border-radius: 8px; }
-
-/* Range inputs: white fill, green on hover (progress + volume). */
-/* Range inputs (seek + volume): white fill and thumb, green on hover —
-   the fill token is read by the track pseudo-elements below. */
-input[type='range'] { --range-fill: rgb(var(--ink-100)); }
-input[type='range']:hover { --range-fill: rgb(var(--ember-500)); }
-input[type='range']::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, var(--range-fill) var(--fill), rgb(var(--ink-600)) var(--fill));
-}
-input[type='range']::-webkit-slider-thumb { background: rgb(var(--ink-100)); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
-input[type='range']:hover::-webkit-slider-thumb { box-shadow: 0 0 0 6px rgb(var(--ink-100) / 0.14); }
-input[type='range']::-moz-range-progress { background: var(--range-fill); }
-input[type='range']::-moz-range-thumb { background: rgb(var(--ink-100)); }
-
-/* Form controls follow the chrome: #282828 fields, white focus edge. */
-.glass-input,
-.glass-search {
-  background: var(--surface-input);
-  border-color: transparent;
-  border-radius: var(--radius-pill);
-}
-.glass-input:focus,
-.glass-input:focus-within,
-.glass-search:focus,
-.glass-search:focus-within {
-  border-color: rgb(var(--ink-100));
-  box-shadow: none;
-}
-.glass-button {
-  border-radius: var(--radius-pill);
-  background: transparent;
-  border-color: rgb(var(--ink-500));
-  font-weight: 700;
-}
-.glass-button:hover { border-color: rgb(var(--ink-100)); }
-
-/* Focus ring reads white on black chrome — the green ring is kept for
-   controls that ARE green. */
-:focus-visible { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25); outline-color: rgb(var(--ink-100)); }
-.btn-primary:focus-visible,
-.card-play:focus-visible { outline-color: rgb(var(--ember-500)); }
-
-/* VinaX AI — flat: solid green mark, plain white title, no ambience. */
-.bg-ai-accent { background: rgb(var(--ember-500)); box-shadow: none; }
-.ai-title,
-html.light .ai-title {
-  background: none;
-  -webkit-text-fill-color: currentColor;
-  color: rgb(var(--ink-100));
-}
-.ai-ambient { background: none; }
-
-/* ============================================================================
    v5.11.6 — Light and Black modes finished. Dark = charcoal + bright green
    with black labels; Light = clean white, deep-green fills with WHITE labels
    (the light accent is darkened for AA text, so black-on-green no longer
@@ -2224,61 +1891,6 @@ html.hc a:focus-visible, html.hc button:focus-visible { outline: 3px solid rgb(v
 @keyframes ambient-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
 
 /* ============================================================================
-   v5.18.0 — design refresh ("Aurora"). The canvas gains a soft accent glow
-   at the top, cards get a hairline highlight, the primary button a sheen,
-   the player bar an accent hairline, and the sidebar a real active state.
-   Everything rides the existing tokens, so accents, festivals, light and
-   black themes all keep working. Festivals paint their own sky instead.
-   ========================================================================= */
-body, html.light body { background-color: transparent; }
-html { background-color: rgb(var(--ink-900)); }
-html:not([class*='fest-']) #root::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(58% 42% at 14% -6%, rgb(var(--ember-500) / 0.13), transparent 62%),
-    radial-gradient(36% 30% at 92% 4%, rgb(var(--aura-cyan, 34 211 238) / 0.07), transparent 60%);
-}
-html.light:not([class*='fest-']) #root::before { opacity: 0.55; }
-html.amoled #root::before { display: none; }
-
-.vx-nav-active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 22%;
-  height: 56%;
-  width: 3px;
-  border-radius: 3px;
-  background: rgb(var(--ember-500));
-}
-.glass-card { border-radius: var(--radius-xl); box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight); }
-.btn-primary { background-image: linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0) 58%); }
-.glass-bottom-player { border-top-color: transparent; }
-.glass-bottom-player::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgb(var(--ember-500) / 0.55) 50%, transparent 100%);
-}
-.vx-hero-title {
-  background: linear-gradient(92deg, rgb(var(--ink-100)) 0%, rgb(var(--ink-100)) 55%, rgb(var(--ember-300)) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.vx-hero-art { box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.08); }
-@media (prefers-reduced-motion: no-preference) {
-  .vx-hero-art { transition: transform 420ms var(--ease-calm); }
-  .vx-hero:hover .vx-hero-art:nth-child(1) { transform: rotate(-8deg) translate(-4px, -6px); }
-  .vx-hero:hover .vx-hero-art:nth-child(3) { transform: rotate(8deg) translate(4px, -6px); }
-}
-
-/* ============================================================================
    v5.25.0 — VinaX AI page. A calm, editorial reading surface: a warm neutral
    ground, hairline structure instead of filled tiles, and the accent spent
    only where it means something (send, active, focus).
@@ -2290,42 +1902,13 @@ html.amoled #root::before { display: none; }
    accent and all three themes carry through unchanged.
    ========================================================================= */
 .ai-root {
-  /* Warm near-black. Deliberately not #000: a slight warmth stops long
-     reading sessions feeling like a terminal. */
-  --ai-bg: #171614;
-  --ai-panel: #1c1b18;
-  --ai-raised: #232120;
-  --ai-line: rgba(255, 255, 255, 0.09);
-  --ai-line-soft: rgba(255, 255, 255, 0.055);
-  --ai-hover: rgba(255, 255, 255, 0.05);
-  --ai-text: #eceae5;
-  --ai-text-2: #b5b0a7;
-  --ai-text-3: #8b857b;
-  --ai-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
-  /* A serif for the greeting only. System faces, so it costs nothing to
-     load and cannot fail offline. */
-  --ai-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, ui-serif, serif;
-  background: var(--ai-bg);
-  color: var(--ai-text);
-}
-html.light .ai-root {
-  --ai-bg: #faf9f6;
-  --ai-panel: #f4f2ed;
-  --ai-raised: #ffffff;
-  --ai-line: rgba(28, 24, 18, 0.11);
-  --ai-line-soft: rgba(28, 24, 18, 0.065);
-  --ai-hover: rgba(28, 24, 18, 0.045);
-  --ai-text: #23201c;
-  --ai-text-2: #56514a;
-  --ai-text-3: #857f75;
-  --ai-shadow: 0 10px 30px -14px rgba(28, 24, 18, 0.18);
-}
-html.amoled .ai-root {
-  --ai-bg: #000000;
-  --ai-panel: #0a0908;
-  --ai-raised: #141311;
-  --ai-line: rgba(255, 255, 255, 0.11);
-  --ai-line-soft: rgba(255, 255, 255, 0.06);
+  --ai-bg: var(--vx-bg-base); --ai-panel: var(--vx-surface);
+  --ai-raised: var(--vx-surface-raised); --ai-line: var(--vx-border);
+  --ai-line-soft: var(--vx-border); --ai-hover: var(--vx-bg-hover);
+  --ai-text: var(--vx-text-primary); --ai-text-2: var(--vx-text-secondary);
+  --ai-text-3: var(--vx-text-muted); --ai-shadow: var(--vx-shadow-overlay);
+  --ai-serif: 'Manrope', system-ui, sans-serif;
+  background: var(--ai-bg); color: var(--ai-text);
 }
 
 /* ---------- Structure ---------- */
@@ -2621,3 +2204,30 @@ html.light .ai-menu-item-danger:hover { color: rgb(185 28 28); }
 @media (prefers-reduced-motion: reduce) {
   .ai-toolbar, .ai-chip, .ai-tool, .ai-composer, .ai-starter, .ai-pick, .ai-side-row, .ai-btn { transition: none; }
 }
+
+
+/* ============================================================================
+   Keyboard focus for non-text inputs (last in the file on purpose: the thumb
+   rules must win over the hover / theme-pass thumb shadows declared above at
+   the same specificity).
+   Sliders: the ring belongs on the THUMB — the input box itself is a
+   transparent strip up to 44px tall, a ring around that reads as a glitch.
+   ========================================================================= */
+input[type='range']:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+input[type='range']:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px rgb(var(--ink-900)), 0 0 0 4px rgb(var(--ember-400));
+}
+input[type='range']:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px rgb(var(--ink-900)), 0 0 0 4px rgb(var(--ember-400));
+}
+input[type='checkbox']:focus-visible,
+input[type='radio']:focus-visible {
+  outline: 2px solid rgb(var(--ember-400));
+  outline-offset: 2px;
+  box-shadow: none;
+  border-radius: 4px;
+}
+input[type='radio']:focus-visible { border-radius: 9999px; }

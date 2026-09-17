@@ -20,12 +20,14 @@ export interface LyricsMatch {
 /** v5.19.0 — a catalogue search function, as the hooks bind it (with signal). */
 export type CatalogueSearch = (query: string, limit: number) => Promise<Song[]>;
 
-/** Words of a query worth matching: lowercase, punctuation-free, 2+ chars. */
+/** Words of a query worth matching: lowercase, punctuation-free, 2+ chars.
+ *  Marks (\p{M}) stay inside a word — Indic vowel signs and viramas are marks,
+ *  and splitting on them shreds "तुम ही हो" into single consonants. */
 export function queryWords(text: string): string[] {
   return text
     .toLowerCase()
     .normalize('NFC')
-    .split(/[^\p{L}\p{N}']+/u)
+    .split(/[^\p{L}\p{N}\p{M}']+/u)
     .map((w) => w.replace(/^'+|'+$/g, ''))
     .filter((w) => w.length >= 2);
 }
@@ -37,14 +39,17 @@ export function looksLikeLyric(text: string): boolean {
 
 const NOISE = new Set(['from', 'the', 'a', 'an', 'feat', 'ft', 'film', 'movie', 'version', 'song']);
 
-function norm(s: string): string {
+/** Exported for tests. */
+export function norm(s: string): string {
   return s
     .replace(/\s*\((?:from|from the|from movie|from\s+the\s+movie)\b[^)]*\)/gi, '')
     .replace(/\s*\[[^\]]*\]/g, '')
     .toLowerCase()
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    // Only Latin combining marks are folded away; Indic vowel signs are marks
+    // too and carry meaning ("दिल" is not "दाल").
+    .replace(/[\u0300-\u036f\u200c\u200d]/g, '') // joiners never decide a match
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

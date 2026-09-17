@@ -20,8 +20,25 @@ function openDb(): Promise<IDBDatabase> {
         store.createIndex('ts', 'ts');
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // Another tab is upgrading (or deleting) the database: let go of this
+      // connection so it is not blocked, and reopen lazily on the next call.
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      db.onclose = () => {
+        dbPromise = null;
+      };
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
+  });
+  // A failed open must not be cached forever — the next call tries again.
+  const attempt = dbPromise;
+  attempt.catch(() => {
+    if (dbPromise === attempt) dbPromise = null;
   });
   return dbPromise;
 }

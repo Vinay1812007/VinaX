@@ -22,7 +22,7 @@ const profile = createEmptyProfile(1);
 profile.artists.skipper = { name: 'Skipper', score: 1, plays: 5, completes: 0, skips: 5, lastTs: 1 };
 const ctx = {
   profile,
-  history: [{ song: pool[0], ts: 1, completed: true }, { song: pool[1], ts: 2, completed: false }] as HistoryEntry[],
+  history: [{ song: pool[0], ts: 1, completed: true }, { song: pool[1], ts: 2, completed: false, skipped: true }, { song: pool[3], ts: 3, completed: false }] as HistoryEntry[],
   favorites: [pool[2]],
   pinnedLanguages: ['telugu'],
   mutedLanguages: ['english'],
@@ -44,6 +44,7 @@ describe('buildDjContext', () => {
     expect(c.seedSong).toBe('Samajavaragamana — Sid Sriram (telugu)');
     expect(c.currentLanguage).toBe('telugu');
     expect(c.recentlyCompleted).toEqual(['Samajavaragamana — Sid Sriram (telugu)']);
+    // v7.0.0 — only a flagged skip is a skip; the unfinished play (paused, or playing right now) is not.
     expect(c.skippedSongs).toEqual(['Butta Bomma — Armaan Malik (telugu)']);
     expect(c.likedSongs).toEqual(['Ramuloo Ramulaa — Anurag Kulkarni (telugu)']);
     expect(c.avoidArtists).toEqual(['Skipper']);

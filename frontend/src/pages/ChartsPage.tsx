@@ -55,7 +55,7 @@ export default function ChartsPage() {
       {/* header + period pills */}
       <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
         <div>
-          <h1 className="text-3xl md:text-[34px] font-extrabold tracking-tight">Charts</h1>
+          <h1 className="text-page-title">Charts</h1>
           <p className="text-xs font-semibold text-ink-400">What India is playing right now</p>
         </div>
         <div className="flex items-center gap-2">
@@ -105,7 +105,7 @@ export default function ChartsPage() {
                       src={bestImage(s.images, 96)}
                       onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
                       alt=""
-                      className="w-12 h-12 rounded-[10px] object-cover shrink-0"
+                      className="w-12 h-12 rounded-lg object-cover shrink-0"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-bold truncate">{s.title}</span>
@@ -128,7 +128,7 @@ export default function ChartsPage() {
                 <Link
                   key={m.label}
                   to={m.to}
-                  className="h-[76px] rounded-[18px] border border-[var(--glass-border)] flex items-end p-3 text-sm font-extrabold hover:brightness-110 transition card-lift"
+                  className="h-[76px] rounded-2xl border border-[var(--glass-border)] flex items-end p-3 text-sm font-extrabold hover:brightness-110 transition card-lift"
                   style={{ background: `linear-gradient(135deg, ${m.tint}, rgba(255,255,255,0.04))` }}
                 >
                   {m.label}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -11,6 +11,23 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { EmptyState } from '@/components/States';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { ChevronDownIcon, WaveformIcon } from '@/components/Icons';
+import { Seekbar } from '@/components/Seekbar';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
+
+/**
+ * Bottom progress + seek. A leaf on purpose: the playback clock ticks ~4×/s
+ * and used to be subscribed at page level, re-rendering the whole lyric list
+ * with it. The shared Seekbar owns the clock subscription here, and brings a
+ * real slider (arrow keys, Home/End, spoken position) in place of the old
+ * click-only strip that keyboard users could not operate.
+ */
+function KaraokeProgress() {
+  return (
+    <div className="flex items-center h-7">
+      <Seekbar compact />
+    </div>
+  );
+}
 
 export default function KaraokePage() {
   usePageTitle('Karaoke');
@@ -20,13 +37,11 @@ export default function KaraokePage() {
   const baseSize = useSettingsStore((s) => s.lyricsSize);
   const karaokeSize = ({ sm: 'md', md: 'lg', lg: 'xl', xl: 'xl' } as const)[baseSize];
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const currentTime = usePlayerStore((s) => s.currentTime);
-  const duration = usePlayerStore((s) => s.duration);
-  const togglePlay = usePlayerStore((s) => s.togglePlay);
-  const nextSong = usePlayerStore((s) => s.next);
-  const prevSong = usePlayerStore((s) => s.prev);
-  const seek = usePlayerStore((s) => s.seek);
-  const playSong = usePlayerStore((s) => s.playSong);
+  const { togglePlay, next: nextSong, prev: prevSong, playSong } = usePlayerStore.getState();
+  // Full-screen portal = modal: keep Tab inside it (the app shell behind stays
+  // mounted), Escape closes, focus returns to whatever opened karaoke.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, !!song, () => navigate(-1));
   // D10 — remember every karaoke session locally so "Sing again" works.
   const [recent] = useState(loadKaraokeHistory);
   useEffect(() => {
@@ -76,7 +91,13 @@ export default function KaraokePage() {
   const art = bestImage(song.images, 500);
 
   return createPortal(
-    <div className="fixed inset-0 z-[65] flex flex-col bg-ink-950">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Karaoke — ${song.title}`}
+      className="fixed inset-0 z-[65] flex flex-col bg-ink-950"
+    >
       <div className="absolute inset-0 -z-10 overflow-hidden" aria-hidden>
         <img
           src={art}
@@ -88,14 +109,14 @@ export default function KaraokePage() {
       </div>
 
       <div className="flex items-center gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
-        <button onClick={() => navigate(-1)} aria-label="Close karaoke" className="w-9 h-9 rounded-full flex items-center justify-center text-ink-100 hover:bg-white/10">
+        <button type="button" onClick={() => navigate(-1)} aria-label="Close karaoke" className="w-11 h-11 rounded-full flex items-center justify-center text-ink-100 hover:bg-white/10">
           <ChevronDownIcon className="w-6 h-6" />
         </button>
         <div className="min-w-0 flex-1 text-center">
           <p className="text-sm font-bold truncate">{song.title}</p>
           <p className="text-xs text-ink-300 truncate">{song.subtitle} · Karaoke</p>
         </div>
-        <span className="w-9 shrink-0" aria-hidden />
+        <span className="w-11 shrink-0" aria-hidden />
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 no-scrollbar">
@@ -113,24 +134,7 @@ export default function KaraokePage() {
       </div>
       {/* canvas 4b — bottom progress + controls + Meaning */}
       <div className="px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 space-y-4">
-        <button
-          aria-label="Seek"
-          className="relative block w-full h-4 cursor-pointer"
-          onClick={(e) => {
-            if (duration <= 0) return;
-            const r = e.currentTarget.getBoundingClientRect();
-            seek(Math.max(0, Math.min(duration, ((e.clientX - r.left) / r.width) * duration)));
-          }}
-        >
-          <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[5px] rounded-full bg-white/[0.12]" />
-          <span
-            className="absolute left-0 top-1/2 -translate-y-1/2 h-[5px] rounded-full"
-            style={{
-              width: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
-              background: 'linear-gradient(90deg, #22d3ee, #60a5fa)',
-            }}
-          />
-        </button>
+        <KaraokeProgress />
         <div className="flex items-center justify-between">
           <Link
             to={`/lyrics/${song.id}`}
@@ -139,7 +143,7 @@ export default function KaraokePage() {
             Meaning
           </Link>
           <div className="flex items-center gap-5">
-            <button onClick={() => prevSong()} aria-label="Previous song" className="p-2 text-ink-200 hover:text-ink-100 transition">
+            <button type="button" onClick={() => prevSong()} aria-label="Previous song" className="p-2 min-w-touch min-h-touch inline-flex items-center justify-center text-ink-200 hover:text-ink-100 transition">
               <PrevIcon className="w-5 h-5" />
             </button>
             <button
@@ -149,7 +153,7 @@ export default function KaraokePage() {
             >
               {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
             </button>
-            <button onClick={() => nextSong(true)} aria-label="Next song" className="p-2 text-ink-200 hover:text-ink-100 transition">
+            <button type="button" onClick={() => nextSong(true)} aria-label="Next song" className="p-2 min-w-touch min-h-touch inline-flex items-center justify-center text-ink-200 hover:text-ink-100 transition">
               <NextIcon className="w-5 h-5" />
             </button>
           </div>

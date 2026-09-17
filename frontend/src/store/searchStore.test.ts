@@ -66,3 +66,61 @@ describe('searchStore rehydration', () => {
     expect(state().songSort).toBe('relevance');
   });
 });
+
+describe('searchStore recents: one entry per search', () => {
+  beforeEach(() => {
+    useSearchStore.setState({ recent: [], pinned: [], songSort: 'relevance' });
+  });
+
+  it('folds case, spacing and Unicode composition when de-duplicating', () => {
+    state().addRecent('Arijit Singh');
+    state().addRecent('kesariya');
+    state().addRecent('arijit   singh ');
+    expect(state().recent).toEqual(['arijit   singh', 'kesariya']);
+    state().addRecent('cafe\u0301'); // decomposed é
+    state().addRecent('caf\u00e9'); // composed é
+    expect(state().recent.filter((r) => r.normalize('NFC') === 'caf\u00e9')).toHaveLength(1);
+  });
+
+  it('a query typed in stages leaves one entry', () => {
+    state().addRecent('kesariya');
+    state().addRecent('arij');
+    state().addRecent('arijit');
+    state().addRecent('Arijit Singh');
+    expect(state().recent).toEqual(['Arijit Singh', 'kesariya']);
+  });
+
+  it('only the newest entry is collapsed, and never a pinned one', () => {
+    state().addRecent('arij');
+    state().addRecent('kesariya');
+    state().addRecent('arijit'); // "arij" is not the newest → it stays
+    expect(state().recent).toEqual(['arijit', 'kesariya', 'arij']);
+
+    state().pinRecent('arijit');
+    state().addRecent('arijit singh');
+    expect(state().recent).toEqual(['arijit singh', 'arijit', 'kesariya', 'arij']);
+    expect(state().pinned).toEqual(['arijit']);
+  });
+
+  it('re-searching a pinned query in another spelling keeps the pin intact', () => {
+    state().addRecent('Arijit');
+    state().pinRecent('Arijit');
+    state().addRecent('kesariya');
+    state().addRecent('arijit');
+    expect(state().recent).toEqual(['Arijit', 'kesariya']);
+    expect(state().pinned).toEqual(['Arijit']);
+  });
+
+  it('rehydration folds duplicates an older blob already holds', async () => {
+    window.localStorage.setItem(
+      'vinax.search.v1',
+      JSON.stringify({
+        state: { recent: ['arijit', 'Kesariya', 'Arijit ', 'kesariya', 'ARIJIT'], pinned: ['ARIJIT', 'arijit'] },
+        version: 0,
+      }),
+    );
+    await useSearchStore.persist.rehydrate();
+    expect(state().recent).toEqual(['ARIJIT', 'Kesariya']);
+    expect(state().pinned).toEqual(['ARIJIT']);
+  });
+});

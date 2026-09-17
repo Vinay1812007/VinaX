@@ -68,20 +68,21 @@ describe('WhatsNewSheet — when it opens', () => {
   it('stays closed when lastSeenVersion already matches the current fingerprint', async () => {
     window.localStorage.setItem(KEY_ONBOARDED, 'true');
     window.localStorage.setItem(KEY_LAST, JSON.stringify(CURRENT_FINGERPRINT));
-    const { container } = render(<WhatsNewSheet />);
-    // Assert stays empty across a microtask tick so the dynamic import
+    render(<WhatsNewSheet />);
+    // The sheet portals into <body>, so the body — not the render container —
+    // is what must stay empty. Assert stays empty across a microtask tick so the dynamic import
     // has a chance to resolve (it never should, since open is false).
     await waitFor(() => {
-      expect(container.textContent ?? '').not.toMatch(/What['’]s new/);
+      expect(document.body.textContent ?? '').not.toMatch(/What['’]s new/);
     });
   });
 
   it('stays closed on a fresh install (onboarding not complete)', async () => {
     // No onboarded flag → the sheet must never race the onboarding modal
     // even though lastSeenVersion is null too.
-    const { container } = render(<WhatsNewSheet />);
+    render(<WhatsNewSheet />);
     await waitFor(() => {
-      expect(container.textContent ?? '').not.toMatch(/What['’]s new/);
+      expect(document.body.textContent ?? '').not.toMatch(/What['’]s new/);
     });
   });
 });

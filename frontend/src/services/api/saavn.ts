@@ -52,7 +52,11 @@ export function searchSongsPage(rawQuery: string, page: number, limit = 25, opts
   });
 }
 
-export function searchAlbums(query: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Album[]> {
+// Every search entry point runs the admin synonym table first, so a published
+// alias ("arr") finds the same artist on the Albums / Artists / Playlists tabs
+// and the All tab as it does on Songs.
+export function searchAlbums(rawQuery: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Album[]> {
+  const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
     signal: opts?.signal,
     paths: [`/search/albums?query=${enc(query)}&limit=${limit}`],
@@ -64,7 +68,8 @@ export function searchAlbums(query: string, limit = 20, opts?: { signal?: AbortS
   });
 }
 
-export function searchAlbumsPage(query: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Album[]> {
+export function searchAlbumsPage(rawQuery: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Album[]> {
+  const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
     signal: opts?.signal,
     paths: [
@@ -79,7 +84,8 @@ export function searchAlbumsPage(query: string, page: number, limit = 20, opts?:
   });
 }
 
-export function searchArtists(query: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Artist[]> {
+export function searchArtists(rawQuery: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Artist[]> {
+  const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
     signal: opts?.signal,
     paths: [`/search/artists?query=${enc(query)}&limit=${limit}`],
@@ -91,7 +97,8 @@ export function searchArtists(query: string, limit = 20, opts?: { signal?: Abort
   });
 }
 
-export function searchPlaylists(query: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Playlist[]> {
+export function searchPlaylists(rawQuery: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Playlist[]> {
+  const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
     signal: opts?.signal,
     paths: [`/search/playlists?query=${enc(query)}&limit=${limit}`],
@@ -107,7 +114,8 @@ export function searchPlaylists(query: string, limit = 20, opts?: { signal?: Abo
  *  page/p fallback ladder that already works for songs and albums; mirrors
  *  that ignore paging repeat page 1, which the client de-dupes by id and
  *  treats as end-of-results. Page is 1-based. */
-export function searchArtistsPage(query: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Artist[]> {
+export function searchArtistsPage(rawQuery: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Artist[]> {
+  const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
     signal: opts?.signal,
     paths: [
@@ -123,7 +131,8 @@ export function searchArtistsPage(query: string, page: number, limit = 20, opts?
 }
 
 /** Paged playlist search — twin of searchArtistsPage. */
-export function searchPlaylistsPage(query: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Playlist[]> {
+export function searchPlaylistsPage(rawQuery: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Playlist[]> {
+  const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
     signal: opts?.signal,
     paths: [
@@ -138,7 +147,8 @@ export function searchPlaylistsPage(query: string, page: number, limit = 20, opt
   });
 }
 
-export function searchAll(query: string, opts?: { signal?: AbortSignal }): Promise<SearchResults> {
+export function searchAll(rawQuery: string, opts?: { signal?: AbortSignal }): Promise<SearchResults> {
+  const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
     signal: opts?.signal,
     paths: [`/search?query=${enc(query)}`],
@@ -219,18 +229,21 @@ export function getArtist(id: string): Promise<Artist> {
   });
 }
 
+/** Artist catalogue by popularity. Page is 0-based. The unpaged dialect is a
+ *  first-page fallback ONLY: on a later page it would serve page 1 again, and
+ *  the list would repeat forever. Past page 0 a well-formed empty list is the
+ *  end of the catalogue, not a shape miss. */
 export function getArtistTopSongs(id: string, page = 0): Promise<Song[]> {
+  const paged = `/artists/${enc(id)}/songs?page=${page}&sortBy=popularity&sortOrder=desc`;
   return orchestratedRequest({
-    paths: [
-      `/artists/${enc(id)}/songs?page=${page}&sortBy=popularity&sortOrder=desc`,
-      `/artists/${enc(id)}/songs`,
-    ],
+    paths: page === 0 ? [paged, `/artists/${enc(id)}/songs`] : [paged],
     validate: (json) => {
       const d = unwrap(json);
       const list = listFrom(d) ?? (Array.isArray(d?.songs) ? d.songs : null);
       if (!list) return null;
       const songs = normalizeSongList(list);
-      return songs.length ? songs : null;
+      if (songs.length) return songs;
+      return page > 0 ? [] : null;
     },
   });
 }

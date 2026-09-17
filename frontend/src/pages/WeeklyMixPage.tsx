@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { PageHeader } from '@/components/PageHeader';
 import { SongRow } from '@/components/SongRow';
-import { EmptyState } from '@/components/States';
+import { EmptyState, ErrorState } from '@/components/States';
 import { ListSkeleton } from '@/components/Skeletons';
 import { PlayIcon, ShuffleIcon } from '@/components/Icons';
 import { usePlayerStore } from '@/store/playerStore';
@@ -13,7 +13,7 @@ import { useWeeklyMix, isoWeekKey } from '@/features/weekly/useWeeklyMix';
 export default function WeeklyMixPage() {
   usePageTitle('Your Week');
   const navigate = useNavigate();
-  const { data: songs = [], isLoading } = useWeeklyMix();
+  const { data: songs = [], isLoading, isError, refetch } = useWeeklyMix();
 
   const play = (shuffle: boolean) => {
     if (!songs.length) return;
@@ -68,7 +68,9 @@ export default function WeeklyMixPage() {
       )}
 
       {isLoading && <ListSkeleton rows={10} />}
-      {!isLoading && !songs.length && (
+      {/* A network error used to read as "Building your week" — forever. */}
+      {isError && !songs.length && <ErrorState retry={() => void refetch()} />}
+      {!isLoading && !isError && !songs.length && (
         <EmptyState title="Building your week" message="Play a few songs and your weekly mix will appear here." />
       )}
       <div className="space-y-1">

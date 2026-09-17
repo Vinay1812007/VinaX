@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
+import { guardedLocalStorage } from '@/services/storage/local';
 
 /** Which Capacitor directory holds a saved file. Legacy items (no tag) live
  *  in the internal data directory. */
@@ -56,7 +57,7 @@ export const useDownloadsStore = create<DownloadsState>()(
     }),
     {
       name: KEYS.downloads,
-      storage: createJSONStorage(() => window.localStorage),
+      storage: createJSONStorage(() => guardedLocalStorage),
       partialize: (s) => ({ items: s.items }),
     },
   ),

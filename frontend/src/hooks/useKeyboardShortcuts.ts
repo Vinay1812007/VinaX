@@ -3,9 +3,26 @@ import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { isNativePlatform } from '@/services/native';
 
-function isTyping(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement;
-  return t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable;
+/** ARIA widgets that handle Space / Enter / arrow keys themselves. */
+const CONTROL_ROLES = new Set(['button', 'slider', 'menuitem', 'option', 'tab', 'switch', 'checkbox', 'radio']);
+const CONTROL_TAGS = new Set(['BUTTON', 'A']);
+/** The keys a focused control consumes; letter shortcuts stay live on it. */
+const CONTROL_KEYS = new Set([' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+
+/**
+ * True when the key press belongs to the focused element, not the player:
+ * typing in a field or a select (type-ahead), anything inside an open dialog,
+ * or Space / arrows on a focused control — Space on a button would otherwise
+ * click it AND toggle playback, arrows on a slider would also seek the track.
+ */
+export function shortcutsExempt(target: EventTarget | null, key: string): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return true;
+  if (target.closest('[role="dialog"]')) return true;
+  const role = target.getAttribute('role');
+  const isControl = CONTROL_TAGS.has(tag) || (role !== null && CONTROL_ROLES.has(role));
+  return isControl && CONTROL_KEYS.has(key);
 }
 
 /**
@@ -16,7 +33,7 @@ export function useKeyboardShortcuts(): void {
   useEffect(() => {
     if (isNativePlatform()) return; // hardware keyboards are a desktop concern
     const onKey = (e: KeyboardEvent) => {
-      if (isTyping(e)) return;
+      if (shortcutsExempt(e.target, e.key)) return;
       // Never fire on modifier combos — otherwise Cmd/Ctrl+P (print) triggers
       // prev(), Cmd+F (find) toggles the favorite, Cmd+S (save) toggles
       // shuffle, Cmd+R (reload) cycles repeat, and so on (audit finding H4).

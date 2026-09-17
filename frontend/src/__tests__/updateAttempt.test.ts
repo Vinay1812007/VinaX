@@ -9,7 +9,7 @@
  * @vitest-environment jsdom
  */
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
-import { installLikelyBlocked, isUpdateSnoozed, markUpdateAttempt, snoozeUpdate, UPDATE_SNOOZE_MS } from '../services/update';
+import { installLikelyBlocked, isUpdateSnoozed, markUpdateAttempt, mergeResumeCheck, snoozeUpdate, UPDATE_SNOOZE_MS, type UpdateInfo } from '../services/update';
 import { KEYS } from '../constants/storage-keys';
 
 beforeEach(() => localStorage.clear());
@@ -78,5 +78,23 @@ describe('update snooze (Update later)', () => {
   it('corrupt storage → not snoozed (fail open, the update is offered)', () => {
     localStorage.setItem(KEYS.updateSnooze, '{not json');
     expect(isUpdateSnoozed(1600, t0)).toBe(false);
+  });
+});
+
+describe('mergeResumeCheck (foreground re-check)', () => {
+  const gate: UpdateInfo = { latest: '1.2', current: '1.1', latestBuild: 1600, currentBuild: 1500, apkUrl: 'https://example.test/apk', mandatory: true };
+
+  it('a null re-check (offline / snoozed / failed) keeps the mandatory gate up', () => {
+    expect(mergeResumeCheck(gate, null)).toBe(gate);
+  });
+
+  it('a fresh result replaces what was shown', () => {
+    const newer: UpdateInfo = { ...gate, latestBuild: 1700 };
+    expect(mergeResumeCheck(gate, newer)).toBe(newer);
+    expect(mergeResumeCheck(null, newer)).toBe(newer);
+  });
+
+  it('nothing known and nothing found stays nothing', () => {
+    expect(mergeResumeCheck(null, null)).toBeNull();
   });
 });

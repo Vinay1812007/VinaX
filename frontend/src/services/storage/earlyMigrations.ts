@@ -10,19 +10,50 @@
 const OLD_PREFIX = 'tarang.';
 const NEW_PREFIX = 'vinax.';
 
+/**
+ * Move one key. Order matters for safety: read, remove the old key, write
+ * the new one — and if that write throws (quota: the old copy no longer
+ * frees room once both exist), put the old key back so nothing is lost and
+ * the next launch retries. When the new-prefix key already exists with
+ * DIFFERENT content the old key is kept: it may be the only copy of data the
+ * listener cares about, and deleting it silently is not this module's call.
+ */
+function moveKey(storage: Storage, oldKey: string): void {
+  const target = NEW_PREFIX + oldKey.slice(OLD_PREFIX.length);
+  const value = storage.getItem(oldKey);
+  if (value == null) return;
+  const existing = storage.getItem(target);
+  if (existing != null) {
+    if (existing === value) storage.removeItem(oldKey);
+    return;
+  }
+  storage.removeItem(oldKey);
+  try {
+    storage.setItem(target, value);
+  } catch {
+    try {
+      storage.removeItem(target);
+      storage.setItem(oldKey, value);
+    } catch {
+      /* storage refused even the put-back — nothing more can be done here */
+    }
+  }
+}
+
 try {
+  const storage = window.localStorage;
   const oldKeys: string[] = [];
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const k = window.localStorage.key(i);
+  for (let i = 0; i < storage.length; i++) {
+    const k = storage.key(i);
     if (k && k.startsWith(OLD_PREFIX)) oldKeys.push(k);
   }
   for (const k of oldKeys) {
-    const target = NEW_PREFIX + k.slice(OLD_PREFIX.length);
-    if (window.localStorage.getItem(target) == null) {
-      const value = window.localStorage.getItem(k);
-      if (value != null) window.localStorage.setItem(target, value);
+    // Per key: one unreadable or unwritable key must not strand the rest.
+    try {
+      moveKey(storage, k);
+    } catch {
+      /* skip this key */
     }
-    window.localStorage.removeItem(k);
   }
 } catch {
   // Private mode / storage unavailable — app still works, just unpersisted.

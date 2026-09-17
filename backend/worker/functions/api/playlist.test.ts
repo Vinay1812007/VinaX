@@ -114,6 +114,21 @@ describe('onRequestPost — variety plumbing end to end', () => {
     expect(titles).not.toContain('Old Repeat');
   });
 
+  it('clips runaway model strings and drops blank entries before they reach the client', async () => {
+    vi.stubGlobal('fetch', async () =>
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: JSON.stringify({ name: 'N'.repeat(500), description: 'D'.repeat(900), songs: [{ title: 'T'.repeat(5000), artist: 'A'.repeat(5000) }, { title: '   ', artist: 'Nobody' }, { title: 'Fine', artist: 'Someone' }] }) } }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ));
+    const res = await post({ prompt: 'long titles' });
+    const data = (await res.json()) as { name: string; description: string; songs: Array<{ title: string; artist: string }> };
+    expect(data.name).toHaveLength(80);
+    expect(data.description).toHaveLength(200);
+    expect(data.songs).toHaveLength(2);
+    expect(data.songs[0].title).toHaveLength(200);
+    expect(data.songs[0].artist).toHaveLength(200);
+  });
+
   it('generates a different nonce on every request', async () => {
     const calls = stubUpstream();
     await post({ prompt: 'gym set' });

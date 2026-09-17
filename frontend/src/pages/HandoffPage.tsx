@@ -157,7 +157,7 @@ export default function HandoffPage() {
   if (incomingId) {
     return (
       <div className="max-w-md mx-auto">
-        <h1 className="text-2xl font-extrabold tracking-tight mb-1">Import this profile?</h1>
+        <h1 className="text-page-title mb-1">Import this profile?</h1>
         <p className="text-sm text-ink-400 mb-5">
           Your favorites, taste and settings from the other device will replace what&rsquo;s on this one.
         </p>
@@ -258,7 +258,7 @@ export default function HandoffPage() {
         <span className="w-10 h-10 rounded-xl bg-ember-500/15 text-ember-300 flex items-center justify-center">
           <DevicesIcon className="w-5 h-5" />
         </span>
-        <h1 className="text-2xl font-extrabold tracking-tight">Move to a new device</h1>
+        <h1 className="text-page-title">Move to a new device</h1>
       </div>
       <p className="text-sm text-ink-400 mb-6">
         No account needed — ever. Your profile is encrypted here, parked for 10 minutes, and burned the moment the new

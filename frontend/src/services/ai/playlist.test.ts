@@ -115,3 +115,34 @@ describe('resolveSuggestions — no convergence on one search hit', () => {
     expect(out.map((s) => s.id)).toEqual(['new-1']);
   });
 });
+
+describe('v7.0.0 — the catalogue song that IS the suggestion wins', () => {
+  it('prefers the title + artist match over the first search hit, and clips untrusted strings', async () => {
+    const credited = (id: string, title: string, artist: string) => ({ ...song(id, title), subtitle: artist, artists: [{ id: `a-${artist}`, name: artist }] });
+    vi.mocked(searchSongs).mockReset();
+    vi.mocked(searchSongs).mockResolvedValue([]);
+    vi.mocked(searchSongs).mockResolvedValueOnce([credited('dub', 'Kesariya (Telugu)', 'Someone Else'), credited('real', 'Kesariya', 'Arijit Singh')]);
+    const out = await resolveSuggestions([{ title: '  Kesariya  ', artist: 'Arijit Singh' }, { title: 'x'.repeat(5000), artist: 'y'.repeat(5000) }], 25, []);
+    expect(out[0].id).toBe('real');
+    const longQuery = vi.mocked(searchSongs).mock.calls[1]?.[0] ?? '';
+    expect(longQuery.length).toBeLessThanOrEqual(241);
+  });
+
+  it('never trusts the shape of the model answer', async () => {
+    vi.stubGlobal('fetch', async () => ({ ok: true, status: 200, json: async () => ({ name: { evil: true }, description: 42, songs: [{ title: 'Gamma', artist: 'Z' }, { title: 7, artist: null }, null] }) }) as unknown as Response);
+    vi.mocked(searchSongs).mockReset();
+    vi.mocked(searchSongs).mockImplementation(async (q: string) => [song(`id-${q}`, q)]);
+    const res = await generatePlaylist('evening drive', [], []);
+    vi.unstubAllGlobals();
+    expect(res).toMatchObject({ ok: true, playlist: { name: 'evening drive', description: '' } });
+    expect(res.ok && res.playlist.songs).toHaveLength(1);
+  });
+
+  it('stops resolving when the caller goes away', async () => {
+    const ctrl = new AbortController();
+    ctrl.abort();
+    vi.mocked(searchSongs).mockReset();
+    expect(await resolveSuggestions([{ title: 'Alpha', artist: 'X' }], 25, [], [], [], ctrl.signal)).toEqual([]);
+    expect(searchSongs).not.toHaveBeenCalled();
+  });
+});

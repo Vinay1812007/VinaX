@@ -3,6 +3,8 @@ import type { Mood } from './mood';
 import type { FestivalMusic } from './festival';
 import type { TasteProfile } from '@/services/personalization/profile';
 import type { UserRecommendationProfile, SessionRecommendationProfile } from './profiles';
+import type { DiscoveryMode } from '@/store/settingsStore';
+import type { SessionIntent } from '@/services/personalization/sessionIntent';
 
 export type CandidateSource =
   | 'related'
@@ -45,7 +47,13 @@ export type ReasonKind =
   | 'diversity'
   /** v6.4.0 */
   | 'song'
-  | 'day';
+  | 'day'
+  /** v7.0.0 — Familiar mode / a skip streak leaning on known ground. */
+  | 'familiar'
+  /** v7.0.0 — the lead artist has played a lot in the last few songs. */
+  | 'fatigue'
+  /** v7.0.0 — this sitting's behaviour (skips, likes, searches, queue-adds). */
+  | 'intent';
 
 export interface ReasonComponent {
   kind: ReasonKind;
@@ -122,4 +130,17 @@ export interface RecommendationContext {
   surface?: 'home' | 'next' | 'radio' | 'playlist';
   userProfile?: UserRecommendationProfile;
   sessionProfile?: SessionRecommendationProfile;
+  /** v7.0.0 — Familiar / Balanced / Discover. Absent = balanced (or discover when `explore` is set). */
+  discoveryMode?: DiscoveryMode;
+  /** v7.0.0 — short-term intent of this sitting; never written to the profile. */
+  sessionIntent?: SessionIntent;
+}
+
+/** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). */
+export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'language-lock' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'invalid';
+
+export interface RejectedCandidate {
+  song: Song;
+  reason: RejectReason;
+  stage: 'filter' | 'rank' | 'validate';
 }

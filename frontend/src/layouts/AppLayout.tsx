@@ -12,12 +12,13 @@ import { MobileBackBar } from '@/components/MobileBackBar';
 import { PlayerBar } from '@/components/PlayerBar';
 import { Toasts } from '@/components/Toasts';
 import { NowPlayingAnnouncer } from '@/components/NowPlayingAnnouncer';
-import { NextUpCard } from '@/components/NextUpCard';
-import { NowPlayingRail } from '@/components/NowPlayingRail';
-import { AuroraBackground } from '@/components/AuroraBackground';
+const NextUpCard = lazy(() => import('@/components/NextUpCard').then(m => ({ default: m.NextUpCard })));
+const NowPlayingRail = lazy(() => import('@/components/NowPlayingRail').then(m => ({ default: m.NowPlayingRail })));
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { TopBar } from '@/components/TopBar';
 import { DiagBanner } from '@/components/DiagBanner';
 import { OfflineBanner } from '@/components/OfflineBanner';
-import { OnboardingSheet } from '@/components/OnboardingSheet';
+const OnboardingSheet = lazy(() => import('@/components/OnboardingSheet').then(m => ({ default: m.OnboardingSheet })));
 import { AnnouncementBridge } from '@/components/AnnouncementBridge';
 import { initTelemetry } from '@/services/analytics/telemetry';
 import { initSessionInsights } from '@/services/analytics/sessionInsights';
@@ -38,7 +39,7 @@ const WhatsNewSheet = lazy(() => import('@/components/WhatsNewSheet').then((m) =
 import { initAudioOutputWatcher } from '@/services/audio/outputWatcher';
 import { audioEngine } from '@/services/audio/engine';
 import { useCastStore } from '@/services/cast';
-import { checkForUpdate } from '@/services/update';
+import { checkForUpdate, mergeResumeCheck } from '@/services/update';
 import { useUpdateStore } from '@/store/updateStore';
 import { PageSkeleton } from '@/components/Skeletons';
 import { ErrorBoundary, PlayerErrorBoundary } from '@/components/ErrorBoundary';
@@ -59,6 +60,11 @@ const CommandPalette = lazy(() => import('@/components/CommandPalette'));
 // hero (the LCP element) paints the moment React commits, ~250ms sooner on
 // throttled mobile. Every navigation after that keeps the animation.
 let hasBooted = false;
+// Separate from the cold-boot animation flag above: AppLayout REMOUNTS on
+// every return from /VinaXAI, and the bootstrap initialisers are not
+// idempotent (device-change / document / `online` / `resume` listeners would
+// stack, one set per remount → duplicate toasts and duplicate work).
+let hasBootstrapped = false;
 
 /**
  * v5.15.0 — wire the admin-published client bundle into the running app:
@@ -95,6 +101,8 @@ const RecsDebugPanel = lazy(() => import('@/features/recommendation/RecsDebugPan
 const recsDebugWanted = recsDebugEnabled();
 
 export function AppLayout() {
+  const wideWorkspace = useMediaQuery('(min-width: 1280px)');
+  const hasTrack = usePlayerStore(s => s.queue.length > 0);
   const coldBoot = !hasBooted;
   useClientConfigEffects();
   useLastRoute();
@@ -195,6 +203,8 @@ export function AppLayout() {
   // One-time bootstrap.
   useEffect(() => {
     hasBooted = true;
+    if (hasBootstrapped) return;
+    hasBootstrapped = true;
     const onIdle = (fn: () => void): void => {
       const ric = (window as Window & {
         requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
@@ -245,7 +255,11 @@ export function AppLayout() {
       void checkForUpdate().then((info) => useUpdateStore.getState().setInfo(info));
       void import('@capacitor/app').then(({ App }) => {
         void App.addListener('resume', () => {
-          void checkForUpdate().then((info) => useUpdateStore.getState().setInfo(info));
+          // A null re-check (offline / snoozed / failed) keeps the current gate.
+          void checkForUpdate().then((info) => {
+            const store = useUpdateStore.getState();
+            store.setInfo(mergeResumeCheck(store.info, info));
+          });
         });
       });
     });
@@ -329,12 +343,6 @@ export function AppLayout() {
     const apply = () => {
       const resolved = resolveTheme(theme, window.matchMedia('(prefers-color-scheme: dark)').matches);
       applyThemeClasses(resolved);
-      // v5.12.0 — Auto follows the clock; re-check each minute so the sunset
-      // flip happens without a reload.
-      if (theme === 'auto') {
-        const t = window.setInterval(() => applyThemeClasses(resolveTheme('auto', false)), 60_000);
-        return () => window.clearInterval(t);
-      }
       document.documentElement.dataset.accent = accent;
       document.documentElement.dataset.density = density;
       // v5.17.0 — custom accent (one hex → derived ramps), display size, high contrast.
@@ -359,7 +367,16 @@ export function AppLayout() {
     apply();
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     mq.addEventListener('change', apply);
-    return () => mq.removeEventListener('change', apply);
+    // v5.12.0 — Auto follows the clock; re-check each minute so the sunset
+    // flip happens without a reload. The interval belongs to THIS effect run
+    // and is cleared with it (it used to be created inside apply() and its
+    // cleanup discarded — one leaked interval per dependency change — and the
+    // early return skipped accent/density/scale/contrast/glass for Auto).
+    const clock = theme === 'auto' ? window.setInterval(apply, 60_000) : null;
+    return () => {
+      mq.removeEventListener('change', apply);
+      if (clock !== null) window.clearInterval(clock);
+    };
   }, [theme, accent, density, glassLevel, glassBlur, dynamicTheme, currentAccent, accentCustom, uiScale, highContrast]);
 
   // Per-route canonical + index/noindex strategy (search & personal pages noindex).
@@ -396,10 +413,10 @@ export function AppLayout() {
       >
         Skip to content
       </a>
-      <AuroraBackground />
       <div className="flex flex-1 min-h-0">
         <Sidebar />
-        <main ref={mainRef} id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto px-5 md:px-10 pt-6 pb-44 md:pb-28">
+        <main ref={mainRef} id="main-content" tabIndex={-1} className="vx-workspace flex-1 min-w-0 overflow-y-auto px-4 md:px-8 pb-[calc(var(--player-safe-offset)+2rem)] md:pb-28">
+          {!isFullScreenPlayer && <TopBar onCommands={() => setPaletteOpen(true)} />}
           <MobileBackBar />
           <DiagBanner />
           <OfflineBanner />
@@ -415,16 +432,16 @@ export function AppLayout() {
           </ErrorBoundary>
         </main>
         <PlayerErrorBoundary silent>
-          <NowPlayingRail />
+          {wideWorkspace && hasTrack && !isFullScreenPlayer && <Suspense fallback={null}><NowPlayingRail /></Suspense>}
         </PlayerErrorBoundary>
       </div>
       <Toasts />
       <PlayerErrorBoundary silent>
         <NowPlayingAnnouncer />
-        <NextUpCard />
+        {hasTrack && <Suspense fallback={null}><NextUpCard /></Suspense>}
       {recsDebugWanted && <Suspense fallback={null}><RecsDebugPanel /></Suspense>}
       </PlayerErrorBoundary>
-      <OnboardingSheet />
+      <Suspense fallback={null}><OnboardingSheet /></Suspense>
       <AnnouncementBridge />
       <ContextMenu />
       {paletteOpen && (
@@ -439,7 +456,7 @@ export function AppLayout() {
         <WhatsNewSheet />
       </Suspense>
       {!isFullScreenPlayer && (
-        <div className="fixed bottom-0 inset-x-0 z-40 pb-[env(safe-area-inset-bottom)]">
+        <div className="fixed bottom-0 inset-x-0 z-40 pb-[var(--safe-bottom)]">
           <PlayerErrorBoundary>
             <PlayerBar />
           </PlayerErrorBoundary>

@@ -11,12 +11,14 @@ interface Props {
 /** Consistent expressive screen header — display title, compact subtitle. */
 export function PageHeader({ title, subtitle, actions, compact }: Props) {
   return (
-    <div className={`flex items-end justify-between gap-3 ${compact ? 'mb-1' : 'mb-6'}`}>
+    <div className={`vx-page-header ${compact ? 'mb-1' : 'mb-6'}`}>
       <div className="min-w-0">
-        <h1 className="text-3xl md:text-[34px] font-extrabold tracking-[-0.025em] truncate">{title}</h1>
+        <h1>{title}</h1>
         {subtitle && <p className="text-meta text-ink-300 mt-1">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+      {/* The row wraps (.vx-page-header is flex-wrap) and so do the actions:
+          a long title plus three buttons used to push off a phone screen. */}
+      {actions && <div className="flex flex-wrap items-center gap-2 max-w-full">{actions}</div>}
     </div>
   );
 }

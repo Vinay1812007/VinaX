@@ -10,6 +10,7 @@ import {
   type SmartRules,
   type SmartSort,
 } from '@/features/library/smartCollections';
+import { guardedLocalStorage } from '@/services/storage/local';
 
 interface SmartCollectionState {
   rules: SmartCollection[];
@@ -67,7 +68,7 @@ export const useSmartCollectionStore = create<SmartCollectionState>()(
     }),
     {
       name: SMART_COLLECTIONS_KEY,
-      storage: createJSONStorage(() => window.localStorage),
+      storage: createJSONStorage(() => guardedLocalStorage),
       version: 1,
       // Any stored shape is migrated/sanitised on the way in, never trusted.
       merge: (persisted, current) => {

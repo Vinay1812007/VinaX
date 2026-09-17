@@ -65,7 +65,7 @@ export default function RecapPage() {
     <div className="max-w-2xl mx-auto pb-8 space-y-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-[26px] font-extrabold tracking-tight">Your {recap.year} in Music</h1>
+          <h1 className="text-page-title">Your {recap.year} in Music</h1>
           <p className="text-xs font-semibold text-ink-400">Computed on this device · never uploaded</p>
         </div>
         <button
@@ -97,7 +97,7 @@ export default function RecapPage() {
           [String(recap.completes), 'PLAYED TO THE END'],
           [String(recap.favorites), 'FAVORITES'],
         ].map(([n, l]) => (
-          <div key={l} className="rounded-[18px] bg-[var(--tile)] border border-[var(--glass-border)] p-4">
+          <div key={l} className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
             <p className="text-[26px] font-extrabold leading-tight">{n}</p>
             <p className="text-[11px] font-bold tracking-widest text-ink-400">{l}</p>
           </div>
@@ -106,7 +106,7 @@ export default function RecapPage() {
 
       {/* top artists */}
       {recap.topArtists.length > 0 && (
-        <section className="rounded-[18px] bg-[var(--tile)] border border-[var(--glass-border)] p-4">
+        <section className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
           <h2 className="text-sm font-extrabold mb-3">Top artists</h2>
           <ol className="space-y-2">
             {recap.topArtists.map((a, i) => (
@@ -124,7 +124,7 @@ export default function RecapPage() {
 
       {/* languages */}
       {recap.topLanguages.length > 0 && (
-        <section className="rounded-[18px] bg-[var(--tile)] border border-[var(--glass-border)] p-4">
+        <section className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
           <h2 className="text-sm font-extrabold mb-3">Your languages</h2>
           <div className="space-y-2.5">
             {recap.topLanguages.map((l) => (
@@ -144,7 +144,7 @@ export default function RecapPage() {
 
       {/* on repeat lately */}
       {recap.onRepeat && (
-        <div className="rounded-[18px] bg-[var(--tile)] border border-[var(--glass-border)] p-4">
+        <div className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
           <p className="text-[11px] font-bold tracking-widest text-ink-400 mb-1">ON REPEAT LATELY</p>
           <p className="text-[15px] font-extrabold truncate">{recap.onRepeat.title}</p>
           <p className="text-xs font-semibold text-ink-400 truncate">

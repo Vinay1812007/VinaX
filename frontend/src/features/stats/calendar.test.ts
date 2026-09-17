@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { calendarCells, listeningStreaks, localDayKey } from './calendar';
 import type { HistoryEntry, Song } from '@/types';
 
@@ -53,5 +53,52 @@ describe('calendarCells (v5.17.0)', () => {
 
   it('localDayKey pads month and day', () => {
     expect(localDayKey(at(2026, 0, 5))).toBe('2026-01-05');
+  });
+});
+
+/**
+ * DST regression. Stepping days by 86 400 000 ms breaks on the 23-hour day
+ * of a spring-forward: the grid's first Monday became a Sunday 23:00 and the
+ * streak cursor jumped over the short day. The zone is switched through
+ * process.env.TZ (Node re-reads it on assignment); when a runner ignores the
+ * switch the DST-specific cases skip, and the zone-independent invariants
+ * below them still hold everywhere.
+ */
+describe('calendar across a DST change', () => {
+  const savedTz = process.env.TZ;
+  beforeAll(() => {
+    process.env.TZ = 'America/New_York';
+  });
+  afterAll(() => {
+    if (savedTz === undefined) delete process.env.TZ;
+    else process.env.TZ = savedTz;
+  });
+  // 8 Mar 2026 is the spring-forward day in New York: EST (UTC-5) → EDT (UTC-4).
+  const inNewYork = () => new Date(2026, 2, 7, 12).getTimezoneOffset() === 300 && new Date(2026, 2, 9, 12).getTimezoneOffset() === 240;
+
+  it('the grid still starts on a Monday at local midnight', (ctx) => {
+    if (!inNewYork()) ctx.skip();
+    const r = calendarCells([], at(2026, 2, 11, 15)); // Wednesday 11 Mar 2026
+    expect(r.cells[0].key).toBe('2025-12-22');
+    const first = new Date(r.cells[0].ts);
+    expect([first.getDay(), first.getHours()]).toEqual([1, 0]);
+    expect(r.cells.findIndex((c) => c.today)).toBe(84 - 7 + 2);
+  });
+
+  it('the streak cursor does not jump over the 23-hour day', (ctx) => {
+    if (!inNewYork()) ctx.skip();
+    const now = at(2026, 2, 10, 9);
+    // 8 Mar is missing: the run is 10 + 9 only. The ms-step skipped 8 Mar and counted 7 Mar too.
+    expect(listeningStreaks(new Set(['2026-03-10', '2026-03-09', '2026-03-07']), now).current).toBe(2);
+    expect(listeningStreaks(new Set(['2026-03-10', '2026-03-09', '2026-03-08', '2026-03-07']), now)).toEqual({ current: 4, longest: 4 });
+  });
+
+  it('every cell is a distinct consecutive local midnight, in any zone', () => {
+    for (const now of [at(2026, 2, 11, 15), at(2026, 10, 4, 15), at(2026, 8, 9, 15)]) {
+      const r = calendarCells([], now);
+      expect(new Set(r.cells.map((c) => c.key)).size).toBe(84);
+      expect(r.cells.every((c) => new Date(c.ts).getHours() === 0)).toBe(true);
+      expect(new Date(r.cells[0].ts).getDay()).toBe(1);
+    }
   });
 });

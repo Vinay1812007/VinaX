@@ -131,7 +131,7 @@ export function didYouMean(query: string, candidates: readonly string[]): string
   const vocab = new Map<string, string>();
   for (const c of pool) {
     for (const w of c.split(/\s+/)) {
-      const k = fold(w).replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+      const k = fold(w).replace(/^[^\p{L}\p{N}\p{M}]+|[^\p{L}\p{N}\p{M}]+$/gu, '');
       if (k.length >= MIN_WORD && !vocab.has(k)) vocab.set(k, w);
     }
   }

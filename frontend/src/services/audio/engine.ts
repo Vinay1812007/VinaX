@@ -27,6 +27,14 @@ export function recoveryAction(srcPlayedOk: boolean, retriedCurrentSrc: boolean)
   return srcPlayedOk && !retriedCurrentSrc ? 'retry-same' : 'advance';
 }
 
+/** HTMLMediaElement.NETWORK_NO_SOURCE — no usable source on the element. */
+const NETWORK_NO_SOURCE = 3;
+
+/** play() rejects with AbortError when a newer load()/pause() interrupted it. */
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError';
+}
+
 export function orderedSources(song: Song, pref: AudioQualityPref): string[] {
   const target = pref === 'high' ? Infinity : pref === 'low' ? 96 : 160;
   return [...song.audio]
@@ -75,6 +83,8 @@ class AudioEngine {
   private retriedCurrentSrc = false;
   private pendingSeek = 0;
   private stallTimer: number | null = null;
+  /** Bumped per applySource so a superseded play() promise can tell it is stale. */
+  private loadToken = 0;
 
   init(cb: EngineCallbacks): void {
     this.cb = cb;
@@ -98,7 +108,9 @@ class AudioEngine {
     el.preload = 'auto';
     el.addEventListener('timeupdate', () => {
       this.clearStall();
-      this.lastTime = el.currentTime;
+      // While a recovery seek is still pending the element reports the fresh
+      // load's 0:00 — recording that would lose the position on a second hop.
+      if (this.pendingSeek === 0) this.lastTime = el.currentTime;
       if (el.currentTime > 1.5) this.srcPlayedOk = true;
       this.cb?.onTime(el.currentTime, Number.isFinite(el.duration) ? el.duration : 0);
     }, on);
@@ -298,6 +310,7 @@ class AudioEngine {
   load(song: Song, pref: AudioQualityPref, autoplay: boolean): void {
     if (!this.el) return;
     this.song = song;
+    this.lastInterruptionAt = 0; // a new load supersedes any pending auto-resume
     const streaming = orderedSources(song, pref);
     // v5.6.0 — every offline source, best first (blob: → SW route → file
     // bridge), ahead of streaming: a saved song exhausts local copies before
@@ -325,6 +338,8 @@ class AudioEngine {
 
   private applySource(): void {
     if (!this.el || !this.song) return;
+    this.loadToken += 1;
+    const token = this.loadToken;
     this.cb?.onBuffering(true);
     this.el.src = this.sources[this.sourceIdx];
     this.el.load();
@@ -332,6 +347,9 @@ class AudioEngine {
     if (this.wantAutoplay) {
       this.armStall();
       void this.el.play().catch((err: unknown) => {
+        // A newer load (or the load() that interrupted this play) owns the
+        // element now — its rejection says nothing about the current source.
+        if (token !== this.loadToken || isAbortError(err)) return;
         // Autoplay policy rejection — surface paused state, user taps play.
         this.clearStall();
         this.cb?.onPlayState(false);
@@ -401,7 +419,7 @@ class AudioEngine {
     this.sourceIdx = 0;
     this.srcPlayedOk = false;
     this.retriedCurrentSrc = false;
-    this.pendingSeek = 0;
+    this.pendingSeek = this.lastTime; // fresh URLs, same position
     this.applySource();
     return true;
   }
@@ -411,7 +429,23 @@ class AudioEngine {
     // only resumes here, and a late-loaded chain attaches here too.
     this.effectsMod?.resumeContext();
     this.wireEffects();
-    void this.el?.play().catch((err: unknown) => {
+    this.wantAutoplay = true; // every recovery path resumes only when this is set
+    this.lastInterruptionAt = 0;
+    const el = this.el;
+    if (!el) return;
+    // Every source failed earlier: the element sits in its error state and
+    // el.play() would reject forever. Start over from the best source, at the
+    // position the listener had reached.
+    if ((el.error || el.networkState === NETWORK_NO_SOURCE) && this.song && this.sources.length > 0) {
+      this.sourceIdx = 0;
+      this.srcPlayedOk = false;
+      this.retriedCurrentSrc = false;
+      this.pendingSeek = this.lastTime;
+      this.applySource();
+      return;
+    }
+    void el.play().catch((err: unknown) => {
+      if (isAbortError(err)) return; // interrupted by a newer load / pause
       this.cb?.onPlayState(false);
       if (err instanceof DOMException && err.name === 'NotAllowedError') this.cb?.onBlocked?.();
     });
@@ -419,6 +453,8 @@ class AudioEngine {
 
   pause(): void {
     this.lastIntentionalPause = Date.now();
+    this.wantAutoplay = false; // a recovery reload must not restart a paused track
+    this.lastInterruptionAt = 0; // a deliberate pause outranks a pending auto-resume
     this.el?.pause();
   }
 
@@ -429,6 +465,8 @@ class AudioEngine {
   /** User-intended volume; fades animate el.volume toward this. */
   private targetVolume = 1;
   private fadeTimer: number | null = null;
+  /** The running fade's visibilitychange handler — removed with the fade. */
+  private fadeVisibility: (() => void) | null = null;
 
   setVolume(v: number): void {
     this.targetVolume = Math.min(1, Math.max(0, v));
@@ -440,6 +478,12 @@ class AudioEngine {
     if (this.fadeTimer != null) {
       window.clearInterval(this.fadeTimer);
       this.fadeTimer = null;
+    }
+    // A cancelled fade must not leave its listener behind: the next time the
+    // app is backgrounded it would snap the volume and run the fade's `done`.
+    if (this.fadeVisibility) {
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.fadeVisibility);
+      this.fadeVisibility = null;
     }
   }
 
@@ -467,13 +511,13 @@ class AudioEngine {
     // during a crossfade tail never leaves the track lingering at half-volume.
     const onVisibility = (): void => {
       if (typeof document !== 'undefined' && document.hidden) {
-        this.cancelFade();
+        this.cancelFade(); // also removes this listener
         if (this.el) this.el.volume = target;
-        document.removeEventListener('visibilitychange', onVisibility);
         done?.();
       }
     };
     if (typeof document !== 'undefined') {
+      this.fadeVisibility = onVisibility;
       document.addEventListener('visibilitychange', onVisibility);
     }
     this.fadeTimer = window.setInterval(() => {
@@ -481,10 +525,7 @@ class AudioEngine {
       const t = i / steps;
       if (this.el) this.el.volume = Math.min(1, Math.max(0, from + (to - from) * t));
       if (i >= steps) {
-        this.cancelFade();
-        if (typeof document !== 'undefined') {
-          document.removeEventListener('visibilitychange', onVisibility);
-        }
+        this.cancelFade(); // also removes the visibility listener
         done?.();
       }
     }, 50);
@@ -513,6 +554,7 @@ class AudioEngine {
       // foreground within 30 min would call togglePlay() and defeat the
       // sleep timer (audit finding H3).
       this.lastIntentionalPause = Date.now();
+      this.wantAutoplay = false;
       this.el?.pause();
       if (this.el) this.el.volume = this.targetVolume; // restore for next play
       done();

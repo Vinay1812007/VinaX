@@ -63,3 +63,16 @@ describe('didYouMean', () => {
     expect(performance.now() - t0).toBeLessThan(200);
   });
 });
+
+describe('didYouMean with Indic scripts', () => {
+  it('does not shave the trailing vowel sign off a candidate word', () => {
+    // "तुम्हारी," used to be keyed as "तुम्हार" (the vowel sign is a mark), so a
+    // correctly typed "तुम्हारी" read as a typo and came back with the comma.
+    expect(didYouMean('तुम्हारी kesariya', ['तुम्हारी, सनम', 'Kesariya'])).toBeNull();
+    expect(didYouMean('నువ్వే kesariya', ['నువ్వే! కావాలి', 'Kesariya'])).toBeNull();
+  });
+
+  it('still corrects a Latin typo next to an Indic word', () => {
+    expect(didYouMean('तुम्हारी kesarya', ['तुम्हारी, सनम', 'Kesariya'])).toBe('तुम्हारी Kesariya');
+  });
+});

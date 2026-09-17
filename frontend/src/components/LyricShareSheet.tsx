@@ -1,10 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import type { Song } from '@/types';
 import { cn } from '@/utils/cn';
 import { toast } from '@/store/toastStore';
 import { shareOrSaveImage } from '@/utils/shareImage';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { Sheet } from './Sheet';
 
 const MAX = 6;
 const trunc = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1) + '…' : s);
@@ -74,9 +73,6 @@ async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {
 }
 
 export function LyricShareSheet({ lines, song, onClose }: { lines: string[]; song: Song; onClose: () => void }) {
-  useDismissOnBack(true, onClose);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, true, onClose);
   const [sel, setSel] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -98,21 +94,10 @@ export function LyricShareSheet({ lines, song, onClose }: { lines: string[]; son
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-ink-950/80 backdrop-blur-sm p-0 sm:p-6"
-      onClick={onClose}
-    >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Share lyrics"
-        className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-5 max-h-[85vh] flex flex-col animate-fade-up"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Sheet onClose={onClose} labelledBy="lyric-share-title" layout="column" maxHeight="medium" backdropClassName="bg-ink-950/80 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-bold">Share lyrics</h2>
-          <button onClick={onClose} className="text-ink-400 text-sm hover:text-ink-100">Close</button>
+          <h2 id="lyric-share-title" className="text-lg font-bold">Share lyrics</h2>
+          <button type="button" onClick={onClose} className="text-ink-400 text-sm hover:text-ink-100">Close</button>
         </div>
         <p className="text-xs text-ink-400 mb-3">Tap up to {MAX} lines, then create your card.</p>
         <div className="overflow-y-auto flex-1 -mx-1 px-1 space-y-1">
@@ -138,7 +123,6 @@ export function LyricShareSheet({ lines, song, onClose }: { lines: string[]; son
         >
           {busy ? 'Creating…' : sel.length ? `Create card (${sel.length})` : 'Select lines'}
         </button>
-      </div>
-    </div>
+    </Sheet>
   );
 }
