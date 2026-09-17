@@ -12,7 +12,7 @@ On first open VinaX asks for three things.
 | Username | 3–20 lowercase letters, numbers or `_`. VinaX suggests one from your name and checks that it is free while you type. If you are offline it is confirmed later. |
 | Languages | The languages you listen in. These become your pinned languages; you can change them in Settings. |
 
-A checkbox, ticked by default, controls whether anonymous usage statistics are shared. Untick it if you do not want to share them. Settings has no switch for this choice afterwards.
+A checkbox, unticked by default, asks whether you want to share anonymous usage statistics. You can change your mind at any time in Settings → Region & Privacy → Share anonymous usage.
 
 There is no password and no login. If you already use VinaX on another device, the same screen has **Move from old device** (scan a QR or type a code) and **Import a file** (restore a backup). See [Library and backup](library-and-backup.md).
 

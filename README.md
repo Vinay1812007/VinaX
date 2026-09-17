@@ -96,7 +96,7 @@ The full description, with the real weights, is in [docs/recommendations.md](doc
 
 - No account. Library, history, settings, taste profile and AI chats stay on the device. Clearing site or app data removes them, so export a backup first (Settings → Your Data).
 - "On the device" does not mean "no network". Searching sends search words to the catalogue. AI features send a bounded summary of taste and recent listening — song titles and artist names, no identity. Choosing a username checks it with the service.
-- Usage statistics and session insights are sent only when the usage-sharing box on the welcome sheet is ticked. The box is ticked by default; unticking it means nothing is sent.
+- Usage statistics and session insights are sent only when the listener opts in. The box on the welcome sheet is unticked by default, and **Settings → Region & Privacy → Share anonymous usage** changes the choice at any time.
 - A backup file never contains credentials, the device identity, downloads or the queue.
 
 Details, including the backup format and a table of every request that leaves the device: [docs/data-and-privacy.md](docs/data-and-privacy.md).

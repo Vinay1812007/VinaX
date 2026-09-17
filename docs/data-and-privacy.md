@@ -7,7 +7,7 @@ This document says where VinaX keeps a listener's data, what the backup file con
 - There are no accounts. Library, history, settings, the taste profile and AI chats live on the device.
 - Nothing personal is synced or backed up by the service. Clearing site or app data removes it, so the app offers an export.
 - Some features need the network and send what they need: search words, song ids, and — for AI features — a bounded summary of taste and recent listening.
-- Usage statistics and session insights are controlled by one checkbox on the welcome sheet. It is ticked by default (`useState(true)` in `OnboardingSheet.tsx`); when it is unticked nothing is sent. The choice is stored as `vinax.analytics-consent`. No Settings control changes it afterwards — the only ways to change it are to erase everything and set up again, or a device transfer, which carries the old choice.
+- Usage statistics and session insights are opt-in. The checkbox on the welcome sheet is unticked by default (`useState(false)` in `OnboardingSheet.tsx`); while it is off nothing is sent. The choice is stored as `vinax.analytics-consent` and can be changed at any time in **Settings → Region & Privacy → Share anonymous usage**. Turning it off stops new usage events at once (`consented()` is read on every send); session insights stop after the next reload. A device transfer carries the choice; a backup never does. Until 7.1 the box was ticked by default and no Settings control existed — listeners who set up before 7.1 keep the choice stored then, and can now change it.
 
 ## What is stored where
 

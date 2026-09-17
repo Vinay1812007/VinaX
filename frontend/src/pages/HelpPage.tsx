@@ -53,7 +53,7 @@ const GUIDES: Guide[] = [
 const FAQ: Array<{ q: string; a: string }> = [
   { q: 'Is VinaX free?', a: 'Yes. There are no subscriptions, no premium tiers and no login. Sponsored placements appear only on the Ads page, never in the player.' },
   { q: 'Do I need an account?', a: 'No. You choose a display name and a username; there is no password or login. Your taste profile, favourites, playlists, history, stats and downloads live on this device.' },
-  { q: 'What data leaves my device?', a: 'Searches and song requests go to the catalogue so music can play. VinaX AI and the AI DJ receive your message or a short taste summary to answer. Your username is confirmed with the service. Anonymous usage statistics with a city-level location are sent only if the usage-sharing box on the welcome screen was left ticked.' },
+  { q: 'What data leaves my device?', a: 'Searches and song requests go to the catalogue so music can play. VinaX AI and the AI DJ receive your message or a short taste summary to answer. Your username is confirmed with the service. Anonymous usage statistics with a city-level location are sent only if you opt in — on the welcome screen, or later in Settings → Region & Privacy.' },
   { q: 'How do the recommendations work without an account?', a: 'The taste profile is computed on this device from the languages you pinned and the songs you finish, like and skip. Taste Profile shows what it learned and lets you adjust it; “Not interested”, “Show fewer like…” and “Never play…” in a song menu steer it, each with Undo.' },
   { q: 'Why are there only five songs in Up Next?', a: 'The DJ builds the next five at a time and adds more as you listen, so it can follow what you skip and finish in this sitting.' },
   { q: 'Why did Up Next stay in one language?', a: 'A continuation always stays in the language of the song that started it, in every discovery mode. Tune this queue → Switch language changes it on purpose.' },
@@ -276,7 +276,7 @@ export default function HelpPage() {
           </p>
           <p className="text-sm text-ink-200 leading-relaxed mb-3">
             Rights holders can request removal of any content at any time — see the DMCA / takedown page. Your personal
-            data never leaves your device except anonymous usage statistics, which you can decline on the welcome screen.
+            data never leaves your device except anonymous usage statistics, which are off unless you opt in (Settings → Region &amp; Privacy).
           </p>
           <p className="text-sm">
             <Link to="/terms" className="text-ember-400 hover:underline">Terms of Use</Link> ·{' '}

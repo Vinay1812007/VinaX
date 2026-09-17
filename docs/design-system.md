@@ -109,7 +109,7 @@ The rule: the visual box may be 36 or 40px, but the touch target is at least 44p
 - `IconButton` adds an invisible `::after` pad: `-inset-1` for `sm` (36 → 44px) and `-inset-0.5` for `md` (40 → 44px). `lg` is 48px and needs none. Use `IconButton` for every icon-only control; it also requires a `label`, defaults to `type="button"`, and forwards `aria-pressed`, `aria-expanded` and `aria-controls`.
 - Rows and links that are their own target set `min-height: 44px` directly: sidebar links, section links, the profile link, Home Studio buttons, player tabs, library inputs. Tailwind exposes this as `min-h-touch` / `min-w-touch`.
 - Dock items are 56px tall. The card play button is a 44px disc.
-- `Chip` is 36px tall and has no hit-area pad on disk; give chip rows enough vertical spacing, or add a pad, when they are a primary touch control.
+- `Chip` is 36px tall with an `::after` pad that extends the hit box 4px above and below (44px). 7.0.1 shipped the smaller chip without the pad; 7.1 adds it, and `components/Chip.test.tsx` asserts it.
 - On coarse pointers (`html.pointer-coarse`, set in `main.tsx`) range inputs get a 44px min-height, and hover-only affordances (`.card-play`, `.hover-reveal`) are always visible.
 
 ## Focus and states

@@ -249,7 +249,7 @@ Two consecutive skips of automatic songs re-sequence the remaining automatic tai
 
 ### De-duplication across shelves
 
-Home is built from blocks that mount and re-render independently, so `features/home/shelfLedger.ts` keeps a shared ledger keyed by block and shelf position. A shelf filters out songs already claimed by any shelf earlier in display order, then records its own claim; claims are replaced on re-render, so the result is stable. The ledger compares catalogue ids. Collapsing by canonical identity happens earlier, where the lists are built: in `mixes.ts` for the personal mixes, in the hard filter for queues and in `trending.ts` for the trending shelf. `features/home/dedupeShelves.ts` contains an identity-based cross-shelf helper that is exercised by unit tests and is not called by the Home page.
+Home is built from blocks that mount and re-render independently, so `features/home/shelfLedger.ts` keeps a shared ledger keyed by block and shelf position. A shelf filters out songs already claimed by any shelf earlier in display order, then records its own claim; claims are replaced on re-render, so the result is stable. Since 7.1 the ledger claims a song by catalogue id and by canonical identity (`songKey`), so another cut of a song shown on an earlier shelf is dropped too. Identity is also collapsed where the lists are built: in `mixes.ts` for the personal mixes, in the hard filter for queues and in `trending.ts` for the trending shelf. `features/home/dedupeShelves.ts` is an older identity-based helper that is exercised by unit tests and is not called by the Home page.
 
 ## Developer breakdown
 

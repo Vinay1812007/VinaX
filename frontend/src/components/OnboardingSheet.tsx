@@ -144,7 +144,9 @@ export function OnboardingSheet() {
   const detected = readBrowserSignals().languages;
   const [picked, setPicked] = useState<string[]>(detected.length ? detected : ['hindi', 'english']);
   const [name, setName] = useState<string>(() => getLocal<string>(KEYS.userName, ''));
-  const [consent, setConsent] = useState<boolean>(true);
+  // v7.1.0 — unticked by default: the privacy page promises usage sharing "only if you opt in",
+  // and a pre-ticked box is not an opt-in. It can be changed later in Settings → Region & Privacy.
+  const [consent, setConsent] = useState<boolean>(false);
   const [nameErr, setNameErr] = useState(false);
   // Unique handle — mandatory, because display names collide across listeners.
   const [handle, setHandle] = useState<string>(
@@ -580,7 +582,7 @@ export function OnboardingSheet() {
                     onChange={(e) => setConsent(e.target.checked)}
                     className="mt-0.5 accent-ember-500"
                   />
-                  <span>Share anonymous usage (city-level location, no account) and session insights with all on-screen text masked, to help improve VinaX. You can change this anytime.</span>
+                  <span>Share anonymous usage (city-level location, no account) and session insights with all on-screen text masked, to help improve VinaX. You can change this anytime in Settings.</span>
                 </label>
               </>
             )}
