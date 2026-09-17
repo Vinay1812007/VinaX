@@ -1,10 +1,29 @@
 # Deploying VinaX
 
-Both applications live on `main`: `frontend/` builds to Cloudflare Pages and `backend/` deploys the `vinax-api` Worker. Older instructions referring to separate frontend/backend branches are obsolete.
+This document covers how the two halves of VinaX reach production: the static frontend in `frontend/` and the `vinax-api` Worker in `backend/`. It lists the hosting settings, the manual deploy commands, how a release flows from pull request to production, the pre-release checks and where to look when a deploy does not land. Day-two topics — secrets, monitoring, the stale-Worker runbook, the known-red dashboard check and rollback — are in [docs/operations.md](docs/operations.md). Host and secret names appear here because a maintainer has to type them.
 
-## Cloudflare Pages
+Both applications live on `main`. There are no separate frontend and backend branches.
 
-Configure the `vinax` Pages project:
+## How a release flows
+
+```text
+branch ─► pull request ─► CI + E2E green ─► merge to main
+                                              ├─► static host builds frontend/  ─► site
+                                              ├─► Deploy Worker (backend/** changed) ─► vinax-api
+                                              └─► Build Android APK ─► repository release (when signing secrets are set)
+```
+
+1. Open a pull request. `ci.yml` runs lint, typecheck, unit tests, build and the bundle budget for `frontend/`, and lint, typecheck, tests and a Worker dry-run for `backend/`. `e2e.yml` builds the app and runs the browser suite.
+2. Merge to `main`.
+3. The static host's Git integration builds and publishes the frontend. No workflow in this repository deploys the frontend.
+4. When the merge touched `backend/**`, `worker-deploy.yml` runs the backend gates again, verifies the deploy token, runs `wrangler deploy`, and polls `/api/status` until it answers `200`. The host's own Git build for the Worker may deploy the same commit as well; that is harmless.
+5. `buildapk.yml` builds the Android package on every push to `main` and publishes a signed release when the signing secrets are present. Pushing a `v*` tag runs `release.yml`, which refuses to publish without the release keystore.
+
+A pushed commit, green checks and a verified production are three separate milestones. Record which ones have actually happened.
+
+## Frontend — static hosting
+
+Project `vinax`, connected to this repository:
 
 | Setting | Value |
 | --- | --- |
@@ -12,19 +31,24 @@ Configure the `vinax` Pages project:
 | Root directory | `frontend` |
 | Build command | `npm run build` |
 | Output directory | `dist` |
-| Node version | `22` or newer |
+| Node version | 22 or newer |
 
-A push deploys automatically only when the Pages Git integration is enabled and healthy. Manual deployment from `frontend/`:
+`npm run build` cleans `dist/` and the build caches, typechecks, builds, prerenders the static routes (`scripts/prerender.mjs`) and writes `dist/changelog.json` (`scripts/changelog-json.mjs`).
+
+Keep the custom domains (`www.sirimillavinay.online`, the apex, `admin.`, `update.`, `status.`) attached to the static project. It is the origin the Worker passes every unmatched URL to. The static project needs no environment variables and no secrets.
+
+Manual deploy, from `frontend/`:
 
 ```sh
 npm ci
-npm run build
-npx wrangler pages deploy dist --project-name vinax
+npm run deploy:pages     # npm run build && wrangler pages deploy dist --project-name vinax
 ```
 
-## Worker
+`frontend/public/_headers` carries the content-security policy, including hashes of the inline scripts in `index.html`. If you change an inline script, build, then run `node scripts/csp-hashes.mjs`, which recomputes the hashes from `dist/index.html` and writes them to `dist/_headers` and back to `public/_headers`; `src/__tests__/cspHashes.test.ts` fails when they drift.
 
-Keep bindings, routes and `ASSETS_HOST` aligned with `backend/worker/wrangler.toml`. Store credentials as Worker secrets; names are documented in `backend/.env.example`. For local development use the ignored `backend/worker/.dev.vars` file.
+## Backend — the Worker
+
+Configuration is `backend/worker/wrangler.toml`: the Worker name, every route pattern it claims on the production domain, `[vars]` (`ASSETS_HOST` must point at the static project's host so fall-through and edge-rendered pages can fetch the shell) and the `HANDOFF` key-value binding. Secrets are never in that file; see [docs/operations.md](docs/operations.md#secrets).
 
 From `backend/`:
 
@@ -34,34 +58,32 @@ npm run lint
 npm run typecheck
 npm test
 npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/vinax-worker-dry
-npm run deploy
+npm run deploy           # wrangler deploy --config worker/wrangler.toml
 ```
 
-### Runbook: the app is newer than the API (AI DJ, AI shelves, curate all silent)
+`npx wrangler login` is needed once on a new machine. Adding a handler under `worker/functions/api/` requires an import and an exact-path entry in `worker/index.ts`; `worker/__tests__/routerCoverage.test.ts` fails otherwise. A handler without a route falls through to the static site and answers `405`, which a dry-run cannot detect.
 
-Symptom: the web app on Pages is current (its `changelog.json` shows the latest version) but `GET /api/version` reports an old version, `POST /api/curate` answers `405`, and `POST /api/dj` hangs or returns the SPA shell. Cause: no Worker deploy has landed. As of 2026-09-16 both paths were down at once — Cloudflare Workers Builds has reported a deleted/rolled build token since 2026-09-10, and the GitHub fallback's `CLOUDFLARE_API_TOKEN` secret has been rejected (`Invalid access token [code: 9109]`) since 2026-09-11, so every backend change since 6.0 stayed undeployed while the app kept shipping.
+The **Deploy Worker** workflow is the second deploy path. It needs the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Without the token it reports that it is not configured and succeeds without deploying. It can be run by hand with `dry_run` to exercise every gate and stop before deploying.
 
-Fix, in order of preference:
+## Android
 
-1. **Rotate the GitHub fallback token** (five minutes, fixes every future push): Cloudflare dashboard → My Profile → API Tokens → Create Token → *Edit Cloudflare Workers* template, scoped to this account → copy it → GitHub → Settings → Secrets and variables → Actions → update `CLOUDFLARE_API_TOKEN` (and confirm `CLOUDFLARE_ACCOUNT_ID`). Then Actions → **Deploy Worker** → *Run workflow*. The workflow now verifies the token first and names this secret when it is rejected.
-2. **Repair Workers Builds**: Cloudflare dashboard → Workers & Pages → `vinax-api` → Settings → Build → reconnect the repository / regenerate the build token. Until then the "Workers Builds: vinax-api" check on every commit stays red; it is informational once path 1 works.
-3. **Deploy by hand** from a machine that is logged in (`npx wrangler whoami` shows the account): `cd backend && npm run deploy`. Then confirm `GET https://www.sirimillavinay.online/api/version` reports the new version and `POST /api/curate` no longer answers `405`.
-
-The **Deploy Worker** GitHub workflow provides a second deployment path when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are configured. Without credentials it skips deployment. If Cloudflare reports a deleted or rolled build token, repair that token in Cloudflare or configure the existing GitHub fallback; a source change alone cannot fix the token.
-
-Pages serves static assets. Worker routes own API, image/APK proxy and configured SEO routes. Verify both deployments because successfully publishing one does not update the other.
+`buildapk.yml` and `release.yml` generate the Android project in CI (`npx cap add android`, `npx cap sync android`, `node scripts/patch-android.js`), set `versionCode` and `versionName`, and build with the keystore from the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets. The release body carries a `VersionCode:` line; `/api/version` reads it, and the in-app update check compares it with the installed build. Details are in [docs/android.md](docs/android.md).
 
 ## Release checks
 
-1. Run the frontend and backend lint, typecheck and test commands in the root README.
-2. Build the frontend, check its bundle budget and run the browser suite against `dist/`.
-3. Confirm CI for the exact commit, then inspect Pages and Worker deployment results.
-4. Check live `/api/health`, Home, search, album/playlist playback, queue completion, lyrics and `/admin/`. Test a new browser profile and a returning listener, desktop and mobile, light and dark themes.
-5. Confirm the displayed app version and check the admin operational panels. Unavailable data does not count as a healthy signal.
-6. For Android, verify native playback/downloads and release signing before creating a `v*` tag. Tagging triggers the signed APK workflow.
+1. Run the frontend and backend gates in [docs/testing.md](docs/testing.md#the-gates), including the bundle budget and the browser suite against `dist/`.
+2. Confirm CI and E2E are green for the exact commit.
+3. After merging, confirm the static host's build succeeded, and read the **Deploy Worker** log when `backend/` changed. Publishing one half does not update the other.
+4. On production, check `/api/status`, Home, Search, album and playlist playback, a queue running to its end, lyrics, VinaX AI and `/admin/`. Use a new browser profile and a returning one, a phone width and a desktop width, light and dark themes.
+5. Confirm the app shows the new version (Settings, the About page, or `/changelog.json`). Confirm a route the backend change added answers as expected; `/api/version` reports the Android release, not the Worker build.
+6. For Android, run [docs/qa-device-script.md](docs/qa-device-script.md) on a device before pushing a `v*` tag.
 
-## Rollback
+## When a deploy does not land
 
-Use Pages deployment history to promote the previous successful deployment. Roll back the Worker through Cloudflare version history separately. Keep the two versions compatible; avoid reverting shared config blindly. Home layout changes can be reversed by restoring the previous configuration or publishing built-in defaults from the console. Export a config backup before larger operational edits.
-
-A pushed commit, passing local checks and a live production verification are separate release milestones. Record which have actually completed.
+| What you see | Where to look |
+| --- | --- |
+| The app is new, AI features are silent, `/api/curate` answers `405` | [The stale-Worker runbook](docs/operations.md#runbook-the-app-is-newer-than-the-api) |
+| "Workers Builds: vinax-api" is red on every commit | [The known-red dashboard build check](docs/operations.md#the-known-red-dashboard-build-check) — harmless while **Deploy Worker** is green |
+| **Deploy Worker** fails at "Verify the Cloudflare token" | Rotate `CLOUDFLARE_API_TOKEN` (same runbook, fix 1) |
+| Visitors are stuck on the boot splash after a deploy | [Rollback](docs/operations.md#rollback): purge the edge cache, or bump the asset URL epoch |
+| Something must be undone now | [Rollback](docs/operations.md#rollback) |

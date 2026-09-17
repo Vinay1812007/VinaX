@@ -34,13 +34,13 @@ test('first run walks onboarding: name gate → tour → app shell', async ({ pa
   // The welcome step demands a name before anything else.
   await expect(page.getByText('Music tuned to you')).toBeVisible();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByText('Name is mandatory', { exact: false })).toBeVisible();
+  await expect(page.getByText('Enter a name for your listening profile.', { exact: false })).toBeVisible();
 
   await page.getByLabel('What should we call you?').fill('Tester');
   await page.getByRole('button', { name: 'Continue' }).click();
 
   // Catalog unreachable → the taste-seed step silently yields to the tour.
-  await expect(page.getByText('Welcome to VinaX')).toBeVisible();
+  await expect(page.getByText('Five places to go')).toBeVisible();
   await page.getByRole('button', { name: 'Skip' }).click();
 
   // Sheet gone, app shell alive.
