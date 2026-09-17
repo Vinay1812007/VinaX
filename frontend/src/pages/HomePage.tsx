@@ -60,7 +60,7 @@ import {
 import { useFreshFinds, useHiddenGems, useTrendingNearYou } from '@/features/home/useDiscoveryShelves';
 import { useTrendingAlbums, useTrendingArtists } from '@/features/home/useTrendingShelves';
 import { useAiHome } from '@/features/home/useAiHome';
-import { flagOn, useFeatureFlags } from '@/features/home/useAppConfig';
+import { useFeatureEnabled } from '@/features/home/useAppConfig';
 import { moodRotationOfTheDay, useMoodShelf } from '@/features/home/useMoodShelves';
 import { GENRE_SHELVES } from '@/features/home/useGenreShelves';
 import { useSeasonalShelf } from '@/features/home/useSeasonalShelf';
@@ -337,8 +337,7 @@ function PersonalBlock() {
 /** v6.2.0 — "Designed for you": AI-titled shelves resolved against the catalogue. Renders nothing until they exist. */
 function AiHomeBlock() {
   const dedupe = useShelfDedupe('aihome');
-  const flags = useFeatureFlags();
-  const allowed = flagOn(flags, 'aiHome');
+  const allowed = useFeatureEnabled('aiHome');
   const shelves = useAiHome(allowed);
   if (!allowed || !shelves.data?.length) {
     return shelves.isLoading && allowed ? <ShelfSkeleton /> : null;

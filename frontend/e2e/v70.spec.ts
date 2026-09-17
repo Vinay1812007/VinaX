@@ -9,13 +9,13 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  *  - the developer breakdown shows selected, passed-over and rejected songs.
  */
 interface Song {
-  kind: 'song'; id: string; title: string; subtitle: string; artists: { id: string; name: string }[];
+  kind: 'song'; id: string; title: string; subtitle: string; artists: { primary: { id: string; name: string }[] };
   album: { id: string; name: string }; images: { quality: string; url: string }[]; audio: { quality: string; url: string }[];
   duration: number; language: string; year: string; explicit: boolean; hasLyrics: boolean; playCount: number;
 }
 const TITLES = ['Party blast', 'Soft melody', 'Dance mass', 'Calm night', 'Mid tempo', 'Feel good', 'Rain song', 'Evening tune', 'Road trip', 'Slow love', 'Bright day', 'Night drive', 'Morning raga', 'City lights'];
 const mk = (base: string, i: number, over: Partial<Song> = {}): Song => ({
-  kind: 'song', id: `s${i}`, title: TITLES[i % TITLES.length], subtitle: `Artist ${i % 7}`, artists: [{ id: `a${i % 7}`, name: `Artist ${i % 7}` }], album: { id: `al${i}`, name: `Album ${i}` },
+  kind: 'song', id: `s${i}`, title: TITLES[i % TITLES.length], subtitle: `Artist ${i % 7}`, artists: { primary: [{ id: `a${i % 7}`, name: `Artist ${i % 7}` }] }, // the catalogue's own shape, so the app sees real artists album: { id: `al${i}`, name: `Album ${i}` },
   images: [{ quality: '500x500', url: `${base}/icons/icon.svg` }], audio: [{ quality: '160kbps', url: `${base}/x.mp4` }],
   duration: 200 + (i % 4) * 30, language: 'telugu', year: String(2000 + i), explicit: false, hasLyrics: false, playCount: 500 - i, ...over,
 });
@@ -38,12 +38,14 @@ async function seed(page: Page, baseURL: string, settings: Record<string, unknow
     },
     { pool, entries, fp: latestNotesFingerprint(), settings },
   );
+  // The network boundary returns catalogue-shaped records, not normalized store Songs.
+  const catalog = pool.map(song => ({ ...song, name: song.title, artists: { primary: song.artists }, image: song.images, downloadUrl: song.audio, explicitContent: song.explicit }));
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
-    if (url.pathname === '/api/cat/search') return route.fulfill({ json: { data: { songs: { results: pool }, albums: { results: [] }, artists: { results: [] }, playlists: { results: [] } } } });
+    if (url.pathname === '/api/cat/search') return route.fulfill({ json: { data: { songs: { results: catalog }, albums: { results: [] }, artists: { results: [] }, playlists: { results: [] } } } });
     if (url.pathname.startsWith('/api/cat/')) {
-      if (url.pathname.includes('/search/songs') || url.pathname.includes('/suggestions')) return route.fulfill({ json: { data: { results: pool } } });
+      if (url.pathname.includes('/search/songs') || url.pathname.includes('/suggestions')) return route.fulfill({ json: { data: { results: catalog } } });
       return route.fulfill({ json: { data: { results: [] } } });
     }
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
@@ -83,6 +85,7 @@ test('the built queue obeys the rules, and a hand-queued song goes ahead of the 
   // Rules: the seed's language only, nothing muted, one entry per song, no lead artist back to back.
   expect(built.every((s) => s.language === 'telugu')).toBe(true);
   expect(new Set(built.map((s) => s.id)).size).toBe(built.length);
+  expect(built.every((s) => s.artists.length > 0)).toBe(true); // the fixture really carries artists, so the next line means something
   for (let i = 1; i < built.length; i += 1) expect(built[i].artists[0].name).not.toBe(built[i - 1].artists[0].name);
 
   // Queue a song by hand that is not in the queue yet.
