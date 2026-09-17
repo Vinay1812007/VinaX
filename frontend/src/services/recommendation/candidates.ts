@@ -57,6 +57,18 @@ export async function gatherCandidates(ctx: RecommendationContext): Promise<Cand
         ),
       );
     }
+    // v7.1.0 — the listener asked for something (a tune, a pinned mood): fetch songs
+    // FOR that intent, in the queue's language, instead of only re-scoring the seed's pool.
+    if (ctx.intentQuery) {
+      const query = ctx.intentQuery;
+      for (const page of [1, 1 + (Math.abs(ctx.salt) % 2) + 1]) {
+        tasks.push(
+          safe(searchSongsPage(query, page, 20), []).then((songs) =>
+            songs.map((song) => ({ song, source: 'intent' as const, seedTitle: query })),
+          ),
+        );
+      }
+    }
     if (seed.language && !ctx.mutedLanguages.includes(seed.language)) {
       tasks.push(
         safe(searchSongsPage(`${seed.language} ${seed.genre ?? ''}`.trim(), 1, 15), []).then((songs) =>

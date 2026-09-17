@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
+import { songLine } from '@/utils/songLine';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useReasonStore } from '@/store/reasonStore';
@@ -99,8 +100,9 @@ function NowPlayingRailBody() {
                 className="w-9 h-9 rounded-md object-cover"
               />
               <span className="min-w-0">
-                <span className="block text-sm truncate">{s.title}</span>
-                <span className="block text-xs text-ink-400 truncate">{s.subtitle}</span>
+                {/* Song – Movie/Album – Artist */}
+                <span className="block text-sm truncate">{songLine(s).title}</span>
+                <span className="block text-xs text-ink-400 truncate">{[songLine(s).album, songLine(s).artist].filter(Boolean).join(' – ')}</span>
                 {reasons[s.id] && <span className="block text-[11px] text-ember-400/80 truncate italic">✨ {reasons[s.id]}</span>}
               </span>
             </button>

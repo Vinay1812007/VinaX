@@ -26,7 +26,7 @@
  *  - When no key is configured the route answers 503 and the client's
  *    deterministic queue ships unchanged.
  *
- *   POST { context: {...}, pool: [{ id?, title, artist, language? }], count?, discover?, maxDiscover? }
+ *   POST { context: {...}, pool: [{ id?, title, artist, language?, album?, year?, known? }], count?, discover?, maxDiscover? }
  *   → 200 { intro, songs: [{ songId, title, artist, reason, segue, confidence, fromPool }], model }
  *   → 400 bad_request | 503 ai_not_configured | 500 { error }
  */
@@ -44,7 +44,9 @@ HOW TO BUILD THE SET
 1. The seed song rules the vibe: stay in its tempo and emotional neighbourhood; carry a musical thread (voice, instrument, groove) across every hand-off. No abrupt genre or energy jumps.
 2. Weight what the listener completes, replays and likes (topSongs, recentlyCompleted, likedSongs, preferredArtists). Nothing they skip; nothing in avoidLanguages or avoidArtists.
 3. Variety: the same lead artist never appears twice in a row; nothing from recentlyPlayed or avoidSongs comes back.
-4. Sequence an ARC: settle into the seed's mood, build gently, let one peak land around two thirds in, then ease off.
+4. ORDER BY TRANSITION STRENGTH, inside the energy arc. Slot 1 is the strongest and most familiar hand-off from the seed: the song that matches it on the most of — mood, energy, era, genre, vocal texture, composer / artist style, popularity — and that this listener is most likely to know (a pool entry marked "known": true, or by a preferredArtists name). From there, introduce related but less familiar songs gradually: each next pick may move ONE of those dimensions a little, never several at once, so the flow stays smooth and every song is recognisably related to the one before it. Discoveries belong in the second half of the set, never in slot 1. Use each pool entry's album (the film or album it comes from) and year to keep era and composer style coherent.
+4b. Every song is in currentLanguage — the same language as the seed — unless tuneInstruction explicitly asks to switch language. A pool entry in another language is skipped.
+4c. Within that order, shape an ARC: settle into the seed's mood, build gently, let one peak land around two thirds in, then ease off.
 5. listenerEnergy is your dashboard: "restless" means change direction with surer, well-loved tracks; "wavering" means re-anchor with a favourite; "returning after a break" opens warm and familiar; "locked in" means sustain and lift one gentle notch at a time.
 6. When festivalContext is present, let two or three picks carry that festival's mood naturally, never a takeover.
 7. Respect tuneInstruction (if present) as the highest-priority adjustment.
@@ -82,7 +84,8 @@ export function canonKey(title: string, artist: string): string {
   return `${t}|${a}`;
 }
 
-export interface PoolSong { id?: string; title: string; artist: string; language?: string | null }
+/** v7.1.0 — album (film / album name), year and `known` (the listener has played this song or artist) are optional facts the DJ orders by. */
+export interface PoolSong { id?: string; title: string; artist: string; language?: string | null; album?: string; year?: string; known?: boolean }
 export interface DjPick { songId: string | null; title: string; artist: string; reason: string; segue: string; confidence: number; fromPool: boolean }
 export interface Candidate { title: string; artist: string }
 
@@ -182,7 +185,7 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
   const pool: PoolSong[] = Array.isArray(body.pool)
     ? (body.pool as unknown[])
         .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
-        .map((p) => ({ ...(clip(p.id, 128) ? { id: clip(p.id, 128) } : {}), title: clip(p.title, 200), artist: clip(p.artist, 200), language: typeof p.language === 'string' ? p.language.slice(0, 40) : null }))
+        .map((p) => ({ ...(clip(p.id, 128) ? { id: clip(p.id, 128) } : {}), title: clip(p.title, 200), artist: clip(p.artist, 200), language: typeof p.language === 'string' ? p.language.slice(0, 40) : null, ...(clip(p.album, 120) ? { album: clip(p.album, 120) } : {}), ...(typeof p.year === 'string' && /^(19|20)\d{2}$/.test(p.year) ? { year: p.year } : {}), ...(p.known === true ? { known: true } : {}) }))
         .filter((p) => p.title && p.artist)
         .slice(0, 60)
     : [];

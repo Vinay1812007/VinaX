@@ -79,7 +79,7 @@ const DISCOVERY_OPTIONS: Array<{ value: DiscoveryMode; label: string }> = [
 const DISCOVERY_NOTES: Record<DiscoveryMode, string> = {
   familiar: 'Known ground: your favourites and songs you finished come back into the mix, new artists are rare, and the queue stays in its language.',
   balanced: 'Mostly your taste, with about one new artist in every four or five songs. What you skip and finish in a sitting tips it either way.',
-  discover: 'Roams further: never-played artists rank higher and fill close to half of a queue, the queue may take a short detour into another language you play, and Home adds picks from languages you haven’t tried.',
+  discover: 'Roams further: never-played artists rank higher and fill close to half of a queue — always in the language of the song that is playing, and introduced after a familiar opening. Home adds picks from languages you haven’t tried.',
 };
 
 function Row({ label, note, children, stack }: { label: string; note?: string; children: ReactNode; stack?: boolean }) {

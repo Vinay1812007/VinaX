@@ -87,6 +87,19 @@ describe('POST /api/dj', () => {
     expect(opts.ladder[0]).toBe('dj');
     expect(opts.skipSecondary).toBe(true);
   });
+  it('v7.1.0 — forwards album, year and familiarity to the DJ, sanitised, and asks for familiar-first ordering in the seed language', async () => {
+    chatMock.mockResolvedValue({ content: JSON.stringify({ intro: '', songs: [] }), model: 'm', keyRole: 'dj', status: 200, error: null });
+    const rich = pool.map((p, i) => ({ ...p, album: i === 0 ? `  Ala   Vaikunthapurramuloo  ` : 'x'.repeat(500), year: i === 0 ? '2020' : 'last year', known: i === 0 ? true : 'yes' }));
+    await post({ context: { seedSong: 'Butta Bomma — Armaan Malik', currentLanguage: 'telugu' }, pool: rich, count: 5 });
+    const [, messages] = chatMock.mock.calls[0] as [unknown, Array<{ content: string }>];
+    const sent = JSON.parse(messages[1].content.split('guaranteed playable (JSON):\n')[1].split('\n\n')[0]) as Array<Record<string, unknown>>;
+    expect(sent[0]).toMatchObject({ album: 'Ala Vaikunthapurramuloo', year: '2020', known: true });
+    expect((sent[1].album as string).length).toBe(120);
+    expect(sent[1]).not.toHaveProperty('year'); // not a year
+    expect(sent[1]).not.toHaveProperty('known'); // only a real boolean true counts
+    expect(messages[0].content).toMatch(/strongest and most familiar hand-off/);
+    expect(messages[0].content).toMatch(/same language as the seed/);
+  });
   it('a fromPool pick can only ever carry a pool id — a forged id with fromPool:true is dropped or re-keyed', async () => {
     chatMock.mockResolvedValue({
       content: JSON.stringify({ songs: [

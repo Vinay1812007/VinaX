@@ -52,6 +52,9 @@ import { AmbientOverlay, useIdle } from '@/components/AmbientOverlay';
 import { shareNowPlayingCard } from '@/utils/shareCard';
 import { toast } from '@/store/toastStore';
 import { TuneChips } from '@/features/queue/TuneChips';
+import { Chip } from '@/components/Chip';
+import { songLine } from '@/utils/songLine';
+import type { TuneIntent } from '@/services/recommendation/tune';
 import { cn } from '@/utils/cn';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
@@ -143,6 +146,15 @@ function BookmarkNowButton({ songId }: { songId: string }) {
   );
 }
 
+/** Mood → the tune intent that rebuilds the queue for it. */
+const MOOD_PINS: Array<[Mood, string, TuneIntent]> = [
+  ['romantic', 'Romantic', 'romantic'],
+  ['energetic', 'Energetic', 'energetic'],
+  ['chill', 'Chill', 'chill'],
+  ['melancholy', 'Melancholy', 'heartbreak'],
+  ['devotional', 'Devotional', 'devotional'],
+];
+
 export default function NowPlayingPage() {
   const song = useCurrentSong();
   usePageTitle(song ? song.title : 'Now Playing');
@@ -188,6 +200,16 @@ export default function NowPlayingPage() {
   const [rightTab, setRightTab] = useState<'queue' | 'lyrics'>('queue');
   // C5 — the manually pinned session mood (45-min override of inference).
   const [moodPin, setMoodPin] = useState<Mood | null>(() => getMoodPin());
+  // True from a mood tap until the rebuilt list arrives (or the attempt gives up).
+  const [rebuilding, setRebuilding] = useState(false);
+  const upcomingCount = usePlayerStore((st) => Math.max(0, st.queue.length - st.index - 1));
+  // The rebuilt list arrived — or, after a generous wait, it is not coming (offline, empty catalogue).
+  useEffect(() => {
+    if (!rebuilding) return;
+    if (upcomingCount > 0) { setRebuilding(false); return; }
+    const t = window.setTimeout(() => setRebuilding(false), 35_000);
+    return () => window.clearTimeout(t);
+  }, [rebuilding, upcomingCount]);
   const [immersive, setImmersive] = useState(false);
   // Android back exits immersive lyrics before it leaves the player (P0-2).
   useDismissOnBack(immersive, () => setImmersive(false));
@@ -837,43 +859,37 @@ export default function NowPlayingPage() {
         </div>
         {rightTab === 'queue' && (
         <>
-        {/* C5 — pin a mood: overrides the inferred session mood for 45 min */}
-        <div className="mt-5">
+        {/* C5 / v7.1.0 — pin a mood. It used to set a flag that only nudged the NEXT automatic
+            extension (possibly eight songs away), so tapping a chip changed nothing you could
+            see. Now it rebuilds Up Next at once: songs are fetched FOR the mood, in this
+            queue's language; songs you queued by hand stay where they are. */}
+        <div className="mt-5" role="group" aria-label="Pin a mood">
           <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-2">
-            Pin a mood <span className="normal-case font-semibold text-ink-500 tracking-normal">· steers picks for 45 min</span>
+            Pin a mood <span className="normal-case font-semibold text-ink-500 tracking-normal">· rebuilds Up Next, holds for 45 min</span>
           </h2>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            {(
-              [
-                ['romantic', 'Romantic'],
-                ['energetic', 'Energetic'],
-                ['chill', 'Chill'],
-                ['melancholy', 'Melancholy'],
-                ['devotional', 'Devotional'],
-              ] as Array<[Mood, string]>
-            ).map(([m, label]) => (
-              <button
+          <div className="flex flex-wrap gap-2">
+            {MOOD_PINS.map(([m, label, intent]) => (
+              <Chip
                 key={m}
+                active={moodPin === m}
                 onClick={() => {
+                  const store = usePlayerStore.getState();
                   if (moodPin === m) {
                     clearMoodPin();
                     setMoodPin(null);
-                    toast('Mood unpinned');
+                    store.tuneQueue(null);
+                    toast('Mood unpinned — Up Next goes back to your usual mix');
                   } else {
                     pinMood(m);
                     setMoodPin(m);
-                    toast(`${label} pinned — picks lean that way for 45 min`);
+                    store.tuneQueue(intent);
+                    toast(`${label} pinned — rebuilding Up Next`);
                   }
+                  setRebuilding(true);
                 }}
-                aria-pressed={moodPin === m}
-                className={
-                  moodPin === m
-                    ? 'shrink-0 px-3.5 py-2 rounded-full text-xs font-bold bg-ember-500/25 text-ember-200 border border-ember-400/40 transition active:scale-95'
-                    : 'shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100 active:scale-95'
-                }
               >
                 {label}
-              </button>
+              </Chip>
             ))}
           </div>
         </div>
@@ -887,17 +903,18 @@ export default function NowPlayingPage() {
             <Link to="/queue" className="text-xs font-semibold text-ember-400">Full queue</Link>
           </div>
           {upNext.length === 0 && (
-            <p className="text-sm text-ink-400 flex items-center gap-1.5">
-              <SparkleIcon className="w-4 h-4 text-ember-400 shrink-0" />
-              Add songs with Play next or Add to queue.
+            <p className="text-sm text-ink-400 flex items-center gap-1.5" role="status">
+              <SparkleIcon className={`w-4 h-4 text-ember-400 shrink-0 ${rebuilding ? 'animate-pulse' : ''}`} />
+              {rebuilding ? 'Finding what follows this song…' : 'Add songs with Play next or Add to queue.'}
             </p>
           )}
           {upNext.map((s, i) => (
             <button key={`${s.id}-${i}`} onClick={() => playAt(index + 1 + i)} className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-ink-800/60 text-left">
               <img src={bestImage(s.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-9 h-9 rounded-lg object-cover" />
               <span className="min-w-0">
-                <span className="block text-sm truncate">{s.title}</span>
-                <span className="block text-xs text-ink-400 truncate">{s.subtitle}</span>
+                {/* Song – Movie/Album – Artist */}
+                <span className="block text-sm truncate">{songLine(s).title}</span>
+                <span className="block text-xs text-ink-400 truncate">{[songLine(s).album, songLine(s).artist].filter(Boolean).join(' – ')}</span>
                 {reasons[s.id] && (
                   <span className="block text-[11px] text-ember-400/80 truncate italic">✨ {reasons[s.id]}</span>
                 )}

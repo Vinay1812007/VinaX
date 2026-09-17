@@ -68,7 +68,8 @@ export interface PlayerState {
   playQueue(songs: Song[], startIndex?: number, opts?: { keepList?: boolean }): void;
   playSong(song: Song): void;
   /** v6.5.0 — reshape what comes next: keeps what played and the current song, rebuilds the rest for the intent. */
-  tuneQueue(intent: TuneIntent): void;
+  /** `null` (v7.1.0) drops the active intent and rebuilds what follows without one. */
+  tuneQueue(intent: TuneIntent | null): void;
   playAt(index: number): void;
   enqueue(song: Song): void;
   enqueueNext(song: Song): void;
@@ -105,6 +106,8 @@ export interface PlayerState {
 }
 
 const SKIP_THRESHOLD = 0.3;
+/** How many songs one continuation adds. */
+const NEXT_BATCH = 5;
 /** v7.0.0 — a play counts toward taste once this much of it has actually been heard. */
 const COUNTED_PLAY_SEC = 5;
 let autoplayNoticeShown = false;
@@ -190,7 +193,9 @@ export const usePlayerStore = create<PlayerState>()(
           try {
             const { queue } = get();
             const songs = await recommendNextSongs(seed, getRecommendationContext(seed, radio ? 'radio' : 'playlist'), {
-              limit: 8,
+              // v7.1.0 — the next FIVE: a short, tight stretch re-planned more often follows the
+              // listener better than eight songs decided at once (and the DJ answers faster).
+              limit: NEXT_BATCH,
               excludeIds: queue.map((song) => song.id),
               excludeKeys: queue.map(songKey),
               tune: get().tuneIntent,
@@ -587,11 +592,11 @@ export const usePlayerStore = create<PlayerState>()(
         playSong: (song) => get().playQueue([song], 0),
 
         tuneQueue: (intent) => {
-          if (!isTuneIntent(intent)) return;
+          if (intent !== null && !isTuneIntent(intent)) return;
           const { queue, index } = get();
           const current = queue[index];
           if (!current) return;
-          const resolved: TuneIntent = intent === 'surprise' ? randomTune() : intent;
+          const resolved: TuneIntent | null = intent === 'surprise' ? randomTune() : intent;
           // Keep what played, the current song and anything the listener queued
           // by hand; the rest of what follows is rebuilt.
           invalidateQueue();

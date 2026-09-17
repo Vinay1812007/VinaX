@@ -288,8 +288,41 @@ export interface DjHints {
   gate?: DiscoveryGate;
 }
 
+/**
+ * v7.1.0 — what the DJ is told about a pool song: besides title and lead
+ * artist, the album / film it comes from and its year (so era and composer
+ * style can be matched) and whether this listener already knows it — the DJ
+ * orders familiar hand-offs first and introduces the rest gradually. Titles
+ * and names only; never an id the listener could be identified by.
+ */
+export function describePoolSong(s: Song, known: { songIds: Set<string>; artists: Set<string> }): { id: string; title: string; artist: string; language: string | null; album?: string; year?: string; known?: true } {
+  const lead = primaryArtist(s);
+  const album = s.album?.name?.trim();
+  return {
+    id: s.id,
+    title: s.title,
+    artist: lead,
+    language: s.language,
+    ...(album ? { album: album.slice(0, 120) } : {}),
+    ...(s.year && /^(19|20)\d{2}$/.test(s.year) ? { year: s.year } : {}),
+    ...(known.songIds.has(s.id) || known.artists.has(lead.trim().toLowerCase()) ? { known: true as const } : {}),
+  };
+}
+
+/** Songs and lead artists this listener has played or liked. */
+export function knownTo(ctx: RecommendationContext): { songIds: Set<string>; artists: Set<string> } {
+  const songIds = new Set<string>([...ctx.favorites.map((s) => s.id), ...ctx.history.map((e) => e.song.id)]);
+  const artists = new Set<string>();
+  for (const s of [...ctx.favorites, ...ctx.history.map((e) => e.song)]) {
+    const lead = primaryArtist(s).trim().toLowerCase();
+    if (lead) artists.add(lead);
+  }
+  return { songIds, artists };
+}
+
 export async function djSequence(seed: Song | null, ctx: RecommendationContext, pool: Song[], limit: number, signal?: AbortSignal, hints: DjHints = {}): Promise<DjSet | null> {
   if (!djAvailable() || pool.length < 3) return null;
+  const known = knownTo(ctx);
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
@@ -305,7 +338,7 @@ export async function djSequence(seed: Song | null, ctx: RecommendationContext, 
           ...(hints.goal ? { listenerGoal: hints.goal.slice(0, 160) } : {}),
           ...(hints.tune ? { tuneInstruction: hints.tune.slice(0, 240) } : {}),
         },
-        pool: pool.slice(0, 40).map((s) => ({ id: s.id, title: s.title, artist: primaryArtist(s), language: s.language })),
+        pool: pool.slice(0, 40).map((s) => describePoolSong(s, known)),
         count: Math.max(1, Math.min(20, limit)),
         discover: hints.discover === true,
         maxDiscover: MAX_DISCOVER,
