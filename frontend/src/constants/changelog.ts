@@ -12,6 +12,16 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '7.0.1': {
+    title: 'A tidier top bar, calmer menus, Trending for you',
+    changes: [
+      { type: 'new', text: 'Trending for you: Home’s trending shelf is now put in your order — taste first on your device, and, when AI shelves are on, re-ordered by VinaX AI. It only ever re-orders real trending songs: your mutes and blocks apply, one version per song, and if AI is slow you still get the on-device order straight away.' },
+      { type: 'improved', text: 'The top bar no longer carries a second search box — Search is one tap away in the dock and has its own field. The bar now shows where you are on the left and your actions on the right; on Home the theme and notification buttons moved up into it, so the page starts higher.' },
+      { type: 'improved', text: 'Medium-sized controls everywhere: slimmer buttons, chips, tiles and search field, with the same comfortable touch area as before.' },
+      { type: 'new', text: 'Discover and Search now include an Ads shortcut, so it is reachable on phones too.' },
+      { type: 'fixed', text: 'Scrolling inside the ⋮ song menu no longer scrolls the page behind it — on the player, in lists, with a finger or a mouse wheel.' },
+    ],
+  },
   '7.0.0': {
     title: 'VinaX 7.0 — smarter, safer, steadier',
     changes: [

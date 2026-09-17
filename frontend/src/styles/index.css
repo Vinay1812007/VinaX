@@ -53,6 +53,13 @@
   --vx-success: #86efac;
   --vx-art-accent: rgb(var(--art));
   --vx-radius-control: 8px;
+  /* v7.0.1 — one medium control scale: what a control LOOKS like. Touch targets stay
+     >= 44px through an invisible hit-area pad where the visual box is smaller. */
+  --vx-control-h: 40px;
+  --vx-control-h-sm: 36px;
+  --vx-tile-h: 48px;
+  /* Height of the sticky top bar; everything that sticks beneath it reads this. */
+  --vx-topbar-h: 64px;
   --vx-radius-card: 12px;
   --vx-radius-panel: 16px;
   --vx-shadow-overlay: 0 16px 48px #0004;
@@ -652,7 +659,7 @@ button:active:not(:disabled) { filter: brightness(.96); }
   overflow: hidden;
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
-  min-height: 44px;
+  min-height: var(--vx-control-h);
   font-weight: 700;
   letter-spacing: 0;
   border: 1px solid rgb(var(--ember-500));

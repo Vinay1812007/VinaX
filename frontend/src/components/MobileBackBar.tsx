@@ -8,11 +8,10 @@ export function MobileBackBar() {
   const navigate = useNavigate();
   if (!DETAIL_ROUTE.test(pathname)) return null;
   return (
-    // Sticks directly UNDER the sticky top bar, whose phone height is
-    // max(64px, safe-top + 52px): its top padding is the status-bar inset, then
-    // a 44px row and 8px below. A plain top-16 slid this strip underneath the
-    // top bar on notched phones. -mx-4 mirrors <main>'s px-4 (full bleed).
-    <div className="md:hidden sticky top-[max(4rem,calc(var(--safe-top)+3.25rem))] z-30 -mx-4 px-3 py-1 glass-navbar">
+    // Sticks directly UNDER the sticky top bar. Its height (status-bar inset
+    // included) is the --vx-topbar-h token, so this strip follows it on notched
+    // phones and whenever the bar is resized. -mx-4 mirrors <main>'s px-4.
+    <div className="md:hidden sticky top-[var(--vx-topbar-h)] z-30 -mx-4 px-3 py-1 glass-navbar">
       <button
         type="button"
         onClick={() => window.history.length > 1 ? navigate(-1) : navigate("/")}

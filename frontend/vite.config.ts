@@ -72,6 +72,16 @@ export default defineConfig({
             { name: 'router', test: /\/node_modules\/(react-router|react-router-dom)\// },
             { name: 'vendor', test: /\/node_modules\/(react|react-dom|scheduler)\// },
             { name: 'data', test: /\/node_modules\/(@tanstack\/react-query|zustand)\// },
+            // v7.0.1 — the small app modules that are ALL already in the first-load
+            // graph (each used to ship as its own preloaded 0.1–2 KB chunk, paying a
+            // module wrapper and a gzip header apiece). Listed explicitly, never by
+            // folder: a pattern wide enough to catch a lazy-only module would drag
+            // it into first load. scripts/check-bundle-size.mjs is the referee.
+            {
+              name: 'core',
+              priority: -1,
+              test: /\/src\/(utils\/(cn|format|images|plays)|constants\/(languages|storage-keys)|components\/Icons|store\/(reasonStore|toastStore|historyStore|settingsStore)|services\/(identity\/installId|native\/index|storage\/local|recommendation\/(quality|songIdentity)|personalization\/(session|storage|profile|eventWeights)))\.tsx?$/,
+            },
           ],
         },
       },

@@ -102,6 +102,27 @@ describe('<TrackMenu />', () => {
     expect(document.activeElement).toBe(trigger());
   });
 
+  it('v7.0.1 — the page behind never scrolls: wheel on the backdrop, or past the end of the list, is swallowed', () => {
+    mount();
+    fireEvent.click(trigger());
+    const menu = screen.getByRole('menu');
+    const backdrop = menu.previousElementSibling as HTMLElement;
+    expect(menu.className).toContain('overscroll-contain');
+    const wheel = (target: Element, deltaY: number): boolean => {
+      const e = new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true });
+      target.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(wheel(backdrop, 120)).toBe(true);
+    // A list with nothing left to scroll must not hand the gesture to the page…
+    expect(wheel(items()[0], 120)).toBe(true);
+    // …but a list that CAN scroll keeps its own scrolling.
+    Object.defineProperty(menu, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(menu, 'clientHeight', { configurable: true, value: 288 });
+    expect(wheel(items()[0], 120)).toBe(false);
+    expect(wheel(items()[0], -120)).toBe(true); // already at the top
+  });
+
   it('removes its window / document listeners when it closes', () => {
     const add = vi.spyOn(window, 'addEventListener');
     const remove = vi.spyOn(window, 'removeEventListener');

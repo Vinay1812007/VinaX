@@ -98,6 +98,8 @@ export function Sheet({
   if (!open) return null;
   return createPortal(
     <div
+      // Marks this as VinaX's own overlay: AppLayout's wheel rescue must not scroll the page behind it.
+      data-vx-overlay
       className={cn('fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-6', Z[z], backdropClassName)}
       // Portals still bubble through the REACT tree: without this, a backdrop
       // click also fires whatever clickable row the sheet was rendered inside.
