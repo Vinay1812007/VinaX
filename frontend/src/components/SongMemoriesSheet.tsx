@@ -1,9 +1,7 @@
-import { useRef } from 'react';
 import type { Song } from '@/types';
 import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { Sheet } from './Sheet';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 
 /**
@@ -18,9 +16,6 @@ export default function SongMemoriesSheet({ song, onClose }: { song: Song; onClo
   const entries = useHistoryStore((s) => s.entries);
   const favorites = useLibraryStore((s) => s.favorites);
   const collections = useLibraryStore((s) => s.collections);
-  const ref = useRef<HTMLDivElement>(null);
-  useFocusTrap(ref, true, onClose);
-  useDismissOnBack(true, onClose);
 
   const mine = entries.filter((e) => e.song.id === song.id);
   const plays = mine.length;
@@ -38,8 +33,7 @@ export default function SongMemoriesSheet({ song, onClose }: { song: Song; onClo
   const fav = plays ? slots[byHour.indexOf(Math.max(...byHour))] : null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label="Your history with this song" className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-5 animate-fade-up" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} label="Your history with this song">
         <div className="flex items-center gap-3">
           <img src={bestImage(song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-14 h-14 rounded-xl object-cover" />
           <div className="min-w-0">
@@ -63,8 +57,7 @@ export default function SongMemoriesSheet({ song, onClose }: { song: Song; onClo
           {inLists.length > 0 && <li>In {inLists.length === 1 ? 'the playlist' : 'playlists'}: <b>{inLists.join(', ')}</b>.</li>}
         </ul>
         <p className="mt-3 text-[11px] text-ink-500">From your on-device history — nothing is uploaded.</p>
-        <button onClick={onClose} className="mt-4 w-full btn-secondary py-2 text-sm">Close</button>
-      </div>
-    </div>
+        <button type="button" onClick={onClose} className="mt-4 w-full btn-secondary py-2 text-sm">Close</button>
+    </Sheet>
   );
 }

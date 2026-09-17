@@ -1,3 +1,4 @@
+import { LanguageGrid } from '@/components/LanguageGrid';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { songPath } from '@/utils/slug';
 import { LANGUAGES, languageLabel } from '@/constants/languages';
@@ -6,15 +7,19 @@ import { Chip } from '@/components/Chip';
 import { Shelf } from '@/components/Shelf';
 import { MediaCard } from '@/components/MediaCard';
 import { ShelfSkeleton } from '@/components/Skeletons';
+import { InlineError } from '@/components/States';
 import { useTrendingForLanguage } from '@/features/home/useHomeShelves';
 import { trendingSeed } from '@/constants/seeds';
 import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
 
 function LanguageShelf({ language }: { language: string }) {
-  const { data, isLoading } = useTrendingForLanguage(language);
+  const { data, isLoading, isError, refetch } = useTrendingForLanguage(language);
   const playQueue = usePlayerStore((s) => s.playQueue);
   if (isLoading) return <ShelfSkeleton />;
+  // A failed shelf used to vanish (`return null`) — a pinned language with no
+  // shelf and no explanation. Empty is still silent; an error is not.
+  if (isError && !data?.length) return <InlineError label={`trending ${languageLabel(language)} songs`} retry={() => void refetch()} />;
   if (!data?.length) return null;
   return (
     <Shelf title={`Trending · ${languageLabel(language)}`} explanation="Trending in your languages" seeAllTo={`/search/${encodeURIComponent(trendingSeed(language))}`}>
@@ -38,8 +43,9 @@ export default function LanguagesPage() {
         Pin languages to boost them everywhere; mute to hide them from recommendations. Your mix can blend several.
       </p>
 
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-semibold text-ink-300">Pin (tap) — pinned glow amber</span>
+      <LanguageGrid />
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <span className="text-sm font-semibold text-ink-300">Choose the languages you love</span>
         <div className="flex gap-2">
           <button
             onClick={() => {

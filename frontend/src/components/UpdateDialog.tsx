@@ -59,7 +59,7 @@ export function UpdateDialog() {
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink-950/85 backdrop-blur-sm p-0 sm:p-6">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Update available" className="w-full sm:max-w-sm glass-modal rounded-t-3xl sm:rounded-3xl p-6 animate-fade-up">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Update available" className="w-full sm:max-w-sm glass-modal rounded-t-3xl sm:rounded-3xl p-6 pb-[max(1.5rem,var(--safe-bottom))] sm:pb-6 max-h-[92dvh] overflow-y-auto overscroll-contain animate-fade-up">
         <div className="flex items-center gap-3 mb-3">
           <img src="/icons/icon.svg" alt="" className="w-11 h-11 rounded-xl" />
           <div>

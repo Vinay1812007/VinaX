@@ -25,7 +25,8 @@ describe('buildSessionContext counters', () => {
     const now = Date.UTC(2026, 8, 16, 9, 0); // a Wednesday
     const song = (language: string, artist: string) => ({ language, artists: [{ name: artist }] });
     const history = [
-      { ts: now - 2 * MIN, completed: false, song: song('telugu', 'Sid Sriram') },
+      { ts: now - 1 * MIN, completed: false, song: song('telugu', 'Sid Sriram') }, // playing now: no verdict yet
+      { ts: now - 2 * MIN, completed: false, skipped: true, song: song('telugu', 'Sid Sriram') },
       { ts: now - 10 * MIN, completed: true, song: song('telugu', 'Anirudh') },
       { ts: now - 25 * MIN, completed: true, song: song('hindi', 'Arijit') },
       { ts: now - 120 * MIN, completed: true, song: song('hindi', 'Arijit') }, // earlier sitting

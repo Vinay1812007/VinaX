@@ -44,6 +44,24 @@ function json(o: unknown, status = 200): Response {
   });
 }
 
+const SITE_ORIGIN = 'https://www.sirimillavinay.online';
+
+/**
+ * True only for a link that stays on the product's own origin: a site path
+ * ("/song/…") or an absolute URL whose PARSED origin is ours. A string-prefix
+ * test is not enough — "https://www.sirimillavinay.online.evil.example" and
+ * "…online@evil.example" both pass one — and "//host" or "/\host" are
+ * protocol-relative, so the path form is resolved against the origin too.
+ */
+export function isInternalLink(link: string): boolean {
+  if (!link.startsWith('/') && !link.startsWith('https://')) return false;
+  try {
+    return new URL(link, SITE_ORIGIN).origin === SITE_ORIGIN;
+  } catch {
+    return false;
+  }
+}
+
 interface GeoRow {
   country: string | null;
   region: string | null;
@@ -121,9 +139,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const url = (body?.link ?? '/').toString().slice(0, 300) || '/';
   // Links must stay inside the product — an admin typo (or a compromised
   // token) must not be able to push arbitrary external URLs to every device.
-  if (!(url.startsWith('/') || url.startsWith('https://www.sirimillavinay.online'))) {
-    return json({ error: 'bad_link' }, 400);
-  }
+  if (!isInternalLink(url)) return json({ error: 'bad_link' }, 400);
   const dedupeKey = typeof body?.dedupe_key === 'string' ? body.dedupe_key.slice(0, 80) : '';
   // Optional filter: {country, region, city, lang, langPrefix} — any provided
   // key becomes an equality (or LIKE for langPrefix) filter on the subs
@@ -165,7 +181,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     const recent = await sbSelect<{ message: string | null }>(
       env,
       'vinax_events',
-      `type=eq.announcement&created_at=gte.${encodeURIComponent(since)}&select=message&limit=50&order=created_at.desc`,
+      `type=eq.announcement&device_id=eq.admin&created_at=gte.${encodeURIComponent(since)}&select=message&limit=50&order=created_at.desc`,
     ).catch(() => []);
     const needle = `"dedupe_key":${JSON.stringify(dedupeKey)}`;
     if (recent.some((r) => (r.message ?? '').includes(needle))) {

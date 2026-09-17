@@ -14,7 +14,17 @@ export const EVENT_WEIGHTS = Object.freeze({
   SKIP: -0.75,
   /** "Show fewer like this" — five skips' worth, plus a soft mute. */
   SOFT_MUTE: -3.75,
+  /** v7.0.0 — a play that started from the listener's own search: a deliberate choice, not a passive one. */
+  SEARCH_PLAY: 1.5,
 } as const);
+
+/**
+ * v7.0.0 — a skip takes back the PLAY bump the song earned when it started.
+ * Without this a song started and skipped at once still NETS +0.25 for its
+ * artist and language (PLAY 1.0 + SKIP −0.75), so a listener skipping their
+ * way through an artist was slowly taught to the profile as liking them.
+ */
+export const SKIP_RETRACTS_PLAY = true;
 
 export type ListeningEvent = keyof typeof EVENT_WEIGHTS;
 
@@ -28,4 +38,4 @@ export const DECAY = Object.freeze({
 /** Hard ceiling on any single affinity score (language, artist, song). */
 export const MAX_AFFINITY = 60;
 
-export const EVENT_WEIGHTS_VERSION = '1.0.0';
+export const EVENT_WEIGHTS_VERSION = '1.1.0';

@@ -64,7 +64,10 @@ test('Settings renders its control surface', async ({ page }) => {
   await goOffline(page);
   await page.goto('/settings');
   await expect(page.getByRole('heading', { name: 'Recommendations' })).toBeVisible();
-  await expect(page.getByText('Explore mode', { exact: true }).first()).toBeVisible();
+  const discovery = page.getByRole('group', { name: 'Discovery mode' });
+  await expect(discovery.getByRole('button', { name: 'Balanced' })).toHaveAttribute('aria-pressed', 'true');
+  await discovery.getByRole('button', { name: 'Discover' }).click();
+  await expect(discovery.getByRole('button', { name: 'Discover' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('heading', { name: 'Your Data' })).toBeVisible();
   await expect(page.getByText('Move to a new device', { exact: true }).first()).toBeVisible();
 });

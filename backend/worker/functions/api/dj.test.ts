@@ -87,6 +87,25 @@ describe('POST /api/dj', () => {
     expect(opts.ladder[0]).toBe('dj');
     expect(opts.skipSecondary).toBe(true);
   });
+  it('a fromPool pick can only ever carry a pool id — a forged id with fromPool:true is dropped or re-keyed', async () => {
+    chatMock.mockResolvedValue({
+      content: JSON.stringify({ songs: [
+        { songId: 'forged-id', title: 'Not In Pool', artist: 'Nobody', fromPool: true },
+        { songId: 'forged-id-2', title: 'Butta Bomma', artist: 'Armaan Malik', fromPool: true },
+        { songId: 'p4', title: 'wrong title', artist: 'wrong artist', fromPool: true },
+      ] }),
+      model: 'm', keyRole: 'dj', status: 200, error: null,
+    });
+    const { status, json } = await post({ context: { seedSong: 'x' }, pool, count: 8, discover: true, maxDiscover: 0 });
+    expect(status).toBe(200);
+    const picks = json.songs as Array<{ songId: string | null; title: string; fromPool: boolean }>;
+    const poolIds = new Set(pool.map((p) => p.id));
+    expect(picks.map((s) => s.songId)).toEqual(['p2', 'p4']);
+    for (const s of picks) if (s.fromPool) expect(poolIds.has(s.songId ?? '')).toBe(true);
+    // The pool's own title wins over whatever the model wrote beside the id.
+    expect(picks[1].title).toBe('Ramuloo Ramulaa');
+  });
+
   it('answers 503 when no engine is configured and 500 when the model returns nothing usable', async () => {
     chatMock.mockResolvedValue({ content: null, error: 'not_configured' });
     expect((await post({ context: { seedSong: 'x' }, pool })).status).toBe(503);

@@ -5,6 +5,7 @@ import type { Song } from '@/types';
 import { searchSongs } from '@/services/api';
 import { isNativePlatform } from '@/services/native';
 import { buildTasteSnapshot } from '@/services/ai/taste';
+import { matchesProposal } from '@/services/ai/dj';
 
 // Same-origin on web; the native app calls the deployed function directly.
 const ENDPOINT = isNativePlatform()
@@ -75,6 +76,7 @@ export async function resolveSuggestions(
   muted: string[],
   avoid: string[] = [],
   languages: string[] = [],
+  signal?: AbortSignal,
 ): Promise<Song[]> {
   const out: Song[] = [];
   const seen = new Set<string>();
@@ -82,16 +84,27 @@ export async function resolveSuggestions(
   const avoidKeys = new Set(avoid.map(titleKey));
   const served = servedKeySet();
   const library = useLibraryStore.getState();
-  const valid = suggestions.filter((s) => s && typeof s.title === 'string' && typeof s.artist === 'string').slice(0, 40);
+  // The model's strings are untrusted input: typed, trimmed and clipped before they reach a search.
+  const valid = suggestions
+    .filter((s) => s && typeof s.title === 'string' && typeof s.artist === 'string')
+    .map((s) => ({ title: s.title.replace(/\s+/g, ' ').trim().slice(0, 120), artist: s.artist.replace(/\s+/g, ' ').trim().slice(0, 120) }))
+    .filter((s) => s.title)
+    .slice(0, 40);
   for (let i = 0; i < valid.length && out.length < limit; i += 4) {
-    const batch = await Promise.allSettled(valid.slice(i, i + 4).map((s) => searchSongs(`${s.title} ${s.artist}`, 5)));
-    for (const result of batch) {
+    if (signal?.aborted) break;
+    const asked = valid.slice(i, i + 4);
+    const batch = await Promise.allSettled(asked.map((s) => searchSongs(`${s.title} ${s.artist}`.trim(), 5, { signal })));
+    for (const [n, result] of batch.entries()) {
       if (out.length >= limit) break;
       if (result.status !== 'fulfilled') continue;
       const results = freshSongs(result.value, {
         excludeKeys: served, muted, blocked: (song) => isSongBlocked(song, library),
       }).filter((song) => !languages.length || (song.language != null && languages.includes(song.language)));
-      const pick = results.find((song) => !seen.has(song.id) && !seenTitles.has(titleKey(song.title)) && !avoidKeys.has(titleKey(song.title)));
+      const open = results.filter((song) => !seen.has(song.id) && !seenTitles.has(titleKey(song.title)) && !avoidKeys.has(titleKey(song.title)));
+      // v7.0.0 — the catalogue song that really IS the suggestion (title and
+      // credited artist both match) wins over whatever the search listed first;
+      // only when none matches does the closest fresh hit stand in.
+      const pick = open.find((song) => matchesProposal(song, asked[n].title, asked[n].artist)) ?? open[0];
       if (pick) {
         seen.add(pick.id);
         seenTitles.add(titleKey(pick.title));
@@ -107,11 +120,15 @@ export async function generatePlaylist(
   prompt: string,
   languages: string[],
   muted: string[] = [],
+  signal?: AbortSignal,
 ): Promise<PlaylistResult> {
   let res: Response;
   const avoidTitles = loadAvoidTitles();
   const ctrl = new AbortController();
-  const timer = window.setTimeout(() => ctrl.abort(), 34_000);
+  const abort = () => ctrl.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) ctrl.abort();
+  const timer = window.setTimeout(abort, 34_000);
   try {
     res = await fetch(ENDPOINT, {
       method: 'POST',
@@ -126,17 +143,19 @@ export async function generatePlaylist(
     return { ok: false, reason: 'error' };
   } finally {
     window.clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
   }
   if (res.status === 503) return { ok: false, reason: 'not_configured' };
   if (!res.ok) return { ok: false, reason: 'error' };
 
   const data = (await res.json().catch(() => null)) as
-    | { name?: string; description?: string; songs?: Suggestion[] }
+    | { name?: unknown; description?: unknown; songs?: Suggestion[] }
     | null;
   const suggestions = Array.isArray(data?.songs) ? (data as { songs: Suggestion[] }).songs : [];
   if (!suggestions.length) return { ok: false, reason: 'empty' };
 
-  const songs = await resolveSuggestions(suggestions, 25, muted, avoidTitles, languages);
+  const songs = await resolveSuggestions(suggestions, 25, muted, avoidTitles, languages, signal);
+  if (signal?.aborted) return { ok: false, reason: 'error' };
   if (!songs.length) return { ok: false, reason: 'empty' };
 
   // Remember what this generation used — the resolved catalog titles (what
@@ -144,13 +163,13 @@ export async function generatePlaylist(
   // same catalog hit) AND the model's own titles — so the next run for the
   // same vibe is steered toward genuinely different picks.
   recordServed(songs.map(songKey));
-  recordAvoidTitles([...songs.map((s) => s.title), ...suggestions.map((s) => s.title)]);
+  recordAvoidTitles([...songs.map((s) => s.title), ...suggestions.flatMap((s) => (s && typeof s.title === 'string' ? [s.title.slice(0, 120)] : []))]);
 
   return {
     ok: true,
     playlist: {
-      name: (data?.name || prompt).slice(0, 60),
-      description: data?.description || '',
+      name: ((typeof data?.name === 'string' && data.name.trim()) || prompt).slice(0, 60),
+      description: typeof data?.description === 'string' ? data.description.trim().slice(0, 240) : '',
       songs,
     },
   };

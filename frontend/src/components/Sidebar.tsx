@@ -1,37 +1,13 @@
-import { Fragment, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import { useSettingsStore } from '@/store/settingsStore';
-import { NAV_GROUPS } from '@/constants/nav';
-import { flagOn, useFeatureFlags } from '@/features/home/useAppConfig';
+import { PRIMARY_NAV } from '@/constants/nav';
 import { DISPLAY_VERSION } from '@/constants/version';
 import { useT } from '@/i18n';
 import { ChevronDownIcon } from './Icons';
 
-const groups = NAV_GROUPS;
 
 export function Sidebar() {
-  // v5.13.0 — admin kill-switches (Settings → Feature Flags in the console).
-  const flags = useFeatureFlags();
-  const location = useLocation();
-  const [closedGroups, setClosedGroups] = useState<string[]>(() => {
-    try {
-      const v = JSON.parse(localStorage.getItem('vinax.nav.groups.v1') || '["Explore"]');
-      return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : ['Explore'];
-    } catch {
-      return ['Explore'];
-    }
-  });
-  const toggleGroup = (name: string) =>
-    setClosedGroups((current) => {
-      const next = current.includes(name) ? current.filter((g) => g !== name) : [...current, name];
-      try {
-        localStorage.setItem('vinax.nav.groups.v1', JSON.stringify(next));
-      } catch {
-        /* Session-only when storage is unavailable. */
-      }
-      return next;
-    });
   const collapsed = useSettingsStore((s) => s.sidebarCollapsed);
   const toggle = useSettingsStore((s) => s.toggleSidebar);
   const t = useT();
@@ -39,7 +15,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'vx-sidebar hidden md:flex flex-col shrink-0 my-2 ml-2 rounded-lg glass-sidebar overflow-y-auto overflow-x-hidden no-scrollbar sticky top-0 max-h-dvh transition-[width] duration-200 ease-out',
+        'vx-sidebar hidden md:flex flex-col shrink-0 glass-sidebar overflow-y-auto overflow-x-hidden no-scrollbar sticky top-0 max-h-dvh pb-24 transition-[width] duration-200 ease-out',
         collapsed ? 'w-[4.5rem]' : 'w-60',
       )}
     >
@@ -82,62 +58,24 @@ export function Sidebar() {
         </button>
       )}
 
-      <nav aria-label="Main navigation" className={cn('flex-1 pb-32', collapsed ? 'px-2' : 'px-3')}>
-        {groups.map((g, i) => (
-          <Fragment key={g.label}>
-            {i > 0 && <div className="vx-sidebar-divider mx-3 my-3 h-px bg-white/5" />}
-            <div>
-              {!collapsed && (
-                <button
-                  onClick={() => toggleGroup(g.label)}
-                  aria-expanded={!closedGroups.includes(g.label)}
-                  aria-label={`Toggle ${t(g.label)} navigation`}
-                  className="vx-sidebar-eyebrow w-full flex justify-between items-center px-2 mb-1.5 font-semibold uppercase text-ink-400"
-                >
-                  <span>{t(g.label)}</span>
-                  <span aria-hidden>{closedGroups.includes(g.label) ? '+' : '−'}</span>
-                </button>
-              )}
-              <ul className="space-y-0.5">
-                {g.items
-                  .filter(
-                    ({ to }) =>
-                      (to !== '/together' || flagOn(flags, 'listenTogether')) &&
-                      (collapsed ||
-                        !closedGroups.includes(g.label) ||
-                        location.pathname === to ||
-                        (to !== '/' && location.pathname.startsWith(to + '/'))),
-                  )
-                  .map(({ to, label, icon: Icon }) => (
-                    <li key={to}>
-                      <NavLink
-                        to={to}
-                        end={to === '/'}
-                        aria-label={label}
-                        title={collapsed ? t(label) : undefined}
-                        className={({ isActive }) =>
-                          cn(
-                            // v5.9.0 nav: bold grey that turns white when
-                            // active or hovered — no pills, no accent bar.
-                            // v5.18.0 refresh: the active item sits on a soft tile with an
-                            // accent bar; the rest stay quiet until hovered.
-                            'relative flex items-center rounded-xl text-[14px] font-bold transition-colors',
-                            collapsed ? 'justify-center w-10 h-10 mx-auto' : 'gap-3.5 px-3 py-2',
-                            isActive
-                              ? 'vx-nav-active bg-[var(--tile)] text-ink-100'
-                              : 'text-ink-300 hover:text-ink-100 hover:bg-[var(--tile)]',
-                          )
-                        }
-                      >
-                        <Icon className="w-5 h-5 shrink-0" />
-                        {!collapsed && t(label)}
-                      </NavLink>
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          </Fragment>
-        ))}
+      <nav aria-label="Main navigation" className={cn('flex-1 pb-4', collapsed ? 'px-2' : 'px-3')}>
+        <ul className="space-y-1">
+          {PRIMARY_NAV.map(({ to, label, icon: Icon }) => (
+            <li key={to}>
+              <NavLink to={to} end={to === '/'} title={collapsed ? t(label) : undefined} aria-label={collapsed ? t(label) : undefined}
+                className={({ isActive }) => cn('vx-nav-link', collapsed && 'justify-center', isActive && 'vx-nav-active')}>
+                <Icon className="w-5 h-5 shrink-0" />{!collapsed && <span>{t(label)}</span>}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+        {!collapsed && <div className="vx-sidebar-library">
+          <p className="vx-eyebrow">Your collection</p>
+          <NavLink to="/favorites">Favorites <span>♡</span></NavLink>
+          <NavLink to="/history">Recently played <span>↗</span></NavLink>
+          <NavLink to="/offline">Downloads <span>↓</span></NavLink>
+          <p className="text-meta text-ink-400 mt-6">A space for your music.<br />No account needed.</p>
+        </div>}
       </nav>
 
       {!collapsed && (

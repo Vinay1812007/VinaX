@@ -48,6 +48,15 @@ function startOfDay(ts: number): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
+/**
+ * Local midnight `days` calendar days away from the day holding `ts`. Stepping
+ * by calendar parts, not by 86 400 000 ms: across a DST change a local day is
+ * 23 or 25 hours long, and a millisecond step lands on the wrong date.
+ */
+function shiftDays(ts: number, days: number): number {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days).getTime();
+}
 
 /** Minutes listened per local day, for every entry. */
 export function minutesByDay(entries: HistoryEntry[]): Map<string, number> {
@@ -66,10 +75,10 @@ export function minutesByDay(entries: HistoryEntry[]): Map<string, number> {
 export function listeningStreaks(days: Set<string>, now: number): { current: number; longest: number } {
   const today = startOfDay(now);
   let current = 0;
-  let cursor = days.has(localDayKey(today)) ? today : today - DAY;
+  let cursor = days.has(localDayKey(today)) ? today : shiftDays(today, -1);
   while (days.has(localDayKey(cursor))) {
     current += 1;
-    cursor -= DAY;
+    cursor = shiftDays(cursor, -1);
   }
   let longest = 0;
   const sorted = [...days].sort();
@@ -91,16 +100,15 @@ export function calendarCells(entries: HistoryEntry[], now = Date.now(), weeks =
   const todayKey = localDayKey(today);
   // Monday-first: JS getDay() is 0 = Sunday.
   const dow = (new Date(today).getDay() + 6) % 7;
-  const thisMonday = today - dow * DAY;
-  const firstMonday = thisMonday - (weeks - 1) * 7 * DAY;
+  const thisMonday = shiftDays(today, -dow);
+  const firstMonday = shiftDays(thisMonday, -(weeks - 1) * 7);
 
   const cells: CalendarCell[] = [];
   let maxMinutes = 0;
   let activeDays = 0;
   for (let i = 0; i < weeks * 7; i++) {
     // Re-derive from calendar parts so a DST shift never skews a column.
-    const base = new Date(firstMonday);
-    const ts = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i).getTime();
+    const ts = shiftDays(firstMonday, i);
     const key = localDayKey(ts);
     const future = ts > today;
     const minutes = future ? 0 : byDay.get(key) ?? 0;

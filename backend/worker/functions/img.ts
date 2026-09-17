@@ -13,6 +13,8 @@
 // them explicitly rather than reintroducing the wildcard.
 const ALLOWED = /(^|\.)(saavncdn\.com|jiosaavn\.com)$|^saavn\.akamaized\.net$/i;
 const MAX_REDIRECTS = 3;
+/** Per-hop wait for upstream response headers. */
+const UPSTREAM_TIMEOUT_MS = 8_000;
 
 function hostOf(u: string): string | null {
   try {
@@ -39,10 +41,22 @@ export const onRequestGet = async (context: { request: Request }): Promise<Respo
   let url = target;
   let upstream: Response | null = null;
   for (let i = 0; i <= MAX_REDIRECTS; i++) {
-    upstream = await fetch(url, {
-      redirect: 'manual',
-      cf: { cacheTtl: 86400, cacheEverything: true },
-    } as RequestInit);
+    // Leash on time-to-headers only: cleared as soon as the upstream answers,
+    // so the image body still streams through at its own pace afterwards.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+    try {
+      upstream = await fetch(url, {
+        redirect: 'manual',
+        cf: { cacheTtl: 86400, cacheEverything: true },
+        signal: controller.signal,
+      } as RequestInit);
+    } catch {
+      // A hung or unreachable artwork host must not pin the request open.
+      return new Response('upstream timeout', { status: 504 });
+    } finally {
+      clearTimeout(timeoutId);
+    }
     // 3xx with a Location header: re-validate the host before following.
     if (upstream.status >= 300 && upstream.status < 400) {
       const next = upstream.headers.get('location');

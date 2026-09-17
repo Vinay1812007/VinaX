@@ -139,11 +139,20 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
                 playing = intent.getBooleanExtra("playing", false);
                 break;
             case ACTION_POSITION:
+                long previousDuration = duration;
                 duration = Math.round(intent.getDoubleExtra("duration", 0) * 1000);
                 position = Math.round(intent.getDoubleExtra("position", 0) * 1000);
                 float s  = (float) intent.getDoubleExtra("speed", 1.0);
                 speed    = s <= 0 ? 1f : s;
-                break;
+                // Position ticks arrive every second: only the PlaybackState
+                // moves. Rebuilding the notification, the widget and the
+                // metadata bitmap each tick is wasted work — the notification
+                // reads its progress from the session. Metadata carries the
+                // duration, so it is re-sent only when that changed.
+                if (duration != previousDuration) updateMetadata();
+                updatePlaybackState();
+                if (!foreground) promote();
+                return;
             case ACTION_PLAY:  relay("play");          playing = true;  break;
             case ACTION_PAUSE: relay("pause");         playing = false; break;
             case ACTION_PREV:  relay("previoustrack"); break;
@@ -164,6 +173,11 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
     }
 
     private void updateSession() {
+        updateMetadata();
+        updatePlaybackState();
+    }
+
+    private void updateMetadata() {
         MediaMetadataCompat.Builder md = new MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_TITLE,  title)
                 .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
@@ -171,7 +185,9 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
                 .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration);
         if (artwork != null) md.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork);
         session.setMetadata(md.build());
+    }
 
+    private void updatePlaybackState() {
         long actions = PlaybackStateCompat.ACTION_PLAY_PAUSE
                 | PlaybackStateCompat.ACTION_PLAY  | PlaybackStateCompat.ACTION_PAUSE
                 | PlaybackStateCompat.ACTION_SKIP_TO_NEXT
@@ -295,6 +311,20 @@ public class VinaxMediaService extends MediaBrowserServiceCompat {
     }
 
     private static String safe(String s) { return s == null ? "" : s; }
+
+    /**
+     * The app was swiped away from recents: the WebView (and the audio) is
+     * gone, so a lingering "playing" notification and widget would control
+     * nothing. Tear the foreground service down with it.
+     */
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        playing = false;
+        stopForegroundCompat();
+        VinaxPlayerWidget.clear(this);
+        stopSelf();
+        super.onTaskRemoved(rootIntent);
+    }
 
     @Override
     public void onDestroy() {

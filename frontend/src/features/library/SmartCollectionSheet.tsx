@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { LANGUAGES, languageLabel } from '@/constants/languages';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { Sheet } from '@/components/Sheet';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { useSmartCollectionStore } from '@/store/smartCollectionStore';
@@ -33,9 +31,6 @@ const parseNum = (v: string): number | null => {
  * the sheet says so up front instead of implying a catalogue search.
  */
 export function SmartCollectionSheet({ existing, onClose }: { existing?: SmartCollection; onClose(): void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useFocusTrap(ref, true, onClose);
-  useDismissOnBack(true, onClose);
   const favorites = useLibraryStore((s) => s.favorites);
   const collections = useLibraryStore((s) => s.collections);
   const later = useLibraryStore((s) => s.later);
@@ -98,17 +93,9 @@ export function SmartCollectionSheet({ existing, onClose }: { existing?: SmartCo
   const field = 'glass-input w-full px-3 py-2 rounded-xl text-sm';
   const chip = (on: boolean) => cn('px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors min-h-[32px]', on ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400');
 
-  // Portal: see note in SmartCollectionSheet — fixed overlays must not live inside a transformed page section.
-  return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
-      <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="smart-sheet-title"
-        className="w-full sm:max-w-2xl glass-modal rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto animate-fade-up"
-        onClick={(e) => e.stopPropagation()}
-      >
+  // <Sheet> portals to <body>: fixed overlays must not live inside a transformed page section.
+  return (
+    <Sheet onClose={onClose} labelledBy="smart-sheet-title" size="2xl">
         <h2 id="smart-sheet-title" className="text-lg font-bold">{existing ? 'Edit smart collection' : 'New smart collection'}</h2>
         <p className="text-xs text-ink-400 mt-0.5 mb-4">
           Rules run over the music already on this device — favourites, playlists, Listen Later and history ({localTotal} songs). They use the metadata the catalogue gave those songs; they never search the catalogue.
@@ -221,7 +208,6 @@ export function SmartCollectionSheet({ existing, onClose }: { existing?: SmartCo
           <button type="button" onClick={onClose} className="btn-secondary px-4 py-2 text-sm min-h-[44px]">Cancel</button>
           <button type="button" onClick={save} className="btn-primary px-4 py-2 text-sm min-h-[44px]">{existing ? 'Save changes' : 'Create smart collection'}</button>
         </div>
-      </div>
-    </div>
-  , document.body);
+    </Sheet>
+  );
 }

@@ -40,7 +40,18 @@ export interface OrchestratedRequest<T> {
    * endpoint-health failure (the endpoint did nothing wrong).
    */
   signal?: AbortSignal;
+  /**
+   * Overall budget for the whole ladder (every base × path dialect × pass).
+   * Per-attempt timeouts alone let one request spend the best part of a minute
+   * walking dead bases while the UI sat on a skeleton; past the deadline the
+   * walk stops and the last error surfaces. An attempt already in flight is
+   * cut short at the deadline too.
+   */
+  deadlineMs?: number;
 }
+
+/** Default overall budget for one orchestrated request. */
+export const REQUEST_DEADLINE_MS = 20_000;
 
 function devLog(...args: unknown[]): void {
   if (import.meta.env.DEV) console.debug('[vinax:api]', ...args);
@@ -122,6 +133,32 @@ async function fetchJsonNetwork(url: string, timeoutMs: number, external?: Abort
   }
 }
 
+/**
+ * A plain `fetch` that cannot hang: aborts after `timeoutMs`, and at once when
+ * the caller's signal aborts. For same-origin helpers outside the catalogue
+ * ladder (trending searches), which used to wait on the browser's own timeout.
+ */
+export async function fetchWithTimeout(
+  url: string,
+  timeoutMs: number,
+  external?: AbortSignal,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(
+    () => controller.abort(new DOMException('timeout', 'AbortError')),
+    timeoutMs,
+  );
+  const onCancel = () => controller.abort(new DOMException('cancelled', 'AbortError'));
+  if (external?.aborted) onCancel();
+  else external?.addEventListener('abort', onCancel, { once: true });
+  try {
+    return await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+  } finally {
+    window.clearTimeout(timer);
+    external?.removeEventListener('abort', onCancel);
+  }
+}
+
 /** True when the failure is the CALLER cancelling, not the endpoint failing. */
 function isCancelled(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true;
@@ -131,7 +168,23 @@ function joinUrl(base: string, path: string): string {
   return `${base.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Backoff pause that ends early when the caller cancels — a cancelled
+ *  request must not sit out the rest of its backoff before noticing. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+    const done = () => {
+      window.clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = window.setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+}
 
 /**
  * Core orchestrator: walks health-ranked endpoints, probing each known path
@@ -141,22 +194,37 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export async function orchestratedRequest<T>(req: OrchestratedRequest<T>): Promise<T> {
   const timeoutMs = req.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const deadlineMs = req.deadlineMs ?? REQUEST_DEADLINE_MS;
+  const startedAt = performance.now();
+  const remaining = () => deadlineMs - (performance.now() - startedAt);
   let lastError: unknown = null;
   let attempts = 0;
 
-  for (let pass = 0; pass < FALLBACK_PASSES; pass++) {
+  ladder: for (let pass = 0; pass < FALLBACK_PASSES; pass++) {
     if (isCancelled(req.signal)) throw new ApiError('cancelled', attempts);
-    if (pass > 0) await sleep(RETRY_BACKOFF_MS * pass);
+    if (pass > 0) {
+      const pause = RETRY_BACKOFF_MS * pass;
+      if (remaining() <= pause) break;
+      await sleep(pause, req.signal);
+    }
     const ranked = healthRegistry.ranked(activeBases());
 
     for (const base of ranked) {
       for (const path of req.paths) {
         if (isCancelled(req.signal)) throw new ApiError('cancelled', attempts);
+        // Out of budget (never before the first attempt): stop walking.
+        const left = remaining();
+        if (attempts > 0 && left <= 0) {
+          lastError = lastError ?? new ApiError(`deadline of ${deadlineMs}ms exceeded`, attempts);
+          break ladder;
+        }
         const url = joinUrl(base.url, path);
         const started = performance.now();
         attempts += 1;
+        // The last attempt before the deadline only gets what is left of it.
+        const clipped = left < timeoutMs;
         try {
-          const json = await fetchJson(url, timeoutMs, req.signal);
+          const json = await fetchJson(url, Math.max(1, Math.min(timeoutMs, left)), req.signal);
           const value = req.validate(json);
           if (value !== null) {
             healthRegistry.recordSuccess(base.id, performance.now() - started);
@@ -181,6 +249,8 @@ export async function orchestratedRequest<T>(req: OrchestratedRequest<T>): Promi
             devLog('route miss (404)', base.label, path);
             continue;
           }
+          // Cut short by OUR deadline, not by its own slowness: no health strike.
+          if (clipped && remaining() <= 0) break ladder;
           healthRegistry.recordFailure(base.id);
           devLog('request failed', base.label, path, err);
           break; // dead/erroring base: skip its remaining path dialects

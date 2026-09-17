@@ -81,7 +81,9 @@ function normMatch(s: string): string {
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
+    // Letters, digits and marks of ANY script survive — an a-z-only class
+    // blanked every Indic title, so native-script songs could never match.
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -173,7 +175,7 @@ async function runLookup(
  * every render (or a player that briefly oscillates between tracks) can fire
  * the same lookup hundreds of times — and because LRCLIB answers 503 under
  * load, a failed lookup would otherwise retry forever. We therefore:
- *   - share a single in-flight promise per (track, artist) key, and
+ *   - share a single in-flight promise per (track, artist, length) key, and
  *   - remember a miss/failure for NEGATIVE_TTL_MS before trying again.
  * A successful result is cached for the lifetime of the session.
  */
@@ -202,7 +204,11 @@ export async function fetchLrclibLyrics(
   artist: string,
   duration: number | null,
 ): Promise<LyricsResult | null> {
-  const key = `${track.toLowerCase()}\u0000${(artist || '').toLowerCase()}`;
+  // The rounded length is part of the identity: a film cut and its extended or
+  // unplugged take share title + first artist, and synced lines timed for one
+  // drift on the other.
+  const length = duration && duration > 0 ? String(Math.round(duration)) : '';
+  const key = `${track.toLowerCase()}\u0000${(artist || '').toLowerCase()}\u0000${length}`;
   const now = Date.now();
   const hit = lyricsCache.get(key);
   if (hit) {
@@ -252,7 +258,8 @@ function lyricWords(text: string): string[] {
   return text
     .toLowerCase()
     .normalize('NFC')
-    .split(/[^\p{L}\p{N}']+/u)
+    // Marks stay in the word: Indic vowel signs and viramas are \p{M}.
+    .split(/[^\p{L}\p{N}\p{M}']+/u)
     .map((w) => w.replace(/^'+|'+$/g, ''))
     .filter((w) => w.length >= 2);
 }
@@ -284,7 +291,7 @@ function lyricSnippet(plain: string, query: string): string {
  * Free-text lyric search against the lyrics service: "the words you remember"
  * become up to 8 title/artist candidates, each with the matching line as a
  * snippet. Results are cached per query for 10 minutes; the request itself
- * aborts after 8 s and any failure yields [].
+ * aborts after 8 s and any failure yields [] (uncached, so it can be retried).
  * v5.19.0 — `opts.signal` (the caller's abort signal, e.g. a query key that
  * moved on) cancels the request too; an aborted search rejects instead of
  * caching an empty result.
@@ -311,9 +318,12 @@ export async function searchLyrics(text: string, opts?: { signal?: AbortSignal }
       outer?.removeEventListener('abort', onOuterAbort);
     });
   if (outer?.aborted) throw new DOMException('Aborted', 'AbortError');
+  // A failed or timed-out request is not "no hits": answer [] for now, but
+  // never cache it — the next try must reach the service again.
+  if (!Array.isArray(list)) return [];
   const hits: LyricsSearchHit[] = [];
   const seen = new Set<string>();
-  for (const rec of Array.isArray(list) ? list : []) {
+  for (const rec of list) {
     const title = rec.trackName?.trim() ?? '';
     const plain = rec.plainLyrics?.trim() ?? '';
     if (!title || !plain || rec.instrumental) continue;
@@ -336,4 +346,10 @@ export async function searchLyrics(text: string, opts?: { signal?: AbortSignal }
   }
   lyricsSearchCache.set(key, { at: now, hits });
   return hits;
+}
+
+/** Test hook: forget every cached lookup and lyric search. */
+export function clearLyricsCaches(): void {
+  lyricsCache.clear();
+  lyricsSearchCache.clear();
 }

@@ -1,3 +1,4 @@
+import { DestinationGrid } from '@/components/DestinationGrid';
 import { useMemo, useState } from 'react';
 import { songPath } from '@/utils/slug';
 import { Link } from 'react-router-dom';
@@ -42,6 +43,12 @@ export default function LibraryPage() {
   const downloads = useDownloadsStore((s) => s.items);
   const { createCollection, deleteCollection, restoreCollection, purgeTrash } = useLibraryStore.getState();
   const history = useHistoryStore((s) => s.entries);
+  const [libraryQuery, setLibraryQuery] = useState('');
+  const [librarySort, setLibrarySort] = useState<'recent' | 'az'>('recent');
+  const [savedKind, setSavedKind] = useState('all');
+  const matchesLibrary = (title: string, subtitle = '') => `${title} ${subtitle}`.toLocaleLowerCase().includes(libraryQuery.trim().toLocaleLowerCase());
+  const visibleSaved = saved.filter(e => matchesLibrary(e.title, e.subtitle) && (savedKind === 'all' || e.kind === savedKind));
+  if (librarySort === 'az') visibleSaved.sort((a, b) => a.title.localeCompare(b.title));
   const [newName, setNewName] = useState('');
   const [importing, setImporting] = useState(false);
   // v6.1.0 — smart collections (rules over the local library).
@@ -59,8 +66,11 @@ export default function LibraryPage() {
   const hasDownloads = Object.keys(downloads).length > 0;
   const filterOn = downloadedOnly && hasDownloads;
   const shownFavorites = useMemo(
-    () => (filterOn ? favorites.filter((s) => !!downloads[s.id]) : favorites),
-    [favorites, filterOn, downloads],
+    () => {
+      const result = favorites.filter(s => (!filterOn || !!downloads[s.id]) && `${s.title} ${s.subtitle}`.toLocaleLowerCase().includes(libraryQuery.trim().toLocaleLowerCase()));
+      return librarySort === 'az' ? result.sort((a, b) => a.title.localeCompare(b.title)) : result;
+    },
+    [favorites, filterOn, downloads, libraryQuery, librarySort],
   );
   // v5.19.0 — tags in use across every playlist; a selection that no longer
   // exists (tag removed on its last playlist) silently drops out of the filter.
@@ -71,13 +81,14 @@ export default function LibraryPage() {
   const shownCollections = useMemo(
     () =>
       orderCollections(collections)
-        .filter((col) => matchesTags(col, activeTags))
+        .filter((col) => matchesTags(col, activeTags) && col.name.toLocaleLowerCase().includes(libraryQuery.trim().toLocaleLowerCase()))
+        .sort((a, b) => librarySort === 'az' ? a.name.localeCompare(b.name) : 0)
         .map((col) => ({
           col,
           songs: filterOn ? col.songs.filter((s) => !!downloads[s.id]) : col.songs,
           downloaded: hasDownloads ? col.songs.filter((s) => !!downloads[s.id]).length : 0,
         })),
-    [collections, activeTags, filterOn, hasDownloads, downloads],
+    [collections, activeTags, filterOn, hasDownloads, downloads, libraryQuery, librarySort],
   );
   const shownHistory = useMemo(
     () => (filterOn ? history.filter((e) => !!downloads[e.song.id]) : history),
@@ -91,7 +102,7 @@ export default function LibraryPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto vx-stagger">
+    <div className="max-w-screen-xl mx-auto">
       <PageHeader
         title="Library"
         subtitle="Everything here lives on this device only."
@@ -104,6 +115,12 @@ export default function LibraryPage() {
           </>
         }
       />
+      <DestinationGrid area="library" />
+      <div className="vx-library-tools" role="search" aria-label="Search your library">
+        <input type="search" value={libraryQuery} onChange={e => setLibraryQuery(e.target.value)} aria-label="Search favorites, saved music and collections" placeholder="Search your collection" />
+        <select aria-label="Sort library" value={librarySort} onChange={e => setLibrarySort(e.target.value as 'recent' | 'az')}><option value="recent">Recently added / pinned</option><option value="az">A–Z</option></select>
+        <select aria-label="Filter saved music" value={savedKind} onChange={e => setSavedKind(e.target.value)}><option value="all">All saved music</option><option value="album">Albums</option><option value="artist">Artists</option><option value="playlist">Playlists</option></select>
+      </div>
       {importing && <ImportPlaylistSheet onClose={() => setImporting(false)} />}
 
       {hasDownloads && (
@@ -148,7 +165,7 @@ export default function LibraryPage() {
         {favorites.length === 0 ? (
           <p className="text-sm text-ink-400">Tap the heart on any song to save it here.</p>
         ) : shownFavorites.length === 0 ? (
-          <p className="text-sm text-ink-400">None of your favorites are downloaded yet.</p>
+          <p className="text-sm text-ink-400">No favorites match these filters.</p>
         ) : (
           shownFavorites.slice(0, 5).map((song, i) => <SongRow key={song.id} song={song} songs={shownFavorites} index={i} />)
         )}
@@ -169,8 +186,8 @@ export default function LibraryPage() {
       )}
 
       {saved.length > 0 && !filterOn && (
-        <Shelf title="Saved & Following" explanation="Albums, artists and playlists you keep">
-          {saved.map((e) => (
+        <Shelf title="Saved & Following" layout="grid" explanation="Albums, artists and playlists you keep">
+          {visibleSaved.map((e) => (
             <MediaCard
               key={`${e.kind}-${e.id}`}
               to={`/${e.kind}/${e.id}`}
@@ -184,11 +201,12 @@ export default function LibraryPage() {
       )}
 
       <section className="mb-10">
-        <h2 className="text-title mb-3">Collections</h2>
+        <h2 className="text-title mb-3">Your playlists & collections</h2>
         <div className="flex gap-2 mb-4">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            aria-label="New collection name"
             placeholder="New collection name"
             className="flex-1 max-w-xs bg-ink-800 border border-ink-600 rounded-xl px-4 py-2 text-sm outline-none focus:border-ember-500"
           />

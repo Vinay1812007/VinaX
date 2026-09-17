@@ -1,11 +1,10 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isNativePlatform } from '@/services/native';
 import { alertsSnoozedUntil, snoozeAlerts } from '@/services/announcements';
 import { toast } from '@/store/toastStore';
 import { XIcon } from '@/components/Icons';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { Sheet } from './Sheet';
 
 interface Announcement {
   title?: string;
@@ -28,9 +27,6 @@ function ago(ts?: number): string {
 
 /** Canvas 3c — notification center: today's pick + recent release notes. */
 export function NotificationSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  useDismissOnBack(open, onClose);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, open, onClose);
   const navigate = useNavigate();
   const [anns, setAnns] = useState<Announcement[]>([]);
   const [notes, setNotes] = useState<NoteRow[]>([]);
@@ -49,19 +45,10 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
       setNotes(rows);
     });
   }, [open]);
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-ink-950/70 backdrop-blur-sm p-0 sm:p-6" onClick={onClose}>
-      <div
-        ref={dialogRef}
-        className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-5 animate-fade-up"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Notifications"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Sheet open={open} onClose={onClose} labelledBy="notification-sheet-title" backdropClassName="bg-ink-950/70 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-extrabold">Notifications</h2>
+          <h2 id="notification-sheet-title" className="text-base font-extrabold">Notifications</h2>
           <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-full text-ink-400 hover:text-ink-100 hover:bg-[var(--tile-hover)]">
             <XIcon className="w-4 h-4" />
           </button>
@@ -75,7 +62,7 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
                   onClose();
                   if (typeof ann.link === 'string' && ann.link.startsWith('/')) navigate(ann.link);
                 }}
-                className="w-full text-left rounded-[18px] bg-[var(--tile)] border border-[var(--glass-border)] p-3 flex items-start gap-3 hover:bg-[var(--tile-hover)] transition"
+                className="w-full text-left rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-3 flex items-start gap-3 hover:bg-[var(--tile-hover)] transition"
               >
                 <span className="w-9 h-9 rounded-[14px] flex items-center justify-center text-base shrink-0" style={{ background: 'rgba(34,211,238,0.14)' }} aria-hidden>
                   🎵
@@ -89,12 +76,12 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
               </button>
             ))
           ) : (
-            <p className="rounded-[18px] bg-[var(--tile)] border border-[var(--glass-border)] p-3 text-xs text-ink-400">
+            <p className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-3 text-xs text-ink-400">
               Nothing new right now — today&rsquo;s pick lands here.
             </p>
           )}
           {notes.map((n) => (
-            <div key={n.version} className="rounded-[18px] bg-[var(--tile)] border border-[var(--glass-border)] p-3 flex items-start gap-3">
+            <div key={n.version} className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-3 flex items-start gap-3">
               <span className="w-9 h-9 rounded-[14px] flex items-center justify-center text-base shrink-0" style={{ background: 'rgba(167,139,250,0.14)' }} aria-hidden>
                 ✨
               </span>
@@ -120,7 +107,6 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
             {snoozed ? 'Alerts muted for 7 days ✓' : 'Mute alerts for 7 days'}
           </button>
         )}
-      </div>
-    </div>
+    </Sheet>
   );
 }

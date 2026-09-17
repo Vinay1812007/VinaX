@@ -25,15 +25,15 @@ function lastValue(varName: string): string {
   return last;
 }
 
-describe('color tokens (v5.9.0 flat black look wins the cascade)', () => {
-  it('brand ramps resolve to VinaX green', () => {
+describe('color tokens (VinaX Flow)', () => {
+  it('brand ramps resolve to VinaX violet', () => {
     // v5.9.0: one green accent (#1db954 / #1ed760) over black chrome and a
     // #121212 canvas. Every earlier era's ramp lives above in the cascade.
-    expect(lastValue('--ember-400')).toBe('30 215 96');
-    expect(lastValue('--ember-500')).toBe('29 185 84');
-    expect(lastValue('--tide-400')).toBe('100 232 150');
-    expect(lastValue('--ink-900')).toBe('18 18 18');
-    expect(lastValue('--surface-sidebar')).toBe('rgb(0 0 0)');
+    expect(lastValue('--ember-400')).toBe('196 181 253');
+    expect(lastValue('--ember-500')).toBe('167 139 250');
+    expect(lastValue('--tide-400')).toBe('196 181 253');
+    expect(lastValue('--ink-900')).toBe('18 18 20');
+    expect(lastValue('--surface-sidebar')).toBe('rgb(var(--ink-950))');
   });
 
   it('glass recipe is ADJUSTABLE — separate alpha and blur dials (4.13)', () => {
@@ -51,9 +51,9 @@ describe('color tokens (v5.9.0 flat black look wins the cascade)', () => {
     expect(css).toContain('prefers-reduced-transparency');
   });
 
-  it('hero gradient is green → deeper-green (quiet single-hue)', () => {
+  it('hero gradient follows the selected accent', () => {
     // One hue family only, so the surface never fights the content.
-    expect(lastValue('--gradient-primary')).toBe('linear-gradient(180deg, rgb(30 215 96), rgb(29 185 84))');
+    expect(lastValue('--gradient-primary')).toBe('linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)))');
   });
 
   it('dark and light both define hairline glass borders', () => {
@@ -143,7 +143,7 @@ describe('contrast (WCAG AA on the documented pairs)', () => {
     // (5.86:1 with white — AA). Hover lifts to --ember-500 (#6366f1) which
     // the accent-heavy chips + focus rings use; that lighter shade isn't a
     // text-on-fill surface so its 4.16:1 doesn't apply.
-    expect(contrast('#000000', '#1db954')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#0b0b0c', '#a78bfa')).toBeGreaterThanOrEqual(4.5);
   });
 
   it('lyric colors meet AA on both canvases (v3.1.1)', () => {

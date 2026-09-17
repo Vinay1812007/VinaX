@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { DEFAULT_FILTERS, sanitizeFilters, type SearchFilters } from '@/features/search/workspace';
 import { isSongSort, type SongSort } from './searchStore';
+import { guardedLocalStorage } from '@/services/storage/local';
 
 export interface SearchPreset {
   id: string;
@@ -53,7 +54,7 @@ export const useSearchWorkspaceStore = create<WorkspaceState>()(
     }),
     {
       name: 'vinax.search.workspace.v1',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => guardedLocalStorage),
       partialize: (s) => ({ compact: s.compact, presets: s.presets }),
       merge: (value, current) => {
         const p = (value ?? {}) as Partial<WorkspaceState>;

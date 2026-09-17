@@ -6,6 +6,7 @@ import { recordFavorite } from '@/services/personalization/updater';
 import { findDuplicates } from '@/features/library/duplicates';
 import { pruneTrash, type TrashEntry } from '@/features/library/trash';
 import { normalizeTags } from '@/features/library/tags';
+import { guardedLocalStorage } from '@/services/storage/local';
 
 /** Derived indexes for O(1) membership checks. */
 let _favIds = new Set<string>();
@@ -97,6 +98,8 @@ export interface LibraryState {
   toggleFavorite(song: Song): void;
   isFavorite(id: string): boolean;
   clearFavorites(): void;
+  /** v7.0.0 — put favourites back (Undo): merged ahead of nothing, behind whatever was liked since, index rebuilt. */
+  restoreFavorites(songs: Song[]): void;
   toggleSaved(entity: Omit<SavedEntity, 'savedAt'>): void;
   isSaved(id: string): boolean;
   toggleHidden(songId: string): void;
@@ -160,14 +163,23 @@ export const useLibraryStore = create<LibraryState>()(
         const exists = favorites.some((s) => s.id === song.id);
         recordFavorite(song, !exists);
         const newFavorites = exists ? favorites.filter((s) => s.id !== song.id) : [song, ...favorites];
-        set({ favorites: newFavorites });
+        // Index first, then `set`: subscribers re-render inside `set`, and one
+        // that asks isFavorite() must already see the new answer.
         rebuildIndexes({ favorites: newFavorites, saved, hiddenSongIds });
+        set({ favorites: newFavorites });
       },
       isFavorite: (id) => _favIds.has(id),
       clearFavorites: () => {
         const { saved, hiddenSongIds } = get();
-        set({ favorites: [] });
         rebuildIndexes({ favorites: [], saved, hiddenSongIds });
+        set({ favorites: [] });
+      },
+      restoreFavorites: (songs) => {
+        const { favorites, saved, hiddenSongIds } = get();
+        const seen = new Set<string>();
+        const merged = [...favorites, ...songs].filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)));
+        rebuildIndexes({ favorites: merged, saved, hiddenSongIds });
+        set({ favorites: merged });
       },
       toggleSaved: (entity) => {
         const { saved, favorites, hiddenSongIds } = get();
@@ -175,8 +187,8 @@ export const useLibraryStore = create<LibraryState>()(
         const newSaved = exists
             ? saved.filter((e) => !(e.id === entity.id && e.kind === entity.kind))
             : [{ ...entity, savedAt: Date.now() }, ...saved];
-        set({ saved: newSaved });
         rebuildIndexes({ favorites, saved: newSaved, hiddenSongIds });
+        set({ saved: newSaved });
       },
       isSaved: (id) => _savedIds.has(id),
       toggleHidden: (songId) => {
@@ -335,12 +347,20 @@ export const useLibraryStore = create<LibraryState>()(
     }),
     {
       name: KEYS.library,
-      storage: createJSONStorage(() => window.localStorage),
+      storage: createJSONStorage(() => guardedLocalStorage),
       // v5.17.0 — expired "recently deleted" entries are pruned as the
       // persisted snapshot is merged in, so they never reach the page.
       merge: (persisted, current) => {
         const p = (persisted && typeof persisted === 'object' ? persisted : {}) as Partial<LibraryState>;
-        return { ...current, ...p, trash: pruneTrash(p.trash) };
+        // A list field that is not a list (damaged or hand-edited record) falls
+        // back to the empty default instead of crashing the first `.some()`.
+        const lists: Partial<LibraryState> = {};
+        for (const key of ['favorites', 'collections', 'saved', 'hiddenSongIds', 'later', 'hiddenArtists'] as const) {
+          if (p[key] !== undefined && !Array.isArray(p[key])) delete p[key];
+        }
+        if (Array.isArray(p.collections)) lists.collections = p.collections.filter((c) => !!c && typeof c.id === 'string' && Array.isArray(c.songs));
+        // pruneTrash also drops entries whose collection has no song list.
+        return { ...current, ...p, ...lists, trash: pruneTrash(p.trash) };
       },
       onRehydrateStorage: () => (state) => { if (state) rebuildIndexes(state); },
     },

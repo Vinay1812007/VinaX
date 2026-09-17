@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -11,6 +11,8 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { PlayIcon, DownloadIcon } from '@/components/Icons';
 import { EmptyState } from '@/components/States';
 import { toast } from '@/store/toastStore';
+import { VirtualChunks } from '@/components/VirtualChunks';
+import type { Song } from '@/types';
 
 // Package D8 — estimated on-disk size. The catalog doesn't expose real file
 // sizes, so we estimate from duration at the high-quality bitrate (320 kbps ≈
@@ -23,25 +25,99 @@ function fmtBytes(n: number): string {
   return `${Math.round(n / 1024)} KB`;
 }
 
+/** Card padding + 44px art + the list's 8px gap — the off-screen size estimate for list chunks. */
+const ROW_HEIGHT = 72;
+const songKey = (song: Song): string => song.id;
+
+interface RowProps {
+  song: Song;
+  index: number;
+  selecting: boolean;
+  picked: boolean;
+  onTogglePick: (id: string) => void;
+  onPlay: (index: number) => void;
+}
+
+/** Memoised: ticking a checkbox re-renders that row, not the whole downloads list. */
+const DownloadRow = memo(function DownloadRow({ song, index, selecting, picked, onTogglePick, onPlay }: RowProps) {
+  return (
+    <div className="flex items-center gap-3 glass-card rounded-xl p-2.5">
+      {selecting && (
+        <input
+          type="checkbox"
+          checked={picked}
+          onChange={() => onTogglePick(song.id)}
+          aria-label={`Select ${song.title}`}
+          className="w-[18px] h-[18px] accent-ember-500 shrink-0 cursor-pointer"
+        />
+      )}
+      <button type="button" onClick={() => (selecting ? onTogglePick(song.id) : onPlay(index))} className="relative shrink-0 group" aria-label={`Play ${song.title}`}>
+        <img
+          src={bestImage(song.images, 150)}
+          onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="w-11 h-11 rounded-lg object-cover"
+        />
+        {!selecting && (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+            <PlayIcon className="w-5 h-5 text-white" />
+          </span>
+        )}
+      </button>
+      {selecting ? (
+        <button type="button" onClick={() => onTogglePick(song.id)} className="min-w-0 flex-1 text-left">
+          <span className="block text-sm font-semibold truncate">{song.title}</span>
+          <span className="block text-xs text-ink-400 truncate">{song.subtitle}</span>
+        </button>
+      ) : (
+        <Link to={songPath(song)} className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold truncate">{song.title}</span>
+          <span className="block text-xs text-ink-400 truncate">{song.subtitle}</span>
+        </Link>
+      )}
+      {!selecting && (
+        <button
+          type="button"
+          onClick={() => void removeDownload(song.id).then(() => toast('Removed download'))}
+          className="text-xs font-semibold text-ink-400 hover:text-red-300 shrink-0 px-2 py-1"
+        >
+          Remove
+        </button>
+      )}
+    </div>
+  );
+});
+
 export default function OfflinePage() {
   usePageTitle('Downloads');
   const items = useDownloadsStore((s) => s.items);
   const downloading = useDownloadsStore((s) => s.downloading);
-  const playQueue = usePlayerStore((s) => s.playQueue);
-  const list = Object.values(items).sort((a, b) => b.addedAt - a.addedAt);
-  const songs = list.map((x) => x.song);
+  const list = useMemo(() => Object.values(items).sort((a, b) => b.addedAt - a.addedAt), [items]);
+  const songs = useMemo(() => list.map((x) => x.song), [list]);
   const inFlight = Object.keys(downloading).length;
 
   // D8 — batch selection mode.
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const togglePick = (id: string): void =>
-    setPicked((p) => {
-      const next = new Set(p);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const togglePick = useCallback(
+    (id: string): void =>
+      setPicked((p) => {
+        const next = new Set(p);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+    [],
+  );
+  const playFrom = useCallback((i: number): void => usePlayerStore.getState().playQueue(songs, i), [songs]);
+  const renderRow = useCallback(
+    (song: Song, i: number) => (
+      <DownloadRow song={song} index={i} selecting={selecting} picked={picked.has(song.id)} onTogglePick={togglePick} onPlay={playFrom} />
+    ),
+    [selecting, picked, togglePick, playFrom],
+  );
   const deletePicked = async (): Promise<void> => {
     const ids = [...picked];
     for (const id of ids) await removeDownload(id);
@@ -136,53 +212,7 @@ export default function OfflinePage() {
       )}
 
       <div className="space-y-2">
-        {list.map(({ song }, i) => (
-          <div key={song.id} className="flex items-center gap-3 glass-card rounded-xl p-2.5">
-            {selecting && (
-              <input
-                type="checkbox"
-                checked={picked.has(song.id)}
-                onChange={() => togglePick(song.id)}
-                aria-label={`Select ${song.title}`}
-                className="w-[18px] h-[18px] accent-ember-500 shrink-0 cursor-pointer"
-              />
-            )}
-            <button onClick={() => (selecting ? togglePick(song.id) : playQueue(songs, i))} className="relative shrink-0 group" aria-label={`Play ${song.title}`}>
-              <img
-                src={bestImage(song.images, 150)}
-                onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                className="w-11 h-11 rounded-lg object-cover"
-              />
-              {!selecting && (
-                <span className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                  <PlayIcon className="w-5 h-5 text-white" />
-                </span>
-              )}
-            </button>
-            {selecting ? (
-              <button onClick={() => togglePick(song.id)} className="min-w-0 flex-1 text-left">
-                <span className="block text-sm font-semibold truncate">{song.title}</span>
-                <span className="block text-xs text-ink-400 truncate">{song.subtitle}</span>
-              </button>
-            ) : (
-              <Link to={songPath(song)} className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold truncate">{song.title}</span>
-                <span className="block text-xs text-ink-400 truncate">{song.subtitle}</span>
-              </Link>
-            )}
-            {!selecting && (
-              <button
-                onClick={() => void removeDownload(song.id).then(() => toast('Removed download'))}
-                className="text-xs font-semibold text-ink-400 hover:text-red-300 shrink-0 px-2 py-1"
-              >
-                Remove
-              </button>
-            )}
-          </div>
-        ))}
+        <VirtualChunks items={songs} keyOf={songKey} renderItem={renderRow} rowHeight={ROW_HEIGHT} chunkClassName="space-y-2" />
       </div>
     </div>
   );

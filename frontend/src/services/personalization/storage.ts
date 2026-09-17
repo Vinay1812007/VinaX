@@ -1,8 +1,8 @@
 import { KEYS } from '@/constants/storage-keys';
-import { getLocal, removeLocal, setLocal } from '@/services/storage/local';
+import { getLocal, localWritesFrozen, removeLocal, setLocal } from '@/services/storage/local';
 import { clearEvents } from '@/services/storage/idb';
 import { useSettingsStore } from '@/store/settingsStore';
-import { applyDecay, createEmptyProfile, type TasteProfile } from './profile';
+import { applyDecay, createEmptyProfile, normalizeProfile, type TasteProfile } from './profile';
 
 let cached: TasteProfile | null = null;
 let cachedKey: string | null = null;
@@ -25,9 +25,11 @@ export function loadProfile(): TasteProfile {
     cachedKey = key;
   }
   if (cached) return cached;
-  const stored = getLocal<TasteProfile | null>(key, null);
-  cached = stored && stored.version === 1 ? stored : createEmptyProfile();
-  if (!cached.hourBuckets) cached.hourBuckets = {};
+  const stored = getLocal<unknown>(key, null);
+  // Never trust the stored shape: a damaged or hand-edited record is coerced
+  // field by field instead of reaching the scorer as-is.
+  const isV1 = !!stored && typeof stored === 'object' && (stored as { version?: unknown }).version === 1;
+  cached = isV1 ? normalizeProfile(stored) : createEmptyProfile();
   applyDecay(cached);
   return cached;
 }
@@ -40,7 +42,9 @@ function flushProfile(): void {
   if (saveTimer == null) return;
   window.clearTimeout(saveTimer);
   saveTimer = null;
-  if (cached && cachedKey) setLocal(cachedKey, cached);
+  // A restore is waiting for its reload: the in-memory profile is the OLD
+  // one and must not land on top of the restored key (setLocal also checks).
+  if (cached && cachedKey && !localWritesFrozen()) setLocal(cachedKey, cached);
   _pendingProfile = null;
 }
 
@@ -84,6 +88,12 @@ export function withProfile(updater: (profile: TasteProfile) => TasteProfile): v
 }
 
 export async function resetProfile(): Promise<void> {
+  // Drop the pending debounced save first — otherwise it fires up to 800 ms
+  // later and writes the profile that was just erased straight back.
+  if (saveTimer != null) {
+    window.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
   cached = createEmptyProfile();
   _pendingProfile = null;
   removeLocal(activeKey());

@@ -51,7 +51,10 @@ export function useFocusTrap(
       if (e.shiftKey && (active === first || !el.contains(active))) {
         e.preventDefault();
         last.focus();
-      } else if (!e.shiftKey && active === last) {
+      } else if (!e.shiftKey && (active === last || !el.contains(active))) {
+        // Same recapture as the Shift+Tab branch: focus that escaped the
+        // dialog (a click on the backdrop, a portalled child closing) must
+        // come back in on the next Tab, not walk the page behind it.
         e.preventDefault();
         first.focus();
       }

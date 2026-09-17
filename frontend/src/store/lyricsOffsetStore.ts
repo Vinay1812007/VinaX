@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KEYS } from '@/constants/storage-keys';
+import { guardedLocalStorage } from '@/services/storage/local';
+import { sanitizeLyricOffsets } from '@/services/storage/sanitize';
 
 /**
  * Per-song lyric sync offset (seconds). Positive = lyrics shown LATER (use when
@@ -34,6 +36,14 @@ export const useLyricsOffsetStore = create<LyricsOffsetState>()(
         set({ offsets });
       },
     }),
-    { name: KEYS.lyricsOffset, storage: createJSONStorage(() => window.localStorage) },
+    {
+      name: KEYS.lyricsOffset,
+      storage: createJSONStorage(() => guardedLocalStorage),
+      // Stored offsets are re-checked on the way in: finite, within ±10 s.
+      merge: (persisted, current) => ({
+        ...current,
+        offsets: sanitizeLyricOffsets((persisted as { offsets?: unknown } | null | undefined)?.offsets),
+      }),
+    },
   ),
 );

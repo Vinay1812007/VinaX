@@ -12,6 +12,7 @@ import { inferMood } from '@/services/recommendation/mood';
 import { useReasonStore } from '@/store/reasonStore';
 import { useDjStore } from '@/store/djStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { isSkippedPlay } from '@/utils/plays';
 
 /**
  * v6.2.0 / v6.5.0 — the AI DJ client.
@@ -144,7 +145,7 @@ export function buildDjContext(seed: Song | null, ctx: RecommendationContext): R
     ...session,
     recentlyPlayed: ctx.history.slice(0, 12).map((e) => describeSong(e.song)),
     recentlyCompleted: ctx.history.filter((e) => e.completed).slice(0, 10).map((e) => describeSong(e.song)),
-    skippedSongs: ctx.history.filter((e) => !e.completed).slice(0, 10).map((e) => describeSong(e.song)),
+    skippedSongs: ctx.history.filter(isSkippedPlay).slice(0, 10).map((e) => describeSong(e.song)),
     avoidSongs: loadSurfaced().slice(0, AVOID_SEND).map((x) => x.d),
     likedSongs: ctx.favorites.slice(0, 15).map(describeSong),
     topSongs,

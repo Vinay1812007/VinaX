@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KEYS } from '@/constants/storage-keys';
+import { guardedLocalStorage } from '@/services/storage/local';
 import { toast } from './toastStore';
 
 /** v5.17.0 — Songs-tab sort orders. 'relevance' is the existing ranking pass. */
@@ -31,6 +32,32 @@ export interface SearchState {
   setSongSort(sort: SongSort): void;
 }
 
+/** What makes two recents "the same search": NFC, case and runs of whitespace
+ *  folded — "Arijit  Singh" and "arijit singh" are one entry. Exported for tests. */
+export function recentKey(query: string): string {
+  return query.normalize('NFC').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/** One entry per `recentKey`, first occurrence wins the position; when one of
+ *  the duplicates is pinned, its spelling is the one kept (pins are matched by
+ *  exact string, so dropping that spelling would orphan the pin). */
+function dedupeRecents(list: string[], pinned: string[]): string[] {
+  const at = new Map<string, number>();
+  const out: string[] = [];
+  for (const r of list) {
+    const key = recentKey(r);
+    if (!key) continue;
+    const i = at.get(key);
+    if (i === undefined) {
+      at.set(key, out.length);
+      out.push(r);
+    } else if (pinned.includes(r) && !pinned.includes(out[i])) {
+      out[i] = r;
+    }
+  }
+  return out;
+}
+
 /** Keep every pinned entry, cap the rest at RECENT_MAX, most recent first. */
 function trimRecent(recent: string[], pinned: string[]): string[] {
   const keep = new Set(pinned);
@@ -53,7 +80,20 @@ export const useSearchStore = create<SearchState>()(
         const q = query.trim();
         if (!q) return;
         const { recent, pinned } = get();
-        set({ recent: trimRecent([q, ...recent.filter((r) => r !== q)], pinned) });
+        const key = recentKey(q);
+        // Rest-on-a-query recording catches a query mid-word: "arij", then
+        // "arijit", then "arijit singh". The newest entry is dropped when the
+        // new query merely extends it — unless the listener pinned it.
+        const head = recent[0];
+        const headKey = head === undefined ? '' : recentKey(head);
+        const extendsHead =
+          head !== undefined &&
+          !pinned.includes(head) &&
+          headKey.length > 0 &&
+          headKey.length < key.length &&
+          key.startsWith(headKey);
+        const rest = extendsHead ? recent.slice(1) : recent;
+        set({ recent: trimRecent(dedupeRecents([q, ...rest], pinned), pinned) });
       },
       removeRecent: (query) =>
         set({
@@ -86,7 +126,7 @@ export const useSearchStore = create<SearchState>()(
     }),
     {
       name: KEYS.search,
-      storage: createJSONStorage(() => window.localStorage),
+      storage: createJSONStorage(() => guardedLocalStorage),
       partialize: (s) => ({ recent: s.recent, pinned: s.pinned, songSort: s.songSort }),
       // No persist version yet (0): the v5.17.0 fields are optional additions,
       // so an older blob simply lacks them — fill safe defaults instead of
@@ -94,11 +134,15 @@ export const useSearchStore = create<SearchState>()(
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<Record<keyof SearchState, unknown>>;
         const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-        const pinned = strings(p.pinned).slice(0, PINNED_MAX);
+        const pinned = dedupeRecents(strings(p.pinned), []).slice(0, PINNED_MAX);
         const recent = strings(p.recent);
         return {
           ...current,
-          recent: trimRecent([...recent, ...pinned.filter((q) => !recent.includes(q))], pinned),
+          // Older blobs hold case / spacing variants of one search — fold them.
+          recent: trimRecent(
+            dedupeRecents([...recent, ...pinned.filter((q) => !recent.includes(q))], pinned),
+            pinned,
+          ),
           pinned,
           songSort: isSongSort(p.songSort) ? p.songSort : 'relevance',
         };

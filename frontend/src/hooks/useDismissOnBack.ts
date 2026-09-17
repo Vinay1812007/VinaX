@@ -22,9 +22,15 @@ export function pushOverlay(close: Close): () => void {
   };
 }
 
-/** Close the topmost overlay, if any. True when one was closed. */
+/**
+ * Ask the topmost overlay to close, if any. True when one is open — the back
+ * press is consumed either way. The entry is NOT popped here: an overlay that
+ * refuses to close (the mandatory update dialog) must keep swallowing back
+ * presses instead of letting the next one fall through to history.back().
+ * Overlays that do close unregister themselves via the hook's effect cleanup.
+ */
 export function closeTopOverlay(): boolean {
-  const top = stack.pop();
+  const top = stack[stack.length - 1];
   if (!top) return false;
   top();
   return true;

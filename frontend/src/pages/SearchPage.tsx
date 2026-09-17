@@ -1,3 +1,4 @@
+import { DestinationGrid } from '@/components/DestinationGrid';
 import { SearchWorkspace, SavedSearches } from '@/features/search/SearchWorkspace';
 import { refineSongs } from '@/features/search/workspace';
 import { useSearchWorkspaceStore, type SearchPreset } from '@/store/searchWorkspaceStore';
@@ -40,6 +41,8 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { toast } from '@/store/toastStore';
 import { loadProfile } from '@/services/personalization/storage';
 import { topArtists } from '@/services/personalization/profile';
+import { recordSearchPlay } from '@/services/personalization/updater';
+import { fetchWithTimeout } from '@/services/api/client';
 import { expertSongSearch } from '@/services/ai/expert';
 import type { Song } from '@/types';
 import { playAlbum, playArtist, playPlaylist } from '@/features/player/playEntity';
@@ -54,7 +57,7 @@ import { looksLikeLyric, splitHighlight } from '@/features/search/lyricsSearch';
 import { useLyricsSearch } from '@/features/search/useLyricsSearch';
 import { filterSongsLocally, SONG_SORT_LABELS, sortSongs } from '@/features/search/sortSongs';
 import { exampleQueries, SEARCH_TIP_LINE } from '@/features/search/searchTips';
-import { rerankSongs } from '@/features/search/rerank';
+import { rerankSongs, suggestTitles } from '@/features/search/rerank';
 import { candidatePool, COMMON_NAMES, didYouMean } from '@/features/search/didYouMean';
 import { useQuickResults } from '@/features/search/useQuickResults';
 import { putCachedQuick, QUICK_LIMIT } from '@/features/search/quickResults';
@@ -227,6 +230,48 @@ function QuickRow({ song, onPlay, dim }: { song: Song; onPlay: () => void; dim: 
   );
 }
 
+/**
+ * A song played from results the listener TYPED a query for is search intent,
+ * on top of the ordinary play the row records. The row owns its own play
+ * handler, so this layout-neutral wrapper listens for the same two gestures
+ * that reach it (the row's buttons stop their own clicks from bubbling).
+ */
+function SearchPlay({ song, children }: { song: Song; children: React.ReactNode }) {
+  return (
+    <div
+      className="contents"
+      onClick={() => recordSearchPlay(song)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') recordSearchPlay(song);
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Loading / error / empty for the Albums, Artists and Playlists tabs — the
+ *  same trio, from the same components, the Songs tab shows. */
+function GridTabState({
+  result,
+  count,
+  noun,
+}: {
+  result: { isLoading: boolean; isError: boolean; refetch: () => unknown };
+  count: number;
+  noun: string;
+}) {
+  if (result.isLoading) return <ListSkeleton />;
+  if (result.isError) return <ErrorState retry={() => void result.refetch()} />;
+  if (count > 0) return null;
+  return (
+    <div className="search-no-matches" role="status">
+      <h3>No matching {noun} yet</h3>
+      <p>Try another name or spelling — or look under a different tab.</p>
+    </div>
+  );
+}
+
 export default function SearchPage() {
   const { query: routeQuery } = useParams();
   const navigate = useNavigate();
@@ -364,9 +409,10 @@ export default function SearchPage() {
   const trendingQ = useQuery<{ queries: string[] }>({
     queryKey: ['trending-searches'],
     staleTime: 10 * 60_000,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const base = isNativePlatform() ? 'https://www.sirimillavinay.online' : '';
-      const r = await fetch(`${base}/api/trending-searches`);
+      // Decorative chips: never worth a hung request — 6 s, and gone on unmount.
+      const r = await fetchWithTimeout(`${base}/api/trending-searches`, 6000, signal);
       const j = r.ok ? ((await r.json()) as { queries?: string[] }) : null;
       return { queries: Array.isArray(j?.queries) ? j.queries : [] };
     },
@@ -497,6 +543,8 @@ export default function SearchPage() {
     ...new Set(allAlbums.map((a) => a.language).filter((l): l is string => !!l && l !== 'unknown')),
   ];
   const albumList = albumLang ? allAlbums.filter((a) => a.language === albumLang) : allAlbums;
+  const artistList = flattenArtistPages(artists.data?.pages);
+  const playlistList = flattenPlaylistPages(playlists.data?.pages);
   const trimmed = input.trim();
   // v5.17.0 — pinned recents first (in pin order), then the rest as recorded.
   const recentOrdered = useMemo(
@@ -515,20 +563,17 @@ export default function SearchPage() {
         : [],
     [trimmed, recent, q],
   );
-  const titleSuggest = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const s of rankedAllSongs) {
-      const t = s.title.trim();
-      const key = t.toLowerCase();
-      if (t && key !== trimmed.toLowerCase() && !seen.has(key)) {
-        seen.add(key);
-        out.push(t);
-      }
-      if (out.length >= 7) break;
-    }
-    return out;
-  }, [rankedAllSongs, trimmed]);
+  // Only from SETTLED results for the text in the box: placeholder data and
+  // the debounce gap both mean `rankedAllSongs` belongs to another query.
+  const titleSuggest = useMemo(
+    () =>
+      suggestTitles(rankedAllSongs, trimmed, {
+        resultsQuery: q,
+        typedQuery: typedNow,
+        placeholder: allPlaceholder,
+      }),
+    [rankedAllSongs, trimmed, q, typedNow, allPlaceholder],
+  );
   const showSuggest =
     focused && trimmed.length >= 1 && (recentMatches.length > 0 || titleSuggest.length > 0);
   // Keyboard-first autocomplete (P2-30): ↑/↓ walk the combined list, Enter
@@ -588,18 +633,35 @@ export default function SearchPage() {
       return;
     }
     const session = createSttSession(
-      { lang: navigator.language || 'en-IN' },
+      // The device language, on purpose: recognition in a pinned Indic language
+      // returns native-script text, and the catalogue matches romanized titles
+      // far better than native script.
+      { lang: navigator.language },
       {
         onInterim: (t) => {
           if (t) setInput(t);
         },
-        onEnd: (finalText) => {
+        onEnd: (finalText, fatal) => {
           if (recRef.current !== session) return;
           recRef.current = null;
           setListening(false);
+          // A session that ends with nothing to search says so — the mic
+          // button used to just go quiet.
+          if (fatal === 'denied') {
+            toast('Microphone access is blocked — allow it in settings to search by voice');
+            return;
+          }
+          if (fatal === 'error') {
+            toast('Voice search is not available right now — try again, or type your search');
+            return;
+          }
+          if (!finalText.trim()) {
+            toast('Didn’t catch that — tap the mic and try again');
+            return;
+          }
           // Commit, don't just fill the box — voice queries now reach the
           // URL and recents like typed ones (audit P2-20).
-          if (finalText) applySuggestion(finalText);
+          applySuggestion(finalText);
         },
       },
     );
@@ -630,45 +692,8 @@ export default function SearchPage() {
   return (
     <div className={cn('search-experience mx-auto', active && 'is-searching')}>
       <header className="search-hero">
-        <div className="search-hero-copy">
-          <span className="search-eyebrow">THE DISCOVERY ROOM</span>
-          <h1>
-            {active ? (
-              'Your search, your way.'
-            ) : (
-              <>
-                Find your
-                <br />
-                <em>next obsession.</em>
-              </>
-            )}
-          </h1>
-          <p>A song you love. A sound you haven't met. It starts here.</p>
-          <div className="search-hero-links">
-            <button
-              onClick={() => {
-                setLyricsMode(true);
-                searchInputRef.current?.focus();
-              }}
-            >
-              ♪ Find a lyric
-            </button>
-            <Link to="/ai-playlist">✧ Build a mood mix ↗</Link>
-          </div>
-        </div>
-        <div className="search-record-art" aria-hidden="true">
-          <div className="search-record-sleeve">
-            <span>
-              VINA X<br />
-              SELECTS
-            </span>
-            <div className="search-record">
-              <i />
-            </div>
-            <small>YOUR WORLD. ON REPEAT.</small>
-          </div>
-          <span className="search-art-caption">GOOD MUSIC HAS NO BOUNDARIES</span>
-        </div>
+        <div><p className="vx-eyebrow">Your next favourite starts here</p><h1>Search</h1></div>
+        <button className="vx-section-link" onClick={() => { setLyricsMode(true); searchInputRef.current?.focus(); }}>Find a song by its lyrics →</button>
       </header>
       <div className="search-sticky sticky top-0 z-20 pt-3 pb-3 bg-ink-900/95 backdrop-blur-md">
         <div className="relative">
@@ -813,7 +838,10 @@ export default function SearchPage() {
                       key={song.id}
                       song={song}
                       dim={quick.stale}
-                      onPlay={() => playQueue(quickSongs, i)}
+                      onPlay={() => {
+                        playQueue(quickSongs, i);
+                        recordSearchPlay(song);
+                      }}
                     />
                   ))}
                 </section>
@@ -860,6 +888,7 @@ export default function SearchPage() {
         )}
       </div>
 
+      {!active && <DestinationGrid area="discover" />}
       {!active && (
         <div className="search-discovery">
           <SavedSearches onOpen={openPreset} />
@@ -1204,7 +1233,10 @@ export default function SearchPage() {
                           <p className="text-sm text-ink-300 truncate">{topResult.subtitle}</p>
                         </div>
                         <button
-                          onClick={() => playQueue(rankedAllSongs, 0)}
+                          onClick={() => {
+                            playQueue(rankedAllSongs, 0);
+                            recordSearchPlay(topResult);
+                          }}
                           aria-label={`Play ${topResult.title}`}
                           className="w-12 h-12 rounded-full btn-primary flex items-center justify-center hover:bg-ember-400 shrink-0"
                         >
@@ -1217,7 +1249,9 @@ export default function SearchPage() {
                     <section>
                       <h2 className="text-lg font-bold mb-2">Songs</h2>
                       {rankedAllSongs.slice(1, 8).map((song, i) => (
-                        <SongRow key={song.id} song={song} songs={rankedAllSongs} index={i + 1} />
+                        <SearchPlay key={song.id} song={song}>
+                          <SongRow song={song} songs={rankedAllSongs} index={i + 1} />
+                        </SearchPlay>
                       ))}
                       <button
                         onClick={() => setTab('Songs')}
@@ -1417,7 +1451,9 @@ export default function SearchPage() {
                 </div>
               )}
               {displaySongs.map((song, i) => (
-                <SongRow key={song.id} song={song} songs={displaySongs} index={i} />
+                <SearchPlay key={song.id} song={song}>
+                  <SongRow song={song} songs={displaySongs} index={i} />
+                </SearchPlay>
               ))}
               <InfiniteSentinel
                 onVisible={() =>
@@ -1453,6 +1489,7 @@ export default function SearchPage() {
                   ))}
                 </div>
               )}
+              <GridTabState result={albums} count={albumList.length} noun="albums" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {albumList.map((a) => (
                   <MediaCard
@@ -1476,8 +1513,9 @@ export default function SearchPage() {
           )}
           {tab === 'Artists' && (
             <>
+              <GridTabState result={artists} count={artistList.length} noun="artists" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {flattenArtistPages(artists.data?.pages).map((a) => (
+                {artistList.map((a) => (
                   <MediaCard
                     key={a.id}
                     to={artistPath(a)}
@@ -1504,8 +1542,9 @@ export default function SearchPage() {
           )}
           {tab === 'Playlists' && (
             <>
+              <GridTabState result={playlists} count={playlistList.length} noun="playlists" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {flattenPlaylistPages(playlists.data?.pages).map((p) => (
+                {playlistList.map((p) => (
                   <MediaCard
                     key={p.id}
                     to={playlistPath(p)}

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 const QueueBuilderSheet = lazy(() => import('@/features/queue/QueueBuilderSheet').then((m) => ({ default: m.QueueBuilderSheet })));
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -6,11 +6,134 @@ import { Link } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { EmptyState } from '@/components/States';
+import { Chip } from '@/components/Chip';
+import { occurrenceKeys, VirtualChunks } from '@/components/VirtualChunks';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
 import { TuneChips } from '@/features/queue/TuneChips';
 import { useSettingsStore } from '@/store/settingsStore';
 import { XIcon, QueueIcon, ChevronDownIcon, GripIcon } from '@/components/Icons';
+import type { Song } from '@/types';
+
+/** Row card (66px) + the list's 8px gap — the off-screen size estimate for list chunks. */
+const ROW_HEIGHT = 74;
+
+/**
+ * Which slot a pointer at `y` falls in, given each row's vertical midpoint
+ * (ascending). Binary search: the first row whose midpoint is below the
+ * pointer, else the last row.
+ */
+export function slotForY(mids: readonly number[], y: number): number {
+  let lo = 0;
+  let hi = mids.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (y < mids[mid]) hi = mid;
+    else lo = mid + 1;
+  }
+  return Math.max(0, Math.min(lo, mids.length - 1));
+}
+
+const SORTS = [
+  ['energy', 'Energy'],
+  ['calm', 'Calm first'],
+  ['new', 'Newest'],
+  ['old', 'Classics'],
+  ['mood', 'Mood arc'],
+] as const;
+
+type DropEdge = 'above' | 'below' | null;
+
+interface QueueRowProps {
+  song: Song;
+  /** 0-based position within "Up next". */
+  pos: number;
+  rowKey: string;
+  isLast: boolean;
+  dragging: boolean;
+  dropEdge: DropEdge;
+  setRowEl: (pos: number, el: HTMLLIElement | null) => void;
+  onDragStart: (pos: number, e: React.PointerEvent<HTMLButtonElement>) => void;
+  onDragMove: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onDragEnd: () => void;
+  onNudge: (pos: number, rowKey: string, e: React.KeyboardEvent<HTMLButtonElement>) => void;
+}
+
+/** Absolute queue index of an "Up next" position, read at call time so handlers never go stale. */
+const absIndex = (pos: number): number => usePlayerStore.getState().index + 1 + pos;
+
+/**
+ * One "Up next" row. Memoised with stable handlers: a drag restyles the two
+ * rows involved and a removal re-renders nothing above it.
+ */
+const QueueRow = memo(function QueueRow({ song: s, pos, rowKey, isLast, dragging, dropEdge, setRowEl, onDragStart, onDragMove, onDragEnd, onNudge }: QueueRowProps) {
+  return (
+    <li
+      ref={(el) => setRowEl(pos, el)}
+      className={`rounded-[18px] bg-[var(--tile)] border p-3 transition-shadow ${
+        dragging
+          ? 'border-ember-400/60 shadow-glow relative z-10 opacity-90'
+          : dropEdge === 'above'
+            ? 'border-[var(--glass-border)] shadow-[0_-3px_0_0_rgb(var(--ember-500))]'
+            : dropEdge === 'below'
+              ? 'border-[var(--glass-border)] shadow-[0_3px_0_0_rgb(var(--ember-500))]'
+              : 'border-[var(--glass-border)]'
+      }`}
+    >
+      <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          data-reorder-key={rowKey}
+          onPointerDown={(e) => onDragStart(pos, e)}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+          onPointerCancel={onDragEnd}
+          onKeyDown={(e) => onNudge(pos, rowKey, e)}
+          aria-label={`Reorder ${s.title} — drag, or use arrow keys`}
+          title="Drag to reorder"
+          // 28px grip, 44px hit area (IconButton's invisible-pad pattern).
+          className={`relative after:absolute after:inset-0 after:-m-[8px] p-1.5 -ml-1 rounded-lg shrink-0 cursor-grab active:cursor-grabbing text-ink-500 hover:text-ink-200 hover:bg-[var(--tile-hover)] ${dragging ? 'text-ember-400' : ''}`}
+          style={{ touchAction: 'none' }}
+        >
+          <GripIcon className="w-4 h-4" />
+        </button>
+        <button type="button" onClick={() => usePlayerStore.getState().playAt(absIndex(pos))} className="flex items-center gap-3 min-w-0 flex-1 text-left">
+          <img
+            src={bestImage(s.images, 96)}
+            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="w-[42px] h-[42px] rounded-[10px] object-cover shrink-0"
+          />
+          <span className="min-w-0">
+            <span className="block text-[13px] font-bold truncate">{s.title}</span>
+            <span className="block text-[11px] font-semibold text-ink-400 truncate">{s.subtitle}</span>
+          </span>
+        </button>
+        {!isLast && (
+          <button
+            type="button"
+            onClick={() => usePlayerStore.getState().clearFrom(absIndex(pos))}
+            aria-label={`Clear the queue from ${s.title} down`}
+            title="Clear from here down"
+            className="p-1.5 rounded-full text-ink-500 hover:text-ink-100 hover:bg-[var(--tile-hover)] shrink-0 relative after:absolute after:inset-0 after:-m-[8px]"
+          >
+            <ChevronDownIcon className="w-4 h-4" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => usePlayerStore.getState().removeAt(absIndex(pos))}
+          aria-label={`Remove ${s.title} from queue`}
+          className="p-1.5 rounded-full text-ink-400 hover:text-ink-100 hover:bg-[var(--tile-hover)] shrink-0 relative after:absolute after:inset-0 after:-m-[8px]"
+        >
+          <XIcon className="w-4 h-4" />
+        </button>
+      </div>
+    </li>
+  );
+});
 
 export default function QueuePage() {
   usePageTitle('Queue');
@@ -18,15 +141,16 @@ export default function QueuePage() {
   const djTakeover = useSettingsStore((s) => s.djTakeover);
   const index = usePlayerStore((s) => s.index);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const playAt = usePlayerStore((s) => s.playAt);
-  const removeAt = usePlayerStore((s) => s.removeAt);
-  const clearFrom = usePlayerStore((s) => s.clearFrom);
-  const sortUpcoming = usePlayerStore((s) => s.sortUpcoming);
-  const moveInQueue = usePlayerStore((s) => s.moveInQueue);
   const song = useCurrentSong();
-  const upNext = queue.slice(index + 1);
+  const upNext = useMemo(() => queue.slice(index + 1), [queue, index]);
+  // Index-free keys, numbered over the WHOLE queue so they also survive the
+  // playing song advancing. `${id}-${index}` remounted the moved row on every
+  // keyboard step (dropping focus) and every row below a removed one.
+  const rowKeys = useMemo(() => occurrenceKeys(queue.map((s) => s.id)).slice(index + 1), [queue, index]);
   // v6.3.0 — Queue Builder.
   const [building, setBuilding] = useState(false);
+  /** Spoken through the polite live region below — reorders are otherwise silent. */
+  const [announcement, setAnnouncement] = useState('');
 
   // ---- Drag-to-reorder (pointer events, zero deps) -----------------------
   // dragFrom/dragOver are 0-based positions within upNext; the store call
@@ -34,53 +158,107 @@ export default function QueuePage() {
   // handle sets touch-action:none so the gesture never fights page scroll.
   // Gesture truth lives in refs (pointer events outrun React state); the
   // mirrored state exists only so the rows restyle while dragging.
-  const dragRef = useRef<{ from: number; over: number } | null>(null);
+  //
+  // Row geometry is snapshotted ONCE at drag start (midpoints relative to the
+  // list) and binary-searched per move; each pointermove then costs a single
+  // rect read on the list — which also keeps it right if the page scrolls —
+  // instead of a getBoundingClientRect on every row.
+  const dragRef = useRef<{ from: number; over: number; mids: number[] } | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const rowRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const listRef = useRef<HTMLUListElement>(null);
+  const setRowEl = useCallback((pos: number, el: HTMLLIElement | null) => {
+    rowRefs.current[pos] = el;
+  }, []);
 
-  const slotFromY = (clientY: number): number => {
-    const rows = rowRefs.current.filter(Boolean) as HTMLLIElement[];
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i].getBoundingClientRect();
-      if (clientY < r.top + r.height / 2) return i;
-    }
-    return Math.max(rows.length - 1, 0);
-  };
-
-  const startDrag = (i: number) => (e: React.PointerEvent<HTMLButtonElement>) => {
+  const startDrag = useCallback((pos: number, e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    dragRef.current = { from: i, over: i };
-    setDragFrom(i);
-    setDragOver(i);
-  };
-  const onDragMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const state = usePlayerStore.getState();
+    const count = state.queue.length - state.index - 1;
+    const listTop = listRef.current?.getBoundingClientRect().top ?? 0;
+    const mids: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const r = rowRefs.current[i]?.getBoundingClientRect();
+      mids.push(r ? r.top - listTop + r.height / 2 : (mids[i - 1] ?? 0) + ROW_HEIGHT);
+    }
+    dragRef.current = { from: pos, over: pos, mids };
+    setDragFrom(pos);
+    setDragOver(pos);
+  }, []);
+  const onDragMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     const d = dragRef.current;
     if (!d) return;
-    const over = slotFromY(e.clientY);
+    const listTop = listRef.current?.getBoundingClientRect().top ?? 0;
+    const over = slotForY(d.mids, e.clientY - listTop);
     if (over !== d.over) {
       d.over = over;
       setDragOver(over);
     }
-  };
-  const endDrag = () => {
+  }, []);
+  const endDrag = useCallback(() => {
     const d = dragRef.current;
     if (d && d.from !== d.over) {
-      moveInQueue(index + 1 + d.from, index + 1 + d.over);
+      const { index: at, queue: q, moveInQueue } = usePlayerStore.getState();
+      moveInQueue(at + 1 + d.from, at + 1 + d.over);
+      setAnnouncement(`Moved to position ${d.over + 1} of ${q.length - at - 1}`);
     }
     dragRef.current = null;
     setDragFrom(null);
     setDragOver(null);
-  };
+  }, []);
+
   /** Keyboard fallback on the handle: arrow keys nudge the row a slot. */
-  const nudge = (i: number) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
+  const refocusKey = useRef<string | null>(null);
+  const nudge = useCallback((pos: number, rowKey: string, e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
-    const to = e.key === 'ArrowUp' ? i - 1 : i + 1;
-    if (to < 0 || to >= upNext.length) return;
-    moveInQueue(index + 1 + i, index + 1 + to);
-  };
+    const { index: at, queue: q, moveInQueue } = usePlayerStore.getState();
+    const count = q.length - at - 1;
+    const to = e.key === 'ArrowUp' ? pos - 1 : pos + 1;
+    if (to < 0 || to >= count) return;
+    refocusKey.current = rowKey;
+    moveInQueue(at + 1 + pos, at + 1 + to);
+    setAnnouncement(`Moved to position ${to + 1} of ${count}`);
+  }, []);
+  // Re-ordering DOM nodes can drop focus from the moved one (the browser
+  // blurs a node that is re-inserted). Put it back on the same handle so
+  // repeated arrow presses keep working.
+  useLayoutEffect(() => {
+    const key = refocusKey.current;
+    if (!key) return;
+    refocusKey.current = null;
+    const handles = listRef.current?.querySelectorAll<HTMLButtonElement>('[data-reorder-key]') ?? [];
+    for (const h of handles) {
+      if (h.dataset.reorderKey === key) {
+        if (document.activeElement !== h) h.focus({ preventScroll: true });
+        h.scrollIntoView?.({ block: 'nearest' });
+        break;
+      }
+    }
+  }, [queue]);
+
+  const total = upNext.length;
+  const renderRow = useCallback(
+    (s: Song, i: number) => (
+      <QueueRow
+        song={s}
+        pos={i}
+        rowKey={rowKeys[i]}
+        isLast={i === total - 1}
+        dragging={dragFrom === i}
+        dropEdge={dragFrom !== null && dragOver === i && dragFrom !== i ? (dragOver < dragFrom ? 'above' : 'below') : null}
+        setRowEl={setRowEl}
+        onDragStart={startDrag}
+        onDragMove={onDragMove}
+        onDragEnd={endDrag}
+        onNudge={nudge}
+      />
+    ),
+    [rowKeys, total, dragFrom, dragOver, setRowEl, startDrag, onDragMove, endDrag, nudge],
+  );
+  const keyOfRow = useCallback((_s: Song, i: number) => rowKeys[i], [rowKeys]);
 
   // Package D5 — freeze this queue into a Collection the listener keeps.
   const saveAsPlaylist = (): void => {
@@ -169,31 +347,25 @@ export default function QueuePage() {
         </div>
       )}
 
+      {/* Reorder results for screen readers — a moved row is otherwise silent. */}
+      <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
+
       {/* up next — and why */}
       <div className="flex items-center justify-between mb-2.5 gap-2">
         <h2 className="text-base font-extrabold">Up next</h2>
         {/* D5 — sort the upcoming stretch; the playing song never moves. */}
         {upNext.length >= 3 && (
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar" role="group" aria-label="Sort upcoming songs">
-            {(
-              [
-                ['energy', 'Energy'],
-                ['calm', 'Calm first'],
-                ['new', 'Newest'],
-                ['old', 'Classics'],
-                ['mood', 'Mood arc'],
-              ] as const
-            ).map(([k, label]) => (
-              <button
+            {SORTS.map(([k, label]) => (
+              <Chip
                 key={k}
                 onClick={() => {
-                  sortUpcoming(k);
+                  usePlayerStore.getState().sortUpcoming(k);
                   toast(`Sorted upcoming by ${label.toLowerCase()}`);
                 }}
-                className="shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[var(--tile)] border border-[var(--glass-border)] text-ink-300 hover:text-ink-100 transition active:scale-95"
               >
                 {label}
-              </button>
+              </Chip>
             ))}
           </div>
         )}
@@ -201,76 +373,8 @@ export default function QueuePage() {
       {upNext.length === 0 ? (
         <p className="text-sm text-ink-400">Nothing queued — add songs using Play next or Add to queue.</p>
       ) : (
-        <ul className="space-y-2">
-          {upNext.map((s, i) => {
-            const realIndex = index + 1 + i;
-            const dragging = dragFrom === i;
-            const dropTarget = dragFrom !== null && dragOver === i && dragFrom !== i;
-            return (
-              <li
-                key={`${s.id}-${realIndex}`}
-                ref={(el) => {
-                  rowRefs.current[i] = el;
-                }}
-                className={`rounded-[18px] bg-[var(--tile)] border p-3 transition-shadow ${
-                  dragging
-                    ? 'border-ember-400/60 shadow-glow relative z-10 opacity-90'
-                    : dropTarget
-                      ? dragOver !== null && dragFrom !== null && dragOver < dragFrom
-                        ? 'border-[var(--glass-border)] shadow-[0_-3px_0_0_rgb(var(--ember-500))]'
-                        : 'border-[var(--glass-border)] shadow-[0_3px_0_0_rgb(var(--ember-500))]'
-                      : 'border-[var(--glass-border)]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <button
-                    onPointerDown={startDrag(i)}
-                    onPointerMove={onDragMove}
-                    onPointerUp={endDrag}
-                    onPointerCancel={endDrag}
-                    onKeyDown={nudge(i)}
-                    aria-label={`Reorder ${s.title} — drag, or use arrow keys`}
-                    title="Drag to reorder"
-                    className={`p-1.5 -ml-1 rounded-lg shrink-0 cursor-grab active:cursor-grabbing text-ink-500 hover:text-ink-200 hover:bg-[var(--tile-hover)] ${dragging ? 'text-ember-400' : ''}`}
-                    style={{ touchAction: 'none' }}
-                  >
-                    <GripIcon className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => playAt(realIndex)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
-                    <img
-                      src={bestImage(s.images, 96)}
-                      onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="w-[42px] h-[42px] rounded-[10px] object-cover shrink-0"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-[13px] font-bold truncate">{s.title}</span>
-                      <span className="block text-[11px] font-semibold text-ink-400 truncate">{s.subtitle}</span>
-                    </span>
-                  </button>
-                  {i < upNext.length - 1 && (
-                    <button
-                      onClick={() => clearFrom(realIndex)}
-                      aria-label={`Clear the queue from ${s.title} down`}
-                      title="Clear from here down"
-                      className="p-1.5 rounded-full text-ink-500 hover:text-ink-100 hover:bg-[var(--tile-hover)] shrink-0 relative after:absolute after:inset-0 after:-m-[8px]"
-                    >
-                      <ChevronDownIcon className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => removeAt(realIndex)}
-                    aria-label={`Remove ${s.title} from queue`}
-                    className="p-1.5 rounded-full text-ink-400 hover:text-ink-100 hover:bg-[var(--tile-hover)] shrink-0 relative after:absolute after:inset-0 after:-m-[8px]"
-                  >
-                    <XIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </li>
-            );
-          })}
+        <ul ref={listRef} className="space-y-2">
+          <VirtualChunks items={upNext} keyOf={keyOfRow} renderItem={renderRow} rowHeight={ROW_HEIGHT} chunkClassName="space-y-2" />
         </ul>
       )}
     </div>

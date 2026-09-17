@@ -3,7 +3,7 @@ import { songPath } from '@/utils/slug';
 import { Shelf } from '@/components/Shelf';
 import { MediaCard } from '@/components/MediaCard';
 import { ShelfSkeleton } from '@/components/Skeletons';
-import { EmptyState } from '@/components/States';
+import { EmptyState, ErrorState } from '@/components/States';
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
 import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
@@ -12,7 +12,8 @@ import { Link } from 'react-router-dom';
 
 export default function MadeForYouPage() {
   usePageTitle('Made For You');
-  const { data: mixes, isLoading } = useRecommendations();
+  const { data: mixes, isLoading, isError, refetch } = useRecommendations();
+  const failed = isError && !mixes?.length;
   const playQueue = usePlayerStore((s) => s.playQueue);
 
   return (
@@ -31,7 +32,10 @@ export default function MadeForYouPage() {
         </>
       )}
 
-      {!isLoading && (!mixes || mixes.length === 0) && (
+      {/* A failed request is not "warming up" — say so and offer the retry. */}
+      {failed && <ErrorState retry={() => void refetch()} />}
+
+      {!isLoading && !failed && (!mixes || mixes.length === 0) && (
         <EmptyState
           title="Your mixes are warming up"
           message="Play a few songs, favorite what you love, and personalized mixes will appear here within a few interactions."

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { cn } from '@/utils/cn';
-import { CompassIcon, DownloadIcon, HomeIcon, LibraryIcon, SearchIcon, SparkleIcon } from './Icons';
-import { haptic, isNativePlatform } from '@/services/native';
+import { CompassIcon, HomeIcon, LibraryIcon, SearchIcon, SparkleIcon } from './Icons';
+import { haptic } from '@/services/native';
 import { useT } from '@/i18n';
 
 interface DockItem {
@@ -15,11 +15,6 @@ const items: DockItem[] = [
   { to: '/', label: 'Home', icon: HomeIcon },
   { to: '/discover', label: 'Discover', icon: CompassIcon },
   { to: '/search', label: 'Search', icon: SearchIcon },
-  // v5.5.2 — Android app: downloads are the whole point of the native shell,
-  // so they get a first-class dock seat there. The web dock keeps its tighter
-  // five seats (browser listeners stream; the Downloads screen stays reachable
-  // from Library).
-  ...(isNativePlatform() ? [{ to: '/offline', label: 'Downloads', icon: DownloadIcon }] : []),
   { to: '/library', label: 'Library', icon: LibraryIcon },
   { to: '/VinaXAI', label: 'VinaX AI', icon: SparkleIcon, ai: true as const },
 ];
@@ -32,7 +27,9 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Main navigation"
-      className="vx-dock md:hidden bg-gradient-to-t from-ink-950 via-ink-950/95 to-ink-950/80 pb-[var(--safe-bottom)]"
+      // No bottom safe-area padding here: the fixed wrapper in AppLayout applies
+      // the inset ONCE for the player bar + dock (it used to be applied twice).
+      className="vx-dock md:hidden bg-ink-950"
     >
       <ul className="flex items-stretch justify-around px-1 pt-1.5 pb-1">
         {items.map(({ to, label, icon: Icon, ai }) => (

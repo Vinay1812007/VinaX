@@ -31,6 +31,7 @@
  *   → 400 bad_request | 503 ai_not_configured | 500 { error }
  */
 import { chat, extractJson, gather, logAiEvent, type AiEnv } from '../_lib/ai';
+import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { pickBySeed, styleAngle } from '../_lib/variety';
@@ -172,15 +173,11 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
   const isApp = request.headers.get('x-vinax-client') === 'app';
   const limited = rateLimit(request, 'dj', { capacity: 15, refillPerMinute: 8 });
   if (limited) return limited;
-  if (Number(request.headers.get('content-length')) > 48_000) return json({ error: 'too_large' }, 413);
-  const text = await request.text();
-  if (text.length > 48_000) return json({ error: 'too_large' }, 413);
-  let body: { context?: unknown; pool?: unknown; count?: unknown; discover?: unknown; maxDiscover?: unknown; wantSegues?: unknown };
-  try {
-    body = JSON.parse(text) as typeof body;
-  } catch {
-    return json({ error: 'bad_request' }, 400);
-  }
+  // Capped while reading — a chunked body carries no content-length.
+  const read = await readJsonCapped<{ context?: unknown; pool?: unknown; count?: unknown; discover?: unknown; maxDiscover?: unknown; wantSegues?: unknown } | null>(request, 48_000);
+  if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
+  if (!read.value || typeof read.value !== 'object') return json({ error: 'bad_request' }, 400);
+  const body = read.value;
   const ctx = body.context && typeof body.context === 'object' && !Array.isArray(body.context) ? (body.context as Record<string, unknown>) : null;
   const pool: PoolSong[] = Array.isArray(body.pool)
     ? (body.pool as unknown[])

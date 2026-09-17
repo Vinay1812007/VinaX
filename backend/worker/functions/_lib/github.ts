@@ -9,6 +9,8 @@ export interface GithubEnv {
 }
 
 const DEFAULT_REPO = 'Vinay1812007/VinaX';
+/** Outbound wait before a hung upstream is abandoned. */
+const REQUEST_TIMEOUT_MS = 10_000;
 
 function repo(env: GithubEnv): string {
   return env.GITHUB_REPO || DEFAULT_REPO;
@@ -32,14 +34,20 @@ function ghHeaders(env: GithubEnv, accept: string): Record<string, string> {
 
 export async function latestRelease(env: GithubEnv): Promise<GhRelease | null> {
   if (!env.GITHUB_TOKEN) return null;
+  // The small JSON body is read under the same leash as the headers.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const res = await fetch(`https://api.github.com/repos/${repo(env)}/releases/latest`, {
       headers: ghHeaders(env, 'application/vnd.github+json'),
+      signal: controller.signal,
     });
     if (!res.ok) return null;
     return (await res.json()) as GhRelease;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -50,9 +58,19 @@ export async function latestRelease(env: GithubEnv): Promise<GhRelease | null> {
  */
 export async function fetchAsset(env: GithubEnv, assetUrl: string): Promise<Response | null> {
   if (!env.GITHUB_TOKEN) return null;
+  // Leash on time-to-headers only — cleared once the (redirected) response
+  // arrives, so the multi-megabyte asset body streams without a deadline.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(assetUrl, { headers: ghHeaders(env, 'application/octet-stream'), redirect: 'follow' });
+    return await fetch(assetUrl, {
+      headers: ghHeaders(env, 'application/octet-stream'),
+      redirect: 'follow',
+      signal: controller.signal,
+    });
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

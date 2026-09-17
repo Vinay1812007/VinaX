@@ -3,6 +3,7 @@ import { timeOfDaySeed } from '@/constants/seeds';
 import { languageLabel } from '@/constants/languages';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { explainMix } from './explanations';
+import { dedupeByIdentity } from './songIdentity';
 import type { Mix, RecommendationContext, ScoredCandidate } from './types';
 
 const MIX_SIZE = 20;
@@ -42,7 +43,10 @@ export function injectExplore(
 }
 
 /** Assemble explainable shelves from the ranked candidate pool. */
-export function buildMixes(ranked: ScoredCandidate[], ctx: RecommendationContext): Mix[] {
+export function buildMixes(rankedInput: ScoredCandidate[], ctx: RecommendationContext): Mix[] {
+  // v7.0.0 — one entry per canonical song (the original cut wins) before any
+  // shelf is drawn, so versions of one song cannot share or repeat across shelves.
+  const ranked = dedupeByIdentity(rankedInput, (s) => s.candidate.song);
   const out: Mix[] = [];
   const used = new Set<string>();
 

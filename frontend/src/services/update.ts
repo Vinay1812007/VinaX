@@ -17,6 +17,16 @@ const VERSION_ENDPOINT = 'https://www.sirimillavinay.online/api/version';
 export const APK_URLS = ['https://www.sirimillavinay.online/api/apk'];
 
 /**
+ * Fold a foreground re-check into what the gate already shows. checkForUpdate
+ * answers null for "offline", "snoozed" and "request failed" as well as for
+ * "up to date", so a null must never overwrite a known update — that is how a
+ * mandatory gate got dismissed by backgrounding the app in airplane mode.
+ */
+export function mergeResumeCheck(current: UpdateInfo | null, fresh: UpdateInfo | null): UpdateInfo | null {
+  return fresh ?? current;
+}
+
+/**
  * Android update check. Compares the installed Android versionCode (build
  * number) against the latest published build — NOT the version name — so the
  * display name can change freely (e.g. reset to "1.1") without breaking

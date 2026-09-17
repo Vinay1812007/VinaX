@@ -1,8 +1,9 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import { artSrcSet, bestImage, derivedVariants, FALLBACK_ART } from '@/utils/images';
 import { rememberCtxSong } from '@/utils/ctxSongs';
+import { isFavoriteIn } from '@/utils/favIndex';
 import type { ImageVariant, Song } from '@/types';
 import { HeartIcon, PlayIcon } from './Icons';
 import { useLibraryStore } from '@/store/libraryStore';
@@ -38,8 +39,7 @@ interface Props {
 }
 
 export function MediaCard({ to, image, images, title, subtitle, round, fluid, onPlay, song }: Props) {
-  const isFav = useLibraryStore((s) => (song ? s.favorites.some((f) => f.id === song.id) : false));
-  const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
+  const isFav = useLibraryStore((s) => (song ? isFavoriteIn(s.favorites, song.id) : false));
   // A8 — unconditional hook call (rules of hooks); selects nothing unless debugging.
   const debugReason = useReasonStore((s) => (RECS_DEBUG && song ? s.reasons[song.id] : undefined));
   // Song cards feed the right-click context menu (idempotent map write).
@@ -49,18 +49,20 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
   const eagerRef = useRef<boolean | null>(null);
   if (eagerRef.current === null) eagerRef.current = eagerBudget > 0 && (eagerBudget--, true);
   const eager = eagerRef.current;
-  const dv = images ? derivedVariants(images) : undefined;
+  // URL rewriting per variant — only redo it when the variants change, not on
+  // every favourite/hover re-render of a shelf full of cards.
+  const dv = useMemo(() => (images ? derivedVariants(images) : undefined), [images]);
   return (
-    <Link
-      to={to}
+    <article
       data-deter-context
       data-song-id={song?.id}
       className={cn(
-        'vx-media-card group rounded-xl p-3 transition-[background-color,transform] duration-200 hover:bg-ink-850/80 hover:-translate-y-0.5 active:scale-[0.98] animate-fade-up',
+        'vx-media-card group',
         fluid ? 'w-full' : 'w-40 sm:w-44 shrink-0',
       )}
     >
-      <div className={cn('relative overflow-hidden shadow-card ring-1 ring-white/5 transition-shadow duration-300 group-hover:shadow-float', round ? 'rounded-full' : 'rounded-xl')}>
+      <div className={cn('vx-media-art', round && 'is-artist')}>
+        <Link to={to} tabIndex={-1} aria-hidden="true">
         <img
           /* 4.19.5 image-quality pass: the 4.18.0 flat 150 cap kept PSI happy
              but read SOFT on 2x+ phones (owner report). The CDN also serves
@@ -96,8 +98,9 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
                 : '(min-width: 640px) 160px, 144px'
               : undefined
           }
-          className={cn('w-full aspect-square object-cover transition-transform duration-300 ease-vinax group-hover:scale-[1.03]', round ? 'rounded-full' : 'rounded-lg')}
+          className={cn('w-full aspect-square object-cover', round ? 'rounded-full' : 'rounded-lg')}
         />
+        </Link>
         {song && (
           <button
             aria-label={isFav ? `Remove ${title} from favorites` : `Add ${title} to favorites`}
@@ -105,10 +108,10 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              toggleFavorite(song);
+              useLibraryStore.getState().toggleFavorite(song);
             }}
             className={cn(
-              'absolute top-2 right-2 w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-md transition-[color,background-color,border-color,opacity,transform] active:scale-90',
+              'absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md transition-[color,background-color,border-color,opacity,transform] active:scale-90',
               isFav ? 'bg-ember-500/90 text-white' : 'bg-black/40 text-white/90 hover:bg-black/60 hover-reveal',
             )}
           >
@@ -134,9 +137,9 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
         )}
       </div>
       {/* Reserved heights keep every shelf row perfectly even. */}
-      <p className={cn('mt-3 text-[15px] font-semibold leading-tight line-clamp-2 min-h-[2.5em]', round && 'text-center')}>{title}</p>
+      <p className={cn('vx-media-title line-clamp-2 min-h-[2.8em]', round && 'text-center')}><Link to={to}>{title}</Link></p>
       {subtitle && (
-        <p className={cn('mt-1 text-[13px] font-medium text-ink-400 leading-snug truncate', round && 'text-center')}>
+        <p className={cn('vx-media-subtitle truncate', round && 'text-center')}>
           {subtitle}
         </p>
       )}
@@ -145,6 +148,6 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
           {debugReason}
         </p>
       )}
-    </Link>
+    </article>
   );
 }

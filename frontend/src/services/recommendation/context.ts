@@ -3,7 +3,8 @@ import { loadProfile } from '@/services/personalization/storage';
 import { getSessionVector } from '@/services/personalization/session';
 import { activeFestivalMusic } from './festival';
 import { buildSessionRecommendationProfile, buildUserRecommendationProfile } from './profiles';
-import { useSettingsStore, resolvedRegion } from '@/store/settingsStore';
+import { useSettingsStore, resolvedRegion, resolveDiscoveryMode } from '@/store/settingsStore';
+import { getSessionIntent } from '@/services/personalization/sessionIntent';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import type { Song } from '@/types';
@@ -17,6 +18,7 @@ export function getRecommendationContext(seedSong: Song | null = null, surface: 
   const favorites = useLibraryStore.getState().favorites;
   const history = useHistoryStore.getState().entries;
   const sv = getSessionVector();
+  const discoveryMode = resolveDiscoveryMode(settings);
   return {
     salt: SESSION_SALT + useDiscoveryStore.getState().round * 7919,
     profile,
@@ -33,7 +35,9 @@ export function getRecommendationContext(seedSong: Song | null = null, surface: 
     sessionLanguage: sv.size >= 2 ? sv.language : undefined,
     sessionSize: sv.size,
     festival: activeFestivalMusic(),
-    explore: settings.exploreMode,
+    explore: discoveryMode === 'discover',
+    discoveryMode,
+    sessionIntent: getSessionIntent(),
     seedSong,
     surface,
     userProfile: buildUserRecommendationProfile(profile, favorites, history),

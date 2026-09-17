@@ -71,3 +71,12 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+/** Persistent navigation is intentionally separate from the complete command catalogue. */
+export const PRIMARY_NAV: NavItem[] = [
+  { to: '/', label: 'Home', icon: HomeIcon },
+  { to: '/search', label: 'Search', icon: SearchIcon },
+  { to: '/discover', label: 'Discover', icon: CompassIcon },
+  { to: '/library', label: 'Library', icon: LibraryIcon },
+  { to: '/VinaXAI', label: 'VinaX AI', icon: SparkleIcon },
+];

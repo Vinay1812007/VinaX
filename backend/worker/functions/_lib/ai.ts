@@ -459,7 +459,10 @@ export async function chat(
         lastStatus = 0;
         break;
       }
-      clearTimeout(timer);
+      // The leash stays armed through the BODY read below: an engine that sends
+      // headers and then stalls would otherwise hold the route open to the
+      // platform limit, because nothing else enforces deadlineAt mid-read. An
+      // abort there surfaces as a blank answer and the ladder walks on.
       // v6.5.2 — one compact line per attempt so `wrangler tail` shows which
       // engine answered, how fast, or why it did not (no secrets, no prompt).
       console.log(`[ai] lane=${role} model=${model} status=${res.status} ms=${Date.now() - startedAt}`);
@@ -467,6 +470,7 @@ export async function chat(
         const data = (await res.json().catch(() => null)) as
           | { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown }; finish_reason?: unknown }>; usage?: unknown }
           | null;
+        clearTimeout(timer);
         const msg = data?.choices?.[0]?.message;
         const usage = usageFromJson(data) ?? undefined;
         // Reasoning models (deep lane) may wrap chain-of-thought in
@@ -492,6 +496,7 @@ export async function chat(
       lastStatus = res.status;
       // The provider's own words, clipped (error envelopes carry no secrets).
       const errBody = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      clearTimeout(timer);
       console.log(`[ai] error lane=${role} model=${model} status=${res.status} json=${useJson} body=${errBody}`);
       // JSON mode unsupported on this model -> retry it once in plain mode.
       if (res.status === 400 && useJson) continue;

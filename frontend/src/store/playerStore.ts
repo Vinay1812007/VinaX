@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
+import { createDedupedStorage } from '@/services/storage/local';
 import { audioEngine, orderedSources } from '@/services/audio/engine';
 import {
   setMediaHandlers,
@@ -14,7 +15,7 @@ import { checkNotificationOnFirstPlay, haptic, isNativePlatform } from '@/servic
 import { toast } from './toastStore';
 import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
-import { useCastStore, castInterceptPlayPause, castInterceptSeek, castMime } from '@/services/cast';
+import { useCastStore, castInterceptPlayPause, castInterceptSeek, castInterceptVolume, castMime } from '@/services/cast';
 import { bestImage } from '@/utils/images';
 import { isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
 import { kidModeOn, stripExplicit } from '@/services/kidMode';
@@ -24,6 +25,7 @@ import { freshSongs } from '@/services/recommendation/freshness';
 import { songKey } from '@/services/recommendation/songIdentity';
 import { isSongBlocked, useLibraryStore } from './libraryStore';
 import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
+import { noteSessionEvent } from '@/services/personalization/sessionIntent';
 
 export type RepeatMode = 'off' | 'one' | 'all';
 
@@ -103,6 +105,8 @@ export interface PlayerState {
 }
 
 const SKIP_THRESHOLD = 0.3;
+/** v7.0.0 — a play counts toward taste once this much of it has actually been heard. */
+const COUNTED_PLAY_SEC = 5;
 let autoplayNoticeShown = false;
 
 let engineInitialized = false;
@@ -165,6 +169,18 @@ export const usePlayerStore = create<PlayerState>()(
       let recommendationJob: { version: number; promise: Promise<boolean> } | null = null;
       /** Ids the recommender appended (never persisted; a reload starts clean). */
       const autoIds = new Set<string>();
+      /** v7.0.0 — ids the listener queued by hand ("Add to queue" / "Play next"). They
+       *  outrank everything automatic: they sit ahead of the recommender's tail,
+       *  survive a re-plan and a "Tune this queue", and are never reordered. */
+      const manualIds = new Set<string>();
+      /** v7.0.0 — the song whose PLAY has not been counted toward taste yet (see COUNTED_PLAY_SEC). */
+      let uncountedPlay: Song | null = null;
+      /** Put the engine back at the listener's volume after a sleep fade was cancelled or finished. */
+      // While casting the local element is only a silent clock: it must never become audible over the receiver.
+      const restoreVolume = (): void => audioEngine.setVolume(useCastStore.getState().connected ? 0 : get().volume);
+      function clearSleepTimeout(): void {
+        if (sleepTimer != null) { window.clearTimeout(sleepTimer); sleepTimer = null; }
+      }
       const canExtend = () => (radio || useSettingsStore.getState().autoplay) && !get().followMode && get().repeat === 'off';
       function invalidateQueue(): void { queueVersion += 1; transition += 1; }
       async function appendRecommendations(seed: Song): Promise<boolean> {
@@ -257,7 +273,11 @@ export const usePlayerStore = create<PlayerState>()(
         
         if (autoplay) {
           sessionPlayed.add(song.id);
-          recordPlay(song);
+          // v7.0.0 — history gets the play at once (the listen clock needs the
+          // entry), but taste only learns from it after a few seconds of real
+          // playback: flipping through five songs in five seconds used to teach
+          // the profile five plays.
+          uncountedPlay = song;
           useHistoryStore.getState().addPlay(song);
           void import('@/utils/streak').then((m) => m.bumpStreak());
           // Android 13+: the playback notification needs this permission.
@@ -284,8 +304,18 @@ export const usePlayerStore = create<PlayerState>()(
       function maybeRecordSkip(manual: boolean): void {
         const { queue, index, currentTime, duration } = get();
         const song = queue[index];
-        if (manual && song && duration > 0 && currentTime / duration < SKIP_THRESHOLD) {
+        if (!manual || !song) return;
+        if (uncountedPlay?.id === song.id) {
+          // Flipped past before it really played: a sign of a restless sitting,
+          // but not a verdict on the song, so the long-term profile is left alone.
+          uncountedPlay = null;
+          useHistoryStore.getState().markSkipped(song.id);
+          noteSessionEvent('skip', song);
+          return;
+        }
+        if (duration > 0 && currentTime / duration < SKIP_THRESHOLD) {
           recordSkip(song, currentTime);
+          useHistoryStore.getState().markSkipped(song.id);
           void import('@/services/analytics/telemetry').then((m) => m.trackSkip(song));
           // v6.3.0 — two skips inside the recommender's tail re-plan the rest of it.
           void import('@/services/recommendation/adaptive').then((m) => m.noteSkipAndMaybeReplan(song));
@@ -312,6 +342,7 @@ export const usePlayerStore = create<PlayerState>()(
         const { queue, index, duration, repeat, sleepAt, sleepAfterTrack, sleepSongsLeft } = get();
         const song = queue[index];
         if (song) {
+          if (uncountedPlay?.id === song.id) { recordPlay(song); uncountedPlay = null; }
           recordComplete(song, duration);
           useHistoryStore.getState().markCompleted(song.id);
           void import('@/services/recommendation/adaptive').then((m) => m.noteCompleted());
@@ -320,6 +351,7 @@ export const usePlayerStore = create<PlayerState>()(
         const songsDone = sleepSongsLeft > 0 ? sleepSongsLeft - 1 : 0;
         if (sleepSongsLeft > 0) set({ sleepSongsLeft: songsDone });
         if (sleepAfterTrack || (sleepSongsLeft === 1) || (sleepAt && Date.now() >= sleepAt)) {
+          clearSleepTimeout();
           set({ sleepAt: null, sleepAfterTrack: false, sleepSongsLeft: 0, isPlaying: false });
           audioEngine.pause();
           toast('Sleep timer: playback stopped');
@@ -357,6 +389,9 @@ export const usePlayerStore = create<PlayerState>()(
           return;
         }
         if (castInterceptPlayPause()) {
+          // v7.0.0 — the silent local element is the clock that drives
+          // 'ended' → next while casting, so it follows the receiver.
+          audioEngine.play();
           set({ isPlaying: true });
           return;
         }
@@ -365,8 +400,14 @@ export const usePlayerStore = create<PlayerState>()(
 
       function pauseCurrent(): void {
         transition += 1;
-        if (!get().isPlaying) return;
+        if (!get().isPlaying) {
+          // Already paused (say, by a phone call): a pause pressed now is a
+          // deliberate one, so the pending auto-resume is called off.
+          audioEngine.lastInterruptionAt = 0;
+          return;
+        }
         if (castInterceptPlayPause()) {
+          audioEngine.pause();
           set({ isPlaying: false });
           return;
         }
@@ -401,19 +442,28 @@ export const usePlayerStore = create<PlayerState>()(
           audioEngine.init({
             onTime: (currentTime, duration) => {
               set({ currentTime, duration });
+              if (uncountedPlay && currentTime >= COUNTED_PLAY_SEC && get().queue[get().index]?.id === uncountedPlay.id) {
+                recordPlay(uncountedPlay);
+                uncountedPlay = null;
+              }
               // v5.17.0 — sleep timer: fade the last 30 s toward silence and
               // stop on the minute instead of waiting for the song to end.
               const sleepAtNow = get().sleepAt;
               if (sleepAtNow) {
                 const left = sleepAtNow - Date.now();
                 if (left <= 0) {
+                  // One stop per deadline: the wall-clock timeout below is the
+                  // fallback for a paused player, so it is disarmed here.
+                  clearSleepTimeout();
                   set({ sleepAt: null, sleepAfterTrack: false, sleepSongsLeft: 0, isPlaying: false });
                   audioEngine.pause();
-                  audioEngine.setVolume(get().muted ? 0 : get().volume);
+                  // Mute rides on the element's own flag; writing 0 here would
+                  // leave the engine silent after an un-mute.
+                  restoreVolume();
                   toast('Sleep timer: playback stopped');
                   return;
                 }
-                if (left < 30_000 && !get().muted) audioEngine.setVolume(Math.max(0.04, get().volume * (left / 30_000)));
+                if (left < 30_000 && !get().muted && !useCastStore.getState().connected) audioEngine.setVolume(Math.max(0.04, get().volume * (left / 30_000)));
               }
               // v5.12.0 — A-B repeat: bounce back to A the moment B passes.
               const { loopA, loopB } = get();
@@ -514,6 +564,7 @@ export const usePlayerStore = create<PlayerState>()(
           resetSkipGuard(); // manual play — the user vouches for the sources
           invalidateQueue();
           autoIds.clear();
+          manualIds.clear();
           sessionPlayed.clear();
           // v6.5.0 — DJ takeover: the tapped song is the seed and the DJ
           // builds the continuation (startTrack asks for it at once because
@@ -523,13 +574,13 @@ export const usePlayerStore = create<PlayerState>()(
           const takeover = settings.djTakeover && settings.autoplay && !opts.keepList && !get().followMode && get().repeat === 'off';
           radio = takeover;
           if (takeover) {
-            set({ queue: [seed], index: 0, currentTime: 0, loopA: null, loopB: null, tuneIntent: null });
+            set({ queue: [seed], index: 0, currentTime: 0, duration: 0, loopA: null, loopB: null, tuneIntent: null });
             startTrack(seed, true);
             return;
           }
           const queue = stripExplicit(songs);
           const index = queue.indexOf(seed);
-          set({ queue: [...queue], index, currentTime: 0, loopA: null, loopB: null, tuneIntent: null });
+          set({ queue: [...queue], index, currentTime: 0, duration: 0, loopA: null, loopB: null, tuneIntent: null });
           startTrack(seed, true);
         },
 
@@ -541,16 +592,24 @@ export const usePlayerStore = create<PlayerState>()(
           const current = queue[index];
           if (!current) return;
           const resolved: TuneIntent = intent === 'surprise' ? randomTune() : intent;
-          // Keep what played and the current song; everything after is rebuilt.
+          // Keep what played, the current song and anything the listener queued
+          // by hand; the rest of what follows is rebuilt.
           invalidateQueue();
           radio = true; // a tuned continuation is endless, like radio
           for (const s of queue.slice(index + 1)) autoIds.delete(s.id);
-          set({ queue: queue.slice(0, index + 1), tuneIntent: resolved });
+          const kept = [...queue.slice(0, index + 1), ...queue.slice(index + 1).filter((s) => manualIds.has(s.id))];
+          set({ queue: kept, tuneIntent: resolved });
           void appendRecommendations(current).then((added) => {
-            if (!added && get().queue.length === index + 1) toast('Could not retune right now — try again in a moment');
+            if (!added && get().queue.length === kept.length) toast('Could not retune right now — try again in a moment');
           });
         },
-        setSleepSongs: (n) => set({ sleepSongsLeft: Math.max(0, Math.round(n)), sleepAfterTrack: false, sleepAt: null }),
+        setSleepSongs: (n) => {
+          // v7.0.0 — a minutes timer replaced by "after N songs" used to keep its
+          // timeout armed and stop playback at the old deadline anyway.
+          clearSleepTimeout();
+          if (get().sleepAt != null) restoreVolume(); // undo a fade already in progress
+          set({ sleepSongsLeft: Math.max(0, Math.round(n)), sleepAfterTrack: false, sleepAt: null });
+        },
         setLoopPoint: (which) => {
           const { currentTime, loopA, loopB } = get();
           if (which === 'A') set({ loopA: currentTime, loopB: loopB != null && loopB > currentTime ? loopB : null });
@@ -563,7 +622,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (index < 0 || index >= queue.length) return;
           resetSkipGuard(); // manual play
           maybeRecordSkip(true);
-          set({ index, currentTime: 0, loopA: null, loopB: null });
+          set({ index, currentTime: 0, duration: 0, loopA: null, loopB: null });
           startTrack(queue[index], true);
         },
 
@@ -578,7 +637,15 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           recordQueueAdd(song);
-          set({ queue: [...queue, song] });
+          // v7.0.0 — a hand-queued song goes ahead of whatever the recommender
+          // appended (after the listener's own list and earlier hand-queued
+          // songs), not behind eight automatic picks.
+          const { index } = get();
+          const firstAuto = queue.findIndex((s, i) => i > index && autoIds.has(s.id));
+          const at = firstAuto < 0 ? queue.length : firstAuto;
+          manualIds.add(song.id);
+          set({ queue: [...queue.slice(0, at), song, ...queue.slice(at)] });
+          if (firstAuto >= 0) preloadUpcoming();
           toast('Added to queue');
           if (queue.length === 0) get().playQueue([song]);
         },
@@ -590,7 +657,11 @@ export const usePlayerStore = create<PlayerState>()(
             toast('Already in queue');
             return;
           }
-          set({ queue: [...get().queue, ...fresh] });
+          const current = get().queue;
+          const firstAuto = current.findIndex((s, i) => i > get().index && autoIds.has(s.id));
+          const at = firstAuto < 0 ? current.length : firstAuto;
+          for (const s of fresh) manualIds.add(s.id);
+          set({ queue: [...current.slice(0, at), ...fresh, ...current.slice(at)] });
           toast(`Added ${fresh.length} songs to queue`);
           if (get().queue.length === fresh.length) startTrack(fresh[0], true);
         },
@@ -618,6 +689,8 @@ export const usePlayerStore = create<PlayerState>()(
           // element is playing (audit finding H2).
           const newIndex = currentSong ? filtered.indexOf(currentSong) : index;
           const insertAt = Math.min(newIndex + 1, filtered.length);
+          autoIds.delete(song.id);
+          manualIds.add(song.id);
           set({
             queue: [...filtered.slice(0, insertAt), song, ...filtered.slice(insertAt)],
             index: newIndex,
@@ -680,7 +753,10 @@ export const usePlayerStore = create<PlayerState>()(
         clearQueue: () => {
           invalidateQueue();
           radio = false;
-          if (sleepTimer != null) { window.clearTimeout(sleepTimer); sleepTimer = null; }
+          clearSleepTimeout();
+          autoIds.clear();
+          manualIds.clear();
+          uncountedPlay = null;
           refetchedSongs.clear();
           audioEngine.pause();
           set({ queue: [], index: 0, isPlaying: false, currentTime: 0, duration: 0 });
@@ -697,6 +773,10 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           if (castInterceptPlayPause()) {
+            // Keep the silent local clock in step with the receiver: left
+            // running, it reached the end of a paused song and started the next one.
+            if (isPlaying) audioEngine.pause();
+            else audioEngine.play();
             set({ isPlaying: !isPlaying });
             return;
           }
@@ -739,7 +819,7 @@ export const usePlayerStore = create<PlayerState>()(
               return;
             }
           }
-          set({ index: nextIndex, currentTime: 0 });
+          set({ index: nextIndex, currentTime: 0, duration: 0 });
           startTrack(queue[nextIndex], true);
         },
 
@@ -751,6 +831,8 @@ export const usePlayerStore = create<PlayerState>()(
         replaceAutoTail: (songs) => {
           const { queue, index } = get();
           const head = queue.slice(0, index + 1);
+          // Everything that is not the recommender's — the listener's list and
+          // hand-queued songs — keeps its place and its order.
           const manualTail = queue.slice(index + 1).filter((s) => !autoIds.has(s.id));
           const seen = new Set([...head, ...manualTail].map((s) => s.id));
           const fresh = songs.filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true)));
@@ -785,8 +867,10 @@ export const usePlayerStore = create<PlayerState>()(
           if (!queue.length) return;
           invalidateQueue();
           radio = true;
+          autoIds.clear();
+          manualIds.clear();
           sessionPlayed.clear();
-          set({ queue, index: 0, currentTime: 0, isPlaying: true, tuneIntent: null });
+          set({ queue, index: 0, currentTime: 0, duration: 0, isPlaying: true, tuneIntent: null });
           startTrack(seed, true);
           void appendRecommendations(seed);
         },
@@ -800,12 +884,13 @@ export const usePlayerStore = create<PlayerState>()(
             audioEngine.seek(0);
             return;
           }
-          set({ index: index - 1, currentTime: 0 });
+          set({ index: index - 1, currentTime: 0, duration: 0 });
           startTrack(queue[index - 1], true);
         },
 
         seek: (seconds) => {
           if (castInterceptSeek(seconds)) {
+            audioEngine.seek(seconds); // the local clock decides when the song "ends"
             set({ currentTime: seconds });
             return;
           }
@@ -813,7 +898,7 @@ export const usePlayerStore = create<PlayerState>()(
           // otherwise leave the track stuck at silence — un-arm and restore.
           if (crossfadeArmed) {
             crossfadeArmed = false;
-            audioEngine.setVolume(get().volume);
+            restoreVolume();
           }
           audioEngine.seek(seconds);
           set({ currentTime: seconds });
@@ -821,9 +906,15 @@ export const usePlayerStore = create<PlayerState>()(
 
         setVolume: (v) => {
           const volume = Math.min(1, Math.max(0, v));
-          audioEngine.setVolume(volume);
-          set({ volume });
-          if (volume > 0) audioEngine.setMuted(false);
+          // While casting, volume belongs to the receiver; the local element stays silent.
+          if (!castInterceptVolume(volume)) audioEngine.setVolume(volume);
+          // Raising the volume un-mutes — in the state too, or the UI kept showing "muted".
+          if (volume > 0 && get().muted) {
+            audioEngine.setMuted(false);
+            set({ volume, muted: false });
+          } else {
+            set({ volume });
+          }
         },
 
         toggleMute: () => {
@@ -846,14 +937,16 @@ export const usePlayerStore = create<PlayerState>()(
         toggleShuffle: () => set({ shuffle: !get().shuffle }),
 
         setSleepTimer: (minutes) => {
-          if (sleepTimer != null) {
-            window.clearTimeout(sleepTimer);
-            sleepTimer = null;
-          }
+          clearSleepTimeout();
+          if (get().sleepAt != null) restoreVolume(); // cancelled or replaced inside the final fade
           set({ sleepAt: minutes == null ? null : Date.now() + minutes * 60_000, sleepAfterTrack: false });
           if (minutes != null) {
             toast(`Sleeping in ${minutes} min`);
             sleepTimer = window.setTimeout(() => {
+              sleepTimer = null;
+              // The playing path (onTime) already stopped at the deadline, or the
+              // timer was replaced: nothing left to do.
+              if (get().sleepAt == null || !get().isPlaying) { set({ sleepAt: null }); return; }
               // Gentle 8s fade to silence, then pause.
               audioEngine.fadeOutAndPause(8000, () => {
                 set({ isPlaying: false, sleepAt: null });
@@ -864,7 +957,8 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         setSleepAfterTrack: (v) => {
-          if (sleepTimer != null) { window.clearTimeout(sleepTimer); sleepTimer = null; }
+          clearSleepTimeout();
+          if (get().sleepAt != null) restoreVolume();
           set({ sleepAfterTrack: v, sleepAt: null });
           if (v) toast('Will stop after this song');
         },
@@ -876,7 +970,11 @@ export const usePlayerStore = create<PlayerState>()(
     {
       name: KEYS.player,
       version: 1,
-      storage: createJSONStorage(() => window.localStorage),
+      // v7.0.0 — progress ticks `set` ~4×/s and none of the persisted fields
+      // change: the write is skipped unless one did (it used to re-serialise the
+      // whole queue every tick), is dropped while a restore waits for its reload,
+      // and a full device no longer throws into playback.
+      storage: createDedupedStorage<PersistedPlayerState>(),
       partialize: (s): PersistedPlayerState => ({
         queue: s.queue,
         index: s.index,

@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { Sheet } from '@/components/Sheet';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -43,9 +41,6 @@ const DISCOVERY: Array<{ value: DiscoveryLevel; label: string }> = [
  * reason) before replacing the queue or adding it after the current song.
  */
 export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useFocusTrap(ref, true, onClose);
-  useDismissOnBack(true, onClose);
   const current = useCurrentSong();
   const favorites = useLibraryStore((s) => s.favorites);
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
@@ -92,9 +87,8 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
   const chip = (on: boolean) => cn('px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors min-h-[36px]', on ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400');
   const langOptions = [...new Set([...(current?.language && current.language !== 'unknown' ? [current.language] : []), ...pinned])];
 
-  return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="queue-builder-title" className="w-full sm:max-w-2xl glass-modal rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto animate-fade-up" onClick={(e) => e.stopPropagation()}>
+  return (
+    <Sheet onClose={onClose} labelledBy="queue-builder-title" size="2xl">
         <h2 id="queue-builder-title" className="text-lg font-bold">Build a queue</h2>
         <p className="text-xs text-ink-400 mt-0.5 mb-4">Say how long, what mood and how the energy should move. VinaX plans it from real songs your taste already reaches, shows you the arc, and only then touches the queue.</p>
 
@@ -189,8 +183,6 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
             <button type="button" onClick={onClose} className="btn-secondary px-4 py-2 text-sm min-h-[44px]">Cancel</button>
           </div>
         )}
-      </div>
-    </div>,
-    document.body,
+    </Sheet>
   );
 }

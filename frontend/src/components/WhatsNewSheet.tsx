@@ -1,6 +1,6 @@
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { DISPLAY_VERSION } from '@/constants/version';
 // NOTE: do NOT statically import from '@/constants/changelog' here —
 // the changelog module is ~10 KB gz of historical release notes; pulling it
@@ -8,8 +8,7 @@ import { DISPLAY_VERSION } from '@/constants/version';
 // on the effect that actually needs it (audit finding: undid the P2-shape
 // win from the "Living Glass" consolidation).
 import type { VersionInfo, ChangeEntry } from '@/constants/changelog';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { Sheet } from './Sheet';
 
 const TYPE_META: Record<ChangeEntry['type'], { label: string; dot: string; bg: string; text: string }> = {
   new:      { label: 'New',      dot: 'bg-emerald-400', bg: 'bg-emerald-400/10', text: 'text-emerald-400' },
@@ -58,9 +57,6 @@ export function WhatsNewSheet() {
     if (fingerprint) setLocal(KEYS.lastSeenVersion, fingerprint);
     setOpen(false);
   };
-  useDismissOnBack(open, dismiss);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, open, dismiss);
 
   useEffect(() => {
     const onboarded = getLocal<boolean>(KEYS.onboarded, false);
@@ -87,12 +83,13 @@ export function WhatsNewSheet() {
   if (!open || !notes) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-ink-950/80 backdrop-blur-sm p-0 sm:p-6">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="What's new" className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-6 animate-fade-up max-h-[85vh] flex flex-col">
+    // Backdrop taps do not dismiss this one (as before): it closes through
+    // its button, Escape or back — all of which stamp the fingerprint.
+    <Sheet onClose={dismiss} labelledBy="whats-new-title" z={60} padding="lg" layout="column" maxHeight="medium" closeOnBackdrop={false} backdropClassName="bg-ink-950/80 backdrop-blur-sm">
         <div className="flex items-center gap-3 mb-4">
           <img src="/icons/icon.svg" alt="" className="w-10 h-10 rounded-xl" />
           <div>
-            <h2 className="text-xl font-bold">What&apos;s new</h2>
+            <h2 id="whats-new-title" className="text-xl font-bold">What&apos;s new</h2>
             <p className="text-xs text-ink-400">
               {DISPLAY_VERSION}
               {notes.title && (
@@ -106,11 +103,10 @@ export function WhatsNewSheet() {
           <StructuredNotes changes={notes.changes} />
         </div>
 
-        <button onClick={dismiss} className="w-full py-3 rounded-full btn-primary shrink-0">
+        <button type="button" onClick={dismiss} className="w-full py-3 rounded-full btn-primary shrink-0">
           Nice — let&apos;s go
         </button>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

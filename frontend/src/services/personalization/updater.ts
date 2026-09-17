@@ -9,11 +9,13 @@ import {
   bumpLanguage,
   bumpSong,
   rememberRecent,
+  type AffinityEventKind,
   type TasteProfile,
 } from './profile';
 import { withProfile as withProfileCoalesced } from './storage';
 import { energyOfSong, recordSessionPlay } from './session';
-import { EVENT_WEIGHTS } from './eventWeights';
+import { EVENT_WEIGHTS, SKIP_RETRACTS_PLAY } from './eventWeights';
+import { noteSessionEvent } from './sessionIntent';
 
 function logEvent(type: string, song: Song, playedSec?: number): void {
   void addEvent({
@@ -41,7 +43,7 @@ function withProfile(fn: (p: TasteProfile) => void): void {
   });
 }
 
-function bumpAll(p: TasteProfile, song: Song, delta: number, kind: 'play' | 'complete' | 'skip'): void {
+function bumpAll(p: TasteProfile, song: Song, delta: number, kind: AffinityEventKind): void {
   bumpLanguage(p, song.language, delta, kind);
   for (const artist of song.artists.slice(0, 3)) {
     bumpArtist(p, artist.id, artist.name, delta, kind);
@@ -70,35 +72,53 @@ export function recordComplete(song: Song, playedSec: number): void {
     p.totals.completes += 1;
     bumpEnergyPref(p, energyOfSong(song));
   });
+  noteSessionEvent('complete', song);
   logEvent('complete', song, playedSec);
 }
 
 export function recordSkip(song: Song, playedSec: number): void {
   withProfile((p) => {
-    bumpAll(p, song, EVENT_WEIGHTS.SKIP, 'skip');
+    bumpAll(p, song, EVENT_WEIGHTS.SKIP - (SKIP_RETRACTS_PLAY ? EVENT_WEIGHTS.PLAY : 0), 'skip');
     p.totals.skips += 1;
     p.skippedSongIds = [song.id, ...(p.skippedSongIds ?? []).filter((id) => id !== song.id)].slice(0, 120);
   });
+  noteSessionEvent('skip', song);
   logEvent('skip', song, playedSec);
 }
 
 export function recordFavorite(song: Song, favored: boolean): void {
   withProfile((p) => {
-    bumpAll(p, song, favored ? EVENT_WEIGHTS.FAVORITE : -EVENT_WEIGHTS.FAVORITE, 'play');
+    bumpAll(p, song, favored ? EVENT_WEIGHTS.FAVORITE : -EVENT_WEIGHTS.FAVORITE, 'signal');
     p.totals.favorites += favored ? 1 : -1;
     if (p.totals.favorites < 0) p.totals.favorites = 0;
     const ids = p.likedSongIds ?? [];
     p.likedSongIds = favored ? [song.id, ...ids.filter((id) => id !== song.id)].slice(0, 200) : ids.filter((id) => id !== song.id);
   });
+  noteSessionEvent(favored ? 'like' : 'unlike', song);
   if (favored) logEvent('favorite', song);
 }
 
 export function recordQueueAdd(song: Song): void {
   withProfile((p) => {
-    bumpAll(p, song, EVENT_WEIGHTS.QUEUE_ADD, 'play');
+    bumpAll(p, song, EVENT_WEIGHTS.QUEUE_ADD, 'signal');
     p.totals.queueAdds += 1;
   });
+  noteSessionEvent('queue_add', song);
   logEvent('queue_add', song);
+}
+
+/**
+ * v7.0.0 — the listener searched for something and played a result. Counted
+ * on top of the ordinary PLAY the player records: a search is the clearest
+ * statement of intent the app ever gets, for the long-term profile (a
+ * modest extra bump) and for this sitting (a strong pull).
+ */
+export function recordSearchPlay(song: Song): void {
+  withProfile((p) => {
+    bumpAll(p, song, EVENT_WEIGHTS.SEARCH_PLAY, 'signal');
+  });
+  noteSessionEvent('search_play', song);
+  logEvent('search_play', song);
 }
 
 /** Package A3 — the listener explicitly asked for less of an artist.

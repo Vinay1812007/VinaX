@@ -12,6 +12,24 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '7.0.0': {
+    title: 'VinaX 7.0 — smarter, safer, steadier',
+    changes: [
+      { type: 'new', text: 'Familiar, Balanced or Discover (Settings → Recommendations) now really changes what plays. Familiar brings your favourites and finished songs back and keeps new artists rare; Balanced mixes in about one new artist in every four or five songs; Discover ranks artists you have never played higher, gives them close to half a queue and may take a short detour into another language you play.' },
+      { type: 'new', text: 'The next song now follows your sitting, not just your history: skip an artist twice and they sink for now, search for or hand-queue an artist and they rise, a run of skips brings surer picks, a run of finished songs earns more discovery — and none of it is written into your long-term taste.' },
+      { type: 'improved', text: 'Songs you add to the queue go ahead of the automatic picks, and stay put when the queue is re-planned or tuned. A suggestion that arrives after you have started something else is dropped.' },
+      { type: 'improved', text: 'One song, one slot: the film cut, the remaster and the lofi flip of a song now count as the same song in queues, on Home shelves and in generated playlists, and the original is the one kept. Works for Telugu, Hindi and other scripts too.' },
+      { type: 'improved', text: 'Every queue — built on your device or by the AI DJ — passes the same final check: your language, your mutes and blocks, no repeats, no artist twice in a row. When AI is slow or down, the on-device order plays on.' },
+      { type: 'improved', text: 'Search understands “song + singer”, ignores punctuation, prefers the original over karaoke and lofi cuts, rescues typos on the Songs tab too, and reads Hindi, Telugu and Tamil text correctly. Albums, Artists and Playlists tabs now show loading, empty and retry states.' },
+      { type: 'improved', text: 'Flipping quickly through songs no longer teaches VinaX that you like them: a play counts after five seconds, and a skip takes its play back.' },
+      { type: 'improved', text: 'Easier to use: larger touch targets, keyboard focus you can see, sliders that speak in minutes and percent, dialogs that respect the home indicator and the back button, arrows on Home shelves for mouse users, error screens with Retry where pages used to stay blank, and clearer secondary text.' },
+      { type: 'improved', text: 'Faster and lighter: Home no longer rebuilds (or asks the AI to redesign it) every time a song changes, the player stops saving your whole queue four times a second, long lists only render what is near the screen, and the big player no longer redraws on every tick.' },
+      { type: 'fixed', text: 'Playback: music no longer stops or goes silent the first time you leave the app after a sleep timer or a crossfade; a replaced sleep timer can no longer fire; a song that failed while offline plays again when you tap Play; pausing on purpose is respected after a phone call; while casting, pause, seek and volume now reach the screen you cast to.' },
+      { type: 'fixed', text: 'Your data: a restored backup is no longer overwritten while the app reloads, measured listening time survives export and restore, merge really keeps what is on the device (taste, streak, lyric timings), a damaged file cannot break the app, Undo is kept when a later restore fails, and clearing history or favourites offers Undo.' },
+      { type: 'fixed', text: 'Android: the playback notification goes away when you swipe the app closed and no longer redraws every second, the right cover stays with the right song on the lock screen, the back button closes the voice overlay, and an update you must install can no longer be dismissed by going offline.' },
+      { type: 'fixed', text: 'Behind the scenes: the service now refuses look-alike system events from outside, caps request sizes, times out slow upstreams, checks everything the AI engines return before it reaches you, and tells the chat when an answer was cut short instead of presenting it as complete.' },
+    ],
+  },
   '6.5.2': {
     title: 'The DJ gets the time it needs',
     changes: [

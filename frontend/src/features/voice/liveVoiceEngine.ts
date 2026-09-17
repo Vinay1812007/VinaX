@@ -133,7 +133,10 @@ export interface LiveVoiceOptions {
  * Exported pure so the state-machine tests can lock it without audio.
  */
 export function isLikelyEcho(heard: string, spoken: string): boolean {
-  const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Letters, digits and marks of any script: an a-z-only class blanked Hindi /
+  // Telugu speech entirely, so every Indic barge-in read as "nothing heard".
+  const norm = (s: string): string =>
+    s.toLowerCase().replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
   const h = norm(heard);
   const s = norm(spoken);
   if (!h) return true; // nothing meaningful heard → not a real barge-in
@@ -479,7 +482,7 @@ export class LiveVoiceEngine {
     // own audio can't self-trigger before the echo filter has real words.
     if (Date.now() - this.speakStartedAt < 700) return;
     const heard = text.trim();
-    if (heard.replace(/[^a-z0-9]/gi, '').length < 3) return; // too little to be intent
+    if (heard.replace(/[^\p{L}\p{N}\p{M}]/gu, '').length < 3) return; // too little to be intent
     if (isLikelyEcho(heard, this.speakingText)) return; // our own voice echoing back
     // Real speech over the reply — yield the floor. interrupt() reopens the
     // mic, and the fresh listening session captures the user's full utterance.

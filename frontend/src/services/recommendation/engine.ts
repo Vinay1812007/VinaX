@@ -1,16 +1,19 @@
 import { gatherCandidates, generateNextCandidates } from './candidates';
-import { rankCandidates } from './scoring';
+import { buildScoringFrame, effectiveDiscoveryMode, rankCandidates } from './scoring';
+import type { HardFilterOptions } from './filters';
+import type { ValidateOptions } from './validation';
+import type { DebugTrace } from '@/store/recsDebugStore';
+import { topLanguages } from '@/services/personalization/profile';
 import { buildMixes } from './mixes';
 import { servedKeySet, songKey } from './songIdentity';
 import { explainTopReasons } from './explanations';
 import { useReasonStore } from '@/store/reasonStore';
-import type { Mix, RecommendationContext, ScoredCandidate } from './types';
+import type { Mix, RecommendationContext, RejectedCandidate, ScoredCandidate } from './types';
 import type { Song } from '@/types';
 import { enrichSongs, aiRerankSongs } from '@/services/ai/recommendations';
-import { freshSongs } from './freshness';
 import { rerankCandidates } from './reranking';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
-import { stripExplicit } from '@/services/kidMode';
+import { kidModeOn } from '@/services/kidMode';
 import { useSettingsStore } from '@/store/settingsStore';
 import { queryClient } from '@/services/queryClient';
 import type { ArcShape } from './sequencer';
@@ -63,6 +66,7 @@ function ctxKey(ctx: RecommendationContext): string {
     ctx.mutedLanguages.join(','),
     Math.round(ctx.intensity * 10),
     ctx.explore ? 1 : 0,
+    ctx.discoveryMode ?? '',
     ctx.salt,
     ctx.profile.createdAt,
     ctx.profile.recentSongIds.join(','),
@@ -116,120 +120,176 @@ export interface NextRecommendationOptions {
   tune?: TuneIntent | null;
 }
 
-/** Shared continuation entry point for autoplay, radio and playlist queues. */
+/** Share of a queue that may go to artists the listener has never played, per discovery mode. */
+const DISCOVERY_SHARE = { familiar: 0.05, balanced: 0.2, discover: 0.45 } as const;
+
+/**
+ * Shared continuation entry point for autoplay, radio and playlist queues.
+ *
+ * v7.0.0 — one explicit pipeline, each stage in code and each stage traced
+ * for the developer breakdown (`?debug=recs`):
+ *
+ *   1  candidate generation   seed-related, artist, language, taste-wide, rediscovery (./candidates)
+ *   2  hard filtering         rules with a named reason per rejection (./filters)
+ *   3  feature extraction     classifier metadata: mood, genre, energy, tempo (bounded wait)
+ *   4  context scoring        taste, seed similarity, time, session vector (./scoring)
+ *   5  diversity + repeats    MMR re-rank, artist fatigue, recent-play demotion
+ *   6  session adjustment     this sitting's intent: skips, likes, searches, queue-adds
+ *   7  exploration tuning     Familiar / Balanced / Discover: novelty lean and discovery share
+ *   8  ranking                the scored, re-ranked pool (plus any "Tune this queue" nudge)
+ *   9  queue sequencing       energy arc, mood flow, transitions, spacing, language policy (./sequencer)
+ *  9b  AI DJ (optional)       may re-order the pool and propose catalogue-verified songs
+ *  10  validation             the final order re-checked against every rule (./validation)
+ *
+ * The AI never writes to the queue: whatever it returns goes through stage
+ * 10, and when it is slow, down, wrong or unconfigured the local order —
+ * validated the same way — ships instead.
+ */
 export async function recommendNextSongs(seed: Song, ctx: RecommendationContext, options: NextRecommendationOptions = {}): Promise<Song[]> {
   const limit = Math.max(0, Math.min(40, Math.floor(options.limit ?? 8)));
   if (!limit) return [];
-  const excluded = new Set([seed.id, ...ctx.profile.recentSongIds, ...(options.excludeIds ?? [])]);
-  const candidates = await generateNextCandidates(seed, { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next' });
-  // Continuation has a short foreground window for the low-cost classifier so
-  // fresh mood/genre/energy metadata can affect this next-song decision.
-  const enriched = await enrichSongs(candidates.map((candidate) => candidate.song), { waitMs: 1_800 });
-  const enrichedById = new Map(enriched.map((song) => [song.id, song]));
-  const admitted = freshSongs(stripExplicit(enriched), { excludeIds: excluded,
-    excludeKeys: new Set([songKey(seed), ...(options.excludeKeys ?? []), ...ctx.history.slice(0, 20).map(e => songKey(e.song))]),
-    muted: ctx.mutedLanguages, blocked: song => isSongBlocked(song, useLibraryStore.getState()) });
-  const admittedIds = new Set(admitted.map(s => s.id));
-  let ranked = rankCandidates(candidates.filter(c => admittedIds.has(c.song.id)).map((candidate) => ({ ...candidate, song: enrichedById.get(candidate.song.id) ?? candidate.song })), { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next' });
-  // v6.5.2 — the AI re-rank and the AI DJ both order the same pool; running
-  // both in series doubled the wait before a continuation could ship (live:
-  // ~10 s of ranking timeouts, then the DJ). When the DJ is on, it is the
-  // AI voice for this stretch; the re-rank only runs when the DJ is off.
-  if (!aiDjEnabled()) ranked = await blendAi(ranked, { ...ctx, seedSong: seed });
-  const seedLang = seed.language && seed.language !== 'unknown' ? seed.language : null;
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next' };
+  const mode = effectiveDiscoveryMode(nextCtx);
+  const intent = nextCtx.sessionIntent ?? null;
   const tune = options.tune ?? null;
+  const library = useLibraryStore.getState();
+
+  // 1 — candidate generation. The rule modules are lazy, like the sequencer:
+  // this engine rides the first-load player store, and none of them is needed
+  // until a queue is actually extended.
+  const [candidates, { hardFilter, rejectReasonFor }] = await Promise.all([generateNextCandidates(seed, nextCtx), import('./filters')]);
+
+  // 2 — hard filtering (before enrichment, so the classifier only sees songs that can play).
+  const rules: HardFilterOptions = {
+    seed,
+    queuedIds: new Set(options.excludeIds ?? []),
+    queuedKeys: new Set(options.excludeKeys ?? []),
+    recentIds: new Set(ctx.profile.recentSongIds),
+    recentKeys: new Set(ctx.history.slice(0, 20).map((e) => songKey(e.song))),
+    sessionSkippedIds: intent?.skippedSongIds,
+    mutedLanguages: ctx.mutedLanguages,
+    blocked: (song) => isSongBlocked(song, library),
+    hideExplicit: kidModeOn(),
+  };
+  const filtered = hardFilter(candidates, rules);
+  const rejected: RejectedCandidate[] = [...filtered.rejected];
+
+  // 3 — feature extraction. Continuation has a short foreground window for the
+  // low-cost classifier so fresh mood/genre/energy metadata can affect this decision.
+  const enriched = await enrichSongs(filtered.admitted.map((candidate) => candidate.song), { waitMs: 1_800 });
+  const enrichedById = new Map(enriched.map((song) => [song.id, song]));
+
+  // 4–8 — scoring, diversity, session adjustment, exploration tuning, ranking.
+  let ranked = rankCandidates(
+    filtered.admitted.map((candidate) => ({ ...candidate, song: enrichedById.get(candidate.song.id) ?? candidate.song })),
+    nextCtx,
+    (dropped) => rejected.push({ song: dropped.candidate.song, reason: 'low-score', stage: 'rank' }),
+  );
+  // v6.5.2 — the AI re-rank and the AI DJ both order the same pool; running
+  // both in series doubled the wait before a continuation could ship. When
+  // the DJ is on, it is the AI voice for this stretch.
+  if (!aiDjEnabled()) ranked = await blendAi(ranked, nextCtx);
+  const seedLang = seed.language && seed.language !== 'unknown' ? seed.language : null;
   if (tune) {
     // v6.5.0 — the on-device half of a tune: a deterministic nudge per song
-    // (era, language, energy, title cues) so the intent holds even when the
-    // DJ is unavailable. Mood-only intents lean on the DJ brief below.
+    // so the intent holds even when the DJ is unavailable.
     ranked = ranked.map((item) => ({ ...item, score: item.score + tuneScoreAdjust(item.candidate.song, tune, seedLang) })).sort((a, b) => b.score - a.score);
   }
-  // v6.3.0 — the arc sequencer orders the ranked pool from real signals
-  // (energy, mood, artist spacing, era, language lock, transition memory)
-  // instead of taking the top N as they come. The ranking stays the taste
-  // prior; the arc shape follows the live listener-energy read.
-  const orderedPool: Song[] = [];
-  for (const item of ranked) {
-    const song = item.candidate.song;
-    if (song.id === seed.id || excluded.has(song.id) || orderedPool.some((s) => s.id === song.id)) continue;
-    orderedPool.push(song);
-  }
-  // Lazy: this engine rides the first-load player store; the sequencer and
-  // the session-context reader are only needed once a queue is extended.
-  const [{ sequenceSongs, arcErrorOf }, { readListenerEnergy }] = await Promise.all([import('./sequencer'), import('@/services/ai/sessionContext')]);
-  const shape = (tune && tuneShape(tune)) || shapeFor(readListenerEnergy(ctx.history, ctx.hour));
+  const orderedPool: Song[] = ranked.map((item) => item.candidate.song);
+
+  // 9 — queue sequencing. Lazy: this engine rides the first-load player store;
+  // the sequencer and the session-context reader are only needed once a queue is extended.
+  const [{ sequenceSongs, arcErrorOf }, { readListenerEnergy }, { validateSequence }] = await Promise.all([import('./sequencer'), import('@/services/ai/sessionContext'), import('./validation')]);
+  // A live skip streak outranks the slower history read: come up and re-anchor now.
+  const shape = (tune && tuneShape(tune)) || (intent && intent.skipStreak >= 2 ? 'lift' : shapeFor(readListenerEnergy(ctx.history, ctx.hour)));
   const sureIds = new Set([...ctx.favorites.map((s) => s.id), ...ctx.history.slice(0, 60).map((e) => e.song.id)]);
-  const discoveryIds = new Set(ranked.filter((item) => item.candidate.source === 'explore').map((item) => item.candidate.song.id));
-  // Language rule: the queue speaks the seed's language. In explore mode it
+  // Discovery = an artist this listener has never played (or an explore-source pick).
+  const frame = buildScoringFrame(nextCtx);
+  const discoveryIds = new Set(
+    ranked
+      .filter((item) => item.candidate.source === 'explore' || !frame.knownArtists.has((item.candidate.song.artists[0]?.name ?? '').trim().toLowerCase()))
+      .map((item) => item.candidate.song.id),
+  );
+  // Language rule: the queue speaks the seed's language. In Discover mode it
   // may take an occasional detour into another language the listener plays.
-  // "Switch language" moves the lock to another language the listener plays
-  // (the pinned list first, then whatever the pool offers).
+  // "Switch language" moves the lock to another language the listener plays.
   const switchTo = tune === 'different-language'
     ? ctx.pinnedLanguages.find((l) => l !== seedLang) ?? orderedPool.map((s) => s.language).find((l) => l && l !== 'unknown' && l !== seedLang) ?? null
     : null;
   const lock = switchTo ?? seedLang;
   const otherLanguages = ctx.pinnedLanguages.filter((l) => l !== lock);
-  const explore = ctx.explore || tune === 'surprise';
-  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: explore && tune !== 'same-language' ? 'prefer' : 'lock', otherLanguages, discovery: explore ? 0.3 : 0.15, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
-  const songs: Song[] = arc.songs.map((s) => s.song);
-  // A language-locked pool can run short; top up in ranked order.
-  for (const song of orderedPool) {
-    if (songs.length >= limit) break;
-    if (!songs.some((s) => s.id === song.id)) songs.push(song);
-  }
+  const roam = mode === 'discover' || tune === 'surprise';
+  const drift = roam && tune !== 'same-language';
+  const discoveryShare = Math.max(0, Math.min(0.5, (tune === 'surprise' ? DISCOVERY_SHARE.discover : DISCOVERY_SHARE[mode]) + (intent ? intent.discoveryAppetite * 0.15 : 0)));
+  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: drift ? 'prefer' : 'lock', otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
+
+  // 10 — validation. The arc first, then the rest of the ranked pool as the
+  // reserve a short or language-locked arc is topped up from.
+  const familiarLanguages = [...new Set([...ctx.pinnedLanguages, ...topLanguages(ctx.profile, 3).map((l) => l.id)])];
+  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: drift ? null : lock, familiarLanguages };
+  const arcIds = new Set(arc.songs.map((s) => s.song.id));
+  const local = validateSequence([...arc.songs.map((s) => s.song), ...orderedPool.filter((s) => !arcIds.has(s.id))], validateOptions);
+  const songs = local.songs;
+  const trace: DebugTrace = { mode, shape, lock, languagePolicy: drift ? 'prefer' : 'lock', discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: local.relaxed, repairs: local.repairs };
   publishReasons(ranked.filter((item) => songs.some((song) => song.id === item.candidate.song.id)));
   // Arc reasons are more specific than scorer reasons; let them win.
   useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why).map((s) => [s.song.id, s.why]));
-  publishDebug(ranked, songs, 'local');
-  // v6.2.0 — the AI DJ gets a bounded, optional final say over the ORDER of
-  // the admitted pool (never over what is in it). Off by setting or owner
-  // flag, or when the DJ is slow/down/unconfigured, the deterministic order
-  // above ships unchanged.
+  publishDebug(ranked, songs, 'local', { trace, rejected: [...rejected, ...local.rejected] });
+
+  // 9b — the AI DJ gets a bounded, optional say over the ORDER of the admitted
+  // pool, and may propose a few songs from outside it. Off by setting or owner
+  // flag, or when the DJ is slow/down/unconfigured, the local order ships.
   if (aiDjEnabled() && songs.length >= 3) {
-    // The DJ client is a lazy chunk: this engine rides the first-load player
-    // store, and the DJ only matters once a queue is actually being extended.
+    // The DJ client is a lazy chunk: it only matters once a queue is actually being extended.
     const { djSequence, samplePool } = await import('@/services/ai/dj');
     // v6.5.0 — a rotating slice of the ranked pool (top ranks always, the
     // rest sampled) so consecutive rounds hand the DJ different material.
-    const pool = samplePool(ranked.map((item) => item.candidate.song).filter((s) => s.id !== seed.id && !excluded.has(s.id)).slice(0, 40), 10, 30);
-    const queuedKeys = new Set([songKey(seed), ...(options.excludeKeys ?? []), ...ctx.history.slice(0, 20).map((e) => songKey(e.song))]);
-    const library = useLibraryStore.getState();
-    // v6.5.0 — the generative half: the DJ may propose a few songs from
-    // outside the pool; each is verified in the catalogue and must pass the
-    // same gates as everything else before it can be queued.
-    const gate = {
-      language: explore && tune !== 'same-language' ? null : lock,
-      admit: (song: Song) => !excluded.has(song.id) && !queuedKeys.has(songKey(song)) && !(song.language && ctx.mutedLanguages.includes(song.language)) && !isSongBlocked(song, library) && stripExplicit([song]).length === 1,
-    };
-    const set = await djSequence(seed, { ...ctx, seedSong: seed }, pool, limit, undefined, { shape, discover: true, gate, ...(tune ? { tune: tunePromptHint(tune) } : {}) });
+    const pool = samplePool(orderedPool.slice(0, 40), 10, 30);
+    // v6.5.0 — the generative half: each proposal is verified in the catalogue
+    // and must pass the same rules as everything else before it can be queued.
+    const gate = { language: drift ? null : lock, admit: (song: Song) => rejectReasonFor(song, rules) === null };
+    const set = await djSequence(seed, nextCtx, pool, limit, undefined, { shape, discover: true, gate, ...(tune ? { tune: tunePromptHint(tune) } : {}) });
     if (set && set.picks.length >= Math.min(3, limit)) {
       const used = new Set<string>();
-      const sequenced: Song[] = [];
-      for (const p of set.picks) if (!used.has(p.song.id)) { used.add(p.song.id); sequenced.push(p.song); }
-      for (const s of songs) if (sequenced.length < limit && !used.has(s.id)) { used.add(s.id); sequenced.push(s); }
-      // The DJ's order is accepted only when it keeps the arc at least as
-      // tight as the local one (within a small tolerance); its reasons and
-      // segues are kept either way. A tune relaxes the tolerance: the
-      // listener asked for a change of direction.
-      if (arcErrorOf(sequenced, seed, shape) <= arc.arcError + (tune ? 0.2 : 0.08)) {
-        publishDebug(ranked, sequenced.slice(0, limit), 'ai', new Map(set.picks.map((p) => [p.song.id, p.confidence])), new Set(set.picks.filter((p) => p.discovered).map((p) => p.song.id)));
-        return sequenced.slice(0, limit);
+      const proposed: Song[] = [];
+      for (const p of set.picks) if (!used.has(p.song.id)) { used.add(p.song.id); proposed.push(p.song); }
+      for (const s of songs) if (!used.has(s.id)) { used.add(s.id); proposed.push(s); }
+      // The DJ's order goes through the same validation as the local one, and
+      // is accepted only when it still keeps the arc about as tight (a tune
+      // relaxes the tolerance: the listener asked for a change of direction).
+      const checked = validateSequence(proposed, validateOptions);
+      if (checked.songs.length >= Math.min(3, limit) && arcErrorOf(checked.songs, seed, shape) <= arcErrorOf(songs, seed, shape) + (tune ? 0.2 : 0.08)) {
+        publishDebug(ranked, checked.songs, 'ai', {
+          trace: { ...trace, stages: { ...trace.stages, validated: checked.songs.length }, relaxed: checked.relaxed, repairs: checked.repairs },
+          rejected: [...rejected, ...checked.rejected],
+          confidence: new Map(set.picks.map((p) => [p.song.id, p.confidence])),
+          discovered: new Set(set.picks.filter((p) => p.discovered).map((p) => p.song.id)),
+        });
+        return checked.songs;
       }
     }
   }
   return songs;
 }
 
-/** v6.4.0 — development-only score breakdowns for the recs debug panel (no-op unless enabled). */
-function publishDebug(ranked: ScoredCandidate[], chosen: Song[], source: 'local' | 'ai', confidence?: Map<string, number>, discovered?: Set<string>): void {
+/** v6.4.0 / v7.0.0 — development-only score breakdowns for the recs debug panel (no-op unless enabled). */
+function publishDebug(ranked: ScoredCandidate[], chosen: Song[], source: 'local' | 'ai', extra: { trace?: DebugTrace; rejected?: RejectedCandidate[]; confidence?: Map<string, number>; discovered?: Set<string> } = {}): void {
   void import('@/store/recsDebugStore').then((m) => {
     if (!m.recsDebugEnabled()) return;
     const byId = new Map(ranked.map((r) => [r.candidate.song.id, r]));
+    const rankOf = new Map(ranked.map((r, i) => [r.candidate.song.id, i + 1]));
+    const chosenIds = new Set(chosen.map((s) => s.id));
     m.useRecsDebugStore.getState().publish(
       chosen.map((song, i) => {
         const r = byId.get(song.id);
-        return { position: i + 1, song, finalScore: r?.score ?? 0, source: r?.candidate.source ?? (discovered?.has(song.id) ? 'dj-discovery' : 'unknown'), components: r?.reasons ?? [], picker: source, confidence: confidence?.get(song.id) };
+        return { position: i + 1, rank: rankOf.get(song.id), song, finalScore: r?.score ?? 0, source: r?.candidate.source ?? (extra.discovered?.has(song.id) ? 'dj-discovery' : 'unknown'), components: r?.reasons ?? [], picker: source, confidence: extra.confidence?.get(song.id) };
       }),
+      {
+        trace: extra.trace,
+        rejected: extra.rejected ?? [],
+        // Ranked but not chosen: what the sequencer passed over, best first.
+        passedOver: ranked.filter((r) => !chosenIds.has(r.candidate.song.id)).slice(0, 15).map((r) => ({ song: r.candidate.song, rank: rankOf.get(r.candidate.song.id) ?? 0, finalScore: r.score, source: r.candidate.source, components: r.reasons })),
+      },
     );
   }).catch(() => undefined);
 }

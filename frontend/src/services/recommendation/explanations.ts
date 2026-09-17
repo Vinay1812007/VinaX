@@ -38,9 +38,17 @@ export function explainReasons(reasons: ReasonComponent[]): string {
     case 'co-play':
       return top.detail ? `You often play ${top.detail} alongside this` : 'You often play these together';
     case 'discovery':
+      if (top.detail === 'new-artist') return 'An artist you have not played yet';
+      if (top.detail === 'new-song') return 'A song you have not played yet';
       return top.detail
         ? `Something different — ${languageLabel(top.detail)} you haven’t tried`
         : 'Something different — outside your usual';
+    case 'familiar':
+      return 'Known ground — you asked for familiar picks';
+    case 'fatigue':
+      return 'Held back a little — this artist just played a lot';
+    case 'intent':
+      return top.weight < 0 ? 'Less of what you have been skipping just now' : 'More of what you reached for just now';
     case 'popularity':
     default:
       return 'Popular right now';

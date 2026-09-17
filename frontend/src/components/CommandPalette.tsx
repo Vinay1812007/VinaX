@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Song } from '@/types';
 import { searchSongs } from '@/services/api';
+import { rankSongs } from '@/features/search/useSearch';
+import { recordSearchPlay } from '@/services/personalization/updater';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -21,8 +23,8 @@ interface Entry {
   run: () => void;
 }
 
-/** Substring beats subsequence; both beat nothing. -1 = no match. */
-function fuzzyScore(query: string, text: string): number {
+/** Substring beats subsequence; both beat nothing. -1 = no match. Exported for tests. */
+export function fuzzyScore(query: string, text: string): number {
   const q = query.toLowerCase().trim();
   if (!q) return 1;
   const t = text.toLowerCase();
@@ -38,6 +40,22 @@ function fuzzyScore(query: string, text: string): number {
     ti = found + 1;
   }
   return 50 - Math.min(gaps, 45);
+}
+
+/** A substring hit (fuzzyScore > 50) — the listener typed a command's name. */
+const STRONG_MATCH = 50;
+
+/**
+ * Final row order. Commands the query literally names come FIRST, so typing
+ * "next" + Enter runs "Next track" instead of playing whatever song the
+ * catalogue found for "next"; songs follow, then the loose (subsequence)
+ * command matches. Exported for tests.
+ */
+export function arrangePalette<T>(scored: readonly { e: T; s: number }[], songs: readonly T[], max = 12): T[] {
+  const ranked = scored.filter((x) => x.s >= 0).sort((a, b) => b.s - a.s);
+  const strong = ranked.filter((x) => x.s > STRONG_MATCH).map((x) => x.e);
+  const loose = ranked.filter((x) => x.s <= STRONG_MATCH).map((x) => x.e);
+  return [...strong, ...songs, ...loose].slice(0, max);
 }
 
 /**
@@ -56,24 +74,25 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const dq = useDebouncedValue(query, 200);
 
-  // Live song search — top 5 via the existing search service.
+  // Live song search — top 5 via the existing search service. Each keystroke's
+  // request is aborted by the next (and on close), and results go through the
+  // search ranking pass so muted languages and kid mode apply here too.
   useEffect(() => {
-    let alive = true;
     const q = dq.trim();
     if (q.length < 2) {
       setSongs([]);
-      return;
+      return undefined;
     }
-    searchSongs(q, 5)
+    const controller = new AbortController();
+    searchSongs(q, 8, { signal: controller.signal })
       .then((r) => {
-        if (alive) setSongs(r.slice(0, 5));
+        if (controller.signal.aborted) return;
+        setSongs(rankSongs(r, { query: q, searchMode: true }).slice(0, 5));
       })
       .catch(() => {
-        if (alive) setSongs([]);
+        if (!controller.signal.aborted) setSongs([]);
       });
-    return () => {
-      alive = false;
-    };
+    return () => controller.abort();
   }, [dq]);
 
   const staticEntries = useMemo<Entry[]>(() => {
@@ -126,21 +145,20 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const list = useMemo<Entry[]>(() => {
     const q = query.trim();
-    const scored = staticEntries
-      .map((e) => ({ e, s: fuzzyScore(q, `${e.label} ${e.hint ?? ''}`) }))
-      .filter((x) => x.s >= 0)
-      .sort((a, b) => b.s - a.s)
-      .map((x) => x.e);
-    if (!q) return scored;
+    const scored = staticEntries.map((e) => ({ e, s: fuzzyScore(q, `${e.label} ${e.hint ?? ''}`) }));
+    if (!q) return arrangePalette(scored, [], scored.length);
     const songEntries: Entry[] = songs.map((s) => ({
       id: `s-${s.id}`,
       label: s.title,
       hint: s.subtitle,
       kind: 'song',
       song: s,
-      run: () => usePlayerStore.getState().playQueue([s], 0),
+      run: () => {
+        usePlayerStore.getState().playQueue([s], 0);
+        recordSearchPlay(s); // a typed query, then a pick: search intent
+      },
     }));
-    return [...songEntries, ...scored].slice(0, 12);
+    return arrangePalette(scored, songEntries);
   }, [query, songs, staticEntries]);
 
   // Keep the selection inside the list as results change.

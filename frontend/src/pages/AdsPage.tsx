@@ -36,7 +36,7 @@ export default function AdsPage() {
   }, []);
   return (
     <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Ads</h1>
+      <h1 className="text-page-title mb-2">Ads</h1>
       <p className="text-sm text-ink-300 mb-8">Sponsored placements for VinaX — shown only on this page.</p>
       <ins
         className="adsbygoogle block w-full rounded-3xl overflow-hidden"

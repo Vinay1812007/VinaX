@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KEYS } from '@/constants/storage-keys';
+import { guardedLocalStorage } from '@/services/storage/local';
+import { sanitizeAlarm } from '@/services/storage/sanitize';
 
 interface AlarmState {
   enabled: boolean;
@@ -35,6 +37,12 @@ export const useAlarmStore = create<AlarmState>()(
       setFadeIn: (fadeIn) => set({ fadeIn }),
       markFired: (lastFired) => set({ lastFired }),
     }),
-    { name: KEYS.alarm, storage: createJSONStorage(() => window.localStorage) },
+    {
+      name: KEYS.alarm,
+      storage: createJSONStorage(() => guardedLocalStorage),
+      // A stored alarm is validated field by field ("HH:MM", booleans, known
+      // action) — the scheduler splits `time` and must never see junk.
+      merge: (persisted, current) => ({ ...current, ...sanitizeAlarm(persisted, current) }),
+    },
   ),
 );

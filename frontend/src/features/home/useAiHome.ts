@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Song } from '@/types';
 import { searchSongs, searchSongsPage } from '@/services/api';
 import { rankSongs } from '@/features/search/useSearch';
 import { freshSongs } from '@/services/recommendation/freshness';
 import { servedKeySet } from '@/services/recommendation/songIdentity';
-import { profileStamp } from '@/services/personalization/storage';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { useDiscoveryStore } from '@/store/discoveryStore';
@@ -82,10 +81,15 @@ export function useAiHome(enabled: boolean) {
   // last build), while the same open keeps its shelves through re-renders.
   const [visitNonce] = useState(newVisitNonce);
   return useQuery<AiShelf[]>({
-    queryKey: ['ai-home-shelves', visitNonce, profileStamp(), pinned, muted, round],
+    // v7.0.0 — the profile stamp is NOT in the key: it changes on every play,
+    // skip and like, and each change used to throw the shelves away and spend
+    // another design call while Home was simply open. One design per Home
+    // open (the nonce), plus the settings that really change what may be shown.
+    queryKey: ['ai-home-shelves', visitNonce, pinned, muted, round],
     enabled: enabled && on && (hasTaste || pinned.length > 0),
     staleTime: 0,
     gcTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
     retry: false,
     queryFn: ({ signal }) => designAndResolve(signal, visitNonce),
   });

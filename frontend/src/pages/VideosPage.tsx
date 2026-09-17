@@ -8,6 +8,7 @@ import { loadProfile } from '@/services/personalization/storage';
 import { topLanguages } from '@/services/personalization/profile';
 import { languageLabel } from '@/constants/languages';
 import { SearchIcon } from '@/components/Icons';
+import { ErrorState, InlineError } from '@/components/States';
 
 function fmtDuration(s: number | null): string {
   if (!s) return '';
@@ -54,9 +55,9 @@ function VideoGridSkeleton({ n = 8 }: { n?: number }) {
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
       {Array.from({ length: n }).map((_, i) => (
         <div key={i}>
-          <div className="aspect-video rounded-2xl bg-ink-800/60 animate-pulse" />
-          <div className="mt-2 h-3.5 w-3/4 rounded bg-ink-800/60 animate-pulse" />
-          <div className="mt-1.5 h-3 w-1/2 rounded bg-ink-800/60 animate-pulse" />
+          <div className="skeleton aspect-video rounded-2xl" />
+          <div className="skeleton mt-2 h-3.5 w-3/4" />
+          <div className="skeleton mt-1.5 h-3 w-1/2" />
         </div>
       ))}
     </div>
@@ -64,7 +65,7 @@ function VideoGridSkeleton({ n = 8 }: { n?: number }) {
 }
 
 function VideoShelf({ title, query }: { title: string; query: string }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['videos-shelf', query],
     queryFn: () => searchVideos(query, 0, 12),
     staleTime: 10 * 60_000,
@@ -74,6 +75,14 @@ function VideoShelf({ title, query }: { title: string; query: string }) {
       <section className="mb-8">
         <h2 className="text-lg font-bold mb-3">{title}</h2>
         <VideoGridSkeleton n={4} />
+      </section>
+    );
+  }
+  if (isError && !data?.length) {
+    return (
+      <section>
+        <h2 className="text-lg font-bold mb-3">{title}</h2>
+        <InlineError retry={() => void refetch()} />
       </section>
     );
   }
@@ -113,7 +122,7 @@ export default function VideosPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">Videos</h1>
+      <h1 className="text-page-title mb-1">Videos</h1>
       <p className="text-sm text-ink-300 mb-5">Music videos from the catalog — tap one to watch.</p>
 
       <form
@@ -136,6 +145,9 @@ export default function VideosPage() {
       {q.trim().length > 1 ? (
         search.isLoading ? (
           <VideoGridSkeleton />
+        ) : search.isError ? (
+          // A failed search used to read as "No videos found" — wrong, and no way to retry.
+          <ErrorState retry={() => void search.refetch()} />
         ) : search.data?.length ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {search.data.map((v) => (

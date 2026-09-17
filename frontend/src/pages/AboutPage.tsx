@@ -14,7 +14,7 @@ export default function AboutPage() {
       <div className="flex items-center gap-4 mb-6">
         <img src="/icons/icon.svg" alt="" className="w-16 h-16 rounded-2xl" />
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">VinaX</h1>
+          <h1 className="text-page-title font-bold tracking-tight">VinaX</h1>
           <p className="text-sm text-ink-400">Music tuned to you · {DISPLAY_VERSION}</p>
         </div>
         <button

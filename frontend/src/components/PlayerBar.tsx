@@ -9,6 +9,7 @@ import { Seekbar } from './Seekbar';
 import { FavButton } from './FavButton';
 import { IconButton } from './IconButton';
 import { Marquee } from './Marquee';
+const DeviceSheet = lazy(() => import('./DeviceSheet').then(m => ({ default: m.DeviceSheet })));
 // Lazy: the live lyric line pulls the synced-lyrics hook, which the first paint never needs.
 const NowLine = lazy(() => import('./NowLine').then((m) => ({ default: m.NowLine })));
 import {
@@ -29,15 +30,22 @@ import {
 function ProgressHairline() {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
-  const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
+  // scaleX, not width: a width animation re-lays-out and repaints inside the
+  // backdrop-blurred card four times a second; a transform stays on the
+  // compositor. The track clips the scaled fill, so its rounded ends survive.
   return (
-    <div className="absolute bottom-0 left-2 right-2 h-[3px] rounded-full bg-white/20">
-      <div className="h-full rounded-full bg-white transition-[width] duration-300" style={{ width: `${progressPct}%` }} />
+    <div className="absolute bottom-0 left-2 right-2 h-[3px] rounded-full bg-white/20 overflow-hidden">
+      <div
+        className="h-full w-full origin-left rounded-full bg-white transition-transform duration-300"
+        style={{ transform: `scaleX(${progress})` }}
+      />
     </div>
   );
 }
 
 export function PlayerBar() {
+  const [devicesOpen, setDevicesOpen] = useState(false);
   const song = useCurrentSong();
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isBuffering = usePlayerStore((s) => s.isBuffering);
@@ -131,7 +139,7 @@ export function PlayerBar() {
   return (
     <>
       {/* ---- Mobile: floating mini-player card (artwork-tinted) ---- */}
-      <div className="sm:hidden px-2 pb-1.5" data-tour="player">
+      <div className="md:hidden px-2 pb-1.5" data-tour="player">
         <div
           className={cn(
             'np-mini relative rounded-xl overflow-hidden shadow-lg border border-glass',
@@ -174,10 +182,11 @@ export function PlayerBar() {
             )}
             <FavButton song={song} className="text-white/80" />
             <button
+              type="button"
               aria-label={isPlaying ? 'Pause' : 'Play'}
               title={isPlaying ? 'Pause' : 'Play'}
               onClick={togglePlay}
-              className="np-mini-play inline-flex items-center justify-center w-10 h-10 rounded-full text-white shrink-0 active:scale-95 transition-transform"
+              className="np-mini-play inline-flex items-center justify-center w-11 h-11 rounded-full text-white shrink-0 active:scale-95 transition-transform"
             >
               {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6 ml-0.5" />}
             </button>
@@ -189,9 +198,9 @@ export function PlayerBar() {
 
       {/* ---- Desktop bar: three-zone layout ---- */}
       {/* v5.9.0 — the bar: full width, flush with the bottom, black. */}
-      <div className="relative hidden sm:block overflow-hidden glass-bottom-player" data-tour="player">
+      <div className="relative hidden md:block overflow-hidden glass-bottom-player" data-tour="player">
         <div className="flex items-center gap-4 px-4 py-2.5 max-w-screen-2xl mx-auto">
-          <div className="flex items-center gap-3 min-w-0 w-60 lg:w-80">
+          <div className="flex items-center gap-3 min-w-0 w-48 lg:w-60">
             <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="group shrink-0">
               <img
                 src={artUrl ?? FALLBACK_ART}
@@ -216,9 +225,11 @@ export function PlayerBar() {
                 <PrevIcon className="w-5 h-5" />
               </IconButton>
               <button
+                type="button"
                 onClick={togglePlay}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="np-play-desktop w-9 h-9 rounded-full flex items-center justify-center hover:scale-[1.06] active:scale-95 transition-transform"
+                // 36px disc, 44px hit area (IconButton's invisible-pad pattern).
+                className="np-play-desktop relative after:absolute after:inset-0 after:-m-[4px] w-9 h-9 rounded-full flex items-center justify-center hover:scale-[1.06] active:scale-95 transition-transform"
               >
                 {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
               </button>
@@ -238,7 +249,7 @@ export function PlayerBar() {
             </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-1 w-60 lg:w-80 justify-end">
+          <div className="hidden md:flex items-center gap-1 w-48 lg:w-60 justify-end">
             {castAvailable && (
               <div className="w-8 h-8 flex items-center justify-center mr-1">
                 {/* Custom element defined by Google Cast SDK */}
@@ -251,6 +262,8 @@ export function PlayerBar() {
                 <ClockIcon className="w-3.5 h-3.5" /> {sleepLabel}
               </button>
             )}
+            <Link to="/now-playing" aria-label="Lyrics and now playing" title="Lyrics and now playing" className="min-w-touch min-h-touch inline-flex items-center justify-center text-ink-300 hover:text-ink-100"><span aria-hidden>♪</span></Link>
+            <IconButton label="Connect to a device" onClick={() => setDevicesOpen(true)}><VolumeIcon className="w-4 h-4" /></IconButton>
             <Link to="/queue" aria-label="Queue" title="Queue" className="inline-flex items-center justify-center min-w-touch min-h-touch rounded-full text-ink-300 hover:text-ink-100 hover:bg-ink-700/70">
               <QueueIcon className="w-4 h-4" />
             </Link>
@@ -260,17 +273,19 @@ export function PlayerBar() {
             <input
               type="range"
               aria-label="Volume"
+              aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`}
               min={0}
               max={1}
               step={0.05}
               value={muted ? 0 : volume}
               onChange={(e) => setVolume(Number(e.target.value))}
-              className="w-24"
+              className="w-20"
               style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties}
             />
           </div>
         </div>
       </div>
+      {devicesOpen && <Suspense fallback={null}><DeviceSheet open onClose={() => setDevicesOpen(false)} /></Suspense>}
     </>
   );
 }

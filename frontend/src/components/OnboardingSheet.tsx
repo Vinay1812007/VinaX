@@ -150,9 +150,15 @@ export function OnboardingSheet() {
     if (!f) return;
     setImportErr(false);
     try {
-      const text = await f.text();
-      const { importProfileJson } = await import('@/features/settings/actions');
-      const out = importProfileJson(text);
+      const { importProfileJson, readBackupFile } = await import('@/features/settings/actions');
+      // Size is checked before the file is read into memory.
+      const read = await readBackupFile(f);
+      if (!read.ok) {
+        setImportErr(true);
+        toast(read.error, { duration: 6000 });
+        return;
+      }
+      const out = importProfileJson(read.text);
       if (!out.ok) {
         setImportErr(true);
         toast(out.error, { duration: 6000 });

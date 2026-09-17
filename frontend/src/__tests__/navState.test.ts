@@ -21,11 +21,13 @@ describe('overlayStack', () => {
     const a = pushOverlay(() => order.push('a'));
     const b = pushOverlay(() => order.push('b'));
     expect(closeTopOverlay()).toBe(true);
+    b(); // the closed overlay unregisters itself (effect cleanup) — the stack never pops for it
     expect(closeTopOverlay()).toBe(true);
+    a();
     expect(order).toEqual(['b', 'a']);
     expect(closeTopOverlay()).toBe(false); // empty → hardware back may pop history
     a();
-    b(); // unregister after close is a no-op, never a crash
+    b(); // unregistering twice is a no-op, never a crash
   });
 
   it('an overlay that closes itself (Escape/tap-out) unregisters cleanly', () => {

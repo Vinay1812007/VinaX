@@ -10,6 +10,8 @@ import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 
 const REDISCOVERY_AGE_MS = 14 * 86_400_000;
 
+const effectiveMode = (ctx: RecommendationContext): 'familiar' | 'balanced' | 'discover' => ctx.discoveryMode ?? (ctx.explore ? 'discover' : 'balanced');
+
 /** Take n items from a list starting at a salt-rotated offset (wraps around). */
 function rotate<T>(arr: T[], salt: number, n: number): T[] {
   if (arr.length <= n) return arr;
@@ -125,7 +127,7 @@ export async function gatherCandidates(ctx: RecommendationContext): Promise<Cand
   // 4b. Package A4 — exploration budget (opt-in). Trending picks in languages
   // the listener has literally never played: not in the profile, not pinned,
   // never muted. Salt-rotated so different opens explore different corners.
-  if (ctx.explore) {
+  if (effectiveMode(ctx) === 'discover') {
     const heard = new Set(Object.keys(ctx.profile.languages));
     const unheard = LANGUAGES.map((l) => l.id).filter(
       (id) => !heard.has(id) && !ctx.pinnedLanguages.includes(id) && !ctx.mutedLanguages.includes(id),
@@ -137,6 +139,18 @@ export async function gatherCandidates(ctx: RecommendationContext): Promise<Cand
         ),
       );
     }
+  }
+
+  // 4c. v7.0.0 — Familiar mode: known ground is a candidate source of its own.
+  // Favourites and songs the listener finished (salt-rotated, no fetch), in
+  // the seed's language when there is a seed. The recent-play guard and the
+  // hard filter still keep out anything heard in the last stretch.
+  const familiar: Candidate[] = [];
+  if (effectiveMode(ctx) === 'familiar') {
+    const seedLanguage = ctx.seedSong?.language && ctx.seedSong.language !== 'unknown' ? ctx.seedSong.language : null;
+    const fits = (song: Song): boolean => !seedLanguage || !song.language || song.language === seedLanguage;
+    const finished = ctx.history.filter((e) => e.completed && fits(e.song)).map((e) => e.song);
+    for (const song of [...rotate(ctx.favorites.filter(fits), ctx.salt, 12), ...rotate(finished, ctx.salt, 10)]) familiar.push({ song, source: 'history' });
   }
 
   // 5. Rediscovery: completed listens older than two weeks (no fetch needed).
@@ -163,7 +177,7 @@ export async function gatherCandidates(ctx: RecommendationContext): Promise<Cand
     return !!(entry && entry.until > now);
   };
 
-  return [...pool, ...rediscovery]
+  return [...pool, ...familiar, ...rediscovery]
     .filter((c) => !isSongBlocked(c.song, useLibraryStore.getState()))
     .filter((c) => !isJunkTrack(c.song))
     .filter((c) => !isMuted(c.song))

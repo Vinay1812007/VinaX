@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { audioEngine } from '@/services/audio/engine';
 import { useOutputStore } from '@/store/outputStore';
 import { useCastStore, ensureCastSdk } from '@/services/cast';
@@ -80,7 +81,9 @@ export function DeviceSheet({ open, onClose }: { open: boolean; onClose: () => v
     'w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl text-left text-sm transition-colors ' +
     (active ? 'bg-ember-500/15 text-ember-300 font-semibold' : 'hover:bg-ink-800 text-ink-100');
 
-  return (
+  // Portalled (own shell, not <Sheet>: this one keeps the grabber + the
+  // glass-sheet surface, which already pads the bottom safe-area inset).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Connect to a device" className="glass-sheet relative w-full sm:max-w-sm sm:rounded-3xl rounded-t-3xl p-4 max-h-[80vh] overflow-y-auto">
@@ -111,6 +114,7 @@ export function DeviceSheet({ open, onClose }: { open: boolean; onClose: () => v
           {!supported && ' Output switching isn’t available in this app/browser — pairing in system settings still routes audio.'}
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

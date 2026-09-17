@@ -156,13 +156,16 @@ function ensureAffinity<T extends Affinity>(map: Record<string, T>, key: string,
   return map[key];
 }
 
+/** What an affinity bump counts as. 'signal' (v7.0.0) moves the score only — a like, a queue-add or a search is not a play. */
+export type AffinityEventKind = 'play' | 'complete' | 'skip' | 'signal';
+
 const blank = (now: number): Affinity => ({ score: 0, plays: 0, completes: 0, skips: 0, lastTs: now });
 
 export function bumpLanguage(
   profile: TasteProfile,
   language: string | null,
   delta: number,
-  kind: 'play' | 'complete' | 'skip',
+  kind: AffinityEventKind,
   now = Date.now(),
 ): void {
   if (!language) return;
@@ -179,7 +182,7 @@ export function bumpArtist(
   artistId: string,
   artistName: string,
   delta: number,
-  kind: 'play' | 'complete' | 'skip',
+  kind: AffinityEventKind,
   now = Date.now(),
 ): void {
   if (!artistId && !artistName) return;
@@ -201,7 +204,7 @@ export function bumpArtist(
 }
 
 /** v6.4.0 — per-song affinity, capped at SONG_CAP entries (least recent dropped). */
-export function bumpSong(profile: TasteProfile, songId: string, delta: number, kind: 'play' | 'complete' | 'skip', now = Date.now()): void {
+export function bumpSong(profile: TasteProfile, songId: string, delta: number, kind: AffinityEventKind, now = Date.now()): void {
   if (!songId) return;
   if (!profile.songs) profile.songs = {};
   const a = ensureAffinity(profile.songs, songId, blank(now));
@@ -363,4 +366,75 @@ export function artistLastSeen(
     if (a && (last == null || a.lastTs > last)) last = a.lastTs;
   }
   return last;
+}
+
+/**
+ * Coerce anything read from storage or a backup file into a profile the
+ * scorer can run on: maps are plain objects of finite-number affinities,
+ * histograms have their fixed length, totals are finite, id lists hold only
+ * strings. Unknown or damaged parts fall back to the empty profile's value —
+ * a hand-edited `"languages": []` or `"hourHistogram": null` can no longer
+ * throw (or spread NaN) inside recommendations. Pure; returns a new object.
+ */
+export function normalizeProfile(p: unknown): TasteProfile {
+  const now = Date.now();
+  const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+  const n = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+  const nums = (v: unknown, length: number): number[] => Array.from({ length }, (_, i) => Math.max(0, n(Array.isArray(v) ? v[i] : 0)));
+  const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  const affinity = (v: unknown): Affinity | null => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    const a = v as Record<string, unknown>;
+    return { score: n(a.score), plays: n(a.plays), completes: n(a.completes), skips: n(a.skips), lastTs: n(a.lastTs) };
+  };
+  const affinities = (v: unknown): Record<string, Affinity> => {
+    const out: Record<string, Affinity> = {};
+    for (const [k, raw] of Object.entries(obj(v))) {
+      const a = affinity(raw);
+      if (a) out[k] = a;
+    }
+    return out;
+  };
+  const src = obj(p);
+  const base = createEmptyProfile(now);
+  const totals = obj(src.totals);
+  const artists: Record<string, ArtistAffinity> = {};
+  for (const [k, raw] of Object.entries(obj(src.artists))) {
+    const a = affinity(raw);
+    const name = (raw as { name?: unknown } | null)?.name;
+    if (a) artists[k] = { ...a, name: typeof name === 'string' ? name : k.replace(/^name:/, '') };
+  }
+  const hourBuckets: Record<string, number[]> = {};
+  for (const [k, raw] of Object.entries(obj(src.hourBuckets))) if (Array.isArray(raw)) hourBuckets[k] = nums(raw, 4);
+  const out: TasteProfile = {
+    ...base,
+    version: 1,
+    createdAt: n(src.createdAt, now),
+    updatedAt: n(src.updatedAt, now),
+    languages: affinities(src.languages),
+    artists,
+    hourHistogram: nums(src.hourHistogram, 24),
+    totals: { plays: n(totals.plays), completes: n(totals.completes), skips: n(totals.skips), favorites: n(totals.favorites), queueAdds: n(totals.queueAdds) },
+    recentSongIds: ids(src.recentSongIds),
+    hourBuckets,
+  };
+  if (src.songs !== undefined) out.songs = affinities(src.songs);
+  if (src.dayHistogram !== undefined) out.dayHistogram = nums(src.dayHistogram, 7);
+  if (src.skippedSongIds !== undefined) out.skippedSongIds = ids(src.skippedSongIds);
+  if (src.likedSongIds !== undefined) out.likedSongIds = ids(src.likedSongIds);
+  const energy = obj(src.energyPref);
+  if (typeof energy.sum === 'number' && typeof energy.n === 'number' && Number.isFinite(energy.sum) && Number.isFinite(energy.n)) out.energyPref = { sum: energy.sum, n: energy.n };
+  if (src.softMuted !== undefined) {
+    const muted: Record<string, { until: number }> = {};
+    for (const [k, raw] of Object.entries(obj(src.softMuted))) {
+      const until = (raw as { until?: unknown } | null)?.until;
+      if (typeof until === 'number' && Number.isFinite(until)) muted[k] = { until };
+    }
+    out.softMuted = muted;
+  }
+  const dials = obj(src.sliders);
+  const dial = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : null);
+  const [adventurous, recency, energyDial, vocalness] = [dial(dials.adventurous), dial(dials.recency), dial(dials.energy), dial(dials.vocalness)];
+  if (adventurous !== null && recency !== null && energyDial !== null && vocalness !== null) out.sliders = { adventurous, recency, energy: energyDial, vocalness };
+  return out;
 }

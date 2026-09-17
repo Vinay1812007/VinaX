@@ -38,12 +38,6 @@ function ratio(a: RGB, b: RGB): number {
 }
 
 const dark = tokensOf(':root');
-const astraCss = readFileSync(resolve(__dirname, '../styles/astra.css'), 'utf8');
-const astraBody = astraCss.match(/html:not\(\.light\):not\(\.amoled\):not\(\.hc\)\s*\{([^}]*)\}/)?.[1] ?? '';
-const astraDark = { ...dark };
-for (const m of astraBody.matchAll(/--([\w-]+):\s*(\d+)\s+(\d+)\s+(\d+)\s*;/g)) {
-  astraDark[m[1]] = [Number(m[2]), Number(m[3]), Number(m[4])];
-}
 // The light block inherits anything it doesn't override from :root.
 const light = { ...dark, ...tokensOf('html.light') };
 
@@ -55,6 +49,11 @@ const TEXT_TIERS: Array<[string, string[], number]> = [
   ['ink-300', ['ink-900', 'ink-800'], 4.5],
   // The muted-meta tier — the single most used text color in the app.
   ['ink-400', ['ink-900', 'ink-800'], 4.5],
+  // ink-500 is NOT a decoration tier: text-ink-500 carries captions, counts
+  // and hints across the app, so it is held to text AA on the canvas and on
+  // cards, in both themes (it used to be gated at the 3:1 UI ratio and
+  // measured 3.3–3.9 dark / 2.8–3.2 light).
+  ['ink-500', ['ink-900', 'ink-800'], 4.5],
   // Accent text tiers (reasons, links, stats — meaningful content).
   ['ember-400', ['ink-900', 'ink-800'], 4.5],
   ['tide-400', ['ink-900', 'ink-800'], 4.5],
@@ -63,13 +62,11 @@ const TEXT_TIERS: Array<[string, string[], number]> = [
 /** Non-text UI tiers (rings, icons with hover states): WCAG 1.4.11 → 3:1. */
 const UI_TIERS: Array<[string, string[], number]> = [
   ['ember-500', ['ink-900'], 3],
-  ['ink-500', ['ink-900'], 3],
 ];
 
 describe.each([
   ['dark', dark],
   ['light', light],
-  ['astra dark', astraDark],
 ])('%s theme contrast', (_name, t) => {
   it.each(TEXT_TIERS)('text %s on [%s] ≥ %s:1', (token, surfaces, min) => {
     for (const surface of surfaces) {

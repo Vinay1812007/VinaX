@@ -72,6 +72,7 @@ function chatRequest(content = 'hello there'): Request {
 interface Frame {
   delta?: string;
   done?: boolean;
+  truncated?: boolean;
   meta?: { model?: string; web?: string };
   error?: string;
 }
@@ -169,5 +170,91 @@ describe('AI lane failover — chaos scenarios', () => {
     expect(sys).toContain('LIVE WEB SEARCH FAILED');
     // And the client saw the web status flip to failed in a meta update.
     expect(frames.filter((f) => f.meta).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/**
+ * The per-attempt leash covers TIME TO RESPONSE HEADERS only. It used to be a
+ * never-cleared timeout signal, so it kept ticking into the body and cut long
+ * answers off at 18 s — presented to the client as a complete reply. These run
+ * on fake timers; the upstream body honours the request's abort signal exactly
+ * as a real fetch does, so a leaked leash would error the stream.
+ */
+describe('stream leash vs. stream body', () => {
+  const frame = (c: string): Uint8Array =>
+    new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: c } }] })}\n\n`);
+
+  /** Headers arrive at once; `script` then feeds the body over (fake) time. */
+  function slowBody(init: RequestInit | undefined, script: (c: ReadableStreamDefaultController<Uint8Array>) => void): Response {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        init?.signal?.addEventListener('abort', () => {
+          try {
+            controller.error(new DOMException('aborted', 'AbortError'));
+          } catch {
+            /* already closed */
+          }
+        });
+        script(controller);
+      },
+    });
+    return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a body that outlives the 18s header leash is NOT aborted and ends as a complete reply', async () => {
+    installFetch((_url, init) =>
+      slowBody(init, (c) => {
+        c.enqueue(frame('first half, '));
+        setTimeout(() => {
+          c.enqueue(frame('second half.'));
+          c.close();
+        }, 40_000);
+      }),
+    );
+    const pending = drive(chatRequest());
+    await vi.advanceTimersByTimeAsync(45_000);
+    const { status, frames, text } = await pending;
+    expect(status).toBe(200);
+    expect(text).toBe('first half, second half.');
+    expect(llmCalls()).toHaveLength(1);
+    const last = frames[frames.length - 1];
+    expect(last.done).toBe(true);
+    expect(last.truncated).toBeUndefined();
+  });
+
+  it('a stream stuck past the overall budget is cut and flagged truncated, not complete', async () => {
+    installFetch((_url, init) =>
+      slowBody(init, (c) => {
+        c.enqueue(frame('partial answer'));
+        // …and then the upstream never sends another byte.
+      }),
+    );
+    const pending = drive(chatRequest());
+    await vi.advanceTimersByTimeAsync(95_000);
+    const { frames, text } = await pending;
+    expect(text).toBe('partial answer');
+    expect(llmCalls()).toHaveLength(1); // partial output is never re-asked
+    expect(frames[frames.length - 1]).toEqual({ done: true, truncated: true });
+  });
+
+  it('a mid-stream upstream error after partial output is flagged truncated', async () => {
+    installFetch((_url, init) =>
+      slowBody(init, (c) => {
+        c.enqueue(frame('half an '));
+        setTimeout(() => c.error(new Error('ECONNRESET')), 5_000);
+      }),
+    );
+    const pending = drive(chatRequest());
+    await vi.advanceTimersByTimeAsync(6_000);
+    const { frames, text } = await pending;
+    expect(text).toBe('half an ');
+    expect(frames[frames.length - 1]).toEqual({ done: true, truncated: true });
   });
 });

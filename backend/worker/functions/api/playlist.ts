@@ -13,6 +13,7 @@
  * instead of re-serving one canonical playlist.
  */
 import { chat, gather, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
+import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { tasteBlock } from '../_lib/taste';
@@ -39,6 +40,10 @@ const CORS_HEADERS: Record<string, string> = {
   'access-control-allow-methods': 'POST, OPTIONS',
   'access-control-allow-headers': 'content-type, x-vinax-client',
 };
+
+/** Request-body ceiling. 60 avoid-titles plus a taste snapshot in a non-Latin
+ *  script (3 bytes a character) can legitimately pass 16 KB, so the cap sits above it. */
+const MAX_BODY_BYTES = 32_000;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -67,7 +72,9 @@ function parsePlaylist(content: string | null): Parsed {
   const songs = Array.isArray(parsed.songs)
     ? parsed.songs
         .filter((s) => s && typeof s.title === 'string' && typeof s.artist === 'string')
-        .map((s) => ({ title: String(s.title), artist: String(s.artist) }))
+        // Clipped like every other model string — a runaway title never ships.
+        .map((s) => ({ title: String(s.title).trim().slice(0, 200), artist: String(s.artist).trim().slice(0, 200) }))
+        .filter((s) => s.title && s.artist)
         .slice(0, 30)
     : [];
   return {
@@ -154,17 +161,17 @@ async function handlePost(context: {
   const limited = rateLimit(request, 'playlist', { capacity: 6, refillPerMinute: 3 });
   if (limited) return limited;
 
-  let body: { prompt?: unknown; languages?: unknown; taste?: unknown; avoidTitles?: unknown };
-  try {
-    body = (await request.json()) as {
-      prompt?: unknown;
-      languages?: unknown;
-      taste?: unknown;
-      avoidTitles?: unknown;
-    };
-  } catch {
-    return json({ error: 'bad_request' }, 400);
-  }
+  // Capped read: a 500-char prompt, 60 avoid-titles and a taste snapshot fit
+  // comfortably; content-length is absent on a chunked body, so the read caps too.
+  const read = await readJsonCapped<{
+    prompt?: unknown;
+    languages?: unknown;
+    taste?: unknown;
+    avoidTitles?: unknown;
+  } | null>(request, MAX_BODY_BYTES);
+  if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
+  if (!read.value || typeof read.value !== 'object') return json({ error: 'bad_request' }, 400);
+  const body = read.value;
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, 500) : '';
   if (!prompt) return json({ error: 'bad_request' }, 400);
   const languages = Array.isArray(body.languages)

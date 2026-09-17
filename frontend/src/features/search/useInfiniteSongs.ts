@@ -7,8 +7,54 @@ import {
   searchSongsPage,
 } from '@/services/api';
 import { useSettingsStore } from '@/store/settingsStore';
-import { normalizeQuery, rankSongs, SEARCH_GC_MS, SEARCH_STALE_MS } from './useSearch';
+import { normalizeQuery, rankSongs, relaxedQuery, SEARCH_GC_MS, SEARCH_STALE_MS } from './useSearch';
 import { rerankSongs } from './rerank';
+
+type SongPageFetch = (q: string, page: number, limit: number, opts?: { signal?: AbortSignal }) => Promise<Song[]>;
+
+// Queries whose first page only answered in relaxed form → the form that
+// worked, so pages 2+ keep asking the same question. Small and bounded.
+const rescued = new Map<string, string>();
+const RESCUED_MAX = 50;
+
+/** Test hook. */
+export function clearRescuedQueries(): void {
+  rescued.clear();
+}
+
+/**
+ * One raw page for the Songs tab. In search mode an empty FIRST page gets the
+ * same typo rescue the All tab has ("arijittt singh!!" → "arijit singh"): one
+ * retry with the relaxed query, when there is one. Exported for tests.
+ */
+export async function fetchSongsPage(
+  q: string,
+  page: number,
+  search: boolean,
+  signal?: AbortSignal,
+  fetchPage: SongPageFetch = searchSongsPage,
+): Promise<Song[]> {
+  if (!search) return fetchPage(q, page, 25, { signal });
+  if (page > 1) return fetchPage(rescued.get(q) ?? q, page, 25, { signal });
+  const raw = await fetchPage(q, page, 25, { signal });
+  if (raw.length > 0) {
+    rescued.delete(q);
+    return raw;
+  }
+  const relaxed = relaxedQuery(q);
+  if (!relaxed) return raw;
+  const retry = await fetchPage(relaxed, page, 25, { signal });
+  if (retry.length > 0) {
+    rescued.delete(q);
+    rescued.set(q, relaxed);
+    while (rescued.size > RESCUED_MAX) {
+      const oldest = rescued.keys().next().value;
+      if (oldest === undefined) break;
+      rescued.delete(oldest);
+    }
+  }
+  return retry;
+}
 
 /**
  * Endless song lists for any seed query (search, trending, moods, charts).
@@ -28,7 +74,7 @@ export function useInfiniteSongs(query: string, enabled = true, opts?: { search?
     enabled: enabled && q.length > 1,
     initialPageParam: 1,
     // Keep provider pages raw in the cache so filters cannot terminate pagination.
-    queryFn: ({ pageParam, signal }) => searchSongsPage(q, pageParam, 25, { signal }),
+    queryFn: ({ pageParam, signal }) => fetchSongsPage(q, pageParam, search, signal),
     select: (data) => ({
       ...data,
       pages: data.pages.map((raw) => {

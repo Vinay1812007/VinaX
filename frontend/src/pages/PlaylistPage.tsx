@@ -1,3 +1,4 @@
+import { HeroMedia } from '@/components/HeroMedia';
 import { useParams } from 'react-router-dom';
 import { extractId, playlistPath } from '@/utils/slug';
 import { useCanonicalRedirect } from '@/hooks/useSeo';
@@ -30,14 +31,14 @@ export default function PlaylistPage() {
     canonicalPath,
   });
 
-  if (isLoading) return <div className="max-w-4xl mx-auto"><HeaderSkeleton /><ListSkeleton /></div>;
+  if (isLoading) return <div className="max-w-screen-xl mx-auto"><HeaderSkeleton /><ListSkeleton /></div>;
   if (isError || !playlist) return <ErrorState retry={() => refetch()} />;
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-6 mb-8">
+    <div className="max-w-screen-xl mx-auto">
+      <HeroMedia>
         <img src={bestImage(playlist.images, 500)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-44 h-44 sm:w-52 sm:h-52 rounded-2xl object-cover shadow-float" data-deter-context />
-        <div>
+        <div className="min-w-0 break-words">
           <p className="text-xs uppercase tracking-widest text-ink-400 font-semibold mb-1.5">Playlist</p>
           <h1 className="text-display tracking-tight">{playlist.title}</h1>
           {playlist.subtitle && <p className="text-sm text-ink-300 mt-2">{playlist.subtitle}</p>}
@@ -59,7 +60,7 @@ export default function PlaylistPage() {
             <SaveButton entity={{ id: playlist.id, kind: 'playlist', title: playlist.title, subtitle: playlist.subtitle, image: bestImage(playlist.images, 300) }} />
           </div>
         </div>
-      </div>
+      </HeroMedia>
       {playlist.songs.length === 0 ? (
         <EmptyState title="No songs returned" message="We couldn’t load songs for this playlist right now." />
       ) : (

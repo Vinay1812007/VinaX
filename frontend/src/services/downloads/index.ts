@@ -270,10 +270,23 @@ export async function initDownloads(): Promise<void> {
   }
 }
 
+/** Downloads in progress, by song id. */
+const inFlight = new Map<string, Promise<boolean>>();
+
 export async function downloadSong(song: Song): Promise<boolean> {
   void import('@/services/analytics/telemetry').then((m) => m.trackDownload(song)).catch(() => undefined);
   if (!isNativePlatform()) return false;
   if (useDownloadsStore.getState().items[song.id]) return true;
+  // A double tap, or "download all" racing a single-song tap, must not write
+  // the same file twice at once — later callers share the first attempt.
+  const running = inFlight.get(song.id);
+  if (running) return running;
+  const job = runDownload(song).finally(() => inFlight.delete(song.id));
+  inFlight.set(song.id, job);
+  return job;
+}
+
+async function runDownload(song: Song): Promise<boolean> {
   const rawUrl = bestAudioUrl(song);
   if (!rawUrl) return false;
   // Some CDN variants are http:// — Android blocks cleartext, so force TLS.
@@ -306,6 +319,8 @@ export async function downloadSong(song: Song): Promise<boolean> {
     try {
       await saveTo(dirOf(Directory, 'EXTERNAL'));
     } catch {
+      // Don't strand a half-written file on device storage (best-effort).
+      await Filesystem.deleteFile({ path, directory: dirOf(Directory, 'EXTERNAL') }).catch(() => undefined);
       dirTag = 'DATA';
       await saveTo(dirOf(Directory, 'DATA'));
     }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { KEYS } from '@/constants/storage-keys';
+import { guardedLocalStorage } from '@/services/storage/local';
 
 interface OutputState {
   /** setSinkId device id; '' = system default output. */
@@ -16,6 +17,6 @@ export const useOutputStore = create<OutputState>()(
       label: 'This device',
       setOutput: (sinkId, label) => set({ sinkId, label }),
     }),
-    { name: KEYS.output, storage: createJSONStorage(() => window.localStorage) },
+    { name: KEYS.output, storage: createJSONStorage(() => guardedLocalStorage) },
   ),
 );

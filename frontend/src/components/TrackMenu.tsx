@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { albumPath, artistPath, songPath } from '@/utils/slug';
 import { useNavigate } from 'react-router-dom';
 import type { Song } from '@/types';
@@ -13,47 +14,182 @@ import { softMuteArtist } from '@/services/personalization/updater';
 import { useReasonStore } from '@/store/reasonStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { downloadSong, removeDownload } from '@/services/downloads';
-import { cn } from '@/utils/cn';
 import { DotsIcon } from './Icons';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 // v5.17.0 — lazy: the memories sheet is a rare tap, never first-load code.
 const SongMemoriesSheet = lazy(() => import('./SongMemoriesSheet'));
 
+const PANEL_WIDTH = 224; // w-56
+const EDGE = 8; // keep this far inside the viewport
+const GAP = 4; // between trigger and panel
+
+interface PanelPos {
+  top: number;
+  left: number;
+}
+
+/** Where the panel goes for a trigger at `rect`: below if it fits, else above, always inside the viewport. */
+export function placePanel(
+  rect: { top: number; bottom: number; right: number },
+  panelHeight: number,
+  viewport: { width: number; height: number },
+): PanelPos {
+  const left = Math.max(EDGE, Math.min(rect.right - PANEL_WIDTH, viewport.width - PANEL_WIDTH - EDGE));
+  const below = rect.bottom + GAP;
+  const fitsBelow = below + panelHeight <= viewport.height - EDGE;
+  const above = rect.top - GAP - panelHeight;
+  const top = fitsBelow || above < EDGE ? Math.min(below, Math.max(EDGE, viewport.height - EDGE - panelHeight)) : above;
+  return { top, left };
+}
+
+/**
+ * The "⋯" trigger. Deliberately light: every song row renders one, so the
+ * trigger holds no store subscriptions and builds nothing — the ~25-item
+ * action list, its six subscriptions and the back-button registration all
+ * live in <TrackMenuPanel/>, which only exists while the menu is open.
+ */
 export function TrackMenu({ song }: { song: Song }) {
   const [memories, setMemories] = useState(false);
   const [open, setOpen] = useState(false);
-  // Android back closes the menu instead of leaving the page (audit P0-2).
-  useDismissOnBack(open, () => setOpen(false));
-  const [flipUp, setFlipUp] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => {
+    setOpen(false);
+    // Focus goes back to the control that opened the menu.
+    btnRef.current?.focus({ preventScroll: true });
+  }, []);
+  const showMemories = useCallback(() => setMemories(true), []);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label="More options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        // 36px visual, 44px hit area (IconButton's invisible-pad pattern).
+        className="relative after:absolute after:inset-0 after:-m-[4px] inline-flex items-center justify-center w-9 h-9 shrink-0 rounded-full text-ink-300 hover:text-ink-100 hover:bg-ink-700/70"
+      >
+        <DotsIcon className="w-4 h-4" />
+      </button>
+      {open && <TrackMenuPanel song={song} anchorRef={btnRef} onClose={close} onShowMemories={showMemories} />}
+      {memories && (
+        <Suspense fallback={null}>
+          <SongMemoriesSheet song={song} onClose={() => setMemories(false)} />
+        </Suspense>
+      )}
+    </>
+  );
+}
+
+interface PanelProps {
+  song: Song;
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+  onShowMemories: () => void;
+}
+
+/**
+ * The open menu. Portalled to <body> and positioned from the trigger's
+ * bounding rect: inside a list it used to be an absolutely-positioned child
+ * of its row, so it painted UNDER the rows after it and was clipped by any
+ * transformed / overflow-hidden ancestor.
+ */
+function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps) {
+  // Android back closes the menu instead of leaving the page (audit P0-2).
+  useDismissOnBack(true, onClose);
   const navigate = useNavigate();
   const { enqueue, enqueueNext, startRadio } = usePlayerStore.getState();
+  const { addToCollection, createCollection, toggleHidden, toggleLater, toggleHiddenArtist } = useLibraryStore.getState();
   const collections = useLibraryStore((s) => s.collections);
-  const addToCollection = useLibraryStore((s) => s.addToCollection);
-  const createCollection = useLibraryStore((s) => s.createCollection);
-  const toggleHidden = useLibraryStore((s) => s.toggleHidden);
-  const toggleLater = useLibraryStore((s) => s.toggleLater);
   const inLater = useLibraryStore((s) => s.later.some((x) => x.id === song.id));
-  const toggleHiddenArtist = useLibraryStore((s) => s.toggleHiddenArtist);
   const downloaded = useDownloadsStore((s) => !!s.items[song.id]);
   const downloading = useDownloadsStore((s) => !!s.downloading[song.id]);
   // Package C4 — the honest "why am I seeing this?" line from catalog recommendations.
   const whyLine = useReasonStore((s) => s.reasons[song.id]);
 
   const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<PanelPos | null>(null);
+
+  // Position before first paint, then follow the trigger on scroll / resize.
+  // If the trigger leaves the viewport there is nothing left to anchor to.
+  useLayoutEffect(() => {
+    const place = (): void => {
+      const anchor = anchorRef.current;
+      const menu = menuRef.current;
+      if (!anchor || !menu) return;
+      const rect = anchor.getBoundingClientRect();
+      const viewport = { width: window.innerWidth, height: window.innerHeight };
+      if (rect.bottom < 0 || rect.top > viewport.height) {
+        onClose();
+        return;
+      }
+      const next = placePanel(rect, menu.offsetHeight, viewport);
+      setPos((prev) => (prev && prev.top === next.top && prev.left === next.left ? prev : next));
+    };
+    place();
+    const onScroll = (e: Event): void => {
+      // The panel's own overflow scroll is not the page moving.
+      if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
+      place();
+    };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [anchorRef, onClose]);
+
+  const itemEls = (): HTMLElement[] =>
+    Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? []);
 
   useEffect(() => {
-    if (!open) return;
+    // Escape is caught on the document so it still works if focus wandered.
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setOpen(false); e.stopPropagation(); }
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
     };
     document.addEventListener('keydown', handleKey);
-    // Focus first menu item
-    const firstItem = menuRef.current?.querySelector<HTMLElement>('[role=menuitem]');
-    firstItem?.focus();
     return () => document.removeEventListener('keydown', handleKey);
-  }, [open]);
+  }, [onClose]);
 
+  // Focus the first item once the panel is placed (it is visibility:hidden,
+  // and therefore unfocusable, until it has a position).
+  const placed = pos !== null;
+  useEffect(() => {
+    if (placed) menuRef.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
+  }, [placed]);
+
+  const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Portals bubble React events to the React parent — a song row that plays on Enter.
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      // Stopping the React event above also keeps it from the document listener.
+      e.nativeEvent.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key === 'Tab') {
+      // A menu is one tab stop: Tab leaves it, continuing from the trigger.
+      onClose();
+      return;
+    }
+    const els = itemEls();
+    if (!els.length) return;
+    const at = els.indexOf(document.activeElement as HTMLElement);
+    let to = -1;
+    if (e.key === 'ArrowDown') to = at < 0 ? 0 : (at + 1) % els.length;
+    else if (e.key === 'ArrowUp') to = at < 0 ? els.length - 1 : (at - 1 + els.length) % els.length;
+    else if (e.key === 'Home') to = 0;
+    else if (e.key === 'End') to = els.length - 1;
+    if (to < 0) return;
+    e.preventDefault();
+    els[to].focus();
+  };
 
   const items: Array<{ label: string; action: () => void } | null> = [
     { label: 'Start song radio', action: () => startRadio(song) },
@@ -69,7 +205,7 @@ export function TrackMenu({ song }: { song: Song }) {
     },
     { label: 'Song details', action: () => navigate(songPath(song)) },
     // v5.17.0 — your own history with this song, from on-device data.
-    { label: 'Your history with this song', action: () => setMemories(true) },
+    { label: 'Your history with this song', action: onShowMemories },
     song.album?.id ? { label: 'Go to album', action: () => navigate(albumPath(song.album!)) } : null,
     song.artists[0]?.id
       ? { label: 'Go to artist', action: () => navigate(artistPath(song.artists[0])) }
@@ -184,62 +320,39 @@ export function TrackMenu({ song }: { song: Song }) {
     },
   ];
 
-  const toggleOpen = () => {
-    if (!open && btnRef.current) {
-      // Flip the menu upward when there is no room below.
-      const rect = btnRef.current.getBoundingClientRect();
-      setFlipUp(window.innerHeight - rect.bottom < 300);
-    }
-    setOpen((v) => !v);
-  };
 
-  return (
-    <div className="relative">
-      <button
-        ref={btnRef}
-        aria-label="More options"
-        aria-haspopup="menu"
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleOpen();
-        }}
-        className="inline-flex items-center justify-center w-8 h-8 rounded-full text-ink-300 hover:text-ink-100 hover:bg-ink-700/70"
+  const stop = (e: React.SyntheticEvent): void => e.stopPropagation();
+
+  return createPortal(
+    // Touch + click are stopped here for the same portal-bubbling reason as
+    // keydown: a swipe on the menu must not swipe the song row that owns it.
+    <div onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop} onClick={stop}>
+      <div className="fixed inset-0 z-[70] bg-black/40" onClick={onClose} />
+      <div
+        ref={menuRef}
+        role="menu"
+        aria-label={`More options for ${song.title}`}
+        onKeyDown={onMenuKeyDown}
+        className="fixed z-[71] w-56 rounded-md p-1 animate-fade-up max-h-72 overflow-y-auto bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)]"
+        style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
       >
-        <DotsIcon className="w-4 h-4" />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/40" onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
-          <div
-            ref={menuRef}
-            role="menu"
-            className={cn(
-              'absolute right-0 z-50 w-56 rounded-md p-1 animate-fade-up max-h-72 overflow-y-auto bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)]',
-              flipUp ? 'bottom-full mb-1' : 'mt-1',
-            )}
+        {items.filter(Boolean).map((item) => (
+          <button
+            key={item!.label}
+            type="button"
+            role="menuitem"
+            tabIndex={-1}
+            onClick={() => {
+              onClose();
+              item!.action();
+            }}
+            className="w-full text-left rounded-sm px-3 py-2.5 text-[14px] font-medium text-ink-100 hover:bg-ink-700 focus-visible:bg-ink-700 truncate"
           >
-            {items.filter(Boolean).map((item) => (
-              <button
-                key={item!.label}
-                role="menuitem"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  item!.action();
-                  setOpen(false);
-                }}
-                className="w-full text-left rounded-sm px-3 py-2.5 text-[14px] font-medium text-ink-100 hover:bg-ink-700 truncate"
-              >
-                {item!.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {memories && (
-        <Suspense fallback={null}>
-          <SongMemoriesSheet song={song} onClose={() => setMemories(false)} />
-        </Suspense>
-      )}
-    </div>
+            {item!.label}
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body,
   );
 }

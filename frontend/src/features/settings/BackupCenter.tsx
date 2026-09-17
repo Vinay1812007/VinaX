@@ -4,58 +4,26 @@ import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { toast } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
-import { writeLocalBatch } from '@/services/storage/local';
-import { downloadProfileExport } from './actions';
+import { freezeLocalWrites, writeLocalBatch } from '@/services/storage/local';
+import { downloadProfileExport, readBackupFile } from './actions';
 import {
   BACKUP_CATEGORIES,
   BACKUP_EXCLUSIONS,
-  applyBackup,
+  RESTORE_UNDO_KEY,
   backupMeta,
+  clearUndo,
   currentCategoryValues,
   parseBackup,
+  readUndo,
+  restoreWithUndo,
   type BackupCategoryId,
   type ParsedBackup,
   type RestoreMode,
+  type UndoSnapshot,
 } from './backup';
 
-/** Where the pre-restore safety copy lives until the tab closes. */
-export const RESTORE_UNDO_KEY = 'vinax.backup.undo.v1';
-
-interface UndoSnapshot {
-  at: number;
-  entries: Array<[string, string | null]>;
-}
-
-function readUndo(): UndoSnapshot | null {
-  try {
-    const raw = sessionStorage.getItem(RESTORE_UNDO_KEY);
-    const v = raw ? (JSON.parse(raw) as UndoSnapshot) : null;
-    return v && Array.isArray(v.entries) ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Snapshot the keys a restore will touch; false when the browser cannot keep it. */
-function keepUndo(ids: readonly BackupCategoryId[]): boolean {
-  const entries: Array<[string, string | null]> = [];
-  for (const cat of BACKUP_CATEGORIES) {
-    if (!ids.includes(cat.id)) continue;
-    for (const spec of cat.keys) {
-      try {
-        entries.push([spec.key, localStorage.getItem(spec.key)]);
-      } catch {
-        /* unreadable key: nothing to restore */
-      }
-    }
-  }
-  try {
-    sessionStorage.setItem(RESTORE_UNDO_KEY, JSON.stringify({ at: Date.now(), entries } satisfies UndoSnapshot));
-    return true;
-  } catch {
-    return false;
-  }
-}
+// Re-exported for callers that knew the key from here; the snapshot logic lives in ./backup.
+export { RESTORE_UNDO_KEY };
 
 const when = (ts?: number): string => (ts ? new Date(ts).toLocaleString() : 'never');
 const kb = (n?: number): string => (n ? `${Math.max(1, Math.round(n / 1024))} KB` : '');
@@ -90,7 +58,13 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
     if (!file) return;
     setParseError(null);
     setParsed(null);
-    const res = parseBackup(await file.text());
+    // Size is checked before the file is read; a read failure is reported, not thrown.
+    const read = await readBackupFile(file);
+    if (!read.ok) {
+      setParseError(read.error);
+      return;
+    }
+    const res = parseBackup(read.text);
     if (!res.ok) {
       setParseError(res.error);
       return;
@@ -110,20 +84,18 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
   const restore = () => {
     if (!parsed || !chosen.size || applying) return;
     setApplying(true);
-    const ids = [...chosen];
-    const kept = keepUndo(ids);
-    const res = applyBackup(parsed, { mode, categories: ids });
+    const res = restoreWithUndo(parsed, { mode, categories: [...chosen] });
     if (!res.ok) {
       setApplying(false);
-      try {
-        sessionStorage.removeItem(RESTORE_UNDO_KEY);
-      } catch {
-        /* nothing kept */
-      }
+      // An earlier restore's snapshot (if any) was put back — keep offering it.
+      setUndo(readUndo());
       toast(`${res.message}${res.rolledBack ? '' : ' Some keys could not be rolled back — restore your safety copy.'}`, { duration: 9000 });
       return;
     }
-    toast(kept ? 'Restored. Reloading — you can undo from the Backup Center.' : 'Restored. Reloading.');
+    // The live stores still hold the pre-restore state; nothing they persist
+    // from here to the reload may land on top of what was just written.
+    freezeLocalWrites();
+    toast(res.undoKept ? 'Restored. Reloading — you can undo from the Backup Center.' : 'Restored. Reloading.');
     window.setTimeout(() => window.location.reload(), 400);
   };
 
@@ -134,11 +106,8 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
       toast(res.message, { duration: 8000 });
       return;
     }
-    try {
-      sessionStorage.removeItem(RESTORE_UNDO_KEY);
-    } catch {
-      /* ignore */
-    }
+    freezeLocalWrites();
+    clearUndo();
     setUndo(null);
     toast('Restore undone. Reloading.');
     window.setTimeout(() => window.location.reload(), 400);
@@ -234,7 +203,7 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
                         <span className="block text-sm font-semibold">{m === 'merge' ? 'Merge' : 'Replace'}</span>
                         <span className="block text-[11px] text-ink-400">
                           {m === 'merge'
-                            ? 'Keeps everything on this device and adds what the file has. A song, playlist, bookmark or saved search that is already here is never added twice; settings from the file win.'
+                            ? 'Keeps everything on this device and adds what the file has. A song, playlist, bookmark or saved search that is already here is never added twice. Your alarm, Home layout and lyric timings stay as they are here, the taste profile that has learned more is kept, and settings from the file win.'
                             : 'The chosen categories become exactly what the file holds. Anything in those categories that is only on this device is removed.'}
                         </span>
                       </span>

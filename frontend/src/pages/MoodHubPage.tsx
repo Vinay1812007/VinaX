@@ -8,6 +8,7 @@ import { InfiniteSentinel } from '@/components/InfiniteSentinel';
 import { usePlayerStore } from '@/store/playerStore';
 import { SongRow } from '@/components/SongRow';
 import { ListSkeleton } from '@/components/Skeletons';
+import { EmptyState, ErrorState } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import { MOOD_HUBS, type MoodHub } from '@/constants/hubs';
 
@@ -65,8 +66,19 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
         {songs.map((song, i) => (
           <SongRow key={song.id} song={song} songs={songs} index={i} />
         ))}
-        {!q.isLoading && songs.length === 0 && (
-          <p className="text-sm text-ink-400">Nothing surfaced right now — the catalog may be briefly unreachable. Pull to refresh or try again shortly.</p>
+        {/* The old copy said "Pull to refresh" on a page with no pull-to-refresh,
+            and did not tell a failure from an empty result. */}
+        {q.isError && songs.length === 0 && <ErrorState retry={() => void q.refetch()} />}
+        {!q.isLoading && !q.isError && songs.length === 0 && (
+          <EmptyState
+            title="Nothing here right now"
+            message={`No ${label} ${mood.label.toLowerCase()} songs surfaced from the catalog just now.`}
+            action={
+              <button type="button" onClick={() => void q.refetch()} className="btn-secondary px-5 py-2.5 rounded-full">
+                Try again
+              </button>
+            }
+          />
         )}
         <InfiniteSentinel
           onVisible={() => q.hasNextPage && !q.isFetchingNextPage && q.fetchNextPage()}

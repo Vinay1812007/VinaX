@@ -170,9 +170,23 @@ function playBlob(blob: Blob): Promise<boolean> {
   });
 }
 
+function noDeviceVoices(): boolean {
+  try {
+    return window.speechSynthesis.getVoices().length === 0;
+  } catch {
+    return true;
+  }
+}
+
 /** Speak with the device's own engine. The original path, kept whole. */
 function speakOnDevice(id: string, text: string): void {
   if (!readAloudSupported()) {
+    if (speakingId === id) emit(null);
+    return;
+  }
+  // A native WebView with no speech voices installed accepts the utterance
+  // and then never fires `end` or `error` — the reply would "speak" forever.
+  if (isNativePlatform() && noDeviceVoices()) {
     if (speakingId === id) emit(null);
     return;
   }

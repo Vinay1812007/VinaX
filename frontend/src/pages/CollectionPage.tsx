@@ -21,6 +21,8 @@ import { allTags } from '@/features/library/tags';
 import { TagChips, TagEditor } from '@/features/library/TagEditor';
 import { filterSongs, songCount } from '@/features/library/collectionEdit';
 import type { RemovedEntry } from '@/store/libraryStore';
+import { occurrenceKeys, VirtualChunks } from '@/components/VirtualChunks';
+import type { Song } from '@/types';
 
 /**
  * v5.17.0 — collection page: collage cover, inline name/emoji/description
@@ -75,6 +77,7 @@ export default function CollectionPage() {
     const base = downloadedOnly && hasDownloads ? songs.filter((s) => !!downloads[s.id]) : songs;
     return sortSongs(filterSongs(base, query), sort);
   }, [songs, sort, downloadedOnly, hasDownloads, downloads, query]);
+  const rowKeys = useMemo(() => occurrenceKeys(visible.map((s) => s.id)), [visible]);
   const filtering = query.trim() !== '';
   const reorderable = sort === 'added' && !(downloadedOnly && hasDownloads) && !filtering;
   const otherCollections = useMemo(() => allCollections.filter((c) => c.id !== id), [allCollections, id]);
@@ -251,7 +254,7 @@ export default function CollectionPage() {
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-extrabold flex-1 truncate">
+                <h1 className="text-page-title flex-1 min-w-0 truncate">
                   {collection.emoji && <span className="mr-2" aria-hidden>{collection.emoji}</span>}
                   {collection.name}
                 </h1>
@@ -401,8 +404,16 @@ export default function CollectionPage() {
         )
       ) : (
         <div className="space-y-1">
-          {visible.map((song, i) => (
-            <div key={`${song.id}-${i}`} className={cn('flex items-center gap-2.5 glass-card rounded-xl p-2', selecting && selected.has(song.id) && 'ring-1 ring-ember-400')}>
+          {/* Long playlists: rows render in content-visibility chunks so off-screen
+              ones cost no layout or paint. Keys are index-free, so Move up / down
+              re-orders DOM nodes instead of remounting the rows. */}
+          <VirtualChunks
+            items={visible}
+            keyOf={(_song: Song, i: number) => rowKeys[i]}
+            rowHeight={60}
+            chunkClassName="space-y-1"
+            renderItem={(song: Song, i: number) => (
+            <div className={cn('flex items-center gap-2.5 glass-card rounded-xl p-2', selecting && selected.has(song.id) && 'ring-1 ring-ember-400')}>
               {selecting ? (
                 <input
                   type="checkbox"
@@ -438,7 +449,8 @@ export default function CollectionPage() {
                 </button>
               )}
             </div>
-          ))}
+            )}
+          />
         </div>
       )}
     </div>

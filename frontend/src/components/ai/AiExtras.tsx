@@ -134,7 +134,7 @@ export function SavedPromptsSheet({ onClose, onUse, draft }: { onClose(): void; 
   useDismissOnBack(true, onClose);
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label="Saved prompts" className="w-full sm:max-w-lg glass-modal rounded-t-3xl sm:rounded-3xl p-5 animate-fade-up max-h-[85vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label="Saved prompts" className="w-full sm:max-w-lg glass-modal rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,var(--safe-bottom))] sm:pb-5 animate-fade-up max-h-[85dvh] overflow-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold tracking-tight">Saved prompts</h2>

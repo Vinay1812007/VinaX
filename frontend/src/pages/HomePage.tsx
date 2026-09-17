@@ -1,3 +1,4 @@
+import { HomeOpening } from '@/features/home/HomeOpening';
 import { useDiscoveryStore } from '@/store/discoveryStore';
 import { invalidateRecommendationCache } from '@/services/recommendation/engine';
 import { recordServed, songKey } from '@/services/recommendation/songIdentity';
@@ -29,7 +30,7 @@ import { PushPromptCard } from '@/components/PushPromptCard';
 import { NotificationSheet } from '@/components/NotificationSheet';
 import { DownloadCta } from '@/components/DownloadCta';
 import { IconButton } from '@/components/IconButton';
-import { MoonIcon, SearchIcon, SettingsIcon, SunIcon, SparkleIcon, PlayIcon } from '@/components/Icons';
+import {  SearchIcon,  SunIcon, SparkleIcon, PlayIcon } from '@/components/Icons';
 import { useHistoryStore } from '@/store/historyStore';
 import { onThisDay } from '@/features/home/onThisDay';
 import { localDateKey, pickDailyFavorite, useBecauseYouLiked } from '@/features/home/useBecauseYouLiked';
@@ -120,7 +121,7 @@ function SongShelf({ title, explanation, songs, seeAllTo }: { title: string; exp
   const playQueue = usePlayerStore((s) => s.playQueue);
   if (!songs.length) return null;
   return (
-    <Shelf title={title} explanation={explanation} seeAllTo={seeAllTo}>
+    <Shelf title={title} explanation={explanation} seeAllTo={seeAllTo} layout={songs.length <= 8 ? 'grid' : 'rail'}>
       {songs.map((song, i) => (
         <MediaCard
           key={song.id}
@@ -703,7 +704,7 @@ function FeedBlock() {
           Picks in your languages, ranked by your taste — scrolls forever
         </p>
         {feed.isLoading && <CardGridSkeleton />}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-2">
           {feedSongs.map((song, i) => (
             <MediaCard
               key={song.id}
@@ -914,47 +915,14 @@ export default function HomePage() {
   return (
    <PullToRefresh onRefresh={handleRefresh}>
     <div className="max-w-screen-2xl mx-auto vx-stagger vx-home">
-      {/* Home header: brand (mobile) + quick theme & settings (all sizes) */}
-      <div className="sticky top-0 z-30 -mx-5 px-5 mb-4 pt-[max(0.375rem,var(--safe-top))] pb-2.5 flex items-center justify-between bg-[rgb(var(--ink-950)/0.7)] backdrop-blur-xl border-b border-glass md:static md:z-auto md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none md:border-0 md:pt-1 md:pb-0">
-        <div className="md:hidden vx-brand flex items-center gap-2.5">
-          <img src="/icons/icon.svg" alt="" className="w-9 h-9 rounded-xl" />
-          <span className="text-2xl font-bold tracking-tight">
-            <span className="bg-gradient-to-r from-ember-400 to-tide-400 bg-clip-text text-transparent">VinaX</span><span className="text-ember-500">.</span>
-          </span>
-        </div>
-        <div className="hidden md:flex items-center gap-6 min-w-0">
-          <div className="min-w-0">
-            <p className="text-xl font-bold tracking-tight truncate">
-              Your listening space
-            </p>
-            <p className="text-[11px] text-ink-400">YOUR LISTENING SPACE</p>
-          </div>
-          <Link
-            to="/search"
-            className="glass-search rounded-full px-4 py-2.5 w-72 flex items-center gap-2 text-sm text-ink-400 hover:text-ink-200 transition-colors"
-          >
-            <SearchIcon className="w-4 h-4" /> Songs, artists, albums…
-          </Link>
-        </div>
-        <div className="flex items-center gap-1">
-          <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-            <span className="relative block w-5 h-5 overflow-visible" aria-hidden>
-              <SunIcon className="theme-ico theme-ico-sun absolute inset-0 w-5 h-5" />
-              <MoonIcon className="theme-ico theme-ico-moon absolute inset-0 w-5 h-5" />
-            </span>
-          </IconButton>
-          <IconButton label="Notifications" onClick={() => setNotifOpen(true)}>
-            <span className="text-[17px] leading-none" aria-hidden>🔔</span>
-          </IconButton>
-          <IconButton label="Settings" onClick={() => navigate('/settings')}>
-            <SettingsIcon className="w-5 h-5" />
-          </IconButton>
-        </div>
+      <div className="flex items-center justify-end gap-1 mb-2">
+        <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}><SunIcon className="w-5 h-5" /></IconButton>
+        <IconButton label="Notifications" onClick={() => setNotifOpen(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M9 21h6" /></svg></IconButton>
       </div>
       <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
       {/* Hero — full-bleed colour wash that fades into the page */}
-      <div className={`-mx-5 md:-mx-10 -mt-6 lg:mt-0 mb-6 px-5 md:px-10 pt-6 pb-4 bg-gradient-to-b ${
+      <div className={`mb-6 pb-2 bg-gradient-to-b ${
         ({
           morning: 'from-transparent to-transparent',
           afternoon: 'from-transparent to-transparent',
@@ -965,7 +933,7 @@ export default function HomePage() {
         <p className="text-[11px] font-extrabold tracking-[0.22em] text-ember-400 uppercase mb-1.5">
           {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} · made for you
         </p>
-        <h1 className="text-3xl md:text-[38px] font-extrabold tracking-tight">{hello.title}</h1>
+        <h1 className="text-page-title font-extrabold tracking-tight">{hello.title}</h1>
         <p className="text-ink-200 mt-1.5 text-sm font-medium">{clientCfg?.greeting?.text ?? hello.subtitle}</p>
         <p className="text-ink-300 mt-1 text-sm">
           {region?.country ? `Tuned for ${region.country}` : 'Tuned to you'} · recommendations that grow with you
@@ -974,7 +942,22 @@ export default function HomePage() {
           )}
           {getStreak() > 1 && <span className="text-ember-400 font-semibold"> · 🔥 {getStreak()}-day streak</span>}
         </p>
-        <div className="flex gap-2 mt-4 flex-wrap">
+
+      </div>
+
+      <HomeOpening design={design} songs={heroSongs} recent={continueListening}
+        onPlay={() => heroSongs.length && playQueueFeed(heroSongs, 0)}
+        onResume={index => usePlayerStore.getState().playQueue(continueListening, index)} />
+
+      <HomeStudio design={design} locked={layout.ownerHidden} onApply={value => {
+        const checked = validateHomeDesign(value); setHomeDesign(checked);
+        try { localStorage.setItem(HOME_DESIGN_KEY, JSON.stringify(checked)); toast('Your Home layout is saved'); }
+        catch { toast('Layout applied for this visit. Device storage is unavailable.'); }
+      }} onReset={() => { setHomeDesign(null); try { localStorage.removeItem(HOME_DESIGN_KEY); } catch { /* session reset still works */ } }} />
+
+
+
+        <div className="flex gap-2 mb-6 flex-wrap">
           <button
             onClick={() => {
               // Songs the page already holds — no extra catalogue call for a surprise.
@@ -996,67 +979,6 @@ export default function HomePage() {
           <Chip onClick={() => navigate('/regions')}>Regions</Chip>
           <Chip onClick={() => navigate('/made-for-you')}>Made For You</Chip>
         </div>
-      </div>
-
-      {/* Aura Mix hero — plays the displayed mix */}
-      <section className="vx-hero relative overflow-hidden rounded-3xl mb-6 border border-glass bg-ink-850">
-        {/* v5.18.0 refresh — accent-led wash + a fan of the mix's own artwork */}
-        {heroSongs.length < 3 && <div className="vx-hero-record" aria-hidden="true"><div><span>V</span><small>VINAX / LISTENING SPACE</small></div></div>}
-        {heroSongs.length >= 3 && (
-          <div className="absolute right-6 md:right-10 top-1/2 -translate-y-1/2 hidden sm:flex items-center pointer-events-none" aria-hidden>
-            {heroSongs.slice(0, 3).map((hs, i) => (
-              <img
-                key={hs.id}
-                src={bestImage(hs.images, 150)}
-                alt=""
-                loading="lazy"
-                className="vx-hero-art w-24 h-24 md:w-28 md:h-28 rounded-2xl object-cover"
-                style={{ marginLeft: i ? '-2.25rem' : 0, transform: `rotate(${(i - 1) * 7}deg) translateY(${i === 1 ? -8 : 4}px)`, zIndex: i === 1 ? 2 : 1 }}
-              />
-            ))}
-          </div>
-        )}
-        <div
-          className="vx-hero-wash absolute inset-0 pointer-events-none opacity-70"
-          style={{
-            background:
-              'radial-gradient(90% 100% at 0% 0%, rgb(var(--ember-500) / 0.30), transparent 56%), radial-gradient(110% 120% at 100% 10%, rgb(var(--aura-cyan) / 0.22), transparent 55%), radial-gradient(120% 130% at 55% 130%, rgb(var(--aura-lime) / 0.22), transparent 60%)',
-          }}
-          aria-hidden
-        />
-        <div className="relative p-6 md:p-10 sm:max-w-[65%]">
-          <p className="aura-eyebrow text-xs font-bold uppercase tracking-widest text-ember-300 flex items-center gap-1.5">
-            <SparkleIcon className="w-3.5 h-3.5" /> AURA MIX / MADE FOR YOU
-          </p>
-          <h2 className="vx-hero-title text-3xl md:text-[40px] font-extrabold tracking-[-0.03em] mt-2">{design.title}</h2>
-          <p className="text-sm text-ink-200/90 mt-2 max-w-md leading-relaxed">
-            {design.description}
-          </p>
-          <div className="mt-5 flex items-center gap-2.5">
-            <button
-              onClick={() => heroSongs.length && playQueueFeed(heroSongs, 0)}
-              disabled={!heroSongs.length}
-              aria-label="Play your Aura Mix"
-              className="inline-flex items-center gap-2 px-7 py-3 rounded-full btn-primary shadow-glow transition hover:bg-ember-400 active:scale-95 disabled:opacity-50"
-            >
-              <PlayIcon className="w-4 h-4 ml-0.5" /> Play my mix
-            </button>
-            <button
-              onClick={() => navigate('/made-for-you')}
-              className="px-5 py-3 rounded-full btn-secondary text-sm"
-            >
-              Made for you
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <HomeStudio design={design} locked={layout.ownerHidden} onApply={value => {
-        const checked = validateHomeDesign(value); setHomeDesign(checked);
-        try { localStorage.setItem(HOME_DESIGN_KEY, JSON.stringify(checked)); toast('Your Home layout is saved'); }
-        catch { toast('Layout applied for this visit. Device storage is unavailable.'); }
-      }} onReset={() => { setHomeDesign(null); try { localStorage.removeItem(HOME_DESIGN_KEY); } catch { /* session reset still works */ } }} />
-
       <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
         <p className="text-sm text-ink-400" role="status">{refreshingDiscovery ? 'Finding a fresh direction…' : 'Ready for a different discovery?'}</p>
         <button className="vx-fresh-button" disabled={refreshingDiscovery} onClick={async () => {
@@ -1068,43 +990,9 @@ export default function HomePage() {
       </div>
       <nav className="vx-journeys" aria-label="Explore your sound">
         <Link to="/VinaXAI"><SparkleIcon /><div><strong>Meet VinaX AI</strong><span>Ask, create, explore</span></div></Link>
-        <Link to="/made-for-you"><PlayIcon /><div><strong>Your discovery orbit</strong><span>Mixes shaped by your listening</span></div></Link>
+        <Link to="/made-for-you"><PlayIcon /><div><strong>Made for your day</strong><span>Mixes shaped by your listening</span></div></Link>
         <Link to="/moods"><SearchIcon /><div><strong>Find a feeling</strong><span>A soundtrack for every headspace</span></div></Link>
       </nav>
-
-      {continueListening.length >= 2 && (
-        <section aria-label="Jump back in" className="mb-5">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-            {continueListening.slice(0, 6).map((song, i) => (
-              <button
-                key={song.id}
-                onClick={() => usePlayerStore.getState().playQueue(continueListening, i)}
-                className="flex items-center gap-2.5 rounded-xl glass-card overflow-hidden pr-3 text-left hover:bg-ink-800/40 transition-colors"
-              >
-                <img
-                  /* 4.18.1: 48px cell — same srcset negotiation as the row
-                     lists (50px file on 1x screens, 150 on 2x+). */
-                  src={bestImage(song.images, 150)}
-                  srcSet={artSrcSet(song.images, 150)}
-                  sizes="48px"
-                  width={48}
-                  height={48}
-                  onError={(e) => {
-                    const t = e.target as HTMLImageElement;
-                    t.srcset = '';
-                    t.src = FALLBACK_ART;
-                  }}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className="w-12 h-12 object-cover shrink-0"
-                />
-                <span className="text-xs font-semibold truncate">{song.title}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
 
       <ListeningGuide />
 
@@ -1135,6 +1023,7 @@ export default function HomePage() {
         const Block = HOME_BLOCKS[k];
         return i < 2 ? <Block key={k} /> : <DeferredBlock key={k} render={() => <Block />} />;
       })}
+
     </div>
    </PullToRefresh>
   );

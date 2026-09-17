@@ -1,3 +1,5 @@
+import { LanguageGrid } from '@/components/LanguageGrid';
+import { DestinationGrid } from '@/components/DestinationGrid';
 
 import { playlistPath, songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -33,7 +35,9 @@ export default function DiscoverPage() {
 
   return (
     <div className="max-w-screen-2xl mx-auto vx-stagger">
-      <h1 className="text-3xl md:text-[34px] font-extrabold tracking-tight mb-6">Discover</h1>
+      <header className="vx-page-header"><p className="vx-eyebrow">Find your next favourite</p><h1>Discover</h1><p>Every language. Every mood. A world of music, closer to you.</p></header>
+      <DestinationGrid area="discover" />
+      <LanguageGrid />
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
         {LANGUAGES.map((l) => (
@@ -48,7 +52,7 @@ export default function DiscoverPage() {
       ) : trending.isLoading ? (
         <ShelfSkeleton />
       ) : (
-        <Shelf title={`Trending Now · ${languageLabel(lang)}`} explanation="Fresh popularity signals, re-ranked by your taste">
+        <Shelf layout="grid" title={`Trending Now · ${languageLabel(lang)}`} explanation="Fresh popularity signals, re-ranked by your taste">
           {(trending.data ?? []).map((song, i) => (
             <MediaCard key={song.id} to={songPath(song)} image={bestImage(song.images)} images={song.images} title={song.title} subtitle={song.subtitle} song={song} onPlay={() => playQueue(trending.data ?? [], i)} />
           ))}
@@ -66,7 +70,7 @@ export default function DiscoverPage() {
       {moodSongs.isLoading ? (
         <ShelfSkeleton />
       ) : (
-        <Shelf title={`${MOODS.find((m) => m.id === mood)?.label} Picks`} explanation={`${languageLabel(lang)} · mood-matched`}>
+        <Shelf layout="grid" title={`${MOODS.find((m) => m.id === mood)?.label} Picks`} explanation={`${languageLabel(lang)} · mood-matched`}>
           {(moodSongs.data ?? []).map((song, i) => (
             <MediaCard key={song.id} to={songPath(song)} image={bestImage(song.images)} images={song.images} title={song.title} subtitle={song.subtitle} song={song} onPlay={() => playQueue(moodSongs.data ?? [], i)} />
           ))}
@@ -74,7 +78,7 @@ export default function DiscoverPage() {
       )}
 
       {editorial.data && editorial.data.length > 0 && (
-        <Shelf title="Playlists For The Vibe" explanation="Hand-picked playlists for the mood">
+        <Shelf layout="grid" title="Playlists For The Vibe" explanation="Hand-picked playlists for the mood">
           {editorial.data.map((p) => (
             <MediaCard key={p.id} to={playlistPath(p)} image={bestImage(p.images)} images={p.images} title={p.title} subtitle={p.subtitle || `${p.songCount ?? ''} songs`} onPlay={() => void playPlaylist(p.id, p.title)} />
           ))}
@@ -84,7 +88,7 @@ export default function DiscoverPage() {
       {fresh.isLoading ? (
         <ShelfSkeleton />
       ) : (fresh.data?.length ?? 0) >= 4 ? (
-        <Shelf title={`New This Week · ${languageLabel(lang)}`} explanation="The freshest releases, straight off the presses">
+        <Shelf layout="grid" title={`New This Week · ${languageLabel(lang)}`} explanation="The freshest releases, straight off the presses">
           {(fresh.data ?? []).map((song, i) => (
             <MediaCard key={song.id} to={songPath(song)} image={bestImage(song.images)} images={song.images} title={song.title} subtitle={song.subtitle} song={song} onPlay={() => playQueue(fresh.data ?? [], i)} />
           ))}
@@ -94,7 +98,7 @@ export default function DiscoverPage() {
       {films.isLoading ? (
         <ShelfSkeleton />
       ) : (films.data?.length ?? 0) >= 4 ? (
-        <Shelf title={`Movies You Missed · ${languageLabel(lang)}`} explanation="Recent film soundtracks worth a first listen">
+        <Shelf layout="grid" title={`Movies You Missed · ${languageLabel(lang)}`} explanation="Recent film soundtracks worth a first listen">
           {(films.data ?? []).map((song, i) => (
             <MediaCard key={song.id} to={songPath(song)} image={bestImage(song.images)} images={song.images} title={song.title} subtitle={song.subtitle} song={song} onPlay={() => playQueue(films.data ?? [], i)} />
           ))}

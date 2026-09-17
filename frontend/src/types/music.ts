@@ -113,6 +113,13 @@ export interface HistoryEntry {
    * back-filled (features/stats/listening.ts).
    */
   listenedSec?: number;
+  /**
+   * v7.0.0 — true when the listener skipped this play inside its first
+   * third. Absent on older plays and on plays that simply were not finished
+   * (paused, app closed, jumped away later), which `completed: false` alone
+   * cannot tell apart from a skip. Read through `isSkippedPlay`.
+   */
+  skipped?: boolean;
 }
 
 /** Formal film projection over soundtrack albums (ADR-001 / catalog audit §3).

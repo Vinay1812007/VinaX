@@ -14,7 +14,7 @@ import { energyOfSong } from '@/services/personalization/session';
 import { coPlayAffinity, coPlayIndexFor } from './coplay';
 import type { Candidate, ReasonComponent, RecommendationContext, ScoredCandidate } from './types';
 import { inferMood, moodMatchScore } from './mood';
-import { buildSongProfile, overlap } from './profiles';
+import { buildSongProfile, overlap, type SongProfile } from './profiles';
 import { RECOMMENDATION_WEIGHTS } from './weights';
 import { rerankCandidates } from './reranking';
 
@@ -28,7 +28,8 @@ const SOURCE_BOOST: Record<Candidate['source'], number> = {
   // ranking below real taste matches; the mixer guarantees their shelf slots.
   explore: 0.08,
   trending: 0.06,
-  history: 0.0,
+  // v7.0.0 — Familiar mode's own favourites and finished songs.
+  history: 0.1,
 };
 
 // Package C3 — the only reliable "instrumental" signal from catalog metadata is
@@ -37,11 +38,73 @@ const SOURCE_BOOST: Record<Candidate['source'], number> = {
 const INSTRUMENTAL_RE = /\b(instrumental|bgm|background score|theme music|karaoke|lo-?fi)\b/i;
 
 /**
+ * v7.0.0 — everything about a ranking pass that does not depend on the
+ * candidate, computed once instead of once per song: the seed's profile,
+ * the affinity maxima, the listener's played songs and artists, how often
+ * each lead artist appeared in the last few plays, and the effective
+ * discovery lean (mode + this sitting's appetite).
+ */
+export interface ScoringFrame {
+  personalBlend: number;
+  seedProfile: SongProfile | null;
+  maxGenre: number;
+  maxVibe: number;
+  playedSongIds: Set<string>;
+  knownArtists: Set<string>;
+  recentArtistCounts: Map<string, number>;
+  /** −1 (familiar) … +1 (discover), after the session's appetite is folded in. */
+  lean: number;
+  /** 0..1 — how much weight the session intent gets (fades in over its first events). */
+  intentRamp: number;
+  year: number;
+}
+
+const MODE_LEAN = { familiar: -1, balanced: 0, discover: 1 } as const;
+const lower = (v: string | null | undefined): string => (v ?? '').trim().toLowerCase();
+
+export function effectiveDiscoveryMode(ctx: RecommendationContext): 'familiar' | 'balanced' | 'discover' {
+  return ctx.discoveryMode ?? (ctx.explore ? 'discover' : 'balanced');
+}
+
+export function buildScoringFrame(ctx: RecommendationContext): ScoringFrame {
+  const { profile } = ctx;
+  const confidence = profileConfidence(profile);
+  const user = ctx.userProfile;
+  const knownArtists = new Set<string>();
+  for (const a of Object.values(profile.artists)) if (a.plays > 0 || a.completes > 0) knownArtists.add(lower(a.name));
+  const playedSongIds = new Set<string>(profile.recentSongIds);
+  for (const id of Object.keys(profile.songs ?? {})) playedSongIds.add(id);
+  const recentArtistCounts = new Map<string, number>();
+  ctx.history.forEach((entry, i) => {
+    playedSongIds.add(entry.song.id);
+    const lead = lower(entry.song.artists[0]?.name);
+    if (!lead) return;
+    knownArtists.add(lead);
+    if (i < 10) recentArtistCounts.set(lead, (recentArtistCounts.get(lead) ?? 0) + 1);
+  });
+  const intent = ctx.sessionIntent;
+  const lean = Math.max(-1, Math.min(1, MODE_LEAN[effectiveDiscoveryMode(ctx)] + (intent ? intent.discoveryAppetite * 0.6 : 0)));
+  return {
+    personalBlend: (0.3 + 0.7 * confidence) * (0.4 + 0.6 * ctx.intensity),
+    seedProfile: ctx.seedSong ? buildSongProfile(ctx.seedSong) : null,
+    maxGenre: user ? Math.max(1, ...Object.values(user.genres)) : 1,
+    maxVibe: user ? Math.max(1, ...Object.values(user.vibes)) : 1,
+    playedSongIds,
+    knownArtists,
+    recentArtistCounts,
+    lean,
+    intentRamp: intent ? Math.min(1, intent.size / 3) : 0,
+    year: new Date().getFullYear(),
+  };
+}
+
+/**
  * Deterministic hybrid scoring. Personalized terms are blended in by
  * `confidence * intensity`, so a cold profile leans on popularity/trending
  * and a warm profile leans on taste — explainable via the reasons array.
+ * Pass a `frame` when scoring many candidates against one context.
  */
-export function scoreCandidate(c: Candidate, ctx: RecommendationContext): ScoredCandidate {
+export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: ScoringFrame = buildScoringFrame(ctx)): ScoredCandidate {
   const { profile } = ctx;
   const reasons: ReasonComponent[] = [];
   const song = c.song;
@@ -50,12 +113,11 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
     return { candidate: c, score: -1, reasons: [] };
   }
 
-  const confidence = profileConfidence(profile);
-  const personalBlend = (0.3 + 0.7 * confidence) * (0.4 + 0.6 * ctx.intensity);
+  const personalBlend = frame.personalBlend;
 
   let score = 0;
   const candidateProfile = buildSongProfile(song);
-  const seedProfile = ctx.seedSong ? buildSongProfile(ctx.seedSong) : null;
+  const seedProfile = frame.seedProfile;
   const user = ctx.userProfile;
 
   // Content similarity against the current seed/session. These terms are
@@ -87,8 +149,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
   if (user) {
     const genreAffinity = candidateProfile.genres.reduce((m, g) => Math.max(m, user.genres[g] ?? 0), 0);
     const vibeAffinity = candidateProfile.vibes.reduce((m, v) => Math.max(m, user.vibes[v] ?? 0), 0);
-    const maxGenre = Math.max(1, ...Object.values(user.genres));
-    const maxVibe = Math.max(1, ...Object.values(user.vibes));
+    const { maxGenre, maxVibe } = frame;
     score += (genreAffinity / maxGenre) * RECOMMENDATION_WEIGHTS.genre * 0.6;
     score += (vibeAffinity / maxVibe) * RECOMMENDATION_WEIGHTS.vibe * 0.6;
     if (candidateProfile.dialect && user.dialects[candidateProfile.dialect]) score += RECOMMENDATION_WEIGHTS.dialect * 0.4;
@@ -216,7 +277,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
 
   // Freshness: light boost for recent releases (novelty without dominating).
   const year = song.year ? Number(song.year) : null;
-  if (year && year >= new Date().getFullYear() - 1) score += RECOMMENDATION_WEIGHTS.freshness;
+  if (year && year >= frame.year - 1) score += RECOMMENDATION_WEIGHTS.freshness;
 
   // Package A10 — festival/season boost: during a festival window, lift songs in
   // its languages or mood a touch. Silent (like freshness) — it colours ranking
@@ -241,7 +302,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
     score += adv * ((discovery ? 0.05 : 0) - rawArtW * 0.06);
     // Classics ↔ recent: map release age to a signed recency axis (+new, −old).
     if (year) {
-      const age = new Date().getFullYear() - year;
+      const age = frame.year - year;
       const yr = age <= 1 ? 1 : age >= 9 ? -1 : (5 - age) / 4;
       score += (dials.recency - 0.5) * 2 * yr * 0.06;
     }
@@ -249,6 +310,47 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext): Scored
     score += (dials.energy - 0.5) * 2 * (energyOfSong(song) - 0.5) * 0.1;
     // Vocal ↔ instrumental: title-detectable instrumentals only.
     if (INSTRUMENTAL_RE.test(song.title)) score += -((dials.vocalness - 0.5) * 2) * 0.06;
+  }
+
+  // v7.0.0 — Familiar / Balanced / Discover. One signed swing between novelty
+  // and familiarity: 0 = a song already played, 0.5 = a known artist's unheard
+  // song, 1 = an artist never played. `lean` is the mode plus what this
+  // sitting's behaviour asks for (a skip streak leans familiar, a long run of
+  // completions earns room to roam), so Balanced stays exactly neutral until
+  // the listener's own actions tip it.
+  const lead = lower(song.artists[0]?.name);
+  if (frame.lean !== 0) {
+    const novelty = frame.playedSongIds.has(song.id) ? 0 : lead && frame.knownArtists.has(lead) ? 0.5 : 1;
+    const swing = frame.lean * (novelty - 0.5) * RECOMMENDATION_WEIGHTS.novelty;
+    if (swing > 0.02) reasons.push(frame.lean > 0 ? { kind: 'discovery', weight: swing, detail: novelty === 1 ? 'new-artist' : 'new-song' } : { kind: 'familiar', weight: swing });
+    score += swing;
+  }
+
+  // v7.0.0 — artist fatigue: the third, fourth… song by one lead artist inside
+  // the last ten plays costs a little more each time. Long-term affinity is
+  // untouched; this only spaces an artist out while they are over-present.
+  const recentByArtist = lead ? frame.recentArtistCounts.get(lead) ?? 0 : 0;
+  if (recentByArtist > 2) {
+    const fatigue = -Math.min(4, recentByArtist - 2) * RECOMMENDATION_WEIGHTS.artistFatigue;
+    reasons.push({ kind: 'fatigue', weight: fatigue, detail: song.artists[0]?.name });
+    score += fatigue;
+  }
+
+  // v7.0.0 — session intent: what the listener did in THIS sitting. Artists
+  // they keep skipping sink, artists they liked, searched for or hand-queued
+  // rise, the energy follows what they finish rather than what they skip, and
+  // a song skipped minutes ago is not offered again. Bounded and ramped, so
+  // one action never outweighs weeks of taste.
+  const intent = ctx.sessionIntent;
+  if (intent && frame.intentRamp > 0) {
+    let term = 0;
+    if (lead) term += (intent.artistPull[lead] ?? 0) * RECOMMENDATION_WEIGHTS.intentArtist;
+    if (song.language) term += (intent.languagePull[song.language] ?? 0) * RECOMMENDATION_WEIGHTS.intentLanguage;
+    if (intent.energySteer !== 0) term += (candidateProfile.energy - 0.5) * intent.energySteer * RECOMMENDATION_WEIGHTS.intentEnergy;
+    if (intent.skippedSongIds.has(song.id)) term -= RECOMMENDATION_WEIGHTS.intentSkippedSong;
+    term *= frame.intentRamp;
+    if (Math.abs(term) > 0.02) reasons.push({ kind: 'intent', weight: term });
+    score += term;
   }
 
   return { candidate: c, score, reasons: reasons.sort((a, b) => b.weight - a.weight) };
@@ -286,14 +388,16 @@ function shuffleTiers(list: ScoredCandidate[], salt: number): ScoredCandidate[] 
   return out;
 }
 
-export function rankCandidates(candidates: Candidate[], ctx: RecommendationContext): ScoredCandidate[] {
+export function rankCandidates(candidates: Candidate[], ctx: RecommendationContext, onDrop?: (dropped: ScoredCandidate) => void): ScoredCandidate[] {
   const seen = new Set<string>();
   const out: ScoredCandidate[] = [];
+  const frame = buildScoringFrame(ctx);
   for (const c of candidates) {
     if (seen.has(c.song.id)) continue;
     seen.add(c.song.id);
-    const scored = scoreCandidate(c, ctx);
+    const scored = scoreCandidate(c, ctx, frame);
     if (scored.score > 0) out.push(scored);
+    else onDrop?.(scored);
   }
   out.sort((a, b) => b.score - a.score);
   return rerankCandidates(shuffleTiers(out, ctx.salt), ctx);

@@ -1,3 +1,4 @@
+import { lazy, Suspense, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useReasonStore } from '@/store/reasonStore';
@@ -6,10 +7,24 @@ import { FavButton } from './FavButton';
 import { Marquee } from './Marquee';
 import { artistPath } from '@/utils/slug';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
-import { LiveLyricLine } from './LiveLyricLine';
+const SyncedLyrics = lazy(() => import('./SyncedLyrics').then(m => ({ default: m.SyncedLyrics })));
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
-/** Persistent Now Playing column on wide screens — artwork, queue preview, one tap to the full player. */
+/**
+ * Persistent Now Playing column on wide screens — artwork, queue preview, one tap to the full player.
+ *
+ * The rail is only ever visible from the `xl` breakpoint up. CSS-hiding it
+ * was not enough: below 1280px it still mounted, fetched synced lyrics, held a
+ * playback-clock subscriber and downloaded 500px artwork on every phone. The
+ * gate keeps all of that unmounted until the column can actually show.
+ */
 export function NowPlayingRail() {
+  const wide = useMediaQuery('(min-width: 1280px)');
+  return wide ? <NowPlayingRailBody /> : null;
+}
+
+function NowPlayingRailBody() {
+  const [panel, setPanel] = useState<'queue' | 'lyrics'>('queue');
   const song = useCurrentSong();
   const queue = usePlayerStore((s) => s.queue);
   const index = usePlayerStore((s) => s.index);
@@ -36,7 +51,7 @@ export function NowPlayingRail() {
           src={bestImage(song.images, 500)}
           onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
           alt=""
-          className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+          className="w-full aspect-square object-cover"
         />
       </button>
       <div className="flex items-center justify-between gap-2">
@@ -52,11 +67,18 @@ export function NowPlayingRail() {
         </div>
         <FavButton song={song} />
       </div>
-      {lyrics.data?.synced && (
-        <LiveLyricLine lines={lyrics.data.synced} onOpen={() => navigate('/now-playing')} />
-      )}
-
-      {upNext.length > 0 && (
+      <div className="vx-panel-switch" role="group" aria-label="Now playing panel">
+        <button type="button" aria-pressed={panel === 'queue'} onClick={() => setPanel('queue')}>Up next</button>
+        <button type="button" aria-pressed={panel === 'lyrics'} onClick={() => setPanel('lyrics')}>Lyrics</button>
+      </div>
+      {panel === 'lyrics' && <section aria-label="Live lyrics" className="vx-rail-lyrics">
+        {lyrics.isLoading ? <p className="text-meta text-ink-400" role="status">Finding the words…</p> : lyrics.data?.synced ?
+          <Suspense fallback={<p role="status">Loading lyrics…</p>}><SyncedLyrics lines={lyrics.data.synced} live className="max-h-96 overflow-y-auto" /></Suspense> :
+          <p className="text-sm text-ink-300 whitespace-pre-wrap leading-7">{lyrics.data?.plain || 'Lyrics aren’t available for this song yet.'}</p>}
+        <Link to="/now-playing" className="vx-section-link">Open full player →</Link>
+      </section>}
+      {panel === 'queue' && upNext.length === 0 && <p className="text-meta text-ink-400">You’re at the end of this queue. Add a song or tune your next mix.</p>}
+      {panel === 'queue' && upNext.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-bold uppercase tracking-widest text-ink-400">Queue</h3>
