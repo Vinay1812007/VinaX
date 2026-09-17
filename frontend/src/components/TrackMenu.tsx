@@ -364,7 +364,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
   return createPortal(
     // Touch + click are stopped here for the same portal-bubbling reason as
     // keydown: a swipe on the menu must not swipe the song row that owns it.
-    <div ref={overlayRef} onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop} onClick={stop}>
+    <div ref={overlayRef} data-vx-overlay onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop} onClick={stop}>
       <div className="fixed inset-0 z-[70] bg-black/40" onClick={onClose} />
       <div
         ref={menuRef}

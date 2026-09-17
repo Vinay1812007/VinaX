@@ -25,6 +25,7 @@ import { initSessionInsights } from '@/services/analytics/sessionInsights';
 import { applyGlassLevel, applyThemeClasses, resolveTheme } from '@/utils/theme';
 import { closeTopOverlay } from '@/hooks/useDismissOnBack';
 import { recallScroll, rememberScroll, restoreWhenTall } from '@/features/nav/scrollMemory';
+import { shouldRescueWheel } from '@/features/nav/wheelRescue';
 import { loadBlocklist } from '@/services/content/blocklist';
 import { initLockScreenLyrics } from '@/services/media-session/lockscreenLyrics';
 import { initDownloads } from '@/services/downloads';
@@ -305,7 +306,8 @@ export function AppLayout() {
       const m = mainRef.current;
       const root = document.getElementById('root');
       const t = e.target;
-      if (!m || !root || !(t instanceof Node) || root.contains(t)) return;
+      // Only an injected blocker under <body> is rescued — never our own portalled menus and sheets.
+      if (!m || !shouldRescueWheel(t, root, e.defaultPrevented)) return;
       m.scrollBy({ top: e.deltaY });
     };
     if (!isNativePlatform()) window.addEventListener('wheel', onWheel, { passive: true });

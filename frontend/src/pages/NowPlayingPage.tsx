@@ -931,6 +931,7 @@ export default function NowPlayingPage() {
       {chromeHidden &&
         createPortal(
           <div
+            data-vx-overlay
             className="fixed inset-0 z-[60] bg-black select-none touch-pan-x overflow-hidden animate-fade-up"
             data-deter-context
             onTouchStart={onArtTouchStart}
