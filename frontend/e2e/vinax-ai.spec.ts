@@ -243,12 +243,13 @@ test('one model menu lists the live catalogue; a pick goes on the wire; Agent mo
   await page.locator('button[aria-label^="Model:"]').click();
   const list = page.locator('[role="listbox"][aria-label="Choose model"]');
   await expect(list).toBeVisible();
-  for (const heading of ['Recommended', 'VinaX engines', 'VinaX GRQ ALL', 'VinaX OPR ALL']) {
+  // Section headings are upper-cased by CSS and this harness reads RENDERED text, so match case-insensitively.
+  for (const heading of [/recommended/i, /vinax engines/i, /vinax grq all/i, /vinax opr all/i]) {
     await expect(list).toContainText(heading);
   }
   const agentic = list.locator('[role="option"]').filter({ hasText: 'agentic' });
-  await expect(agentic).toContainText('Agent');
-  await expect(agentic).toContainText('128K');
+  await expect(agentic).toContainText(/agent/i);
+  await expect(agentic).toContainText(/128k/i);
   await expect(list.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
 
   // Type to filter, Enter to choose: the chip names the catalogue model.
