@@ -652,7 +652,7 @@ export default function SettingsPage() {
         <Row label="DJ builds every queue" note="Tap any song — in an album, a playlist or a shelf — and it starts alone while the DJ builds what follows from it. Off makes playback follow the list you tapped. Queue Builder plans and songs you queue by hand are never replaced.">
           <Toggle on={s.djTakeover} onChange={s.setDjTakeover} label="DJ builds every queue" />
         </Row>
-        <Row label="AI-designed shelves on Home" note="A “Designed for you” block with shelves the AI titles from your taste and the time of day, filled from the catalogue. Off hides it.">
+        <Row label="AI-designed shelves on Home" note="A “Designed for you” block with shelves the AI titles from your taste and the time of day, filled from the catalogue, and an AI-ordered “Trending for you”. Off hides the block and keeps Trending in your on-device taste order.">
           <Toggle on={s.aiHomeShelves} onChange={s.setAiHomeShelves} label="AI-designed shelves" />
         </Row>
         <Row stack label="Discovery" note={DISCOVERY_NOTES[s.discoveryMode]}>

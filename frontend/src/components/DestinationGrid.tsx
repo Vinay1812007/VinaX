@@ -4,7 +4,7 @@ import { NAV_GROUPS } from '@/constants/nav';
 /** Secondary routes remain discoverable inside their primary workspace. */
 export function DestinationGrid({ area }: { area: 'discover' | 'library' }) {
   const routes = area === 'discover'
-    ? ['/charts', '/languages', '/moods', '/regions', '/movies', '/videos', '/made-for-you', '/weekly', '/ai-playlist']
+    ? ['/charts', '/languages', '/moods', '/regions', '/movies', '/videos', '/made-for-you', '/weekly', '/ai-playlist', '/ads']
     : ['/favorites', '/later', '/offline', '/history', '/stats', '/taste-profile'];
   const items = NAV_GROUPS.flatMap(g => g.items);
   return <nav className="vx-destinations" aria-label={area === 'discover' ? 'Browse music' : 'Your collection shortcuts'}>

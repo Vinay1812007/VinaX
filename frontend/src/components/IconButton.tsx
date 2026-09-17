@@ -46,8 +46,10 @@ export function IconButton({
         'inline-flex items-center justify-center rounded-full transition-colors shrink-0',
         // Visual size scales, but the tap target stays >= 44px via padding box.
         
-        size === 'sm' && 'w-11 h-11',
-        size === 'md' && 'w-11 h-11',
+        // v7.0.1 — medium: 36 / 40px discs; the ::after pad keeps the hit box at 44px.
+        'relative after:absolute after:content-[\'\']',
+        size === 'sm' && 'w-9 h-9 after:-inset-1',
+        size === 'md' && 'w-10 h-10 after:-inset-0.5',
         size === 'lg' && 'w-12 h-12',
         active ? 'text-ember-400' : 'text-ink-300 hover:text-ink-100',
         'hover:bg-ink-800',

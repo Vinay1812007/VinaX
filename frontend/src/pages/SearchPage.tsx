@@ -740,7 +740,7 @@ export default function SearchPage() {
                   ? 'Type a line you remember…'
                   : 'Songs, albums, artists, playlists…'
             }
-            className={`w-full glass-search rounded-2xl pl-12 pr-20 py-3.5 text-sm outline-none transition-[color,background-color,border-color,opacity,transform] focus:ring-2 focus:ring-ember-500/35 focus:shadow-[0_0_34px_-8px_rgb(var(--ember-500)/0.5)] ${listening ? 'border-ember-500 ring-2 ring-ember-500/40' : ''}`}
+            className={`w-full glass-search rounded-2xl pl-12 pr-20 py-3 text-sm outline-none transition-[color,background-color,border-color,opacity,transform] focus:ring-2 focus:ring-ember-500/35 focus:shadow-[0_0_34px_-8px_rgb(var(--ember-500)/0.5)] ${listening ? 'border-ember-500 ring-2 ring-ember-500/40' : ''}`}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
             {input && (

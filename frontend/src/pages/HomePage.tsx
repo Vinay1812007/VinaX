@@ -1,4 +1,5 @@
 import { HomeOpening } from '@/features/home/HomeOpening';
+import { TopBarActions } from '@/components/TopBar';
 import { useDiscoveryStore } from '@/store/discoveryStore';
 import { invalidateRecommendationCache } from '@/services/recommendation/engine';
 import { recordServed, songKey } from '@/services/recommendation/songIdentity';
@@ -59,6 +60,7 @@ import {
 } from '@/features/home/usePersonalShelves';
 import { useFreshFinds, useHiddenGems, useTrendingNearYou } from '@/features/home/useDiscoveryShelves';
 import { useTrendingAlbums, useTrendingArtists } from '@/features/home/useTrendingShelves';
+import { useAiTrending } from '@/features/home/useAiTrending';
 import { useAiHome } from '@/features/home/useAiHome';
 import { useFeatureEnabled } from '@/features/home/useAppConfig';
 import { moodRotationOfTheDay, useMoodShelf } from '@/features/home/useMoodShelves';
@@ -362,7 +364,7 @@ function DiscoveryBlock() {
   // static — the second-language query just goes unused when there isn't one.
   const secondLang = pinned[1] && pinned[1] !== primaryLang ? pinned[1] : null;
   const nearYou = useTrendingNearYou();
-  const trendingNow = useTrendingNow();
+  const trendingNow = useAiTrending();
   const trending = useTrendingForLanguage(primaryLang);
   const newReleases = useNewReleases();
   const popular = usePopular();
@@ -383,11 +385,16 @@ function DiscoveryBlock() {
         />
       ) : null}
 
-      {/* 12. Trending Now (existing) */}
+      {/* 12. Trending for you — the trending pool, ordered by taste (and by the AI when it is on) */}
       {trendingNow.isLoading ? (
         <ShelfSkeleton />
-      ) : trendingNow.data && trendingNow.data.length > 0 ? (
-        <SongShelf title="Trending Now" explanation="What everyone's playing right now" songs={dedupe(trendingNow.data)} seeAllTo="/charts" />
+      ) : trendingNow.songs.length > 0 ? (
+        <SongShelf
+          title="Trending for you"
+          explanation={trendingNow.by === 'ai' ? 'What’s trending right now, put in your order by VinaX AI' : 'What’s trending right now, in the order your taste suggests'}
+          songs={dedupe(trendingNow.songs)}
+          seeAllTo="/charts"
+        />
       ) : null}
 
       {/* Trending in your primary language */}
@@ -914,10 +921,10 @@ export default function HomePage() {
   return (
    <PullToRefresh onRefresh={handleRefresh}>
     <div className="max-w-screen-2xl mx-auto vx-stagger vx-home">
-      <div className="flex items-center justify-end gap-1 mb-2">
+      <TopBarActions>
         <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}><SunIcon className="w-5 h-5" /></IconButton>
         <IconButton label="Notifications" onClick={() => setNotifOpen(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M9 21h6" /></svg></IconButton>
-      </div>
+      </TopBarActions>
       <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
       {/* Hero — full-bleed colour wash that fades into the page */}

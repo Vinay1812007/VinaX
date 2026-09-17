@@ -145,6 +145,44 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
     };
   }, [anchorRef, onClose]);
 
+  // v7.0.1 — while the menu is open, the page behind it must not move. The
+  // page scrolls inside its own container (not <body>), so a body lock does
+  // nothing; instead the overlay swallows every wheel / touch scroll that is
+  // not the menu's own list moving. Native listeners, because React's are
+  // passive and cannot preventDefault.
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    let lastY = 0;
+    const canScroll = (dy: number): boolean => {
+      const menu = menuRef.current;
+      if (!menu || menu.scrollHeight <= menu.clientHeight) return false;
+      return dy > 0 ? menu.scrollTop + menu.clientHeight < menu.scrollHeight - 1 : menu.scrollTop > 0;
+    };
+    const inMenu = (t: EventTarget | null): boolean => t instanceof Node && !!menuRef.current?.contains(t);
+    const onWheel = (e: WheelEvent): void => {
+      if (!inMenu(e.target) || !canScroll(e.deltaY)) e.preventDefault();
+    };
+    const onTouchStart = (e: TouchEvent): void => {
+      lastY = e.touches[0]?.clientY ?? 0;
+    };
+    const onTouchMove = (e: TouchEvent): void => {
+      const y = e.touches[0]?.clientY ?? lastY;
+      const dy = lastY - y; // finger up = content scrolls down
+      lastY = y;
+      if (!inMenu(e.target) || !canScroll(dy)) e.preventDefault();
+    };
+    overlay.addEventListener('wheel', onWheel, { passive: false });
+    overlay.addEventListener('touchstart', onTouchStart, { passive: true });
+    overlay.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      overlay.removeEventListener('wheel', onWheel);
+      overlay.removeEventListener('touchstart', onTouchStart);
+      overlay.removeEventListener('touchmove', onTouchMove);
+    };
+  }, []);
+
   const itemEls = (): HTMLElement[] =>
     Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? []);
 
@@ -326,14 +364,14 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
   return createPortal(
     // Touch + click are stopped here for the same portal-bubbling reason as
     // keydown: a swipe on the menu must not swipe the song row that owns it.
-    <div onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop} onClick={stop}>
+    <div ref={overlayRef} onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop} onClick={stop}>
       <div className="fixed inset-0 z-[70] bg-black/40" onClick={onClose} />
       <div
         ref={menuRef}
         role="menu"
         aria-label={`More options for ${song.title}`}
         onKeyDown={onMenuKeyDown}
-        className="fixed z-[71] w-56 rounded-md p-1 animate-fade-up max-h-72 overflow-y-auto bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)]"
+        className="fixed z-[71] w-56 rounded-md p-1 animate-fade-up max-h-72 overflow-y-auto overscroll-contain bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)]"
         style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
       >
         {items.filter(Boolean).map((item) => (
