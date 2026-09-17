@@ -56,7 +56,7 @@
   font-size: 16px;
 }
 .ai-ambient {
-  background: radial-gradient(ellipse at 50% 0, rgb(var(--ember-500) / 0.045), transparent 60%);
+  background: none;
 }
 .ai-display {
   font-family: 'Manrope', system-ui, sans-serif;
@@ -73,11 +73,11 @@
   place-items: center;
   width: 64px;
   height: 64px;
-  border-radius: 22px;
+  border-radius: var(--vx-radius-panel);
   margin: 0 auto 24px;
-  background: linear-gradient(140deg, rgb(var(--ember-400) / 0.22), var(--ai-panel));
+  background: var(--vx-surface-raised);
   border: 1px solid rgb(var(--ember-400) / 0.3);
-  box-shadow: 0 0 50px rgb(var(--ember-500) / 0.1);
+  box-shadow: none;
   color: rgb(var(--ember-400));
 }
 .ai-astra-kicker {
@@ -163,7 +163,7 @@
   place-items: center;
   margin: 10px;
   border: 2px dashed rgb(var(--ember-400) / 0.7);
-  border-radius: 22px;
+  border-radius: var(--vx-radius-panel);
   background: rgb(var(--ai-bg) / 0.92);
   backdrop-filter: blur(10px);
 }
@@ -415,8 +415,6 @@
 html.light :focus-visible { outline-color: var(--vx-focus); box-shadow: none; }
 .glass-card, .glass-panel { box-shadow: none; }
 .bg-ai-accent { background: var(--vx-accent); box-shadow: none; }
-.ai-ambient { background: none; }
-.ai-astra-mark { box-shadow: none; border-radius: var(--vx-radius-panel); background: var(--vx-surface-raised); }
 .vx-library-tools { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
 .vx-library-tools input { flex: 1; min-width: 160px; }
 .vx-library-tools input, .vx-library-tools select { min-height: 44px; padding: 8px 12px; background: var(--vx-surface-raised); border: 1px solid var(--vx-border); border-radius: var(--vx-radius-control); }

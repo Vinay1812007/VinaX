@@ -26,7 +26,7 @@ function StateBadge({ icon }: { icon?: ReactNode }) {
         // a neutral slate when nothing is playing (--art defaults set in CSS).
         background: 'rgb(var(--art) / 0.10)',
         boxShadow: 'inset 0 0 0 1px rgb(var(--art) / 0.22)',
-        color: 'rgb(var(--art))',
+        color: 'var(--vx-accent-hover)',
       }}
       aria-hidden
     >

@@ -112,7 +112,7 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
             }}
             className={cn(
               'absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md transition-[color,background-color,border-color,opacity,transform] active:scale-90',
-              isFav ? 'bg-ember-500/90 text-white' : 'bg-black/40 text-white/90 hover:bg-black/60 hover-reveal',
+              isFav ? 'bg-ember-500 text-[var(--vx-on-accent)]' : 'bg-black/40 text-white/90 hover:bg-black/60 hover-reveal',
             )}
           >
             <HeartIcon className="w-4 h-4" />

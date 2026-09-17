@@ -908,9 +908,6 @@ html.light .np-mini {
   background: var(--glass-bg-strong);
   border-color: rgba(0, 0, 0, 0.08);
 }
-html.light .np-mini > div {
-  background: rgba(255, 255, 255, 0.35);
-}
 
 /* Song-change bloom on the mini-player — toggled by PlayerBar on song.id
    flip; the class is removed after ~420ms so subsequent flips retrigger. */

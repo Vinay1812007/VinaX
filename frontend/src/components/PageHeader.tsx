@@ -13,7 +13,7 @@ export function PageHeader({ title, subtitle, actions, compact }: Props) {
   return (
     <div className={`vx-page-header ${compact ? 'mb-1' : 'mb-6'}`}>
       <div className="min-w-0">
-        <h1 className="">{title}</h1>
+        <h1>{title}</h1>
         {subtitle && <p className="text-meta text-ink-300 mt-1">{subtitle}</p>}
       </div>
       {/* The row wraps (.vx-page-header is flex-wrap) and so do the actions:

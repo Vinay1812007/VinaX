@@ -139,18 +139,18 @@ export function PlayerBar() {
   return (
     <>
       {/* ---- Mobile: floating mini-player card (artwork-tinted) ---- */}
-      <div className="md:hidden px-2 pb-1.5" data-tour="player">
+      <div className="lg:hidden px-2 pb-1.5" data-tour="player">
         <div
           className={cn(
             'np-mini relative rounded-xl overflow-hidden shadow-lg border border-glass',
             changed && 'np-changed',
           )}
           data-buffering={isBuffering ? 'true' : undefined}
-          style={{ background: accent ?? `rgb(var(--ink-800))` }}
+          style={{ background: accent ? `color-mix(in srgb, ${accent} 16%, var(--vx-surface-raised))` : 'var(--vx-surface-raised)' }}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
-          <div className="flex items-center gap-2.5 pl-2 pr-1 py-1.5 bg-black/35 backdrop-blur-md">
+          <div className="flex items-center gap-2.5 pl-2 pr-1 py-1.5">
             <button
               onClick={() => navigate('/now-playing')}
               className="flex items-center gap-3.5 flex-1 min-w-0 text-left"
@@ -165,8 +165,8 @@ export function PlayerBar() {
                 />
               </span>
               <span className="min-w-0 flex-1">
-                <Marquee text={song.title} className="text-[13px] font-semibold text-white" />
-                <span className="block text-[11px] text-white/70 truncate">{song.subtitle}</span>
+                <Marquee text={song.title} className="text-[13px] font-semibold text-ink-100" />
+                <span className="block text-[11px] text-ink-400 truncate">{song.subtitle}</span>
               </span>
             </button>
             {sleepActive && (
@@ -180,13 +180,13 @@ export function PlayerBar() {
                 <cast-media-route-button style={{ width: '24px', height: '24px', '--connected-color': 'rgb(var(--ember-400))', '--disconnected-color': 'currentColor' }} />
               </div>
             )}
-            <FavButton song={song} className="text-white/80" />
+            <FavButton song={song} className="text-ink-300" />
             <button
               type="button"
               aria-label={isPlaying ? 'Pause' : 'Play'}
               title={isPlaying ? 'Pause' : 'Play'}
               onClick={togglePlay}
-              className="np-mini-play inline-flex items-center justify-center w-11 h-11 rounded-full text-white shrink-0 active:scale-95 transition-transform"
+              className="np-mini-play inline-flex items-center justify-center w-11 h-11 rounded-full text-ink-100 shrink-0 active:scale-95 transition-transform"
             >
               {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6 ml-0.5" />}
             </button>
@@ -198,9 +198,9 @@ export function PlayerBar() {
 
       {/* ---- Desktop bar: three-zone layout ---- */}
       {/* v5.9.0 — the bar: full width, flush with the bottom, black. */}
-      <div className="relative hidden md:block overflow-hidden glass-bottom-player" data-tour="player">
+      <div className="relative hidden lg:block overflow-hidden glass-bottom-player" data-tour="player">
         <div className="flex items-center gap-4 px-4 py-2.5 max-w-screen-2xl mx-auto">
-          <div className="flex items-center gap-3 min-w-0 w-48 lg:w-60">
+          <div className="flex items-center gap-3 min-w-0 w-40 lg:w-60">
             <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="group shrink-0">
               <img
                 src={artUrl ?? FALLBACK_ART}
@@ -249,7 +249,7 @@ export function PlayerBar() {
             </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-1 w-48 lg:w-60 justify-end">
+          <div className="hidden md:flex items-center gap-0 lg:gap-1 w-60 lg:w-72 justify-end">
             {castAvailable && (
               <div className="w-8 h-8 flex items-center justify-center mr-1">
                 {/* Custom element defined by Google Cast SDK */}
@@ -279,7 +279,7 @@ export function PlayerBar() {
               step={0.05}
               value={muted ? 0 : volume}
               onChange={(e) => setVolume(Number(e.target.value))}
-              className="w-20"
+              className="w-16 lg:w-20"
               style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties}
             />
           </div>

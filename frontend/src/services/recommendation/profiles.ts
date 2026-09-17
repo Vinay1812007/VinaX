@@ -78,6 +78,10 @@ function finite(value: unknown): number | null {
 }
 
 export function buildSongProfile(song: Song): SongProfile {
+  // v7.0.0 — persisted songs are untrusted: one favourite or history entry with a
+  // malformed `artists` used to throw here, and the player (rightly) swallows a failed
+  // continuation — so a single bad record silently ended autoplay for good.
+  const artists = Array.isArray(song.artists) ? song.artists : [];
   const text = textFor(song);
   const genres = unique([...(song.genres ?? []), song.genre ?? '', ...inferred(GENRE_HINTS, text)].map(clean));
   const vibes = unique([...(song.vibes ?? []), song.vibe ?? '', ...inferred(VIBE_HINTS, text)].map(clean));
@@ -97,8 +101,8 @@ export function buildSongProfile(song: Song): SongProfile {
     mood,
     energy,
     tempo,
-    artistIds: song.artists.map((a) => clean(a.id)).filter(Boolean),
-    artistNames: song.artists.map((a) => clean(a.name)).filter(Boolean),
+    artistIds: artists.map((a) => clean(a?.id)).filter(Boolean),
+    artistNames: artists.map((a) => clean(a?.name)).filter(Boolean),
   };
 }
 

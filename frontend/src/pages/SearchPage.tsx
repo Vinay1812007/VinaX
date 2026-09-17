@@ -860,7 +860,8 @@ export default function SearchPage() {
                   active={tab === t}
                   onClick={() => {
                     setTab(t);
-                    searchInputRef.current?.focus();
+                    setFocused(false);
+                    searchInputRef.current?.blur();
                   }}
                 >
                   {t}

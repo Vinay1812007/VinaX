@@ -166,7 +166,7 @@ for (const size of SIZES) {
     await page.setViewportSize(size);
     await seed(page, baseURL!, size.theme);
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Open' }).click();
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Backup Center' })).toBeVisible();
     await expect.poll(() => bodyText(page)).toMatch(/2 favourites · 2 playlists/);
     await expect.poll(() => bodyText(page)).toMatch(/Downloaded audio and download paths/);
@@ -190,7 +190,7 @@ for (const size of SIZES) {
       return `${lib.favorites.length}/${lib.collections.length}`;
     }), { timeout: 15_000 }).toBe('3/3');
     // Undo is offered in the same tab and puts the old data back.
-    await page.getByRole('button', { name: 'Open' }).click();
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Undo that restore' })).toBeVisible();
     await page.getByRole('button', { name: 'Undo that restore' }).click();
     await expect.poll(() => page.evaluate(() => {
