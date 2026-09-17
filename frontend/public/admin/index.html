@@ -14,258 +14,342 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org" />
     <title>VinaX · Control Room</title>
 
+    <!-- Pre-paint: resolves the theme (stored choice, else the system
+         preference) and the sidebar rail state before first paint, so there
+         is no theme flash and no layout shift. External file because the CSP
+         above forbids inline scripts. -->
+    <script src="/admin/theme-boot.js"></script>
+
     <!-- Leaflet (vendored — CSP script-src is 'self') for the World map. -->
     <link rel="stylesheet" href="/admin/leaflet/leaflet.css" />
     <style>
       /* =====================================================================
-         VinaX Admin Console — calm operations redesign.
-         One token system drives everything: layered surfaces, hairline
-         borders, a 4/8px rhythm, one accent, restrained type. body.lightadm
-         only re-maps the tokens. app.js paints panels into #view with plain
+         VinaX Admin Console — one product with the listener app.
+         The palette below MIRRORS the app's design tokens (values copied from
+         src/styles/index.css — the console is standalone and never imports
+         app CSS): ink surface ramp, hairline borders, the violet accent ramp,
+         8px controls / 12px cards / 16px panels, 40px buttons / 36px chips,
+         Manrope. Dark is the default; html.light re-maps the tokens exactly
+         like the app's html.light. app.js paints panels into #view with plain
          class names (.card .cards .pill .row .muted .empty .inp .ghost
          .switch .btrack .bfill .brow .codebox …) — those names are the API.
          ===================================================================== */
+      @font-face {
+        font-family: 'Manrope';
+        src: url('/fonts/manrope-var.woff2') format('woff2-variations');
+        font-weight: 200 800; font-style: normal; font-display: swap;
+      }
       :root {
         color-scheme: dark;
-        --bg: #0a0c12;            /* page */
-        --surface: #12151d;       /* sidebar, header, cards */
-        --surface-2: #171b25;     /* inputs, table heads, hover rows */
-        --surface-3: #1d2230;     /* pressed / active fills, code pills */
-        --border: #252b38;
-        --border-strong: #323a4a;
-        --text: #e8ebf1;
-        --text-2: #a6adbb;
-        --text-3: #6f7788;
-        --accent: #4f8cff;
-        --accent-strong: #3b78f0;
-        --accent-soft: rgba(79, 140, 255, 0.14);
-        --accent-tint: rgba(79, 140, 255, 0.09);
-        --accent-text: #8fb5ff;
-        --ok: #2fbf71;
-        --warn: #e0a326;
-        --danger: #e5484d;
-        --ok-soft: rgba(47, 191, 113, 0.14);
-        --warn-soft: rgba(224, 163, 38, 0.14);
-        --danger-soft: rgba(229, 72, 77, 0.14);
-        --row-alt: rgba(255, 255, 255, 0.018);
-        --row-hover: rgba(79, 140, 255, 0.07);
-        --highlight: rgba(255, 255, 255, 0.04);   /* gradient top sheen on tiles */
+        --bg: #121214;            /* page canvas            (app ink-900) */
+        --chrome: #0b0b0c;        /* sidebar, footer        (app ink-950) */
+        --surface: #18181b;       /* cards, modals          (app ink-850) */
+        --surface-2: #222226;     /* inputs, table heads, hover (app ink-800) */
+        --surface-3: #333333;     /* pressed fills, tracks, code (app ink-700) */
+        --border: rgba(255, 255, 255, 0.06);        /* app hairline */
+        --border-strong: rgba(255, 255, 255, 0.12); /* app strong hairline */
+        --text: #ffffff;          /* app ink-100 */
+        --text-2: #b3b3b3;        /* app ink-300 */
+        --text-3: #a7a7a7;        /* app ink-400 (muted) */
+        --accent: #a78bfa;        /* app ember-500 */
+        --accent-strong: #c4b5fd; /* app ember-400 (hover) */
+        --accent-text: #c4b5fd;   /* app ember-400 (text tier) */
+        --on-accent: #0b0b0c;
+        --focus: #c4b5fd;
+        --accent-soft: rgba(167, 139, 250, 0.16);
+        --accent-tint: rgba(167, 139, 250, 0.08);
+        --ok: #86efac;
+        --warn: #fcd34d;
+        --danger: #fda4af;
+        --ok-soft: rgba(134, 239, 172, 0.14);
+        --warn-soft: rgba(252, 211, 77, 0.14);
+        --danger-soft: rgba(253, 164, 175, 0.14);
+        --row-alt: rgba(255, 255, 255, 0.02);
+        --row-hover: rgba(167, 139, 250, 0.08);
+        --highlight: rgba(255, 255, 255, 0.02);   /* gradient top sheen on tiles */
+        --scrim: rgba(0, 0, 0, 0.6);
         --ring: 0 0 0 3px var(--accent-soft);
-        --radius-sm: 6px; --radius: 8px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 16px; --radius-pill: 999px;
+        --radius-sm: 6px; --radius: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 16px; --radius-pill: 999px;
         --r-sm: var(--radius-sm); --r: var(--radius); --r-lg: var(--radius-md); /* legacy aliases */
-        --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08);
-        --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.35);
-        --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
-        --t-fast: 120ms; --t: 160ms; --ease: cubic-bezier(.2, .7, .3, 1);
-        --font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        --control-h: 40px; --control-h-sm: 36px;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+        --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+        --t-fast: 140ms; --t: 200ms; --ease: cubic-bezier(0.32, 0.72, 0, 1);
+        --font: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, 'Segoe UI', Roboto, sans-serif;
         --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        /* Shell geometry: the grid column reads --sb-cur, so collapsing the
+           sidebar is one variable change — no reflow of the shell itself. */
+        --sb-w: 272px; --sb-rail-w: 68px; --sb-cur: var(--sb-w);
         /* Legacy aliases still referenced by app.js inline styles. */
         --ember: var(--accent);
         --pink: var(--accent);
         --grad: var(--accent);
       }
-      body.lightadm {
+      :root.light {
         color-scheme: light;
-        --bg: #f5f6fa;
+        --bg: #f7f7f7;            /* app light ink-900 */
+        --chrome: #ffffff;        /* app light ink-950 */
         --surface: #ffffff;
-        --surface-2: #f3f4f8;
-        --surface-3: #e9ecf3;
-        --border: #e2e5ec;
-        --border-strong: #cdd3dd;
-        --text: #161922;
-        --text-2: #4b5364;
-        --text-3: #7a8494;
-        --accent: #2f6fed;
-        --accent-strong: #245fd6;
-        --accent-soft: rgba(47, 111, 237, 0.12);
-        --accent-tint: rgba(47, 111, 237, 0.08);
-        --accent-text: #2158c4;
-        --ok: #1f9d5a;
-        --warn: #b7791f;
-        --danger: #d03a40;
-        --ok-soft: rgba(31, 157, 90, 0.12);
-        --warn-soft: rgba(183, 121, 31, 0.12);
-        --danger-soft: rgba(208, 58, 64, 0.10);
-        --row-alt: rgba(20, 30, 60, 0.025);
-        --row-hover: rgba(47, 111, 237, 0.06);
-        --highlight: rgba(255, 255, 255, 0.6);
-        --shadow: 0 1px 2px rgba(20, 30, 60, 0.06), 0 0 0 1px rgba(20, 30, 60, 0.02);
-        --shadow-md: 0 6px 18px rgba(20, 30, 60, 0.10);
-        --shadow-lg: 0 24px 60px rgba(20, 30, 60, 0.20);
+        --surface-2: #f0f0f0;     /* app light ink-850 */
+        --surface-3: #e5e5e5;     /* app light ink-800 */
+        --border: rgba(15, 20, 30, 0.08);
+        --border-strong: rgba(15, 20, 30, 0.14);
+        --text: #0c0e14;          /* app light ink-100 */
+        --text-2: #545a68;        /* app light ink-300 */
+        --text-3: #5c6272;        /* app light ink-400 */
+        --accent: #5b21b6;        /* app light ember-500 */
+        --accent-strong: #6d28d9; /* app light ember-400 */
+        --accent-text: #6d28d9;
+        --on-accent: #ffffff;
+        --focus: #6d28d9;
+        --accent-soft: rgba(91, 33, 182, 0.12);
+        --accent-tint: rgba(91, 33, 182, 0.07);
+        --ok: #166534;
+        --warn: #92400e;
+        --danger: #be123c;
+        --ok-soft: rgba(22, 101, 52, 0.10);
+        --warn-soft: rgba(146, 64, 14, 0.10);
+        --danger-soft: rgba(190, 18, 60, 0.10);
+        --row-alt: rgba(15, 20, 30, 0.025);
+        --row-hover: rgba(91, 33, 182, 0.06);
+        --highlight: rgba(255, 255, 255, 0.75);
+        --scrim: rgba(12, 14, 20, 0.4);
+        --shadow: 0 1px 2px rgba(15, 20, 30, 0.06);
+        --shadow-md: 0 4px 12px -6px rgba(15, 20, 30, 0.12), 0 4px 16px rgba(15, 20, 30, 0.06);
+        --shadow-lg: 0 16px 48px rgba(15, 20, 30, 0.2);
       }
 
       * { box-sizing: border-box; }
       [hidden] { display: none !important; }
       html, body { height: 100%; }
       body {
-        margin: 0; font-family: var(--font); font-size: 13px; line-height: 1.45; color: var(--text); background: var(--bg);
-        -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+        margin: 0; font-family: var(--font); font-size: 14px; line-height: 1.45; color: var(--text); background: var(--bg); letter-spacing: -0.005em;
+        -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; -webkit-tap-highlight-color: transparent;
       }
       a { color: var(--accent-text); }
       code { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
       ::selection { background: var(--accent-soft); }
-      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
       * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
       .spacer { flex: 1 1 auto; }
+      .ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
       /* ---------- Controls ---------- */
       input[type="password"], input[type="text"], input[type="search"], input[type="date"], input[type="number"], input[type="url"], input[type="email"],
       select, textarea, .inp {
-        width: 100%; height: 32px; padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
+        width: 100%; height: var(--control-h); padding: 0 12px; border-radius: var(--radius); border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
         font-size: 13px; font-family: inherit; line-height: 1.4; transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
       }
-      textarea, textarea.inp { height: auto; padding: 8px 10px; }
+      textarea, textarea.inp { height: auto; padding: 8px 12px; }
       select, select.inp, input[type="date"], input[type="date"].inp, input[type="color"] { width: auto; }
       input::placeholder, textarea::placeholder { color: var(--text-3); }
       input:hover, select:hover, textarea:hover, .inp:hover { border-color: var(--text-3); }
-      input:focus, select:focus, textarea:focus, .inp:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); background: var(--surface); }
+      input:focus, select:focus, textarea:focus, .inp:focus { outline: none; border-color: var(--focus); box-shadow: var(--ring); }
+      input:focus-visible, select:focus-visible, textarea:focus-visible, .inp:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
       select { appearance: none; -webkit-appearance: none; padding-right: 28px; cursor: pointer;
         background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' width='10' height='7'><path fill='%237a8494' d='M6 8L0 0h12z'/></svg>");
         background-repeat: no-repeat; background-position: right 10px center; }
       input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
       button {
-        padding: 0 12px; min-height: 32px; border-radius: var(--radius); border: 1px solid transparent; cursor: pointer; background: var(--accent); color: #fff;
-        font-weight: 600; font-size: 12.5px; font-family: inherit; line-height: 1.3; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        padding: 0 14px; min-height: var(--control-h); border-radius: var(--radius); border: 1px solid transparent; cursor: pointer; background: var(--accent); color: var(--on-accent);
+        font-weight: 700; font-size: 13px; font-family: inherit; line-height: 1.3;
         transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
       }
-      button:not(:disabled):hover { background: var(--accent-strong); }
-      button:not(:disabled):active { transform: translateY(1px); box-shadow: none; }
+      button:not(:disabled):hover { background: var(--accent-strong); color: var(--on-accent); }
+      button:not(:disabled):active { transform: translateY(1px); }
       button:disabled { opacity: .45; cursor: not-allowed; }
-      button.ghost { background: transparent; border-color: var(--border-strong); color: var(--text-2); font-weight: 500; box-shadow: none; }
+      button.ghost { min-height: var(--control-h-sm); background: transparent; border-color: var(--border-strong); color: var(--text-2); font-weight: 600; }
       button.ghost:not(:disabled):hover { background: var(--surface-2); border-color: var(--text-3); color: var(--text); }
-      button.icon-btn { width: 30px; height: 30px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); font-size: 11px; line-height: 1; }
+      button.ghost[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+      button.icon-btn { width: 32px; height: 32px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); font-size: 11px; line-height: 1; }
       button.icon-btn:disabled { opacity: .25; }
       .err { color: var(--danger); font-size: 12.5px; margin-top: 10px; min-height: 18px; }
       .row { display: flex; gap: 10px; align-items: center; }
       .row > .spacer ~ .inp, .row > .spacer ~ input { width: auto; flex: 0 1 260px; }
       .muted { color: var(--text-3); }
-      .pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: var(--radius-pill); background: var(--accent-tint); color: var(--accent-text); border: 1px solid transparent; white-space: nowrap; line-height: 1.5; letter-spacing: .01em; }
+      .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: var(--radius-pill); background: var(--accent-tint); color: var(--accent-text); border: 1px solid transparent; white-space: nowrap; line-height: 1.5; letter-spacing: .01em; }
       .dot2 { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
       .dot2.on { background: var(--ok); } .dot2.off { background: var(--text-3); opacity: .6; }
       .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
       .seg { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 3px; }
-      .seg button, .subtabs button { background: transparent; color: var(--text-2); min-height: 24px; padding: 0 11px; font-size: 12px; border-radius: var(--radius-sm); border: 0; font-weight: 500; box-shadow: none; }
+      .seg button, .subtabs button { background: transparent; color: var(--text-2); min-height: 28px; padding: 0 11px; font-size: 12px; border-radius: var(--radius-sm); border: 0; font-weight: 600; }
       .seg button:not(:disabled):hover, .subtabs button:not(:disabled):hover { background: var(--surface-3); color: var(--text); }
-      .seg button.active, .subtabs button.active { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
-      body.lightadm .seg button.active, body.lightadm .subtabs button.active { background: #fff; }
+      .seg button.active, .subtabs button.active,
+      .seg button.active:not(:disabled):hover, .subtabs button.active:not(:disabled):hover { background: var(--accent); color: var(--on-accent); font-weight: 700; }
       .subtabs { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 3px; margin-bottom: 14px; }
-      .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); cursor: pointer; user-select: none; font-weight: 500; }
+      .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); cursor: pointer; user-select: none; font-weight: 600; }
       .switch:hover { color: var(--text); }
-      .switch .track { width: 34px; height: 20px; border-radius: var(--radius-pill); background: var(--border-strong); position: relative; flex: none; transition: background var(--t) var(--ease); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2); }
-      .switch .track.on { background: var(--accent); }
-      .switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); transition: transform var(--t) var(--ease); }
-      .switch .track.on .knob { transform: translateX(14px); }
+      .switch .track { width: 34px; height: 20px; border-radius: var(--radius-pill); background: var(--surface-3); border: 1px solid var(--border-strong); position: relative; flex: none; transition: background var(--t) var(--ease); }
+      .switch .track.on { background: var(--accent); border-color: var(--accent); }
+      .switch .knob { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-2); transition: transform var(--t) var(--ease), background var(--t) var(--ease); }
+      .switch .track.on .knob { transform: translateX(14px); background: var(--on-accent); }
       .thumb { width: 36px; height: 36px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0; background: var(--surface-3); }
       .thumb.ph { background: var(--surface-3); }
       .thumb-sm { width: 26px; height: 26px; border-radius: 5px; object-fit: cover; flex-shrink: 0; background: var(--surface-3); }
+
+      /* ---------- Brand (a real link: sidebar → console home, login → console root) ---------- */
+      .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; color: var(--text); text-decoration: none; border-radius: var(--radius); }
+      .brand:hover .bname { color: var(--accent-text); }
+      .brand .mark { width: 30px; height: 30px; border-radius: var(--radius); background: linear-gradient(180deg, var(--accent-strong), var(--accent)); color: var(--on-accent); display: inline-grid; place-items: center; font-size: 15px; font-weight: 800; letter-spacing: 0; flex: none; }
+      .brand small { font-weight: 700; color: var(--text-3); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: 5px; line-height: 1.4; }
 
       /* ---------- Login ---------- */
       .login {
         min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;
         background: radial-gradient(900px 480px at 50% -10%, var(--accent-soft), transparent 70%), var(--bg);
       }
-      .login .panel { width: 100%; max-width: 400px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 32px 28px 26px; box-shadow: var(--shadow-md); }
+      .login .panel { width: 100%; max-width: 400px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px 28px 26px; box-shadow: var(--shadow-md); }
       .login .lg-brand { display: flex; justify-content: center; margin-bottom: 20px; }
-      .login .lg-brand .brand { margin: 0; }
-      .login .lg-brand .mark { width: 40px; height: 40px; border-radius: 12px; font-size: 20px; }
-      .login .lg-brand .brand > span:nth-child(2), .login .lg-brand .bname { font-size: 18px; }
-      .login h2 { font-size: 18px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.015em; text-align: center; }
+      .login .lg-brand .brand { margin: 0; padding: 4px 6px; }
+      .login .lg-brand .mark { width: 40px; height: 40px; border-radius: var(--radius-md); font-size: 20px; }
+      .login .lg-brand .bname { font-size: 18px; }
+      .login h2 { font-size: 18px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.015em; text-align: center; }
       .login p { color: var(--text-3); font-size: 12.5px; margin: 0 0 22px; text-align: center; }
-      .login label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); margin-bottom: 6px; }
-      .login input { height: 38px; font-family: var(--mono); letter-spacing: .12em; }
+      .login label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); margin-bottom: 6px; }
+      .login input { height: var(--control-h); font-family: var(--mono); letter-spacing: .12em; }
       .login .row { margin-top: 12px; }
-      .login .row button { width: 100%; min-height: 38px; }
+      .login .row button { width: 100%; }
       .login .lg-foot { text-align: center; color: var(--text-3); font-size: 11px; margin: 18px 0 0; }
 
-      /* ---------- Shell: sidebar + header + main in one grid ---------- */
+      /* ---------- Shell: sidebar + (stale banner / main / footer) in one grid.
+         There is no top bar at any width: every global control lives in the
+         sidebar. The sidebar column is a variable, so collapsing to the icon
+         rail only changes --sb-cur. ---------- */
       #app {
         display: grid; height: 100dvh;
-        grid-template-columns: 248px minmax(0, 1fr);
-        grid-template-rows: 56px auto minmax(0, 1fr) auto;
-        grid-template-areas: "nav header" "nav stale" "nav main" "nav footer";
+        grid-template-columns: var(--sb-cur) minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        grid-template-areas: "side stale" "side main" "side footer";
+        transition: grid-template-columns var(--t) var(--ease);
       }
-      .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; color: var(--text); }
-      .brand .mark { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(160deg, #6ea3ff, var(--accent-strong)); color: #fff; display: inline-grid; place-items: center; font-size: 14px; font-weight: 800; letter-spacing: 0; flex: none; box-shadow: 0 2px 8px var(--accent-soft), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
-      .brand small { font-weight: 600; color: var(--text-3); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: 5px; line-height: 1.4; }
-      .brand .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); margin-left: auto; box-shadow: 0 0 0 3px var(--surface-3); flex: none; }
-      body.live .brand .dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); animation: apulse 2.4s ease-in-out infinite; }
-      header {
-        grid-area: header; display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 24px; flex-wrap: nowrap; min-width: 0;
-        border-bottom: 1px solid var(--border); background: var(--surface); z-index: 5;
-      }
-      header .brand-top { display: none; }
-      header .updated { font-size: 11px; color: var(--text-3); }
-      .kpis { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-      .kpis .k { display: inline-flex; align-items: center; gap: 5px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 3px 10px; font-size: 11.5px; color: var(--text-3); white-space: nowrap; line-height: 1.5; }
-      .kpis .k b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
-      header #kpis { flex: none; }
-      header #kpis:empty { display: none; }
-      .hdr-tools { display: flex; align-items: center; gap: 10px; flex: none; margin-left: auto; }
-      .hdr-auto, .hdr-actions { display: flex; align-items: center; gap: 6px; }
-      .hdr-auto { padding-right: 10px; border-right: 1px solid var(--border); }
-      header .switch { padding: 0 4px; }
-      header button.ghost, header #hdr-interval { height: 32px; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0 11px; font-size: 12px; white-space: nowrap; border-radius: var(--radius); }
-      header #logout { color: var(--text-3); }
-      #hdr-interval { width: auto !important; padding: 0 26px 0 10px !important; border-radius: var(--radius) !important; border: 1px solid var(--border-strong) !important; background-color: transparent !important; color: var(--text-2) !important; font-size: 12px !important; font-weight: 500; cursor: pointer; }
-      #hdr-interval:hover { color: var(--text) !important; background-color: var(--surface-2) !important; }
-      .stale { grid-area: stale; background: var(--warn-soft); color: var(--warn); border-bottom: 1px solid var(--border); text-align: center; padding: 6px; font-size: 12px; font-weight: 500; }
+      .stale { grid-area: stale; background: var(--warn-soft); color: var(--warn); border-bottom: 1px solid var(--border); text-align: center; padding: 6px; font-size: 12px; font-weight: 600; }
 
       /* ---------- Sidebar ---------- */
-      nav {
-        grid-area: nav; display: block; min-height: 0; border-right: 1px solid var(--border); padding: 0 12px 28px; background: var(--surface);
-        overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent;
+      .sidebar {
+        grid-area: side; display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%;
+        background: var(--chrome); border-right: 1px solid var(--border);
+        overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
       }
-      nav .brand { position: sticky; top: 0; z-index: 2; height: 56px; padding: 0 4px; margin: 0 0 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
-      input.nav-search { width: 100%; height: 32px; padding: 0 10px 0 30px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 12.5px; margin-bottom: 8px;
-        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f7788' stroke-width='2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><path d='M20 20l-3.5-3.5'/></svg>");
+      .sb-head { position: sticky; top: 0; z-index: 3; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 60px; padding: 0 12px 0 14px; background: var(--chrome); border-bottom: 1px solid var(--border); }
+      .sb-head .brand { padding: 4px 6px 4px 2px; min-width: 0; }
+      button.sb-icon { width: 36px; height: 36px; min-height: 0; padding: 0; flex: none; display: inline-grid; place-items: center; background: transparent; border-color: transparent; color: var(--text-3); }
+      button.sb-icon:not(:disabled):hover { background: var(--surface-2); color: var(--text); }
+      .sb-group { flex: none; padding: 12px 12px 14px; border-top: 1px solid var(--border); }
+      .sb-head + .sb-group { border-top: 0; }
+      .sb-title { display: flex; align-items: center; gap: 8px; padding: 0 4px 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text-3); }
+      .sb-title .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); flex: none; }
+      body.live .sb-title .dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); animation: apulse 2.4s ease-in-out infinite; }
+      .kpis { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+      .kpis .k { display: inline-flex; align-items: center; gap: 5px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 3px 10px; font-size: 11.5px; color: var(--text-3); white-space: nowrap; line-height: 1.5; }
+      .kpis .k b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+      #kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+      #kpis .k { flex-direction: column; align-items: flex-start; gap: 0; padding: 7px 9px; border-radius: var(--radius); background: var(--surface); min-width: 0; }
+      #kpis .k b { font-size: 15px; line-height: 1.25; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+      #kpis .k .kl { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+      #kpis .k .kg { display: none; }
+
+      #nav { flex: 1 1 0; min-height: 240px; padding: 12px 12px 16px; border-top: 1px solid var(--border); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+      input.nav-search { width: 100%; height: var(--control-h-sm); padding: 0 10px 0 32px; border-radius: var(--radius); border: 1px solid var(--border-strong); background-color: var(--surface-2); color: var(--text); font-size: 12.5px; margin-bottom: 8px;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237a8494' stroke-width='2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><path d='M20 20l-3.5-3.5'/></svg>");
         background-repeat: no-repeat; background-size: 14px; background-position: 10px center; }
       input.nav-search:hover { border-color: var(--text-3); }
-      input.nav-search:focus { border-color: var(--accent); box-shadow: var(--ring); background-color: var(--surface); }
       button.nav-group-label {
-        display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); box-shadow: none;
-        padding: 6px 10px 4px; min-height: 0; margin: 14px 0 3px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--text-3); cursor: pointer;
+        display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm);
+        padding: 6px 8px 4px; min-height: 0; margin: 14px 0 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text-3); cursor: pointer;
       }
-      div.nav-group-label { display: flex; align-items: center; gap: 6px; padding: 6px 10px 4px; margin: 14px 0 3px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--text-3); }
-      button.nav-group-label:hover { color: var(--text-2); background: transparent; transform: none; }
+      div.nav-group-label { display: flex; align-items: center; gap: 8px; padding: 6px 8px 4px; margin: 14px 0 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text-3); }
+      button.nav-group-label:not(:disabled):hover { color: var(--text); background: transparent; transform: none; }
+      .nav-group-label .ic { width: 15px; height: 15px; }
       .nav-search + .nav-group-label, #nav-pins + .nav-group-label, #nav-pins .nav-group-label { margin-top: 8px; }
-      .nav-group-label .ng-n { font-size: 10px; font-weight: 600; letter-spacing: 0; color: var(--text-3); background: var(--surface-3); border-radius: 4px; padding: 0 5px; line-height: 16px; }
+      .nav-group-label .ng-n { font-size: 10px; font-weight: 700; letter-spacing: 0; color: var(--text-3); background: var(--surface-2); border-radius: 4px; padding: 0 5px; line-height: 16px; }
       .nav-group-label .ng-chev { margin-left: auto; font-size: 11px; opacity: .75; transition: transform var(--t) var(--ease); }
       .nav-group-label.closed .ng-chev { transform: rotate(-90deg); }
-      nav button[data-sec] {
-        position: relative; display: block; width: 100%; text-align: left; background: transparent; color: var(--text-2); border: 0; border-radius: var(--radius); box-shadow: none;
-        padding: 0 10px 0 14px; min-height: 32px; margin-bottom: 1px; font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      #nav button[data-sec] {
+        position: relative; display: block; width: 100%; text-align: left; background: transparent; color: var(--text-2); border: 0; border-radius: var(--radius);
+        padding: 0 10px 0 14px; min-height: var(--control-h-sm); margin-bottom: 1px; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
       }
-      nav button[data-sec]::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--accent); opacity: 0; transform: scaleY(.4); transition: opacity var(--t) var(--ease), transform var(--t) var(--ease); }
-      nav button[data-sec]:hover:not(:disabled) { background: var(--surface-2); color: var(--text); transform: none; }
-      nav button[data-sec].active { background: var(--accent-soft); color: var(--text); font-weight: 600; }
-      nav button[data-sec].active::before { opacity: 1; transform: none; }
-      @media (min-width: 901px) {
-        #nav button[data-sec].grp-hidden { display: none; }
-        #nav.searching button[data-sec].grp-hidden { display: block; }
+      #nav button[data-sec]::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 3px; background: var(--accent); opacity: 0; transform: scaleY(.4); transition: opacity var(--t) var(--ease), transform var(--t) var(--ease); }
+      #nav button[data-sec]:hover:not(:disabled) { background: var(--surface-2); color: var(--text); transform: none; }
+      #nav button[data-sec].active { background: var(--accent-soft); color: var(--text); font-weight: 700; }
+      #nav button[data-sec].active::before { opacity: 1; transform: none; }
+      #nav button[data-sec].grp-hidden { display: none; }
+      #nav.searching button[data-sec].grp-hidden { display: block; }
+
+      /* View + Actions groups and the pinned Sign out */
+      #range { display: flex; width: 100%; margin-bottom: 8px; }
+      #range button { flex: 1 1 0; padding: 0 4px; }
+      .sb-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      button.switch { flex: 1 1 auto; min-width: 0; min-height: var(--control-h-sm); padding: 0 6px; justify-content: flex-start; background: transparent; border-color: transparent; }
+      button.switch:not(:disabled):hover { background: var(--surface-2); color: var(--text); }
+      #hdr-interval { flex: none; width: auto; height: var(--control-h-sm); padding: 0 26px 0 10px; background-color: transparent; color: var(--text-2); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+      #hdr-interval:hover { color: var(--text); background-color: var(--surface-2); }
+      .sb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+      button.sb-btn { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; min-width: 0; padding: 0 10px; font-size: 12.5px; white-space: nowrap; }
+      button.sb-btn .bl { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      button.sb-btn .bv { margin-left: auto; color: var(--text-3); font-weight: 600; }
+      button.sb-btn.wide { grid-column: 1 / -1; }
+      .sb-foot { position: sticky; bottom: 0; z-index: 3; flex: none; margin-top: auto; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--chrome); border-top: 1px solid var(--border); }
+      #logout { color: var(--text-2); }
+      #logout:not(:disabled):hover { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+
+      /* Phone / tablet drawer chrome (hidden on desktop) */
+      button.menu-fab { display: none; position: fixed; z-index: 50; top: calc(10px + env(safe-area-inset-top)); left: calc(10px + env(safe-area-inset-left)); width: 40px; height: 40px; min-height: 0; padding: 0; place-items: center; background: var(--surface); border-color: var(--border-strong); color: var(--text); box-shadow: var(--shadow-md); }
+      button.menu-fab:not(:disabled):hover { background: var(--surface-2); }
+      .menu-fab .ic { width: 18px; height: 18px; }
+      .sb-scrim { display: none; position: fixed; inset: 0; z-index: 55; background: var(--scrim); }
+
+      /* Desktop icon rail */
+      @media (min-width: 1024px) {
+        :root.sb-rail { --sb-cur: var(--sb-rail-w); }
+        :root.sb-rail .sb-head { flex-direction: column; justify-content: center; gap: 4px; padding: 10px 0; }
+        :root.sb-rail .sb-head .brand { padding: 2px; }
+        :root.sb-rail .brand .bname, :root.sb-rail .brand small,
+        :root.sb-rail .sb-title, :root.sb-rail #navSearch, :root.sb-rail #nav-pins, :root.sb-rail #nav button[data-sec],
+        :root.sb-rail .nav-group-label .ng-t, :root.sb-rail .nav-group-label .ng-n, :root.sb-rail .nav-group-label .ng-chev,
+        :root.sb-rail #range, :root.sb-rail #hdr-interval, :root.sb-rail #kpis .kl { display: none; }
+        :root.sb-rail .sb-group, :root.sb-rail #nav, :root.sb-rail .sb-foot { padding-left: 10px; padding-right: 10px; }
+        :root.sb-rail #kpis { grid-template-columns: minmax(0, 1fr); }
+        :root.sb-rail #kpis .k { align-items: center; padding: 4px 2px; }
+        :root.sb-rail #kpis .k .kg { display: block; font-size: 9px; line-height: 1.2; }
+        :root.sb-rail #kpis .k b { font-size: 12.5px; }
+        :root.sb-rail #nav { flex: none; min-height: 0; overflow: visible; }
+        :root.sb-rail .sb-foot { margin-top: auto; }
+        :root.sb-rail button.nav-group-label { justify-content: center; min-height: var(--control-h-sm); margin: 0 0 4px; padding: 0; border-radius: var(--radius); }
+        :root.sb-rail button.nav-group-label:not(:disabled):hover, :root.sb-rail button.nav-group-label.current { background: var(--surface-2); color: var(--text); }
+        :root.sb-rail button.nav-group-label.current { background: var(--accent-soft); }
+        :root.sb-rail .nav-group-label .ic { width: 17px; height: 17px; }
+        :root.sb-rail .sb-row { justify-content: center; margin-bottom: 6px; }
+        :root.sb-rail button.switch { flex: none; padding: 0 6px; }
+        :root.sb-rail .sb-grid { grid-template-columns: minmax(0, 1fr); }
+        :root.sb-rail button.sb-btn { justify-content: center; padding: 0; }
+        :root.sb-rail .bl, :root.sb-rail .bv { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
       }
+      @media (max-width: 1023px) { #sbCollapse .ic-rail { display: none; } }
+      @media (min-width: 1024px) { #sbCollapse .ic-close { display: none; } }
 
       /* ---------- Content ---------- */
-      main { grid-area: main; min-width: 0; min-height: 0; padding: 24px 24px 48px; overflow-y: auto; overscroll-behavior: contain; }
+      main { grid-area: main; min-width: 0; min-height: 0; padding: 28px 24px 48px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background: radial-gradient(ellipse at 100% 0, var(--accent-tint), transparent 55%), var(--bg); }
       main > * { max-width: 1280px; margin-inline: auto; }
-      .toolbar { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+      .toolbar { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 22px; padding-bottom: 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
       .toolbar .tt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-      .toolbar .crumb { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--text-3); }
+      .toolbar .crumb { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text-3); }
       .toolbar .crumb:empty { display: none; }
-      .toolbar h2 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.02em; line-height: 1.2; }
+      .toolbar h2 { font-size: clamp(1.75rem, 2.5vw, 2.25rem); font-weight: 700; margin: 0; letter-spacing: -0.035em; line-height: 1.15; }
       .toolbar .spacer { flex: 1; }
       .toolbar .updated { font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface); white-space: nowrap; }
-      h3 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-2); margin: 26px 0 10px; }
+      h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-2); margin: 26px 0 10px; }
       h3 .muted, h3 .pill { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; }
-      h4 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
-      footer { grid-area: footer; text-align: center; color: var(--text-3); font-size: 11px; padding: 8px 24px; border-top: 1px solid var(--border); background: var(--surface); }
+      h4 { font-size: 13px; font-weight: 700; margin: 0 0 6px; }
+      footer { grid-area: footer; text-align: center; color: var(--text-3); font-size: 11px; padding: 8px 24px; border-top: 1px solid var(--border); background: var(--chrome); }
 
       /* Cards & KPIs */
       .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 22px; }
-      .card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow); }
+      .card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; box-shadow: var(--shadow); }
       .card > h3:first-child, .card h3 { font-size: 13px; letter-spacing: .06em; color: var(--text); margin: 0 0 14px; }
       .card h3 + p { margin-top: 0; }
-      .card .n { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+      .card .n { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
       .card .l { font-size: 11px; color: var(--text-3); margin-top: 6px; font-weight: 500; letter-spacing: .02em; }
       .cards > .card { background: linear-gradient(180deg, var(--highlight), transparent 45%), var(--surface); padding: 16px 18px; min-height: 92px; overflow: hidden; }
       .cards > .card .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -275,7 +359,7 @@
       .card.kpi .ki:empty { display: none; }
       #spk-wrap { justify-content: space-between; gap: 6px !important; }
       #spk-wrap > .spk-bar { max-width: 44px; }
-      .card.kpi .kt { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: var(--radius-sm); font-variant-numeric: tabular-nums; }
+      .card.kpi .kt { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: var(--radius-sm); font-variant-numeric: tabular-nums; }
       .card.kpi .kt.up { background: var(--ok-soft); color: var(--ok); }
       .card.kpi .kt.dn { background: var(--danger-soft); color: var(--danger); }
       .card.kpi .kt.flat { background: var(--surface-3); color: var(--text-2); }
@@ -284,18 +368,18 @@
 
       /* Overview health strip */
       .health-strip { display: flex; align-items: center; gap: 6px 18px; flex-wrap: wrap; padding: 10px 16px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: linear-gradient(90deg, var(--accent-tint), transparent 60%), var(--surface); font-size: 12.5px; color: var(--text-2); }
-      .hz-status { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); padding-right: 18px; border-right: 1px solid var(--border); }
+      .hz-status { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text); padding-right: 18px; border-right: 1px solid var(--border); }
       .hz-status .hz-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); flex: none; }
       .hz-status.warn .hz-dot { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
       .hz-status.bad .hz-dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
       .hz-m { white-space: nowrap; }
-      .hz-m b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; }
+      .hz-m b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13px; }
       .health-strip .muted { font-size: 11.5px; }
 
       /* Tables */
-      table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 16px; }
-      th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-      thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); color: var(--text-3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; cursor: pointer; user-select: none; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--border); }
+      table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 16px; }
+      th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+      thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); color: var(--text-3); font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; cursor: pointer; user-select: none; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--border); }
       thead th:first-child { border-top-left-radius: calc(var(--radius-md) - 1px); }
       thead th:last-child { border-top-right-radius: calc(var(--radius-md) - 1px); }
       th.s-asc::after { content: ' ▲'; color: var(--accent-text); font-size: 9px; }
@@ -323,14 +407,14 @@
       /* Rows & lists */
       .srow { display: grid; grid-template-columns: 36px minmax(0, 1.2fr) 1fr 50px; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
       .srow:last-child { border-bottom: 0; }
-      .srow .sname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+      .srow .sname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
       .nowcell { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
       .nowcell span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .brow { display: grid; grid-template-columns: 210px 1fr 56px; gap: 12px; align-items: center; margin-bottom: 8px; font-size: 12.5px; }
       .brow .blabel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
       .btrack { background: var(--surface-3); border-radius: var(--radius-pill); height: 6px; overflow: hidden; }
-      .bfill { height: 100%; background: linear-gradient(90deg, var(--accent-strong), var(--accent)); border-radius: var(--radius-pill); transition: width .4s var(--ease); }
-      .bval { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; font-weight: 500; }
+      .bfill { height: 100%; background: var(--accent); border-radius: var(--radius-pill); transition: width .4s var(--ease); }
+      .bval { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
       .days { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; align-items: end; height: 120px; margin-top: 6px; padding-top: 4px; }
       .day { display: flex; flex-direction: column; align-items: center; gap: 4px; }
       .day .col { width: 40%; max-width: 16px; min-width: 5px; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 3px; opacity: .9; transition: opacity var(--t-fast) var(--ease); }
@@ -340,53 +424,55 @@
       div.empty { padding: 24px 14px; border: 1px dashed var(--border-strong); border-radius: var(--radius-md); margin: 8px 0 14px; background: var(--surface); }
       .card > div.empty { background: transparent; }
       .empty-state { text-align: center; padding: 40px 20px; border: 1px dashed var(--border-strong); border-radius: var(--radius-md); background: var(--surface); margin: 8px 0 14px; }
-      .empty-state svg { width: 56px; height: 56px; margin-bottom: 10px; opacity: .5; color: var(--text-2); }
-      .empty-state .es-title { font-size: 13.5px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+      .empty-state svg { width: 56px; height: 56px; margin-bottom: 10px; color: var(--text-3); }
+      .empty-state .es-title { font-size: 13.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
       .empty-state .es-hint { font-size: 12.5px; color: var(--text-3); max-width: 380px; margin: 0 auto; line-height: 1.5; }
-      button.ghost.qa-go { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); font-weight: 600; }
+      button.ghost.qa-go { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); font-weight: 700; }
       button.ghost.qa-go:hover { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
       .hs-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; background: var(--surface); }
-      .hs-row .hs-name { background: transparent; border: 0; color: var(--text); font-weight: 500; font-size: 13px; padding: 4px 6px; border-radius: 4px; }
-      .hs-row .hs-name:focus { outline: 1px solid var(--accent); background: var(--surface-2); }
+      .hs-row .hs-name { background: transparent; border: 0; color: var(--text); font-weight: 600; font-size: 13px; padding: 4px 6px; border-radius: 4px; }
+      .hs-row .hs-name:focus { outline: 2px solid var(--focus); background: var(--surface-2); }
       .hs-row .hs-ord { color: var(--text-3); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
       .hs-row.disabled { opacity: .5; }
       .sw { display: inline-flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-      .sw button { width: 30px; height: 30px; min-height: 0; border-radius: var(--radius); padding: 0; border: 1px solid var(--border-strong); cursor: pointer; box-shadow: none; }
-      .sw button.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+      .sw button { width: 32px; height: 32px; min-height: 0; border-radius: var(--radius); padding: 0; border: 1px solid var(--border-strong); cursor: pointer; }
+      .sw button.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus); }
       .bn-preview { border-radius: var(--radius-md); padding: 18px 20px; background: var(--surface-2); border: 1px solid var(--border); min-height: 100px; }
-      .bn-preview h4 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+      .bn-preview h4 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
       .bn-preview p { margin: 0; color: var(--text-2); font-size: 13px; }
       .stub-banner { position: relative; border: 1px solid var(--border); background: linear-gradient(90deg, var(--accent-tint), transparent 55%), var(--surface); border-radius: var(--radius-md); padding: 12px 14px 12px 18px; margin-bottom: 14px; overflow: hidden; }
       .stub-banner::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
-      .stub-banner h4 { margin: 0 0 4px; font-size: 11px; color: var(--accent-text); letter-spacing: .08em; text-transform: uppercase; font-weight: 600; }
+      .stub-banner h4 { margin: 0 0 4px; font-size: 11px; color: var(--accent-text); letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }
       .stub-banner p { margin: 4px 0 0; font-size: 12.5px; color: var(--text-2); line-height: 1.55; }
       .spk-chip { display: inline-block; position: fixed; pointer-events: none; background: var(--surface-3); border: 1px solid var(--border-strong); color: var(--text); font-size: 11px; padding: 4px 8px; border-radius: var(--radius-sm); z-index: 40; opacity: 0; transition: opacity .1s; box-shadow: var(--shadow-md); }
       .spk-chip.show { opacity: 1; }
       .pn-kind { background: var(--surface); border: 1px solid var(--border-strong); color: var(--text-2); }
-      .pn-kind.active { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
-      .live-dot { border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 var(--accent-soft); animation: lpulse 1.8s ease-out infinite; }
+      .pn-kind:not(:disabled):hover { background: var(--surface-2); color: var(--text); }
+      .pn-kind.active, .pn-kind.active:not(:disabled):hover { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+      .live-dot { border-radius: 50%; background: var(--accent); animation: lpulse 1.8s ease-out infinite; }
       .live-dot.playing { background: var(--ok); animation-name: lpulse-p; }
-      @keyframes lpulse { 0% { box-shadow: 0 0 0 0 rgba(79, 140, 255, 0.45); } 100% { box-shadow: 0 0 0 14px rgba(79, 140, 255, 0); } }
-      @keyframes lpulse-p { 0% { box-shadow: 0 0 0 0 rgba(47, 191, 113, 0.45); } 100% { box-shadow: 0 0 0 14px rgba(47, 191, 113, 0); } }
+      @keyframes lpulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: 0 0 0 14px color-mix(in srgb, var(--accent) 0%, transparent); } }
+      @keyframes lpulse-p { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 45%, transparent); } 100% { box-shadow: 0 0 0 14px color-mix(in srgb, var(--ok) 0%, transparent); } }
       @keyframes apulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
-      /* World map — dark tiles on dark, plain tiles on light. */
+      /* World map — tiles are inverted on the dark theme, plain on light. */
       #wmap { height: 440px; border-radius: var(--radius-md); overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); }
-      #wmap .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.4); }
-      #wmap .leaflet-container { background: var(--surface-2); }
-      body.lightadm #wmap .leaflet-tile { filter: saturate(0.6); }
+      #wmap .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.3); }
+      #wmap.leaflet-container, #wmap .leaflet-container { background: var(--surface-2); font-family: var(--font); }
+      :root.light #wmap .leaflet-tile { filter: saturate(0.6); }
 
       /* Modals & dialogs */
-      .modal { position: fixed; inset: 0; background: rgba(4, 6, 10, 0.6); backdrop-filter: blur(2px); display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px; z-index: 20; overflow: auto; }
+      .modal { position: fixed; inset: 0; background: var(--scrim); backdrop-filter: blur(2px); display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px; z-index: 70; overflow: auto; }
       .modal .box { width: 100%; max-width: 640px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 20px 22px; box-shadow: var(--shadow-lg); }
-      .modal .x { float: right; background: transparent; border: 1px solid var(--border-strong); color: var(--text-2); border-radius: var(--radius-sm); width: 28px; height: 28px; min-height: 0; padding: 0; box-shadow: none; }
+      .modal .x { float: right; background: transparent; border: 1px solid var(--border-strong); color: var(--text-2); border-radius: var(--radius-sm); width: 32px; height: 32px; min-height: 0; padding: 0; }
+      .pal-item:hover { background: var(--surface-2); }
       .zoomed { position: fixed !important; inset: 4vh 4vw !important; z-index: 30; overflow: auto; background: var(--surface) !important; box-shadow: var(--shadow-lg); padding: 24px !important; border-radius: var(--radius-lg); border: 1px solid var(--border-strong); }
-      .vxd-overlay { position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 20px 20px; background: rgba(4, 6, 10, 0.6); backdrop-filter: blur(2px); animation: vxdFade var(--t-fast) ease; }
+      .vxd-overlay { position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 20px 20px; background: var(--scrim); backdrop-filter: blur(2px); animation: vxdFade var(--t-fast) ease; }
       .vxd-overlay.closing { opacity: 0; transition: opacity var(--t-fast) ease; pointer-events: none; }
       .vxd { width: 100%; max-width: 440px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 18px 20px 16px; box-shadow: var(--shadow-lg); animation: vxdPop var(--t) var(--ease); }
       @keyframes vxdFade { from { opacity: 0; } }
       @keyframes vxdPop { from { opacity: 0; transform: translateY(-6px); } }
-      .vxd-head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 10px; }
+      .vxd-head { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 10px; }
       .vxd-logo { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
       .vxd.danger .vxd-logo { background: var(--danger); }
       .vxd-msg { font-size: 14px; line-height: 1.55; color: var(--text); white-space: pre-line; overflow-wrap: break-word; }
@@ -394,16 +480,15 @@
       .vxd-note { margin-top: 7px; font-size: 12px; color: var(--danger); min-height: 15px; }
       .vxd-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
       .vxd-actions button { min-width: 84px; }
-      .vxd.danger .vxd-ok { background: var(--danger); }
-      body.lightadm .modal, body.lightadm .vxd-overlay { background: rgba(23, 26, 33, 0.35); }
+      .vxd.danger .vxd-ok, .vxd.danger .vxd-ok:not(:disabled):hover { background: var(--danger); color: var(--on-accent); }
 
       /* ---------- AI Lab ---------- */
       .lab-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-      .lab-chip { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); color: var(--text-2); padding: 8px 12px; min-height: 0; text-align: left; font-weight: 500; box-shadow: none; }
+      .lab-chip { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); color: var(--text-2); padding: 8px 12px; min-height: 0; text-align: left; font-weight: 600; }
       .lab-chip:not(:disabled):hover { background: var(--surface-2); color: var(--text); }
       .lab-chip .ln { display: block; font-size: 12.5px; }
       .lab-chip .lm { display: block; font-size: 10.5px; color: var(--text-3); margin-top: 2px; font-weight: 500; }
-      .lab-chip.active { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
+      .lab-chip.active, .lab-chip.active:not(:disabled):hover { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
       .lab-chip.active .lm { color: var(--accent-text); }
       .lab-msgs { display: flex; flex-direction: column; gap: 4px; max-height: 52vh; min-height: 120px; overflow-y: auto; padding: 4px 2px; margin-bottom: 12px; }
       .lab-msg { max-width: 84%; border-radius: var(--radius-md); padding: 9px 13px; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; margin-top: 6px; }
@@ -413,7 +498,9 @@
       .lab-meta { align-self: flex-start; font-size: 10.5px; color: var(--text-3); padding-left: 4px; }
       .lab-input { width: 100%; min-height: 62px; resize: vertical; }
       .lab-cursor::after { content: '▍'; color: var(--accent); animation: apulse 1s ease-in-out infinite; }
-      .lab-ping { font-size: 11px; padding: 3px 9px; border-radius: var(--radius-pill); background: var(--surface-3); color: var(--text-2); white-space: nowrap; border: 1px solid var(--border); }
+      /* Model-ping chips: success / danger keep their meaning in both themes
+         (text + border in the status colour over its own soft wash). */
+      .lab-ping { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: var(--radius-pill); background: var(--surface-3); color: var(--text-2); white-space: nowrap; border: 1px solid var(--border); }
       .lab-ping.ok { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
       .lab-ping.bad { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
       .lab-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); margin-right: 6px; vertical-align: 1px; }
@@ -423,18 +510,19 @@
       /* ---------- Seasonal skin (Aug 14–15) — restrained tricolour rule ---------- */
       html.fest-ind body::after { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 99; pointer-events: none; background: linear-gradient(90deg, #ff9933 0 33.4%, #fff 33.4% 66.7%, #138808 66.7% 100%); }
       .fest-sky { display: none; }
-      .fest-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #ff9933; border: 1px solid rgba(255, 153, 51, 0.5); }
+      .fest-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: var(--warn); border: 1px solid var(--warn); }
 
       /* ---------- Motion: entrances only, short ---------- */
       #view.enter > * { animation: rise .2s var(--ease) both; }
       @keyframes rise { from { transform: translateY(4px); opacity: 0; } to { transform: none; opacity: 1; } }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+        #app, .sidebar { transition: none !important; }
         #view.enter > *, .bfill, .day .col, .vxd-overlay, .vxd { animation: none !important; }
-        .live-dot, body.live .brand .dot { animation: none; }
+        .live-dot, body.live .sb-title .dot { animation: none; }
       }
       @media print {
-        nav, header, footer, #stale { display: none !important; }
+        .sidebar, .menu-fab, .sb-scrim, footer, #stale { display: none !important; }
         #app { display: block; height: auto; }
         body { background: #fff !important; color: #000 !important; }
         .card { border-color: #bbb; break-inside: avoid; }
@@ -442,29 +530,25 @@
       }
 
       /* ---------- Responsive ---------- */
-      @media (max-width: 1240px) { header #kpis { display: none; } }
-      @media (max-width: 1080px) { #app { grid-template-columns: 216px minmax(0, 1fr); } main { padding: 20px 16px 40px; } header { padding: 0 16px; } }
+      @media (max-width: 1240px) { :root { --sb-w: 248px; } main { padding: 24px 16px 40px; } }
+      /* Phones + tablets: the sidebar is an off-canvas drawer opened by one
+         small floating button; still no top bar. */
+      @media (max-width: 1023px) {
+        #app { grid-template-columns: minmax(0, 1fr); grid-template-areas: "stale" "main" "footer"; }
+        .sidebar {
+          position: fixed; z-index: 60; top: 0; bottom: 0; left: 0; width: min(320px, 88vw); height: 100dvh; padding-left: env(safe-area-inset-left);
+          transform: translateX(-100%); visibility: hidden; box-shadow: var(--shadow-lg);
+          transition: transform var(--t) var(--ease), visibility 0s linear var(--t);
+        }
+        :root.sb-open .sidebar { transform: none; visibility: visible; transition: transform var(--t) var(--ease), visibility 0s; }
+        :root.sb-open .sb-scrim { display: block; }
+        button.menu-fab { display: inline-grid; }
+        .toolbar { padding-left: 52px; min-height: 40px; }
+      }
       @media (max-width: 900px) {
-        #app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr) auto; grid-template-areas: "header" "nav" "stale" "main" "footer"; }
-        header { height: auto; padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left)); gap: 6px; flex-wrap: wrap; }
-        header .brand-top { display: flex; font-size: 14px; margin-right: 4px; }
-        header .brand-top .mark { width: 24px; height: 24px; border-radius: 7px; font-size: 12px; }
-        header .brand-top .dot { margin-left: 2px; }
-        header .updated, #kpis, #json, #report, #notify { display: none; }
-        .hdr-tools { width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; padding-bottom: 2px; margin-left: 0; gap: 8px; }
-        .hdr-tools::-webkit-scrollbar { display: none; }
-        .hdr-auto { padding-right: 8px; }
         .switch { white-space: nowrap; }
-        nav { display: flex; align-items: center; gap: 6px; padding: 8px 12px; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--border); -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-        nav::-webkit-scrollbar { display: none; }
-        nav .brand, nav .nav-group-label, .nav-search { display: none; }
-        #nav-pins { display: contents; }
-        nav button[data-sec] { width: auto; flex: none; white-space: nowrap; margin-bottom: 0; padding: 0 12px; min-height: 30px; border-radius: var(--radius-pill); border: 1px solid var(--border-strong); background: var(--surface); font-size: 12.5px; overflow: visible; }
-        nav button[data-sec]::before { display: none; }
-        nav button[data-sec].active { border-color: var(--accent); background: var(--accent-soft); border-radius: var(--radius-pill); }
-        main { padding: 14px 12px calc(14px + env(safe-area-inset-bottom)); }
-        .toolbar { margin-bottom: 14px; padding-bottom: 12px; }
-        .toolbar h2 { font-size: 18px; }
+        main { padding: 12px 12px calc(14px + env(safe-area-inset-bottom)); }
+        .toolbar { margin-bottom: 14px; padding-bottom: 12px; align-items: center; }
         .cards { grid-template-columns: repeat(auto-fit, minmax(136px, 1fr)); gap: 8px; }
         .cards > .card { padding: 14px; }
         .card .n { font-size: 22px; }
@@ -480,21 +564,44 @@
         .zoomed { inset: 2vh 2vw !important; padding: 14px !important; }
       }
       @media (pointer: coarse) {
-        button { min-height: 36px; }
         button.icon-btn { width: 36px; height: 36px; }
         .switch .track { width: 40px; height: 22px; }
-        .switch .knob { width: 18px; height: 18px; }
+        .switch .knob { width: 16px; height: 16px; }
         .switch .track.on .knob { transform: translateX(18px); }
       }
-      @media (min-width: 1880px) { body { zoom: 1.1; } main > * { max-width: 1400px; } #app { grid-template-columns: 260px minmax(0, 1fr); } }
+      @media (min-width: 1880px) { body { zoom: 1.1; } main > * { max-width: 1400px; } :root { --sb-w: 280px; } }
     </style>
     <link rel="stylesheet" href="/admin/studio.css" />
-      <link rel="stylesheet" href="/admin/workspace.css" />
+    <link rel="stylesheet" href="/admin/workspace.css" />
   </head>
   <body>
+    <!-- Icon sprite (same-document <use>, so the strict CSP is untouched). -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+      <symbol id="i-rail" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M16 10l-2 2 2 2"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 10a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 15 6 10z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+      <symbol id="i-report" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 3h6v4H9zM9 12h6M9 16h4"/></symbol>
+      <symbol id="i-json" viewBox="0 0 24 24"><path d="M9 4c-2 0-3 1-3 3v2c0 1.6-1 3-2.5 3C5 12 6 13.4 6 15v2c0 2 1 3 3 3"/><path d="M15 4c2 0 3 1 3 3v2c0 1.6 1 3 2.5 3-1.5 0-2.5 1.4-2.5 3v2c0 2-1 3-3 3"/></symbol>
+      <symbol id="i-csv" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+      <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-rows" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></symbol>
+      <symbol id="i-compact" viewBox="0 0 24 24"><path d="M4 10h16M4 14h16M12 3v4M10 5l2 2 2-2M12 21v-4M10 19l2-2 2 2"/></symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M9 16l-4-4 4-4M5 12h10"/></symbol>
+      <symbol id="i-dash" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+      <symbol id="i-aud" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><circle cx="17.5" cy="8.5" r="2.5"/><path d="M18 14c2.3.5 3.5 2.6 3.5 5"/></symbol>
+      <symbol id="i-cat" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+      <symbol id="i-promo" viewBox="0 0 24 24"><path d="M4 10v4h3l9 4V6l-9 4z"/><path d="M8 14.5l1 4.5h2.5l-1-4M19 9.5a3.5 3.5 0 0 1 0 5"/></symbol>
+      <symbol id="i-ana" viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-6"/></symbol>
+      <symbol id="i-ai" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></symbol>
+      <symbol id="i-ops" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+      <symbol id="i-set" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+    </svg>
+
     <div id="login" class="login">
       <div class="panel">
-        <div class="lg-brand"><span class="brand"><span class="mark">V</span><span class="bname">VinaX</span><small>Admin</small></span></div>
+        <div class="lg-brand"><a class="brand" id="loginBrand" href="/admin/" aria-label="VinaX admin home"><span class="mark" aria-hidden="true">V</span><span class="bname">VinaX</span><small>Admin</small></a></div>
         <h2>Sign in to the console</h2>
         <p>Enter the admin token to open the dashboards.</p>
         <label for="token">Admin token</label>
@@ -507,115 +614,144 @@
 
     <div id="app" hidden>
       <!-- Shell is a single CSS grid: the sidebar spans every row on the
-           left; header / stale banner / main / footer stack on the right.
-           Under 900px the grid collapses to one column and the nav becomes
-           a horizontal chip rail (see the responsive block in the styles). -->
-      <nav id="nav">
-        <div class="brand"><span class="mark">V</span><span class="bname">VinaX</span><small>Admin</small><span class="dot" title="Auto-refresh status"></span></div>
-        <input id="navSearch" class="nav-search" type="search" placeholder="Search tools… (⌘K)" aria-label="Filter tools" />
+           left; stale banner / main / footer stack on the right. There is no
+           top bar: brand, live counters, section nav, view controls, actions
+           and sign-out all live in the sidebar. On desktop it collapses to an
+           icon rail (state kept per browser); under 1024px it is an
+           off-canvas drawer opened by the floating menu button. -->
+      <button type="button" class="menu-fab" id="menuBtn" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false" title="Menu"><svg class="ic" aria-hidden="true"><use href="#i-menu"></use></svg></button>
+      <div class="sb-scrim" id="sbScrim"></div>
+      <aside id="sidebar" class="sidebar" aria-label="Console sidebar">
+        <div class="sb-head">
+          <a class="brand" id="brandHome" href="#overview" aria-label="VinaX admin home" title="Console home"><span class="mark" aria-hidden="true">V</span><span class="bname">VinaX</span><small>Admin</small></a>
+          <button type="button" class="sb-icon" id="sbCollapse" aria-pressed="false" aria-label="Collapse sidebar" title="Collapse sidebar"><svg class="ic ic-rail" aria-hidden="true"><use href="#i-rail"></use></svg><svg class="ic ic-close" aria-hidden="true"><use href="#i-close"></use></svg></button>
+        </div>
+
+        <div class="sb-group sb-live" role="group" aria-label="Live">
+          <div class="sb-title" aria-hidden="true">Live <span class="dot" title="Auto-refresh status"></span></div>
+          <div id="kpis" class="kpis" title="Live pulse — refreshes every minute">
+            <span class="k"><span class="kg" aria-hidden="true">●</span><b>–</b><span class="kl">now</span></span>
+            <span class="k"><span class="kg" aria-hidden="true">▶</span><b>–</b><span class="kl">today</span></span>
+            <span class="k"><span class="kg" aria-hidden="true">⚠</span><b>–</b><span class="kl">errors</span></span>
+          </div>
+        </div>
+
+        <nav id="nav" aria-label="Console sections">
+          <input id="navSearch" class="nav-search" type="search" placeholder="Search tools… (⌘K)" aria-label="Filter tools" />
           <!-- v5.7.5 — formal category reorganisation: every tool sits under
                exactly one category; category headers collapse (state kept per
                browser) and show their tool count. Categories are ordered by
                daily workflow: watch → audience → catalog → promotion →
                reports → AI → operations → settings. -->
-          <button class="nav-group-label" data-group="Dashboards" aria-expanded="true">Dashboards <span class="ng-n">3</span><span class="ng-chev">▾</span></button>
-          <button data-sec="workspace" data-cat="Dashboards">Operations Workspace</button>
-          <button data-sec="overview" data-cat="Dashboards" class="active">Overview</button>
-          <button data-sec="realtime" data-cat="Dashboards">Real-Time</button>
-          <button class="nav-group-label" data-group="Audience" aria-expanded="true">Audience <span class="ng-n">9</span><span class="ng-chev">▾</span></button>
-          <button data-sec="live" data-cat="Audience">Live Listening</button>
-          <button data-sec="activity" data-cat="Audience">Activity Feed</button>
-          <button data-sec="engagement" data-cat="Audience">Engagement</button>
-          <button data-sec="users" data-cat="Audience">User Management</button>
-          <button data-sec="retention" data-cat="Audience">Retention Cohorts</button>
-          <button data-sec="usage" data-cat="Audience">Feature Usage</button>
-          <button data-sec="heatmap" data-cat="Audience">Listening Heatmap</button>
-          <button data-sec="funnel" data-cat="Audience">Onboarding Funnel</button>
-          <button data-sec="segments" data-cat="Audience">Audience Segments</button>
-          <button class="nav-group-label" data-group="Catalog" aria-expanded="true">Catalog <span class="ng-n">13</span><span class="ng-chev">▾</span></button>
-          <button data-sec="songs" data-cat="Catalog">Song Management</button>
-          <button data-sec="playlists" data-cat="Catalog">Playlist Management</button>
-          <button data-sec="categories" data-cat="Catalog">Categories &amp; Genres</button>
-          <button data-sec="content" data-cat="Catalog">Content Control</button>
-          <button data-sec="catalog" data-cat="Catalog">Catalog Lookup</button>
-          <button data-sec="trendpins" data-cat="Catalog">Trending Pins</button>
-          <button data-sec="songstats" data-cat="Catalog">Song Drilldown</button>
-          <button data-sec="skips" data-cat="Catalog">Skip Report</button>
-          <button data-sec="synonyms" data-cat="Catalog">Search Synonyms</button>
-          <button data-sec="sources" data-cat="Catalog">Catalog Sources</button>
-          <button data-sec="langorder" data-cat="Catalog">Language Order</button>
-          <button data-sec="blocklistio" data-cat="Catalog">Blocklist Import/Export</button>
-          <button class="nav-group-label" data-group="Promotion" aria-expanded="true">Promotion <span class="ng-n">8</span><span class="ng-chev">▾</span></button>
-          <button data-sec="banners" data-cat="Promotion">Banners &amp; Offers</button>
-          <button data-sec="festivals" data-cat="Promotion">Festival Themes</button>
-          <button data-sec="broadcast" data-cat="Promotion">Broadcast Message</button>
-          <button data-sec="greeting" data-cat="Promotion">Home Greeting</button>
-          <button data-sec="homebuilder" data-cat="Promotion">Home Layout Studio</button>
-          <button data-sec="faq" data-cat="Promotion">Help Center FAQ</button>
-          <button data-sec="announce" data-cat="Promotion">Announcement Composer</button>
-          <button data-sec="notify2" data-cat="Promotion">Notifications</button>
-          <button class="nav-group-label" data-group="Analytics" aria-expanded="true">Analytics <span class="ng-n">7</span><span class="ng-chev">▾</span></button>
-          <button data-sec="music" data-cat="Analytics">Music Analytics</button>
-          <button data-sec="search" data-cat="Analytics">Search Analytics</button>
-          <button data-sec="location" data-cat="Analytics">Location Analytics</button>
-          <button data-sec="world" data-cat="Analytics">World Map</button>
-          <button data-sec="insights" data-cat="Analytics">Insights</button>
-          <button data-sec="experiments" data-cat="Analytics">A/B Experiments</button>
-          <button data-sec="seo" data-cat="Analytics">SEO Corpus</button>
-          <button class="nav-group-label" data-group="AI &amp; Engines" aria-expanded="true">AI &amp; Engines <span class="ng-n">7</span><span class="ng-chev">▾</span></button>
-          <button data-sec="ai" data-cat="AI &amp; Engines">AI Monitoring</button>
-          <button data-sec="ailab" data-cat="AI &amp; Engines">API Monitoring</button>
-          <button data-sec="engineprobe" data-cat="AI &amp; Engines">Engine Probe</button>
-          <button data-sec="aistarters" data-cat="AI &amp; Engines">AI Starter Prompts</button>
-          <button data-sec="aiquick" data-cat="AI &amp; Engines">AI Quick Actions</button>
-          <button data-sec="airules" data-cat="AI &amp; Engines">AI House Rules</button>
-          <button data-sec="aicost" data-cat="AI &amp; Engines">AI Tokens &amp; Cost</button>
-          <button class="nav-group-label" data-group="Operations" aria-expanded="true">Operations <span class="ng-n">17</span><span class="ng-chev">▾</span></button>
-          <button data-sec="opscenter" data-cat="Operations">Operations Center</button>
-          <button data-sec="technical" data-cat="Operations">Technical Monitoring</button>
-          <button data-sec="feedback" data-cat="Operations">Feedback &amp; Bugs</button>
-          <button data-sec="rooms" data-cat="Operations">Live Rooms</button>
-          <button data-sec="edge" data-cat="Operations">Edge &amp; Endpoint Health</button>
-          <button data-sec="dataquality" data-cat="Operations">Data Quality</button>
-          <button data-sec="releases" data-cat="Operations">Releases &amp; CI</button>
-          <button data-sec="tables" data-cat="Operations">Database Overview</button>
-          <button data-sec="audit" data-cat="Operations">Audit Trail</button>
-          <button data-sec="statusnote" data-cat="Operations">Status Note</button>
-          <button data-sec="cron" data-cat="Operations">Cron Health</button>
-          <button data-sec="statushist" data-cat="Operations">Status History</button>
-          <button data-sec="envcheck" data-cat="Operations">Environment Checklist</button>
-          <button data-sec="query" data-cat="Operations">Query Console</button>
-          <button data-sec="relnotes" data-cat="Operations">Release Notes</button>
-          <button data-sec="maintwin" data-cat="Operations">Maintenance Scheduler</button>
-          <button data-sec="minver" data-cat="Operations">Minimum App Version</button>
-          <button class="nav-group-label" data-group="Settings" aria-expanded="true">Settings <span class="ng-n">5</span><span class="ng-chev">▾</span></button>
-          <button data-sec="config" data-cat="Settings">App Configuration</button>
-          <button data-sec="flags" data-cat="Settings">Feature Flags</button>
-          <button data-sec="runbook" data-cat="Settings">Runbook</button>
-          <button data-sec="backup" data-cat="Settings">Config Backup</button>
-          <button data-sec="pins" data-cat="Settings">Pinned Tools</button>
+          <button type="button" class="nav-group-label" data-group="Dashboards" aria-expanded="true" title="Dashboards"><svg class="ic" aria-hidden="true"><use href="#i-dash"></use></svg><span class="ng-t">Dashboards</span> <span class="ng-n">3</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" data-sec="workspace" data-cat="Dashboards">Operations Workspace</button>
+          <button type="button" data-sec="overview" data-cat="Dashboards" class="active" aria-current="page">Overview</button>
+          <button type="button" data-sec="realtime" data-cat="Dashboards">Real-Time</button>
+          <button type="button" class="nav-group-label" data-group="Audience" aria-expanded="true" title="Audience"><svg class="ic" aria-hidden="true"><use href="#i-aud"></use></svg><span class="ng-t">Audience</span> <span class="ng-n">9</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" data-sec="live" data-cat="Audience">Live Listening</button>
+          <button type="button" data-sec="activity" data-cat="Audience">Activity Feed</button>
+          <button type="button" data-sec="engagement" data-cat="Audience">Engagement</button>
+          <button type="button" data-sec="users" data-cat="Audience">User Management</button>
+          <button type="button" data-sec="retention" data-cat="Audience">Retention Cohorts</button>
+          <button type="button" data-sec="usage" data-cat="Audience">Feature Usage</button>
+          <button type="button" data-sec="heatmap" data-cat="Audience">Listening Heatmap</button>
+          <button type="button" data-sec="funnel" data-cat="Audience">Onboarding Funnel</button>
+          <button type="button" data-sec="segments" data-cat="Audience">Audience Segments</button>
+          <button type="button" class="nav-group-label" data-group="Catalog" aria-expanded="true" title="Catalog"><svg class="ic" aria-hidden="true"><use href="#i-cat"></use></svg><span class="ng-t">Catalog</span> <span class="ng-n">13</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" data-sec="songs" data-cat="Catalog">Song Management</button>
+          <button type="button" data-sec="playlists" data-cat="Catalog">Playlist Management</button>
+          <button type="button" data-sec="categories" data-cat="Catalog">Categories &amp; Genres</button>
+          <button type="button" data-sec="content" data-cat="Catalog">Content Control</button>
+          <button type="button" data-sec="catalog" data-cat="Catalog">Catalog Lookup</button>
+          <button type="button" data-sec="trendpins" data-cat="Catalog">Trending Pins</button>
+          <button type="button" data-sec="songstats" data-cat="Catalog">Song Drilldown</button>
+          <button type="button" data-sec="skips" data-cat="Catalog">Skip Report</button>
+          <button type="button" data-sec="synonyms" data-cat="Catalog">Search Synonyms</button>
+          <button type="button" data-sec="sources" data-cat="Catalog">Catalog Sources</button>
+          <button type="button" data-sec="langorder" data-cat="Catalog">Language Order</button>
+          <button type="button" data-sec="blocklistio" data-cat="Catalog">Blocklist Import/Export</button>
+          <button type="button" class="nav-group-label" data-group="Promotion" aria-expanded="true" title="Promotion"><svg class="ic" aria-hidden="true"><use href="#i-promo"></use></svg><span class="ng-t">Promotion</span> <span class="ng-n">8</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" data-sec="banners" data-cat="Promotion">Banners &amp; Offers</button>
+          <button type="button" data-sec="festivals" data-cat="Promotion">Festival Themes</button>
+          <button type="button" data-sec="broadcast" data-cat="Promotion">Broadcast Message</button>
+          <button type="button" data-sec="greeting" data-cat="Promotion">Home Greeting</button>
+          <button type="button" data-sec="homebuilder" data-cat="Promotion">Home Layout Studio</button>
+          <button type="button" data-sec="faq" data-cat="Promotion">Help Center FAQ</button>
+          <button type="button" data-sec="announce" data-cat="Promotion">Announcement Composer</button>
+          <button type="button" data-sec="notify2" data-cat="Promotion">Notifications</button>
+          <button type="button" class="nav-group-label" data-group="Analytics" aria-expanded="true" title="Analytics"><svg class="ic" aria-hidden="true"><use href="#i-ana"></use></svg><span class="ng-t">Analytics</span> <span class="ng-n">7</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" data-sec="music" data-cat="Analytics">Music Analytics</button>
+          <button type="button" data-sec="search" data-cat="Analytics">Search Analytics</button>
+          <button type="button" data-sec="location" data-cat="Analytics">Location Analytics</button>
+          <button type="button" data-sec="world" data-cat="Analytics">World Map</button>
+          <button type="button" data-sec="insights" data-cat="Analytics">Insights</button>
+          <button type="button" data-sec="experiments" data-cat="Analytics">A/B Experiments</button>
+          <button type="button" data-sec="seo" data-cat="Analytics">SEO Corpus</button>
+          <button type="button" class="nav-group-label" data-group="AI &amp; Engines" aria-expanded="true" title="AI &amp; Engines"><svg class="ic" aria-hidden="true"><use href="#i-ai"></use></svg><span class="ng-t">AI &amp; Engines</span> <span class="ng-n">7</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" data-sec="ai" data-cat="AI &amp; Engines">AI Monitoring</button>
+          <button type="button" data-sec="ailab" data-cat="AI &amp; Engines">API Monitoring</button>
+          <button type="button" data-sec="engineprobe" data-cat="AI &amp; Engines">Engine Probe</button>
+          <button type="button" data-sec="aistarters" data-cat="AI &amp; Engines">AI Starter Prompts</button>
+          <button type="button" data-sec="aiquick" data-cat="AI &amp; Engines">AI Quick Actions</button>
+          <button type="button" data-sec="airules" data-cat="AI &amp; Engines">AI House Rules</button>
+          <button type="button" data-sec="aicost" data-cat="AI &amp; Engines">AI Tokens &amp; Cost</button>
+          <button type="button" class="nav-group-label" data-group="Operations" aria-expanded="true" title="Operations"><svg class="ic" aria-hidden="true"><use href="#i-ops"></use></svg><span class="ng-t">Operations</span> <span class="ng-n">17</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" data-sec="opscenter" data-cat="Operations">Operations Center</button>
+          <button type="button" data-sec="technical" data-cat="Operations">Technical Monitoring</button>
+          <button type="button" data-sec="feedback" data-cat="Operations">Feedback &amp; Bugs</button>
+          <button type="button" data-sec="rooms" data-cat="Operations">Live Rooms</button>
+          <button type="button" data-sec="edge" data-cat="Operations">Edge &amp; Endpoint Health</button>
+          <button type="button" data-sec="dataquality" data-cat="Operations">Data Quality</button>
+          <button type="button" data-sec="releases" data-cat="Operations">Releases &amp; CI</button>
+          <button type="button" data-sec="tables" data-cat="Operations">Database Overview</button>
+          <button type="button" data-sec="audit" data-cat="Operations">Audit Trail</button>
+          <button type="button" data-sec="statusnote" data-cat="Operations">Status Note</button>
+          <button type="button" data-sec="cron" data-cat="Operations">Cron Health</button>
+          <button type="button" data-sec="statushist" data-cat="Operations">Status History</button>
+          <button type="button" data-sec="envcheck" data-cat="Operations">Environment Checklist</button>
+          <button type="button" data-sec="query" data-cat="Operations">Query Console</button>
+          <button type="button" data-sec="relnotes" data-cat="Operations">Release Notes</button>
+          <button type="button" data-sec="maintwin" data-cat="Operations">Maintenance Scheduler</button>
+          <button type="button" data-sec="minver" data-cat="Operations">Minimum App Version</button>
+          <button type="button" class="nav-group-label" data-group="Settings" aria-expanded="true" title="Settings"><svg class="ic" aria-hidden="true"><use href="#i-set"></use></svg><span class="ng-t">Settings</span> <span class="ng-n">5</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" data-sec="config" data-cat="Settings">App Configuration</button>
+          <button type="button" data-sec="flags" data-cat="Settings">Feature Flags</button>
+          <button type="button" data-sec="runbook" data-cat="Settings">Runbook</button>
+          <button type="button" data-sec="backup" data-cat="Settings">Config Backup</button>
+          <button type="button" data-sec="pins" data-cat="Settings">Pinned Tools</button>
         </nav>
-      <header>
-        <div class="brand brand-top"><span class="mark">V</span><span class="bname">VinaX</span><span class="dot" title="Auto-refresh status"></span></div>
-        <div id="kpis" class="kpis" title="Live pulse — refreshes every minute"></div>
-        <div class="spacer"></div>
-        <div class="hdr-tools">
-          <div class="seg" id="range" hidden></div>
-          <div class="hdr-auto"><label class="switch" id="autoWrap"><span class="track on" id="autoTrack"><span class="knob"></span></span> Auto-refresh</label></div>
-          <div class="hdr-actions">
-            <button class="ghost" id="csv" hidden title="Download this table as CSV">CSV</button>
-            <button class="ghost" id="json" title="Download this panel as JSON">JSON</button>
-            <button class="ghost" id="report" title="Copy a day report to the clipboard">Report</button>
-            <button class="ghost" id="notify" title="Browser alert when new errors appear">Alerts</button>
-            <button class="ghost" id="density" aria-pressed="false" title="Toggle compact layout">Compact</button>
-            <button class="ghost" id="theme" title="Light / dark">Theme</button>
-            <button class="ghost" id="refresh" title="Refresh now">Refresh</button>
-            <button class="ghost" id="logout">Sign out</button>
+
+        <div class="sb-group" id="sbView" role="group" aria-label="View">
+          <div class="sb-title" aria-hidden="true">View</div>
+          <div class="seg" id="range" role="group" aria-label="Date range" hidden></div>
+          <!-- app.js adds the refresh-interval select (#hdr-interval) to this row. -->
+          <div class="sb-row" id="intervalHost">
+            <button type="button" class="switch" id="autoWrap" aria-pressed="true" title="Auto-refresh"><span class="track on" id="autoTrack"><span class="knob"></span></span><span class="bl">Auto-refresh</span></button>
+          </div>
+          <!-- app.js adds the row-density toggle (#rowDensity) before #density. -->
+          <div class="sb-grid" id="viewToggles">
+            <button type="button" class="ghost sb-btn" id="density" aria-pressed="false" title="Toggle compact layout"><svg class="ic" aria-hidden="true"><use href="#i-compact"></use></svg><span class="bl">Compact</span></button>
+            <button type="button" class="ghost sb-btn wide" id="theme" title="Light / dark"><svg class="ic" aria-hidden="true"><use href="#i-theme"></use></svg><span class="bl">Theme</span><span class="bv" id="themeVal">Dark</span></button>
           </div>
         </div>
-      </header>
+
+        <div class="sb-group" id="sbActions" role="group" aria-label="Actions">
+          <div class="sb-title" aria-hidden="true">Actions</div>
+          <div class="sb-grid">
+            <button type="button" class="ghost sb-btn" id="refresh" title="Refresh now (R)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg><span class="bl">Refresh</span></button>
+            <button type="button" class="ghost sb-btn" id="notify" aria-pressed="false" title="Browser alert when new errors appear"><svg class="ic" aria-hidden="true"><use href="#i-bell"></use></svg><span class="bl">Alerts</span></button>
+            <button type="button" class="ghost sb-btn" id="report" title="Copy a day report to the clipboard"><svg class="ic" aria-hidden="true"><use href="#i-report"></use></svg><span class="bl">Report</span></button>
+            <button type="button" class="ghost sb-btn" id="json" title="Download this panel as JSON"><svg class="ic" aria-hidden="true"><use href="#i-json"></use></svg><span class="bl">JSON</span></button>
+            <button type="button" class="ghost sb-btn wide" id="csv" hidden title="Download this table as CSV"><svg class="ic" aria-hidden="true"><use href="#i-csv"></use></svg><span class="bl">CSV</span></button>
+          </div>
+        </div>
+
+        <div class="sb-foot">
+          <button type="button" class="ghost sb-btn" id="logout" title="Sign out"><svg class="ic" aria-hidden="true"><use href="#i-logout"></use></svg><span class="bl">Sign out</span></button>
+        </div>
+      </aside>
       <div id="stale" class="stale" hidden>Data looks stale — refresh may be failing.</div>
-      <main>
+      <main id="main">
         <div class="toolbar"><div class="tt"><span id="secCrumb" class="crumb"></span><h2 id="secTitle">Overview</h2></div><div class="spacer"></div><span class="updated" id="updated">—</span></div>
         <div id="view"><div class="empty">Loading…</div></div>
       </main>

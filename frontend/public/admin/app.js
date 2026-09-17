@@ -10,12 +10,24 @@
   var lastJson = null, lastStampAt = Date.now();
   // Request-budget fix: default auto-refresh 10s -> 30s. An always-open
   // admin tab at 10s burned ~8-9k Worker requests/day by itself; 30s keeps
-  // dashboards live at a third of the cost (header selector still offers 10s).
+  // dashboards live at a third of the cost (sidebar interval select still offers 10s).
   var refreshMs = parseInt((localStorage.getItem('vinax_admin_interval') || '30000'), 10) || 30000;
 
   function $(id) { return document.getElementById(id); }
   function token() { return sessionStorage.getItem(TOKEN_KEY) || ''; }
   function noop() {}
+  // Theme tokens for the few places that need a colour VALUE in JS (map
+  // markers). Everything else is painted with var(--token) straight in CSS /
+  // inline styles, so it follows the dark / light theme on its own.
+  function themeColor(name, fallback) {
+    try { return (getComputedStyle(document.documentElement).getPropertyValue(name) || '').trim() || fallback; } catch (e) { return fallback; }
+  }
+  // Sidebar buttons are icon + <span class="bl">label</span>; swap only the label.
+  function setBtnLabel(btn, text) {
+    if (!btn) return;
+    var l = btn.querySelector('.bl');
+    if (l) l.textContent = text; else btn.textContent = text;
+  }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   // Audit finding H-SRV-10 — safe HTML template tag. Prefer this over raw
   // innerHTML string concatenation for new code: every ${value} is escaped
@@ -152,7 +164,7 @@
   // Silent refresh: resolve null when the payload didn't change, so loaders
   // skip repainting. Still stamps freshness so the stale banner stays honest.
   // `key` lets two callers share one endpoint without deduping each other
-  // (the header pulse and the Overview panel both read /api/admin/overview).
+  // (the sidebar Live pulse and the Overview panel both read /api/admin/overview).
   function apiMemo(path, key) {
     key = key || path;
     return api(path).then(function (d) {
@@ -464,8 +476,8 @@
       var exact = cityExact(r.city, r.country);
       var m = L.circleMarker([ll[0], ll[1]], {
         radius: 4 + 10 * Math.sqrt(n / maxN),
-        color: '#4f8cff', weight: 1, opacity: 0.8,
-        fillColor: '#4f8cff', fillOpacity: 0.3
+        color: themeColor('--accent', '#a78bfa'), weight: 1, opacity: 0.9,
+        fillColor: themeColor('--accent', '#a78bfa'), fillOpacity: 0.35
       }).addTo(leafMap);
       m.bindPopup('<b>' + esc(r.city || 'Unknown') + '</b>' + (r.country ? ', ' + esc(r.country) : '') +
         '<br>' + n + ' listener' + (n === 1 ? '' : 's') + ' \u00b7 ' + (r.plays || 0) + ' plays' +
@@ -671,7 +683,7 @@
       '<h3>Web Vitals — field p75 (' + (d.days || 7) + 'd)</h3><div class="cards">' + (vitCards || '<div class="empty">No data yet.</div>') + '</div>' +
       '<h3>Lyrics not found (' + (d.days || 7) + 'd)</h3>' + songRows(lyricList) +
       '<h3>App versions</h3>' + bars(d.versions || [], function (x) { return esc(x.app_version) + ' <span class="muted">· ' + esc(x.platform) + '</span>'; }, function (x) { return x.users; }) +
-      '<h3>Errors per day</h3>' + dayChart(d.errorsByDay, 'hits', 'linear-gradient(180deg,#ff8080,#ff4d4d)') +
+      '<h3>Errors per day</h3>' + dayChart(d.errorsByDay, 'hits', 'var(--danger)') +
       '<h3>Top errors</h3><table><thead><tr><th>Kind</th><th>Message</th><th>Hits</th><th>Last</th></tr></thead><tbody>' + (errRows || '<tr><td colspan="4" class="empty">No errors logged. 🎉</td></tr>') + '</tbody></table>' +
       '<h3>Data tools <span class="muted">· database maintenance</span></h3><div class="row" style="flex-wrap:wrap;gap:8px">' +
       '<button class="ghost" id="mt-purge">Purge events &gt; 90d</button>' +
@@ -830,7 +842,7 @@
       kc(((s.plays_7d || 0) / Math.max(1, s.total_users || 1)).toFixed(1), 'Avg plays / user (7d)') +
       '<div class="card kpi"><div class="n">₹0</div><div class="l">Revenue · free forever</div></div>' + '</div>' +
       '<h3>Plays per day (14d)</h3>' + dayChart(d.playsByDay, 'plays') +
-      '<h3>New users per day (14d)</h3>' + dayChart(d.newUsersByDay, 'users', 'linear-gradient(180deg,#6ee7b7,#10b981)') +
+      '<h3>New users per day (14d)</h3>' + dayChart(d.newUsersByDay, 'users', 'var(--ok)') +
       '<h3>Top songs (7d)</h3>' + songRows(d.topSongs || []) +
       '<h3>Top countries (7d)</h3>' + bars(d.topCountries || [], function (x) { return esc(x.country); }, function (x) { return x.listeners; });
     stamp();
@@ -875,7 +887,7 @@
       return '<tr><td><span class="pill">' + esc(e.type) + '</span></td><td>' + song + '</td><td class="muted">' + esc((e.device_id || '').slice(0, 8)) + '</td><td><span class="pill">' + esc(e.platform || 'web') + '</span></td><td class="muted">' + loc + '</td><td class="muted">' + ago(e.created_at) + '</td></tr>';
     }).join('');
     var chips = ['all', 'play', 'search', 'favorite', 'download', 'share', 'error'].map(function (t) {
-      return '<button class="ghost act-chip" data-t="' + t + '" style="padding:4px 12px;font-size:11px' + (actFilter === t ? ';background:var(--grad);color:#fff;border-color:transparent' : '') + '">' + (t === 'all' ? 'All' : t) + '</button>';
+      return '<button class="ghost act-chip" data-t="' + t + '" style="padding:4px 12px;font-size:11px' + (actFilter === t ? ';background:var(--accent);color:var(--on-accent);border-color:transparent' : '') + '">' + (t === 'all' ? 'All' : t) + '</button>';
     }).join('');
     $('view').innerHTML = '<div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px">' + chips + '</div>' +
       (rows ? '<table><thead><tr><th>Event</th><th>Song</th><th>Device</th><th>Platform</th><th>Location</th><th>When</th></tr></thead><tbody>' + rows + '</tbody></table>'
@@ -884,7 +896,7 @@
   }
 
 
-  // ---------- routing / header ----------
+  // ---------- routing / shell ----------
   function loadAi() { apiMemo('/api/admin/ai?days=' + rangeDays).then(function (d) { if (d && active === 'ai') renderAi(d); }).catch(noop); }
   function renderAi(d) {
     var m = (d && d.metrics) || {};
@@ -1211,7 +1223,7 @@
       current = items.filter(function (it) { return it.label.toLowerCase().indexOf(f) !== -1; }).slice(0, 9);
       if (sel >= current.length) sel = Math.max(0, current.length - 1);
       list.innerHTML = current.map(function (it, i) {
-        return '<div class="pal-item' + (i === sel ? ' pal-sel' : '') + '" data-i="' + i + '" style="padding:9px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;' + (i === sel ? 'background:var(--grad);color:#fff' : '') + '">' + esc(it.label) + '</div>';
+        return '<div class="pal-item' + (i === sel ? ' pal-sel' : '') + '" data-i="' + i + '" style="padding:9px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;' + (i === sel ? 'background:var(--accent);color:var(--on-accent)' : '') + '">' + esc(it.label) + '</div>';
       }).join('') || '<div class="empty">No match</div>';
       Array.prototype.forEach.call(list.querySelectorAll('.pal-item'), function (el) {
         el.addEventListener('click', function () { pick(parseInt(el.getAttribute('data-i'), 10)); });
@@ -1987,12 +1999,12 @@
     play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M10 8l6 4-6 4z" fill="currentColor"/></svg>',
     dau: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>',
     wau: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
-    empty_activity: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="32" cy="32" r="26" stroke="rgba(255,255,255,0.2)"/><path d="M20 34l8 8 16-18" stroke="rgba(34,211,238,0.7)"/></svg>',
-    empty_search: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="28" cy="28" r="16" stroke="rgba(255,255,255,0.3)"/><path d="M40 40l14 14" stroke="rgba(34,211,238,0.7)"/></svg>',
-    empty_ai: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="14" y="16" width="36" height="30" rx="6" stroke="rgba(255,255,255,0.3)"/><circle cx="24" cy="30" r="3" fill="rgba(34,211,238,0.7)"/><circle cx="40" cy="30" r="3" fill="rgba(34,211,238,0.7)"/><path d="M22 40h20" stroke="rgba(255,255,255,0.3)"/></svg>',
-    empty_feedback: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16h40v28H36l-8 8v-8H12z" stroke="rgba(255,255,255,0.3)"/><circle cx="24" cy="30" r="2" fill="rgba(34,211,238,0.7)"/><circle cx="32" cy="30" r="2" fill="rgba(34,211,238,0.7)"/><circle cx="40" cy="30" r="2" fill="rgba(34,211,238,0.7)"/></svg>',
-    empty_rooms: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="24" cy="26" r="6" stroke="rgba(255,255,255,0.3)"/><circle cx="42" cy="30" r="5" stroke="rgba(255,255,255,0.3)"/><path d="M12 48c0-6 6-10 12-10s12 4 12 10" stroke="rgba(34,211,238,0.7)"/><path d="M34 46c0-4 4-8 8-8s10 4 10 8" stroke="rgba(255,255,255,0.3)"/></svg>',
-    empty_music: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M24 46V16l24-4v30" stroke="rgba(34,211,238,0.7)"/><circle cx="20" cy="46" r="4" stroke="rgba(255,255,255,0.3)"/><circle cx="44" cy="42" r="4" stroke="rgba(255,255,255,0.3)"/></svg>'
+    empty_activity: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="32" cy="32" r="26" stroke-opacity="0.55"/><path d="M20 34l8 8 16-18" style="stroke:var(--accent)"/></svg>',
+    empty_search: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="28" cy="28" r="16" stroke-opacity="0.55"/><path d="M40 40l14 14" style="stroke:var(--accent)"/></svg>',
+    empty_ai: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="14" y="16" width="36" height="30" rx="6" stroke-opacity="0.55"/><circle cx="24" cy="30" r="3" style="fill:var(--accent);stroke:none"/><circle cx="40" cy="30" r="3" style="fill:var(--accent);stroke:none"/><path d="M22 40h20" stroke-opacity="0.55"/></svg>',
+    empty_feedback: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16h40v28H36l-8 8v-8H12z" stroke-opacity="0.55"/><circle cx="24" cy="30" r="2" style="fill:var(--accent);stroke:none"/><circle cx="32" cy="30" r="2" style="fill:var(--accent);stroke:none"/><circle cx="40" cy="30" r="2" style="fill:var(--accent);stroke:none"/></svg>',
+    empty_rooms: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="24" cy="26" r="6" stroke-opacity="0.55"/><circle cx="42" cy="30" r="5" stroke-opacity="0.55"/><path d="M12 48c0-6 6-10 12-10s12 4 12 10" style="stroke:var(--accent)"/><path d="M34 46c0-4 4-8 8-8s10 4 10 8" stroke-opacity="0.55"/></svg>',
+    empty_music: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M24 46V16l24-4v30" style="stroke:var(--accent)"/><circle cx="20" cy="46" r="4" stroke-opacity="0.55"/><circle cx="44" cy="42" r="4" stroke-opacity="0.55"/></svg>'
   };
   function emptyState(iconKey, title, hint) {
     return html`<div class="empty-state">${''}` + (ICONS[iconKey] || '') + html`<div class="es-title">${title}</div><div class="es-hint">${hint}</div></div>`;
@@ -2800,7 +2812,7 @@
       if (!d.configured) { showFail('Supabase is not configured.'); return; }
       var max = 1; d.heatmap.forEach(function (r) { r.forEach(function (n) { if (n > max) max = n; }); });
       var grid = '<div style="overflow:auto"><table style="border-collapse:separate;border-spacing:2px"><thead><tr><th></th>' + Array.from({ length: 24 }, function (_, h) { return '<th class="muted" style="font-size:10px;font-weight:600;padding:0 2px">' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
-        d.heatmap.map(function (row, day) { return '<tr><td class="muted" style="font-size:11px;padding-right:6px">' + DAY_NAMES[day] + '</td>' + row.map(function (n, h) { var a = n / max; return '<td title="' + DAY_NAMES[day] + ' ' + h + ':00 · ' + n + ' plays" style="width:22px;height:20px;border-radius:4px;background:rgba(59,120,240,' + (0.06 + a * 0.9).toFixed(2) + ')"></td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+        d.heatmap.map(function (row, day) { return '<tr><td class="muted" style="font-size:11px;padding-right:6px">' + DAY_NAMES[day] + '</td>' + row.map(function (n, h) { var a = n / max; return '<td title="' + DAY_NAMES[day] + ' ' + h + ':00 · ' + n + ' plays" style="width:22px;height:20px;border-radius:4px;background:color-mix(in srgb, var(--accent) ' + Math.round((0.06 + a * 0.9) * 100) + '%, transparent)"></td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
       $('view').innerHTML =
         '<div class="cards">' + card(d.peak ? DAY_NAMES[d.peak.day] + ' ' + d.peak.hour + ':00' : '—', 'Busiest hour (IST)') + card(d.peak ? d.peak.n : 0, 'Plays in that hour') + card(d.days + ' d', 'Window') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">When people listen <span class="muted">· plays + heartbeats, IST</span></h3>' + grid + '<p class="muted" style="font-size:11px;margin:10px 0 0">Darker = more listening. Use it to time pushes, releases and maintenance windows.</p></div>';
@@ -2968,7 +2980,7 @@
         '<div class="card"><h3 style="margin-top:0">90-day uptime</h3>' +
         (comps.length ? comps.map(function (c) {
           var days = c.days || [];
-          var bars = days.map(function (x) { var up = x.total ? x.up / x.total : (x.ok === false ? 0 : 1); var col = up >= 0.999 ? 'var(--ok)' : up >= 0.98 ? '#f59e0b' : 'var(--danger)'; return '<i title="' + esc(x.day || '') + ' · ' + Math.round(up * 100) + '%" style="display:inline-block;width:6px;height:22px;margin-right:1px;border-radius:2px;background:' + col + ';opacity:' + (x.total ? 1 : 0.3) + '"></i>'; }).join('');
+          var bars = days.map(function (x) { var up = x.total ? x.up / x.total : (x.ok === false ? 0 : 1); var col = up >= 0.999 ? 'var(--ok)' : up >= 0.98 ? 'var(--warn)' : 'var(--danger)'; return '<i title="' + esc(x.day || '') + ' · ' + Math.round(up * 100) + '%" style="display:inline-block;width:6px;height:22px;margin-right:1px;border-radius:2px;background:' + col + ';opacity:' + (x.total ? 1 : 0.3) + '"></i>'; }).join('');
           return '<div style="margin:10px 0"><div class="row" style="align-items:center;gap:8px"><b>' + esc(c.name || c.id) + '</b>' + okPill(c.status === 'up', c.status || 'unknown') + '<span class="muted">' + (c.uptime90 != null ? c.uptime90 + '% over 90 d' : '') + (c.latencyMs != null ? ' \u00b7 ' + c.latencyMs + ' ms' : '') + (c.checkedAt ? ' \u00b7 checked ' + ago(c.checkedAt) : '') + '</span>' + '</div><div style="margin-top:4px;white-space:nowrap;overflow:hidden">' + bars + '</div></div>';
         }).join('') : '<div class="empty">No components reported.</div>') +
         '<p class="muted" style="font-size:11px">Source: the public status endpoint. Ticks come from the status-tick workflow every 30 min.</p></div>';
@@ -3235,7 +3247,7 @@
     function applyDensity() {
       document.body.classList.toggle('astra-compact', compact);
       densityButton.setAttribute('aria-pressed', String(compact));
-      densityButton.textContent = compact ? 'Comfortable' : 'Compact';
+      setBtnLabel(densityButton, compact ? 'Comfortable' : 'Compact');
     }
     applyDensity();
     densityButton.addEventListener('click', function () {
@@ -3244,6 +3256,111 @@
       try { localStorage.setItem('vinax.admin.compact', compact ? '1' : '0'); } catch (e) {}
     });
   }
+  // ---------- theme: same tokens as the listener app, dark + light ----------
+  // Stored choice wins ('vinax_admin_theme' = light | dark; the legacy
+  // 'vinax_admin_light' flag still reads as light). With nothing stored the
+  // console follows prefers-color-scheme. The class lives on <html> so
+  // theme-boot.js can set it before first paint.
+  var THEME_KEY = 'vinax_admin_theme';
+  function storedTheme() {
+    try {
+      var t = localStorage.getItem(THEME_KEY);
+      if (t === 'light' || t === 'dark') return t;
+      if (localStorage.getItem('vinax_admin_light')) return 'light';
+    } catch (e) {}
+    return '';
+  }
+  function systemTheme() {
+    try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; } catch (e) { return 'dark'; }
+  }
+  function applyTheme(mode) {
+    var light = mode === 'light';
+    document.documentElement.classList.toggle('light', light);
+    var tv = $('themeVal'); if (tv) tv.textContent = light ? 'Light' : 'Dark';
+    var tb = $('theme'); if (tb) tb.setAttribute('aria-label', 'Theme: ' + (light ? 'light' : 'dark') + '. Switch to ' + (light ? 'dark' : 'light') + '.');
+  }
+
+  // ---------- sidebar: icon rail on desktop, off-canvas drawer below 1024px ----------
+  // Rail state persists per browser ('vinax_admin_sidebar' = rail | full) and
+  // only changes the --sb-cur grid variable. The drawer traps focus, closes
+  // on Escape / scrim / picking a tool, and hands focus back to the menu button.
+  var HOME_SEC = 'overview';
+  var SB_KEY = 'vinax_admin_sidebar';
+  var rootEl = document.documentElement;
+  var drawerMq = null;
+  try { drawerMq = window.matchMedia('(max-width: 1023px)'); } catch (e) {}
+  function isDrawerMode() { return !!(drawerMq && drawerMq.matches); }
+  function isRail() { return !isDrawerMode() && rootEl.classList.contains('sb-rail'); }
+  function drawerOpen() { return rootEl.classList.contains('sb-open'); }
+  function paintSidebar() {
+    var drawer = isDrawerMode(), rail = rootEl.classList.contains('sb-rail');
+    var cb = $('sbCollapse');
+    if (cb) {
+      var lbl = drawer ? 'Close menu' : (rail ? 'Expand sidebar' : 'Collapse sidebar');
+      cb.setAttribute('aria-label', lbl); cb.title = lbl;
+      if (drawer) cb.removeAttribute('aria-pressed'); else cb.setAttribute('aria-pressed', String(rail));
+    }
+    var mb = $('menuBtn');
+    if (mb) { mb.setAttribute('aria-expanded', String(drawerOpen())); mb.setAttribute('aria-label', drawerOpen() ? 'Close menu' : 'Open menu'); }
+  }
+  function setBehindDrawerInert(on) {
+    [$('main'), $('stale'), document.querySelector('#app > footer')].forEach(function (el) { if (el) { try { el.inert = on; } catch (e) {} } });
+  }
+  function setRail(on) {
+    rootEl.classList.toggle('sb-rail', on);
+    try { localStorage.setItem(SB_KEY, on ? 'rail' : 'full'); } catch (e) {}
+    paintSidebar();
+  }
+  function openDrawer() {
+    if (!isDrawerMode() || drawerOpen()) return;
+    rootEl.classList.add('sb-open');
+    setBehindDrawerInert(true);
+    paintSidebar();
+    var cb = $('sbCollapse'); if (cb) { try { cb.focus(); } catch (e) {} }
+  }
+  function closeDrawer(restoreFocus) {
+    if (!drawerOpen()) return;
+    rootEl.classList.remove('sb-open');
+    setBehindDrawerInert(false);
+    paintSidebar();
+    if (restoreFocus !== false) { var mb = $('menuBtn'); if (mb) { try { mb.focus(); } catch (e) {} } }
+  }
+  function sidebarFocusables() {
+    var sb = $('sidebar'); if (!sb) return [];
+    return Array.prototype.filter.call(sb.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled])'), function (el) { return el.getClientRects().length > 0; });
+  }
+  function initSidebar() {
+    paintSidebar();
+    var mb = $('menuBtn'); if (mb) mb.addEventListener('click', function () { if (drawerOpen()) closeDrawer(); else openDrawer(); });
+    var sc = $('sbScrim'); if (sc) sc.addEventListener('click', function () { closeDrawer(); });
+    var cb = $('sbCollapse'); if (cb) cb.addEventListener('click', function () { if (isDrawerMode()) closeDrawer(); else setRail(!rootEl.classList.contains('sb-rail')); });
+    // The brand is the way home: same switch the nav uses (setSection also
+    // writes the #hash and the remembered section). Modified clicks keep the
+    // native link behaviour (href="#overview" opens the console home in a new tab).
+    var bh = $('brandHome');
+    if (bh) bh.addEventListener('click', function (e) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
+      e.preventDefault();
+      setSection(HOME_SEC);
+      var m = $('main'); if (m) m.scrollTop = 0;
+    });
+    if (drawerMq) {
+      var onMq = function () { if (!isDrawerMode()) closeDrawer(false); paintSidebar(); };
+      if (drawerMq.addEventListener) drawerMq.addEventListener('change', onMq); else if (drawerMq.addListener) drawerMq.addListener(onMq);
+    }
+    document.addEventListener('keydown', function (e) {
+      if (!drawerOpen() || !isDrawerMode()) return;
+      if (document.querySelector('.vxd-overlay, #palette')) return; // a dialog on top owns the keyboard
+      if (e.key === 'Escape') { if (e.defaultPrevented) return; e.preventDefault(); closeDrawer(); return; }
+      if (e.key !== 'Tab') return;
+      var f = sidebarFocusables(); if (!f.length) return;
+      var first = f[0], last = f[f.length - 1], cur = document.activeElement, sb = $('sidebar');
+      if (!sb.contains(cur)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && cur === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && cur === last) { e.preventDefault(); first.focus(); }
+    });
+  }
+
   var GRP_KEY = 'vinax_admin_navgroups';
   function closedGroups() { try { var v = JSON.parse(localStorage.getItem(GRP_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
   function applyNavGroups() {
@@ -3375,9 +3492,16 @@
     memoReset();
     active = sec;
     try { if (location.hash !== '#' + sec) location.hash = sec; localStorage.setItem('vinax_admin_sec', sec); } catch (e) {}
-    Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-sec]'), function (b) { b.classList.toggle('active', b.getAttribute('data-sec') === sec); });
-    // Mobile: the nav is a horizontal chip rail — keep the active chip visible.
-    try { var ab = document.querySelector('#nav button.active'); if (ab && ab.scrollIntoView) ab.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) {}
+    Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-sec]'), function (b) {
+      var on = b.getAttribute('data-sec') === sec;
+      b.classList.toggle('active', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+    // Icon rail: the category that holds the active tool stays highlighted.
+    Array.prototype.forEach.call(document.querySelectorAll('#nav button.nav-group-label'), function (g) { g.classList.toggle('current', g.getAttribute('data-group') === CATS[sec]); });
+    closeDrawer();
+    // Keep the active tool visible inside the sidebar's own scroller.
+    try { var ab = document.querySelector('#nav button.active'); if (ab && ab.scrollIntoView) ab.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {}
     $('secTitle').textContent = TITLES[sec] || '';
     var crumbEl = $('secCrumb');
     if (crumbEl) crumbEl.textContent = CATS[sec] || '';
@@ -3392,12 +3516,12 @@
   }
   function buildRange() {
     var opts = [[1, '24h'], [7, '7d'], [30, '30d'], [90, '90d']];
-    $('range').innerHTML = opts.map(function (o) { return '<button data-d="' + o[0] + '"' + (o[0] === rangeDays ? ' class="active"' : '') + '>' + o[1] + '</button>'; }).join('');
+    $('range').innerHTML = opts.map(function (o) { return '<button type="button" data-d="' + o[0] + '" aria-pressed="' + (o[0] === rangeDays) + '"' + (o[0] === rangeDays ? ' class="active"' : '') + '>' + o[1] + '</button>'; }).join('');
     Array.prototype.forEach.call($('range').querySelectorAll('button'), function (b) {
       b.addEventListener('click', function () { rangeDays = parseInt(b.getAttribute('data-d'), 10); buildRange(); refreshActive(); });
     });
   }
-  function setAuto(on) { autoRefresh = on; $('autoTrack').classList.toggle('on', on); document.body.classList.toggle('live', on); if (on) startAuto(); else stopAuto(); }
+  function setAuto(on) { autoRefresh = on; $('autoTrack').classList.toggle('on', on); $('autoWrap').setAttribute('aria-pressed', String(on)); document.body.classList.toggle('live', on); if (on) startAuto(); else stopAuto(); }
 
   // ---------- table search / sort / pagination (auto-applied to big tables) ----------
   function cellVal(r, i) {
@@ -3472,11 +3596,17 @@
         if (o[0] === refreshMs) op.selected = true; sel.appendChild(op);
       });
       sel.id = 'hdr-interval';
+      sel.setAttribute('aria-label', 'Auto-refresh interval');
       sel.addEventListener('change', function () { refreshMs = parseInt(sel.value, 10); try { localStorage.setItem('vinax_admin_interval', sel.value); } catch (e) {} startAuto(); });
-      var den = document.createElement('button'); den.className = 'ghost'; den.textContent = 'Density'; den.title = 'Toggle compact rows';
-      den.addEventListener('click', function () { var on = document.body.classList.toggle('compact'); try { localStorage.setItem('vinax_admin_compact', on ? '1' : ''); } catch (e) {} });
+      var den = document.createElement('button'); den.type = 'button'; den.id = 'rowDensity'; den.className = 'ghost sb-btn'; den.title = 'Toggle compact rows';
+      den.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-rows"></use></svg><span class="bl">Density</span>';
+      den.addEventListener('click', function () { var on = document.body.classList.toggle('compact'); den.setAttribute('aria-pressed', String(on)); try { localStorage.setItem('vinax_admin_compact', on ? '1' : ''); } catch (e) {} });
       if (localStorage.getItem('vinax_admin_compact')) document.body.classList.add('compact');
-      var aw = $('autoWrap'); aw.parentNode.insertBefore(sel, aw); aw.parentNode.insertBefore(den, aw);
+      den.setAttribute('aria-pressed', String(document.body.classList.contains('compact')));
+      // Sidebar → View group: the select sits beside the auto-refresh switch,
+      // the row-density toggle leads the toggle grid (before Compact).
+      var aw = $('autoWrap'); aw.parentNode.appendChild(sel);
+      var cmp = $('density'); if (cmp && cmp.parentNode) cmp.parentNode.insertBefore(den, cmp); else aw.parentNode.appendChild(den);
     } catch (e) {}
     // (The mousemove 3D card tilt lived here — retired: it rotated whole
     //  tables/cards over their neighbours and added nothing but wobble.)
@@ -3522,14 +3652,14 @@
           'Plays today: ' + (s.plays_today || 0) + ' · 7d: ' + (s.plays_7d || 0) + '\n' +
           'Users: ' + (s.total_users || 0) + ' total · +' + (s.new_today || 0) + ' today · DAU ' + (s.dau || 0) + ' / WAU ' + (s.wau || 0) + ' / MAU ' + (s.mau || 0) + '\n' +
           'Errors (24h): ' + (s.errors_24h || 0) + ' · New feedback: ' + (s.feedback_new || 0);
-        try { navigator.clipboard.writeText(txt).then(function () { $('report').textContent = 'Copied'; setTimeout(function () { $('report').textContent = 'Report'; }, 1200); }); } catch (err) { vxPrompt('Copy the report text below:', { title: 'Day report', value: txt, okText: 'Done' }); }
+        try { navigator.clipboard.writeText(txt).then(function () { setBtnLabel($('report'), 'Copied'); setTimeout(function () { setBtnLabel($('report'), 'Report'); }, 1200); }); } catch (err) { vxPrompt('Copy the report text below:', { title: 'Day report', value: txt, okText: 'Done' }); }
       }).catch(noop);
     });
 
     // ---- Error notifications (opt-in) ----
     var notifyOn = !!localStorage.getItem('vinax_admin_notify');
     var lastErr = -1;
-    function paintNotify() { $('notify').style.opacity = notifyOn ? '1' : '.45'; }
+    function paintNotify() { $('notify').setAttribute('aria-pressed', String(notifyOn)); }
     paintNotify();
     $('notify').addEventListener('click', function () {
       notifyOn = !notifyOn;
@@ -3541,12 +3671,21 @@
       paintNotify();
     });
 
-    // ---- Light / dark admin theme ----
-    if (localStorage.getItem('vinax_admin_light')) document.body.classList.add('lightadm');
+    // ---- Light / dark admin theme (same tokens as the listener app) ----
+    // The stored choice wins; with none stored the console follows the
+    // system preference, live. theme-boot.js applies the same rule pre-paint.
+    applyTheme(storedTheme() || systemTheme());
     $('theme').addEventListener('click', function () {
-      var on = document.body.classList.toggle('lightadm');
-      try { localStorage.setItem('vinax_admin_light', on ? '1' : ''); } catch (err) {}
+      var next = document.documentElement.classList.contains('light') ? 'dark' : 'light';
+      try { localStorage.setItem(THEME_KEY, next); localStorage.removeItem('vinax_admin_light'); } catch (err) {}
+      applyTheme(next);
+      if (active === 'world') refreshActive(); // map markers read the accent as a value
     });
+    try {
+      var schemeMq = window.matchMedia('(prefers-color-scheme: light)');
+      var onScheme = function () { if (!storedTheme()) applyTheme(systemTheme()); };
+      if (schemeMq.addEventListener) schemeMq.addEventListener('change', onScheme); else if (schemeMq.addListener) schemeMq.addListener(onScheme);
+    } catch (err) {}
 
     // ---- Mini KPI strip (60s pulse) + notification trigger ----
     function kpiTick() {
@@ -3554,9 +3693,9 @@
         if (!d || !d.summary) return;
         var s = d.summary;
         $('kpis').innerHTML =
-          '<span class="k">● <b>' + (s.active_now || 0) + '</b> now</span>' +
-          '<span class="k">▶ <b>' + (s.plays_today || 0) + '</b> today</span>' +
-          '<span class="k">⚠ <b>' + (s.errors_24h || 0) + '</b> errors</span>';
+          '<span class="k"><span class="kg" aria-hidden="true">●</span><b>' + (s.active_now || 0) + '</b><span class="kl">now</span></span>' +
+          '<span class="k"><span class="kg" aria-hidden="true">▶</span><b>' + (s.plays_today || 0) + '</b><span class="kl">today</span></span>' +
+          '<span class="k"><span class="kg" aria-hidden="true">⚠</span><b>' + (s.errors_24h || 0) + '</b><span class="kl">errors</span></span>';
         if (notifyOn && lastErr >= 0 && (s.errors_24h || 0) > lastErr && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('VinaX: new errors', { body: (s.errors_24h - lastErr) + ' new error(s) in the last day.' });
         }
@@ -3622,22 +3761,27 @@
     showApp(); buildRange(); initEnhancements();
     if (autoRefresh) document.body.classList.add('live');
     var initial = (location.hash || '').replace('#', '');
-    setSection(TITLES[initial] ? initial : (localStorage.getItem('vinax_admin_sec') || 'overview'));
+    setSection(TITLES[initial] ? initial : (localStorage.getItem('vinax_admin_sec') || HOME_SEC));
   }
 
   Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-sec]'), function (b) { b.addEventListener('click', function () { setSection(b.getAttribute('data-sec')); }); });
-  Array.prototype.forEach.call(document.querySelectorAll('#nav .nav-group-label'), function (g) { g.addEventListener('click', function () { toggleNavGroup(g.getAttribute('data-group')); }); });
+  Array.prototype.forEach.call(document.querySelectorAll('#nav .nav-group-label'), function (g) { g.addEventListener('click', function () {
+    var name = g.getAttribute('data-group');
+    if (isRail()) { setRail(false); if (closedGroups().indexOf(name) >= 0) toggleNavGroup(name); try { g.scrollIntoView({ block: 'start' }); } catch (e) {} return; }
+    toggleNavGroup(name);
+  }); });
   applyNavGroups();
   $('enter').addEventListener('click', function () { var t = $('token').value.trim(); if (!t) { $('loginErr').textContent = 'Enter a token.'; return; } sessionStorage.setItem(TOKEN_KEY, t); start(); });
   $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('enter').click(); });
-  $('logout').addEventListener('click', function () { sessionStorage.removeItem(TOKEN_KEY); showLogin(''); });
+  $('logout').addEventListener('click', function () { closeDrawer(false); sessionStorage.removeItem(TOKEN_KEY); showLogin(''); });
   $('refresh').addEventListener('click', refreshActive);
   $('csv').addEventListener('click', downloadCsv);
   $('autoWrap').addEventListener('click', function () { setAuto(!autoRefresh); });
   $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
 
-  // Honour the saved theme before the login card paints (initEnhancements
-  // re-applies it after sign-in; this just avoids a dark flash on light).
-  try { if (localStorage.getItem('vinax_admin_light')) document.body.classList.add('lightadm'); } catch (e) {}
+  // Theme before the login card paints (theme-boot.js already did this
+  // pre-paint; repeated here so a cached page without it still lands right).
+  applyTheme(storedTheme() || systemTheme());
+  initSidebar();
   if (token()) start(); else showLogin('');
 })();

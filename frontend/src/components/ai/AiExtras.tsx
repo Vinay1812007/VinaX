@@ -5,11 +5,10 @@ import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { ChevronDownIcon, XIcon } from '@/components/Icons';
 import { type SlashCommand } from '@/features/ai/slashCommands';
 import { addPrompt, loadPrompts, removePrompt, type SavedPrompt } from '@/features/ai/savedPrompts';
-import { buildTodayBrief, type TodayBrief } from '@/features/ai/todayBrief';
 import { REPLY_LANGS, REPLY_STYLES } from '@/features/ai/replyPrefs';
 
 /* v5.16.0 — small companions for the VinaX AI page, kept out of the 1.8k-line
-   page module: slash menu, follow-up chips, today brief, saved prompts, the
+   page module: slash menu, follow-up chips, saved prompts, the
    reply-preference bar and (v5.18.0) the message-toolbar "More" popover plus
    the small icon set the toolbar uses. Presentation only — every handler is
    passed in by the page. */
@@ -71,7 +70,7 @@ export const ArrowUpRightIcon = ({ className }: IconProps): ReactNode => (
 export function SlashMenu({ items, onPick }: { items: SlashCommand[]; onPick: (c: SlashCommand) => void }) {
   if (!items.length) return null;
   return (
-    <div role="listbox" aria-label="Commands" className="ai-popover absolute left-2 right-2 bottom-full mb-2 max-h-64 overflow-auto z-20 animate-fade-up">
+    <div role="listbox" aria-label="Commands" className="ai-popover absolute left-2 right-2 bottom-full mb-2 max-h-64 overflow-auto z-20 ai-pop">
       <p className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest ai-t3">Commands</p>
       {items.map((c) => (
         <button
@@ -103,28 +102,6 @@ export function FollowupChips({ items, onPick, disabled }: { items: string[]; on
   );
 }
 
-export function TodayBriefCard({ onPick }: { onPick: (t: string) => void }) {
-  const [brief, setBrief] = useState<TodayBrief | null>(null);
-  useEffect(() => { setBrief(buildTodayBrief()); }, []);
-  if (!brief) return null;
-  return (
-    <div className="ai-card w-full p-4 sm:p-5 text-left">
-      <div className="flex items-center gap-2">
-        <span className="w-1.5 h-1.5 rounded-full bg-ember-400 shrink-0" aria-hidden />
-        <p className="text-[10px] font-bold uppercase tracking-widest ai-t3">Today for you · {brief.date}</p>
-      </div>
-      {brief.lines.length > 0 && <p className="mt-1.5 text-[14px] leading-relaxed ai-t2">{brief.lines.join(' ')}</p>}
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {brief.prompts.map((p) => (
-          <button key={p} onClick={() => onPick(p)} className="ai-chip">
-            {p}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function SavedPromptsSheet({ onClose, onUse, draft }: { onClose(): void; onUse: (t: string) => void; draft: string }) {
   const [list, setList] = useState<SavedPrompt[]>(() => loadPrompts());
   const [title, setTitle] = useState('');
@@ -134,7 +111,7 @@ export function SavedPromptsSheet({ onClose, onUse, draft }: { onClose(): void; 
   useDismissOnBack(true, onClose);
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label="Saved prompts" className="w-full sm:max-w-lg glass-modal rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,var(--safe-bottom))] sm:pb-5 animate-fade-up max-h-[85dvh] overflow-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label="Saved prompts" className="w-full sm:max-w-lg glass-modal rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,var(--safe-bottom))] sm:pb-5 ai-enter max-h-[85dvh] overflow-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold tracking-tight">Saved prompts</h2>
@@ -198,17 +175,23 @@ export function ReplyPrefsBar({
           <ChevronDownIcon className="w-3 h-3 pointer-events-none opacity-60" />
         </span>
       </label>
-      {hasSong && (
-        <button
-          onClick={() => onSongCtx(!songCtx)}
-          aria-pressed={songCtx}
-          title="Let the assistant see the song playing now (title, artist, lyrics)"
-          className="ai-menu-item justify-between"
-        >
-          <span>Use the song playing now</span>
-          <span className={cn('text-[11px] font-bold', songCtx ? 'text-ember-400' : 'ai-t3')}>{songCtx ? 'On' : 'Off'}</span>
-        </button>
-      )}
+      {/* Always listed (v7.1): in a settings dialog a row that only exists
+          while music plays reads as a missing setting. With nothing playing
+          it is shown, explained, and inert. */}
+      <button
+        type="button"
+        onClick={() => { if (hasSong) onSongCtx(!songCtx); }}
+        aria-pressed={songCtx}
+        aria-disabled={!hasSong || undefined}
+        title={hasSong ? 'Let the assistant see the song playing now (title, artist, lyrics)' : 'Play a song first — nothing is playing right now'}
+        className={cn('ai-menu-item justify-between', !hasSong && 'opacity-55')}
+      >
+        <span className="min-w-0">
+          <span className="block">Use the song playing now</span>
+          {!hasSong && <span className="block text-[11px] font-medium ai-t3">Nothing is playing right now</span>}
+        </span>
+        <span className={cn('text-[11px] font-bold', songCtx ? 'text-ember-400' : 'ai-t3')}>{songCtx ? 'On' : 'Off'}</span>
+      </button>
     </div>
   );
 }
@@ -227,10 +210,40 @@ export interface MoreAction {
  *  upward so it never falls below the composer on the last reply. */
 export function MoreMenu({ actions }: { actions: MoreAction[] }) {
   const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // v7.1 — a real menu: focus moves into it when it opens, the arrow keys
+  // walk it, and Escape closes it and hands focus back to the trigger.
+  useEffect(() => {
+    if (open) menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+  }, [open]);
   if (!actions.length) return null;
+  const close = (): void => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
   return (
-    <div className="relative" onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}>
+    <div
+      className="relative"
+      onKeyDown={(e) => {
+        if (!open) return;
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          close();
+          return;
+        }
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+        const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+        if (!items.length) return;
+        e.preventDefault();
+        const at = items.indexOf(document.activeElement as HTMLElement);
+        const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[next].focus();
+      }}
+    >
       <button
+        ref={triggerRef}
+        type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -242,11 +255,12 @@ export function MoreMenu({ actions }: { actions: MoreAction[] }) {
       </button>
       {open && (
         <>
-          <button aria-label="Close menu" tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
-          <div role="menu" aria-label="More actions" className="ai-popover absolute left-0 bottom-full mb-1.5 z-50 w-48 animate-fade-up">
+          <button type="button" aria-label="Close menu" tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />
+          <div ref={menuRef} role="menu" aria-label="More actions" className="ai-popover absolute left-0 bottom-full mb-1.5 z-50 w-48 ai-pop">
             {actions.map((a) => (
               <button
                 key={a.label}
+                type="button"
                 role="menuitem"
                 title={a.title}
                 aria-pressed={a.active}

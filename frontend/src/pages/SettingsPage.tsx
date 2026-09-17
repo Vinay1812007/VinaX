@@ -20,6 +20,7 @@ import { activeFestival, nextFestival } from '@/constants/festivals';
 import { applyGlassLevel } from '@/utils/theme';
 import { COUNTRIES, REGIONS } from '@/constants/regions';
 import { KEYS } from '@/constants/storage-keys';
+import { getLocal, setLocal } from '@/services/storage/local';
 import { DISPLAY_VERSION } from '@/constants/version';
 import { ensureNotificationPermission, getNotificationPermission, isNativePlatform } from '@/services/native';
 import { pushSupported, isPushSubscribed, enablePush, disablePush } from '@/services/push';
@@ -79,7 +80,7 @@ const DISCOVERY_OPTIONS: Array<{ value: DiscoveryMode; label: string }> = [
 const DISCOVERY_NOTES: Record<DiscoveryMode, string> = {
   familiar: 'Known ground: your favourites and songs you finished come back into the mix, new artists are rare, and the queue stays in its language.',
   balanced: 'Mostly your taste, with about one new artist in every four or five songs. What you skip and finish in a sitting tips it either way.',
-  discover: 'Roams further: never-played artists rank higher and fill close to half of a queue, the queue may take a short detour into another language you play, and Home adds picks from languages you haven’t tried.',
+  discover: 'Roams further: never-played artists rank higher and fill close to half of a queue — always in the language of the song that is playing, and introduced after a familiar opening. Home adds picks from languages you haven’t tried.',
 };
 
 function Row({ label, note, children, stack }: { label: string; note?: string; children: ReactNode; stack?: boolean }) {
@@ -290,6 +291,8 @@ export default function SettingsPage() {
   const [settingsQuery, setSettingsQuery] = useState('');
   usePageTitle('Settings');
   const s = useSettingsStore();
+  // Usage-sharing consent lives outside the settings store (it is never part of a backup).
+  const [usageSharing, setUsageSharing] = useState<boolean>(() => getLocal<boolean>(KEYS.analyticsConsent, false) === true);
   const region = useRegion();
   const fileRef = useRef<HTMLInputElement>(null);
   const [notifPerm, setNotifPerm] = useState<'granted' | 'denied' | 'unsupported' | 'unknown'>('unknown');
@@ -735,6 +738,24 @@ export default function SettingsPage() {
       </div>
 
       <Section title="Region & Privacy" icon={ShieldIcon}>
+        <Row
+          label="Share anonymous usage"
+          note="City-level location, no account, and session insights with all on-screen text masked — to help improve VinaX. Off by default. Turning it off stops new usage events at once; session insights stop after the next reload."
+        >
+          <Toggle
+            on={usageSharing}
+            label="Share anonymous usage"
+            onChange={(v) => {
+              setLocal(KEYS.analyticsConsent, v);
+              setUsageSharing(v);
+              if (v) {
+                void import('@/services/analytics/telemetry').then((m) => m.registerUser());
+                void import('@/services/analytics/sessionInsights').then((m) => m.initSessionInsights());
+              }
+              toast(v ? 'Thank you — anonymous usage sharing is on' : 'Usage sharing is off');
+            }}
+          />
+        </Row>
         <Row
           label="Allow region inference"
           note={`Coarse country only — from Cloudflare's edge country header or your browser locale/timezone. Your IP is never stored. Current: ${region ? `${region.country ?? 'unknown'} (${region.source})` : 'unknown'}.`}

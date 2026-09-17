@@ -211,3 +211,21 @@ describe('persistence', () => {
     spy.mockRestore();
   });
 });
+
+describe('v7.1.0 — un-tuning and the batch of five', () => {
+  it('tuneQueue(null) clears the intent and rebuilds the automatic tail, keeping hand-queued songs', async () => {
+    recommendMock.mockResolvedValueOnce([song('auto1'), song('auto2')]);
+    usePlayerStore.getState().playSong(song('seed'));
+    await flush();
+    usePlayerStore.getState().enqueue(song('mine'));
+    recommendMock.mockResolvedValueOnce([song('dev1')]);
+    usePlayerStore.getState().tuneQueue('devotional');
+    await flush();
+    expect(usePlayerStore.getState().tuneIntent).toBe('devotional');
+    recommendMock.mockResolvedValueOnce([song('usual1'), song('usual2')]);
+    usePlayerStore.getState().tuneQueue(null);
+    await flush();
+    expect(usePlayerStore.getState().tuneIntent).toBeNull();
+    expect(ids()).toEqual(['seed', 'mine', 'usual1', 'usual2']);
+  });
+});

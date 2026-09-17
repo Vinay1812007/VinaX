@@ -48,6 +48,12 @@ export interface SequenceOptions {
   discoveryIds?: Set<string>;
   /** Songs that played just before this stretch (for spacing and memory). */
   recent?: Song[];
+  /**
+   * v7.1.0 — familiar first, then gradually introduce. The strongest, most
+   * familiar hand-off leads; discovery is held out of the opening slots and
+   * costs less the further into the stretch it lands. Default on.
+   */
+  familiarFirst?: boolean;
 }
 
 export interface SequencedSong {
@@ -147,7 +153,12 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
     const prevLead = prev ? leadArtist(prev) : '';
     const prevEnergy = out.length ? out[out.length - 1].energy : seed ? startEnergy : null;
     const prevDecade = prev ? decadeOf(prev) : null;
-    const discoveryAllowed = discoveryUsed < Math.floor(discoveryShare * n + 0.5);
+    // Where in the stretch we are: 0 at the first slot, 1 at the last.
+    const progress = n <= 1 ? 1 : i / (n - 1);
+    const familiarFirst = opts.familiarFirst !== false;
+    // No discovery in the opening (slot 1, and slot 2 of a stretch of four or more).
+    const opening = familiarFirst && i < (n >= 4 ? 2 : 1);
+    const discoveryAllowed = !opening && discoveryUsed < Math.floor(discoveryShare * n + 0.5);
     let bestIdx = -1;
     let bestCost = Infinity;
     let bestWhy = '';
@@ -183,6 +194,15 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
         const prevOff = !!(prev?.language && prev.language !== opts.language);
         cost += (familiar ? 1.1 : 2.5) + (prevOff ? 3 : 0);
         why.push(`a ${c.song.language} detour`);
+      }
+      if (familiarFirst) {
+        // A known song earns the early slots; an unknown one is welcome later.
+        if (opts.sureIds?.has(c.song.id)) {
+          cost -= 0.9 * (1 - progress);
+          if (i === 0) why.push('a familiar way in');
+        } else if (isDiscovery) {
+          cost += 1.1 * (1 - progress);
+        }
       }
       if (shape === 'lift' && opts.sureIds?.has(c.song.id)) {
         cost -= 1.2;

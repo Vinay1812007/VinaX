@@ -1,4 +1,5 @@
 import type { Song } from '@/types';
+import { inferMood, type Mood } from './mood';
 import type { ArcShape } from './sequencer';
 
 /**
@@ -106,7 +107,40 @@ export function tuneShape(intent: TuneIntent): ArcShape | null {
  * metadata; energy uses the classifier's value when present; the rest lean
  * on title cues and otherwise stay neutral (the DJ carries those intents).
  */
+/**
+ * v7.1.0 — the catalogue search that FETCHES songs for an intent. A tune (or a
+ * pinned mood) used to re-score whatever the seed's pool happened to contain;
+ * a romantic seed's pool holds almost nothing devotional, so the rebuilt list
+ * barely changed. Now every intent also brings its own candidates, in the
+ * queue's language. null = the intent needs no pool of its own.
+ */
+export function tuneSearchQuery(intent: TuneIntent, language: string | null): string | null {
+  const lang = language && language !== 'unknown' ? `${language} ` : '';
+  switch (intent) {
+    case 'energetic': return `${lang}high energy dance hits`;
+    case 'chill': return `${lang}chill soothing melodies`;
+    case 'romantic': return `${lang}romantic love songs`;
+    case 'melody': return `${lang}melody songs`;
+    case 'mass': return `${lang}mass beat songs`;
+    case 'devotional': return `${lang}devotional songs`;
+    case 'heartbreak': return `${lang}sad heartbreak songs`;
+    case 'classics': return `${lang}evergreen old classic hits`;
+    case 'fresh': return `${lang}latest new songs ${CURRENT_YEAR}`;
+    default: return null;
+  }
+}
+
+/** The inferred / classified mood each mood intent is looking for. */
+const INTENT_MOOD: Partial<Record<TuneIntent, Mood>> = { energetic: 'energetic', chill: 'chill', romantic: 'romantic', heartbreak: 'melancholy', devotional: 'devotional' };
+
 export function tuneScoreAdjust(song: Song, intent: TuneIntent, seedLang: string | null): number {
+  // v7.1.0 — a song whose mood IS the asked-for mood rises, whatever its title says.
+  const wanted = INTENT_MOOD[intent];
+  const moodLift = wanted && (song.mood === wanted || inferMood(song) === wanted) ? 0.35 : 0;
+  return moodLift + tuneBaseAdjust(song, intent, seedLang);
+}
+
+function tuneBaseAdjust(song: Song, intent: TuneIntent, seedLang: string | null): number {
   const year = song.year ? Number(song.year) : null;
   const energy = typeof song.energy === 'number' ? song.energy : null;
   switch (intent) {

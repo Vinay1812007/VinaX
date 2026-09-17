@@ -1,38 +1,5 @@
-/* Shared console redesign and purpose-built operations workspace. */
-body:not(.lightadm) {
-  --bg: #0c1012;
-  --surface: #13191b;
-  --surface-2: #1b2325;
-  --surface-3: #253032;
-  --border: #2c3839;
-  --accent: #c5e879;
-  --accent-strong: #b2d762;
-  --accent-text: #d3eea0;
-  --accent-soft: #c5e87915;
-  --accent-tint: #c5e87909;
-  --text: #edf2ec;
-  --text-2: #b2c0b9;
-  --text-3: #8b9d92;
-}
-#nav .brand {
-  padding-bottom: 26px;
-}
-#nav button[data-sec] {
-  border-radius: 8px;
-  font-weight: 500;
-}
-#nav button.active {
-  box-shadow: none;
-}
-#app main {
-  padding-top: 28px;
-}
-#secTitle {
-  letter-spacing: -0.045em;
-}
-#view .card {
-  border-radius: 14px;
-}
+/* Purpose-built operations workspace. Palette, radii and control scale come
+   from the token block in index.html (dark + light, mirrors the listener app). */
 #ops-workspace {
   max-width: 1500px;
   margin: auto;
@@ -43,7 +10,7 @@ body:not(.lightadm) {
   gap: 24px;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: linear-gradient(110deg, var(--surface), var(--accent-soft));
   padding: 32px;
 }
@@ -98,7 +65,12 @@ body:not(.lightadm) {
   color: var(--text-3);
   margin-right: 10px;
 }
-.ops-tabs button[aria-selected='true'] {
+.ops-tabs button:not(:disabled):hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.ops-tabs button[aria-selected='true'],
+.ops-tabs button[aria-selected='true']:not(:disabled):hover {
   color: var(--accent-text);
   box-shadow: inset 0 -2px var(--accent);
 }
@@ -111,7 +83,7 @@ body:not(.lightadm) {
 .ops-metric {
   padding: 22px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   min-width: 0;
 }
@@ -139,7 +111,7 @@ body:not(.lightadm) {
 .ops-panel {
   padding: 24px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   margin-bottom: 18px;
   min-width: 0;
@@ -231,7 +203,7 @@ body:not(.lightadm) {
   font-size: 11px;
 }
 #ops-workspace button:not(.ghost):not([role='tab']) {
-  color: var(--bg);
+  color: var(--on-accent);
 }
 .ops-goal strong {
   font-size: 40px;
@@ -299,7 +271,7 @@ body:not(.lightadm) {
 .ops-task-column {
   background: var(--surface-2);
   padding: 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
 }
 .ops-task-column h3 {
   margin: 0 0 18px;
@@ -314,7 +286,7 @@ body:not(.lightadm) {
   border: 1px solid var(--border);
   padding: 16px;
   margin-bottom: 12px;
-  border-radius: 10px;
+  border-radius: var(--radius);
 }
 .ops-task h4 {
   font-size: 13px;
@@ -401,12 +373,12 @@ body:not(.lightadm) {
   background: var(--warn-soft);
   color: var(--text);
   padding: 14px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-size: 12px;
 }
 #ops-workspace :is(button, a, input, select, textarea):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 @media (min-width: 1600px) {
   .ops-metrics {
@@ -444,27 +416,5 @@ body:not(.lightadm) {
   .ops-timeline li {
     flex-direction: column;
     gap: 5px;
-  }
-}
-/* Keep the console's growing tool set inside the viewport. */
-@media (min-width: 901px) {
-  #app {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
-  }
-  #app > header {
-    height: auto;
-    min-height: 70px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-  }
-  .hdr-tools {
-    flex: 1 1 auto;
-    min-width: 0;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-  .hdr-actions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
   }
 }

@@ -4,9 +4,11 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
 /**
  * VinaX AI surface (/VinaXAI) against a mocked SSE backend: the welcome brief,
  * the slash-command menu and the local `/now` command, reply preferences
- * travelling in the request body, the streamed reply with follow-up chips
- * and per-reply actions (pin, branch), and saved prompts. No model, no
- * network: `POST /api/vinaxai` is answered by a canned event stream.
+ * (now in the settings dialog) travelling in the request body, the streamed
+ * reply with follow-up chips and per-reply actions (pin, branch), the single
+ * model menu fed by the live catalogue, Agent mode with its activity list,
+ * and saved prompts. No model, no network: `POST /api/vinaxai` is answered by
+ * a canned event stream and `GET /api/aimodels` by a canned catalogue.
  */
 
 interface ChatMessage {
@@ -15,6 +17,8 @@ interface ChatMessage {
 }
 interface ChatRequest {
   messages: ChatMessage[];
+  mode?: string;
+  model?: string;
 }
 
 const SSE_REPLY =
@@ -22,6 +26,37 @@ const SSE_REPLY =
   'data: {"delta":"Here is a **short** answer.\\n\\n1. Kesariya — Arijit Singh\\n2. Srivalli — Sid Sriram\\n"}\n\n' +
   'data: {"delta":">>> Show an example | Make it shorter | Why?"}\n\n' +
   'data: {"done":true}\n\n';
+
+/** An agentic reply: two tool runs reported as additive `step` frames. */
+const SSE_AGENT_REPLY =
+  'data: {"meta":{"model":"vendor/agentic","mode":"scholar","web":"off","sources":[]}}\n\n' +
+  'data: {"step":{"tool":"search","label":"Searched the web for \u201cnews\u201d"}}\n\n' +
+  'data: {"step":{"tool":"code","label":"Ran code"}}\n\n' +
+  'data: {"delta":"Here is what I found."}\n\n' +
+  'data: {"done":true}\n\n';
+
+/** The live catalogue as GET /api/aimodels returns it (v7.1 adds `agent`). */
+const CATALOG = {
+  groups: [
+    {
+      id: 'grq',
+      label: 'VinaX GRQ ALL',
+      hint: 'Instant answers',
+      configured: true,
+      models: [
+        { id: 'vendor/agentic', label: 'agentic', provider: 'grq', context: 131072, agent: true },
+        { id: 'vendor/plain-8b', label: 'plain-8b', provider: 'grq', context: 8192, agent: false },
+      ],
+    },
+    {
+      id: 'opr',
+      label: 'VinaX OPR ALL',
+      hint: 'Marketplace',
+      configured: true,
+      models: [{ id: 'lab/big:free', label: 'big', provider: 'opr', context: 1000000, agent: false }],
+    },
+  ],
+};
 
 async function seed(page: Page): Promise<void> {
   await page.addInitScript((fp) => {
@@ -43,9 +78,15 @@ async function mockNetwork(page: Page, posted: ChatRequest[]): Promise<void> {
     const url = new URL(req.url());
     if (!url.origin.startsWith('http://localhost')) return route.abort();
     if (url.pathname === '/api/vinaxai' && req.method() === 'POST') {
-      posted.push(JSON.parse(req.postData() || '{}') as ChatRequest);
-      return route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: SSE_REPLY });
+      const body = JSON.parse(req.postData() || '{}') as ChatRequest;
+      posted.push(body);
+      return route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+        body: body.model === 'vendor/agentic' ? SSE_AGENT_REPLY : SSE_REPLY,
+      });
     }
+    if (url.pathname === '/api/aimodels') return route.fulfill({ json: CATALOG });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
     return route.continue();
   });
@@ -81,6 +122,20 @@ async function openMoreActions(page: Page): Promise<void> {
   expect(ok, 'a "More actions" button exists').toBe(true);
 }
 
+/** v7.1 — chat settings is a modal dialog with tabs (it was a gear popover
+ *  that toggled). Open it on a tab; close it with its own Close button. */
+async function openSettings(page: Page, tab: string): Promise<void> {
+  await page.locator('button[aria-label="Chat settings"]').click();
+  const dialog = page.locator('[role="dialog"]').filter({ hasText: 'Chat settings' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('tab', { name: tab }).click();
+  await expect(dialog.getByRole('tab', { name: tab })).toHaveAttribute('aria-selected', 'true');
+}
+async function closeSettings(page: Page): Promise<void> {
+  await page.locator('button[aria-label="Close settings"]').click();
+  await expect(page.locator('button[aria-label="Close settings"]')).toHaveCount(0);
+}
+
 test('welcome brief, slash commands, prefs in the request, reply actions, pin and branch', async ({ page }) => {
   const posted: ChatRequest[] = [];
   const pageErrors: string[] = [];
@@ -96,14 +151,11 @@ test('welcome brief, slash commands, prefs in the request, reply actions, pin an
   await expect.poll(() => bodyText(page), { timeout: 10_000 }).toMatch(/today for you/i);
   expect(await bodyText(page)).toMatch(/saved prompts/i);
 
-  // Reply preferences moved OUT of a bar permanently parked above the composer
-  // and INTO the chat-settings menu (v5.25.0). This assertion still checked the
-  // old placement and had been failing ever since; it now opens the menu, which
-  // is where a listener actually finds these controls today.
-  const settings = page.locator('button[aria-label="Chat settings"]');
-  await settings.click();
+  // Reply preferences live in the chat-settings DIALOG (v7.1; a gear popover
+  // from v5.25.0 until then), on its Replies tab.
+  await openSettings(page, 'Replies');
   await expect.poll(() => bodyText(page), { timeout: 5_000 }).toMatch(/reply in[\s\S]*style/i);
-  await settings.click();
+  await closeSettings(page);
 
   // Slash menu filters commands as you type.
   await box.fill('/pl');
@@ -118,12 +170,11 @@ test('welcome brief, slash commands, prefs in the request, reply actions, pin an
   await expect.poll(() => bodyText(page)).toMatch(/nothing is playing right now/i);
   expect(posted, '/now never reaches the backend').toHaveLength(0);
 
-  // Reply preferences ride along as a rule in the first message. The controls
-  // live in the chat-settings menu since v5.25.0, so open it to reach them.
-  await settings.click();
+  // Reply preferences ride along as a rule in the first message.
+  await openSettings(page, 'Replies');
   await page.selectOption('select[aria-label="Reply language"]', 'telugu');
   await page.selectOption('select[aria-label="Reply style"]', 'brief');
-  await settings.click();
+  await closeSettings(page);
   await box.fill('Give me two songs');
   await box.press('Enter');
   await expect.poll(() => bodyText(page), { timeout: 10_000 }).toMatch(/short answer/i);
@@ -140,13 +191,20 @@ test('welcome brief, slash commands, prefs in the request, reply actions, pin an
   // The song list in the reply becomes a playable card.
   expect(reply).toMatch(/save as playlist/i);
 
-  // Per-reply actions live in the "More actions" menu.
+  // Per-reply actions: copy, read aloud, regenerate, thumbs, branch and pin sit
+  // in the action row under the reply (v7.1 — pin and branch used to be inside
+  // "More actions"); the rewrites stay in the "More actions" menu.
+  const actions = page.locator('[role="group"][aria-label="Reply actions"]').last();
+  for (const name of ['Copy', 'Regenerate', 'Good response', 'Bad response', 'Branch', 'Pin']) {
+    await expect(actions.getByRole('button', { name, exact: true })).toHaveCount(1);
+  }
   const moreMenu = page.locator('[role="menu"][aria-label="More actions"]');
   await openMoreActions(page);
   await expect(moreMenu).toBeVisible();
-  for (const action of [/shorten/i, /expand/i, /simplify/i, /^pin$/i, /branch/i]) {
+  for (const action of [/continue/i, /shorten/i, /expand/i, /simplify/i]) {
     await expect(moreMenu.locator('[role="menuitem"]').filter({ hasText: action })).toHaveCount(1);
   }
+  await page.keyboard.press('Escape');
   await clickButton(page, /^pin$/i);
   await expect.poll(() => bodyText(page)).toMatch(/pinned/i);
 
@@ -161,10 +219,69 @@ test('welcome brief, slash commands, prefs in the request, reply actions, pin an
   await expect(page.locator('[role="status"][aria-label="Thinking"]')).toHaveCount(0, { timeout: 10_000 });
   await expect(page.locator('button[aria-label="More actions"]').last()).toBeAttached({ timeout: 10_000 });
 
-  await openMoreActions(page);
-  await expect(moreMenu).toBeVisible();
   await clickButton(page, /^branch$/i);
   await expect.poll(() => bodyText(page)).toMatch(/· branch/i);
+
+  expect(pageErrors).toEqual([]);
+});
+
+test('one model menu lists the live catalogue; a pick goes on the wire; Agent mode shows its working', async ({ page }) => {
+  const posted: ChatRequest[] = [];
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await seed(page);
+  await mockNetwork(page, posted);
+
+  await page.goto('/VinaXAI', { waitUntil: 'domcontentloaded' });
+  const box = page.locator('textarea[aria-label="Message VinaX AI"]');
+  await expect(box).toBeVisible({ timeout: 15_000 });
+
+  // The greeting uses the listener's first name; the composer sits under it.
+  await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Tester$/ })).toBeVisible();
+
+  // Every pinned engine and every catalogue model, in one searchable listbox.
+  await page.locator('button[aria-label^="Model:"]').click();
+  const list = page.locator('[role="listbox"][aria-label="Choose model"]');
+  await expect(list).toBeVisible();
+  // Section headings are upper-cased by CSS and this harness reads RENDERED text, so match case-insensitively.
+  for (const heading of [/recommended/i, /vinax engines/i, /vinax grq all/i, /vinax opr all/i]) {
+    await expect(list).toContainText(heading);
+  }
+  const agentic = list.locator('[role="option"]').filter({ hasText: 'agentic' });
+  await expect(agentic).toContainText(/agent/i);
+  await expect(agentic).toContainText(/128k/i);
+  await expect(list.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
+
+  // Type to filter, Enter to choose: the chip names the catalogue model.
+  const search = page.locator('input[aria-label="Search models"]');
+  await search.fill('big');
+  await expect(list.locator('[role="option"]')).toHaveCount(1);
+  await search.press('Enter');
+  await expect(list).toHaveCount(0);
+  await expect(page.locator('button[aria-label="Model: big"]')).toBeVisible();
+
+  await box.fill('hello there');
+  await box.press('Enter');
+  await expect.poll(() => posted.length, { timeout: 10_000 }).toBe(1);
+  expect(posted[0].mode).toBe('router');
+  expect(posted[0].model).toBe('lab/big:free');
+  await expect(page.locator('[role="status"][aria-label="Thinking"]')).toHaveCount(0, { timeout: 10_000 });
+
+  // Agent mode moves to the agent-capable model and the reply shows its steps,
+  // folded to one line once the answer is complete.
+  const agent = page.locator('button[aria-label="Agent mode"]');
+  await agent.click();
+  await expect(agent).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('button[aria-label="Model: agentic"]')).toBeVisible();
+  await box.fill('find the news');
+  await box.press('Enter');
+  await expect.poll(() => posted.length, { timeout: 10_000 }).toBe(2);
+  expect(posted[1].mode).toBe('scholar');
+  expect(posted[1].model).toBe('vendor/agentic');
+  const summary = page.getByRole('button', { name: /Searched the web · ran code · 2 steps/ });
+  await expect(summary).toBeVisible({ timeout: 10_000 });
+  await summary.click();
+  await expect(page.locator('ol[aria-label="Agent activity"] li')).toHaveCount(2);
 
   expect(pageErrors).toEqual([]);
 });

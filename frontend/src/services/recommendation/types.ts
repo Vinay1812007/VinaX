@@ -14,7 +14,9 @@ export type CandidateSource =
   | 'rediscovery'
   | 'history'
   /** Package A4 — the exploration budget: deliberately unlike your usual. */
-  | 'explore';
+  | 'explore'
+  /** v7.1.0 — fetched FOR the listener's stated intent (a tune, a pinned mood). */
+  | 'intent';
 
 export interface Candidate {
   song: Song;
@@ -132,6 +134,10 @@ export interface RecommendationContext {
   sessionProfile?: SessionRecommendationProfile;
   /** v7.0.0 — Familiar / Balanced / Discover. Absent = balanced (or discover when `explore` is set). */
   discoveryMode?: DiscoveryMode;
+  /** v7.1.0 — the listener's pinned mood (Now Playing → Pin a mood), when one is active. */
+  moodPin?: Mood | null;
+  /** v7.1.0 — a catalogue query that gathers candidates for an active tune / pinned mood. */
+  intentQuery?: string | null;
   /** v7.0.0 — short-term intent of this sitting; never written to the profile. */
   sessionIntent?: SessionIntent;
 }

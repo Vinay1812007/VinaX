@@ -1,3 +1,4 @@
+import { songKey } from '@/services/recommendation/songIdentity';
 import type { Song } from '@/types';
 
 /**
@@ -36,11 +37,17 @@ export function claimShelf(block: string, seq: number, songs: Song[]): Song[] {
     if (ci < 0) continue;
     if (ci < bi || (ci === bi && c.seq < seq)) earlier.push(c.ids);
   }
+  // v7.1.0 — a song is claimed by catalogue id AND by canonical identity, so the film
+  // cut, the remaster and the lofi flip of one song never fill three shelves. (7.0 added
+  // this to dedupeShelves.ts, which Home does not use — this ledger is what Home uses.)
   const own = new Set<string>();
   const out = songs.filter((song) => {
-    if (!song || own.has(song.id)) return false;
-    for (const set of earlier) if (set.has(song.id)) return false;
+    if (!song) return false;
+    const key = `k:${songKey(song)}`;
+    if (own.has(song.id) || own.has(key)) return false;
+    for (const set of earlier) if (set.has(song.id) || set.has(key)) return false;
     own.add(song.id);
+    own.add(key);
     return true;
   });
   claims.set(`${block}#${seq}`, { block, seq, ids: own });

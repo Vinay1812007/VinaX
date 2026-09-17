@@ -1,3 +1,4 @@
+import { greetingName } from '@/utils/greetingName';
 import { languageLabel } from '@/constants/languages';
 import { festivalById } from '@/constants/festivals';
 
@@ -50,7 +51,8 @@ function dayPartTitle(hour: number, name: string): string {
 }
 
 export function personalMessage(i: MessageInput): PersonalMessage {
-  const name = i.name.trim();
+  // A greeting uses a first name — never a whole device name (see utils/greetingName).
+  const name = greetingName(i.name);
   const lang = i.topLanguage ? languageLabel(i.topLanguage) : null;
 
   // 1 · Festival days beat everything — they're rare and shared.

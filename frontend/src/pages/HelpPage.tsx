@@ -15,7 +15,8 @@ import { isNativePlatform } from '@/services/native';
 import { cn } from '@/utils/cn';
 
 /**
- * v5.20.0 — Help & Feedback, rebuilt around what the app can do today:
+ * v5.20.0 — Help & Feedback, rebuilt around what the app can do today
+ * (guides, FAQ and shortcuts rewritten for 7.1):
  * live tutorials that run inside the real app, searchable guides and FAQ,
  * the latest update card, shortcuts, legal, and the feedback form with
  * optional diagnostics. Every claim here must be true today.
@@ -24,58 +25,75 @@ import { cn } from '@/utils/cn';
 interface Guide { group: string; title: string; steps: string[] }
 
 const GUIDES: Guide[] = [
-  { group: 'Listening', title: 'Play your first song', steps: ['Open Search and type anything — a song, artist, film or mood; results appear as you type.', 'Tap a result to play it. Albums and playlists play their songs in order.', 'Tap the mini-player to open the full-screen player with synced lyrics.'] },
-  { group: 'Listening', title: 'The full-screen player', steps: ['Flick the artwork up for the next song, down for the previous one. Double-tap the edges to seek ±10 s, the centre to like.', 'More options holds the sleep timer (minutes, end of song, or after 3/5/10 songs), A-B repeat, bookmarks, playback speed and “Share this moment”.', 'Ambient mode: leave the player alone for 45 seconds and it settles into artwork and a clock; tap to bring the controls back.'] },
-  { group: 'Listening', title: 'Sleep, alarm and Drive mode', steps: ['Sleep timer fades the last 30 seconds out and stops on the minute.', 'Settings → Wake-up alarm plays your favourites, resumes, or plays a playlist you choose, with a gentle 30-second fade-in.', 'Drive mode (from the player) gives big targets and fewer distractions.'] },
+  { group: 'Getting around', title: 'Five destinations and the top bar', steps: ['Home, Discover, Search, Library and VinaX AI are the five destinations: a dock at the bottom on phones, a sidebar on wider screens.', 'The top bar names the page you are on and holds its actions, plus the link to Settings. It has no search box: Search is its own destination.', 'Press ⌘/Ctrl+K on a keyboard for the command palette: pages, player actions and songs in one place.'] },
+  { group: 'Getting around', title: 'Discover and its shortcuts', steps: ['Discover opens with a shortcut grid: Charts, Languages, Moods, Regions, Movies, Videos, Made For You, Your Week, AI Playlist and Ads.', 'Below it, pick a language and a mood to change the shelves: trending, mood picks, playlists, new releases and film soundtracks.', 'Library has its own grid: Favorites, Listen Later, Downloads, History, Your VinaX and Taste Profile.'] },
+  { group: 'Listening', title: 'Tap a song: the DJ builds the next five', steps: ['Tap any song, in a shelf, an album or a playlist. It starts alone and the DJ builds what follows from it.', 'A continuation is the next five songs, always in the language of the song you tapped. It opens with familiar songs and introduces newer artists gradually.', 'Settings → Recommendations → “DJ builds every queue” turns this off, so playback follows the list you tapped instead.'] },
+  { group: 'Listening', title: 'Pin a mood and Tune this queue', steps: ['Tune this queue is on the Queue page and under More options in the full-screen player: More energetic, More chill, Same language, Surprise me and others.', 'Pin a mood is in the full-screen player’s Up Next tab: Romantic, Energetic, Chill, Melancholy or Devotional. A pin holds for 45 minutes; tap it again to unpin.', 'Both rebuild Up Next at once with songs fetched for that choice. Songs that already played, the current song and songs you queued by hand stay where they are.'] },
+  { group: 'Listening', title: 'Your queue: hand-queued songs go first', steps: ['Play next and Add to queue are in every song menu (right-click or long-press). On touch screens, swiping a song row right also adds it to the queue.', 'Songs you queue by hand play before anything the DJ added, and a rebuild never removes them.', 'On the Queue page, drag to reorder, remove songs, sort what is coming up, or save the queue as a playlist. Build a queue plans a longer session.'] },
+  { group: 'Listening', title: 'The full-screen player', steps: ['Flick the artwork up for the next song, down for the previous one. Double-tap the edges to seek, the centre to like.', 'More options holds playback speed, the sleep timer (15, 30 or 60 minutes, end of song, or after 3, 5 or 10 songs), A-B repeat, bookmarks and “Share this moment”.', 'Ambient mode: leave the player alone for 45 seconds and it settles into artwork and a clock; tap to bring the controls back.'] },
+  { group: 'Listening', title: 'Sleep, alarm and Drive mode', steps: ['The sleep timer fades the last 30 seconds out before it stops.', 'Settings → Wake-up alarm starts music at a time you set, with a gentle fade-in.', 'Drive mode (from the full-screen player) gives big targets and fewer distractions.'] },
   { group: 'Listening', title: 'Sound: equaliser, balance, mono', steps: ['Settings → Sound → turn on Sound effects.', 'Pick a preset or move the five bands; set left/right balance; switch on Mono for one-ear listening or Loudness normalisation for even volume.', 'If a source cannot be processed the status line says “Not available for this source” and playback continues untouched.'] },
-  { group: 'Finding music', title: 'Search like a pro', steps: ['Results appear as you type; Enter opens the full results with Songs, Albums, Artists and Playlists tabs.', 'Sort songs by relevance, popularity, newest, length or A→Z; filter within long lists; Play all or Queue all.', 'Typos are caught with “Did you mean …?”, and recent searches can be pinned (hover or long-press).'] },
-  { group: 'Finding music', title: 'Find a song by its lyrics', steps: ['Paste a line you remember into Search. Five words or more and VinaX offers Search by lyrics.', 'Matches show the lyric snippet; when the lyrics service has no hit, VinaX falls back to titles (many songs are named after their first line).', 'Tap a match to play it.'] },
-  { group: 'Finding music', title: 'Explore, charts and hubs', steps: ['Explore: decade radio, pick a year, a language × mood grid and Surprise album.', 'Charts: Top 50 global, Top 50 for your country and Viral 50.', 'Every language has its own hub, and 72 language-mood pages (Telugu romantic, Hindi party …).'] },
-  { group: 'Your music', title: 'Listen Later and playlists', steps: ['Choose Listen later in any song menu, or swipe a song row left. Swipe right adds it to the queue.', 'Playlists: pin, tag and filter by tag, add an emoji and description, sort, shuffle-play, remove duplicates, copy or share as text.', 'Deleted a playlist by mistake? Library → Recently deleted keeps it for seven days.'] },
-  { group: 'Your music', title: 'Import a playlist from text', steps: ['Library → Import from text.', 'Paste one song per line as “Title — Artist” (a bare title works too).', 'VinaX finds each song and saves the playlist; Save & play starts it immediately.'] },
-  { group: 'Your music', title: 'History and stats', steps: ['History: search it, filter by day, remove any entry, clear the last hour or today.', 'Your VinaX: a weekly report versus last week, a 12-week listening calendar with streaks, and a daily goal ring.', 'Any song menu → “Your history with this song” shows plays, completions and first/last time.'] },
-  { group: 'VinaX AI', title: 'Chat, and make it play', steps: ['Open VinaX AI from the menu. Ask anything; attach photos or files; switch on the globe for live web answers with sources.', 'Any “Title — Artist” line in a reply becomes a playable card, with Play all, Queue all and Save as playlist.', 'Type “play <song>”, “next” or “pause” as a message for instant control with a live mini-player in the chat.'] },
-  { group: 'VinaX AI', title: 'Slash commands and preferences', steps: ['Type / to open the menu: /playlist <vibe>, /now, /lyrics, /mood <mood>, /summary, /think, /web, /prompts, /export, /clear.', 'Reply in Telugu, Hindi, Tamil, Tenglish, Hinglish and more; choose a style — Brief, Detailed, Simple, Steps or Table.', '“Now playing on” lets the assistant see the song you are listening to. Paste a VinaX song link and it reads that song too.'] },
-  { group: 'VinaX AI', title: 'Working with replies', steps: ['Follow-up chips suggest the next question after every substantial reply.', 'Shorten, Expand or Simplify an answer; Listen reads it aloud; Pin keeps it at the top; Branch continues from that point in a new chat.', 'Saved prompts (welcome screen or /prompts) keep your own library on this device.'] },
-  { group: 'Look and feel', title: 'Themes, accents and festivals', steps: ['Settings → Theme: Dark, Black (AMOLED), Light, System or Auto (day/night). Ten accents, or Custom accent for any colour.', 'On 43 festivals the whole app takes on its own look — colours, glow, a greeting and a living backdrop — and returns to normal after. Settings → Festival themes switches it off.', 'Display size, High contrast, Reduce motion, Data saver and a Startup page are all in Settings; type in the Settings search box to find any of them.'] },
-  { group: 'Together and devices', title: 'Listen Together', steps: ['Library → Listen Together → Start session, then share the room code or invite link.', 'Everyone hears the same second; guests request songs into your queue with credit; you stay the DJ.', '“End for all” closes the room for everyone.'] },
-  { group: 'Together and devices', title: 'Move to a new device', steps: ['Old device: Settings → Your Data → Move to a new device (a one-time QR, or a 10-character code).', 'New device: on the welcome screen tap “Import your profile”, or Settings → Your Data → Import.', 'Favourites, playlists, history, stats and settings all come across; nothing is stored on a server.'] },
-  { group: 'Together and devices', title: 'Android app', steps: ['Settings → Get the App. Background playback, the media notification, offline downloads and in-app updates.', 'Downloads: open a song’s menu → Download. Library → Downloaded only filters to what plays offline.', 'Push notifications bring one AI-chosen song a day at most, and owner announcements.'] },
+  { group: 'Recommendations', title: 'Familiar, Balanced or Discover', steps: ['Settings → Recommendations → Discovery. Familiar brings back favourites and songs you finished; new artists are rare.', 'Balanced is mostly your taste with about one new artist in every four or five songs. Discover ranks never-played artists higher.', 'In every mode a queue stays in the language of its song and opens with a familiar hand-off.'] },
+  { group: 'Recommendations', title: 'Home and “Trending for you”', steps: ['Play my mix starts a mix built from your pinned languages and your listening on this device.', '“Trending for you” is the current trending pool put in the order your taste suggests; with AI-designed shelves on, VinaX AI orders it.', 'Home shows a song once: a song already in an earlier shelf is left out of later ones. Home Studio reorders or hides shelves.'] },
+  { group: 'Finding music', title: 'Search', steps: ['Results appear as you type; Enter opens the full results with All, Songs, Albums, Artists and Playlists tabs.', 'Sort songs by relevance, popularity, newest, length or A to Z, then Play all or Queue all.', 'A search with no songs offers “Did you mean …?”. Recent searches can be pinned (hover or long-press).'] },
+  { group: 'Finding music', title: 'Find a song by its lyrics', steps: ['Type a line you remember into Search. With five words or more VinaX offers Search by lyrics.', 'Matches show the lyric snippet; when the lyrics service has no hit, VinaX falls back to titles.', 'Tap a match to play it.'] },
+  { group: 'Your music', title: 'Listen Later and playlists', steps: ['Choose Listen later in any song menu, or swipe a song row left on a touch screen.', 'Playlists: pin, tag and filter by tag, sort, shuffle-play and remove duplicates.', 'Deleted a playlist by mistake? Library → Recently deleted keeps it for seven days.'] },
+  { group: 'Your music', title: 'Import a playlist from text', steps: ['Library → Import from text.', 'Paste one song per line as “Title — Artist” (a bare title works too).', 'Review the matches, then save the playlist.'] },
+  { group: 'Your music', title: 'Back up, restore and Undo', steps: ['Settings → Your Data → Export a backup downloads one file with your settings, library, history, taste profile and more. Downloaded audio is never included.', 'Backup Center → Choose a backup file shows what the file holds next to what is on this device. Choose Merge or Replace, untick categories you do not want, then restore.', 'Changed your mind? Open Backup Center again in the same tab and use “Undo that restore”. The undo copy lasts until you close the tab.'] },
+  { group: 'Your music', title: 'History and stats', steps: ['History: search it, filter by date, remove an entry, clear the last hour or today.', 'Your VinaX: your listening report, a 12-week listening calendar and a daily goal ring.', 'Any song menu → “Your history with this song” shows plays, completions and first/last time.'] },
+  { group: 'VinaX AI', title: 'Chat, and make it play', steps: ['Open VinaX AI from the dock or sidebar. Ask anything. The + button uploads files or a folder and switches on Web search, Think, Research or image creation.', 'Any “Title — Artist” line in a reply becomes a playable card, with Play all and Save as playlist.', '“play <song>”, “queue <song>”, “pause”, “next” and “previous” work as messages.'] },
+  { group: 'VinaX AI', title: 'The model menu and Agent mode', steps: ['The model button in the composer opens one menu with a search field over every model VinaX can reach: recently used first, then recommended, then each catalogue.', 'Auto picks an engine for each question. Chat settings → General sets the default model.', 'Agent mode uses an agent-capable model that can search the web and run code by itself. The button is greyed out when no agent model is available; while it is on, the model menu lists agent models only.'] },
+  { group: 'VinaX AI', title: 'Slash commands and chat settings', steps: ['Type / to open the menu: /playlist <vibe>, /now, /lyrics, /mood <mood>, /summary, /think, /web, /prompts, /export, /clear. Tab completes.', 'Chat settings has five tabs: General (text size, default model, Send with Enter, Start in Agent mode), Replies (language, style, About you), Voice, Data (export, import or clear chats) and Shortcuts.', 'Your messages and a short taste summary go to the AI service to answer. Your library stays on this device.'] },
+  { group: 'Look and feel', title: 'Themes, accents and festivals', steps: ['Settings → Theme: Dark, Black, Light, System or Auto (day/night). Pick an accent, or Custom accent for any colour.', 'On festival days the app takes on a festive look and returns to normal after. Settings → Festival themes switches it off.', 'Type in the Settings search box to find any setting by name.'] },
+  { group: 'Together and devices', title: 'Listen Together', steps: ['Library → Listen Together → Start session, then share the room code or invite link.', 'Guests hear what you play and can request songs; you stay in control of the queue.', '“End for all” closes the room for everyone.'] },
+  { group: 'Together and devices', title: 'Move to a new device', steps: ['Old device: Settings → Your Data → Move to a new device shows a one-time QR and a 10-character code.', 'New device: on the welcome screen tap “Move from old device” and scan or type the code — or tap “Import a file” to restore a backup file.', 'The handoff is parked for 10 minutes and works once.'] },
+  { group: 'Together and devices', title: 'Android app', steps: ['The Android app adds background playback with a media notification, offline downloads and in-app updates.', 'Downloads: open a song’s menu → Download. Library → Downloaded only filters to what plays offline.', 'Settings → Notifications turns push notifications on or off.'] },
 ];
 
 const FAQ: Array<{ q: string; a: string }> = [
-  { q: 'Is VinaX really free? What’s the catch?', a: 'Free, forever, for everything — no subscriptions, no premium tiers, no login. Sponsored placements appear only on the Ads page, never in the player, and never in Kid mode.' },
-  { q: 'Do I need an account?', a: 'Never. Your name is only used to greet you. Your taste profile, favourites, playlists, history, stats and downloads live on this device alone.' },
-  { q: 'What data leaves my device?', a: 'Only anonymous, opt-in usage statistics (like “a song was played in this city”), which you can switch off in Settings. IP addresses are never stored; device ids are signed and peppered. VinaX AI receives the message thread and a short on-device taste snapshot to answer, and stores nothing but per-call success and latency.' },
-  { q: 'How do the recommendations work without an account?', a: 'The taste profile is computed here: languages you pinned, songs you finish, like and skip, the hour and the day. Taste Profile shows what it learned and lets you fine-tune it; “Show fewer like…” and “Never play…” in any song menu steer it, and every one of those has Undo.' },
-  { q: 'Why did the app change its colours and look?', a: 'A festival. VinaX celebrates 43 Indian festivals and special days — Sankranti, Holi, Ugadi, Eid, Onam, Ganesh Chaturthi, Bathukamma, Dussehra, Diwali, Christmas, New Year and more — each with its own colours, glow, greeting and living backdrop. It returns to your normal look the morning after. Settings → Festival themes turns it off.' },
-  { q: 'What is VinaX AI?', a: 'A full assistant with 19 engines (or Auto) — two of which open a whole menu of free models to pick from — live web search with sources, Think and Research modes, code that runs, charts, diagrams, maths, voice chat, slash commands, and music you can play straight from the reply.' },
-  { q: 'How do I control songs from the chat?', a: '“play <song>”, “queue <song>”, “pause”, “next” and “previous” work as messages, or use /now, /mood and /playlist. A play request answers with a live mini-player: controls, seek bar and the lyric being sung.' },
-  { q: 'What do Think and Research do?', a: 'Think asks the engine to reason more carefully before it answers. Research checks the live web, cross-checks sources and cites them. When a search comes up empty, VinaX says so instead of guessing.' },
-  { q: 'What is the Ctrl+K command palette?', a: 'Press Ctrl/⌘+K anywhere: jump to any page, fire player actions, or type a song name to find and play it.' },
-  { q: 'What does the Queue page do?', a: 'View, reorder or remove upcoming songs. Add songs with Play next or Add to queue, and save the queue as a playlist any time.' },
-  { q: 'What is the 🔔 bell on Home?', a: 'Your notification centre: the daily song pick, announcements and recent release notes.' },
-  { q: 'How do I download songs for offline?', a: 'In the Android app, open a song’s menu and choose Download. Library, favourites and history browse offline with artwork; downloads play with no network.' },
-  { q: 'Why did my music pause during a phone call?', a: 'Android pauses all audio for calls. VinaX resumes the moment the call ends.' },
+  { q: 'Is VinaX free?', a: 'Yes. There are no subscriptions, no premium tiers and no login. Sponsored placements appear only on the Ads page, never in the player.' },
+  { q: 'Do I need an account?', a: 'No. You choose a display name and a username; there is no password or login. Your taste profile, favourites, playlists, history, stats and downloads live on this device.' },
+  { q: 'What data leaves my device?', a: 'Searches and song requests go to the catalogue so music can play. VinaX AI and the AI DJ receive your message or a short taste summary to answer. Your username is confirmed with the service. Anonymous usage statistics with a city-level location are sent only if you opt in — on the welcome screen, or later in Settings → Region & Privacy.' },
+  { q: 'How do the recommendations work without an account?', a: 'The taste profile is computed on this device from the languages you pinned and the songs you finish, like and skip. Taste Profile shows what it learned and lets you adjust it; “Not interested”, “Show fewer like…” and “Never play…” in a song menu steer it, each with Undo.' },
+  { q: 'Why are there only five songs in Up Next?', a: 'The DJ builds the next five at a time and adds more as you listen, so it can follow what you skip and finish in this sitting.' },
+  { q: 'Why did Up Next stay in one language?', a: 'A continuation always stays in the language of the song that started it, in every discovery mode. Tune this queue → Switch language changes it on purpose.' },
+  { q: 'I pinned a mood. What changed?', a: 'Up Next was rebuilt at once with songs fetched for that mood, in the queue’s language. Songs you queued by hand kept their place. The pin holds for 45 minutes or until you unpin it.' },
+  { q: 'Do songs I queue myself get replaced?', a: 'No. Songs added with Play next or Add to queue play before the DJ’s picks and survive every rebuild.' },
+  { q: 'What do Familiar, Balanced and Discover change?', a: 'How many never-played artists reach your queue and how they rank. Familiar keeps them rare, Balanced adds about one in every four or five songs, Discover fills close to half of a queue with them after a familiar opening.' },
+  { q: 'Why did the app change its colours and look?', a: 'A festival. VinaX marks festivals and special days with their own colours, glow and greeting, then returns to your normal look. Settings → Festival themes turns it off.' },
+  { q: 'What is VinaX AI?', a: 'A chat assistant with a searchable menu of models, an Agent mode, optional web search, Think and Research, slash commands, voice chat, and songs you can play straight from a reply.' },
+  { q: 'What do Think, Research and Agent mode do?', a: 'Think sends the message to a slower, more careful engine. Research searches the web and cross-checks more than one source. Agent mode lets an agent-capable model search the web and run code by itself.' },
+  { q: 'How do I control songs from the chat?', a: '“play <song>”, “queue <song>”, “pause”, “next” and “previous” work as messages, or use /now, /mood and /playlist.' },
+  { q: 'What is the Ctrl+K command palette?', a: 'Press Ctrl/⌘+K anywhere: jump to any page, fire player actions, or type a song name to find and play it. Inside VinaX AI the same keys start a new chat.' },
+  { q: 'What does the Queue page do?', a: 'View, reorder, sort or remove upcoming songs, tune the queue, build a longer queue, and save the queue as a playlist.' },
+  { q: 'Where are notifications?', a: 'The bell in Home’s top bar opens the notification centre: song picks, announcements and recent release notes.' },
+  { q: 'How do I download songs for offline?', a: 'In the Android app, open a song’s menu and choose Download. Downloads play with no network.' },
   { q: 'A song won’t play — why?', a: 'Music streams from public catalogue sources that can be briefly unavailable. VinaX tries the next source automatically; try again in a moment or pick another version. Report broken track in the song menu tells the team.' },
-  { q: 'Where are lyrics from, and what is “Meaning”?', a: 'Lyrics come from a public lyrics library, synced line by line. If a line lands early or late, nudge the offset in the lyrics view. Meaning, romanise and translate use VinaX AI.' },
-  { q: 'What is the equaliser doing to my audio?', a: 'It processes the stream on your device with a five-band filter, balance, optional mono downmix and a gentle compressor for even loudness. Nothing is sent anywhere. If a source cannot be processed, the effects step aside and the song plays as normal.' },
-  { q: 'Can I search a setting instead of scrolling?', a: 'Yes — the search box at the top of Settings filters every setting by name and description and highlights the match.' },
-  { q: 'How do I move VinaX to a new device?', a: 'Settings → Your Data → Move to a new device beams everything with a one-time QR or code; or export a file and import it on the new device.' },
-  { q: 'How do I export or erase everything?', a: 'Settings → Your Data. Export downloads one file with everything; the clear buttons erase history, favourites, queue, cached data or the whole profile, with a deletion receipt.' },
+  { q: 'Where are lyrics from, and what is “Meaning”?', a: 'Lyrics come from a public lyrics library, synced line by line when timing is available. If a line lands early or late, nudge the offset in the lyrics view. Meaning, romanise and translate use VinaX AI.' },
+  { q: 'What is the equaliser doing to my audio?', a: 'It processes the stream on your device with a five-band filter, balance, optional mono downmix and loudness normalisation. If a source cannot be processed, the effects step aside and the song plays as normal.' },
+  { q: 'Can I search a setting instead of scrolling?', a: 'Yes — the search box at the top of Settings filters every setting by name and description.' },
+  { q: 'How do I move VinaX to a new device?', a: 'Settings → Your Data → Move to a new device hands everything over with a one-time QR or code; or export a backup file and import it on the new device.' },
+  { q: 'Can I undo a restore?', a: 'Yes, in the same tab. Backup Center keeps the previous data until you close the tab and shows “Undo that restore”.' },
+  { q: 'How do I export or erase everything?', a: 'Settings → Your Data. Export a backup downloads one file; the clear rows erase history, favourites, the queue, cached data or the personalization profile, and Reset app state erases everything on this device.' },
 ];
 
 const SHORTCUTS: Array<[string, string]> = [
   ['Space', 'Play / pause'],
   ['N / P', 'Next / previous song'],
-  ['← / →', 'Seek 10 seconds'],
+  ['← / →', 'Seek 10 seconds back / forward'],
+  ['↑ / ↓', 'Volume up / down'],
+  ['M', 'Mute / unmute'],
+  ['S', 'Shuffle on / off'],
+  ['R', 'Cycle repeat'],
   ['F', 'Like the current song'],
+  ['?', 'Show the shortcut list'],
   ['⌘/Ctrl + K', 'Command palette · new chat (in VinaX AI)'],
+  ['⌘/Ctrl + B', 'Show or hide the chat list (in VinaX AI)'],
   ['/', 'Slash commands (in the VinaX AI composer)'],
   ['Right-click / long-press', 'Song menu anywhere'],
   ['Esc', 'Stop AI generation · close overlays · leave a tutorial'],
   ['Flick artwork ↑ / ↓', 'Next / previous song'],
-  ['Double-tap artwork edge / centre', 'Seek ±10 s / like'],
+  ['Double-tap artwork edge / centre', 'Seek / like'],
   ['Swipe a song row → / ←', 'Add to queue / Listen Later'],
 ];
 
@@ -133,7 +151,7 @@ export default function HelpPage() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search help… (lyrics, sleep timer, festival, equaliser)"
+          placeholder="Search help… (queue, mood, backup, lyrics, equaliser)"
           aria-label="Search help"
           className="w-full glass-input pl-4 pr-10 py-2.5 rounded-full text-sm outline-none focus:ring-1 focus:ring-ink-100/40"
         />
@@ -258,7 +276,7 @@ export default function HelpPage() {
           </p>
           <p className="text-sm text-ink-200 leading-relaxed mb-3">
             Rights holders can request removal of any content at any time — see the DMCA / takedown page. Your personal
-            data never leaves your device except anonymous, opt-in usage statistics.
+            data never leaves your device except anonymous usage statistics, which are off unless you opt in (Settings → Region &amp; Privacy).
           </p>
           <p className="text-sm">
             <Link to="/terms" className="text-ember-400 hover:underline">Terms of Use</Link> ·{' '}

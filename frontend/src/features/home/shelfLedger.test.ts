@@ -39,4 +39,11 @@ describe('shelf ledger', () => {
   it('dedupes within a single shelf too', () => {
     expect(ids(claimShelf('quick', 0, [s('a'), s('a'), s('b')]))).toEqual(['a', 'b']);
   });
+
+  it('v7.1.0 — one cut of a song across shelves: a version with another catalogue id is the same song', () => {
+    const v = (id: string, title: string, artist: string): Song => ({ ...s(id), title, subtitle: artist, artists: [{ id: `a-${artist}`, name: artist }] });
+    expect(ids(claimShelf('personal', 0, [v('1', 'Monica', 'Anirudh'), v('2', 'Hukum', 'Anirudh')]))).toEqual(['1', '2']);
+    expect(ids(claimShelf('personal', 1, [v('3', 'Monica (From "Coolie")', 'Anirudh'), v('4', 'Kaavaalaa', 'Shilpa Rao')]))).toEqual(['4']);
+    expect(ids(claimShelf('discovery', 0, [v('5', 'Monica - Lofi Flip', 'Anirudh'), v('6', 'Monica', 'Someone Else')]))).toEqual(['6']);
+  });
 });

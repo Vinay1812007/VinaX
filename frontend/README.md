@@ -1,8 +1,6 @@
 # VinaX frontend
 
-React 19, TypeScript and Vite power the listening app. Capacitor packages the same application for Android. The standalone admin console lives in `public/admin/`.
-
-Start with the [project README](../README.md) for features, personalization, privacy and repository structure, or the [deployment guide](../DEPLOYMENT.md) for Cloudflare settings.
+This package is the VinaX app: a single-page web app that is also packaged for Android. This file covers how to run and verify it and where to make common changes. Everything else — architecture, recommendations, the design system, testing, Android, deployment — is in [../docs/](../docs/README.md).
 
 ## Develop
 
@@ -13,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Run `npm run dev` from `../backend` in a second terminal for dynamic endpoints. Vite proxies the API to the Worker on port 8787; the frontend runs on port 5173. Keep credentials in the backend, never in browser-visible `VITE_*` variables.
+The app runs on port 5173. For anything dynamic, run `npm run dev` in `../backend` in a second terminal; the dev server proxies `/api`, `/img` and `/apk` to the Worker on port 8787. Keep credentials in the backend. A `VITE_*` variable is visible to every visitor.
 
 ## Verify
 
@@ -26,19 +24,22 @@ node scripts/check-bundle-size.mjs
 npm run e2e
 ```
 
-The browser suite serves `dist/` and mocks backend responses. Install Chromium with `npx playwright-core install chromium` if needed, or set `E2E_CHROMIUM_PATH`. Browser tests cover Home and playlist layouts, mobile width, personalized playlist starters and owner console navigation. Screenshots go into ignored `test-results/`.
+The browser suite serves `dist/`, so build first. It needs its test browser (`npx playwright-core install chromium`, or set `E2E_CHROMIUM_PATH` to an installed binary). See [../docs/testing.md](../docs/testing.md) for the harness, fixture shapes and the bundle budget.
 
-## Editing the experience
+## Where to change things
 
-- Shared themes and materials: `src/styles/index.css`.
-- Listening and playlist Studio layouts: `src/styles/studio.css`.
-- Home catalog shelves: `src/pages/HomePage.tsx`.
-- Album, playlist and manual queue playback: `src/store/playerStore.ts`.
-- Welcome and guided tours: `src/components/OnboardingSheet.tsx`, `src/features/tutorials/tutorials.ts`.
-- Admin UI: `public/admin/app.js`, `public/admin/index.html`, `public/admin/studio.css`.
+| To change | Edit |
+| --- | --- |
+| Design tokens and the Flow look | `src/styles/index.css`, `src/styles/flow.css` — see [../docs/design-system.md](../docs/design-system.md) |
+| The shell (sidebar, top bar, dock, overlays) | `src/layouts/AppLayout.tsx`, `src/components/TopBar.tsx`, `src/components/BottomNav.tsx`, `src/components/Sidebar.tsx` |
+| Routes | `src/router/index.tsx` |
+| Home shelves | `src/pages/HomePage.tsx`, `src/features/home/` |
+| What plays next | `src/services/recommendation/`, `src/store/playerStore.ts` — see [../docs/recommendations.md](../docs/recommendations.md) |
+| The welcome sheet, tours and Help | `src/components/OnboardingSheet.tsx`, `src/features/tutorials/tutorials.ts`, `src/pages/HelpPage.tsx` |
+| Backup and restore | `src/features/settings/backup.ts`, `src/features/settings/BackupCenter.tsx` |
+| The owner console | `public/admin/` — see [../docs/admin-console.md](../docs/admin-console.md) |
+| Android native code | `native-android/`, `scripts/patch-android.js` — see [../docs/android.md](../docs/android.md) |
 
-AI DJ, automatic next-song recommendations, AI Home shelves and listener layout editing are removed. Settings version 3 drops retired queue and layout preferences while preserving other settings.
+## Releasing a version
 
-When changing a release, update `package.json`, the root package entry in `package-lock.json`, `src/constants/version.ts` and `src/constants/changelog.ts` together.
-
-For native development, see [native-android/README.md](native-android/README.md). A web build alone does not validate Android media controls, downloads or signing.
+Update these together: `package.json`, the root entry in `package-lock.json`, `src/constants/version.ts` and `src/constants/changelog.ts`. Deployment is described in [../DEPLOYMENT.md](../DEPLOYMENT.md). A web build alone does not validate Android media controls, downloads or signing.

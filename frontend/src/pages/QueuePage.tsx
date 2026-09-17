@@ -1,4 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { songLine } from '@/utils/songLine';
 
 const QueueBuilderSheet = lazy(() => import('@/features/queue/QueueBuilderSheet').then((m) => ({ default: m.QueueBuilderSheet })));
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -107,8 +108,9 @@ const QueueRow = memo(function QueueRow({ song: s, pos, rowKey, isLast, dragging
             className="w-[42px] h-[42px] rounded-[10px] object-cover shrink-0"
           />
           <span className="min-w-0">
-            <span className="block text-[13px] font-bold truncate">{s.title}</span>
-            <span className="block text-[11px] font-semibold text-ink-400 truncate">{s.subtitle}</span>
+            {/* Song – Movie/Album – Artist */}
+            <span className="block text-[13px] font-bold truncate">{songLine(s).title}</span>
+            <span className="block text-[11px] font-semibold text-ink-400 truncate">{[songLine(s).album, songLine(s).artist].filter(Boolean).join(' – ')}</span>
           </span>
         </button>
         {!isLast && (

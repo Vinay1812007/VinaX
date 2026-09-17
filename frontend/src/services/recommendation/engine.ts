@@ -17,7 +17,8 @@ import { kidModeOn } from '@/services/kidMode';
 import { useSettingsStore } from '@/store/settingsStore';
 import { queryClient } from '@/services/queryClient';
 import type { ArcShape } from './sequencer';
-import { tunePromptHint, tuneScoreAdjust, tuneShape, type TuneIntent } from './tune';
+import { tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape, type TuneIntent } from './tune';
+import type { Mood } from './mood';
 
 function aiContext(ctx: RecommendationContext): string {
   return JSON.stringify({ surface: ctx.surface, seed: ctx.seedSong?.title, mood: ctx.sessionMood, energy: ctx.sessionEnergy,
@@ -120,6 +121,13 @@ export interface NextRecommendationOptions {
   tune?: TuneIntent | null;
 }
 
+/** The catalogue query for a pinned mood (same table the tune intents use). */
+function moodPinQuery(mood: Mood, language: string | null): string | null {
+  const asIntent: Partial<Record<Mood, TuneIntent>> = { romantic: 'romantic', energetic: 'energetic', chill: 'chill', melancholy: 'heartbreak', devotional: 'devotional' };
+  const intent = asIntent[mood];
+  return intent ? tuneSearchQuery(intent, language) : null;
+}
+
 /** Share of a queue that may go to artists the listener has never played, per discovery mode. */
 const DISCOVERY_SHARE = { familiar: 0.05, balanced: 0.2, discover: 0.45 } as const;
 
@@ -148,10 +156,13 @@ const DISCOVERY_SHARE = { familiar: 0.05, balanced: 0.2, discover: 0.45 } as con
 export async function recommendNextSongs(seed: Song, ctx: RecommendationContext, options: NextRecommendationOptions = {}): Promise<Song[]> {
   const limit = Math.max(0, Math.min(40, Math.floor(options.limit ?? 8)));
   if (!limit) return [];
-  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next' };
+  const tune = options.tune ?? null;
+  const seedLanguage = seed.language && seed.language !== 'unknown' ? seed.language : null;
+  // v7.1.0 — an active tune (or a pinned mood) gathers its own candidates, in the queue's language.
+  const intentQuery = tune ? tuneSearchQuery(tune, tune === 'different-language' ? null : seedLanguage) : ctx.moodPin ? moodPinQuery(ctx.moodPin, seedLanguage) : null;
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery };
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
-  const tune = options.tune ?? null;
   const library = useLibraryStore.getState();
 
   // 1 — candidate generation. The rule modules are lazy, like the sequencer:
@@ -207,30 +218,33 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   const frame = buildScoringFrame(nextCtx);
   const discoveryIds = new Set(
     ranked
+      // A song fetched FOR the listener's stated intent is the request itself, not a discovery to ration.
+      .filter((item) => item.candidate.source !== 'intent')
       .filter((item) => item.candidate.source === 'explore' || !frame.knownArtists.has((item.candidate.song.artists[0]?.name ?? '').trim().toLowerCase()))
       .map((item) => item.candidate.song.id),
   );
-  // Language rule: the queue speaks the seed's language. In Discover mode it
-  // may take an occasional detour into another language the listener plays.
+  // Language rule: the queue speaks the seed's language.
   // "Switch language" moves the lock to another language the listener plays.
   const switchTo = tune === 'different-language'
     ? ctx.pinnedLanguages.find((l) => l !== seedLang) ?? orderedPool.map((s) => s.language).find((l) => l && l !== 'unknown' && l !== seedLang) ?? null
     : null;
   const lock = switchTo ?? seedLang;
   const otherLanguages = ctx.pinnedLanguages.filter((l) => l !== lock);
-  const roam = mode === 'discover' || tune === 'surprise';
-  const drift = roam && tune !== 'same-language';
+  // v7.1.0 — the queue speaks the seed's language, in every mode. (7.0 let
+  // Discover take a detour into another language; the owner's rule is that
+  // what follows a song is in that song's language.) Only "Switch language"
+  // moves the lock, and it moves it — the queue still speaks ONE language.
   const discoveryShare = Math.max(0, Math.min(0.5, (tune === 'surprise' ? DISCOVERY_SHARE.discover : DISCOVERY_SHARE[mode]) + (intent ? intent.discoveryAppetite * 0.15 : 0)));
-  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: drift ? 'prefer' : 'lock', otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
+  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: 'lock', otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
 
   // 10 — validation. The arc first, then the rest of the ranked pool as the
   // reserve a short or language-locked arc is topped up from.
   const familiarLanguages = [...new Set([...ctx.pinnedLanguages, ...topLanguages(ctx.profile, 3).map((l) => l.id)])];
-  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: drift ? null : lock, familiarLanguages };
+  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: lock, familiarLanguages };
   const arcIds = new Set(arc.songs.map((s) => s.song.id));
   const local = validateSequence([...arc.songs.map((s) => s.song), ...orderedPool.filter((s) => !arcIds.has(s.id))], validateOptions);
   const songs = local.songs;
-  const trace: DebugTrace = { mode, shape, lock, languagePolicy: drift ? 'prefer' : 'lock', discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: local.relaxed, repairs: local.repairs };
+  const trace: DebugTrace = { mode, shape, lock, languagePolicy: 'lock', discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: local.relaxed, repairs: local.repairs };
   publishReasons(ranked.filter((item) => songs.some((song) => song.id === item.candidate.song.id)));
   // Arc reasons are more specific than scorer reasons; let them win.
   useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why).map((s) => [s.song.id, s.why]));
@@ -247,7 +261,7 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
     const pool = samplePool(orderedPool.slice(0, 40), 10, 30);
     // v6.5.0 — the generative half: each proposal is verified in the catalogue
     // and must pass the same rules as everything else before it can be queued.
-    const gate = { language: drift ? null : lock, admit: (song: Song) => rejectReasonFor(song, rules) === null };
+    const gate = { language: lock, admit: (song: Song) => rejectReasonFor(song, rules) === null };
     const set = await djSequence(seed, nextCtx, pool, limit, undefined, { shape, discover: true, gate, ...(tune ? { tune: tunePromptHint(tune) } : {}) });
     if (set && set.picks.length >= Math.min(3, limit)) {
       const used = new Set<string>();

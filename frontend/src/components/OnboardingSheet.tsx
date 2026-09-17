@@ -25,6 +25,9 @@ import {
   PlayIcon,
   HeartIcon,
   ChevronDownIcon,
+  CompassIcon,
+  QueueIcon,
+  SearchIcon,
 } from './Icons';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
@@ -44,47 +47,68 @@ interface TourSlide {
 }
 
 /**
- * The Welcome tour (fully rewritten 4.17.1). Ground rules for editing:
+ * The Welcome tour (rewritten for 7.1). Ground rules for editing:
  *  - Every claim must be TRUE today. No version numbers in titles: the tour
  *    is evergreen, What's New handles releases.
- *  - Short lines, one idea each. The user is 10 seconds from music.
+ *  - A slide is a title of at most 6 words and at most 22 words of lines in
+ *    total. The user is 10 seconds from music.
  */
 const TOUR: TourSlide[] = [
   {
-    icon: <HomeIcon className="w-7 h-7" />,
-    title: 'Your next favourite starts here',
+    icon: <CompassIcon className="w-7 h-7" />,
+    title: 'Five places to go',
     lines: [
-      'Press Play my mix on Home for a soundtrack based on your languages and listening.',
-      'Choose Familiar, Balanced or Discover to shape your recommendations.',
-      'Open Edit home to try a layout, reorder shelves or keep only your essentials.',
+      'Home, Discover, Search, Library and VinaX AI are always one tap away.',
+      'The top bar shows where you are and your actions.',
+    ],
+  },
+  {
+    icon: <HomeIcon className="w-7 h-7" />,
+    title: 'Home learns your taste',
+    lines: [
+      'Play my mix starts a mix built from your languages and listening.',
+      'Trending for you puts today’s popular songs in your order.',
     ],
   },
   {
     icon: <PlayIcon className="w-7 h-7" />,
-    title: 'One song is all it takes',
+    title: 'Tap one song',
     lines: [
-      'Search for a song or artist, then press play. Save favourites to help your taste take shape.',
-      'Open the player for lyrics and playback controls. Your queue shows what comes next.',
-      'Long-press a song to play it next, save it for later or add it to a playlist.',
+      'Tap any song. The DJ lines up five more in its language, familiar first.',
+      'Songs you queue yourself go first.',
     ],
     shortcuts: [{ combo: 'Space', label: 'play / pause' }, { combo: 'N', label: 'next song' }, { combo: 'F', label: 'favourite' }],
   },
   {
-    icon: <SparkleIcon className="w-7 h-7" />,
-    title: 'Give your music a direction',
+    icon: <QueueIcon className="w-7 h-7" />,
+    title: 'Steer what plays next',
     lines: [
-      'Try AI Playlist with “a mellow Telugu mix for a rainy evening”.',
-      'Use Taste Profile for more control over energy, discovery and release era.',
-      'AI features send relevant context to the service. Your library and taste profile are stored on this device; optional usage sharing is controlled in Settings.',
+      'In the player, Pin a mood or Tune this queue. Up Next rebuilds at once.',
+      'Settings offers Familiar, Balanced or Discover.',
+    ],
+  },
+  {
+    icon: <SearchIcon className="w-7 h-7" />,
+    title: 'Find something new',
+    lines: [
+      'Discover has shortcuts to charts, languages, moods, films, videos, mixes and Ads.',
+      'Search takes songs, artists, films or a lyric line.',
+    ],
+  },
+  {
+    icon: <SparkleIcon className="w-7 h-7" />,
+    title: 'Ask VinaX AI',
+    lines: [
+      'Chat about anything, choose a model, play songs from a reply.',
+      'Messages go to the AI service; your library stays here.',
     ],
   },
   {
     icon: <HeartIcon className="w-7 h-7" />,
-    title: 'Ready when you are',
+    title: 'Yours to keep',
     lines: [
-      'Find your saved music in Library and invite friends from Listen Together.',
-      'Settings has sound, appearance, accessibility and data export. Export a backup before clearing browser storage.',
-      'Start a guided walkthrough now, or explore at your own pace. Help has the tours whenever you need them.',
+      'Library keeps favourites and playlists on this device.',
+      'Back up from Settings → Your Data; a restore can be undone.',
     ],
   },
 ];
@@ -120,7 +144,9 @@ export function OnboardingSheet() {
   const detected = readBrowserSignals().languages;
   const [picked, setPicked] = useState<string[]>(detected.length ? detected : ['hindi', 'english']);
   const [name, setName] = useState<string>(() => getLocal<string>(KEYS.userName, ''));
-  const [consent, setConsent] = useState<boolean>(true);
+  // v7.1.0 — unticked by default: the privacy page promises usage sharing "only if you opt in",
+  // and a pre-ticked box is not an opt-in. It can be changed later in Settings → Region & Privacy.
+  const [consent, setConsent] = useState<boolean>(false);
   const [nameErr, setNameErr] = useState(false);
   // Unique handle — mandatory, because display names collide across listeners.
   const [handle, setHandle] = useState<string>(
@@ -556,7 +582,7 @@ export function OnboardingSheet() {
                     onChange={(e) => setConsent(e.target.checked)}
                     className="mt-0.5 accent-ember-500"
                   />
-                  <span>Share anonymous usage (city-level location, no account) and session insights with all on-screen text masked, to help improve VinaX. You can change this anytime.</span>
+                  <span>Share anonymous usage (city-level location, no account) and session insights with all on-screen text masked, to help improve VinaX. You can change this anytime in Settings.</span>
                 </label>
               </>
             )}

@@ -8,6 +8,12 @@ import { test, expect, type Page } from '@playwright/test';
  * interactions are exercised — catalog search, song drilldown, query console,
  * synonyms publish, broadcast publish, pinning a tool. Zero page errors and
  * zero console errors tolerated. All non-localhost network is aborted.
+ *
+ * Shell (v7.1): there is no top bar. Brand (a link home), Live counters, the
+ * section nav, the View group (range / interval / auto-refresh / density /
+ * compact / theme), the Actions group and Sign out all live in `#sidebar`,
+ * which collapses to an icon rail on desktop and is an off-canvas drawer on
+ * phones — covered by the two shell tests at the bottom.
  */
 
 const iso = (hoursAgo: number): string => new Date(Date.now() - hoursAgo * 3_600_000).toISOString();
@@ -295,5 +301,135 @@ test('operations center, audience segments and broadcast preview are actionable'
   await page.locator('#bc-link').fill('/discover');
   await expect(page.locator('#bc-preview-text')).toHaveText('Preview this update');
   await expect(page.locator('#bc-preview-link')).toHaveText('/discover');
+  expect(errors).toEqual([]);
+});
+
+// ---- Shell (v7.1): no top bar — every global control lives in the sidebar ----
+
+const inSidebar = (page: Page): Promise<boolean> =>
+  page.evaluate(() => !!document.activeElement && !!document.getElementById('sidebar')?.contains(document.activeElement));
+
+test('shell: no top bar; brand link returns home; range, theme and sign-out live in the sidebar', async ({ page }) => {
+  await login(page);
+  await mockBackend(page);
+  const errors = collectErrors(page);
+  await openAdmin(page);
+
+  // The old sticky header (and its tool strip) is gone at every width.
+  await expect(page.locator('header')).toHaveCount(0);
+  await expect(page.locator('.hdr-tools')).toHaveCount(0);
+
+  // Sidebar, top to bottom: brand, Live, section nav, View, Actions, Sign out.
+  const sb = page.locator('#sidebar');
+  await expect(sb).toBeVisible();
+  await expect(sb.locator('[role="group"][aria-label="Live"] #kpis')).toBeVisible();
+  await expect(sb.locator('nav#nav')).toHaveAttribute('aria-label', /sections/i);
+  for (const id of ['autoWrap', 'hdr-interval', 'rowDensity', 'density', 'theme']) {
+    await expect(sb.locator(`[role="group"][aria-label="View"] #${id}`)).toBeVisible();
+  }
+  for (const id of ['refresh', 'notify', 'report', 'json']) {
+    await expect(sb.locator(`[role="group"][aria-label="Actions"] #${id}`)).toBeVisible();
+  }
+  await expect(sb.locator('#logout')).toBeVisible();
+  await expect(sb.locator('#autoWrap')).toHaveAttribute('aria-pressed', 'true');
+
+  // Range switch: reachable in the sidebar on a ranged panel, toggle semantics.
+  await openSection(page, 'music');
+  await expect(page.locator('#secTitle')).toHaveText('Music Analytics');
+  const d30 = sb.locator('#range button[data-d="30"]');
+  await expect(d30).toBeVisible();
+  await d30.click();
+  await expect(sb.locator('#range button[data-d="30"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(sb.locator('#range button[data-d="7"]')).toHaveAttribute('aria-pressed', 'false');
+
+  // The brand is a real, keyboard-operable link back to the overview.
+  const brand = page.locator('#brandHome');
+  await expect(brand).toHaveAttribute('aria-label', 'VinaX admin home');
+  expect(await brand.evaluate((el) => el.tagName)).toBe('A');
+  await brand.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#secTitle')).toHaveText('Overview');
+  expect(await page.evaluate(() => location.hash)).toBe('#overview');
+  await expect(page.locator('#nav button[data-sec="overview"][aria-current="page"]')).toHaveCount(1);
+  await expect(page.locator('#nav button[data-sec="music"][aria-current]')).toHaveCount(0);
+  await expect(sb.locator('#range')).toBeHidden(); // overview has no range
+
+  // Theme: toggles the app-token theme on <html> and persists the choice.
+  const wasLight = await page.evaluate(() => document.documentElement.classList.contains('light'));
+  await sb.locator('#theme').click();
+  expect(await page.evaluate(() => document.documentElement.classList.contains('light'))).toBe(!wasLight);
+  expect(await page.evaluate(() => localStorage.getItem('vinax_admin_theme'))).toBe(wasLight ? 'dark' : 'light');
+  await expect(sb.locator('#themeVal')).toHaveText(wasLight ? 'Dark' : 'Light');
+
+  // Desktop icon rail: collapses, persists, keeps brand + sign-out reachable.
+  await page.locator('#sbCollapse').click();
+  await expect(page.locator('html')).toHaveClass(/sb-rail/);
+  expect(await page.evaluate(() => localStorage.getItem('vinax_admin_sidebar'))).toBe('rail');
+  await expect(brand).toBeVisible();
+  await expect(sb.locator('#logout')).toBeVisible();
+  await expect(sb.locator('#navSearch')).toBeHidden();
+  await page.locator('#sbCollapse').click();
+  expect(await page.evaluate(() => document.documentElement.classList.contains('sb-rail'))).toBe(false);
+  await expect(sb.locator('#navSearch')).toBeVisible();
+
+  // Sign out from the sidebar lands on the login card, whose brand reloads the console root.
+  await sb.locator('#logout').click();
+  await expect(page.locator('#login')).toBeVisible();
+  await expect(page.locator('#app')).toBeHidden();
+  await expect(page.locator('#loginBrand')).toHaveAttribute('href', '/admin/');
+  await expect(page.locator('#loginBrand')).toHaveAttribute('aria-label', 'VinaX admin home');
+  expect(errors).toEqual([]);
+});
+
+test('phone: the sidebar is an off-canvas drawer — menu button opens it, Escape / scrim / picking a tool close it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  await mockBackend(page);
+  const errors = collectErrors(page);
+  await openAdmin(page);
+
+  await expect(page.locator('header')).toHaveCount(0);
+  const sb = page.locator('#sidebar');
+  const menu = page.locator('#menuBtn');
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  await expect(sb).toBeHidden();
+
+  await menu.click();
+  await expect(menu).toHaveAttribute('aria-expanded', 'true');
+  await expect(sb).toBeVisible();
+  await expect(page.locator('#sbScrim')).toBeVisible();
+  await expect(sb.locator('#theme')).toBeVisible();
+  await expect(sb.locator('#logout')).toBeVisible();
+
+  // Focus moves into the drawer and is trapped there (wraps in both directions).
+  expect(await inSidebar(page)).toBe(true);
+  await page.keyboard.press('Shift+Tab');
+  expect(await inSidebar(page)).toBe(true);
+  await page.keyboard.press('Shift+Tab');
+  expect(await inSidebar(page)).toBe(true);
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  expect(await inSidebar(page)).toBe(true);
+
+  // Escape closes and hands focus back to the menu button.
+  await page.keyboard.press('Escape');
+  await expect(sb).toBeHidden();
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe('menuBtn');
+
+  // Picking a tool closes the drawer and switches the panel.
+  await menu.click();
+  await expect(sb).toBeVisible();
+  await sb.locator('#nav button[data-sec="realtime"]').click();
+  await expect(sb).toBeHidden();
+  await expect(page.locator('#secTitle')).toHaveText('Real-Time');
+
+  // The scrim closes it too.
+  await menu.click();
+  await expect(sb).toBeVisible();
+  await page.locator('#sbScrim').click({ position: { x: 370, y: 420 } });
+  await expect(sb).toBeHidden();
   expect(errors).toEqual([]);
 });

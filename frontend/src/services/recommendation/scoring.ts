@@ -27,6 +27,8 @@ const SOURCE_BOOST: Record<Candidate['source'], number> = {
   // boost keeps them positive (rankCandidates drops score <= 0) while still
   // ranking below real taste matches; the mixer guarantees their shelf slots.
   explore: 0.08,
+  // v7.1.0 — gathered for what the listener just asked for: outranks passive sources.
+  intent: 0.24,
   trending: 0.06,
   // v7.0.0 — Familiar mode's own favourites and finished songs.
   history: 0.1,
@@ -274,6 +276,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   if (c.source === 'rediscovery') reasons.push({ kind: 'rediscovery', weight: boost });
   if (c.source === 'trending') reasons.push({ kind: 'trending', weight: boost });
   if (c.source === 'explore') reasons.push({ kind: 'discovery', weight: boost, detail: song.language ?? undefined });
+  if (c.source === 'intent') reasons.push({ kind: 'intent', weight: boost });
 
   // Freshness: light boost for recent releases (novelty without dominating).
   const year = song.year ? Number(song.year) : null;

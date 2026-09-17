@@ -42,7 +42,7 @@ export function buildTodayBrief(now = new Date()): TodayBrief {
   }
   const hour = now.getHours();
   const slot = hour < 11 ? 'morning' : hour < 16 ? 'afternoon' : hour < 21 ? 'evening' : 'late-night';
-  prompts.push(`Suggest 5 ${Lang} songs for a ${slot} ${hour < 11 ? 'start' : hour < 21 ? 'break' : 'wind-down'}`);
+  prompts.push(`Suggest 5 ${Lang} songs for ${/^[aeiou]/.test(slot) ? 'an' : 'a'} ${slot} ${hour < 11 ? 'start' : hour < 21 ? 'break' : 'wind-down'}`);
   if (prompts.length < 3) prompts.push('What can you help me with today?');
   return { date, lines, prompts: prompts.slice(0, 3) };
 }

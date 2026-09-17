@@ -56,6 +56,17 @@
   Cache-Control: no-cache
 /admin/index.html
   Cache-Control: no-cache
+# v7.1.0 — the console is un-hashed static files: every one of them must
+# revalidate, or an owner gets a new index.html with a stale stylesheet or
+# boot script (the sidebar layout depends on all of them agreeing).
+/admin/theme-boot.js
+  Cache-Control: no-cache
+/admin/studio.css
+  Cache-Control: no-cache
+/admin/workspace.css
+  Cache-Control: no-cache
+/admin/workspace.js
+  Cache-Control: no-cache
 
 /assets-404.txt
   Cache-Control: no-store

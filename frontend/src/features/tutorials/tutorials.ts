@@ -8,6 +8,11 @@ import { toast } from '@/store/toastStore';
  * (CSS selector) that the runner spotlights, and may run an `action` first
  * (navigate, start a song, open a panel). Copy rule: every claim must be
  * true today; short lines; the listener is a tap away from music.
+ *
+ * v7.1 rewrite — a step is a title of at most 6 words and a body of at most
+ * 22 words. A target must exist in the current source and must be a short
+ * element (the card sits above or below it); when the control only appears
+ * after a tap (a menu, a tab), leave `target` out and the card is centred.
  */
 export interface TutorialStep {
   title: string;
@@ -59,71 +64,78 @@ export const TUTORIALS: Tutorial[] = [
   {
     id: 'first-song',
     title: 'Play your first song',
-    blurb: 'Start music, meet the player, like a song, open the full screen.',
-    minutes: 2,
+    blurb: 'Start music, see how the DJ builds the next five, and steer what plays next.',
+    minutes: 3,
     emoji: '▶️',
     playsMusic: true,
     steps: [
-      { route: '/', title: 'Welcome — let’s play something', body: 'This walkthrough runs inside the real app. It will start a song in your first language so you can hear what every control does.', tip: 'You can stop at any time with Esc or Skip.' },
-      { route: '/', target: '[aria-label="Play your Aura Mix"]', title: 'Your Aura Mix', body: 'This button plays a mix tuned to your taste, mood and languages. When automatic continuation is enabled, VinaX adds related music after it. Press Next and the tutorial starts a song for you.', placement: 'bottom' },
-      { target: '[data-tour="player"]', title: 'The player bar', body: 'Now playing lives here: play/pause, next, previous, shuffle and repeat, plus the seek bar. Tap the artwork or title for the full-screen player.', action: async () => { await playTutorialSong(); await wait(700); }, placement: 'top' },
-      { target: '[data-tour="player"] [aria-label="Add to favorites"], [data-tour="player"] [aria-label="Remove from favorites"]', title: 'Like it', body: 'The heart saves a song to Liked Songs and teaches your taste profile — on this device only. Try it now; you can unlike it any time.', placement: 'top' },
-      { route: '/now-playing', target: '[aria-label="More options"]', title: 'Full-screen player', body: 'Flick the artwork up for the next song, down for the previous one. Double-tap the edges to seek. More options holds the sleep timer, A-B repeat, bookmarks, playback speed and “Share this moment”.', action: async () => { await wait(600); }, placement: 'top' },
-      { title: 'That’s the player', body: 'Synced lyrics follow the singer line by line, and the Queue page lets you view and reorder upcoming songs. Keep the song playing — or try another tutorial.', tip: 'Space plays and pauses, N skips, F likes.' },
+      { route: '/', title: 'Let’s play something', body: 'This walkthrough runs inside the real app and starts a song in your first language.', tip: 'Leave at any time with Esc or Skip.' },
+      { route: '/', target: '.vx-topbar', title: 'Where you are', body: 'The top bar names the page and holds its actions. Home, Discover, Search, Library and VinaX AI sit in the navigation.', placement: 'bottom' },
+      { route: '/', target: '[aria-label="Play your Aura Mix"]', title: 'Play my mix', body: 'A mix built from your languages and listening. Press Next and the tutorial starts a song for you.', placement: 'bottom' },
+      { target: '[data-tour="player"]', title: 'The player bar', body: 'Play, pause and skip from here. Tap the artwork or title for the full-screen player.', action: async () => { await playTutorialSong(); await wait(700); }, placement: 'top' },
+      { target: '[data-tour="player"] [aria-label="Add to favorites"], [data-tour="player"] [aria-label="Remove from favorites"]', title: 'Like it', body: 'The heart saves the song to your favourites and teaches your taste profile, on this device only.', placement: 'top' },
+      { route: '/queue', target: 'section[aria-label="Tune this queue"]', title: 'The next five', body: 'Tap any song and the DJ lines up five more in its language, familiar first. A tune chip rebuilds them.', action: async () => { await wait(400); }, placement: 'bottom' },
+      { route: '/now-playing', target: '[aria-label="More options"]', title: 'Full-screen player', body: 'Flick the artwork up or down to change song. More options holds the sleep timer, speed, bookmarks and Tune this queue.', action: async () => { await wait(600); }, placement: 'top' },
+      { route: '/now-playing', title: 'Pin a mood', body: 'In the Up Next tab, Pin a mood rebuilds Up Next for that mood and holds it for 45 minutes.' },
+      { title: 'Your picks go first', body: 'Songs you add with Play next or Add to queue always play before the DJ’s picks.', tip: 'Space plays and pauses, N skips, F likes.' },
     ],
   },
   {
     id: 'find-anything',
     title: 'Find any song',
-    blurb: 'Search as you type, lyrics search, sorting and the recents row.',
+    blurb: 'Search as you type, lyrics search, sorting, recents and Discover’s shortcuts.',
     minutes: 2,
     emoji: '🔍',
     steps: [
-      { route: '/search', target: '[data-tour="search-input"]', title: 'One box for everything', body: 'Type a song, artist, film or mood — in any language or script. Results appear as you type; Enter opens the full results with tabs for songs, albums, artists and playlists.', placement: 'bottom' },
-      { route: '/search', target: '[data-tour="search-input"]', title: 'Remember only the words?', body: 'Paste a lyric line you remember. When a query is five words or longer, VinaX offers Search by lyrics; it matches the line and falls back to song titles when the lyrics service has no hit.', placement: 'bottom' },
-      { route: '/search', title: 'Sort, filter, play all', body: 'On the Songs tab, sort by relevance, popularity, newest, length or A→Z, filter within long result lists, and press Play all or Queue all. Language chips narrow results to what you understand.' },
-      { route: '/search', title: 'Recents and trending', body: 'Recent searches sit under the box: hover (or long-press) one to pin or remove it. Trending chips show what the community is searching for right now.', tip: 'Press ⌘/Ctrl+K anywhere for the command palette: pages, player actions and songs in one place.' },
+      { route: '/search', target: '[data-tour="search-input"]', title: 'One box for everything', body: 'Type a song, artist, film or mood in any script. Results appear as you type; Enter opens every tab.', placement: 'bottom' },
+      { route: '/search', target: '[data-tour="search-input"]', title: 'Remember only the words?', body: 'Type five or more words of a lyric and VinaX offers Search by lyrics.', placement: 'bottom' },
+      { route: '/search', title: 'Sort and play all', body: 'On the Songs tab, sort by relevance, popularity, newest, length or A to Z, then Play all or Queue all.' },
+      { route: '/search', title: 'Recents and trending', body: 'Long-press or hover a recent search to pin it. Trending searches show what listeners look for now.', tip: 'Press ⌘/Ctrl+K anywhere for the command palette.' },
+      { route: '/discover', target: 'nav[aria-label="Browse music"]', title: 'Discover’s shortcuts', body: 'Charts, Languages, Moods, Regions, Movies, Videos, Made For You, Your Week, AI Playlist and Ads, one tap each.', placement: 'bottom' },
     ],
   },
   {
     id: 'meet-ai',
     title: 'Ask VinaX AI',
-    blurb: 'The composer, slash commands, reply language and style, follow-ups.',
-    minutes: 3,
+    blurb: 'The composer, the model menu, Agent mode, slash commands and chat settings.',
+    minutes: 2,
     emoji: '✨',
     steps: [
-      { route: '/VinaXAI', target: 'textarea[aria-label="Message VinaX AI"]', title: 'The composer', body: 'Ask anything — writing, code, maths, research, translation, or music. Attach a photo or file with +, switch on the globe for live web answers, or tap the waveform for hands-free voice chat.', placement: 'top' },
-      { route: '/VinaXAI', target: 'textarea[aria-label="Message VinaX AI"]', title: 'Slash commands', body: 'Type / to open the command menu: /playlist <vibe> builds a playlist right here, /now shows what is playing, /lyrics explains the current song, /summary recaps the chat. Tab completes.', placement: 'top' },
-      { route: '/VinaXAI', target: 'select[aria-label="Reply language"]', title: 'Reply in your language', body: 'Choose Telugu, Hindi, Tamil, Tenglish, Hinglish and more, and a style — Brief, Detailed, Simple, Steps or Table. Both are remembered for this chat.', placement: 'top' },
-      { route: '/VinaXAI', title: 'Songs you can play', body: 'Any “Title — Artist” line in a reply becomes a playable card, with Play all, Queue all and Save as playlist. “Now playing on” lets the assistant see the song you are listening to, so “who composed this?” just works.', tip: 'Think reasons harder; Research checks the live web and cites sources.' },
-      { route: '/VinaXAI', title: 'After every answer', body: 'Follow-up chips suggest the next question. Shorten, Expand or Simplify any reply, Listen reads it aloud, Pin keeps it at the top, Branch continues from that point in a new chat.' },
+      { route: '/VinaXAI', target: 'textarea[aria-label="Message VinaX AI"]', title: 'The composer', body: 'Ask anything: writing, code, maths, translation or music. Type / for commands such as /playlist, /now, /lyrics and /summary.', placement: 'top' },
+      { route: '/VinaXAI', target: 'button[aria-label="Attach and tools"]', title: 'Attach and tools', body: 'The + button uploads files or a folder and switches on Web search, Think, Research or image creation.', placement: 'top' },
+      { route: '/VinaXAI', target: 'button[aria-label^="Model:"]', title: 'The model menu', body: 'Search every model VinaX can reach. Recent and recommended ones come first; Auto picks an engine for each question.', placement: 'top' },
+      { route: '/VinaXAI', target: 'button[aria-label="Agent mode"]', title: 'Agent mode', body: 'When on, an agent-capable model can search the web and run code by itself. It is greyed out when none is available.', placement: 'top' },
+      { route: '/VinaXAI', title: 'Songs you can play', body: 'A “Title — Artist” line in a reply becomes a playable card, with Play all and Save as playlist.' },
+      { route: '/VinaXAI', target: 'button[aria-label="Chat settings"]', title: 'Chat settings', body: 'Tabs for General, Replies, Voice, Data and Shortcuts: default model, reply language and style, spoken voice, and your chat storage.', placement: 'bottom' },
     ],
   },
   {
     id: 'make-it-yours',
     title: 'Make it yours',
-    blurb: 'Themes, custom accent, festival looks, sound and the settings search.',
+    blurb: 'Settings search, discovery modes, themes, sound and backups.',
     minutes: 2,
     emoji: '🎨',
     steps: [
-      { route: '/settings', target: 'input[aria-label="Search settings"]', title: 'Find any setting', body: 'Type “theme”, “sleep”, “alarm” or “quality” and only the matching settings stay, highlighted.', placement: 'bottom' },
-      { route: '/settings', target: '[aria-label="Festival themes"]', title: 'Festival themes', body: 'On 43 festivals — Sankranti to Diwali to Christmas — the whole app takes on its own look: colours, glow, a greeting and a living backdrop. This switch turns that off if you prefer one look all year.', placement: 'bottom' },
-      { route: '/settings', target: '[aria-label="Custom accent colour"]', title: 'Your colour', body: 'Pick any colour and VinaX derives the whole palette, with a readable version for the light theme. Dark, Light, Black, System and Auto (day/night) themes sit just above.', placement: 'bottom' },
-      { route: '/settings', target: '[data-tour="sound"]', title: 'Sound', body: 'A five-band equaliser with presets, left/right balance, mono audio and loudness normalisation — processed on your device. Turn on Sound effects to start.', placement: 'top' },
-      { route: '/settings', title: 'And the rest', body: 'Display size, High contrast, Data saver, a startup page, a wake-up alarm that plays a playlist, and Your Data for export, import and a clean erase.' },
+      { route: '/settings', target: 'input[aria-label="Search settings"]', title: 'Find any setting', body: 'Type “theme”, “sleep” or “quality” and only the matching settings stay.', placement: 'bottom' },
+      { route: '/settings', target: '[aria-label="Discovery mode"]', title: 'Familiar, Balanced or Discover', body: 'Choose how far recommendations roam. Every queue still opens with familiar songs and stays in its song’s language.', placement: 'top' },
+      { route: '/settings', target: '[aria-label="Festival themes"]', title: 'Festival themes', body: 'On festival days the app takes on a festive look. This switch keeps one look all year.', placement: 'bottom' },
+      { route: '/settings', target: '[aria-label="Custom accent colour"]', title: 'Your colour', body: 'Pick any colour and VinaX derives the palette from it. The theme choices sit just above.', placement: 'bottom' },
+      { route: '/settings', target: '[data-tour="sound"]', title: 'Sound', body: 'A five-band equaliser, balance, mono and loudness normalisation, processed on your device. Turn on Sound effects first.', placement: 'top' },
+      { route: '/settings', title: 'Back up and restore', body: 'Your Data exports a backup file. Backup Center previews a restore, merges or replaces, and offers Undo.' },
     ],
   },
   {
     id: 'save-organise',
     title: 'Save and organise',
-    blurb: 'Listen Later, playlists, tags, import from text, history.',
+    blurb: 'Collection shortcuts, import from text, Listen Later and tidy playlists.',
     minutes: 2,
     emoji: '📚',
     steps: [
-      { route: '/library', title: 'Your library', body: 'Everything here lives on this device: Liked Songs, playlists, saved albums and artists, and recently added songs.' },
-      { route: '/library', target: '[data-tour="import-text"]', title: 'Import a playlist from text', body: 'Paste any list — one song per line as “Title — Artist” — and VinaX finds every song and saves a playlist. Copy as text on any playlist does the reverse.', placement: 'bottom' },
-      { route: '/library', target: 'a[aria-label="Listen Later"]', title: 'Listen Later', body: 'A one-tap “come back to this” list. Choose Listen later in any song menu, or swipe a song row to the left. Swipe right adds it to the queue.', placement: 'bottom' },
-      { route: '/library', title: 'Playlists that stay tidy', body: 'Pin favourites to the top, add tags and filter by them, sort or shuffle-play, remove duplicates, and restore anything deleted within seven days.', tip: 'Open any song menu for “Your history with this song”.' },
+      { route: '/library', title: 'Your library', body: 'Favourites, playlists, saved albums and artists all live on this device.' },
+      { route: '/library', target: 'nav[aria-label="Your collection shortcuts"]', title: 'Collection shortcuts', body: 'Favorites, Listen Later, Downloads, History, Your VinaX and Taste Profile open from here.', placement: 'bottom' },
+      { route: '/library', target: '[data-tour="import-text"]', title: 'Import from text', body: 'Paste one song per line as “Title — Artist”. You review every match before the playlist is saved.', placement: 'bottom' },
+      { route: '/library', title: 'Queue or save with a swipe', body: 'On touch screens, swipe a song row right to queue it, left for Listen Later. Song menus offer both too.' },
+      { route: '/library', title: 'Playlists that stay tidy', body: 'Pin, tag, sort and de-duplicate playlists. A deleted playlist waits in Recently deleted for seven days.', tip: 'Open any song menu for “Your history with this song”.' },
     ],
   },
 ];

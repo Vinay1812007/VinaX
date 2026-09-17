@@ -8,7 +8,9 @@
  * the engine picker and the admin Lab always show what is actually callable
  * today.
  *
- * No key ever leaves the Worker: only slugs, labels and context sizes go out.
+ * No key ever leaves the Worker: only slugs, labels, context sizes and the
+ * `agent` flag go out (v7.1 — true for the agentic systems in the explicit
+ * allow-list in _lib/catalog.ts; additive, older clients ignore it).
  * Empty groups are reported as empty — a missing secret or an unreachable
  * provider never turns into an invented menu.
  */
