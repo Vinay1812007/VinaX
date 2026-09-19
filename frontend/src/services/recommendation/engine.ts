@@ -20,6 +20,7 @@ import type { ArcShape } from './sequencer';
 import { tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape, type TuneIntent } from './tune';
 import type { Mood } from './mood';
 import { SCORING_WEIGHTS_VERSION } from './weights';
+import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from './deadlines';
 
 function aiContext(ctx: RecommendationContext): string {
   return JSON.stringify({ surface: ctx.surface, seed: ctx.seedSong?.title, mood: ctx.sessionMood, energy: ctx.sessionEnergy,
@@ -175,10 +176,7 @@ export interface NextSongsPlan {
   refinement: Promise<NextSongsPlan | { rejected: FallbackReason }> | null;
 }
 
-/** On-device order budget when the queue still has songs ahead. */
-export const NEXT_DEADLINE_MS = 8_000;
-/** On-device order budget when the listener is waiting at the end of the queue. */
-export const NEXT_URGENT_DEADLINE_MS = 3_500;
+export { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS };
 /** The AI refinement's budget: long enough for the DJ, short of the stretch it would reorder. */
 const AI_BUDGET_MS = 24_000;
 /** Time kept back from candidate gathering for filtering, ranking, sequencing and validation. */

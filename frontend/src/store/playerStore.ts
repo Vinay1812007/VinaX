@@ -20,7 +20,8 @@ import { bestImage } from '@/utils/images';
 import { isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
 import { kidModeOn, stripExplicit } from '@/services/kidMode';
 import { getRecommendationContext } from '@/services/recommendation/context';
-import { NEXT_URGENT_DEADLINE_MS, planNextSongs, type NextSongsPlan } from '@/services/recommendation/engine';
+import type { NextSongsPlan } from '@/services/recommendation/engine';
+import { NEXT_URGENT_DEADLINE_MS } from '@/services/recommendation/deadlines';
 import { songKey } from '@/services/recommendation/songIdentity';
 import { admitSongs } from '@/services/recommendation/admission';
 import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
@@ -351,6 +352,10 @@ export const usePlayerStore = create<PlayerState>()(
         planAbort = abort;
         const promise = (async () => {
           try {
+            // 7.2.0 — the engine is loaded on demand: it no longer rides the
+            // first load with the player store (the service worker precaches it).
+            const { planNextSongs } = await import('@/services/recommendation/engine');
+            if (version !== queueVersion || abort.signal.aborted) return false;
             const { queue } = get();
             // 7.2.0 — a plan: the on-device order inside one end-to-end deadline
             // (shorter when the listener is waiting at the end of the queue), and

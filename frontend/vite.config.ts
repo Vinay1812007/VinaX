@@ -80,7 +80,7 @@ export default defineConfig({
             {
               name: 'core',
               priority: -1,
-              test: /\/src\/(utils\/(cn|format|images|plays)|constants\/(languages|storage-keys)|components\/Icons|store\/(reasonStore|toastStore|historyStore|settingsStore)|services\/(identity\/installId|native\/index|storage\/local|recommendation\/(quality|songIdentity|identityCore)|personalization\/(session|storage|profile|eventWeights)))\.tsx?$/,
+              test: /\/src\/(utils\/(cn|format|images|plays)|constants\/(languages|storage-keys)|components\/Icons|store\/(reasonStore|toastStore|historyStore|settingsStore)|services\/(identity\/installId|native\/index|storage\/local|recommendation\/(quality|songIdentity|identityCore|filters|admission|deadlines)|playback\/session|personalization\/(session|storage|profile|eventWeights)))\.tsx?$/,
             },
           ],
         },
