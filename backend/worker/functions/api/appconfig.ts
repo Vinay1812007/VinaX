@@ -10,7 +10,7 @@
  * for) expired/unstarted campaigns.
  */
 import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
-import { CLIENT_KEYS, publicClientConfig, readConfig } from '../_lib/clientConfig';
+import { CLIENT_READ_KEYS, publicClientConfig, readConfig, withRolloutSplit } from '../_lib/clientConfig';
 
 interface ConfigRow {
   value: unknown;
@@ -69,7 +69,14 @@ export const onRequestGet = async (context: { request: Request; env: SupabaseEnv
   const key = new URL(request.url).searchParams.get('key') ?? '';
   // v5.15.0 — one bundle for everything the app reads at boot (greeting,
   // broadcast, search synonyms, source switches, AI starters, FAQ, min build).
-  if (key === 'client') return json(publicClientConfig(await readConfig(env, CLIENT_KEYS)), 60);
+  if (key === 'client') {
+    const cfg = publicClientConfig(await readConfig(env, CLIENT_READ_KEYS));
+    // 7.2.0 — a weight override staged to one experiment variant ships with
+    // that experiment's live split (withheld while the experiment is paused).
+    const { recConfig: staged, ...rest } = cfg;
+    const recConfig = staged ? await withRolloutSplit(env, staged) : null;
+    return json({ ...rest, ...(recConfig ? { recConfig } : {}) }, 60);
+  }
   if (key !== 'banners' && key !== 'festival' && key !== 'flags') {
     return new Response(JSON.stringify({ error: 'unknown_key' }), { status: 400, headers: { 'content-type': 'application/json' } });
   }
