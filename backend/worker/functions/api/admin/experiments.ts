@@ -7,7 +7,7 @@
  * signals the audit named (skip rate, session length proxied honestly as
  * plays per device).
  */
-import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import { sbDelete, sbSelect, sbSelectResult, sbUpdate, sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
 import { assignVariant, sanitizeVariants, type ExperimentConfig } from '../../_lib/experiments';
@@ -32,7 +32,7 @@ interface EventRow {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   // Error-aware read: a missing vinax_experiments table (migration not run)
   // must report configured:false — not masquerade as "configured, empty" (D-1).
@@ -109,7 +109,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   const body = (await request.json().catch(() => null)) as
     | { action?: string; key?: string; name?: string; variants?: unknown; active?: boolean }
     | null;

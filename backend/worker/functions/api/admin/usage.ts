@@ -9,7 +9,7 @@
  * so (`source: 'sampled'`). No PII either way — only the event type,
  * platform and timestamp are used, and the RPC returns aggregates only.
  */
-import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -58,7 +58,7 @@ export function usageFromRows(rows: Row[]): { byType: Array<{ type: string; n: n
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false });
   const days = Math.min(30, Math.max(1, parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10) || 7));
   const exact = await sbRpcResult<UsageRollup | null>(env, 'vinax_usage', { p_days: days });

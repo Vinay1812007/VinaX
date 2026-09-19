@@ -1,6 +1,6 @@
 /** Per-user drill-down: the user's latest-state row + recent raw events.
  *  Top songs / languages / recents are derived client-side from the events. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -32,7 +32,7 @@ interface EventRow {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const rawId = new URL(request.url).searchParams.get('deviceId');
   // Length-capped: a huge id produced an over-length PostgREST URL whose 414

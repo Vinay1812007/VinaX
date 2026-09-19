@@ -12,7 +12,7 @@
  * (a missing column 400s that select alone → its metric reads null, the rest
  * keep working).
  */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -25,7 +25,7 @@ function pct(n: number, total: number): number | null {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   if (!supabaseConfigured(env)) {
     return adminJson({ configured: false, score: null, metrics: { originVerifiedPct: null, countryResolvedPct: null, aiOkPct: null, aiContentPct: null }, slos: [], sampled: { events: 0, aiEvents: 0 } });

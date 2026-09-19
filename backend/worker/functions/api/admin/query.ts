@@ -6,7 +6,7 @@
  * raw identifiers never appear. Equality filter on one whitelisted column,
  * newest first, hard cap 500 rows.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -47,7 +47,7 @@ export function buildQuery(params: URLSearchParams): { table: string; query: str
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, rows: [] });
   const built = buildQuery(new URL(request.url).searchParams);
   if ('error' in built) return json({ error: built.error, tables: Object.keys(QUERYABLE) }, 400);

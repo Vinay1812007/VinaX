@@ -1,5 +1,5 @@
 /** Sent-notification log: announcements + daily song pushes, with retract. */
-import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import { sbDeleteReturning, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
@@ -14,7 +14,7 @@ function json(o: unknown, status = 200): Response {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, rows: [] });
   const read = await sbSelectResult<{ type: string; message: string | null; created_at: string; city: string | null; region: string | null; country: string | null; song_title: string | null; language: string | null }>(
     env,
@@ -28,7 +28,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   const body = (await request.json().catch(() => null)) as { action?: string; created_at?: string } | null;
   if (body?.action !== 'retract' || typeof body.created_at !== 'string') return json({ error: 'bad_request' }, 400);
   // Audit finding M-SRV-9: sbDelete returned true even when zero rows were

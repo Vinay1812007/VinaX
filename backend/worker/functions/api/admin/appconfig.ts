@@ -6,7 +6,7 @@
  * The ADMIN reads/writes through this route (token-gated). Clients read the
  * published values through the public /api/appconfig route (cached, no auth).
  */
-import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import { sbSelectResult, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
@@ -40,7 +40,7 @@ interface ConfigRow {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, value: null });
   const key = new URL(request.url).searchParams.get('key') ?? '';
   if (!ALLOWED_KEYS.has(key)) return json({ error: 'unknown_key' }, 400);
@@ -55,7 +55,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
   let body: { key?: unknown; value?: unknown };
   try {

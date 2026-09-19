@@ -1,5 +1,5 @@
 /** Admin: latest in-app feedback / bug reports. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbSelectResult, sbUpdate, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -19,7 +19,7 @@ interface FeedbackRow {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   if (!supabaseConfigured(env)) return adminJson({ configured: false, feedback: [] });
   const read = await sbSelectResult<FeedbackRow>(
@@ -35,7 +35,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const body = (await request.json().catch(() => null)) as { id?: number; status?: string } | null;
   const id = body && typeof body.id === 'number' ? body.id : null;

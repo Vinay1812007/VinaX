@@ -1,13 +1,13 @@
 /** Real-time pulse: starts/min, joins, live listeners + cities, errors (5m),
  *  AI latency (15m), active rooms. Designed for 5-10s polling. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) {
     // Unchanged pre-7.2 shape for an unconfigured Worker (plus the flag).
     return adminJson({ configured: false, startsPerMin: 0, joins5m: 0, errors5m: 0, recentErrors: [], liveListeners: 0, liveCities: [], aiP50: 0, aiOkRate: null, aiCalls15m: 0, activeRooms: 0 });

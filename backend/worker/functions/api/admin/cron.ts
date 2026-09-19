@@ -5,7 +5,7 @@
  * Every scheduled job leaves a footprint (an event row or a table write);
  * this reads the newest footprint per job and flags anything overdue.
  */
-import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -25,7 +25,7 @@ const JOBS: Job[] = [
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, jobs: [] });
   const reads = await Promise.all(JOBS.map(async (j) => ({ j, read: await sbSelectResult<Record<string, string | null>>(env, j.table, j.query) })));
   // 7.2.0 — sbSelect never threw, so the old `.catch(() => null)` never fired:

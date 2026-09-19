@@ -7,7 +7,7 @@
  * Song ids match exactly; a title fragment picks the most-played match and
  * lists the other candidates so the operator can switch.
  */
-import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -59,7 +59,7 @@ export function summarise(rows: Row[]): {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false });
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') ?? '').trim().slice(0, 120);

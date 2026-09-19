@@ -14,7 +14,7 @@
  */
 import { chat, gather, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
-import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
+import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { tasteBlock } from '../_lib/taste';
 import { styleAngle } from '../_lib/variety';
@@ -158,7 +158,7 @@ async function handlePost(context: {
 }): Promise<Response> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'playlist', { capacity: 6, refillPerMinute: 3 });
+  const limited = await rateLimitAsync(request, 'playlist', { capacity: 6, refillPerMinute: 3 }, env);
   if (limited) return limited;
 
   // Capped read: a 500-char prompt, 60 avoid-titles and a taste snapshot fit

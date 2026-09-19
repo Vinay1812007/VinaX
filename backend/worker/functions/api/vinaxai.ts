@@ -28,7 +28,7 @@ import {
 import { catalogDefaultModel, resolveCatalogModel, type CatalogProvider } from '../_lib/catalog';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { readJsonCapped } from '../_lib/body';
-import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
+import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { probeFetchMarker } from '../_lib/fetchMarker';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { houseRules, readConfig } from '../_lib/clientConfig';
@@ -530,7 +530,7 @@ export const onRequestPost = async (context: {
 }): Promise<Response> => {
   const { request, env, waitUntil } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'vinaxai', { capacity: 20, refillPerMinute: 10 });
+  const limited = await rateLimitAsync(request, 'vinaxai', { capacity: 20, refillPerMinute: 10 }, env);
   if (limited) return limited;
   try {
     return await handleChat(request, env, waitUntil, isApp);
@@ -666,7 +666,7 @@ async function handleChat(
     // shared vinaxai bucket (audit finding H-SRV-9).
     // B8: 3 → 5/min — research answers routinely need a follow-up search or
     // two, and the burst cap still keeps scripted abuse uneconomical.
-    const webRl = rateLimit(request, 'vinaxai-web', { capacity: 5, refillPerMinute: 5 }, env);
+    const webRl = await rateLimitAsync(request, 'vinaxai-web', { capacity: 5, refillPerMinute: 5 }, env);
     if (webRl) return webRl;
     const s = await liveSearch(env, lastQ.slice(0, 300));
     if (s) {
@@ -1082,7 +1082,7 @@ async function handleChat(
       let liveMsgs = msgs;
       const fetchQ = fetchBox.q;
       if (fetchQ && !full && canFetch) {
-        const rl2 = rateLimit(request, 'vinaxai-web', { capacity: 5, refillPerMinute: 5 }, env);
+        const rl2 = await rateLimitAsync(request, 'vinaxai-web', { capacity: 5, refillPerMinute: 5 }, env);
         const hit = rl2 ? null : await liveSearch(env, fetchQ.slice(0, 300));
         let sys2: string;
         if (hit) {

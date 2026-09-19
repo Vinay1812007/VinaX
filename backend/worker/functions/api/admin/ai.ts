@@ -1,5 +1,5 @@
 /** AI Monitoring: request volume, success rate, models, latency, errors, recent. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -11,7 +11,7 @@ function clampDays(v: string | null): number {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   const days = clampDays(new URL(request.url).searchParams.get('days'));
   if (!supabaseConfigured(env)) return adminJson({ configured: false, days, metrics: null });
   const metrics = await sbRpcResult<Record<string, unknown>>(env, 'vinax_ai_metrics', { p_days: days });

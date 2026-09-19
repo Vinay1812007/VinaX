@@ -9,7 +9,7 @@
  * the newest-10k sample remains the fallback until the migration is applied
  * (`source: 'sampled'`). Keep STEPS and the RPC's step table in sync.
  */
-import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -45,7 +45,7 @@ export function withPct(steps: Array<{ id: string; label: string; devices: numbe
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, steps: [] });
   const days = Math.min(30, Math.max(1, parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10) || 7));
   const exact = await sbRpcResult<Array<{ id: string; label: string; devices: number }>>(env, 'vinax_funnel', { p_days: days });

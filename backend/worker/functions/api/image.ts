@@ -2,7 +2,7 @@
  *  server keys. Returns a data URL; the client renders it in the chat.
  *  Fully gated: if the key lacks image access, the client gets an honest
  *  error instead of a hang. */
-import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
+import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type AiEnv } from '../_lib/ai';
 
 type Env = AiEnv;
@@ -28,7 +28,7 @@ export const onRequestOptions = async (): Promise<Response> =>
 export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
-  const limited = rateLimit(context.request, 'image', { capacity: 6, refillPerMinute: 3 });
+  const limited = await rateLimitAsync(context.request, 'image', { capacity: 6, refillPerMinute: 3 }, context.env);
   if (limited) return limited;
   try {
     return await handleImage(context);

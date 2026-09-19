@@ -1,5 +1,5 @@
 /** Overview: headline KPIs, engagement (DAU/WAU/MAU), and growth charts. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -15,7 +15,7 @@ interface GeoRow { country: string; city: string; listeners: number; plays: numb
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return adminJson({ configured: false, summary: null, newUsersByDay: [], playsByDay: [], topSongs: [], topCountries: [] });
 
   const [summary, newUsersByDay, playsByDay, topSongs, geo] = await Promise.all([

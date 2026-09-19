@@ -5,8 +5,8 @@
  *  ?key= names which lane key signs the call — see BY_SUFFIX below for the
  *  accepted values (default LIGHTNING, the balanced/DJ key);
  *  ?model= overrides the probed slug (default: that lane's pinned model). */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { rateLimit } from '../../_lib/ratelimit';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { rateLimitAsync } from '../../_lib/ratelimit';
 import { LANE_MODEL, laneEndpoint, type AiEnv, type Lane } from '../../_lib/ai';
 
 type Env = AdminEnv & AiEnv;
@@ -40,9 +40,9 @@ function json(o: unknown, status = 200): Response {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   // Paid upstream ping — throttle even for authed callers (audit: unthrottled).
-  const limited = rateLimit(request, 'admin-enginetest', { capacity: 10, refillPerMinute: 10 }, env as never);
+  const limited = await rateLimitAsync(request, 'admin-enginetest', { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
   const url = new URL(request.url);
   const suffix = (url.searchParams.get('key') ?? 'LIGHTNING').toUpperCase();

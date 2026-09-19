@@ -1,6 +1,6 @@
 /** Admin maintenance: destructive Supabase actions, each explicit + audited
  *  by the admin UI's confirm dialogs. Token-gated like every admin route. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import { methodNotAllowed } from '../../_lib/ratelimit';
 import { sbDelete, sbDeleteReturning, sbInsert, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
@@ -19,7 +19,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed('POS
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const action = typeof body?.action === 'string' ? body.action : '';
   const days = typeof body?.days === 'number' && body.days > 0 ? Math.floor(body.days) : 0;

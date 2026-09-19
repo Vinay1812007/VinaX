@@ -9,8 +9,8 @@
  * vision key. The bench-only inventory lanes stay out; the AI Lab probes
  * those one at a time.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { rateLimit } from '../../_lib/ratelimit';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { rateLimitAsync } from '../../_lib/ratelimit';
 import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { LANE_MODEL, laneEndpoint, type AiEnv } from '../../_lib/ai';
 import { catalogDefaultModel } from '../../_lib/catalog';
@@ -52,10 +52,10 @@ async function pingKey(name: string, key: string | undefined, model: string, bas
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   // 9 live model pings per call — cap the frequency so a stuck 10s auto-
   // refresh loop can't burn upstream quota (audit: unthrottled).
-  const limited = rateLimit(request, 'admin-health', { capacity: 4, refillPerMinute: 2 }, env as never);
+  const limited = await rateLimitAsync(request, 'admin-health', { capacity: 4, refillPerMinute: 2 }, env);
   if (limited) return limited;
   // The two catalog lanes serve a moving catalog, so health must ping the
   // model they would ACTUALLY use right now — a fixed pin here reported a

@@ -1,6 +1,6 @@
 /** Location Analytics: listeners + plays by country / city, and platform split.
  *  Coarse + anonymous: city/country come from the Cloudflare edge; no raw IP. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -15,7 +15,7 @@ interface PlatRow { platform: string; listeners: number; }
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const days = clampDays(new URL(request.url).searchParams.get('days'));
   if (!supabaseConfigured(env)) return adminJson({ configured: false, days, countries: [], cities: [], platforms: [] });

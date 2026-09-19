@@ -1,6 +1,6 @@
 /** Public feedback / bug-report ingest. Users explicitly submit this, so it is
  *  not consent-gated. Coarse geo is added at the edge; no raw IP is stored. */
-import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
+import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { sbInsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
 
 type Env = SupabaseEnv;
@@ -26,7 +26,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  const limited = rateLimit(request, 'feedback', { capacity: 5, refillPerMinute: 2 });
+  const limited = await rateLimitAsync(request, 'feedback', { capacity: 5, refillPerMinute: 2 }, env);
   if (limited) return limited;
   const json = (b: unknown, status = 200): Response =>
     new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json', ...CORS } });

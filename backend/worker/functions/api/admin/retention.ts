@@ -4,7 +4,7 @@
  * answers { configured: false } until the RPC exists so the panel can say
  * "run the migration" instead of erroring.
  */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -19,7 +19,7 @@ interface CohortRow {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return adminJson({ configured: false, cohorts: [] });
   const rows = await sbRpcResult<CohortRow[]>(env, 'vinax_retention', { p_weeks: 8 });
   // A missing function (404) is the documented "run the migration" state;

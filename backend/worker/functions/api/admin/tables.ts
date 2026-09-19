@@ -3,7 +3,7 @@
  * Worker writes, so retention jobs, a stalled writer or a runaway logger show
  * up as numbers rather than as a surprise on the Supabase bill.
  */
-import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbCountResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -28,7 +28,7 @@ const json = (o: unknown, status = 200): Response =>
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, tables: [] });
   const since24h = new Date(Date.now() - 86_400_000).toISOString();
   const reads = await Promise.all(

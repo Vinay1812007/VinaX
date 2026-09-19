@@ -14,7 +14,7 @@
  * Empty groups are reported as empty — a missing secret or an unreachable
  * provider never turns into an invented menu.
  */
-import { rateLimit, methodNotAllowed } from '../_lib/ratelimit';
+import { rateLimitAsync, methodNotAllowed } from '../_lib/ratelimit';
 import { fullCatalog } from '../_lib/catalog';
 import { type AiEnv } from '../_lib/ai';
 
@@ -24,7 +24,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const { request, env } = context;
   // Each miss costs two upstream calls; the 15-minute isolate cache absorbs
   // the rest. Throttle anyway so a looping client can't hammer the providers.
-  const limited = rateLimit(request, 'aimodels', { capacity: 12, refillPerMinute: 12 });
+  const limited = await rateLimitAsync(request, 'aimodels', { capacity: 12, refillPerMinute: 12 }, env);
   if (limited) return limited;
 
   const { grq, opr } = await fullCatalog(env);

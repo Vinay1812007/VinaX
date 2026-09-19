@@ -6,7 +6,7 @@
 import { chat, logAiEvent, type AiEnv } from '../_lib/ai';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { readJsonCapped } from '../_lib/body';
-import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
+import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { istNowLine } from '../_lib/time';
 import { type SupabaseEnv } from '../_lib/supabase';
@@ -77,7 +77,7 @@ async function handlePost(context: {
 }): Promise<Response> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'assistant', { capacity: 20, refillPerMinute: 10 });
+  const limited = await rateLimitAsync(request, 'assistant', { capacity: 20, refillPerMinute: 10 }, env);
   if (limited) return limited;
   // Capped read — content-length is absent on a chunked body, so the read caps too.
   const read = await readJsonCapped<{ messages?: InMsg[]; taste?: unknown } | null>(request, MAX_BODY_BYTES);

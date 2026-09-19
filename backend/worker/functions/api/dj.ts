@@ -32,7 +32,7 @@
  */
 import { chat, extractJson, gather, logAiEvent, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
-import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
+import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { pickBySeed, styleAngle } from '../_lib/variety';
 import { canonicalKey } from '../_lib/identityCore';
@@ -175,7 +175,7 @@ export const onRequestPost = async (context: { request: Request; env: AiEnv & Su
 async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'dj', { capacity: 15, refillPerMinute: 8 });
+  const limited = await rateLimitAsync(request, 'dj', { capacity: 15, refillPerMinute: 8 }, env);
   if (limited) return limited;
   // Capped while reading — a chunked body carries no content-length.
   const read = await readJsonCapped<{ context?: unknown; pool?: unknown; count?: unknown; discover?: unknown; maxDiscover?: unknown; wantSegues?: unknown } | null>(request, 48_000);

@@ -1,7 +1,7 @@
 /** Structured music tasks on the existing key/model lane router. */
 import { chat, extractJson, logAiEvent, type AiEnv, type Lane } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
-import { rateLimit, methodNotAllowed } from '../_lib/ratelimit';
+import { rateLimitAsync, methodNotAllowed } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { designShelves } from '../_lib/homeShelves';
 
@@ -114,7 +114,7 @@ export function sanitizeCurated(task: 'metadata' | 'ranking' | 'home', raw: unkn
 }
 
 export async function onRequestPost({ request, env, waitUntil }: { request: Request; env: AiEnv & SupabaseEnv; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> {
-  const limited = rateLimit(request, 'curate', { capacity: 12, refillPerMinute: 6 });
+  const limited = await rateLimitAsync(request, 'curate', { capacity: 12, refillPerMinute: 6 }, env);
   if (limited) return limited;
   try {
     // Capped while reading — a chunked body carries no content-length.

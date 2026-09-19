@@ -1,5 +1,5 @@
 /** Admin: send a push notification to every subscribed device. */
-import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import { dbErrorCode, sbInsert, sbSelectResult, sbUpdate, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { pushConfigured, sendPush, type PushSubscriptionRecord, type VapidEnv } from '../../_lib/webpush';
@@ -103,7 +103,7 @@ function bucketGeo(rows: GeoRow[]): {
  *  dropdown with real, live subscriber counts. */
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: pushConfigured(env), subscribers: 0, fcm: 0, geo: bucketGeo([]) });
   const [webRead, fcmRead] = await Promise.all([
     sbSelectResult<GeoRow>(
@@ -131,7 +131,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!pushConfigured(env) && !fcmConfigured(env)) return json({ error: 'push_not_configured' }, 400);
   const body = (await request.json().catch(() => null)) as
     | { title?: string; body?: string; link?: string; dedupe_key?: string; filter?: { country?: string; region?: string; city?: string; lang?: string; langPrefix?: string } }

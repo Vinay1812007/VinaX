@@ -1,12 +1,12 @@
 /** Live Listen Together rooms: active rooms, member counts, now playing. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return adminJson({ configured: false, rooms: [], active: 0, listeners: 0 });
   const since = new Date(Date.now() - 2 * 3600_000).toISOString();
   const memSince = new Date(Date.now() - 60_000).toISOString();

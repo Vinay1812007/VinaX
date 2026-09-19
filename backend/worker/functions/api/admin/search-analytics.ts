@@ -1,13 +1,13 @@
 /** Search analytics: top queries, zero-result queries, trending artists +
  *  languages. Sourced from consent-gated anonymous search events. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   const rawDays = parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10);
   // NaN survives Math.min/max and used to throw RangeError -> 500 on ?days=abc (D-5).
   const days = Number.isFinite(rawDays) ? Math.min(Math.max(rawDays, 1), 90) : 7;

@@ -2,7 +2,7 @@
  *  per-lane provider base — see functions/_lib/ai.ts). Returns the same number
  *  of lines in the same order so synced-lyric timing stays aligned. */
 import { chat, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
-import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
+import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 
 const SYS: Record<string, string> = {
@@ -54,7 +54,7 @@ async function handlePost(context: {
 }): Promise<Response> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'lyrics-tools', { capacity: 12, refillPerMinute: 6 });
+  const limited = await rateLimitAsync(request, 'lyrics-tools', { capacity: 12, refillPerMinute: 6 }, env);
   if (limited) return limited;
 
   const body = (await request.json().catch(() => null)) as { lines?: unknown; mode?: unknown } | null;

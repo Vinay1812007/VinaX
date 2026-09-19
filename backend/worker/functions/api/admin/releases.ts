@@ -4,7 +4,7 @@
  * on the version the repo says it should be. Read-only; needs the same
  * GITHUB_TOKEN the APK updater already uses, and says so when it is absent.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { githubConfigured, latestRelease, type GithubEnv } from '../../_lib/github';
 
 type Env = AdminEnv & GithubEnv;
@@ -29,7 +29,7 @@ async function gh<T>(env: GithubEnv, path: string): Promise<T | null> {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!githubConfigured(env)) return json({ configured: false });
   const origin = new URL(request.url).origin.replace('admin.', 'www.');
 

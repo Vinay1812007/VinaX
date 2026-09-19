@@ -1,5 +1,5 @@
 /** Technical Monitoring: version spread, errors, field Web Vitals, lyric coverage. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -74,7 +74,7 @@ function aggregateLyricMisses(
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   const days = clampDays(new URL(request.url).searchParams.get('days'));
   const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString();
   if (!supabaseConfigured(env)) {

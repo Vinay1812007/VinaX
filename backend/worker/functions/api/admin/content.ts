@@ -1,5 +1,5 @@
 /** Content Admin: view + manage the song blocklist the app honors. */
-import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import { sbDelete, sbRpcResult, sbSelectResult, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
@@ -16,7 +16,7 @@ function clip(v: unknown, n: number): string | null {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   if (!supabaseConfigured(env)) return adminJson({ configured: false, blocked: [], topSongs: [] });
   const [blocked, topSongs] = await Promise.all([
@@ -32,7 +32,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const action = body ? clip(body.action, 12) : null;

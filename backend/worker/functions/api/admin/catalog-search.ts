@@ -14,8 +14,8 @@
  * runs the SAME multi-mirror fallback server-side, returns a normalized
  * shape the admin JS renders directly.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { rateLimit } from '../../_lib/ratelimit';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { rateLimitAsync } from '../../_lib/ratelimit';
 
 // Same mirror pool the app's client uses. Order matters — first responder wins.
 // 5.0.0 sweep: the self-hosted catalog (/api/cat) leads everywhere. saavn.dev
@@ -106,8 +106,8 @@ async function searchOne(base: string, path: string): Promise<{ ok: boolean; ite
 
 export const onRequestGet = async (context: { request: Request; env: AdminEnv }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
-  const rl = rateLimit(request, 'admin-catalog-search', { capacity: 40, refillPerMinute: 40 }, env);
+  if (!(await isAdminAsync(request, env))) return unauthorized();
+  const rl = await rateLimitAsync(request, 'admin-catalog-search', { capacity: 40, refillPerMinute: 40 }, env);
   if (rl) return rl;
 
   const url = new URL(request.url);
