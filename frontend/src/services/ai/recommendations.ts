@@ -25,6 +25,8 @@ let retryAfter = 0;
 let routeMissingUntil = 0;
 /** Test hook. */
 export function resetCuratorBackoff(): void { retryAfter = 0; routeMissingUntil = 0; }
+/** 7.2.0 — back-offs carry up to a fifth more at random, so devices that failed together do not retry together. */
+const withJitter = (ms: number): number => ms + Math.floor(Math.random() * ms * 0.2);
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const label = (v: unknown): string | undefined => typeof v === 'string' && v.trim() ? v.trim().toLowerCase().slice(0, 60) : undefined;
 const labels = (v: unknown) => (Array.isArray(v) ? v : [v]).map(label).filter((s): s is string => !!s).slice(0, 6);
@@ -47,11 +49,11 @@ export async function requestCurator(task: 'metadata' | 'ranking' | 'home' | 'sh
       method: 'POST', headers: { 'content-type': 'application/json', 'x-vinax-client': isNativePlatform() ? 'app' : 'web' },
       body: JSON.stringify({ task, data }), signal: controller.signal,
     });
-    if (res.status === 404 || res.status === 405) { routeMissingUntil = Date.now() + 10 * 60_000; return null; }
+    if (res.status === 404 || res.status === 405) { routeMissingUntil = Date.now() + withJitter(10 * 60_000); return null; }
     if (!res.ok) throw new Error('Curator unavailable');
     return object(await res.json()).data ?? null;
   } catch {
-    if (!signal?.aborted) retryAfter = Date.now() + 30_000;
+    if (!signal?.aborted) retryAfter = Date.now() + withJitter(30_000);
     return null;
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
