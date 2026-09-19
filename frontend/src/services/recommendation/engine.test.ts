@@ -14,7 +14,7 @@ let pool: Candidate[] = [];
 const djSequence = vi.fn();
 vi.mock('./candidates', () => ({ gatherCandidates: vi.fn(async () => pool), generateNextCandidates: vi.fn(async () => pool) }));
 vi.mock('@/services/ai/recommendations', () => ({ enrichSongs: vi.fn(async (songs: Song[]) => songs), aiRerankSongs: vi.fn(async (songs: Song[]) => songs) }));
-vi.mock('@/services/ai/dj', () => ({ djSequence: (...args: unknown[]) => djSequence(...args), samplePool: (songs: Song[]) => songs }));
+vi.mock('@/services/ai/dj', () => ({ djSequence: (...args: unknown[]) => djSequence(...args), samplePool: (songs: Song[]) => songs, commitDjSet: vi.fn(), lastDjOutcome: () => 'ok' }));
 vi.mock('@/services/queryClient', () => ({ queryClient: { getQueryData: () => undefined } }));
 
 import { recommendNextSongs } from './engine';

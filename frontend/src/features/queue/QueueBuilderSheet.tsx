@@ -79,7 +79,10 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
   };
   const apply = (mode: 'replace' | 'append') => {
     if (!plan?.songs.length) return;
-    applyPlan(plan.songs.map((s) => s.song), mode);
+    const chosen = plan.songs.map((s) => s.song);
+    applyPlan(chosen, mode);
+    // 7.2.0 — the DJ's notes are published only now that the plan was applied.
+    plan.commit?.(chosen);
     toast(mode === 'replace' ? `Playing your ${minutes}-minute plan` : `Added ${plan.songs.length} songs after the current one`);
     onClose();
   };

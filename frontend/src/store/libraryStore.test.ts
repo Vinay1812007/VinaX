@@ -133,3 +133,16 @@ describe('libraryStore v5.17.0 — collections', () => {
     expect(st.trash.map((t) => t.collection.id)).toEqual(['fresh']);
   });
 });
+
+describe('7.2.0 — hiding an artist works in every script', () => {
+  it('keys Indic-script names instead of reducing them to nothing, and keeps Latin keys unchanged', async () => {
+    const { artistKey, isSongBlocked } = await import('./libraryStore');
+    expect(artistKey('José González')).toBe('jose gonzalez');
+    expect(artistKey('Sid Sriram')).toBe('sid sriram');
+    expect(artistKey('సిద్ శ్రీరామ్')).not.toBe('');
+    expect(artistKey('अरिजीत सिंह')).not.toBe('');
+    const song = { id: 's', title: 't', subtitle: 'సిద్ శ్రీరామ్', artists: [{ id: 'a', name: 'సిద్ శ్రీరామ్' }] } as unknown as Parameters<typeof isSongBlocked>[0];
+    expect(isSongBlocked(song, { hiddenSongIds: [], hiddenArtists: [artistKey('సిద్ శ్రీరామ్')] })).toBe(true);
+    expect(isSongBlocked(song, { hiddenSongIds: [], hiddenArtists: [artistKey('అనిరుధ్')] })).toBe(false);
+  });
+});

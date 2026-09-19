@@ -26,7 +26,10 @@ vi.mock('@/utils/streak', () => ({ bumpStreak: vi.fn() }));
 vi.mock('@/services/analytics/telemetry', () => ({ trackSkip: vi.fn(), trackComplete: vi.fn() }));
 vi.mock('@/services/recommendation/adaptive', () => ({ noteSkipAndMaybeReplan: vi.fn(), noteCompleted: vi.fn() }));
 const recommendMock = vi.fn(async (): Promise<Song[]> => []);
-vi.mock('@/services/recommendation/engine', () => ({ recommendNextSongs: () => recommendMock() }));
+vi.mock('@/services/recommendation/engine', () => ({
+  NEXT_URGENT_DEADLINE_MS: 3500,
+  planNextSongs: async () => ({ songs: await recommendMock(), picker: 'local', fallback: null, latencyMs: 0, alg: 'test', relaxed: [], discoveryIds: new Set<string>(), language: null, commit: () => undefined, topUp: () => [], refinement: null }),
+}));
 
 import { audioEngine } from '@/services/audio/engine';
 import { recordPlay, recordSkip } from '@/services/personalization/updater';
@@ -38,6 +41,8 @@ import { getSessionIntent, resetSessionIntent } from '@/services/personalization
 const song = (id: string): Song => ({ kind: 'song', id, title: id, subtitle: 'Artist', artists: [{ id: `a-${id}`, name: `Artist ${id}` }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: '2024', explicit: false, hasLyrics: false, playCount: null });
 const ids = () => usePlayerStore.getState().queue.map((s) => s.id);
 const flush = async () => { await vi.advanceTimersByTimeAsync(0); };
+/** 7.2.0 — listening is a run of quarter-second ticks; one jump of the playhead is a seek, not listening. */
+const listen = (from: number, to: number, d = 200) => { for (let t = from; t <= to + 1e-9; t += 0.25) engine.handlers?.onTime(Math.round(t * 100) / 100, d); };
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -132,7 +137,7 @@ describe('what counts as a play, and what counts as a skip', () => {
   it('records a real skip (heard, then left inside the first third) and flags it in history', () => {
     useSettingsStore.setState({ djTakeover: false });
     usePlayerStore.getState().playQueue([song('a'), song('b')], 0);
-    engine.handlers?.onTime(20, 200);
+    listen(0, 20);
     usePlayerStore.getState().next(true);
     expect(recordSkip).toHaveBeenCalledTimes(1);
     expect(useHistoryStore.getState().entries.find((e) => e.song.id === 'a')?.skipped).toBe(true);
@@ -141,7 +146,7 @@ describe('what counts as a play, and what counts as a skip', () => {
   it('does not call leaving a song after the first third a skip', () => {
     useSettingsStore.setState({ djTakeover: false });
     usePlayerStore.getState().playQueue([song('a'), song('b')], 0);
-    engine.handlers?.onTime(120, 200);
+    listen(0, 120);
     usePlayerStore.getState().next(true);
     expect(recordSkip).not.toHaveBeenCalled();
     expect(useHistoryStore.getState().entries.find((e) => e.song.id === 'a')?.skipped).toBeUndefined();

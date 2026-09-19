@@ -8,7 +8,7 @@ import { buildMixes } from './mixes';
 import { servedKeySet, songKey } from './songIdentity';
 import { explainTopReasons } from './explanations';
 import { useReasonStore } from '@/store/reasonStore';
-import type { Mix, RecommendationContext, RejectedCandidate, ScoredCandidate } from './types';
+import type { Candidate, Mix, RecommendationContext, RejectedCandidate, ScoredCandidate } from './types';
 import type { Song } from '@/types';
 import { enrichSongs, aiRerankSongs } from '@/services/ai/recommendations';
 import { rerankCandidates } from './reranking';
@@ -19,6 +19,7 @@ import { queryClient } from '@/services/queryClient';
 import type { ArcShape } from './sequencer';
 import { tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape, type TuneIntent } from './tune';
 import type { Mood } from './mood';
+import { SCORING_WEIGHTS_VERSION } from './weights';
 
 function aiContext(ctx: RecommendationContext): string {
   return JSON.stringify({ surface: ctx.surface, seed: ctx.seedSong?.title, mood: ctx.sessionMood, energy: ctx.sessionEnergy,
@@ -113,14 +114,6 @@ export function invalidateRecommendationCache(): void {
   memo = null;
 }
 
-export interface NextRecommendationOptions {
-  limit?: number;
-  excludeIds?: string[];
-  excludeKeys?: string[];
-  /** v6.5.0 — an active "Tune this queue" intent: reshapes the score, the arc, the language lock and the DJ brief. */
-  tune?: TuneIntent | null;
-}
-
 /** The catalogue query for a pinned mood (same table the tune intents use). */
 function moodPinQuery(mood: Mood, language: string | null): string | null {
   const asIntent: Partial<Record<Mood, TuneIntent>> = { romantic: 'romantic', energetic: 'energetic', chill: 'chill', melancholy: 'heartbreak', devotional: 'devotional' };
@@ -130,6 +123,87 @@ function moodPinQuery(mood: Mood, language: string | null): string | null {
 
 /** Share of a queue that may go to artists the listener has never played, per discovery mode. */
 const DISCOVERY_SHARE = { familiar: 0.05, balanced: 0.2, discover: 0.45 } as const;
+
+export interface NextRecommendationOptions {
+  limit?: number;
+  excludeIds?: string[];
+  excludeKeys?: string[];
+  /** v6.5.0 — an active "Tune this queue" intent: reshapes the score, the arc, the language lock and the DJ brief. */
+  tune?: TuneIntent | null;
+  /** 7.2.0 — cancels the plan and its AI refinement (the player's queue moved on). */
+  signal?: AbortSignal;
+  /** 7.2.0 — end-to-end budget for the on-device order: from the call to a validated list. */
+  deadlineMs?: number;
+  /** 7.2.0 — end-to-end budget for the optional AI refinement, counted from the call. */
+  aiBudgetMs?: number;
+}
+
+/** 7.2.0 — the pipeline's own version, recorded with every continuation (developer breakdown, opt-in telemetry). */
+export const PIPELINE_VERSION = '7.2.0';
+export function algorithmVersion(): string {
+  return `${PIPELINE_VERSION}/${SCORING_WEIGHTS_VERSION}`;
+}
+
+/** Why the AI did not choose a continuation's order. */
+export type FallbackReason = 'ai_timeout' | 'ai_unavailable' | 'ai_rejected' | 'deadline' | 'error';
+
+export interface NextSongsPlan {
+  /** The validated order to queue now. */
+  songs: Song[];
+  picker: 'local' | 'ai';
+  /** Why the AI did not choose this order; null when it did, or was not asked. */
+  fallback: FallbackReason | null;
+  latencyMs: number;
+  alg: string;
+  relaxed: string[];
+  discoveryIds: ReadonlySet<string>;
+  /** The language the stretch is locked to (null = none known). */
+  language: string | null;
+  /**
+   * Publish this plan's side effects — "why this song" lines, DJ segues and the
+   * surfaced-song memory — for the songs the player actually accepted into a
+   * still-current queue. Nothing is published before this is called.
+   */
+  commit(accepted: Song[]): void;
+  /**
+   * More validated songs for a top-up when the queue is about to run dry
+   * before the next plan lands: the ranked reserve, re-validated against the
+   * song now at the end of the queue with the same final policy.
+   */
+  topUp(seedNow: Song, n: number, exclude: { ids: Set<string>; keys: Set<string> }): Song[];
+  /** The optional AI refinement of the same stretch: an AI plan, or the reason there is none. */
+  refinement: Promise<NextSongsPlan | { rejected: FallbackReason }> | null;
+}
+
+/** On-device order budget when the queue still has songs ahead. */
+export const NEXT_DEADLINE_MS = 8_000;
+/** On-device order budget when the listener is waiting at the end of the queue. */
+export const NEXT_URGENT_DEADLINE_MS = 3_500;
+/** The AI refinement's budget: long enough for the DJ, short of the stretch it would reorder. */
+const AI_BUDGET_MS = 24_000;
+/** Time kept back from candidate gathering for filtering, ranking, sequencing and validation. */
+const RANK_RESERVE_MS = 700;
+/** Songs kept in the validated reserve behind a continuation. */
+const RESERVE_SIZE = 12;
+
+/** Resolve with `fallback` once `ms` passes or the signal aborts; a late answer is ignored. */
+function within<T>(p: Promise<T>, ms: number, fallback: T, signal?: AbortSignal): Promise<{ value: T; late: boolean }> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value: T, late: boolean): void => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      resolve({ value, late });
+    };
+    const onAbort = (): void => finish(fallback, true);
+    const timer = setTimeout(() => finish(fallback, true), Math.max(0, ms));
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener('abort', onAbort, { once: true });
+    p.then((v) => finish(v, false), () => finish(fallback, false));
+  });
+}
 
 /**
  * Shared continuation entry point for autoplay, radio and playlist queues.
@@ -149,13 +223,25 @@ const DISCOVERY_SHARE = { familiar: 0.05, balanced: 0.2, discover: 0.45 } as con
  *  9b  AI DJ (optional)       may re-order the pool and propose catalogue-verified songs
  *  10  validation             the final order re-checked against every rule (./validation)
  *
- * The AI never writes to the queue: whatever it returns goes through stage
- * 10, and when it is slow, down, wrong or unconfigured the local order —
- * validated the same way — ships instead.
+ * 7.2.0 — a PLAN, local first. The on-device order is built inside one
+ * end-to-end deadline (slow optional sources are not waited for past it) and
+ * returned at once; the AI DJ's order is a separate, bounded REFINEMENT the
+ * caller may apply to the automatic entries that have not started. Nothing is
+ * published (reasons, segues, surfaced memory) until the caller commits the
+ * songs it accepted. The AI never writes to the queue: whatever it returns
+ * goes through stage 10, and a slow, down, wrong or unconfigured AI simply
+ * leaves the local order in place.
  */
-export async function recommendNextSongs(seed: Song, ctx: RecommendationContext, options: NextRecommendationOptions = {}): Promise<Song[]> {
+export async function planNextSongs(seed: Song, ctx: RecommendationContext, options: NextRecommendationOptions = {}): Promise<NextSongsPlan> {
+  const t0 = Date.now();
+  const alg = algorithmVersion();
   const limit = Math.max(0, Math.min(40, Math.floor(options.limit ?? 8)));
-  if (!limit) return [];
+  const signal = options.signal;
+  const emptyPlan = (fallback: FallbackReason | null): NextSongsPlan => ({ songs: [], picker: 'local', fallback, latencyMs: Date.now() - t0, alg, relaxed: [], discoveryIds: new Set(), language: seed.language && seed.language !== 'unknown' ? seed.language : null, commit: () => undefined, topUp: () => [], refinement: null });
+  if (!limit) return emptyPlan(null);
+  const deadlineAt = t0 + Math.max(1_500, options.deadlineMs ?? NEXT_DEADLINE_MS);
+  const aiDeadlineAt = t0 + Math.max(0, options.aiBudgetMs ?? AI_BUDGET_MS);
+  const left = (): number => Math.max(0, deadlineAt - Date.now());
   const tune = options.tune ?? null;
   const seedLanguage = seed.language && seed.language !== 'unknown' ? seed.language : null;
   // v7.1.0 — an active tune (or a pinned mood) gathers its own candidates, in the queue's language.
@@ -164,11 +250,17 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
   const library = useLibraryStore.getState();
+  let fallback: FallbackReason | null = null;
 
-  // 1 — candidate generation. The rule modules are lazy, like the sequencer:
-  // this engine rides the first-load player store, and none of them is needed
-  // until a queue is actually extended.
-  const [candidates, { hardFilter, rejectReasonFor }] = await Promise.all([generateNextCandidates(seed, nextCtx), import('./filters')]);
+  // 1 — candidate generation, inside the deadline. The rule modules are lazy,
+  // like the sequencer: this engine rides the first-load player store.
+  const [gathered, { hardFilter, rejectReasonFor }] = await Promise.all([
+    within(generateNextCandidates(seed, nextCtx).catch(() => [] as Candidate[]), left() - RANK_RESERVE_MS, [] as Candidate[], signal),
+    import('./filters'),
+  ]);
+  if (signal?.aborted) return emptyPlan(null);
+  if (gathered.late) fallback = 'deadline';
+  const candidates = gathered.value;
 
   // 2 — hard filtering (before enrichment, so the classifier only sees songs that can play).
   const rules: HardFilterOptions = {
@@ -185,9 +277,8 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   const filtered = hardFilter(candidates, rules);
   const rejected: RejectedCandidate[] = [...filtered.rejected];
 
-  // 3 — feature extraction. Continuation has a short foreground window for the
-  // low-cost classifier so fresh mood/genre/energy metadata can affect this decision.
-  const enriched = await enrichSongs(filtered.admitted.map((candidate) => candidate.song), { waitMs: 1_800 });
+  // 3 — feature extraction: a short foreground window for the classifier, never past the deadline.
+  const enriched = await enrichSongs(filtered.admitted.map((candidate) => candidate.song), { waitMs: Math.min(1_800, Math.max(0, left() - RANK_RESERVE_MS)) });
   const enrichedById = new Map(enriched.map((song) => [song.id, song]));
 
   // 4–8 — scoring, diversity, session adjustment, exploration tuning, ranking.
@@ -196,11 +287,17 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
     nextCtx,
     (dropped) => rejected.push({ song: dropped.candidate.song, reason: 'low-score', stage: 'rank' }),
   );
-  // v6.5.2 — the AI re-rank and the AI DJ both order the same pool; running
-  // both in series doubled the wait before a continuation could ship. When
-  // the DJ is on, it is the AI voice for this stretch.
-  if (!aiDjEnabled()) ranked = await blendAi(ranked, nextCtx);
-  const seedLang = seed.language && seed.language !== 'unknown' ? seed.language : null;
+  // v6.5.2 — the AI re-rank and the AI DJ both order the same pool; when the
+  // DJ is on, it is the AI voice for this stretch. The re-rank waits only
+  // inside what is left of the deadline.
+  const djOn = aiDjEnabled();
+  if (!djOn && ranked.length >= 4 && left() > RANK_RESERVE_MS) {
+    const blended = await within(blendAi(ranked, nextCtx), left() - RANK_RESERVE_MS / 2, ranked, signal);
+    ranked = blended.value;
+    if (blended.late && !signal?.aborted) fallback = fallback ?? 'ai_timeout';
+  }
+  if (signal?.aborted) return emptyPlan(null);
+  const seedLang = seedLanguage;
   if (tune) {
     // v6.5.0 — the on-device half of a tune: a deterministic nudge per song
     // so the intent holds even when the DJ is unavailable.
@@ -208,8 +305,7 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   }
   const orderedPool: Song[] = ranked.map((item) => item.candidate.song);
 
-  // 9 — queue sequencing. Lazy: this engine rides the first-load player store;
-  // the sequencer and the session-context reader are only needed once a queue is extended.
+  // 9 — queue sequencing. Lazy: the sequencer and the session-context reader are only needed once a queue is extended.
   const [{ sequenceSongs, arcErrorOf }, { readListenerEnergy }, { validateSequence }] = await Promise.all([import('./sequencer'), import('@/services/ai/sessionContext'), import('./validation')]);
   // A live skip streak outranks the slower history read: come up and re-anchor now.
   const shape = (tune && tuneShape(tune)) || (intent && intent.skipStreak >= 2 ? 'lift' : shapeFor(readListenerEnergy(ctx.history, ctx.hour)));
@@ -223,17 +319,13 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
       .filter((item) => item.candidate.source === 'explore' || !frame.knownArtists.has((item.candidate.song.artists[0]?.name ?? '').trim().toLowerCase()))
       .map((item) => item.candidate.song.id),
   );
-  // Language rule: the queue speaks the seed's language.
-  // "Switch language" moves the lock to another language the listener plays.
+  // Language rule: the queue speaks the seed's language. "Switch language"
+  // moves the lock to another language the listener plays — the queue still speaks ONE language.
   const switchTo = tune === 'different-language'
     ? ctx.pinnedLanguages.find((l) => l !== seedLang) ?? orderedPool.map((s) => s.language).find((l) => l && l !== 'unknown' && l !== seedLang) ?? null
     : null;
   const lock = switchTo ?? seedLang;
   const otherLanguages = ctx.pinnedLanguages.filter((l) => l !== lock);
-  // v7.1.0 — the queue speaks the seed's language, in every mode. (7.0 let
-  // Discover take a detour into another language; the owner's rule is that
-  // what follows a song is in that song's language.) Only "Switch language"
-  // moves the lock, and it moves it — the queue still speaks ONE language.
   const discoveryShare = Math.max(0, Math.min(0.5, (tune === 'surprise' ? DISCOVERY_SHARE.discover : DISCOVERY_SHARE[mode]) + (intent ? intent.discoveryAppetite * 0.15 : 0)));
   const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: 'lock', otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
 
@@ -245,25 +337,65 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
   const local = validateSequence([...arc.songs.map((s) => s.song), ...orderedPool.filter((s) => !arcIds.has(s.id))], validateOptions);
   const songs = local.songs;
   const trace: DebugTrace = { mode, shape, lock, languagePolicy: 'lock', discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: local.relaxed, repairs: local.repairs };
-  publishReasons(ranked.filter((item) => songs.some((song) => song.id === item.candidate.song.id)));
-  // Arc reasons are more specific than scorer reasons; let them win.
-  useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why).map((s) => [s.song.id, s.why]));
   publishDebug(ranked, songs, 'local', { trace, rejected: [...rejected, ...local.rejected] });
 
+  const shipped = new Set(songs.map((s) => s.id));
+  const reservePool = orderedPool.filter((s) => !shipped.has(s.id)).slice(0, RESERVE_SIZE * 2);
+  const committed = new Set<string>();
+  const publishFor = (accepted: Song[], whyFromArc: boolean): void => {
+    const ids = new Set(accepted.map((s) => s.id).filter((id) => !committed.has(id)));
+    if (!ids.size) return;
+    for (const id of ids) committed.add(id);
+    // Arc reasons are more specific than scorer reasons; let them win.
+    if (whyFromArc) useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why && ids.has(s.song.id)).map((s) => [s.song.id, s.why]));
+    publishReasons(ranked.filter((item) => ids.has(item.candidate.song.id)));
+  };
+  const topUp = (seedNow: Song, n: number, exclude: { ids: Set<string>; keys: Set<string> }): Song[] => {
+    if (n <= 0) return [];
+    // The same final policy as the shipped order, against the song now at the end of the queue.
+    const pool = reservePool.filter((s) => !exclude.ids.has(s.id) && !exclude.keys.has(songKey(s)));
+    return validateSequence(pool, { ...validateOptions, seed: seedNow, limit: Math.min(n, RESERVE_SIZE), queuedIds: new Set([...(rules.queuedIds ?? []), ...exclude.ids]), queuedKeys: new Set([...(rules.queuedKeys ?? []), ...exclude.keys]) }).songs;
+  };
+  const plan: NextSongsPlan = {
+    songs,
+    picker: 'local',
+    fallback,
+    latencyMs: Date.now() - t0,
+    alg,
+    relaxed: [...local.relaxed],
+    discoveryIds,
+    language: lock,
+    commit: (accepted) => publishFor(accepted, true),
+    topUp,
+    refinement: null,
+  };
+
   // 9b — the AI DJ gets a bounded, optional say over the ORDER of the admitted
-  // pool, and may propose a few songs from outside it. Off by setting or owner
-  // flag, or when the DJ is slow/down/unconfigured, the local order ships.
-  if (aiDjEnabled() && songs.length >= 3) {
-    // The DJ client is a lazy chunk: it only matters once a queue is actually being extended.
-    const { djSequence, samplePool } = await import('@/services/ai/dj');
-    // v6.5.0 — a rotating slice of the ranked pool (top ranks always, the
-    // rest sampled) so consecutive rounds hand the DJ different material.
-    const pool = samplePool(orderedPool.slice(0, 40), 10, 30);
-    // v6.5.0 — the generative half: each proposal is verified in the catalogue
-    // and must pass the same rules as everything else before it can be queued.
-    const gate = { language: lock, admit: (song: Song) => rejectReasonFor(song, rules) === null };
-    const set = await djSequence(seed, nextCtx, pool, limit, undefined, { shape, discover: true, gate, ...(tune ? { tune: tunePromptHint(tune) } : {}) });
-    if (set && set.picks.length >= Math.min(3, limit)) {
+  // pool, and may propose a few songs from outside it. It is a refinement: the
+  // local order above is already usable.
+  if (djOn && songs.length >= 3 && aiDeadlineAt - Date.now() > 1_500) {
+    plan.refinement = (async (): Promise<NextSongsPlan | { rejected: FallbackReason }> => {
+      const dj = await import('@/services/ai/dj');
+      // v6.5.0 — a rotating slice of the ranked pool (top ranks always, the rest sampled).
+      const pool = dj.samplePool(orderedPool.slice(0, 40), 10, 30);
+      // Each proposal is verified in the catalogue and must pass the same rules as everything else.
+      const gate = { language: lock, admit: (song: Song) => rejectReasonFor(song, rules) === null };
+      const controller = new AbortController();
+      const cancel = (): void => controller.abort();
+      if (signal?.aborted) return { rejected: 'ai_unavailable' };
+      signal?.addEventListener('abort', cancel, { once: true });
+      const timer = setTimeout(cancel, Math.max(0, aiDeadlineAt - Date.now()));
+      let set: Awaited<ReturnType<typeof dj.djSequence>>;
+      try {
+        set = await dj.djSequence(seed, nextCtx, pool, limit, controller.signal, { shape, discover: true, gate, ...(tune ? { tune: tunePromptHint(tune) } : {}) });
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', cancel);
+      }
+      if (!set || set.picks.length < Math.min(3, limit)) {
+        const outcome = typeof dj.lastDjOutcome === 'function' ? dj.lastDjOutcome() : 'unavailable';
+        return { rejected: outcome === 'timeout' ? 'ai_timeout' : outcome === 'empty' ? 'ai_rejected' : outcome === 'error' ? 'error' : 'ai_unavailable' };
+      }
       const used = new Set<string>();
       const proposed: Song[] = [];
       for (const p of set.picks) if (!used.has(p.song.id)) { used.add(p.song.id); proposed.push(p.song); }
@@ -272,18 +404,52 @@ export async function recommendNextSongs(seed: Song, ctx: RecommendationContext,
       // is accepted only when it still keeps the arc about as tight (a tune
       // relaxes the tolerance: the listener asked for a change of direction).
       const checked = validateSequence(proposed, validateOptions);
-      if (checked.songs.length >= Math.min(3, limit) && arcErrorOf(checked.songs, seed, shape) <= arcErrorOf(songs, seed, shape) + (tune ? 0.2 : 0.08)) {
-        publishDebug(ranked, checked.songs, 'ai', {
-          trace: { ...trace, stages: { ...trace.stages, validated: checked.songs.length }, relaxed: checked.relaxed, repairs: checked.repairs },
-          rejected: [...rejected, ...checked.rejected],
-          confidence: new Map(set.picks.map((p) => [p.song.id, p.confidence])),
-          discovered: new Set(set.picks.filter((p) => p.discovered).map((p) => p.song.id)),
-        });
-        return checked.songs;
-      }
-    }
+      // 7.2.0 — count the DJ's OWN picks that survived: local songs filling the
+      // gaps behind a rejected answer used to make it look accepted.
+      const djIds = new Set(set.picks.map((p) => p.song.id));
+      const survived = checked.songs.filter((s) => djIds.has(s.id)).length;
+      if (survived < Math.min(3, limit) || arcErrorOf(checked.songs, seed, shape) > arcErrorOf(songs, seed, shape) + (tune ? 0.2 : 0.08)) return { rejected: 'ai_rejected' };
+      publishDebug(ranked, checked.songs, 'ai', {
+        trace: { ...trace, stages: { ...trace.stages, validated: checked.songs.length }, relaxed: checked.relaxed, repairs: checked.repairs },
+        rejected: [...rejected, ...checked.rejected],
+        confidence: new Map(set.picks.map((p) => [p.song.id, p.confidence])),
+        discovered: new Set(set.picks.filter((p) => p.discovered).map((p) => p.song.id)),
+      });
+      const djSet = set;
+      return {
+        ...plan,
+        songs: checked.songs,
+        picker: 'ai',
+        fallback: null,
+        latencyMs: Date.now() - t0,
+        relaxed: [...checked.relaxed],
+        commit: (accepted) => {
+          // The DJ's own lines first (they overwrite), then scorer lines fill any gaps.
+          if (typeof dj.commitDjSet === 'function') dj.commitDjSet(djSet, accepted);
+          publishFor(accepted, false);
+        },
+        refinement: null,
+      };
+    })().catch((): { rejected: FallbackReason } => ({ rejected: 'error' }));
   }
-  return songs;
+  return plan;
+}
+
+/**
+ * The whole continuation as one list, for callers that are not the live
+ * queue (radio start, playlist continuation, tests): the local plan, replaced
+ * by the AI refinement when that arrives and passes validation. Side effects
+ * are committed for the returned songs.
+ */
+export async function recommendNextSongs(seed: Song, ctx: RecommendationContext, options: NextRecommendationOptions = {}): Promise<Song[]> {
+  const plan = await planNextSongs(seed, ctx, options);
+  let chosen = plan;
+  if (plan.refinement) {
+    const refined = await plan.refinement;
+    if ('songs' in refined) chosen = refined;
+  }
+  chosen.commit(chosen.songs);
+  return chosen.songs;
 }
 
 /** v6.4.0 / v7.0.0 — development-only score breakdowns for the recs debug panel (no-op unless enabled). */

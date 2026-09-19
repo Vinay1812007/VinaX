@@ -1,23 +1,25 @@
 import { usePlayerStore } from '@/store/playerStore';
 import { useHistoryStore } from '@/store/historyStore';
+import { onPlaybackEvent } from '@/services/playback/session';
 
 /**
- * Measured listening time. Watches the player's clock and credits the
- * current history entry with the seconds that ACTUALLY played:
+ * Measured listening time. Credits each history entry with the seconds that
+ * ACTUALLY played.
  *
- *  - pauses add nothing (no ticks arrive while paused);
- *  - a seek is a jump: any step backwards, or forwards by more than a normal
- *    tick, is ignored rather than credited;
- *  - a replay (repeat-one, "play again") keeps adding to the same play, so
- *    a song looped three times counts three times;
- *  - plays recorded before this clock existed keep no `listenedSec` and are
- *    estimated by features/stats/listening.ts — nothing is invented.
+ * 7.2.0 — the clock no longer measures on its own: it banks the seconds the
+ * player's playback instance credits (services/playback/session.ts), so the
+ * listen clock, the taste profile, transition memory and analytics all read
+ * one measurement. Pauses, seeks, buffering and undeclared jumps add nothing;
+ * each repeat-one loop keeps adding to the same history entry; plays recorded
+ * before measurement existed keep no `listenedSec` and are estimated by
+ * features/stats/listening.ts — nothing is invented.
  *
  * Seconds are batched in memory and flushed to the history store every
- * FLUSH_MS, on pause, on song change and when the page is hidden, so the
+ * FLUSH_MS, when a playback instance ends and when the page is hidden, so the
  * persisted history is not rewritten four times a second.
  */
-const MAX_TICK_SEC = 3;
+/** Largest step a lone snapshot comparison credits (kept for `tickCredit`; matches the session's tick allowance). */
+const MAX_TICK_SEC = 4;
 const FLUSH_MS = 30_000;
 
 interface Snapshot {
@@ -26,7 +28,6 @@ interface Snapshot {
   playing: boolean;
 }
 
-let last: Snapshot = { songId: null, time: 0, playing: false };
 let pendingSongId: string | null = null;
 let pendingSec = 0;
 let flushTimer: number | null = null;
@@ -60,14 +61,14 @@ export function tickCredit(prev: Snapshot, next: Snapshot): number {
 
 export function initListenClock(): () => void {
   if (stop) return stop;
-  const unsubscribe = usePlayerStore.subscribe((s) => {
-    const song = s.queue[s.index] ?? null;
-    const next: Snapshot = { songId: song?.id ?? null, time: s.currentTime, playing: s.isPlaying };
-    const add = tickCredit(last, next);
-    if (add > 0 && next.songId) credit(next.songId, add);
-    // Pause or song change: bank what we have so a crash loses at most 30 s.
-    if ((last.playing && !next.playing) || (last.songId && last.songId !== next.songId)) flush();
-    last = next;
+  const unsubscribe = onPlaybackEvent((e) => {
+    if (e.kind === 'credit') credit(e.songId, e.seconds);
+    // A play ended: bank what we have so a crash loses at most FLUSH_MS.
+    else if (e.kind === 'end') flush();
+  });
+  // A pause banks too.
+  const unsubscribePause = usePlayerStore.subscribe((s, prev) => {
+    if (prev.isPlaying && !s.isPlaying) flush();
   });
   const onHide = (): void => {
     if (document.hidden) flush();
@@ -76,10 +77,10 @@ export function initListenClock(): () => void {
   window.addEventListener('pagehide', flush);
   stop = () => {
     unsubscribe();
+    unsubscribePause();
     document.removeEventListener('visibilitychange', onHide);
     window.removeEventListener('pagehide', flush);
     flush();
-    last = { songId: null, time: 0, playing: false };
     stop = null;
   };
   return stop;

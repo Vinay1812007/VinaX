@@ -2,9 +2,9 @@ import type { Song } from '@/types';
 import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
-import { useSettingsStore } from '@/store/settingsStore';
 import { readListenerEnergy } from '@/services/ai/sessionContext';
 import { sequenceSongs, type ArcShape } from './sequencer';
+import { admitSongs } from './admission';
 import { toast } from '@/store/toastStore';
 
 /**
@@ -54,17 +54,17 @@ export function noteSkipAndMaybeReplan(skipped: Song, now = Date.now()): boolean
   if (!current || tail.length < 3) return false;
   const sure = sureSongIds();
   const lang = current.language && current.language !== 'unknown' ? current.language : null;
-  const muted = useSettingsStore.getState().mutedLanguages;
-  // Bring a few sure favourites into the pool that are not already queued or just played.
-  const queued = new Set(p.queue.map((s) => s.id));
-  const recent = new Set(useHistoryStore.getState().entries.slice(0, 15).map((e) => e.song.id));
-  const extra = useLibraryStore
-    .getState()
-    .favorites.filter((s) => !queued.has(s.id) && !recent.has(s.id) && (!lang || !s.language || s.language === lang) && !(s.language && muted.includes(s.language)))
-    .slice(0, 4);
+  // Bring a few sure favourites into the pool. 7.2.0 — through the same
+  // current-state gate as every automatic addition (Kid mode, hidden songs and
+  // artists, muted languages, soft mutes, identity, recent plays, this
+  // sitting's skips): a favourite is not exempt from the listener's rules.
+  const inLanguage = useLibraryStore.getState().favorites.filter((s) => !lang || !s.language || s.language === lang);
+  const extra = admitSongs(inLanguage, { queue: p.queue, index: p.index }).admitted.slice(0, 4);
   const plan = sequenceSongs([...extra, ...tail], { seed: current, shape: 'lift', sureIds: sure, language: lang, limit: tail.length + Math.min(2, extra.length) });
-  if (plan.songs.length < 3) return false;
-  p.replaceAutoTail(plan.songs.map((s) => s.song));
+  const replacing = new Set(tail.map((s) => s.id));
+  const admitted = admitSongs(plan.songs.map((s) => s.song), { queue: p.queue, index: p.index, replacing }).admitted;
+  if (admitted.length < 3) return false;
+  p.replaceAutoTail(admitted);
   skipStreak = 0;
   lastReplanAt = now;
   toast('Two skips — the DJ re-planned what comes next with surer picks');
