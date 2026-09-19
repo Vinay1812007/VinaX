@@ -1,5 +1,6 @@
 /** Shared admin-token gate for the /api/admin/* dashboards. */
 import { safeEqual } from './safe-compare';
+import { dbErrorCode, type DbFailure } from './supabase';
 
 export interface AdminEnv {
   ADMIN_LOGIN_PASSWORD?: string;
@@ -60,4 +61,33 @@ export function unauthorized(): Response {
     status: 401,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
+}
+
+/** JSON answer for an admin route (never cached). */
+export function adminJson(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+  });
+}
+
+/** The failure half of a DbResult / DbValue. */
+export interface ReadFailure {
+  error: DbFailure;
+  httpStatus: number | null;
+}
+
+/**
+ * 7.2.0 — a required dashboard read failed: answer 502 with the failure's
+ * kind, never a 200 with zeros or empty lists. The console treats any non-2xx
+ * as "unavailable".
+ */
+export function dbFailure(fail: ReadFailure, extra: Record<string, unknown> = {}): Response {
+  return adminJson({ configured: true, error: dbErrorCode(fail.error), upstreamStatus: fail.httpStatus, ...extra }, 502);
+}
+
+/** The first failed read among several, or null when every read succeeded. */
+export function firstFailure(...reads: Array<{ ok: true } | ({ ok: false } & ReadFailure)>): ReadFailure | null {
+  for (const r of reads) if (!r.ok) return { error: r.error, httpStatus: r.httpStatus };
+  return null;
 }

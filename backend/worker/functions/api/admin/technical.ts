@@ -1,6 +1,6 @@
 /** Technical Monitoring: version spread, errors, field Web Vitals, lyric coverage. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -77,32 +77,45 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!isAdmin(request, env)) return unauthorized();
   const days = clampDays(new URL(request.url).searchParams.get('days'));
   const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString();
+  if (!supabaseConfigured(env)) {
+    return adminJson({ configured: false, days, versions: [], errors: [], errorsByDay: [], summary: null, vitals: aggregateVitals([]), lyricMisses: [] });
+  }
   const [versions, errors, errorsByDay, summary, vitalRows, lyricRows] = await Promise.all([
-    sbRpc<VersionRow[]>(env, 'vinax_versions', {}),
-    sbRpc<ErrorRow[]>(env, 'vinax_errors', { days, lim: 50 }),
-    sbRpc<DayRow[]>(env, 'vinax_errors_by_day', { days: Math.min(days, 30) }),
-    sbRpc<Summary>(env, 'vinax_tech_summary', {}),
-    sbSelect<VitalEventRow>(
+    sbRpcResult<VersionRow[]>(env, 'vinax_versions', {}),
+    sbRpcResult<ErrorRow[]>(env, 'vinax_errors', { days, lim: 50 }),
+    sbRpcResult<DayRow[]>(env, 'vinax_errors_by_day', { days: Math.min(days, 30) }),
+    sbRpcResult<Summary>(env, 'vinax_tech_summary', {}),
+    sbSelectResult<VitalEventRow>(
       env,
       'vinax_events',
       `select=error_kind,message&type=eq.vital&created_at=gte.${encodeURIComponent(sinceIso)}&limit=10000`,
     ),
-    sbSelect<LyricEventRow>(
+    sbSelectResult<LyricEventRow>(
       env,
       'vinax_events',
       `select=song_id,song_title,song_artist&type=eq.lyric-miss&created_at=gte.${encodeURIComponent(sinceIso)}&limit=10000`,
     ),
   ]);
-  return new Response(
-    JSON.stringify({
-      days,
-      versions: versions ?? [],
-      errors: errors ?? [],
-      errorsByDay: errorsByDay ?? [],
-      summary: summary ?? null,
-      vitals: aggregateVitals(vitalRows ?? []),
-      lyricMisses: aggregateLyricMisses(lyricRows ?? []),
-    }),
-    { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
-  );
+  // 7.2.0 — this panel also hosts the maintenance tools and the live health
+  // check (the first place to look during a database outage), so its six
+  // independent parts degrade one by one: a failed part is null (never 0 or
+  // an empty list) and is named in `unavailable`. Only when every part failed
+  // does the route answer 502.
+  const parts = { versions, errors, errorsByDay, summary, vitals: vitalRows, lyricMisses: lyricRows };
+  const unavailable = Object.entries(parts).filter(([, r]) => !r.ok).map(([name]) => name);
+  if (unavailable.length === Object.keys(parts).length) {
+    const first = [versions, errors, errorsByDay, summary, vitalRows, lyricRows].find((r) => !r.ok);
+    if (first && !first.ok) return dbFailure(first, { unavailable });
+  }
+  return adminJson({
+    configured: true,
+    days,
+    versions: versions.ok ? (versions.value ?? []) : null,
+    errors: errors.ok ? (errors.value ?? []) : null,
+    errorsByDay: errorsByDay.ok ? (errorsByDay.value ?? []) : null,
+    summary: summary.ok ? (summary.value ?? null) : null,
+    vitals: vitalRows.ok ? aggregateVitals(vitalRows.rows) : null,
+    lyricMisses: lyricRows.ok ? aggregateLyricMisses(lyricRows.rows) : null,
+    unavailable,
+  });
 };

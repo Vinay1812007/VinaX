@@ -9,8 +9,8 @@
  * the newest-10k sample remains the fallback until the migration is applied
  * (`source: 'sampled'`). Keep STEPS and the RPC's step table in sync.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 interface Row { type: string | null; device_id: string | null }
@@ -48,16 +48,20 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!isAdmin(request, env)) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, steps: [] });
   const days = Math.min(30, Math.max(1, parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10) || 7));
-  const exact = await sbRpc<Array<{ id: string; label: string; devices: number }>>(env, 'vinax_funnel', { p_days: days });
-  if (Array.isArray(exact)) {
-    const steps = withPct(exact);
+  const exact = await sbRpcResult<Array<{ id: string; label: string; devices: number }>>(env, 'vinax_funnel', { p_days: days });
+  if (exact.ok && Array.isArray(exact.value)) {
+    const steps = withPct(exact.value);
     return json({ configured: true, days, sampled: steps[0]?.devices ?? 0, source: 'exact', steps });
   }
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const rows = await sbSelect<Row>(
+  const read = await sbSelectResult<Row>(
     env,
     'vinax_events',
     `created_at=gte.${encodeURIComponent(since)}&type=in.(open,register,play,heartbeat,complete,favorite,search,share)&select=type,device_id&order=created_at.desc&limit=10000`,
-  ).catch(() => [] as Row[]);
+  );
+  // 7.2.0 — the rollup and the sample both failed: unavailable, not a funnel
+  // of zeros.
+  if (!read.ok) return dbFailure(read);
+  const rows = read.rows;
   return json({ configured: true, days, sampled: rows.length, source: 'sampled', steps: funnel(rows) });
 };

@@ -11,9 +11,8 @@
  * A model matches the LONGEST prefix key; there are no built-in prices, so
  * `unpriced: true` is the panel's cue to fill the table in. Cost is USD.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { readConfig } from '../../_lib/clientConfig';
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -119,14 +118,20 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!supabaseConfigured(env)) return json({ configured: false });
   const days = Math.min(90, Math.max(1, parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10) || 7));
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const [rows, cfg] = await Promise.all([
-    sbSelect<AiEventRow>(
+  const [events, cfg] = await Promise.all([
+    sbSelectResult<AiEventRow>(
       env,
       'vinax_ai_events',
       `created_at=gte.${encodeURIComponent(since)}&select=created_at,feature,model,prompt_tokens,completion_tokens&order=created_at.desc&limit=20000`,
-    ).catch(() => [] as AiEventRow[]),
-    readConfig(env, ['ai-prices']).catch(() => ({}) as Record<string, unknown>),
+    ),
+    // Read directly (not through the swallowing config memo): a failed price
+    // read must not render as "no prices entered, $0".
+    sbSelectResult<{ value: unknown }>(env, 'vinax_config', 'key=eq.ai-prices&select=value&limit=1'),
   ]);
-  const prices = parsePrices(cfg['ai-prices']);
+  // 7.2.0 — token totals and costs from a failed read would all read 0.
+  if (!events.ok) return dbFailure(events);
+  if (!cfg.ok) return dbFailure(cfg);
+  const rows = events.rows;
+  const prices = parsePrices(cfg.rows[0]?.value);
   return json({ configured: true, days, sampled: rows.length, ...aiCost(rows, prices), prices });
 };

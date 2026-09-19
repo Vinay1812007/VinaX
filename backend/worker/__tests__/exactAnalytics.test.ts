@@ -2,21 +2,25 @@
  * v5.16.0 — the Feature Usage / Onboarding Funnel / Skip Report panels read
  * exact rollups from the vinax_usage / vinax_funnel / vinax_skips RPCs and
  * fall back to the newest-10k sample when the migration is not applied.
- * sbRpc is mocked at the module boundary; the sampled path still drives the
+ * The RPC helper is mocked at the module boundary (7.2.0: `sbRpcResult`, which
+ * names a missing function as `not_found`); the sampled path still drives the
  * real REST helper through a stubbed fetch.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { sbRpc } from '../functions/_lib/supabase';
+import { sbRpcResult } from '../functions/_lib/supabase';
 import { onRequestGet as usageGet, usageFromRows } from '../functions/api/admin/usage';
 import { onRequestGet as funnelGet, funnel, withPct } from '../functions/api/admin/funnel';
 import { onRequestGet as skipsGet, skipTable } from '../functions/api/admin/skips';
 
 vi.mock('../functions/_lib/supabase', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../functions/_lib/supabase')>();
-  return { ...actual, sbRpc: vi.fn(async () => null) };
+  return { ...actual, sbRpcResult: vi.fn(async () => MISSING) };
 });
 
-const rpc = vi.mocked(sbRpc);
+/** What PostgREST answers for a function the migration has not created. */
+const MISSING = { ok: false as const, error: 'not_found' as const, httpStatus: 404 };
+const rpc = vi.mocked(sbRpcResult);
+const exact = (value: unknown) => ({ ok: true as const, value });
 
 const ENV = { ADMIN_LOGIN_PASSWORD: 'test-secret', SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk' };
 
@@ -40,7 +44,7 @@ function req(path: string): Request {
 beforeEach(() => {
   vi.unstubAllGlobals();
   rpc.mockReset();
-  rpc.mockResolvedValue(null);
+  rpc.mockResolvedValue(MISSING);
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -60,7 +64,7 @@ describe('usage panel', () => {
       peak: { day: 1, hour: 20, n: 9 },
       total: 40,
     };
-    rpc.mockResolvedValueOnce(rollup);
+    rpc.mockResolvedValueOnce(exact(rollup));
     stubRest([]);
     const res = await usageGet({ request: req('/api/admin/usage?days=3'), env: ENV });
     const body = (await res.json()) as Record<string, unknown>;
@@ -87,10 +91,10 @@ describe('usage panel', () => {
 
 describe('funnel panel', () => {
   it('adds pct to the exact RPC steps and reports source:exact', async () => {
-    rpc.mockResolvedValueOnce([
+    rpc.mockResolvedValueOnce(exact([
       { id: 'open', label: 'Opened the app', devices: 200 },
       { id: 'register', label: 'Chose a name', devices: 50 },
-    ]);
+    ]));
     stubRest([]);
     const res = await funnelGet({ request: req('/api/admin/funnel?days=14'), env: ENV });
     const body = (await res.json()) as { source: string; sampled: number; steps: Array<{ id: string; pct: number }> };
@@ -125,7 +129,7 @@ describe('funnel panel', () => {
 describe('skip report', () => {
   it('passes the exact ranking through with days and min forwarded to the RPC', async () => {
     const items = [{ id: 's9', title: 'Nine', artist: 'Y', image: '', plays: 12, skips: 9, rate: 75 }];
-    rpc.mockResolvedValueOnce(items);
+    rpc.mockResolvedValueOnce(exact(items));
     stubRest([]);
     const res = await skipsGet({ request: req('/api/admin/skips?days=30&min=10'), env: ENV });
     const body = (await res.json()) as Record<string, unknown>;

@@ -1,7 +1,7 @@
 /** Content Admin: view + manage the song blocklist the app honors. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbDelete, sbRpc, sbSelect, sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
+import { sbDelete, sbRpcResult, sbSelectResult, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -18,14 +18,16 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
 
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, blocked: [], topSongs: [] });
   const [blocked, topSongs] = await Promise.all([
-    sbSelect<BlockRow>(env, 'vinax_blocklist', 'select=song_id,song_title,reason,created_at&order=created_at.desc&limit=500'),
-    sbRpc<SongRow[]>(env, 'vinax_blockable_songs', { days: 30, lim: 40 }),
+    sbSelectResult<BlockRow>(env, 'vinax_blocklist', 'select=song_id,song_title,reason,created_at&order=created_at.desc&limit=500'),
+    sbRpcResult<SongRow[]>(env, 'vinax_blockable_songs', { days: 30, lim: 40 }),
   ]);
-
-  return new Response(JSON.stringify({ blocked, topSongs: topSongs ?? [] }), {
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  });
+  // 7.2.0 — an empty blocklist from a failed read would suggest nothing is
+  // blocked (and the importer would re-block everything).
+  if (!blocked.ok) return dbFailure(blocked);
+  if (!topSongs.ok) return dbFailure(topSongs);
+  return adminJson({ configured: true, blocked: blocked.rows, topSongs: topSongs.value ?? [] });
 };
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {

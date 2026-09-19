@@ -4,8 +4,8 @@
  * answers { configured: false } until the RPC exists so the panel can say
  * "run the migration" instead of erroring.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -20,9 +20,10 @@ interface CohortRow {
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
-  const rows = await sbRpc<CohortRow[]>(env, 'vinax_retention', { p_weeks: 8 });
-  return new Response(
-    JSON.stringify(rows === null ? { configured: false, cohorts: [] } : { configured: true, cohorts: rows }),
-    { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
-  );
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, cohorts: [] });
+  const rows = await sbRpcResult<CohortRow[]>(env, 'vinax_retention', { p_weeks: 8 });
+  // A missing function (404) is the documented "run the migration" state;
+  // any other failure is an outage and answers 502 (7.2.0), not configured:false.
+  if (!rows.ok) return rows.error === 'not_found' ? adminJson({ configured: false, cohorts: [] }) : dbFailure(rows);
+  return adminJson({ configured: true, cohorts: rows.value ?? [] });
 };

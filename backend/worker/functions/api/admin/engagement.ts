@@ -1,7 +1,7 @@
 /** Engagement: skip/completion/repeat rates, favorites/downloads/shares,
  *  retention cohorts (D1/D7/D30, approximate), avg plays per user. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -12,15 +12,23 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   // NaN survives Math.min/max and used to throw RangeError -> 500 on ?days=abc (D-5).
   const days = Number.isFinite(rawDays) ? Math.min(Math.max(rawDays, 1), 90) : 7;
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const [events, users] = await Promise.all([
-    sbSelect<{ type: string; device_id: string | null; song_id: string | null }>(
+  if (!supabaseConfigured(env)) {
+    return adminJson({ configured: false, days, plays: 0, skips: 0, completes: 0, favorites: 0, downloads: 0, shares: 0, skipRate: 0, completionRate: 0, repeatRate: 0, avgPlaysPerUser: 0, retention: { d1: null, d7: null, d30: null }, totalUsers: 0 });
+  }
+  const [eventsRead, usersRead] = await Promise.all([
+    sbSelectResult<{ type: string; device_id: string | null; song_id: string | null }>(
       env, 'vinax_events',
       `type=in.(play,skip,complete,favorite,download,share)&created_at=gte.${encodeURIComponent(since)}&select=type,device_id,song_id&order=created_at.desc&limit=5000`,
     ),
-    sbSelect<{ first_seen: string; last_seen: string }>(
+    sbSelectResult<{ first_seen: string; last_seen: string }>(
       env, 'vinax_users', 'select=first_seen,last_seen&limit=5000',
     ),
   ]);
+  // 7.2.0 — rates computed from a failed read would all read 0 %.
+  if (!eventsRead.ok) return dbFailure(eventsRead);
+  if (!usersRead.ok) return dbFailure(usersRead);
+  const events = eventsRead.rows;
+  const users = usersRead.rows;
   const c: Record<string, number> = { play: 0, skip: 0, complete: 0, favorite: 0, download: 0, share: 0 };
   const perPair = new Map<string, number>();
   const perUser = new Map<string, number>();
@@ -49,8 +57,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     const kept = cohort.filter((u) => new Date(u.last_seen).getTime() >= hi).length;
     return Math.round((kept / cohort.length) * 100);
   };
-  return new Response(
-    JSON.stringify({
+  return adminJson({
+      configured: true,
       days,
       plays: c.play, skips: c.skip, completes: c.complete,
       favorites: c.favorite, downloads: c.download, shares: c.share,
@@ -60,7 +68,5 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
       avgPlaysPerUser: perUser.size ? Math.round((c.play / perUser.size) * 10) / 10 : 0,
       retention: { d1: ret(1), d7: ret(7), d30: ret(30) },
       totalUsers: users.length,
-    }),
-    { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
-  );
+    });
 };

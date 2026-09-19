@@ -1,7 +1,7 @@
 /** Sent-notification log: announcements + daily song pushes, with retract. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbDeleteReturning, sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { sbDeleteReturning, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -15,12 +15,15 @@ function json(o: unknown, status = 200): Response {
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!isAdmin(request, env)) return unauthorized();
-  const rows = await sbSelect<{ type: string; message: string | null; created_at: string; city: string | null; region: string | null; country: string | null; song_title: string | null; language: string | null }>(
+  if (!supabaseConfigured(env)) return json({ configured: false, rows: [] });
+  const read = await sbSelectResult<{ type: string; message: string | null; created_at: string; city: string | null; region: string | null; country: string | null; song_title: string | null; language: string | null }>(
     env,
     'vinax_events',
     'type=in.(announcement,song-push,ai-push)&select=type,message,created_at,city,region,country,song_title,language&order=created_at.desc&limit=30',
-  ).catch(() => []);
-  return json({ rows });
+  );
+  // 7.2.0 — a failed read is not "nothing was sent".
+  if (!read.ok) return dbFailure(read);
+  return json({ configured: true, rows: read.rows });
 };
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {

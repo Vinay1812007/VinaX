@@ -7,9 +7,9 @@
  * signals the audit named (skip rate, session length proxied honestly as
  * plays per device).
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbDelete, sbSelect, sbSelectRes, sbUpdate, sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
+import { sbDelete, sbSelect, sbSelectResult, sbUpdate, sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
 import { assignVariant, sanitizeVariants, type ExperimentConfig } from '../../_lib/experiments';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -36,18 +36,28 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
 
   // Error-aware read: a missing vinax_experiments table (migration not run)
   // must report configured:false — not masquerade as "configured, empty" (D-1).
-  const sel = await sbSelectRes<ExpRow>(env, 'vinax_experiments', 'select=key,name,variants,active,created_at&order=created_at.desc.nullslast&limit=50');
-  if (!sel.ok) return json({ configured: false, experiments: [] });
+  // 7.2.0 — only a missing table or an unconfigured Worker means that; an
+  // outage (5xx, timeout, refused key) answers 502 instead of claiming the
+  // experiments feature was never set up.
+  const sel = await sbSelectResult<ExpRow>(env, 'vinax_experiments', 'select=key,name,variants,active,created_at&order=created_at.desc.nullslast&limit=50');
+  if (!sel.ok) {
+    if (sel.error === 'not_found' || sel.error === 'not_configured') return json({ configured: false, experiments: [] });
+    return dbFailure(sel);
+  }
   const rows = sel.rows;
   if (!rows.length) return json({ configured: true, experiments: [] });
 
   // One events sample serves every experiment's metrics.
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
-  const events = await sbSelect<EventRow>(
+  const eventsRead = await sbSelectResult<EventRow>(
     env,
     'vinax_events',
     `created_at=gte.${encodeURIComponent(since)}&type=in.(play,complete,skip)&select=device_id,type&order=created_at.desc&limit=10000`,
-  ).catch(() => [] as EventRow[]);
+  );
+  // 7.2.0 — the experiment list stays usable (pause / resume still work) when
+  // only the metrics read fails; each experiment's metrics are then null,
+  // never "0 devices".
+  const events = eventsRead.rows;
 
   const experiments = rows.map((r) => {
     const exp: ExperimentConfig = { key: r.key, name: r.name, variants: sanitizeVariants(r.variants), active: r.active === true };
@@ -90,9 +100,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
         skipRatePct: finished ? Math.round((skips / finished) * 100) : null,
       };
     });
-    return { key: exp.key, name: r.name, active: exp.active, variants: exp.variants, metrics, created_at: r.created_at };
+    return { key: exp.key, name: r.name, active: exp.active, variants: exp.variants, metrics: eventsRead.ok ? metrics : null, created_at: r.created_at };
   });
 
+  if (!eventsRead.ok) return json({ configured: true, experiments, sampledEvents: null, unavailable: ['metrics'] });
   return json({ configured: true, experiments, sampledEvents: events.length });
 };
 
@@ -110,7 +121,8 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     const variants = sanitizeVariants(body?.variants);
     if (variants.length < 2) return json({ error: 'need_two_variants' }, 400);
     // created_at only on first insert — writing it on every save reset the
-    // creation date and reshuffled the list on each edit (D-16b).
+    // creation date and reshuffled the list on each edit (D-16b). Best-effort
+    // on purpose: a failed read only means created_at is re-stamped.
     const existing = await sbSelect<{ key: string }>(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}&select=key&limit=1`);
     const patch = {
       key,

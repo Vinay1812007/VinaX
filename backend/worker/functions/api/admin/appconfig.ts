@@ -6,9 +6,9 @@
  * The ADMIN reads/writes through this route (token-gated). Clients read the
  * published values through the public /api/appconfig route (cached, no auth).
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { sbSelectResult, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -44,10 +44,12 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!supabaseConfigured(env)) return json({ configured: false, value: null });
   const key = new URL(request.url).searchParams.get('key') ?? '';
   if (!ALLOWED_KEYS.has(key)) return json({ error: 'unknown_key' }, 400);
-  const rows = await sbSelect<ConfigRow>(env, 'vinax_config', `key=eq.${encodeURIComponent(key)}&select=key,value,updated_at&limit=1`).catch(
-    () => [] as ConfigRow[],
-  );
-  const row = rows[0];
+  const read = await sbSelectResult<ConfigRow>(env, 'vinax_config', `key=eq.${encodeURIComponent(key)}&select=key,value,updated_at&limit=1`);
+  // 7.2.0 — a failed read must not look like "nothing published yet": an
+  // editor opened on `value: null` shows defaults, and pressing Publish would
+  // overwrite the real stored value with them.
+  if (!read.ok) return dbFailure(read, { key });
+  const row = read.rows[0];
   return json({ configured: true, value: row?.value ?? null, updated_at: row?.updated_at ?? null });
 };
 

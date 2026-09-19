@@ -1,6 +1,6 @@
 /** Music Analytics: top songs / artists / languages + plays-by-day. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -19,21 +19,25 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!isAdmin(request, env)) return unauthorized();
 
   const days = clampDays(new URL(request.url).searchParams.get('days'));
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, days, topSongs: [], topArtists: [], topLanguages: [], playsByDay: [] });
   const [topSongs, topArtists, topLanguages, playsByDay] = await Promise.all([
-    sbRpc<SongRow[]>(env, 'vinax_top_songs', { days, lim: 25 }),
-    sbRpc<ArtistRow[]>(env, 'vinax_top_artists', { days, lim: 25 }),
-    sbRpc<LangRow[]>(env, 'vinax_top_languages', { days, lim: 20 }),
-    sbRpc<DayRow[]>(env, 'vinax_plays_by_day', { days: Math.min(days, 30) }),
+    sbRpcResult<SongRow[]>(env, 'vinax_top_songs', { days, lim: 25 }),
+    sbRpcResult<ArtistRow[]>(env, 'vinax_top_artists', { days, lim: 25 }),
+    sbRpcResult<LangRow[]>(env, 'vinax_top_languages', { days, lim: 20 }),
+    sbRpcResult<DayRow[]>(env, 'vinax_plays_by_day', { days: Math.min(days, 30) }),
   ]);
+  // 7.2.0 — empty charts from failed reads look like "nothing was played".
+  if (!topSongs.ok) return dbFailure(topSongs);
+  if (!topArtists.ok) return dbFailure(topArtists);
+  if (!topLanguages.ok) return dbFailure(topLanguages);
+  if (!playsByDay.ok) return dbFailure(playsByDay);
 
-  return new Response(
-    JSON.stringify({
-      days,
-      topSongs: topSongs ?? [],
-      topArtists: topArtists ?? [],
-      topLanguages: topLanguages ?? [],
-      playsByDay: playsByDay ?? [],
-    }),
-    { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
-  );
+  return adminJson({
+    configured: true,
+    days,
+    topSongs: topSongs.value ?? [],
+    topArtists: topArtists.value ?? [],
+    topLanguages: topLanguages.value ?? [],
+    playsByDay: playsByDay.value ?? [],
+  });
 };

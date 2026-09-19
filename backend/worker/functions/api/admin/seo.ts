@@ -5,8 +5,8 @@
  * reachability check of the public sitemap index — so "why did Search
  * Console stop growing" is one screen instead of four queries.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbCount, sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbFailure, isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbCountResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { SEO_PAGE_SIZE, SEO_TYPES } from '../../_lib/seo';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -22,14 +22,11 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!supabaseConfigured(env)) return json({ configured: false });
   const origin = new URL(request.url).origin.replace('admin.', 'www.');
 
-  const [counts, sample, sitemap] = await Promise.all([
+  const [countReads, sampleRead, sitemap] = await Promise.all([
     Promise.all(
-      Object.entries(SEO_TYPES).map(async ([plural, type]) => {
-        const n = (await sbCount(env, 'vinax_seo_urls', `type=eq.${type}`)) ?? 0;
-        return { type, plural, count: n, pages: Math.ceil(n / SEO_PAGE_SIZE) };
-      }),
+      Object.entries(SEO_TYPES).map(async ([plural, type]) => ({ plural, type, read: await sbCountResult(env, 'vinax_seo_urls', `type=eq.${type}`) })),
     ),
-    sbSelect<Row>(env, 'vinax_seo_urls', 'select=key,type,name,lang,added_at&order=added_at.desc&limit=2000').catch(() => [] as Row[]),
+    sbSelectResult<Row>(env, 'vinax_seo_urls', 'select=key,type,name,lang,added_at&order=added_at.desc&limit=2000'),
     (async () => {
       const t0 = Date.now();
       try {
@@ -42,6 +39,14 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     })(),
   ]);
 
+  // 7.2.0 — a failed count used to read as 0 URLs in the corpus.
+  const counts: Array<{ type: string; plural: string; count: number; pages: number }> = [];
+  for (const c of countReads) {
+    if (!c.read.ok) return dbFailure(c.read, { sitemap });
+    counts.push({ type: c.type, plural: c.plural, count: c.read.value, pages: Math.ceil(c.read.value / SEO_PAGE_SIZE) });
+  }
+  if (!sampleRead.ok) return dbFailure(sampleRead, { sitemap });
+  const sample = sampleRead.rows;
   const langs = new Map<string, number>();
   const byDay = new Map<string, number>();
   for (const r of sample) {

@@ -517,6 +517,11 @@
       return;
     }
     var cards = exps.map(function (x) {
+      if (x.metrics === null) {
+        return '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">' + esc(x.name || x.key) + ' ' + (x.active ? '<span class="pill">active</span>' : '<span class="pill" style="opacity:.6">paused</span>') + '</h3>' +
+          '<p class="muted" style="font-size:12px">key: <span style="font-family:monospace">' + esc(x.key) + '</span> · created ' + date(x.created_at) + '</p>' +
+          '<div class="empty">Metrics unavailable — the events read failed. Nothing is shown as zero.</div></div>';
+      }
       var rows = (x.metrics || []).map(function (m) {
         return '<tr><td>' + esc(m.variant) + '</td><td>' + (m.pct != null ? m.pct + '%' : '—') + '</td><td>' + (m.devices || 0) + '</td><td>' + (m.playsPerDevice != null ? m.playsPerDevice : '—') + '</td><td>' + (m.skipRatePct != null ? m.skipRatePct + '%' : '—') + '</td></tr>';
       }).join('');
@@ -666,6 +671,9 @@
   }
   function renderTechnical(d) {
     var s = d.summary || {};
+    // 7.2.0 — a part the server could not read arrives as null: say so, never 0.
+    var NA = '<div class="empty">Unavailable — this read failed. Nothing is shown as zero.</div>';
+    function sn(v) { return d.summary == null ? 'unavailable' : (v || 0); }
     setExport('errors', d.errors || []);
     var errRows = (d.errors || []).map(function (e) { return '<tr><td><span class="pill">' + esc(e.error_kind) + '</span></td><td>' + esc(e.message || '—') + '</td><td>' + e.hits + '</td><td class="muted">' + ago(e.last_seen) + '</td></tr>'; }).join('');
     var vitCards = (d.vitals || []).map(function (v) {
@@ -675,16 +683,16 @@
     }).join('');
     var lyricList = (d.lyricMisses || []).map(function (x) { return { song_title: x.song_title, song_artist: x.song_artist, plays: x.hits }; });
     $('view').innerHTML =
-      '<div class="cards"><div class="card"><div class="n">' + (s.errors_24h || 0) + '</div><div class="l">Errors (24h)</div></div>' +
-      '<div class="card"><div class="n">' + (s.plays_24h || 0) + '</div><div class="l">Plays (24h)</div></div>' +
-      '<div class="card"><div class="n">' + (s.active_sessions || 0) + '</div><div class="l">Active sessions (5m)</div></div>' +
-      '<div class="card"><div class="n">' + (s.versions || 0) + '</div><div class="l">App versions</div></div></div>' +
+      '<div class="cards"><div class="card"><div class="n">' + sn(s.errors_24h) + '</div><div class="l">Errors (24h)</div></div>' +
+      '<div class="card"><div class="n">' + sn(s.plays_24h) + '</div><div class="l">Plays (24h)</div></div>' +
+      '<div class="card"><div class="n">' + sn(s.active_sessions) + '</div><div class="l">Active sessions (5m)</div></div>' +
+      '<div class="card"><div class="n">' + sn(s.versions) + '</div><div class="l">App versions</div></div></div>' +
       '<h3>System health <span class="muted">· live key + database check</span> <button id="hrecheck" class="ghost" style="padding:3px 10px;font-size:11px">Re-check</button></h3><div id="healthbox"><div class="empty">Pinging all 7 lanes + database — can take ~20s…</div></div>' +
-      '<h3>Web Vitals — field p75 (' + (d.days || 7) + 'd)</h3><div class="cards">' + (vitCards || '<div class="empty">No data yet.</div>') + '</div>' +
-      '<h3>Lyrics not found (' + (d.days || 7) + 'd)</h3>' + songRows(lyricList) +
-      '<h3>App versions</h3>' + bars(d.versions || [], function (x) { return esc(x.app_version) + ' <span class="muted">· ' + esc(x.platform) + '</span>'; }, function (x) { return x.users; }) +
-      '<h3>Errors per day</h3>' + dayChart(d.errorsByDay, 'hits', 'var(--danger)') +
-      '<h3>Top errors</h3><table><thead><tr><th>Kind</th><th>Message</th><th>Hits</th><th>Last</th></tr></thead><tbody>' + (errRows || '<tr><td colspan="4" class="empty">No errors logged. 🎉</td></tr>') + '</tbody></table>' +
+      '<h3>Web Vitals — field p75 (' + (d.days || 7) + 'd)</h3>' + (d.vitals === null ? NA : '<div class="cards">' + (vitCards || '<div class="empty">No data yet.</div>') + '</div>') +
+      '<h3>Lyrics not found (' + (d.days || 7) + 'd)</h3>' + (d.lyricMisses === null ? NA : songRows(lyricList)) +
+      '<h3>App versions</h3>' + (d.versions === null ? NA : bars(d.versions || [], function (x) { return esc(x.app_version) + ' <span class="muted">· ' + esc(x.platform) + '</span>'; }, function (x) { return x.users; })) +
+      '<h3>Errors per day</h3>' + (d.errorsByDay === null ? NA : dayChart(d.errorsByDay, 'hits', 'var(--danger)')) +
+      '<h3>Top errors</h3>' + (d.errors === null ? NA : '<table><thead><tr><th>Kind</th><th>Message</th><th>Hits</th><th>Last</th></tr></thead><tbody>' + (errRows || '<tr><td colspan="4" class="empty">No errors logged. 🎉</td></tr>') + '</tbody></table>') +
       '<h3>Data tools <span class="muted">· database maintenance</span></h3><div class="row" style="flex-wrap:wrap;gap:8px">' +
       '<button class="ghost" id="mt-purge">Purge events &gt; 90d</button>' +
       '<button class="ghost" id="mt-errors">Clear all errors</button>' +
@@ -942,7 +950,7 @@
       '<div class="cards">' +
       card(d.startsPerMin, 'Songs started / min') + card(d.liveListeners, 'Listening now (5m)') +
       card(d.joins5m, 'New users (5m)') + card(d.errors5m, 'Errors (5m)') +
-      card((d.aiP50 || 0) + 'ms', 'AI latency p50 (15m)') + card(d.aiOkRate == null ? '—' : d.aiOkRate + '%', 'AI success (15m)') +
+      card(d.aiP50 == null ? '—' : d.aiP50 + 'ms', 'AI latency p50 (15m)') + card(d.aiOkRate == null ? '—' : d.aiOkRate + '%', 'AI success (15m)') +
       card(d.activeRooms, 'Active rooms') + '</div>' +
       '<h3>Live listeners</h3><table><thead><tr><th>Listener</th><th>Location</th><th>Now playing</th></tr></thead><tbody>' +
       (cities || '<tr><td colspan="3" class="empty">Nobody listening right now.</td></tr>') + '</tbody></table>' +
@@ -1445,6 +1453,7 @@
         postApi('/api/admin/push', { title: t, body: b, link: link }).then(function (r) {
           $('pn-send').disabled = false;
           if (!r) { $('pn-out').textContent = 'Failed'; return; }
+          if (r.error) { $('pn-out').textContent = 'Not sent — ' + r.error; return; }
           $('pn-out').textContent = 'Delivered to ' + (r.sent || 0) + ' of ' + (r.total || 0) + ' web device(s)' + (r.gone ? ' · ' + r.gone + ' expired removed' : '') + ' ✓ — the app picks it up on next open.';
           loadNotifyStat();
         }).catch(function () { $('pn-send').disabled = false; $('pn-out').textContent = 'Failed'; });
@@ -2475,7 +2484,7 @@
       var metric = function (label, v) { return { label: label, v: v == null ? 0 : v, txt: v == null ? '—' : v + '%' }; };
       var items = [metric('Play events with verified origin', m.originVerifiedPct), metric('Play events with a resolved country', m.countryResolvedPct), metric('AI calls that succeeded', m.aiOkPct), metric('AI calls that returned content', m.aiContentPct)];
       $('view').innerHTML =
-        '<div class="cards">' + card(d.score == null ? '—' : d.score + '%', 'Data quality score') + card((d.sampled && d.sampled.events) || 0, 'Play events sampled') + card((d.sampled && d.sampled.aiEvents) || 0, 'AI calls sampled') + '</div>' +
+        '<div class="cards">' + card(d.score == null ? '—' : d.score + '%', 'Data quality score') + card(d.sampled && d.sampled.events === null ? 'unavailable' : (d.sampled && d.sampled.events) || 0, 'Play events sampled') + card(d.sampled && d.sampled.aiEvents === null ? 'unavailable' : (d.sampled && d.sampled.aiEvents) || 0, 'AI calls sampled') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Signals</h3>' + items.map(function (x) { return '<div class="brow"><div class="blabel">' + esc(x.label) + '</div><div class="btrack"><div class="bfill" style="width:' + x.v + '%"></div></div><div class="bval">' + x.txt + '</div></div>'; }).join('') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Service objectives <span class="muted">· error budget burned this window</span></h3><table><thead><tr><th>SLO</th><th>Target</th><th>Actual</th><th>Budget burned</th></tr></thead><tbody>' +
         (d.slos || []).map(function (s) { var burn = s.budgetBurnedPct; return '<tr><td>' + esc(s.name) + '</td><td>' + s.targetPct + '%</td><td>' + (s.actualPct == null ? '—' : s.actualPct + '%') + '</td><td>' + (burn == null ? '—' : okPill(burn <= 100, burn + '%')) + '</td></tr>'; }).join('') +
@@ -2592,9 +2601,9 @@
       exportRows = d.tables; exportName = 'database'; $('csv').hidden = false;
       var busiest = d.tables.slice().sort(function (a, b) { return (b.last24h || 0) - (a.last24h || 0); })[0];
       $('view').innerHTML =
-        '<div class="cards">' + card((d.totalRows || 0).toLocaleString(), 'Rows across tables') + card(d.tables.length, 'Tables') + card(busiest ? busiest.name.replace('vinax_', '') : '—', 'Busiest in 24 h') + '</div>' +
+        '<div class="cards">' + card(d.totalRows == null ? 'unavailable' : d.totalRows.toLocaleString(), 'Rows across tables') + card(d.tables.length, 'Tables') + card(busiest ? busiest.name.replace('vinax_', '') : '—', 'Busiest in 24 h') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Tables <span class="muted">· counts are live; age is the newest row</span></h3><table><thead><tr><th>Table</th><th>Rows</th><th>Last 24 h</th><th>Newest row</th><th>What it holds</th></tr></thead><tbody>' +
-        d.tables.map(function (t) { var stale = t.ageMin != null && t.ageMin > 1440 && /events|ai_events/.test(t.name); return '<tr><td><code>' + esc(t.name) + '</code></td><td>' + (t.total == null ? '<span class="muted">n/a</span>' : t.total.toLocaleString()) + '</td><td>' + (t.last24h == null ? '—' : '+' + t.last24h.toLocaleString()) + '</td><td>' + (stale ? okPill(false, ago(t.newestAt)) : '<span class="muted">' + ago(t.newestAt) + '</span>') + '</td><td class="muted">' + esc(t.note) + '</td></tr>'; }).join('') +
+        d.tables.map(function (t) { var stale = t.ageMin != null && t.ageMin > 1440 && /events|ai_events/.test(t.name); return '<tr><td><code>' + esc(t.name) + '</code></td><td>' + (t.total == null ? '<span class="muted">unavailable</span>' : t.total.toLocaleString()) + '</td><td>' + (t.last24h == null ? '<span class="muted">unavailable</span>' : '+' + t.last24h.toLocaleString()) + '</td><td>' + (t.readable === false ? '<span class="muted">unavailable</span>' : stale ? okPill(false, ago(t.newestAt)) : '<span class="muted">' + ago(t.newestAt) + '</span>') + '</td><td class="muted">' + esc(t.note) + '</td></tr>'; }).join('') +
         '</tbody></table></div>';
     }).catch(function () { if (active === 'tables') showFail(); });
   }
@@ -2966,7 +2975,7 @@
       $('view').innerHTML =
         '<div class="cards">' + card(d.jobs.length, 'Scheduled jobs') + card(bad, 'Overdue') + card(ago(d.checkedAt), 'Checked') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Jobs <span class="muted">· each leaves a footprint; overdue = footprint older than its schedule allows</span></h3><table><thead><tr><th>Job</th><th>Schedule</th><th>Last footprint</th><th>Status</th><th>Footprint</th></tr></thead><tbody>' +
-        d.jobs.map(function (j) { return '<tr><td><b>' + esc(j.label) + '</b><div class="muted"><code>' + esc(j.id) + '</code></div></td><td class="muted">' + esc(j.schedule) + '</td><td>' + (j.lastAt ? ago(j.lastAt) : '<span class="muted">never</span>') + '</td><td>' + (j.ok === null ? '<span class="pill">unreadable</span>' : okPill(j.ok, j.ok ? 'on time' : 'overdue')) + '</td><td class="muted">' + esc(j.note) + '</td></tr>'; }).join('') + '</tbody></table>' +
+        d.jobs.map(function (j) { return '<tr><td><b>' + esc(j.label) + '</b><div class="muted"><code>' + esc(j.id) + '</code></div></td><td class="muted">' + esc(j.schedule) + '</td><td>' + (j.readable === false ? '<span class="muted">unavailable</span>' : j.lastAt ? ago(j.lastAt) : '<span class="muted">never</span>') + '</td><td>' + (j.ok === null ? '<span class="pill">unreadable</span>' : okPill(j.ok, j.ok ? 'on time' : 'overdue')) + '</td><td class="muted">' + esc(j.note) + '</td></tr>'; }).join('') + '</tbody></table>' +
         '<p class="muted" style="font-size:11px;margin:10px 0 0">Jobs run from GitHub Actions on a schedule. To run one now: Actions → workflow → Run workflow.</p></div>';
     }).catch(function () { if (active === 'cron') showFail(); });
   }
