@@ -66,6 +66,10 @@ import * as m_api_admin_tables from './functions/api/admin/tables';
 import * as m_api_admin_technical from './functions/api/admin/technical';
 import * as m_api_admin_user from './functions/api/admin/user';
 import * as m_api_admin_users from './functions/api/admin/users';
+// 7.2.0 — recommendation quality, AI operations, recommendation tuning.
+import * as m_api_admin_recquality from './functions/api/admin/recquality';
+import * as m_api_admin_aiops from './functions/api/admin/aiops';
+import * as m_api_admin_recconfig from './functions/api/admin/recconfig';
 import * as m_api_announcements from './functions/api/announcements';
 import * as m_api_apk from './functions/api/apk';
 import * as m_api_appconfig from './functions/api/appconfig';
@@ -183,6 +187,9 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/technical': m_api_admin_technical,
   '/api/admin/user': m_api_admin_user,
   '/api/admin/users': m_api_admin_users,
+  '/api/admin/recquality': m_api_admin_recquality,
+  '/api/admin/aiops': m_api_admin_aiops,
+  '/api/admin/recconfig': m_api_admin_recconfig,
   '/api/aimodels': m_api_aimodels,
   '/api/curate': m_api_curate,
   '/api/dj': m_api_dj,
