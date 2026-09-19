@@ -35,6 +35,7 @@ import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { pickBySeed, styleAngle } from '../_lib/variety';
+import { canonicalKey } from '../_lib/identityCore';
 
 const SYSTEM_PROMPT = `You are the AI DJ of VinaX, a music app for Indian music in Telugu, Hindi, Tamil and more. You program the next stretch of a listener's queue the way a live radio DJ reads a room: tempo, mood, vocal texture and era all register, and every hand-off is a musical segue. Work ONLY from the context you are handed. Never invent listener history. If asked, VinaX built you; never name any AI vendor or model.
 
@@ -74,14 +75,14 @@ function json(body: unknown, status = 200): Response {
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS_HEADERS });
 export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
-/** Canonical identity shared with the client (recommendation/songIdentity.ts): normalised title + primary artist. */
+/**
+ * Canonical WORK identity, shared with the client byte for byte
+ * (_lib/identityCore.ts ↔ frontend recommendation/identityCore.ts): NFKC,
+ * invisible characters dropped, Latin accents folded, Indic vowel signs KEPT,
+ * version decorations and featured credits stripped, primary artist only.
+ */
 export function canonKey(title: string, artist: string): string {
-  const t = title
-    .toLowerCase()
-    .replace(/\s*[([{][^)\]}]*(?:from|remix|remaster|reprise|version|mix|unplugged|19\d{2}|20\d{2})[^)\]}]*[)\]}]/gi, '')
-    .replace(/[^\p{L}\p{N}]+/gu, '');
-  const a = artist.toLowerCase().split(',')[0].replace(/[^\p{L}\p{N}]+/gu, '');
-  return `${t}|${a}`;
+  return canonicalKey(title, artist);
 }
 
 /** v7.1.0 — album (film / album name), year and `known` (the listener has played this song or artist) are optional facts the DJ orders by. */

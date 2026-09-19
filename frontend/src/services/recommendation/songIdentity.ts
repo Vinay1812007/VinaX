@@ -1,5 +1,6 @@
 /** Shared song identity and recently displayed music for catalog shelves and playlists. */
 import type { Song } from '@/types';
+import { canonicalKey, versionKind, versionTag, type VersionKind } from './identityCore';
 
 /** Recently displayed songs shared by catalog shelves and playlists. */
 const SERVED_KEY = 'vinax.flow.served.v1';
@@ -10,57 +11,27 @@ let servedMemory: ServedEntry[] = [];
 /** Titles that are never songs — they poison queues when a search returns them. */
 const JUNK_TITLE = /\b(dialogue|dialogues|bgm|jukebox|trailer|teaser|promo|ringtone|commentary)\b/i;
 
-/** Words that mark a bracketed or dashed suffix as a VERSION of a song rather than part of its name. */
-const VERSION_WORDS =
-  'from|remix|remaster(?:ed)?|reprise|version|mix|unplugged|reloaded|revisited|slowed|sped\\s?up|reverb|lofi|lo-fi|live|acoustic|cover|karaoke|instrumental|edit|extended|female|male|duet|8d|bass\\s?boosted|deluxe|bonus|ost|flip|mashup|19\\d{2}|20\\d{2}';
-
-/** Version decorations that make one song look like many. */
-const VERSION_TAG = new RegExp(`\\s*[([{][^)\\]}]*\\b(?:${VERSION_WORDS})\\b[^)\\]}]*[)\\]}]`, 'gi');
-/** The same decorations written without brackets: "Song - Lofi Flip", "Song – 2019 Remaster". */
-const VERSION_DASH = new RegExp(`\\s+[-–—]\\s+[^-–—]*\\b(?:${VERSION_WORDS})\\b[^-–—]*$`, 'i');
-/** Invisible characters catalogue titles pick up (zero-width joiners stay: Indic scripts need them). */
-const INVISIBLE = /[\u200B\u2060\uFEFF\u00AD]/g;
-
 /** Primary credited artist for a song — the identity half of the canonical key. */
 export function primaryArtist(s: Song): string {
   return s.artists?.[0]?.name ?? s.subtitle?.split(',')[0] ?? '';
 }
 
-const squash = (text: string): string => text.replace(/[^\p{L}\p{N}\p{M}]+/gu, '');
-
-/**
- * Canonical song identity: normalized title + primary artist. "Monica",
- * "Monica (From \"Coolie\")", "Monica (2025 Remix)" and "Monica - Lofi Flip"
- * by the same artist all collapse onto one key, so one of them ever reaches a
- * queue or shelf. Unicode-safe: NFKC folds width/compatibility forms, and
- * combining marks are kept so Indic titles do not lose their vowel signs.
- */
-export function canonicalKey(title: string, artist: string): string {
-  const base = title.normalize('NFKC').replace(INVISIBLE, '').toLowerCase();
-  const stripped = base
-    .replace(VERSION_TAG, '')
-    .replace(VERSION_DASH, '')
-    .replace(/\s*[-–—]\s*from\s+.+$/i, '')
-    .replace(/\s*(?:feat\.?|ft\.?|featuring)\s+.+$/i, '');
-  // A title that is nothing BUT a version word ("Remix", "Live") keeps its own name.
-  const t = squash(stripped) || squash(base);
-  const a = squash(artist.normalize('NFKC').replace(INVISIBLE, '').toLowerCase().split(/[,&]/)[0]);
-  return `${t}|${a}`;
-}
-
-export type VersionKind = 'original' | 'remaster' | 'alternate';
-
-/** v7.0.0 — what kind of cut a title is: the plain release, a remaster of it, or an alternate (remix, live, slowed, cover…). */
-export function versionKind(title: string): VersionKind {
-  const base = title.normalize('NFKC').toLowerCase();
-  const tags = [...(base.match(VERSION_TAG) ?? []), ...(base.match(VERSION_DASH) ?? [])].join(' ');
-  if (!tags) return 'original';
-  if (/\b(?:remix|reprise|mix|unplugged|reloaded|revisited|slowed|sped\s?up|reverb|lofi|lo-fi|live|acoustic|cover|karaoke|instrumental|edit|extended|female|male|duet|8d|bass\s?boosted|flip|mashup)\b/.test(tags)) return 'alternate';
-  if (/\bremaster(?:ed)?\b/.test(tags)) return 'remaster';
-  return 'original'; // "(From "Film")", a year, a deluxe/bonus tag: the same recording
-}
+// The normalisation itself is the shared contract in ./identityCore (kept
+// byte-identical with the Worker's copy): NFKC, invisible characters dropped,
+// Latin accents folded, Indic vowel signs kept, version decorations and
+// featured credits stripped, primary artist only.
+export { canonicalKey, recordingKey, versionKind, versionTag, type VersionKind } from './identityCore';
 
 const VERSION_RANK: Record<VersionKind, number> = { original: 0, remaster: 1, alternate: 2 };
+
+export interface DedupeOptions {
+  /**
+   * 7.2.0 — the listener asked for a particular recording (they chose a
+   * remix, a live cut or a cover): within a family, the cut with this
+   * version tag wins over the original instead of losing to it.
+   */
+  preferTag?: string | null;
+}
 
 /**
  * v7.0.0 — collapse songs that share a canonical identity, keeping the best
@@ -68,9 +39,11 @@ const VERSION_RANK: Record<VersionKind, number> = { original: 0, remaster: 1, al
  * played one. Order-preserving — the survivor takes the FIRST position its
  * identity appeared at, so a ranked list stays ranked.
  */
-export function dedupeByIdentity<T>(items: T[], songOf: (item: T) => Song): T[] {
+export function dedupeByIdentity<T>(items: T[], songOf: (item: T) => Song, options: DedupeOptions = {}): T[] {
   const slot = new Map<string, number>();
   const out: T[] = [];
+  const prefer = options.preferTag || null;
+  const rank = (song: Song): number => (prefer && versionTag(song.title) === prefer ? -1 : VERSION_RANK[versionKind(song.title)]);
   for (const item of items) {
     const song = songOf(item);
     const key = songKey(song);
@@ -81,7 +54,7 @@ export function dedupeByIdentity<T>(items: T[], songOf: (item: T) => Song): T[] 
       continue;
     }
     const kept = songOf(out[at]);
-    const better = VERSION_RANK[versionKind(song.title)] - VERSION_RANK[versionKind(kept.title)] || (kept.playCount ?? 0) - (song.playCount ?? 0);
+    const better = rank(song) - rank(kept) || (kept.playCount ?? 0) - (song.playCount ?? 0);
     if (better < 0) out[at] = item;
   }
   return out;

@@ -1,12 +1,21 @@
 /**
- * Minimal Supabase REST helper for Cloudflare Pages Functions.
+ * Minimal Supabase REST helper for the Worker.
  * Uses the SERVICE-ROLE key (server-side only) so it bypasses RLS. The key is
  * read from env and never sent to any client.
+ *
+ * 7.2.0 — every request carries a deadline (DB_TIMEOUT_MS unless the caller
+ * passes its own), so a hung database can no longer hold a route open until
+ * the platform kills it. Reads that must tell "empty" from "broken" use
+ * `sbSelectResult`, which names the failure; `sbSelect` stays the
+ * best-effort read for callers that deliberately treat a failure as "no rows".
  */
 export interface SupabaseEnv {
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
 }
+
+/** Default deadline for one database request. */
+export const DB_TIMEOUT_MS = 8_000;
 
 function base(env: SupabaseEnv): { url: string; key: string } | null {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -21,11 +30,69 @@ function headers(key: string, extra?: Record<string, string>): Record<string, st
   return { apikey: key, authorization: `Bearer ${key}`, 'content-type': 'application/json', ...extra };
 }
 
+const NULL_BODY_STATUS = new Set([101, 103, 204, 205, 304]);
+
+/**
+ * fetch with a deadline covering the WHOLE exchange: the response body is
+ * buffered under the same timer, so a stalled stream is cut as surely as a
+ * stalled connect. Rejects (AbortError) once `ms` passes.
+ */
+export async function dbFetch(url: string, init: RequestInit = {}, ms = DB_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    const body = NULL_BODY_STATUS.has(res.status) ? null : await res.arrayBuffer();
+    return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Why a read did not produce rows:
+ *   not_configured — no database env on this Worker;
+ *   unauthorized   — the database refused the service key (401/403);
+ *   bad_request    — the query itself was refused (400: bad filter / column);
+ *   not_found      — the table or function does not exist (404: a migration is missing);
+ *   unavailable    — 5xx, network failure, unparseable body or the deadline passed.
+ */
+export type DbFailure = 'not_configured' | 'unauthorized' | 'bad_request' | 'not_found' | 'unavailable';
+
+export type DbResult<T> = { ok: true; rows: T[] } | { ok: false; error: DbFailure; httpStatus: number | null; rows: T[] };
+
+export function dbFailureFromStatus(status: number): DbFailure {
+  if (status === 401 || status === 403) return 'unauthorized';
+  if (status === 404) return 'not_found';
+  if (status >= 400 && status < 500) return 'bad_request';
+  return 'unavailable';
+}
+
+/** The JSON error code an admin route answers with for a failed read. */
+export function dbErrorCode(error: DbFailure): string {
+  return error === 'not_configured' ? 'db_not_configured' : error === 'unauthorized' ? 'db_unauthorized' : error === 'not_found' ? 'db_schema_missing' : error === 'bad_request' ? 'db_bad_request' : 'db_unavailable';
+}
+
+/** SELECT that says exactly why it failed. `rows` is always an array (empty on failure). */
+export async function sbSelectResult<T>(env: SupabaseEnv, table: string, query: string, opts: { timeoutMs?: number; headers?: Record<string, string> } = {}): Promise<DbResult<T>> {
+  const b = base(env);
+  if (!b) return { ok: false, error: 'not_configured', httpStatus: null, rows: [] };
+  try {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}?${query}`, { headers: headers(b.key, opts.headers) }, opts.timeoutMs);
+    if (!res.ok) return { ok: false, error: dbFailureFromStatus(res.status), httpStatus: res.status, rows: [] };
+    const body = (await res.json()) as unknown;
+    if (!Array.isArray(body)) return { ok: false, error: 'unavailable', httpStatus: res.status, rows: [] };
+    return { ok: true, rows: body as T[] };
+  } catch {
+    return { ok: false, error: 'unavailable', httpStatus: null, rows: [] };
+  }
+}
+
 export async function sbInsert(env: SupabaseEnv, table: string, row: unknown): Promise<boolean> {
   const b = base(env);
   if (!b) return false;
   try {
-    const res = await fetch(`${b.url}/rest/v1/${table}`, {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}`, {
       method: 'POST',
       headers: headers(b.key, { prefer: 'return=minimal' }),
       body: JSON.stringify(row),
@@ -52,7 +119,7 @@ export async function sbInsertIgnore<T>(
   const b = base(env);
   if (!b) return null;
   try {
-    const res = await fetch(`${b.url}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`, {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`, {
       method: 'POST',
       headers: headers(b.key, { prefer: 'resolution=ignore-duplicates,return=representation' }),
       body: JSON.stringify(row),
@@ -68,7 +135,7 @@ export async function sbUpsert(env: SupabaseEnv, table: string, row: unknown, on
   const b = base(env);
   if (!b) return false;
   try {
-    const res = await fetch(`${b.url}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`, {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`, {
       method: 'POST',
       headers: headers(b.key, { prefer: 'resolution=merge-duplicates,return=minimal' }),
       body: JSON.stringify(row),
@@ -89,23 +156,21 @@ export async function sbSelectRes<T>(
   env: SupabaseEnv,
   table: string,
   query: string,
-): Promise<{ ok: boolean; rows: T[] }> {
-  const b = base(env);
-  if (!b) return { ok: false, rows: [] };
-  try {
-    const res = await fetch(`${b.url}/rest/v1/${table}?${query}`, { headers: headers(b.key) });
-    if (!res.ok) return { ok: false, rows: [] };
-    return { ok: true, rows: (await res.json().catch(() => [])) as T[] };
-  } catch {
-    return { ok: false, rows: [] };
-  }
+): Promise<{ ok: boolean; rows: T[]; error?: DbFailure }> {
+  const r = await sbSelectResult<T>(env, table, query);
+  return r.ok ? { ok: true, rows: r.rows } : { ok: false, rows: [], error: r.error };
 }
 
+/**
+ * Best-effort SELECT: any failure reads as "no rows". Use it only where an
+ * empty answer is an acceptable degradation (public pages, cron throttles).
+ * Dashboards and anything that reports numbers use `sbSelectResult`.
+ */
 export async function sbSelect<T>(env: SupabaseEnv, table: string, query: string): Promise<T[]> {
   const b = base(env);
   if (!b) return [];
   try {
-    const res = await fetch(`${b.url}/rest/v1/${table}?${query}`, { headers: headers(b.key) });
+    const res = await dbFetch(`${b.url}/rest/v1/${table}?${query}`, { headers: headers(b.key) });
     if (!res.ok) return [];
     return (await res.json().catch(() => [])) as T[];
   } catch {
@@ -128,7 +193,7 @@ export async function sbCount(env: SupabaseEnv, table: string, query = ''): Prom
     // GET, not HEAD (4.16.2): in production the unfiltered HEAD count came
     // back without a usable content-range while filtered ones worked — GET
     // always carries the header and a limit=1 body costs nothing.
-    const res = await fetch(`${b.url}/rest/v1/${table}?select=*&limit=1${query ? `&${query}` : ''}`, {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}?select=*&limit=1${query ? `&${query}` : ''}`, {
       headers: headers(b.key, { prefer: 'count=exact' }),
     });
     if (!res.ok) return null;
@@ -144,7 +209,7 @@ export async function sbRpc<T>(env: SupabaseEnv, fn: string, args: Record<string
   const b = base(env);
   if (!b) return null;
   try {
-    const res = await fetch(`${b.url}/rest/v1/rpc/${fn}`, {
+    const res = await dbFetch(`${b.url}/rest/v1/rpc/${fn}`, {
       method: 'POST',
       headers: headers(b.key),
       body: JSON.stringify(args ?? {}),
@@ -160,7 +225,7 @@ export async function sbDelete(env: SupabaseEnv, table: string, query: string): 
   const b = base(env);
   if (!b) return false;
   try {
-    const res = await fetch(`${b.url}/rest/v1/${table}?${query}`, {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}?${query}`, {
       method: 'DELETE',
       headers: headers(b.key, { prefer: 'return=minimal' }),
     });
@@ -179,7 +244,7 @@ export async function sbDeleteReturning<T>(env: SupabaseEnv, table: string, quer
   const b = base(env);
   if (!b) return null;
   try {
-    const res = await fetch(`${b.url}/rest/v1/${table}?${query}`, {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}?${query}`, {
       method: 'DELETE',
       headers: headers(b.key, { prefer: 'return=representation' }),
     });
@@ -194,7 +259,7 @@ export async function sbUpdate(env: SupabaseEnv, table: string, query: string, p
   const b = base(env);
   if (!b) return false;
   try {
-    const res = await fetch(`${b.url}/rest/v1/${table}?${query}`, {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}?${query}`, {
       method: 'PATCH',
       headers: headers(b.key, { prefer: 'return=minimal' }),
       body: JSON.stringify(patch),
