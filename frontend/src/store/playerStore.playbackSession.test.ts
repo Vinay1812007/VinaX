@@ -188,3 +188,22 @@ describe('failed playback and stale async work', () => {
     expect(audioEngine.reloadWithSources).not.toHaveBeenCalled();
   });
 });
+
+describe('one moment a play is a play', () => {
+  it('emits a single counted event per run, after five seconds heard — never on start or on a seek', async () => {
+    const { onPlaybackEvent } = await import('@/services/playback/session');
+    const counted: string[] = [];
+    const off = onPlaybackEvent((e) => { if (e.kind === 'counted') counted.push(e.song.id); });
+    usePlayerStore.getState().playSong(song('a'));
+    expect(counted).toEqual([]);
+    tick(0.25);
+    usePlayerStore.getState().seek(150);
+    tick(150);
+    expect(counted).toEqual([]);
+    listen(150.25, 156);
+    expect(counted).toEqual(['a']);
+    listen(156.25, 170);
+    expect(counted).toEqual(['a']);
+    off();
+  });
+});

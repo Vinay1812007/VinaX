@@ -166,6 +166,8 @@ export interface AutoEntryMeta {
 
 export type PlaybackEvent =
   | { kind: 'credit'; instanceId: string; songId: string; seconds: number }
+  /** The run's PLAY was just counted (enough of it heard): the one moment a play is a play, for taste and for usage analytics alike. */
+  | { kind: 'counted'; instanceId: string; song: Song; heardSec: number }
   | { kind: 'end'; instanceId: string; song: Song; from: Song | null; heardSec: number; durationSec: number; reason: PlaybackEndReason; run: Readonly<PlaybackRun>; auto: AutoEntryMeta | null }
   /** An automatic continuation entered the queue (after the admission gate). */
   | { kind: 'served'; batch: number; alg: string; picker: 'local' | 'ai' | 'reserve'; fallback: string | null; latencyMs: number; n: number; discovery: number; languageViolations: number; relaxed: string[]; refinementPending: boolean }

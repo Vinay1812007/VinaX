@@ -526,7 +526,11 @@ export const usePlayerStore = create<PlayerState>()(
           // 7.2.0 — reaching the end is a completion only when most of the song
           // was heard: seeking to the last seconds and letting it end is not.
           if (!inst.run.completed && isCompletion(inst.heardSec, inst.durationSec || duration)) {
-            if (!inst.run.played) { inst.run.played = true; recordPlay(song); }
+            if (!inst.run.played) {
+              inst.run.played = true;
+              recordPlay(song);
+              emitPlaybackEvent({ kind: 'counted', instanceId: inst.id, song, heardSec: inst.heardSec });
+            }
             inst.run.completed = true;
             recordComplete(song, Math.round(inst.heardSec * 10) / 10);
             useHistoryStore.getState().markCompleted(song.id);
@@ -648,6 +652,7 @@ export const usePlayerStore = create<PlayerState>()(
                   if (!inst.run.played && inst.heardSec >= playThreshold(inst.durationSec)) {
                     inst.run.played = true;
                     recordPlay(inst.song);
+                    emitPlaybackEvent({ kind: 'counted', instanceId: inst.id, song: inst.song, heardSec: inst.heardSec });
                   }
                 }
               }
