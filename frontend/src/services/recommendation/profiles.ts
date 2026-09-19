@@ -1,7 +1,23 @@
 import type { HistoryEntry, Song } from '@/types';
 import type { TasteProfile } from '@/services/personalization/profile';
-import { energyOfSong } from '@/services/personalization/session';
 import { inferMood, type Mood } from './mood';
+import type { SongFeature } from './types';
+
+/**
+ * 7.2.0 — how far a feature value can be trusted. Catalogue metadata counts
+ * in full, classifier output for less, a keyword read of the title for less
+ * still; a value derived from another one (energy or tempo from the mood)
+ * multiplies down by DERIVED. Unknown is 0: it contributes nothing.
+ */
+export const FEATURE_CONFIDENCE = { catalogue: 1, classifier: 0.6, title: 0.35, derived: 0.5 } as const;
+
+export interface FeatureConfidence {
+  mood: number;
+  energy: number;
+  tempo: number;
+  genres: number;
+  vibes: number;
+}
 
 export interface SongProfile {
   id: string;
@@ -10,11 +26,29 @@ export interface SongProfile {
   subLanguage: string | null;
   genres: string[];
   vibes: string[];
+  /** 'neutral' with confidence 0 when nothing is known. */
   mood: Mood;
+  /** 0..1; 0.5 (confidence 0) when unknown. */
   energy: number;
+  /** BPM; 100 (confidence 0) when unknown. */
   tempo: number;
   artistIds: string[];
   artistNames: string[];
+  /** 7.2.0 — 0..1 per feature (see FEATURE_CONFIDENCE). */
+  confidence: FeatureConfidence;
+}
+
+/**
+ * Package A3 / 7.2.0 — true when the song's lead artist is under an active
+ * "show fewer like this" (keyed by artist id, or lower-case name when the
+ * catalogue gave no id). One definition for the gatherer, the hard filter,
+ * validation and the Home shelves.
+ */
+export function softMutedArtist(song: Song, muted: TasteProfile['softMuted'], now = Date.now()): boolean {
+  const lead = song.artists?.[0];
+  if (!lead || !muted) return false;
+  const entry = (lead.id ? muted[lead.id] : undefined) ?? muted[String(lead.name).toLowerCase()];
+  return !!entry && entry.until > now;
 }
 
 export interface UserRecommendationProfile {
@@ -77,34 +111,67 @@ function finite(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function buildSongProfile(song: Song): SongProfile {
+/** Energy (0..1) and tempo (BPM) a mood suggests; the energies match the session tracker's. */
+const MOOD_PRIOR: Record<Mood, [number, number]> = { energetic: [0.9, 124], romantic: [0.55, 92], chill: [0.25, 72], melancholy: [0.15, 70], devotional: [0.45, 82], neutral: [0.5, 100] };
+
+/**
+ * `classified` lists the features whose value came from the classifier rather
+ * than the catalogue (`Candidate.classified`); they are trusted less.
+ */
+export function buildSongProfile(song: Song, classified: readonly SongFeature[] = []): SongProfile {
   // v7.0.0 — persisted songs are untrusted: one favourite or history entry with a
   // malformed `artists` used to throw here, and the player (rightly) swallows a failed
   // continuation — so a single bad record silently ended autoplay for good.
   const artists = Array.isArray(song.artists) ? song.artists : [];
   const text = textFor(song);
-  const genres = unique([...(song.genres ?? []), song.genre ?? '', ...inferred(GENRE_HINTS, text)].map(clean));
-  const vibes = unique([...(song.vibes ?? []), song.vibe ?? '', ...inferred(VIBE_HINTS, text)].map(clean));
+  const given = (f: SongFeature): number => (classified.includes(f) ? FEATURE_CONFIDENCE.classifier : FEATURE_CONFIDENCE.catalogue);
+  const supplied = (values: Array<string | null | undefined>): string[] => unique(values.map(clean));
+  const suppliedGenres = supplied([...(song.genres ?? []), song.genre]);
+  const suppliedVibes = supplied([...(song.vibes ?? []), song.vibe]);
+  const hintedGenres = inferred(GENRE_HINTS, text);
+  const hintedVibes = inferred(VIBE_HINTS, text);
   const moodHint = clean(song.mood);
-  const mood = ['romantic', 'energetic', 'chill', 'melancholy', 'devotional', 'neutral'].includes(moodHint)
-    ? moodHint as Mood
-    : inferMood(song);
-  const energy = Math.max(0, Math.min(1, finite(song.energy) ?? energyOfSong(song)));
-  const tempo = Math.max(40, Math.min(220, finite(song.tempo) ?? ({ energetic: 124, romantic: 92, chill: 72, melancholy: 70, devotional: 82, neutral: 100 }[mood])));
+  const titleMood = inferMood(song);
+  const [mood, moodConf]: [Mood, number] = ['romantic', 'energetic', 'chill', 'melancholy', 'devotional', 'neutral'].includes(moodHint)
+    ? [moodHint as Mood, given('mood')]
+    : [titleMood, titleMood === 'neutral' ? 0 : FEATURE_CONFIDENCE.title];
+  const energyGiven = finite(song.energy);
+  const tempoGiven = finite(song.tempo);
   return {
     id: song.id,
     language: song.language ? clean(song.language) : null,
     dialect: song.dialect ? clean(song.dialect) : null,
     subLanguage: song.subLanguage ? clean(song.subLanguage) : null,
-    genres,
-    vibes,
+    genres: unique([...suppliedGenres, ...hintedGenres]),
+    vibes: unique([...suppliedVibes, ...hintedVibes]),
     mood,
-    energy,
-    tempo,
+    energy: Math.max(0, Math.min(1, energyGiven ?? MOOD_PRIOR[mood][0])),
+    tempo: Math.max(40, Math.min(220, tempoGiven ?? MOOD_PRIOR[mood][1])),
     artistIds: artists.map((a) => clean(a?.id)).filter(Boolean),
     artistNames: artists.map((a) => clean(a?.name)).filter(Boolean),
+    confidence: {
+      mood: moodConf,
+      energy: energyGiven !== null ? given('energy') : moodConf * FEATURE_CONFIDENCE.derived,
+      tempo: tempoGiven !== null ? given('tempo') : moodConf * FEATURE_CONFIDENCE.derived,
+      genres: suppliedGenres.length ? given('genre') : hintedGenres.length ? FEATURE_CONFIDENCE.title : 0,
+      vibes: suppliedVibes.length ? given('vibe') : hintedVibes.length ? FEATURE_CONFIDENCE.title : 0,
+    },
   };
 }
+
+/** Confidence-weighted mean of one numeric feature; null when nothing is known. */
+function knownMean(ps: SongProfile[], key: 'energy' | 'tempo'): number | null {
+  let sum = 0;
+  let weight = 0;
+  for (const p of ps) {
+    sum += p[key] * p.confidence[key];
+    weight += p.confidence[key];
+  }
+  return weight > 0 ? sum / weight : null;
+}
+
+/** The most common KNOWN mood. */
+const dominantMood = (ps: SongProfile[]): Mood | null => dominant(ps.filter((p) => p.confidence.mood > 0).map((p) => p.mood));
 
 function bump(map: Record<string, number>, key: string | null, weight: number): void {
   if (key) map[key] = (map[key] ?? 0) + weight;
@@ -133,13 +200,12 @@ export function buildUserRecommendationProfile(profile: TasteProfile, favorites:
   topMap(profile.artists, out.artists);
   favorites.forEach((song) => addSong(out, song, 2));
   history.slice(0, 100).forEach((entry, index) => addSong(out, entry.song, Math.max(0.2, 1 - index / 100)));
-  const listened = [...favorites, ...history.map((h) => h.song)];
-  if (listened.length) {
-    const ps = listened.map(buildSongProfile);
-    out.avgEnergy = ps.reduce((sum, p) => sum + p.energy, 0) / ps.length;
-    out.avgTempo = ps.reduce((sum, p) => sum + p.tempo, 0) / ps.length;
-    out.dominantMood = dominant(ps.map((p) => p.mood));
-  }
+  // 7.2.0 — averages over what is actually known about the songs, weighted by
+  // how far it can be trusted; null (no pull at all) when nothing is known.
+  const ps = [...favorites, ...history.map((h) => h.song)].map((s) => buildSongProfile(s));
+  out.avgEnergy = knownMean(ps, 'energy');
+  out.avgTempo = knownMean(ps, 'tempo');
+  out.dominantMood = dominantMood(ps);
   return out;
 }
 
@@ -155,12 +221,12 @@ function dominant<T extends string>(values: T[]): T | null {
 }
 
 export function buildSessionRecommendationProfile(songs: Song[]): SessionRecommendationProfile {
-  const profiles = songs.slice(0, 20).map(buildSongProfile);
+  const profiles = songs.slice(0, 20).map((s) => buildSongProfile(s));
   return {
     recentSongIds: new Set(profiles.map((p) => p.id)),
-    avgEnergy: profiles.length ? profiles.reduce((s, p) => s + p.energy, 0) / profiles.length : null,
-    avgTempo: profiles.length ? profiles.reduce((s, p) => s + p.tempo, 0) / profiles.length : null,
-    dominantMood: dominant(profiles.map((p) => p.mood)),
+    avgEnergy: knownMean(profiles, 'energy'),
+    avgTempo: knownMean(profiles, 'tempo'),
+    dominantMood: dominantMood(profiles),
     dominantLanguage: dominant(profiles.map((p) => p.language).filter((v): v is string => !!v)),
     dominantDialect: dominant(profiles.map((p) => p.dialect).filter((v): v is string => !!v)),
     size: profiles.length,

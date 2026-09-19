@@ -57,6 +57,8 @@ export function recordPlay(song: Song): void {
     p.totals.plays += 1;
     p.hourHistogram[new Date().getHours()] += 1;
     bumpDay(p, new Date().getDay());
+    // 7.2.0 — the same weekday, per language: what the weekday ranking term learns from.
+    if (song.language) ((p.languageDays ??= {})[song.language] ??= [0, 0, 0, 0, 0, 0, 0])[new Date().getDay()] += 1;
     bumpHourBucket(p, song.language, new Date().getHours());
     rememberRecent(p, song.id);
   });

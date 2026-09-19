@@ -55,3 +55,79 @@ describe('validateSequence', () => {
     expect(small.relaxed).toEqual(['artist-cap']);
   });
 });
+
+describe('7.2 — validation enforces the sequencer’s final policy', () => {
+  const d = (n: number) => makeSong(`d${n}`, { artist: `Stranger ${n}` });
+  const k = (n: number) => makeSong(`k${n}`, { artist: `Known ${n}` });
+  const discoveryIds = new Set(['d1', 'd2', 'd3', 'd4']);
+
+  it('an AI order that front-loads three discoveries ships with a familiar opening and within the discovery share', () => {
+    const out = validateSequence([d(1), d(2), d(3), k(1), k(2), k(3), k(4)], { limit: 5, discoveryIds, discoveryShare: 0.2 });
+    expect(ids(out.songs)).toEqual(['k1', 'k2', 'd1', 'k3', 'k4']);
+    expect(out.songs.filter((s) => discoveryIds.has(s.id))).toHaveLength(1); // ⌊0.2 × 5 + 0.5⌋ = 1
+    expect(out.relaxed).toEqual([]);
+  });
+
+  it('holds discovery out of slot 1 only when the stretch is shorter than four', () => {
+    const out = validateSequence([d(1), k(1), k(2)], { limit: 3, discoveryIds, discoveryShare: 0.45 });
+    expect(ids(out.songs)).toEqual(['k1', 'd1', 'k2']);
+    expect(out.relaxed).toEqual([]);
+  });
+
+  it('a reserve top-up cannot push the stretch over the share', () => {
+    // The sequenced arc (k1, k2) is short; the reserve behind it is mostly strangers.
+    const out = validateSequence([k(1), k(2), d(1), d(2), d(3), k(3), k(4)], { limit: 5, discoveryIds, discoveryShare: 0.2 });
+    expect(out.songs.filter((s) => discoveryIds.has(s.id))).toHaveLength(1);
+    expect(ids(out.songs)).toEqual(['k1', 'k2', 'd1', 'k3', 'k4']);
+  });
+
+  it('relaxes the opening and the share only when the pool cannot fill the stretch otherwise — and says so', () => {
+    const out = validateSequence([d(1), d(2), d(3), k(1)], { limit: 4, discoveryIds, discoveryShare: 0.2 });
+    expect(ids(out.songs)).toEqual(['k1', 'd1', 'd2', 'd3']);
+    expect(out.relaxed).toEqual(['familiar-opening', 'discovery-share']);
+    // Traceable: one entry per slot that gave way, with the song and the reason.
+    expect(out.relaxations.map((r) => `${r.rule}@${r.slot}:${r.songId}`)).toEqual(['familiar-opening@2:d1', 'discovery-share@3:d2', 'discovery-share@4:d3']);
+    expect(out.relaxations.every((r) => r.detail.length > 0)).toBe(true);
+  });
+
+  it('the familiar opening can be switched off, and applies without a share', () => {
+    expect(ids(validateSequence([d(1), k(1), k(2), k(3)], { limit: 4, discoveryIds }).songs)).toEqual(['k1', 'k2', 'd1', 'k3']);
+    expect(ids(validateSequence([d(1), k(1), k(2), k(3)], { limit: 4, discoveryIds, familiarOpening: false }).songs)).toEqual(['d1', 'k1', 'k2', 'k3']);
+  });
+
+  it('never relaxes a hard rule, even when that leaves the stretch short', () => {
+    const NOW = 1_800_000_000_000;
+    const order = [
+      makeSong('explicit', { artist: 'A', explicit: true }),
+      makeSong('blocked', { artist: 'B' }),
+      makeSong('muted', { artist: 'C', language: 'punjabi' }),
+      makeSong('soft', { artist: 'Soft Muted' }),
+      makeSong('recent', { artist: 'D' }),
+      makeSong('skipped', { artist: 'E' }),
+      makeSong('junk', { title: 'Film Jukebox', artist: 'F' }),
+      makeSong('', { artist: 'G' }),
+      makeSong('ok', { artist: 'H' }),
+    ];
+    const out = validateSequence(order, {
+      limit: 5, hideExplicit: true, blocked: (s) => s.id === 'blocked', mutedLanguages: ['punjabi'], recentIds: new Set(['recent']),
+      sessionSkippedIds: new Set(['skipped']), softMuted: { 'artist-soft-muted': { until: NOW + 1 } }, now: NOW,
+    });
+    expect(ids(out.songs)).toEqual(['ok']);
+    expect(out.relaxed).toEqual([]);
+    expect(out.rejected.map((r) => r.reason)).toEqual(['explicit', 'blocked', 'muted-language', 'soft-muted', 'recently-played', 'skipped-this-session', 'junk', 'invalid']);
+  });
+
+  it('reports which step of the language-lock relaxation was used', () => {
+    const te = (id: string, artist: string) => makeSong(id, { artist, language: 'telugu' });
+    const hi = (id: string, artist: string) => makeSong(id, { artist, language: 'hindi' });
+    const pa = (id: string, artist: string) => makeSong(id, { artist, language: 'punjabi' });
+    const held = validateSequence([te('t1', 'A'), te('t2', 'B'), te('t3', 'C'), hi('h1', 'D')], { limit: 8, lockLanguage: 'telugu', familiarLanguages: ['hindi'] });
+    expect(held.languageLockStep).toBeNull();
+    const familiar = validateSequence([te('t1', 'A'), hi('h1', 'B'), pa('p1', 'C'), hi('h2', 'D')], { limit: 8, lockLanguage: 'telugu', familiarLanguages: ['hindi'] });
+    expect(familiar.languageLockStep).toBe('familiar');
+    expect(familiar.relaxations).toContainEqual({ rule: 'language-lock', detail: expect.stringContaining('familiar') });
+    const any = validateSequence([te('t1', 'A'), pa('p1', 'B'), pa('p2', 'C')], { limit: 8, lockLanguage: 'telugu', familiarLanguages: ['hindi'] });
+    expect(any.languageLockStep).toBe('any');
+    expect(ids(any.songs)).toEqual(['t1', 'p1', 'p2']);
+  });
+});
