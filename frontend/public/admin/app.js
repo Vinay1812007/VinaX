@@ -3384,7 +3384,19 @@
     try { localStorage.setItem(GRP_KEY, JSON.stringify(closed)); } catch (e) {}
     applyNavGroups();
   }
+  // 7.2.0 — helpers handed to section modules (sections/registry.js).
+  // Failed reads render as unavailable with the server's reason, never as zeros.
+  var SECTION_HELPERS = {
+    api: api, apiMemo: apiMemo, postApi: postApi, esc: esc, html: html, $: $,
+    view: function (markup) { $('view').innerHTML = markup; },
+    stamp: stamp, setExport: setExport, days: function () { return rangeDays; },
+    isActive: function (key) { return active === key; }, navigate: function (key) { setSection(key); },
+    fail: function (e) { showFail(e && e.message ? 'Unavailable — ' + e.message + '. Nothing is shown as zero while the read is failing.' : 'Unavailable.'); },
+  };
+  function sectionModule(key) { return window.VinaXAdminSections ? window.VinaXAdminSections.get(key) : null; }
   function refreshActive() {
+    var mod = sectionModule(active);
+    if (mod) { mod.load(SECTION_HELPERS); return; }
     if (active === 'workspace') window.VinaXWorkspace.mount({ api: api, days: function () { return rangeDays; }, navigate: setSection, isActive: function () { return active === 'workspace'; } });
     else if (active === 'overview') loadOverview();
     else if (active === 'live') loadLive();
@@ -3468,6 +3480,8 @@
   function autoTick() {
     if (formFocused()) return;
     if (LOCAL_SECTIONS[active]) return;
+    var mod = sectionModule(active);
+    if (mod && mod.local) return;
     if (isIdle()) return; // untouched tab: stop burning the request budget
     if (active === 'workspace') { window.VinaXWorkspace.refresh(); return; }
     refreshActive();

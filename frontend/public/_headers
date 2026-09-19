@@ -67,6 +67,8 @@
   Cache-Control: no-cache
 /admin/workspace.js
   Cache-Control: no-cache
+/admin/sections/*
+  Cache-Control: no-cache
 
 /assets-404.txt
   Cache-Control: no-store
