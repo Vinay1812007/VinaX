@@ -23,7 +23,7 @@ export const onRequestOptions = async () => new Response(null, { status: 204, he
 export const onRequestGet = async () => methodNotAllowed();
 
 const contracts = {
-  metadata: 'Return {"songs":[{"id":"supplied id","mood":"chill","vibe":["calm"],"genre":["folk"],"language":null,"dialect":null,"subLanguage":null,"energy":null,"tempo":null,"context":["focus"]}]}. Classify the supplied song metadata conservatively. Unknown fields must be null or empty. Never claim measured audio features: energy and tempo must be null unless explicitly provided in the input. Mood is romantic, energetic, chill, melancholy, devotional or neutral. Do not guess dialect from language or artist alone.',
+  metadata: 'Return {"songs":[{"id":"supplied id","mood":"chill","vibe":["calm"],"genre":["folk"],"language":null,"dialect":null,"subLanguage":null,"energy":null,"tempo":null,"context":["focus"]}]}. Classify the supplied song metadata conservatively. Unknown fields must be null or empty. Never claim measured audio features: energy and tempo must be null unless the input song carries them, and then they are copied unchanged. Mood is romantic, energetic, chill, melancholy, devotional or neutral. Do not guess dialect from language or artist alone.',
   ranking: 'Return {"ids":["supplied song id",...]}. Rank only supplied candidates using seed, likes, skips, completed listening, artist affinity, mood, energy, language and session context. Include discovery with related mood/genre and varied lead artists. Exclude duplicates. Never invent song ids.',
   shelves: 'Return {"sections":[{"title":"short shelf title","query":"a catalogue search phrase","why":"one short sentence"}]}. Design 4 to 6 Home shelves for this listener from the taste, time of day and session context supplied. Each title is original, specific and under 50 characters; each query is a plain search phrase (language, mood, era, artist, film or instrument words) under 90 characters that a song catalogue can answer; each why explains the shelf in under 90 characters without naming any AI vendor, model or competitor. Stay inside preferredLanguages; never use avoidLanguages; never repeat a title or query listed in avoidShelves. Never output HTML, URLs or brand names.',
   home: 'Return {"title":"short original VinaX headline","description":"one sentence","order":["shelf key",...]}. Build a listening Home from these allowed shelf keys: quick, personal, aihome, discovery, charts, seasonal, moods, genres, artists, albums, daypicks, loved, feed. Include each key exactly once, ordering around the listener request and taste. Never output HTML, CSS, scripts, external URLs, competitor brands or model names. Title max 60 characters, description max 160.',
@@ -37,11 +37,39 @@ const MOODS = new Set(['romantic', 'energetic', 'chill', 'melancholy', 'devotion
 const HOME_KEYS = new Set(['quick', 'personal', 'aihome', 'discovery', 'charts', 'seasonal', 'moods', 'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed']);
 const MARKUP = /<|>|https?:\/\//i;
 
-/** Ids of the songs the CLIENT supplied — the only ids an answer may carry. */
-function suppliedIds(data: unknown): Set<string> {
+/** The songs the CLIENT supplied, by id (first 60) — the only ids an answer may carry. */
+function suppliedSongs(data: unknown): Map<string, Record<string, unknown>> {
   const songs = isObj(data) && Array.isArray(data.songs) ? data.songs : [];
-  return new Set(songs.filter(isObj).map((row) => row.id).filter((id): id is string => typeof id === 'string' && !!id).slice(0, 60));
+  const out = new Map<string, Record<string, unknown>>();
+  for (const row of songs.filter(isObj)) {
+    if (out.size >= 60) break;
+    if (typeof row.id === 'string' && row.id && !out.has(row.id)) out.set(row.id, row);
+  }
+  return out;
 }
+
+/** Measured audio features: the model may echo a supplied value (within rounding), never invent or change one. */
+const MEASURED = { energy: { min: 0, max: 1, tolerance: 0.01 }, tempo: { min: 40, max: 220, tolerance: 1 } } as const;
+/** Descriptive fields the model may infer; each is labelled `inferred` unless it merely echoes the request. */
+const DESCRIPTIVE = ['mood', 'vibe', 'genre', 'context', 'language', 'dialect', 'subLanguage'] as const;
+
+/**
+ * 7.2.0 — provenance is enforced in code, not left to the prompt. energy and
+ * tempo survive only when the request's song carried that field and the
+ * model's value equals it within rounding; the answer then carries the
+ * SUPPLIED value and lists the field in `supplied`. Anything else is null —
+ * an unknown stays unknown. Every descriptive field the model filled that the
+ * request did not already carry is listed in `inferred`, so clients can tell
+ * a model's guess at mood from a measured audio feature.
+ */
+function measured(field: keyof typeof MEASURED, answer: Record<string, unknown>, source: Record<string, unknown> | undefined): number | null {
+  const { min, max, tolerance } = MEASURED[field];
+  const given = ranged(source?.[field], min, max);
+  if (given === null) return null;
+  const said = ranged(answer[field], min, max);
+  return said !== null && Math.abs(said - given) <= tolerance ? given : null;
+}
+const sameText = (a: unknown, b: unknown): boolean => typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /**
  * The engine's JSON is untrusted: rebuild each task's answer field by field so
@@ -59,7 +87,8 @@ export function sanitizeCurated(task: 'metadata' | 'ranking' | 'home', raw: unkn
     const line = (v: unknown, max: number): string | null => { const t = text(v, max); return t && !MARKUP.test(t) ? t : null; };
     return { title: line(raw.title, 60), description: line(raw.description, 160), order, hidden: keys(raw.hidden).slice(0, HOME_KEYS.size - 1) };
   }
-  const allowed = suppliedIds(requestData);
+  const supplied = suppliedSongs(requestData);
+  const allowed = new Set(supplied.keys());
   const seen = new Set<string>();
   const fresh = (id: unknown): id is string => typeof id === 'string' && allowed.has(id) && !seen.has(id) && !!seen.add(id);
   if (task === 'ranking') {
@@ -69,12 +98,17 @@ export function sanitizeCurated(task: 'metadata' | 'ranking' | 'home', raw: unkn
   }
   const rows = Array.isArray(raw) ? raw : isObj(raw) && Array.isArray(raw.songs) ? raw.songs : [];
   const songs = rows.filter(isObj).filter((row) => fresh(row.id)).map((row) => {
+    const source = supplied.get(row.id as string);
     const mood = text(row.mood, 20)?.toLowerCase() ?? null;
-    return {
+    const out = {
       id: row.id as string, mood: mood && MOODS.has(mood) ? mood : null, vibe: tags(row.vibe), genre: tags(row.genre), context: tags(row.context),
       language: text(row.language, 60), dialect: text(row.dialect, 60), subLanguage: text(row.subLanguage, 60),
-      energy: ranged(row.energy, 0, 1), tempo: ranged(row.tempo, 40, 220),
+      energy: measured('energy', row, source), tempo: measured('tempo', row, source),
     };
+    const filled = (v: unknown): boolean => (Array.isArray(v) ? v.length > 0 : v !== null && v !== undefined);
+    const inferred = DESCRIPTIVE.filter((f) => filled(out[f]) && !sameText(out[f], source?.[f]));
+    const echoed = (['energy', 'tempo'] as const).filter((f) => out[f] !== null);
+    return { ...out, inferred, supplied: echoed };
   });
   return songs.length ? { songs } : null;
 }
