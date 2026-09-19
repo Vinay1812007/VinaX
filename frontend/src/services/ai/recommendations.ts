@@ -1,5 +1,6 @@
 import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
+import { useSettingsStore } from '@/store/settingsStore';
 
 /** Task budgets; models and fallback lanes are configured in the server router. */
 // v6.5.2 — client leashes sit above the server budgets (metadata 5.5 s,
@@ -30,6 +31,9 @@ const labels = (v: unknown) => (Array.isArray(v) ? v : [v]).map(label).filter((s
 const numeric = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : undefined;
 
 export async function requestCurator(task: 'metadata' | 'ranking' | 'home' | 'shelves', data: unknown, signal?: AbortSignal): Promise<unknown> {
+  // 7.2.0 — every curate task is background AI for recommendations: the
+  // listener's master switch turns all of them off (the on-device paths answer).
+  if (!useSettingsStore.getState().aiAssist) return null;
   if (Date.now() < routeMissingUntil) return null;
   if (task !== 'home' && task !== 'shelves' && Date.now() < retryAfter) return null;
   const controller = new AbortController();

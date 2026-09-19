@@ -289,7 +289,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // DJ is on, it is the AI voice for this stretch. The re-rank waits only
   // inside what is left of the deadline.
   const djOn = aiDjEnabled();
-  if (!djOn && ranked.length >= 4 && left() > RANK_RESERVE_MS) {
+  if (!djOn && useSettingsStore.getState().aiAssist && ranked.length >= 4 && left() > RANK_RESERVE_MS) {
     const blended = await within(blendAi(ranked, nextCtx), left() - RANK_RESERVE_MS / 2, ranked, signal);
     ranked = blended.value;
     if (blended.late && !signal?.aborted) fallback = fallback ?? 'ai_timeout';
@@ -479,9 +479,10 @@ export function shapeFor(energy: string): ArcShape {
   return 'steady';
 }
 
-/** Listener switch AND owner flag (read from the cached config; a missing flag means on). */
+/** Listener switches (AI in recommendations, AI DJ) AND the owner flag (read from the cached config; a missing flag means on). */
 function aiDjEnabled(): boolean {
-  if (!useSettingsStore.getState().aiDj) return false;
+  const settings = useSettingsStore.getState();
+  if (!settings.aiAssist || !settings.aiDj) return false;
   const flags = queryClient.getQueryData<Record<string, boolean>>(['feature-flags']);
   return flags?.aiDj !== false;
 }

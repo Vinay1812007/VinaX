@@ -12,6 +12,7 @@ import { stripExplicit } from '@/services/kidMode';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { queryClient } from '@/services/queryClient';
 import type { Candidate } from './types';
 
 /**
@@ -95,7 +96,9 @@ export async function planQueue(req: PlanRequest): Promise<QueuePlan> {
   let djTouched = false;
   let songs = arc.songs;
   let commit: QueuePlan['commit'];
-  if (req.useDj && arc.songs.length >= 3 && useSettingsStore.getState().aiDj) {
+  // 7.2.0 — the master switch and the owner's kill switch apply to the Queue Builder too.
+  const djAllowed = useSettingsStore.getState().aiAssist && useSettingsStore.getState().aiDj && queryClient.getQueryData<Record<string, boolean>>(['feature-flags'])?.aiDj !== false;
+  if (req.useDj && arc.songs.length >= 3 && djAllowed) {
     try {
       const { djSequence, commitDjSet } = await import('@/services/ai/dj');
       const set = await djSequence(seed, { ...ctx, seedSong: seed }, arc.songs.map((s) => s.song), arc.songs.length, undefined, { shape: req.shape, goal: req.goal });
