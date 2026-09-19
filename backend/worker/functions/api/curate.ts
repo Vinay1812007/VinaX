@@ -1,5 +1,5 @@
 /** Structured music tasks on the existing key/model lane router. */
-import { chat, extractJson, logAiEvent, type AiEnv, type Lane } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, extractJson, isAiBlocked, logAiEvent, type AiEnv, type AiFeature, type Lane } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { rateLimitAsync, methodNotAllowed } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
@@ -124,6 +124,12 @@ export async function onRequestPost({ request, env, waitUntil }: { request: Requ
     if (!body || !Object.prototype.hasOwnProperty.call(TASK_ROUTES, body.task ?? '') || !body.data || typeof body.data !== 'object') return json({ error: 'bad_request' }, 400);
     const task = body.task as keyof typeof TASK_ROUTES;
     const route = TASK_ROUTES[task];
+    // 7.2.0 — each curate task has its own owner switch (curate-metadata,
+    // curate-ranking, curate-home, curate-shelves) plus the global stop and
+    // caps; the client already falls back on any non-2xx.
+    const feature = `curate-${task}` as AiFeature;
+    const blocked = await aiGate(env, feature);
+    if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
     const now = Date.now();
     if (task === 'shelves') {
       // v6.5.0 — the Home Builder: idea pitches in parallel, one curate, and
@@ -148,7 +154,8 @@ export async function onRequestPost({ request, env, waitUntil }: { request: Requ
       { role: 'user', content: JSON.stringify(body.data) },
     // v6.5.2 — leashes sized to the engines measured live (a warm metadata
     // call lands in ~4 s; 2.5 s aborted it before it could answer).
-    ], { lane: lanes[0], ladder: lanes.slice(1), json: true, temperature: 0.25, maxTokens: route.tokens, firstTimeoutMs: task === 'metadata' ? 3500 : 5000, timeoutMs: 4000, deadlineAt: now + route.budget, reasoningEffort: 'low' });
+    ], { lane: lanes[0], ladder: lanes.slice(1), json: true, temperature: 0.25, maxTokens: route.tokens, firstTimeoutMs: task === 'metadata' ? 3500 : 5000, timeoutMs: 4000, deadlineAt: now + route.budget, reasoningEffort: 'low', feature });
+    if (isAiBlocked(result.error)) return json({ error: aiBlockCode(result.error) }, 503);
     // Never hand the engine's JSON through as-is — validate and clip it first.
     const data = sanitizeCurated(task, extractJson(result.content), body.data);
     const servedLane = lanes.includes(result.keyRole as Lane) ? result.keyRole as Lane : lanes[0];

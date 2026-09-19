@@ -8,6 +8,7 @@
  */
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
+import { validateAiControls } from '../../_lib/ai';
 import { sbSelectResult, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -22,7 +23,19 @@ export const ALLOWED_KEYS = new Set([
   'greeting', 'broadcast', 'search-synonyms', 'catalog-sources', 'language-order', 'ai-starters', 'ai-quick', 'support-faq', 'min-version', 'maintenance-window', 'ai-rules',
   // v5.16.0 — operator-entered model prices for the AI Cost panel (admin-only)
   'ai-prices',
+  // 7.2.0 — backend-enforced AI emergency stop, feature switches and daily
+  // spend caps (_lib/ai.ts). Admin-only; strictly validated below.
+  'ai-controls',
 ]);
+
+/**
+ * Keys whose value is validated strictly before it is stored: a malformed
+ * record is refused with 400 and the reason, never coerced. The stored value
+ * is the validator's normalised copy.
+ */
+const VALIDATORS: Partial<Record<string, (value: unknown) => { ok: true; value: unknown } | { ok: false; error: string }>> = {
+  'ai-controls': (value) => validateAiControls(value),
+};
 /** jsonb payload cap — banners may embed small base64 images. */
 const MAX_VALUE_BYTES = 900 * 1024;
 
@@ -66,10 +79,17 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const key = typeof body.key === 'string' ? body.key : '';
   if (!ALLOWED_KEYS.has(key)) return json({ error: 'unknown_key' }, 400);
   if (body.value === undefined) return json({ error: 'bad_request' }, 400);
-  const serialized = JSON.stringify(body.value);
+  const validate = VALIDATORS[key];
+  let value: unknown = body.value;
+  if (validate) {
+    const checked = validate(body.value);
+    if (!checked.ok) return json({ error: 'invalid_value', key, reason: checked.error }, 400);
+    value = checked.value;
+  }
+  const serialized = JSON.stringify(value);
   if (serialized.length > MAX_VALUE_BYTES) return json({ error: 'too_large' }, 413);
-  const ok = await sbUpsert(env, 'vinax_config', { key, value: body.value, updated_at: new Date().toISOString() }, 'key');
+  const ok = await sbUpsert(env, 'vinax_config', { key, value, updated_at: new Date().toISOString() }, 'key');
   if (!ok) return json({ error: 'store_failed' }, 502);
   void logAdminAudit(env, 'config', `updated ${key} (${serialized.length} bytes)`);
-  return json({ ok: true });
+  return json({ ok: true, ...(validate ? { value } : {}) });
 };

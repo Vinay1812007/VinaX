@@ -14,6 +14,7 @@
  */
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { isServedVoiceModel } from '../_lib/catalog';
+import { aiBlockCode, aiGate } from '../_lib/ai';
 
 interface Env {
   VINAX_GROQ_API_KEY?: string;
@@ -60,6 +61,10 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
 
   const key = env.VINAX_GROQ_API_KEY;
   if (!key) return json({ error: 'not_configured' }, 503);
+  // 7.2.0 — the owner's AI switches and spend caps; the client falls back to
+  // the device's own speech engine on any non-2xx.
+  const blocked = await aiGate(env, 'tts');
+  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
 
   const body = (await request.json().catch(() => null)) as { text?: unknown; model?: unknown; voice?: unknown } | null;
   const raw = typeof body?.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';

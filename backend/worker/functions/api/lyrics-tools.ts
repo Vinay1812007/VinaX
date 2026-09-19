@@ -1,7 +1,7 @@
 /** Romanize or translate lyric lines via the scholar lane (server-side key;
  *  per-lane provider base — see functions/_lib/ai.ts). Returns the same number
  *  of lines in the same order so synced-lyric timing stays aligned. */
-import { chat, extractJson, logAiEvent, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, extractJson, isAiBlocked, logAiEvent, type AiEnv } from '../_lib/ai';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 
@@ -56,6 +56,9 @@ async function handlePost(context: {
   const isApp = request.headers.get('x-vinax-client') === 'app';
   const limited = await rateLimitAsync(request, 'lyrics-tools', { capacity: 12, refillPerMinute: 6 }, env);
   if (limited) return limited;
+  // 7.2.0 — the owner's AI switches and spend caps.
+  const blocked = await aiGate(env, 'lyrics');
+  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
 
   const body = (await request.json().catch(() => null)) as { lines?: unknown; mode?: unknown } | null;
   const mode = typeof body?.mode === 'string' && body.mode in SYS ? body.mode : null;
@@ -74,8 +77,9 @@ async function handlePost(context: {
     // Scholar rides a sub-second external base now (v2.7.3, probed TTFB
     // ~120 ms) — a 12s first leash covers even a big JSON payload with room
     // to spare, and ladder hops stay tight at 10s inside the 32s deadline.
-    { temperature: 0.3, maxTokens: 4000, lane: 'scholar', json: true, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: 12_000, deadlineAt: t0 + 32_000 },
+    { temperature: 0.3, maxTokens: 4000, lane: 'scholar', json: true, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: 12_000, deadlineAt: t0 + 32_000, feature: 'lyrics' },
   );
+  if (isAiBlocked(r.error)) return json({ error: aiBlockCode(r.error) }, 503);
   if (mode === 'explain') {
     const parsed = r.error ? null : extractJson<{ summary?: unknown; mood?: unknown; themes?: unknown }>(r.content);
     const summary = typeof parsed?.summary === 'string' ? parsed.summary.slice(0, 800) : '';

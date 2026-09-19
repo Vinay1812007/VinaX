@@ -106,6 +106,11 @@ create table if not exists vinax_ai_events (
   client      text,           -- web | app
   latency_ms  int
 );
+-- Token counts for the AI Cost panel and the 7.2 daily spend caps (the
+-- 2026-09 rollups migration adds the same columns; a no-op where they exist).
+alter table if exists vinax_ai_events
+  add column if not exists prompt_tokens int,
+  add column if not exists completion_tokens int;
 
 create table if not exists vinax_rooms (
   code        text primary key,
@@ -595,3 +600,28 @@ set search_path = public, pg_temp as $$
         from ev order by created_at desc limit 30) t), '[]'::jsonb)
   );
 $$;
+
+-- 7.2: today's AI token use by model, for the backend-enforced daily spend
+-- caps (_lib/ai.ts). Same definition as
+-- migrations/2026-09-vinax-7.2-ai-controls.sql; service role only.
+create or replace function public.vinax_ai_usage_since(p_since timestamptz)
+returns table (model text, calls bigint, prompt_tokens bigint, completion_tokens bigint, calls_without_usage bigint)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(e.model, '(none)') as model,
+         count(*)::bigint as calls,
+         coalesce(sum(e.prompt_tokens), 0)::bigint as prompt_tokens,
+         coalesce(sum(e.completion_tokens), 0)::bigint as completion_tokens,
+         count(*) filter (where e.prompt_tokens is null or e.completion_tokens is null)::bigint as calls_without_usage
+  from vinax_ai_events e
+  -- Never scan more than two days, whatever the caller asks for.
+  where e.created_at >= greatest(p_since, now() - interval '2 days')
+  group by 1
+  order by 2 desc
+  limit 500;
+$$;
+revoke execute on function public.vinax_ai_usage_since(timestamptz) from anon, authenticated;
+grant execute on function public.vinax_ai_usage_since(timestamptz) to service_role;

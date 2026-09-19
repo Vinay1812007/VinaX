@@ -3,7 +3,7 @@
  *  Fully gated: if the key lacks image access, the client gets an honest
  *  error instead of a hang. */
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, type AiEnv } from '../_lib/ai';
 
 type Env = AiEnv;
 
@@ -59,6 +59,9 @@ const handleImage = async (context: { request: Request; env: Env }): Promise<Res
   // No image key means the feature is unavailable, not that the client sent
   // a bad request — surface as 503 (audit finding M13).
   if (!key) return json({ error: 'not_configured' }, 503);
+  // 7.2.0 — the owner's AI switches and spend caps.
+  const blocked = await aiGate(env, 'image');
+  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
   const body = (await request.json().catch(() => null)) as { prompt?: string } | null;
   const prompt = (body?.prompt ?? '').toString().trim().slice(0, 600);
   if (prompt.length < 3) return json({ error: 'bad_request' }, 400);

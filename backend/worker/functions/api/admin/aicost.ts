@@ -12,7 +12,12 @@
  * `unpriced: true` is the panel's cue to fill the table in. Cost is USD.
  */
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { costUsd, matchPrice, modelSlug, parsePrices, type Price, type PriceTable } from '../../_lib/ai';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+
+// 7.2.0 — the price helpers moved to _lib/ai.ts, where the daily spend cap
+// uses the same table; re-exported so existing importers keep working.
+export { costUsd, matchPrice, modelSlug, parsePrices, type Price, type PriceTable };
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -24,54 +29,10 @@ export interface AiEventRow {
   completion_tokens: number | null;
 }
 
-export interface Price { in: number; out: number }
-export type PriceTable = Record<string, Price>;
-
 const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
-
-/** Sanitise the `ai-prices` config value: only `{prefix: {in, out}}` entries with non-negative numbers survive. */
-export function parsePrices(raw: unknown): PriceTable {
-  const out: PriceTable = {};
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    const key = k.trim().slice(0, 120);
-    if (!key || !v || typeof v !== 'object') continue;
-    const p = v as { in?: unknown; out?: unknown };
-    const pin = num(p.in);
-    const pout = num(p.out);
-    if (pin === null || pout === null) continue;
-    out[key] = { in: pin, out: pout };
-    if (Object.keys(out).length >= 200) break;
-  }
-  return out;
-}
-
-/** vinax_ai_events stores `slug @lane` — the slug alone is what gets priced. */
-export function modelSlug(model: string | null): string {
-  const m = (model ?? '').trim();
-  if (!m) return '(none)';
-  const at = m.indexOf(' @');
-  return at > 0 ? m.slice(0, at) : m;
-}
-
-/** Longest-prefix price lookup (exact slug beats any prefix). */
-export function matchPrice(model: string, prices: PriceTable): Price | null {
-  let best: string | null = null;
-  for (const key of Object.keys(prices)) {
-    if (model.startsWith(key) && (best === null || key.length > best.length)) best = key;
-  }
-  return best === null ? null : prices[best];
-}
-
-/** USD for one call: tokens / 1e6 × price per million, rounded to micro-dollars. */
-export function costUsd(prompt: number, completion: number, price: Price | null): number {
-  if (!price) return 0;
-  const usd = (prompt / 1e6) * price.in + (completion / 1e6) * price.out;
-  return Math.round(usd * 1e6) / 1e6;
-}
 
 export interface AiCostReport {
   tokensTotal: { prompt: number; completion: number };

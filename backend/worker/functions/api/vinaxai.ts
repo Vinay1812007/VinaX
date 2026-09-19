@@ -24,6 +24,8 @@ import {
   usageFromJson,
   type AiEnv,
   type Lane,
+  aiBlockCode,
+  aiGate,
 } from '../_lib/ai';
 import { catalogDefaultModel, resolveCatalogModel, type CatalogProvider } from '../_lib/catalog';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
@@ -642,6 +644,10 @@ async function handleChat(
   // model degrades to a healthy sibling instead of failing the chat.
   const attempts = laneAttempts(env, LANE_BY_MODE[mode], pickedModel ?? undefined);
   if (!attempts.length) return jsonErr({ error: 'ai_not_configured' }, 503);
+  // 7.2.0 — the owner's AI switches and spend caps, before any engine or web
+  // search is called; the chat page shows its "paused" line on a 503.
+  const blocked = await aiGate(env, 'vinaxai');
+  if (blocked) return jsonErr({ error: aiBlockCode(blocked) }, 503);
   const primary = attempts[0];
   const keyRole = primary.role;
 

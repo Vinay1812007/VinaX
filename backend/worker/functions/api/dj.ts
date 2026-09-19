@@ -30,7 +30,7 @@
  *   → 200 { intro, songs: [{ songId, title, artist, reason, segue, confidence, fromPool }], model }
  *   → 400 bad_request | 503 ai_not_configured | 500 { error }
  */
-import { chat, extractJson, gather, logAiEvent, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, extractJson, gather, isAiBlocked, logAiEvent, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
@@ -177,6 +177,10 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
   const isApp = request.headers.get('x-vinax-client') === 'app';
   const limited = await rateLimitAsync(request, 'dj', { capacity: 15, refillPerMinute: 8 }, env);
   if (limited) return limited;
+  // 7.2.0 — the owner's AI switches and spend caps: 503 so the client keeps
+  // its on-device order (it already treats a 503 as "DJ unavailable").
+  const blocked = await aiGate(env, 'dj');
+  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
   // Capped while reading — a chunked body carries no content-length.
   const read = await readJsonCapped<{ context?: unknown; pool?: unknown; count?: unknown; discover?: unknown; maxDiscover?: unknown; wantSegues?: unknown } | null>(request, 48_000);
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
@@ -223,7 +227,7 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
           { role: 'user', content: `Seed + session context (JSON):\n${ctxJson}\n\nvarietySeed: "${seed}" — vary the list between rounds. List about 20 candidate songs as JSON.` },
         ],
         ['scholar'],
-        { temperature: 0.7, maxTokens: 900, timeoutMs: 3_500, deadlineAt: Math.min(deadlineAt, Date.now() + 3_500) },
+        { temperature: 0.7, maxTokens: 900, timeoutMs: 3_500, deadlineAt: Math.min(deadlineAt, Date.now() + 3_500), feature: 'dj' },
       );
       const seen = new Set(pool.map((p) => canonKey(p.title, p.artist)));
       for (const g of gathered) {
@@ -257,8 +261,10 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
     // another 11 s. The Groq scholar lane answers the same JSON in 1–3 s, so
     // it leads, the dj engine is the first failover, and the secondary is
     // skipped — a set lands in a few seconds instead of a 408 at 26 s.
-    { temperature: 0.8, lane: 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 11_000, firstTimeoutMs: 9_000, skipSecondary: true, ladder: ['dj', 'fast', 'chat', 'home'], deadlineAt },
+    { temperature: 0.8, lane: 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 11_000, firstTimeoutMs: 9_000, skipSecondary: true, ladder: ['dj', 'fast', 'chat', 'home'], deadlineAt, feature: 'dj' },
   );
+  // The controls changed while this request ran: same honest 503, nothing logged as a failed call.
+  if (isAiBlocked(r.error)) return json({ error: aiBlockCode(r.error) }, 503);
   // Structural anti-repeat for proposals: whatever the model claims, a title
   // the listener just heard or was already offered never comes back.
   const avoidBlob = maxDiscover > 0 ? (JSON.stringify(ctx.avoidSongs ?? '') + JSON.stringify(ctx.recentlyPlayed ?? '') + JSON.stringify(ctx.skippedSongs ?? '')).toLowerCase() : '';

@@ -60,7 +60,7 @@
  * NVIDIA_BASE_URL optional DEFAULT endpoint override — applies only
  * to lanes without their own LANE_BASE pin
  */
-import { sbInsert, supabaseConfigured, type SupabaseEnv } from './supabase';
+import { dbErrorCode, sbInsert, sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 export interface AiEnv {
   // The owner's 18 live keys (2026-09-09 rotation). Every secret from the
@@ -318,7 +318,8 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
   return out;
 }
 
-export type ChatError = 'not_configured' | 'unreachable' | 'failed';
+/** `disabled` / `over_budget` (7.2.0): refused by the owner's AI controls before any provider was called. */
+export type ChatError = 'not_configured' | 'unreachable' | 'failed' | AiBlock;
 
 /** Provider-reported token usage for one call (OpenAI-compatible `usage`). */
 export interface TokenUsage {
@@ -396,6 +397,9 @@ export async function chat(
      * honest failure instead of stacked retries that outlive client patience
      * (DQA-02). */
     deadlineAt?: number;
+    /** 7.2.0 — the product feature this call serves, for the owner's per-feature
+     * switch. Without it only the emergency stop and the spend caps apply. */
+    feature?: AiFeature;
   } = {},
 ): Promise<ChatResult> {
   const lane = opts.lane ?? 'chat';
@@ -403,6 +407,9 @@ export async function chat(
   // dead or missing key degrades gracefully instead of failing the feature.
   const attempts = laneAttempts(env, lane, opts.model, opts.ladder, opts.skipSecondary === true);
   if (!attempts.length) return { content: null, model: null, error: 'not_configured' };
+  // 7.2.0 — the owner's switches and spend caps, before any provider call.
+  const blocked = await aiGate(env, opts.feature);
+  if (blocked) return { content: null, model: null, error: blocked };
   const wantJson = opts.json === true;
   let lastStatus = 0;
   let attemptNo = 0;
@@ -528,6 +535,8 @@ export interface GatherOpts {
   maxTokens?: number;
   timeoutMs?: number;
   deadlineAt?: number;
+  /** 7.2.0 — the product feature this round serves (owner per-feature switch). */
+  feature?: AiFeature;
   /** Co-work mode (v5.24.0). When true each participating lane is restricted
    *  to its OWN key — no cross-lane failover hop.
    *
@@ -566,6 +575,8 @@ export async function gatherDetailed(
   lanes: Lane[],
   opts: GatherOpts = {},
 ): Promise<GatherResult[]> {
+  // 7.2.0 — a switched-off feature or a reached cap spends nothing on pitches.
+  if (await aiGate(env, opts.feature)) return [];
   const settled = await Promise.allSettled(
     lanes.map(async (lane) => {
       const started = Date.now();
@@ -577,6 +588,7 @@ export async function gatherDetailed(
         lane,
         json: true,
         reasoningEffort: 'low',
+        feature: opts.feature,
         // An empty ladder keeps the participant on its own key+secondary.
         ...(opts.soloLadder ? { ladder: [] as Lane[] } : {}),
       });
@@ -586,6 +598,460 @@ export async function gatherDetailed(
   const out: GatherResult[] = [];
   for (const s of settled) if (s.status === 'fulfilled' && s.value.content) out.push(s.value);
   return out;
+}
+
+// ============================================================================
+// 7.2.0 — owner AI controls: emergency switch, per-feature switches and daily
+// spend caps, enforced here so every entry point (chat, gather, and the
+// streaming routes through aiGate) obeys them.
+//
+// The owner publishes vinax_config key `ai-controls` (strictly validated by
+// /api/admin/appconfig with validateAiControls). Each isolate caches it: a
+// good read is refreshed after CONTROLS_TTL_MS; a failed refresh is logged
+// and FAILS OPEN (today's behaviour: every feature on, no caps), except that
+// an emergencyOff: true read within the last CONTROLS_MAX_AGE_MS keeps
+// applying until that age — a flaky database cannot lift an emergency stop
+// early, and cannot hold AI off for more than a minute after it was lifted.
+//
+// Observed use = today's (UTC) token sums from vinax_ai_events, read with a
+// bounded aggregate (the vinax_ai_usage_since RPC; a 10,000-row sample until
+// that migration is applied) and cached per isolate for USAGE_TTL_MS. Cost is
+// estimated with the same operator price table the AI Cost panel uses
+// (`ai-prices`); tokens on an unpriced model, or calls whose provider sent no
+// usage, make the estimate a LOWER BOUND ("not known"), never a zero. A cap
+// blocks only when the known part alone reaches it; a failed usage read fails
+// open. Caps are soft by up to one cache period plus in-flight calls.
+// ============================================================================
+
+export const AI_FEATURES = ['dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image'] as const;
+export type AiFeature = (typeof AI_FEATURES)[number];
+
+export interface AiControls {
+  /** Every AI feature off, backend-enforced. */
+  emergencyOff: boolean;
+  /** Per-feature switches: false = off. A missing feature is on. */
+  features: Partial<Record<AiFeature, boolean>>;
+  /** Daily (UTC) prompt + completion token cap across all AI calls; null = none. */
+  dailyTokenCap: number | null;
+  /** Daily (UTC) estimated cost cap in USD; null = none. */
+  dailyCostCapUsd: number | null;
+  /** When the owner published this record (ISO), set by the server. */
+  updatedAt: string | null;
+}
+
+export const AI_CONTROLS_DEFAULT: AiControls = Object.freeze({ emergencyOff: false, features: {}, dailyTokenCap: null, dailyCostCapUsd: null, updatedAt: null }) as AiControls;
+
+const CONTROL_KEYS = new Set(['emergencyOff', 'features', 'dailyTokenCap', 'dailyCostCapUsd', 'updatedAt']);
+const MAX_TOKEN_CAP = 1e12;
+const MAX_COST_CAP_USD = 1e6;
+
+/**
+ * Strict validation of an owner publish. Unknown keys, unknown features,
+ * non-boolean switches and out-of-range caps are refused (never coerced).
+ * `updatedAt` is accepted but replaced by the server clock.
+ */
+export function validateAiControls(raw: unknown, now = new Date()): { ok: true; value: AiControls } | { ok: false; error: string } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: 'not_an_object' };
+  const o = raw as Record<string, unknown>;
+  for (const k of Object.keys(o)) if (!CONTROL_KEYS.has(k)) return { ok: false, error: `unknown_key:${k.slice(0, 40)}` };
+  if (typeof o.emergencyOff !== 'boolean') return { ok: false, error: 'emergencyOff_must_be_boolean' };
+  const features: Partial<Record<AiFeature, boolean>> = {};
+  if (o.features !== undefined) {
+    if (!o.features || typeof o.features !== 'object' || Array.isArray(o.features)) return { ok: false, error: 'features_must_be_an_object' };
+    for (const [k, v] of Object.entries(o.features as Record<string, unknown>)) {
+      if (!(AI_FEATURES as readonly string[]).includes(k)) return { ok: false, error: `unknown_feature:${k.slice(0, 40)}` };
+      if (typeof v !== 'boolean') return { ok: false, error: `feature_must_be_boolean:${k}` };
+      features[k as AiFeature] = v;
+    }
+  }
+  const cap = (v: unknown, max: number, integer: boolean): number | null | 'bad' => {
+    if (v === undefined || v === null) return null;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > max) return 'bad';
+    if (integer && !Number.isInteger(v)) return 'bad';
+    return v;
+  };
+  const tokenCap = cap(o.dailyTokenCap, MAX_TOKEN_CAP, true);
+  if (tokenCap === 'bad') return { ok: false, error: 'dailyTokenCap_must_be_a_whole_number_or_null' };
+  const costCap = cap(o.dailyCostCapUsd, MAX_COST_CAP_USD, false);
+  if (costCap === 'bad') return { ok: false, error: 'dailyCostCapUsd_must_be_a_number_or_null' };
+  return { ok: true, value: { emergencyOff: o.emergencyOff, features, dailyTokenCap: tokenCap, dailyCostCapUsd: costCap, updatedAt: now.toISOString() } };
+}
+
+/**
+ * Lenient read of the STORED record (it may predate validation or have been
+ * edited by hand): a malformed field falls back to its default, but an
+ * explicit emergencyOff: true is always honoured.
+ */
+export function parseAiControls(raw: unknown): AiControls {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...AI_CONTROLS_DEFAULT, features: {} };
+  const o = raw as Record<string, unknown>;
+  const features: Partial<Record<AiFeature, boolean>> = {};
+  if (o.features && typeof o.features === 'object' && !Array.isArray(o.features)) {
+    for (const f of AI_FEATURES) {
+      const v = (o.features as Record<string, unknown>)[f];
+      if (typeof v === 'boolean') features[f] = v;
+    }
+  }
+  const num = (v: unknown, max: number): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
+  return {
+    emergencyOff: o.emergencyOff === true,
+    features,
+    dailyTokenCap: num(o.dailyTokenCap, MAX_TOKEN_CAP),
+    dailyCostCapUsd: num(o.dailyCostCapUsd, MAX_COST_CAP_USD),
+    updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt.slice(0, 40) : null,
+  };
+}
+
+export interface Price { in: number; out: number }
+export type PriceTable = Record<string, Price>;
+
+const priceNum = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+
+/** Sanitise the `ai-prices` config value: only `{prefix: {in, out}}` entries with non-negative numbers survive. */
+export function parsePrices(raw: unknown): PriceTable {
+  const out: PriceTable = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = k.trim().slice(0, 120);
+    if (!key || !v || typeof v !== 'object') continue;
+    const p = v as { in?: unknown; out?: unknown };
+    const pin = priceNum(p.in);
+    const pout = priceNum(p.out);
+    if (pin === null || pout === null) continue;
+    out[key] = { in: pin, out: pout };
+    if (Object.keys(out).length >= 200) break;
+  }
+  return out;
+}
+
+/** vinax_ai_events stores `slug @lane` — the slug alone is what gets priced. */
+export function modelSlug(model: string | null): string {
+  const m = (model ?? '').trim();
+  if (!m) return '(none)';
+  const at = m.indexOf(' @');
+  return at > 0 ? m.slice(0, at) : m;
+}
+
+/** Longest-prefix price lookup (exact slug beats any prefix). */
+export function matchPrice(model: string, prices: PriceTable): Price | null {
+  let best: string | null = null;
+  for (const key of Object.keys(prices)) {
+    if (model.startsWith(key) && (best === null || key.length > best.length)) best = key;
+  }
+  return best === null ? null : prices[best];
+}
+
+/** USD for one call: tokens / 1e6 × price per million, rounded to micro-dollars. 0 when unpriced — callers that must tell "free" from "unknown" check the price first. */
+export function costUsd(prompt: number, completion: number, price: Price | null): number {
+  if (!price) return 0;
+  const usd = (prompt / 1e6) * price.in + (completion / 1e6) * price.out;
+  return Math.round(usd * 1e6) / 1e6;
+}
+
+const CONTROLS_TTL_MS = 30_000;
+const CONTROLS_MAX_AGE_MS = 60_000;
+const CONTROLS_RETRY_MS = 10_000;
+const USAGE_TTL_MS = 60_000;
+const USAGE_RETRY_MS = 10_000;
+const CONTROL_READ_TIMEOUT_MS = 1_500;
+const USAGE_SAMPLE_LIMIT = 10_000;
+
+interface ControlsState {
+  controls: AiControls;
+  prices: PriceTable;
+  /** published = a stored record; default = none stored; unavailable = the read failed (fail-open in force). */
+  source: 'published' | 'default' | 'unavailable';
+  readError: string | null;
+  refreshAt: number;
+  /** A cached emergency stop keeps applying through a failed refresh until this time. */
+  emergencyUntil: number;
+}
+
+export interface ModelUsage { model: string; calls: number; prompt: number; completion: number; callsWithoutUsage: number }
+interface UsageState {
+  day: string;
+  models: ModelUsage[];
+  source: 'exact' | 'sampled';
+  truncated: boolean;
+  refreshAt: number;
+}
+
+let controlsState: ControlsState | null = null;
+let controlsInflight: Promise<ControlsState> | null = null;
+let usageState: UsageState | null = null;
+let usageFailedUntil = 0;
+let usageError: string | null = null;
+let usageInflight: Promise<UsageState | null> | null = null;
+
+/** Test hook: forget every cached control and usage read in this isolate. */
+export function resetAiControlsCache(): void {
+  controlsState = null;
+  controlsInflight = null;
+  usageState = null;
+  usageFailedUntil = 0;
+  usageError = null;
+  usageInflight = null;
+}
+
+async function readControls(env: SupabaseEnv, now: number): Promise<ControlsState> {
+  const keys = encodeURIComponent('"ai-controls","ai-prices"');
+  const r = await sbSelectResult<{ key: string; value: unknown; updated_at?: string }>(env, 'vinax_config', `key=in.(${keys})&select=key,value,updated_at`, { timeoutMs: CONTROL_READ_TIMEOUT_MS });
+  if (r.ok) {
+    const row = r.rows.find((x) => x.key === 'ai-controls');
+    const controls = row ? parseAiControls(row.value) : { ...AI_CONTROLS_DEFAULT, features: {} };
+    if (row && !controls.updatedAt && typeof row.updated_at === 'string') controls.updatedAt = row.updated_at;
+    return {
+      controls,
+      prices: parsePrices(r.rows.find((x) => x.key === 'ai-prices')?.value),
+      source: row ? 'published' : 'default',
+      readError: null,
+      refreshAt: now + CONTROLS_TTL_MS,
+      emergencyUntil: controls.emergencyOff ? now + CONTROLS_MAX_AGE_MS : 0,
+    };
+  }
+  const code = dbErrorCode(r.error);
+  const keep = controlsState && controlsState.emergencyUntil > now ? controlsState : null;
+  console.warn(`[ai-controls] read failed (${code}${r.httpStatus ? ` ${r.httpStatus}` : ''}) — failing open${keep ? '; the cached emergency stop stays on until it expires' : ''}`);
+  return {
+    controls: keep ? { ...AI_CONTROLS_DEFAULT, features: {}, emergencyOff: true, updatedAt: keep.controls.updatedAt } : { ...AI_CONTROLS_DEFAULT, features: {} },
+    prices: controlsState?.prices ?? {},
+    source: 'unavailable',
+    readError: code,
+    refreshAt: now + CONTROLS_RETRY_MS,
+    emergencyUntil: keep ? keep.emergencyUntil : 0,
+  };
+}
+
+async function loadControls(env: SupabaseEnv): Promise<ControlsState> {
+  const now = Date.now();
+  if (!supabaseConfigured(env)) {
+    return { controls: { ...AI_CONTROLS_DEFAULT, features: {} }, prices: {}, source: 'default', readError: null, refreshAt: now, emergencyUntil: 0 };
+  }
+  if (controlsState && now < controlsState.refreshAt) return controlsState;
+  if (!controlsInflight) {
+    controlsInflight = readControls(env, now)
+      .then((s) => (controlsState = s))
+      .finally(() => {
+        controlsInflight = null;
+      });
+  }
+  return controlsInflight;
+}
+
+const utcDay = (t: number): string => new Date(t).toISOString().slice(0, 10);
+
+async function readUsage(env: SupabaseEnv, now: number): Promise<UsageState | null> {
+  const day = utcDay(now);
+  const since = `${day}T00:00:00.000Z`;
+  const exact = await sbRpcResult<Array<{ model: string | null; calls: number; prompt_tokens: number; completion_tokens: number; calls_without_usage: number }>>(
+    env,
+    'vinax_ai_usage_since',
+    { p_since: since },
+    { timeoutMs: CONTROL_READ_TIMEOUT_MS },
+  );
+  const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : Number(v) >= 0 ? Number(v) : 0);
+  if (exact.ok && Array.isArray(exact.value)) {
+    const byModel = new Map<string, ModelUsage>();
+    for (const row of exact.value) {
+      const slug = modelSlug(row.model);
+      const m = byModel.get(slug) ?? { model: slug, calls: 0, prompt: 0, completion: 0, callsWithoutUsage: 0 };
+      m.calls += n(row.calls);
+      m.prompt += n(row.prompt_tokens);
+      m.completion += n(row.completion_tokens);
+      m.callsWithoutUsage += n(row.calls_without_usage);
+      byModel.set(slug, m);
+    }
+    return { day, models: [...byModel.values()], source: 'exact', truncated: false, refreshAt: now + USAGE_TTL_MS };
+  }
+  // The rollup is missing (migration not applied) or failed: a bounded
+  // sample of today's rows — a lower bound when it hits the row limit.
+  const sample = await sbSelectResult<{ model: string | null; prompt_tokens: number | null; completion_tokens: number | null }>(
+    env,
+    'vinax_ai_events',
+    `created_at=gte.${encodeURIComponent(since)}&select=model,prompt_tokens,completion_tokens&order=created_at.desc&limit=${USAGE_SAMPLE_LIMIT}`,
+    { timeoutMs: CONTROL_READ_TIMEOUT_MS },
+  );
+  if (!sample.ok) {
+    usageError = dbErrorCode(sample.error);
+    console.warn(`[ai-controls] usage read failed (${usageError}) — spend caps are not enforced until it recovers`);
+    return null;
+  }
+  const byModel = new Map<string, ModelUsage>();
+  for (const row of sample.rows) {
+    const slug = modelSlug(row.model);
+    const m = byModel.get(slug) ?? { model: slug, calls: 0, prompt: 0, completion: 0, callsWithoutUsage: 0 };
+    m.calls += 1;
+    const known = typeof row.prompt_tokens === 'number' && typeof row.completion_tokens === 'number';
+    if (known) {
+      m.prompt += row.prompt_tokens as number;
+      m.completion += row.completion_tokens as number;
+    } else m.callsWithoutUsage += 1;
+    byModel.set(slug, m);
+  }
+  return { day, models: [...byModel.values()], source: 'sampled', truncated: sample.rows.length >= USAGE_SAMPLE_LIMIT, refreshAt: now + USAGE_TTL_MS };
+}
+
+async function loadUsage(env: SupabaseEnv): Promise<UsageState | null> {
+  const now = Date.now();
+  if (!supabaseConfigured(env)) return null;
+  if (usageState && now < usageState.refreshAt && usageState.day === utcDay(now)) return usageState;
+  if (now < usageFailedUntil) return null;
+  if (!usageInflight) {
+    usageInflight = readUsage(env, now)
+      .then((s) => {
+        if (s) {
+          usageState = s;
+          usageError = null;
+        } else usageFailedUntil = now + USAGE_RETRY_MS;
+        return s;
+      })
+      .finally(() => {
+        usageInflight = null;
+      });
+  }
+  return usageInflight;
+}
+
+export interface UsageSummary {
+  day: string;
+  source: 'exact' | 'sampled';
+  /** The sample hit its row limit: every figure is a lower bound. */
+  truncated: boolean;
+  calls: number;
+  /** Calls whose provider reported no token counts — their tokens are unknown. */
+  callsWithoutUsage: number;
+  tokens: { prompt: number; completion: number; total: number };
+  /** False when any call lacks token counts or the sample was truncated. */
+  tokensComplete: boolean;
+  /** Estimated USD for the priced part only. */
+  costUsd: number;
+  /** False when any tokens ran on an unpriced model (the estimate is a lower bound). */
+  costKnown: boolean;
+  unpricedModels: string[];
+}
+
+function summarise(usage: UsageState, prices: PriceTable): UsageSummary {
+  let prompt = 0;
+  let completion = 0;
+  let calls = 0;
+  let without = 0;
+  let cost = 0;
+  const unpriced: string[] = [];
+  for (const m of usage.models) {
+    prompt += m.prompt;
+    completion += m.completion;
+    calls += m.calls;
+    without += m.callsWithoutUsage;
+    const price = matchPrice(m.model, prices);
+    if (price) cost += costUsd(m.prompt, m.completion, price);
+    else if (m.prompt + m.completion > 0 || m.callsWithoutUsage > 0) unpriced.push(m.model);
+  }
+  const tokensComplete = without === 0 && !usage.truncated;
+  return {
+    day: usage.day,
+    source: usage.source,
+    truncated: usage.truncated,
+    calls,
+    callsWithoutUsage: without,
+    tokens: { prompt, completion, total: prompt + completion },
+    tokensComplete,
+    costUsd: Math.round(cost * 1e6) / 1e6,
+    costKnown: tokensComplete && unpriced.length === 0,
+    unpricedModels: unpriced.sort(),
+  };
+}
+
+/** Why an AI call was refused before reaching any provider. */
+export type AiBlock = 'disabled' | 'over_budget';
+
+export function isAiBlocked(error: unknown): error is AiBlock {
+  return error === 'disabled' || error === 'over_budget';
+}
+
+/** The JSON error a route answers (with 503) so the client falls back to its on-device path. */
+export function aiBlockCode(block: AiBlock): 'ai_disabled' | 'ai_over_budget' {
+  return block === 'disabled' ? 'ai_disabled' : 'ai_over_budget';
+}
+
+function capsReached(c: AiControls, summary: UsageSummary | null): { tokens: boolean; cost: boolean } {
+  if (!summary) return { tokens: false, cost: false };
+  return {
+    tokens: c.dailyTokenCap !== null && summary.tokens.total >= c.dailyTokenCap,
+    cost: c.dailyCostCapUsd !== null && summary.costUsd >= c.dailyCostCapUsd,
+  };
+}
+
+/**
+ * The backend switch every AI entry point consults. Null = go ahead.
+ * Reads are cached per isolate (see above); any read failure fails open.
+ */
+export async function aiGate(env: object, feature?: AiFeature): Promise<AiBlock | null> {
+  const sbEnv = env as SupabaseEnv;
+  const state = await loadControls(sbEnv);
+  const c = state.controls;
+  if (c.emergencyOff) return 'disabled';
+  if (feature && c.features[feature] === false) return 'disabled';
+  if (c.dailyTokenCap === null && c.dailyCostCapUsd === null) return null;
+  const usage = await loadUsage(sbEnv);
+  const reached = capsReached(c, usage ? summarise(usage, state.prices) : null);
+  return reached.tokens || reached.cost ? 'over_budget' : null;
+}
+
+export interface AiControlsStatus {
+  /** The database is configured, so controls can be published and use observed. */
+  configured: boolean;
+  /** Where the effective controls came from; `unavailable` = the read failed and fail-open is in force. */
+  source: 'published' | 'default' | 'unavailable';
+  /** db_* code of a failed controls read, else null. */
+  readError: string | null;
+  /** The controls enforcement is using right now. */
+  controls: AiControls;
+  /** Effective per-feature state (false when switched off or under the emergency stop). */
+  features: Record<AiFeature, boolean>;
+  /** Today's (UTC) observed use; null when it could not be read (caps are then not enforced). */
+  usage: UsageSummary | null;
+  usageError: string | null;
+  caps: {
+    tokens: { cap: number | null; used: number | null; remaining: number | null; reached: boolean; complete: boolean };
+    costUsd: { cap: number | null; used: number | null; remaining: number | null; reached: boolean; known: boolean };
+  };
+  blocked: { emergency: boolean; overBudget: boolean; disabledFeatures: AiFeature[] };
+  cache: { controlsRefreshSec: number; emergencyMaxAgeSec: number; usageRefreshSec: number };
+  checkedAt: string;
+}
+
+/**
+ * Everything the console's AI operations panel shows, from the same cached
+ * reads enforcement uses (no other side effects): the effective controls,
+ * today's observed use, each cap with what is used and left, and whether the
+ * cost estimate is known or a lower bound. Always reads usage, caps or not.
+ */
+export async function aiControlsStatus(env: object): Promise<AiControlsStatus> {
+  const sbEnv = env as SupabaseEnv;
+  const state = await loadControls(sbEnv);
+  const usage = await loadUsage(sbEnv);
+  const summary = usage ? summarise(usage, state.prices) : null;
+  const c = state.controls;
+  const reached = capsReached(c, summary);
+  const features = Object.fromEntries(AI_FEATURES.map((f) => [f, !c.emergencyOff && c.features[f] !== false])) as Record<AiFeature, boolean>;
+  const used = summary ? summary.tokens.total : null;
+  const spent = summary ? summary.costUsd : null;
+  return {
+    configured: supabaseConfigured(sbEnv),
+    source: state.source,
+    readError: state.readError,
+    controls: c,
+    features,
+    usage: summary,
+    usageError: summary ? null : supabaseConfigured(sbEnv) ? usageError : null,
+    caps: {
+      tokens: { cap: c.dailyTokenCap, used, remaining: c.dailyTokenCap !== null && used !== null ? Math.max(0, c.dailyTokenCap - used) : null, reached: reached.tokens, complete: summary?.tokensComplete ?? false },
+      costUsd: { cap: c.dailyCostCapUsd, used: spent, remaining: c.dailyCostCapUsd !== null && spent !== null ? Math.max(0, Math.round((c.dailyCostCapUsd - spent) * 1e6) / 1e6) : null, reached: reached.cost, known: summary?.costKnown ?? false },
+    },
+    blocked: { emergency: c.emergencyOff, overBudget: reached.tokens || reached.cost, disabledFeatures: AI_FEATURES.filter((f) => !features[f]) },
+    cache: { controlsRefreshSec: CONTROLS_TTL_MS / 1000, emergencyMaxAgeSec: CONTROLS_MAX_AGE_MS / 1000, usageRefreshSec: USAGE_TTL_MS / 1000 },
+    checkedAt: new Date().toISOString(),
+  };
 }
 
 export interface ModerationResult {
