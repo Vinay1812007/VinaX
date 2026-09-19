@@ -12,7 +12,7 @@
  * hard-filtered against avoidTitles — identical requests explore fresh picks
  * instead of re-serving one canonical playlist.
  */
-import { aiBlockCode, aiGate, chat, gather, extractJson, isAiBlocked, logAiEvent, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, gather, extractJson, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
@@ -161,8 +161,13 @@ async function handlePost(context: {
   const limited = await rateLimitAsync(request, 'playlist', { capacity: 6, refillPerMinute: 3 }, env);
   if (limited) return limited;
   // 7.2.0 — the owner's AI switches and spend caps.
+  // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
+  const refuse = (b: AiBlock): Response => {
+    void logAiRefusal(env, 'playlist', b, isApp ? 'app' : 'web', context.waitUntil);
+    return json({ error: aiBlockCode(b) }, 503);
+  };
   const blocked = await aiGate(env, 'playlist');
-  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
+  if (blocked) return refuse(blocked);
 
   // Capped read: a 500-char prompt, 60 avoid-titles and a taste snapshot fit
   // comfortably; content-length is absent on a chunked body, so the read caps too.
@@ -254,7 +259,7 @@ async function handlePost(context: {
     // remaining budget — a full playlist always fits inside client patience.
     { temperature: 0.95, lane: 'dj', maxTokens: 2000, json: true, reasoningEffort: 'low', timeoutMs: 14_000, firstTimeoutMs: 14_000, ladder: ['home', 'fast', 'scholar'], deadlineAt, feature: 'playlist' },
   );
-  if (isAiBlocked(r.error)) return json({ error: aiBlockCode(r.error) }, 503);
+  if (isAiBlocked(r.error)) return refuse(r.error);
   let parsed = parsePlaylist(r.error ? null : r.content);
   // Belt-and-braces: the model was told about avoidTitles — enforce it, and
   // drop in-playlist repeats, before anything reaches the client (v3.3.1).

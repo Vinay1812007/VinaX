@@ -637,11 +637,16 @@ export interface AiControls {
   dailyCostCapUsd: number | null;
   /** When the owner published this record (ISO), set by the server. */
   updatedAt: string | null;
+  /** Free-text name the console sends with a publish (clipped); informational only. */
+  updatedBy: string | null;
 }
 
-export const AI_CONTROLS_DEFAULT: AiControls = Object.freeze({ emergencyOff: false, features: {}, dailyTokenCap: null, dailyCostCapUsd: null, updatedAt: null }) as AiControls;
+export const AI_CONTROLS_DEFAULT: AiControls = Object.freeze({ emergencyOff: false, features: {}, dailyTokenCap: null, dailyCostCapUsd: null, updatedAt: null, updatedBy: null }) as AiControls;
 
-const CONTROL_KEYS = new Set(['emergencyOff', 'features', 'dailyTokenCap', 'dailyCostCapUsd', 'updatedAt']);
+const CONTROL_KEYS = new Set(['emergencyOff', 'features', 'dailyTokenCap', 'dailyCostCapUsd', 'updatedAt', 'updatedBy']);
+const UPDATED_BY_MAX = 80;
+// eslint-disable-next-line no-control-regex
+const clipName = (s: string): string | null => s.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, UPDATED_BY_MAX) || null;
 const MAX_TOKEN_CAP = 1e12;
 const MAX_COST_CAP_USD = 1e6;
 
@@ -674,7 +679,9 @@ export function validateAiControls(raw: unknown, now = new Date()): { ok: true; 
   if (tokenCap === 'bad') return { ok: false, error: 'dailyTokenCap_must_be_a_whole_number_or_null' };
   const costCap = cap(o.dailyCostCapUsd, MAX_COST_CAP_USD, false);
   if (costCap === 'bad') return { ok: false, error: 'dailyCostCapUsd_must_be_a_number_or_null' };
-  return { ok: true, value: { emergencyOff: o.emergencyOff, features, dailyTokenCap: tokenCap, dailyCostCapUsd: costCap, updatedAt: now.toISOString() } };
+  if (o.updatedBy !== undefined && o.updatedBy !== null && typeof o.updatedBy !== 'string') return { ok: false, error: 'updatedBy_must_be_a_string' };
+  const updatedBy = typeof o.updatedBy === 'string' ? clipName(o.updatedBy) : null;
+  return { ok: true, value: { emergencyOff: o.emergencyOff, features, dailyTokenCap: tokenCap, dailyCostCapUsd: costCap, updatedAt: now.toISOString(), updatedBy } };
 }
 
 /**
@@ -699,6 +706,7 @@ export function parseAiControls(raw: unknown): AiControls {
     dailyTokenCap: num(o.dailyTokenCap, MAX_TOKEN_CAP),
     dailyCostCapUsd: num(o.dailyCostCapUsd, MAX_COST_CAP_USD),
     updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt.slice(0, 40) : null,
+    updatedBy: typeof o.updatedBy === 'string' ? clipName(o.updatedBy) : null,
   };
 }
 
@@ -865,10 +873,10 @@ async function readUsage(env: SupabaseEnv, now: number): Promise<UsageState | nu
   }
   // The rollup is missing (migration not applied) or failed: a bounded
   // sample of today's rows — a lower bound when it hits the row limit.
-  const sample = await sbSelectResult<{ model: string | null; prompt_tokens: number | null; completion_tokens: number | null }>(
+  const sample = await sbSelectResult<{ model: string | null; prompt_tokens: number | null; completion_tokens: number | null; error: string | null }>(
     env,
     'vinax_ai_events',
-    `created_at=gte.${encodeURIComponent(since)}&select=model,prompt_tokens,completion_tokens&order=created_at.desc&limit=${USAGE_SAMPLE_LIMIT}`,
+    `created_at=gte.${encodeURIComponent(since)}&select=model,prompt_tokens,completion_tokens,error&order=created_at.desc&limit=${USAGE_SAMPLE_LIMIT}`,
     { timeoutMs: CONTROL_READ_TIMEOUT_MS },
   );
   if (!sample.ok) {
@@ -878,6 +886,8 @@ async function readUsage(env: SupabaseEnv, now: number): Promise<UsageState | nu
   }
   const byModel = new Map<string, ModelUsage>();
   for (const row of sample.rows) {
+    // A refused call (logged for the operations panel) spent nothing.
+    if (isRefusalCode(row.error)) continue;
     const slug = modelSlug(row.model);
     const m = byModel.get(slug) ?? { model: slug, calls: 0, prompt: 0, completion: 0, callsWithoutUsage: 0 };
     m.calls += 1;
@@ -971,6 +981,26 @@ export function isAiBlocked(error: unknown): error is AiBlock {
 /** The JSON error a route answers (with 503) so the client falls back to its on-device path. */
 export function aiBlockCode(block: AiBlock): 'ai_disabled' | 'ai_over_budget' {
   return block === 'disabled' ? 'ai_disabled' : 'ai_over_budget';
+}
+
+/** The vinax_ai_events `error` values of refused calls (never provider failures). */
+export const AI_REFUSAL_CODES: readonly string[] = ['ai_disabled', 'ai_over_budget'];
+export function isRefusalCode(error: string | null | undefined): boolean {
+  return !!error && AI_REFUSAL_CODES.includes(error);
+}
+
+/**
+ * Record a refused call as one vinax_ai_events row (ok: false, model null,
+ * status 503, error ai_disabled | ai_over_budget) — the owner console's AI
+ * operations panel counts refusals from that column. Spend and reliability
+ * readers (the daily caps, Data quality, lane health) skip these rows: a
+ * refusal spent nothing and is not a provider failure. Registered with
+ * `waitUntil` when given so it survives the response.
+ */
+export function logAiRefusal(env: object, feature: AiFeature, block: AiBlock, client: 'web' | 'app', waitUntil?: (p: Promise<unknown>) => void): Promise<void> {
+  const write = logAiEvent(env as SupabaseEnv, { feature, model: null, ok: false, status: 503, error: aiBlockCode(block), client, latency_ms: 0 });
+  if (waitUntil) waitUntil(write);
+  return write;
 }
 
 function capsReached(c: AiControls, summary: UsageSummary | null): { tokens: boolean; cost: boolean } {
@@ -1105,7 +1135,8 @@ export function extractJson<T = unknown>(content: string | null): T | null {
 }
 
 export interface AiLogRow {
-  feature: 'dj' | 'playlist' | 'lyrics' | 'home' | 'assistant';
+  /** 7.2.0 — refusals are logged under the controls' feature names (e.g. curate-metadata, tts). */
+  feature: 'dj' | 'playlist' | 'lyrics' | 'home' | 'assistant' | AiFeature;
   model: string | null;
   ok: boolean;
   status?: number | null;

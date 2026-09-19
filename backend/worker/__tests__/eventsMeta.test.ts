@@ -9,7 +9,7 @@ import { META_MAX_BYTES, onRequestPost, sanitizeEventMeta } from '../functions/a
 
 describe('sanitizeEventMeta', () => {
   it('keeps a well-formed rec_served meta exactly', () => {
-    const meta = { alg: 'nextfive-v3', picker: 'ai', fallback: null, latencyMs: 840, n: 5, discovery: 1, languageViolations: 0, relaxed: ['era'], exp: { dj_order: 'b' } };
+    const meta = { alg: 'nextfive-v3', picker: 'ai', fallback: null, latencyMs: 840, n: 5, discovery: 1, languageViolations: 0, distinctArtists: 4, relaxed: ['era'], exp: { dj_order: 'b' } };
     expect(sanitizeEventMeta('rec_served', meta)).toEqual(meta);
   });
 
@@ -30,8 +30,9 @@ describe('sanitizeEventMeta', () => {
   });
 
   it('bounds numbers and rounds them; non-finite numbers are dropped', () => {
-    const out = sanitizeEventMeta('rec_served', { latencyMs: 500_000, n: -3, discovery: 12.6, languageViolations: Number.NaN });
-    expect(out).toEqual({ latencyMs: 120_000, n: 0, discovery: 13 });
+    const out = sanitizeEventMeta('rec_served', { latencyMs: 500_000, n: -3, discovery: 12.6, languageViolations: Number.NaN, distinctArtists: 99 });
+    expect(out).toEqual({ latencyMs: 120_000, n: 0, discovery: 13, distinctArtists: 40 });
+    expect(sanitizeEventMeta('rec_outcome', { distinctArtists: 3 })).toBeNull(); // rec_served only
     const outcome = sanitizeEventMeta('rec_outcome', { pos: 99, heardSec: 12.345, durationSec: 9000 });
     expect(outcome).toEqual({ pos: 40, heardSec: 12.3, durationSec: 3600 });
   });

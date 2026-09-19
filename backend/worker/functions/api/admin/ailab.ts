@@ -12,7 +12,7 @@
  * story. maxTokens is capped at 1000 — this is a bench, not a workload.
  */
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { LANE_ENV, LANE_MODEL, isExternalEndpoint, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
+import { LANE_ENV, LANE_MODEL, isExternalEndpoint, isRefusalCode, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
 import { catalogDefaultModel, type CatalogProvider } from '../../_lib/catalog';
 import { aggregateLaneHealth, type AiEventRow } from '../../_lib/laneHealth';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
@@ -61,8 +61,10 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   );
   // 7.2.0 — lane health built from a failed read shows every lane idle.
   if (!read.ok) return dbFailure(read);
-  const rows = read.rows;
-  return json({ configured: true, hours: 24, sampled: rows.length, capped: rows.length >= 10000, lanes: aggregateLaneHealth(rows) });
+  // Refused calls (owner AI controls) reached no lane; they would read as an
+  // "unknown" lane full of failures.
+  const rows = read.rows.filter((r) => !isRefusalCode(r.error));
+  return json({ configured: true, hours: 24, sampled: rows.length, capped: read.rows.length >= 10000, lanes: aggregateLaneHealth(rows) });
 };
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {

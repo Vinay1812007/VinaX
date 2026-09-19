@@ -13,6 +13,7 @@
  * keep working).
  */
 import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isRefusalCode } from '../../_lib/ai';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -49,7 +50,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!eventsRead.ok && !aiRead.ok) return dbFailure(eventsRead, { unavailable: ['events', 'aiEvents'] });
   const unavailable = [...(eventsRead.ok ? [] : ['events']), ...(aiRead.ok ? [] : ['aiEvents'])];
   const events = eventsRead.rows;
-  const aiEvents = aiRead.rows;
+  // 7.2.0 — a call the owner's AI controls refused (ai_disabled /
+  // ai_over_budget) is not an AI failure; it stays out of the SLOs.
+  const aiEvents = aiRead.rows.filter((e) => !isRefusalCode(e.error));
 
   const originPct = eventsRead.ok ? pct(events.filter((e) => e.origin_verified === true).length, events.length) : null;
   const countryPct = eventsRead.ok ? pct(events.filter((e) => !!e.country).length, events.length) : null;

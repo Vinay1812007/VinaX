@@ -13,6 +13,8 @@ import { onRequestPost as vinaxaiPost } from '../functions/api/vinaxai';
 import { onRequestPost as ttsPost } from '../functions/api/tts';
 import { onRequestPost as imagePost } from '../functions/api/image';
 import { onRequestPost as appconfigPost } from '../functions/api/admin/appconfig';
+import { onRequestGet as dataqualityGet } from '../functions/api/admin/dataquality';
+import { onRequestGet as ailabGet } from '../functions/api/admin/ailab';
 
 const ENV = {
   SUPABASE_URL: 'https://sb.test',
@@ -96,7 +98,15 @@ describe('validateAiControls — strict', () => {
   const now = new Date('2026-09-19T10:00:00Z');
   it('accepts a full record and stamps updatedAt from the server clock', () => {
     const r = validateAiControls({ emergencyOff: false, features: { dj: false, tts: true }, dailyTokenCap: 2_000_000, dailyCostCapUsd: 5.5, updatedAt: '1999-01-01' }, now);
-    expect(r).toEqual({ ok: true, value: { emergencyOff: false, features: { dj: false, tts: true }, dailyTokenCap: 2_000_000, dailyCostCapUsd: 5.5, updatedAt: now.toISOString() } });
+    expect(r).toEqual({ ok: true, value: { emergencyOff: false, features: { dj: false, tts: true }, dailyTokenCap: 2_000_000, dailyCostCapUsd: 5.5, updatedAt: now.toISOString(), updatedBy: null } });
+  });
+  it('accepts the console\'s optional updatedBy, clipped, rather than rejecting the record', () => {
+    const r = validateAiControls({ emergencyOff: false, updatedBy: `  Owner\u0000 ${'x'.repeat(200)}` }, now);
+    expect(r.ok).toBe(true);
+    const by = r.ok ? r.value.updatedBy : null;
+    expect(by?.startsWith('Owner x')).toBe(true);
+    expect(by).toHaveLength(80);
+    expect(validateAiControls({ emergencyOff: false, updatedBy: 7 }, now)).toEqual({ ok: false, error: 'updatedBy_must_be_a_string' });
   });
   it.each([
     [null, 'not_an_object'],
@@ -174,6 +184,62 @@ describe('switching one feature off', () => {
     const other = await chat(ENV, [{ role: 'user', content: 'x' }], { lane: 'scholar', feature: 'assistant' });
     expect(other.error).toBeUndefined();
     expect(providerCalls()).toHaveLength(1);
+  });
+});
+
+describe('refusals are logged for the operations panel', () => {
+  const aiRows = () =>
+    calls.filter((c) => c.method === 'POST' && c.url === 'https://sb.test/rest/v1/vinax_ai_events').map((c) => JSON.parse(c.body ?? '{}') as Record<string, unknown>);
+
+  it('a switched-off feature leaves one ok:false row with error ai_disabled', async () => {
+    install({ controls: { emergencyOff: false, features: { dj: false } } });
+    await dj();
+    expect(aiRows()).toEqual([{ feature: 'dj', model: null, ok: false, status: 503, error: 'ai_disabled', client: 'web', latency_ms: 0 }]);
+  });
+
+  it('a reached cap leaves error ai_over_budget, under the refusing feature\'s name', async () => {
+    install({ controls: { emergencyOff: false, dailyTokenCap: 10 }, usage: [{ model: 'm1 @dj', calls: 1, prompt_tokens: 50, completion_tokens: 5, calls_without_usage: 0 }] });
+    await curate('ranking', { songs: [{ id: 's1' }, { id: 's2' }, { id: 's3' }] });
+    await ttsPost({ request: post('/api/tts', { text: 'hi' }, { 'x-vinax-client': 'app' }), env: ENV });
+    expect(aiRows().map((r) => [r.feature, r.error, r.client])).toEqual([
+      ['curate-ranking', 'ai_over_budget', 'web'],
+      ['tts', 'ai_over_budget', 'app'],
+    ]);
+  });
+
+  it('refusal rows never count as spend, as AI failures, or as a lane', async () => {
+    // Daily use: a refusal row carries no tokens and must not make the total "incomplete".
+    install({ controls: { emergencyOff: false, dailyTokenCap: 1000 }, usage: null, sample: [
+      { model: 'm1 @dj', prompt_tokens: 100, completion_tokens: 20, error: null },
+      { model: null, prompt_tokens: null, completion_tokens: null, error: 'ai_disabled' },
+    ] });
+    const s = await aiControlsStatus(ENV);
+    expect(s.usage).toMatchObject({ calls: 1, callsWithoutUsage: 0, tokensComplete: true });
+    // Data quality: a refusal is not a failed AI call.
+    install({});
+    vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
+      const url = String(input);
+      const rows = url.includes('vinax_ai_events')
+        ? [{ ok: true, error: null, model: 'm @dj', status: 200, latency_ms: 900 }, { ok: false, error: 'ai_disabled', model: null, status: 503, latency_ms: 0 }]
+        : [{ origin_verified: true, country: 'IN' }];
+      return Promise.resolve(new Response(JSON.stringify(rows), { status: 200 }));
+    });
+    const admin = (path: string) => new Request(`https://admin.test${path}`, { headers: { 'x-admin-token': 'test-secret', 'cf-connecting-ip': `10.41.0.${++ipSeq % 250}` } });
+    const dq = (await (await dataqualityGet({ request: admin('/api/admin/dataquality'), env: ENV })).json()) as { metrics: { aiOkPct: number }; sampled: { aiEvents: number } };
+    expect(dq.metrics.aiOkPct).toBe(100);
+    expect(dq.sampled.aiEvents).toBe(1);
+    const lab = (await (await ailabGet({ request: admin('/api/admin/ailab'), env: ENV })).json()) as { lanes: Array<{ lane: string }> };
+    expect(lab.lanes.map((l) => l.lane)).not.toContain('unknown');
+  });
+});
+
+describe('a feature is on unless its value is exactly false', () => {
+  it('a stored non-boolean switch leaves the feature on', async () => {
+    install({ controls: { emergencyOff: false, features: { dj: 'false', playlist: 0 } }, answer: djAnswer });
+    expect((await dj()).status).toBe(200);
+    const s = await aiControlsStatus(ENV);
+    expect(s.features.dj).toBe(true);
+    expect(s.features.playlist).toBe(true);
   });
 });
 

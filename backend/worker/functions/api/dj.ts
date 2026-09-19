@@ -30,7 +30,7 @@
  *   → 200 { intro, songs: [{ songId, title, artist, reason, segue, confidence, fromPool }], model }
  *   → 400 bad_request | 503 ai_not_configured | 500 { error }
  */
-import { aiBlockCode, aiGate, chat, extractJson, gather, isAiBlocked, logAiEvent, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, extractJson, gather, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
@@ -179,8 +179,13 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
   if (limited) return limited;
   // 7.2.0 — the owner's AI switches and spend caps: 503 so the client keeps
   // its on-device order (it already treats a 503 as "DJ unavailable").
+  // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
+  const refuse = (b: AiBlock): Response => {
+    void logAiRefusal(env, 'dj', b, isApp ? 'app' : 'web', context.waitUntil);
+    return json({ error: aiBlockCode(b) }, 503);
+  };
   const blocked = await aiGate(env, 'dj');
-  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
+  if (blocked) return refuse(blocked);
   // Capped while reading — a chunked body carries no content-length.
   const read = await readJsonCapped<{ context?: unknown; pool?: unknown; count?: unknown; discover?: unknown; maxDiscover?: unknown; wantSegues?: unknown } | null>(request, 48_000);
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
@@ -264,7 +269,7 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
     { temperature: 0.8, lane: 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 11_000, firstTimeoutMs: 9_000, skipSecondary: true, ladder: ['dj', 'fast', 'chat', 'home'], deadlineAt, feature: 'dj' },
   );
   // The controls changed while this request ran: same honest 503, nothing logged as a failed call.
-  if (isAiBlocked(r.error)) return json({ error: aiBlockCode(r.error) }, 503);
+  if (isAiBlocked(r.error)) return refuse(r.error);
   // Structural anti-repeat for proposals: whatever the model claims, a title
   // the listener just heard or was already offered never comes back.
   const avoidBlob = maxDiscover > 0 ? (JSON.stringify(ctx.avoidSongs ?? '') + JSON.stringify(ctx.recentlyPlayed ?? '') + JSON.stringify(ctx.skippedSongs ?? '')).toLowerCase() : '';

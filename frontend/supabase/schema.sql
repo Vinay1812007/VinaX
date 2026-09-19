@@ -619,6 +619,9 @@ as $$
   from vinax_ai_events e
   -- Never scan more than two days, whatever the caller asks for.
   where e.created_at >= greatest(p_since, now() - interval '2 days')
+    -- Calls the controls refused are logged for the operations panel but
+    -- spent nothing.
+    and (e.error is null or e.error not in ('ai_disabled', 'ai_over_budget'))
   group by 1
   order by 2 desc
   limit 500;

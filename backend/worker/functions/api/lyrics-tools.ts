@@ -1,7 +1,7 @@
 /** Romanize or translate lyric lines via the scholar lane (server-side key;
  *  per-lane provider base — see functions/_lib/ai.ts). Returns the same number
  *  of lines in the same order so synced-lyric timing stays aligned. */
-import { aiBlockCode, aiGate, chat, extractJson, isAiBlocked, logAiEvent, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, extractJson, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 
@@ -57,8 +57,13 @@ async function handlePost(context: {
   const limited = await rateLimitAsync(request, 'lyrics-tools', { capacity: 12, refillPerMinute: 6 }, env);
   if (limited) return limited;
   // 7.2.0 — the owner's AI switches and spend caps.
+  // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
+  const refuse = (b: AiBlock): Response => {
+    void logAiRefusal(env, 'lyrics', b, isApp ? 'app' : 'web', context.waitUntil);
+    return json({ error: aiBlockCode(b) }, 503);
+  };
   const blocked = await aiGate(env, 'lyrics');
-  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
+  if (blocked) return refuse(blocked);
 
   const body = (await request.json().catch(() => null)) as { lines?: unknown; mode?: unknown } | null;
   const mode = typeof body?.mode === 'string' && body.mode in SYS ? body.mode : null;
@@ -79,7 +84,7 @@ async function handlePost(context: {
     // to spare, and ladder hops stay tight at 10s inside the 32s deadline.
     { temperature: 0.3, maxTokens: 4000, lane: 'scholar', json: true, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: 12_000, deadlineAt: t0 + 32_000, feature: 'lyrics' },
   );
-  if (isAiBlocked(r.error)) return json({ error: aiBlockCode(r.error) }, 503);
+  if (isAiBlocked(r.error)) return refuse(r.error);
   if (mode === 'explain') {
     const parsed = r.error ? null : extractJson<{ summary?: unknown; mood?: unknown; themes?: unknown }>(r.content);
     const summary = typeof parsed?.summary === 'string' ? parsed.summary.slice(0, 800) : '';

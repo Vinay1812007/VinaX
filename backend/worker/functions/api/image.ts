@@ -3,7 +3,7 @@
  *  Fully gated: if the key lacks image access, the client gets an honest
  *  error instead of a hang. */
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { aiBlockCode, aiGate, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, logAiRefusal, type AiEnv } from '../_lib/ai';
 
 type Env = AiEnv;
 
@@ -27,7 +27,7 @@ export const onRequestOptions = async (): Promise<Response> =>
 /** POST-only: answer GET with an honest 405 instead of the SPA shell (DQA-07). */
 export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const limited = await rateLimitAsync(context.request, 'image', { capacity: 6, refillPerMinute: 3 }, context.env);
   if (limited) return limited;
   try {
@@ -40,7 +40,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
 };
 
-const handleImage = async (context: { request: Request; env: Env }): Promise<Response> => {
+const handleImage = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   // The image endpoint lives on the default (NVIDIA) base, so only a key that
   // belongs to that account can sign the call — the two aggregator keys
@@ -61,7 +61,11 @@ const handleImage = async (context: { request: Request; env: Env }): Promise<Res
   if (!key) return json({ error: 'not_configured' }, 503);
   // 7.2.0 — the owner's AI switches and spend caps.
   const blocked = await aiGate(env, 'image');
-  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
+  if (blocked) {
+    // Logged (error ai_disabled / ai_over_budget) for the console.
+    void logAiRefusal(env, 'image', blocked, request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web', context.waitUntil);
+    return json({ error: aiBlockCode(blocked) }, 503);
+  }
   const body = (await request.json().catch(() => null)) as { prompt?: string } | null;
   const prompt = (body?.prompt ?? '').toString().trim().slice(0, 600);
   if (prompt.length < 3) return json({ error: 'bad_request' }, 400);

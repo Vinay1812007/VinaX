@@ -14,7 +14,7 @@
  */
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { isServedVoiceModel } from '../_lib/catalog';
-import { aiBlockCode, aiGate } from '../_lib/ai';
+import { aiBlockCode, aiGate, logAiRefusal } from '../_lib/ai';
 
 interface Env {
   VINAX_GROQ_API_KEY?: string;
@@ -50,7 +50,7 @@ export const onRequestOptions = async (): Promise<Response> => new Response(null
 /** POST-only: answer GET with an honest 405 instead of the SPA shell (DQA-07). */
 export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   // Voice chat speaks sentence-by-sentence, so one turn is a small burst of
   // requests — capacity covers a long reply, refill covers steady listening.
@@ -64,7 +64,11 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // 7.2.0 — the owner's AI switches and spend caps; the client falls back to
   // the device's own speech engine on any non-2xx.
   const blocked = await aiGate(env, 'tts');
-  if (blocked) return json({ error: aiBlockCode(blocked) }, 503);
+  if (blocked) {
+    // Logged (error ai_disabled / ai_over_budget) for the console.
+    void logAiRefusal(env, 'tts', blocked, request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web', context.waitUntil);
+    return json({ error: aiBlockCode(blocked) }, 503);
+  }
 
   const body = (await request.json().catch(() => null)) as { text?: unknown; model?: unknown; voice?: unknown } | null;
   const raw = typeof body?.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';
