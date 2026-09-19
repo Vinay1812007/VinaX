@@ -164,6 +164,8 @@ These are the values in `services/recommendation/weights.ts` (`SCORING_WEIGHTS_V
 | `intentEnergy` | 0.30 | Energy steer (−0.3..0.3) × the candidate's distance from mid energy |
 | `intentSkippedSong` | 0.40 | Subtracted for a song skipped in this sitting |
 
+**Owner overrides (7.2).** The owner console's Recommendation Tuning can publish a versioned set of overrides for these keys (`rec-config`, see [admin-console.md](admin-console.md#recommendation-tuning)). Each value is clamped to between half and double its default. The public `client` bundle carries the overrides only while the rollout targets someone; the app applies them (`applyWeightOverrides` in `weights.ts`, loaded lazily by `remoteWeights.ts`) only when the rollout is `all`, or when this device's experiment variant matches. `activeWeightsVersion()` then reads, for example, `1.2.0+rc7`, and that string is part of every continuation's `alg` stamp, so opt-in outcomes can be compared per version. An override without an attached evaluation is labelled "unvalidated" in the console; no override is presented as proven. `artistAffinity` and `session` are declared weights the scorer does not read, so overriding them has no effect.
+
 Terms that depend on the taste profile are multiplied by a personal blend of `(0.3 + 0.7 × profile confidence) × (0.4 + 0.6 × intensity)`, so a new profile leans on popularity and trending and a warm one leans on taste. Intensity is the recommendation-intensity setting.
 
 Each candidate also receives a source boost:
