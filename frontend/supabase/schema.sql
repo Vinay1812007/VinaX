@@ -52,11 +52,27 @@ create table if not exists vinax_events (
   -- signed_device_id HMAC, false when it was derived server-side from
   -- ip+ua. Lets analytics downweight the derived rows if desired.
   origin_verified boolean default false,
+  -- 7.2: recommendation telemetry (rec_served / rec_outcome only). The
+  -- Worker whitelists keys and caps it at 1 KB; see
+  -- migrations/2026-09-vinax-7.2-events-meta.sql.
+  meta        jsonb,
   created_at  timestamptz default now()
 );
 -- Idempotent add for existing deploys that predate H-SRV-6.
 alter table if exists vinax_events
   add column if not exists origin_verified boolean default false;
+-- Idempotent add for existing deploys that predate 7.2 events meta.
+alter table if exists vinax_events
+  add column if not exists meta jsonb;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'vinax_events_meta_shape') then
+    alter table vinax_events
+      add constraint vinax_events_meta_shape
+      check (meta is null or (jsonb_typeof(meta) = 'object' and octet_length(meta::text) <= 2048))
+      not valid;
+  end if;
+end $$;
 
 create table if not exists vinax_feedback (
   id          bigint generated always as identity primary key,
@@ -183,6 +199,9 @@ create table if not exists vinax_seo_urls (
 create index if not exists idx_vinax_users_last_seen   on vinax_users (last_seen desc);
 create index if not exists idx_vinax_events_created    on vinax_events (created_at desc);
 create index if not exists idx_vinax_events_device     on vinax_events (device_id);
+-- Typed windows (rec_served / rec_outcome, the rollups); same name as the
+-- migrations use, so re-running either is a no-op.
+create index if not exists vinax_events_type_created_at_idx on vinax_events (type, created_at desc);
 create index if not exists idx_vinax_feedback_created  on vinax_feedback (created_at desc);
 create index if not exists idx_vinax_room_members_seen on vinax_room_members (code, last_seen desc);
 create index if not exists vinax_ai_events_created_idx on vinax_ai_events (created_at desc);

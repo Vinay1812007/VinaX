@@ -91,6 +91,32 @@ export async function sbSelectResult<T>(env: SupabaseEnv, table: string, query: 
   }
 }
 
+/**
+ * INSERT that says why it failed, including PostgREST's own error `code`
+ * (e.g. PGRST204: a column the payload names does not exist yet — the
+ * migration that adds it has not been applied).
+ */
+export async function sbInsertResult(
+  env: SupabaseEnv,
+  table: string,
+  row: unknown,
+): Promise<{ ok: true } | { ok: false; error: DbFailure; httpStatus: number | null; code: string | null }> {
+  const b = base(env);
+  if (!b) return { ok: false, error: 'not_configured', httpStatus: null, code: null };
+  try {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: headers(b.key, { prefer: 'return=minimal' }),
+      body: JSON.stringify(row),
+    });
+    if (res.ok) return { ok: true };
+    const body = (await res.json().catch(() => null)) as { code?: unknown } | null;
+    return { ok: false, error: dbFailureFromStatus(res.status), httpStatus: res.status, code: typeof body?.code === 'string' ? body.code : null };
+  } catch {
+    return { ok: false, error: 'unavailable', httpStatus: null, code: null };
+  }
+}
+
 export async function sbInsert(env: SupabaseEnv, table: string, row: unknown): Promise<boolean> {
   const b = base(env);
   if (!b) return false;
