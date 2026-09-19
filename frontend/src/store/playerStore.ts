@@ -253,6 +253,11 @@ export const usePlayerStore = create<PlayerState>()(
         });
       }
 
+      /** Distinct lead artists in a continuation (diversity, for opt-in quality telemetry). */
+      function distinctLeads(songs: Song[]): number {
+        return new Set(songs.map((s) => (s.artists[0]?.name ?? s.subtitle ?? '').trim().toLowerCase()).filter(Boolean)).size;
+      }
+
       function languageViolations(songs: Song[], lock: string | null): number {
         return lock ? songs.filter((s) => s.language && s.language !== 'unknown' && s.language !== lock).length : 0;
       }
@@ -269,7 +274,7 @@ export const usePlayerStore = create<PlayerState>()(
         plan.commit(admitted);
         lastPlan = plan;
         preloadUpcoming();
-        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: plan.picker, fallback: plan.fallback, latencyMs: plan.latencyMs, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), relaxed: plan.relaxed, refinementPending: !!plan.refinement });
+        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: plan.picker, fallback: plan.fallback, latencyMs: plan.latencyMs, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: plan.relaxed, refinementPending: !!plan.refinement });
         if (plan.refinement) {
           const version = queueVersion;
           void plan.refinement.then((refined) => {
@@ -341,7 +346,7 @@ export const usePlayerStore = create<PlayerState>()(
         markAuto(admitted, { alg: plan.alg, picker: 'reserve', batch });
         set({ queue: [...queue, ...admitted] });
         plan.commit(admitted);
-        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: 'reserve', fallback: 'deadline', latencyMs: 0, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), relaxed: [], refinementPending: false });
+        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: 'reserve', fallback: 'deadline', latencyMs: 0, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: [], refinementPending: false });
         return admitted.length;
       }
       async function appendRecommendations(seed: Song, opts: { urgent?: boolean } = {}): Promise<boolean> {

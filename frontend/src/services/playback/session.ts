@@ -170,7 +170,7 @@ export type PlaybackEvent =
   | { kind: 'counted'; instanceId: string; song: Song; heardSec: number }
   | { kind: 'end'; instanceId: string; song: Song; from: Song | null; heardSec: number; durationSec: number; reason: PlaybackEndReason; run: Readonly<PlaybackRun>; auto: AutoEntryMeta | null }
   /** An automatic continuation entered the queue (after the admission gate). */
-  | { kind: 'served'; batch: number; alg: string; picker: 'local' | 'ai' | 'reserve'; fallback: string | null; latencyMs: number; n: number; discovery: number; languageViolations: number; relaxed: string[]; refinementPending: boolean }
+  | { kind: 'served'; batch: number; alg: string; picker: 'local' | 'ai' | 'reserve'; fallback: string | null; latencyMs: number; n: number; discovery: number; languageViolations: number; distinctArtists: number; relaxed: string[]; refinementPending: boolean }
   /** The AI refinement of a continuation settled: applied, or the reason it was not. */
   | { kind: 'refined'; batch: number; applied: boolean; fallback: string | null; latencyMs: number; n: number };
 

@@ -19,7 +19,7 @@ import { queryClient } from '@/services/queryClient';
 import type { ArcShape } from './sequencer';
 import { tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape, type TuneIntent } from './tune';
 import type { Mood } from './mood';
-import { SCORING_WEIGHTS_VERSION } from './weights';
+import { activeWeightsVersion } from './weights';
 import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from './deadlines';
 
 function aiContext(ctx: RecommendationContext): string {
@@ -142,7 +142,8 @@ export interface NextRecommendationOptions {
 /** 7.2.0 — the pipeline's own version, recorded with every continuation (developer breakdown, opt-in telemetry). */
 export const PIPELINE_VERSION = '7.2.0';
 export function algorithmVersion(): string {
-  return `${PIPELINE_VERSION}/${SCORING_WEIGHTS_VERSION}`;
+  // The weights part names an owner override while one is applied ("1.2.0+rc7").
+  return `${PIPELINE_VERSION}/${activeWeightsVersion()}`;
 }
 
 /** Why the AI did not choose a continuation's order. */
