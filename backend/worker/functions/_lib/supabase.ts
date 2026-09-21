@@ -61,6 +61,9 @@ export type DbFailure = 'not_configured' | 'unauthorized' | 'bad_request' | 'not
 
 export type DbResult<T> = { ok: true; rows: T[] } | { ok: false; error: DbFailure; httpStatus: number | null; rows: T[] };
 
+/** A single value (an RPC answer, a count) that says exactly why it failed. */
+export type DbValue<T> = { ok: true; value: T } | { ok: false; error: DbFailure; httpStatus: number | null };
+
 export function dbFailureFromStatus(status: number): DbFailure {
   if (status === 401 || status === 403) return 'unauthorized';
   if (status === 404) return 'not_found';
@@ -85,6 +88,32 @@ export async function sbSelectResult<T>(env: SupabaseEnv, table: string, query: 
     return { ok: true, rows: body as T[] };
   } catch {
     return { ok: false, error: 'unavailable', httpStatus: null, rows: [] };
+  }
+}
+
+/**
+ * INSERT that says why it failed, including PostgREST's own error `code`
+ * (e.g. PGRST204: a column the payload names does not exist yet — the
+ * migration that adds it has not been applied).
+ */
+export async function sbInsertResult(
+  env: SupabaseEnv,
+  table: string,
+  row: unknown,
+): Promise<{ ok: true } | { ok: false; error: DbFailure; httpStatus: number | null; code: string | null }> {
+  const b = base(env);
+  if (!b) return { ok: false, error: 'not_configured', httpStatus: null, code: null };
+  try {
+    const res = await dbFetch(`${b.url}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: headers(b.key, { prefer: 'return=minimal' }),
+      body: JSON.stringify(row),
+    });
+    if (res.ok) return { ok: true };
+    const body = (await res.json().catch(() => null)) as { code?: unknown } | null;
+    return { ok: false, error: dbFailureFromStatus(res.status), httpStatus: res.status, code: typeof body?.code === 'string' ? body.code : null };
+  } catch {
+    return { ok: false, error: 'unavailable', httpStatus: null, code: null };
   }
 }
 
@@ -179,13 +208,13 @@ export async function sbSelect<T>(env: SupabaseEnv, table: string, query: string
 }
 
 /**
- * Exact row count via a HEAD request (Prefer: count=exact) — no rows move.
- * Returns null when Supabase is unconfigured or the read fails (missing
- * table, transport error), so callers can distinguish "0 rows" from "broken".
+ * Exact row count that names its failure. GET with `Prefer: count=exact` and
+ * limit=1 — no rows move. A response without a usable content-range is a
+ * failure, never a zero.
  */
-export async function sbCount(env: SupabaseEnv, table: string, query = ''): Promise<number | null> {
+export async function sbCountResult(env: SupabaseEnv, table: string, query = '', opts: { timeoutMs?: number } = {}): Promise<DbValue<number>> {
   const b = base(env);
-  if (!b) return null;
+  if (!b) return { ok: false, error: 'not_configured', httpStatus: null };
   try {
     // limit=1 keeps the scan cheap; NO Range header — an explicit `range: 0-0`
     // can answer 416 on an empty table (PostgREST version dependent), which
@@ -193,32 +222,59 @@ export async function sbCount(env: SupabaseEnv, table: string, query = ''): Prom
     // GET, not HEAD (4.16.2): in production the unfiltered HEAD count came
     // back without a usable content-range while filtered ones worked — GET
     // always carries the header and a limit=1 body costs nothing.
-    const res = await dbFetch(`${b.url}/rest/v1/${table}?select=*&limit=1${query ? `&${query}` : ''}`, {
-      headers: headers(b.key, { prefer: 'count=exact' }),
-    });
-    if (!res.ok) return null;
+    const res = await dbFetch(
+      `${b.url}/rest/v1/${table}?select=*&limit=1${query ? `&${query}` : ''}`,
+      { headers: headers(b.key, { prefer: 'count=exact' }) },
+      opts.timeoutMs,
+    );
+    if (!res.ok) return { ok: false, error: dbFailureFromStatus(res.status), httpStatus: res.status };
     const total = Number((res.headers.get('content-range') ?? '').split('/')[1]);
-    return Number.isFinite(total) ? total : null;
+    return Number.isFinite(total) ? { ok: true, value: total } : { ok: false, error: 'unavailable', httpStatus: res.status };
   } catch {
-    return null;
+    return { ok: false, error: 'unavailable', httpStatus: null };
   }
 }
 
-/** Call a Postgres function exposed via PostgREST (/rpc/<fn>). */
-export async function sbRpc<T>(env: SupabaseEnv, fn: string, args: Record<string, unknown>): Promise<T | null> {
+/**
+ * Exact row count via GET (Prefer: count=exact) — no rows move.
+ * Returns null when Supabase is unconfigured or the read fails (missing
+ * table, transport error), so callers can distinguish "0 rows" from "broken".
+ */
+export async function sbCount(env: SupabaseEnv, table: string, query = ''): Promise<number | null> {
+  const r = await sbCountResult(env, table, query);
+  return r.ok ? r.value : null;
+}
+
+/**
+ * Call a Postgres function exposed via PostgREST (/rpc/<fn>) and say exactly
+ * why it failed. A missing function answers 404 → `not_found`, which callers
+ * with a sampled fallback treat as "migration not applied yet".
+ */
+export async function sbRpcResult<T>(env: SupabaseEnv, fn: string, args: Record<string, unknown>, opts: { timeoutMs?: number } = {}): Promise<DbValue<T>> {
   const b = base(env);
-  if (!b) return null;
+  if (!b) return { ok: false, error: 'not_configured', httpStatus: null };
   try {
-    const res = await dbFetch(`${b.url}/rest/v1/rpc/${fn}`, {
-      method: 'POST',
-      headers: headers(b.key),
-      body: JSON.stringify(args ?? {}),
-    });
-    if (!res.ok) return null;
-    return (await res.json().catch(() => null)) as T | null;
+    const res = await dbFetch(
+      `${b.url}/rest/v1/rpc/${fn}`,
+      { method: 'POST', headers: headers(b.key), body: JSON.stringify(args ?? {}) },
+      opts.timeoutMs,
+    );
+    if (!res.ok) return { ok: false, error: dbFailureFromStatus(res.status), httpStatus: res.status };
+    const text = await res.text();
+    try {
+      return { ok: true, value: (text ? JSON.parse(text) : null) as T };
+    } catch {
+      return { ok: false, error: 'unavailable', httpStatus: res.status };
+    }
   } catch {
-    return null;
+    return { ok: false, error: 'unavailable', httpStatus: null };
   }
+}
+
+/** Best-effort RPC: any failure reads as null. Dashboards use `sbRpcResult`. */
+export async function sbRpc<T>(env: SupabaseEnv, fn: string, args: Record<string, unknown>): Promise<T | null> {
+  const r = await sbRpcResult<T>(env, fn, args);
+  return r.ok ? r.value : null;
 }
 
 export async function sbDelete(env: SupabaseEnv, table: string, query: string): Promise<boolean> {

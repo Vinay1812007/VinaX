@@ -124,6 +124,42 @@ GITHUB_REPO = "Vinay1812007/VinaX"
 binding = "HANDOFF"
 id = "34a611e441644d0b9eb77cbbe584a766"
 
+# Workers Rate Limiting (7.2.0) — see worker/functions/_lib/ratelimit.ts.
+# Counters are shared by every isolate in ONE Cloudflare location (not
+# global), permissive and eventually consistent. Each tier is "requests per
+# 60 s per key"; a route uses the smallest tier at or above its in-memory
+# bucket's capacity + one minute of refill, keyed `route|hash(client ip)`.
+# namespace_id is a number chosen here (unique within the account; two
+# bindings sharing one share counters) — nothing is created ahead of deploy.
+# Without these bindings (tests, `wrangler dev` without them) the in-memory
+# limiter is the whole limiter.
+[[ratelimits]]
+name = "RATE_LIMIT_10"
+namespace_id = "7201"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "RATE_LIMIT_30"
+namespace_id = "7202"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "RATE_LIMIT_60"
+namespace_id = "7203"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "RATE_LIMIT_300"
+namespace_id = "7204"
+simple = { limit = 300, period = 60 }
+
+# Wrong admin tokens per source per location (_lib/admin.ts isAdminAsync):
+# past 15 in a minute, each isolate that sees the source locks it for 10 min.
+[[ratelimits]]
+name = "ADMIN_AUTH_FAILS"
+namespace_id = "7205"
+simple = { limit = 15, period = 60 }
+
 [observability]
 enabled = false
 

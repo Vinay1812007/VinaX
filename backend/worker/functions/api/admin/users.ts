@@ -1,6 +1,6 @@
 /** User Management: paginated + searchable user list with summary counts. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -19,7 +19,7 @@ interface Summary { total_users: number; active_24h: number; new_24h: number; to
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const url = new URL(request.url);
   const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 1), 100);
@@ -37,14 +37,18 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     `&order=last_seen.desc&limit=${limit + 1}&offset=${offset}`;
   if (q) query += `&or=(name.ilike.*${encodeURIComponent(q)}*,username.ilike.*${encodeURIComponent(q)}*,device_id.ilike.*${encodeURIComponent(q)}*)`;
 
-  const [users, summary] = await Promise.all([
-    sbSelect<UserRow>(env, 'vinax_users', query),
-    sbRpc<Summary>(env, 'vinax_user_summary', {}),
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, users: [], summary: null, limit, offset, hasMore: false });
+  const [read, summary] = await Promise.all([
+    sbSelectResult<UserRow>(env, 'vinax_users', query),
+    sbRpcResult<Summary>(env, 'vinax_user_summary', {}),
   ]);
+  // 7.2.0 — a failed read is not "no users": the list and its counts are
+  // unavailable together.
+  if (!read.ok) return dbFailure(read);
+  if (!summary.ok) return dbFailure(summary);
 
+  const users = read.rows;
   const hasMore = users.length > limit;
   if (hasMore) users.length = limit;
-  return new Response(JSON.stringify({ users, summary: summary ?? null, limit, offset, hasMore }), {
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  });
+  return adminJson({ configured: true, users, summary: summary.value ?? null, limit, offset, hasMore });
 };

@@ -1,18 +1,22 @@
 /** New listeners per day (last 28d) for the Overview growth card. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, days: new Array(14).fill(0), last14: 0, prev14: 0, sampled: false });
   const since = new Date(Date.now() - 28 * 86_400_000).toISOString();
-  const rows = await sbSelect<{ first_seen: string }>(
+  const read = await sbSelectResult<{ first_seen: string }>(
     env,
     'vinax_users',
     `first_seen=gte.${encodeURIComponent(since)}&select=first_seen&limit=5000`,
-  ).catch(() => []);
+  );
+  // 7.2.0 — a failed read would draw a flat line of zero sign-ups.
+  if (!read.ok) return dbFailure(read);
+  const rows = read.rows;
   const buckets = new Array(28).fill(0) as number[];
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
@@ -22,7 +26,5 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   }
   const last14 = buckets.slice(14).reduce((a, b) => a + b, 0);
   const prev14 = buckets.slice(0, 14).reduce((a, b) => a + b, 0);
-  return new Response(JSON.stringify({ days: buckets.slice(14), last14, prev14, sampled: rows.length >= 5000 }), {
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  });
+  return adminJson({ configured: true, days: buckets.slice(14), last14, prev14, sampled: rows.length >= 5000 });
 };

@@ -1,24 +1,32 @@
 /** Search analytics: top queries, zero-result queries, trending artists +
  *  languages. Sourced from consent-gated anonymous search events. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   const rawDays = parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10);
   // NaN survives Math.min/max and used to throw RangeError -> 500 on ?days=abc (D-5).
   const days = Number.isFinite(rawDays) ? Math.min(Math.max(rawDays, 1), 90) : 7;
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const [rows, artists, languages] = await Promise.all([
-    sbSelect<{ message: string | null }>(
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, total: 0, top: [], zero: [], artists: [], languages: [] });
+  const [read, artistsRead, languagesRead] = await Promise.all([
+    sbSelectResult<{ message: string | null }>(
       env, 'vinax_events', `type=eq.search&created_at=gte.${encodeURIComponent(since)}&select=message&order=created_at.desc&limit=3000`,
     ),
-    sbRpc<unknown[]>(env, 'vinax_top_artists', { days, lim: 12 }).catch(() => []),
-    sbRpc<unknown[]>(env, 'vinax_top_languages', { days, lim: 10 }).catch(() => []),
+    sbRpcResult<unknown[]>(env, 'vinax_top_artists', { days, lim: 12 }),
+    sbRpcResult<unknown[]>(env, 'vinax_top_languages', { days, lim: 10 }),
   ]);
+  // 7.2.0 — "no searches yet" from a failed read hides every content gap.
+  if (!read.ok) return dbFailure(read);
+  if (!artistsRead.ok) return dbFailure(artistsRead);
+  if (!languagesRead.ok) return dbFailure(languagesRead);
+  const rows = read.rows;
+  const artists = artistsRead.value ?? [];
+  const languages = languagesRead.value ?? [];
   const top = new Map<string, number>();
   const zero = new Map<string, number>();
   for (const r of rows) {
@@ -33,8 +41,5 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   }
   const sort = (mp: Map<string, number>) =>
     [...mp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([q, c]) => ({ query: q, count: c }));
-  return new Response(
-    JSON.stringify({ total: rows.length, top: sort(top), zero: sort(zero), artists, languages }),
-    { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
-  );
+  return adminJson({ configured: true, total: rows.length, top: sort(top), zero: sort(zero), artists, languages });
 };

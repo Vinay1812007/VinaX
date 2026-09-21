@@ -9,8 +9,8 @@
  * so (`source: 'sampled'`). No PII either way — only the event type,
  * platform and timestamp are used, and the RPC returns aggregates only.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 interface Row { type: string | null; platform: string | null; device_id: string | null; created_at: string }
@@ -58,19 +58,23 @@ export function usageFromRows(rows: Row[]): { byType: Array<{ type: string; n: n
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false });
   const days = Math.min(30, Math.max(1, parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10) || 7));
-  const exact = await sbRpc<UsageRollup>(env, 'vinax_usage', { p_days: days });
-  if (exact && Array.isArray(exact.heatmap)) {
-    const { total, ...rest } = exact;
+  const exact = await sbRpcResult<UsageRollup | null>(env, 'vinax_usage', { p_days: days });
+  if (exact.ok && exact.value && Array.isArray(exact.value.heatmap)) {
+    const { total, ...rest } = exact.value;
     return json({ configured: true, days, sampled: total, source: 'exact', ...rest });
   }
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const rows = await sbSelect<Row>(
+  const read = await sbSelectResult<Row>(
     env,
     'vinax_events',
     `created_at=gte.${encodeURIComponent(since)}&select=type,platform,device_id,created_at&order=created_at.desc&limit=10000`,
-  ).catch(() => [] as Row[]);
+  );
+  // 7.2.0 — the rollup and the sample both failed: unavailable, not an empty
+  // heatmap.
+  if (!read.ok) return dbFailure(read);
+  const rows = read.rows;
   return json({ configured: true, days, sampled: rows.length, source: 'sampled', ...usageFromRows(rows) });
 };
