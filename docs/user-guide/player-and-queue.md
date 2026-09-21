@@ -24,6 +24,20 @@ Every song menu (right-click, long-press, or the ⋯ button) has **Play next** a
 - Hand-queued songs play before anything the DJ added.
 - A rebuild (a tune, a pinned mood, a new batch of five) never removes or reorders them.
 
+On the Queue page every upcoming song says which it is:
+
+| Mark | What it means |
+|---|---|
+| **DJ pick** | The DJ chose it. A tune, a pinned mood or **New DJ picks** replaces it. The line under it is the DJ's own reason for choosing it. |
+| **Added by you** | You added it with Play next, Add to queue, or **Keep this song**. Nothing the DJ does moves or removes it. |
+| No mark | It came from the album, playlist or list you tapped. A rebuild replaces these too, and the button says so before you press it. |
+
+These marks last as long as the app is open. After a reload VinaX still has your queue, but not the record of who put each song in it, so the marks are gone until the DJ builds again.
+
+## Keep this song
+
+On a **DJ pick**, the ⋯ menu has **Keep this song**. It stays exactly where it is and becomes yours: the next rebuild, tune or AI refinement leaves it alone. The mark changes to *Added by you*.
+
 ## Tune this queue
 
 Tune this queue is a row of one-tap chips. It is on the **Queue** page, under **More options** in the full-screen player, and in the command palette.
@@ -44,7 +58,19 @@ Pin a mood is in the full-screen player, in the **Up Next** tab: Romantic, Energ
 
 ## The Queue page
 
-Open **Queue** from the queue button in the player or from the command palette. You can drag to reorder (or use the arrow keys on a row's handle), remove a song, clear the queue from a song down, sort the upcoming songs, and **Save as playlist**. **Build a queue** plans a longer session: you say how long, what mood and how the energy should move, review the plan, then add it after the current song or play it.
+Open **Queue** from the queue button in the player or from the command palette.
+
+| Control | What it does |
+|---|---|
+| The handle (⠿) | Drag to reorder. With a keyboard, focus it and press ↑ or ↓ — the row moves one place, keeps focus, and the new position is read out. |
+| ⋯ on a row | Keep this song, Move up, Move down, Clear from here down, Remove — plus everything a song menu offers. Every drag has a button here, so nothing needs a pointer. |
+| ✕ on a row | Removes that song, and offers **Undo** for a few seconds. |
+| **New DJ picks** | Asks the DJ for a fresh set. The line under it says how many songs it will replace before you press it; songs you added always stay. |
+| Sort chips | Reorder the upcoming songs by energy, calm, newest, classics or mood arc. The playing song never moves. |
+| **Save as playlist** | Freezes the queue into a playlist you keep. |
+| **Build a queue** | Plans a longer session: you say how long, what mood and how the energy should move, review the plan, then add it after the current song or play it. |
+
+If the DJ cannot reach the catalogue, the page says so and offers **Try again**; while you are offline it says the queue keeps playing but new picks need a connection.
 
 ## The full-screen player
 

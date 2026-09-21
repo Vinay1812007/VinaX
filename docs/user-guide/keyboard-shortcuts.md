@@ -39,6 +39,14 @@ This page lists every key the VinaX web app listens for, the rules for when a ke
 
 The command palette lists pages, player actions (including retuning the queue) and songs that match what you type.
 
+## The Queue page
+
+| Key | Action |
+|---|---|
+| `↑` `↓` on a row's handle | Move that song one place up or down. Focus stays on the handle and the new position is announced. |
+| `Enter` on a row's ⋯ | Opens the row menu, which repeats Move up, Move down, Keep this song, Clear from here down and Remove. |
+| `Esc` | Closes the row menu and returns focus to the ⋯ button. |
+
 ## Touch gestures
 
 | Gesture | Action |
