@@ -278,7 +278,24 @@ These routes are outside the scope of this document; each keeps its key on the W
 | VinaX AI chat | `503` before the stream; the page shows "The assistant paused — please try again." Device-side music commands still work. |
 | DJ voice | The device's speech engine says "Now playing … by …" instead of the DJ's segue. |
 
-Three switches turn AI features off deliberately: the listener's settings (AI DJ, DJ builds every queue, AI-designed shelves on Home), the owner's feature flags `aiDj` and `aiHome` (see [admin-console.md](admin-console.md)), and the owner's backend-enforced AI controls — the emergency stop, the per-feature switches and the daily spend caps described under [The owner's switches and spend caps](#the-owners-switches-and-spend-caps). A switch or a cap produces the same fallbacks as an outage, because the routes answer 503.
+Three kinds of switch turn AI features off deliberately: the listener's settings, the owner's feature flags `aiDj` and `aiHome` (see [admin-console.md](admin-console.md)), and the owner's backend-enforced AI controls — the emergency stop, the per-feature switches and the daily spend caps described under [The owner's switches and spend caps](#the-owners-switches-and-spend-caps). A switch or a cap produces the same fallbacks as an outage, because the routes answer 503.
+
+### Which switch stops which call (7.2)
+
+Before 7.2 nothing on the device turned off the classifier and the re-ranker: a listener who switched the AI DJ off still sent song lines to `/api/curate`.
+
+| Call | Listener setting | Owner flag | Owner control (`ai-controls`) |
+| --- | --- | --- | --- |
+| `/api/dj` (the DJ orders the queue) | AI in recommendations **and** AI DJ | `aiDj` | `dj` |
+| `/api/curate` `metadata` (mood, genre, energy classification) | AI in recommendations | — | `curate-metadata` |
+| `/api/curate` `ranking` (queue re-rank when the DJ is off, Home order, the popular-picks order) | AI in recommendations | `aiHome` for the Home surfaces | `curate-ranking` |
+| `/api/curate` `home` / `shelves` ("Designed for you") | AI in recommendations **and** AI-designed shelves on Home | `aiHome` | `curate-home`, `curate-shelves` |
+| `/api/playlist` (AI Playlist) | — (the listener asks for it) | — | `playlist` |
+| `/api/vinaxai` (the chat), `/api/assistant` (in-app help) | — (the listener asks for it) | — | `vinaxai`, `assistant` |
+| `/api/tts` (DJ voice, read aloud) | DJ voice, read aloud | — | `tts` |
+| `/api/lyrics-tools`, `/api/image` | — (the listener asks for it) | — | `lyrics`, `image` |
+
+"AI in recommendations" (`aiAssist`, on by default) is the master switch for background AI: with it off, the device sends nothing to an AI engine for recommendations and every surface uses its on-device path. The features a listener invokes by hand — the chat, AI Playlist, the lyric tools — are not covered by it; the owner's controls still are.
 
 ## Adding or replacing a model
 
