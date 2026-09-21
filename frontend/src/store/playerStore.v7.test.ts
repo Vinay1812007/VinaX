@@ -234,3 +234,20 @@ describe('v7.1.0 — un-tuning and the batch of five', () => {
     expect(ids()).toEqual(['seed', 'mine', 'usual1', 'usual2']);
   });
 });
+
+describe('7.2.0 — who queued what survives a reload', () => {
+  it('restores the recommender\u2019s picks and the listener\u2019s own songs, dropping ids no longer in the queue', async () => {
+    const stored = [song('seed'), song('auto1'), song('mine')];
+    localStorage.setItem('vinax.player.v1', JSON.stringify({ state: { queue: stored, index: 0, repeat: 'off', shuffle: false, volume: 1, muted: false, rate: 1 }, version: 1 }));
+    localStorage.setItem('vinax.queue.ownership.v1', JSON.stringify({ v: 1, auto: ['auto1', 'left-the-queue'], manual: ['mine'] }));
+    // A reload is a fresh module: the queue comes back from storage, the
+    // in-memory ownership sets do not.
+    vi.resetModules();
+    const { usePlayerStore: reloaded } = await import('./playerStore');
+    reloaded.getState().initEngine();
+    expect(reloaded.getState().queue.map((s) => s.id)).toEqual(['seed', 'auto1', 'mine']);
+    expect(reloaded.getState().isAutoQueued('auto1')).toBe(true);
+    expect(reloaded.getState().isManualQueued('mine')).toBe(true);
+    expect(reloaded.getState().isAutoQueued('left-the-queue')).toBe(false);
+  });
+});

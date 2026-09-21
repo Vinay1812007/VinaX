@@ -15,11 +15,11 @@ import { upcomingMix } from './origin';
  * `regenerateAutoTail`). A rebuild never touches the listener's hand-queued
  * or kept songs.
  *
- * A retune that the listener did not ask for in so many words runs only when
- * it cannot cost them a song from their own list: the player's rebuild also
- * replaces entries that are neither automatic nor hand-queued (the album or
- * playlist they started), so with any of those upcoming the signal is noted
- * for the next picks and the queue is left alone.
+ * Since 7.2 the player's rebuild replaces the recommender's picks only — the
+ * album or playlist the listener started stays, like their hand-queued songs —
+ * so a retune can follow the signal whenever something is playing. With no DJ
+ * picks upcoming there is nothing to rebuild, and the signal simply steers the
+ * next ones.
  */
 
 const MOOD_TUNE: Partial<Record<Mood, TuneIntent>> = {
@@ -41,11 +41,11 @@ export function tuneLabel(intent: TuneIntent): string {
   return TUNE_OPTIONS.find((o) => o.id === intent)?.label ?? intent;
 }
 
-/** Can the automatic tail be rebuilt without dropping anything from the listener's own list? */
+/** Is there anything for a rebuild to replace (the recommender's picks after the current song)? */
 export function canRetuneQuietly(): boolean {
   const { queue, index } = usePlayerStore.getState();
   if (!queue[index]) return false;
-  return upcomingMix().list === 0;
+  return upcomingMix().auto > 0;
 }
 
 export interface MoreLikeThisResult {

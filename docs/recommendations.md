@@ -209,7 +209,7 @@ Every listening event bumps the language, the first three credited artists and t
 | `QUEUE_ADD` | 0.5 | "Add to queue" or "Play next" |
 | `SEARCH_PLAY` | 1.5 | A play started from the listener's own search, on top of the `PLAY` |
 | `SKIP` | −0.75 | A manual skip with under 30 % of the song heard. Because `SKIP_RETRACTS_PLAY` is on, the skip also takes back the `PLAY` bump, for a total of −1.75. |
-| `SOFT_MUTE` | −3.75 | "Show fewer like this"; also mutes the lead artist for 14 days |
+| `SOFT_MUTE` | −3.75 | "Less like this"; also mutes the lead artist for 7, 14 or 30 days as the listener chose (14 by default). Settings → Recommendations lists the active mutes with their end dates and takes any of them back |
 
 A song flipped past before the 5-second mark never earns its `PLAY` and is not recorded as a skip in the profile; it is still noted in the session intent. Positive affinity halves 14 days after the last signal; skips halve after 30 days. No single affinity score can exceed 60.
 

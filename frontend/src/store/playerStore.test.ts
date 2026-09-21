@@ -132,16 +132,18 @@ describe('v6.5.0 — DJ takeover and Tune this queue', () => {
     expect(recommendMock).not.toHaveBeenCalled();
   });
 
-  it('tuneQueue keeps what played and the current song, rebuilds the rest with the intent, and a fresh play clears it', async () => {
+  it('tuneQueue keeps what played, the current song and the list the listener started, and rebuilds the automatic picks', async () => {
     usePlayerStore.getState().playQueue([song('a'), song('b'), song('c'), song('d')], 1);
     recommendMock.mockResolvedValue([song('t1'), song('t2')]);
     usePlayerStore.getState().tuneQueue('chill');
     expect(usePlayerStore.getState().tuneIntent).toBe('chill');
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b']);
+    // 7.2.0 — c and d came from the list the listener started, not from the
+    // recommender: a rebuild replaces the DJ's picks only.
+    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b', 'c', 'd']);
     await vi.advanceTimersByTimeAsync(10);
     expect(recommendMock).toHaveBeenCalledOnce();
     expect(recommendMock.mock.calls[0][2]).toMatchObject({ tune: 'chill' });
-    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b', 't1', 't2']);
+    expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['a', 'b', 'c', 'd', 't1', 't2']);
     // "Surprise me" resolves to a concrete intent.
     usePlayerStore.getState().tuneQueue('surprise');
     expect(usePlayerStore.getState().tuneIntent).not.toBe('surprise');

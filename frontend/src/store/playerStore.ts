@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
-import { createDedupedStorage } from '@/services/storage/local';
+import { createDedupedStorage, getLocal, setLocal } from '@/services/storage/local';
 import { audioEngine, orderedSources } from '@/services/audio/engine';
 import {
   setMediaHandlers,
@@ -198,7 +198,8 @@ export const usePlayerStore = create<PlayerState>()(
       let lastPlan: NextSongsPlan | null = null;
       let batchSeq = 0;
       const autoMetaById = new Map<string, AutoEntryMeta>();
-      /** Ids the recommender appended (never persisted; a reload starts clean). */
+      /** Ids the recommender appended. Persisted with the queue (7.2.0) so a
+       *  reload does not turn every entry into "the list you started". */
       const autoIds = new Set<string>();
       /** v7.0.0 — ids the listener queued by hand ("Add to queue" / "Play next"). They
        *  outrank everything automatic: they sit ahead of the recommender's tail,
@@ -251,6 +252,25 @@ export const usePlayerStore = create<PlayerState>()(
           manualIds.delete(song.id);
           autoMetaById.set(song.id, { ...meta, pos });
         });
+        saveOwnership();
+      }
+
+      /** 7.2.0 — who queued what, written next to the queue (not inside the
+       *  de-duplicated player record, which must not change on a progress tick). */
+      function saveOwnership(): void {
+        setLocal(KEYS.queueOwnership, { v: 1, auto: [...autoIds], manual: [...manualIds] });
+      }
+
+      /** Restore ownership for the rehydrated queue; ids no longer in it are dropped. */
+      function loadOwnership(): void {
+        const stored = getLocal<{ v?: number; auto?: unknown; manual?: unknown }>(KEYS.queueOwnership, { v: 1 });
+        const ids = new Set(get().queue.map((s) => s.id));
+        const take = (raw: unknown, into: Set<string>): void => {
+          if (!Array.isArray(raw)) return;
+          for (const id of raw) if (typeof id === 'string' && ids.has(id)) into.add(id);
+        };
+        take(stored?.auto, autoIds);
+        take(stored?.manual, manualIds);
       }
 
       /** Distinct lead artists in a continuation (diversity, for opt-in quality telemetry). */
@@ -640,6 +660,7 @@ export const usePlayerStore = create<PlayerState>()(
         initEngine: () => {
           if (engineInitialized) return;
           engineInitialized = true;
+          loadOwnership();
           audioEngine.init({
             onTime: (currentTime, duration) => {
               set({ currentTime, duration });
@@ -798,6 +819,7 @@ export const usePlayerStore = create<PlayerState>()(
           manualIds.clear();
           sessionPlayed.clear();
           lastRemoval = null;
+          saveOwnership();
           // v6.5.0 — DJ takeover: the tapped song is the seed and the DJ
           // builds the continuation (startTrack asks for it at once because
           // the queue is one song long). Off, or when the caller insists on
@@ -828,8 +850,12 @@ export const usePlayerStore = create<PlayerState>()(
           // by hand; the rest of what follows is rebuilt.
           invalidateQueue();
           radio = true; // a tuned continuation is endless, like radio
+          // 7.2.0 — a rebuild replaces the recommender's picks only. Songs the
+          // listener queued by hand AND the list they started (an album, a
+          // playlist, a Queue Builder plan) stay: "songs you added stay" has to
+          // mean every song the DJ did not choose.
+          const kept = [...queue.slice(0, index + 1), ...queue.slice(index + 1).filter((s) => !autoIds.has(s.id))];
           for (const s of queue.slice(index + 1)) autoIds.delete(s.id);
-          const kept = [...queue.slice(0, index + 1), ...queue.slice(index + 1).filter((s) => manualIds.has(s.id))];
           set({ queue: kept, tuneIntent: resolved });
           void appendRecommendations(current).then((added) => {
             if (!added && get().queue.length === kept.length) toast('Could not retune right now — try again in a moment');
@@ -877,6 +903,7 @@ export const usePlayerStore = create<PlayerState>()(
           const firstAuto = queue.findIndex((s, i) => i > index && autoIds.has(s.id));
           const at = firstAuto < 0 ? queue.length : firstAuto;
           manualIds.add(song.id);
+          saveOwnership();
           set({ queue: [...queue.slice(0, at), song, ...queue.slice(at)] });
           if (firstAuto >= 0) preloadUpcoming();
           toast('Added to queue');
@@ -894,6 +921,7 @@ export const usePlayerStore = create<PlayerState>()(
           const firstAuto = current.findIndex((s, i) => i > get().index && autoIds.has(s.id));
           const at = firstAuto < 0 ? current.length : firstAuto;
           for (const s of fresh) manualIds.add(s.id);
+          saveOwnership();
           set({ queue: [...current.slice(0, at), ...fresh, ...current.slice(at)] });
           toast(`Added ${fresh.length} songs to queue`);
           if (get().queue.length === fresh.length) startTrack(fresh[0], true);
@@ -924,6 +952,7 @@ export const usePlayerStore = create<PlayerState>()(
           const insertAt = Math.min(newIndex + 1, filtered.length);
           autoIds.delete(song.id);
           manualIds.add(song.id);
+          saveOwnership();
           set({
             queue: [...filtered.slice(0, insertAt), song, ...filtered.slice(insertAt)],
             index: newIndex,
@@ -996,6 +1025,7 @@ export const usePlayerStore = create<PlayerState>()(
           autoMetaById.clear();
           manualIds.clear();
           lastRemoval = null;
+          saveOwnership();
           audioEngine.pause();
           set({ queue: [], index: 0, isPlaying: false, currentTime: 0, duration: 0 });
         },
@@ -1102,6 +1132,7 @@ export const usePlayerStore = create<PlayerState>()(
           autoIds.delete(id);
           autoMetaById.delete(id);
           manualIds.add(id);
+          saveOwnership();
           set({ queue: [...queue] });
         },
         regenerateAutoTail: () => get().tuneQueue(get().tuneIntent),

@@ -7,8 +7,10 @@ import { usePlayerStore } from '@/store/playerStore';
  *    It keeps its place through every rebuild and AI refinement.
  *  - `auto`: the DJ appended it. A rebuild ("New DJ picks", a tune, a pinned
  *    mood) replaces it; "Keep this song" turns it into the listener's own.
- *  - `list`: neither — the album or playlist the listener started, or a queue
- *    restored after a reload (the player keeps ownership in memory only).
+ *  - `list`: neither — the album or playlist the listener started. A rebuild
+ *    leaves these alone too (7.2); only the DJ's picks are replaced.
+ *
+ * Ownership is stored next to the queue, so it survives a reload.
  *
  * Read at render time from the player's own sets; every ownership change
  * also replaces `queue`, so a component subscribed to the queue re-reads it.

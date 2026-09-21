@@ -488,14 +488,11 @@ export default function QueuePage() {
     );
   }
 
-  // What a rebuild would replace, in the listener's own terms.
-  const replaceable = mix.auto + mix.list;
+  // What a rebuild would replace, in the listener's own terms: only the DJ's picks.
   const rebuildNote =
-    mix.list > 0
-      ? `Replaces the ${replaceable} upcoming ${replaceable === 1 ? 'song' : 'songs'} you didn’t add, including ${mix.list} from the list you started. Songs you added stay.`
-      : mix.auto > 0
-        ? `Replaces the ${mix.auto} DJ ${mix.auto === 1 ? 'pick' : 'picks'} after this song. Songs you added stay.`
-        : 'Asks the DJ for songs that follow what’s playing. Songs you added stay.';
+    mix.auto > 0
+      ? `Replaces the ${mix.auto} DJ ${mix.auto === 1 ? 'pick' : 'picks'} after this song. Songs you added, and the list you started, stay.`
+      : 'Asks the DJ for songs that follow what’s playing. Songs you added, and the list you started, stay.';
   const canRebuild = !!song;
 
   return (

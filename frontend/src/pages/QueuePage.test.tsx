@@ -184,7 +184,8 @@ describe('QueuePage ownership', () => {
     mount();
     const button = screen.getByRole('button', { name: 'New DJ picks' });
     // Three songs came from the list that was tapped, so the note says so.
-    expect(screen.getByText(/Replaces the 6 upcoming songs you didn’t add, including 4 from the list you started\. Songs you added stay\./)).toBeTruthy();
+    // 7.2.0 — a rebuild replaces the DJ's picks only; the list the listener started stays.
+    expect(screen.getByText(/Replaces the 2 DJ picks after this song\. Songs you added, and the list you started, stay\./)).toBeTruthy();
     expect(button.getAttribute('aria-describedby')).toBe('vx-rebuild-note');
     fireEvent.click(button);
     expect(regenerateAutoTail).toHaveBeenCalled();
