@@ -2,6 +2,7 @@ import { KEYS } from '@/constants/storage-keys';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { installId } from '@/services/identity/installId';
 import { isNativePlatform, platformName } from '@/services/native';
+import { onPlaybackEvent } from '@/services/playback/session';
 import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
 import type { Song } from '@/types';
@@ -12,6 +13,13 @@ import type { Song } from '@/types';
  * optional display name, and the current song; coarse geo is added at the edge
  * (never the raw IP). On web the endpoint is same-origin; the native app posts
  * to the deployed function.
+ *
+ * 7.2.0 — a `play` is sent when the playback session COUNTS the play (enough
+ * of it heard, once per run: services/playback/session.ts), not when a new
+ * song id starts: flipping past a song no longer inflates the owner's play
+ * counts, and usage analytics count plays by the same rule as the taste
+ * profile. Structured events (recommendation telemetry) carry a small `meta`
+ * record; the Worker whitelists and clips it.
  */
 const ENDPOINT = isNativePlatform()
   ? 'https://www.sirimillavinay.online/api/events'
@@ -44,8 +52,15 @@ function toEventSong(song: Song | null | undefined): EventSong | undefined {
   };
 }
 
-async function send(type: string, song?: Song | null, extra?: Record<string, unknown>): Promise<void> {
+/** A flat record of numbers, short strings, booleans, nulls, string lists and string maps. */
+export type TelemetryMeta = Record<string, string | number | boolean | null | string[] | Record<string, string>>;
+
+/** Largest serialised `meta` the client will send; anything bigger is dropped, never truncated mid-value. */
+export const META_MAX_BYTES = 1024;
+
+async function send(type: string, song?: Song | null, extra?: Record<string, unknown>, meta?: TelemetryMeta): Promise<void> {
   if (!consented()) return;
+  if (meta && JSON.stringify(meta).length > META_MAX_BYTES) return;
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',
@@ -70,6 +85,7 @@ async function send(type: string, song?: Song | null, extra?: Record<string, unk
         appVersion: __APP_VERSION__,
         song: toEventSong(song),
         ...(extra ?? {}),
+        ...(meta ? { meta } : {}),
       }),
     });
     // First contact: the server answers 200 + { signed_device_id_next } once;
@@ -81,6 +97,15 @@ async function send(type: string, song?: Song | null, extra?: Record<string, unk
   } catch {
     /* analytics is best-effort and must never affect playback */
   }
+}
+
+/**
+ * A structured event with no song attached: only the fields every event
+ * already carries (device ids, optional name, platform, app version) plus
+ * `meta`. Consent-gated like everything else here.
+ */
+export function trackStructured(type: string, meta: TelemetryMeta): Promise<void> {
+  return send(type, null, undefined, meta);
 }
 
 let errorCount = 0;
@@ -113,6 +138,7 @@ export function registerUser(): void {
 
 let started = false;
 let telemetryUnsubscribe: (() => void) | null = null;
+let playbackUnsubscribe: (() => void) | null = null;
 let telemetryInterval: number | null = null;
 
 /**
@@ -124,6 +150,8 @@ let telemetryInterval: number | null = null;
 export function disposeTelemetry(): void {
   telemetryUnsubscribe?.();
   telemetryUnsubscribe = null;
+  playbackUnsubscribe?.();
+  playbackUnsubscribe = null;
   if (telemetryInterval != null) {
     clearInterval(telemetryInterval);
     telemetryInterval = null;
@@ -135,7 +163,6 @@ export function initTelemetry(): void {
   if (started) return;
   started = true;
 
-  let lastSongId: string | null = null;
   let lastPlaying = false;
 
   // Presence ping so a brand-new listener appears in Live immediately.
@@ -166,13 +193,16 @@ export function initTelemetry(): void {
     window.setTimeout(startVitals, 3000);
   }
 
+  // A play is a play when the playback session counts it (heard time, once
+  // per run) — the same moment the taste profile learns its PLAY. A song
+  // flipped past, or looped by repeat-one inside one run, sends nothing new.
+  playbackUnsubscribe = onPlaybackEvent((e) => {
+    if (e.kind === 'counted') void send('play', e.song);
+  });
+
+  // Pause and heartbeat keep live presence as before.
   telemetryUnsubscribe = usePlayerStore.subscribe((s) => {
     const song = s.queue[s.index] ?? null;
-    const id = song?.id ?? null;
-    if (id && s.isPlaying && id !== lastSongId) {
-      lastSongId = id;
-      void send('play', song);
-    }
     if (!s.isPlaying && lastPlaying) void send('pause', song);
     lastPlaying = s.isPlaying;
   });

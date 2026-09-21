@@ -1,0 +1,4 @@
+# Evaluation output and the extracted baseline checkout: both are reproducible
+# from the fixtures and a commit hash, so neither belongs in the repository.
+reports/
+.cache/

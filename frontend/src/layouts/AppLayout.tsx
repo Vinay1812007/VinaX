@@ -235,6 +235,7 @@ export function AppLayout() {
     onIdle(() => {
       installDeterrence();
       initTelemetry();
+      void import('@/services/analytics/recTelemetry').then((m) => m.initRecTelemetry()).catch(() => undefined);
       initSessionInsights();
       // Measured listening time for Stats (pauses/seeks excluded).
       void import('@/services/analytics/listenClock').then((m) => m.initListenClock());
