@@ -28,8 +28,23 @@ type Env = SupabaseEnv & IdentityEnv;
 
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
+/**
+ * 7.2.0 — the Android shell loads the app from the production origin today, so
+ * these calls are same-origin; a build that bundles the assets (the fix the
+ * Capacitor config recommends) runs on https://localhost and would be refused
+ * at the preflight without this. The body carries no secret and the route
+ * answers the same to anyone, so the allowance is the simple one.
+ */
+const CORS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'content-type',
+};
+
+export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
+
 const json = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...CORS } });
 
 const normalize = (raw: unknown): string | null => {
   if (typeof raw !== 'string') return null;

@@ -263,7 +263,7 @@
       (rows || '<tr><td colspan="5" class="empty">No one is listening right now.</td></tr>') + '</tbody></table>';
     stamp();
   }
-  function loadLive() { apiMemo('/api/admin/live').then(function (d) { if (d && active === 'live') renderLive(d); }).catch(noop); }
+  function loadLive() { apiMemo('/api/admin/live').then(function (d) { if (d && active === 'live') renderLive(d); }).catch(failIf('live', 'live listening')); }
 
   // ---------- Location ----------
   function renderLocation(d) {
@@ -276,7 +276,7 @@
       (cities || '<tr><td colspan="4" class="empty">No data yet.</td></tr>') + '</tbody></table>';
     stamp();
   }
-  function loadLocation() { apiMemo('/api/admin/location?days=' + rangeDays).then(function (d) { if (d && active === 'location') renderLocation(d); }).catch(noop); }
+  function loadLocation() { apiMemo('/api/admin/location?days=' + rangeDays).then(function (d) { if (d && active === 'location') renderLocation(d); }).catch(failIf('location', 'location analytics')); }
 
 
   // --- World Listening: Leaflet + OpenStreetMap tiles (vendored under
@@ -503,7 +503,7 @@
       '<h3>Top languages</h3>' + bars(d.topLanguages || [], function (x) { return esc(x.language); }, function (x) { return x.plays; });
     stamp();
   }
-  function loadMusic() { apiMemo('/api/admin/music?days=' + rangeDays).then(function (d) { if (d && active === 'music') renderMusic(d); }).catch(noop); }
+  function loadMusic() { apiMemo('/api/admin/music?days=' + rangeDays).then(function (d) { if (d && active === 'music') renderMusic(d); }).catch(failIf('music', 'music analytics')); }
 
   // ---------- A/B Experiments ----------
   // The nav button existed but no section did — clicking it left "Loading…"
@@ -533,7 +533,7 @@
     $('view').innerHTML = cards || '<div class="empty">No experiments yet. Create one via POST /api/admin/experiments.</div>';
     stamp();
   }
-  function loadExperiments() { apiMemo('/api/admin/experiments').then(function (d) { if (d && active === 'experiments') renderExperiments(d); }).catch(noop); }
+  function loadExperiments() { apiMemo('/api/admin/experiments').then(function (d) { if (d && active === 'experiments') renderExperiments(d); }).catch(failIf('experiments', 'the experiments')); }
 
   // ---------- Users ----------
   function renderUsers(d) {
@@ -650,7 +650,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-unblock]'), function (b) { b.addEventListener('click', function () { doUnblock(b.getAttribute('data-unblock')); }); });
     stamp();
   }
-  function loadContent() { apiMemo('/api/admin/content').then(function (d) { if (d && active === 'content') renderContent(d); }).catch(noop); }
+  function loadContent() { apiMemo('/api/admin/content').then(function (d) { if (d && active === 'content') renderContent(d); }).catch(failIf('content', 'content control')); }
 
   // ---------- Technical ----------
   function healthHtml(h) {
@@ -778,10 +778,10 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-resolve]'), function (b) { b.addEventListener('click', function () { resolveFeedback(parseInt(b.getAttribute('data-resolve'), 10)); }); });
     stamp();
   }
-  function loadFeedback() { apiMemo('/api/admin/feedback').then(function (d) { if (d && active === 'feedback') renderFeedback(d); }).catch(noop); }
+  function loadFeedback() { apiMemo('/api/admin/feedback').then(function (d) { if (d && active === 'feedback') renderFeedback(d); }).catch(failIf('feedback', 'feedback')); }
 
   // ---------- Overview ----------
-  function loadOverview() { apiMemo('/api/admin/overview').then(function (d) { if (d && active === 'overview') { renderOverview(d); loadDigest(); loadGrowth(); renderQuickActions(); } }).catch(noop); }
+  function loadOverview() { apiMemo('/api/admin/overview').then(function (d) { if (d && active === 'overview') { renderOverview(d); loadDigest(); loadGrowth(); renderQuickActions(); } }).catch(failIf('overview', 'the overview')); }
   // Overview health strip — built only from fields the overview payload
   // already carries (summary.*); nothing is invented, everything defaults to 0.
   function fmtN(n) { n = Number(n || 0); return isFinite(n) ? n.toLocaleString() : '0'; }
@@ -857,7 +857,7 @@
   }
 
   // ---------- Insights ----------
-  function loadInsights() { apiMemo('/api/admin/insights?days=' + rangeDays).then(function (d) { if (d && active === 'insights') renderInsights(d); }).catch(noop); }
+  function loadInsights() { apiMemo('/api/admin/insights?days=' + rangeDays).then(function (d) { if (d && active === 'insights') renderInsights(d); }).catch(failIf('insights', 'the insights')); }
   function renderInsights(d) {
     var s = d.segments || {};
     setExport('top-listeners', d.topListeners || []);
@@ -882,7 +882,7 @@
       if (actLast) renderActivity(actLast);
     }
   });
-  function loadActivity() { apiMemo('/api/admin/activity').then(function (d) { if (d && active === 'activity') renderActivity(d); }).catch(noop); }
+  function loadActivity() { apiMemo('/api/admin/activity').then(function (d) { if (d && active === 'activity') renderActivity(d); }).catch(failIf('activity', 'the activity feed')); }
   var actFilter = 'all';
   var actLast = null;
   function renderActivity(d) {
@@ -905,7 +905,7 @@
 
 
   // ---------- routing / shell ----------
-  function loadAi() { apiMemo('/api/admin/ai?days=' + rangeDays).then(function (d) { if (d && active === 'ai') renderAi(d); }).catch(noop); }
+  function loadAi() { apiMemo('/api/admin/ai?days=' + rangeDays).then(function (d) { if (d && active === 'ai') renderAi(d); }).catch(failIf('ai', 'AI monitoring')); }
   function renderAi(d) {
     var m = (d && d.metrics) || {};
     var total = m.total || 0, ok = m.ok || 0, fail = m.fail || 0;
@@ -958,7 +958,7 @@
       (errs || '<tr><td colspan="3" class="empty">No errors. 🎉</td></tr>') + '</tbody></table>';
     stamp();
   }
-  function loadRealtime() { apiMemo('/api/admin/realtime').then(function (d) { if (d && active === 'realtime') renderRealtime(d); }).catch(noop); }
+  function loadRealtime() { apiMemo('/api/admin/realtime').then(function (d) { if (d && active === 'realtime') renderRealtime(d); }).catch(failIf('realtime', 'the real-time view')); }
 
   // ---------- Search Analytics ----------
   function renderSearchA(d) {
@@ -980,7 +980,7 @@
     setExport('searches', d.top || []);
     stamp();
   }
-  function loadSearchA() { apiMemo('/api/admin/search-analytics?days=' + rangeDays).then(function (d) { if (d && active === 'search') renderSearchA(d); }).catch(noop); }
+  function loadSearchA() { apiMemo('/api/admin/search-analytics?days=' + rangeDays).then(function (d) { if (d && active === 'search') renderSearchA(d); }).catch(failIf('search', 'search analytics')); }
 
   // ---------- Engagement ----------
   function renderEngagement(d) {
@@ -997,7 +997,7 @@
       '<p class="muted" style="font-size:12px">Skip / completion / favorite / share tracking began with v1.1.20 — numbers grow as listeners use the updated app.</p>';
     stamp();
   }
-  function loadEngagement() { apiMemo('/api/admin/engagement?days=' + rangeDays).then(function (d) { if (d && active === 'engagement') renderEngagement(d); }).catch(noop); }
+  function loadEngagement() { apiMemo('/api/admin/engagement?days=' + rangeDays).then(function (d) { if (d && active === 'engagement') renderEngagement(d); }).catch(failIf('engagement', 'engagement')); }
 
   // ---------- Notifications (push composer) ----------
   var PN_BASES = ['https://www.sirimillavinay.online/api/cat', 'https://saavn.sumit.co/api', 'https://nepotuneapi.vercel.app/api'];
@@ -1487,7 +1487,7 @@
     setExport('rooms', d.rooms || []);
     stamp();
   }
-  function loadRooms() { apiMemo('/api/admin/rooms').then(function (d) { if (d && active === 'rooms') renderRooms(d); }).catch(noop); }
+  function loadRooms() { apiMemo('/api/admin/rooms').then(function (d) { if (d && active === 'rooms') renderRooms(d); }).catch(failIf('rooms', 'the live rooms')); }
 
   // ---------- AI Lab (streaming test bench for every AI lane, v5.4.0) ----------
   // Interactive pane: EXCLUDED from the silent auto-refresh — loadAiLab only
@@ -2454,6 +2454,16 @@
   function okPill(ok, text) { return '<span class="pill" style="' + (ok ? 'color:var(--ok);border-color:var(--ok);background:var(--ok-soft)' : 'color:var(--danger);border-color:var(--danger);background:var(--danger-soft)') + '">' + esc(text) + '</span>'; }
   function ago(iso) { if (!iso) return '—'; var m = Math.round((Date.now() - Date.parse(iso)) / 60000); if (!isFinite(m)) return '—'; if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; if (m < 1440) return Math.round(m / 60) + ' h ago'; return Math.round(m / 1440) + ' d ago'; }
   function showFail(msg) { $('view').innerHTML = '<div class="empty">' + esc(msg || 'Could not load.') + '</div>'; }
+  // 7.2 — a dashboard read that FAILS says so. The routes answer 502 with the
+  // reason (db_unavailable, db_unauthorized, db_schema_missing, …) instead of
+  // zeros, so a silent .catch() here would leave the last numbers on screen as
+  // if they were current.
+  function failIf(section, what) {
+    return function () {
+      if (active !== section) return;
+      showFail('Unavailable — ' + (what || 'this panel') + ' could not be read. Nothing is shown as zero while the read is failing; try again shortly.');
+    };
+  }
   function pctCell(v) {
     var p = v == null ? null : Math.round(v <= 1 ? v * 100 : v);
     return p == null ? '<td class="muted">—</td>' : '<td><span class="btrack" style="display:inline-block;width:70px;vertical-align:middle;margin-right:6px"><span class="bfill" style="display:block;width:' + Math.min(100, p) + '%"></span></span>' + p + '%</td>';
@@ -3243,12 +3253,12 @@
   }
   function fmtN(n) { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n); }
 
-  var TITLES = { workspace: 'Operations Workspace', overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', homebuilder: 'Home Layout Studio', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', segments: 'Audience Segments', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', opscenter: 'Operations Center', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools', aicost: 'AI Tokens & Cost' };
-  var USES_RANGE = { workspace: true, location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true, usage: true, heatmap: true, funnel: true, songstats: true, skips: true, aicost: true };
+  var TITLES = { workspace: 'Operations Workspace', overview: 'Overview', live: 'Live Listening', activity: 'Activity Feed', location: 'Location Analytics', world: 'World Listening', music: 'Music Analytics', insights: 'Insights', experiments: 'A/B Experiments', users: 'User Management', technical: 'Technical Monitoring', feedback: 'Feedback & Bug Reports', ai: 'AI Monitoring', rooms: 'Live Rooms', realtime: 'Real-Time', search: 'Search Analytics', engagement: 'Engagement', notify2: 'Notifications', content: 'Content Control', ailab: 'API Monitoring', songs: 'Song Management', playlists: 'Playlist Management', categories: 'Categories & Genres', banners: 'Banner & Promotion', festivals: 'Festival Themes', config: 'App Configuration', homebuilder: 'Home Layout Studio', retention: 'Retention Cohorts', dataquality: 'Data Quality', catalog: 'Catalog Lookup', engineprobe: 'Engine Probe', seo: 'SEO Corpus', edge: 'Edge & Endpoint Health', releases: 'Releases & CI', tables: 'Database Overview', audit: 'Audit Trail', flags: 'Feature Flags', runbook: 'Runbook', backup: 'Config Backup', trendpins: 'Trending Pins', statusnote: 'Status Note', usage: 'Feature Usage', heatmap: 'Listening Heatmap', funnel: 'Onboarding Funnel', segments: 'Audience Segments', songstats: 'Song Drilldown', skips: 'Skip Report', synonyms: 'Search Synonyms', sources: 'Catalog Sources', langorder: 'Language Order', blocklistio: 'Blocklist Import/Export', aistarters: 'AI Starter Prompts', aiquick: 'AI Quick Actions', airules: 'AI House Rules', cron: 'Cron Health', opscenter: 'Operations Center', statushist: 'Status History', envcheck: 'Environment Checklist', query: 'Query Console', relnotes: 'Release Notes', maintwin: 'Maintenance Scheduler', minver: 'Minimum App Version', broadcast: 'Broadcast Message', greeting: 'Home Greeting', faq: 'Help Center FAQ', announce: 'Announcement Composer', pins: 'Pinned Tools', aicost: 'AI Tokens & Cost', recquality: 'Recommendation Quality', aiops: 'AI Operations', recconfig: 'Recommendation Tuning', trends: 'Trend Operations' };
+  var USES_RANGE = { workspace: true, location: true, world: true, music: true, technical: true, insights: true, ai: true, search: true, engagement: true, usage: true, heatmap: true, funnel: true, songstats: true, skips: true, aicost: true, recquality: true, aiops: true };
   // v5.7.5 — formal category reorganisation: which category each tool sits
   // under (drives the breadcrumb over the tool title) + collapsible category
   // headers whose open/closed state persists per browser.
-  var CATS = { workspace: 'Dashboards', overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', segments: 'Audience', songs: 'Catalog', playlists: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', homebuilder: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', opscenter: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines' };
+  var CATS = { workspace: 'Dashboards', overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', segments: 'Audience', songs: 'Catalog', playlists: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', homebuilder: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', opscenter: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines', recquality: 'Analytics', aiops: 'AI & Engines', recconfig: 'Settings', trends: 'Catalog' };
   var densityButton = $('density');
   if (densityButton) {
     var compact = false;

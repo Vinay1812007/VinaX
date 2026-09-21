@@ -51,7 +51,7 @@ export function RecsDebugPanel() {
             <div key={`${r.position}-${r.song.id}`} className="border-t border-white/10 py-1">
               <div>
                 #{r.position} <b>{r.song.title}</b> · {r.song.subtitle} · <span className={r.picker === 'ai' ? 'text-emerald-300' : 'text-amber-300'}>{r.picker === 'ai' ? 'AI selected' : 'LOCAL FALLBACK'}</span>
-                {typeof r.confidence === 'number' && ` · conf ${r.confidence.toFixed(2)}`}
+                {typeof r.confidence === 'number' && ` · self-rated fit ${r.confidence.toFixed(2)} (the model's own claim, not a probability)`}
               </div>
               <div>final {r.finalScore.toFixed(3)} · source {r.source}{typeof r.rank === 'number' && ` · ranked #${r.rank}`}</div>
               <div className="text-white/70">{fmtComponents(r.components)}</div>

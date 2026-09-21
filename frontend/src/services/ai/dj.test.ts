@@ -62,7 +62,8 @@ describe('resolveFromPool', () => {
     );
     expect(out.map((p) => p.song.id)).toEqual(['2', '1']);
     expect(out[0]).toMatchObject({ reason: 'r1', segue: 's1', confidence: 0.8 });
-    expect(out[1].confidence).toBe(0.5);
+    // 7.2.0 — no self-rating from the model means none is recorded (0.5 read like a measurement).
+    expect(out[1].confidence).toBeUndefined();
   });
 });
 

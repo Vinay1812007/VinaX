@@ -60,6 +60,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
         // Short shared cache: the menu changes rarely, and a stale-while-
         // revalidate window keeps the picker instant.
         'cache-control': 'public, max-age=300, stale-while-revalidate=900',
+        // 7.2.0 — readable cross-origin (a bundled Android build runs on https://localhost).
+        'access-control-allow-origin': '*',
       },
     },
   );

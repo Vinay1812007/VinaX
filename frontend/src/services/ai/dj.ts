@@ -74,8 +74,8 @@ export interface DjPick {
   song: Song;
   reason: string;
   segue: string;
-  /** 0..1 — the DJ's own belief in the hand-off (0.5 when it gave none). */
-  confidence: number;
+  /** 0..1 — the DJ's OWN claim about the hand-off, when it made one. Not a probability of enjoyment, and not used in ranking or validation. */
+  confidence?: number;
   /** v6.5.0 — true when the DJ proposed this song from outside the pool and the catalogue confirmed it. */
   discovered?: boolean;
 }
@@ -183,7 +183,8 @@ interface WirePick { songId?: unknown; title?: unknown; artist?: unknown; reason
 
 const fold = (t: string): string => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const clipText = (v: unknown, n: number): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
-const confidenceOf = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5);
+/** 7.2.0 — the DJ's self-rating of a hand-off. Absent when the model gave none: a made-up 0.5 read like a measurement. It is never a probability that the listener will enjoy the song, and nothing ranks by it. */
+const confidenceOf = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : undefined);
 
 /**
  * v6.5.0 — is a catalogue result really the song the DJ proposed? Strong
@@ -244,7 +245,7 @@ export async function resolvePicks(picks: WirePick[], pool: Song[], limit: numbe
   const byId = new Map(pool.map((s) => [s.id, s]));
   const byKey = new Map<string, Song>();
   for (const s of pool) byKey.set(canonicalKey(s.title, primaryArtist(s)), s);
-  const slots: Array<DjPick | { title: string; artist: string; reason: string; segue: string; confidence: number }> = [];
+  const slots: Array<DjPick | { title: string; artist: string; reason: string; segue: string; confidence?: number }> = [];
   const used = new Set<string>();
   let proposals = 0;
   for (const p of picks) {

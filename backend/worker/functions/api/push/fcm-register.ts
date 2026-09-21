@@ -8,10 +8,25 @@ interface FcmRegisterEnv extends SupabaseEnv {
   TELEMETRY_PEPPER?: string;
 }
 
+/**
+ * 7.2.0 — the Android shell loads the app from the production origin today, so
+ * these calls are same-origin; a build that bundles the assets (the fix the
+ * Capacitor config recommends) runs on https://localhost and would be refused
+ * at the preflight without this. The body carries no secret and the route
+ * answers the same to anyone, so the allowance is the simple one.
+ */
+const CORS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'content-type',
+};
+
+export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: CORS });
+
 function json(o: unknown, status = 200): Response {
   return new Response(JSON.stringify(o), {
     status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS },
   });
 }
 

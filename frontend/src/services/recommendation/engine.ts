@@ -437,7 +437,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       publishDebug(ranked, checked.songs, 'ai', {
         trace: { ...trace, stages: { ...trace.stages, validated: checked.songs.length }, relaxed: checked.relaxed, repairs: checked.repairs },
         rejected: [...rejected, ...checked.rejected],
-        confidence: new Map(set.picks.map((p) => [p.song.id, p.confidence])),
+        confidence: new Map(set.picks.filter((p) => typeof p.confidence === 'number').map((p) => [p.song.id, p.confidence as number])),
         discovered: new Set(set.picks.filter((p) => p.discovered).map((p) => p.song.id)),
       });
       const djSet = set;

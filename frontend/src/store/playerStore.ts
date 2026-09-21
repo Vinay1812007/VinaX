@@ -1281,7 +1281,17 @@ export const usePlayerStore = create<PlayerState>()(
       // scalars so a corrupt/legacy record can never brick the player (DQA-06).
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PersistedPlayerState>;
-        const queue = Array.isArray(p.queue) ? p.queue.filter(isValidSong) : [];
+        // 7.2.0 — a queue stored by an older build can carry energy/tempo an AI
+        // guessed. They were never measured, and the classifier fills them again
+        // from cache when it can, so they are dropped rather than passed on as
+        // catalogue metadata (services/ai/recommendations.ts tracks provenance).
+        const queue = (Array.isArray(p.queue) ? p.queue.filter(isValidSong) : []).map((song) => {
+          if (song.energy === undefined && song.tempo === undefined) return song;
+          const rest: Song = { ...song };
+          delete rest.energy;
+          delete rest.tempo;
+          return rest;
+        });
         const rawIndex = typeof p.index === 'number' && Number.isFinite(p.index) ? Math.floor(p.index) : 0;
         const num = (v: unknown, lo: number, hi: number, d: number): number =>
           typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
