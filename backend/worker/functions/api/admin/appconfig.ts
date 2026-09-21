@@ -7,7 +7,7 @@
  * published values through the public /api/appconfig route (cached, no auth).
  */
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { logAdminAudit } from '../../_lib/adminAudit';
+import { auditPrior, logAdminAudit } from '../../_lib/adminAudit';
 import { validateAiControls } from '../../_lib/ai';
 import { sbSelectResult, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
@@ -66,7 +66,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   return json({ configured: true, value: row?.value ?? null, updated_at: row?.updated_at ?? null });
 };
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
@@ -88,8 +88,16 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
   const serialized = JSON.stringify(value);
   if (serialized.length > MAX_VALUE_BYTES) return json({ error: 'too_large' }, 413);
+  // 7.2.0 — the stored value just before the write, for the audit row.
+  const prior = await sbSelectResult<{ value: unknown }>(env, 'vinax_config', `key=eq.${encodeURIComponent(key)}&select=value&limit=1`);
   const ok = await sbUpsert(env, 'vinax_config', { key, value, updated_at: new Date().toISOString() }, 'key');
   if (!ok) return json({ error: 'store_failed' }, 502);
-  void logAdminAudit(env, 'config', `updated ${key} (${serialized.length} bytes)`);
+  await logAdminAudit(context, {
+    action: 'config',
+    summary: `updated ${key} (${serialized.length} bytes)`,
+    target: key,
+    before: auditPrior(prior, (row) => row.value),
+    after: value,
+  });
   return json({ ok: true, ...(validate ? { value } : {}) });
 };

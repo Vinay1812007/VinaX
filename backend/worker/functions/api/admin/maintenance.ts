@@ -1,9 +1,9 @@
 /** Admin maintenance: destructive Supabase actions, each explicit + audited
  *  by the admin UI's confirm dialogs. Token-gated like every admin route. */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { logAdminAudit } from '../../_lib/adminAudit';
+import { auditPrior, logAdminAudit } from '../../_lib/adminAudit';
 import { methodNotAllowed } from '../../_lib/ratelimit';
-import { sbDelete, sbDeleteReturning, sbInsert, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { sbDelete, sbDeleteReturning, sbInsert, sbSelectResult, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -17,7 +17,7 @@ function json(body: unknown, status = 200): Response {
 /** POST-only: answer GET with an honest 405 instead of the SPA shell (DQA-07). */
 export const onRequestGet = async (): Promise<Response> => methodNotAllowed('POST');
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -53,31 +53,31 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     // Permanent audit note — written via the audit channel (status never
     // 'new', never 'resolved': it must not inflate the feedback KPI and must
     // survive clear_feedback). Only the truncated id is recorded.
-    await logAdminAudit(env, 'user-delete', `Deleted user ${id.slice(0, 12)}…: ${reason}`);
+    await logAdminAudit(context, { action: 'user-delete', summary: `Deleted user ${id.slice(0, 12)}…: ${reason}`, target: `${id.slice(0, 12)}…` });
     return json({ ok: okEvents });
   }
   if (action === 'purge_events') {
     if (!days) return json({ error: 'bad_request' }, 400);
     const ok = await sbDelete(env, 'vinax_events', `created_at=lt.${encodeURIComponent(cutoff)}`);
-    if (ok) await logAdminAudit(env, 'maintenance', `Purged events older than ${days}d`);
+    if (ok) await logAdminAudit(context, { action: 'maintenance', summary: `Purged events older than ${days}d` });
     return json({ ok });
   }
   if (action === 'clear_errors') {
     const ok = await sbDelete(env, 'vinax_events', 'type=eq.error');
-    if (ok) await logAdminAudit(env, 'maintenance', 'Cleared error events');
+    if (ok) await logAdminAudit(context, { action: 'maintenance', summary: 'Cleared error events' });
     return json({ ok });
   }
   if (action === 'trim_ai') {
     if (!days) return json({ error: 'bad_request' }, 400);
     const ok = await sbDelete(env, 'vinax_ai_events', `created_at=lt.${encodeURIComponent(cutoff)}`);
-    if (ok) await logAdminAudit(env, 'maintenance', `Trimmed AI events older than ${days}d`);
+    if (ok) await logAdminAudit(context, { action: 'maintenance', summary: `Trimmed AI events older than ${days}d` });
     return json({ ok });
   }
   if (action === 'clear_feedback') {
     // Never delete audit rows — one destructive admin action must not erase
     // the permanent record of another (D-4).
     const ok = await sbDelete(env, 'vinax_feedback', 'status=eq.resolved&type=neq.admin-audit');
-    if (ok) await logAdminAudit(env, 'maintenance', 'Cleared resolved feedback');
+    if (ok) await logAdminAudit(context, { action: 'maintenance', summary: 'Cleared resolved feedback' });
     return json({ ok });
   }
   if (action === 'close_rooms') {
@@ -85,7 +85,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     // silently orphaned every member row while still nuking the rooms (D-2).
     const a = await sbDelete(env, 'vinax_room_members', 'last_seen=gte.1970-01-01');
     const b = await sbDelete(env, 'vinax_rooms', ALL);
-    if (a && b) await logAdminAudit(env, 'maintenance', 'Closed all rooms');
+    if (a && b) await logAdminAudit(context, { action: 'maintenance', summary: 'Closed all rooms' });
     return json({ ok: a && b });
   }
   if (action === 'end_room') {
@@ -93,17 +93,33 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     if (!code) return json({ error: 'bad_request' }, 400);
     const a = await sbDelete(env, 'vinax_room_members', `code=eq.${encodeURIComponent(code)}`);
     const b = await sbDelete(env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}`);
-    if (a && b) await logAdminAudit(env, 'maintenance', `Ended room ${code.slice(0, 12)}`);
+    if (a && b) await logAdminAudit(context, { action: 'maintenance', summary: `Ended room ${code.slice(0, 12)}`, target: code.slice(0, 12) });
     return json({ ok: a && b });
   }
   if (action === 'site_mode') {
     const mode = body?.mode === 'maintenance' ? 'maintenance' : 'live';
     const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 200) : '';
+    // 7.2.0 — the mode in force just before the switch, for the audit row
+    // (the public reader honours the newest admin-written row).
+    const prior = await sbSelectResult<{ message: string | null }>(env, 'vinax_events', 'type=eq.site-mode&device_id=eq.admin&select=message&order=created_at.desc&limit=1');
     const ok = await sbInsert(env, 'vinax_events', {
       device_id: 'admin',
       type: 'site-mode',
       message: `${mode}|${note}`,
     });
+    if (ok) {
+      const parse = (m: string | null): { mode: string; note: string } => {
+        const [was, ...rest] = (m ?? '').split('|');
+        return { mode: was || 'live', note: rest.join('|') };
+      };
+      await logAdminAudit(context, {
+        action: 'site-mode-change',
+        summary: `site ${mode}${note ? ` — ${note}` : ''}`,
+        target: 'site-mode',
+        before: auditPrior(prior, (row) => parse(row.message)),
+        after: { mode, note },
+      });
+    }
     return json({ ok, mode });
   }
 

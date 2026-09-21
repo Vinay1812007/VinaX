@@ -129,7 +129,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   });
 };
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!pushConfigured(env) && !fcmConfigured(env)) return json({ error: 'push_not_configured' }, 400);
@@ -238,7 +238,12 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
   // Every REAL send leaves an audit row — geo-filtered sends previously left
   // zero record anywhere (audit D-7).
-  await logAdminAudit(env, 'push-send', `"${title.slice(0, 60)}" to ${geoTagForLog}`);
+  await logAdminAudit(context, {
+    action: 'push-send',
+    summary: `"${title.slice(0, 60)}" to ${geoTagForLog}`,
+    target: geoTagForLog,
+    after: { title, body: text, link: url, audience: geoTagForLog },
+  });
   // Fan out in parallel with a bounded concurrency. The previous sequential
   // await-loop over 5000 subscribers (~150 ms each) blew past the Pages
   // Functions 30 s wall clock and returned a partial count with no retry

@@ -1,6 +1,6 @@
 /** Content Admin: view + manage the song blocklist the app honors. */
 import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { logAdminAudit } from '../../_lib/adminAudit';
+import { auditPrior, logAdminAudit } from '../../_lib/adminAudit';
 import { sbDelete, sbRpcResult, sbSelectResult, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -30,7 +30,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   return adminJson({ configured: true, blocked: blocked.rows, topSongs: topSongs.value ?? [] });
 };
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
 
@@ -61,14 +61,22 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     return new Response(JSON.stringify({ error: 'bad_request' }), { status: 400, headers: { 'content-type': 'application/json' } });
   }
 
+  // 7.2.0 — the entry as it was, for the audit row.
+  const readPrior = () =>
+    sbSelectResult<BlockRow>(env, 'vinax_blocklist', `song_id=eq.${encodeURIComponent(songId)}&select=song_id,song_title,reason,created_at&limit=1`);
   let ok: boolean;
+  let prior: Awaited<ReturnType<typeof readPrior>>;
+  let after: Record<string, unknown> | null = null;
   if (action === 'block') {
-    ok = await sbUpsert(env, 'vinax_blocklist', {
+    prior = await readPrior();
+    after = {
       song_id: songId,
       song_title: body ? clip(body.songTitle, 200) : null,
       reason: body ? clip(body.reason, 200) : null,
-    }, 'song_id');
+    };
+    ok = await sbUpsert(env, 'vinax_blocklist', after, 'song_id');
   } else if (action === 'unblock') {
+    prior = await readPrior();
     ok = await sbDelete(env, 'vinax_blocklist', `song_id=eq.${encodeURIComponent(songId)}`);
   } else {
     // Same convention as maintenance/experiments — was a bare 400 {ok:false}
@@ -80,7 +88,13 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
   // E12 — every blocklist mutation leaves an audit row (best-effort).
   if (ok) {
-    void logAdminAudit(env, `blocklist-${action}`, `${songId}${body?.reason ? ` — ${clip(body.reason, 120)}` : ''}`);
+    await logAdminAudit(context, {
+      action: `blocklist-${action}`,
+      summary: `${songId}${body?.reason ? ` — ${clip(body.reason, 120)}` : ''}`,
+      target: songId,
+      before: auditPrior(prior, (row) => ({ song_id: row.song_id, song_title: row.song_title, reason: row.reason })),
+      after,
+    });
   }
 
   // A failed Supabase write is a server-side failure, not a client error.

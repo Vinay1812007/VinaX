@@ -26,7 +26,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   return json({ configured: true, rows: read.rows });
 };
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
   const body = (await request.json().catch(() => null)) as { action?: string; created_at?: string } | null;
@@ -34,7 +34,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // Audit finding M-SRV-9: sbDelete returned true even when zero rows were
   // deleted, so a mistyped created_at silently reported "ok" to the admin.
   // Use the returning variant and surface the row count instead.
-  const rows = await sbDeleteReturning<{ created_at: string }>(
+  const rows = await sbDeleteReturning<{ created_at: string; type: string | null; message: string | null }>(
     env,
     'vinax_events',
     // Match every type the GET lists — retracting a song-push/ai-push row
@@ -44,6 +44,12 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   if (rows === null) return json({ ok: false, error: 'delete_failed' }, 500);
   if (rows.length === 0) return json({ ok: false, error: 'not_found' }, 404);
   // E12 — retractions are mutations too; leave a row (best-effort).
-  void logAdminAudit(env, 'notify-retract', `notification @ ${body.created_at}`);
+  await logAdminAudit(context, {
+    action: 'notify-retract',
+    summary: `notification @ ${body.created_at}`,
+    target: body.created_at,
+    before: rows.map((r) => ({ type: r.type, created_at: r.created_at, message: r.message })),
+    after: null,
+  });
   return json({ ok: true, deleted: rows.length });
 };

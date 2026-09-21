@@ -8,8 +8,8 @@
  * plays per device).
  */
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbDelete, sbSelect, sbSelectResult, sbUpdate, sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
+import { auditPrior, logAdminAudit } from '../../_lib/adminAudit';
+import { sbDelete, sbSelectResult, sbUpdate, sbUpsert, type SupabaseEnv } from '../../_lib/supabase';
 import { assignVariant, sanitizeVariants, type ExperimentConfig } from '../../_lib/experiments';
 
 type Env = AdminEnv & SupabaseEnv;
@@ -107,7 +107,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   return json({ configured: true, experiments, sampledEvents: events.length });
 };
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
   const body = (await request.json().catch(() => null)) as
@@ -116,6 +116,10 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const action = typeof body?.action === 'string' ? body.action : '';
   const key = typeof body?.key === 'string' ? body.key.trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40) : '';
   if (!key) return json({ error: 'bad_request' }, 400);
+  // 7.2.0 — the experiment as it was, for the audit row.
+  const readPrior = () =>
+    sbSelectResult<{ key: string; name: string | null; variants: unknown; active: boolean | null }>(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}&select=key,name,variants,active&limit=1`);
+  const shape = (row: { name: string | null; variants: unknown; active: boolean | null }) => ({ name: row.name, variants: row.variants, active: row.active });
 
   if (action === 'save') {
     const variants = sanitizeVariants(body?.variants);
@@ -123,28 +127,46 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     // created_at only on first insert — writing it on every save reset the
     // creation date and reshuffled the list on each edit (D-16b). Best-effort
     // on purpose: a failed read only means created_at is re-stamped.
-    const existing = await sbSelect<{ key: string }>(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}&select=key&limit=1`);
+    const existing = await readPrior();
     const patch = {
       key,
       name: typeof body?.name === 'string' ? body.name.slice(0, 80) : null,
       variants,
       active: body?.active === true,
-      ...(existing.length ? {} : { created_at: new Date().toISOString() }),
+      ...(existing.ok && existing.rows.length ? {} : { created_at: new Date().toISOString() }),
     };
     const ok = await sbUpsert(env, 'vinax_experiments', patch, 'key');
-    if (ok) void logAdminAudit(env, 'experiment-save', `${key} · ${variants.map((v) => `${v.name}:${v.pct}%`).join(' / ')} · ${body?.active ? 'ACTIVE' : 'paused'}`);
+    if (ok) {
+      await logAdminAudit(context, {
+        action: 'experiment-save',
+        summary: `${key} · ${variants.map((v) => `${v.name}:${v.pct}%`).join(' / ')} · ${body?.active ? 'ACTIVE' : 'paused'}`,
+        target: key,
+        before: auditPrior(existing, shape),
+        after: { name: patch.name, variants, active: patch.active },
+      });
+    }
     return json({ ok }, ok ? 200 : 500);
   }
   if (action === 'toggle') {
     // Update-only: an upsert on an unknown key used to INSERT a phantom
     // experiment with null variants that broke the list sort (D-16).
+    const prior = await readPrior();
     const ok = await sbUpdate(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}`, { active: body?.active === true });
-    if (ok) void logAdminAudit(env, 'experiment-toggle', `${key} → ${body?.active ? 'ACTIVE' : 'paused'}`);
+    if (ok) {
+      await logAdminAudit(context, {
+        action: 'experiment-toggle',
+        summary: `${key} → ${body?.active ? 'ACTIVE' : 'paused'}`,
+        target: key,
+        before: auditPrior(prior, (row) => ({ active: row.active })),
+        after: { active: body?.active === true },
+      });
+    }
     return json({ ok });
   }
   if (action === 'delete') {
+    const prior = await readPrior();
     const ok = await sbDelete(env, 'vinax_experiments', `key=eq.${encodeURIComponent(key)}`);
-    if (ok) void logAdminAudit(env, 'experiment-delete', key);
+    if (ok) await logAdminAudit(context, { action: 'experiment-delete', summary: key, target: key, before: auditPrior(prior, shape), after: null });
     return json({ ok });
   }
   return json({ error: 'unknown_action' }, 400);
