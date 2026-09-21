@@ -120,3 +120,18 @@ describe('side effects wait for the caller', () => {
     expect(more[0].artists[0].name).not.toBe(last.artists[0].name);
   });
 });
+
+describe('the listener\'s master switch for AI in recommendations', () => {
+  it('off: the plan asks no AI — no DJ, no re-rank — and the local order ships', async () => {
+    const { aiRerankSongs } = await import('@/services/ai/recommendations');
+    vi.mocked(aiRerankSongs).mockClear();
+    gather = async () => pool(12);
+    useSettingsStore.setState({ aiAssist: false, aiDj: true });
+    const plan = await planNextSongs(seed, ctx(), { limit: 5 });
+    expect(plan.songs).toHaveLength(5);
+    expect(plan.refinement).toBeNull();
+    expect(djSequence).not.toHaveBeenCalled();
+    expect(aiRerankSongs).not.toHaveBeenCalled();
+    useSettingsStore.setState({ aiAssist: true });
+  });
+});

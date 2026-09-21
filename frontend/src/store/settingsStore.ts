@@ -68,6 +68,14 @@ export interface SettingsState {
   aiDj: boolean;
   /** v6.2.0 — "Designed for you": AI-designed shelves on Home. */
   aiHomeShelves: boolean;
+  /**
+   * 7.2.0 — the master switch for AI in recommendations. Off: no song data is
+   * sent to an AI engine for recommendations at all — no DJ ordering, no AI
+   * re-ordering (queue, Home, "Trending for you"), no AI song classification,
+   * no AI-designed Home shelves. VinaX AI chat, AI Playlist and the lyric
+   * tools are features the listener invokes and are not covered.
+   */
+  aiAssist: boolean;
   /** v6.5.0 — the DJ drives every play: tapping a song starts it and the DJ
    *  builds the continuation, instead of following the tapped list. */
   djTakeover: boolean;
@@ -126,6 +134,7 @@ export interface SettingsState {
   setDiscoveryMode(v: DiscoveryMode): void;
   setAiDj(v: boolean): void;
   setAiHomeShelves(v: boolean): void;
+  setAiAssist(v: boolean): void;
   setDjTakeover(v: boolean): void;
   setKidMode(v: boolean): void;
   setAllowRegionInference(v: boolean): void;
@@ -188,6 +197,7 @@ const defaults = {
   discoveryMode: 'balanced' as DiscoveryMode,
   aiDj: true,
   aiHomeShelves: true,
+  aiAssist: true,
   djTakeover: true,
   kidMode: false,
   allowRegionInference: true,
@@ -313,6 +323,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setAiDj: (aiDj) => set({ aiDj }),
       setAiHomeShelves: (aiHomeShelves) => set({ aiHomeShelves }),
+      setAiAssist: (aiAssist) => set({ aiAssist }),
       setDjTakeover: (djTakeover) => set({ djTakeover }),
       setKidMode: (kidMode) => set({ kidMode }),
       setAllowRegionInference: (allowRegionInference) => set({ allowRegionInference }),

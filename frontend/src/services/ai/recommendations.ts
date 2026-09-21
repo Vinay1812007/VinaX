@@ -1,5 +1,6 @@
 import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
+import { useSettingsStore } from '@/store/settingsStore';
 
 /** Task budgets; models and fallback lanes are configured in the server router. */
 // v6.5.2 — client leashes sit above the server budgets (metadata 5.5 s,
@@ -24,12 +25,17 @@ let retryAfter = 0;
 let routeMissingUntil = 0;
 /** Test hook. */
 export function resetCuratorBackoff(): void { retryAfter = 0; routeMissingUntil = 0; }
+/** 7.2.0 — back-offs carry up to a fifth more at random, so devices that failed together do not retry together. */
+const withJitter = (ms: number): number => ms + Math.floor(Math.random() * ms * 0.2);
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const label = (v: unknown): string | undefined => typeof v === 'string' && v.trim() ? v.trim().toLowerCase().slice(0, 60) : undefined;
 const labels = (v: unknown) => (Array.isArray(v) ? v : [v]).map(label).filter((s): s is string => !!s).slice(0, 6);
 const numeric = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : undefined;
 
 export async function requestCurator(task: 'metadata' | 'ranking' | 'home' | 'shelves', data: unknown, signal?: AbortSignal): Promise<unknown> {
+  // 7.2.0 — every curate task is background AI for recommendations: the
+  // listener's master switch turns all of them off (the on-device paths answer).
+  if (!useSettingsStore.getState().aiAssist) return null;
   if (Date.now() < routeMissingUntil) return null;
   if (task !== 'home' && task !== 'shelves' && Date.now() < retryAfter) return null;
   const controller = new AbortController();
@@ -43,11 +49,11 @@ export async function requestCurator(task: 'metadata' | 'ranking' | 'home' | 'sh
       method: 'POST', headers: { 'content-type': 'application/json', 'x-vinax-client': isNativePlatform() ? 'app' : 'web' },
       body: JSON.stringify({ task, data }), signal: controller.signal,
     });
-    if (res.status === 404 || res.status === 405) { routeMissingUntil = Date.now() + 10 * 60_000; return null; }
+    if (res.status === 404 || res.status === 405) { routeMissingUntil = Date.now() + withJitter(10 * 60_000); return null; }
     if (!res.ok) throw new Error('Curator unavailable');
     return object(await res.json()).data ?? null;
   } catch {
-    if (!signal?.aborted) retryAfter = Date.now() + 30_000;
+    if (!signal?.aborted) retryAfter = Date.now() + withJitter(30_000);
     return null;
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }

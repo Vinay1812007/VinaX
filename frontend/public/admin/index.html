@@ -570,6 +570,13 @@
         .switch .track.on .knob { transform: translateX(18px); }
       }
       @media (min-width: 1880px) { body { zoom: 1.1; } main > * { max-width: 1400px; } :root { --sb-w: 280px; } }
+      /* 7.2.0 — sections whose state lives only in this browser (data-local on
+         the nav entry) say so twice: a caption under the entry and a line at
+         the top of the panel. "prefs" = only the layout / preferences are local. */
+      #nav button[data-sec][data-local] { white-space: normal; line-height: 1.25; padding-top: 5px; padding-bottom: 5px; }
+      #nav button[data-sec][data-local]::after { content: 'this browser only'; display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; color: var(--warn); }
+      #app:has(#nav button[data-local].active) #view::before { content: 'Kept in this browser only \2014  not published to listeners and not shared with other operators or browsers.'; display: block; margin: 0 0 14px; padding: 8px 12px; border: 1px solid var(--border-strong); border-left: 3px solid var(--warn); border-radius: var(--radius); background: var(--warn-soft); color: var(--text); font-size: 12.5px; }
+      #app:has(#nav button[data-local="prefs"].active) #view::before { content: 'The layout and preferences of this panel are kept in this browser only; its data comes from the server.'; }
     </style>
     <link rel="stylesheet" href="/admin/studio.css" />
     <link rel="stylesheet" href="/admin/workspace.css" />
@@ -644,7 +651,7 @@
                daily workflow: watch → audience → catalog → promotion →
                reports → AI → operations → settings. -->
           <button type="button" class="nav-group-label" data-group="Dashboards" aria-expanded="true" title="Dashboards"><svg class="ic" aria-hidden="true"><use href="#i-dash"></use></svg><span class="ng-t">Dashboards</span> <span class="ng-n">3</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="workspace" data-cat="Dashboards">Operations Workspace</button>
+          <button type="button" data-sec="workspace" data-cat="Dashboards" data-local="prefs" title="Layout and preferences are kept in this browser only">Operations Workspace</button>
           <button type="button" data-sec="overview" data-cat="Dashboards" class="active" aria-current="page">Overview</button>
           <button type="button" data-sec="realtime" data-cat="Dashboards">Real-Time</button>
           <button type="button" class="nav-group-label" data-group="Audience" aria-expanded="true" title="Audience"><svg class="ic" aria-hidden="true"><use href="#i-aud"></use></svg><span class="ng-t">Audience</span> <span class="ng-n">9</span><span class="ng-chev" aria-hidden="true">▾</span></button>
@@ -679,16 +686,19 @@
           <button type="button" data-sec="faq" data-cat="Promotion">Help Center FAQ</button>
           <button type="button" data-sec="announce" data-cat="Promotion">Announcement Composer</button>
           <button type="button" data-sec="notify2" data-cat="Promotion">Notifications</button>
-          <button type="button" class="nav-group-label" data-group="Analytics" aria-expanded="true" title="Analytics"><svg class="ic" aria-hidden="true"><use href="#i-ana"></use></svg><span class="ng-t">Analytics</span> <span class="ng-n">7</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" class="nav-group-label" data-group="Analytics" aria-expanded="true" title="Analytics"><svg class="ic" aria-hidden="true"><use href="#i-ana"></use></svg><span class="ng-t">Analytics</span> <span class="ng-n">9</span><span class="ng-chev" aria-hidden="true">▾</span></button>
           <button type="button" data-sec="music" data-cat="Analytics">Music Analytics</button>
           <button type="button" data-sec="search" data-cat="Analytics">Search Analytics</button>
           <button type="button" data-sec="location" data-cat="Analytics">Location Analytics</button>
           <button type="button" data-sec="world" data-cat="Analytics">World Map</button>
           <button type="button" data-sec="insights" data-cat="Analytics">Insights</button>
           <button type="button" data-sec="experiments" data-cat="Analytics">A/B Experiments</button>
+          <button type="button" data-sec="recquality" data-cat="Analytics">Recommendation Quality</button>
+          <button type="button" data-sec="recconfig" data-cat="Analytics">Recommendation Tuning</button>
           <button type="button" data-sec="seo" data-cat="Analytics">SEO Corpus</button>
-          <button type="button" class="nav-group-label" data-group="AI &amp; Engines" aria-expanded="true" title="AI &amp; Engines"><svg class="ic" aria-hidden="true"><use href="#i-ai"></use></svg><span class="ng-t">AI &amp; Engines</span> <span class="ng-n">7</span><span class="ng-chev" aria-hidden="true">▾</span></button>
+          <button type="button" class="nav-group-label" data-group="AI &amp; Engines" aria-expanded="true" title="AI &amp; Engines"><svg class="ic" aria-hidden="true"><use href="#i-ai"></use></svg><span class="ng-t">AI &amp; Engines</span> <span class="ng-n">8</span><span class="ng-chev" aria-hidden="true">▾</span></button>
           <button type="button" data-sec="ai" data-cat="AI &amp; Engines">AI Monitoring</button>
+          <button type="button" data-sec="aiops" data-cat="AI &amp; Engines">AI Operations</button>
           <button type="button" data-sec="ailab" data-cat="AI &amp; Engines">API Monitoring</button>
           <button type="button" data-sec="engineprobe" data-cat="AI &amp; Engines">Engine Probe</button>
           <button type="button" data-sec="aistarters" data-cat="AI &amp; Engines">AI Starter Prompts</button>
@@ -714,11 +724,11 @@
           <button type="button" data-sec="maintwin" data-cat="Operations">Maintenance Scheduler</button>
           <button type="button" data-sec="minver" data-cat="Operations">Minimum App Version</button>
           <button type="button" class="nav-group-label" data-group="Settings" aria-expanded="true" title="Settings"><svg class="ic" aria-hidden="true"><use href="#i-set"></use></svg><span class="ng-t">Settings</span> <span class="ng-n">5</span><span class="ng-chev" aria-hidden="true">▾</span></button>
-          <button type="button" data-sec="config" data-cat="Settings">App Configuration</button>
+          <button type="button" data-sec="config" data-cat="Settings" data-local="all" title="Kept in this browser only">App Configuration</button>
           <button type="button" data-sec="flags" data-cat="Settings">Feature Flags</button>
           <button type="button" data-sec="runbook" data-cat="Settings">Runbook</button>
           <button type="button" data-sec="backup" data-cat="Settings">Config Backup</button>
-          <button type="button" data-sec="pins" data-cat="Settings">Pinned Tools</button>
+          <button type="button" data-sec="pins" data-cat="Settings" data-local="all" title="Kept in this browser only">Pinned Tools</button>
         </nav>
 
         <div class="sb-group" id="sbView" role="group" aria-label="View">
@@ -766,5 +776,8 @@
     <script src="/admin/sections/registry.js"></script>
     <script src="/admin/app.js"></script>
     <!-- 7.2.0 — section modules (each registers with sections/registry.js). -->
+    <script src="/admin/sections/recquality.js"></script>
+    <script src="/admin/sections/aiops.js"></script>
+    <script src="/admin/sections/recconfig.js"></script>
   </body>
 </html>

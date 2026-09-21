@@ -1,6 +1,6 @@
 # Architecture
 
-This document names the pieces of VinaX and shows how data moves between them: the app shell and its routes, the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, the service worker, the Worker's routes and the owner console. It describes the code as it is on the `upgrade/7.1` branch. Deep dives live in [recommendations.md](recommendations.md), [ai.md](ai.md), [data-and-privacy.md](data-and-privacy.md), [design-system.md](design-system.md), [android.md](android.md) and [admin-console.md](admin-console.md).
+This document names the pieces of VinaX and shows how data moves between them: the app shell and its routes, the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, the service worker, the Worker's routes and the owner console. It describes the code as it is on the `upgrade/7.2` branch. Deep dives live in [recommendations.md](recommendations.md), [ai.md](ai.md), [data-and-privacy.md](data-and-privacy.md), [design-system.md](design-system.md), [android.md](android.md) and [admin-console.md](admin-console.md).
 
 ## The pieces
 
@@ -142,7 +142,7 @@ Payloads are normalised in `services/api/normalize.ts`. The catalogue API descri
 | `/offline-audio/<id>` | Served from the `vinax-audio-v1` cache with Range support, so downloaded songs can seek |
 | Catalogue APIs, artwork, audio streams, `/api/*`, `/admin/`, the status page | Passed through, never cached |
 
-The build emits `/precache-manifest.json` (a small plugin in `vite.config.ts`). On install, and on every `PRECACHE` message from the app, the worker downloads every listed asset, refreshes the shell entries and prunes assets that left the manifest. The audio cache is never cleared on activate. The worker also shows push notifications and routes their clicks.
+The build emits `/precache-manifest.json` (a small plugin in `vite.config.ts`) with two lists. `precache` is everything reachable from the entry without passing through the diagram and maths engines behind VinaX AI replies; `onDemand` is those engines, what only they reach, and the maths typeface. On install, and on every `PRECACHE` message from the app, the worker downloads the `precache` list, refreshes the shell entries and prunes assets that are in neither list. On-demand assets are cached by the `/assets/` handler the first time a reply needs them. Measured on the 7.2 build: 624 KB gzip precached instead of 2,476 KB. The audio cache is never cleared on activate. The worker also shows push notifications and routes their clicks.
 
 ## Worker routes
 
@@ -164,7 +164,7 @@ A matched module with no handler for the request method answers `405`.
 | `/api/events`, `/api/feedback`, `/api/geo`, `/api/username`, `/api/handoff`, `/api/room` | Consent-gated telemetry, feedback, coarse region, username claims, device transfer relay, Listen Together rooms |
 | `/api/appconfig`, `/api/experiments`, `/api/announcements`, `/api/site-mode`, `/api/version`, `/api/status`, `/api/apk` | Published client configuration, flags, announcements, maintenance mode, version, status probes, Android update source |
 | `/api/push/*`, `/api/cron/*` | Push subscription and the scheduled jobs the workflows call with `x-cron-secret` |
-| `/api/admin/*` | Owner console data and actions, all behind server-side admin auth — see [admin-console.md](admin-console.md) |
+| `/api/admin/*` | Owner console data and actions, all behind server-side admin auth — see [admin-console.md](admin-console.md). A failed database read answers `502` with its kind (unavailable, unauthorized, schema missing, bad request), never an empty `200`; every database request has a deadline (`_lib/supabase.ts`). |
 
 ## Owner console
 
@@ -173,7 +173,32 @@ A matched module with no handler for the request method answers `405`.
 ## How a play flows
 
 1. The listener taps a song. The page calls `playQueue()` on the player store.
-2. The store runs the intake gates (Kid mode drops explicit songs, duplicates of the same song collapse into one slot), loads the song into the audio engine and publishes it to the media session.
-3. With "DJ builds every queue" on, the store asks the recommendation engine for a continuation: the next five songs, in the seed song's language, familiar first. The on-device order is ready at once; the AI DJ may re-order or propose within a bounded wait and the result passes the same final validation. See [recommendations.md](recommendations.md).
-4. A play counts toward the taste profile once five seconds of it have been heard (`COUNTED_PLAY_SEC`). A song flipped past before that is marked skipped in history and in the session signals, and the long-term profile is left alone.
+2. The store runs the intake gates (Kid mode drops explicit songs, duplicates of the same song collapse into one slot), starts a playback instance, loads the song into the audio engine and publishes it to the media session.
+3. With "DJ builds every queue" on, the store loads the recommendation engine (a lazy chunk) and asks it for a plan: the next five songs, in the seed song's language, familiar first, built on the device inside one deadline. The songs pass the admission gate and are appended; the AI DJ's order may later refine the automatic entries that have not started. See [recommendations.md](recommendations.md).
+4. The playback instance measures what is heard. A play counts toward the taste profile once five seconds of it have been heard; seeks, pauses and buffering add nothing. A song left before that is marked skipped in history and in the session signals, and the long-term profile is left alone.
 5. Persisted player fields change (queue, index), so the de-duplicated storage writes once. Progress ticks do not write.
+
+## Three data flows
+
+**Listening events become taste.**
+
+```text
+<audio> time updates ─► playback instance (heard seconds; declared seeks, pauses, buffering excluded)
+   ├─ PLAY / SKIP / COMPLETE (one each per run) ─► personalization/updater ─► vinax.profile.v1
+   ├─ early leave / skip / complete ─► session intent (this sitting only)
+   └─ playback events: counted · credit · end · served · refined
+        ├─ listen clock ─► history entry listenedSec
+        ├─ transition memory (hand-off verdict from heard time)
+        └─ opt-in usage analytics (only with consent)
+```
+
+**Candidates become the next five.**
+
+```text
+seed song ─► candidates (inside the plan's deadline) ─► hard filter ─► classifier metadata (bounded)
+  ─► scoring and ranking ─► sequencer (arc, familiar first, one language) ─► validation
+  ─► plan.songs ─► admission gate (current state) ─► queue ─► plan.commit(accepted)
+                 └─ plan.refinement (AI DJ, bounded) ─► validation ─► gate ─► automatic entries not yet started
+```
+
+**Owner settings reach clients.** The console writes one row per key through `/api/admin/*` (server-side auth on every request, an audit row per change); the app reads them through `/api/appconfig` and related public routes, sanitised again on the way out and cached for up to a few minutes. [admin-console.md](admin-console.md) has the table of keys.

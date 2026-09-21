@@ -19,7 +19,7 @@ import { queryClient } from '@/services/queryClient';
 import type { ArcShape } from './sequencer';
 import { tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape, type TuneIntent } from './tune';
 import type { Mood } from './mood';
-import { SCORING_WEIGHTS_VERSION } from './weights';
+import { activeWeightsVersion } from './weights';
 import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from './deadlines';
 
 function aiContext(ctx: RecommendationContext): string {
@@ -142,7 +142,8 @@ export interface NextRecommendationOptions {
 /** 7.2.0 — the pipeline's own version, recorded with every continuation (developer breakdown, opt-in telemetry). */
 export const PIPELINE_VERSION = '7.2.0';
 export function algorithmVersion(): string {
-  return `${PIPELINE_VERSION}/${SCORING_WEIGHTS_VERSION}`;
+  // The weights part names an owner override while one is applied ("1.2.0+rc7").
+  return `${PIPELINE_VERSION}/${activeWeightsVersion()}`;
 }
 
 /** Why the AI did not choose a continuation's order. */
@@ -289,7 +290,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // DJ is on, it is the AI voice for this stretch. The re-rank waits only
   // inside what is left of the deadline.
   const djOn = aiDjEnabled();
-  if (!djOn && ranked.length >= 4 && left() > RANK_RESERVE_MS) {
+  if (!djOn && useSettingsStore.getState().aiAssist && ranked.length >= 4 && left() > RANK_RESERVE_MS) {
     const blended = await within(blendAi(ranked, nextCtx), left() - RANK_RESERVE_MS / 2, ranked, signal);
     ranked = blended.value;
     if (blended.late && !signal?.aborted) fallback = fallback ?? 'ai_timeout';
@@ -479,9 +480,10 @@ export function shapeFor(energy: string): ArcShape {
   return 'steady';
 }
 
-/** Listener switch AND owner flag (read from the cached config; a missing flag means on). */
+/** Listener switches (AI in recommendations, AI DJ) AND the owner flag (read from the cached config; a missing flag means on). */
 function aiDjEnabled(): boolean {
-  if (!useSettingsStore.getState().aiDj) return false;
+  const settings = useSettingsStore.getState();
+  if (!settings.aiAssist || !settings.aiDj) return false;
   const flags = queryClient.getQueryData<Record<string, boolean>>(['feature-flags']);
   return flags?.aiDj !== false;
 }
