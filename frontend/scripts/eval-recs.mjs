@@ -237,13 +237,13 @@ console.log('\n── summary ────────────────�
 console.log(`fixtures ${current.fixturesVersion} · harness ${current.harnessVersion} · ${current.salts} salts · entry ${current.entry} · alg ${current.alg}`);
 console.log(`continuations ${o.batches} · songs ${o.songs} · empty ${o.emptyBatches} · reproducible ${current.deterministic ? 'yes' : 'NO'}`);
 console.log(`hard-rule violations ${o.hardViolations} (queue-ready ${o.queueReadyHardViolations}) · off-language under a relaxed lock ${o.offLanguageExcused}`);
-console.log(`same lead back to back ${o.repetition.sameLeadBackToBack} (batch boundary ${o.repetition.sameLeadAtBatchBoundary}) · identity repeats ${o.repetition.repeatedIdentity}`);
+console.log(`same lead back to back ${o.repetition.sameLeadBackToBack} (batch boundary ${o.repetition.sameLeadAtBatchBoundary}, avoidable ${o.repetition.sameLeadBackToBackAvoidable ?? 'n-a'}) · identity repeats ${o.repetition.repeatedIdentity}`);
 console.log(`distinct artists per continuation ${o.coverage.distinctArtistsPerBatch} · discovery ${pct(o.discovery.share)} against an allocation of ${pct(o.discovery.allocation)}`);
 console.log(`familiar-first compliance ${pct(o.familiarFirst.compliance)} · pickers ${JSON.stringify(o.pickers)} · fallbacks ${JSON.stringify(o.fallbacks)}`);
 console.log(`queue-ready latency p50 ${ms(o.latency.p50)} · p95 ${ms(o.latency.p95)} (instant sources, ${o.latency.samples} samples)`);
 if (baseline) {
   const b = baseline.quality.overall;
-  console.log(`baseline ${baseline.ref}: hard violations ${b.hardViolations} · identity repeats ${b.repetition.repeatedIdentity} · same lead back to back ${b.repetition.sameLeadBackToBack}`);
+  console.log(`baseline ${baseline.ref}: hard violations ${b.hardViolations} · identity repeats ${b.repetition.repeatedIdentity} · same lead back to back ${b.repetition.sameLeadBackToBack} (avoidable ${b.repetition.sameLeadBackToBackAvoidable ?? 'n-a'})`);
 }
 console.log(`\nreports: ${jsonPath.replace(FRONTEND, 'frontend')} · ${mdPath.replace(FRONTEND, 'frontend')}`);
 console.log('These numbers are rule compliance, diversity mechanics and latency — not enjoyment.');

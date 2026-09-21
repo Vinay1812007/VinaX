@@ -140,8 +140,20 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
   const openOk = (s: Song): boolean => !isDiscovery(s) || out.length >= openingSlots;
   const apartOk = (s: Song): boolean => !prevLead || leadOf(s) !== prevLead;
   const policy = (s: Song): boolean => capOk(s) && shareOk(s) && openOk(s);
-  // Most rules first; each later tier gives one more rule way, in the order d, a, b, c.
-  const tiers: Array<(s: Song) => boolean> = [(s) => policy(s) && apartOk(s), policy, (s) => shareOk(s) && openOk(s), openOk, () => true];
+  // Most rules first; each later tier gives one more rule way, in the order a
+  // listener minds least: the discovery allocation (an internal budget), then
+  // the familiar opening, then the artist cap, and only last the rule against
+  // the same lead artist twice in a row — three songs by one artist is the
+  // thing a listener actually hears. (7.2: the old order gave adjacency away
+  // first, so a Familiar-mode queue, whose discovery budget is nearly zero,
+  // shipped runs of one artist while other artists sat in the reserve.)
+  const tiers: Array<(s: Song) => boolean> = [
+    (s) => policy(s) && apartOk(s),
+    (s) => capOk(s) && openOk(s) && apartOk(s),
+    (s) => capOk(s) && apartOk(s),
+    apartOk,
+    () => true,
+  ];
   while (rest.length && out.length < limit) {
     let pick = -1;
     for (let t = 0; pick < 0; t += 1) pick = rest.findIndex(tiers[t]);

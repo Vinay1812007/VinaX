@@ -141,7 +141,7 @@ Transition memory (`transitions.ts`, `transitionTracker.ts`) records how each ha
 6. The discovery allocation, ⌊share × limit + 0.5⌋ (7.2).
 7. The familiar opening (7.2): no discovery in slot 1, nor in slot 2 when four or more songs ship, as long as a non-discovery song is available.
 
-When nothing else fits, soft rules give way in this order — adjacency, artist cap, discovery share, familiar opening — and each relaxation is reported with its slot, as is the language-lock step that was used. Hard rules (explicit, blocked, muted language, soft-muted artist, recently played, skipped this sitting, invalid, junk) never relax. Order is otherwise preserved.
+When nothing else fits, soft rules give way in the order a listener minds least: the discovery allocation first, then the familiar opening, then the artist cap, and only last the rule against the same lead artist twice in a row. Each relaxation is reported with its slot, as is the language-lock step that was used. (Until 7.2 adjacency gave way first, so a Familiar-mode queue — whose discovery budget is nearly zero — shipped runs of three songs by one artist while other artists sat unused in the reserve. The offline evaluation counts it: 162 back-to-back repeats over 3,432 songs before the change, 24 after, against 59 for 7.1.) Hard rules (explicit, blocked, muted language, soft-muted artist, recently played, skipped this sitting, invalid, junk) never relax. Order is otherwise preserved.
 
 This is the final policy for every order that ships: the on-device one, the AI DJ's, and a top-up from the reserve.
 

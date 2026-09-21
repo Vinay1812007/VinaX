@@ -61,6 +61,8 @@ export interface BatchRecord {
   engineDiscovery: number | null;
   discoveryCap: number;
   familiarAvailable: number;
+  /** Lead artists still eligible when this batch was planned (an unavoidable repeat has none other). */
+  eligibleLeads: string[];
   slot1Discovery: boolean;
   slot2Discovery: boolean;
   distinctArtists: number;
@@ -75,6 +77,8 @@ export interface SessionRecord {
   queueIds: string[];
   /** Pairs of neighbours in the assembled queue (the seed counts as the first). */
   sameLeadBackToBack: number;
+  /** Of those, the ones where another lead artist was still eligible. */
+  sameLeadBackToBackAvoidable: number;
   sameLeadAtBatchBoundary: number;
   sameLeadWithinThree: number;
   sameIdentityBackToBack: number;
@@ -239,6 +243,9 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
       limit: LIMIT,
       excludeIds: queue.map((s) => s.id),
       excludeKeys: queue.map((s) => env.songKey(s)),
+      // The player appends after the last queued song, so that is the hand-off
+      // the no-repeat-artist rule has to judge (7.2).
+      previous: queue[queue.length - 1],
     });
     const rc = ruleContext(fixture, queue, played);
     const known = knownArtists(fixture, played);
@@ -269,6 +276,10 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
       engineDiscovery: outcome.discoveryIds ? outcome.final.filter((s) => outcome.discoveryIds!.has(s.id)).length : null,
       discoveryCap: Math.floor(share * Math.max(1, outcome.final.length) + 0.5),
       familiarAvailable,
+      // 7.2 — which lead artists were still eligible when this batch was
+      // planned, so a repeat can be told from a forced one (the fixtures are
+      // small, and late batches run the pool dry).
+      eligibleLeads: [...new Set(pool.map(leadName).filter(Boolean))],
       slot1Discovery: !!outcome.final[0] && isDiscovery(outcome.final[0]),
       slot2Discovery: outcome.final.length >= 4 && !!outcome.final[1] && isDiscovery(outcome.final[1]),
       distinctArtists: new Set(outcome.final.map(leadName)).size,
@@ -290,16 +301,26 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
     at += rec.n;
   }
   let sameLeadBackToBack = 0;
+  let sameLeadBackToBackAvoidable = 0;
   let sameLeadAtBatchBoundary = 0;
   let sameLeadWithinThree = 0;
   let sameIdentityBackToBack = 0;
   let repeatedIdentity = 0;
   const seenKeys = new Set<string>([workKey(queue[0])]);
+  const batchAt = new Map<number, BatchRecord>();
+  let cursor = 1;
+  for (const rec of batches) {
+    for (let k = 0; k < rec.n; k += 1) batchAt.set(cursor + k, rec);
+    cursor += rec.n;
+  }
   for (let i = 1; i < queue.length; i += 1) {
     const lead = leadName(queue[i]);
     if (lead && lead === leadName(queue[i - 1])) {
       sameLeadBackToBack += 1;
       if (boundaries.has(i)) sameLeadAtBatchBoundary += 1;
+      // Avoidable when another lead artist was still eligible for that batch.
+      const leads = batchAt.get(i)?.eligibleLeads ?? [];
+      if (leads.some((l) => l && l !== lead)) sameLeadBackToBackAvoidable += 1;
     } else if (lead && queue.slice(Math.max(0, i - 3), i).some((s) => leadName(s) === lead)) {
       sameLeadWithinThree += 1;
     }
@@ -314,6 +335,7 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
     batches,
     queueIds: queue.map((s) => s.id),
     sameLeadBackToBack,
+    sameLeadBackToBackAvoidable,
     sameLeadAtBatchBoundary,
     sameLeadWithinThree,
     sameIdentityBackToBack,

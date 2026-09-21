@@ -33,6 +33,8 @@ export interface Summary {
   queueReadyHardViolations: number;
   repetition: {
     sameLeadBackToBack: number;
+    /** Of those, the ones where another lead artist was still eligible for that batch. */
+    sameLeadBackToBackAvoidable: number;
     sameLeadAtBatchBoundary: number;
     sameLeadWithinThree: number;
     sameIdentityBackToBack: number;
@@ -101,6 +103,7 @@ function summariseBatches(sessions: SessionRecord[]): Summary {
     queueReadyHardViolations: queueReadyHard,
     repetition: {
       sameLeadBackToBack: sessions.reduce((n, s) => n + s.sameLeadBackToBack, 0),
+      sameLeadBackToBackAvoidable: sessions.reduce((n, s) => n + s.sameLeadBackToBackAvoidable, 0),
       sameLeadAtBatchBoundary: sessions.reduce((n, s) => n + s.sameLeadAtBatchBoundary, 0),
       sameLeadWithinThree: sessions.reduce((n, s) => n + s.sameLeadWithinThree, 0),
       sameIdentityBackToBack: sessions.reduce((n, s) => n + s.sameIdentityBackToBack, 0),

@@ -131,3 +131,17 @@ describe('7.2 — validation enforces the sequencer’s final policy', () => {
     expect(ids(any.songs)).toEqual(['t1', 'p1', 'p2']);
   });
 });
+
+describe('7.2.0 — the stretch follows the last queued song, not the one playing', () => {
+  it('keeps the same lead artist off both sides of the join', () => {
+    const playing = makeSong('playing', { artist: 'Sid Sriram' });
+    const lastQueued = makeSong('last', { artist: 'Anirudh' });
+    const order = [makeSong('x', { artist: 'Anirudh' }), makeSong('y', { artist: 'Shreya' }), makeSong('z', { artist: 'Kaala' })];
+    const withSeedOnly = validateSequence(order, { seed: playing, limit: 3 });
+    expect(withSeedOnly.songs[0].id).toBe('x'); // nothing knows about the join
+    const withPrevious = validateSequence(order, { seed: playing, limit: 3, previous: lastQueued });
+    expect(withPrevious.songs[0].id).not.toBe('x');
+    expect(withPrevious.songs.map((s) => s.id).sort()).toEqual(['x', 'y', 'z']);
+    expect(withPrevious.repairs).toBe(1);
+  });
+});

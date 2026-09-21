@@ -354,7 +354,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const lock = switchTo ?? seedLang;
   const otherLanguages = ctx.pinnedLanguages.filter((l) => l !== lock);
   const discoveryShare = Math.max(0, Math.min(0.5, (tune === 'surprise' ? DISCOVERY_SHARE.discover : DISCOVERY_SHARE[mode]) + (intent ? intent.discoveryAppetite * 0.15 : 0)));
-  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: 'lock', otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: [...ctx.history.slice(0, 3).map((e) => e.song).reverse(), ...(previous ? [previous] : [])] });
+  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: 'lock', otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
 
   // 10 — validation. The arc first, then the rest of the ranked pool as the
   // reserve a short or language-locked arc is topped up from.
