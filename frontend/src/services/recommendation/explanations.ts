@@ -56,6 +56,8 @@ export function explainReasons(reasons: ReasonComponent[]): string {
       return 'Fits what you play on this day of the week';
     case 'agreement':
       return 'Found by more than one of your listening signals';
+    case 'chart':
+      return top.detail ? `On ${top.detail} right now` : 'On a public chart right now';
     case 'fresh':
       return 'A recent release';
     case 'festival':

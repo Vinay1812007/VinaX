@@ -276,6 +276,11 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   const agreeing = new Set(c.sources ?? [c.source]);
   if (agreeing.size > 1) add('agreement', Math.min(AGREEMENT_CAP, AGREEMENT_STEP * (agreeing.size - 1)), [...agreeing].join(' + '));
 
+  // 7.2.0 — a verified chart position (or an editorial pick) the listener's
+  // region is showing: bounded, and only for a candidate the pool already holds.
+  const chart = ctx.trendBonus?.get(song.id) ?? 0;
+  if (chart > 0) add('chart', chart, ctx.trendLabel?.get(song.id) ?? null);
+
   // Freshness: light boost for recent releases (novelty without dominating).
   const year = song.year ? Number(song.year) : null;
   if (year && year >= frame.year - 1) add('fresh', W.freshness);

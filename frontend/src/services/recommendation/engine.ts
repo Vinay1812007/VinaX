@@ -21,6 +21,7 @@ import { tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape, type TuneI
 import type { Mood } from './mood';
 import { activeWeightsVersion } from './weights';
 import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from './deadlines';
+import { trendSignalNow } from '@/services/trends/signal';
 
 function aiContext(ctx: RecommendationContext): string {
   return JSON.stringify({ surface: ctx.surface, seed: ctx.seedSong?.title, mood: ctx.sessionMood, energy: ctx.sessionEnergy,
@@ -88,7 +89,9 @@ function ctxKey(ctx: RecommendationContext): string {
  * fault-tolerant upstream metadata fetches. Memoized for 10 minutes per
  * profile state so navigation stays instant and playback is never blocked.
  */
-export async function buildRecommendations(ctx: RecommendationContext): Promise<Mix[]> {
+export async function buildRecommendations(rawCtx: RecommendationContext): Promise<Mix[]> {
+  const trend = trendSignalNow(rawCtx);
+  const ctx: RecommendationContext = { ...rawCtx, trendBonus: trend.bonus, trendLabel: trend.label };
   const key = ctxKey(ctx);
   if (memo && memo.key === key && Date.now() - memo.at < MEMO_TTL_MS) return memo.mixes;
   // 7.2.0 — bounded gathering: slow optional sources are not waited for once a useful pool exists.
@@ -250,7 +253,9 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const seedLanguage = seed.language && seed.language !== 'unknown' ? seed.language : null;
   // v7.1.0 — an active tune (or a pinned mood) gathers its own candidates, in the queue's language.
   const intentQuery = tune ? tuneSearchQuery(tune, tune === 'different-language' ? null : seedLanguage) : ctx.moodPin ? moodPinQuery(ctx.moodPin, seedLanguage) : null;
-  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery };
+  // 7.2.0 — verified charts, read from the snapshot already in memory (never waited for).
+  const trend = trendSignalNow(ctx);
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery, trendBonus: trend.bonus, trendLabel: trend.label };
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
   const library = useLibraryStore.getState();

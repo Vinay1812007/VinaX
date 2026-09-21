@@ -112,6 +112,8 @@ export type ReasonKind =
   | 'intent'
   /** 7.2.0 — several candidate sources found the same song. */
   | 'agreement'
+  /** 7.2.0 — a confidently matched entry of a public chart or an editorial pick (services/trends/signal.ts). */
+  | 'chart'
   /** 7.2.0 — a release from this year or last. */
   | 'fresh'
   /** 7.2.0 — an active festival's languages or moods. */
@@ -202,6 +204,14 @@ export interface RecommendationContext {
   intentQuery?: string | null;
   /** v7.0.0 — short-term intent of this sitting; never written to the profile. */
   sessionIntent?: SessionIntent;
+  /**
+   * 7.2.0 — verified charts as one bounded signal: catalogue id → a small,
+   * capped score bonus, and the source label for "Why this song?". Absent
+   * when no chart is configured, matched or fresh; never a candidate source
+   * of its own, and never able to overrule a rule.
+   */
+  trendBonus?: ReadonlyMap<string, number>;
+  trendLabel?: ReadonlyMap<string, string>;
 }
 
 /** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */
