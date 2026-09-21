@@ -2,15 +2,24 @@
 
 This page explains the recommendation settings a listener can change: Familiar, Balanced and Discover, the intensity slider, the AI switches, pinned languages, and the song-menu choices that steer recommendations. All of them are in **Settings → Recommendations** unless noted. The engineering description is in [recommendations](../recommendations.md).
 
+## What VinaX thinks you like
+
+**Settings → Recommendations** opens with a short summary of what the app believes about you: your top languages and artists, the discovery mode, how confident the profile is, which artists are being played less, and how many are blocked. It is read from this device and never uploaded.
+
+Two buttons sit under it:
+
+- **Pick languages & artists** — the optional setup step. Tap the languages you listen in, then tap artists you love from what is popular in those languages. Each artist you pick counts as much as liking one of their songs. You can open it any time; nothing is recorded until you press Save.
+- **See the full taste profile** — the Taste Profile page, with the dials, the bars and the same list of muted artists.
+
 ## Familiar, Balanced, Discover
 
-**Settings → Recommendations → Discovery** has three modes. Balanced is the middle setting.
+**Settings → Recommendations → Discovery** has three modes, each with its own line saying what it changes. Balanced is the middle setting.
 
 | Mode | What changes |
 |---|---|
-| Familiar | Your favourites and songs you finished come back into the mix. New artists are rare. |
-| Balanced | Mostly your taste, with about one new artist in every four or five songs. What you skip and finish in a sitting tips it either way. |
-| Discover | Artists you have never played rank higher and fill close to half of a queue. Home adds picks from languages you have not tried. |
+| Familiar | Mostly songs and artists you already play. New artists are rare. |
+| Balanced | Your taste first, with about one new artist in every four or five songs. What you skip and finish in a sitting tips it either way. |
+| Discover | Up to half of a queue from artists you have never played. Home adds picks from languages you have not tried. |
 
 Two rules hold in every mode:
 
@@ -34,7 +43,7 @@ The taste profile is computed and stored on this device. **Taste Profile** (Libr
 
 | Setting | What it does |
 |---|---|
-| Intensity | Low leans on popular and trending songs; high leans on your own taste |
+| Trending vs. your taste | How much Home and the DJ lean on what is popular right now against your own listening. The line under the slider says what the setting you are on means. |
 | AI DJ | Lets the AI service order what plays next and suggest a few extra songs, each checked against the catalogue before it can play. Off keeps the on-device order. |
 | DJ builds every queue | Tap a song and the DJ builds what follows. Off makes playback follow the list you tapped. |
 | AI-designed shelves on Home | Shows the “Designed for you” block and lets VinaX AI order “Trending for you”. Off hides the block and keeps Trending in your on-device taste order. |
@@ -43,14 +52,25 @@ The taste profile is computed and stored on this device. **Taste Profile** (Libr
 
 ## Steering from a song menu
 
-| Menu item | Effect |
-|---|---|
-| Why this song? | Shows why a recommended song was picked (appears on recommended songs) |
-| Not interested | Shows that song less |
-| Show fewer like *artist* | Lowers that artist |
-| Never play *artist* | Blocks that artist |
+| Menu item | Effect | How long |
+|---|---|---|
+| More like this | A nudge for this sitting, and the DJ picks are rebuilt at once — towards the song's mood when it has one, otherwise towards its artist | This sitting |
+| Less like this… | Asks for 7, 14 or 30 days, then plays that artist less everywhere. If DJ picks by them were already queued, the picks are rebuilt without them | Until the day you chose |
+| Why this song? | Shows why a recommended song was picked (appears on recommended songs) | — |
+| Not interested | Hides that song | Until you undo it |
+| Never play *artist* | Blocks that artist everywhere | Until you allow them again |
 
-Each of these shows an **Undo**.
+The first two steer; the last two block, and they sit in a separate group in the menu. Each shows an **Undo**.
+
+### Artists you are playing less
+
+**Settings → Recommendations → Playing less of** lists every artist under a “Less like this”, with the date each one comes back and how many days are left. **Unmute** ends one (with Undo), **Unmute all** ends them all. The same list is on the Taste Profile page.
+
+The permanent block is a different list: **Settings → Appearance & Playback → Never play**.
+
+## Starting over
+
+**Settings → Your Data → Reset taste profile** (or **Reset personalization** at the foot of the Taste Profile page) erases what VinaX learned: languages, artists, habits, the dials and any “Less like this” mutes. It offers to download a backup first, and says what stays — favourites, playlists, history, the Never play list and your settings. There is no undo, so take the backup.
 
 ## Trending for you
 

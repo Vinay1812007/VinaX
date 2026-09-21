@@ -52,11 +52,27 @@ create table if not exists vinax_events (
   -- signed_device_id HMAC, false when it was derived server-side from
   -- ip+ua. Lets analytics downweight the derived rows if desired.
   origin_verified boolean default false,
+  -- 7.2: recommendation telemetry (rec_served / rec_outcome only). The
+  -- Worker whitelists keys and caps it at 1 KB; see
+  -- migrations/2026-09-vinax-7.2-events-meta.sql.
+  meta        jsonb,
   created_at  timestamptz default now()
 );
 -- Idempotent add for existing deploys that predate H-SRV-6.
 alter table if exists vinax_events
   add column if not exists origin_verified boolean default false;
+-- Idempotent add for existing deploys that predate 7.2 events meta.
+alter table if exists vinax_events
+  add column if not exists meta jsonb;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'vinax_events_meta_shape') then
+    alter table vinax_events
+      add constraint vinax_events_meta_shape
+      check (meta is null or (jsonb_typeof(meta) = 'object' and octet_length(meta::text) <= 2048))
+      not valid;
+  end if;
+end $$;
 
 create table if not exists vinax_feedback (
   id          bigint generated always as identity primary key,
@@ -90,6 +106,11 @@ create table if not exists vinax_ai_events (
   client      text,           -- web | app
   latency_ms  int
 );
+-- Token counts for the AI Cost panel and the 7.2 daily spend caps (the
+-- 2026-09 rollups migration adds the same columns; a no-op where they exist).
+alter table if exists vinax_ai_events
+  add column if not exists prompt_tokens int,
+  add column if not exists completion_tokens int;
 
 create table if not exists vinax_rooms (
   code        text primary key,
@@ -183,6 +204,9 @@ create table if not exists vinax_seo_urls (
 create index if not exists idx_vinax_users_last_seen   on vinax_users (last_seen desc);
 create index if not exists idx_vinax_events_created    on vinax_events (created_at desc);
 create index if not exists idx_vinax_events_device     on vinax_events (device_id);
+-- Typed windows (rec_served / rec_outcome, the rollups); same name as the
+-- migrations use, so re-running either is a no-op.
+create index if not exists vinax_events_type_created_at_idx on vinax_events (type, created_at desc);
 create index if not exists idx_vinax_feedback_created  on vinax_feedback (created_at desc);
 create index if not exists idx_vinax_room_members_seen on vinax_room_members (code, last_seen desc);
 create index if not exists vinax_ai_events_created_idx on vinax_ai_events (created_at desc);
@@ -576,3 +600,182 @@ set search_path = public, pg_temp as $$
         from ev order by created_at desc limit 30) t), '[]'::jsonb)
   );
 $$;
+
+-- ===================== 7.2 VERIFIED TRENDS =====================
+-- The same definitions as migrations/2026-09-vinax-7.2-trends.sql (read that
+-- file's header for what each table holds and the retention rule). Here so a
+-- fresh install gets them; an existing project runs the migration instead.
+-- ------------------------------------------------------------------- runs ---
+create table if not exists public.vinax_trend_runs (
+  id                 uuid primary key,
+  source             text not null,
+  region             text not null,
+  trigger            text not null default 'cron',
+  started_at         timestamptz not null default now(),
+  finished_at        timestamptz,
+  ok                 boolean not null default false,
+  status             text not null default 'running'
+                     check (status in ('running', 'ok', 'error', 'skipped')),
+  error              text,
+  attempts           int not null default 0,
+  items_fetched      int not null default 0,
+  items_inserted     int not null default 0,
+  matched            int not null default 0,
+  queued_for_review  int not null default 0,
+  quota_units        int not null default 0,
+  snapshot_key       text,
+  duplicate_snapshot boolean not null default false
+);
+-- Last success per source/region, quota used today, the console's run log.
+create index if not exists vinax_trend_runs_source_started_idx
+  on public.vinax_trend_runs (source, region, started_at desc);
+create index if not exists vinax_trend_runs_success_idx
+  on public.vinax_trend_runs (region, finished_at desc) where ok;
+
+-- -------------------------------------------------------------- snapshots ---
+create table if not exists public.vinax_trend_snapshots (
+  id           bigint generated always as identity primary key,
+  source       text not null,
+  region       text not null,
+  chart        text not null,
+  snapshot_key text not null,
+  observed_at  timestamptz not null,
+  fetched_at   timestamptz not null,
+  item_count   int not null default 0,
+  run_id       uuid,
+  constraint vinax_trend_snapshots_key unique (source, region, chart, snapshot_key)
+);
+-- Newest snapshot per source/region, and the comparable earlier one for momentum.
+create index if not exists vinax_trend_snapshots_latest_idx
+  on public.vinax_trend_snapshots (region, source, chart, observed_at desc);
+-- Retention sweep.
+create index if not exists vinax_trend_snapshots_fetched_idx
+  on public.vinax_trend_snapshots (fetched_at);
+
+-- ----------------------------------------------------------- observations ---
+create table if not exists public.vinax_trend_observations (
+  id                bigint generated always as identity primary key,
+  snapshot_id       bigint not null references public.vinax_trend_snapshots (id) on delete cascade,
+  source            text not null,
+  source_item_id    text not null,
+  url               text,
+  region            text not null,
+  chart             text not null,
+  title             text not null,
+  credit            text,
+  language_evidence jsonb not null default '{}'::jsonb,
+  observed_at       timestamptz not null,
+  fetched_at        timestamptz not null,
+  expires_at        timestamptz not null,
+  source_rank       int not null check (source_rank > 0),
+  statistics        jsonb,
+  provenance        jsonb not null default '{}'::jsonb,
+  constraint vinax_trend_observations_item unique (snapshot_id, source_item_id),
+  constraint vinax_trend_observations_rank unique (snapshot_id, source_rank)
+);
+-- The public read: one snapshot's unexpired items in rank order
+-- (the unique (snapshot_id, source_rank) index already serves it).
+create index if not exists vinax_trend_observations_expiry_idx
+  on public.vinax_trend_observations (snapshot_id, expires_at);
+-- The console: the latest observation of an item under review.
+create index if not exists vinax_trend_observations_item_idx
+  on public.vinax_trend_observations (source, source_item_id, observed_at desc);
+
+-- ---------------------------------------------------------------- matches ---
+create table if not exists public.vinax_trend_matches (
+  id                 bigint generated always as identity primary key,
+  source             text not null,
+  source_item_id     text not null,
+  catalog_id         text,
+  catalog_title      text,
+  catalog_artist     text,
+  catalog_language   text,
+  mapping_confidence real not null default 0 check (mapping_confidence >= 0 and mapping_confidence <= 1),
+  method             text not null,
+  status             text not null
+                     check (status in ('matched', 'review', 'accepted', 'rejected', 'corrected')),
+  reason             text,
+  candidates         jsonb not null default '[]'::jsonb,
+  reviewed_by        text,
+  reviewed_at        timestamptz,
+  history            jsonb not null default '[]'::jsonb,
+  first_seen_at      timestamptz not null default now(),
+  last_seen_at       timestamptz not null default now(),
+  constraint vinax_trend_matches_item unique (source, source_item_id)
+);
+-- The review queue and the confidence distribution.
+create index if not exists vinax_trend_matches_status_idx
+  on public.vinax_trend_matches (status, last_seen_at desc);
+-- Recent review decisions.
+create index if not exists vinax_trend_matches_reviewed_idx
+  on public.vinax_trend_matches (reviewed_at desc) where reviewed_at is not null;
+-- Retention sweep.
+create index if not exists vinax_trend_matches_seen_idx
+  on public.vinax_trend_matches (last_seen_at);
+
+-- -------------------------------------------------------------- editorial ---
+create table if not exists public.vinax_trend_editorial (
+  id           bigint generated always as identity primary key,
+  dedupe_key   text not null,
+  title        text not null,
+  artist       text,
+  catalog_id   text,
+  region       text not null default 'IN',
+  language     text,
+  position     int not null default 1 check (position between 1 and 100),
+  evidence_url text not null check (evidence_url ~ '^https://'),
+  note         text,
+  starts_at    timestamptz not null default now(),
+  expires_at   timestamptz not null,
+  status       text not null default 'active' check (status in ('active', 'withdrawn')),
+  imported_by  text,
+  imported_at  timestamptz not null default now(),
+  import_batch text,
+  constraint vinax_trend_editorial_dedupe unique (dedupe_key),
+  constraint vinax_trend_editorial_window check (expires_at > starts_at)
+);
+-- The editorial provider's read: active entries of a region inside their window.
+create index if not exists vinax_trend_editorial_active_idx
+  on public.vinax_trend_editorial (region, status, expires_at);
+
+-- -------------------------------------------------------------- lock down ---
+-- Same posture as every other vinax_ table: RLS on, no policies, no grants
+-- for the public roles. The Worker's service-role key bypasses RLS.
+alter table public.vinax_trend_runs         enable row level security;
+alter table public.vinax_trend_snapshots    enable row level security;
+alter table public.vinax_trend_observations enable row level security;
+alter table public.vinax_trend_matches      enable row level security;
+alter table public.vinax_trend_editorial    enable row level security;
+revoke all on table public.vinax_trend_runs         from anon, authenticated;
+revoke all on table public.vinax_trend_snapshots    from anon, authenticated;
+revoke all on table public.vinax_trend_observations from anon, authenticated;
+revoke all on table public.vinax_trend_matches      from anon, authenticated;
+revoke all on table public.vinax_trend_editorial    from anon, authenticated;
+
+-- 7.2: today's AI token use by model, for the backend-enforced daily spend
+-- caps (_lib/ai.ts). Same definition as
+-- migrations/2026-09-vinax-7.2-ai-controls.sql; service role only.
+create or replace function public.vinax_ai_usage_since(p_since timestamptz)
+returns table (model text, calls bigint, prompt_tokens bigint, completion_tokens bigint, calls_without_usage bigint)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(e.model, '(none)') as model,
+         count(*)::bigint as calls,
+         coalesce(sum(e.prompt_tokens), 0)::bigint as prompt_tokens,
+         coalesce(sum(e.completion_tokens), 0)::bigint as completion_tokens,
+         count(*) filter (where e.prompt_tokens is null or e.completion_tokens is null)::bigint as calls_without_usage
+  from vinax_ai_events e
+  -- Never scan more than two days, whatever the caller asks for.
+  where e.created_at >= greatest(p_since, now() - interval '2 days')
+    -- Calls the controls refused are logged for the operations panel but
+    -- spent nothing.
+    and (e.error is null or e.error not in ('ai_disabled', 'ai_over_budget'))
+  group by 1
+  order by 2 desc
+  limit 500;
+$$;
+revoke execute on function public.vinax_ai_usage_since(timestamptz) from anon, authenticated;
+grant execute on function public.vinax_ai_usage_since(timestamptz) to service_role;

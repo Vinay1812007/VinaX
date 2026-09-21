@@ -4,7 +4,7 @@
  * Names only — values never leave the Worker. Tells the operator which
  * secrets/vars are configured so a half-set deployment is obvious.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 
 type Env = AdminEnv & Record<string, unknown>;
 
@@ -54,7 +54,7 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   const items = ENV_ITEMS.map((i) => {
     const v = env[i.name];
     const set = v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '');

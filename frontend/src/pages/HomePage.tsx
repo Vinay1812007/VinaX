@@ -385,13 +385,13 @@ function DiscoveryBlock() {
         />
       ) : null}
 
-      {/* 12. Trending for you — the trending pool, ordered by taste (and by the AI when it is on) */}
+      {/* 12. Popular picks for you — the catalogue's popular pool, ordered by taste (and by the AI when it is on). Public charts with real provenance live on the Charts page. */}
       {trendingNow.isLoading ? (
         <ShelfSkeleton />
       ) : trendingNow.songs.length > 0 ? (
         <SongShelf
-          title="Trending for you"
-          explanation={trendingNow.by === 'ai' ? 'What’s trending right now, put in your order by VinaX AI' : 'What’s trending right now, in the order your taste suggests'}
+          title="Popular picks for you"
+          explanation={trendingNow.by === 'ai' ? 'Popular in the catalogue, put in your order by VinaX AI' : 'Popular in the catalogue, in the order your taste suggests'}
           songs={dedupe(trendingNow.songs)}
           seeAllTo="/charts"
         />

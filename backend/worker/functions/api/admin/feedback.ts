@@ -1,6 +1,6 @@
 /** Admin: latest in-app feedback / bug reports. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbSelectResult, sbUpdate, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -19,22 +19,23 @@ interface FeedbackRow {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
-  const feedback = await sbSelect<FeedbackRow>(
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, feedback: [] });
+  const read = await sbSelectResult<FeedbackRow>(
     env,
     'vinax_feedback',
     'select=id,type,name,message,app_version,platform,country,city,status,created_at&type=neq.admin-audit&order=created_at.desc&limit=200',
   );
 
-  return new Response(JSON.stringify({ feedback }), {
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  });
+  // 7.2.0 — a failed read is not an empty inbox.
+  if (!read.ok) return dbFailure(read);
+  return adminJson({ configured: true, feedback: read.rows });
 };
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const body = (await request.json().catch(() => null)) as { id?: number; status?: string } | null;
   const id = body && typeof body.id === 'number' ? body.id : null;

@@ -1,7 +1,7 @@
 /** Admin: send a push notification to every subscribed device. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
-import { sbInsert, sbSelect, sbUpdate, type SupabaseEnv } from '../../_lib/supabase';
+import { dbErrorCode, sbInsert, sbSelectResult, sbUpdate, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { pushConfigured, sendPush, type PushSubscriptionRecord, type VapidEnv } from '../../_lib/webpush';
 import { fcmConfigured, sendFcm, type FcmEnv } from '../../_lib/fcm';
 
@@ -103,31 +103,35 @@ function bucketGeo(rows: GeoRow[]): {
  *  dropdown with real, live subscriber counts. */
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
-  const [webSubs, fcmToks] = await Promise.all([
-    sbSelect<GeoRow>(
+  if (!(await isAdminAsync(request, env))) return unauthorized();
+  if (!supabaseConfigured(env)) return json({ configured: pushConfigured(env), subscribers: 0, fcm: 0, geo: bucketGeo([]) });
+  const [webRead, fcmRead] = await Promise.all([
+    sbSelectResult<GeoRow>(
       env,
       'vinax_push_subscriptions',
       'select=country,region,city&active=eq.true&limit=5000',
-    ).catch(() => [] as GeoRow[]),
-    sbSelect<GeoRow>(
+    ),
+    sbSelectResult<GeoRow>(
       env,
       'vinax_fcm_tokens',
       'select=country,region,city&active=eq.true&limit=5000',
-    ).catch(() => [] as GeoRow[]),
+    ),
   ]);
-  const geo = bucketGeo([...webSubs, ...fcmToks]);
+  // 7.2.0 — "0 subscribers" from a failed read would steer the composer.
+  if (!webRead.ok) return dbFailure(webRead);
+  if (!fcmRead.ok) return dbFailure(fcmRead);
+  const geo = bucketGeo([...webRead.rows, ...fcmRead.rows]);
   return json({
     configured: pushConfigured(env),
-    subscribers: webSubs.length,
-    fcm: fcmToks.length,
+    subscribers: webRead.rows.length,
+    fcm: fcmRead.rows.length,
     geo,
   });
 };
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!pushConfigured(env) && !fcmConfigured(env)) return json({ error: 'push_not_configured' }, 400);
   const body = (await request.json().catch(() => null)) as
     | { title?: string; body?: string; link?: string; dedupe_key?: string; filter?: { country?: string; region?: string; city?: string; lang?: string; langPrefix?: string } }
@@ -178,32 +182,40 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // rides inside the JSON message body — no schema migration needed.
   if (dedupeKey) {
     const since = new Date(Date.now() - 10 * 60_000).toISOString();
-    const recent = await sbSelect<{ message: string | null }>(
+    const recent = await sbSelectResult<{ message: string | null }>(
       env,
       'vinax_events',
       `type=eq.announcement&device_id=eq.admin&created_at=gte.${encodeURIComponent(since)}&select=message&limit=50&order=created_at.desc`,
-    ).catch(() => []);
+    );
+    // 7.2.0 — if the duplicate check cannot be read, refuse rather than risk
+    // blasting every subscriber twice; the owner can retry.
+    if (!recent.ok) return dbFailure(recent);
     const needle = `"dedupe_key":${JSON.stringify(dedupeKey)}`;
-    if (recent.some((r) => (r.message ?? '').includes(needle))) {
+    if (recent.rows.some((r) => (r.message ?? '').includes(needle))) {
       return json({ error: 'duplicate', message: 'This announcement was already sent recently' }, 409);
     }
   }
 
-  const subs = await sbSelect<SubRow>(
+  const subsRead = await sbSelectResult<SubRow>(
     env,
     'vinax_push_subscriptions',
     `select=endpoint,p256dh,auth&active=eq.true&limit=5000${geoSuffix}`,
   );
+  // 7.2.0 — a failed audience read used to "send" to nobody and report ok.
+  if (!subsRead.ok) return dbFailure(subsRead);
+  const subs = subsRead.rows;
 
   // E10 — preview: report exactly who WOULD receive this, send nothing.
   // MUST run before ANY persistence: the announcement insert used to sit
   // above this return, so "preview" published a live announcement to every
   // Android client and burned the dedupe key (audit D-3).
   if (dryRun) {
-    const toks = fcmConfigured(env)
-      ? await sbSelect<{ token: string }>(env, 'vinax_fcm_tokens', `select=token&active=eq.true&limit=5000${geoSuffix}`).catch(() => [])
-      : [];
-    return json({ dryRun: true, web: subs.length, fcm: toks.length, audience: geoTagForLog });
+    if (fcmConfigured(env)) {
+      const toks = await sbSelectResult<{ token: string }>(env, 'vinax_fcm_tokens', `select=token&active=eq.true&limit=5000${geoSuffix}`);
+      if (!toks.ok) return dbFailure(toks);
+      return json({ dryRun: true, web: subs.length, fcm: toks.rows.length, audience: geoTagForLog });
+    }
+    return json({ dryRun: true, web: subs.length, fcm: 0, audience: geoTagForLog });
   }
 
   // The Android app has no Web Push — it picks the latest announcement up on
@@ -226,7 +238,12 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
   // Every REAL send leaves an audit row — geo-filtered sends previously left
   // zero record anywhere (audit D-7).
-  await logAdminAudit(env, 'push-send', `"${title.slice(0, 60)}" to ${geoTagForLog}`);
+  await logAdminAudit(context, {
+    action: 'push-send',
+    summary: `"${title.slice(0, 60)}" to ${geoTagForLog}`,
+    target: geoTagForLog,
+    after: { title, body: text, link: url, audience: geoTagForLog },
+  });
   // Fan out in parallel with a bounded concurrency. The previous sequential
   // await-loop over 5000 subscribers (~150 ms each) blew past the Pages
   // Functions 30 s wall clock and returned a partial count with no retry
@@ -252,12 +269,18 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   }
   // Also fan out to native Android via FCM — background push, even when closed.
   let fcm = 0;
+  let fcmError: string | null = null;
   if (fcmConfigured(env)) {
-    const toks = await sbSelect<{ token: string }>(
+    const toksRead = await sbSelectResult<{ token: string }>(
       env,
       'vinax_fcm_tokens',
       `select=token&active=eq.true&limit=5000${geoSuffix}`,
-    ).catch(() => []);
+    );
+    // Web push already went out, so the send is not refused here — the
+    // response names the failed Android read instead of reporting fcm: 0 as
+    // if nobody was subscribed.
+    if (!toksRead.ok) fcmError = dbErrorCode(toksRead.error);
+    const toks = toksRead.rows;
     if (toks.length) {
       const r = await sendFcm(env, toks.map((t) => t.token), { title, body: text, link: url });
       fcm = r.sent;
@@ -268,5 +291,5 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       );
     }
   }
-  return json({ ok: true, total: subs.length, sent, gone, fcm, target: geoTagForLog }, 200);
+  return json({ ok: true, total: subs.length, sent, gone, fcm: fcmError ? null : fcm, ...(fcmError ? { fcmError } : {}), target: geoTagForLog }, 200);
 };

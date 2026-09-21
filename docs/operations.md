@@ -11,6 +11,14 @@ This is the runbook for keeping VinaX running: where secrets live, which schedul
 | Android package | Built by workflow, published as a repository release | **Build Android APK** on every push to `main`; **Release APK** on a `v*` tag |
 | Database | A hosted Postgres service reached with the service key | Schema lives in `frontend/supabase/` |
 
+7.2 adds two migrations to paste into the database's SQL editor:
+`frontend/supabase/migrations/2026-09-vinax-7.2-events-meta.sql` (the
+`vinax_events.meta` column for recommendation telemetry) and
+`…-7.2-ai-controls.sql` (`vinax_ai_usage_since`, which the AI spend caps
+read). Both are idempotent, and both halves work before they are applied: an
+event whose insert names the missing column is retried without it, and the
+caps fall back to a bounded sample.
+
 Production host: `www.sirimillavinay.online`. The apex redirects to `www`; `admin.` redirects to `/admin/`; `update.` redirects to the APK download; `status.` serves the status page.
 
 ## Secrets
@@ -38,6 +46,133 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 Non-secret Worker settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext for ten minutes.
 
 Repository Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (Worker deploy fallback), `CRON_SECRET`, and the four `ANDROID_KEYSTORE_*` / `ANDROID_KEY_*` signing secrets.
+
+## Rate limiting
+
+Two layers, both in `backend/worker/functions/_lib/ratelimit.ts`:
+
+1. A per-isolate token bucket in module memory. It is the burst guard, and the
+   whole limiter wherever no binding exists (`wrangler dev` without bindings,
+   unit tests, a deploy that predates the bindings).
+2. The platform's Rate Limiting bindings, declared in `worker/wrangler.toml`
+   as four tiers named for their limit — `RATE_LIMIT_10`, `RATE_LIMIT_30`,
+   `RATE_LIMIT_60`, `RATE_LIMIT_300` (requests per 60 s per key) — plus
+   `ADMIN_AUTH_FAILS` (15 per 60 s) for wrong admin tokens.
+
+```toml
+[[ratelimits]]
+name = "RATE_LIMIT_30"
+namespace_id = "7202"
+simple = { limit = 30, period = 60 }
+```
+
+`namespace_id` is a number chosen in the file, not provisioned anywhere; two
+bindings that share one share counters. `period` may only be 10 or 60.
+
+A route uses the smallest tier at or above its bucket's capacity plus one
+minute of refill, so the binding never refuses a request the bucket alone
+would have served; what it removes is one client multiplying the limit by
+spreading requests across isolates. Keys are `route|hash(client address)`
+(peppered with `TELEMETRY_PEPPER`, so no address is stored).
+
+**What this does and does not guarantee.** Counters are shared by every
+isolate in ONE edge location, not globally: a client that reaches
+several locations gets a budget in each. They are cached on the machine and
+synchronised in the background, so the limiter is permissive and eventually
+consistent — a burst can overshoot a limit slightly. It is not an accounting
+system. A binding call that throws fails open to layer 1 and logs once per
+isolate. Because there are no accounts, the key is the client address, which
+carrier networks share between many listeners; that is why the tiers sit at
+the top of what one isolate already allowed.
+
+The admin login throttle (`_lib/admin.ts`) keeps its per-isolate sliding
+window (15 wrong tokens in 10 minutes locks a source out without comparing
+the token) and additionally counts each wrong token in `ADMIN_AUTH_FAILS`.
+The binding can only be consulted by counting, so it is asked after a failed
+compare; once a location's budget is spent, the isolate locks that source for
+the full 10 minutes, and every other isolate locks it on its next wrong
+guess. Per location that is roughly 15 wrong guesses a minute plus one per
+isolate, instead of 15 per isolate. Correct tokens never spend the budget.
+
+## AI controls: emergency stop, feature switches and spend caps
+
+The owner publishes one record — `vinax_config` key `ai-controls` — from the
+console; `/api/admin/appconfig` validates it strictly and stamps `updatedAt`.
+The Worker enforces it on every AI call (`_lib/ai.ts`), so it does not depend
+on any client honouring a flag.
+
+```json
+{ "emergencyOff": false,
+  "features": { "dj": true, "curate-metadata": true, "curate-ranking": true,
+                "curate-home": true, "curate-shelves": true, "playlist": true,
+                "vinaxai": true, "assistant": true, "tts": true,
+                "lyrics": true, "image": true },
+  "dailyTokenCap": null, "dailyCostCapUsd": null,
+  "updatedAt": "…", "updatedBy": "…" }
+```
+
+A feature is on unless its value is exactly `false`. With the stop on, or a
+feature off, or a cap reached, the route answers `503 { "error":
+"ai_disabled" }` or `503 { "error": "ai_over_budget" }` before any provider
+call, and the app falls back to its on-device path exactly as it does when a
+provider is down. Each refusal is logged to `vinax_ai_events` with that error
+so the console can count them; those rows are excluded from spend, from the
+AI service objectives and from lane health.
+
+- **Caching.** Each isolate refreshes the record every 30 s. A failed read is
+  logged and **fails open** to today's behaviour — except that an
+  `emergencyOff: true` read in the last 60 s keeps applying, so a flaky
+  database cannot lift an emergency stop early (and cannot hold AI off for
+  more than a minute after it was lifted).
+- **Observed use** is today's (UTC) token sums from `vinax_ai_events` through
+  the `vinax_ai_usage_since` function, cached 60 s per isolate; until that
+  migration is applied it samples at most 10,000 of today's rows and says so.
+  Cost is estimated with the operator's `ai-prices` table. Tokens on an
+  unpriced model, calls whose provider reported no usage, and a full sample
+  make the figures a LOWER BOUND — reported as `costKnown: false` /
+  `tokensComplete: false`, never as zero. A cap blocks only when the known
+  part alone reaches it, so caps are soft by up to one cache period plus
+  in-flight calls.
+- The scheduled jobs call the same helper, so the stop and the caps cover
+  them too.
+- `aiControlsStatus(env)` returns the whole picture (controls, effective
+  feature states, observed use, each cap with used/remaining/reached, whether
+  costs are known) for the console's AI operations panel.
+
+## Audit trail
+
+Every mutating admin action writes one row through `logAdminAudit()`
+(`_lib/adminAudit.ts`): the actor, the action, an ISO timestamp, the edge
+request id (`cf-ray`, else a random UUID), the target, and — for
+configuration changes — the value before and after. Rows ride the existing
+`vinax_feedback` channel (`type=admin-audit`, `status=audit`), so they stay
+out of the feedback inbox and its KPI and survive "clear resolved feedback".
+The write is registered with `waitUntil`, so it outlives the response; it is
+best effort and never fails the action it describes.
+
+Before/after values are redacted first: anything under a secret-looking key,
+JWTs, bearer headers, long opaque tokens, secrets inside URLs, and user info
+in URLs are replaced; data URLs shrink to their size; long strings are
+clipped; wide or deep structures are bounded; a value still over 3 KB is
+recorded as its size and a digest. Config publishing, content control,
+experiments, push sends, notification retraction, maintenance actions and the
+site-mode switch all supply before/after where they change configuration.
+
+**Deferred: multi-operator identity, roles and revocable sessions.** Today
+there is one shared token and every row records the actor as
+`{ id: "owner", via: "shared-token" }`. The migration path, when it is
+wanted: add an operators table (id, display name, a password or passkey
+credential, role, disabled flag) and a sessions table (opaque token hash,
+operator id, issued/expires, revoked flag); replace the token check in
+`isAdminAsync()` with a session lookup that keeps the constant-time compare
+and the existing failure throttle, and have it return the operator instead of
+a boolean; pass that operator into `adminActor()`, which already returns
+`{ id, via }` — `via` becomes `session` and nothing that reads older rows
+changes. Roles then gate route groups (read-only analyst, publisher, owner),
+and signing out or disabling an operator revokes the session row instead of
+rotating one shared secret for everybody. Until then, rotating
+`ADMIN_LOGIN_PASSWORD` remains the only way to revoke access, and the trail
+cannot say WHICH person acted.
 
 ## Scheduled jobs
 

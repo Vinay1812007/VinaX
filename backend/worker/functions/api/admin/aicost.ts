@@ -11,9 +11,13 @@
  * A model matches the LONGEST prefix key; there are no built-in prices, so
  * `unpriced: true` is the panel's cue to fill the table in. Cost is USD.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { readConfig } from '../../_lib/clientConfig';
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { costUsd, matchPrice, modelSlug, parsePrices, type Price, type PriceTable } from '../../_lib/ai';
+import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+
+// 7.2.0 — the price helpers moved to _lib/ai.ts, where the daily spend cap
+// uses the same table; re-exported so existing importers keep working.
+export { costUsd, matchPrice, modelSlug, parsePrices, type Price, type PriceTable };
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -25,54 +29,10 @@ export interface AiEventRow {
   completion_tokens: number | null;
 }
 
-export interface Price { in: number; out: number }
-export type PriceTable = Record<string, Price>;
-
 const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
-
-/** Sanitise the `ai-prices` config value: only `{prefix: {in, out}}` entries with non-negative numbers survive. */
-export function parsePrices(raw: unknown): PriceTable {
-  const out: PriceTable = {};
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    const key = k.trim().slice(0, 120);
-    if (!key || !v || typeof v !== 'object') continue;
-    const p = v as { in?: unknown; out?: unknown };
-    const pin = num(p.in);
-    const pout = num(p.out);
-    if (pin === null || pout === null) continue;
-    out[key] = { in: pin, out: pout };
-    if (Object.keys(out).length >= 200) break;
-  }
-  return out;
-}
-
-/** vinax_ai_events stores `slug @lane` — the slug alone is what gets priced. */
-export function modelSlug(model: string | null): string {
-  const m = (model ?? '').trim();
-  if (!m) return '(none)';
-  const at = m.indexOf(' @');
-  return at > 0 ? m.slice(0, at) : m;
-}
-
-/** Longest-prefix price lookup (exact slug beats any prefix). */
-export function matchPrice(model: string, prices: PriceTable): Price | null {
-  let best: string | null = null;
-  for (const key of Object.keys(prices)) {
-    if (model.startsWith(key) && (best === null || key.length > best.length)) best = key;
-  }
-  return best === null ? null : prices[best];
-}
-
-/** USD for one call: tokens / 1e6 × price per million, rounded to micro-dollars. */
-export function costUsd(prompt: number, completion: number, price: Price | null): number {
-  if (!price) return 0;
-  const usd = (prompt / 1e6) * price.in + (completion / 1e6) * price.out;
-  return Math.round(usd * 1e6) / 1e6;
-}
 
 export interface AiCostReport {
   tokensTotal: { prompt: number; completion: number };
@@ -115,18 +75,24 @@ export function aiCost(rows: AiEventRow[], prices: PriceTable): AiCostReport {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false });
   const days = Math.min(90, Math.max(1, parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10) || 7));
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const [rows, cfg] = await Promise.all([
-    sbSelect<AiEventRow>(
+  const [events, cfg] = await Promise.all([
+    sbSelectResult<AiEventRow>(
       env,
       'vinax_ai_events',
       `created_at=gte.${encodeURIComponent(since)}&select=created_at,feature,model,prompt_tokens,completion_tokens&order=created_at.desc&limit=20000`,
-    ).catch(() => [] as AiEventRow[]),
-    readConfig(env, ['ai-prices']).catch(() => ({}) as Record<string, unknown>),
+    ),
+    // Read directly (not through the swallowing config memo): a failed price
+    // read must not render as "no prices entered, $0".
+    sbSelectResult<{ value: unknown }>(env, 'vinax_config', 'key=eq.ai-prices&select=value&limit=1'),
   ]);
-  const prices = parsePrices(cfg['ai-prices']);
+  // 7.2.0 — token totals and costs from a failed read would all read 0.
+  if (!events.ok) return dbFailure(events);
+  if (!cfg.ok) return dbFailure(cfg);
+  const rows = events.rows;
+  const prices = parsePrices(cfg.rows[0]?.value);
   return json({ configured: true, days, sampled: rows.length, ...aiCost(rows, prices), prices });
 };

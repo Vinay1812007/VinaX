@@ -6,8 +6,8 @@
  * raw identifiers never appear. Equality filter on one whitelisted column,
  * newest first, hard cap 500 rows.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -47,11 +47,14 @@ export function buildQuery(params: URLSearchParams): { table: string; query: str
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, rows: [] });
   const built = buildQuery(new URL(request.url).searchParams);
   if ('error' in built) return json({ error: built.error, tables: Object.keys(QUERYABLE) }, 400);
-  const rows = await sbSelect<Record<string, unknown>>(env, built.table, built.query).catch(() => null);
-  if (rows === null) return json({ error: 'query_failed' }, 502);
+  // 7.2.0 — a failed read is reported as a failure (with its kind), never as
+  // an empty table: the old best-effort select turned an upstream 500 into 200 [].
+  const read = await sbSelectResult<Record<string, unknown>>(env, built.table, built.query);
+  if (!read.ok) return json({ configured: true, error: dbErrorCode(read.error), upstreamStatus: read.httpStatus, table: built.table }, 502);
+  const rows = read.rows;
   return json({ configured: true, table: built.table, columns: built.columns, rows, truncated: rows.length >= built.limit });
 };

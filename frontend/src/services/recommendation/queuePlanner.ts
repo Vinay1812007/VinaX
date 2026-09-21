@@ -12,6 +12,7 @@ import { stripExplicit } from '@/services/kidMode';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { queryClient } from '@/services/queryClient';
 import type { Candidate } from './types';
 
 /**
@@ -45,6 +46,12 @@ export interface QueuePlan {
   /** True when the AI DJ contributed reasons/segues. */
   djTouched: boolean;
   candidates: number;
+  /**
+   * 7.2.0 — publish the DJ's notes for the songs the listener actually put in
+   * the queue. A plan that is only previewed, rebuilt or dismissed leaves no
+   * trace in the DJ's memory or in "Why this song?".
+   */
+  commit?: (accepted: Song[]) => void;
 }
 
 const DISCOVERY_SHARE: Record<DiscoveryLevel, number> = { low: 0.05, medium: 0.2, high: 0.4 };
@@ -88,19 +95,23 @@ export async function planQueue(req: PlanRequest): Promise<QueuePlan> {
   let intro: string | null = null;
   let djTouched = false;
   let songs = arc.songs;
-  if (req.useDj && arc.songs.length >= 3 && useSettingsStore.getState().aiDj) {
+  let commit: QueuePlan['commit'];
+  // 7.2.0 — the master switch and the owner's kill switch apply to the Queue Builder too.
+  const djAllowed = useSettingsStore.getState().aiAssist && useSettingsStore.getState().aiDj && queryClient.getQueryData<Record<string, boolean>>(['feature-flags'])?.aiDj !== false;
+  if (req.useDj && arc.songs.length >= 3 && djAllowed) {
     try {
-      const { djSequence } = await import('@/services/ai/dj');
+      const { djSequence, commitDjSet } = await import('@/services/ai/dj');
       const set = await djSequence(seed, { ...ctx, seedSong: seed }, arc.songs.map((s) => s.song), arc.songs.length, undefined, { shape: req.shape, goal: req.goal });
       if (set) {
         intro = set.intro || null;
         djTouched = true;
         const notes = new Map(set.picks.map((p) => [p.song.id, p.reason]));
         songs = arc.songs.map((s) => (notes.get(s.song.id) ? { ...s, why: notes.get(s.song.id) as string } : s));
+        commit = (accepted) => commitDjSet(set, accepted);
       }
     } catch {
       /* the local plan stands */
     }
   }
-  return { songs, totalSec: arc.totalSec, arcError: arc.arcError, intro, djTouched, candidates: admitted.length };
+  return { songs, totalSec: arc.totalSec, arcError: arc.arcError, intro, djTouched, candidates: admitted.length, commit };
 }

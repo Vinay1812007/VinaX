@@ -1,6 +1,6 @@
 /** Insights: user segments, hourly activity, trending songs, top listeners, languages. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -17,26 +17,31 @@ interface LangRow { language: string; plays: number; listeners: number; }
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const days = clampDays(new URL(request.url).searchParams.get('days'));
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, days, segments: null, playsByHour: [], trending: [], topListeners: [], languages: [] });
   const [segments, playsByHour, trending, topListeners, languages] = await Promise.all([
-    sbRpc<Segments>(env, 'vinax_segments', {}),
-    sbRpc<HourRow[]>(env, 'vinax_plays_by_hour', { days }),
-    sbRpc<TrendRow[]>(env, 'vinax_trending', { days, lim: 15 }),
-    sbRpc<ListenerRow[]>(env, 'vinax_top_listeners', { days, lim: 20 }),
-    sbRpc<LangRow[]>(env, 'vinax_languages', { days }),
+    sbRpcResult<Segments>(env, 'vinax_segments', {}),
+    sbRpcResult<HourRow[]>(env, 'vinax_plays_by_hour', { days }),
+    sbRpcResult<TrendRow[]>(env, 'vinax_trending', { days, lim: 15 }),
+    sbRpcResult<ListenerRow[]>(env, 'vinax_top_listeners', { days, lim: 20 }),
+    sbRpcResult<LangRow[]>(env, 'vinax_languages', { days }),
   ]);
+  // 7.2.0 — segment cards and charts from failed reads would read as zeros.
+  if (!segments.ok) return dbFailure(segments);
+  if (!playsByHour.ok) return dbFailure(playsByHour);
+  if (!trending.ok) return dbFailure(trending);
+  if (!topListeners.ok) return dbFailure(topListeners);
+  if (!languages.ok) return dbFailure(languages);
 
-  return new Response(
-    JSON.stringify({
-      days,
-      segments: segments ?? null,
-      playsByHour: playsByHour ?? [],
-      trending: trending ?? [],
-      topListeners: topListeners ?? [],
-      languages: languages ?? [],
-    }),
-    { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
-  );
+  return adminJson({
+    configured: true,
+    days,
+    segments: segments.value ?? null,
+    playsByHour: playsByHour.value ?? [],
+    trending: trending.value ?? [],
+    topListeners: topListeners.value ?? [],
+    languages: languages.value ?? [],
+  });
 };

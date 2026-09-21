@@ -18,11 +18,65 @@ export type CandidateSource =
   /** v7.1.0 — fetched FOR the listener's stated intent (a tune, a pinned mood). */
   | 'intent';
 
+/**
+ * 7.2.0 — which source a song "belongs to" when several found it: the first
+ * of these it has. The listener's stated intent wins, then the seed and taste
+ * sources, then the broad ones (the order of the scorer's source boosts).
+ */
+export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'favorite-album', 'history', 'rediscovery', 'explore', 'trending'];
+
+const rank = (s: CandidateSource): number => SOURCE_PRIORITY.indexOf(s);
+const titlesOf = (c: Candidate): string[] => c.seedTitles ?? (c.seedTitle ? [c.seedTitle] : []);
+
+/**
+ * 7.2.0 — one candidate per catalogue id, keeping the evidence: every source
+ * that found it (`sources`, priority order), every seed title it carried and,
+ * as `source`, the strongest of them. Keeps first-appearance order. Used by
+ * the gatherer and again by the hard filter (for callers that merge pools).
+ */
+export function mergeCandidates(list: Candidate[]): Candidate[] {
+  const out: Candidate[] = [];
+  const at = new Map<string, number>();
+  for (const c of list) {
+    const id = c.song?.id;
+    const i = id ? at.get(id) : undefined;
+    if (i === undefined) {
+      if (id) at.set(id, out.length);
+      out.push({ ...c, sources: c.sources ?? [c.source], seedTitles: titlesOf(c) });
+      continue;
+    }
+    const prev = out[i];
+    const sources = [...new Set([...prev.sources!, ...(c.sources ?? [c.source])])].sort((a, b) => rank(a) - rank(b));
+    const lead = rank(c.source) < rank(prev.source) ? c : prev;
+    out[i] = { ...prev, source: sources[0], sources, seedTitles: [...new Set([...prev.seedTitles!, ...titlesOf(c)])], seedTitle: lead.seedTitle ?? prev.seedTitle };
+  }
+  return out;
+}
+
+/** The song features a classifier can fill in (see `Candidate.classified`). */
+export type SongFeature = 'mood' | 'energy' | 'tempo' | 'genre' | 'vibe' | 'dialect';
+
 export interface Candidate {
   song: Song;
+  /**
+   * The primary source. When several sources found the same song it is the
+   * strongest of them, in `SOURCE_PRIORITY` order (./candidates): intent,
+   * related, favorite-artist, favorite-album, history, rediscovery, explore,
+   * trending.
+   */
   source: CandidateSource;
-  /** For "Because you played X" grouping. */
+  /** For "Because you played X" grouping (the primary source's seed). */
   seedTitle?: string;
+  /** 7.2.0 — every source that found this song, in priority order (absent = just `source`). */
+  sources?: CandidateSource[];
+  /** 7.2.0 — every distinct seed title those sources carried, in arrival order. */
+  seedTitles?: string[];
+  /**
+   * 7.2.0 — features whose value came from the classifier rather than the
+   * catalogue (the scorer trusts them less). Absent = every value present on
+   * the song is catalogue metadata.
+   */
+  classified?: SongFeature[];
 }
 
 export type ReasonKind =
@@ -55,7 +109,17 @@ export type ReasonKind =
   /** v7.0.0 — the lead artist has played a lot in the last few songs. */
   | 'fatigue'
   /** v7.0.0 — this sitting's behaviour (skips, likes, searches, queue-adds). */
-  | 'intent';
+  | 'intent'
+  /** 7.2.0 — several candidate sources found the same song. */
+  | 'agreement'
+  /** 7.2.0 — a confidently matched entry of a public chart or an editorial pick (services/trends/signal.ts). */
+  | 'chart'
+  /** 7.2.0 — a release from this year or last. */
+  | 'fresh'
+  /** 7.2.0 — an active festival's languages or moods. */
+  | 'festival'
+  /** 7.2.0 — the listener's taste dials. */
+  | 'dial';
 
 export interface ReasonComponent {
   kind: ReasonKind;
@@ -140,10 +204,34 @@ export interface RecommendationContext {
   intentQuery?: string | null;
   /** v7.0.0 — short-term intent of this sitting; never written to the profile. */
   sessionIntent?: SessionIntent;
+  /**
+   * 7.2.0 — verified charts as one bounded signal: catalogue id → a small,
+   * capped score bonus, and the source label for "Why this song?". Absent
+   * when no chart is configured, matched or fresh; never a candidate source
+   * of its own, and never able to overrule a rule.
+   */
+  trendBonus?: ReadonlyMap<string, number>;
+  trendLabel?: ReadonlyMap<string, string>;
 }
 
-/** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). */
-export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'language-lock' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'invalid';
+/** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */
+export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'soft-muted' | 'language-lock' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'discovery-share' | 'invalid';
+
+/**
+ * 7.2.0 — a soft rule the sequencer or the validator had to give up on
+ * because the pool could not fill the stretch otherwise. Hard rules (the
+ * `RejectReason`s the hard filter returns) are never relaxed.
+ */
+export type RelaxedRule = 'language-lock' | 'artist-cap' | 'discovery-share' | 'familiar-opening' | 'recent-version' | 'artist-spacing';
+
+/** 7.2.0 — one relaxation, with what gave and why (the developer breakdown shows these). */
+export interface Relaxation {
+  rule: RelaxedRule;
+  /** 1-based slot where it happened, when it is about one slot. */
+  slot?: number;
+  songId?: string;
+  detail: string;
+}
 
 export interface RejectedCandidate {
   song: Song;

@@ -189,8 +189,9 @@ export function getSong(id: string): Promise<Song> {
   });
 }
 
-export function getSongSuggestions(id: string, limit = 15): Promise<Song[]> {
+export function getSongSuggestions(id: string, limit = 15, opts?: { signal?: AbortSignal }): Promise<Song[]> {
   return orchestratedRequest({
+    signal: opts?.signal,
     paths: [
       `/songs/${enc(id)}/suggestions?limit=${limit}`,
       `/songs/${enc(id)}/suggestions`,
@@ -204,8 +205,9 @@ export function getSongSuggestions(id: string, limit = 15): Promise<Song[]> {
   });
 }
 
-export function getAlbum(id: string): Promise<Album> {
+export function getAlbum(id: string, opts?: { signal?: AbortSignal }): Promise<Album> {
   return orchestratedRequest({
+    signal: opts?.signal,
     paths: [`/albums?id=${enc(id)}`, `/albums/${enc(id)}`, `/album?id=${enc(id)}`],
     validate: (json) => normalizeAlbum(unwrap(json)),
   });

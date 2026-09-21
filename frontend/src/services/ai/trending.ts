@@ -50,7 +50,8 @@ export function trendingBrief(ctx: RecommendationContext): string {
 
 export async function curateTrending(pool: Song[], ctx: RecommendationContext, options: CurateTrendingOptions): Promise<TrendingCuration> {
   const limit = Math.max(1, Math.min(30, Math.floor(options.limit ?? 20)));
-  const rules = { mutedLanguages: ctx.mutedLanguages, blocked: options.blocked, hideExplicit: options.hideExplicit };
+  // 7.2.0 — soft mutes ("show fewer like this") are a hard rule here too.
+  const rules = { mutedLanguages: ctx.mutedLanguages, blocked: options.blocked, hideExplicit: options.hideExplicit, softMuted: ctx.profile?.softMuted };
   const admitted = dedupeByIdentity(pool.filter((song) => rejectReasonFor(song, rules) === null), (s) => s);
   const ranked = rankCandidates(admitted.map((song) => ({ song, source: 'trending' as const })), { ...ctx, surface: 'home' }).map((r) => r.candidate.song);
   // Songs the scorer dropped (score <= 0) still belong on a trending shelf, after the ranked ones.

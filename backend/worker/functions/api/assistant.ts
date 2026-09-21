@@ -3,10 +3,10 @@
  * client sends a short message history and gets one reply. Conversation is
  * never stored: no user id, no persistence, consistent with no-login privacy.
  */
-import { chat, logAiEvent, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { readJsonCapped } from '../_lib/body';
-import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
+import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { istNowLine } from '../_lib/time';
 import { type SupabaseEnv } from '../_lib/supabase';
@@ -77,8 +77,16 @@ async function handlePost(context: {
 }): Promise<Response> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
-  const limited = rateLimit(request, 'assistant', { capacity: 20, refillPerMinute: 10 });
+  const limited = await rateLimitAsync(request, 'assistant', { capacity: 20, refillPerMinute: 10 }, env);
   if (limited) return limited;
+  // 7.2.0 — the owner's AI switches and spend caps.
+  // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
+  const refuse = (b: AiBlock): Response => {
+    void logAiRefusal(env, 'assistant', b, isApp ? 'app' : 'web', context.waitUntil);
+    return json({ error: aiBlockCode(b) }, 503);
+  };
+  const blocked = await aiGate(env, 'assistant');
+  if (blocked) return refuse(blocked);
   // Capped read — content-length is absent on a chunked body, so the read caps too.
   const read = await readJsonCapped<{ messages?: InMsg[]; taste?: unknown } | null>(request, MAX_BODY_BYTES);
   if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
@@ -100,8 +108,9 @@ async function handlePost(context: {
   const r = await chat(
     env,
     [{ role: 'system', content: sysPrompt }, ...history],
-    { temperature: 0.65, lane: 'chat', maxTokens: 950, timeoutMs: 15_000, deadlineAt: t0 + 28_000 },
+    { temperature: 0.65, lane: 'chat', maxTokens: 950, timeoutMs: 15_000, deadlineAt: t0 + 28_000, feature: 'assistant' },
   );
+  if (isAiBlocked(r.error)) return refuse(r.error);
   const reply = r.error ? null : (r.content ?? '').trim();
   if (r.error !== 'not_configured') {
     const log = logAiEvent(env, {

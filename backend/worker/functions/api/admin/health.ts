@@ -9,9 +9,9 @@
  * vision key. The bench-only inventory lanes stay out; the AI Lab probes
  * those one at a time.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { rateLimit } from '../../_lib/ratelimit';
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { rateLimitAsync } from '../../_lib/ratelimit';
+import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { LANE_MODEL, laneEndpoint, type AiEnv } from '../../_lib/ai';
 import { catalogDefaultModel } from '../../_lib/catalog';
 
@@ -52,10 +52,10 @@ async function pingKey(name: string, key: string | undefined, model: string, bas
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   // 9 live model pings per call — cap the frequency so a stuck 10s auto-
   // refresh loop can't burn upstream quota (audit: unthrottled).
-  const limited = rateLimit(request, 'admin-health', { capacity: 4, refillPerMinute: 2 }, env as never);
+  const limited = await rateLimitAsync(request, 'admin-health', { capacity: 4, refillPerMinute: 2 }, env);
   if (limited) return limited;
   // The two catalog lanes serve a moving catalog, so health must ping the
   // model they would ACTUALLY use right now — a fixed pin here reported a
@@ -74,20 +74,32 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     pingKey('VinaX NMTRN NN OMNI · search music expert', env.VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING, LANE_MODEL.search, laneEndpoint(env, 'search')),
     pingKey('VinaX OPR ALL · free model marketplace', env.VINAX_OPENROUTER_API_KEY, routerModel ?? LANE_MODEL.router, laneEndpoint(env, 'router')),
     pingKey('VinaX VSN 11B · image understanding', env.VINAX_MTA_LMA_3_2_11B_VSN_INT, LANE_MODEL.vision, laneEndpoint(env, 'vision')),
-    sbSelect<{ created_at?: string }>(env, 'vinax_events', 'select=created_at&order=created_at.desc&limit=1'),
+    sbSelectResult<{ created_at?: string }>(env, 'vinax_events', 'select=created_at&order=created_at.desc&limit=1'),
   ]);
-  const lastEventAt = lastEvents.length ? (lastEvents[0].created_at ?? null) : null;
+  // 7.2.0 — the database half of this panel names its failure instead of
+  // guessing between "paused, empty or failing"; the AI pings stay useful.
+  const lastEventAt = lastEvents.ok && lastEvents.rows.length ? (lastEvents.rows[0].created_at ?? null) : null;
+  const dbReadable = lastEvents.ok;
+  const dbError = lastEvents.ok ? null : dbErrorCode(lastEvents.error);
   return new Response(
     JSON.stringify({
       time: new Date().toISOString(),
       ai: [dj, chat, sage, swift, scholar, home, search, router, vision],
       supabase: {
         configured: supabaseConfigured(env),
+        readable: dbReadable,
+        error: dbError,
+        upstreamStatus: lastEvents.ok ? null : lastEvents.httpStatus,
         lastEventAt,
         note: lastEventAt
           ? null
-          : 'No readable events — Supabase paused/unreachable, table empty, or writes failing.',
+          : !supabaseConfigured(env)
+            ? 'Database not configured.'
+            : !lastEvents.ok
+              ? `Unavailable — the events read failed (${dbError}${lastEvents.httpStatus ? `, HTTP ${lastEvents.httpStatus}` : ''}).`
+              : 'The events table is readable but empty — no event has been written yet.',
       },
+      unavailable: supabaseConfigured(env) && !dbReadable ? ['supabase'] : [],
     }),
     { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
   );

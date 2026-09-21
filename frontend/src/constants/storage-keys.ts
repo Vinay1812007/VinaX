@@ -5,6 +5,8 @@ export const KEYS = {
   schemaVersion: `${STORAGE_PREFIX}.schema-version`,
   settings: `${STORAGE_PREFIX}.settings.v1`,
   player: `${STORAGE_PREFIX}.player.v1`,
+  /** 7.2.0 — who queued each song in the persisted queue (the recommender or the listener). */
+  queueOwnership: `${STORAGE_PREFIX}.queue.ownership.v1`,
   library: `${STORAGE_PREFIX}.library.v1`,
   history: `${STORAGE_PREFIX}.history.v1`,
   search: `${STORAGE_PREFIX}.search.v1`,

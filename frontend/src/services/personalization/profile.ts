@@ -26,6 +26,8 @@ export interface TasteProfile {
   songs?: Record<string, Affinity>;
   /** v6.4.0 — plays per weekday (0 = Sunday). */
   dayHistogram?: number[];
+  /** 7.2.0 — plays per weekday (0 = Sunday) for each language. Optional: older profiles load unchanged. */
+  languageDays?: Record<string, number[]>;
   /** v6.4.0 — running energy preference from completed plays: sum and count. */
   energyPref?: { sum: number; n: number };
   /** Plays per hour-of-day, for time-of-day shelves and insights. */
@@ -420,6 +422,10 @@ export function normalizeProfile(p: unknown): TasteProfile {
   };
   if (src.songs !== undefined) out.songs = affinities(src.songs);
   if (src.dayHistogram !== undefined) out.dayHistogram = nums(src.dayHistogram, 7);
+  if (src.languageDays !== undefined) {
+    out.languageDays = {};
+    for (const [k, raw] of Object.entries(obj(src.languageDays))) if (Array.isArray(raw)) out.languageDays[k] = nums(raw, 7);
+  }
   if (src.skippedSongIds !== undefined) out.skippedSongIds = ids(src.skippedSongIds);
   if (src.likedSongIds !== undefined) out.likedSongIds = ids(src.likedSongIds);
   const energy = obj(src.energyPref);

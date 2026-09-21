@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { usePlayerStore } from '@/store/playerStore';
+import { originOf, ORIGIN_LABEL } from '@/features/queue/origin';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { NextIcon } from './Icons';
 
@@ -40,12 +41,16 @@ export function NextUpCard() {
 
   if (endingIn === null || !upcoming || upcoming.id === current?.id || pathname === '/now-playing') return null;
 
+  // 7.2 — say who queued it, in the same words the Queue page uses.
+  const origin = ORIGIN_LABEL[originOf(upcoming.id)];
+
   return (
-    <div className="fixed right-3 sm:right-6 z-30 bottom-[calc(9rem+env(safe-area-inset-bottom))] sm:bottom-24 pointer-events-none">
+    // vx-nextup-card steps aside for the Now Playing rail on wide screens.
+    <div className="vx-nextup-card fixed right-3 sm:right-6 z-30 bottom-[calc(9rem+env(safe-area-inset-bottom))] sm:bottom-24 pointer-events-none">
       <button
         type="button"
         onClick={() => usePlayerStore.getState().next(true)}
-        aria-label={`Up next: ${upcoming.title}. Tap to play it now.`}
+        aria-label={`Up next: ${upcoming.title}${origin ? `, ${origin.toLowerCase()}` : ''}. Tap to play it now.`}
         className="pointer-events-auto glass-card rounded-2xl p-2 pr-3 flex items-center gap-3 w-60 sm:w-64 text-left animate-fade-up active:scale-[0.98] transition-transform"
       >
         <img
@@ -56,7 +61,7 @@ export function NextUpCard() {
         />
         <span className="min-w-0 flex-1">
           <span className="block text-[10px] font-bold uppercase tracking-wider text-ember-400">
-            Up next · {endingIn}s
+            Up next{origin ? ` · ${origin}` : ''} · {endingIn}s
           </span>
           <span className="block text-sm font-semibold truncate">{upcoming.title}</span>
           <span className="block text-xs text-ink-300 truncate">{upcoming.subtitle}</span>

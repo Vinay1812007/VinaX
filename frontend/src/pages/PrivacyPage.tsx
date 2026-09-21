@@ -25,6 +25,16 @@ export default function PrivacyPage() {
           this entirely, anytime.
         </p>
         <p className="mt-2">
+          A song counts as played once you have heard at least 5 seconds of it, the same rule your taste profile uses,
+          so flipping past a song is not counted. The same opt-in sends two short reports about the songs VinaX adds to
+          your queue by itself. When it adds a batch: which version of the recommender chose it, whether the on-device
+          engine or the AI chose the order (and why not the AI, if it didn&rsquo;t), how long it took, how many songs it
+          added, how many were by artists you haven&rsquo;t played or by different artists, whether a queue rule had to
+          be relaxed, and which test group your device is in, if any. When one of those songs stops: its place in the
+          batch, how many seconds of it you heard out of its length, whether you finished it, skipped it or liked it, and
+          the same test group. <strong>Neither report names the song.</strong>
+        </p>
+        <p className="mt-2">
           The same opt-in also turns on anonymous session insights: heatmaps and replays of how the app is used
           (taps, scrolls and which screens load), processed by an analytics provider so we can find confusing spots
           and fix them. <strong>All text on screen is masked on your device before anything is sent</strong> — song

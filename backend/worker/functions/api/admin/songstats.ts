@@ -7,8 +7,8 @@
  * Song ids match exactly; a title fragment picks the most-played match and
  * lists the other candidates so the operator can switch.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 interface Row { type: string | null; song_id: string | null; song_title: string | null; song_artist: string | null; song_image: string | null; device_id: string | null; country: string | null; platform: string | null; created_at: string }
@@ -59,7 +59,7 @@ export function summarise(rows: Row[]): {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false });
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') ?? '').trim().slice(0, 120);
@@ -68,11 +68,14 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
   const looksLikeId = /^[A-Za-z0-9_-]{4,40}$/.test(q) && !/\s/.test(q) && !/^[a-z]+$/i.test(q);
   const filter = looksLikeId ? `song_id=eq.${encodeURIComponent(q)}` : `song_title=ilike.${encodeURIComponent('*' + q.replace(/[%*,()]/g, ' ').trim() + '*')}`;
-  const rows = await sbSelect<Row>(
+  const read = await sbSelectResult<Row>(
     env,
     'vinax_events',
     `${filter}&created_at=gte.${encodeURIComponent(since)}&select=type,song_id,song_title,song_artist,song_image,device_id,country,platform,created_at&order=created_at.desc&limit=8000`,
-  ).catch(() => [] as Row[]);
+  );
+  // 7.2.0 — a failed read is not "this song was never played".
+  if (!read.ok) return dbFailure(read);
+  const rows = read.rows;
   // Pick the dominant song among title matches; keep the rest as candidates.
   const bySong = new Map<string, { id: string; title: string; artist: string; image: string; n: number }>();
   for (const r of rows) {

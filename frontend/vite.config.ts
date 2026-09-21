@@ -17,17 +17,42 @@ const APP_VERSION = BUILD_NUMBER ? `${pkg.version}+${BUILD_NUMBER}` : pkg.versio
  *  this: with runtime caching alone, a lazy page the user had never visited
  *  (e.g. Downloads) was simply missing offline, so tapping "downloads" while
  *  offline hit a failed chunk import (v5.3.1 offline-downloads fix). */
+/** 7.2.0 — the diagram and maths engines behind VinaX AI replies (and every
+ *  chunk only they reach). A reply that needs them needs the network anyway,
+ *  so they are ON DEMAND: fetched and runtime-cached on first use, never
+ *  pruned afterwards — instead of ~1.6 MB gzip precached for every listener. */
+const RICH_RENDER_ROOT = /[\\/]node_modules[\\/](?:mermaid|katex)[\\/]/;
+/** The maths typeface (three formats each) and its stylesheet. */
+const ON_DEMAND_ASSET = /^assets\/(?:KaTeX_[^/]*|katex[^/]*\.css)$/;
+
+/** Split the build's assets into what the service worker precaches and what it fetches on demand. */
+export function splitPrecache(bundle: Record<string, { type: 'chunk' | 'asset'; fileName: string; isEntry?: boolean; facadeModuleId?: string | null; imports?: string[]; dynamicImports?: string[] }>): { precache: string[]; onDemand: string[] } {
+  const all = Object.keys(bundle).filter((f) => f.startsWith('assets/')).sort();
+  const chunks = Object.values(bundle).filter((c) => c.type === 'chunk');
+  const byFile = new Map(chunks.map((c) => [c.fileName, c]));
+  const roots = new Set(chunks.filter((c) => c.facadeModuleId && RICH_RENDER_ROOT.test(c.facadeModuleId)).map((c) => c.fileName));
+  const reached = new Set<string>();
+  const stack = chunks.filter((c) => c.isEntry).map((c) => c.fileName);
+  while (stack.length) {
+    const f = stack.pop() as string;
+    if (reached.has(f) || roots.has(f)) continue;
+    reached.add(f);
+    const c = byFile.get(f);
+    if (c) stack.push(...(c.imports ?? []), ...(c.dynamicImports ?? []));
+  }
+  const onDemand = all.filter((f) => (bundle[f].type === 'chunk' ? !reached.has(f) : ON_DEMAND_ASSET.test(f)));
+  const skip = new Set(onDemand);
+  return { precache: all.filter((f) => !skip.has(f)).map((f) => `/${f}`), onDemand: onDemand.map((f) => `/${f}`) };
+}
+
 const precacheManifest = (): Plugin => ({
   name: 'vinax-precache-manifest',
   generateBundle(_options, bundle) {
-    const files = Object.keys(bundle)
-      .filter((f) => f.startsWith('assets/'))
-      .sort()
-      .map((f) => `/${f}`);
+    const { precache, onDemand } = splitPrecache(bundle as unknown as Parameters<typeof splitPrecache>[0]);
     this.emitFile({
       type: 'asset',
       fileName: 'precache-manifest.json',
-      source: JSON.stringify(files),
+      source: JSON.stringify({ v: 2, precache, onDemand }),
     });
   },
 });
@@ -80,7 +105,7 @@ export default defineConfig({
             {
               name: 'core',
               priority: -1,
-              test: /\/src\/(utils\/(cn|format|images|plays)|constants\/(languages|storage-keys)|components\/Icons|store\/(reasonStore|toastStore|historyStore|settingsStore)|services\/(identity\/installId|native\/index|storage\/local|recommendation\/(quality|songIdentity)|personalization\/(session|storage|profile|eventWeights)))\.tsx?$/,
+              test: /\/src\/(utils\/(cn|format|images|plays)|constants\/(languages|storage-keys)|components\/Icons|store\/(reasonStore|toastStore|historyStore|settingsStore)|services\/(identity\/installId|native\/index|storage\/local|recommendation\/(quality|songIdentity|identityCore|filters|admission|deadlines)|playback\/session|personalization\/(session|storage|profile|eventWeights)))\.tsx?$/,
             },
           ],
         },

@@ -7,6 +7,7 @@ import { findDuplicates } from '@/features/library/duplicates';
 import { pruneTrash, type TrashEntry } from '@/features/library/trash';
 import { normalizeTags } from '@/features/library/tags';
 import { guardedLocalStorage } from '@/services/storage/local';
+import { normalizeIdentityText } from '@/services/recommendation/identityCore';
 
 /** Derived indexes for O(1) membership checks. */
 let _favIds = new Set<string>();
@@ -23,7 +24,11 @@ let _hiddenIds = new Set<string>();
  */
 /** Normalised artist name for the never-play list. */
 export function artistKey(name: string): string {
-  return name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  // 7.2.0 — Unicode-safe (the shared identity fold): Latin accents fold as
+  // before, so existing keys are unchanged, but a name written in an Indic
+  // script keeps its letters and vowel signs. It used to reduce to '' — an
+  // artist credited in Telugu, Hindi or Tamil script could not be hidden.
+  return normalizeIdentityText(name).replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
 }
 
 /** v5.12.0 — true when a song is hidden outright or credited to a never-play artist. */

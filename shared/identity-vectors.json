@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "description": "Song identity contract vectors. Both frontend and backend test suites run every vector against their copy of identityCore.ts.",
+  "same": [
+    { "why": "film credit", "a": ["Kesariya (From \"Brahmastra\")", "Arijit Singh"], "b": ["Kesariya", "Arijit Singh"] },
+    { "why": "remaster", "a": ["Kesariya (2023 Remaster)", "Arijit Singh"], "b": ["Kesariya", "Arijit Singh"] },
+    { "why": "cover is a version of the same work", "a": ["Kesariya (Cover)", "Arijit Singh"], "b": ["Kesariya", "Arijit Singh"] },
+    { "why": "dashed lofi flip", "a": ["Kesariya - Lofi Flip", "Arijit Singh"], "b": ["Kesariya", "Arijit Singh"] },
+    { "why": "dashed film credit", "a": ["Monica - From Coolie", "Anirudh Ravichander"], "b": ["Monica", "Anirudh Ravichander"] },
+    { "why": "bracketed featured credit", "a": ["Monica (feat. Someone)", "Anirudh Ravichander"], "b": ["Monica", "Anirudh Ravichander"] },
+    { "why": "trailing featured credit", "a": ["Monica ft. Someone", "Anirudh Ravichander"], "b": ["Monica", "Anirudh Ravichander"] },
+    { "why": "comma credits", "a": ["Kesariya", "Arijit Singh, Pritam"], "b": ["Kesariya", "Arijit Singh"] },
+    { "why": "ampersand credits", "a": ["Kesariya", "Arijit Singh & Pritam"], "b": ["Kesariya", "Arijit Singh"] },
+    { "why": "featured artist in the credit line", "a": ["Kesariya", "Arijit Singh feat. Pritam"], "b": ["Kesariya", "Arijit Singh"] },
+    { "why": "Latin accents fold", "a": ["Café", "Singer"], "b": ["Cafe", "Singer"] },
+    { "why": "full-width forms fold", "a": ["Ｋｅｓａｒｉｙａ", "Arijit Singh"], "b": ["Kesariya", "Arijit Singh"] },
+    { "why": "zero-width joiner", "a": ["కల‍", "Singer"], "b": ["కల", "Singer"] },
+    { "why": "zero-width non-joiner", "a": ["क‌ष", "Singer"], "b": ["कष", "Singer"] },
+    { "why": "zero-width space", "a": ["Kesa​riya", "Arijit Singh"], "b": ["Kesariya", "Arijit Singh"] },
+    { "why": "case and punctuation", "a": ["BUTTA   BOMMA!", "Armaan Malik"], "b": ["Butta Bomma", "Armaan Malik"] }
+  ],
+  "different": [
+    { "why": "Telugu vowel sign (kala / kaala)", "a": ["కల", "Singer"], "b": ["కాల", "Singer"] },
+    { "why": "Telugu words", "a": ["నువ్వే", "Sid Sriram"], "b": ["నవ్వు", "Sid Sriram"] },
+    { "why": "Hindi matra (dil / dal)", "a": ["दिल", "Singer"], "b": ["दल", "Singer"] },
+    { "why": "Hindi nukta", "a": ["राज़", "Singer"], "b": ["राज", "Singer"] },
+    { "why": "Tamil vowel sign", "a": ["கல", "Singer"], "b": ["கால", "Singer"] },
+    { "why": "different lead artist", "a": ["Monica", "Anirudh"], "b": ["Monica", "Someone Else"] },
+    { "why": "a title that is only a version word keeps its name", "a": ["(Live)", "Band"], "b": ["(Acoustic)", "Band"] },
+    { "why": "ft inside a word is not a featured credit", "a": ["Left Right", "Singer"], "b": ["Le", "Singer"] }
+  ],
+  "recording": [
+    { "title": "Kesariya", "tag": "", "kind": "original" },
+    { "title": "Kesariya (From \"Brahmastra\")", "tag": "", "kind": "original" },
+    { "title": "Kesariya (2023 Remastered)", "tag": "", "kind": "remaster" },
+    { "title": "Kesariya (Remix)", "tag": "remix", "kind": "alternate" },
+    { "title": "Kesariya - Slowed + Reverb", "tag": "reverb+slowed", "kind": "alternate" },
+    { "title": "Kesariya (Lo-Fi Version)", "tag": "lofi", "kind": "alternate" },
+    { "title": "Kesariya [Live]", "tag": "live", "kind": "alternate" },
+    { "title": "Kesariya (Cover)", "tag": "cover", "kind": "alternate" }
+  ]
+}

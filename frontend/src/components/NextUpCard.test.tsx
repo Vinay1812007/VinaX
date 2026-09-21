@@ -82,4 +82,12 @@ describe('<NextUpCard />', () => {
     card.click();
     expect(next).toHaveBeenCalledWith(true);
   });
+
+  it('7.2 — says who queued the next song, in words, for the eye and the screen reader', () => {
+    act(() => usePlayerStore.getState().enqueueNext(makeSong('c', { title: 'Mine' })));
+    mount();
+    act(() => usePlayerStore.setState({ currentTime: 180 }));
+    const card = screen.getByRole('button', { name: 'Up next: Mine, added by you. Tap to play it now.' });
+    expect(card.textContent).toContain('Up next · Added by you · 20s');
+  });
 });

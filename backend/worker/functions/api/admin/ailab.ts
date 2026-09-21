@@ -11,11 +11,11 @@
  * because Cloudflare masks origin 5xx bodies and the admin UI wants the real
  * story. maxTokens is capped at 1000 — this is a bench, not a workload.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { LANE_ENV, LANE_MODEL, isExternalEndpoint, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { LANE_ENV, LANE_MODEL, isExternalEndpoint, isRefusalCode, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
 import { catalogDefaultModel, type CatalogProvider } from '../../_lib/catalog';
 import { aggregateLaneHealth, type AiEventRow } from '../../_lib/laneHealth';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & AiEnv & SupabaseEnv;
 
@@ -51,19 +51,25 @@ function json(body: unknown, status = 200): Response {
  *  row cap keeps the read bounded). */
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
+  if (!supabaseConfigured(env)) return json({ configured: false, hours: 24, sampled: 0, capped: false, lanes: aggregateLaneHealth([]) });
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const rows = await sbSelect<AiEventRow>(
+  const read = await sbSelectResult<AiEventRow>(
     env,
     'vinax_ai_events',
     `created_at=gte.${encodeURIComponent(since)}&select=model,ok,status,error,latency_ms&order=created_at.desc&limit=10000`,
   );
-  return json({ hours: 24, sampled: rows.length, capped: rows.length >= 10000, lanes: aggregateLaneHealth(rows) });
+  // 7.2.0 — lane health built from a failed read shows every lane idle.
+  if (!read.ok) return dbFailure(read);
+  // Refused calls (owner AI controls) reached no lane; they would read as an
+  // "unknown" lane full of failures.
+  const rows = read.rows.filter((r) => !isRefusalCode(r.error));
+  return json({ configured: true, hours: 24, sampled: rows.length, capped: read.rows.length >= 10000, lanes: aggregateLaneHealth(rows) });
 };
 
 export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   let body: { lane?: unknown; messages?: InMsg[]; maxTokens?: unknown; model?: unknown };
   try {

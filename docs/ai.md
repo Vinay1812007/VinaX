@@ -60,7 +60,14 @@ The result is `{ content, model, keyRole, usage }` or an error: `not_configured`
 
 ### Rate limits and body caps
 
-Every AI route uses the per-isolate token bucket in `_lib/ratelimit.ts` (limits apply per edge location, not globally) and reads its body through a capped reader, so a chunked body cannot exceed the cap.
+Every AI route passes through two limiters (`_lib/ratelimit.ts`): the
+per-isolate token bucket below, and — when the Worker has the Rate Limiting
+bindings — a counter every isolate in one edge location shares, at the
+smallest tier above the bucket's burst. Limits are therefore per location,
+never global, and permissive by design. [operations.md](operations.md#rate-limiting)
+has the tiers, the `wrangler.toml` snippet and the honest guarantees. Each
+route also reads its body through a capped reader, so a chunked body cannot
+exceed the cap.
 
 | Route | Bucket (burst / refill per minute) | Body cap |
 | --- | --- | --- |
@@ -69,6 +76,35 @@ Every AI route uses the per-isolate token bucket in `_lib/ratelimit.ts` (limits 
 | `POST /api/playlist` | 6 / 3 | 32 KB |
 | `POST /api/vinaxai` | 20 / 10, plus 5 / 5 for requests with web search | 12 MB (6 MB of inline images) |
 | `GET /api/aimodels` | 12 / 12 | — |
+
+### The owner's switches and spend caps
+
+Beyond the two feature flags below, the owner publishes one backend-enforced
+record (`vinax_config` key `ai-controls`): an emergency stop, a switch per
+feature (`dj`, `curate-metadata`, `curate-ranking`, `curate-home`,
+`curate-shelves`, `playlist`, `vinaxai`, `assistant`, `tts`, `lyrics`,
+`image`) and daily token / cost caps. `chat()` and `gather()` consult it
+before any provider call, and the streaming routes call `aiGate()` directly.
+
+- A feature is on unless its value is exactly `false`.
+- A refused call answers `503 { error: 'ai_disabled' }` or
+  `503 { error: 'ai_over_budget' }` — the same shape the clients already
+  treat as "this lane is unavailable", so every surface falls back to its
+  on-device path (see [When every provider is down](#when-every-provider-is-down)).
+  The refusal is logged to `vinax_ai_events` with that error, and those rows
+  count as neither spend nor failure.
+- Each isolate caches the record for 30 s; a failed read is logged and fails
+  open, except that a cached emergency stop keeps applying for up to a minute.
+- Caps are measured against today's (UTC) token sums from `vinax_ai_events`,
+  priced with the operator's `ai-prices` table, cached 60 s. Unpriced models
+  and calls whose provider reported no usage make the figures a lower bound
+  (`costKnown: false`), never zero, and a cap blocks only when the known part
+  alone reaches it. Caps are therefore soft by up to one cache period plus
+  the calls already in flight.
+
+`aiControlsStatus(env)` returns the same picture for the owner console.
+Operational detail lives in
+[operations.md](operations.md#ai-controls-emergency-stop-feature-switches-and-spend-caps).
 
 ## `POST /api/dj` — the AI DJ
 
@@ -242,7 +278,24 @@ These routes are outside the scope of this document; each keeps its key on the W
 | VinaX AI chat | `503` before the stream; the page shows "The assistant paused — please try again." Device-side music commands still work. |
 | DJ voice | The device's speech engine says "Now playing … by …" instead of the DJ's segue. |
 
-Two switches turn AI features off deliberately: the listener's settings (AI DJ, DJ builds every queue, AI-designed shelves on Home) and the owner's feature flags `aiDj` and `aiHome` (see [admin-console.md](admin-console.md)).
+Three kinds of switch turn AI features off deliberately: the listener's settings, the owner's feature flags `aiDj` and `aiHome` (see [admin-console.md](admin-console.md)), and the owner's backend-enforced AI controls — the emergency stop, the per-feature switches and the daily spend caps described under [The owner's switches and spend caps](#the-owners-switches-and-spend-caps). A switch or a cap produces the same fallbacks as an outage, because the routes answer 503.
+
+### Which switch stops which call (7.2)
+
+Before 7.2 nothing on the device turned off the classifier and the re-ranker: a listener who switched the AI DJ off still sent song lines to `/api/curate`.
+
+| Call | Listener setting | Owner flag | Owner control (`ai-controls`) |
+| --- | --- | --- | --- |
+| `/api/dj` (the DJ orders the queue) | AI in recommendations **and** AI DJ | `aiDj` | `dj` |
+| `/api/curate` `metadata` (mood, genre, energy classification) | AI in recommendations | — | `curate-metadata` |
+| `/api/curate` `ranking` (queue re-rank when the DJ is off, Home order, the popular-picks order) | AI in recommendations | `aiHome` for the Home surfaces | `curate-ranking` |
+| `/api/curate` `home` / `shelves` ("Designed for you") | AI in recommendations **and** AI-designed shelves on Home | `aiHome` | `curate-home`, `curate-shelves` |
+| `/api/playlist` (AI Playlist) | — (the listener asks for it) | — | `playlist` |
+| `/api/vinaxai` (the chat), `/api/assistant` (in-app help) | — (the listener asks for it) | — | `vinaxai`, `assistant` |
+| `/api/tts` (DJ voice, read aloud) | DJ voice, read aloud | — | `tts` |
+| `/api/lyrics-tools`, `/api/image` | — (the listener asks for it) | — | `lyrics`, `image` |
+
+"AI in recommendations" (`aiAssist`, on by default) is the master switch for background AI: with it off, the device sends nothing to an AI engine for recommendations and every surface uses its on-device path. The features a listener invokes by hand — the chat, AI Playlist, the lyric tools — are not covered by it; the owner's controls still are.
 
 ## Adding or replacing a model
 

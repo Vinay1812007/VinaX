@@ -49,8 +49,60 @@ describe('sanitizeCurated', () => {
     expect((row.vibe as string[])[1]).toHaveLength(60);
     expect(row.context).toHaveLength(6);
     expect(row.energy).toBeNull(); // out of the 0–1 range
-    expect(row.tempo).toBe(120);
+    // 7.2.0 — the request carried no tempo, so the model's 120 is an invented
+    // "measurement" and is dropped (this line used to expect 120).
+    expect(row.tempo).toBeNull();
     expect(row.dialect).toBeNull();
+  });
+
+  describe('metadata provenance (7.2.0)', () => {
+    const measuredSongs = [
+      { id: 'm1', title: 'Orbit', energy: 0.62, tempo: 118 },
+      { id: 'm2', title: 'Starlight' },
+      { id: 'm3', title: 'Comet', language: 'telugu', energy: 0.3 },
+    ];
+    const run = (rows: unknown[]) =>
+      (sanitizeCurated('metadata', { songs: rows }, { songs: measuredSongs }) as { songs: Array<Record<string, unknown>> }).songs;
+
+    it('an in-range energy/tempo the request did not carry is null, never accepted', () => {
+      const [row] = run([{ id: 'm2', mood: 'chill', energy: 0.8, tempo: 128 }]);
+      expect(row.energy).toBeNull();
+      expect(row.tempo).toBeNull();
+      expect(row.supplied).toEqual([]);
+    });
+
+    it('a supplied measurement echoed within rounding survives as the SUPPLIED value', () => {
+      const [row] = run([{ id: 'm1', energy: 0.6234, tempo: 118.4 }]);
+      expect(row.energy).toBe(0.62);
+      expect(row.tempo).toBe(118);
+      expect(row.supplied).toEqual(['energy', 'tempo']);
+    });
+
+    it('the model may not change a supplied measurement', () => {
+      const [row] = run([{ id: 'm1', energy: 0.9, tempo: 140 }]);
+      expect(row.energy).toBeNull();
+      expect(row.tempo).toBeNull();
+      expect(row.supplied).toEqual([]);
+    });
+
+    it('a supplied measurement the model left out stays unknown (null), not invented back', () => {
+      const [row] = run([{ id: 'm3', mood: 'melancholy' }]);
+      expect(row.energy).toBeNull();
+      expect(row.tempo).toBeNull();
+    });
+
+    it('labels every descriptive field the model filled as inferred, but not an echo of the request', () => {
+      const [row] = run([{ id: 'm3', mood: 'Melancholy', vibe: ['wistful'], genre: [], context: ['night'], language: 'Telugu', dialect: 'coastal', energy: 0.3 }]);
+      expect(row.inferred).toEqual(['mood', 'vibe', 'context', 'dialect']);
+      expect(row.supplied).toEqual(['energy']);
+      expect(row.language).toBe('Telugu');
+      expect(row.subLanguage).toBeNull();
+    });
+
+    it('unknowns are preserved as null / empty, and an all-unknown row infers nothing', () => {
+      const [row] = run([{ id: 'm2' }]);
+      expect(row).toMatchObject({ mood: null, vibe: [], genre: [], context: [], language: null, dialect: null, subLanguage: null, energy: null, tempo: null, inferred: [], supplied: [] });
+    });
   });
 
   it('home keeps only known shelf keys and markup-free, clipped text', () => {
@@ -73,6 +125,15 @@ describe('POST /api/curate', () => {
     expect((await post({ task: 'ranking', data: { songs } })).status).toBe(502);
     chatMock.mockResolvedValue({ content: null, model: null, error: 'not_configured' });
     expect((await post({ task: 'ranking', data: { songs } })).status).toBe(503);
+  });
+
+  it('the route itself never returns a model-invented energy or tempo', async () => {
+    chatMock.mockResolvedValue(answer({ songs: [{ id: 's1', mood: 'chill', energy: 0.7, tempo: 120 }, { id: 's2', energy: 0.5, tempo: 90 }] }));
+    const { status, json } = await post({ task: 'metadata', data: { songs: [{ id: 's1', title: 'Orbit' }, { id: 's2', title: 'Starlight', energy: 0.5 }] } });
+    expect(status).toBe(200);
+    const rows = (json.data as { songs: Array<Record<string, unknown>> }).songs;
+    expect(rows[0]).toMatchObject({ id: 's1', energy: null, tempo: null, inferred: ['mood'], supplied: [] });
+    expect(rows[1]).toMatchObject({ id: 's2', energy: 0.5, tempo: null, supplied: ['energy'] });
   });
 
   it('when every engine fails the route answers at once with the failure, not a hang', async () => {

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
-import { createDedupedStorage } from '@/services/storage/local';
+import { createDedupedStorage, getLocal, setLocal } from '@/services/storage/local';
 import { audioEngine, orderedSources } from '@/services/audio/engine';
 import {
   setMediaHandlers,
@@ -20,12 +20,24 @@ import { bestImage } from '@/utils/images';
 import { isValidSong, noteUnavailable, queueAfterClearFrom, reorderQueue, resetSkipGuard, sortQueueTail, type QueueSortKind } from './playerGuards';
 import { kidModeOn, stripExplicit } from '@/services/kidMode';
 import { getRecommendationContext } from '@/services/recommendation/context';
-import { recommendNextSongs } from '@/services/recommendation/engine';
-import { freshSongs } from '@/services/recommendation/freshness';
+import type { NextSongsPlan } from '@/services/recommendation/engine';
+import { NEXT_URGENT_DEADLINE_MS } from '@/services/recommendation/deadlines';
 import { songKey } from '@/services/recommendation/songIdentity';
-import { isSongBlocked, useLibraryStore } from './libraryStore';
+import { admitSongs } from '@/services/recommendation/admission';
 import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
 import { noteSessionEvent } from '@/services/personalization/sessionIntent';
+import {
+  creditTick,
+  emitPlaybackEvent,
+  isCompletion,
+  isEarlyLeave,
+  newPlaybackInstance,
+  noteSeek,
+  playThreshold,
+  type AutoEntryMeta,
+  type PlaybackEndReason,
+  type PlaybackInstance,
+} from '@/services/playback/session';
 
 export type RepeatMode = 'off' | 'one' | 'all';
 
@@ -90,6 +102,18 @@ export interface PlayerState {
   isAutoQueued(id: string): boolean;
   /** v6.3.0 — swap the recommender's tail for a new order, keeping hand-queued songs in place. */
   replaceAutoTail(songs: Song[]): void;
+  /** 7.2.0 — was this entry queued by the listener ("Add to queue", "Play next", "Keep this song")? */
+  isManualQueued(id: string): boolean;
+  /** 7.2.0 — keep an automatic entry: it becomes the listener's own and survives a rebuild or an AI refinement. */
+  keepSong(id: string): void;
+  /** 7.2.0 — the listener asked for new automatic picks: rebuild everything automatic after the current song. */
+  regenerateAutoTail(): void;
+  /** 7.2.0 — put back the upcoming entry the last `removeAt` took out (while the same song is playing). */
+  undoRemove(): boolean;
+  /** 7.2.0 — the playback instance measuring the current track (see services/playback/session.ts). */
+  playbackInstance(): Readonly<PlaybackInstance> | null;
+  /** 7.2.0 — how an automatic entry got into the queue (null for the listener's own songs). */
+  autoMeta(id: string): AutoEntryMeta | null;
   /** v6.3.0 — Queue Builder: install a planned queue, replacing everything or appending after the current song. */
   applyPlan(songs: Song[], mode: 'replace' | 'append'): void;
   prev(): void;
@@ -105,11 +129,10 @@ export interface PlayerState {
   setFollowMode(v: boolean): void;
 }
 
-const SKIP_THRESHOLD = 0.3;
 /** How many songs one continuation adds. */
 const NEXT_BATCH = 5;
-/** v7.0.0 — a play counts toward taste once this much of it has actually been heard. */
-const COUNTED_PLAY_SEC = 5;
+/** 7.2.0 — inside the last seconds of a song the next track is committed: an AI refinement leaves it alone. */
+const NEXT_COMMIT_WINDOW_SEC = 30;
 let autoplayNoticeShown = false;
 
 let engineInitialized = false;
@@ -155,8 +178,6 @@ function saveResume(id: string, sec: number, duration: number): void {
 }
 let crossfadeArmed = false;
 let sleepTimer: number | null = null;
-/** Song ids we've already tried to refetch fresh URLs for (avoid loops). */
-const refetchedSongs = new Set<string>();
 let _lastResumedSec = -1; // throttle: write at most once per 5-second mark
 let lastUnavailableToastAt = 0;
 
@@ -170,14 +191,30 @@ export const usePlayerStore = create<PlayerState>()(
       let transition = 0;
       let radio = false;
       let recommendationJob: { version: number; promise: Promise<boolean> } | null = null;
-      /** Ids the recommender appended (never persisted; a reload starts clean). */
+      /** 7.2.0 — cancels the in-flight plan and its AI refinement when the queue moves on. */
+      let planAbort: AbortController | null = null;
+      /** 7.2.0 — the latest accepted plan. Its validated reserve tops up a queue about to run
+       *  dry, and — for a queue in the same language — is the last-good fallback. */
+      let lastPlan: NextSongsPlan | null = null;
+      let batchSeq = 0;
+      const autoMetaById = new Map<string, AutoEntryMeta>();
+      /** Ids the recommender appended. Persisted with the queue (7.2.0) so a
+       *  reload does not turn every entry into "the list you started". */
       const autoIds = new Set<string>();
       /** v7.0.0 — ids the listener queued by hand ("Add to queue" / "Play next"). They
        *  outrank everything automatic: they sit ahead of the recommender's tail,
        *  survive a re-plan and a "Tune this queue", and are never reordered. */
       const manualIds = new Set<string>();
-      /** v7.0.0 — the song whose PLAY has not been counted toward taste yet (see COUNTED_PLAY_SEC). */
-      let uncountedPlay: Song | null = null;
+      /** 7.2.0 — the playback instance measuring the current track (heard time, verdicts). */
+      let playback: PlaybackInstance | null = null;
+      /** Whether the current instance already has its history entry. */
+      let playbackInHistory = false;
+      /** Instances that already had their one fresh-URL retry after every source failed. */
+      const refetchTried = new WeakSet<PlaybackInstance>();
+      /** Cancels an in-flight song-detail refetch when the track changes. */
+      let refetchAbort: AbortController | null = null;
+      /** The last upcoming entry `removeAt` took out, for Undo. */
+      let lastRemoval: { song: Song; at: number; manual: boolean; auto: AutoEntryMeta | null; anchorId: string | null } | null = null;
       /** Put the engine back at the listener's volume after a sleep fade was cancelled or finished. */
       // While casting the local element is only a silent clock: it must never become audible over the receiver.
       const restoreVolume = (): void => audioEngine.setVolume(useCastStore.getState().connected ? 0 : get().volume);
@@ -185,33 +222,195 @@ export const usePlayerStore = create<PlayerState>()(
         if (sleepTimer != null) { window.clearTimeout(sleepTimer); sleepTimer = null; }
       }
       const canExtend = () => (radio || useSettingsStore.getState().autoplay) && !get().followMode && get().repeat === 'off';
-      function invalidateQueue(): void { queueVersion += 1; transition += 1; }
-      async function appendRecommendations(seed: Song): Promise<boolean> {
+      function invalidateQueue(): void {
+        queueVersion += 1;
+        transition += 1;
+        // Obsolete work is cancelled, not just ignored: the plan's reads and the DJ request stop.
+        planAbort?.abort();
+        planAbort = null;
+      }
+
+      /** End the current playback instance once (idempotent) and tell the listeners how it went. */
+      function finalizePlayback(reason: PlaybackEndReason): void {
+        const inst = playback;
+        if (!inst || inst.finalized) return;
+        inst.finalized = true;
+        inst.endReason = inst.failed ? 'failed' : inst.endReason ?? reason;
+        emitPlaybackEvent({ kind: 'end', instanceId: inst.id, song: inst.song, from: inst.from, heardSec: inst.heardSec, durationSec: inst.durationSec, reason: inst.endReason, run: inst.run, auto: autoMetaById.get(inst.song.id) ?? null });
+      }
+
+      /** Every source failed for this instance (after its one refetch): skip it, if it is still the one playing. */
+      function failPlayback(inst: PlaybackInstance): void {
+        if (playback !== inst || inst.finalized) return;
+        inst.failed = true;
+        skipUnavailable();
+      }
+
+      function markAuto(songs: Song[], meta: Omit<AutoEntryMeta, 'pos'>): void {
+        songs.forEach((song, pos) => {
+          autoIds.add(song.id);
+          manualIds.delete(song.id);
+          autoMetaById.set(song.id, { ...meta, pos });
+        });
+        saveOwnership();
+      }
+
+      /** 7.2.0 — who queued what, written next to the queue (not inside the
+       *  de-duplicated player record, which must not change on a progress tick). */
+      function saveOwnership(): void {
+        setLocal(KEYS.queueOwnership, { v: 1, auto: [...autoIds], manual: [...manualIds] });
+      }
+
+      /** Restore ownership for the rehydrated queue; ids no longer in it are dropped. */
+      function loadOwnership(): void {
+        const stored = getLocal<{ v?: number; auto?: unknown; manual?: unknown }>(KEYS.queueOwnership, { v: 1 });
+        const ids = new Set(get().queue.map((s) => s.id));
+        const take = (raw: unknown, into: Set<string>): void => {
+          if (!Array.isArray(raw)) return;
+          for (const id of raw) if (typeof id === 'string' && ids.has(id)) into.add(id);
+        };
+        take(stored?.auto, autoIds);
+        take(stored?.manual, manualIds);
+      }
+
+      /** Distinct lead artists in a continuation (diversity, for opt-in quality telemetry). */
+      function distinctLeads(songs: Song[]): number {
+        return new Set(songs.map((s) => (s.artists[0]?.name ?? s.subtitle ?? '').trim().toLowerCase()).filter(Boolean)).size;
+      }
+
+      function languageViolations(songs: Song[], lock: string | null): number {
+        return lock ? songs.filter((s) => s.language && s.language !== 'unknown' && s.language !== lock).length : 0;
+      }
+
+      /** Append an accepted plan through the current-state gate; commit its side effects for what went in. */
+      function acceptPlan(plan: NextSongsPlan): number {
+        const queue = get().queue;
+        if (!queue.length) return 0;
+        const { admitted } = admitSongs(plan.songs, { queue, index: get().index });
+        if (!admitted.length) return 0;
+        const batch = (batchSeq += 1);
+        markAuto(admitted, { alg: plan.alg, picker: plan.picker, batch });
+        set({ queue: [...queue, ...admitted] });
+        plan.commit(admitted);
+        lastPlan = plan;
+        preloadUpcoming();
+        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: plan.picker, fallback: plan.fallback, latencyMs: plan.latencyMs, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: plan.relaxed, refinementPending: !!plan.refinement });
+        if (plan.refinement) {
+          const version = queueVersion;
+          void plan.refinement.then((refined) => {
+            if (!('songs' in refined)) {
+              emitPlaybackEvent({ kind: 'refined', batch, applied: false, fallback: refined.rejected, latencyMs: plan.latencyMs, n: 0, discovery: 0, languageViolations: 0, distinctArtists: 0, relaxed: [] });
+              return;
+            }
+            // A refinement for a queue the listener has since changed is dropped (and never committed).
+            const placed = version === queueVersion && canExtend() ? applyRefinement(refined, batch) : [];
+            const n = placed.length;
+            emitPlaybackEvent({
+              kind: 'refined', batch, applied: n > 0, fallback: n > 0 ? null : 'ai_rejected', latencyMs: refined.latencyMs, n,
+              // Measured on what the AI order actually placed, so the quality
+              // panel compares like with like against the local batch.
+              discovery: placed.filter((s) => refined.discoveryIds.has(s.id)).length,
+              languageViolations: languageViolations(placed, refined.language),
+              distinctArtists: distinctLeads(placed),
+              relaxed: refined.relaxed,
+            });
+          });
+        }
+        return admitted.length;
+      }
+
+      /** Is the track after the current one committed, so an AI refinement must not swap it? */
+      function nextCommitted(): boolean {
+        const { queue, index, currentTime, duration } = get();
+        const next = queue[index + 1];
+        if (!next) return false;
+        if (!autoIds.has(next.id) || crossfadeArmed) return true;
+        return duration > 0 && duration - currentTime <= NEXT_COMMIT_WINDOW_SEC;
+      }
+
+      /**
+       * 7.2.0 — the AI's order for a stretch already queued from the local plan.
+       * Only automatic entries that have not started may change: never the
+       * current track, never a committed next track, never the listener's own
+       * songs (they keep their place ahead of the automatic ones).
+       */
+      function applyRefinement(refined: NextSongsPlan, batch: number): Song[] {
+        const { queue, index } = get();
+        const start = index + 1 + (nextCommitted() ? 1 : 0);
+        const eligible = queue.slice(start).filter((s) => autoIds.has(s.id));
+        if (!eligible.length) return [];
+        const eligibleIds = new Set(eligible.map((s) => s.id));
+        const { admitted } = admitSongs(refined.songs, { queue, index, replacing: eligibleIds });
+        const fresh = admitted.slice(0, eligible.length);
+        if (fresh.length < Math.min(3, eligible.length)) return [];
+        const others = queue.slice(start).filter((s) => !eligibleIds.has(s.id));
+        for (const id of eligibleIds) {
+          autoIds.delete(id);
+          autoMetaById.delete(id);
+        }
+        markAuto(fresh, { alg: refined.alg, picker: 'ai', batch });
+        set({ queue: [...queue.slice(0, start), ...others, ...fresh] });
+        refined.commit(fresh);
+        preloadUpcoming();
+        return fresh;
+      }
+
+      /**
+       * 7.2.0 — top the queue up at once from the latest plan's validated
+       * reserve when it is about to run dry and no fresh plan is ready. The
+       * reserve is re-validated against the song now at the end (same final
+       * policy) and passes the current-state gate; a reserve in another
+       * language is never used.
+       */
+      function topUpFromReserve(seedNow: Song): number {
+        const plan = lastPlan;
+        if (!plan) return 0;
+        const lang = seedNow.language && seedNow.language !== 'unknown' ? seedNow.language : null;
+        if (plan.language && lang && plan.language !== lang) return 0;
+        const { queue, index } = get();
+        const picks = plan.topUp(seedNow, NEXT_BATCH, { ids: new Set(queue.map((s) => s.id)), keys: new Set(queue.map(songKey)) });
+        const { admitted } = admitSongs(picks, { queue, index });
+        if (!admitted.length) return 0;
+        const batch = (batchSeq += 1);
+        markAuto(admitted, { alg: plan.alg, picker: 'reserve', batch });
+        set({ queue: [...queue, ...admitted] });
+        plan.commit(admitted);
+        emitPlaybackEvent({ kind: 'served', batch, alg: plan.alg, picker: 'reserve', fallback: 'deadline', latencyMs: 0, n: admitted.length, discovery: admitted.filter((s) => plan.discoveryIds.has(s.id)).length, languageViolations: languageViolations(admitted, plan.language), distinctArtists: distinctLeads(admitted), relaxed: [], refinementPending: false });
+        return admitted.length;
+      }
+      async function appendRecommendations(seed: Song, opts: { urgent?: boolean } = {}): Promise<boolean> {
         if (recommendationJob?.version === queueVersion) return recommendationJob.promise;
         const version = queueVersion;
+        planAbort?.abort();
+        const abort = new AbortController();
+        planAbort = abort;
         const promise = (async () => {
           try {
+            // 7.2.0 — the engine is loaded on demand: it no longer rides the
+            // first load with the player store (the service worker precaches it).
+            const { planNextSongs } = await import('@/services/recommendation/engine');
+            if (version !== queueVersion || abort.signal.aborted) return false;
             const { queue } = get();
-            const songs = await recommendNextSongs(seed, getRecommendationContext(seed, radio ? 'radio' : 'playlist'), {
+            // 7.2.0 — a plan: the on-device order inside one end-to-end deadline
+            // (shorter when the listener is waiting at the end of the queue), and
+            // the AI DJ's order as a later refinement of the automatic entries.
+            const plan = await planNextSongs(seed, getRecommendationContext(seed, radio ? 'radio' : 'playlist'), {
               // v7.1.0 — the next FIVE: a short, tight stretch re-planned more often follows the
               // listener better than eight songs decided at once (and the DJ answers faster).
               limit: NEXT_BATCH,
               excludeIds: queue.map((song) => song.id),
               excludeKeys: queue.map(songKey),
               tune: get().tuneIntent,
+              // The stretch is appended after the last queued song: that is the
+              // hand-off the no-repeat-artist rule must judge.
+              previous: queue[queue.length - 1] ?? null,
+              signal: abort.signal,
+              deadlineMs: opts.urgent ? NEXT_URGENT_DEADLINE_MS : undefined,
             });
-            if (!songs.length || version !== queueVersion || !canExtend()) return false;
-            const current = get().queue;
-            if (!current.length) return false;
-            const additions = freshSongs(stripExplicit(songs), {
-              excludeIds: new Set(current.map(song => song.id)), excludeKeys: new Set(current.map(songKey)),
-              muted: useSettingsStore.getState().mutedLanguages, blocked: song => isSongBlocked(song, useLibraryStore.getState()),
-            });
-            if (!additions.length) return false;
-            for (const song of additions) autoIds.add(song.id);
-            set({ queue: [...current, ...additions] });
-            preloadUpcoming();
-            return true;
+            // The gate reads the state as it is NOW, after the await: a song hidden
+            // or a Kid mode switched on meanwhile never gets in.
+            if (version !== queueVersion || !canExtend() || abort.signal.aborted) return false;
+            return acceptPlan(plan) > 0;
           } catch {
             return false;
           } finally {
@@ -231,8 +430,16 @@ export const usePlayerStore = create<PlayerState>()(
         audioEngine.preloadNext(url);
       }
 
-      function startTrack(song: Song, autoplay: boolean): void {
+      function startTrack(song: Song, autoplay: boolean, opts: { from?: Song | null } = {}): void {
         transition += 1;
+        // 7.2.0 — one playback instance per start. The previous one ends here
+        // (once) and any async work tied to it is cancelled.
+        finalizePlayback('replaced');
+        refetchAbort?.abort();
+        refetchAbort = null;
+        const instance = newPlaybackInstance(song, { from: opts.from ?? null });
+        playback = instance;
+        playbackInHistory = false;
         // Reset the resume-write throttle so the first timeupdate on the NEW
         // song can save immediately — without this the previous song's 5s
         // bucket suppresses the initial write on a same-second boundary.
@@ -244,7 +451,8 @@ export const usePlayerStore = create<PlayerState>()(
           const at = loadResume()[song.id];
           if (at && at > 20) {
             window.setTimeout(() => {
-              if (get().queue[get().index]?.id === song.id) {
+              if (playback === instance && get().queue[get().index]?.id === song.id) {
+                noteSeek(instance, at);
                 audioEngine.seek(at);
                 toast(`Resumed from ${Math.floor(at / 60)}:${String(Math.floor(at % 60)).padStart(2, '0')}`);
               }
@@ -279,11 +487,10 @@ export const usePlayerStore = create<PlayerState>()(
         if (autoplay) {
           sessionPlayed.add(song.id);
           // v7.0.0 — history gets the play at once (the listen clock needs the
-          // entry), but taste only learns from it after a few seconds of real
-          // playback: flipping through five songs in five seconds used to teach
-          // the profile five plays.
-          uncountedPlay = song;
+          // entry); taste learns from it only once the playback instance has
+          // really been heard (services/playback/session.ts).
           useHistoryStore.getState().addPlay(song);
+          playbackInHistory = true;
           void import('@/utils/streak').then((m) => m.bumpStreak());
           // Android 13+: the playback notification needs this permission.
           void checkNotificationOnFirstPlay(toast);
@@ -307,19 +514,24 @@ export const usePlayerStore = create<PlayerState>()(
       }
 
       function maybeRecordSkip(manual: boolean): void {
-        const { queue, index, currentTime, duration } = get();
+        const { queue, index, duration } = get();
         const song = queue[index];
-        if (!manual || !song) return;
-        if (uncountedPlay?.id === song.id) {
-          // Flipped past before it really played: a sign of a restless sitting,
+        const inst = playback;
+        if (!manual || !song || !inst || inst.song.id !== song.id || inst.finalized) return;
+        inst.endReason = 'manual-skip';
+        // 7.2.0 — every verdict reads the HEARD time of this playback instance;
+        // the playhead (a seek to the end, a scrub back) is never proof of listening.
+        if (inst.run.completed || inst.run.skipped) return; // one verdict per run (repeat-one loops)
+        if (!inst.run.played) {
+          // Left before it really played: a sign of a restless sitting,
           // but not a verdict on the song, so the long-term profile is left alone.
-          uncountedPlay = null;
           useHistoryStore.getState().markSkipped(song.id);
           noteSessionEvent('skip', song);
           return;
         }
-        if (duration > 0 && currentTime / duration < SKIP_THRESHOLD) {
-          recordSkip(song, currentTime);
+        if (isEarlyLeave(inst.heardSec, inst.durationSec || duration)) {
+          inst.run.skipped = true;
+          recordSkip(song, Math.round(inst.heardSec * 10) / 10);
           useHistoryStore.getState().markSkipped(song.id);
           void import('@/services/analytics/telemetry').then((m) => m.trackSkip(song));
           // v6.3.0 — two skips inside the recommender's tail re-plan the rest of it.
@@ -346,11 +558,22 @@ export const usePlayerStore = create<PlayerState>()(
         resetSkipGuard(); // a track finished — sources are alive
         const { queue, index, duration, repeat, sleepAt, sleepAfterTrack, sleepSongsLeft } = get();
         const song = queue[index];
-        if (song) {
-          if (uncountedPlay?.id === song.id) { recordPlay(song); uncountedPlay = null; }
-          recordComplete(song, duration);
-          useHistoryStore.getState().markCompleted(song.id);
-          void import('@/services/recommendation/adaptive').then((m) => m.noteCompleted());
+        const inst = song && playback && playback.song.id === song.id && !playback.finalized ? playback : null;
+        if (song && inst) {
+          // 7.2.0 — reaching the end is a completion only when most of the song
+          // was heard: seeking to the last seconds and letting it end is not.
+          if (!inst.run.completed && isCompletion(inst.heardSec, inst.durationSec || duration)) {
+            if (!inst.run.played) {
+              inst.run.played = true;
+              recordPlay(song);
+              emitPlaybackEvent({ kind: 'counted', instanceId: inst.id, song, heardSec: inst.heardSec });
+            }
+            inst.run.completed = true;
+            recordComplete(song, Math.round(inst.heardSec * 10) / 10);
+            useHistoryStore.getState().markCompleted(song.id);
+            void import('@/services/recommendation/adaptive').then((m) => m.noteCompleted());
+          }
+          finalizePlayback(repeat === 'one' ? 'repeat' : 'ended');
         }
         // v5.12.0 — sleep after N songs counts down here; the last one stops.
         const songsDone = sleepSongsLeft > 0 ? sleepSongsLeft - 1 : 0;
@@ -363,6 +586,11 @@ export const usePlayerStore = create<PlayerState>()(
           return;
         }
         if (repeat === 'one' && song) {
+          // Each loop is a new playback instance of the same RUN: its seconds
+          // count, but the run never learns a second PLAY or COMPLETE.
+          playback = newPlaybackInstance(song, { run: inst?.run });
+          noteSeek(playback, 0);
+          playbackInHistory = true;
           audioEngine.seek(0);
           audioEngine.play();
           return;
@@ -444,12 +672,27 @@ export const usePlayerStore = create<PlayerState>()(
         initEngine: () => {
           if (engineInitialized) return;
           engineInitialized = true;
+          loadOwnership();
           audioEngine.init({
             onTime: (currentTime, duration) => {
               set({ currentTime, duration });
-              if (uncountedPlay && currentTime >= COUNTED_PLAY_SEC && get().queue[get().index]?.id === uncountedPlay.id) {
-                recordPlay(uncountedPlay);
-                uncountedPlay = null;
+              // 7.2.0 — the playback instance credits only what was heard: no
+              // seeks, no pauses, no buffering, no undeclared jumps.
+              const inst = playback;
+              if (inst && !inst.finalized && get().queue[get().index]?.id === inst.song.id) {
+                const heard = creditTick(inst, currentTime, duration, { rate: get().rate, buffering: get().isBuffering });
+                if (heard > 0) {
+                  if (!playbackInHistory) {
+                    useHistoryStore.getState().addPlay(inst.song);
+                    playbackInHistory = true;
+                  }
+                  emitPlaybackEvent({ kind: 'credit', instanceId: inst.id, songId: inst.song.id, seconds: heard });
+                  if (!inst.run.played && inst.heardSec >= playThreshold(inst.durationSec)) {
+                    inst.run.played = true;
+                    recordPlay(inst.song);
+                    emitPlaybackEvent({ kind: 'counted', instanceId: inst.id, song: inst.song, heardSec: inst.heardSec });
+                  }
+                }
               }
               // v5.17.0 — sleep timer: fade the last 30 s toward silence and
               // stop on the minute instead of waiting for the song to end.
@@ -472,7 +715,10 @@ export const usePlayerStore = create<PlayerState>()(
               }
               // v5.12.0 — A-B repeat: bounce back to A the moment B passes.
               const { loopA, loopB } = get();
-              if (loopA != null && loopB != null && loopB > loopA && currentTime >= loopB) audioEngine.seek(loopA);
+              if (loopA != null && loopB != null && loopB > loopA && currentTime >= loopB) {
+                if (playback) noteSeek(playback, loopA);
+                audioEngine.seek(loopA);
+              }
               updatePositionState(duration, currentTime, get().rate);
               const playing = get().queue[get().index];
               const _sec5 = Math.floor(currentTime / 5); if (playing && _sec5 !== _lastResumedSec && Math.floor(currentTime) % 5 === 0) { _lastResumedSec = _sec5; saveResume(playing.id, currentTime, duration); }
@@ -514,24 +760,35 @@ export const usePlayerStore = create<PlayerState>()(
               // giving up, fetch the song's detail record for fresh URLs and
               // retry once. Only skip (with a single, debounced toast) if that
               // also fails.
+              // 7.2.0 — the report and every async answer are checked against
+              // the playback INSTANCE that failed (it changes whenever the
+              // current track changes, including a replay of the same song), and
+              // the refetch is aborted when the track changes: a late success
+              // can never reload, and a late failure never skip, the song the
+              // listener chose since.
+              const inst = playback;
               const cur = get().queue[get().index];
-              if (cur && cur.id === songId && !refetchedSongs.has(songId)) {
-                refetchedSongs.add(songId);
-                if (refetchedSongs.size > 200) refetchedSongs.clear();
+              if (!inst || inst.finalized || !cur || cur.id !== songId || inst.song.id !== songId) return;
+              if (!refetchTried.has(inst)) {
+                refetchTried.add(inst);
+                refetchAbort?.abort();
+                const ctrl = new AbortController();
+                refetchAbort = ctrl;
+                const stillCurrent = (): boolean => !ctrl.signal.aborted && playback === inst && !inst.finalized;
                 void import('@/services/api')
                   .then(({ getSong }) => getSong(songId))
                   .then((fresh) => {
+                    if (!stillCurrent()) return;
                     const urls = orderedSources(fresh, useSettingsStore.getState().audioQuality);
-                    if (urls.length && get().queue[get().index]?.id === songId) {
-                      const ok = audioEngine.reloadWithSources(urls);
-                      if (ok) return;
-                    }
-                    skipUnavailable();
+                    if (urls.length && audioEngine.reloadWithSources(urls)) return;
+                    failPlayback(inst);
                   })
-                  .catch(() => skipUnavailable());
+                  .catch(() => {
+                    if (stillCurrent()) failPlayback(inst);
+                  });
                 return;
               }
-              skipUnavailable();
+              failPlayback(inst);
             },
           });
           const { volume, muted, rate } = get();
@@ -567,10 +824,14 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           resetSkipGuard(); // manual play — the user vouches for the sources
+          finalizePlayback('replaced');
           invalidateQueue();
           autoIds.clear();
+          autoMetaById.clear();
           manualIds.clear();
           sessionPlayed.clear();
+          lastRemoval = null;
+          saveOwnership();
           // v6.5.0 — DJ takeover: the tapped song is the seed and the DJ
           // builds the continuation (startTrack asks for it at once because
           // the queue is one song long). Off, or when the caller insists on
@@ -601,8 +862,12 @@ export const usePlayerStore = create<PlayerState>()(
           // by hand; the rest of what follows is rebuilt.
           invalidateQueue();
           radio = true; // a tuned continuation is endless, like radio
+          // 7.2.0 — a rebuild replaces the recommender's picks only. Songs the
+          // listener queued by hand AND the list they started (an album, a
+          // playlist, a Queue Builder plan) stay: "songs you added stay" has to
+          // mean every song the DJ did not choose.
+          const kept = [...queue.slice(0, index + 1), ...queue.slice(index + 1).filter((s) => !autoIds.has(s.id))];
           for (const s of queue.slice(index + 1)) autoIds.delete(s.id);
-          const kept = [...queue.slice(0, index + 1), ...queue.slice(index + 1).filter((s) => manualIds.has(s.id))];
           set({ queue: kept, tuneIntent: resolved });
           void appendRecommendations(current).then((added) => {
             if (!added && get().queue.length === kept.length) toast('Could not retune right now — try again in a moment');
@@ -627,8 +892,9 @@ export const usePlayerStore = create<PlayerState>()(
           if (index < 0 || index >= queue.length) return;
           resetSkipGuard(); // manual play
           maybeRecordSkip(true);
+          const from = index === get().index + 1 ? queue[get().index] : null;
           set({ index, currentTime: 0, duration: 0, loopA: null, loopB: null });
-          startTrack(queue[index], true);
+          startTrack(queue[index], true, { from });
         },
 
         enqueue: (song) => {
@@ -649,6 +915,7 @@ export const usePlayerStore = create<PlayerState>()(
           const firstAuto = queue.findIndex((s, i) => i > index && autoIds.has(s.id));
           const at = firstAuto < 0 ? queue.length : firstAuto;
           manualIds.add(song.id);
+          saveOwnership();
           set({ queue: [...queue.slice(0, at), song, ...queue.slice(at)] });
           if (firstAuto >= 0) preloadUpcoming();
           toast('Added to queue');
@@ -666,6 +933,7 @@ export const usePlayerStore = create<PlayerState>()(
           const firstAuto = current.findIndex((s, i) => i > get().index && autoIds.has(s.id));
           const at = firstAuto < 0 ? current.length : firstAuto;
           for (const s of fresh) manualIds.add(s.id);
+          saveOwnership();
           set({ queue: [...current.slice(0, at), ...fresh, ...current.slice(at)] });
           toast(`Added ${fresh.length} songs to queue`);
           if (get().queue.length === fresh.length) startTrack(fresh[0], true);
@@ -696,6 +964,7 @@ export const usePlayerStore = create<PlayerState>()(
           const insertAt = Math.min(newIndex + 1, filtered.length);
           autoIds.delete(song.id);
           manualIds.add(song.id);
+          saveOwnership();
           set({
             queue: [...filtered.slice(0, insertAt), song, ...filtered.slice(insertAt)],
             index: newIndex,
@@ -708,6 +977,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (i < 0 || i >= queue.length) return;
           invalidateQueue();
           const removingCurrent = i === index;
+          lastRemoval = i > index ? { song: queue[i], at: i, manual: manualIds.has(queue[i].id), auto: autoMetaById.get(queue[i].id) ?? null, anchorId: queue[index]?.id ?? null } : null;
           const next = queue.filter((_, idx) => idx !== i);
           if (next.length === 0) {
             audioEngine.pause();
@@ -756,13 +1026,18 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         clearQueue: () => {
+          finalizePlayback('cleared');
+          playback = null;
+          refetchAbort?.abort();
+          refetchAbort = null;
           invalidateQueue();
           radio = false;
           clearSleepTimeout();
           autoIds.clear();
+          autoMetaById.clear();
           manualIds.clear();
-          uncountedPlay = null;
-          refetchedSongs.clear();
+          lastRemoval = null;
+          saveOwnership();
           audioEngine.pause();
           set({ queue: [], index: 0, isPlaying: false, currentTime: 0, duration: 0 });
         },
@@ -804,17 +1079,24 @@ export const usePlayerStore = create<PlayerState>()(
             if (repeat === 'all') {
               nextIndex = 0;
             } else {
-              const current = queue[index];
-              if (current && canExtend()) {
+              const playing = queue[index];
+              if (playing && canExtend()) {
+                // 7.2.0 — the validated reserve first: the next song starts at
+                // once while a fresh plan is built in the background.
+                if (topUpFromReserve(playing) > 0) {
+                  set({ index: index + 1, currentTime: 0, duration: 0 });
+                  startTrack(get().queue[index + 1], true, { from: playing });
+                  return;
+                }
                 const version = queueVersion;
                 const ticket = ++transition;
                 // Pause immediately so the existing player contract remains
                 // synchronous; resume automatically once the async tail is
-                // available.
+                // available — within the urgent deadline, never an AI's leash.
                 set({ isPlaying: false });
                 audioEngine.pause();
-                void appendRecommendations(current).then((added) => {
-                  if (version !== queueVersion || ticket !== transition || get().queue[get().index]?.id !== current.id || !canExtend()) return;
+                void appendRecommendations(playing, { urgent: true }).then((added) => {
+                  if (version !== queueVersion || ticket !== transition || get().queue[get().index]?.id !== playing.id || !canExtend()) return;
                   if (added || get().index < get().queue.length - 1) get().next(false);
                 });
               } else {
@@ -824,8 +1106,9 @@ export const usePlayerStore = create<PlayerState>()(
               return;
             }
           }
+          const from = nextIndex === index + 1 ? queue[index] : null;
           set({ index: nextIndex, currentTime: 0, duration: 0 });
-          startTrack(queue[nextIndex], true);
+          startTrack(queue[nextIndex], true, { from });
         },
 
         autoTail: () => {
@@ -839,16 +1122,56 @@ export const usePlayerStore = create<PlayerState>()(
           // Everything that is not the recommender's — the listener's list and
           // hand-queued songs — keeps its place and its order.
           const manualTail = queue.slice(index + 1).filter((s) => !autoIds.has(s.id));
-          const seen = new Set([...head, ...manualTail].map((s) => s.id));
-          const fresh = songs.filter((s) => (seen.has(s.id) ? false : (seen.add(s.id), true)));
-          for (const s of queue.slice(index + 1)) if (autoIds.has(s.id)) autoIds.delete(s.id);
-          for (const s of fresh) autoIds.add(s.id);
+          const replacing = new Set(queue.slice(index + 1).filter((s) => autoIds.has(s.id)).map((s) => s.id));
+          // 7.2.0 — the same current-state gate as every automatic mutation:
+          // Kid mode, hidden songs and artists, muted languages, soft mutes,
+          // identity, recent plays and this sitting's skips all hold here too.
+          const { admitted: fresh } = admitSongs(songs, { queue, index, replacing });
+          for (const id of replacing) {
+            autoIds.delete(id);
+            autoMetaById.delete(id);
+          }
+          markAuto(fresh, { alg: lastPlan?.alg ?? 'replan', picker: 'local', batch: (batchSeq += 1) });
           invalidateQueue();
           set({ queue: [...head, ...manualTail, ...fresh] });
           preloadUpcoming();
         },
+        isManualQueued: (id) => manualIds.has(id),
+        keepSong: (id) => {
+          const { queue, index } = get();
+          if (!autoIds.has(id) || !queue.some((s, i) => i > index && s.id === id)) return;
+          // It stays where it is, but it is the listener's now: a rebuild or an AI refinement leaves it alone.
+          autoIds.delete(id);
+          autoMetaById.delete(id);
+          manualIds.add(id);
+          saveOwnership();
+          set({ queue: [...queue] });
+        },
+        regenerateAutoTail: () => get().tuneQueue(get().tuneIntent),
+        undoRemove: () => {
+          const r = lastRemoval;
+          lastRemoval = null;
+          if (!r) return false;
+          const { queue, index } = get();
+          // Only while the same song is playing, and only if the song is not back already.
+          if (!r.anchorId || queue[index]?.id !== r.anchorId || queue.some((s) => s.id === r.song.id)) return false;
+          const at = Math.min(Math.max(index + 1, r.at), queue.length);
+          invalidateQueue();
+          if (r.manual) manualIds.add(r.song.id);
+          else if (r.auto) {
+            autoIds.add(r.song.id);
+            autoMetaById.set(r.song.id, r.auto);
+          }
+          set({ queue: [...queue.slice(0, at), r.song, ...queue.slice(at)] });
+          preloadUpcoming();
+          return true;
+        },
+        playbackInstance: () => playback,
+        autoMeta: (id) => autoMetaById.get(id) ?? null,
         applyPlan: (songs, mode) => {
-          const clean = stripExplicit(songs);
+          // 7.2.0 — a plan the listener installs keeps its order; the explicit
+          // restrictions (Kid mode, hidden, muted languages, invalid entries) still hold.
+          const clean = admitSongs(songs, { queue: get().queue, index: get().index, mode: 'plan' }).admitted;
           if (!clean.length) return;
           if (mode === 'replace') {
             autoIds.clear();
@@ -870,10 +1193,13 @@ export const usePlayerStore = create<PlayerState>()(
           if (!seed) return;
           const queue = stripExplicit([seed]);
           if (!queue.length) return;
+          finalizePlayback('replaced');
           invalidateQueue();
           radio = true;
           autoIds.clear();
+          autoMetaById.clear();
           manualIds.clear();
+          lastRemoval = null;
           sessionPlayed.clear();
           set({ queue, index: 0, currentTime: 0, duration: 0, isPlaying: true, tuneIntent: null });
           startTrack(seed, true);
@@ -886,6 +1212,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (!queue.length) return;
           haptic('light');
           if (currentTime > 3 || index === 0) {
+            if (playback) noteSeek(playback, 0);
             audioEngine.seek(0);
             return;
           }
@@ -894,6 +1221,8 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         seek: (seconds) => {
+          // 7.2.0 — a declared seek: the playback instance re-bases instead of crediting the jump.
+          if (playback) noteSeek(playback, seconds);
           if (castInterceptSeek(seconds)) {
             audioEngine.seek(seconds); // the local clock decides when the song "ends"
             set({ currentTime: seconds });
@@ -995,7 +1324,17 @@ export const usePlayerStore = create<PlayerState>()(
       // scalars so a corrupt/legacy record can never brick the player (DQA-06).
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PersistedPlayerState>;
-        const queue = Array.isArray(p.queue) ? p.queue.filter(isValidSong) : [];
+        // 7.2.0 — a queue stored by an older build can carry energy/tempo an AI
+        // guessed. They were never measured, and the classifier fills them again
+        // from cache when it can, so they are dropped rather than passed on as
+        // catalogue metadata (services/ai/recommendations.ts tracks provenance).
+        const queue = (Array.isArray(p.queue) ? p.queue.filter(isValidSong) : []).map((song) => {
+          if (song.energy === undefined && song.tempo === undefined) return song;
+          const rest: Song = { ...song };
+          delete rest.energy;
+          delete rest.tempo;
+          return rest;
+        });
         const rawIndex = typeof p.index === 'number' && Number.isFinite(p.index) ? Math.floor(p.index) : 0;
         const num = (v: unknown, lo: number, hi: number, d: number): number =>
           typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;

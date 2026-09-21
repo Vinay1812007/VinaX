@@ -7,8 +7,12 @@ This is the index of the current documentation. Everything here describes the pr
 | Document | Read it when you need to know |
 | --- | --- |
 | [architecture.md](architecture.md) | What the pieces are and how data flows: app shell, routes and lazy chunks, stores and persistence, the catalogue client, the audio engine, the service worker, Worker routes, the owner console |
-| [recommendations.md](recommendations.md) | How the next song is chosen: the ten-stage pipeline, the weights, session intent, event weights, Familiar / Balanced / Discover, the 7.1 queue rules, Home shelves, the `?debug=recs` breakdown |
+| [recommendations.md](recommendations.md) | How the next song is chosen: the ten-stage pipeline, the weights, session intent, event weights, Familiar / Balanced / Discover, the 7.2 playback and admission contracts, the queue rules, Home shelves, the `?debug=recs` breakdown |
 | [ai.md](ai.md) | How AI is used and bounded: lanes and failover, each AI route's contract, timeouts and budgets, what happens with every provider down |
+| [trends.md](trends.md) | Verified trend ingestion: the provider adapters and what each provider's rules allow, scheduled jobs and quota, catalogue matching and confidence, momentum, the admin review queue, and the honest labels the app shows |
+| [evaluation.md](evaluation.md) | The offline evaluation of next-song selection: fixtures, metrics, the 7.1 comparison, and how to read an A/B result |
+| [audit-7.2.md](audit-7.2.md) | The 7.2 review: every finding with its severity, evidence, reproduction, fix and validation |
+| [progress-7.2.md](progress-7.2.md) | What 7.2 landed, what is deferred and why, and the decisions the owner owes |
 | [design-system.md](design-system.md) | The Flow tokens, the medium control scale, the hit-area rule, overlays and `data-vx-overlay`, motion rules, the top bar actions slot |
 | [data-and-privacy.md](data-and-privacy.md) | What is stored where, the backup format, restore / merge / undo rules, what leaves the device and when |
 | [testing.md](testing.md) | Unit tests, the browser suite and its harness, fixture shapes, the bundle budget and the `core` chunk group, verifying a commit in a throw-away worktree |

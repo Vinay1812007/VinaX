@@ -1,7 +1,7 @@
 /** Location Analytics: listeners + plays by country / city, and platform split.
  *  Coarse + anonymous: city/country come from the Cloudflare edge; no raw IP. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -15,28 +15,30 @@ interface PlatRow { platform: string; listeners: number; }
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const days = clampDays(new URL(request.url).searchParams.get('days'));
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, days, countries: [], cities: [], platforms: [] });
   const [geo, platforms] = await Promise.all([
-    sbRpc<GeoRow[]>(env, 'vinax_geo', { days }),
-    sbRpc<PlatRow[]>(env, 'vinax_platforms', {}),
+    sbRpcResult<GeoRow[]>(env, 'vinax_geo', { days }),
+    sbRpcResult<PlatRow[]>(env, 'vinax_platforms', {}),
   ]);
+  // 7.2.0 — an empty map from a failed read looks like "no listeners anywhere".
+  if (!geo.ok) return dbFailure(geo);
+  if (!platforms.ok) return dbFailure(platforms);
 
-  const rows = geo ?? [];
+  const rows = geo.value ?? [];
   const byCountry: Record<string, number> = {};
   for (const r of rows) byCountry[r.country] = (byCountry[r.country] ?? 0) + r.listeners;
   const countries = Object.entries(byCountry)
     .map(([country, listeners]) => ({ country, listeners }))
     .sort((a, b) => b.listeners - a.listeners);
 
-  return new Response(
-    JSON.stringify({
-      days,
-      countries,
-      cities: rows.slice(0, 50),
-      platforms: platforms ?? [],
-    }),
-    { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
-  );
+  return adminJson({
+    configured: true,
+    days,
+    countries,
+    cities: rows.slice(0, 50),
+    platforms: platforms.value ?? [],
+  });
 };

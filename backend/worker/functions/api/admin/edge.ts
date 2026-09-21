@@ -8,8 +8,8 @@
  * the app cannot boot or play without, with status + latency. Admin-gated:
  * it fans out ~15 requests per call.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { rateLimit } from '../../_lib/ratelimit';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { rateLimitAsync } from '../../_lib/ratelimit';
 
 type Env = AdminEnv;
 
@@ -60,8 +60,8 @@ function extractAssets(html: string): Array<{ path: string; kind: 'script' | 'st
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
-  const limited = rateLimit(request, 'admin-edge', { capacity: 6, refillPerMinute: 6 }, env as never);
+  if (!(await isAdminAsync(request, env))) return unauthorized();
+  const limited = await rateLimitAsync(request, 'admin-edge', { capacity: 6, refillPerMinute: 6 }, env);
   if (limited) return limited;
   const origin = new URL(request.url).origin.replace('admin.', 'www.');
 

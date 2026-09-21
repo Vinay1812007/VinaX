@@ -1,7 +1,7 @@
 /** Per-user drill-down: the user's latest-state row + recent raw events.
  *  Top songs / languages / recents are derived client-side from the events. */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -32,7 +32,7 @@ interface EventRow {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const rawId = new URL(request.url).searchParams.get('deviceId');
   // Length-capped: a huge id produced an over-length PostgREST URL whose 414
@@ -44,6 +44,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
     });
   }
+  if (!supabaseConfigured(env)) return adminJson({ configured: false, user: null, events: [] });
   const enc = encodeURIComponent(deviceId);
 
   // full=1 → the profile-download export: a much larger event window with
@@ -58,19 +59,21 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const eventLimit = full ? 2000 : 150;
 
   const [users, events] = await Promise.all([
-    sbSelect<UserRow>(
+    sbSelectResult<UserRow>(
       env,
       'vinax_users',
       `device_id=eq.${enc}&limit=1&select=device_id,name,username,platform,country,city,region,app_version,is_playing,first_seen,last_seen,current_song_title,current_song_artist`,
     ),
-    sbSelect<EventRow>(
+    sbSelectResult<EventRow>(
       env,
       'vinax_events',
       `device_id=eq.${enc}&order=created_at.desc&limit=${eventLimit}&select=${eventCols}`,
     ),
   ]);
 
-  return new Response(JSON.stringify({ user: users[0] ?? null, events }), {
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  });
+  // 7.2.0 — a failed read is not "no such user"; a profile export built on
+  // one would silently ship an empty history.
+  if (!users.ok) return dbFailure(users);
+  if (!events.ok) return dbFailure(events);
+  return adminJson({ configured: true, user: users.rows[0] ?? null, events: events.rows });
 };

@@ -5,8 +5,8 @@
  * Every scheduled job leaves a footprint (an event row or a table write);
  * this reads the newest footprint per job and flags anything overdue.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -25,13 +25,20 @@ const JOBS: Job[] = [
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, jobs: [] });
-  const jobs = await Promise.all(JOBS.map(async (j) => {
-    const rows = await sbSelect<Record<string, string | null>>(env, j.table, j.query).catch(() => null);
+  const reads = await Promise.all(JOBS.map(async (j) => ({ j, read: await sbSelectResult<Record<string, string | null>>(env, j.table, j.query) })));
+  // 7.2.0 — sbSelect never threw, so the old `.catch(() => null)` never fired:
+  // a failed read reported the job as "never ran / overdue". A failed read is
+  // now `readable: false, ok: null` (unknown), and all reads failing is a 502.
+  const firstFail = reads.find((r) => !r.read.ok)?.read;
+  if (firstFail && !firstFail.ok && reads.every((r) => !r.read.ok)) return dbFailure(firstFail, { unavailable: JOBS.map((j) => j.id) });
+  const jobs = reads.map(({ j, read }) => {
+    const rows = read.ok ? read.rows : null;
     const lastAt = rows && rows[0] ? rows[0][j.ts] ?? null : null;
     const ageMin = lastAt ? Math.round((Date.now() - Date.parse(lastAt)) / 60_000) : null;
     return { id: j.id, label: j.label, schedule: j.schedule, note: j.note, lastAt, ageMin, ok: rows === null ? null : ageMin !== null && ageMin <= j.maxAgeMin, maxAgeMin: j.maxAgeMin, readable: rows !== null };
-  }));
-  return json({ configured: true, checkedAt: new Date().toISOString(), jobs });
+  });
+  const unavailable = jobs.filter((j) => !j.readable).map((j) => j.id);
+  return json({ configured: true, checkedAt: new Date().toISOString(), jobs, unavailable });
 };

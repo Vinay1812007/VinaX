@@ -12,8 +12,9 @@
  * (a missing column 400s that select alone → its metric reads null, the rest
  * keep working).
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbSelect, type SupabaseEnv } from '../../_lib/supabase';
+import { adminJson, dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isRefusalCode } from '../../_lib/ai';
+import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 
@@ -25,30 +26,41 @@ function pct(n: number, total: number): number | null {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
-  const [events, aiEvents] = await Promise.all([
-    sbSelect<{ origin_verified: boolean | null; country: string | null }>(
+  if (!supabaseConfigured(env)) {
+    return adminJson({ configured: false, score: null, metrics: { originVerifiedPct: null, countryResolvedPct: null, aiOkPct: null, aiContentPct: null }, slos: [], sampled: { events: 0, aiEvents: 0 } });
+  }
+  const [eventsRead, aiRead] = await Promise.all([
+    sbSelectResult<{ origin_verified: boolean | null; country: string | null }>(
       env,
       'vinax_events',
       // type=play: the metrics are defined over PLAY events; sampling every
       // event type (vitals, errors, admin markers) skewed both percentages (D-8).
       `select=origin_verified,country&type=eq.play&order=created_at.desc&limit=${SAMPLE}`,
     ),
-    sbSelect<{ ok: boolean | null; error: string | null }>(
+    sbSelectResult<{ ok: boolean | null; error: string | null }>(
       env,
       'vinax_ai_events',
       `select=ok,error&order=created_at.desc&limit=${SAMPLE}`,
     ),
   ]);
+  // 7.2.0 — the two samples are independent: a failed one makes ITS metrics
+  // and sample size null (named in `unavailable`), never 0. Both failed → 502.
+  if (!eventsRead.ok && !aiRead.ok) return dbFailure(eventsRead, { unavailable: ['events', 'aiEvents'] });
+  const unavailable = [...(eventsRead.ok ? [] : ['events']), ...(aiRead.ok ? [] : ['aiEvents'])];
+  const events = eventsRead.rows;
+  // 7.2.0 — a call the owner's AI controls refused (ai_disabled /
+  // ai_over_budget) is not an AI failure; it stays out of the SLOs.
+  const aiEvents = aiRead.rows.filter((e) => !isRefusalCode(e.error));
 
-  const originPct = pct(events.filter((e) => e.origin_verified === true).length, events.length);
-  const countryPct = pct(events.filter((e) => !!e.country).length, events.length);
-  const aiOkPct = pct(aiEvents.filter((e) => e.ok === true).length, aiEvents.length);
+  const originPct = eventsRead.ok ? pct(events.filter((e) => e.origin_verified === true).length, events.length) : null;
+  const countryPct = eventsRead.ok ? pct(events.filter((e) => !!e.country).length, events.length) : null;
+  const aiOkPct = aiRead.ok ? pct(aiEvents.filter((e) => e.ok === true).length, aiEvents.length) : null;
   // Content delivered = the call SUCCEEDED and carried no error marker.
   // `error !== 'empty'` alone counted failed/not_configured/empty_stream_fallback
   // rows as delivered content, structurally over-reporting the SLO (D-9).
-  const aiContentPct = pct(aiEvents.filter((e) => e.ok === true && !e.error).length, aiEvents.length);
+  const aiContentPct = aiRead.ok ? pct(aiEvents.filter((e) => e.ok === true && !e.error).length, aiEvents.length) : null;
 
   const parts = [originPct, countryPct, aiOkPct, aiContentPct].filter((v): v is number => v != null);
   const score = parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null;
@@ -63,8 +75,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
       actualPct == null ? null : Math.min(999, Math.round(((100 - actualPct) / (100 - targetPct)) * 100)),
   });
 
-  return new Response(
-    JSON.stringify({
+  return adminJson({
+      configured: true,
       score,
       metrics: {
         originVerifiedPct: originPct,
@@ -76,8 +88,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
         slo('AI success', 98, aiOkPct),
         slo('AI content delivery', 99, aiContentPct),
       ],
-      sampled: { events: events.length, aiEvents: aiEvents.length },
-    }),
-    { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } },
-  );
+      sampled: { events: eventsRead.ok ? events.length : null, aiEvents: aiRead.ok ? aiEvents.length : null },
+      unavailable,
+  });
 };

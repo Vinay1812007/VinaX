@@ -12,6 +12,24 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '7.2.0': {
+    title: 'VinaX 7.2 — a queue that listens, charts you can check, and a control room that tells the truth',
+    changes: [
+      { type: 'fixed', text: 'Skipping ahead inside a song no longer teaches VinaX that you liked it. What you actually heard is what counts now — seeks, pauses and buffering do not — so plays, skips and finishes reflect real listening. Looping one song all evening no longer floods your taste with it either.' },
+      { type: 'fixed', text: 'Kid mode, hidden songs and artists, muted languages and “less like this” now apply to every automatic pick, including the ones that arrive after two skips. A song that became off-limits while VinaX was fetching can no longer slip into the queue.' },
+      { type: 'improved', text: 'The next songs arrive sooner. VinaX builds them on your device inside a few seconds and never waits on the AI; when the AI answers in time it may reorder the picks that have not started yet, and never the song playing or the one queued next.' },
+      { type: 'fixed', text: 'When a song will not play, a late answer from the failed one can no longer skip, or replace, the song you picked instead.' },
+      { type: 'improved', text: 'Fewer runs of the same artist. In Familiar mode the queue could serve three songs by one artist while other artists were available; it now spaces them and gives up an internal discovery budget first.' },
+      { type: 'new', text: 'The queue says who chose what: DJ pick or added by you. Keep this song makes a DJ pick yours, New DJ picks asks for a fresh set and says what it will replace, remove offers Undo, and you can reorder with the keyboard or the row menu instead of dragging. The album or playlist you started now stays through a rebuild, and all of this survives a reload.' },
+      { type: 'new', text: 'Steer from any song menu: More like this changes what comes next straight away, and Less like this asks whether to hear that artist less for 7, 14 or 30 days, with Undo.' },
+      { type: 'new', text: 'Settings → Recommendations now says what VinaX thinks you like, explains what each discovery mode really changes, and lists every artist you are hearing less of with the date they come back. Resetting your taste offers a backup first.' },
+      { type: 'new', text: 'One switch turns off AI in recommendations. With it off nothing about your songs is sent to an AI engine for recommendations, and everything still works on your device.' },
+      { type: 'new', text: 'Charts are honest. The Charts page can show real public charts with their source, region, update time and a link to check, and says plainly when a source is stale or not set up. Home’s shelf is now called “Popular picks for you”, because that is what it is: the catalogue’s popular songs in your order.' },
+      { type: 'fixed', text: 'Songs in Telugu, Hindi and Tamil script are matched correctly again across the app and the service, so two different songs are no longer treated as one — and an artist written in those scripts can now be hidden.' },
+      { type: 'improved', text: 'The app downloads about a quarter of what it used to on each start: the diagram and formula engines behind AI replies are fetched only when a reply needs them, and the app’s own first load is smaller than in 7.1.' },
+      { type: 'improved', text: 'Owner console: recommendation quality, AI operations with emergency switches and spend caps, and versioned recommendation tuning with rollback. A panel that cannot read its data now says so instead of showing zeros, every change is recorded with who, what and what changed, and sign-in lockouts and rate limits count across a whole location.' },
+    ],
+  },
   '7.1.0': {
     title: 'VinaX 7.1 — the next five, a new VinaX AI, and a calmer control room',
     changes: [

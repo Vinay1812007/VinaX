@@ -1,0 +1,57 @@
+# Actions pinned by SHA — rotate via Dependabot (github-actions ecosystem).
+name: Trends ingest
+
+# Pings the protected cron endpoint, which reads every configured trend source
+# for every region in TRENDS_REGIONS, stores a snapshot, matches new items to
+# catalogue songs and deletes data past its retention window (docs/trends.md).
+# Set the CRON_SECRET repository secret to match the Worker's CRON_SECRET.
+#
+# Cadence: every six hours. One run reads one page of 50 per region at 1 quota
+# unit a request (at most 3 with the endpoint's own retries, 9 if this
+# workflow also retries a failing run), so four runs a day use 4 units per
+# region normally and 36 at worst, against the provider's default
+# 10,000-unit daily quota and the app's own ceiling
+# (TRENDS_VIDEO_DAILY_UNIT_BUDGET, default 200). The chart
+# does not move fast enough for more to help, the stale threshold (18 hours)
+# tolerates two missed runs, and each run's catalogue matching is budgeted.
+on:
+  schedule:
+    - cron: '17 */6 * * *' # 00:17, 06:17, 12:17, 18:17 UTC — off the hour, away from the other jobs
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Trigger trends ingest
+        # Retry transient failures (edge blips, cold starts) before giving up.
+        # A re-run inside the same hour is idempotent: the endpoint stores
+        # nothing twice and spends no quota on a snapshot it already has.
+        run: |
+          set -eu
+          attempt=1
+          until curl -fsS -X POST "https://www.sirimillavinay.online/api/cron/trends-ingest" \
+              -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "::error::trends-ingest endpoint failed after $attempt attempts"
+              exit 1
+            fi
+            echo "attempt $attempt failed; sleeping 30s"
+            attempt=$((attempt + 1))
+            sleep 30
+          done
+
+      - name: Open failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "cron trends ingest failed" \
+            --body "The scheduled trends ingest workflow failed. Open Trend Operations in the owner console for the failing source and its error. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

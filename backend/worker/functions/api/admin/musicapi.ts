@@ -7,7 +7,7 @@
  * silent-empty-home always has an obvious cause. Admin-gated: external
  * mirrors are community services and this spends their quota.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { onRequestGet as catalogGet } from '../cat/[[path]]';
 
 type Env = AdminEnv;
@@ -89,7 +89,7 @@ export const onRequestGet = async (context: {
   env: Env;
 }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   const sources = await Promise.all([
     pingSelfCatalog(request),
     ...MIRRORS.map(pingMirror),

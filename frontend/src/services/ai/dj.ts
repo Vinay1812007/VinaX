@@ -59,12 +59,23 @@ const DISCOVERY_FOCI = [
 let aiAvailable: boolean | null = null; // false after a 503: the key is not configured on this deployment
 let retryAfter = 0;
 
+/** 7.2.0 — how the last DJ request ended, for the caller's fallback accounting. */
+export type DjOutcome = 'ok' | 'unavailable' | 'timeout' | 'error' | 'empty' | 'skipped';
+let lastOutcome: DjOutcome = 'skipped';
+export function lastDjOutcome(): DjOutcome {
+  return lastOutcome;
+}
+/** Back off for `ms`, plus up to a fifth more at random, so many devices do not retry in step. */
+const backOff = (ms: number): void => {
+  retryAfter = Date.now() + ms + Math.floor(Math.random() * ms * 0.2);
+};
+
 export interface DjPick {
   song: Song;
   reason: string;
   segue: string;
-  /** 0..1 — the DJ's own belief in the hand-off (0.5 when it gave none). */
-  confidence: number;
+  /** 0..1 — the DJ's OWN claim about the hand-off, when it made one. Not a probability of enjoyment, and not used in ranking or validation. */
+  confidence?: number;
   /** v6.5.0 — true when the DJ proposed this song from outside the pool and the catalogue confirmed it. */
   discovered?: boolean;
 }
@@ -172,7 +183,8 @@ interface WirePick { songId?: unknown; title?: unknown; artist?: unknown; reason
 
 const fold = (t: string): string => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const clipText = (v: unknown, n: number): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
-const confidenceOf = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5);
+/** 7.2.0 — the DJ's self-rating of a hand-off. Absent when the model gave none: a made-up 0.5 read like a measurement. It is never a probability that the listener will enjoy the song, and nothing ranks by it. */
+const confidenceOf = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : undefined);
 
 /**
  * v6.5.0 — is a catalogue result really the song the DJ proposed? Strong
@@ -233,7 +245,7 @@ export async function resolvePicks(picks: WirePick[], pool: Song[], limit: numbe
   const byId = new Map(pool.map((s) => [s.id, s]));
   const byKey = new Map<string, Song>();
   for (const s of pool) byKey.set(canonicalKey(s.title, primaryArtist(s)), s);
-  const slots: Array<DjPick | { title: string; artist: string; reason: string; segue: string; confidence: number }> = [];
+  const slots: Array<DjPick | { title: string; artist: string; reason: string; segue: string; confidence?: number }> = [];
   const used = new Set<string>();
   let proposals = 0;
   for (const p of picks) {
@@ -320,8 +332,38 @@ export function knownTo(ctx: RecommendationContext): { songIds: Set<string>; art
   return { songIds, artists };
 }
 
+/**
+ * 7.2.0 — commit a DJ set's side effects for the songs the player actually
+ * accepted into a still-current queue: their "why this song" lines, their
+ * spoken segues and the set intro, and the surfaced-song memory that steers
+ * later rounds away from repeats. A proposal that was rejected, cancelled or
+ * superseded is never committed, so it cannot colour later discovery or
+ * what the DJ says.
+ */
+export function commitDjSet(set: DjSet, accepted: Song[]): void {
+  const ids = new Set(accepted.map((s) => s.id));
+  const picks = set.picks.filter((p) => ids.has(p.song.id));
+  if (!picks.length) return;
+  useReasonStore.getState().setReasons(picks.filter((p) => p.reason).map((p) => [p.song.id, p.reason]));
+  useDjStore.getState().setSet(set.intro, picks.map((p) => [p.song.id, p.segue]));
+  recordSurfaced(picks.map((p) => p.song));
+}
+
+/**
+ * Ask the DJ for a PROPOSAL over `pool`. Pure: nothing is published or
+ * remembered here — the caller validates the order and calls `commitDjSet`
+ * for what it accepts.
+ */
 export async function djSequence(seed: Song | null, ctx: RecommendationContext, pool: Song[], limit: number, signal?: AbortSignal, hints: DjHints = {}): Promise<DjSet | null> {
-  if (!djAvailable() || pool.length < 3) return null;
+  if (!djAvailable() || pool.length < 3) {
+    lastOutcome = 'skipped';
+    return null;
+  }
+  if (signal?.aborted) {
+    lastOutcome = 'skipped';
+    return null;
+  }
+  lastOutcome = 'error';
   const known = knownTo(ctx);
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -349,32 +391,45 @@ export async function djSequence(seed: Song | null, ctx: RecommendationContext, 
       signal: controller.signal,
     });
     if (res.status === 503) {
+      // Not configured, switched off by the owner, or over its budget: the
+      // on-device order plays for the rest of this session.
       aiAvailable = false;
+      lastOutcome = 'unavailable';
       return null;
     }
     // v6.5.1 — the route is missing: the deployed backend predates this
     // client. Stay quiet for ten minutes rather than re-trying every round.
     if (res.status === 404 || res.status === 405) {
-      retryAfter = Date.now() + 10 * 60_000;
+      backOff(10 * 60_000);
+      lastOutcome = 'unavailable';
       return null;
     }
     if (!res.ok) {
-      retryAfter = Date.now() + 60_000;
+      backOff(60_000);
+      lastOutcome = 'error';
       return null;
     }
     aiAvailable = true;
     const data = (await res.json()) as { intro?: unknown; songs?: unknown };
     const wire = Array.isArray(data.songs) ? (data.songs as WirePick[]) : [];
     const picks = hints.discover ? await resolvePicks(wire, pool, limit, { ...hints.gate, signal: controller.signal }) : resolveFromPool(wire, pool, limit);
-    if (picks.length < 3) return null;
+    if (picks.length < 3) {
+      lastOutcome = 'empty';
+      return null;
+    }
     const intro = typeof data.intro === 'string' ? data.intro.trim().slice(0, 200) : '';
-    // What the listener will see and hear.
-    useReasonStore.getState().setReasons(picks.filter((p) => p.reason).map((p) => [p.song.id, p.reason]));
-    useDjStore.getState().setSet(intro, picks.map((p) => [p.song.id, p.segue]));
-    recordSurfaced(picks.map((p) => p.song));
+    lastOutcome = 'ok';
     return { intro, picks };
   } catch {
-    if (!signal?.aborted) retryAfter = Date.now() + 60_000;
+    // The caller's cancel is not the DJ's fault; our own leash is a timeout.
+    if (signal?.aborted) lastOutcome = 'skipped';
+    else if (controller.signal.aborted) {
+      lastOutcome = 'timeout';
+      backOff(60_000);
+    } else {
+      lastOutcome = 'error';
+      backOff(60_000);
+    }
     return null;
   } finally {
     window.clearTimeout(timer);

@@ -8,7 +8,7 @@ vi.mock('@/services/personalization/session', () => ({ getMoodPin: () => null })
 const searchMock = vi.fn(async (_q: string): Promise<Song[]> => []);
 vi.mock('@/services/api', () => ({ searchSongs: (q: string) => searchMock(q) }));
 
-import { buildDjContext, djAvailable, djSequence, matchesProposal, resetDjAvailability, resolveFromPool, resolvePicks, samplePool } from './dj';
+import { buildDjContext, commitDjSet, djAvailable, djSequence, lastDjOutcome, matchesProposal, resetDjAvailability, resolveFromPool, resolvePicks, samplePool } from './dj';
 import { createEmptyProfile } from '@/services/personalization/profile';
 import { useDjStore } from '@/store/djStore';
 import { useReasonStore } from '@/store/reasonStore';
@@ -62,16 +62,25 @@ describe('resolveFromPool', () => {
     );
     expect(out.map((p) => p.song.id)).toEqual(['2', '1']);
     expect(out[0]).toMatchObject({ reason: 'r1', segue: 's1', confidence: 0.8 });
-    expect(out[1].confidence).toBe(0.5);
+    // 7.2.0 — no self-rating from the model means none is recorded (0.5 read like a measurement).
+    expect(out[1].confidence).toBeUndefined();
   });
 });
 
 describe('djSequence', () => {
-  it('returns the DJ order, publishes reasons and segues, and remembers what it surfaced', async () => {
+  it('returns a pure proposal: nothing is published or remembered until the caller commits what it accepted', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ intro: 'Easing in.', songs: [{ title: 'Ramuloo Ramulaa', artist: 'Anurag Kulkarni', reason: 'folk lift', segue: 'Here comes a folk lift' }, { title: 'Inkem Inkem', artist: 'Sid Sriram', reason: 'soft', segue: 'Softly now' }, { title: 'Butta Bomma', artist: 'Armaan Malik', reason: 'peak', segue: 'And the peak' }] }), { status: 200 })));
     const set = await djSequence(pool[0], ctx, pool, 8);
     expect(set?.intro).toBe('Easing in.');
     expect(set?.picks.map((p) => p.song.id)).toEqual(['3', '4', '2']);
+    expect(lastDjOutcome()).toBe('ok');
+    // 7.2.0 — a proposal the queue rejects must leave no trace.
+    expect(useReasonStore.getState().reasons['3']).toBeUndefined();
+    expect(useDjStore.getState().intro).toBeNull();
+    expect(localStorage.getItem('vinax.dj.surfaced.v1')).toBeNull();
+    expect(buildDjContext(pool[0], ctx).avoidSongs).toHaveLength(0);
+    if (!set) throw new Error('expected a set');
+    commitDjSet(set, [pool[2], pool[3], pool[1]]);
     expect(useReasonStore.getState().reasons['3']).toBe('folk lift');
     expect(useDjStore.getState().segues['4']).toBe('Softly now');
     expect(useDjStore.getState().intro).toBe('Easing in.');
@@ -159,6 +168,20 @@ describe('v6.5.0 — generative DJ, verified in the catalogue', () => {
     expect(typeof body.context.discoveryFocus).toBe('string');
     expect(set?.picks.map((p) => p.song.id)).toEqual(['3', 'n1', '4']);
     expect(set?.picks[1].discovered).toBe(true);
+    expect(useReasonStore.getState().reasons.n1).toBeUndefined();
+    if (set) commitDjSet(set, set.picks.map((p) => p.song));
     expect(useReasonStore.getState().reasons.n1).toBe('a discovery');
+  });
+
+  it('commits only the accepted songs of a proposal', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ intro: 'Hi.', songs: [{ songId: '3', title: 'Ramuloo Ramulaa', artist: 'Anurag Kulkarni', reason: 'kept', segue: 'one' }, { songId: '4', title: 'Inkem Inkem', artist: 'Sid Sriram', reason: 'dropped', segue: 'two' }, { songId: '2', title: 'Butta Bomma', artist: 'Armaan Malik', reason: 'dropped too', segue: 'three' }] }), { status: 200 })));
+    const set = await djSequence(pool[0], ctx, pool, 8);
+    if (!set) throw new Error('expected a set');
+    commitDjSet(set, [pool[2]]);
+    expect(useReasonStore.getState().reasons['3']).toBe('kept');
+    expect(useReasonStore.getState().reasons['4']).toBeUndefined();
+    expect(useDjStore.getState().segues['2']).toBeUndefined();
+    const surfaced = JSON.parse(localStorage.getItem('vinax.dj.surfaced.v1') ?? '[]') as Array<{ id: string }>;
+    expect(surfaced.map((s) => s.id)).toEqual(['3']);
   });
 });

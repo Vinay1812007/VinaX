@@ -45,7 +45,7 @@ const CONFIG: Record<ChartVariant, VariantConfig> = {
     kicker: 'Right now',
     h1: 'Trending Songs',
     title: 'Trending Songs This Week',
-    desc: `What India is playing this week on VinaX — trending Telugu, Hindi, Tamil, Punjabi and more. Free streaming, no login, refreshed continuously.`,
+    desc: `Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, no login, refreshed continuously.`,
     intro:
       'The songs climbing fastest across VinaX this week. Fresh momentum, real hits, tuned to what people are actually playing right now.',
     seed: `trending songs india this week ${YEAR}`,

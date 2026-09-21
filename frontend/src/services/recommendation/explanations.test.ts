@@ -31,3 +31,14 @@ describe('explainTopReasons (C4)', () => {
     expect(explainTopReasons([])).toBe('Popular right now');
   });
 });
+
+describe('7.2.0 — every recorded reason has its own line', () => {
+  it('never falls back to "Popular right now" for a term that is not popularity', () => {
+    const kinds: ReasonComponent['kind'][] = ['language', 'artist', 'co-play', 'popularity', 'low-skip', 'trending', 'rediscovery', 'related', 'time', 'mood', 'session', 'region', 'discovery', 'dialect', 'genre', 'vibe', 'energy', 'tempo', 'history', 'likes', 'diversity', 'song', 'day', 'familiar', 'fatigue', 'intent', 'agreement', 'fresh', 'festival', 'dial'];
+    for (const kind of kinds) {
+      const line = explainReasons([{ kind, weight: 0.1 }]);
+      expect(line.length).toBeGreaterThan(3);
+      if (kind !== 'popularity') expect(line).not.toBe('Popular right now');
+    }
+  });
+});

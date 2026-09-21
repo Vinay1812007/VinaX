@@ -8,8 +8,8 @@
  * the newest-10k sample remains the fallback until the migration is applied
  * (`source: 'sampled'`).
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { sbRpc, sbSelect, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
+import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
 type Env = AdminEnv & SupabaseEnv;
 interface Row { type: string | null; song_id: string | null; song_title: string | null; song_artist: string | null; song_image: string | null }
@@ -36,22 +36,27 @@ export function skipTable(rows: Row[], min: number): SkipItem[] {
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false, items: [] });
   const url = new URL(request.url);
   const days = Math.min(30, Math.max(1, parseInt(url.searchParams.get('days') ?? '7', 10) || 7));
   const min = Math.min(100, Math.max(1, parseInt(url.searchParams.get('min') ?? '5', 10) || 5));
-  const exact = await sbRpc<SkipItem[]>(env, 'vinax_skips', { p_days: days, p_min: min });
-  if (Array.isArray(exact)) {
+  const exact = await sbRpcResult<SkipItem[]>(env, 'vinax_skips', { p_days: days, p_min: min });
+  if (exact.ok && Array.isArray(exact.value)) {
     // sampled = plays+skips the ranking is built on — same meaning as below.
-    const sampled = exact.reduce((n, e) => n + (e.plays || 0) + (e.skips || 0), 0);
-    return json({ configured: true, days, min, sampled, source: 'exact', items: exact });
+    const sampled = exact.value.reduce((n, e) => n + (e.plays || 0) + (e.skips || 0), 0);
+    return json({ configured: true, days, min, sampled, source: 'exact', items: exact.value });
   }
+  // The rollup is missing (migration not applied) or failed: the bounded
+  // sample is still an honest answer when IT can be read (`source: 'sampled'`).
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const rows = await sbSelect<Row>(
+  const read = await sbSelectResult<Row>(
     env,
     'vinax_events',
     `type=in.(play,skip)&created_at=gte.${encodeURIComponent(since)}&select=type,song_id,song_title,song_artist,song_image&order=created_at.desc&limit=10000`,
-  ).catch(() => [] as Row[]);
+  );
+  // 7.2.0 — both paths failed: unavailable, never an empty "nobody skips".
+  if (!read.ok) return dbFailure(read);
+  const rows = read.rows;
   return json({ configured: true, days, min, sampled: rows.length, source: 'sampled', items: skipTable(rows, min) });
 };

@@ -15,23 +15,35 @@ vi.mock('@/services/audio/engine', () => ({
 vi.mock('@/services/media-session', () => ({
   setMediaHandlers: vi.fn(), updateMediaMetadata: vi.fn(), updatePlaybackState: vi.fn(), updatePositionState: vi.fn(),
 }));
-vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false }));
-vi.mock('@/services/personalization/updater', () => ({
-  recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(), softMuteArtist: vi.fn(),
-}));
+vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false, platformName: () => 'web' }));
+vi.mock('@/services/storage/idb', () => ({ addEvent: vi.fn(async () => undefined), getRecentEvents: vi.fn(async () => []), clearEvents: vi.fn(async () => undefined) }));
+// The play recorders are stubs, but "Less like this" writes a real soft mute:
+// the test follows it through to the profile and back out again with Undo.
+vi.mock('@/services/personalization/updater', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/personalization/updater')>();
+  return {
+    recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(),
+    softMuteArtist: actual.softMuteArtist,
+  };
+});
 vi.mock('@/services/feedback', () => ({ sendFeedback: vi.fn(async () => true) }));
 vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn() }));
 
 import { usePlayerStore } from '@/store/playerStore';
+import { useToastStore } from '@/store/toastStore';
 import { makeSong } from '@/__fixtures__/songs';
+import { listSoftMutes, clearSoftMutes } from '@/services/personalization/softMutes';
 import { placePanel, TrackMenu } from './TrackMenu';
 
-const song = makeSong('a');
+const song = makeSong('a', { artist: 'సిద్ శ్రీరామ్' });
 const enqueue = vi.fn();
 
 beforeEach(() => {
   enqueue.mockReset();
-  usePlayerStore.setState({ enqueue });
+  localStorage.clear();
+  clearSoftMutes();
+  useToastStore.setState({ toasts: [] });
+  usePlayerStore.setState({ enqueue, queue: [], index: 0 });
 });
 afterEach(cleanup);
 
@@ -121,6 +133,51 @@ describe('<TrackMenu />', () => {
     Object.defineProperty(menu, 'clientHeight', { configurable: true, value: 288 });
     expect(wheel(items()[0], 120)).toBe(false);
     expect(wheel(items()[0], -120)).toBe(true); // already at the top
+  });
+
+  it('7.2 — "Less like this" asks for how long, mutes for that long and offers an exact Undo', () => {
+    mount();
+    fireEvent.click(trigger());
+    const less = screen.getByRole('menuitem', { name: 'Less like this…' });
+    expect(less.getAttribute('aria-haspopup')).toBe('menu');
+    fireEvent.click(less);
+    // The same menu, now asking for how long — the menu stays open and says whose.
+    const menu = screen.getByRole('menu');
+    expect(menu.getAttribute('aria-label')).toBe('Less like this: play less of సిద్ శ్రీరామ్ for how long?');
+    expect(items().map((i) => i.textContent)).toEqual(['7 days', '14 days', '30 days', 'Back']);
+    expect(document.activeElement).toBe(items()[0]);
+
+    // Escape steps back to the full menu (and keeps it open), focus on the item that opened it.
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Less like this…' }));
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Less like this…' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '7 days' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(listSoftMutes().map((m) => m.name)).toEqual(['సిద్ శ్రీరామ్']);
+    const toasts = useToastStore.getState().toasts;
+    const toast = toasts[toasts.length - 1];
+    expect(toast.message).toMatch(/^Less of సిద్ శ్రీరామ్ until /);
+    toast.action!.onClick();
+    expect(listSoftMutes()).toEqual([]);
+  });
+
+  it('7.2 — the permanent blocks sit in their own group, and a long artist name is never sliced', () => {
+    mount();
+    fireEvent.click(trigger());
+    const labels = items().map((i) => i.textContent);
+    expect(labels).toContain('More like this');
+    expect(labels).toContain('Not interested');
+    // Never play carries the whole name (CSS truncates it; slicing broke Indic clusters).
+    expect(labels).toContain('Never play సిద్ శ్రీరామ్');
+    expect(screen.getAllByRole('separator').length).toBeGreaterThanOrEqual(2);
+    // A divider separates the temporary "Less like this" from the permanent blocks.
+    const menu = screen.getByRole('menu');
+    const nodes = Array.from(menu.children);
+    const lessAt = nodes.findIndex((n) => n.textContent === 'Less like this…');
+    const blockAt = nodes.findIndex((n) => n.textContent === 'Not interested');
+    expect(nodes.slice(lessAt, blockAt).some((n) => n.getAttribute('role') === 'separator')).toBe(true);
   });
 
   it('removes its window / document listeners when it closes', () => {

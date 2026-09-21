@@ -79,4 +79,4 @@ Open the Backup Center again **in the same tab** and use **Undo that restore**. 
 
 ## Erase
 
-**Settings → Your Data** has separate rows to clear history, favourites, the queue, cached metadata and the personalization profile. Clearing history or favourites offers Undo. **Reset app state** erases everything VinaX stores on this device and reloads. Downloaded audio in the Android app is managed from Downloads.
+**Settings → Your Data** has separate rows to clear history, favourites, the queue, cached metadata and the taste profile. Clearing history or favourites offers Undo. **Reset taste profile** offers to download a backup first and lists what it erases (languages, artists, habits, dials and “Less like this” mutes) and what it keeps (favourites, playlists, history, Never play and your settings). **Reset app state** erases everything VinaX stores on this device and reloads. Downloaded audio in the Android app is managed from Downloads.
