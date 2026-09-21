@@ -385,7 +385,7 @@ function DiscoveryBlock() {
         />
       ) : null}
 
-      {/* 12. Trending for you — the trending pool, ordered by taste (and by the AI when it is on) */}
+      {/* 12. Popular picks for you — the catalogue's popular pool, ordered by taste (and by the AI when it is on). Public charts with real provenance live on the Charts page. */}
       {trendingNow.isLoading ? (
         <ShelfSkeleton />
       ) : trendingNow.songs.length > 0 ? (
