@@ -44,4 +44,54 @@ The four review probes and the stale-refetch finding below were written as regre
 | --- | --- |
 | Playback ticks re-rendering whole screens | Every clock reader (`PlayerBar` progress, `CanvasProgress`, `BookmarkNowButton`, `Seekbar`, lyric lines) is a leaf component with a narrow selector since 7.0; no component subscribes to the whole player store. |
 
-<!-- The sections below are completed as the parallel work lands: backend reliability and security, trends, owner console, Home safety and ranking, queue and listener controls, evaluation. -->
+## Reproduced defects (continued)
+
+| # | Sev | Finding | Reproduction | Fix | Validation |
+| --- | --- | --- | --- | --- | --- |
+| R9 | S1 | Home's AI shelves and the popular-picks shelf kept showing a song after it became forbidden: Kid mode switched on, a song or artist hidden, a language muted, an artist soft-muted, or the server blocklist arriving late. The query keys did not carry those settings and placeholder data was never filtered. | `features/home/useAiHome.test.tsx`, `useAiTrending.test.tsx` — 11 of 12 failed at baseline | `features/home/useShelfSafety.ts` applies the current rules on every render, to cached and placeholder data, without spending another model call | 13 tests pass; the model-call count is asserted unchanged |
+| R10 | S2 | Validation did not enforce the discovery allocation or the familiar opening, so an AI order or a reserve top-up could front-load three strangers. | `validation.test.ts` — 7 new cases failed at baseline | One slot-by-slot pass enforces every rule, reports each relaxation with its slot, and never relaxes a hard rule | 7 pass |
+| R11 | S2 | Candidate retrieval waited for every source, re-fetched identical requests, and lost a song's other sources when the same id arrived twice (intent and trend evidence disappeared). | `candidates.test.ts` — 10 of 12 failed at baseline | Bounded concurrency (6), request de-duplication, a 3-minute response cache, soft and hard deadlines with cancellation, and `sources` on every candidate | 12 pass |
+| R12 | S2 | The weekday term added the same amount to every candidate, so it could not change any order. | `ranking.test.ts` — 7 of 10 failed at baseline | A candidate-specific term: this listener's affinity for that language on this weekday, from a new optional profile field; zero below five plays | A test proves it flips two candidates between Saturday and Wednesday |
+| R13 | S1 | `/api/events` refused the app's own consent header cross-origin: the browser blocked the request in the preflight and **no event was written**. | A real browser (Chromium) with the actual handler on a second origin | The preflight allows the headers the client sends, for the app's own origins only, with the consent gate unchanged | Before: 0 events written and a CORS console error. After: the event is accepted; a foreign origin is still refused |
+| R14 | S2 | `/api/curate` accepted any in-range energy and tempo the model returned, even when the request carried none — invented audio features entered the taste pipeline. | `curate.test.ts` — 7 backend and 6 frontend cases failed at baseline (one existing assertion pinned the defect and was corrected) | Energy and tempo survive only when the request supplied them and the model echoed them; everything else is null, inferred fields are listed as inferred, and the client's metadata cache version was bumped so invented values are discarded | 13 pass |
+| R15 | S2 | Rate limits and the admin sign-in lockout counted per Worker isolate, so three isolates admitted 18 requests and 45 password guesses where the limit was 10 and 15. | `durableRateLimit.test.ts` — all 10 failed at baseline | The platform's rate-limit binding counts per edge location, with the in-memory bucket as the fallback when no binding is bound | 10 pass; the honest guarantee (per location, permissive, eventually consistent) is documented |
+| R16 | S1 | A rebuild ("Tune this queue", "New DJ picks") swept away the album or playlist the listener had started, although only hand-queued songs were promised to stay; queue ownership also lived in memory, so after a reload every entry looked replaceable. | `playerStore.test.ts`, `playerStore.v7.test.ts` | A rebuild replaces the recommender's picks only, and ownership is stored next to the queue | Pass |
+| R17 | S2 | Validation judged the no-repeat-artist rule against the song playing, not the song the new stretch is appended after, so the same artist could sit on both sides of the join. | `validation.test.ts` (new case); the offline evaluation counts it | The plan takes the song it will follow | Boundary repeats fell from 36 to 24 across 816 continuations |
+| R18 | S1 | Soft rules gave way in the wrong order: the no-repeat-artist rule went first, so a Familiar-mode queue (discovery budget ≈ 0) shipped runs of three songs by one artist while other artists sat unused. | The offline evaluation: 162 back-to-back repeats over 3,432 songs, 150 of them avoidable | The discovery allocation yields first, then the familiar opening, then the artist cap, and last the repeated artist | 24 back-to-back (12 avoidable), against 59 (36 avoidable) for 7.1 |
+
+Three further defects were found while auditing failed database reads, each of which had made the console lie rather than fail: a failed read showed a scheduled job as **overdue**; the configuration editor opened on an empty value it could then publish **over** the stored config; and a push reported success when the subscriber read had failed and it reached **nobody**.
+
+## Product proposals implemented
+
+| Area | What was added |
+| --- | --- |
+| Trends | Provider adapters with scheduled ingestion, quota accounting, idempotent jobs, catalogue matching with a confidence score, an admin review queue for unmatched entries, editorial imports with evidence and expiry, and a public read that labels its source, region, update time and stale state. Momentum is defined but **off**, because the video platform's terms forbid derived metrics. |
+| Ranking | Verified charts as one bounded, capped signal, subordinate to every rule. |
+| Owner console | Recommendation quality (opt-in aggregates with confidence intervals and a minimum-device threshold), AI operations (latency, failures, cost, budget versus observed use, emergency switches), and versioned recommendation tuning with validation, conflict detection, rollback and staged rollout. |
+| Listener controls | Who queued what, Keep this song, deliberate regeneration, Undo on remove, keyboard reorder, More/Less like this with an expiry and Undo, a readable personalization preview, a soft-mute list and a reset that offers a backup first. |
+| Evaluation | A versioned offline evaluation over 19 fixtures × 12 salts, run against the 7.1 baseline with the same harness, plus opt-in outcome telemetry and experiment exposure logging. |
+
+## Measured
+
+| Measure | 7.1 (`7c4e2f5`) | 7.2 |
+| --- | ---: | ---: |
+| Hard-rule violations (3,432 songs over 816 continuations) | 72 | 0 |
+| Same identity served twice in a sitting | 24 | 0 |
+| Same lead artist back to back (avoidable) | 59 (36) | 24 (12) |
+| Distinct lead artists per continuation of five | 3.77 | 3.86 |
+| Queue-ready latency, all sources instant (p50 / p95) | 1.3 / 1.6 ms | 1.3 / 1.7 ms |
+| Queue-ready latency, AI DJ answers after 2 s | 2,011 / 2,021 ms | 2.9 / 9.6 ms |
+| Queue-ready latency, AI DJ never answers | nothing within 8 s | 7.8 / 11.4 ms |
+| First-load JavaScript (gzip) | 183.4 KB | 171.3 KB |
+| Service-worker download per boot (gzip) | 2,476 KB | 624 KB |
+| Frontend unit tests | 1,005 | 1,248 |
+| Backend unit tests | 279 | 720 |
+
+The evaluation measures rule compliance, diversity mechanics and latency on synthetic fixtures. It does not measure whether anyone enjoys the songs, and no quality claim is made from it.
+
+## Not verified
+
+- No live provider credentials: the chart adapter is tested against responses shaped like the documented API, never against the live service.
+- No Android device: background audio, notification controls, interruptions and offline playback were not re-tested. `docs/qa-device-script.md` lists what to run.
+- The three SQL migrations were not executed (no database in this environment); each feature degrades honestly until its migration is applied.
+- No production deployment and no destructive migration were performed, as instructed.
