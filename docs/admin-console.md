@@ -37,7 +37,7 @@ Properties of `isAdmin()`:
 | --- | --- |
 | Secret not set | Always refuses. An unconfigured Worker has no console access |
 | Comparison | Constant-time (`_lib/safe-compare.ts`), so response timing does not leak the secret |
-| Throttle | 15 wrong tokens from one source address inside a sliding 10 minutes locks that address out. While locked out the token is not compared at all, so a correct guess is refused too |
+| Throttle | 15 wrong tokens from one source address inside a sliding 10 minutes locks that address out. While locked out the token is not compared at all, so a correct guess is refused too. Since 7.2 the count is shared by every isolate in one edge location through a rate-limit binding, so a lockout is no longer per isolate |
 | Correct tokens | Never consume the failure budget |
 | Scope | Counters live in the memory of one Worker isolate and are capped at 5,000 sources. A different isolate has its own counters |
 | Refusal | `401`, JSON `{ "error": "unauthorized" }`, `cache-control: no-store` |
@@ -46,7 +46,9 @@ There is one shared token and no per-user accounts or roles. Rotating `ADMIN_LOG
 
 ### Audit trail
 
-Mutating routes call `logAdminAudit()` (`_lib/adminAudit.ts`), which writes a row of type `admin-audit` with status `audit` into the feedback table; the Audit Trail section reads them back. The write is best effort and never fails the action it describes. On disk the helper is called by: config publishing, content control (block and unblock), experiments, push sends, the notification log, maintenance actions and recommendation tuning (every published version).
+Mutating routes call `logAdminAudit()` (`_lib/adminAudit.ts`), which writes a row of type `admin-audit` with status `audit` into the feedback table; the Audit Trail section reads them back. The write is best effort and never fails the action it describes. On disk the helper is called by: config publishing, content control (block and unblock), experiments, push sends, the notification log, maintenance actions including the site-mode switch, recommendation tuning (every published version) and trend operations.
+
+Since 7.2 each row records the actor (`owner` via the shared token today, in a shape ready for per-operator identities), the action and a summary, the target, an ISO timestamp, the edge request id (`cf-ray`, else a fresh UUID) and — for configuration changes — the safe before and after values, with secrets, tokens and credential-looking strings redacted and an oversized value reduced to its size and a digest. The write is registered with the Worker's `waitUntil`, so it survives the response without delaying the action.
 
 ## Layout and theme
 
@@ -96,7 +98,7 @@ listener app ◀──GET /api/appconfig?key=…── Worker ◀─────
                   sanitised again on the way out, edge-cached
 ```
 
-Write side (`api/admin/appconfig.ts`): the key must be in `ALLOWED_KEYS`, the serialised value must be under 900 KB, and the row is upserted with a timestamp. Without the database configured, reads answer `{ configured: false }` and writes answer `503`.
+Write side (`api/admin/appconfig.ts`): the key must be in `ALLOWED_KEYS`, the serialised value must be under 900 KB, and the row is upserted with a timestamp. Without the database configured, reads answer `{ configured: false }` and writes answer `503`. Since 7.2 a read that FAILS answers `502` with its kind (`db_unavailable`, `db_unauthorized`, `db_schema_missing`, `db_bad_request`) instead of an empty value an editor could publish over the stored config — the same rule holds for every dashboard route, and the console shows "Unavailable" rather than zeros.
 
 Read side (`api/appconfig.ts`, `_lib/clientConfig.ts`): public, no auth, and it never trusts the stored row. Unknown fields are dropped, strings are clipped, lists are capped, and scheduled items outside their window are withheld.
 
@@ -314,7 +316,8 @@ The console never presents a weight change as proven. A version without an evalu
 ## Limits
 
 - One shared token; no per-operator identity in the audit trail. The optional "by" names in AI Operations and Recommendation Tuning are what the publisher typed.
-- The failed-attempt throttle is per Worker isolate, not global.
+- The failed-attempt throttle, and every rate limit, counts per edge location rather than globally: counters are shared by the isolates in one location and are permissive by design, so a client spread across locations gets a budget in each.
+- The audit trail records the actor as `owner`, not a person. The migration path to operator identities, roles and revocable sessions is in [operations.md](operations.md).
 - Browser-local sections do not follow the operator to another browser.
 - Recommendation Quality and AI Operations read at most 20,000 rows per request; `truncated` says when a window held more.
 - Browser end-to-end coverage for the console is in `frontend/e2e/admin-console.spec.ts`; see [testing.md](testing.md). The section modules are also covered by the DOM contract test above.
