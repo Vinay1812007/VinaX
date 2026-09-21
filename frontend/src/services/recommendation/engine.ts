@@ -91,10 +91,15 @@ function ctxKey(ctx: RecommendationContext): string {
 export async function buildRecommendations(ctx: RecommendationContext): Promise<Mix[]> {
   const key = ctxKey(ctx);
   if (memo && memo.key === key && Date.now() - memo.at < MEMO_TTL_MS) return memo.mixes;
-  const candidates = await gatherCandidates(ctx);
+  // 7.2.0 — bounded gathering: slow optional sources are not waited for once a useful pool exists.
+  const [candidates, { classifiedFields }] = await Promise.all([gatherCandidates(ctx, { softDeadlineMs: 2_500, hardDeadlineMs: 8_000, minPool: 120 }), import('./filters')]);
   const enriched = await enrichSongs(candidates.map((candidate) => candidate.song));
   const enrichedById = new Map(enriched.map((song) => [song.id, song]));
-  let ranked = rankCandidates(candidates.map((candidate) => ({ ...candidate, song: enrichedById.get(candidate.song.id) ?? candidate.song })), ctx);
+  let ranked = rankCandidates(candidates.map((candidate) => {
+    const song = enrichedById.get(candidate.song.id) ?? candidate.song;
+    // Classifier-filled fields are inferred, and weigh less than catalogue metadata.
+    return { ...candidate, song, classified: classifiedFields(candidate.song, song) };
+  }), ctx);
   // On a warm profile, let a stronger routed seat understand the whole Home
   // context and reorder a bounded top window. Cold-start Home remains instant
   // and deterministic; failures simply preserve the local order.
@@ -253,8 +258,17 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
 
   // 1 — candidate generation, inside the deadline. The rule modules are lazy,
   // like the sequencer: this engine rides the first-load player store.
-  const [gathered, { hardFilter, rejectReasonFor }] = await Promise.all([
-    within(generateNextCandidates(seed, nextCtx).catch(() => [] as Candidate[]), left() - RANK_RESERVE_MS, [] as Candidate[], signal),
+  // The gather itself stops waiting for slow optional sources once a useful pool
+  // exists (soft deadline) and settles with what it has at the hard one; `within`
+  // is only the outer guard.
+  const gatherBudget = Math.max(0, left() - RANK_RESERVE_MS);
+  const [gathered, { hardFilter, rejectReasonFor, classifiedFields }] = await Promise.all([
+    within(
+      generateNextCandidates(seed, nextCtx, { signal, softDeadlineMs: Math.min(2_000, gatherBudget / 2), hardDeadlineMs: gatherBudget, minPool: 40 }).catch(() => [] as Candidate[]),
+      gatherBudget + 250,
+      [] as Candidate[],
+      signal,
+    ),
     import('./filters'),
   ]);
   if (signal?.aborted) return emptyPlan(null);
@@ -272,6 +286,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     mutedLanguages: ctx.mutedLanguages,
     blocked: (song) => isSongBlocked(song, library),
     hideExplicit: kidModeOn(),
+    // 7.2.0 — soft mutes are a rule at every stage (the DJ's gate and validation included), not only a candidate filter.
+    softMuted: ctx.profile.softMuted,
   };
   const filtered = hardFilter(candidates, rules);
   const rejected: RejectedCandidate[] = [...filtered.rejected];
@@ -282,7 +298,10 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
 
   // 4–8 — scoring, diversity, session adjustment, exploration tuning, ranking.
   let ranked = rankCandidates(
-    filtered.admitted.map((candidate) => ({ ...candidate, song: enrichedById.get(candidate.song.id) ?? candidate.song })),
+    filtered.admitted.map((candidate) => {
+      const song = enrichedById.get(candidate.song.id) ?? candidate.song;
+      return { ...candidate, song, classified: classifiedFields(candidate.song, song) };
+    }),
     nextCtx,
     (dropped) => rejected.push({ song: dropped.candidate.song, reason: 'low-score', stage: 'rank' }),
   );
@@ -331,11 +350,13 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // 10 — validation. The arc first, then the rest of the ranked pool as the
   // reserve a short or language-locked arc is topped up from.
   const familiarLanguages = [...new Set([...ctx.pinnedLanguages, ...topLanguages(ctx.profile, 3).map((l) => l.id)])];
-  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: lock, familiarLanguages };
+  // 7.2.0 — the final policy, for every order that ships (local, AI, reserve top-up):
+  // the discovery allocation and the familiar opening are enforced here too.
+  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: lock, familiarLanguages, discoveryIds, discoveryShare };
   const arcIds = new Set(arc.songs.map((s) => s.song.id));
   const local = validateSequence([...arc.songs.map((s) => s.song), ...orderedPool.filter((s) => !arcIds.has(s.id))], validateOptions);
   const songs = local.songs;
-  const trace: DebugTrace = { mode, shape, lock, languagePolicy: 'lock', discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: local.relaxed, repairs: local.repairs };
+  const trace: DebugTrace = { mode, shape, lock, languagePolicy: 'lock', discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed])], repairs: local.repairs };
   publishDebug(ranked, songs, 'local', { trace, rejected: [...rejected, ...local.rejected] });
 
   const shipped = new Set(songs.map((s) => s.id));
@@ -361,7 +382,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     fallback,
     latencyMs: Date.now() - t0,
     alg,
-    relaxed: [...local.relaxed],
+    relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed])],
     discoveryIds,
     language: lock,
     commit: (accepted) => publishFor(accepted, true),

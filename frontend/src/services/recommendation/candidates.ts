@@ -159,7 +159,7 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
   const add = (source: CandidateSource, detail: string, req: Pick<Task, 'key' | 'limit' | 'fetch'>, seedTitle?: string, required = false): void => {
     tasks.push({ label: `${source}:${detail}`, source, seedTitle, required, ...req });
   };
-  const suggest = (id: string, limit: number): Pick<Task, 'key' | 'limit' | 'fetch'> => ({ key: `s|${id}`, limit, fetch: (n) => getSongSuggestions(id, n) });
+  const suggest = (id: string, limit: number): Pick<Task, 'key' | 'limit' | 'fetch'> => ({ key: `s|${id}`, limit, fetch: (n, signal) => getSongSuggestions(id, n, { signal }) });
   const search = (query: string, page: number, limit: number): Pick<Task, 'key' | 'limit' | 'fetch'> => ({ key: `q|${query}|${page}`, limit, fetch: (n, signal) => searchSongsPage(query, page, n, { signal }) });
 
   // Seed-first pool for autoplay/radio/playlist continuation. Keeping this
@@ -187,7 +187,7 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
   // 2b. Favorite-album catalogs: the rest of albums you favorite songs from.
   const albums = new Map<string, string | undefined>();
   for (const f of ctx.favorites) if (f.album?.id && albums.size < 2) albums.set(f.album.id, f.album.name);
-  for (const [id, name] of albums) add('favorite-album', id, { key: `a|${id}`, limit: 500, fetch: () => getAlbum(id).then((a) => a?.songs ?? []) }, name);
+  for (const [id, name] of albums) add('favorite-album', id, { key: `a|${id}`, limit: 500, fetch: (_n, signal) => getAlbum(id, { signal }).then((a) => a?.songs ?? []) }, name);
 
   // 3. Favorite-artist catalogs. 7.2.0 — cold start: with no artist in the
   // profile, the artists of songs the listener liked (the onboarding picks

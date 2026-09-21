@@ -49,9 +49,23 @@ export function explainReasons(reasons: ReasonComponent[]): string {
       return 'Held back a little — this artist just played a lot';
     case 'intent':
       return top.weight < 0 ? 'Less of what you have been skipping just now' : 'More of what you reached for just now';
+    // 7.2.0 — every recorded term has its own honest line; none borrows "popular".
+    case 'song':
+      return 'A song you keep finishing';
+    case 'day':
+      return 'Fits what you play on this day of the week';
+    case 'agreement':
+      return 'Found by more than one of your listening signals';
+    case 'fresh':
+      return 'A recent release';
+    case 'festival':
+      return 'For the festival season';
+    case 'dial':
+      return top.weight < 0 ? 'Held back by your taste dials' : 'Nudged up by your taste dials';
     case 'popularity':
-    default:
       return 'Popular right now';
+    default:
+      return 'Picked from your listening';
   }
 }
 

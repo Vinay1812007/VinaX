@@ -91,9 +91,15 @@ Every automatic change to the queue — a continuation, an AI refinement, the ad
 
 Before the pool leaves this stage it drops blocked songs, junk tracks, artists under an active "show fewer like this" soft mute, and explicit songs when kid mode is on.
 
+**Bounded work (7.2).** At most six catalogue requests are in flight at once. Identical requests (same endpoint, query and page) share one fetch, and responses are reused for three minutes (sixty kept). After a soft deadline the gather resolves as soon as the pool holds enough songs and the required sources — the seed's suggestions and the intent search — have answered; at the hard deadline it resolves with whatever has settled and abandons the rest, passing its `AbortSignal` to the requests that accept one. The deadlines come from the plan's own budget.
+
+**Provenance (7.2).** A song found by several sources arrives once, carrying every source (`sources`, primary chosen by the priority intent, related, favorite-artist, favorite-album, history, rediscovery, explore, trending) and the seeds it came from, so intent and trend evidence is not lost when the same id appears twice.
+
+**Cold start (7.2).** With no taste yet: pinned languages, then the languages of liked songs, then default languages that are not muted. With no artists in the profile, the artists of liked songs seed the artist searches.
+
 ### Stage 2 — hard filter reasons
 
-`rejectReasonFor` checks, in this order: `invalid` (no id, title or artist list), `junk` (dialogue, background score, jukebox, trailer, promo, ringtone and similar titles), `too-short` (a known duration under 90 s), `explicit` (kid mode), `blocked`, `muted-language`, `seed` (the seed or another version of it), `already-queued` (by id or canonical identity), `recently-played` (the profile's recent ids, or the identity of any of the last 20 history entries), `skipped-this-session`. Survivors that share a canonical identity are collapsed with reason `duplicate-version`, keeping the original over a remaster over an alternate cut, then the more-played one.
+`rejectReasonFor` checks, in this order: `invalid` (no id, title or artist list), `junk` (dialogue, background score, jukebox, trailer, promo, ringtone and similar titles), `too-short` (a known duration under 90 s), `explicit` (kid mode), `blocked`, `muted-language`, `soft-muted` (a lead artist the listener asked less of, until it expires), `seed` (the seed or another version of it), `already-queued` (by id or canonical identity), `recently-played` (the profile's recent ids, or the identity of any of the last 20 history entries), `skipped-this-session`. Survivors that share a canonical identity are collapsed with reason `duplicate-version`, keeping the original over a remaster over an alternate cut, then the more-played one.
 
 Canonical identity (`identityCore.ts`, `songKey`) is the normalised title plus the primary artist. Since 7.2 the same file, byte for byte, serves the Worker, and both test suites run the vectors in `shared/identity-vectors.json`. Normalisation is Unicode-safe: NFKC, invisible characters dropped, Latin accents folded ("Café" = "Cafe"), every other combining mark kept so Indic vowel signs survive ("కల" ≠ "కాల"). It strips version decorations in brackets or after a dash (film credit, remix, remaster, live, lofi, a year, and so on), bracketed or trailing featured credits, and uses the first credited artist whatever the separator (comma, ampersand, "feat."). `recordingKey` adds the version tag, so a remix or a live cut stays distinguishable from its work family; when the listener starts an alternate cut, de-duplication prefers that cut within a family.
 
@@ -117,6 +123,8 @@ Canonical identity (`identityCore.ts`, `songKey`) is the normalised title plus t
 | Familiar first: a "sure" song | − 0.9 × (1 − progress) |
 | Familiar first: a discovery | + 1.1 × (1 − progress) |
 
+One recording family (`songKey`) appears once per stretch, and a version of the seed or of a recent play is used only when nothing else fits. `languagePolicy` is `lock` (strict, what a queue uses) or `prefer` (optional exploration at a cost). Every soft rule a small pool forced to give way is reported in `relaxed` and, per slot, in `relaxations`.
+
 Arc shapes are `steady`, `build`, `wind-down`, `wave` and `lift`. The engine chooses the shape in this order: the active tune's shape, then `lift` when the sitting has a skip streak of two or more, then the listener-energy read (`restless` or `wavering` → `lift`, late hours → `wind-down`, otherwise `steady`).
 
 Transition memory (`transitions.ts`, `transitionTracker.ts`) records how each hand-off went, from the playback instance's heard time: 70 % or more heard counts as completed, under 30 % as skipped, failed playback judges nothing.
@@ -130,8 +138,12 @@ Transition memory (`transitions.ts`, `transitionTracker.ts`) records how each ha
 3. The language lock. Songs whose language is known and differs from the lock are dropped. If that leaves fewer than three songs, languages the listener plays (pinned languages and the profile's top three) are let back in; only if that is still short is the rest allowed. The trace records `language-lock` as relaxed.
 4. An artist cap of ⌈limit ÷ 4⌉ songs per lead artist (two in a stretch of five). Overflow returns only when the pool cannot otherwise fill the stretch; the trace records `artist-cap` as relaxed.
 5. No lead artist back to back, counting the seed as the previous song. A later song is pulled forward to break a pair; the trace counts these repairs.
+6. The discovery allocation, ⌊share × limit + 0.5⌋ (7.2).
+7. The familiar opening (7.2): no discovery in slot 1, nor in slot 2 when four or more songs ship, as long as a non-discovery song is available.
 
-Order is otherwise preserved.
+When nothing else fits, soft rules give way in this order — adjacency, artist cap, discovery share, familiar opening — and each relaxation is reported with its slot, as is the language-lock step that was used. Hard rules (explicit, blocked, muted language, soft-muted artist, recently played, skipped this sitting, invalid, junk) never relax. Order is otherwise preserved.
+
+This is the final policy for every order that ships: the on-device one, the AI DJ's, and a top-up from the reserve.
 
 ## Scoring weights
 
@@ -156,7 +168,7 @@ These are the values in `services/recommendation/weights.ts` (`SCORING_WEIGHTS_V
 | `freshness` | 0.04 | Released this year or last |
 | `diversity` | 0.20 | Penalty multiplier in the diversity re-rank |
 | `songAffinity` | 0.12 | A song the listener keeps finishing |
-| `dayOfWeek` | 0.04 | Weekday rhythm |
+| `dayOfWeek` | 0.04 | Weekday lift of the candidate's language (7.2) |
 | `novelty` | 0.16 | Swing between novelty and familiarity, signed by the lean: ±0.08 at the extremes, 0 when neutral |
 | `artistFatigue` | 0.04 | Per recent play of one lead artist beyond two within the last ten plays, capped at four steps |
 | `intentArtist` | 0.18 | This sitting's pull on the lead artist (−1..1) |
@@ -180,6 +192,8 @@ Each candidate also receives a source boost:
 | `history` | 0.10 |
 | `explore` | 0.08 |
 | `trending` | 0.06 |
+
+Every term is recorded as a reason and the reasons sum to the score. Unknown features score 0 rather than a guessed value; title-inferred and classifier-filled features are scaled by confidence (catalogue metadata 1, classifier 0.6, title inference 0.35), so a song with no metadata is not rewarded for a similarity nobody measured. A song found by several sources earns +0.02 per extra source, capped at +0.04. The weekday term (7.2) is the candidate's language share of this weekday's plays minus its share of all plays, so it can change the order between two candidates instead of adding the same amount to every one; it is zero below five plays on that weekday and for profiles recorded before 7.2.
 
 Other fixed terms in the scorer: a song in the profile's recent list loses 0.5; an artist played in the last seven days gains 0.05 × blend; an active festival window adds 0.14 for its languages and 0.10 for its moods; the four taste dials (adventurous, recency, energy, vocal) add small signed nudges that are zero at the neutral default. A candidate in a muted language scores −1. Candidates scoring 0 or less are dropped with reason `low-score`.
 
