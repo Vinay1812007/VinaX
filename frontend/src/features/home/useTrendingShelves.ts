@@ -10,10 +10,23 @@ import type { ArtistCard } from './useYourArtists';
 const YEAR = new Date().getFullYear();
 const STALE = 4 * 60 * 60_000;
 
-/** "Trending Albums" — top albums right now, sourced via album search. */
+/**
+ * 7.2 — where these shelves come from, said plainly: catalogue searches for
+ * popular phrases ("trending albums 2026"), ranked on the device. That is the
+ * catalogue's own relevance, not evidence from any public chart, so these
+ * shelves must never be labelled as one. Verified public charts come only
+ * from services/trends (see docs/trends.md).
+ */
+export const CATALOGUE_SEARCH_PROVENANCE = {
+  kind: 'catalogue-search',
+  label: 'Popular in the catalogue',
+  note: 'Catalogue search results — not a live chart.',
+} as const;
+
+/** "Trending Albums" shelf — catalogue album search results for this year's popular albums (not a chart). */
 export function useTrendingAlbums() {
   const bucket = dailyBucket();
-  return useQuery<Album[]>({
+  const query = useQuery<Album[]>({
     queryKey: ['trending-albums', YEAR, bucket],
     staleTime: STALE,
     queryFn: async () => {
@@ -21,11 +34,13 @@ export function useTrendingAlbums() {
       return albums.slice(0, 18);
     },
   });
+  return { ...query, provenance: CATALOGUE_SEARCH_PROVENANCE };
 }
 
 /**
- * "Trending Artists" — dominant artists surfaced from cross-language trending
- * search. Returns the same `ArtistCard` shape as `useYourArtists` so the same
+ * "Trending Artists" shelf — artists that appear most often in catalogue song
+ * searches for popular phrases across the listener's languages (not a chart).
+ * Returns the same `ArtistCard` shape as `useYourArtists` so the same
  * MediaCard round layout works. One song-search pool → aggregate artists by
  * appearance count.
  */
@@ -69,5 +84,5 @@ export function useTrendingArtists(limit = 12) {
     }
     return [...map.values()].sort((a, b) => b.plays - a.plays).slice(0, limit);
   }, [query.data, limit]);
-  return { ...query, data };
+  return { ...query, data, provenance: CATALOGUE_SEARCH_PROVENANCE };
 }
