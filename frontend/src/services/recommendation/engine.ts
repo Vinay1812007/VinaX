@@ -145,6 +145,8 @@ export interface NextRecommendationOptions {
   deadlineMs?: number;
   /** 7.2.0 — end-to-end budget for the optional AI refinement, counted from the call. */
   aiBudgetMs?: number;
+  /** 7.2.0 — the song this stretch will follow in the queue, when it is not the seed (the queue's last entry). */
+  previous?: Song | null;
 }
 
 /** 7.2.0 — the pipeline's own version, recorded with every continuation (developer breakdown, opt-in telemetry). */
@@ -250,6 +252,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const aiDeadlineAt = t0 + Math.max(0, options.aiBudgetMs ?? AI_BUDGET_MS);
   const left = (): number => Math.max(0, deadlineAt - Date.now());
   const tune = options.tune ?? null;
+  /** The song this stretch follows in the queue (the caller's last entry), when that is not the seed. */
+  const previous = options.previous ?? null;
   const seedLanguage = seed.language && seed.language !== 'unknown' ? seed.language : null;
   // v7.1.0 — an active tune (or a pinned mood) gathers its own candidates, in the queue's language.
   const intentQuery = tune ? tuneSearchQuery(tune, tune === 'different-language' ? null : seedLanguage) : ctx.moodPin ? moodPinQuery(ctx.moodPin, seedLanguage) : null;
@@ -350,14 +354,14 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const lock = switchTo ?? seedLang;
   const otherLanguages = ctx.pinnedLanguages.filter((l) => l !== lock);
   const discoveryShare = Math.max(0, Math.min(0.5, (tune === 'surprise' ? DISCOVERY_SHARE.discover : DISCOVERY_SHARE[mode]) + (intent ? intent.discoveryAppetite * 0.15 : 0)));
-  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: 'lock', otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
+  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: 'lock', otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: [...ctx.history.slice(0, 3).map((e) => e.song).reverse(), ...(previous ? [previous] : [])] });
 
   // 10 — validation. The arc first, then the rest of the ranked pool as the
   // reserve a short or language-locked arc is topped up from.
   const familiarLanguages = [...new Set([...ctx.pinnedLanguages, ...topLanguages(ctx.profile, 3).map((l) => l.id)])];
   // 7.2.0 — the final policy, for every order that ships (local, AI, reserve top-up):
   // the discovery allocation and the familiar opening are enforced here too.
-  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: lock, familiarLanguages, discoveryIds, discoveryShare };
+  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: lock, familiarLanguages, discoveryIds, discoveryShare, previous };
   const arcIds = new Set(arc.songs.map((s) => s.song.id));
   const local = validateSequence([...arc.songs.map((s) => s.song), ...orderedPool.filter((s) => !arcIds.has(s.id))], validateOptions);
   const songs = local.songs;
@@ -445,6 +449,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
         ...plan,
         songs: checked.songs,
         picker: 'ai',
+        discoveryIds,
         fallback: null,
         latencyMs: Date.now() - t0,
         relaxed: [...checked.relaxed],

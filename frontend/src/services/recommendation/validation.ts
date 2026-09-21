@@ -44,6 +44,12 @@ export interface ValidateOptions extends HardFilterOptions {
   minimum?: number;
   /** Max songs per lead artist; default ⌈limit / 4⌉ (two in a queue of eight). */
   artistCap?: number;
+  /**
+   * 7.2.0 — the song this stretch will FOLLOW in the queue, when that is not
+   * the seed: a continuation is appended after the last queued song, so the
+   * no-repeat-artist rule has to look at that pair, not at what is playing.
+   */
+  previous?: Song | null;
   /** 7.2.0 — the songs the sequencer counts as discoveries (never-played artists, explore picks). */
   discoveryIds?: Set<string>;
   /** 7.2.0 — 0..1 share of the stretch open to discoveries; the cap is ⌊share × limit + 0.5⌋. Absent = no cap. */
@@ -128,7 +134,7 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
   const rest = [...pool];
   let discoveries = 0;
   let repairs = 0;
-  let prevLead = leadOf(options.seed);
+  let prevLead = leadOf(options.previous ?? options.seed);
   const capOk = (s: Song): boolean => !leadOf(s) || (perArtist.get(leadOf(s)) ?? 0) < cap;
   const shareOk = (s: Song): boolean => !isDiscovery(s) || discoveries < discoveryCap;
   const openOk = (s: Song): boolean => !isDiscovery(s) || out.length >= openingSlots;

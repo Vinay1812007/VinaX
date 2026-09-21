@@ -172,7 +172,7 @@ export type PlaybackEvent =
   /** An automatic continuation entered the queue (after the admission gate). */
   | { kind: 'served'; batch: number; alg: string; picker: 'local' | 'ai' | 'reserve'; fallback: string | null; latencyMs: number; n: number; discovery: number; languageViolations: number; distinctArtists: number; relaxed: string[]; refinementPending: boolean }
   /** The AI refinement of a continuation settled: applied, or the reason it was not. */
-  | { kind: 'refined'; batch: number; applied: boolean; fallback: string | null; latencyMs: number; n: number };
+  | { kind: 'refined'; batch: number; applied: boolean; fallback: string | null; latencyMs: number; n: number; discovery: number; languageViolations: number; distinctArtists: number; relaxed: string[] };
 
 type Listener = (e: PlaybackEvent) => void;
 const listeners = new Set<Listener>();

@@ -299,12 +299,21 @@ export const usePlayerStore = create<PlayerState>()(
           const version = queueVersion;
           void plan.refinement.then((refined) => {
             if (!('songs' in refined)) {
-              emitPlaybackEvent({ kind: 'refined', batch, applied: false, fallback: refined.rejected, latencyMs: plan.latencyMs, n: 0 });
+              emitPlaybackEvent({ kind: 'refined', batch, applied: false, fallback: refined.rejected, latencyMs: plan.latencyMs, n: 0, discovery: 0, languageViolations: 0, distinctArtists: 0, relaxed: [] });
               return;
             }
             // A refinement for a queue the listener has since changed is dropped (and never committed).
-            const n = version === queueVersion && canExtend() ? applyRefinement(refined, batch) : 0;
-            emitPlaybackEvent({ kind: 'refined', batch, applied: n > 0, fallback: n > 0 ? null : 'ai_rejected', latencyMs: refined.latencyMs, n });
+            const placed = version === queueVersion && canExtend() ? applyRefinement(refined, batch) : [];
+            const n = placed.length;
+            emitPlaybackEvent({
+              kind: 'refined', batch, applied: n > 0, fallback: n > 0 ? null : 'ai_rejected', latencyMs: refined.latencyMs, n,
+              // Measured on what the AI order actually placed, so the quality
+              // panel compares like with like against the local batch.
+              discovery: placed.filter((s) => refined.discoveryIds.has(s.id)).length,
+              languageViolations: languageViolations(placed, refined.language),
+              distinctArtists: distinctLeads(placed),
+              relaxed: refined.relaxed,
+            });
           });
         }
         return admitted.length;
@@ -325,15 +334,15 @@ export const usePlayerStore = create<PlayerState>()(
        * current track, never a committed next track, never the listener's own
        * songs (they keep their place ahead of the automatic ones).
        */
-      function applyRefinement(refined: NextSongsPlan, batch: number): number {
+      function applyRefinement(refined: NextSongsPlan, batch: number): Song[] {
         const { queue, index } = get();
         const start = index + 1 + (nextCommitted() ? 1 : 0);
         const eligible = queue.slice(start).filter((s) => autoIds.has(s.id));
-        if (!eligible.length) return 0;
+        if (!eligible.length) return [];
         const eligibleIds = new Set(eligible.map((s) => s.id));
         const { admitted } = admitSongs(refined.songs, { queue, index, replacing: eligibleIds });
         const fresh = admitted.slice(0, eligible.length);
-        if (fresh.length < Math.min(3, eligible.length)) return 0;
+        if (fresh.length < Math.min(3, eligible.length)) return [];
         const others = queue.slice(start).filter((s) => !eligibleIds.has(s.id));
         for (const id of eligibleIds) {
           autoIds.delete(id);
@@ -343,7 +352,7 @@ export const usePlayerStore = create<PlayerState>()(
         set({ queue: [...queue.slice(0, start), ...others, ...fresh] });
         refined.commit(fresh);
         preloadUpcoming();
-        return fresh.length;
+        return fresh;
       }
 
       /**
@@ -392,6 +401,9 @@ export const usePlayerStore = create<PlayerState>()(
               excludeIds: queue.map((song) => song.id),
               excludeKeys: queue.map(songKey),
               tune: get().tuneIntent,
+              // The stretch is appended after the last queued song: that is the
+              // hand-off the no-repeat-artist rule must judge.
+              previous: queue[queue.length - 1] ?? null,
               signal: abort.signal,
               deadlineMs: opts.urgent ? NEXT_URGENT_DEADLINE_MS : undefined,
             });

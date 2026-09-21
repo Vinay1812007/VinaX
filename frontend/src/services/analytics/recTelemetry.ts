@@ -1,6 +1,5 @@
 import { isCompletion, isEarlyLeave, onPlaybackEvent, playThreshold, type PlaybackEndReason, type PlaybackEvent } from '@/services/playback/session';
 import { useLibraryStore } from '@/store/libraryStore';
-import { usePlayerStore } from '@/store/playerStore';
 import { claimExposure, exposureOf, loadRecExperiments } from '@/features/experiments/recExperiment';
 import { consented, trackStructured, type TelemetryMeta } from './telemetry';
 
@@ -34,8 +33,8 @@ import { consented, trackStructured, type TelemetryMeta } from './telemetry';
  * When an AI refinement replaced the stretch, `n` counts the songs it placed,
  * `distinctArtists` is re-counted from the queue entries of that continuation
  * as they stand after the refinement, and `discovery`, `languageViolations`
- * and `relaxed` are null: the player's `refined` event does not measure them
- * for the AI's order (it passed the same validation as the local one).
+ * and `relaxed` describe the AI's own order: since 7.2 the player measures a
+ * refinement exactly as it measures the local batch, so the two are comparable.
  * `latencyMs` is always the queue-ready latency — from the plan call to a
  * queueable order — whoever picked. `exp` is the continuation's exposure map
  * (features/experiments/recExperiment.ts), including an applied owner
@@ -131,20 +130,6 @@ function enqueue(type: 'rec_served' | 'rec_outcome', meta: TelemetryMeta): void 
   pump();
 }
 
-/** Distinct lead artists among the queue entries of one continuation (the player's own count, re-taken after a refinement). */
-function distinctArtistsOfBatch(batch: number): number | null {
-  const player = usePlayerStore.getState();
-  const leads = new Set<string>();
-  let found = 0;
-  for (const s of player.queue) {
-    if (player.autoMeta(s.id)?.batch !== batch) continue;
-    found += 1;
-    const lead = (s.artists[0]?.name ?? s.subtitle ?? '').trim().toLowerCase();
-    if (lead) leads.add(lead);
-  }
-  return found ? leads.size : null;
-}
-
 function sendServed(served: Served, exp: Record<string, string>, refined: Refined | null, timedOut: boolean): void {
   const aiApplied = !!refined?.applied;
   const fallback: RecFallback = aiApplied
@@ -160,10 +145,12 @@ function sendServed(served: Served, exp: Record<string, string>, refined: Refine
     fallback,
     latencyMs: whole(served.latencyMs),
     n: whole(aiApplied ? refined!.n : served.n),
-    discovery: aiApplied ? null : whole(served.discovery),
-    languageViolations: aiApplied ? null : whole(served.languageViolations),
-    distinctArtists: aiApplied ? distinctArtistsOfBatch(served.batch) : whole(served.distinctArtists),
-    relaxed: aiApplied ? null : served.relaxed.slice(0, 4).map((r) => String(r).slice(0, 24)),
+    // 7.2.0 — an applied AI order reports what IT placed (the player measures
+    // the refinement the same way as the local batch), so the two are comparable.
+    discovery: whole(aiApplied ? refined!.discovery : served.discovery),
+    languageViolations: whole(aiApplied ? refined!.languageViolations : served.languageViolations),
+    distinctArtists: whole(aiApplied ? refined!.distinctArtists : served.distinctArtists),
+    relaxed: (aiApplied ? refined!.relaxed : served.relaxed).slice(0, 4).map((r) => String(r).slice(0, 24)),
     exp,
   });
 }

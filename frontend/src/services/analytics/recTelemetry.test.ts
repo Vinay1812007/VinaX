@@ -70,7 +70,7 @@ const ofType = (type: string) => bodies().filter((b) => b.type === type).map((b)
 const consent = (on: boolean) => localStorage.setItem(KEYS.analyticsConsent, JSON.stringify(on));
 
 const served = (batch: number, over: Partial<Extract<PlaybackEvent, { kind: 'served' }>> = {}): PlaybackEvent => ({ kind: 'served', batch, alg: ALG, picker: 'local', fallback: null, latencyMs: 412.6, n: 5, discovery: 1, languageViolations: 0, distinctArtists: 4, relaxed: [], refinementPending: false, ...over });
-const refined = (batch: number, applied: boolean, fallback: string | null, n = applied ? 5 : 0): PlaybackEvent => ({ kind: 'refined', batch, applied, fallback, latencyMs: 9000, n });
+const refined = (batch: number, applied: boolean, fallback: string | null, n = applied ? 5 : 0, over: Partial<Extract<PlaybackEvent, { kind: 'refined' }>> = {}): PlaybackEvent => ({ kind: 'refined', batch, applied, fallback, latencyMs: 9000, n, discovery: applied ? 2 : 0, languageViolations: 0, distinctArtists: applied ? 5 : 0, relaxed: [], ...over });
 const auto = (batch: number, pos: number, picker: AutoEntryMeta['picker'] = 'local'): AutoEntryMeta => ({ alg: ALG, picker, pos, batch });
 const ended = (id: string, heardSec: number, reason: PlaybackEndReason, a: AutoEntryMeta | null, durationSec = 200, run = newRun()): PlaybackEvent => ({ kind: 'end', instanceId: `pb-${id}`, song: song(id), from: null, heardSec, durationSec, reason, run, auto: a });
 const settle = async () => { await vi.advanceTimersByTimeAsync(0); };
@@ -146,7 +146,7 @@ describe('rec_served — once per continuation, with the final picker', () => {
     emitPlaybackEvent(refined(1, true, null, 4));
     emitPlaybackEvent(refined(1, true, null, 4)); // a duplicate never produces a second event
     await vi.advanceTimersByTimeAsync(REFINE_WAIT_MS + 1);
-    expect(ofType('rec_served')).toEqual([{ alg: ALG, picker: 'ai', fallback: null, latencyMs: 413, n: 4, discovery: null, languageViolations: null, distinctArtists: null, relaxed: null, exp: {} }]);
+    expect(ofType('rec_served')).toEqual([{ alg: ALG, picker: 'ai', fallback: null, latencyMs: 413, n: 4, discovery: 2, languageViolations: 0, distinctArtists: 5, relaxed: [], exp: {} }]);
   });
 
   it('waits for the refinement: rejected → one event with picker local and the reason', async () => {
@@ -310,7 +310,7 @@ describe('with the real player', () => {
     await settle();
     await settle();
     expect(usePlayerStore.getState().queue.map((s) => s.id)).toEqual(['seed', 'n3', 'n1', 'n2', 'n4', 'n5']);
-    expect(ofType('rec_served')).toEqual([{ alg: ALG, picker: 'ai', fallback: null, latencyMs: 640, n: 5, discovery: null, languageViolations: null, distinctArtists: 5, relaxed: null, exp: {} }]);
+    expect(ofType('rec_served')).toEqual([{ alg: ALG, picker: 'ai', fallback: null, latencyMs: 640, n: 5, discovery: 1, languageViolations: 0, distinctArtists: 5, relaxed: [], exp: {} }]);
 
     // The seed is the listener's own: its end reports nothing. The first automatic song is flipped past at 2 s.
     listen(0.25, 20);
