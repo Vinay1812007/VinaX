@@ -64,6 +64,7 @@ import * as m_api_admin_search_analytics from './functions/api/admin/search-anal
 import * as m_api_admin_seo from './functions/api/admin/seo';
 import * as m_api_admin_tables from './functions/api/admin/tables';
 import * as m_api_admin_technical from './functions/api/admin/technical';
+import * as m_api_admin_trends from './functions/api/admin/trends';
 import * as m_api_admin_user from './functions/api/admin/user';
 import * as m_api_admin_users from './functions/api/admin/users';
 import * as m_api_announcements from './functions/api/announcements';
@@ -74,6 +75,7 @@ import * as m_api_blocklist from './functions/api/blocklist';
 import * as m_api_cron_ai_daily_push from './functions/api/cron/ai-daily-push';
 import * as m_api_cron_seo_crawl from './functions/api/cron/seo-crawl';
 import * as m_api_cron_song_push from './functions/api/cron/song-push';
+import * as m_api_cron_trends_ingest from './functions/api/cron/trends-ingest';
 import * as m_api_cron_weekly_digest from './functions/api/cron/weekly-digest';
 import * as m_api_events from './functions/api/events';
 import * as m_api_experiments from './functions/api/experiments';
@@ -91,6 +93,7 @@ import * as m_api_push_vapid from './functions/api/push/vapid';
 import * as m_api_room from './functions/api/room';
 import * as m_api_site_mode from './functions/api/site-mode';
 import * as m_api_trending_searches from './functions/api/trending-searches';
+import * as m_api_trends from './functions/api/trends';
 import * as m_api_tts from './functions/api/tts';
 import * as m_api_username from './functions/api/username';
 import * as m_api_version from './functions/api/version';
@@ -181,6 +184,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/seo': m_api_admin_seo,
   '/api/admin/tables': m_api_admin_tables,
   '/api/admin/technical': m_api_admin_technical,
+  '/api/admin/trends': m_api_admin_trends,
   '/api/admin/user': m_api_admin_user,
   '/api/admin/users': m_api_admin_users,
   '/api/aimodels': m_api_aimodels,
@@ -195,6 +199,7 @@ const EXACT: Record<string, Mod> = {
   '/api/cron/ai-daily-push': m_api_cron_ai_daily_push,
   '/api/cron/seo-crawl': m_api_cron_seo_crawl,
   '/api/cron/song-push': m_api_cron_song_push,
+  '/api/cron/trends-ingest': m_api_cron_trends_ingest,
   '/api/cron/weekly-digest': m_api_cron_weekly_digest,
   '/api/events': m_api_events,
   '/api/experiments': m_api_experiments,
@@ -213,6 +218,7 @@ const EXACT: Record<string, Mod> = {
   '/api/site-mode': m_api_site_mode,
   '/api/status': m_api_status,
   '/api/trending-searches': m_api_trending_searches,
+  '/api/trends': m_api_trends,
   '/api/tts': m_api_tts,
   '/api/username': m_api_username,
   '/api/version': m_api_version,
