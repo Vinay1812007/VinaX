@@ -157,16 +157,20 @@ const QueueRow = memo(function QueueRow({
             className="w-[42px] h-[42px] rounded-[10px] object-cover shrink-0"
           />
           <span className="min-w-0 flex-1">
-            {/* Song – Movie/Album – Artist, with who queued it */}
+            {/* Song – Movie/Album – Artist, then who queued it and why */}
             <span className="block text-[13px] font-bold truncate">{line.title}</span>
-            <span className="flex items-center gap-1.5 min-w-0">
-              <OriginBadge origin={origin} />
-              <span className="block text-[11px] font-semibold text-ink-400 truncate">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
-            </span>
-            {reason && (
-              <span className="mt-0.5 flex items-center gap-1 min-w-0 text-[11px] text-ink-500">
-                <SparkleIcon className="w-3 h-3 shrink-0" aria-hidden />
-                <span className="truncate">{reason}</span>
+            <span className="block text-[11px] font-semibold text-ink-400 truncate">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
+            {/* The marker keeps its own line: on a phone it would otherwise
+                leave the film and artist with a few characters. */}
+            {(origin !== 'list' || reason) && (
+              <span className="mt-1 flex items-center gap-1.5 min-w-0">
+                <OriginBadge origin={origin} />
+                {reason && (
+                  <>
+                    <SparkleIcon className="w-3 h-3 shrink-0 text-ink-500" aria-hidden />
+                    <span className="block text-[11px] text-ink-500 truncate">{reason}</span>
+                  </>
+                )}
               </span>
             )}
           </span>
@@ -475,8 +479,8 @@ export default function QueuePage() {
           message="Play a song, album or playlist to start your queue — or let VinaX build one from your taste."
           action={
             <span className="flex flex-wrap gap-2 justify-center">
-              <button onClick={() => setBuilding(true)} className="px-5 py-2.5 rounded-full btn-primary min-h-touch">Build a queue</button>
-              <Link to="/" className="px-5 py-2.5 rounded-full btn-secondary min-h-touch inline-flex items-center">Browse Home</Link>
+              <button onClick={() => setBuilding(true)} className="vx-tap px-5 py-2.5 rounded-full btn-primary">Build a queue</button>
+              <Link to="/" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Browse Home</Link>
             </span>
           }
         />
@@ -501,9 +505,9 @@ export default function QueuePage() {
         subtitle={djTakeover ? 'The DJ builds around what’s playing — the songs you add always stay' : 'Your selected songs, in order'}
         actions={
           <>
-            <button onClick={() => setBuilding(true)} className="px-4 py-2 min-h-touch rounded-full btn-primary text-xs font-bold">Build a queue</button>
+            <button onClick={() => setBuilding(true)} className="vx-tap px-4 py-2 rounded-full btn-primary text-xs font-bold">Build a queue</button>
             {queue.length >= 2 && (
-              <button onClick={saveAsPlaylist} className="px-4 py-2 min-h-touch rounded-full glass-button text-xs font-bold">
+              <button onClick={saveAsPlaylist} className="vx-tap px-4 py-2 rounded-full glass-button text-xs font-bold">
                 Save as playlist
               </button>
             )}

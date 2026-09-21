@@ -418,3 +418,17 @@ html[data-density='compact'] .vx-shelf { margin-bottom: 24px; }
 @media (min-width: 1280px) {
   .vx-nextup-card { right: calc(clamp(260px, 21vw, 320px) + 24px); }
 }
+
+/* 7.2 — a short control (a 40px button, a 24px switch) with a 44px touch
+   target: an invisible, centred pad, the same trick IconButton uses. The
+   visual box is untouched. */
+.vx-tap { position: relative; }
+.vx-tap::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}

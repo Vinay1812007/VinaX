@@ -137,7 +137,7 @@ export function TasteSetupSheet({ onClose, onSaved }: { onClose: () => void; onS
         <button type="button" onClick={onClose} className="px-4 py-2.5 min-h-touch rounded-full border border-ink-600 text-sm font-semibold text-ink-200">
           Cancel
         </button>
-        <button type="button" onClick={save} className="px-5 py-2.5 min-h-touch rounded-full btn-primary text-sm font-bold">
+        <button type="button" onClick={save} className="vx-tap px-5 py-2.5 rounded-full btn-primary text-sm font-bold">
           {picked.length ? `Save ${picked.length} ${picked.length === 1 ? 'artist' : 'artists'}` : 'Done'}
         </button>
       </div>

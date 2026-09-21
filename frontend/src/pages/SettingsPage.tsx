@@ -157,7 +157,7 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
       aria-checked={on}
       aria-label={label}
       onClick={() => onChange(!on)}
-      className={cn('w-11 h-6 rounded-full transition-colors relative', on ? 'bg-ember-500' : 'bg-ink-600')}
+      className={cn('vx-tap w-11 h-6 rounded-full transition-colors', on ? 'bg-ember-500' : 'bg-ink-600')}
     >
       <span className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white transition-[color,background-color,border-color,opacity,transform]', on ? 'left-[22px]' : 'left-0.5')} />
     </button>
@@ -286,11 +286,11 @@ function UsernameRow() {
   return (
     <Row label={label} note={note}>
       {status.state === 'pending' ? (
-        <button onClick={() => void retry()} disabled={busy} className="px-4 py-2 rounded-full glass-button text-sm disabled:opacity-50">
+        <button onClick={() => void retry()} disabled={busy} className="vx-tap px-4 py-2 rounded-full glass-button text-sm disabled:opacity-50">
           {busy ? 'Confirming…' : 'Confirm now'}
         </button>
       ) : status.state === 'taken' || status.state === 'none' ? (
-        <button onClick={openTour} className="px-4 py-2 rounded-full glass-button text-sm">Choose</button>
+        <button onClick={openTour} className="vx-tap px-4 py-2 rounded-full glass-button text-sm">Choose</button>
       ) : (
         <span className="text-xs font-semibold text-emerald-400 px-2 py-2">Confirmed</span>
       )}
@@ -408,7 +408,7 @@ export default function SettingsPage() {
       )}
       <Section title="Help & Support" icon={HelpIcon}>
         <Row label="Help & Feedback" note="FAQs, how-tos, and report a bug or share an idea.">
-          <Link to="/help" className="px-4 py-2 rounded-full btn-secondary text-sm">Open</Link>
+          <Link to="/help" className="vx-tap px-4 py-2 rounded-full btn-secondary text-sm">Open</Link>
         </Row>
       </Section>
       <Section title="Wake-up alarm" icon={ClockIcon}>
@@ -627,7 +627,7 @@ export default function SettingsPage() {
                     else toast('You’re on the latest version');
                   })
                 }
-                className="px-4 py-2 rounded-full glass-button text-sm"
+                className="vx-tap px-4 py-2 rounded-full glass-button text-sm"
               >
                 Check for updates
               </button>
@@ -638,7 +638,7 @@ export default function SettingsPage() {
           <Row label="Keyboard shortcuts" note="Space, arrows, N/P, M, S, R, F — or press ? anywhere.">
             <button
               onClick={() => window.dispatchEvent(new Event('vinax:shortcuts'))}
-              className="px-4 py-2 rounded-full glass-button text-sm"
+              className="vx-tap px-4 py-2 rounded-full glass-button text-sm"
             >
               View
             </button>
@@ -873,10 +873,10 @@ export default function SettingsPage() {
       <Section title="Your Data" icon={DownloadIcon} id="your-data">
         <UsernameRow />
         <Row label="Move to a new device" note="Encrypted QR handoff — scan on the new phone and everything comes across. Parked 10 minutes, burned after one use.">
-          <Link to="/handoff" className="px-4 py-2 rounded-full glass-button text-sm inline-block">Start</Link>
+          <Link to="/handoff" className="vx-tap px-4 py-2 rounded-full glass-button text-sm inline-block">Start</Link>
         </Row>
         <Row label="Backup Center" note="See exactly what a backup includes and leaves out, when you last exported, and restore from a file with a merge-or-replace preview and undo.">
-          <button onClick={() => setBackupOpen(true)} className="px-4 py-2 rounded-full glass-button text-sm">Open</button>
+          <button onClick={() => setBackupOpen(true)} className="vx-tap px-4 py-2 rounded-full glass-button text-sm">Open</button>
         </Row>
         {backupOpen && (
           <Suspense fallback={null}>
@@ -884,7 +884,7 @@ export default function SettingsPage() {
           </Suspense>
         )}
         <Row label="Export a backup" note="A versioned JSON file of your portable data: settings, library, smart collections, history, taste profile, saved searches, bookmarks, Home layout, name and username. Never includes downloaded audio, device identity, host keys or caches.">
-          <button onClick={() => { downloadProfileExport(); toast('Backup file downloaded'); }} className="px-4 py-2 rounded-full glass-button text-sm">Export</button>
+          <button onClick={() => { downloadProfileExport(); toast('Backup file downloaded'); }} className="vx-tap px-4 py-2 rounded-full glass-button text-sm">Export</button>
         </Row>
         <Row label="Restore a backup (quick)" note="Replaces the same categories on this device. A damaged file changes nothing; older exports are migrated. Use the Backup Center to preview or merge.">
           <>
@@ -910,17 +910,17 @@ export default function SettingsPage() {
                 }
               }}
             />
-            <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-full glass-button text-sm">Restore</button>
+            <button onClick={() => fileRef.current?.click()} className="vx-tap px-4 py-2 rounded-full glass-button text-sm">Restore</button>
           </>
         </Row>
-        <Row label="Clear history"><button onClick={clearHistoryWithUndo} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
-        <Row label="Clear favorites"><button onClick={clearFavoritesWithUndo} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
-        <Row label="Clear queue"><button onClick={clearQueue} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
+        <Row label="Clear history"><button onClick={clearHistoryWithUndo} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
+        <Row label="Clear favorites"><button onClick={clearFavoritesWithUndo} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
+        <Row label="Clear queue"><button onClick={clearQueue} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
         <Row label="Clear cached metadata" note="Drops the in-memory API cache; data refetches on demand.">
-          <button onClick={clearCachedMetadata} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button>
+          <button onClick={clearCachedMetadata} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button>
         </Row>
         <Row label="Reset taste profile" note="Erases what VinaX learned — languages, artists, habits, dials and “Less like this” mutes — and the event log behind them. Offers a backup first. Favorites, playlists and history stay.">
-          <button onClick={() => setResetOpen(true)} className="px-4 py-2 min-h-touch rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Reset</button>
+          <button onClick={() => setResetOpen(true)} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Reset</button>
         </Row>
         {resetOpen && (
           <Suspense fallback={null}>
@@ -930,7 +930,7 @@ export default function SettingsPage() {
         <Row label="Reset app state" note="Erases everything VinaX stores on this device and reloads.">
           <button
             onClick={() => setEraseOpen(true)}
-            className="px-4 py-2 rounded-full bg-red-500/15 border border-red-500/50 text-red-300 text-sm font-semibold hover:bg-red-500/25"
+            className="vx-tap px-4 py-2 rounded-full bg-red-500/15 border border-red-500/50 text-red-300 text-sm font-semibold hover:bg-red-500/25"
           >
             Reset
           </button>

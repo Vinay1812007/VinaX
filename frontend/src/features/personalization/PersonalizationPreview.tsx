@@ -75,11 +75,11 @@ export function PersonalizationPreview({ showProfileLink = true }: { showProfile
       )}
       <Line label="Pinned">{pinned.length ? pinned.map((l) => languageLabel(l)).join(', ') : 'No languages pinned'}</Line>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setSetup(true)} className="px-3.5 py-2 min-h-touch rounded-full btn-primary text-xs font-bold">
+        <button type="button" onClick={() => setSetup(true)} className="vx-tap px-3.5 py-2 rounded-full btn-primary text-xs font-bold">
           Pick languages &amp; artists
         </button>
         {showProfileLink && (
-          <Link to="/taste-profile" className="px-3.5 py-2 min-h-touch inline-flex items-center rounded-full glass-button text-xs font-bold">
+          <Link to="/taste-profile" className="vx-tap px-3.5 py-2 inline-flex items-center rounded-full glass-button text-xs font-bold">
             See the full taste profile
           </Link>
         )}

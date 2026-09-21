@@ -65,7 +65,7 @@ export function ResetTasteSheet({ onClose, onDone, showDataLink = true }: { onCl
           type="button"
           onClick={backup}
           disabled={backedUp}
-          className="px-4 py-2.5 min-h-touch rounded-full glass-button text-sm font-bold disabled:opacity-60"
+          className="vx-tap px-4 py-2.5 rounded-full glass-button text-sm font-bold disabled:opacity-60"
         >
           {backedUp ? 'Backup downloaded' : 'Download a backup first'}
         </button>
