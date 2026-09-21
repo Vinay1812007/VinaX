@@ -2,6 +2,8 @@ import type { Song } from '@/types';
 import { inferMood, moodMatchScore, type Mood } from './mood';
 import { energyOfSong } from '@/services/personalization/session';
 import { transitionScore } from './transitions';
+import { songKey } from './songIdentity';
+import type { Relaxation, RelaxedRule } from './types';
 
 /**
  * v6.3.0 — the arc sequencer. Given a pool of admitted songs, orders them
@@ -16,14 +18,25 @@ import { transitionScore } from './transitions';
  *              slots; the same album not back to back.
  *   era      — decade jumps cost a little, so a 90s cut lands next to a 90s
  *              cut, not between two 2024 releases.
- *   language — the queue's language lock is a hard rule.
+ *   language — the queue's language policy (see `languagePolicy`).
  *   memory   — hand-offs the listener completed before are preferred, ones
  *              they skipped are avoided (./transitions.ts).
  *   rank     — the caller's ranking (taste) is a prior, not the whole story.
+ *   versions — 7.2.0: one recording family (`songKey`) per stretch, the
+ *              better-ranked cut kept; a version of the seed or of a song in
+ *              `recent` waits until nothing else can fill the slot.
  *
  * Greedy, deterministic and fast (pool ≤ 60), so it can run on every queue
  * extension and inside the Queue Builder preview. The optional duration
  * budget stops the arc once the target minutes are covered.
+ *
+ * 7.2.0 — small pools. The soft rules give way only when no remaining song
+ * satisfies them, in this order: the discovery share and the familiar
+ * opening first, then the recent-version hold-back. A lead artist back to
+ * back is a cost (+4), not a filter; when it happens anyway it is reported.
+ * Every such case is in the result's `relaxed` / `relaxations`. The language
+ * lock and the one-family-per-stretch rule never give way here (validation
+ * owns the only language relaxation).
  */
 export type ArcShape = 'steady' | 'build' | 'wind-down' | 'wave' | 'lift';
 
@@ -35,8 +48,16 @@ export interface SequenceOptions {
   limit?: number;
   /** Target language; null = none. */
   language?: string | null;
-  /** 'lock' (default) drops other languages; 'prefer' keeps them but charges a cost, so a
-   *  few can drift in when the arc and the listener's other languages justify it. */
+  /**
+   * How strictly `language` holds. Songs with no language, or 'unknown', pass either way.
+   *   'lock' (default) — strict: a song in another known language never enters
+   *                      the stretch, even if that leaves it short.
+   *   'prefer'         — optional exploration: other languages stay in the pool
+   *                      at a cost (1.1 for one in `otherLanguages`, 2.5 for any
+   *                      other, +3 right after another off-language song), so a
+   *                      familiar-language detour can drift in when the arc and
+   *                      the pool justify it, and never two in a row by choice.
+   */
   languagePolicy?: 'lock' | 'prefer';
   /** Other languages the listener plays (only matters under 'prefer'). */
   otherLanguages?: string[];
@@ -72,6 +93,10 @@ export interface SequenceResult {
   totalSec: number;
   /** Mean absolute distance between song energy and slot target (0 = perfect arc). */
   arcError: number;
+  /** 7.2.0 — soft rules the pool forced to give way, each once, first first. */
+  relaxed: RelaxedRule[];
+  /** 7.2.0 — one entry per slot that gave way: the rule, the slot (1-based), the song and why. */
+  relaxations: Relaxation[];
 }
 
 const decadeOf = (s: Song): number | null => {
@@ -113,6 +138,8 @@ interface Scored {
   energy: number;
   mood: Mood;
   rank: number;
+  /** A version of the seed or of a song in `recent`: used only when nothing else can fill the slot. */
+  held: boolean;
 }
 
 export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): SequenceResult {
@@ -121,16 +148,24 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
   const budget = opts.durationSec && opts.durationSec > 0 ? opts.durationSec : 0;
   const discoveryShare = Math.max(0, Math.min(1, opts.discovery ?? 0.2));
   const seed = opts.seed ?? null;
+  const relaxed: RelaxedRule[] = [];
+  const relaxations: Relaxation[] = [];
   const seen = new Set<string>();
+  // 7.2.0 — recording families: one per stretch; the seed's and the recent plays' wait.
+  const families = new Set<string>();
+  const heldKeys = new Set([...(opts.recent ?? []), ...(seed ? [seed] : [])].map(songKey));
   const items: Scored[] = [];
   pool.forEach((song, rank) => {
     if (!song?.id || seen.has(song.id)) return;
     if (seed && song.id === seed.id) return;
     if (opts.language && song.language && song.language !== opts.language && (opts.languagePolicy ?? 'lock') === 'lock') return;
+    const key = songKey(song);
+    if (families.has(key)) return; // another cut of a song already in the pool, ranked lower
+    families.add(key);
     seen.add(song.id);
-    items.push({ song, energy: songEnergy(song), mood: inferMood(song), rank });
+    items.push({ song, energy: songEnergy(song), mood: inferMood(song), rank, held: heldKeys.has(key) });
   });
-  if (!items.length || !limit) return { songs: [], totalSec: 0, arcError: 0 };
+  if (!items.length || !limit) return { songs: [], totalSec: 0, arcError: 0, relaxed, relaxations };
 
   const startEnergy = seed ? songEnergy(seed) : items.reduce((s, it) => s + it.energy, 0) / items.length;
   const startMood: Mood = seed ? inferMood(seed) : 'neutral';
@@ -140,6 +175,9 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
   let totalSec = 0;
   let errSum = 0;
   let discoveryUsed = 0;
+  const shareCap = Math.floor(discoveryShare * n + 0.5);
+  const familiarFirst = opts.familiarFirst !== false;
+  const isDiscovery = (c: Scored): boolean => !!opts.discoveryIds?.has(c.song.id);
   const remaining = [...items];
 
   while (remaining.length && out.length < n) {
@@ -155,17 +193,21 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
     const prevDecade = prev ? decadeOf(prev) : null;
     // Where in the stretch we are: 0 at the first slot, 1 at the last.
     const progress = n <= 1 ? 1 : i / (n - 1);
-    const familiarFirst = opts.familiarFirst !== false;
     // No discovery in the opening (slot 1, and slot 2 of a stretch of four or more).
     const opening = familiarFirst && i < (n >= 4 ? 2 : 1);
-    const discoveryAllowed = !opening && discoveryUsed < Math.floor(discoveryShare * n + 0.5);
+    const shareFull = discoveryUsed >= shareCap;
+    const discoveryOk = (c: Scored): boolean => !isDiscovery(c) || (!opening && !shareFull);
+    // The strictest level any remaining song meets: every soft rule, then the
+    // discovery rules given up, then the recent-version hold-back, then both.
+    const levels = [(c: Scored) => !c.held && discoveryOk(c), (c: Scored) => !c.held, discoveryOk, () => true];
+    const eligible = levels.find((level) => remaining.some(level))!;
     let bestIdx = -1;
     let bestCost = Infinity;
     let bestWhy = '';
     for (let k = 0; k < remaining.length; k += 1) {
       const c = remaining[k];
-      const isDiscovery = !!opts.discoveryIds?.has(c.song.id);
-      if (isDiscovery && !discoveryAllowed && remaining.some((r) => !opts.discoveryIds?.has(r.song.id))) continue;
+      if (!eligible(c)) continue;
+      const discovery = isDiscovery(c);
       const why: string[] = [];
       let cost = Math.abs(c.energy - target) * 3;
       const moodFit = moodMatchScore(prevMood, c.mood);
@@ -200,7 +242,7 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
         if (opts.sureIds?.has(c.song.id)) {
           cost -= 0.9 * (1 - progress);
           if (i === 0) why.push('a familiar way in');
-        } else if (isDiscovery) {
+        } else if (discovery) {
           cost += 1.1 * (1 - progress);
         }
       }
@@ -212,7 +254,7 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
       cost -= memory * 1.5;
       if (memory > 0.2) why.push('a hand-off you finished before');
       if (memory < -0.2) why.push('you skipped this after a song like the last one');
-      if (isDiscovery) why.push('a discovery slot');
+      if (discovery) why.push('a discovery slot');
       if (cost < bestCost) {
         bestCost = cost;
         bestIdx = k;
@@ -222,15 +264,28 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
     }
     if (bestIdx < 0) break;
     const [pick] = remaining.splice(bestIdx, 1);
-    if (opts.discoveryIds?.has(pick.song.id)) discoveryUsed += 1;
     const dur = typeof pick.song.duration === 'number' && pick.song.duration > 0 ? pick.song.duration : 210;
     if (budget && totalSec > 0 && totalSec + dur > budget * 1.1) break;
+    // 7.2.0 — say what gave way for this slot, and why.
+    const at = { slot: i + 1, songId: pick.song.id };
+    const relax = (rule: RelaxedRule, detail: string): void => {
+      if (!relaxed.includes(rule)) relaxed.push(rule);
+      relaxations.push({ rule, ...at, detail });
+    };
+    if (!discoveryOk(pick)) {
+      if (opening) relax('familiar-opening', 'a discovery in the opening; no familiar song was left');
+      if (shareFull) relax('discovery-share', `discovery ${discoveryUsed + 1} over a share of ${shareCap}; no other song was left`);
+    }
+    if (pick.held) relax('recent-version', 'another version of a song that just played; nothing else was left');
+    const lead = leadArtist(pick.song);
+    if (lead && lastArtists[lastArtists.length - 1] === lead) relax('artist-spacing', remaining.some((r) => leadArtist(r.song) !== lead) ? 'the same lead artist twice in a row; the alternatives fit the arc worse' : 'the same lead artist twice in a row; no other artist was left');
+    if (isDiscovery(pick)) discoveryUsed += 1;
     totalSec += dur;
     errSum += Math.abs(pick.energy - target);
     out.push({ song: pick.song, target, energy: pick.energy, mood: pick.mood, why: bestWhy });
     if (budget && totalSec >= budget) break;
   }
-  return { songs: out, totalSec, arcError: out.length ? errSum / out.length : 0 };
+  return { songs: out, totalSec, arcError: out.length ? errSum / out.length : 0, relaxed, relaxations };
 }
 
 /** Mean |energy − target| for a FIXED order (how far it strays from the arc). */
