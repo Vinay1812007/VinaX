@@ -1,0 +1,11 @@
+{
+  "//": "The root tsconfig only includes src/, so the evaluation harness has its own: npx tsc --noEmit -p eval/tsconfig.json",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"],
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": ["**/*.ts", "../src/vite-env.d.ts"],
+  "exclude": [".cache", "reports"],
+  "references": []
+}
