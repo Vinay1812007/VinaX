@@ -140,6 +140,10 @@ export function softMuteArtist(song: Song, days = 14): void {
     p.softMuted[key] = { until };
   });
   logEvent('soft_mute', song);
+  // Home's shelves apply the listener's safety settings when they render, and
+  // a soft mute lives on the profile rather than in a store. Loaded on demand:
+  // this module is first-load code and the Home hook is not.
+  void import('@/features/home/useShelfSafety').then((m) => m.notifyShelfSafetyChanged()).catch(() => undefined);
 }
 
 // Undo path deliberately not exported yet — the 14-day natural expiry in

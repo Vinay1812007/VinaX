@@ -393,3 +393,28 @@ html[data-density='compact'] .vx-shelf { margin-bottom: 24px; }
 .home-studio:not([open]) { border-color: transparent; background: transparent; margin-bottom: 12px; }
 .home-studio:not([open]) > summary { min-height: 44px; padding: 0; }
 .home-studio-intro h2 { font-size: var(--vx-type-section); line-height: 1.3; letter-spacing: -.025em; }
+
+/* 7.2 — the queue's ownership marker: who put this song in the list. Words
+   carry the meaning (a screen reader reads them with the row); the tint only
+   repeats it. */
+.vx-queue-origin {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border: 1px solid var(--vx-border);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--vx-text-muted);
+}
+.vx-queue-origin[data-origin='manual'] { color: var(--vx-accent-hover); border-color: rgb(var(--ember-500) / .35); }
+
+/* The floating "Up next" card sits beside the Now Playing rail, never on top
+   of it — the rail mounts from 1280px up and already lists the queue. */
+@media (min-width: 1280px) {
+  .vx-nextup-card { right: calc(clamp(260px, 21vw, 320px) + 24px); }
+}

@@ -19,6 +19,7 @@
  * screens import it, never the first-load graph.
  */
 import type { Song } from '@/types';
+import { notifyShelfSafetyChanged } from '@/features/home/useShelfSafety';
 import { applyDecay, type Affinity, type ArtistAffinity, type TasteProfile } from './profile';
 import { loadProfile, withProfile } from './storage';
 import { softMuteArtist } from './updater';
@@ -63,6 +64,9 @@ export function softMutesVersion(): number {
 
 function changed(): void {
   version += 1;
+  // Home's shelves filter when they render: tell them now, so a muted artist
+  // leaves the shelves on the next render instead of the next interaction.
+  notifyShelfSafetyChanged();
   for (const fn of [...listeners]) fn();
 }
 
