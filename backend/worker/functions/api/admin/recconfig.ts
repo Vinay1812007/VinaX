@@ -35,7 +35,7 @@
  * (see publicRecConfig in _lib/clientConfig.ts); notes, evaluations and
  * authors stay in the console.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import {
   EXPERIMENT_KEY_RE,
@@ -324,9 +324,9 @@ const summaryLine = (r: RecConfigRecord): string => {
 
 // ---- handlers -------------------------------------------------------------------
 
-export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestGet = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false });
   const [read, experiments] = await Promise.all([readStored(env), readExperiments(env)]);
   if (!read.ok) return json({ configured: true, error: dbErrorCode(read.error) }, 502);
@@ -346,9 +346,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   });
 };
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
   const body = obj(await request.json().catch(() => null));
   if (!body) return json({ error: 'bad_request' }, 400);
@@ -400,6 +400,12 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // History is best effort: the record above is already the source of truth.
   const history = [next, ...stored.history.filter((r) => r.version !== next.version)].slice(0, HISTORY_LIMIT);
   const historySaved = await sbUpsert(env, 'vinax_config', { key: REC_CONFIG_HISTORY_KEY, value: history, updated_at: now }, 'key');
-  void logAdminAudit(env, 'rec-config', `${summaryLine(next)}${rolledBackFrom ? ` · rollback of v${rolledBackFrom}` : ''}`);
+  await logAdminAudit(context, {
+    action: 'rec-config',
+    summary: `${summaryLine(next)}${rolledBackFrom ? ` · rollback of v${rolledBackFrom}` : ''}`,
+    target: `v${next.version}`,
+    before: stored.current,
+    after: next,
+  });
   return json({ ok: true, record: next, clamped: v.clamped, historySaved });
 };

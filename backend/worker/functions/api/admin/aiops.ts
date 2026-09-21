@@ -20,7 +20,7 @@
  * A failed events read answers 502 with the failure's kind, never zeros. A
  * failed config read leaves the numbers and marks controls and prices unknown.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { percentile } from '../../_lib/laneHealth';
 import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 import { costUsd, matchPrice, modelSlug, parsePrices, type PriceTable } from './aicost';
@@ -233,7 +233,7 @@ interface ConfigRow { key: string; value: unknown; updated_at: string | null }
 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ configured: false });
   const days = Math.min(90, Math.max(1, parseInt(new URL(request.url).searchParams.get('days') ?? '7', 10) || 7));
   const since = new Date(Date.now() - days * 86_400_000).toISOString();

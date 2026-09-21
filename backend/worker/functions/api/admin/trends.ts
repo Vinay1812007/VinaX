@@ -17,7 +17,7 @@
  *
  * Every handler checks isAdmin first; every mutation leaves an audit row.
  */
-import { isAdmin, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { logAdminAudit } from '../../_lib/adminAudit';
 import { dbErrorCode, sbInsertIgnore, sbSelectResult, sbUpdate, supabaseConfigured } from '../../_lib/supabase';
 import { lookupCatalogSong } from '../../_lib/trends/catalog';
@@ -79,9 +79,9 @@ export function confidenceBuckets(rows: Array<{ mapping_confidence: number }>): 
   return edges.map(([range, lo, hi]) => ({ range, count: rows.filter((r) => Number(r.mapping_confidence) >= lo && Number(r.mapping_confidence) < hi).length }));
 }
 
-export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestGet = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
 
   const now = new Date();
   const regions = configuredRegions(env);
@@ -181,9 +181,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   });
 };
 
-export const onRequestPost = async (context: { request: Request; env: Env }): Promise<Response> => {
+export const onRequestPost = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
-  if (!isAdmin(request, env)) return unauthorized();
+  if (!(await isAdminAsync(request, env))) return unauthorized();
   if (!supabaseConfigured(env)) return json({ error: 'db_not_configured' }, 503);
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const action = typeof body?.action === 'string' ? body.action : '';
@@ -197,7 +197,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
       now,
     );
     if (!result.ok) return json({ error: result.error }, result.httpStatus);
-    void logAdminAudit(env, 'trends-review', `match ${String(body?.id)} → ${result.status}${result.catalogId ? ` (${result.catalogId})` : ''}`);
+    await logAdminAudit(context, { action: 'trends-review', summary: `match ${String(body?.id)} → ${result.status}${result.catalogId ? ` (${result.catalogId})` : ''}`, target: String(body?.id ?? ''), after: { status: result.status, catalogId: result.catalogId ?? null } });
     return json(result);
   }
 
@@ -210,7 +210,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     const reviewer = typeof body?.reviewer === 'string' && body.reviewer.trim() ? body.reviewer.trim().slice(0, 60) : 'owner';
     const inserted = await sbInsertIgnore<{ id: number; region: string }>(env, 'vinax_trend_editorial', out.valid.map((v) => ({ ...v, imported_by: reviewer, import_batch: batch })), 'dedupe_key');
     if (inserted === null) return json({ error: 'db_write_failed' }, 500);
-    void logAdminAudit(env, 'trends-import', `${inserted.length} editorial entries (${out.valid.length - inserted.length} already imported)`);
+    await logAdminAudit(context, { action: 'trends-import', summary: `${inserted.length} editorial entries (${out.valid.length - inserted.length} already imported)`, after: { imported: inserted.length, skipped: out.valid.length - inserted.length } });
     const regions = [...new Set(out.valid.map((v) => v.region))];
     const refresh = await runIngest(env, { sources: ['editorial'], regions, trigger: 'admin' });
     return json({ ok: true, inserted: inserted.length, alreadyImported: out.valid.length - inserted.length, refresh: refresh.runs });
@@ -224,7 +224,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     if (!row.rows[0]) return json({ error: 'not_found' }, 404);
     const ok = await sbUpdate(env, 'vinax_trend_editorial', `id=eq.${id}`, { status: 'withdrawn' });
     if (!ok) return json({ error: 'db_write_failed' }, 500);
-    void logAdminAudit(env, 'trends-withdraw', `editorial ${id} — ${row.rows[0].title}`);
+    await logAdminAudit(context, { action: 'trends-withdraw', summary: `editorial ${id} — ${row.rows[0].title}`, target: String(id), before: { id, title: row.rows[0].title } });
     const refresh = await runIngest(env, { sources: ['editorial'], regions: [row.rows[0].region], trigger: 'admin' });
     return json({ ok: true, refresh: refresh.runs });
   }
@@ -235,7 +235,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     if (source && !providerById(source)) return json({ error: 'unknown_source' }, 400);
     if (region && !REGION_RE.test(region)) return json({ error: 'bad_region' }, 400);
     const result = await runIngest(env, { sources: source ? [source] : undefined, regions: region ? [region] : undefined, trigger: 'admin' });
-    void logAdminAudit(env, 'trends-run', `${source || 'all sources'} · ${region || 'all regions'} → ${result.runs.map((r) => `${r.source}/${r.region}:${r.status}`).join(', ') || 'nothing ran'}`);
+    await logAdminAudit(context, { action: 'trends-run', summary: `${source || 'all sources'} · ${region || 'all regions'} → ${result.runs.map((r) => `${r.source}/${r.region}:${r.status}`).join(', ') || 'nothing ran'}`, after: { runs: result.runs.map((r) => ({ source: r.source, region: r.region, status: r.status })) } });
     return json(result);
   }
 
