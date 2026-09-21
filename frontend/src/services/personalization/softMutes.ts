@@ -62,6 +62,11 @@ export function softMutesVersion(): number {
   return version;
 }
 
+/** For changes made elsewhere (a profile reset, a restored backup). */
+export function notifySoftMutesChanged(): void {
+  changed();
+}
+
 function changed(): void {
   version += 1;
   // Home's shelves filter when they render: tell them now, so a muted artist
@@ -84,6 +89,20 @@ function nameFor(p: TasteProfile, key: string): string {
   for (const a of Object.values(p.artists)) if (a.name && a.name.toLowerCase() === key) return a.name;
   // An id-keyed entry whose artist record is gone: say so rather than print an id.
   return /\d/.test(key) && !/\s/.test(key) ? 'An artist you muted' : key;
+}
+
+/**
+ * The same list, but stable between changes, so a component can use it as a
+ * `useSyncExternalStore` snapshot (a fresh array every call would re-render
+ * for ever). Recomputed when something changes it, and when an entry in the
+ * cached list has since run out.
+ */
+let listCache: { version: number; list: SoftMute[] } | null = null;
+export function softMutesSnapshot(now = Date.now()): SoftMute[] {
+  if (!listCache || listCache.version !== version || listCache.list.some((m) => m.until <= now)) {
+    listCache = { version, list: listSoftMutes(now) };
+  }
+  return listCache.list;
 }
 
 /** Active soft mutes, soonest to end first. Expired entries are never listed. */

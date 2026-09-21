@@ -1,21 +1,25 @@
-import { useState, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useTasteInsights } from '@/features/taste-profile/useTasteInsights';
 import { useRegion } from '@/features/location/useRegion';
-import { clearPersonalization } from '@/features/settings/actions';
 import type { SliderKey } from '@/services/personalization/profile';
 import { loadProfile, withProfile } from '@/services/personalization/storage';
 import { getSliders, DEFAULT_SLIDERS } from '@/services/personalization/dials';
 import { PageSkeleton } from '@/components/Skeletons';
-import { EmptyState } from '@/components/States';
+import { EmptyState, ErrorState } from '@/components/States';
+import { SoftMuteList } from '@/features/personalization/SoftMuteList';
+import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
 import { Link } from 'react-router-dom';
+
+const ResetTasteSheet = lazy(() => import('@/features/personalization/ResetTasteSheet').then((m) => ({ default: m.ResetTasteSheet })));
 
 function Bar({ label, value, max, suffix }: { label: string; value: number; max: number; suffix?: string }) {
   const pct = max > 0 ? Math.max(4, Math.round((value / max) * 100)) : 0;
   return (
     <div className="flex items-center gap-3 text-sm">
-      <span className="w-28 truncate text-ink-200">{label}</span>
+      <span className="w-32 sm:w-44 truncate text-ink-200" title={label}>{label}</span>
       <div className="flex-1 h-2.5 rounded-full bg-ink-800 overflow-hidden">
         <div className="h-full rounded-full bg-gradient-to-r from-ember-600 to-ember-400" style={{ width: `${pct}%` }} />
       </div>
@@ -96,9 +100,24 @@ function TasteDials() {
 
 export default function TasteProfilePage() {
   usePageTitle('Taste Profile');
-  const { data, isLoading } = useTasteInsights();
+  const { data, isLoading, isError, refetch } = useTasteInsights();
   const region = useRegion();
+  const queryClient = useQueryClient();
+  const [resetOpen, setResetOpen] = useState(false);
+  const afterReset = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['taste-insights'] });
+  };
 
+  // The read is on-device only, but the event log can still fail to open.
+  if (isError) {
+    return (
+      <ErrorState
+        title="Couldn’t read your taste profile"
+        message="The listening log on this device didn’t open. Nothing is lost — try again."
+        retry={() => void refetch()}
+      />
+    );
+  }
   if (isLoading || !data) return <PageSkeleton />;
 
   const hasSignal = data.totals.plays > 0;
@@ -110,9 +129,14 @@ export default function TasteProfilePage() {
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-display tracking-tight mb-1">Your Taste Profile</h1>
-      <p className="text-sm text-ink-400 mb-6">
+      <p className="text-sm text-ink-400 mb-5">
         Everything below is computed and stored only on this device. It powers Made For You.
       </p>
+
+      {/* 7.2 — the same plain-words preview Settings shows, and the way to add to it. */}
+      <div className="mb-5">
+        <PersonalizationPreview showProfileLink={false} />
+      </div>
 
       <TasteDials />
 
@@ -192,6 +216,13 @@ export default function TasteProfilePage() {
       )}
 
       <Section
+        title="Playing less of"
+        note="Artists you asked to hear less of with “Less like this”. Each one comes back on its own; “Never play” (Settings → Appearance & Playback) is the permanent block."
+      >
+        <SoftMuteList />
+      </Section>
+
+      <Section
         title="How recommendations are formed"
         note="Your taste profile stays on your device."
       >
@@ -207,15 +238,17 @@ export default function TasteProfilePage() {
       </Section>
 
       <button
-        onClick={() => {
-          if (window.confirm('Reset all personalization? Your favorites and queue stay; the taste profile and event log are erased.')) {
-            void clearPersonalization();
-          }
-        }}
-        className="w-full mt-2 px-5 py-3 rounded-2xl border border-red-500/40 text-red-300 font-semibold hover:bg-red-500/10"
+        onClick={() => setResetOpen(true)}
+        className="w-full mt-2 px-5 py-3 min-h-touch rounded-2xl border border-red-500/40 text-red-300 font-semibold hover:bg-red-500/10"
       >
         Reset personalization
       </button>
+      <p className="mt-2 text-xs text-ink-400">A backup is offered first — your favourites, playlists and history are not touched.</p>
+      {resetOpen && (
+        <Suspense fallback={null}>
+          <ResetTasteSheet onClose={() => setResetOpen(false)} onDone={afterReset} />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { scrollBehavior } from '@/utils/motion';
 import { useSettingsStore, type DiscoveryMode } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useRegion } from '@/features/location/useRegion';
@@ -9,12 +10,13 @@ import {
   clearFavoritesWithUndo,
   clearHistoryWithUndo,
   clearQueue,
-  confirmClearPersonalization,
   downloadProfileExport,
   importProfileJson,
   readBackupFile,
   resetAppState,
 } from '@/features/settings/actions';
+import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
+import { SoftMuteList } from '@/features/personalization/SoftMuteList';
 import { ACCENT_OPTIONS } from '@/constants/accents';
 import { activeFestival, nextFestival } from '@/constants/festivals';
 import { applyGlassLevel } from '@/utils/theme';
@@ -45,6 +47,7 @@ import { useUiStore } from '@/store/uiStore';
 import { lazy, Suspense } from 'react';
 
 const BackupCenter = lazy(() => import('@/features/settings/BackupCenter').then((m) => ({ default: m.BackupCenter })));
+const ResetTasteSheet = lazy(() => import('@/features/personalization/ResetTasteSheet').then((m) => ({ default: m.ResetTasteSheet })));
 
 /**
  * v5.19.0 — Settings search. A query at the top filters every row by its
@@ -71,17 +74,23 @@ function Highlight({ text, q }: { text: string; q: string }) {
   );
 }
 
-/** v7.0.0 — the three discovery modes; each note says what the mode really changes. */
-const DISCOVERY_OPTIONS: Array<{ value: DiscoveryMode; label: string }> = [
-  { value: 'familiar', label: 'Familiar' },
-  { value: 'balanced', label: 'Balanced' },
-  { value: 'discover', label: 'Discover' },
+/**
+ * v7.0.0 — the three discovery modes. 7.2: every mode carries its own
+ * one-line explanation, shown together, so the choice can be read rather
+ * than tried. The lines say what CHANGES, not how it feels.
+ */
+const DISCOVERY_OPTIONS: Array<{ value: DiscoveryMode; label: string; line: string }> = [
+  { value: 'familiar', label: 'Familiar', line: 'Mostly songs and artists you already play. New artists are rare.' },
+  { value: 'balanced', label: 'Balanced', line: 'Your taste first, with about one new artist in every four or five songs.' },
+  { value: 'discover', label: 'Discover', line: 'Up to half of a queue from artists you have never played. Home adds new languages.' },
 ];
-const DISCOVERY_NOTES: Record<DiscoveryMode, string> = {
-  familiar: 'Known ground: your favourites and songs you finished come back into the mix, new artists are rare, and the queue stays in its language.',
-  balanced: 'Mostly your taste, with about one new artist in every four or five songs. What you skip and finish in a sitting tips it either way.',
-  discover: 'Roams further: never-played artists rank higher and fill close to half of a queue — always in the language of the song that is playing, and introduced after a familiar opening. Home adds picks from languages you haven’t tried.',
-};
+
+/** The intensity slider in one plain line, for the value it is on now. */
+function intensityWords(v: number): string {
+  if (v <= 0.3) return 'Mostly what is popular and trending right now';
+  if (v >= 0.7) return 'Mostly your own listening';
+  return 'A mix of what is trending and what you play';
+}
 
 function Row({ label, note, children, stack }: { label: string; note?: string; children: ReactNode; stack?: boolean }) {
   const q = useContext(SettingsSearchCtx);
@@ -102,6 +111,23 @@ function Row({ label, note, children, stack }: { label: string; note?: string; c
         {note && <p className="text-xs text-ink-400 mt-0.5 max-w-md leading-relaxed"><Highlight text={note} q={q} /></p>}
       </div>
       <div className={stack ? 'sm:shrink-0' : 'shrink-0'}>{children}</div>
+    </div>
+  );
+}
+
+/**
+ * A full-width settings block: like `Row`, but the control sits under the
+ * label instead of beside it. Takes part in Settings search like every row.
+ */
+function Block({ label, note, keywords, children }: { label: string; note?: string; keywords?: string; children: ReactNode }) {
+  const q = useContext(SettingsSearchCtx);
+  if (!matchesQuery(q, label, note, keywords)) return null;
+  const id = `vx-block-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+  return (
+    <div data-settings-row className="py-3.5 border-b border-[color:var(--glass-border)] last:border-0">
+      <p id={id} className="text-sm font-medium"><Highlight text={label} q={q} /></p>
+      {note && <p className="text-xs text-ink-400 mt-0.5 mb-3 max-w-md leading-relaxed"><Highlight text={note} q={q} /></p>}
+      <div className={note ? undefined : 'mt-3'}>{children}</div>
     </div>
   );
 }
@@ -141,10 +167,13 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 function Section({
   title,
   icon: Icon,
+  id,
   children,
 }: {
   title: string;
   icon: ComponentType<{ className?: string }>;
+  /** Anchor target, so other screens can link straight to this section. */
+  id?: string;
   children: ReactNode;
 }) {
   const q = useContext(SettingsSearchCtx);
@@ -156,7 +185,7 @@ function Section({
     setEmpty(!!q && !el.querySelector('[data-settings-row]'));
   }, [q]);
   return (
-    <section ref={ref} className={cn('mb-6', empty && 'hidden')} data-settings-section>
+    <section ref={ref} id={id} className={cn('mb-6 scroll-mt-[calc(var(--vx-topbar-h)+16px)]', empty && 'hidden')} data-settings-section>
       <div className="flex items-center gap-2.5 px-1 mb-2.5">
         <span className="w-7 h-7 rounded-lg bg-ember-500/15 text-ember-500 flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4" />
@@ -298,6 +327,7 @@ export default function SettingsPage() {
   const [notifPerm, setNotifPerm] = useState<'granted' | 'denied' | 'unsupported' | 'unknown'>('unknown');
   const [eraseOpen, setEraseOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false); // C7 deletion receipt
+  const [resetOpen, setResetOpen] = useState(false); // 7.2 taste reset, backup first
   useDismissOnBack(eraseOpen, () => setEraseOpen(false));
   const eraseRef = useRef<HTMLDivElement>(null);
   useFocusTrap(eraseRef, eraseOpen, () => setEraseOpen(false));
@@ -330,6 +360,13 @@ export default function SettingsPage() {
   };
   const alarm = useAlarmStore();
   const collections = useLibraryStore((s) => s.collections);
+  // A link like /settings#your-data lands on the section, under the sticky bar.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    el?.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
+  }, [hash]);
 
   return (
     <SettingsSearchCtx.Provider value={settingsQuery.trim()}>
@@ -633,22 +670,37 @@ export default function SettingsPage() {
       {/* v5.19.0 — on-device sound processing (its rows take part in Settings search) */}
       <div data-tour="sound"><SoundSettings /></div>
       <Section title="Recommendations" icon={SparkleIcon}>
-        <Row stack label="Intensity" note="Low = mostly popular/trending. High = strongly personalized.">
-          <div className="flex items-center gap-2">
+        {/* 7.2 — what the app believes about this listener, before the switches that change it. */}
+        <Block
+          label="What VinaX thinks you like"
+          note="Read from the taste profile on this device. Nothing here is uploaded."
+          keywords="personalization preview taste languages artists muted"
+        >
+          <PersonalizationPreview />
+        </Block>
+        <Block
+          label="Trending vs. your taste"
+          note="How much Home and the DJ lean on what is popular right now, against what you actually play."
+          keywords="intensity personalization trending"
+        >
+          <div className="flex items-center gap-3 max-w-[320px]">
+            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">TRENDING</span>
             <input
               type="range"
-              aria-label="Recommendation intensity"
+              aria-label="Trending vs. your taste"
+              aria-valuetext={intensityWords(s.recommendationIntensity)}
               min={0}
               max={1}
               step={0.1}
               value={s.recommendationIntensity}
               onChange={(e) => s.setRecommendationIntensity(Number(e.target.value))}
-              className="w-32"
+              className="flex-1 accent-ember-500"
               style={{ '--fill': `${s.recommendationIntensity * 100}%` } as React.CSSProperties}
             />
-            <span className="text-xs text-ink-400 w-8 tabular-nums">{Math.round(s.recommendationIntensity * 100)}%</span>
+            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">YOUR TASTE</span>
           </div>
-        </Row>
+          <p className="mt-2 text-xs text-ink-300">{intensityWords(s.recommendationIntensity)}.</p>
+        </Block>
         <Row label="AI DJ" note="Lets the VinaX DJ engine sequence what plays next — an energy arc, no repeats, a reason for every song — and suggest a few songs beyond the app’s own picks, each checked against the catalogue before it can play. Off keeps the on-device order.">
           <Toggle on={s.aiDj} onChange={s.setAiDj} label="AI DJ" />
         </Row>
@@ -658,13 +710,41 @@ export default function SettingsPage() {
         <Row label="AI-designed shelves on Home" note="A “Designed for you” block with shelves the AI titles from your taste and the time of day, filled from the catalogue, and an AI-ordered “Trending for you”. Off hides the block and keeps Trending in your on-device taste order.">
           <Toggle on={s.aiHomeShelves} onChange={s.setAiHomeShelves} label="AI-designed shelves" />
         </Row>
-        <Row stack label="Discovery" note={DISCOVERY_NOTES[s.discoveryMode]}>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Discovery mode">
+        <Block
+          label="Discovery"
+          note="How far recommendations roam. In every mode a queue stays in the language of the song that is playing and opens with songs you know."
+          keywords="familiar balanced discover explore new artists"
+        >
+          <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="Discovery mode">
             {DISCOVERY_OPTIONS.map((o) => (
-              <Chip key={o.value} active={s.discoveryMode === o.value} onClick={() => s.setDiscoveryMode(o.value)}>{o.label}</Chip>
+              <button
+                key={o.value}
+                type="button"
+                aria-label={o.label}
+                aria-pressed={s.discoveryMode === o.value}
+                aria-describedby={`vx-discovery-${o.value}`}
+                onClick={() => s.setDiscoveryMode(o.value)}
+                className={cn(
+                  'text-left rounded-xl border p-3 min-h-touch transition-colors',
+                  s.discoveryMode === o.value
+                    ? 'border-ember-400/50 bg-ember-500/10'
+                    : 'border-[color:var(--glass-border)] bg-ink-850/40 hover:bg-ink-800/60',
+                )}
+              >
+                <span className={cn('block text-sm font-semibold', s.discoveryMode === o.value && 'text-ember-400')}>{o.label}</span>
+                <span id={`vx-discovery-${o.value}`} className="block text-[11px] text-ink-400 mt-0.5 leading-snug">{o.line}</span>
+              </button>
             ))}
           </div>
-        </Row>
+        </Block>
+        {/* 7.2 — the temporary mutes, kept well away from the permanent "Never play" list. */}
+        <Block
+          label="Playing less of"
+          note="Artists you asked to hear less of with “Less like this”. Each one comes back on its own. For a permanent block use Never play, under Appearance & Playback."
+          keywords="soft mute muted less like this artists"
+        >
+          <SoftMuteList />
+        </Block>
         <Row label="Kid mode" note="Hides songs the catalog marks explicit — everywhere — and keeps a separate taste profile so a child’s listening never shapes yours. Favorites and downloads stay shared. Only as good as the catalog’s explicit flags.">
           <Toggle
             on={s.kidMode}
@@ -790,7 +870,7 @@ export default function SettingsPage() {
         </Row>
       </Section>
 
-      <Section title="Your Data" icon={DownloadIcon}>
+      <Section title="Your Data" icon={DownloadIcon} id="your-data">
         <UsernameRow />
         <Row label="Move to a new device" note="Encrypted QR handoff — scan on the new phone and everything comes across. Parked 10 minutes, burned after one use.">
           <Link to="/handoff" className="px-4 py-2 rounded-full glass-button text-sm inline-block">Start</Link>
@@ -839,9 +919,14 @@ export default function SettingsPage() {
         <Row label="Clear cached metadata" note="Drops the in-memory API cache; data refetches on demand.">
           <button onClick={clearCachedMetadata} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button>
         </Row>
-        <Row label="Clear personalization profile" note="Erases taste profile + event log. Favorites stay.">
-          <button onClick={() => void confirmClearPersonalization()} className="px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button>
+        <Row label="Reset taste profile" note="Erases what VinaX learned — languages, artists, habits, dials and “Less like this” mutes — and the event log behind them. Offers a backup first. Favorites, playlists and history stay.">
+          <button onClick={() => setResetOpen(true)} className="px-4 py-2 min-h-touch rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Reset</button>
         </Row>
+        {resetOpen && (
+          <Suspense fallback={null}>
+            <ResetTasteSheet onClose={() => setResetOpen(false)} showDataLink={false} />
+          </Suspense>
+        )}
         <Row label="Reset app state" note="Erases everything VinaX stores on this device and reloads.">
           <button
             onClick={() => setEraseOpen(true)}

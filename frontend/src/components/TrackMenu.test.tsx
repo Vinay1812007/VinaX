@@ -156,7 +156,8 @@ describe('<TrackMenu />', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: '7 days' }));
     expect(screen.queryByRole('menu')).toBeNull();
     expect(listSoftMutes().map((m) => m.name)).toEqual(['సిద్ శ్రీరామ్']);
-    const toast = useToastStore.getState().toasts.at(-1)!;
+    const toasts = useToastStore.getState().toasts;
+    const toast = toasts[toasts.length - 1];
     expect(toast.message).toMatch(/^Less of సిద్ శ్రీరామ్ until /);
     toast.action!.onClick();
     expect(listSoftMutes()).toEqual([]);

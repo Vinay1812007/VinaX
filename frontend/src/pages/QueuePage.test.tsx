@@ -119,7 +119,8 @@ describe('QueuePage reordering', () => {
     // Focus moved to the row that took its place, not to nowhere.
     expect(document.activeElement).toBe(removeButton('Twice'));
 
-    const undo = useToastStore.getState().toasts.at(-1)?.action;
+    const toasts = useToastStore.getState().toasts;
+    const undo = toasts[toasts.length - 1]?.action;
     expect(undo?.label).toBe('Undo');
     act(() => undo!.onClick());
     expect(order().map((t) => t.split(/DJ pick|Added by you/)[0])).toEqual(['Alpha', 'Twice', 'Beta', 'Twice']);
