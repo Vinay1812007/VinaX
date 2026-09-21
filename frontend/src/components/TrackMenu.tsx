@@ -10,10 +10,11 @@ import { shareSongCard, shareSongStoryCard } from '@/utils/songCard';
 import { toast } from '@/store/toastStore';
 import { isNativePlatform } from '@/services/native';
 import { sendFeedback } from '@/services/feedback';
-import { softMuteArtist } from '@/services/personalization/updater';
 import { useReasonStore } from '@/store/reasonStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { downloadSong, removeDownload } from '@/services/downloads';
+import { SOFT_MUTE_DAYS } from '@/services/personalization/softMutes';
+import { lessLikeThis, moreLikeThis, tuneLabel } from '@/features/queue/steer';
 import { DotsIcon } from './Icons';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 // v5.17.0 — lazy: the memories sheet is a rare tap, never first-load code.
@@ -42,13 +43,27 @@ export function placePanel(
   return { top, left };
 }
 
+/** One entry a caller adds to the top of the menu (the Queue page's row actions). */
+export interface TrackMenuItem {
+  label: string;
+  action: () => void;
+}
+
+interface TrackMenuProps {
+  song: Song;
+  /** Accessible name of the trigger. Rows that repeat per song say which song. */
+  label?: string;
+  /** Context actions shown first, above a divider (e.g. "Keep this song", "Move up"). */
+  leadItems?: TrackMenuItem[];
+}
+
 /**
  * The "⋯" trigger. Deliberately light: every song row renders one, so the
  * trigger holds no store subscriptions and builds nothing — the ~25-item
  * action list, its six subscriptions and the back-button registration all
  * live in <TrackMenuPanel/>, which only exists while the menu is open.
  */
-export function TrackMenu({ song }: { song: Song }) {
+export function TrackMenu({ song, label = 'More options', leadItems }: TrackMenuProps) {
   const [memories, setMemories] = useState(false);
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -64,7 +79,7 @@ export function TrackMenu({ song }: { song: Song }) {
       <button
         ref={btnRef}
         type="button"
-        aria-label="More options"
+        aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={(e) => {
@@ -76,7 +91,7 @@ export function TrackMenu({ song }: { song: Song }) {
       >
         <DotsIcon className="w-4 h-4" />
       </button>
-      {open && <TrackMenuPanel song={song} anchorRef={btnRef} onClose={close} onShowMemories={showMemories} />}
+      {open && <TrackMenuPanel song={song} anchorRef={btnRef} onClose={close} onShowMemories={showMemories} leadItems={leadItems} />}
       {memories && (
         <Suspense fallback={null}>
           <SongMemoriesSheet song={song} onClose={() => setMemories(false)} />
@@ -91,7 +106,12 @@ interface PanelProps {
   anchorRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onShowMemories: () => void;
+  leadItems?: TrackMenuItem[];
 }
+
+type MenuEntry = (TrackMenuItem & { submenu?: boolean; id?: string }) | 'divider' | null;
+
+const fmtDate = (ts: number): string => new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
 /**
  * The open menu. Portalled to <body> and positioned from the trigger's
@@ -99,7 +119,7 @@ interface PanelProps {
  * of its row, so it painted UNDER the rows after it and was clipped by any
  * transformed / overflow-hidden ancestor.
  */
-function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps) {
+function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }: PanelProps) {
   // Android back closes the menu instead of leaving the page (audit P0-2).
   useDismissOnBack(true, onClose);
   const navigate = useNavigate();
@@ -114,6 +134,9 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
 
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<PanelPos | null>(null);
+  // 7.2 — "Less like this" asks for how long in a second view of the same menu.
+  const [view, setView] = useState<'main' | 'less'>('main');
+  const returnTo = useRef<string | null>(null);
 
   // Position before first paint, then follow the trigger on scroll / resize.
   // If the trigger leaves the viewport there is nothing left to anchor to.
@@ -143,7 +166,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', place);
     };
-  }, [anchorRef, onClose]);
+  }, [anchorRef, onClose, view]);
 
   // v7.0.1 — while the menu is open, the page behind it must not move. The
   // page scrolls inside its own container (not <body>), so a body lock does
@@ -199,8 +222,18 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
   // and therefore unfocusable, until it has a position).
   const placed = pos !== null;
   useEffect(() => {
-    if (placed) menuRef.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
-  }, [placed]);
+    if (!placed) return;
+    const back = returnTo.current;
+    returnTo.current = null;
+    const target = (back && menuRef.current?.querySelector<HTMLElement>(`[data-menu-id="${back}"]`)) || menuRef.current?.querySelector<HTMLElement>('[role=menuitem]');
+    target?.focus({ preventScroll: true });
+  }, [placed, view]);
+
+  const openLess = (): void => setView('less');
+  const leaveLess = (): void => {
+    returnTo.current = 'less';
+    setView('main');
+  };
 
   const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     // Portals bubble React events to the React parent — a song row that plays on Enter.
@@ -208,7 +241,14 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
     if (e.key === 'Escape') {
       // Stopping the React event above also keeps it from the document listener.
       e.nativeEvent.stopPropagation();
-      onClose();
+      // In the "how long?" view, Escape steps back to the full menu first.
+      if (view === 'less') leaveLess();
+      else onClose();
+      return;
+    }
+    if (view === 'less' && e.key === 'ArrowLeft') {
+      e.preventDefault();
+      leaveLess();
       return;
     }
     if (e.key === 'Tab') {
@@ -229,10 +269,44 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
     els[to].focus();
   };
 
-  const items: Array<{ label: string; action: () => void } | null> = [
+  const artist = song.artists[0]?.name ?? '';
+
+  const moreLike = (): void => {
+    const r = moreLikeThis(song);
+    if (!r.retuned) toast('Got it — more like this for the rest of this session');
+    else if (r.intent) toast(`More like this — new DJ picks, ${tuneLabel(r.intent).toLowerCase()}`);
+    else toast(artist ? `More like this — new DJ picks lean toward ${artist}` : 'More like this — new DJ picks on the way');
+  };
+
+  const lessLike = (days: number): void => {
+    const r = lessLikeThis(song, days);
+    if (!r) return;
+    const { receipt, refreshed } = r;
+    toast(`Less of ${receipt.mute.name} until ${fmtDate(receipt.mute.until)}${refreshed ? ' · DJ picks refreshed' : ''}`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          receipt.undo();
+          toast(`${receipt.mute.name} is back to normal`);
+        },
+      },
+    });
+  };
+
+  const entries: MenuEntry[] = [
+    ...(leadItems?.length ? [...leadItems, 'divider' as const] : []),
     { label: 'Start song radio', action: () => startRadio(song) },
     { label: 'Play next', action: () => enqueueNext(song) },
     { label: 'Add to queue', action: () => enqueue(song) },
+    // 7.2 — steer what comes next. "More like this" is for this sitting and
+    // retunes the DJ picks now; "Less like this" plays the artist less for a
+    // while (a soft mute that ends on its own).
+    { label: 'More like this', action: moreLike },
+    artist ? { id: 'less', label: 'Less like this…', action: openLess, submenu: true } : null,
+    // C4 — only offered when this song was actually recommended (an entry
+    // exists); library/search results aren't automatic picks, so no item.
+    whyLine ? { label: 'Why this song?', action: () => toast(whyLine) } : null,
+    'divider',
     // v5.12.0 — Listen Later: the one-tap "come back to this" list.
     {
       label: inLater ? 'Remove from Listen Later' : 'Listen later',
@@ -284,14 +358,8 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
           toast(ok ? 'Thanks — reported' : 'Could not send report'),
         ),
     },
-    // C4 — only offered when this song was actually recommended (an entry
-    // exists); library/search results aren't automatic picks, so no item.
-    whyLine
-      ? {
-          label: 'Why this song?',
-          action: () => toast(whyLine),
-        }
-      : null,
+    'divider',
+    // Permanent blocks, kept apart from the temporary "Less like this" above.
     {
       label: 'Not interested',
       action: () => {
@@ -299,36 +367,26 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
         toast('We’ll show this less', { action: { label: 'Undo', onClick: () => toggleHidden(song.id) } });
       },
     },
-    song.artists[0]
+    artist
       ? {
-          // Package A3 — long-form "less of this artist" (14-day soft-mute
-          // + 5× negative bump). Complements "Not interested" which only
-          // hides the specific song. Toast is undo-able within 5 s.
-          label: `Show fewer like ${song.artists[0].name.slice(0, 20)}${song.artists[0].name.length > 20 ? '…' : ''}`,
+          // v5.12.0 — hard block: this artist never plays from any feed until
+          // allowed again in Settings → Appearance & Playback → Never play.
+          // The name is truncated by CSS, never by slicing: a cut in the middle
+          // of an Indic cluster leaves a dangling vowel sign.
+          label: `Never play ${artist}`,
           action: () => {
-            softMuteArtist(song, 14);
-            toast(`Muted ${song.artists[0].name} for 2 weeks`);
+            toggleHiddenArtist(artist);
+            toast(`${artist} won’t play again`, { action: { label: 'Undo', onClick: () => toggleHiddenArtist(artist) } });
           },
         }
       : null,
-    song.artists[0]?.name
-      ? {
-          // v5.12.0 — hard block: this artist never plays from any feed,
-          // artist is excluded from future catalog recommendations until removed
-          // in Settings → Playback.
-          label: `Never play ${song.artists[0].name.slice(0, 20)}${song.artists[0].name.length > 20 ? '…' : ''}`,
-          action: () => {
-            toggleHiddenArtist(song.artists[0].name);
-            toast(`${song.artists[0].name} won’t play again`, { action: { label: 'Undo', onClick: () => toggleHiddenArtist(song.artists[0].name) } });
-          },
-        }
-      : null,
+    'divider',
     {
       label: 'Share',
       action: () => void shareLink(songPath(song), song.title).then((r) => r === 'copied' && toast('Link copied')),
     },
     {
-      // D15 — pre-filled WhatsApp share (works on app + web via wa.me).
+      // D15 — pre-filled share to a messaging app (works on app + web).
       label: 'Share to WhatsApp',
       action: () =>
         window.open(
@@ -352,14 +410,24 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
       action: () => void shareSongCard(song).then((ok) => { if (!ok) toast('Could not create image'); }),
     },
     {
-      // D15 — 9:16 for Instagram/WhatsApp status.
+      // D15 — a 9:16 card for status and story formats.
       label: 'Share as story',
       action: () => void shareSongStoryCard(song).then((ok) => { if (!ok) toast('Could not create image'); }),
     },
   ];
 
+  const lessEntries: MenuEntry[] = [
+    ...SOFT_MUTE_DAYS.map((d) => ({ label: `${d} days`, action: () => lessLike(d) })),
+    'divider',
+    { id: 'back', label: 'Back', action: leaveLess, submenu: true },
+  ];
+
+  // Dividers only between real items: none leading, trailing or doubled.
+  const shown = (view === 'less' ? lessEntries : entries).filter((e): e is Exclude<MenuEntry, null> => e !== null);
+  const visible = shown.filter((e, i) => e !== 'divider' || (i > 0 && i < shown.length - 1 && shown[i - 1] !== 'divider'));
 
   const stop = (e: React.SyntheticEvent): void => e.stopPropagation();
+  const itemClass = 'w-full text-left rounded-sm px-3 py-2.5 min-h-touch text-[14px] font-medium text-ink-100 hover:bg-ink-700 focus-visible:bg-ink-700 truncate';
 
   return createPortal(
     // Touch + click are stopped here for the same portal-bubbling reason as
@@ -369,26 +437,47 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories }: PanelProps
       <div
         ref={menuRef}
         role="menu"
-        aria-label={`More options for ${song.title}`}
+        aria-label={view === 'less' ? `Less like this: play less of ${artist} for how long?` : `More options for ${song.title}`}
         onKeyDown={onMenuKeyDown}
         className="fixed z-[71] w-56 rounded-md p-1 animate-fade-up max-h-72 overflow-y-auto overscroll-contain bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)]"
         style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
       >
-        {items.filter(Boolean).map((item) => (
-          <button
-            key={item!.label}
-            type="button"
-            role="menuitem"
-            tabIndex={-1}
-            onClick={() => {
-              onClose();
-              item!.action();
-            }}
-            className="w-full text-left rounded-sm px-3 py-2.5 text-[14px] font-medium text-ink-100 hover:bg-ink-700 focus-visible:bg-ink-700 truncate"
-          >
-            {item!.label}
-          </button>
-        ))}
+        {view === 'less' && (
+          // Not a menu item: the heading of the "how long?" view.
+          <div role="presentation" className="px-3 pt-2 pb-1.5">
+            <p className="text-[12px] font-semibold text-ink-300 leading-snug">
+              Play less of <span className="text-ink-100 break-words">{artist}</span> for:
+            </p>
+            <p className="mt-1 text-[11px] text-ink-400 leading-snug">Ends on its own. “Never play” is the permanent block.</p>
+          </div>
+        )}
+        {visible.map((item, i) =>
+          item === 'divider' ? (
+            <div key={`divider-${i}`} role="separator" className="my-1 h-px bg-[var(--glass-border)]" />
+          ) : (
+            <button
+              key={item.id ?? item.label}
+              type="button"
+              role="menuitem"
+              tabIndex={-1}
+              data-menu-id={item.id}
+              aria-haspopup={item.id === 'less' ? 'menu' : undefined}
+              title={item.label}
+              onClick={() => {
+                // Opening or leaving the "how long?" view keeps the menu open.
+                if (item.submenu) {
+                  item.action();
+                  return;
+                }
+                onClose();
+                item.action();
+              }}
+              className={itemClass}
+            >
+              {item.label}
+            </button>
+          ),
+        )}
       </div>
     </div>,
     document.body,
