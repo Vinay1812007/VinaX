@@ -171,6 +171,12 @@ validation work), fixtures 1.0.0, harness 1.0.0, 12 salts per fixture.
 | Continuations over that allocation with familiar songs free | 64 | 60 | — |
 | Familiar-first compliance (slot 1) | 89.5 % | 93.0 % | 716 / 684 opportunities |
 | Queue-ready latency p50 / p95 (instant sources) | 0.8 / 1.5 ms | 0.8 / 1.5 ms | 828 / 816 |
+
+Every row above except the last is identical between runs — the harness proves
+that on each run. The latency row is not: it moves by a few tenths of a
+millisecond with the machine's load (a later run of the same commit read
+1.0 / 2.8 ms). Read it as an order of magnitude, not a constant.
+
 | Relaxations reported to the caller | not exposed | `language-lock` ×12 | — |
 
 Reading the table:
