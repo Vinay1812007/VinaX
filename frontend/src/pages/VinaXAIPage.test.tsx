@@ -122,7 +122,7 @@ describe('VinaX AI chat', () => {
     await waitFor(() => expect(document.body.textContent).toContain('short'));
     await waitFor(() => expect(screen.queryByRole('status', { name: 'Thinking' })).toBeNull());
     expect(posted).toHaveLength(1);
-    expect(posted[0]).toMatchObject({ mode: 'muse', web: false });
+    expect(posted[0]).toMatchObject({ mode: 'auto', web: false });
     expect(document.body.textContent).not.toContain('>>>');
     expect(screen.getByRole('button', { name: 'Show an example' })).toBeTruthy();
     const actions = screen.getByRole('group', { name: 'Reply actions' });
@@ -139,7 +139,7 @@ describe('VinaX AI chat', () => {
 
   it('one model menu: opening it fetches the catalogue once, and a catalogue pick goes on the wire as mode + model', async () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Model: Balanced' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
     const list = await screen.findByRole('listbox', { name: 'Choose model' });
     await waitFor(() => expect(within(list).getByText('plain-8b')).toBeTruthy());
     expect(catalogCalls).toBe(1);
@@ -175,7 +175,7 @@ describe('VinaX AI chat', () => {
     await waitFor(() => expect(posted).toHaveLength(1));
     expect(posted[0]).toMatchObject({ mode: 'scholar', model: 'vendor/agentic' });
     fireEvent.click(screen.getByRole('button', { name: 'Agent mode' }));
-    expect(screen.getByRole('button', { name: 'Model: Balanced' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Model: Auto' })).toBeTruthy();
   });
 
   it('disables the Agent toggle, with the reason, when no agent model is being served', async () => {

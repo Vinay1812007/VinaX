@@ -31,8 +31,10 @@ if (fs.existsSync(nativeSrc)) {
 }
 
 // 1b-res. Widget resources: copy native-android/res/** (layout, drawable,
-// xml) into the app's res tree so the quick-play widget's RemoteViews and
-// provider-info compile with the project.
+// xml, values) into the app's res tree so the widgets' RemoteViews, the
+// provider-info files and the playback notification's icons and strings
+// compile with the project. Only files are copied (one level deep); every
+// VinaX file is prefixed `vinax_` so it never collides with the template's.
 const nativeRes = path.join(root, 'native-android', 'res');
 if (fs.existsSync(nativeRes)) {
   for (const dir of fs.readdirSync(nativeRes)) {
@@ -100,10 +102,29 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         super.onPause();
-        // Keep the WebView's JS + <audio> alive while backgrounded so the
-        // notification media controls (play/pause/next) work without reopening
-        // the app. Without this the WebView freezes and a "play" tap is only
-        // processed once the app returns to the foreground.
+        keepWebViewAlive();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        // onStop is where the activity is no longer visible at all (home
+        // button, another app on top); re-assert here as well because some
+        // vendor skins pause the WebView between onPause and onStop.
+        keepWebViewAlive();
+    }
+
+    /**
+     * Keep the WebView's JS + audio element alive while the app is in the
+     * background so the notification, lock-screen and widget controls
+     * (play / pause / next) act without reopening the app. Without this the
+     * WebView's timers freeze and a "play" tap is only processed once the
+     * app returns to the foreground. WebView.onResume() and resumeTimers()
+     * are idempotent, so calling them again here and in the base class's
+     * onResume (Capacitor's keepRunning default) cannot double-resume.
+     * There is no onResume override on purpose.
+     */
+    private void keepWebViewAlive() {
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
                 getBridge().getWebView().onResume();
@@ -171,7 +192,10 @@ if (fs.existsSync(manifestPath)) {
             </intent-filter>
         </service>
 
-        <receiver android:name=".VinaxQuickPlayWidget" android:exported="true">
+        <receiver
+            android:name=".VinaxQuickPlayWidget"
+            android:label="@string/vinax_widget_quickplay_label"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -180,7 +204,10 @@ if (fs.existsSync(manifestPath)) {
                 android:resource="@xml/vinax_widget_info" />
         </receiver>
 
-        <receiver android:name=".VinaxPlayerWidget" android:exported="true">
+        <receiver
+            android:name=".VinaxPlayerWidget"
+            android:label="@string/vinax_widget_player_label"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

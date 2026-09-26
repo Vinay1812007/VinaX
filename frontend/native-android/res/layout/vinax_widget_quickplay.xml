@@ -1,16 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Quick-play widget: logo, "Play my mix", a shuffle hint and the violet
+     play disc. The whole card is one tap (VinaxQuickPlayWidget). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/vinax_widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="12dp"
+    android:paddingStart="12dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp"
     android:background="@drawable/vinax_widget_bg">
 
     <ImageView
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:id="@+id/vinax_widget_logo"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
         android:src="@mipmap/ic_launcher"
         android:contentDescription="@null" />
 
@@ -19,32 +25,55 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:layout_marginStart="12dp"
+        android:layout_marginEnd="6dp"
         android:orientation="vertical">
 
         <TextView
-            android:layout_width="wrap_content"
+            android:id="@+id/vinax_widget_title"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="VinaX"
-            android:textColor="#FFFFFF"
+            android:text="@string/vinax_widget_quickplay_title"
+            android:textColor="@color/vinax_widget_text"
             android:textSize="15sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Tap to play your Aura Mix"
-            android:textColor="#B9BDC9"
-            android:textSize="12sp"
+            android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="4dp"
+                android:src="@drawable/vinax_ic_shuffle"
+                android:tint="@color/vinax_widget_text_muted"
+                android:contentDescription="@string/vinax_cd_shuffle" />
+
+            <TextView
+                android:id="@+id/vinax_widget_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/vinax_widget_quickplay_subtitle"
+                android:textColor="@color/vinax_widget_text_muted"
+                android:textSize="12sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
     </LinearLayout>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="▶"
-        android:textColor="#22D3EE"
-        android:textSize="22sp"
-        android:paddingStart="8dp"
-        android:paddingEnd="4dp" />
+    <ImageButton
+        android:id="@+id/vinax_widget_play"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/vinax_ic_play"
+        android:tint="@color/vinax_on_accent"
+        android:background="@drawable/vinax_widget_play_bg"
+        android:contentDescription="@string/vinax_cd_play" />
 </LinearLayout>

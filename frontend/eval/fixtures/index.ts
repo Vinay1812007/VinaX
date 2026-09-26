@@ -208,8 +208,9 @@ export function buildFixtures(now: number): EvalFixture[] {
   const mixedQueue = listener(now, 'hindi', { id: 'mixed-queue', title: 'Mixed-language profile, queue languages: mix (8.1)', notes: 'Hindi seed, Hindi + Telugu + Tamil listener, mix policy on: the queue may change language within the rules.', queueLanguages: 'mix' });
   mixedQueue.pinnedLanguages = ['hindi', 'telugu', 'tamil'];
   mixedQueue.profile = warmProfile(now, { languages: { hindi: 30, telugu: 22, tamil: 14 }, artists: [...hi.artists.slice(0, 2), ...te.artists.slice(0, 2)] });
-  mixedQueue.related = [...pool('hindi', { prefix: 'mixq-r', count: 10, offset: 1 }), ...pool('telugu', { prefix: 'mixq-t', count: 6, offset: 2 }), ...pool('tamil', { prefix: 'mixq-x', count: 6, offset: 3 }), ...pool('punjabi', { prefix: 'mixq-p', count: 4, offset: 4 })];
-  mixedQueue.search = [...pool('hindi', { prefix: 'mixq-s', count: 6, offset: 9, artistPattern: [3, 4, 5, 6, 7, 3] }), ...pool('telugu', { prefix: 'mixq-st', count: 4, offset: 5 })];
+  // Enough Hindi for a whole sitting (the `mixed` fixture starves its lock on purpose; this one measures the mix rules under supply).
+  mixedQueue.related = [...pool('hindi', { prefix: 'mixq-r', count: 26, offset: 1 }), ...pool('telugu', { prefix: 'mixq-t', count: 8, offset: 2 }), ...pool('tamil', { prefix: 'mixq-x', count: 8, offset: 3 }), ...pool('punjabi', { prefix: 'mixq-p', count: 4, offset: 4 })];
+  mixedQueue.search = [...pool('hindi', { prefix: 'mixq-s', count: 12, offset: 9, artistPattern: [3, 4, 5, 6, 7, 3, 8, 9, 4, 5, 6, 7] }), ...pool('telugu', { prefix: 'mixq-st', count: 4, offset: 5 })];
 
   const prefs = listener(now, 'telugu', { id: 'prefs', title: 'Mixed preferences (quiet and loud)', notes: 'Two clusters in one pool: the arc and the energy step rules decide the order.' });
   prefs.related = [

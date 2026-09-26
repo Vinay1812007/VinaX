@@ -62,8 +62,13 @@ export interface Summary {
   refinements: Record<string, number>;
   relaxed: Record<string, number>;
   aiSongsShipped: number;
+  /** 8.1.0 — language-opening / language-run breaks the engine reported as its own `language-mix` give-way (nothing in the queue language was left). */
+  languageMixExcused: number;
   latency: { p50: number; p95: number; max: number; samples: number };
 }
+
+const MIX_KINDS = ['language-opening', 'language-run'] as const;
+const mixBreaks = (v: Violations): number => v['language-opening'] + v['language-run'];
 
 function summariseBatches(sessions: SessionRecord[]): Summary {
   const batches: BatchRecord[] = sessions.flatMap((s) => s.batches);
@@ -75,10 +80,15 @@ function summariseBatches(sessions: SessionRecord[]): Summary {
   let slot2 = 0;
   let over = 0;
   const relaxed: Record<string, number> = {};
+  let mixExcused = 0;
   for (const b of batches) {
     addViolations(violations, b.violations);
+    // 8.1.0 — the mix rules give way only when the engine says nothing in the
+    // queue language was left; that batch is excused its opening/run breaks.
+    const mixStarved = b.relaxed.includes('language-mix');
+    if (mixStarved) mixExcused += mixBreaks(b.violations);
     // Each order is excused its own off-language songs when the lock was starved.
-    queueReadyHard += totalViolations(b.violationsQueueReady, ['off-language']) + (b.lockStarved ? 0 : b.violationsQueueReady['off-language']);
+    queueReadyHard += totalViolations(b.violationsQueueReady, ['off-language', ...MIX_KINDS]) + (b.lockStarved ? 0 : b.violationsQueueReady['off-language']) + (mixStarved ? 0 : mixBreaks(b.violationsQueueReady));
     excused += b.offLanguageExcused;
     if (b.familiarAvailable > 0 && b.n > 0) {
       opportunities += 1;
@@ -90,7 +100,8 @@ function summariseBatches(sessions: SessionRecord[]): Summary {
   }
   const songs = batches.reduce((n, b) => n + b.n, 0);
   const offLanguageUnexcused = Math.max(0, violations['off-language'] - excused);
-  const hard = totalViolations(violations, ['off-language']) + offLanguageUnexcused;
+  const mixUnexcused = Math.max(0, mixBreaks(violations) - mixExcused);
+  const hard = totalViolations(violations, ['off-language', ...MIX_KINDS]) + offLanguageUnexcused + mixUnexcused;
   return {
     sessions: sessions.length,
     batches: batches.length,
@@ -100,6 +111,7 @@ function summariseBatches(sessions: SessionRecord[]): Summary {
     violations: { ...violations, 'off-language': offLanguageUnexcused },
     hardViolations: hard,
     offLanguageExcused: excused,
+    languageMixExcused: mixExcused,
     queueReadyHardViolations: queueReadyHard,
     repetition: {
       sameLeadBackToBack: sessions.reduce((n, s) => n + s.sameLeadBackToBack, 0),

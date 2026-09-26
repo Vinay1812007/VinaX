@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Now Playing widget, 4x1 (and any height below the tall threshold).
+     RemoteViews-safe views only; every id is shared with the tall layout. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/vinax_wp_root"
     android:layout_width="match_parent"
@@ -6,7 +8,7 @@
     android:orientation="horizontal"
     android:gravity="center_vertical"
     android:paddingStart="12dp"
-    android:paddingEnd="8dp"
+    android:paddingEnd="10dp"
     android:paddingTop="10dp"
     android:paddingBottom="10dp"
     android:background="@drawable/vinax_widget_player_bg">
@@ -16,23 +18,24 @@
         android:layout_width="56dp"
         android:layout_height="56dp"
         android:scaleType="centerCrop"
-        android:src="@mipmap/ic_launcher"
-        android:contentDescription="@null" />
+        android:src="@drawable/vinax_widget_art_placeholder"
+        android:contentDescription="@string/vinax_cd_artwork" />
 
     <LinearLayout
+        android:id="@+id/vinax_wp_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:layout_marginStart="12dp"
-        android:layout_marginEnd="4dp"
+        android:layout_marginEnd="6dp"
         android:orientation="vertical">
 
         <TextView
             android:id="@+id/vinax_wp_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="VinaX"
-            android:textColor="#FFFFFF"
+            android:text="@string/vinax_widget_idle_title"
+            android:textColor="@color/vinax_widget_text"
             android:textSize="15sp"
             android:textStyle="bold"
             android:maxLines="1"
@@ -42,8 +45,9 @@
             android:id="@+id/vinax_wp_artist"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Tap to start listening"
-            android:textColor="#B3B3B3"
+            android:layout_marginTop="2dp"
+            android:text="@string/vinax_widget_idle_subtitle"
+            android:textColor="@color/vinax_widget_text_muted"
             android:textSize="12sp"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -51,28 +55,34 @@
 
     <ImageButton
         android:id="@+id/vinax_wp_prev"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:src="@android:drawable/ic_media_previous"
-        android:tint="#FFFFFF"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Previous" />
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:padding="8dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/vinax_ic_prev"
+        android:background="@drawable/vinax_widget_button_bg"
+        android:contentDescription="@string/vinax_cd_previous" />
 
     <ImageButton
         android:id="@+id/vinax_wp_toggle"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:src="@android:drawable/ic_media_play"
-        android:tint="#000000"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="6dp"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/vinax_ic_play"
+        android:tint="@color/vinax_on_accent"
         android:background="@drawable/vinax_widget_play_bg"
-        android:contentDescription="Play" />
+        android:contentDescription="@string/vinax_cd_play" />
 
     <ImageButton
         android:id="@+id/vinax_wp_next"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:src="@android:drawable/ic_media_next"
-        android:tint="#FFFFFF"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Next" />
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:padding="8dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/vinax_ic_next"
+        android:background="@drawable/vinax_widget_button_bg"
+        android:contentDescription="@string/vinax_cd_next" />
 </LinearLayout>

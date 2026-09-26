@@ -1040,6 +1040,8 @@ export const usePlayerStore = create<PlayerState>()(
           saveOwnership();
           audioEngine.pause();
           set({ queue: [], index: 0, isPlaying: false, currentTime: 0, duration: 0 });
+          // 8.1.0 — an empty queue ends the media session: notification, lock-screen controls and the widget clear.
+          updateMediaMetadata(null);
         },
 
         togglePlay: () => {

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Previous / next: a quiet translucent disc (no theme attributes — a
+     RemoteViews layout is inflated inside the launcher's theme). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/vinax_widget_button_surface" />
+</shape>

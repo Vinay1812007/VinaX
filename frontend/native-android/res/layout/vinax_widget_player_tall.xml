@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Now Playing widget, tall (4x2 and up): artwork + text on top, a centred
+     transport row below. Same ids as vinax_widget_player.xml. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/vinax_wp_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="14dp"
+    android:background="@drawable/vinax_widget_player_bg">
+
+    <LinearLayout
+        android:id="@+id/vinax_wp_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/vinax_wp_art"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:scaleType="centerCrop"
+            android:src="@drawable/vinax_widget_art_placeholder"
+            android:contentDescription="@string/vinax_cd_artwork" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="14dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/vinax_wp_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/vinax_widget_idle_title"
+                android:textColor="@color/vinax_widget_text"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/vinax_wp_artist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="@string/vinax_widget_idle_subtitle"
+                android:textColor="@color/vinax_widget_text_muted"
+                android:textSize="13sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <ImageButton
+            android:id="@+id/vinax_wp_prev"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/vinax_ic_prev"
+            android:background="@drawable/vinax_widget_button_bg"
+            android:contentDescription="@string/vinax_cd_previous" />
+
+        <ImageButton
+            android:id="@+id/vinax_wp_toggle"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="20dp"
+            android:layout_marginEnd="20dp"
+            android:padding="14dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/vinax_ic_play"
+            android:tint="@color/vinax_on_accent"
+            android:background="@drawable/vinax_widget_play_bg"
+            android:contentDescription="@string/vinax_cd_play" />
+
+        <ImageButton
+            android:id="@+id/vinax_wp_next"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/vinax_ic_next"
+            android:background="@drawable/vinax_widget_button_bg"
+            android:contentDescription="@string/vinax_cd_next" />
+    </LinearLayout>
+</LinearLayout>

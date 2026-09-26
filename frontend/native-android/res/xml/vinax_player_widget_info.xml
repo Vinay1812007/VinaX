@@ -1,12 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Now Playing widget. 4x1 by default; resizable both ways — from about two
+     rows up VinaxPlayerWidget switches to the tall layout. updatePeriodMillis
+     is 0 because the media service pushes every change (no polling). No
+     previewImage: the repository has no rendered PNG, so launchers below
+     Android 12 show the app icon in the picker. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
     android:minHeight="60dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="60dp"
     android:targetCellWidth="4"
     android:targetCellHeight="1"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/vinax_widget_player"
     android:previewLayout="@layout/vinax_widget_player"
-    android:description="@string/app_name"
-    android:resizeMode="horizontal"
+    android:description="@string/vinax_widget_player_desc"
+    android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen" />

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget + playback-notification strings and colours. Copied into the app's
+     res/values by scripts/patch-android.js next to the generated strings.xml. -->
+<resources>
+    <color name="vinax_accent">#A78BFA</color>
+    <color name="vinax_on_accent">#0B0C18</color>
+    <color name="vinax_widget_surface">#E60B0C18</color>
+    <color name="vinax_widget_surface_stroke">#33A78BFA</color>
+    <color name="vinax_widget_art_surface">#1E1B2E</color>
+    <color name="vinax_widget_text">#FFFFFF</color>
+    <color name="vinax_widget_text_muted">#B9BDC9</color>
+    <color name="vinax_widget_button_surface">#1AFFFFFF</color>
+
+    <string name="vinax_widget_player_label">Now Playing</string>
+    <string name="vinax_widget_player_desc">Artwork, song title and play, pause, previous and next for what is playing.</string>
+    <string name="vinax_widget_quickplay_label">Play my mix</string>
+    <string name="vinax_widget_quickplay_desc">One tap starts a shuffled mix picked for you.</string>
+    <string name="vinax_widget_idle_title">VinaX</string>
+    <string name="vinax_widget_idle_subtitle">Tap to start listening</string>
+    <string name="vinax_widget_quickplay_title">Play my mix</string>
+    <string name="vinax_widget_quickplay_subtitle">Shuffle songs picked for you</string>
+    <string name="vinax_cd_artwork">Open the player</string>
+    <string name="vinax_cd_previous">Previous</string>
+    <string name="vinax_cd_play">Play</string>
+    <string name="vinax_cd_pause">Pause</string>
+    <string name="vinax_cd_next">Next</string>
+    <string name="vinax_cd_shuffle">Shuffle</string>
+    <string name="vinax_playback_channel">Playback</string>
+</resources>
