@@ -12,6 +12,7 @@ import { Link, useNavigate, useNavigationType, useParams } from 'react-router-do
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { SongRow } from '@/components/SongRow';
+import { TrackMenu } from '@/components/TrackMenu';
 import { MediaCard } from '@/components/MediaCard';
 import { Chip } from '@/components/Chip';
 import { ListSkeleton } from '@/components/Skeletons';
@@ -1246,13 +1247,16 @@ export default function SearchPage() {
                                 <span>{topResult.subtitle}</span>
                               </p>
                             </div>
+                            <div className="search-top-result-menu">
+                              <TrackMenu song={topResult} />
+                            </div>
                             <button
                               type="button"
                               onClick={() => {
                                 playQueue(rankedAllSongs, 0);
                                 recordSearchPlay(topResult);
                               }}
-                              aria-label={`Play ${topResult.title}`}
+                              aria-label={`Play ${topResult.title} by ${topResult.subtitle}`}
                               className="vx-play-fab"
                             >
                               <PlayIcon />

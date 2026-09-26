@@ -636,6 +636,7 @@ a.search-assist-row:hover, button.search-assist-row:hover { background: rgb(var(
   transition: background-color 160ms var(--ease-calm);
 }
 .search-top-result { cursor: pointer; }
+.search-top-result-menu { position: absolute; top: 12px; right: 12px; }
 .search-top-result:hover { background: rgb(var(--ink-800)); }
 .search-top-result img {
   width: 96px;
@@ -690,8 +691,9 @@ html.light .search-type-pill { background: rgb(var(--ink-100) / 0.08); }
   .search-top-result img { width: 80px; height: 80px; }
   .search-top-result-name { font-size: 20px; }
   .search-top-result-meta { padding-right: 0; margin-top: 4px; }
-  .search-top-result > div { min-width: 0; flex: 1; padding-right: 60px; }
-  .search-top-result .vx-play-fab { right: 16px; bottom: auto; top: 50%; width: 48px; height: 48px; margin-top: -24px; }
+  .search-top-result > div:not(.search-top-result-menu) { min-width: 0; flex: 1; padding-right: 100px; }
+  .search-top-result .vx-play-fab { right: 56px; bottom: auto; top: 50%; width: 48px; height: 48px; margin-top: -24px; }
+  .search-top-result-menu { top: 50%; right: 8px; margin-top: -20px; }
   .search-top-result:hover .vx-play-fab, .search-top-result:focus-within .vx-play-fab { transform: none; }
 }
 
