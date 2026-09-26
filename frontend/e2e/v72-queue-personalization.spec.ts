@@ -128,7 +128,8 @@ const queueIds = (page: Page) =>
 async function playAndOpenQueue(page: Page): Promise<void> {
   await page.goto('/search/telugu');
   const rows = page.locator('[data-song-id]');
-  await expect(rows.first()).toBeVisible();
+  // The results page fetches the catalogue; under the parallel full run the default 5 s was too tight at phone width.
+  await expect(rows.first()).toBeVisible({ timeout: 20_000 });
   await rows.first().click();
   await expect.poll(() => queueIds(page).then((q) => q.length), { timeout: 25_000 }).toBeGreaterThan(2);
   await gotoInApp(page, '/queue');
