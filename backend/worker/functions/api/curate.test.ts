@@ -147,3 +147,22 @@ describe('POST /api/curate', () => {
     expect(opts.deadlineAt).toBeLessThan(Date.now() + 15_000);
   });
 });
+
+describe('lane order (8.0.3)', () => {
+  it('a lane that answered in 3 s keeps leading: only failures or blown leashes demote a lane', async () => {
+    // Start past the 60 s health window, so earlier tests' observations have expired.
+    let offset = 120_000;
+    const real = Date.now.bind(Date);
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => real() + offset);
+    try {
+      chatMock.mockImplementation(async () => { offset += 3_000; return { ...answer({ ids: ['s1', 's2'] }), keyRole: 'maestro' }; });
+      await post({ task: 'ranking', data: { songs } });
+      await post({ task: 'ranking', data: { songs } });
+      const lanes = chatMock.mock.calls.map((c) => (c as unknown as [unknown, unknown, { lane: string }])[2].lane);
+      expect(lanes).toEqual(['maestro', 'maestro']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+

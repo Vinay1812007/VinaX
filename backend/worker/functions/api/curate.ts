@@ -157,7 +157,11 @@ export async function onRequestPost({ request, env, waitUntil }: { request: Requ
       return r.sections.length ? json({ data: { sections: r.sections, model: r.model } }) : json({ error: r.error ?? 'invalid_output' }, 502);
     }
     // Short-lived health observations; expired failures recover automatically.
-    const penalty = (lane: Lane) => { const h = health.get(lane); return h && now - h.at < 60_000 ? (h.failed ? 10_000 : h.latency / 10) : 0; };
+    // 8.0.3 — only a lane that failed, or answered slower than its leash
+    // allows, is sent back. Ranking by raw speed demoted the maestro lane (it
+    // thinks first: ~3 s live) behind the sub-second scholar lane after its
+    // very first answer, so the route's chosen lead never led twice.
+    const penalty = (lane: Lane) => { const h = health.get(lane); return h && now - h.at < 60_000 ? (h.failed ? 10_000 : h.latency > 6_000 ? h.latency / 10 : 0) : 0; };
     const lanes = [...route.lanes].sort((a, b) => penalty(a) - penalty(b));
     const result = await chat(env, [
       // The word "JSON" must appear in the messages for the Groq host's JSON
