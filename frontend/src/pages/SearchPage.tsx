@@ -1223,7 +1223,17 @@ export default function SearchPage() {
                           <div className="search-section-heading">
                             <h2>Top result</h2>
                           </div>
-                          <div className="search-top-result">
+                          {/* The whole card plays (the round button is its keyboard target); it is a song, so it feeds the song context menu too. */}
+                          <div
+                            className="search-top-result"
+                            data-song-id={topResult.id}
+                            data-deter-context
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest('button')) return;
+                              playQueue(rankedAllSongs, 0);
+                              recordSearchPlay(topResult);
+                            }}
+                          >
                             <img
                               src={bestImage(topResult.images, 300)}
                               onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
@@ -1254,7 +1264,7 @@ export default function SearchPage() {
                         <section aria-label="Songs" className="min-w-0">
                           <div className="search-section-heading">
                             <h2>Songs</h2>
-                            <button type="button" onClick={() => setTab('Songs')}>
+                            <button type="button" onClick={() => setTab('Songs')} aria-label="Show all songs">
                               Show all
                             </button>
                           </div>

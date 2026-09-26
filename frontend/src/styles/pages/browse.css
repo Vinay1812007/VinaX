@@ -635,6 +635,7 @@ a.search-assist-row:hover, button.search-assist-row:hover { background: rgb(var(
   background: rgb(var(--ink-850));
   transition: background-color 160ms var(--ease-calm);
 }
+.search-top-result { cursor: pointer; }
 .search-top-result:hover { background: rgb(var(--ink-800)); }
 .search-top-result img {
   width: 96px;
