@@ -576,8 +576,8 @@ export default function SettingsPage() {
             </Row>
             <Row stack label="Custom accent" note="Any colour. VinaX builds a readable palette from it." keywords="colour color palette hex">
               <div className="flex items-center gap-2">
-                <input type="color" aria-label="Custom accent colour" value={s.accentCustom ?? '#1ed760'} onChange={(e) => s.setAccentCustom(e.target.value)} className="vx-set-color" />
-                <input value={s.accentCustom ?? ''} onChange={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-fA-F]{6}$/.test(v)) s.setAccentCustom(v); }} placeholder="#1ed760" maxLength={7} className="vx-set-input w-28 font-mono" aria-label="Custom accent hex" />
+                <input type="color" aria-label="Custom accent colour" value={s.accentCustom ?? '#a78bfa'} onChange={(e) => s.setAccentCustom(e.target.value)} className="vx-set-color" />
+                <input value={s.accentCustom ?? ''} onChange={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-fA-F]{6}$/.test(v)) s.setAccentCustom(v); }} placeholder="#a78bfa" maxLength={7} className="vx-set-input w-28 font-mono" aria-label="Custom accent hex" />
                 {s.accent === 'custom' && <RowButton onClick={() => s.setAccentCustom(null)}>Use a preset</RowButton>}
               </div>
             </Row>

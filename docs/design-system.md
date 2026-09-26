@@ -1,6 +1,25 @@
-# Design system — "Flow"
+# Design system — "Stage" (8.0) on the "Flow" tokens
 
-This document covers how the listener app looks and behaves at the component level: where the tokens live, the colour, type and radius scales, the medium control scale and the 44px hit-area rule, how overlays are built and why they carry `data-vx-overlay`, the motion rules, and the top bar's actions slot. It describes the code as of 7.1. The owner console has its own standalone stylesheet and is covered in [admin-console.md](admin-console.md).
+This document covers how the listener app looks and behaves at the component level: where the tokens live, the colour, type and radius scales, the medium control scale and the 44px hit-area rule, how overlays are built and why they carry `data-vx-overlay`, the motion rules, and the top bar's actions slot. The token sections below describe the Flow tokens, which 8.0 kept unchanged; the next section describes the 8.0 "Stage" layer built on them. The owner console has its own standalone stylesheet and is covered in [admin-console.md](admin-console.md).
+
+## 8.0 "Stage"
+
+8.0 redesigned every screen without changing a token value or a behaviour. The rules:
+
+- Artwork leads and copy follows. A section has a title and at most a "Show all" link; taglines, arrows and letter-spaced eyebrows were removed.
+- Hierarchy comes from size and weight, not boxes. Surfaces are flat tiers: `ink-950` chrome, `ink-900` workspace, `ink-850` raised, `--vx-hover` / `--vx-pressed` (6% / 10% of the text colour) for hover and selected rows. Hairlines appear only between rows and around inputs.
+- The accent is for play buttons, active states, progress, switches and focus.
+- Spacing is on an 8px grid: `--vx-gutter` (32px desktop / 16px phone), `--vx-shelf-gap` (40 / 32), `--vx-card-gap` (16 / 12). Motion is 140–200ms on `--ease-calm`.
+- Sentence case everywhere. Buttons are pills (`.btn-primary`, outline `.btn-secondary`); `.vx-play-fab` is the 56px circular accent play button.
+
+| File | What it owns |
+| --- | --- |
+| `styles/stage.css` | The shell and shared primitives: sidebar and its library list (`.vx-lib-*`), the top bar that is transparent until the workspace scrolls (`.is-scrolled`), the phone tab bar, the three-zone player bar (`.vx-pb-*`), page and section headers, rails and grids, media cards, track rows, pill buttons, chips (`.vx-chip-idle`), `.vx-display`. Loaded after `flow.css`, so it wins where both style a class |
+| `styles/overlays.css` | Sheets, dialogs, menus and the welcome sheet. Imported by `Sheet`, `TrackMenu` and `OnboardingSheet`, not by `main.tsx` |
+| `styles/pages/*.css` | One stylesheet per area (`home`, `browse`, `library`, `tracklist`, `player`, `settings`, `secondary`), each imported by its page or component, so it ships in that lazy chunk and never in the first load |
+| `styles/ai.css` | VinaX AI, which renders outside the main shell |
+
+Shell components: `Sidebar` (destinations, then Your library: Liked songs, Listen later, Downloads, Recently played, the listener's collections with their first song's artwork, saved albums, playlists and artists; collapses to a 76px rail), `TopBar` (back / forward, page name once scrolled, the page's actions slot, the command key, the avatar that opens Settings), `BottomNav` (solid icon for the active tab), `PlayerBar`, and `EntityHeader` (artwork-coloured header with type label, display title, meta line and the action row, shared by album, playlist, collection and library-list pages). Icons have a 1.8 stroke; `HomeIcon`, `CompassIcon`, `SearchIcon`, `LibraryIcon` and `SparkleIcon` take `filled` for the active destination.
 
 ## Where things live
 
@@ -8,7 +27,7 @@ This document covers how the listener app looks and behaves at the component lev
 | --- | --- |
 | `frontend/src/styles/index.css` | Every token (`:root`), the light / black / accent overrides, the glass and button primitives, the reduced-motion kill switch |
 | `frontend/src/styles/flow.css` | Component layout only: shell, top bar, sidebar, dock, shelves, track rows, heroes, Home Studio, VinaX AI layout. It defines no theme tokens, with one exception: it re-computes `--vx-topbar-h` for phones |
-| `frontend/src/styles/discovery.css`, `festivals.css` | The Search/Discover layout and the festival themes |
+| `frontend/src/styles/festivals.css` | The festival themes. (8.0 removed `discovery.css`; Search and Discover styles live in `styles/pages/browse.css`) |
 | `frontend/tailwind.config.ts` | Maps the tokens to utility classes (`bg-ink-900`, `text-ember-400`, `text-page-title`, `rounded-card`, `min-h-touch`) |
 | `frontend/src/components/*` | The primitives: `Button`, `IconButton`, `Chip`, `Sheet`, `TopBar`, `PageHeader`, `SectionHeader`, `Shelf`, `MediaCard`, `SongRow`, `TrackMenu`, `Skeletons`, `States`, `Toasts` |
 
@@ -98,7 +117,7 @@ These four tokens describe what a control looks like. They were introduced in 7.
 | `--vx-control-h` | 40px | `.btn-primary` / `.btn-premium` min-height, the command-palette key in the top bar, `.vx-panel-switch` buttons. `IconButton` size `md` is the same 40px disc |
 | `--vx-control-h-sm` | 36px | The small control size. No stylesheet rule reads the token yet; `IconButton` size `sm` and `Chip` render at the same 36px through utility classes |
 | `--vx-tile-h` | 48px | Shortcut tiles in the destination grid (`.vx-destinations a`) |
-| `--vx-topbar-h` | 64px; on phones `calc(max(8px, env(safe-area-inset-top)) + 48px)` | The sticky top bar's min-height, and everything that sticks beneath it: `MobileBackBar` (`top-[var(--vx-topbar-h)]`) and the sticky Search header in `discovery.css` |
+| `--vx-topbar-h` | 64px; on phones `calc(max(8px, env(safe-area-inset-top)) + 48px)` | The sticky top bar's min-height, and everything that sticks beneath it: `MobileBackBar` (`top-[var(--vx-topbar-h)]`) and the sticky Search header in `styles/pages/browse.css` |
 
 Anything that pins itself under the top bar must read `--vx-topbar-h` rather than a number, so it follows the safe-area inset on notched phones.
 

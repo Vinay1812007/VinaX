@@ -217,7 +217,10 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(100deg, rgb(var(--ink-900) / 0.15) 0%, rgb(var(--ink-900) / 0.55) 45%, rgb(var(--ink-900) / 0.8) 100%);
+  /* Ends on the card's own raised tier (not the page colour), so the right edge stays visible. */
+  background: linear-gradient(100deg, rgb(var(--ink-850) / 0.1) 0%, rgb(var(--ink-850) / 0.5) 45%, rgb(var(--ink-800) / 0.72) 100%);
+  box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.06);
+  border-radius: inherit;
 }
 html.light .vx-home .vxh-feature-wash { opacity: 0.55; }
 html.light .vx-home .vxh-feature::before {

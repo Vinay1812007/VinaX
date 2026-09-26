@@ -27,8 +27,8 @@ function lastValue(varName: string): string {
 
 describe('color tokens (VinaX Flow)', () => {
   it('brand ramps resolve to VinaX violet', () => {
-    // v5.9.0: one green accent (#1db954 / #1ed760) over black chrome and a
-    // #121212 canvas. Every earlier era's ramp lives above in the cascade.
+    // The default ramp is VinaX violet over near-black chrome. Every earlier
+    // era's ramp lives above in the cascade.
     expect(lastValue('--ember-400')).toBe('196 181 253');
     expect(lastValue('--ember-500')).toBe('167 139 250');
     expect(lastValue('--tide-400')).toBe('196 181 253');

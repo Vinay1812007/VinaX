@@ -13,8 +13,17 @@ export interface VersionInfo {
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '8.0.0': {
-    title: 'VinaX 8.0 — a sharper DJ and a Home that finally fits you',
+    title: 'VinaX 8.0 — a new look, a sharper DJ and a Home that fits you',
     changes: [
+      { type: 'new', text: 'A new look across the whole app. Artwork leads on every screen, the words step back, and everything follows one set of sizes, spacing and colours in dark and light.' },
+      { type: 'new', text: 'On a computer, the sidebar now holds your library: Liked songs, Listen later, Downloads, Recently played, your playlists and everything you saved, each with its artwork. The + button makes a new playlist. The top bar stays out of the way until you scroll.' },
+      { type: 'improved', text: 'Home opens with music: a greeting with your languages, Jump back in, then your Aura Mix as a big artwork card and your shelves. Customise Home and the smaller cards are further down.' },
+      { type: 'improved', text: 'Discover and Search: colourful category tiles, languages written in their own script, a big search field that stays in view, and a Top result card you can play straight away.' },
+      { type: 'improved', text: 'Albums, playlists and artists open with a header in the colours of their artwork, a large play button, shuffle, and a cleaner song list.' },
+      { type: 'improved', text: 'The full-screen player takes its colours from the song, with big artwork, bold lyrics and the less common controls grouped under More options. Up next shows your songs and the DJ’s picks as separate runs.' },
+      { type: 'improved', text: 'Settings is searchable, with grouped sections and real switches. Menus, sheets, the welcome screen and notices have been redesigned to match.' },
+      { type: 'improved', text: 'VinaX AI and the owner console follow the same design.' },
+      { type: 'fixed', text: 'The VinaX colour swatch in Settings now shows the violet it actually applies.' },
       { type: 'fixed', text: 'Designed for you shelves now hold the songs they promise. A Telugu shelf could fill up with Tamil, Malayalam or instrumental tracks that only shared a word with its title; every shelf now keeps to its language, and an artist shelf plays only that artist.' },
       { type: 'fixed', text: 'Build with VinaX AI in Home Studio works again. It failed about two times in three with “AI is unavailable right now”; it now asks the fastest engines first and answers in a moment.' },
       { type: 'new', text: 'A new flagship AI engine now leads the DJ, the Queue Builder, AI Playlist, song ranking and the Home builder. It was chosen for its music knowledge, so more of its suggestions are real songs VinaX can find and play. When it is busy, the other engines take over, and everything still works on your device.' },
