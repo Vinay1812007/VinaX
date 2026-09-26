@@ -1,0 +1,378 @@
+/* ============================================================================
+   VinaX 8 — overlays: the sheet / dialog shell, its header, and the song menu.
+
+   Imported by Sheet.tsx and TrackMenu.tsx, so it ships with those chunks and
+   never with first load. Surfaces are flat (ink-850 in dark, white in light),
+   one hairline, one soft shadow. Phones get a bottom sheet with a grab handle
+   and a 16px top radius; from 640px it is a centred 16px-radius dialog.
+   ========================================================================= */
+
+/* ------------------------------------------------------------ sheet shell */
+.vx-sheet {
+  position: relative;
+  color: rgb(var(--ink-100));
+  background: rgb(var(--ink-850));
+  border: 1px solid var(--vx-border);
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -16px 48px -16px rgb(0 0 0 / 0.6);
+  animation: vx-sheet-up 240ms var(--ease-calm) backwards;
+}
+@media (min-width: 640px) {
+  .vx-sheet {
+    border-bottom: 1px solid var(--vx-border);
+    border-radius: 16px;
+    box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.65);
+    animation-name: vx-dialog-in;
+    animation-duration: 200ms;
+  }
+}
+html.light .vx-sheet {
+  background: rgb(var(--ink-950));
+  box-shadow: 0 -12px 40px -16px rgb(15 20 30 / 0.28);
+}
+@media (min-width: 640px) {
+  html.light .vx-sheet { box-shadow: 0 24px 64px -20px rgb(15 20 30 / 0.3); }
+}
+
+.vx-sheet-grab {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  margin-left: -18px;
+  border-radius: 2px;
+  background: rgb(var(--ink-100) / 0.2);
+  pointer-events: none;
+}
+@media (min-width: 640px) {
+  .vx-sheet-grab { display: none; }
+}
+
+.vx-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.vx-sheet-title {
+  padding-top: 5px;
+  color: rgb(var(--ink-100));
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+.vx-sheet-sub {
+  margin-top: 2px;
+  color: rgb(var(--ink-400));
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.vx-sheet-close {
+  margin: -2px -6px 0 0;
+  color: rgb(var(--ink-200));
+  background: rgb(var(--ink-100) / 0.07);
+}
+.vx-sheet-close:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.12); }
+
+/* A pinned footer row of actions (primary on the right / full width on phones). */
+.vx-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+.vx-sheet-actions > * { flex: 1 1 0; min-height: 44px; }
+
+@keyframes vx-sheet-up {
+  from { opacity: 0; transform: translateY(32px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes vx-dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ------------------------------------------------------------- song menu */
+.vx-menu {
+  width: 256px;
+  padding: 4px;
+  color: rgb(var(--ink-100));
+  background: rgb(var(--ink-850));
+  border: 1px solid var(--vx-border);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 4px 12px -4px rgb(0 0 0 / 0.35);
+  max-height: min(420px, calc(100dvh - 16px));
+  animation: vx-dialog-in 160ms var(--ease-calm) backwards;
+}
+html.light .vx-menu {
+  background: rgb(var(--ink-950));
+  box-shadow: 0 16px 40px -16px rgb(15 20 30 / 0.3), 0 2px 8px -2px rgb(15 20 30 / 0.12);
+}
+.vx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 6px;
+  color: rgb(var(--ink-100));
+  font-size: 14px;
+  font-weight: 550;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  outline: none;
+  transition: background-color 120ms var(--ease-calm);
+}
+.vx-menu-item:focus-visible { background: var(--vx-hover); }
+@media (hover: hover) and (pointer: fine) {
+  .vx-menu-item:hover { background: var(--vx-hover); }
+}
+.vx-menu-item:active { background: var(--vx-pressed); }
+.vx-menu-item:focus-visible { box-shadow: inset 0 0 0 2px rgb(var(--ember-500) / 0.6); }
+.vx-menu-item > svg { flex-shrink: 0; width: 20px; height: 20px; color: rgb(var(--ink-300)); }
+.vx-menu-item > .vx-menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vx-menu-item > .vx-menu-chev { display: flex; margin-left: auto; padding-left: 8px; color: rgb(var(--ink-400)); }
+.vx-menu-chev svg { width: 16px; height: 16px; }
+.vx-menu-item.is-danger, .vx-menu-item.is-danger > svg { color: var(--vx-danger); }
+.vx-menu-sep { height: 1px; margin: 4px 8px; background: var(--vx-border); }
+.vx-menu-note { padding: 8px 12px 6px; }
+.vx-menu-note p:first-child { color: rgb(var(--ink-300)); font-size: 13px; font-weight: 600; line-height: 1.4; }
+.vx-menu-note p + p { margin-top: 4px; color: rgb(var(--ink-400)); font-size: 12px; line-height: 1.4; }
+
+/* The song the menu acts on (phone sheet only). */
+.vx-menu-head { display: none; }
+
+/* Phones: the same menu, as a bottom sheet. */
+.vx-menu.is-sheet {
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  max-height: min(78dvh, calc(100dvh - var(--safe-top) - 48px));
+  padding: 0 8px max(12px, var(--safe-bottom));
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  animation: vx-sheet-up 240ms var(--ease-calm) backwards;
+}
+.vx-menu.is-sheet .vx-menu-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 -8px 4px;
+  padding: 20px 20px 14px;
+  background: inherit;
+  border-bottom: 1px solid var(--vx-border);
+}
+.vx-menu.is-sheet .vx-menu-head::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  margin-left: -18px;
+  border-radius: 2px;
+  background: rgb(var(--ink-100) / 0.2);
+}
+.vx-menu-head img, .vx-menu-head .vx-menu-art {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
+  background: rgb(var(--ink-800));
+}
+.vx-menu-head-title { overflow: hidden; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.vx-menu-head-sub { overflow: hidden; margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+.vx-menu.is-sheet .vx-menu-item { min-height: 48px; padding: 0 12px; font-size: 15px; }
+.vx-menu.is-sheet .vx-menu-sep { margin: 4px 12px; }
+
+/* ------------------------------------------------------ welcome (first run) */
+.vx-welcome { padding: 0; }
+.vx-welcome-body { padding: 28px 24px max(24px, var(--safe-bottom)); }
+@media (min-width: 640px) { .vx-welcome-body { padding: 28px 28px 28px; } }
+.vx-welcome-art + .vx-welcome-body { padding-top: 20px; }
+.vx-welcome-art {
+  position: relative;
+  height: 156px;
+  overflow: hidden;
+  border-radius: 16px 16px 0 0;
+  background:
+    linear-gradient(200deg, rgb(0 0 0 / 0.05) 10%, rgb(0 0 0 / 0.6) 100%),
+    radial-gradient(120% 140% at 0% 0%, rgb(var(--ember-500)), rgb(var(--ember-600)) 55%);
+}
+.vx-welcome-scripts {
+  position: absolute;
+  inset: -12px -40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  transform: rotate(-8deg);
+}
+.vx-welcome-scripts p {
+  display: flex;
+  gap: 18px;
+  white-space: nowrap;
+  color: rgb(255 255 255 / 0.2);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.vx-welcome-scripts p:nth-child(2) { margin-left: -80px; color: rgb(255 255 255 / 0.32); }
+.vx-welcome-scripts p:nth-child(3) { margin-left: -24px; }
+.vx-welcome-logo {
+  position: absolute;
+  left: 24px;
+  bottom: 18px;
+  width: 52px;
+  height: 52px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgb(0 0 0 / 0.82);
+  box-shadow: 0 10px 24px -8px rgb(0 0 0 / 0.6);
+}
+@media (min-width: 640px) { .vx-welcome-logo { left: 28px; } }
+.vx-welcome-label {
+  display: block;
+  margin-bottom: 8px;
+  color: rgb(var(--ink-200));
+  font-size: 13px;
+  font-weight: 700;
+}
+.vx-welcome-msg { margin-top: 6px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
+.vx-welcome-msg.is-bad { color: var(--vx-danger); }
+.vx-welcome-msg.is-good { color: var(--vx-success); }
+.vx-welcome-skip {
+  position: relative;
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 4px;
+  color: rgb(var(--ink-300));
+  font-size: 13px;
+  font-weight: 700;
+}
+.vx-welcome-skip::after { content: ''; position: absolute; inset: -6px -4px; }
+.vx-welcome-skip:hover { color: rgb(var(--ink-100)); }
+.vx-welcome-langs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgb(var(--ink-900));
+}
+html.light .vx-welcome-langs { background: rgb(var(--ink-900)); }
+.vx-welcome-more {
+  position: relative;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px dashed rgb(var(--ink-100) / 0.28);
+  border-radius: 9999px;
+  color: rgb(var(--ink-200));
+  font-size: 13px;
+  font-weight: 600;
+}
+.vx-welcome-more::after { content: ''; position: absolute; inset: -4px 0; }
+.vx-welcome-more:hover { color: rgb(var(--ink-100)); border-color: rgb(var(--ink-100) / 0.5); }
+.vx-welcome-cta {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 20px -24px 0;
+  padding: 12px 24px;
+  background: rgb(var(--ink-850));
+  box-shadow: 0 -12px 16px -12px rgb(0 0 0 / 0.5);
+}
+html.light .vx-welcome-cta { background: rgb(var(--ink-950)); box-shadow: 0 -12px 16px -14px rgb(15 20 30 / 0.2); }
+@media (min-width: 640px) { .vx-welcome-cta { margin: 20px -28px 0; padding: 12px 28px; } }
+.vx-welcome-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+  color: rgb(var(--ink-400));
+  font-size: 12.5px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.vx-welcome-consent input { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; accent-color: rgb(var(--ember-500)); }
+.vx-welcome-link {
+  position: relative;
+  min-height: 32px;
+  padding: 0 4px;
+  color: rgb(var(--ink-100));
+  font-weight: 700;
+}
+.vx-welcome-link::after { content: ''; position: absolute; inset: -6px 0; }
+.vx-welcome-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.vx-tour-art {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(140deg, rgb(var(--ember-600)), rgb(var(--ember-500)));
+  box-shadow: 0 12px 28px -12px rgb(var(--ember-600) / 0.8);
+}
+
+/* Taste seed: square artwork, a heart that fills. */
+.vx-seed {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgb(var(--ink-800));
+  transition: transform 140ms var(--ease-calm);
+}
+.vx-seed:active { transform: scale(0.97); }
+.vx-seed img { width: 100%; height: 100%; object-fit: cover; transition: filter 160ms var(--ease-calm); }
+.vx-seed::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06); pointer-events: none; }
+.vx-seed.is-liked::after { box-shadow: inset 0 0 0 3px rgb(var(--ember-500)); }
+.vx-seed.is-liked img { filter: brightness(0.6); }
+.vx-seed-heart {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(0 0 0 / 0.5);
+}
+.vx-seed.is-liked .vx-seed-heart { color: var(--vx-on-accent); background: rgb(var(--ember-500)); }
+.vx-seed-title {
+  position: absolute;
+  inset: auto 0 0;
+  overflow: hidden;
+  padding: 16px 8px 6px;
+  color: #fff;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.75), transparent);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vx-sheet, .vx-menu { animation: none !important; }
+}
+html.reduce-motion .vx-sheet, html.reduce-motion .vx-menu { animation: none !important; }

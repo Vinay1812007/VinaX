@@ -1,15 +1,16 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
+import '@/styles/pages/secondary.css';
 
-const H = ({ children }: { children: string }) => <h2 className="text-base font-extrabold mt-6 mb-1.5 text-ink-100">{children}</h2>;
+const H = ({ children }: { children: string }) => <h2>{children}</h2>;
 
 export default function TermsPage() {
   usePageTitle('Terms');
   return (
-    <div className="max-w-2xl mx-auto pb-10">
-      <PageHeader title="Terms of Use" subtitle="Plain language, no tricks. Last updated July 2026." />
-      <div className="text-sm text-ink-200 leading-relaxed">
+    <div className="vx-sec">
+      <PageHeader title="Terms of use" subtitle="Last updated July 2026" />
+      <div className="vx-article">
         <H>What VinaX is</H>
         <p>
           VinaX is a free music player for Indian and international music. It streams songs, artwork and lyrics from
@@ -25,7 +26,7 @@ export default function TermsPage() {
         <p>
           You don&rsquo;t create an account, so there are no credentials to protect and nothing to ban. Your name,
           favorites, history and taste profile live only on your device — see the{' '}
-          <Link to="/privacy" className="text-ember-400 hover:underline">Privacy page</Link> for exactly what that means.
+          <Link to="/privacy">Privacy page</Link> for exactly what that means.
         </p>
         <H>Availability</H>
         <p>
@@ -47,7 +48,7 @@ export default function TermsPage() {
         <H>Rights holders</H>
         <p>
           If content should not be available, tell us via the{' '}
-          <Link to="/dmca" className="text-ember-400 hover:underline">Copyright &amp; takedowns page</Link>. Verified
+          <Link to="/dmca">Copyright &amp; takedowns page</Link>. Verified
           requests are honored by removing the content from search, playback and recommendations across all clients.
         </p>
         <H>Changes and endings</H>
@@ -62,8 +63,8 @@ export default function TermsPage() {
           VinaX and its maker are not liable for damages arising from use of the service. Use it in line with the laws
           of your region.
         </p>
-        <p className="mt-6 text-ink-400">
-          Questions? <Link to="/contact" className="text-ember-400 hover:underline">Contact us</Link>.
+        <p className="vx-article-end">
+          Questions? <Link to="/contact">Contact us</Link>.
         </p>
       </div>
     </div>

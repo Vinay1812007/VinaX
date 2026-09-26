@@ -431,7 +431,7 @@
       '<div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">' +
         '<div style="flex:2;min-width:300px">' +
           '<div id="wmap"></div>' +
-          '<p class="muted" style="margin-top:8px"><span class="dot2 on"></span> ' + nowN + ' listening now · ' + mappable + ' active cities in the selected range. OpenStreetMap — drag to pan, scroll or pinch to zoom.</p>' +
+          '<p class="muted" style="margin-top:8px"><span class="dot2 on"></span> ' + nowN + ' listening now · ' + mappable + ' active cities in the selected range. Drag to pan, scroll or pinch to zoom.</p>' +
         '</div>' +
         '<div style="flex:1;min-width:240px">' +
           '<h3>Listening now</h3>' +
@@ -813,12 +813,12 @@
     var errors = typeof s.errors_24h === 'number' ? s.errors_24h : null;
     var feedback = typeof s.feedback_new === 'number' ? s.feedback_new : null;
     var headline = errors === null ? 'Waiting for operational signals' : errors > 0 ? 'A few things need your attention' : 'Make the next listening session better';
-    return '<section class="ops-brief"><div><span class="ops-eyebrow">VINAX / CONTROL ROOM</span><h2>' + esc(headline) + '</h2><p>Your audience, music experience and release tools in one place.</p></div>' +
-      '<div class="ops-actions"><a href="#technical"><b>' + (errors === null ? '—' : fmtN(errors)) + '</b><span>Errors · last 24 hours →</span></a>' +
-      '<a href="#feedback"><b>' + (feedback === null ? '—' : fmtN(feedback)) + '</b><span>New feedback →</span></a>' +
-      '<a href="#releases"><b>Release centre</b><span>Inspect builds and versions →</span></a>' +
-      '<a href="#ai"><b>AI intelligence</b><span>Review engines and request health →</span></a>' +
-      '<a href="#skips"><b>Discovery quality</b><span>See where listeners skip →</span></a></div></section>';
+    return '<section class="ops-brief"><div><h2>' + esc(headline) + '</h2></div>' +
+      '<div class="ops-actions"><a href="#technical"><b>' + (errors === null ? '—' : fmtN(errors)) + '</b><span>Errors in the last 24 hours</span></a>' +
+      '<a href="#feedback"><b>' + (feedback === null ? '—' : fmtN(feedback)) + '</b><span>New feedback</span></a>' +
+      '<a href="#releases"><b>Releases</b><span>Builds and versions</span></a>' +
+      '<a href="#ai"><b>AI health</b><span>Engines and request health</span></a>' +
+      '<a href="#skips"><b>Discovery</b><span>Where listeners skip</span></a></div></section>';
   }
   function renderOverview(d) {
     var s = d.summary || {};
@@ -1197,12 +1197,12 @@
     if (!view) return;
     insertTop(view,
       '<div class="card" id="quickbox" style="margin-bottom:14px"><div class="row" style="flex-wrap:wrap;gap:8px">' +
-      '<button class="ghost qa-go" data-to="notify2">\ud83d\udce3 Send notification</button>' +
-      '<button class="ghost qa-go" data-to="technical">\u26a1 Site mode</button>' +
-      '<button class="ghost qa-go" data-to="content">\ud83d\udeab Content control</button>' +
-      '<button class="ghost qa-go" data-to="feedback">\ud83d\udcac Feedback</button>' +
-      '<button class="ghost qa-go" data-to="rooms">\ud83d\udc65 Live rooms</button>' +
-      '<span class="muted" style="font-size:11px;align-self:center">\u2318K anywhere \u2192 jump</span>' +
+      '<button class="ghost qa-go" data-to="notify2">Send notification</button>' +
+      '<button class="ghost qa-go" data-to="technical">Site mode</button>' +
+      '<button class="ghost qa-go" data-to="content">Content control</button>' +
+      '<button class="ghost qa-go" data-to="feedback">Feedback</button>' +
+      '<button class="ghost qa-go" data-to="rooms">Live rooms</button>' +
+      '<span class="muted" style="font-size:12px;align-self:center;margin-left:auto">Press \u2318K to jump to any tool</span>' +
       '</div></div>');
     Array.prototype.forEach.call(document.querySelectorAll('.qa-go'), function (b) {
       b.addEventListener('click', function () { setSection(b.getAttribute('data-to')); });
@@ -1497,6 +1497,8 @@
     // v5.21.0 — rebuilt for the owner's 2026-09-09 key rotation: 19 lanes over
     // 18 keys (dj and chat share the lightning key). Every secret is new, so
     // this bench is how each engine earns its verified status back.
+    // 8.0.0 — the flagship lane on the owner's new key.
+    { lane: 'maestro', name: 'MAESTRO', nick: 'VinaX Maestro', model: 'gemini-2.5-flash' },
     { lane: 'dj', name: 'NMTRN 3.5 LTNG', nick: 'VinaX NVD NMTRN 3.5 LTNG 30B', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
     { lane: 'chat', name: 'BALANCED', nick: 'VinaX Balanced (LTNG key)', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
     { lane: 'fast', name: 'OSS 20B', nick: 'VinaX OAI OSS 20B', model: 'openai/gpt-oss-20b' },
@@ -2451,9 +2453,10 @@
   // flags, runbook, config backup, trending pins, status note) ----------
   function cfgGet(key) { return api('/api/admin/appconfig?key=' + encodeURIComponent(key)); }
   function cfgSet(key, value) { return postApi('/api/admin/appconfig', { key: key, value: value }); }
-  function okPill(ok, text) { return '<span class="pill" style="' + (ok ? 'color:var(--ok);border-color:var(--ok);background:var(--ok-soft)' : 'color:var(--danger);border-color:var(--danger);background:var(--danger-soft)') + '">' + esc(text) + '</span>'; }
+  // Status pill: icon + word (.st-ok / .st-fail in index.html), never colour alone.
+  function okPill(ok, text) { return '<span class="pill st ' + (ok ? 'st-ok' : 'st-fail') + '">' + esc(text) + '</span>'; }
   function ago(iso) { if (!iso) return '—'; var m = Math.round((Date.now() - Date.parse(iso)) / 60000); if (!isFinite(m)) return '—'; if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; if (m < 1440) return Math.round(m / 60) + ' h ago'; return Math.round(m / 1440) + ' d ago'; }
-  function showFail(msg) { $('view').innerHTML = '<div class="empty">' + esc(msg || 'Could not load.') + '</div>'; }
+  function showFail(msg) { $('view').innerHTML = '<div class="empty is-error" role="alert">' + esc(msg || 'Could not load this panel. Check the connection, then press Refresh.') + '</div>'; }
   // 7.2 — a dashboard read that FAILS says so. The routes answer 502 with the
   // reason (db_unavailable, db_unauthorized, db_schema_missing, …) instead of
   // zeros, so a silent .catch() here would leave the last numbers on screen as
@@ -2473,7 +2476,7 @@
   function loadRetention() {
     apiMemo('/api/admin/retention').then(function (d) {
       if (!d || active !== 'retention') return;
-      if (!d.configured) { $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Retention cohorts</h3><p class="muted">The <code>vinax_retention</code> function is not installed in Supabase yet. Run the retention migration and this panel fills in on the next refresh.</p></div>'; return; }
+      if (!d.configured) { $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Retention cohorts</h3><p class="muted">The <code>vinax_retention</code> function is not installed in the database yet. Run the retention migration and this panel fills in on the next refresh.</p></div>'; return; }
       var cs = d.cohorts || [];
       var avg = function (k) { var xs = cs.map(function (c) { return c[k]; }).filter(function (v) { return v != null; }); if (!xs.length) return null; var s = xs.reduce(function (a, b) { return a + (b <= 1 ? b * 100 : b); }, 0); return Math.round(s / xs.length) + '%'; };
       exportRows = cs; exportName = 'retention'; $('csv').hidden = !cs.length;
@@ -2554,7 +2557,7 @@
   function loadSeo() {
     apiMemo('/api/admin/seo').then(function (d) {
       if (!d || active !== 'seo') return;
-      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       exportRows = d.newest || []; exportName = 'seo-newest'; $('csv').hidden = !exportRows.length;
       var sm = d.sitemap || {};
       $('view').innerHTML =
@@ -2594,7 +2597,7 @@
       var liveVer = live.version || live.latest || live.tag || '—';
       var runPill = function (r) { if (r.status !== 'completed') return '<span class="pill">' + esc(r.status) + '</span>'; return okPill(r.conclusion === 'success', r.conclusion || r.status); };
       $('view').innerHTML =
-        '<div class="cards">' + card(rel ? esc(rel.tag) : '—', 'Latest GitHub release') + card(esc(String(liveVer)), 'Version the site reports') + card((d.runs || []).filter(function (r) { return r.conclusion === 'failure'; }).length, 'Failed runs (last 20)') + card((d.commits || []).length, 'Recent commits on main') + '</div>' +
+        '<div class="cards">' + card(rel ? esc(rel.tag) : '—', 'Latest release') + card(esc(String(liveVer)), 'Version the site reports') + card((d.runs || []).filter(function (r) { return r.conclusion === 'failure'; }).length, 'Failed runs (last 20)') + card((d.commits || []).length, 'Recent commits on main') + '</div>' +
         (rel ? '<div class="card"><h3 style="margin-top:0">' + esc(rel.name || rel.tag) + '</h3><div class="row" style="gap:8px;flex-wrap:wrap">' + (rel.assets || []).map(function (a) { return '<span class="pill">' + esc(a.name) + '</span>'; }).join('') + '</div>' + (rel.notes ? '<pre class="codebox" style="white-space:pre-wrap;margin-top:10px">' + esc(rel.notes) + '</pre>' : '') + '</div>' : '') +
         '<div class="card"><h3 style="margin-top:0">Workflow runs</h3><table><thead><tr><th>#</th><th>Workflow</th><th>Result</th><th>Branch</th><th>Trigger</th><th>Started</th><th></th></tr></thead><tbody>' +
         ((d.runs || []).length ? d.runs.map(function (r) { return '<tr><td class="muted">' + r.number + '</td><td><b>' + esc(r.name) + '</b><div class="muted">' + esc(r.title) + '</div></td><td>' + runPill(r) + '</td><td><code>' + esc(r.branch) + '</code> <span class="muted">' + esc(r.sha) + '</span></td><td>' + esc(r.event) + '</td><td class="muted">' + ago(r.started) + '</td><td><a class="ghost" href="' + esc(r.url) + '" target="_blank" rel="noopener">Open</a></td></tr>'; }).join('') : '<tr><td colspan="7" class="empty">No runs.</td></tr>') +
@@ -2607,7 +2610,7 @@
   function loadTables() {
     apiMemo('/api/admin/tables').then(function (d) {
       if (!d || active !== 'tables') return;
-      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       exportRows = d.tables; exportName = 'database'; $('csv').hidden = false;
       var busiest = d.tables.slice().sort(function (a, b) { return (b.last24h || 0) - (a.last24h || 0); })[0];
       $('view').innerHTML =
@@ -2645,7 +2648,7 @@
     $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
     cfgGet('flags').then(function (d) {
       if (active !== 'flags') return;
-      if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
+      if (d && d.configured === false) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       var flags = (d && d.value && typeof d.value === 'object') ? d.value : {};
       var known = {}; KNOWN_FLAGS.forEach(function (f) { known[f.key] = true; });
       var custom = Object.keys(flags).filter(function (k) { return !known[k]; });
@@ -2672,7 +2675,7 @@
     $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
     cfgGet('runbook').then(function (d) {
       if (active !== 'runbook') return;
-      if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
+      if (d && d.configured === false) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       var notes = (d && Array.isArray(d.value)) ? d.value : [];
       var save = function (next, msg) { $('rb-out').textContent = 'Saving…'; return cfgSet('runbook', next).then(function (r) { if (r && r.ok) { notes = next; paint(); $('rb-out').textContent = msg || 'Saved ✓'; } else $('rb-out').textContent = 'Failed'; }).catch(function () { $('rb-out').textContent = 'Failed'; }); };
       var paint = function () {
@@ -2735,7 +2738,7 @@
     Promise.all([cfgGet('trending-pins'), fetch('/api/trending-searches?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).catch(function () { return null; })]).then(function (rs) {
       if (active !== 'trendpins') return;
       var d = rs[0], live = rs[1];
-      if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
+      if (d && d.configured === false) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       var pins = (d && Array.isArray(d.value)) ? d.value : [];
       $('view').innerHTML =
         '<div class="card"><h3 style="margin-top:0">Trending pins</h3><p class="muted" style="margin-top:0">Up to six searches to show first in the “Trending” chips under the search bar — a new release, a festival, a film. Organic community searches fill the remaining slots. Public within about ten minutes.</p>' +
@@ -2754,7 +2757,7 @@
     $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
     cfgGet('status-note').then(function (d) {
       if (active !== 'statusnote') return;
-      if (d && d.configured === false) { showFail('Supabase is not configured.'); return; }
+      if (d && d.configured === false) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       var v = d && d.value; var note = typeof v === 'string' ? v : (v && typeof v === 'object' && typeof v.text === 'string') ? v.text : '';
       $('view').innerHTML =
         '<div class="card"><h3 style="margin-top:0">Status note</h3><p class="muted" style="margin-top:0">A plain sentence for listeners during an incident (“Search is slow while a source recovers”). Shown by <code>/api/status</code> and the status page; empty means all clear.' + (d && d.updated_at ? ' Last changed ' + ago(d.updated_at) + '.' : '') + '</p>' +
@@ -2814,7 +2817,7 @@
   function loadUsage() {
     apiMemo('/api/admin/usage?days=' + rangeDays).then(function (d) {
       if (!d || active !== 'usage') return;
-      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       exportRows = d.byType; exportName = 'feature-usage'; $('csv').hidden = false;
       var total = d.byType.reduce(function (a, x) { return a + x.n; }, 0) || 1;
       $('view').innerHTML =
@@ -2828,7 +2831,7 @@
   function loadHeatmap() {
     apiMemo('/api/admin/usage?days=' + rangeDays).then(function (d) {
       if (!d || active !== 'heatmap') return;
-      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       var max = 1; d.heatmap.forEach(function (r) { r.forEach(function (n) { if (n > max) max = n; }); });
       var grid = '<div style="overflow:auto"><table style="border-collapse:separate;border-spacing:2px"><thead><tr><th></th>' + Array.from({ length: 24 }, function (_, h) { return '<th class="muted" style="font-size:10px;font-weight:600;padding:0 2px">' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
         d.heatmap.map(function (row, day) { return '<tr><td class="muted" style="font-size:11px;padding-right:6px">' + DAY_NAMES[day] + '</td>' + row.map(function (n, h) { var a = n / max; return '<td title="' + DAY_NAMES[day] + ' ' + h + ':00 · ' + n + ' plays" style="width:22px;height:20px;border-radius:4px;background:color-mix(in srgb, var(--accent) ' + Math.round((0.06 + a * 0.9) * 100) + '%, transparent)"></td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
@@ -2841,7 +2844,7 @@
   function loadFunnel() {
     apiMemo('/api/admin/funnel?days=' + rangeDays).then(function (d) {
       if (!d || active !== 'funnel') return;
-      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       exportRows = d.steps; exportName = 'funnel'; $('csv').hidden = false;
       $('view').innerHTML =
         '<div class="cards">' + card(d.steps[0] ? d.steps[0].devices.toLocaleString() : 0, 'Devices that opened the app') + card((d.steps[2] ? d.steps[2].pct : 0) + '%', 'Went on to play') + card((d.steps[3] ? d.steps[3].pct : 0) + '%', 'Finished a song') + '</div>' +
@@ -2878,7 +2881,7 @@
   function loadSkips() {
     apiMemo('/api/admin/skips?days=' + rangeDays).then(function (d) {
       if (!d || active !== 'skips') return;
-      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       exportRows = d.items; exportName = 'skips'; $('csv').hidden = !d.items.length;
       $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Most skipped <span class="muted">· songs with ≥' + d.min + ' plays in ' + d.days + ' d, ranked by skip rate \u00b7 ' + (d.source === 'exact' ? 'exact' : 'sampled') + '</span></h3><table><thead><tr><th></th><th>Song</th><th>Plays</th><th>Skips</th><th>Rate</th><th></th></tr></thead><tbody>' +
         (d.items.length ? d.items.map(function (s) { return '<tr><td>' + (s.image ? '<img class="thumb-sm" src="' + esc(s.image) + '" alt="" />' : '') + '</td><td><b>' + esc(s.title) + '</b><div class="muted">' + esc(s.artist) + '</div></td><td>' + s.plays + '</td><td>' + s.skips + '</td>' + pctCell(s.rate) + '<td><button class="ghost" data-block="' + esc(s.id) + '" data-title="' + esc(s.title) + '">Block</button> <button class="ghost" data-ss2="' + esc(s.id) + '">Drilldown</button></td></tr>'; }).join('') : '<tr><td colspan="6" class="empty">Nothing skipped enough to report.</td></tr>') + '</tbody></table></div>';
@@ -2980,13 +2983,13 @@
   function loadCron() {
     apiMemo('/api/admin/cron').then(function (d) {
       if (!d || active !== 'cron') return;
-      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       var bad = d.jobs.filter(function (j) { return j.ok === false; }).length;
       $('view').innerHTML =
         '<div class="cards">' + card(d.jobs.length, 'Scheduled jobs') + card(bad, 'Overdue') + card(ago(d.checkedAt), 'Checked') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Jobs <span class="muted">· each leaves a footprint; overdue = footprint older than its schedule allows</span></h3><table><thead><tr><th>Job</th><th>Schedule</th><th>Last footprint</th><th>Status</th><th>Footprint</th></tr></thead><tbody>' +
         d.jobs.map(function (j) { return '<tr><td><b>' + esc(j.label) + '</b><div class="muted"><code>' + esc(j.id) + '</code></div></td><td class="muted">' + esc(j.schedule) + '</td><td>' + (j.readable === false ? '<span class="muted">unavailable</span>' : j.lastAt ? ago(j.lastAt) : '<span class="muted">never</span>') + '</td><td>' + (j.ok === null ? '<span class="pill">unreadable</span>' : okPill(j.ok, j.ok ? 'on time' : 'overdue')) + '</td><td class="muted">' + esc(j.note) + '</td></tr>'; }).join('') + '</tbody></table>' +
-        '<p class="muted" style="font-size:11px;margin:10px 0 0">Jobs run from GitHub Actions on a schedule. To run one now: Actions → workflow → Run workflow.</p></div>';
+        '<p class="muted" style="font-size:11px;margin:10px 0 0">Jobs run from the CI scheduler. To run one now, start its workflow by hand from the CI dashboard.</p></div>';
     }).catch(function () { if (active === 'cron') showFail(); });
   }
   // 14. Status history — the public status API, 90 days.
@@ -3223,7 +3226,7 @@
   function loadAiCost() {
     apiMemo('/api/admin/aicost?days=' + rangeDays).then(function (d) {
       if (!d || active !== 'aicost') return;
-      if (!d.configured) { showFail('Supabase is not configured.'); return; }
+      if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       var tt = d.tokensTotal || { prompt: 0, completion: 0 };
       var cost = (d.byModel || []).reduce(function (a, m) { return a + (m.cost || 0); }, 0);
       exportRows = d.byModel || []; exportName = 'ai-cost'; $('csv').hidden = !exportRows.length;
@@ -3258,6 +3261,81 @@
   // v5.7.5 — formal category reorganisation: which category each tool sits
   // under (drives the breadcrumb over the tool title) + collapsible category
   // headers whose open/closed state persists per browser.
+  // 8.0 — one-line description under each page title (presentation only).
+  var DESCS = {
+    workspace: 'Audience pulse, search recovery, your task board and shift handover.',
+    overview: 'Listening, growth and errors for today, with the top songs and countries.',
+    realtime: 'What is happening across VinaX in the last few minutes.',
+    live: 'Who is listening right now, what they play and where.',
+    activity: 'The latest plays, searches and AI calls as they arrive.',
+    engagement: 'How often listeners come back and how long they stay.',
+    users: 'Find a listener and see their devices and recent activity.',
+    retention: 'Weekly cohorts and how many come back on day 1, 7 and 30.',
+    usage: 'Which parts of the app listeners actually use.',
+    heatmap: 'When listening peaks, by weekday and hour.',
+    funnel: 'How new listeners move from first open to a finished song.',
+    segments: 'New, returning, power and inactive listeners at a glance.',
+    songs: 'Songs the catalog is surfacing and how they perform.',
+    playlists: 'Curated playlists and what listeners do with them.',
+    categories: 'The genres, moods and languages that shape browsing.',
+    content: 'Block or restore songs across the whole app.',
+    catalog: 'Look up any song, album or artist in the catalog.',
+    trendpins: 'Pin searches to the top of the trending list.',
+    trends: 'Review, publish and retire what shows as trending.',
+    songstats: 'Plays, skips and listeners for a single song.',
+    skips: 'Songs listeners skip most, so discovery can be fixed.',
+    synonyms: 'Map shorthand and misspellings to what listeners mean.',
+    sources: 'Turn catalog sources on or off for every listener.',
+    langorder: 'The order languages appear in across the app.',
+    blocklistio: 'Export the blocklist, or import one from a file.',
+    banners: 'Promotional banners with schedules and links.',
+    festivals: 'Seasonal themes, applied from the calendar or forced.',
+    broadcast: 'A one-line message shown to every listener.',
+    greeting: 'The greeting line at the top of Home.',
+    homebuilder: 'The default order and visibility of Home shelves.',
+    faq: 'Questions and answers in the in-app help centre.',
+    announce: 'Compose an announcement and preview it before it goes out.',
+    notify2: 'Send push notifications and review what went out.',
+    music: 'Top songs, artists and languages over the selected range.',
+    search: 'What listeners search for, and which queries find nothing.',
+    location: 'Listeners and plays by country, platform and city.',
+    world: 'Where listeners are, on a live map.',
+    insights: 'Audience segments and the most active listeners.',
+    experiments: 'A/B experiments and how each variant performs.',
+    recquality: 'How automatic continuations perform, from opt-in telemetry.',
+    recconfig: 'Tune and publish recommendation weights, with version history.',
+    seo: 'Pages in the search corpus and the health of the sitemap.',
+    ai: 'AI request volume, latency, errors and the models in use.',
+    aiops: 'AI spend, failures and emergency switches per feature.',
+    ailab: 'Ping every AI lane, model and music API, and chat with a lane.',
+    engineprobe: 'Check which engines answer, and how fast.',
+    aistarters: 'Starter prompts suggested in VinaX AI.',
+    aiquick: 'Quick-action chips shown in VinaX AI.',
+    airules: 'House rules added to every VinaX AI conversation.',
+    aicost: 'Tokens used and estimated cost by model and feature.',
+    opscenter: 'Service pulse, scheduled work and open issues in one place.',
+    technical: 'Errors, app versions, web vitals and site mode.',
+    feedback: 'Bug reports and ideas sent by listeners.',
+    rooms: 'Listen Together rooms that are open right now.',
+    edge: 'The site shell, assets and API endpoints, checked live.',
+    dataquality: 'How complete and trustworthy the telemetry is.',
+    releases: 'The latest release, deploy runs and recent commits.',
+    tables: 'Row counts and freshness for every database table.',
+    audit: 'Every change made from this console, newest first.',
+    statusnote: 'The note shown on the public status page.',
+    cron: 'Scheduled jobs and whether each one ran on time.',
+    statushist: '90-day uptime for each public component.',
+    envcheck: 'Which Worker settings and secrets are present.',
+    query: 'Read-only queries against the event tables.',
+    relnotes: 'Release notes and the cards that ship with them.',
+    maintwin: 'Schedule a maintenance window listeners will see.',
+    minver: 'The oldest app build that may keep running.',
+    config: 'App settings drafted in this browser.',
+    flags: 'Kill switches for features, published to every listener.',
+    runbook: 'Step-by-step fixes for known incidents.',
+    backup: 'Download or restore the published settings as one file.',
+    pins: 'Pin the tools you use most to the top of the sidebar.'
+  };
   var CATS = { workspace: 'Dashboards', overview: 'Dashboards', realtime: 'Dashboards', live: 'Audience', activity: 'Audience', engagement: 'Audience', users: 'Audience', segments: 'Audience', songs: 'Catalog', playlists: 'Catalog', categories: 'Catalog', content: 'Catalog', banners: 'Promotion', festivals: 'Promotion', notify2: 'Promotion', homebuilder: 'Promotion', music: 'Analytics', search: 'Analytics', location: 'Analytics', world: 'Analytics', insights: 'Analytics', experiments: 'Analytics', ai: 'AI & Engines', ailab: 'AI & Engines', technical: 'Operations', feedback: 'Operations', rooms: 'Operations', opscenter: 'Operations', config: 'Settings', retention: 'Audience', dataquality: 'Operations', catalog: 'Catalog', engineprobe: 'AI & Engines', seo: 'Analytics', edge: 'Operations', releases: 'Operations', tables: 'Operations', audit: 'Operations', flags: 'Settings', runbook: 'Settings', backup: 'Settings', trendpins: 'Catalog', statusnote: 'Operations', usage: 'Audience', heatmap: 'Audience', funnel: 'Audience', songstats: 'Catalog', skips: 'Catalog', synonyms: 'Catalog', sources: 'Catalog', langorder: 'Catalog', blocklistio: 'Catalog', aistarters: 'AI & Engines', aiquick: 'AI & Engines', airules: 'AI & Engines', cron: 'Operations', statushist: 'Operations', envcheck: 'Operations', query: 'Operations', relnotes: 'Operations', maintwin: 'Operations', minver: 'Operations', broadcast: 'Promotion', greeting: 'Promotion', faq: 'Promotion', announce: 'Promotion', pins: 'Settings', aicost: 'AI & Engines', recquality: 'Analytics', aiops: 'AI & Engines', recconfig: 'Settings', trends: 'Catalog' };
   var densityButton = $('density');
   if (densityButton) {
@@ -3538,6 +3616,12 @@
     $('secTitle').textContent = TITLES[sec] || '';
     var crumbEl = $('secCrumb');
     if (crumbEl) crumbEl.textContent = CATS[sec] || '';
+    var descEl = $('secDesc');
+    if (descEl) descEl.textContent = DESCS[sec] || '';
+    // Header Refresh: dashboards only — editors keep their own Publish, and a
+    // re-render would drop an unsaved edit; the workspace has its own button.
+    var hdrRef = $('hdrRefresh');
+    if (hdrRef) { var hdrMod = sectionModule(sec); hdrRef.hidden = sec === 'workspace' || !!LOCAL_SECTIONS[sec] || !!(hdrMod && hdrMod.local); }
     applyNavGroups();
     var v = $('view'); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
     $('range').hidden = !USES_RANGE[sec];
@@ -3562,6 +3646,28 @@
     var n = parseFloat(t.replace(/[, ]/g, ''));
     return isNaN(n) ? t.toLowerCase() : n;
   }
+  // Presentation: a column whose body cells are all numbers (counts, %, ms)
+  // gets .num on its cells and header, so figures right-align in a column.
+  var NUM_CELL = /^[-+\u2212]?[\d.,\s]*\d[\d.,\s]*(%|\s?ms|\s?s|\s?x|k|K|M)?$/;
+  var NUM_BLANK = /^(\u2014|\u2013|-|n\/a)?$/i;
+  function markNumericColumns(tbl) {
+    var head = tbl.tHead && tbl.tHead.rows[0];
+    var body = tbl.tBodies[0];
+    if (!head || !body) return;
+    var cols = head.cells.length;
+    var rows = Array.prototype.filter.call(body.rows, function (r) { return r.cells.length === cols; });
+    if (!rows.length) return;
+    for (var c = 0; c < cols; c++) {
+      var numeric = 0, other = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var t = (rows[i].cells[c].textContent || '').trim();
+        if (NUM_CELL.test(t)) numeric++; else if (!NUM_BLANK.test(t)) { other++; break; }
+      }
+      if (!numeric || other) continue;
+      head.cells[c].classList.add('num');
+      rows.forEach(function (r) { r.cells[c].classList.add('num'); });
+    }
+  }
   function enhanceTables() {
     try {
       var tables = $('view').querySelectorAll('table:not([data-enh])');
@@ -3569,6 +3675,7 @@
         tbl.setAttribute('data-enh', '1');
         var tbody = tbl.tBodies[0];
         if (!tbody) return;
+        markNumericColumns(tbl);
         var allRows = Array.prototype.slice.call(tbody.rows).filter(function (r) { return !r.querySelector('.empty'); });
         if (allRows.length < 8) return;
         var st = { q: '', sortCol: -1, dir: 1, page: 0, per: 25 };
@@ -3808,6 +3915,7 @@
   $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('enter').click(); });
   $('logout').addEventListener('click', function () { closeDrawer(false); sessionStorage.removeItem(TOKEN_KEY); showLogin(''); });
   $('refresh').addEventListener('click', refreshActive);
+  if ($('hdrRefresh')) $('hdrRefresh').addEventListener('click', refreshActive);
   $('csv').addEventListener('click', downloadCsv);
   $('autoWrap').addEventListener('click', function () { setAuto(!autoRefresh); });
   $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });

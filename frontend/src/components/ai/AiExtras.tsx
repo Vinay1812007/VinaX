@@ -71,7 +71,7 @@ export function SlashMenu({ items, onPick }: { items: SlashCommand[]; onPick: (c
   if (!items.length) return null;
   return (
     <div role="listbox" aria-label="Commands" className="ai-popover absolute left-2 right-2 bottom-full mb-2 max-h-64 overflow-auto z-20 ai-pop">
-      <p className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest ai-t3">Commands</p>
+      <p className="ai-menu-heading">Commands</p>
       {items.map((c) => (
         <button
           key={c.cmd}
@@ -91,10 +91,10 @@ export function SlashMenu({ items, onPick }: { items: SlashCommand[]; onPick: (c
 export function FollowupChips({ items, onPick, disabled }: { items: string[]; onPick: (t: string) => void; disabled?: boolean }) {
   if (!items.length) return null;
   return (
-    <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Follow-up suggestions">
+    <div className="ai-followups" aria-label="Follow-up suggestions">
       {items.map((t) => (
         <button key={t} disabled={disabled} onClick={() => onPick(t)} className="ai-chip">
-          <ArrowUpRightIcon className="w-3 h-3 text-ember-400 shrink-0" />
+          <ArrowUpRightIcon className="w-3.5 h-3.5 ai-t3 shrink-0" />
           {t}
         </button>
       ))}
@@ -156,7 +156,7 @@ export function ReplyPrefsBar({
   // They are set once and rarely changed, so they belong in the settings
   // menu; this renders as menu rows, not as a toolbar.
   return (
-    <div aria-label="Reply preferences">
+    <div className="ai-prefs" aria-label="Reply preferences">
       <label className="ai-menu-item justify-between cursor-pointer">
         <span>Reply in</span>
         <span className="flex items-center gap-1 ai-t1">
@@ -188,9 +188,9 @@ export function ReplyPrefsBar({
       >
         <span className="min-w-0">
           <span className="block">Use the song playing now</span>
-          {!hasSong && <span className="block text-[11px] font-medium ai-t3">Nothing is playing right now</span>}
+          {!hasSong && <span className="block text-[13px] font-medium ai-t3">Nothing is playing right now</span>}
         </span>
-        <span className={cn('text-[11px] font-bold', songCtx ? 'text-ember-400' : 'ai-t3')}>{songCtx ? 'On' : 'Off'}</span>
+        <span className={cn('text-[13px] font-semibold', songCtx ? 'text-ember-400' : 'ai-t3')}>{songCtx ? 'On' : 'Off'}</span>
       </button>
     </div>
   );

@@ -9,20 +9,21 @@ import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
 import { PlayIcon } from '@/components/Icons';
 import { Link } from 'react-router-dom';
+import { PageHeader } from '@/components/PageHeader';
+import '@/styles/pages/library.css';
 
 export default function MadeForYouPage() {
-  usePageTitle('Made For You');
+  usePageTitle('Made for you');
   const { data: mixes, isLoading, isError, refetch } = useRecommendations();
   const failed = isError && !mixes?.length;
   const playQueue = usePlayerStore((s) => s.playQueue);
 
   return (
-    <div className="max-w-screen-2xl mx-auto">
-      <h1 className="text-display tracking-tight mb-1">Made For You</h1>
-      <p className="text-sm text-ink-400 mb-8">
-        Every shelf is computed on this device from your listening — nothing leaves your browser.
-        <Link to="/taste-profile" className="text-ember-400 font-semibold ml-1">See how →</Link>
-      </p>
+    <div className="vx-entity">
+      <PageHeader
+        title="Made for you"
+        actions={<Link to="/taste-profile" className="vx-quiet-btn">How it works</Link>}
+      />
 
       {isLoading && (
         <>
@@ -53,11 +54,8 @@ export default function MadeForYouPage() {
           title={mix.title}
           explanation={mix.explanation}
           action={
-            <button
-              onClick={() => playQueue(mix.songs, 0)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs btn-primary"
-            >
-              <PlayIcon className="w-3.5 h-3.5" /> Play all
+            <button onClick={() => playQueue(mix.songs, 0)} className="vx-mix-play">
+              <PlayIcon className="w-4 h-4" /> Play all
             </button>
           }
         >

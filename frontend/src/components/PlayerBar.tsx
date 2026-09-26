@@ -14,6 +14,9 @@ const DeviceSheet = lazy(() => import('./DeviceSheet').then(m => ({ default: m.D
 const NowLine = lazy(() => import('./NowLine').then((m) => ({ default: m.NowLine })));
 import {
   ClockIcon,
+  DevicesIcon,
+  ExpandIcon,
+  MicIcon,
   NextIcon,
   PauseIcon,
   PlayIcon,
@@ -35,9 +38,9 @@ function ProgressHairline() {
   // backdrop-blurred card four times a second; a transform stays on the
   // compositor. The track clips the scaled fill, so its rounded ends survive.
   return (
-    <div className="absolute bottom-0 left-2 right-2 h-[3px] rounded-full bg-white/20 overflow-hidden">
+    <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-white/15 overflow-hidden">
       <div
-        className="h-full w-full origin-left rounded-full bg-white transition-transform duration-300"
+        className="h-full w-full origin-left rounded-full bg-white/90 transition-transform duration-300"
         style={{ transform: `scaleX(${progress})` }}
       />
     </div>
@@ -199,25 +202,26 @@ export function PlayerBar() {
       {/* ---- Desktop bar: three-zone layout ---- */}
       {/* v5.9.0 — the bar: full width, flush with the bottom, black. */}
       <div className="relative hidden lg:block overflow-hidden glass-bottom-player" data-tour="player">
-        <div className="flex items-center gap-4 px-4 py-2.5 max-w-screen-2xl mx-auto">
-          <div className="flex items-center gap-3 min-w-0 w-40 lg:w-60">
-            <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="group shrink-0">
+        <div className="vx-pb-row">
+          <div className="vx-pb-track">
+            <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="vx-pb-art group shrink-0">
               <img
                 src={artUrl ?? FALLBACK_ART}
                 onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
                 alt=""
-                className={cn('w-14 h-14 rounded-lg object-cover ring-1 ring-white/10 group-hover:opacity-80 transition-opacity shadow-md', isBuffering && 'opacity-50')}
+                className={cn('w-14 h-14 rounded-md object-cover', isBuffering && 'opacity-50')}
               />
+              <span className="vx-pb-art-hint" aria-hidden><ExpandIcon className="w-4 h-4" /></span>
             </button>
             <div className="min-w-0">
-              <Marquee text={song.title} className="text-sm font-semibold" />
-              <p className="text-xs text-ink-300 truncate">{song.subtitle}</p>
+              <Marquee text={song.title} className="text-sm font-semibold text-ink-100" />
+              <p className="text-xs text-ink-400 truncate">{song.subtitle}</p>
             </div>
             <FavButton song={song} />
           </div>
 
-          <div className="flex-1 flex flex-col items-center gap-1.5">
-            <div className="flex items-center gap-3">
+          <div className="vx-pb-center">
+            <div className="flex items-center gap-4">
               <IconButton label={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={toggleShuffle} active={shuffle} size="sm">
                 <ShuffleIcon className="w-4 h-4" />
               </IconButton>
@@ -229,7 +233,7 @@ export function PlayerBar() {
                 onClick={togglePlay}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
                 // 36px disc, 44px hit area (IconButton's invisible-pad pattern).
-                className="np-play-desktop relative after:absolute after:inset-0 after:-m-[4px] w-9 h-9 rounded-full flex items-center justify-center hover:scale-[1.06] active:scale-95 transition-transform"
+                className="np-play-desktop relative after:absolute after:inset-0 after:-m-[2px] w-10 h-10 rounded-full flex items-center justify-center hover:scale-[1.05] active:scale-95 transition-transform"
               >
                 {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
               </button>
@@ -249,10 +253,10 @@ export function PlayerBar() {
             </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-0 lg:gap-1 w-60 lg:w-72 justify-end">
+          <div className="vx-pb-tools">
             {castAvailable && (
               <div className="w-8 h-8 flex items-center justify-center mr-1">
-                {/* Custom element defined by Google Cast SDK */}
+                {/* Custom element defined by the cast SDK */}
                 {/* @ts-expect-error custom element */}
                 <cast-media-route-button style={{ width: '24px', height: '24px', '--connected-color': 'rgb(var(--ember-400))', '--disconnected-color': 'currentColor' }} />
               </div>
@@ -262,11 +266,11 @@ export function PlayerBar() {
                 <ClockIcon className="w-3.5 h-3.5" /> {sleepLabel}
               </button>
             )}
-            <Link to="/now-playing" aria-label="Lyrics and now playing" title="Lyrics and now playing" className="min-w-touch min-h-touch inline-flex items-center justify-center text-ink-300 hover:text-ink-100"><span aria-hidden>♪</span></Link>
-            <IconButton label="Connect to a device" onClick={() => setDevicesOpen(true)}><VolumeIcon className="w-4 h-4" /></IconButton>
-            <Link to="/queue" aria-label="Queue" title="Queue" className="inline-flex items-center justify-center min-w-touch min-h-touch rounded-full text-ink-300 hover:text-ink-100 hover:bg-ink-700/70">
-              <QueueIcon className="w-4 h-4" />
+            <Link to="/now-playing" aria-label="Lyrics and now playing" title="Lyrics and now playing" className="vx-pb-link"><MicIcon className="w-[18px] h-[18px]" /></Link>
+            <Link to="/queue" aria-label="Queue" title="Queue" className="vx-pb-link">
+              <QueueIcon className="w-[18px] h-[18px]" />
             </Link>
+            <IconButton size="sm" label="Connect to a device" onClick={() => setDevicesOpen(true)}><DevicesIcon className="w-[18px] h-[18px]" /></IconButton>
             <IconButton label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} size="sm">
               <VolumeIcon className="w-4 h-4" muted={muted} />
             </IconButton>
@@ -279,9 +283,10 @@ export function PlayerBar() {
               step={0.05}
               value={muted ? 0 : volume}
               onChange={(e) => setVolume(Number(e.target.value))}
-              className="w-16 lg:w-20"
+              className="vx-volume"
               style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties}
             />
+            <Link to="/now-playing" aria-label="Full screen player" title="Full screen player" className="vx-pb-link"><ExpandIcon className="w-4 h-4" /></Link>
           </div>
         </div>
       </div>

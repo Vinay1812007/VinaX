@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { isNativePlatform } from '@/services/native';
 import { alertsSnoozedUntil, snoozeAlerts } from '@/services/announcements';
 import { toast } from '@/store/toastStore';
-import { XIcon } from '@/components/Icons';
-import { Sheet } from './Sheet';
+import { MegaphoneIcon, SparkleIcon } from '@/components/Icons';
+import { Sheet, SheetHeader } from './Sheet';
 
 interface Announcement {
   title?: string;
@@ -46,52 +46,46 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
     });
   }, [open]);
   return (
-    <Sheet open={open} onClose={onClose} labelledBy="notification-sheet-title" backdropClassName="bg-ink-950/70 backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h2 id="notification-sheet-title" className="text-base font-extrabold">Notifications</h2>
-          <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-full text-ink-400 hover:text-ink-100 hover:bg-[var(--tile-hover)]">
-            <XIcon className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="space-y-2">
+    <Sheet open={open} onClose={onClose} labelledBy="notification-sheet-title" backdropClassName="bg-black/60">
+        <SheetHeader id="notification-sheet-title" title="Notifications" onClose={onClose} />
+        <ul className="-mx-2">
           {anns.length > 0 ? (
             anns.map((ann, i) => (
-              <button
-                key={ann.ts ?? i}
-                onClick={() => {
-                  onClose();
-                  if (typeof ann.link === 'string' && ann.link.startsWith('/')) navigate(ann.link);
-                }}
-                className="w-full text-left rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-3 flex items-start gap-3 hover:bg-[var(--tile-hover)] transition"
-              >
-                <span className="w-9 h-9 rounded-[14px] flex items-center justify-center text-base shrink-0" style={{ background: 'rgba(34,211,238,0.14)' }} aria-hidden>
-                  🎵
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-bold truncate">{ann.title}</span>
-                  <span className="block text-[11px] font-semibold text-ink-400 truncate">
-                    {ann.body} {ann.ts ? `— ${ago(ann.ts)}` : ''}
+              <li key={ann.ts ?? i}>
+                <button
+                  onClick={() => {
+                    onClose();
+                    if (typeof ann.link === 'string' && ann.link.startsWith('/')) navigate(ann.link);
+                  }}
+                  className="w-full min-h-[60px] text-left rounded-lg px-2 py-2 flex items-center gap-3 hover:bg-[var(--vx-hover)] transition-colors"
+                >
+                  <span className="w-10 h-10 rounded-full bg-ink-100/[0.07] text-ink-200 flex items-center justify-center shrink-0" aria-hidden>
+                    <MegaphoneIcon className="w-5 h-5" />
                   </span>
-                </span>
-              </button>
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-semibold text-ink-100 truncate">{ann.title}</span>
+                    <span className="block text-[13px] text-ink-400 truncate">
+                      {ann.body} {ann.ts ? `· ${ago(ann.ts)}` : ''}
+                    </span>
+                  </span>
+                </button>
+              </li>
             ))
           ) : (
-            <p className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-3 text-xs text-ink-400">
-              Nothing new right now — today&rsquo;s pick lands here.
-            </p>
+            <li className="px-2 py-3 text-[14px] text-ink-400">Nothing new right now.</li>
           )}
           {notes.map((n) => (
-            <div key={n.version} className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-3 flex items-start gap-3">
-              <span className="w-9 h-9 rounded-[14px] flex items-center justify-center text-base shrink-0" style={{ background: 'rgba(167,139,250,0.14)' }} aria-hidden>
-                ✨
+            <li key={n.version} className="min-h-[60px] px-2 py-2 flex items-center gap-3">
+              <span className="w-10 h-10 rounded-full bg-ink-100/[0.07] text-ink-200 flex items-center justify-center shrink-0" aria-hidden>
+                <SparkleIcon className="w-5 h-5" />
               </span>
               <span className="min-w-0">
-                <span className="block text-[13px] font-bold truncate">VinaX {n.version} is here</span>
-                <span className="block text-[11px] font-semibold text-ink-400 truncate">{n.title}</span>
+                <span className="block text-[14px] font-semibold text-ink-100 truncate">VinaX {n.version} is here</span>
+                <span className="block text-[13px] text-ink-400 truncate">{n.title}</span>
               </span>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
         {/* D7 — a week of quiet, without touching the permanent toggle. */}
         {isNativePlatform() && (
           <button
@@ -101,10 +95,10 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
               setSnoozed(true);
               toast('Alerts muted for 7 days');
             }}
-            className="w-full mt-3 py-2 rounded-full border border-ink-600 text-xs font-semibold text-ink-300 hover:text-ink-100 transition disabled:opacity-60"
+            className="w-full mt-4 min-h-[44px] rounded-full btn-secondary text-[14px] disabled:opacity-60"
             disabled={snoozed}
           >
-            {snoozed ? 'Alerts muted for 7 days ✓' : 'Mute alerts for 7 days'}
+            {snoozed ? 'Alerts muted for 7 days' : 'Mute alerts for 7 days'}
           </button>
         )}
     </Sheet>

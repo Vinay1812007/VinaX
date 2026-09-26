@@ -908,21 +908,21 @@ export default function VinaXAIPage(): ReactNode {
             model lives beside the composer, where it is chosen. */}
         <header className="ai-header">
           <button type="button" className="ai-icon-btn ai-below-md" aria-label="Menu" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}>
-            <MenuIcon className="w-[18px] h-[18px]" />
+            <MenuIcon className="w-5 h-5" />
           </button>
           {sidebarCollapsed && (
             <>
               <button type="button" className="ai-icon-btn ai-from-md" aria-label="Show chat list" title="Show chat list (Ctrl/⌘+B)" onClick={toggleCollapsed}>
-                <PanelIcon className="w-[18px] h-[18px]" />
+                <PanelIcon className="w-5 h-5" />
               </button>
               <button type="button" className="ai-icon-btn ai-from-md" aria-label="New chat" title="New chat (Ctrl/⌘+K)" onClick={newChat}>
-                <PlusIcon className="w-[18px] h-[18px]" />
+                <PlusIcon className="w-5 h-5" />
               </button>
             </>
           )}
           <div className="min-w-0 flex-1">
-            <h1 className="min-w-0 truncate font-semibold ai-t2">{active?.title ?? 'VinaX AI'}</h1>
-            <p className="text-[11px] ai-t3 leading-tight truncate md:hidden">
+            <h1 className="ai-header-title">{active?.title ?? 'VinaX AI'}</h1>
+            <p className="ai-header-sub md:hidden">
               {modelLabel}
               {agentOn ? ' · Agent' : ''}
               {think ? ' · Think' : ''}
@@ -939,7 +939,7 @@ export default function VinaXAIPage(): ReactNode {
               aria-expanded={exportOpen}
               className={cn('ai-icon-btn', exportOpen && 'ai-icon-btn-on')}
             >
-              <DownloadIcon className="w-[18px] h-[18px]" />
+              <DownloadIcon className="w-5 h-5" />
             </button>
             {exportOpen && (
               <>
@@ -947,7 +947,7 @@ export default function VinaXAIPage(): ReactNode {
                 <div
                   role="menu"
                   aria-label="Export chat"
-                  className="ai-popover ai-pop absolute right-0 top-full mt-1.5 z-50 w-48"
+                  className="ai-popover ai-pop absolute right-0 top-full mt-1.5 z-50 w-56"
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') {
                       e.stopPropagation();
@@ -974,7 +974,7 @@ export default function VinaXAIPage(): ReactNode {
             )}
           </div>
           <button type="button" onClick={openSettings} aria-label="Chat settings" title="Chat settings" aria-haspopup="dialog" className="ai-icon-btn">
-            <SettingsIcon className="w-[18px] h-[18px]" />
+            <SettingsIcon className="w-5 h-5" />
           </button>
         </header>
 
@@ -982,7 +982,7 @@ export default function VinaXAIPage(): ReactNode {
             the stage centres greeting → composer → suggestions; once there
             are messages the thread takes the space and the composer docks. */}
         <div
-          className={cn('ai-stage', isEmpty && 'ai-stage-empty', fontSize === 's' ? 'text-[13px]' : fontSize === 'l' ? 'text-[17px]' : 'text-[15px]')}
+          className={cn('ai-stage', isEmpty && 'ai-stage-empty', fontSize === 's' ? 'text-[14px]' : fontSize === 'l' ? 'text-[18px]' : 'text-[16px]')}
           onDragEnter={(e) => {
             e.preventDefault();
             setDropActive(true);

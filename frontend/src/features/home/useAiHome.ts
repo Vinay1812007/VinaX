@@ -46,6 +46,29 @@ async function fetchShelfSongs(query: string, page: number, signal?: AbortSignal
   return [...first, ...base.filter((s) => !seen.has(s.id))];
 }
 
+const fold = (s: string): string => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/**
+ * 8.0.0 — a shelf keeps only songs that belong on it: in the shelf's language
+ * (a song with no known language is kept only when the shelf has none), and,
+ * for an artist shelf, crediting that singer. Measured live, an
+ * unchecked query put Tamil, Malayalam and instrumental tracks on a Telugu
+ * listener's shelf.
+ */
+export function belongsOnShelf(song: Song, shelf: Pick<AiShelfDefinition, 'language' | 'kind' | 'subject'>): boolean {
+  const lang = (song.language ?? '').toLowerCase();
+  if (shelf.language) {
+    if (!lang || lang === 'unknown' || lang !== shelf.language) return false;
+  }
+  // Singers are credited on the song; a music director usually is not, so composer shelves are checked for language only.
+  if (shelf.kind === 'artist' && shelf.subject) {
+    const want = fold(shelf.subject);
+    const credits = fold([...song.artists.map((a) => a.name), song.subtitle].join(' '));
+    if (!want || !credits.includes(want)) return false;
+  }
+  return true;
+}
+
 export async function designAndResolve(signal?: AbortSignal, visitNonce = newVisitNonce()): Promise<AiShelf[]> {
   const sections = await designHomeShelves(signal, visitNonce);
   if (!sections.length) return [];
@@ -60,7 +83,7 @@ export async function designAndResolve(signal?: AbortSignal, visitNonce = newVis
   sections.forEach((section, i) => {
     const r = results[i];
     if (r.status !== 'fulfilled') return;
-    const ranked = rankSongs(r.value);
+    const ranked = rankSongs(r.value).filter((song) => belongsOnShelf(song, section));
     // Songs not shown on AI shelves recently come first; shown ones only fill up.
     // (rankSongs has already dropped explicit songs in Kid mode.) The hook re-applies all of this on render.
     const admitted = freshSongs(ranked, { excludeIds: seenIds, excludeKeys: served, muted: settings.mutedLanguages, blocked: (s) => isSongBlocked(s, lib) || softMutedArtist(s, softMuted) });

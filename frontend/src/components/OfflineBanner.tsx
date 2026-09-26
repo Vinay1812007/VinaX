@@ -9,21 +9,15 @@ export function OfflineBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="mb-3 flex items-center gap-3 rounded-2xl glass-card px-4 py-3 text-sm animate-fade-up"
+      className="mb-4 flex items-center gap-3 min-h-[48px] rounded-xl bg-ink-850 px-4 py-2 text-[14px] animate-fade-up"
     >
-      <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
-        <span
-          className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
-          style={{ background: '#fbbf24' }}
-        />
-        <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: '#fbbf24' }} />
-      </span>
+      <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden />
       <span className="min-w-0 flex-1 text-ink-200">
-        You&rsquo;re offline &mdash; playing from{' '}
-        <Link to="/offline" className="font-semibold text-ember-400 hover:text-ember-300">
+        You&rsquo;re offline. Your library still browses, and{' '}
+        <Link to="/offline" className="font-semibold text-ink-100 underline underline-offset-2 decoration-ink-400 hover:decoration-ink-100">
           downloads
-        </Link>
-        . Library, favorites and history still browse with artwork.
+        </Link>{' '}
+        still play.
       </span>
     </div>
   );

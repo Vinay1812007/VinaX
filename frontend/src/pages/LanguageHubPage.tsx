@@ -16,34 +16,42 @@ import { SongRow } from '@/components/SongRow';
 import { ListSkeleton } from '@/components/Skeletons';
 import { ErrorState, InlineError } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
-import { MOOD_HUBS } from '@/constants/hubs';
 import type { Song } from '@/types/music';
+import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
+import { Shelf } from '@/components/Shelf';
+import { PlayIcon } from '@/components/Icons';
+import { HubMoodTiles } from '@/features/discover/HubMoodTiles';
+import '@/styles/pages/browse.css';
 
 
 function HubSection({ heading, songs, loading, error, retry }: { heading: string; songs: Song[] | undefined; loading: boolean; error: boolean; retry: () => void }) {
   const playQueue = usePlayerStore((s) => s.playQueue);
   return (
-    <section className="mb-8">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-bold">{heading}</h2>
-        {(songs?.length ?? 0) > 0 && (
+    <section className="vx-section">
+      <SectionHeader
+        title={heading}
+        action={(songs?.length ?? 0) > 0 && (
           <button
+            type="button"
             onClick={() => {
               if (songs) playQueue(songs, 0);
             }}
-            className="text-xs font-semibold text-ember-400 hover:text-ember-300"
+            className="vx-pill-btn"
           >
-            Play all
+            <PlayIcon /> Play all
           </button>
         )}
-      </div>
+      />
       {loading && <ListSkeleton />}
       {/* One section failing is a quiet inline retry; the page-level error
           state is reserved for when nothing on the hub could load. */}
       {error && !songs?.length && <InlineError retry={retry} />}
-      {(songs ?? []).slice(0, 10).map((song, i) => (
-        <SongRow key={song.id} song={song} songs={songs ?? []} index={i} />
-      ))}
+      <div className="vx-track-list">
+        {(songs ?? []).slice(0, 10).map((song, i) => (
+          <SongRow key={song.id} song={song} songs={songs ?? []} index={i} />
+        ))}
+      </div>
     </section>
   );
 }
@@ -91,15 +99,8 @@ export default function LanguageHubPage({ language }: { language: string }) {
   );
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <header className="mb-7">
-        <p className="text-xs uppercase tracking-widest text-ink-400 font-semibold mb-1.5">Language hub</p>
-        <h1 className="text-display tracking-tight">{label} Songs</h1>
-        <p className="text-sm text-ink-300 mt-2 max-w-2xl">
-          The latest {label} hits, fresh releases and all-time favourites — free, no login, tuned to you. Updated
-          daily.
-        </p>
-      </header>
+    <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
+      <PageHeader title={`${label} Songs`} />
 
       {shelvesFailed ? (
         <ErrorState
@@ -117,49 +118,50 @@ export default function LanguageHubPage({ language }: { language: string }) {
       )}
 
       {(artists.data?.length ?? 0) >= 4 && (
-        <section className="mb-8">
-          <h2 className="text-lg font-bold mb-3">Top {label} artists</h2>
-          <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-2 px-2">
-            {(artists.data ?? []).map((a) => (
-              <MediaCard
-                key={a.id}
-                to={artistPath(a)}
-                image={bestImage(a.images)}
-                images={a.images}
-                title={a.name}
-                subtitle="Artist"
-                round
-                onPlay={() => void playArtist(a.id, a.name)}
-              />
-            ))}
-          </div>
-        </section>
+        <Shelf title={`Top ${label} artists`}>
+          {(artists.data ?? []).map((a) => (
+            <MediaCard
+              key={a.id}
+              to={artistPath(a)}
+              image={bestImage(a.images)}
+              images={a.images}
+              title={a.name}
+              subtitle="Artist"
+              round
+              onPlay={() => void playArtist(a.id, a.name)}
+            />
+          ))}
+        </Shelf>
       )}
 
       {(albums.data?.length ?? 0) >= 4 && (
-        <section className="mb-8">
-          <h2 className="text-lg font-bold mb-3">{label} albums worth an evening</h2>
-          <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-2 px-2">
-            {(albums.data ?? []).map((al) => (
-              <MediaCard
-                key={al.id}
-                to={albumPath(al)}
-                image={bestImage(al.images)}
-                images={al.images}
-                title={al.title}
-                subtitle={al.subtitle || 'Album'}
-                onPlay={() => void playAlbum(al.id, al.title)}
-              />
-            ))}
-          </div>
-        </section>
+        <Shelf title={`${label} albums`}>
+          {(albums.data ?? []).map((al) => (
+            <MediaCard
+              key={al.id}
+              to={albumPath(al)}
+              image={bestImage(al.images)}
+              images={al.images}
+              title={al.title}
+              subtitle={al.subtitle || 'Album'}
+              onPlay={() => void playAlbum(al.id, al.title)}
+            />
+          ))}
+        </Shelf>
       )}
 
-      <section className="mb-8">
-        <h2 className="text-lg font-bold mb-2">More {label} songs</h2>
-        {moreSongs.map((song, i) => (
-          <SongRow key={song.id} song={song} songs={moreSongs} index={i} />
-        ))}
+      <section className="vx-section" aria-label={`${label} songs by mood`}>
+        <SectionHeader title="Browse by mood" />
+        <HubMoodTiles language={language} />
+      </section>
+
+      <section className="vx-section">
+        <SectionHeader title={`More ${label} songs`} />
+        <div className="vx-track-list">
+          {moreSongs.map((song, i) => (
+            <SongRow key={song.id} song={song} songs={moreSongs} index={i} />
+          ))}
+        </div>
         <InfiniteSentinel
           onVisible={() => more.hasNextPage && !more.isFetchingNextPage && more.fetchNextPage()}
           disabled={!more.hasNextPage}
@@ -167,32 +169,18 @@ export default function LanguageHubPage({ language }: { language: string }) {
         />
       </section>
 
-      <section className="mb-6">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-3">{label} songs by mood</h2>
-        <div className="flex flex-wrap gap-2 mb-6">
-          {MOOD_HUBS.map((m) => (
-            <Link key={m.slug} to={`/${language}-${m.slug}-songs`} className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100">
-              {label} {m.label.toLowerCase()} songs
-            </Link>
-          ))}
-        </div>
-        <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-3">More languages</h2>
-        <div className="flex flex-wrap gap-2">
+      <section className="vx-section" aria-label="More languages">
+        <SectionHeader title="More languages" />
+        <div className="vx-chip-row">
           {HUB_LANGUAGES.filter((l) => l !== language).map((l) => (
-            <Link
-              key={l}
-              to={`/${l}-songs`}
-              className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100"
-            >
+            <Link key={l} to={`/${l}-songs`} className="vx-link-chip">
               {languageLabel(l)} songs
             </Link>
           ))}
+          <Link to="/moods" className="vx-link-chip">Music by mood</Link>
+          <Link to="/movies" className="vx-link-chip">Movie soundtracks</Link>
+          <Link to="/charts" className="vx-link-chip">Top charts</Link>
         </div>
-        <p className="text-sm text-ink-400 mt-4">
-          Explore more: <Link to="/moods" className="text-ember-400 hover:underline">music by mood</Link> ·{' '}
-          <Link to="/movies" className="text-ember-400 hover:underline">movie soundtracks</Link> ·{' '}
-          <Link to="/charts" className="text-ember-400 hover:underline">top charts</Link>
-        </p>
       </section>
     </div>
   );

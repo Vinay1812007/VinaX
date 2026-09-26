@@ -1,15 +1,16 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
+import '@/styles/pages/secondary.css';
 
-const H = ({ children }: { children: string }) => <h2 className="text-base font-extrabold mt-6 mb-1.5 text-ink-100">{children}</h2>;
+const H = ({ children }: { children: string }) => <h2>{children}</h2>;
 
 export default function PrivacyPage() {
   usePageTitle('Privacy');
   return (
-    <div className="max-w-2xl mx-auto pb-10">
-      <PageHeader title="Privacy" subtitle="Private by design — the short version is: your listening is yours. Last updated September 2026." />
-      <div className="text-sm text-ink-200 leading-relaxed">
+    <div className="vx-sec">
+      <PageHeader title="Privacy" subtitle="Last updated September 2026" />
+      <div className="vx-article">
         <H>What stays on your device</H>
         <p>
           Everything personal: your name, favorites, listening history, downloads, queue, taste profile, streaks,
@@ -24,7 +25,7 @@ export default function PrivacyPage() {
           no emails, no precise location, no advertising identifiers — those don&rsquo;t exist here. Opting out stops
           this entirely, anytime.
         </p>
-        <p className="mt-2">
+        <p>
           A song counts as played once you have heard at least 5 seconds of it, the same rule your taste profile uses,
           so flipping past a song is not counted. The same opt-in sends two short reports about the songs VinaX adds to
           your queue by itself. When it adds a batch: which version of the recommender chose it, whether the on-device
@@ -34,7 +35,7 @@ export default function PrivacyPage() {
           batch, how many seconds of it you heard out of its length, whether you finished it, skipped it or liked it, and
           the same test group. <strong>Neither report names the song.</strong>
         </p>
-        <p className="mt-2">
+        <p>
           The same opt-in also turns on anonymous session insights: heatmaps and replays of how the app is used
           (taps, scrolls and which screens load), processed by an analytics provider so we can find confusing spots
           and fix them. <strong>All text on screen is masked on your device before anything is sent</strong> — song
@@ -72,9 +73,9 @@ export default function PrivacyPage() {
           Settings → Your Data can export your entire profile as one file, import it on a new device, or erase
           everything in one tap. Because nothing personal is on our servers, local erase is total erase.
         </p>
-        <p className="mt-6 text-ink-400">
+        <p className="vx-article-end">
           The enforced technical rules behind this page live in the project&rsquo;s privacy baseline. Questions?{' '}
-          <Link to="/contact" className="text-ember-400 hover:underline">Contact us</Link>.
+          <Link to="/contact">Contact us</Link>.
         </p>
       </div>
     </div>

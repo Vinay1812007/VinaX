@@ -1,5 +1,5 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Shelf } from '@/components/Shelf';
+import { SectionHeader } from '@/components/SectionHeader';
 import { SongRow } from '@/components/SongRow';
 import { ShelfSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
@@ -7,17 +7,9 @@ import { useRecommendations } from '@/features/recommendations/useRecommendation
 import { usePlayerStore } from '@/store/playerStore';
 import { PlayIcon } from '@/components/Icons';
 import { Link } from 'react-router-dom';
+import { PageHeader } from '@/components/PageHeader';
+import '@/styles/pages/library.css';
 
-const MIX_KIND_ICONS: Record<string, string> = {
-  'made-for-you': '🎯',
-  daily: '📅',
-  language: '🌐',
-  time: '🕐',
-  rediscover: '🔁',
-  'low-skip': '💎',
-  because: '🎵',
-  fresh: '✨',
-};
 
 export default function MixesPage() {
   usePageTitle('Mixes');
@@ -26,14 +18,11 @@ export default function MixesPage() {
   const playQueue = usePlayerStore((s) => s.playQueue);
 
   return (
-    <div className="max-w-screen-xl mx-auto">
-      <h1 className="text-display tracking-tight mb-1">Your Mixes</h1>
-      <p className="text-sm text-ink-400 mb-8">
-        Personalised playlists built from your listening history — updated throughout the day.{' '}
-        <Link to="/taste-profile" className="text-ember-400 font-semibold">
-          See your taste profile →
-        </Link>
-      </p>
+    <div className="vx-entity">
+      <PageHeader
+        title="Your mixes"
+        actions={<Link to="/taste-profile" className="vx-quiet-btn">Taste profile</Link>}
+      />
 
       {isLoading && (
         <>
@@ -62,25 +51,22 @@ export default function MixesPage() {
       )}
 
       {mixes?.map((mix) => (
-        <Shelf
-          key={mix.id}
-          title={`${MIX_KIND_ICONS[mix.kind] ?? '🎶'} ${mix.title}`}
-          explanation={mix.explanation}
-          action={
-            <button
-              onClick={() => playQueue(mix.songs, 0)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs btn-primary"
-            >
-              <PlayIcon className="w-3.5 h-3.5" /> Play all
-            </button>
-          }
-        >
-          <div className="flex flex-col gap-0.5">
+        <section key={mix.id} className="vx-shelf" aria-label={mix.title}>
+          <SectionHeader
+            title={mix.title}
+            explanation={mix.explanation}
+            action={
+              <button onClick={() => playQueue(mix.songs, 0)} className="vx-mix-play">
+                <PlayIcon className="w-4 h-4" /> Play all
+              </button>
+            }
+          />
+          <div className="vx-tracklist no-album vx-mix-list">
             {mix.songs.map((song, i) => (
               <SongRow key={song.id} song={song} songs={mix.songs} index={i} showArt />
             ))}
           </div>
-        </Shelf>
+        </section>
       ))}
     </div>
   );

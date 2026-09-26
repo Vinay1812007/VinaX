@@ -6,14 +6,16 @@ import type { LrcLine } from '@/services/lyrics/lrclib';
 import { cn } from '@/utils/cn';
 
 /**
- * Lyric strip: the line just sung (ghosted), the current line (highlighted)
- * and the next line (ghosted). Tapping opens the full lyrics view.
+ * Lyric preview card: the line just sung (dim), the current line (bright)
+ * and the next line (dim). Tapping opens the full lyrics view.
  *
  * v5.20.0 — FIXED height. Each row has a set line box (the current line is
- * clamped to two lines), and empty rows keep a placeholder, so the strip
- * never grows or shrinks between lines and the controls under it stay put.
+ * clamped to two lines), and empty rows keep a placeholder, so the card
+ * never grows or shrinks between lines and whatever sits under it stays put.
+ *
+ * 8.0 — the card takes the artwork's tint (`.vx-rail-lyrics-card`, player.css).
  */
-export function LiveLyricLine({ lines, onOpen }: { lines: LrcLine[]; onOpen: () => void }) {
+export function LiveLyricLine({ lines, onOpen, className }: { lines: LrcLine[]; onOpen: () => void; className?: string }) {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const song = useCurrentSong();
   const offset = useLyricsOffsetStore((s) => (song ? s.offsets[song.id] ?? 0 : 0));
@@ -29,28 +31,14 @@ export function LiveLyricLine({ lines, onOpen }: { lines: LrcLine[]; onOpen: () 
   if (!lines.length) return null;
 
   return (
-    <button
-      onClick={onOpen}
-      className="w-full text-left mt-3 px-4 py-3 rounded-2xl bg-ink-950/30 hover:bg-ink-950/45 transition-colors"
-      aria-label="Open lyrics"
-    >
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Lyrics</span>
-        <span className="text-[11px] font-semibold text-ember-300">Open ›</span>
-      </div>
-      <p className="h-5 text-sm vx-lyric-dim opacity-60 leading-5 truncate" aria-hidden={!previous}>
-        {previous ?? ' '}
+    <button onClick={onOpen} className={cn('vx-rail-lyrics-card', className)} aria-label="Open lyrics">
+      <span className="block mb-2 text-[13px] font-bold text-ink-100">Lyrics</span>
+      <p className="h-5 leading-5 truncate" aria-hidden={!previous}>
+        {previous ?? ' '}
       </p>
-      <p
-        className={cn(
-          'h-[3.25rem] text-[1.15rem] font-extrabold leading-[1.625rem] line-clamp-2 overflow-hidden transition-[color,opacity]',
-          current ? 'vx-lyric-active' : 'vx-lyric-dim',
-        )}
-      >
-        {current ?? '♪'}
-      </p>
-      <p className="h-5 text-sm vx-lyric-dim opacity-70 leading-5 truncate" aria-hidden={!upcoming}>
-        {upcoming ?? ' '}
+      <p className={cn('is-now h-[3rem] line-clamp-2 overflow-hidden my-1', !current && 'opacity-60')}>{current ?? '♪'}</p>
+      <p className="h-5 leading-5 truncate" aria-hidden={!upcoming}>
+        {upcoming ?? ' '}
       </p>
     </button>
   );

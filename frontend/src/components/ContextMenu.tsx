@@ -10,10 +10,26 @@ import { songPath } from '@/utils/slug';
 import { toast } from '@/store/toastStore';
 import { recallCtxSong } from '@/utils/ctxSongs';
 import { cn } from '@/utils/cn';
+import { bestImage } from '@/utils/images';
+import {
+  ChevronRightIcon,
+  HeartIcon,
+  HomeIcon,
+  MoonIcon,
+  NextIcon,
+  PlayIcon,
+  QueueIcon,
+  RepeatIcon,
+  SearchIcon,
+  ShareIcon,
+  SunIcon,
+} from './Icons';
 
 interface MenuItem {
   label: string;
   action: () => void;
+  /** 20px glyph shown before the label. */
+  icon?: (p: { className?: string }) => React.ReactElement;
 }
 interface MenuState {
   x: number;
@@ -21,8 +37,9 @@ interface MenuState {
   song: Song | null;
 }
 
-const MENU_W = 224; // matches w-56
-const ITEM_H = 36;
+const MENU_W = 240;
+const ITEM_H = 44;
+const Back = ({ className }: { className?: string }) => <ChevronRightIcon className={cn(className, 'rotate-180')} />;
 
 /** Same canonical-origin rule the share sheet uses. */
 function absoluteUrl(path: string): string {
@@ -69,9 +86,10 @@ export function ContextMenu() {
       const song = menu.song;
       const isFav = useLibraryStore.getState().favorites.some((f) => f.id === song.id);
       return [
-        { label: 'Play', action: () => usePlayerStore.getState().playQueue([song], 0) },
+        { label: 'Play', icon: PlayIcon, action: () => usePlayerStore.getState().playQueue([song], 0) },
         {
           label: 'Play next',
+          icon: NextIcon,
           action: () => {
             usePlayerStore.getState().enqueueNext(song);
             toast('Playing next');
@@ -79,6 +97,7 @@ export function ContextMenu() {
         },
         {
           label: 'Add to queue',
+          icon: QueueIcon,
           action: () => {
             usePlayerStore.getState().enqueue(song);
             toast('Added to queue');
@@ -86,6 +105,7 @@ export function ContextMenu() {
         },
         {
           label: isFav ? 'Remove from favorites' : 'Favorite',
+          icon: HeartIcon,
           action: () => {
             useLibraryStore.getState().toggleFavorite(song);
             toast(isFav ? 'Removed from favorites' : 'Added to favorites');
@@ -93,6 +113,7 @@ export function ContextMenu() {
         },
         {
           label: 'Copy link',
+          icon: ShareIcon,
           action: () => {
             void navigator.clipboard
               ?.writeText(absoluteUrl(songPath(song)))
@@ -103,12 +124,13 @@ export function ContextMenu() {
       ];
     }
     return [
-      { label: 'Back', action: () => window.history.back() },
-      { label: 'Forward', action: () => window.history.forward() },
-      { label: 'Home', action: () => navigate('/') },
-      { label: 'Search', action: () => navigate('/search') },
+      { label: 'Back', icon: Back, action: () => window.history.back() },
+      { label: 'Forward', icon: ChevronRightIcon, action: () => window.history.forward() },
+      { label: 'Home', icon: HomeIcon, action: () => navigate('/') },
+      { label: 'Search', icon: SearchIcon, action: () => navigate('/search') },
       {
         label: 'Toggle theme',
+        icon: document.documentElement.classList.contains('light') ? MoonIcon : SunIcon,
         action: () => {
           const s = useSettingsStore.getState();
           const resolved = resolveTheme(s.theme, window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -117,6 +139,7 @@ export function ContextMenu() {
       },
       {
         label: 'Refresh data',
+        icon: RepeatIcon,
         action: () => {
           void queryClient.refetchQueries({ type: 'active' });
           toast('Refreshing…');
@@ -167,7 +190,7 @@ export function ContextMenu() {
 
   if (!menu) return null;
 
-  const height = items.length * ITEM_H + (menu.song ? 44 : 12);
+  const height = items.length * ITEM_H + (menu.song ? 72 : 10);
   const x = Math.max(8, Math.min(menu.x, window.innerWidth - MENU_W - 8));
   const y = Math.max(8, Math.min(menu.y, window.innerHeight - height - 8));
 
@@ -185,32 +208,44 @@ export function ContextMenu() {
         role="menu"
         aria-label={menu.song ? `Actions for ${menu.song.title}` : 'App actions'}
         style={{ left: x, top: y, width: MENU_W }}
-        className="fixed p-1 rounded-md bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)] animate-fade-up"
+        className="fixed p-1 rounded-lg border border-[color:var(--vx-border)] bg-ink-850 [html.light_&]:bg-ink-950 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.55),0_4px_12px_-4px_rgba(0,0,0,0.3)] animate-fade-up"
         onClick={(e) => e.stopPropagation()}
       >
         {menu.song && (
-          <p className="px-3.5 pt-1 pb-1.5 text-[11px] font-semibold text-ink-400 truncate border-b border-[color:var(--glass-border)] mb-1">
-            {menu.song.title}
-          </p>
+          <div className="flex items-center gap-3 px-2.5 pt-2 pb-2.5 mb-1 border-b border-[color:var(--vx-border)]">
+            <img src={bestImage(menu.song.images, 150)} alt="" className="w-10 h-10 rounded-md object-cover shrink-0 bg-ink-800" />
+            <div className="min-w-0">
+              <p className="text-[14px] font-bold text-ink-100 truncate">{menu.song.title}</p>
+              {menu.song.subtitle && <p className="text-[12px] font-medium text-ink-400 truncate">{menu.song.subtitle}</p>}
+            </div>
+          </div>
         )}
-        {items.map((it, i) => (
-          <button
-            key={it.label}
-            role="menuitem"
-            tabIndex={i === sel ? 0 : -1}
-            onMouseEnter={() => setSel(i)}
-            onClick={() => {
-              setMenu(null);
-              it.action();
-            }}
-            className={cn(
-              'w-full text-left rounded-sm px-3 py-2.5 text-[14px] font-medium truncate outline-none',
-              i === sel ? 'bg-ink-700 text-ink-100' : 'text-ink-100',
-            )}
-          >
-            {it.label}
-          </button>
-        ))}
+        {items.map((it, i) => {
+          const Icon = it.icon;
+          return (
+            <button
+              key={it.label}
+              role="menuitem"
+              tabIndex={i === sel ? 0 : -1}
+              onMouseEnter={() => setSel(i)}
+              onClick={() => {
+                setMenu(null);
+                it.action();
+              }}
+              className={cn(
+                'w-full flex items-center gap-3 min-h-[44px] px-3 rounded-md text-left text-[14px] font-semibold text-ink-100 outline-none transition-colors',
+                i === sel && 'bg-ink-100/[0.07]',
+              )}
+            >
+              {Icon && (
+                <span aria-hidden className="shrink-0 text-ink-300">
+                  <Icon className="w-5 h-5" />
+                </span>
+              )}
+              <span className="truncate">{it.label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

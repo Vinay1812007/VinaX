@@ -12,6 +12,7 @@ import { Link, useNavigate, useNavigationType, useParams } from 'react-router-do
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { SongRow } from '@/components/SongRow';
+import { TrackMenu } from '@/components/TrackMenu';
 import { MediaCard } from '@/components/MediaCard';
 import { Chip } from '@/components/Chip';
 import { ListSkeleton } from '@/components/Skeletons';
@@ -56,11 +57,15 @@ import { shouldSyncRouteToInput } from '@/features/search/routeSync';
 import { looksLikeLyric, splitHighlight } from '@/features/search/lyricsSearch';
 import { useLyricsSearch } from '@/features/search/useLyricsSearch';
 import { filterSongsLocally, SONG_SORT_LABELS, sortSongs } from '@/features/search/sortSongs';
-import { exampleQueries, SEARCH_TIP_LINE } from '@/features/search/searchTips';
+import { exampleQueries } from '@/features/search/searchTips';
 import { rerankSongs, suggestTitles } from '@/features/search/rerank';
 import { candidatePool, COMMON_NAMES, didYouMean } from '@/features/search/didYouMean';
 import { useQuickResults } from '@/features/search/useQuickResults';
 import { putCachedQuick, QUICK_LIMIT } from '@/features/search/quickResults';
+import { PageHeader } from '@/components/PageHeader';
+import { Shelf } from '@/components/Shelf';
+import { IconButton } from '@/components/IconButton';
+import '@/styles/pages/browse.css';
 
 const TABS = ['All', 'Songs', 'Albums', 'Artists', 'Playlists'] as const;
 type Tab = (typeof TABS)[number];
@@ -85,7 +90,7 @@ function Highlight({ text, term }: { text: string; term: string }) {
   return (
     <>
       {text.slice(0, i)}
-      <span className="text-ember-400 font-bold">{text.slice(i, i + term.length)}</span>
+      <span className="text-ink-100 font-extrabold">{text.slice(i, i + term.length)}</span>
       {text.slice(i + term.length)}
     </>
   );
@@ -110,12 +115,12 @@ function PinGlyph({ className }: { className?: string }) {
   );
 }
 
-/** v5.17.0 — one recent-search chip: tap opens it, long-press (or the pin
+/** v5.17.0 — one recent search: tap opens it, long-press (or the pin
  *  button) pins it to the front, × forgets it.
- *  v5.19.0 — decluttered: the chip shows only its text (plus a small pin
- *  glyph when pinned). Pin/× fade in on hover or keyboard focus; on touch
- *  screens only a single small × stays visible and long-press does the pinning. */
-function RecentChip({
+ *  8.0.0 — a list row (clock or pin sleeve, the words, then the tools). Pin
+ *  and × fade in on hover or keyboard focus; on touch screens only × stays
+ *  visible and long-press does the pinning. */
+function RecentRow({
   query,
   pinned,
   onOpen,
@@ -136,8 +141,10 @@ function RecentChip({
   };
   useEffect(() => cancel, []);
   return (
-    <span className="group inline-flex items-center">
-      <span
+    <li className="search-recent-row">
+      <button
+        type="button"
+        className="search-recent-open"
         onPointerDown={() => {
           longPressed.current = false;
           cancel();
@@ -153,41 +160,37 @@ function RecentChip({
           // A long-press on touch also raises contextmenu — swallow it once.
           if (longPressed.current) e.preventDefault();
         }}
+        onClick={() => {
+          if (longPressed.current) {
+            longPressed.current = false;
+            return;
+          }
+          onOpen();
+        }}
       >
-        <Chip
-          onClick={() => {
-            if (longPressed.current) {
-              longPressed.current = false;
-              return;
-            }
-            onOpen();
-          }}
-        >
-          {pinned && <PinGlyph className="w-3 h-3 mr-1 inline-block -mt-0.5 text-ember-400" />}
-          {query}
-        </Chip>
-      </span>
-      <span className="relative flex items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+        <span className="search-recent-icon" aria-hidden>
+          {pinned ? <PinGlyph /> : <ClockIcon />}
+        </span>
+        <span className="min-w-0">
+          <span className="search-recent-text">{query}</span>
+          {pinned && <span className="search-recent-meta">Pinned</span>}
+        </span>
+      </button>
+      <span className="search-recent-tools">
         <button
+          type="button"
           aria-label={pinned ? `Unpin ${query}` : `Pin ${query}`}
           aria-pressed={pinned}
           onClick={() => onTogglePin(false)}
-          className={cn(
-            'p-1 rounded-full hover:bg-ink-700/70 [@media(hover:none)]:hidden',
-            pinned ? 'text-ember-400' : 'text-ink-500 hover:text-ink-200',
-          )}
+          className="search-recent-tool search-recent-pin"
         >
-          <PinGlyph className="w-3.5 h-3.5" />
+          <PinGlyph className="w-4 h-4" />
         </button>
-        <button
-          aria-label={`Remove ${query}`}
-          onClick={onRemove}
-          className="p-1 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70"
-        >
-          <XIcon className="w-3 h-3" />
+        <button type="button" aria-label={`Remove ${query}`} onClick={onRemove} className="search-recent-tool">
+          <XIcon className="w-4 h-4" />
         </button>
       </span>
-    </span>
+    </li>
   );
 }
 
@@ -389,18 +392,17 @@ export default function SearchPage() {
       {!aiLoading && aiError && <p className="text-sm text-ink-400">{aiError}</p>}
       {!aiLoading && aiSongs && aiSongs.length > 0 && (
         <section>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold text-ink-300">Expert picks</p>
-            <button
-              onClick={() => playQueue(aiSongs, 0)}
-              className="text-xs font-semibold text-ember-400 hover:text-ember-300"
-            >
+          <div className="search-section-heading !mb-1">
+            <h2 className="!text-[17px]">Expert picks</h2>
+            <button type="button" onClick={() => playQueue(aiSongs, 0)}>
               Play all
             </button>
           </div>
-          {aiSongs.map((song, i) => (
-            <SongRow key={song.id} song={song} songs={aiSongs} index={i} />
-          ))}
+          <div className="vx-track-list">
+            {aiSongs.map((song, i) => (
+              <SongRow key={song.id} song={song} songs={aiSongs} index={i} />
+            ))}
+          </div>
         </section>
       )}
     </div>
@@ -611,12 +613,9 @@ export default function SearchPage() {
     return didYouMean(q, candidatePool(q, [trendingQueries ?? [], recent, COMMON_NAMES]));
   }, [noSongsSettled, q, trendingQueries, recent]);
   const dymBar = dym ? (
-    <p role="status" className="mb-4 text-sm text-ink-300">
+    <p role="status" className="search-dym">
       Did you mean{' '}
-      <button
-        onClick={() => applySuggestion(dym)}
-        className="font-bold text-ember-400 hover:text-ember-300"
-      >
+      <button type="button" onClick={() => applySuggestion(dym)}>
         {dym}
       </button>
       ?
@@ -689,15 +688,18 @@ export default function SearchPage() {
     </Chip>
   );
 
+  const showAllTab = (t: Tab, title: string) => (
+    <button type="button" className="vx-section-link" onClick={() => setTab(t)} aria-label={`Show all ${title.toLowerCase()}`}>
+      Show all
+    </button>
+  );
+
   return (
-    <div className={cn('search-experience mx-auto', active && 'is-searching')}>
-      <header className="search-hero">
-        <div><p className="vx-eyebrow">Your next favourite starts here</p><h1>Search</h1></div>
-        <button className="vx-section-link" onClick={() => { setLyricsMode(true); searchInputRef.current?.focus(); }}>Find a song by its lyrics →</button>
-      </header>
-      <div className="search-sticky sticky top-0 z-20 pt-3 pb-3 bg-ink-900/95 backdrop-blur-md">
-        <div className="relative">
-          <SearchIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
+    <div className={cn('search-experience vx-browse mx-auto', active && 'is-searching')}>
+      <PageHeader title="Search" />
+      <div className="search-sticky">
+        <div className={cn('vx-field search-field', listening && 'is-listening')}>
+          <SearchIcon />
           <input
             ref={searchInputRef}
             value={input}
@@ -740,11 +742,11 @@ export default function SearchPage() {
                   ? 'Type a line you remember…'
                   : 'Songs, albums, artists, playlists…'
             }
-            className={`w-full glass-search rounded-2xl pl-12 pr-20 py-3 text-sm outline-none transition-[color,background-color,border-color,opacity,transform] focus:ring-2 focus:ring-ember-500/35 focus:shadow-[0_0_34px_-8px_rgb(var(--ember-500)/0.5)] ${listening ? 'border-ember-500 ring-2 ring-ember-500/40' : ''}`}
           />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+          <div className="vx-field-actions">
             {input && (
               <button
+                type="button"
                 aria-label="Clear"
                 onClick={() => {
                   setInput('');
@@ -752,30 +754,27 @@ export default function SearchPage() {
                   lastRouteApplied.current = null;
                   navigate('/search', { replace: true });
                 }}
-                className="p-2.5 text-ink-400 hover:text-ink-100 rounded-full hover:bg-ink-700/70"
+                className="search-field-btn"
               >
-                <XIcon className="w-4 h-4" />
+                <XIcon />
               </button>
             )}
             {voiceReady && (
               <button
+                type="button"
                 aria-label={listening ? 'Listening…' : 'Voice search'}
                 onClick={startVoice}
-                className={`relative p-2.5 rounded-full hover:bg-ink-700/70 ${listening ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100'}`}
+                className={cn('search-field-btn', listening && 'is-live')}
               >
-                {listening && (
-                  <>
-                    <span className="absolute inset-0 rounded-full bg-ember-500/30 animate-ping" />
-                    <span className="absolute inset-[-6px] rounded-full border border-ember-500/40 animate-pulse" />
-                  </>
-                )}
+                {listening && <span className="absolute inset-0 rounded-full bg-ember-500/20" aria-hidden />}
                 <svg
                   viewBox="0 0 24 24"
                   fill={listening ? 'currentColor' : 'none'}
                   stroke="currentColor"
                   strokeWidth={2}
                   strokeLinecap="round"
-                  className="relative w-4 h-4"
+                  className="relative"
+                  aria-hidden
                 >
                   <rect x="9" y="2" width="6" height="12" rx="3" />
                   <path d="M5 10a7 7 0 0014 0M12 17v5" />
@@ -784,7 +783,7 @@ export default function SearchPage() {
             )}
           </div>
           {showPanel && (
-            <div className="absolute left-0 right-0 top-full mt-2 z-30 bg-ink-850 border border-ink-700/70 shadow-float rounded-2xl py-2 max-h-[28rem] overflow-y-auto">
+            <div className="search-panel">
               <div
                 id="search-suggest"
                 role="listbox"
@@ -813,10 +812,13 @@ export default function SearchPage() {
                         if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12)
                           applySuggestion(text);
                       }}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-ink-800/60 ${suggSel === i ? 'bg-ink-800/80' : ''}`}
+                      className={cn(
+                        'w-full min-h-[44px] flex items-center gap-3 px-4 py-2 text-left hover:bg-ink-800',
+                        suggSel === i && 'bg-ink-800',
+                      )}
                     >
                       <Icon className="w-4 h-4 text-ink-400 shrink-0" />
-                      <span className="text-sm truncate">
+                      <span className="text-[15px] truncate">
                         <Highlight text={text} term={trimmed} />
                       </span>
                     </button>
@@ -827,11 +829,9 @@ export default function SearchPage() {
                 <section
                   aria-label="Quick results"
                   aria-busy={quick.loading}
-                  className={cn(showSuggest && 'mt-1 pt-1 border-t border-ink-700/60')}
+                  className={cn(showSuggest && 'mt-1 pt-1 border-t border-[var(--vx-border)]')}
                 >
-                  <p className="px-4 pt-1 pb-1 text-[11px] font-bold uppercase tracking-widest text-ink-400">
-                    Quick results
-                  </p>
+                  <p className="search-panel-label">Quick results</p>
                   {quickSongs.length === 0 && quick.loading && <ListSkeleton rows={3} />}
                   {quickSongs.map((song, i) => (
                     <QuickRow
@@ -850,9 +850,7 @@ export default function SearchPage() {
           )}
         </div>
         {(active || lyricsMode || !trimmed) && (
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mt-3">
-            {lyricsChip}
-            {!lyricsMode && <span aria-hidden className="w-px h-5 bg-ink-700 shrink-0" />}
+          <div className="search-filters">
             {!lyricsMode &&
               TABS.map((t) => (
                 <Chip
@@ -867,134 +865,48 @@ export default function SearchPage() {
                   {t}
                 </Chip>
               ))}
+            {!lyricsMode && <span aria-hidden className="search-filters-sep" />}
+            {lyricsChip}
           </div>
         )}
         {suggestLyrics && (
-          <div role="status" className="mt-2 flex items-center gap-2 text-xs text-ink-300">
+          <div role="status" className="search-hint">
             <span>That reads like a lyric line.</span>
             <button
+              type="button"
               onClick={() => setLyricsMode(true)}
-              className="font-semibold text-ember-400 hover:text-ember-300"
+              className="font-bold text-ink-100 underline underline-offset-2"
             >
-              Search by lyrics →
+              Search by lyrics
             </button>
-            <button
-              aria-label="Dismiss"
-              onClick={() => setLyricHintDismissed(q)}
-              className="p-1 rounded-full text-ink-500 hover:text-ink-200 hover:bg-ink-700/70"
-            >
+            <IconButton size="sm" label="Dismiss" onClick={() => setLyricHintDismissed(q)}>
               <XIcon className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           </div>
         )}
       </div>
 
-      {!active && <DestinationGrid area="discover" />}
       {!active && (
         <div className="search-discovery">
-          <SavedSearches onOpen={openPreset} />
-          <section className="search-browse" aria-label="Browse a vibe">
-            <div className="search-section-heading">
-              <h2>Where do you want to go?</h2>
-              <Link to="/moods">Explore moods ↗</Link>
-            </div>
-            <div className="search-vibe-grid">
-              {[
-                {
-                  title: 'After hours',
-                  detail: 'Slow down. Tune in.',
-                  query: 'late night chill melodies',
-                  art: 'night',
-                  glyph: '☾',
-                },
-                {
-                  title: 'The golden years',
-                  detail: 'Forever on repeat.',
-                  query: `${pinnedLangs[0] || 'Telugu'} 90s hits`,
-                  art: 'gold',
-                  glyph: '◎',
-                },
-                {
-                  title: 'Full volume',
-                  detail: 'Find your second wind.',
-                  query: 'workout energetic hits',
-                  art: 'energy',
-                  glyph: '↗',
-                },
-                {
-                  title: 'Heart on sleeve',
-                  detail: 'For all the feelings.',
-                  query: `${pinnedLangs[0] || 'Telugu'} love melodies`,
-                  art: 'love',
-                  glyph: '♡',
-                },
-              ].map((v) => (
-                <button
-                  key={v.art}
-                  className={`search-vibe search-vibe-${v.art}`}
-                  onClick={() => applySuggestion(v.query)}
-                >
-                  <span className="search-vibe-glyph" aria-hidden="true">
-                    {v.glyph}
-                  </span>
-                  <strong>{v.title}</strong>
-                  <small>{v.detail}</small>
-                  <span className="search-vibe-arrow" aria-hidden="true">
-                    ↗
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-          {!!trendingQ.data?.queries.length && (
-            <section className="search-trending-queries" aria-label="Trending searches">
+          {recent.length > 0 && (
+            <section className="search-block" aria-label="Recent searches">
               <div className="search-section-heading">
-                <h2>In the conversation</h2>
-                <span>Trending searches</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {trendingQ.data.queries.slice(0, 8).map((term, i) => (
-                  <button key={term} onClick={() => applySuggestion(term)}>
-                    <span>{String(i + 1).padStart(2, '0')}</span>
-                    {term}
-                    <span aria-hidden>↗</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {!trimmed && (
-            <section className="mb-6" aria-label="Search tips">
-              <p className="text-xs text-ink-400 mb-2">{SEARCH_TIP_LINE}</p>
-              <div className="flex flex-wrap gap-2">
-                {exampleQueries(pinnedLangs).map((ex) => (
-                  <Chip key={ex} onClick={() => applySuggestion(ex)}>
-                    {ex}
-                  </Chip>
-                ))}
-              </div>
-            </section>
-          )}
-          {recent.length > 0 ? (
-            <>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold text-ink-300">Recent searches</p>
+                <h2>Recent searches</h2>
                 <button
+                  type="button"
                   onClick={() => {
                     clearRecent();
                     if (pinned.length) toast('Cleared — pinned searches kept');
                   }}
-                  className="text-xs text-ink-400 hover:text-ink-100"
                 >
                   Clear all
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <ul className="search-recent-list">
                 {recentOrdered.map((r) => {
                   const isPinned = pinned.includes(r);
                   return (
-                    <RecentChip
+                    <RecentRow
                       key={r}
                       query={r}
                       pinned={isPinned}
@@ -1007,76 +919,112 @@ export default function SearchPage() {
                     />
                   );
                 })}
-              </div>
+              </ul>
               {pinned.length === 0 && recent.length > 1 && (
-                <p className="mt-2 text-[11px] text-ink-500">
-                  Long-press (or hover) a search to pin it.
-                </p>
+                <p className="search-recent-tip">Long-press (or hover) a search to pin it.</p>
               )}
-            </>
-          ) : (
-            <EmptyState
-              icon={<SearchIcon className="w-8 h-8" />}
-              title="Your next favorite starts here"
-              message="Try a title, an artist, or a few lyrics. Save a search shortcut from the Songs tab to return to your favorite filters."
-            />
+            </section>
           )}
 
-          <div className="mt-7 rounded-2xl glass-card px-4 py-3.5">
-            <button
-              onClick={() => setAiOpen((v) => !v)}
-              className="w-full flex items-center gap-3 text-left"
-            >
-              <span className="w-9 h-9 rounded-xl bg-ember-500 text-black flex items-center justify-center shrink-0">
-                <SparkleIcon className="w-5 h-5" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-bold">Ask AI for songs</span>
-                <span className="block text-xs text-ink-400 truncate">
-                  Describe a mood, an era, a memory — a music expert answers
-                </span>
-              </span>
-            </button>
-            {aiOpen && (
-              <div className="mt-3">
-                <div className="flex gap-2">
-                  <input
-                    value={aiPrompt}
-                    maxLength={200}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void askExpert(aiPrompt);
-                    }}
-                    placeholder="e.g. rainy-evening Telugu melodies"
-                    className="glass-input flex-1 min-w-0 px-3 py-2 rounded-xl text-sm outline-none"
-                  />
-                  <button
-                    onClick={() => void askExpert(aiPrompt)}
-                    disabled={aiLoading || !aiPrompt.trim()}
-                    className="px-4 py-2 rounded-full btn-primary text-sm font-semibold disabled:opacity-50 shrink-0"
-                  >
-                    {aiLoading ? 'Asking…' : 'Ask'}
-                  </button>
-                </div>
-                {expertPanel}
-              </div>
-            )}
+          <div className="search-block empty:hidden">
+            <SavedSearches onOpen={openPreset} />
           </div>
 
-          <Link
-            to="/VinaXAI"
-            className="mt-3 w-full flex items-center gap-3 rounded-2xl glass-card px-4 py-3.5 hover:bg-ink-800/40 transition-colors text-left"
-          >
-            <span className="w-9 h-9 rounded-xl bg-ink-800 text-ember-300 flex items-center justify-center shrink-0">
-              <SparkleIcon className="w-5 h-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-bold">Chat with VinaX AI</span>
-              <span className="block text-xs text-ink-400 truncate">
-                Find songs, talk music, ask anything — full chat with web search
-              </span>
-            </span>
-          </Link>
+          {!!trendingQ.data?.queries.length && (
+            <section className="search-block search-trending-queries" aria-label="Trending searches">
+              <div className="search-section-heading">
+                <h2>Trending searches</h2>
+              </div>
+              <ol>
+                {trendingQ.data.queries.slice(0, 8).map((term, i) => (
+                  <li key={term}>
+                    <button type="button" onClick={() => applySuggestion(term)}>
+                      <span>{i + 1}</span>
+                      <span>{term}</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          <section className="search-block search-browse" aria-label="Browse a vibe">
+            <div className="search-section-heading">
+              <h2>Moods and moments</h2>
+              <Link to="/moods">Show all</Link>
+            </div>
+            <div className="search-vibe-grid">
+              {[
+                {
+                  title: 'After hours',
+                  detail: 'Slow down. Tune in.',
+                  query: 'late night chill melodies',
+                  art: 'night',
+                  glyph: '☾',
+                  tone: 8,
+                },
+                {
+                  title: 'The golden years',
+                  detail: 'Forever on repeat.',
+                  query: `${pinnedLangs[0] || 'Telugu'} 90s hits`,
+                  art: 'gold',
+                  glyph: '◎',
+                  tone: 11,
+                },
+                {
+                  title: 'Full volume',
+                  detail: 'Find your second wind.',
+                  query: 'workout energetic hits',
+                  art: 'energy',
+                  glyph: '↗',
+                  tone: 7,
+                },
+                {
+                  title: 'Heart on sleeve',
+                  detail: 'For all the feelings.',
+                  query: `${pinnedLangs[0] || 'Telugu'} love melodies`,
+                  art: 'love',
+                  glyph: '♡',
+                  tone: 3,
+                },
+              ].map((v) => (
+                <button
+                  key={v.art}
+                  type="button"
+                  className={`search-vibe search-vibe-${v.art} vx-browse-tile vx-tone-${v.tone}`}
+                  onClick={() => applySuggestion(v.query)}
+                >
+                  <span className="vx-browse-tile-title">{v.title}</span>
+                  <span className="vx-browse-tile-meta">{v.detail}</span>
+                  <span className="vx-browse-tile-art is-glyph" aria-hidden="true">
+                    {v.glyph}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="search-block" aria-label="Browse all">
+            <div className="search-section-heading">
+              <h2>Browse all</h2>
+            </div>
+            <DestinationGrid area="discover" />
+          </section>
+
+          {!trimmed && (
+            <section className="search-block" aria-label="Search tips">
+              <div className="search-section-heading">
+                <h2>Try searching</h2>
+              </div>
+              <div className="vx-chip-row">
+                {exampleQueries(pinnedLangs).map((ex) => (
+                  <Chip key={ex} onClick={() => applySuggestion(ex)}>
+                    {ex}
+                  </Chip>
+                ))}
+              </div>
+            </section>
+          )}
 
           {(() => {
             // Package D4 — cold-box suggestions straight from the on-device
@@ -1085,9 +1033,11 @@ export default function SearchPage() {
               .map((a) => a.affinity.name)
               .filter(Boolean);
             return mine.length >= 2 ? (
-              <section className="mt-7">
-                <p className="text-sm font-semibold text-ink-300 mb-3">From your artists</p>
-                <div className="flex flex-wrap gap-2">
+              <section className="search-block" aria-label="From your artists">
+                <div className="search-section-heading">
+                  <h2>From your artists</h2>
+                </div>
+                <div className="vx-chip-row">
                   {mine.map((name) => (
                     <Chip key={name} onClick={() => applySuggestion(name)}>
                       {name}
@@ -1098,9 +1048,11 @@ export default function SearchPage() {
             ) : null;
           })()}
 
-          <section className="mt-7">
-            <p className="text-sm font-semibold text-ink-300 mb-3">In the mood for</p>
-            <div className="flex flex-wrap gap-2">
+          <section className="search-block" aria-label="In the mood for">
+            <div className="search-section-heading">
+              <h2>In the mood for</h2>
+            </div>
+            <div className="vx-chip-row">
               {MOODS.map((m) => (
                 <Chip key={m.id} onClick={() => setInput(m.query)}>
                   <span aria-hidden className="mr-1">
@@ -1112,36 +1064,90 @@ export default function SearchPage() {
             </div>
           </section>
 
-          <section className="mt-7">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-ink-300">Trending now</p>
+          <section className="search-block" aria-label="Trending now">
+            <div className="search-section-heading">
+              <h2>Trending now</h2>
               {(trendingNow.data?.length ?? 0) > 0 && (
                 <button
+                  type="button"
                   onClick={() => {
                     if (trendingNow.data) playQueue(trendingNow.data, 0);
                   }}
-                  className="text-xs font-semibold text-ember-400 hover:text-ember-300"
                 >
                   Play all
                 </button>
               )}
             </div>
             {trendingNow.isLoading && <ListSkeleton />}
-            {(trendingNow.data ?? []).slice(0, 6).map((song, i) => (
-              <SongRow key={song.id} song={song} songs={trendingNow.data ?? []} index={i} />
-            ))}
+            <div className="vx-track-list max-w-[960px]">
+              {(trendingNow.data ?? []).slice(0, 6).map((song, i) => (
+                <SongRow key={song.id} song={song} songs={trendingNow.data ?? []} index={i} />
+              ))}
+            </div>
+          </section>
+
+          <section className={cn('search-assist', aiOpen && 'is-open')} aria-label="Ask for songs">
+            <div>
+              <button
+                type="button"
+                onClick={() => setAiOpen((v) => !v)}
+                aria-expanded={aiOpen}
+                className="search-assist-row"
+              >
+                <span className="search-assist-icon is-accent">
+                  <SparkleIcon />
+                </span>
+                <span className="min-w-0">
+                  <span className="search-assist-title">Ask AI for songs</span>
+                  <span className="search-assist-meta">Describe a mood, an era or a memory</span>
+                </span>
+              </button>
+              {aiOpen && (
+                <div className="search-assist-panel">
+                  <div className="flex gap-2">
+                    <input
+                      value={aiPrompt}
+                      maxLength={200}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void askExpert(aiPrompt);
+                      }}
+                      placeholder="e.g. rainy-evening Telugu melodies"
+                      aria-label="Describe the songs you want"
+                      className="flex-1 min-w-0"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void askExpert(aiPrompt)}
+                      disabled={aiLoading || !aiPrompt.trim()}
+                      className="px-5 min-h-[44px] rounded-full btn-primary text-sm font-bold disabled:opacity-50 shrink-0"
+                    >
+                      {aiLoading ? 'Asking…' : 'Ask'}
+                    </button>
+                  </div>
+                  {expertPanel}
+                </div>
+              )}
+            </div>
+            <Link to="/VinaXAI" className="search-assist-row">
+              <span className="search-assist-icon">
+                <SparkleIcon />
+              </span>
+              <span className="min-w-0">
+                <span className="search-assist-title">Chat with VinaX AI</span>
+                <span className="search-assist-meta">Find songs, talk music, ask anything</span>
+              </span>
+            </Link>
           </section>
         </div>
       )}
 
       {active && lyricsMode && (
-        <div className="pt-4">
+        <div className="search-results">
           {lyricsQ.isLoading && <ListSkeleton />}
           {lyricsQ.isError && <ErrorState retry={() => lyricsQ.refetch()} />}
           {!lyricsQ.isLoading && !lyricsQ.isError && !lyricMatches && (
-            <p className="text-sm text-ink-400">
-              Type a line you remember — a few words in a row work best.
-            </p>
+            <p className="vx-meta-line">Type a line you remember — a few words in a row work best.</p>
           )}
           {lyricMatches && lyricMatches.length === 0 && (
             <EmptyState
@@ -1150,6 +1156,7 @@ export default function SearchPage() {
               message="The lyrics service matches whole phrases best — a full line beats a couple of words."
               action={
                 <button
+                  type="button"
                   onClick={() => setLyricsMode(false)}
                   className="px-5 py-2.5 rounded-full btn-primary"
                 >
@@ -1160,52 +1167,43 @@ export default function SearchPage() {
           )}
           {lyricMatches && lyricMatches.length > 0 && (
             <section>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-lg font-bold">Songs with those words</h2>
-                <button
-                  onClick={() => playQueue(lyricSongs, 0)}
-                  className="text-xs font-semibold text-ember-400 hover:text-ember-300"
-                >
+              <div className="search-section-heading">
+                <h2>Songs with those words</h2>
+                <button type="button" onClick={() => playQueue(lyricSongs, 0)}>
                   Play all
                 </button>
               </div>
               {lyricMatches.every((m) => m.source === 'catalogue') && (
-                <p className="mb-2 text-xs text-ink-400">
+                <p className="vx-meta-line mb-2">
                   The lyrics service had no match — these titles begin with those words.
                 </p>
               )}
-              {lyricMatches.map((m, i) => (
-                <div key={m.song.id}>
-                  <SongRow song={m.song} songs={lyricSongs} index={i} />
-                  {m.source === 'catalogue' && (
-                    <p className="pl-[3.75rem] pr-2 -mt-1 mb-2">
-                      <span className="inline-block rounded-full border border-ink-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-400">
-                        Matched by title
-                      </span>
-                    </p>
-                  )}
-                  {m.source === 'lyrics' && m.hit.snippet && (
-                    <p className="pl-[3.75rem] pr-2 -mt-1 mb-2 text-xs text-ink-400 leading-relaxed">
-                      {splitHighlight(m.hit.snippet, q).map((run, j) =>
-                        run.hit ? (
-                          <mark key={j} className="bg-transparent text-ember-300 font-semibold">
-                            {run.text}
-                          </mark>
-                        ) : (
-                          <span key={j}>{run.text}</span>
-                        ),
-                      )}
-                    </p>
-                  )}
-                </div>
-              ))}
+              <div className="vx-track-list">
+                {lyricMatches.map((m, i) => (
+                  <div key={m.song.id}>
+                    <SongRow song={m.song} songs={lyricSongs} index={i} />
+                    {m.source === 'catalogue' && (
+                      <p className="search-lyric-note">
+                        <span className="search-lyric-badge">Matched by title</span>
+                      </p>
+                    )}
+                    {m.source === 'lyrics' && m.hit.snippet && (
+                      <p className="search-lyric-note">
+                        {splitHighlight(m.hit.snippet, q).map((run, j) =>
+                          run.hit ? <mark key={j}>{run.text}</mark> : <span key={j}>{run.text}</span>,
+                        )}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </section>
           )}
         </div>
       )}
 
       {active && !lyricsMode && (
-        <div className="pt-4">
+        <div className="search-results">
           {tab === 'All' && (
             <>
               {all.isLoading && <ListSkeleton />}
@@ -1217,109 +1215,123 @@ export default function SearchPage() {
               {all.data && (
                 <div
                   aria-busy={allPlaceholder}
-                  className={cn('space-y-7 transition-opacity', allPlaceholder && 'opacity-40')}
+                  className={cn('transition-opacity', allPlaceholder && 'opacity-40')}
                 >
-                  {topResult && (
-                    <section>
-                      <h2 className="text-lg font-bold mb-2">Top Result</h2>
-                      <div className="search-top-result rounded-2xl border border-ink-700 bg-ink-850/60 p-4 flex items-center gap-4">
-                        <img
-                          src={bestImage(topResult.images, 300)}
-                          onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                          alt=""
-                          className="w-20 h-20 rounded-xl object-cover shadow-lg"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-lg font-bold truncate">{topResult.title}</p>
-                          <p className="text-sm text-ink-300 truncate">{topResult.subtitle}</p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            playQueue(rankedAllSongs, 0);
-                            recordSearchPlay(topResult);
-                          }}
-                          aria-label={`Play ${topResult.title}`}
-                          className="w-12 h-12 rounded-full btn-primary flex items-center justify-center hover:bg-ember-400 shrink-0"
-                        >
-                          <PlayIcon className="w-5 h-5 ml-0.5" />
-                        </button>
-                      </div>
-                    </section>
-                  )}
-                  {rankedAllSongs.length > 1 && (
-                    <section>
-                      <h2 className="text-lg font-bold mb-2">Songs</h2>
-                      {rankedAllSongs.slice(1, 8).map((song, i) => (
-                        <SearchPlay key={song.id} song={song}>
-                          <SongRow song={song} songs={rankedAllSongs} index={i + 1} />
-                        </SearchPlay>
-                      ))}
-                      <button
-                        onClick={() => setTab('Songs')}
-                        className="mt-2 text-xs font-semibold text-ember-400 px-2"
-                      >
-                        Explore all songs →
-                      </button>
-                    </section>
-                  )}
-                  {all.data.albums.length > 0 && (
-                    <section>
-                      <h2 className="text-lg font-bold mb-2">Albums</h2>
-                      <div className="flex gap-3 overflow-x-auto no-scrollbar">
-                        {all.data.albums.map((a) => (
-                          <MediaCard
-                            key={a.id}
-                            to={albumPath(a)}
-                            image={bestImage(a.images)}
-                            images={a.images}
-                            title={a.title}
-                            subtitle={a.subtitle}
-                            onPlay={() => void playAlbum(a.id, a.title)}
-                          />
-                        ))}
-                      </div>
-                    </section>
+                  {(topResult || rankedAllSongs.length > 1) && (
+                    <div className="search-results-lead">
+                      {topResult && (
+                        <section aria-label="Top result">
+                          <div className="search-section-heading">
+                            <h2>Top result</h2>
+                          </div>
+                          {/* The whole card plays (the round button is its keyboard target); it is a song, so it feeds the song context menu too. */}
+                          <div
+                            className="search-top-result"
+                            data-song-id={topResult.id}
+                            data-deter-context
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest('button')) return;
+                              playQueue(rankedAllSongs, 0);
+                              recordSearchPlay(topResult);
+                            }}
+                          >
+                            <img
+                              src={bestImage(topResult.images, 300)}
+                              onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+                              alt=""
+                            />
+                            <div>
+                              <p className="search-top-result-name">{topResult.title}</p>
+                              <p className="search-top-result-meta">
+                                <span className="search-type-pill">Song</span>
+                                <span>{topResult.subtitle}</span>
+                              </p>
+                            </div>
+                            <div className="search-top-result-menu">
+                              <TrackMenu song={topResult} />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playQueue(rankedAllSongs, 0);
+                                recordSearchPlay(topResult);
+                              }}
+                              aria-label={`Play ${topResult.title} by ${topResult.subtitle}`}
+                              className="vx-play-fab"
+                            >
+                              <PlayIcon />
+                            </button>
+                          </div>
+                        </section>
+                      )}
+                      {rankedAllSongs.length > 1 && (
+                        <section aria-label="Songs" className="min-w-0">
+                          <div className="search-section-heading">
+                            <h2>Songs</h2>
+                            <button type="button" onClick={() => setTab('Songs')} aria-label="Show all songs">
+                              Show all
+                            </button>
+                          </div>
+                          <div className="search-top-songs">
+                            {rankedAllSongs.slice(1, 5).map((song, i) => (
+                              <SearchPlay key={song.id} song={song}>
+                                <SongRow song={song} songs={rankedAllSongs} index={i + 1} />
+                              </SearchPlay>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+                    </div>
                   )}
                   {all.data.artists.length > 0 && (
-                    <section>
-                      <h2 className="text-lg font-bold mb-2">Artists</h2>
-                      <div className="flex gap-3 overflow-x-auto no-scrollbar">
-                        {all.data.artists.map((a) => (
-                          <MediaCard
-                            key={a.id}
-                            to={artistPath(a)}
-                            image={
-                              bestImage(a.images) === FALLBACK_ART
-                                ? letterAvatar(a.name)
-                                : bestImage(a.images)
-                            }
-                            images={a.images}
-                            title={a.name}
-                            subtitle="Artist"
-                            round
-                            onPlay={() => void playArtist(a.id, a.name)}
-                          />
-                        ))}
-                      </div>
-                    </section>
+                    <Shelf title="Artists" action={showAllTab('Artists', 'Artists')}>
+                      {all.data.artists.map((a) => (
+                        <MediaCard
+                          key={a.id}
+                          to={artistPath(a)}
+                          image={
+                            bestImage(a.images) === FALLBACK_ART
+                              ? letterAvatar(a.name)
+                              : bestImage(a.images)
+                          }
+                          images={a.images}
+                          title={a.name}
+                          subtitle="Artist"
+                          round
+                          onPlay={() => void playArtist(a.id, a.name)}
+                        />
+                      ))}
+                    </Shelf>
+                  )}
+                  {all.data.albums.length > 0 && (
+                    <Shelf title="Albums" action={showAllTab('Albums', 'Albums')}>
+                      {all.data.albums.map((a) => (
+                        <MediaCard
+                          key={a.id}
+                          to={albumPath(a)}
+                          image={bestImage(a.images)}
+                          images={a.images}
+                          title={a.title}
+                          subtitle={a.subtitle}
+                          onPlay={() => void playAlbum(a.id, a.title)}
+                        />
+                      ))}
+                    </Shelf>
                   )}
                   {all.data.playlists.length > 0 && (
-                    <section>
-                      <h2 className="text-lg font-bold mb-2">Playlists</h2>
-                      <div className="flex gap-3 overflow-x-auto no-scrollbar">
-                        {all.data.playlists.map((p) => (
-                          <MediaCard
-                            key={p.id}
-                            to={playlistPath(p)}
-                            image={bestImage(p.images)}
-                            images={p.images}
-                            title={p.title}
-                            subtitle={p.subtitle}
-                            onPlay={() => void playPlaylist(p.id, p.title)}
-                          />
-                        ))}
-                      </div>
-                    </section>
+                    <Shelf title="Playlists" action={showAllTab('Playlists', 'Playlists')}>
+                      {all.data.playlists.map((p) => (
+                        <MediaCard
+                          key={p.id}
+                          to={playlistPath(p)}
+                          image={bestImage(p.images)}
+                          images={p.images}
+                          title={p.title}
+                          subtitle={p.subtitle}
+                          onPlay={() => void playPlaylist(p.id, p.title)}
+                        />
+                      ))}
+                    </Shelf>
                   )}
                   {rankedAllSongs.length === 0 &&
                     all.data.albums.length === 0 &&
@@ -1332,6 +1344,7 @@ export default function SearchPage() {
                           message={`Nothing matched “${q}”. Try a shorter or transliterated spelling — or ask the AI.`}
                           action={
                             <button
+                              type="button"
                               onClick={() => void askExpert(q)}
                               disabled={aiLoading}
                               className="px-5 py-2.5 rounded-full btn-primary disabled:opacity-50"
@@ -1359,7 +1372,7 @@ export default function SearchPage() {
                 language={langFilter}
               />
               {availableLangs.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
+                <div className="vx-chip-rail" role="group" aria-label="Language">
                   <Chip active={!langFilter} onClick={() => setLangFilter(null)}>
                     All languages
                   </Chip>
@@ -1371,16 +1384,15 @@ export default function SearchPage() {
                 </div>
               )}
               {allSongList.length > 0 && (
-                <div className="flex items-center gap-3 mb-3 flex-wrap">
-                  <label className="flex items-center gap-1.5 text-xs text-ink-400">
-                    Sort
+                <div className="search-songs-tools">
+                  <label>
+                    <span className="max-md:sr-only">Sort</span>
                     <select
                       value={songSort}
                       onChange={(e) => {
                         if (isSongSort(e.target.value)) setSongSort(e.target.value);
                       }}
                       aria-label="Sort results"
-                      className="glass-input rounded-lg px-2 py-1 text-xs font-semibold text-ink-100 outline-none focus:ring-2 focus:ring-ember-500/35"
                     >
                       {SONG_SORTS.map((s) => (
                         <option key={s} value={s}>
@@ -1392,16 +1404,10 @@ export default function SearchPage() {
                   <span className="flex-1" />
                   {displaySongs.length > 0 && (
                     <>
-                      <button
-                        onClick={() => playQueue(displaySongs, 0)}
-                        className="text-xs font-semibold text-ember-400 hover:text-ember-300"
-                      >
-                        Play all
+                      <button type="button" onClick={() => playQueue(displaySongs, 0)} className="vx-pill-btn">
+                        <PlayIcon /> Play all
                       </button>
-                      <button
-                        onClick={() => enqueueAll(displaySongs)}
-                        className="text-xs font-semibold text-ink-300 hover:text-ink-100"
-                      >
+                      <button type="button" onClick={() => enqueueAll(displaySongs)} className="vx-pill-btn">
                         Queue all
                       </button>
                     </>
@@ -1409,23 +1415,21 @@ export default function SearchPage() {
                 </div>
               )}
               {allSongList.length > 0 && (
-                <div className="relative mb-3">
+                <div className="vx-field search-local-filter">
+                  <SearchIcon />
                   <input
                     value={resultFilter}
                     maxLength={80}
                     onChange={(e) => setResultFilter(e.target.value)}
                     aria-label="Filter these results"
                     placeholder="Filter these results"
-                    className="glass-input w-full rounded-xl px-3 py-2 pr-9 text-sm outline-none focus:ring-2 focus:ring-ember-500/35"
                   />
                   {resultFilter && (
-                    <button
-                      aria-label="Clear filter"
-                      onClick={() => setResultFilter('')}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-ink-400 hover:text-ink-100 hover:bg-ink-700/70"
-                    >
-                      <XIcon className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="vx-field-actions">
+                      <IconButton size="sm" label="Clear filter" onClick={() => setResultFilter('')}>
+                        <XIcon className="w-3.5 h-3.5" />
+                      </IconButton>
+                    </div>
                   )}
                 </div>
               )}
@@ -1436,7 +1440,7 @@ export default function SearchPage() {
                 allSongList.length === 0 &&
                 dymBar}
               {resultFilter.trim() && displaySongs.length === 0 && songList.length > 0 && (
-                <p className="text-sm text-ink-400 px-2">
+                <p className="vx-meta-line px-2 mb-3">
                   Nothing loaded so far matches “{resultFilter.trim()}” — scroll to load more, or
                   clear the filter.
                 </p>
@@ -1451,11 +1455,13 @@ export default function SearchPage() {
                   </p>
                 </div>
               )}
-              {displaySongs.map((song, i) => (
-                <SearchPlay key={song.id} song={song}>
-                  <SongRow song={song} songs={displaySongs} index={i} />
-                </SearchPlay>
-              ))}
+              <div className="vx-track-list">
+                {displaySongs.map((song, i) => (
+                  <SearchPlay key={song.id} song={song}>
+                    <SongRow song={song} songs={displaySongs} index={i} />
+                  </SearchPlay>
+                ))}
+              </div>
               <InfiniteSentinel
                 onVisible={() =>
                   infiniteSongs.hasNextPage &&
@@ -1467,6 +1473,7 @@ export default function SearchPage() {
               />
               {infiniteSongs.hasNextPage && (
                 <button
+                  type="button"
                   className="search-load-more"
                   disabled={infiniteSongs.isFetchingNextPage}
                   onClick={() => void infiniteSongs.fetchNextPage()}
@@ -1479,7 +1486,7 @@ export default function SearchPage() {
           {tab === 'Albums' && (
             <>
               {albumLangs.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
+                <div className="vx-chip-rail" role="group" aria-label="Language">
                   <Chip active={!albumLang} onClick={() => setAlbumLang(null)}>
                     All languages
                   </Chip>
@@ -1491,7 +1498,7 @@ export default function SearchPage() {
                 </div>
               )}
               <GridTabState result={albums} count={albumList.length} noun="albums" />
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              <div className="vx-card-grid">
                 {albumList.map((a) => (
                   <MediaCard
                     key={a.id}
@@ -1515,7 +1522,7 @@ export default function SearchPage() {
           {tab === 'Artists' && (
             <>
               <GridTabState result={artists} count={artistList.length} noun="artists" />
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              <div className="vx-card-grid">
                 {artistList.map((a) => (
                   <MediaCard
                     key={a.id}
@@ -1544,7 +1551,7 @@ export default function SearchPage() {
           {tab === 'Playlists' && (
             <>
               <GridTabState result={playlists} count={playlistList.length} noun="playlists" />
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              <div className="vx-card-grid">
                 {playlistList.map((p) => (
                   <MediaCard
                     key={p.id}

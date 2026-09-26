@@ -10,6 +10,7 @@ import type { Song } from '@/types';
 import { shareLink } from '@/utils/share';
 import { toast } from '@/store/toastStore';
 import { PlusIcon, UsersIcon } from '@/components/Icons';
+import '@/styles/pages/secondary.css';
 
 type Mode = 'idle' | 'host' | 'guest';
 
@@ -28,18 +29,17 @@ function AddSong({ label, onPick }: { label: string; onPick: (s: Song) => void }
     return () => window.clearTimeout(t);
   }, [q]);
   return (
-    <div className="glass-panel rounded-2xl p-4 mb-4">
-      <p className="text-sm font-bold mb-2 flex items-center gap-1.5">
-        <PlusIcon className="w-4 h-4 text-ember-400" /> {label}
-      </p>
+    <section className="vx-sec-block">
+      <h2 className="vx-sec-title">{label}</h2>
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Search songs to add…"
-        className="glass-input w-full px-4 py-2.5 rounded-xl text-sm"
+        placeholder="Search songs to add"
+        aria-label={label}
+        className="vx-field"
       />
       {results.length > 0 && (
-        <ul className="mt-2 divide-y divide-white/5">
+        <ul className="vx-group mt-3">
           {results.map((s) => (
             <li key={s.id}>
               <button
@@ -48,20 +48,20 @@ function AddSong({ label, onPick }: { label: string; onPick: (s: Song) => void }
                   setQ('');
                   setResults([]);
                 }}
-                className="w-full flex items-center gap-3 py-2 px-1.5 text-left rounded-lg hover:bg-ink-800/40 transition-colors"
+                className="vx-row"
               >
-                <img src={bestImage(s.images, 100)} alt="" className="w-9 h-9 rounded-lg object-cover" loading="lazy" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold truncate">{s.title}</span>
-                  <span className="block text-xs text-ink-400 truncate">{s.subtitle}</span>
+                <img src={bestImage(s.images, 100)} alt="" className="vx-row-art" loading="lazy" />
+                <span className="vx-row-main">
+                  <span className="vx-row-label truncate">{s.title}</span>
+                  <span className="vx-row-hint truncate">{s.subtitle}</span>
                 </span>
-                <PlusIcon className="w-4 h-4 text-ink-400 shrink-0" />
+                <PlusIcon className="w-5 h-5 text-ink-300 shrink-0" />
               </button>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -342,58 +342,69 @@ export default function ListenTogetherPage() {
 
   if (mode === 'idle') {
     return (
-      <div className="max-w-xl mx-auto">
-        <PageHeader title="Listen Together" />
-        <p className="text-sm text-ink-400 -mt-2 mb-6">Play the same music in sync with friends. Start a session and share the code, or join one.</p>
+      <div className="vx-sec is-narrow">
+        <PageHeader title="Listen Together" subtitle="Play the same music in sync with friends." />
 
-        <div className="glass-panel rounded-2xl p-5 mb-4">
-          <h2 className="text-base font-bold mb-1 flex items-center gap-2"><UsersIcon className="w-5 h-5 text-ember-400" /> Start a session</h2>
-          <p className="text-xs text-ink-400 mb-4">You become the host — whatever you play, everyone hears.</p>
-          <button onClick={() => void host()} disabled={busy} className="px-5 py-2.5 rounded-full btn-primary">
-            {busy ? 'Starting…' : 'Start session'}
-          </button>
-        </div>
+        <section className="vx-sec-block" aria-labelledby="vx-lt-start">
+          <h2 id="vx-lt-start" className="vx-sec-title">Start a session</h2>
+          <div className="vx-group">
+            <div className="vx-row">
+              <span className="vx-row-lead" aria-hidden><UsersIcon className="w-5 h-5" /></span>
+              <span className="vx-row-main">
+                <span className="vx-row-label">You host</span>
+                <span className="vx-row-hint">Whatever you play, everyone hears.</span>
+              </span>
+              <button onClick={() => void host()} disabled={busy} className="px-5 py-2.5 rounded-full btn-primary text-sm shrink-0">
+                {busy ? 'Starting…' : 'Start session'}
+              </button>
+            </div>
+          </div>
+        </section>
 
-        <div className="glass-panel rounded-2xl p-5">
-          <h2 className="text-base font-bold mb-3">Join a session</h2>
+        <section className="vx-sec-block" aria-labelledby="vx-lt-join">
+          <h2 id="vx-lt-join" className="vx-sec-title">Join a session</h2>
           <div className="flex gap-2">
             <input
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               placeholder="Room code"
+              aria-label="Room code"
               maxLength={8}
-              className="glass-input flex-1 px-4 py-2.5 rounded-xl text-sm tracking-widest font-bold"
+              className="vx-field flex-1 min-w-0 tracking-[0.2em] font-bold"
             />
-            <button onClick={() => void join()} disabled={busy} className="px-5 py-2.5 rounded-full bg-ink-700 text-ink-100 font-bold hover:bg-ink-600 disabled:opacity-60">
+            <button onClick={() => void join()} disabled={busy} className="vx-pill-btn min-h-[48px] px-6 shrink-0">
               Join
             </button>
           </div>
-        </div>
+        </section>
       </div>
     );
   }
 
   return (
-    <div className="max-w-xl mx-auto">
+    <div className="vx-sec is-narrow">
       <PageHeader title="Listen Together" />
 
-      <div className="glass-panel rounded-2xl p-6 text-center mb-4 relative overflow-hidden">
+      <section className="vx-sec-block vx-feature text-center" aria-label="Room">
         {/* D11 — floating reactions from everyone in the room. */}
         <div aria-hidden className="pointer-events-none absolute inset-0 z-10">
           {floats.map((f) => (
             <span key={f.id} className="vx-react" style={{ left: `${f.left}%` }}>{f.e}</span>
           ))}
         </div>
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-ember-300 mb-2 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-ember-400 animate-pulse" aria-hidden />{mode === 'host' ? 'Live session · You\u2019re hosting' : `Following ${hostName ?? 'the host'}`}</p>
-        <p className="text-4xl font-extrabold tracking-[0.3em] text-ember-400">{code}</p>
+        <p className="text-[13px] font-semibold text-ink-300 mb-2 inline-flex items-center gap-2">
+          <span className="vx-status-dot" aria-hidden />
+          {mode === 'host' ? 'Live · you’re hosting' : `Following ${hostName ?? 'the host'}`}
+        </p>
+        <p className="vx-code">{code}</p>
         {/* D11 — react to what's playing; everyone in the room sees it rise. */}
-        <div className="flex items-center justify-center gap-1.5 mt-4" role="group" aria-label="React to the music">
+        <div className="flex items-center justify-center gap-2 mt-5" role="group" aria-label="React to the music">
           {REACTION_EMOJI.map((e) => (
             <button
               key={e}
               onClick={() => react(e)}
               aria-label={`React ${e}`}
-              className="w-10 h-10 rounded-full bg-white/[0.06] border border-glass-strong text-lg hover:bg-white/[0.14] active:scale-90 transition"
+              className="w-11 h-11 rounded-full bg-ink-100/[0.08] text-lg hover:bg-ink-100/[0.14] active:scale-95 transition"
             >
               {e}
             </button>
@@ -405,37 +416,41 @@ export default function ListenTogetherPage() {
               <img
                 src={qr}
                 alt={`QR code to join room ${code}`}
-                className="mx-auto mt-4 w-36 h-36 rounded-xl bg-white p-1.5"
+                className="mx-auto mt-5 w-36 h-36 rounded-xl bg-white p-1.5"
               />
             )}
-            <div className="flex items-center justify-center gap-2 mt-4">
+            <div className="flex items-center justify-center gap-2 mt-5">
               <button
                 onClick={() => void shareLink(inviteLink, 'Listen with me on VinaX').then((r) => toast(r === 'copied' ? 'Invite copied' : 'Invite shared'))}
-                className="px-4 py-2 rounded-full btn-primary text-sm font-bold"
+                className="px-5 py-2.5 rounded-full btn-primary text-sm"
               >
                 Share invite
               </button>
-              <button onClick={() => void navigator.clipboard?.writeText(code).then(() => toast('Code copied'))} className="px-4 py-2 rounded-full border border-ink-600 text-sm font-semibold">
+              <button onClick={() => void navigator.clipboard?.writeText(code).then(() => toast('Code copied'))} className="vx-pill-btn">
                 Copy code
               </button>
             </div>
           </>
         )}
-      </div>
+      </section>
 
       {current && (
-        <div className="glass-panel rounded-2xl p-4 mb-4 flex items-center gap-3">
-          <img src={bestImage(current.images, 200)} alt="" className="w-14 h-14 rounded-xl object-cover" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[10px] uppercase tracking-widest text-ink-400 mb-0.5">Now playing</span>
-            <span className="block text-sm font-bold truncate">{current.title}</span>
-            <span className="block text-xs text-ink-400 truncate">{current.subtitle}</span>
-          </span>
-        </div>
+        <section className="vx-sec-block" aria-labelledby="vx-lt-now">
+          <h2 id="vx-lt-now" className="vx-sec-title">Now playing</h2>
+          <div className="vx-group">
+            <div className="vx-row">
+              <img src={bestImage(current.images, 200)} alt="" className="w-14 h-14 rounded-md object-cover shrink-0" />
+              <span className="vx-row-main">
+                <span className="vx-row-label truncate">{current.title}</span>
+                <span className="vx-row-hint truncate">{current.subtitle}</span>
+              </span>
+            </div>
+          </div>
+        </section>
       )}
 
       <AddSong
-        label={mode === 'host' ? 'Add to the queue' : 'Add a song — plays for everyone'}
+        label={mode === 'host' ? 'Add to the queue' : 'Add a song for everyone'}
         onPick={(s) => {
           if (mode === 'host') {
             usePlayerStore.getState().enqueue(s);
@@ -448,40 +463,41 @@ export default function ListenTogetherPage() {
       />
 
       {queue.length > 0 && (
-        <div className="glass-card rounded-2xl p-4 mb-4">
-          <p className="text-xs text-ink-400 mb-2">Up next</p>
-          <ul className="divide-y divide-white/5">
+        <section className="vx-sec-block" aria-labelledby="vx-lt-next">
+          <h2 id="vx-lt-next" className="vx-sec-title">Up next</h2>
+          <ul className="vx-group">
             {queue.map((t, i) => (
-              <li key={`${t.song.id}-${i}`} className="flex items-center gap-3 py-2">
-                <img src={bestImage(t.song.images, 100)} alt="" className="w-9 h-9 rounded-lg object-cover" loading="lazy" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold truncate">{t.song.title}</span>
-                  <span className="block text-xs text-ink-400 truncate">{t.by ? `Added by ${t.by}` : t.song.subtitle}</span>
+              <li key={`${t.song.id}-${i}`} className="vx-row">
+                <img src={bestImage(t.song.images, 100)} alt="" className="vx-row-art" loading="lazy" />
+                <span className="vx-row-main">
+                  <span className="vx-row-label truncate">{t.song.title}</span>
+                  <span className="vx-row-hint truncate">{t.by ? `Added by ${t.by}` : t.song.subtitle}</span>
                 </span>
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
 
-      <div className="glass-card rounded-2xl p-4 mb-4">
-        <p className="text-xs text-ink-400 mb-2 flex items-center gap-1.5"><UsersIcon className="w-4 h-4" /> {Math.max(listenerCount, members.length, 1)} listening</p>
+      <section className="vx-sec-block" aria-labelledby="vx-lt-people">
+        <h2 id="vx-lt-people" className="vx-sec-title flex items-center gap-2">
+          <UsersIcon className="w-5 h-5 text-ink-300" /> {Math.max(listenerCount, members.length, 1)} listening
+        </h2>
         <div className="flex flex-wrap gap-2">
           {/* Names render only when the server shared them (the host's view);
               guests see the honest count above — never each other's names. */}
           {(members.length ? members : ['You']).map((m, i) => (
-            <span key={`${m}-${i}`} className="glass-card rounded-full px-3 py-1 text-xs">{m}</span>
+            <span key={`${m}-${i}`} className="vx-chip-idle rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-ink-100">{m}</span>
           ))}
         </div>
-      </div>
+        <p className="vx-sec-foot">
+          {mode === 'host'
+            ? 'Play, pause, and skip as usual — everyone in the room follows you.'
+            : 'The host controls playback — your player follows automatically. Songs you add join the shared queue for everyone.'}
+        </p>
+      </section>
 
-      <p className="text-xs text-ink-500 mb-4 leading-relaxed">
-        {mode === 'host'
-          ? 'Play, pause, and skip as usual — everyone in the room follows you.'
-          : 'The host controls playback — your player follows automatically. Songs you add join the shared queue for everyone.'}
-      </p>
-
-      <button onClick={leave} className="px-5 py-2.5 rounded-full border border-ink-600 text-sm font-semibold hover:border-red-400 hover:text-red-300">
+      <button onClick={leave} className="vx-pill-btn is-danger">
         {mode === 'host' ? 'End for all' : 'Leave session'}
       </button>
     </div>

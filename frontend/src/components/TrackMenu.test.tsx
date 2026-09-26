@@ -198,14 +198,14 @@ describe('<TrackMenu />', () => {
 describe('placePanel', () => {
   const viewport = { width: 400, height: 800 };
   it('opens below the trigger, right-aligned to it', () => {
-    expect(placePanel({ top: 100, bottom: 136, right: 380 }, 288, viewport)).toEqual({ top: 140, left: 156 });
+    expect(placePanel({ top: 100, bottom: 136, right: 380 }, 288, viewport)).toEqual({ top: 140, left: 124 });
   });
   it('flips above when there is no room below', () => {
-    expect(placePanel({ top: 700, bottom: 736, right: 380 }, 288, viewport)).toEqual({ top: 408, left: 156 });
+    expect(placePanel({ top: 700, bottom: 736, right: 380 }, 288, viewport)).toEqual({ top: 408, left: 124 });
   });
   it('never leaves the viewport, horizontally or vertically', () => {
     expect(placePanel({ top: 100, bottom: 136, right: 60 }, 288, viewport).left).toBe(8);
-    expect(placePanel({ top: 100, bottom: 136, right: 2000 }, 288, viewport).left).toBe(400 - 224 - 8);
+    expect(placePanel({ top: 100, bottom: 136, right: 2000 }, 288, viewport).left).toBe(400 - 256 - 8);
     // Too tall for either side: pinned inside the viewport instead of overflowing it.
     const squeezed = placePanel({ top: 150, bottom: 186, right: 380 }, 288, { width: 400, height: 380 });
     expect(squeezed.top).toBeGreaterThanOrEqual(8);

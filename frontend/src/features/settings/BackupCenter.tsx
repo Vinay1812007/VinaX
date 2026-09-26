@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { Sheet, SheetHeader } from '@/components/Sheet';
 import { toast } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
 import { freezeLocalWrites, writeLocalBatch } from '@/services/storage/local';
@@ -36,9 +34,7 @@ const kb = (n?: number): string => (n ? `${Math.max(1, Math.round(n / 1024))} KB
  * an Undo that survives the reload.
  */
 export function BackupCenter({ onClose }: { onClose(): void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useFocusTrap(ref, true, onClose);
-  useDismissOnBack(true, onClose);
+  // <Sheet> owns the portal, focus trap, Escape, hardware back and scroll lock.
   const fileRef = useRef<HTMLInputElement>(null);
   const [meta, setMeta] = useState(backupMeta);
   const [parsed, setParsed] = useState<ParsedBackup | null>(null);
@@ -113,36 +109,30 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
     window.setTimeout(() => window.location.reload(), 400);
   };
 
-  const box = 'rounded-2xl border border-[var(--glass-border)] bg-[var(--tile)] p-3';
+  const box = 'rounded-xl border border-transparent bg-ink-100/[0.05] p-3';
+  const h3 = 'text-[15px] font-bold text-ink-100';
 
-  // Portal: see note in SmartCollectionSheet — fixed overlays must not live inside a transformed page section.
-  return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
-      <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="backup-center-title"
-        className="w-full sm:max-w-2xl glass-modal rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto animate-fade-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 id="backup-center-title" className="text-lg font-bold">Backup Center</h2>
-        <p className="text-xs text-ink-400 mt-0.5 mb-4">
-          A backup is a JSON file of the data you built up in VinaX. It never contains downloaded audio — only the list of what you saved — and never your device identity.
-        </p>
+  return (
+    <Sheet onClose={onClose} labelledBy="backup-center-title" size="2xl">
+        <SheetHeader
+          id="backup-center-title"
+          title="Backup Center"
+          subtitle="A JSON file of what you built up in VinaX. Never downloaded audio, only the list of what you saved, and never your device identity."
+          onClose={onClose}
+        />
 
         {undo && (
-          <div role="status" className={cn(box, 'mb-4 border-amber-400/40')}>
+          <div role="status" className={cn(box, 'mb-5 border-amber-400/40')}>
             <p className="text-sm font-semibold">A restore was applied {when(undo.at)}.</p>
             <p className="text-xs text-ink-400 mt-0.5">The previous data is kept in this tab until you close it.</p>
-            <button onClick={undoRestore} className="mt-2 px-4 py-2 rounded-full glass-button text-sm min-h-[40px]">Undo that restore</button>
+            <button onClick={undoRestore} className="mt-2 px-4 py-2 rounded-full btn-secondary text-sm min-h-[44px]">Undo that restore</button>
           </div>
         )}
 
-        <section aria-labelledby="backup-included" className="mb-4">
-          <div className="flex items-baseline justify-between gap-3 mb-2">
-            <h3 id="backup-included" className="text-sm font-bold">What a backup includes</h3>
-            <span className="text-[11px] text-ink-400">Last export: {when(meta.lastExportAt)}{meta.lastExportBytes ? ` · ${kb(meta.lastExportBytes)}` : ''}</span>
+        <section aria-labelledby="backup-included" className="mb-6">
+          <div className="flex items-baseline justify-between gap-3 mb-2.5">
+            <h3 id="backup-included" className={h3}>What a backup includes</h3>
+            <span className="text-[12px] text-ink-400">Last export: {when(meta.lastExportAt)}{meta.lastExportBytes ? ` · ${kb(meta.lastExportBytes)}` : ''}</span>
           </div>
           <ul className="grid gap-1.5 sm:grid-cols-2">
             {current.map(({ cat, summary, empty }) => (
@@ -159,23 +149,23 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
           </div>
         </section>
 
-        <section aria-labelledby="backup-excluded" className="mb-4">
-          <h3 id="backup-excluded" className="text-sm font-bold mb-2">What it leaves out, and why</h3>
-          <ul className="space-y-1">
+        <section aria-labelledby="backup-excluded" className="mb-6">
+          <h3 id="backup-excluded" className={cn(h3, 'mb-2.5')}>What it leaves out, and why</h3>
+          <ul className="space-y-1.5">
             {BACKUP_EXCLUSIONS.map((x) => (
-              <li key={x.label} className="text-xs"><b>{x.label}</b> <span className="text-ink-400">— {x.why}</span></li>
+              <li key={x.label} className="text-[13px] leading-snug"><b className="font-semibold">{x.label}</b> <span className="text-ink-400">— {x.why}</span></li>
             ))}
           </ul>
         </section>
 
         <section aria-labelledby="backup-restore">
-          <h3 id="backup-restore" className="text-sm font-bold mb-2">Restore from a file</h3>
+          <h3 id="backup-restore" className={cn(h3, 'mb-2.5')}>Restore from a file</h3>
           <input ref={fileRef} type="file" accept="application/json" className="hidden" aria-label="Choose a VinaX backup file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onFile(f); }} />
           <div className="flex flex-wrap gap-2 items-center">
-            <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-full glass-button text-sm min-h-[44px]">Choose a backup file…</button>
+            <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-full btn-secondary text-sm min-h-[44px]">Choose a backup file…</button>
             <span className="text-[11px] text-ink-400">You will see what is inside before anything changes.</span>
           </div>
-          {parseError && <p role="alert" className="mt-2 text-xs text-red-300">{parseError}</p>}
+          {parseError && <p role="alert" className="mt-2 text-xs text-[color:var(--vx-danger)]">{parseError}</p>}
 
           {parsed && (
             <div className="mt-3 space-y-3">
@@ -186,7 +176,7 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
               {parsed.warnings.map((w) => <p key={w} className="text-[11px] text-amber-300">{w}</p>)}
               {parsed.rejected.length > 0 && (
                 <div role="alert" className={cn(box, 'border-red-400/40')}>
-                  <p className="text-xs font-semibold text-red-300">Damaged sections are left out:</p>
+                  <p className="text-xs font-semibold text-[color:var(--vx-danger)]">Damaged sections are left out:</p>
                   <ul className="text-[11px] text-ink-300 list-disc pl-4">
                     {parsed.rejected.map((r) => <li key={r.id}>{r.label}: {r.error}</li>)}
                   </ul>
@@ -233,7 +223,7 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
               </fieldset>
 
               <div className="flex flex-wrap gap-2 justify-end items-center">
-                <button onClick={() => { downloadProfileExport(); setMeta(backupMeta()); toast('Safety copy downloaded'); }} className="px-4 py-2 rounded-full border border-ink-600 text-sm min-h-[44px] mr-auto">Download a safety copy first</button>
+                <button onClick={() => { downloadProfileExport(); setMeta(backupMeta()); toast('Safety copy downloaded'); }} className="btn-secondary px-4 py-2 text-sm min-h-[44px] mr-auto">Download a safety copy first</button>
                 <button onClick={() => setParsed(null)} className="btn-secondary px-4 py-2 text-sm min-h-[44px]">Cancel</button>
                 <button onClick={restore} disabled={!chosen.size || applying} className="btn-primary px-4 py-2 text-sm min-h-[44px] disabled:opacity-50">
                   {applying ? 'Restoring…' : `${mode === 'merge' ? 'Merge' : 'Replace'} ${chosen.size} categor${chosen.size === 1 ? 'y' : 'ies'}`}
@@ -242,7 +232,6 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
             </div>
           )}
         </section>
-      </div>
-    </div>
-  , document.body);
+    </Sheet>
+  );
 }

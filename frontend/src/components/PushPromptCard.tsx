@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { enablePush, pushSupported } from '@/services/push';
 import { toast } from '@/store/toastStore';
+import { BellIcon } from './Icons';
 
 const KEY = 'vinax.push-prompt.v1';
 
@@ -43,24 +44,22 @@ export function PushPromptCard() {
     }
   };
   return (
-    <div className="glass-panel rounded-2xl p-4 mb-5 flex flex-wrap items-center gap-3">
-      <span aria-hidden className="text-2xl">🔔</span>
-      <div className="flex-1 min-w-44">
-        <p className="text-sm font-bold">One song a day, tuned to you</p>
-        <p className="text-xs text-ink-400">Today’s pick + the odd announcement — never spam.</p>
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => void turnOn()}
-          disabled={busy}
-          className="px-4 py-2 rounded-full btn-primary text-sm font-semibold"
-        >
-          {busy ? 'Turning on…' : 'Turn on'}
-        </button>
-        <button onClick={dismiss} className="px-3.5 py-2 rounded-full btn-secondary text-sm">
+    <div className="vxh-note">
+      <span className="vxh-note-icon" aria-hidden>
+        <BellIcon />
+      </span>
+      <span className="vxh-note-text">
+        <span className="vxh-note-title">One song a day, tuned to you</span>
+        <span className="vxh-note-sub">Today’s pick and the odd announcement. Never spam.</span>
+      </span>
+      <span className="vxh-note-actions">
+        <button type="button" onClick={dismiss} className="vxh-note-btn is-quiet">
           Not now
         </button>
-      </div>
+        <button type="button" onClick={() => void turnOn()} disabled={busy} className="vxh-note-btn">
+          {busy ? 'Turning on…' : 'Turn on'}
+        </button>
+      </span>
     </div>
   );
 }

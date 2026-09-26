@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useBanners, type PromoBannerData } from '@/features/home/useAppConfig';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { useSettingsStore } from '@/store/settingsStore';
+import { IconButton } from './IconButton';
+import { XIcon } from './Icons';
 
 /**
  * Owner-published promo banner (Banner & Promotion in the admin). Renders at
@@ -46,35 +48,27 @@ export function PromoBanner({ className = '' }: { className?: string }) {
   };
 
   const inner = (
-    <div className="flex items-center gap-4 min-w-0">
-      {banner.img && (
-        <img src={banner.img} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" loading="lazy" />
-      )}
-      <div className="min-w-0">
-        <p className="font-bold text-sm truncate">{banner.title}</p>
-        {banner.subtitle && <p className="text-xs text-ink-400 truncate">{banner.subtitle}</p>}
-      </div>
-    </div>
+    <>
+      {banner.img && <img src={banner.img} alt="" className="vxh-note-icon" width={40} height={40} loading="lazy" />}
+      <span className="vxh-note-text">
+        <span className="vxh-note-title">{banner.title}</span>
+        {banner.subtitle && <span className="vxh-note-sub">{banner.subtitle}</span>}
+      </span>
+    </>
   );
 
   return (
-    <div className={`relative glass-card rounded-2xl p-4 pr-11 ${className}`}>
+    <div className={`vxh-note ${className}`}>
       {path ? (
-        <Link to={path} className="block min-w-0 hover:opacity-90 transition">
+        <Link to={path} className="vxh-note-link">
           {inner}
         </Link>
       ) : (
         inner
       )}
-      <button
-        onClick={dismiss}
-        aria-label="Dismiss banner"
-        className="absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center text-ink-400 hover:text-ink-100 hover:bg-ink-800/50 transition"
-      >
-        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
-          <path d="M6 6l12 12M18 6L6 18" />
-        </svg>
-      </button>
+      <IconButton size="sm" label="Dismiss banner" onClick={dismiss}>
+        <XIcon className="w-4 h-4" />
+      </IconButton>
     </div>
   );
 }

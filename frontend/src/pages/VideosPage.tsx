@@ -9,6 +9,9 @@ import { topLanguages } from '@/services/personalization/profile';
 import { languageLabel } from '@/constants/languages';
 import { SearchIcon } from '@/components/Icons';
 import { ErrorState, InlineError } from '@/components/States';
+import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
+import '@/styles/pages/browse.css';
 
 function fmtDuration(s: number | null): string {
   if (!s) return '';
@@ -21,7 +24,7 @@ function fmtDuration(s: number | null): string {
 export function VideoCard({ v }: { v: Video }) {
   return (
     <Link to={`/video/${v.id}`} className="group block min-w-0">
-      <div className="relative aspect-video rounded-2xl overflow-hidden bg-ink-850 border border-ink-700/40">
+      <div className="relative aspect-video rounded-lg overflow-hidden bg-ink-850 shadow-[var(--vx-art-shadow)]">
         {v.thumbnail ? (
           <img
             src={v.thumbnail}
@@ -33,7 +36,7 @@ export function VideoCard({ v }: { v: Video }) {
           <div className="w-full h-full grid place-items-center text-ink-500 text-3xl">▶</div>
         )}
         <div className="absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
-          <span className="w-12 h-12 rounded-full bg-white/90 text-ink-950 grid place-items-center text-lg pl-0.5">▶</span>
+          <span className="vx-play-fab !w-12 !h-12 text-lg pl-0.5">▶</span>
         </div>
         {v.duration != null && (
           <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/70 text-white text-[11px] font-semibold tabular-nums">
@@ -41,8 +44,8 @@ export function VideoCard({ v }: { v: Video }) {
           </span>
         )}
       </div>
-      <p className="mt-2 text-sm font-semibold text-ink-100 truncate">{v.title}</p>
-      <p className="text-xs text-ink-400 truncate">
+      <p className="mt-2.5 text-[14px] font-semibold text-ink-100 truncate group-hover:underline underline-offset-2">{v.title}</p>
+      <p className="mt-0.5 text-[13px] text-ink-400 truncate">
         {v.subtitle}
         {v.year ? ` · ${v.year}` : ''}
       </p>
@@ -52,10 +55,10 @@ export function VideoCard({ v }: { v: Video }) {
 
 function VideoGridSkeleton({ n = 8 }: { n?: number }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="vx-video-grid">
       {Array.from({ length: n }).map((_, i) => (
         <div key={i}>
-          <div className="skeleton aspect-video rounded-2xl" />
+          <div className="skeleton aspect-video rounded-lg" />
           <div className="skeleton mt-2 h-3.5 w-3/4" />
           <div className="skeleton mt-1.5 h-3 w-1/2" />
         </div>
@@ -72,25 +75,25 @@ function VideoShelf({ title, query }: { title: string; query: string }) {
   });
   if (isLoading) {
     return (
-      <section className="mb-8">
-        <h2 className="text-lg font-bold mb-3">{title}</h2>
+      <section className="vx-section">
+        <SectionHeader title={title} />
         <VideoGridSkeleton n={4} />
       </section>
     );
   }
   if (isError && !data?.length) {
     return (
-      <section>
-        <h2 className="text-lg font-bold mb-3">{title}</h2>
+      <section className="vx-section">
+        <SectionHeader title={title} />
         <InlineError retry={() => void refetch()} />
       </section>
     );
   }
   if (!data?.length) return null;
   return (
-    <section className="mb-8">
-      <h2 className="text-lg font-bold mb-3">{title}</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+    <section className="vx-section">
+      <SectionHeader title={title} />
+      <div className="vx-video-grid">
         {data.slice(0, 8).map((v) => (
           <VideoCard key={v.id} v={v} />
         ))}
@@ -121,24 +124,23 @@ export default function VideosPage() {
   });
 
   return (
-    <div>
-      <h1 className="text-page-title mb-1">Videos</h1>
-      <p className="text-sm text-ink-300 mb-5">Music videos from the catalog — tap one to watch.</p>
+    <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
+      <PageHeader title="Videos" />
 
       <form
-        className="relative mb-7 max-w-xl"
+        className="vx-field mb-8 max-w-[720px]"
         onSubmit={(e) => {
           e.preventDefault();
           setQ(input);
         }}
       >
-        <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400 w-4 h-4" />
+        <SearchIcon />
         <input
           type="search"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Search music videos…"
-          className="w-full pl-10 pr-4 py-3 rounded-2xl bg-ink-850/70 border border-ink-700/60 text-sm text-ink-100 placeholder:text-ink-500 focus:outline-none focus:border-ember-500/60"
+          aria-label="Search music videos"
         />
       </form>
 
@@ -149,7 +151,7 @@ export default function VideosPage() {
           // A failed search used to read as "No videos found" — wrong, and no way to retry.
           <ErrorState retry={() => void search.refetch()} />
         ) : search.data?.length ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="vx-video-grid">
             {search.data.map((v) => (
               <VideoCard key={v.id} v={v} />
             ))}

@@ -9,18 +9,15 @@ import { CardGridSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { Chip } from '@/components/Chip';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
-import { SearchIcon, XIcon, FilmIcon } from '@/components/Icons';
+import { SearchIcon, XIcon, FilmIcon, PlayIcon } from '@/components/Icons';
 import { flattenAlbumPages, useInfiniteAlbums } from '@/features/search/useInfiniteSongs';
 import { LANGUAGES, languageLabel } from '@/constants/languages';
 import { useSettingsStore } from '@/store/settingsStore';
 import { bestImage } from '@/utils/images';
 import { playAlbum } from '@/features/player/playEntity';
-
-function cnSort(active: boolean): string {
-  return active
-    ? 'px-3.5 py-1.5 rounded-full text-xs font-bold bg-premium text-black'
-    : 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-300 hover:text-ink-100 transition';
-}
+import { PageHeader } from '@/components/PageHeader';
+import { IconButton } from '@/components/IconButton';
+import '@/styles/pages/browse.css';
 
 export default function MoviesPage() {
   usePageTitle('Movies');
@@ -42,55 +39,51 @@ export default function MoviesPage() {
       : albums;
 
   return (
-    <div className="max-w-screen-2xl mx-auto">
-      <h1 className="text-display tracking-tight mb-1">Movies</h1>
-      <p className="text-sm text-ink-400 mb-4">Film soundtracks and album hits — search or pick a language.</p>
-      <div className="flex items-center gap-1.5 mb-4" role="group" aria-label="Sort movies">
-        {(
-          [
-            ['fresh', 'Fresh'],
-            ['az', 'A–Z'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setSort(id)}
-            aria-pressed={sort === id}
-            className={cnSort(sort === id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+    <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
+      <PageHeader title="Movies" />
 
-      <div className="relative mb-4">
-        <SearchIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
+      <div className="vx-field mb-4 max-w-[720px]">
+        <SearchIcon />
         <input
+          type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search movies…"
-          className="w-full glass-search rounded-2xl pl-12 pr-12 py-3 text-sm outline-none"
+          aria-label="Search movies"
         />
         {search && (
-          <button
-            aria-label="Clear"
-            onClick={() => setSearch('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-ink-400 hover:text-ink-100 rounded-full hover:bg-ink-700/70"
-          >
-            <XIcon className="w-4 h-4" />
-          </button>
+          <div className="vx-field-actions">
+            <IconButton label="Clear" size="sm" onClick={() => setSearch('')}>
+              <XIcon className="w-4 h-4" />
+            </IconButton>
+          </div>
         )}
       </div>
 
-      {!searching && (
-        <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
-          {LANGUAGES.map((l) => (
-            <Chip key={l.id} active={lang === l.id} onClick={() => setLang(l.id)}>
-              {l.label}
+      <div className="vx-chip-rail !mb-6">
+        <div className="flex items-center gap-2 shrink-0" role="group" aria-label="Sort movies">
+          {(
+            [
+              ['fresh', 'Fresh'],
+              ['az', 'A–Z'],
+            ] as const
+          ).map(([id, label]) => (
+            <Chip key={id} active={sort === id} onClick={() => setSort(id)}>
+              {label}
             </Chip>
           ))}
         </div>
-      )}
+        {!searching && (
+          <>
+            <span aria-hidden className="search-filters-sep self-center" />
+            {LANGUAGES.map((l) => (
+              <Chip key={l.id} active={lang === l.id} onClick={() => setLang(l.id)}>
+                {l.label}
+              </Chip>
+            ))}
+          </>
+        )}
+      </div>
 
       {q.isLoading && <CardGridSkeleton />}
       {q.isError && <ErrorState retry={() => void q.refetch()} />}
@@ -107,45 +100,31 @@ export default function MoviesPage() {
       )}
       {albums.length > 0 && (
         <>
-          {/* D9 — featured film: the top result as a full-bleed backdrop card. */}
+          {/* D9 — featured film: the top result as a wide artwork-led card. */}
           {!searching && shown[0] && (
-            <Link
-              to={albumPath(shown[0])}
-              className="relative block rounded-3xl overflow-hidden mb-5 group ring-1 ring-white/10"
-            >
-              <img
-                src={bestImage(shown[0].images, 500)}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-50"
-                aria-hidden
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-ink-950/40 to-transparent" aria-hidden />
-              <div className="relative flex items-end gap-4 p-5 pt-16 sm:pt-24">
-                <img
-                  src={bestImage(shown[0].images, 250)}
-                  alt=""
-                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl object-cover shadow-float shrink-0"
-                />
-                <div className="min-w-0 flex-1 pb-1">
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-ember-300 mb-1">Featured film</p>
-                  <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight truncate">
-                    {filmTitleFromAlbumName(shown[0].title) ?? shown[0].title}
-                  </h2>
-                  <p className="text-xs text-ink-300 truncate">{shown[0].subtitle || 'Full soundtrack'}</p>
+            <Link to={albumPath(shown[0])} className="vx-feature group">
+              <img src={bestImage(shown[0].images, 500)} alt="" className="vx-feature-bg" aria-hidden />
+              <div className="vx-feature-body">
+                <img src={bestImage(shown[0].images, 250)} alt="" className="vx-feature-art" />
+                <div className="min-w-0 flex-1">
+                  <p className="vx-feature-kind">Featured film</p>
+                  <h2 className="vx-feature-title">{filmTitleFromAlbumName(shown[0].title) ?? shown[0].title}</h2>
+                  <p className="vx-feature-meta">{shown[0].subtitle || 'Full soundtrack'}</p>
                 </div>
                 <button
                   onClick={(e) => {
                     e.preventDefault();
                     void playAlbum(shown[0].id, shown[0].title);
                   }}
-                  className="shrink-0 px-5 py-2.5 rounded-full btn-primary text-sm font-bold active:scale-95 transition"
+                  className="vx-play-fab shrink-0"
+                  aria-label="Play soundtrack"
                 >
-                  Play soundtrack
+                  <PlayIcon />
                 </button>
               </div>
             </Link>
           )}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-2">
+          <div className="vx-card-grid">
             {shown.map((a) => (
               <MediaCard
                 key={a.id}

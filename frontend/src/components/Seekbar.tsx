@@ -6,9 +6,11 @@ interface Props {
   compact?: boolean;
   /** : full-width bar with the time labels underneath. */
   timesBelow?: boolean;
+  /** With `timesBelow`: the right-hand label counts down (−1:23) instead of showing the length. */
+  remaining?: boolean;
 }
 
-export function Seekbar({ compact = false, timesBelow = false }: Props) {
+export function Seekbar({ compact = false, timesBelow = false, remaining = false }: Props) {
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
 
@@ -79,9 +81,11 @@ export function Seekbar({ compact = false, timesBelow = false }: Props) {
     return (
       <div className="w-full">
         {input}
-        <div className="flex justify-between -mt-0.5">
+        <div className="vx-seek-times flex justify-between -mt-0.5">
           <span className="text-[11px] tabular-nums text-ink-400">{formatDuration(shown)}</span>
-          <span className="text-[11px] tabular-nums text-ink-400">{formatDuration(duration)}</span>
+          <span className="text-[11px] tabular-nums text-ink-400">
+            {remaining && duration > 0 ? `−${formatDuration(Math.max(0, duration - shown))}` : formatDuration(duration)}
+          </span>
         </div>
       </div>
     );

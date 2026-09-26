@@ -51,20 +51,20 @@ export function NextUpCard() {
         type="button"
         onClick={() => usePlayerStore.getState().next(true)}
         aria-label={`Up next: ${upcoming.title}${origin ? `, ${origin.toLowerCase()}` : ''}. Tap to play it now.`}
-        className="pointer-events-auto glass-card rounded-2xl p-2 pr-3 flex items-center gap-3 w-60 sm:w-64 text-left animate-fade-up active:scale-[0.98] transition-transform"
+        className="pointer-events-auto rounded-xl bg-ink-850 shadow-[0_16px_40px_-16px_rgb(0_0_0/0.6)] p-2 pr-3 flex items-center gap-3 w-64 sm:w-72 text-left animate-fade-up active:scale-[0.98] transition-transform"
       >
         <img
           src={bestImage(upcoming.images, 80)}
           onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
           alt=""
-          className="w-12 h-12 rounded-xl object-cover shrink-0"
+          className="w-12 h-12 rounded-md object-cover shrink-0"
         />
         <span className="min-w-0 flex-1">
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-ember-400">
+          <span className="block text-[12px] font-semibold text-ink-400 tabular-nums">
             Up next{origin ? ` · ${origin}` : ''} · {endingIn}s
           </span>
-          <span className="block text-sm font-semibold truncate">{upcoming.title}</span>
-          <span className="block text-xs text-ink-300 truncate">{upcoming.subtitle}</span>
+          <span className="block text-[14px] font-semibold text-ink-100 truncate">{upcoming.title}</span>
+          <span className="block text-[13px] text-ink-400 truncate">{upcoming.subtitle}</span>
         </span>
         <NextIcon className="w-5 h-5 text-ink-300 shrink-0" />
       </button>

@@ -42,34 +42,32 @@ export function FestivalLookaheadCard() {
   };
 
   return (
-    <div className="glass-card rounded-2xl p-4 relative overflow-hidden min-w-0">
-      <span aria-hidden className="absolute inset-x-0 top-0 h-[3px]" style={{ background: ribbonGradient(info.ribbon) }} />
-      <div className="flex items-center gap-3.5">
-        <span
-          className="w-14 h-14 rounded-2xl shrink-0 bg-cover bg-center border border-white/15 shadow-lg"
-          style={{ backgroundImage: `url("${visual.image}")`, backgroundPosition: visual.position }}
-          aria-hidden
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[10px] font-extrabold tracking-[0.18em] uppercase" style={{ color: info.accent }}>Coming up</span>
-          <span className="block text-[15px] font-extrabold leading-tight truncate">{info.title}</span>
-          <span className="block text-[11px] font-semibold text-ink-300 mt-0.5 truncate">{info.note}</span>
+    <div className="vxh-card">
+      <span aria-hidden className="vxh-card-ribbon" style={{ background: ribbonGradient(info.ribbon) }} />
+      <span
+        className="vxh-card-art bg-cover bg-center"
+        style={{ backgroundImage: `url("${visual.image}")`, backgroundPosition: visual.position }}
+        aria-hidden
+      />
+      <span className="min-w-0 flex-1">
+        <span className="vxh-card-label">Coming up</span>
+        <span className="vxh-card-title">{info.title}</span>
+        <span className="vxh-card-sub">{info.note}</span>
+        <span className="vxh-card-links">
+          <button
+            type="button"
+            onClick={() => void play()}
+            disabled={busy}
+            aria-busy={busy}
+            className="vxh-mini is-primary"
+          >
+            <PlayIcon /> {busy ? 'Finding songs…' : `Play ${info.shortName} songs`}
+          </button>
+          <Link to="/settings" className="vxh-mini">
+            <SettingsIcon /> Theme settings
+          </Link>
         </span>
-      </div>
-      <div className="flex flex-wrap gap-1.5 mt-3">
-        <button
-          type="button"
-          onClick={() => void play()}
-          disabled={busy}
-          aria-busy={busy}
-          className="btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold disabled:opacity-60 active:scale-95 transition-transform"
-        >
-          <PlayIcon className="w-3 h-3" /> {busy ? 'Finding songs…' : `Play ${info.shortName} songs`}
-        </button>
-        <Link to="/settings" className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold">
-          <SettingsIcon className="w-3.5 h-3.5" /> Theme settings
-        </Link>
-      </div>
+      </span>
     </div>
   );
 }

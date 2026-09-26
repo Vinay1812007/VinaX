@@ -109,9 +109,9 @@ function Sources({ sources }: { sources: string[] }): ReactNode {
   // answer. The coloured chip is a local letter avatar, NOT an icon fetch —
   // pulling icons from third parties would leak what you read.
   return (
-    <div className="ai-card mt-3 px-3 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-wider ai-t3 mb-1.5 flex items-center gap-1">
-        <GlobeIcon className="w-3 h-3" /> Sources
+    <div className="ai-card ai-sources">
+      <p className="ai-card-heading">
+        <GlobeIcon className="w-3.5 h-3.5" /> Sources
       </p>
       <div className="space-y-0.5">
         {sources.map((u, k) => {

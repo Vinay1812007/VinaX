@@ -56,8 +56,8 @@ export function Shelf({ title, explanation, seeAllTo, action, children, layout =
     <section className="vx-shelf cv-auto" onPointerEnter={measure}>
       <SectionHeader title={title} explanation={explanation} seeAllTo={seeAllTo} action={<>
         {scrollable && <div className="hidden md:flex items-center">
-          <IconButton size="sm" label={`Scroll ${title} back`} onClick={() => page(-1)} disabled={edges.atStart}><ChevronDownIcon className="w-5 h-5 rotate-90" /></IconButton>
-          <IconButton size="sm" label={`Scroll ${title} forward`} onClick={() => page(1)} disabled={edges.atEnd}><ChevronDownIcon className="w-5 h-5 -rotate-90" /></IconButton>
+          <IconButton size="sm" className="vx-shelf-nav" label={`Scroll ${title} back`} onClick={() => page(-1)} disabled={edges.atStart}><ChevronDownIcon className="w-5 h-5 rotate-90" /></IconButton>
+          <IconButton size="sm" className="vx-shelf-nav ml-2" label={`Scroll ${title} forward`} onClick={() => page(1)} disabled={edges.atEnd}><ChevronDownIcon className="w-5 h-5 -rotate-90" /></IconButton>
         </div>}
         {action}
       </>} />

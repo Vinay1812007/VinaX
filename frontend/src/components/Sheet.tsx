@@ -3,6 +3,10 @@ import { createPortal } from 'react-dom';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { cn } from '@/utils/cn';
+import { IconButton } from './IconButton';
+import { XIcon } from './Icons';
+// The overlay language (sheet shell, header, menus) ships with this chunk, not first load.
+import '@/styles/overlays.css';
 
 export interface SheetProps {
   /** Defaults to true — most sheets only mount while they are open. */
@@ -36,9 +40,10 @@ export interface SheetProps {
 }
 
 const SIZE = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-lg', '2xl': 'sm:max-w-2xl' } as const;
+// Phones get a taller top edge: the grab handle sits in it.
 const PADDING = {
-  md: 'p-5 pb-[max(1.25rem,var(--safe-bottom))] sm:pb-5',
-  lg: 'p-6 pb-[max(1.5rem,var(--safe-bottom))] sm:pb-6',
+  md: 'px-5 pt-7 pb-[max(1.25rem,var(--safe-bottom))] sm:p-6',
+  lg: 'px-6 pt-8 pb-[max(1.5rem,var(--safe-bottom))] sm:p-7',
 } as const;
 const MAX_HEIGHT = { tall: 'max-h-[92dvh]', medium: 'max-h-[85dvh]' } as const;
 const Z = { 60: 'z-[60]', 70: 'z-[70]', 80: 'z-[80]' } as const;
@@ -115,7 +120,7 @@ export function Sheet({
         aria-labelledby={labelledBy}
         aria-label={labelledBy ? undefined : label}
         className={cn(
-          'w-full glass-modal rounded-t-3xl sm:rounded-3xl animate-fade-up overscroll-contain',
+          'vx-sheet w-full overscroll-contain',
           SIZE[size],
           PADDING[padding],
           MAX_HEIGHT[maxHeight],
@@ -124,9 +129,46 @@ export function Sheet({
         )}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Phones only: the bottom sheet's grab handle (decorative — Escape, back and the backdrop dismiss). */}
+        <span aria-hidden className="vx-sheet-grab" />
         {children}
       </div>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * The standard sheet header: title (18px / 750) on the left, a close button
+ * on the right. Pass the same `id` to the Sheet's `labelledBy`.
+ */
+export function SheetHeader({
+  id,
+  title,
+  subtitle,
+  onClose,
+  closeLabel = 'Close',
+  className,
+}: {
+  id: string;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  /** Omit for a sheet that must be answered (no close button). */
+  onClose?: () => void;
+  closeLabel?: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn('vx-sheet-head', className)}>
+      <div className="min-w-0">
+        <h2 id={id} className="vx-sheet-title">{title}</h2>
+        {subtitle && <p className="vx-sheet-sub">{subtitle}</p>}
+      </div>
+      {onClose && (
+        <IconButton label={closeLabel} size="sm" onClick={onClose} className="vx-sheet-close">
+          <XIcon className="w-5 h-5" />
+        </IconButton>
+      )}
+    </div>
   );
 }

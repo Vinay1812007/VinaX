@@ -35,7 +35,7 @@ export default function DriveModePage() {
       <button onClick={() => navigate(-1)} aria-label="Exit Drive Mode" className="absolute top-[max(1rem,env(safe-area-inset-top))] left-4 p-3 text-ink-300">
         <ChevronDownIcon className="w-8 h-8" />
       </button>
-      <img src={bestImage(song.images, 300)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-44 h-44 rounded-3xl object-cover shadow-float mb-8" />
+      <img src={bestImage(song.images, 300)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-48 h-48 rounded-xl object-cover shadow-[var(--vx-art-shadow)] mb-8" />
       <h1 className="text-page-title font-extrabold leading-tight line-clamp-2">{song.title}</h1>
       <p className="text-lg text-ink-300 mt-2 truncate max-w-full">{song.subtitle}</p>
 
@@ -43,7 +43,7 @@ export default function DriveModePage() {
         <button onClick={prev} aria-label="Previous" className="w-24 h-24 rounded-full bg-ink-800 active:bg-ink-700 flex items-center justify-center">
           <PrevIcon className="w-12 h-12 text-ink-100" />
         </button>
-        <button onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="w-32 h-32 rounded-full btn-primary flex items-center justify-center active:scale-95 transition-transform shadow-glow">
+        <button onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="w-32 h-32 rounded-full btn-primary flex items-center justify-center active:scale-95 transition-transform">
           {isPlaying ? <PauseIcon className="w-16 h-16" /> : <PlayIcon className="w-16 h-16 ml-2" />}
         </button>
         <button onClick={() => next(true)} aria-label="Next" className="w-24 h-24 rounded-full bg-ink-800 active:bg-ink-700 flex items-center justify-center">

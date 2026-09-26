@@ -12,6 +12,8 @@ import { useTrendingForLanguage } from '@/features/home/useHomeShelves';
 import { trendingSeed } from '@/constants/seeds';
 import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
+import { PageHeader } from '@/components/PageHeader';
+import '@/styles/pages/browse.css';
 
 function LanguageShelf({ language }: { language: string }) {
   const { data, isLoading, isError, refetch } = useTrendingForLanguage(language);
@@ -22,7 +24,7 @@ function LanguageShelf({ language }: { language: string }) {
   if (isError && !data?.length) return <InlineError label={`trending ${languageLabel(language)} songs`} retry={() => void refetch()} />;
   if (!data?.length) return null;
   return (
-    <Shelf title={`Trending · ${languageLabel(language)}`} explanation="Trending in your languages" seeAllTo={`/search/${encodeURIComponent(trendingSeed(language))}`}>
+    <Shelf title={`Trending in ${languageLabel(language)}`} seeAllTo={`/search/${encodeURIComponent(trendingSeed(language))}`}>
       {data.map((song, i) => (
         <MediaCard key={song.id} to={songPath(song)} image={bestImage(song.images)} images={song.images} title={song.title} subtitle={song.subtitle} onPlay={() => playQueue(data, i)} />
       ))}
@@ -37,53 +39,52 @@ export default function LanguagesPage() {
   const { togglePinnedLanguage, toggleMutedLanguage, setPinnedLanguages, setMutedLanguages } = useSettingsStore.getState();
 
   return (
-    <div className="max-w-screen-2xl mx-auto">
-      <h1 className="text-display tracking-tight mb-1">Languages</h1>
-      <p className="text-sm text-ink-400 mb-6">
-        Pin languages to boost them everywhere; mute to hide them from recommendations. Your mix can blend several.
-      </p>
+    <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
+      <PageHeader title="Languages" />
 
-      <LanguageGrid />
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <span className="text-sm font-semibold text-ink-300">Choose the languages you love</span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              setPinnedLanguages(LANGUAGES.map((l) => l.id));
-              setMutedLanguages([]);
-            }}
-            className="px-3.5 py-1.5 rounded-full text-xs font-bold btn-primary hover:bg-ember-400 min-h-touch"
-          >
-            All languages
-          </button>
-          {pinned.length > 0 && (
+      <LanguageGrid heading={false} />
+
+      <section className="vx-control-group" aria-label="Pinned languages">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h2 className="vx-subhead !mb-0">Languages you love<small>Boosted everywhere</small></h2>
+          <div className="flex gap-2">
             <button
-              onClick={() => setPinnedLanguages([])}
-              className="px-3.5 py-1.5 rounded-full text-xs font-semibold btn-secondary min-h-touch"
+              onClick={() => {
+                setPinnedLanguages(LANGUAGES.map((l) => l.id));
+                setMutedLanguages([]);
+              }}
+              className="vx-pill-btn"
             >
-              Clear
+              All languages
             </button>
-          )}
+            {pinned.length > 0 && (
+              <button onClick={() => setPinnedLanguages([])} className="vx-pill-btn">
+                Clear
+              </button>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="flex flex-wrap gap-2 mb-6">
-        {LANGUAGES.map((l) => (
-          <Chip key={l.id} active={pinned.includes(l.id)} onClick={() => togglePinnedLanguage(l.id)}>
-            {l.label}
-          </Chip>
-        ))}
-      </div>
+        <div className="vx-chip-row">
+          {LANGUAGES.map((l) => (
+            <Chip key={l.id} active={pinned.includes(l.id)} onClick={() => togglePinnedLanguage(l.id)}>
+              {l.label}
+            </Chip>
+          ))}
+        </div>
+      </section>
 
-      <div className="mb-3 text-sm font-semibold text-ink-300">Mute — never recommend</div>
-      <div className="flex flex-wrap gap-2 mb-10">
-        {LANGUAGES.map((l) => (
-          <Chip key={l.id} active={muted.includes(l.id)} tone="danger" onClick={() => toggleMutedLanguage(l.id)}>
-            {l.label}
-          </Chip>
-        ))}
-      </div>
+      <section className="vx-control-group !mb-10" aria-label="Muted languages">
+        <h2 className="vx-subhead">Muted<small>Never recommended</small></h2>
+        <div className="vx-chip-row">
+          {LANGUAGES.map((l) => (
+            <Chip key={l.id} active={muted.includes(l.id)} tone="danger" onClick={() => toggleMutedLanguage(l.id)}>
+              {l.label}
+            </Chip>
+          ))}
+        </div>
+      </section>
 
-      {pinned.length === 0 && <p className="text-sm text-ink-400 mb-6">Pin at least one language to see trending shelves here.</p>}
+      {pinned.length === 0 && <p className="vx-meta-line mb-6">Pin at least one language to see trending shelves here.</p>}
       {pinned.map((lang) => (
         <LanguageShelf key={lang} language={lang} />
       ))}

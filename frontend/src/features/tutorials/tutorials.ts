@@ -71,7 +71,7 @@ export const TUTORIALS: Tutorial[] = [
     steps: [
       { route: '/', title: 'Let’s play something', body: 'This walkthrough runs inside the real app and starts a song in your first language.', tip: 'Leave at any time with Esc or Skip.' },
       { route: '/', target: '.vx-topbar', title: 'Where you are', body: 'The top bar names the page and holds its actions. Home, Discover, Search, Library and VinaX AI sit in the navigation.', placement: 'bottom' },
-      { route: '/', target: '[aria-label="Play your Aura Mix"]', title: 'Play my mix', body: 'A mix built from your languages and listening. Press Next and the tutorial starts a song for you.', placement: 'bottom' },
+      { route: '/', target: '[aria-label="Play your Aura Mix"]', title: 'Your Aura Mix', body: 'The play button on the Aura Mix card starts a mix built from your languages and listening. Press Next and the tutorial starts a song for you.', placement: 'bottom' },
       { target: '[data-tour="player"]', title: 'The player bar', body: 'Play, pause and skip from here. Tap the artwork or title for the full-screen player.', action: async () => { await playTutorialSong(); await wait(700); }, placement: 'top' },
       { target: '[data-tour="player"] [aria-label="Add to favorites"], [data-tour="player"] [aria-label="Remove from favorites"]', title: 'Like it', body: 'The heart saves the song to your favourites and teaches your taste profile, on this device only.', placement: 'top' },
       { route: '/queue', target: 'section[aria-label="Tune this queue"]', title: 'The next five', body: 'Tap any song and the DJ lines up five more in its language, familiar first. A tune chip rebuilds them.', action: async () => { await wait(400); }, placement: 'bottom' },

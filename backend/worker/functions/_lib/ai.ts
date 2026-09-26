@@ -83,6 +83,12 @@ export interface AiEnv {
   VINAX_MTA_LMA_3_2_90B_VSN_INT?: string;
   VINAX_GROQ_API_KEY?: string;
   VINAX_OPENROUTER_API_KEY?: string;
+  /** 8.0.0 — the maestro lane's key (the flagship engine behind the DJ, the
+   * Queue Builder, ranking and the Home builder). */
+  VINAX_GGL_GEMINI_API_KEY?: string;
+  /** Optional plain var: replaces the maestro lane's pinned model without a
+   * deploy of new code when the provider publishes a newer one. */
+  VINAX_MAESTRO_MODEL?: string;
   NVIDIA_BASE_URL?: string;
 }
 
@@ -102,6 +108,9 @@ export type Lane =
   | 'agent'
   // The free-model marketplace (v5.21.0): one lane, many selectable models.
   | 'router'
+  // 8.0.0 — the flagship lane: strongest music knowledge, leads the DJ,
+  // the Queue Builder, ranking, playlists and the Home builder.
+  | 'maestro'
   // Vision lanes — image understanding, on their own keys since v5.21.0.
   | 'vision'
   | 'vision90'
@@ -125,6 +134,7 @@ export function defaultEndpoint(env: AiEnv): string {
 export const LANE_BASE: Partial<Record<Lane, string>> = {
   scholar: 'https://api.groq.com/openai/v1',
   router: 'https://openrouter.ai/api/v1',
+  maestro: 'https://generativelanguage.googleapis.com/v1beta/openai',
 };
 
 /** Full chat-completions URL for a lane — its own provider base when pinned,
@@ -150,10 +160,17 @@ export function isRouterEndpoint(url: string): boolean {
   return url.includes('openrouter.ai');
 }
 
+/** 8.0.0 — the maestro host. OpenAI-compatible; it accepts
+ * `reasoning_effort` (it maps onto the engine's thinking budget) and JSON
+ * mode, and rejects the NVIDIA-only chat_template_kwargs. */
+export function isMaestroEndpoint(url: string): boolean {
+  return url.includes('generativelanguage.googleapis.com');
+}
+
 /** True when the endpoint is NOT the NVIDIA base — i.e. vendor-specific
  * payload knobs must be withheld. */
 export function isExternalEndpoint(url: string): boolean {
-  return isGroqEndpoint(url) || isRouterEndpoint(url);
+  return isGroqEndpoint(url) || isRouterEndpoint(url) || isMaestroEndpoint(url);
 }
 
 /** nemotron a3b-family models reason by DEFAULT and leak BARE chain-of-thought
@@ -214,6 +231,8 @@ export const LANE_MODEL: Record<Lane, string> = {
   // re-publishes slugs constantly, so this value is deliberately never
   // trusted on its own: every call site resolves the catalog first.
   router: 'nvidia/nemotron-3-super:free',
+  // 8.0.0 — the owner's new key. VINAX_MAESTRO_MODEL overrides the pin.
+  maestro: 'gemini-2.5-flash',
   vision: 'meta/llama-3.2-11b-vision-instruct',
   vision90: 'meta/llama-3.2-90b-vision-instruct',
   // Inventory bench lanes — one per remaining key, no feature depends on them.
@@ -242,6 +261,8 @@ export const LANE_SECONDARY: Partial<Record<Lane, string>> = {
   scholar: 'openai/gpt-oss-120b',
   vision: 'meta/llama-3.2-90b-vision-instruct',
   vision90: 'meta/llama-3.2-11b-vision-instruct',
+  // Same key, lighter sibling: answers when the flagship is busy or retired.
+  maestro: 'gemini-2.5-flash-lite',
 };
 
 /** Env var that holds each lane's key — exported for the admin AI Lab bench. */
@@ -257,6 +278,7 @@ export const LANE_ENV: Record<Lane, keyof AiEnv> = {
   mini: 'VINAX_MISTRAL_NEMOTRON',
   agent: 'VINAX_KIMI_K3',
   router: 'VINAX_OPENROUTER_API_KEY',
+  maestro: 'VINAX_GGL_GEMINI_API_KEY',
   vision: 'VINAX_MTA_LMA_3_2_11B_VSN_INT',
   vision90: 'VINAX_MTA_LMA_3_2_90B_VSN_INT',
   dsflash: 'VINAX_DEEPSEEK_V4_FLASH_0731',
@@ -298,12 +320,21 @@ export interface LaneAttempt {
  * its same-key secondary pin (when one exists), then the cross-lane ladder.
  * Each attempt carries its lane's endpoint so mixed-provider failover signs
  * every hop against the right base. */
+/** The lane's pinned model, honouring the maestro override var. */
+export function laneModel(env: AiEnv, lane: Lane): string {
+  if (lane === 'maestro') {
+    const override = typeof env.VINAX_MAESTRO_MODEL === 'string' ? env.VINAX_MAESTRO_MODEL.trim() : '';
+    if (/^[\w.:/-]{3,80}$/.test(override)) return override;
+  }
+  return LANE_MODEL[lane];
+}
+
 export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, ladder?: Lane[], skipSecondary = false): LaneAttempt[] {
   const out: LaneAttempt[] = [];
   const add = (l: Lane, model?: string): void => {
     const key = env[LANE_ENV[l]];
     if (key && !out.some((a) => a.role === l)) {
-      out.push({ key, model: model ?? LANE_MODEL[l], role: l, endpoint: laneEndpoint(env, l) });
+      out.push({ key, model: model ?? laneModel(env, l), role: l, endpoint: laneEndpoint(env, l) });
     }
   };
   add(lane, modelOverride);
@@ -316,6 +347,26 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
   }
   for (const l of ladder ?? LADDER) add(l);
   return out;
+}
+
+/**
+ * 8.0.0 — rate-limit cooldown, per isolate. A key that answered 429 is
+ * skipped for a minute instead of costing every call in that minute a wasted
+ * round trip (the maestro key may sit on a small free quota). Keyed by lane
+ * and model, so a same-key secondary on a different quota is still tried.
+ */
+const COOLDOWN_MS = 60_000;
+const cooldowns = new Map<string, number>();
+const coolKey = (role: Lane, model: string): string => `${role}|${model}`;
+export function laneCoolingDown(role: Lane, model: string, now = Date.now()): boolean {
+  const until = cooldowns.get(coolKey(role, model));
+  if (until === undefined) return false;
+  if (until <= now) { cooldowns.delete(coolKey(role, model)); return false; }
+  return true;
+}
+/** Test hook. */
+export function clearLaneCooldowns(): void {
+  cooldowns.clear();
 }
 
 /** `disabled` / `over_budget` (7.2.0): refused by the owner's AI controls before any provider was called. */
@@ -414,6 +465,11 @@ export async function chat(
   let lastStatus = 0;
   let attemptNo = 0;
   for (const { key, model, role, endpoint } of attempts) {
+    if (laneCoolingDown(role, model)) {
+      console.log(`[ai] lane=${role} model=${model} status=cooldown`);
+      lastStatus = lastStatus || 429;
+      continue;
+    }
     attemptNo += 1;
     // Prefer strict JSON output when asked. If a model rejects response_format
     // with a 400, retry the SAME model once in plain mode so guided JSON is a
@@ -439,6 +495,13 @@ export async function chat(
       // mode failed with json_validate_failed. Groq documents reasoning_effort
       // for the gpt-oss models; only the marketplace router still withholds it.
       if (model.includes('gpt-oss') && !isRouterEndpoint(endpoint)) payload.reasoning_effort = opts.reasoningEffort ?? 'low';
+      // 8.0.0 — the maestro engine thinks before it answers; the effort knob
+      // caps that budget, and the output ceiling gets headroom for it so a
+      // short JSON answer is never cut off by its own reasoning.
+      if (isMaestroEndpoint(endpoint)) {
+        payload.reasoning_effort = opts.reasoningEffort ?? 'low';
+        payload.max_tokens = (opts.maxTokens ?? 6000) + 1024;
+      }
       // nemotron a3b-family models leak BARE chain-of-thought unless reasoning
       // is switched off at the chat-template level (probed live — see
       // reasoningOffParams). Model-gated: a no-op for every other pin.
@@ -505,6 +568,7 @@ export async function chat(
       const errBody = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
       clearTimeout(timer);
       console.log(`[ai] error lane=${role} model=${model} status=${res.status} json=${useJson} body=${errBody}`);
+      if (res.status === 429) cooldowns.set(coolKey(role, model), Date.now() + COOLDOWN_MS);
       // JSON mode unsupported on this model -> retry it once in plain mode.
       if (res.status === 400 && useJson) continue;
       // Anything else (dead/exhausted key 401/402/403/429, unknown model

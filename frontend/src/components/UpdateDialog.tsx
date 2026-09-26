@@ -57,100 +57,91 @@ export function UpdateDialog() {
 
   const busy = phase === 'downloading' || phase === 'installing';
 
+  const spinner = <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden />;
+  const primary = 'w-full min-h-[48px] rounded-full btn-primary flex items-center justify-center gap-2';
+  const secondary = 'w-full min-h-[48px] rounded-full btn-secondary text-[14px] font-bold';
+  const quiet = 'w-full min-h-[44px] rounded-full text-[13px] font-bold text-ink-300 hover:text-ink-100 transition-colors';
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink-950/85 backdrop-blur-sm p-0 sm:p-6">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Update available" className="w-full sm:max-w-sm glass-modal rounded-t-3xl sm:rounded-3xl p-6 pb-[max(1.5rem,var(--safe-bottom))] sm:pb-6 max-h-[92dvh] overflow-y-auto overscroll-contain animate-fade-up">
-        <div className="flex items-center gap-3 mb-3">
-          <img src="/icons/icon.svg" alt="" className="w-11 h-11 rounded-xl" />
-          <div>
-            <h2 className="text-lg font-bold">{blocked ? 'One-time reinstall needed' : 'Update available'}</h2>
-            <p className="text-xs text-ink-300">v{info.current} → v{info.latest}</p>
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-6">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Update available"
+        className="w-full sm:max-w-sm bg-ink-950 dark:bg-ink-850 border border-[color:var(--vx-border)] rounded-t-2xl sm:rounded-2xl px-6 pt-6 pb-[max(1.5rem,var(--safe-bottom))] sm:pb-6 max-h-[92dvh] overflow-y-auto overscroll-contain shadow-[0_24px_64px_-16px_rgba(0,0,0,0.65)] animate-fade-up"
+      >
+        <div className="flex items-center gap-3.5 mb-4">
+          <img src="/icons/icon.svg" alt="" className="w-12 h-12 rounded-xl" />
+          <div className="min-w-0">
+            <h2 className="text-[18px] font-[750] tracking-[-0.015em]">{blocked ? 'One-time reinstall needed' : 'Update available'}</h2>
+            <p className="text-[13px] text-ink-400 tabular-nums">v{info.current} → v{info.latest}</p>
           </div>
         </div>
 
         {blocked ? (
           <>
-            <p className="text-sm text-ink-200 leading-relaxed mb-4">
-              Android is blocking this update because your installed copy came from an older signing
-              setup (&ldquo;package conflicts&rdquo;). One fresh install fixes it forever — and your
-              music survives the trip:
+            <p className="text-[14px] text-ink-200 leading-relaxed mb-4">
+              Your phone is blocking this update because the installed copy came from an older signing
+              setup (&ldquo;package conflicts&rdquo;). One fresh install fixes it for good, and your music comes with you:
             </p>
-            <ol className="text-[13px] text-ink-200 space-y-2 mb-4 list-decimal pl-5">
+            <ol className="text-[14px] text-ink-200 space-y-2 mb-5 list-decimal pl-5 marker:text-ink-400 marker:font-bold">
               <li className="pl-1">
-                <b>Save your data</b> — one file with your favorites, history and taste.
+                <b>Save your data</b>: one file with your favorites, history and taste.
               </li>
               <li className="pl-1"><b>Uninstall VinaX</b>, then run the installer below.</li>
               <li className="pl-1">
                 Open the new app → Settings → Your Data → <b>Import</b> that file.
               </li>
             </ol>
-            <button
-              onClick={exportData}
-              className="w-full py-3 mb-2 rounded-full btn-secondary text-sm font-bold"
-            >
-              {exported ? '✓ Data file saved — now uninstall & install' : '1 · Save my data file'}
-            </button>
-            <button
-              onClick={start}
-              disabled={busy}
-              className="w-full py-3.5 rounded-full btn-primary flex items-center justify-center gap-2"
-            >
-              {busy && <span className="w-4 h-4 border-2 border-ink-950 border-t-transparent rounded-full animate-spin" />}
-              {phase === 'downloading' ? 'Downloading…' : phase === 'installing' ? 'Opening installer…' : '2 · Download installer'}
-            </button>
-            <button
-              onClick={later}
-              disabled={busy}
-              className="w-full py-2.5 mt-2 rounded-full text-sm font-bold text-ink-300 hover:text-ink-100 transition"
-            >
-              Update later
-            </button>
-            <p className="text-[11px] text-ink-500 mt-1 text-center">
-              After this one time, every future update installs over the top normally.
+            <div className="space-y-2">
+              <button onClick={exportData} className={secondary}>
+                {exported ? 'Data file saved — now uninstall and install' : '1 · Save my data file'}
+              </button>
+              <button onClick={start} disabled={busy} className={primary}>
+                {busy && spinner}
+                {phase === 'downloading' ? 'Downloading…' : phase === 'installing' ? 'Opening installer…' : '2 · Download installer'}
+              </button>
+              <button onClick={later} disabled={busy} className={quiet}>
+                Update later
+              </button>
+            </div>
+            <p className="text-[12px] text-ink-400 mt-1 text-center">
+              After this once, every update installs over the top.
             </p>
           </>
         ) : (
           <>
-            <p className="text-sm text-ink-200 leading-relaxed mb-5">
-              A new version of VinaX is ready. It downloads inside the app and installs over the top —
-              your music, favorites, and settings are kept.
+            <p className="text-[14px] text-ink-200 leading-relaxed mb-5">
+              It downloads inside the app and installs over the top. Your music, favorites and settings stay.
             </p>
-            {error && <p className="text-xs text-red-300 mb-3">{error} — check your connection and retry.</p>}
-            <button
-              onClick={start}
-              disabled={busy}
-              className="w-full py-3.5 rounded-full btn-primary flex items-center justify-center gap-2"
-            >
-              {busy && <span className="w-4 h-4 border-2 border-ink-950 border-t-transparent rounded-full animate-spin" />}
-              {phase === 'downloading'
-                ? 'Downloading…'
-                : phase === 'installing'
-                  ? 'Opening installer…'
-                  : phase === 'error'
-                    ? 'Retry update'
-                    : 'Update now'}
-            </button>
-            {info.mandatory ? (
-              <p className="mt-2 text-center text-[11px] font-semibold text-ink-300">This version is no longer supported — update to keep listening.</p>
-            ) : (
-              <button
-                onClick={later}
-                disabled={busy}
-                className="w-full py-3 mt-2 rounded-full btn-secondary text-sm font-bold"
-              >
-                Update later
+            {error && <p className="text-[13px] text-[color:var(--vx-danger)] mb-3">{error} — check your connection and retry.</p>}
+            <div className="space-y-2">
+              <button onClick={start} disabled={busy} className={primary}>
+                {busy && spinner}
+                {phase === 'downloading'
+                  ? 'Downloading…'
+                  : phase === 'installing'
+                    ? 'Opening installer…'
+                    : phase === 'error'
+                      ? 'Retry update'
+                      : 'Update now'}
               </button>
-            )}
-            {/* The data-export path stays inside the dialog: it is the first
-                thing to do before any install, so it must be one tap away. */}
-            <button
-              onClick={exportData}
-              className="w-full py-2.5 mt-2 rounded-full text-xs font-bold text-ink-300 hover:text-ink-100 transition"
-            >
-              {exported ? '✓ Data file saved to your phone' : 'Save my data file first (favorites · history · taste)'}
-            </button>
-            <p className="text-[11px] text-ink-500 mt-1.5 text-center">
-              First time only: Android will ask to allow updates from VinaX.
+              {info.mandatory ? (
+                <p className="pt-1 text-center text-[12px] font-semibold text-ink-300">This version is no longer supported. Update to keep listening.</p>
+              ) : (
+                <button onClick={later} disabled={busy} className={secondary}>
+                  Update later
+                </button>
+              )}
+              {/* The data-export path stays inside the dialog: it is the first
+                  thing to do before any install, so it must be one tap away. */}
+              <button onClick={exportData} className={quiet}>
+                {exported ? 'Data file saved to your phone' : 'Save my data file first'}
+              </button>
+            </div>
+            <p className="text-[12px] text-ink-400 mt-1 text-center">
+              First time only: your phone asks to allow updates from VinaX.
             </p>
           </>
         )}

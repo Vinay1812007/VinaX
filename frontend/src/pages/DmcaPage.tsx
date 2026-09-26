@@ -1,15 +1,16 @@
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
+import '@/styles/pages/secondary.css';
 
-const H = ({ children }: { children: string }) => <h2 className="text-base font-extrabold mt-6 mb-1.5 text-ink-100">{children}</h2>;
+const H = ({ children }: { children: string }) => <h2>{children}</h2>;
 
 export default function DmcaPage() {
   usePageTitle('Copyright & Takedowns');
   return (
-    <div className="max-w-2xl mx-auto pb-10">
-      <PageHeader title="Copyright & Takedowns" subtitle="For artists, labels and rights holders. Last updated July 2026." />
-      <div className="text-sm text-ink-200 leading-relaxed">
+    <div className="vx-sec">
+      <PageHeader title="Copyright and takedowns" subtitle="For artists, labels and rights holders · Last updated July 2026" />
+      <div className="vx-article">
         <H>Where the music comes from</H>
         <p>
           VinaX is a player over independent third-party public catalogs. We host no media files. All songs,
@@ -25,7 +26,7 @@ export default function DmcaPage() {
         <H>What to include</H>
         <p>
           Email{' '}
-          <a href="mailto:hello@sirimillavinay.online" className="text-ember-400 hover:underline">
+          <a href="mailto:hello@sirimillavinay.online">
             hello@sirimillavinay.online
           </a>{' '}
           with: (1) the exact track, album or artist and, if possible, its link in VinaX; (2) the work it infringes
@@ -42,9 +43,9 @@ export default function DmcaPage() {
           Because sources can re-index content under new IDs, tell us if something returns — blocking is by song
           identity and we extend it promptly.
         </p>
-        <p className="mt-6 text-ink-400">
-          General questions? <Link to="/contact" className="text-ember-400 hover:underline">Contact</Link> · How the
-          app works? <Link to="/help" className="text-ember-400 hover:underline">Help</Link>.
+        <p className="vx-article-end">
+          General questions? <Link to="/contact">Contact</Link> · How the
+          app works? <Link to="/help">Help</Link>.
         </p>
       </div>
     </div>

@@ -12,16 +12,21 @@ import type { CalendarCell } from '@/features/stats/calendar';
 import { cn } from '@/utils/cn';
 import type { HistoryEntry } from '@/types';
 import { coverageNote, formatHours, historyCoverage, listeningTotal, HISTORY_CAP } from '@/features/stats/listening';
+import { PageHeader } from '@/components/PageHeader';
+import { ChevronRightIcon, ShareIcon, WaveIcon } from '@/components/Icons';
+import '@/styles/pages/secondary.css';
 
-const BAR_COLORS = ['#22d3ee', '#60a5fa', '#a78bfa', '#67e8f9', '#c4b5fd'];
+/** One hue at falling strength: the language split reads as parts of one whole. */
+const SHARE_ALPHA = [1, 0.72, 0.5, 0.34, 0.2];
+const shareColor = (i: number): string => `rgb(var(--ember-500) / ${SHARE_ALPHA[i % SHARE_ALPHA.length]})`;
 
 /** v5.17.0 — up/down delta pill for the weekly report card. */
 function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
-  if (value === 0) return <span className="text-[11px] font-bold text-ink-500">— same</span>;
+  if (value === 0) return <span className="vx-kpi-delta text-ink-400">No change<span className="vx-delta-ctx"> from last week</span></span>;
   const up = value > 0;
   return (
-    <span className={cn('text-[11px] font-bold', up ? 'text-emerald-400' : 'text-red-300')}>
-      {up ? '▲' : '▼'} {Math.abs(value)}{suffix} vs last week
+    <span className="vx-kpi-delta" style={{ color: up ? 'var(--vx-success)' : 'var(--vx-danger)' }}>
+      {up ? '▲' : '▼'} {Math.abs(value)}{suffix}<span className="vx-delta-ctx"> vs last week</span>
     </span>
   );
 }
@@ -33,51 +38,51 @@ function WeeklyReportCard({ entries }: { entries: HistoryEntry[] }) {
   if (thisWeek.songs === 0 && lastWeek.songs === 0) return null;
   const note = coverageNote(coverage, 'the comparison');
   const tiles: Array<{ label: string; value: string; delta: number; suffix?: string }> = [
-    { label: thisWeek.estimated ? 'MINUTES (EST.)' : 'MINUTES', value: `${thisWeek.estimated ? '≈' : ''}${thisWeek.minutes}`, delta: delta.minutes, suffix: ' min' },
-    { label: 'SONGS', value: String(thisWeek.songs), delta: delta.songs },
-    { label: 'NEW ARTISTS', value: String(thisWeek.newArtists), delta: delta.newArtists },
+    { label: thisWeek.estimated ? 'Minutes (est.)' : 'Minutes', value: `${thisWeek.estimated ? '≈' : ''}${thisWeek.minutes}`, delta: delta.minutes, suffix: ' min' },
+    { label: 'Songs', value: String(thisWeek.songs), delta: delta.songs },
+    { label: 'New artists', value: String(thisWeek.newArtists), delta: delta.newArtists },
   ];
   return (
-    <section
-      aria-label="Weekly report"
-      className="rounded-2xl border border-ember-400/20 p-4"
-      style={{ background: 'linear-gradient(120deg, rgb(var(--ember-500) / 0.14), rgb(var(--ember-500) / 0.04))' }}
-    >
-      <div className="flex items-baseline justify-between gap-3 mb-3">
-        <h2 className="text-[15px] font-extrabold">This week's report</h2>
-        <span className="text-[11px] font-semibold text-ink-400">Last 7 days · vs the 7 before</span>
+    <section aria-label="Weekly report" className="vx-sec-block">
+      <div className="vx-sec-title-row">
+        <h2 className="vx-sec-title">This week’s report</h2>
+        <span className="vx-sec-meta">Last 7 days vs the 7 before</span>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="vx-kpis is-three-always">
         {tiles.map((t) => (
-          <div key={t.label} className="rounded-xl bg-[var(--tile)] border border-[var(--glass-border)] px-3 py-2.5 min-w-0">
-            <p className="text-[22px] font-extrabold leading-tight">{t.value}</p>
-            <p className="text-[10px] font-bold tracking-widest text-ink-400">{t.label}</p>
-            <p className="mt-1 truncate"><Delta value={t.delta} suffix={t.suffix} /></p>
+          <div key={t.label} className="vx-kpi">
+            <span className="vx-kpi-label">{t.label}</span>
+            <span className="vx-kpi-value">{t.value}</span>
+            <Delta value={t.delta} suffix={t.suffix} />
           </div>
         ))}
       </div>
+      <dl className="vx-group mt-3">
+        <div className="vx-row">
+          <dt className="vx-row-main vx-row-label">Top artist</dt>
+          <dd className="min-w-0 text-right">
+            <span className="block truncate text-[15px] font-semibold text-ink-100">{thisWeek.topArtist ?? '—'}</span>
+            {lastWeek.topArtist && lastWeek.topArtist !== thisWeek.topArtist && (
+              <span className="block truncate text-[12px] text-ink-400">was {lastWeek.topArtist}</span>
+            )}
+          </dd>
+        </div>
+        <div className="vx-row">
+          <dt className="vx-row-main vx-row-label">Top language</dt>
+          <dd className="min-w-0 text-right">
+            <span className="block truncate text-[15px] font-semibold text-ink-100">{thisWeek.topLanguage ?? '—'}</span>
+            {lastWeek.topLanguage && lastWeek.topLanguage !== thisWeek.topLanguage && (
+              <span className="block truncate text-[12px] text-ink-400">was {lastWeek.topLanguage}</span>
+            )}
+          </dd>
+        </div>
+      </dl>
       {(thisWeek.estimated || note) && (
-        <p className="mt-2 text-[11px] text-ink-400">
+        <p className="vx-sec-foot">
           {thisWeek.estimated && 'Minutes marked ≈ are estimated from track lengths for plays recorded before VinaX measured playback. '}
           {note}
         </p>
       )}
-      <dl className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
-        <div className="min-w-0">
-          <dt className="text-[10px] font-bold tracking-widest text-ink-400">TOP ARTIST</dt>
-          <dd className="font-bold truncate">{thisWeek.topArtist ?? '—'}</dd>
-          {lastWeek.topArtist && lastWeek.topArtist !== thisWeek.topArtist && (
-            <dd className="text-[11px] text-ink-500 truncate">was {lastWeek.topArtist}</dd>
-          )}
-        </div>
-        <div className="min-w-0">
-          <dt className="text-[10px] font-bold tracking-widest text-ink-400">TOP LANGUAGE</dt>
-          <dd className="font-bold truncate">{thisWeek.topLanguage ?? '—'}</dd>
-          {lastWeek.topLanguage && lastWeek.topLanguage !== thisWeek.topLanguage && (
-            <dd className="text-[11px] text-ink-500 truncate">was {lastWeek.topLanguage}</dd>
-          )}
-        </div>
-      </dl>
     </section>
   );
 }
@@ -106,25 +111,25 @@ function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
     return out;
   }, [cal]);
   return (
-    <section aria-label="Listening calendar">
-      <div className="flex items-baseline justify-between gap-3 mb-2.5">
-        <h2 className="text-base font-extrabold">Listening calendar</h2>
-        <span className="text-[11px] font-semibold text-ink-400">{cal.activeDays} active days · 12 weeks{cal.estimated ? ' · minutes ≈ estimated' : ''}</span>
+    <section aria-label="Listening calendar" className="vx-sec-block">
+      <div className="vx-sec-title-row">
+        <h2 className="vx-sec-title">Listening calendar</h2>
+        <span className="vx-sec-meta">{cal.activeDays} active days · 12 weeks{cal.estimated ? ' · minutes ≈ estimated' : ''}</span>
       </div>
       {coverageNote(cal.coverage, 'this calendar') && (
-        <p className="mb-2 text-[11px] text-ink-400">{coverageNote(cal.coverage, 'this calendar')}</p>
+        <p className="vx-sec-lede">{coverageNote(cal.coverage, 'this calendar')}</p>
       )}
-      <div className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-3 overflow-x-auto">
+      <div className="vx-group is-padded overflow-x-auto">
         <div className="flex gap-1.5 min-w-max">
           <div className="grid grid-rows-7 gap-[3px] pt-[14px]">
             {DOW.map((d, i) => (
-              <span key={i} className="h-3 text-[9px] leading-3 font-bold text-ink-500 w-6">{d}</span>
+              <span key={i} className="h-3 text-[10px] leading-3 font-semibold text-ink-400 w-7">{d}</span>
             ))}
           </div>
           <div>
             <div className="grid grid-flow-col gap-[3px] mb-[2px]" style={{ gridTemplateColumns: `repeat(${cal.weeks}, 0.75rem)` }}>
               {monthLabels.map((m, i) => (
-                <span key={i} className="h-3 text-[9px] leading-3 font-bold text-ink-500 whitespace-nowrap">{m ?? ''}</span>
+                <span key={i} className="h-3 text-[10px] leading-3 font-semibold text-ink-400 whitespace-nowrap">{m ?? ''}</span>
               ))}
             </div>
             <div className="grid grid-flow-col grid-rows-7 gap-[3px]" role="img" aria-label={`Minutes listened per day over the last ${cal.weeks} weeks`}>
@@ -145,13 +150,13 @@ function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
             </div>
           </div>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-[11px] font-semibold text-ink-300">
-            Current streak <span className="text-ink-100 font-extrabold">{cal.currentStreak}</span> day{cal.currentStreak === 1 ? '' : 's'}
-            <span className="text-ink-500"> · </span>
-            Longest <span className="text-ink-100 font-extrabold">{cal.longestStreak}</span> day{cal.longestStreak === 1 ? '' : 's'}
+        <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-[13px] font-medium text-ink-400">
+            Current streak <span className="text-ink-100 font-bold tabular-nums">{cal.currentStreak}</span> day{cal.currentStreak === 1 ? '' : 's'}
+            <span aria-hidden> · </span>
+            Longest <span className="text-ink-100 font-bold tabular-nums">{cal.longestStreak}</span> day{cal.longestStreak === 1 ? '' : 's'}
           </p>
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-ink-500">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-ink-400">
             Less
             {LEVEL_ALPHA.map((a, i) => (
               <span
@@ -218,133 +223,113 @@ export default function StatsPage() {
 
   if (!entries.length) {
     return (
-      <div className="glass-card rounded-3xl max-w-md mx-auto my-24 px-10 py-14 text-center flex flex-col items-center gap-4">
-        <p className="text-2xl font-extrabold">Your VinaX</p>
-        <p className="text-sm text-ink-300">Play a few songs and your on-device stats bloom here — never uploaded, always yours.</p>
-        <Link to="/" className="px-5 py-2.5 rounded-full btn-primary text-sm font-bold">Start listening</Link>
+      <div className="vx-empty-page">
+        <span className="vx-empty-icon" aria-hidden>
+          <WaveIcon className="w-8 h-8" />
+        </span>
+        <h1>Your VinaX</h1>
+        <p>Play a few songs and your stats appear here — computed on this device, never uploaded.</p>
+        <Link to="/" className="px-6 py-3 rounded-full btn-primary">Start listening</Link>
       </div>
     );
   }
 
+  const kpis: Array<[string, string]> = [
+    [String(stats.plays), stats.capped ? `Last ${HISTORY_CAP} plays` : 'Plays'],
+    [stats.hours, stats.estimated ? 'Listened (est.)' : 'Listened'],
+    [String(favorites.length), 'Favorites'],
+    [String(stats.artists), 'Artists'],
+  ];
+
   return (
-    <div className="max-w-2xl mx-auto pb-8 space-y-5">
-      {/* header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-page-title">Your VinaX</h1>
-          <p className="text-xs font-semibold text-ink-400">
-            Computed on this device · never uploaded
-            {stats.capped && ` · history keeps your last ${HISTORY_CAP} plays`}
-          </p>
-        </div>
-        <button
-          onClick={share}
-          className="h-[38px] px-4 rounded-full bg-[var(--tile-2)] border border-[var(--glass-border)] text-xs font-bold text-ink-200 hover:bg-[var(--tile-hover)] transition active:scale-95 shrink-0"
-        >
-          ↑ Share
-        </button>
-      </div>
+    <div className="vx-sec">
+      <PageHeader
+        title="Your VinaX"
+        subtitle={`Computed on this device · never uploaded${stats.capped ? ` · history keeps your last ${HISTORY_CAP} plays` : ''}`}
+        actions={
+          <button onClick={share} className="vx-pill-btn">
+            <ShareIcon className="w-4 h-4" /> Share
+          </button>
+        }
+      />
 
-      {/* v5.17.0 — weekly report card */}
-      <WeeklyReportCard entries={entries} />
-
-      {/* stat grid */}
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          [String(stats.plays), stats.capped ? `LAST ${HISTORY_CAP} PLAYS` : 'PLAYS'],
-          [stats.hours, stats.estimated ? 'LISTENED (EST.)' : 'LISTENED'],
-          [String(favorites.length), 'FAVORITES'],
-          [String(stats.artists), 'ARTISTS'],
-        ].map(([n, l]) => (
-          <div key={l} className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
-            <p className="text-[26px] font-extrabold leading-tight">{n}</p>
-            <p className="text-[11px] font-bold tracking-widest text-ink-400">{l}</p>
+      <div className="vx-sec-block vx-kpis is-four">
+        {kpis.map(([n, l]) => (
+          <div key={l} className="vx-kpi">
+            <span className="vx-kpi-label">{l}</span>
+            <span className="vx-kpi-value">{n}</span>
           </div>
         ))}
       </div>
 
-      {/* streak */}
-      <div
-        className="rounded-2xl border border-ember-400/20 p-4 flex items-center gap-3.5"
-        style={{ background: 'linear-gradient(120deg, rgba(34,211,238,0.16), rgba(96,165,250,0.08))' }}
-      >
-        <span className="text-[28px]" aria-hidden>🔥</span>
-        <span>
-          <span className="block text-[15px] font-extrabold">
-            {streak > 0 ? `${streak}-day streak` : 'Start a streak tonight'}
-          </span>
-          <span className="block text-[11px] font-semibold text-ink-300">
-            Best: {Math.max(best, streak)} days · keep the music alive
-          </span>
-        </span>
-      </div>
+      {/* v5.17.0 — weekly report */}
+      <WeeklyReportCard entries={entries} />
 
-      {/* v5.12.0 — daily listening goal (set in Settings → Playback) */}
-      <GoalRing />
+      {/* Streak, daily goal (set in Settings) and the year recap. */}
+      <section aria-label="Streak and goal" className="vx-sec-block">
+        <div className="vx-group">
+          <div className="vx-row">
+            <span className="vx-row-main">
+              <span className="vx-row-label">{streak > 0 ? `${streak}-day streak` : 'No streak yet'}</span>
+              <span className="vx-row-hint">{streak > 0 ? 'Listen today to keep it going' : 'Play a song today to start one'}</span>
+            </span>
+            <span className="vx-row-value">Best {Math.max(best, streak)} day{Math.max(best, streak) === 1 ? '' : 's'}</span>
+          </div>
+          <Link to="/recap" className="vx-row is-link">
+            <span className="vx-row-main">
+              <span className="vx-row-label">Your year in music</span>
+              <span className="vx-row-hint">Your persona, top artists and a share card</span>
+            </span>
+            <ChevronRightIcon className="vx-row-chev" />
+          </Link>
+        </div>
+        <div className="vx-stats-goal mt-3">
+          <GoalRing />
+        </div>
+      </section>
 
       {/* v5.17.0 — 12-week listening calendar */}
       <ListeningCalendar entries={entries} />
 
-      {/* Year in Music recap */}
-      <Link
-        to="/recap"
-        className="block rounded-2xl border border-ember-400/25 p-4 transition hover:opacity-90"
-        style={{ background: 'linear-gradient(120deg, rgba(99,102,241,0.20), rgba(45,212,191,0.09))' }}
-      >
-        <span className="flex items-center justify-between gap-3">
-          <span>
-            <span className="block text-[15px] font-extrabold">Your Year in Music ✨</span>
-            <span className="block text-[11px] font-semibold text-ink-300">
-              Your persona, top artists and a share-anywhere card — built on this device
-            </span>
-          </span>
-          <span className="text-ink-300 font-extrabold" aria-hidden>›</span>
-        </span>
-      </Link>
+      <div className="grid gap-10 md:grid-cols-2 md:gap-8">
+        <section aria-labelledby="vx-stats-artists">
+          <h2 id="vx-stats-artists" className="vx-sec-title">Top artists</h2>
+          <ol className="vx-group">
+            {stats.topArtists.map(([name, count], i) => (
+              <li key={name} className="vx-row">
+                <span className="vx-row-rank">{i + 1}</span>
+                <span className="vx-row-main">
+                  <span className="vx-row-label truncate">{name}</span>
+                  <span className="vx-bar mt-2 block" aria-hidden>
+                    <span style={{ width: `${Math.max(6, (count / stats.maxArtist) * 100)}%` }} />
+                  </span>
+                </span>
+                <span className="vx-row-value w-10 text-right">{count}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
 
-      {/* top artists */}
-      <section>
-        <h2 className="text-base font-extrabold mb-2.5">Top artists</h2>
-        <ul className="space-y-2">
-          {stats.topArtists.map(([name, count], i) => (
-            <li key={name} className="flex items-center gap-3">
-              <span className="w-5 text-[13px] font-extrabold text-ink-500">{i + 1}</span>
-              <span
-                className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-sm font-extrabold text-white shrink-0"
-                style={{ background: `linear-gradient(135deg, ${BAR_COLORS[i % BAR_COLORS.length]}55, #164e63)` }}
-              >
-                {name[0]?.toUpperCase()}
-              </span>
-              <span className="flex-1 min-w-0 text-[13px] font-bold truncate">{name}</span>
-              <span className="w-[110px] h-1.5 rounded-full bg-[var(--track)] overflow-hidden shrink-0">
-                <span
-                  className="block h-full rounded-full"
-                  style={{ width: `${Math.max(8, (count / stats.maxArtist) * 100)}%`, background: 'linear-gradient(90deg, #22d3ee, #a78bfa)' }}
-                />
-              </span>
-              <span className="w-8 text-right text-[11px] font-bold text-ink-400 shrink-0">{count}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* languages */}
-      <section>
-        <h2 className="text-base font-extrabold mb-2.5">Languages</h2>
-        <div className="h-3.5 rounded-full overflow-hidden flex border border-[var(--glass-border)]">
-          {stats.langs.map((l, i) => (
-            <span key={l.name} style={{ width: `${l.pct}%`, background: BAR_COLORS[i % BAR_COLORS.length] }} />
-          ))}
-        </div>
-        <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
-          {stats.langs.map((l, i) => (
-            <span key={l.name} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-ink-300">
-              <span className="w-[9px] h-[9px] rounded-[3px]" style={{ background: BAR_COLORS[i % BAR_COLORS.length] }} />
-              {l.name} {l.pct}%
-            </span>
-          ))}
-        </div>
-      </section>
+        <section aria-labelledby="vx-stats-langs">
+          <h2 id="vx-stats-langs" className="vx-sec-title">Languages</h2>
+          <div className="vx-group is-padded">
+            <div className="h-3 rounded-full overflow-hidden flex gap-[2px]" aria-hidden>
+              {stats.langs.map((l, i) => (
+                <span key={l.name} style={{ width: `${l.pct}%`, background: shareColor(i) }} />
+              ))}
+            </div>
+            <ul className="mt-4 grid gap-2.5">
+              {stats.langs.map((l, i) => (
+                <li key={l.name} className="flex items-center gap-2.5 text-[14px]">
+                  <span className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: shareColor(i) }} aria-hidden />
+                  <span className="flex-1 min-w-0 truncate font-semibold text-ink-100">{l.name}</span>
+                  <span className="text-ink-400 tabular-nums">{l.pct}%</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

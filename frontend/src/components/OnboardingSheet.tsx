@@ -24,15 +24,25 @@ import {
   HomeIcon,
   PlayIcon,
   HeartIcon,
-  ChevronDownIcon,
   CompassIcon,
   QueueIcon,
   SearchIcon,
 } from './Icons';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { cn } from '@/utils/cn';
+import '@/styles/overlays.css';
 
 /** Small pill for keyboard shortcut hints ("Space", "⌘K", etc). */
-const KEY_CHIP = 'inline-flex items-center px-1.5 py-0.5 rounded-md border border-ink-600/70 bg-ink-900/50 text-[10.5px] font-semibold text-ink-200 font-mono';
+const KEY_CHIP = 'inline-flex items-center min-w-[24px] justify-center px-1.5 py-0.5 rounded-md bg-ink-100/10 text-[11px] font-bold text-ink-200';
+
+/** The welcome art: music in the listener's scripts (decorative). */
+const SCRIPTS = ['తెలుగు', 'हिन्दी', 'தமிழ்', 'മലയാളം', 'ಕನ್ನಡ', 'ਪੰਜਾਬੀ', 'বাংলা', 'मराठी', 'ગુજરાતી', 'English', 'اردو', 'ଓଡ଼ିଆ'];
+
+/** Languages shown before "More languages" (the rest stay one tap away). */
+const FIRST_LANGS = 10;
+
+const INPUT = 'glass-input w-full h-12 px-4 rounded-xl text-[15px]';
+const INPUT_BAD = 'ring-1 ring-[color:var(--vx-danger)]';
 function KeyChip({ children }: { children: ReactNode }) {
   return <kbd className={KEY_CHIP}>{children}</kbd>;
 }
@@ -66,7 +76,7 @@ const TOUR: TourSlide[] = [
     icon: <HomeIcon className="w-7 h-7" />,
     title: 'Home learns your taste',
     lines: [
-      'Play my mix starts a mix built from your languages and listening.',
+      'The Aura Mix on Home plays a mix built from your languages and listening.',
       'Trending for you puts today’s popular songs in your order.',
     ],
   },
@@ -108,7 +118,7 @@ const TOUR: TourSlide[] = [
     title: 'Yours to keep',
     lines: [
       'Library keeps favourites and playlists on this device.',
-      'Back up from Settings → Your Data; a restore can be undone.',
+      'Back up from Settings → Your data; a restore can be undone.',
     ],
   },
 ];
@@ -162,6 +172,7 @@ export function OnboardingSheet() {
   // Live availability, checked while the listener types (debounced).
   const [handleAvail, setHandleAvail] = useState<'checking' | 'free' | 'taken' | null>(null);
   const [importErr, setImportErr] = useState(false);
+  const [moreLangs, setMoreLangs] = useState(false);
   // Package A7/D1 — the 10-song taste-seed step. Sits between the language
   // picker and the tour. Liking a handful jumps the cold profile's confidence
   // from ~0 to ~0.5, so Home has something to work with on the very first open.
@@ -398,36 +409,34 @@ export function OnboardingSheet() {
 
   const slide = step >= 0 ? TOUR[step] : null;
 
+  const shownLangs = moreLangs ? LANGUAGES : LANGUAGES.filter((l, i) => i < FIRST_LANGS || picked.includes(l.id));
+
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-ink-950/80 backdrop-blur-sm p-0 sm:p-6"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="vx-onboarding-title"
     >
-      <div ref={dialogRef} className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-6 animate-fade-up">
+      <div ref={dialogRef} className="vx-sheet vx-welcome w-full sm:max-w-[440px] max-h-[94dvh] overflow-y-auto overscroll-contain">
+        <span aria-hidden className="vx-sheet-grab" />
         {seedOpen ? (
-          <>
-            <div className="flex items-center justify-between mb-1">
-              <h2 id="vx-onboarding-title" className="text-xl font-bold">Tap a few you love</h2>
-              <button
-                onClick={() => finishSeed(false)}
-                className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 hover:text-ink-300 transition"
-              >
+          <div className="vx-welcome-body">
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <h2 id="vx-onboarding-title" className="text-[22px] leading-tight font-extrabold tracking-[-0.02em]">Tap a few you love</h2>
+              <button onClick={() => finishSeed(false)} className="vx-welcome-skip">
                 Skip
               </button>
             </div>
-            <p className="text-xs text-ink-400 mb-4">
-              This teaches Home your taste instantly — everything stays on your device.
-            </p>
+            <p className="text-[14px] text-ink-400 mb-5">Home learns from these. They stay on this device.</p>
             {seedSongs.length === 0 ? (
-              <div className="grid grid-cols-3 gap-2.5" aria-hidden>
+              <div className="grid grid-cols-3 gap-3" aria-hidden>
                 {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="aspect-square rounded-xl skeleton" />
+                  <div key={i} className="aspect-square rounded-lg skeleton" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-3 gap-3">
                 {seedSongs.map((s) => {
                   const liked = seedLiked.includes(s.id);
                   return (
@@ -436,264 +445,224 @@ export function OnboardingSheet() {
                       onClick={() => toggleSeed(s.id)}
                       aria-pressed={liked}
                       aria-label={`${liked ? 'Unlike' : 'Like'} ${s.title}`}
-                      className="group relative aspect-square rounded-xl overflow-hidden ring-1 ring-white/5 active:scale-95 transition"
+                      className={cn('vx-seed', liked && 'is-liked')}
                     >
                       <img
                         src={bestImage(s.images, 150)}
                         onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
                         alt=""
                         loading="lazy"
-                        className={liked ? 'w-full h-full object-cover brightness-[0.55]' : 'w-full h-full object-cover'}
                       />
-                      <span
-                        className={
-                          liked
-                            ? 'absolute inset-0 flex items-center justify-center'
-                            : 'absolute bottom-1 right-1 flex items-center justify-center w-6 h-6 rounded-full bg-black/45 opacity-0 group-hover:opacity-100 transition'
-                        }
-                      >
-                        <HeartIcon className={liked ? 'w-7 h-7 text-ember-400' : 'w-3.5 h-3.5 text-white/90'} />
+                      <span className="vx-seed-heart" aria-hidden>
+                        <HeartIcon filled={liked} className="w-4 h-4" />
                       </span>
-                      <span className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-gradient-to-t from-black/75 to-transparent text-[10px] font-semibold text-white text-left leading-tight line-clamp-1">
-                        {s.title}
-                      </span>
+                      <span className="vx-seed-title">{s.title}</span>
                     </button>
                   );
                 })}
               </div>
             )}
-            <div className="mt-5 flex items-center gap-2.5">
-              <button
-                onClick={() => finishSeed(true)}
-                disabled={seedSongs.length === 0}
-                className="flex-1 py-3 rounded-full btn-premium font-bold disabled:opacity-50"
-              >
-                {seedLiked.length ? `Continue with ${seedLiked.length} liked` : 'Continue'}
-              </button>
-            </div>
-            <p className="mt-3 text-center text-[11px] font-semibold text-ink-400">
-              You can heart or unheart anything later, anytime.
-            </p>
-          </>
+            <button
+              onClick={() => finishSeed(true)}
+              disabled={seedSongs.length === 0}
+              className="mt-6 w-full h-12 rounded-full btn-primary text-[15px] font-bold disabled:opacity-50"
+            >
+              {seedLiked.length ? `Continue with ${seedLiked.length} liked` : 'Continue'}
+            </button>
+          </div>
         ) : step === -1 ? (
           <>
-            <div className="flex items-center gap-3 mb-2">
-              <img src="/icons/icon.svg" alt="" className="w-10 h-10 rounded-xl" />
-              <div>
-                <h2 id="vx-onboarding-title" className="text-[26px] leading-tight font-extrabold tracking-tight text-gradient">Music tuned to you</h2>
-                <p className="text-xs text-ink-400">A personal listening space. Choose your languages to get started.</p>
-              </div>
-            </div>
-            <label className="block mt-4 mb-1 text-sm text-ink-300" htmlFor="vx-name">
-              What should we call you?
-            </label>
-            <input
-              id="vx-name"
-              value={name}
-              onChange={(e) => onNameChange(e.target.value)}
-              placeholder="Your name"
-              maxLength={40}
-              aria-invalid={nameErr}
-              className={
-                nameErr
-                  ? 'glass-input w-full px-4 py-2.5 rounded-xl text-sm ring-1 ring-red-400/70'
-                  : 'glass-input w-full px-4 py-2.5 rounded-xl text-sm'
-              }
-            />
-            {nameErr && <p className="mt-1.5 text-xs text-red-300">Enter a name for your listening profile.</p>}
-            <label className="block mt-3 mb-1 text-sm text-ink-300" htmlFor="vx-username">
-              Pick a username <span className="text-ink-400 font-normal">(suggested for you)</span>
-            </label>
-            <div className="relative">
-              <span aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-ink-400">@</span>
-              <input
-                id="vx-username"
-                value={handle}
-                onChange={(e) => {
-                  setHandleEdited(true);
-                  setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20));
-                  setHandleErr(null);
-                  setHandleSuggestions([]);
-                }}
-                placeholder="username"
-                maxLength={20}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                aria-invalid={handleErr != null}
-                className={
-                  handleErr
-                    ? 'glass-input w-full pl-9 pr-4 py-2.5 rounded-xl text-sm ring-1 ring-red-400/70'
-                    : 'glass-input w-full pl-9 pr-4 py-2.5 rounded-xl text-sm'
-                }
-              />
-            </div>
-            {handleErr ? (
-              <p className="mt-1.5 text-xs text-red-300">{handleErr}</p>
-            ) : handleAvail === 'taken' ? (
-              <p className="mt-1.5 text-xs text-red-300">@{handle} already exists — pick another username.</p>
-            ) : handleAvail === 'free' ? (
-              <p className="mt-1.5 text-xs text-emerald-300">@{handle} is available.</p>
-            ) : handleAvail === 'checking' ? (
-              <p className="mt-1.5 text-xs text-ink-400">Checking availability…</p>
-            ) : null}
-            {handleSuggestions.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-semibold text-ink-400">Available:</span>
-                {handleSuggestions.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => {
-                      setHandleEdited(true);
-                      setHandle(s);
-                      setHandleErr(null);
-                      setHandleSuggestions([]);
-                    }}
-                    className="px-2.5 py-1 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/20 text-ink-200"
-                  >
-                    @{s}
-                  </button>
+            <div className="vx-welcome-art" aria-hidden>
+              <div className="vx-welcome-scripts">
+                {[0, 1, 2].map((row) => (
+                  <p key={row}>
+                    {SCRIPTS.slice(row * 4, row * 4 + 4).concat(SCRIPTS.slice(row * 4, row * 4 + 4)).map((w, i) => (
+                      <span key={i}>{w}</span>
+                    ))}
+                  </p>
                 ))}
               </div>
-            )}
-            {!handleOnly && (
-              <>
-                <div className="flex items-center justify-between gap-3 mt-4 mb-3">
-                  <p className="text-sm font-bold text-ink-200">Which languages do you listen in?</p>
-                  <button
-                    onClick={() => setPicked(picked.length === LANGUAGES.length ? [] : LANGUAGES.map((l) => l.id))}
-                    className="shrink-0 text-xs font-semibold text-ember-400 hover:text-ember-300"
-                  >
-                    {picked.length === LANGUAGES.length ? 'Clear' : 'All languages'}
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {LANGUAGES.map((l) => (
-                    <Chip key={l.id} active={picked.includes(l.id)} onClick={() => toggle(l.id)}>
-                      {l.label}
+              <img src="/icons/icon.svg" alt="" className="vx-welcome-logo" />
+            </div>
+            <div className="vx-welcome-body">
+              <h2 id="vx-onboarding-title" className="text-[26px] leading-[1.15] font-extrabold tracking-[-0.025em]">Music tuned to you</h2>
+              <p className="mt-1.5 text-[14px] text-ink-400">No account, no login. Everything stays on this device.</p>
+
+              <label className="vx-welcome-label mt-6" htmlFor="vx-name">
+                What should we call you?
+              </label>
+              <input
+                id="vx-name"
+                value={name}
+                onChange={(e) => onNameChange(e.target.value)}
+                placeholder="Your name"
+                maxLength={40}
+                autoComplete="given-name"
+                aria-invalid={nameErr}
+                className={cn(INPUT, nameErr && INPUT_BAD)}
+              />
+              {nameErr && <p className="vx-welcome-msg is-bad">Enter a name for your listening profile.</p>}
+              <label className="vx-welcome-label mt-4" htmlFor="vx-username">
+                Username
+              </label>
+              <div className="relative">
+                <span aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] text-ink-400">@</span>
+                <input
+                  id="vx-username"
+                  value={handle}
+                  onChange={(e) => {
+                    setHandleEdited(true);
+                    setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20));
+                    setHandleErr(null);
+                    setHandleSuggestions([]);
+                  }}
+                  placeholder="username"
+                  maxLength={20}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-invalid={handleErr != null}
+                  className={cn(INPUT, 'pl-9', handleErr && INPUT_BAD)}
+                />
+              </div>
+              {handleErr ? (
+                <p className="vx-welcome-msg is-bad">{handleErr}</p>
+              ) : handleAvail === 'taken' ? (
+                <p className="vx-welcome-msg is-bad">@{handle} already exists — pick another username.</p>
+              ) : handleAvail === 'free' ? (
+                <p className="vx-welcome-msg is-good">@{handle} is available.</p>
+              ) : handleAvail === 'checking' ? (
+                <p className="vx-welcome-msg">Checking availability…</p>
+              ) : null}
+              {handleSuggestions.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] font-semibold text-ink-400">Available:</span>
+                  {handleSuggestions.map((s) => (
+                    <Chip
+                      key={s}
+                      onClick={() => {
+                        setHandleEdited(true);
+                        setHandle(s);
+                        setHandleErr(null);
+                        setHandleSuggestions([]);
+                      }}
+                    >
+                      @{s}
                     </Chip>
                   ))}
                 </div>
-                <p className="-mt-4 mb-5 text-[11px] font-semibold text-ink-400">Pick at least one — you can change these anytime.</p>
-                <label className="flex items-start gap-2.5 mb-4 text-xs text-ink-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consent}
-                    onChange={(e) => setConsent(e.target.checked)}
-                    className="mt-0.5 accent-ember-500"
-                  />
-                  <span>Share anonymous usage (city-level location, no account) and session insights with all on-screen text masked, to help improve VinaX. You can change this anytime in Settings.</span>
-                </label>
-              </>
-            )}
-            <div className={handleOnly ? 'flex gap-3 mt-5' : 'flex gap-3'}>
-              <button
-                onClick={() => void continueFromWelcome()}
-                disabled={claiming}
-                className="flex-1 py-3 rounded-full btn-premium font-bold disabled:opacity-60"
-              >
-                {claiming ? 'Checking username…' : 'Continue'}
-              </button>
+              )}
+              {!handleOnly && (
+                <>
+                  <div className="flex items-center justify-between gap-3 mt-6 mb-2.5">
+                    <p className="vx-welcome-label !mb-0">Your languages</p>
+                    <button
+                      onClick={() => setPicked(picked.length === LANGUAGES.length ? [] : LANGUAGES.map((l) => l.id))}
+                      className="vx-welcome-skip"
+                    >
+                      {picked.length === LANGUAGES.length ? 'Clear' : 'All languages'}
+                    </button>
+                  </div>
+                  <div className="vx-welcome-langs">
+                    {shownLangs.map((l) => (
+                      <Chip key={l.id} active={picked.includes(l.id)} onClick={() => toggle(l.id)}>
+                        {l.label}
+                      </Chip>
+                    ))}
+                    {!moreLangs && shownLangs.length < LANGUAGES.length && (
+                      <button type="button" onClick={() => setMoreLangs(true)} className="vx-welcome-more">
+                        More languages
+                      </button>
+                    )}
+                  </div>
+                  <label className="vx-welcome-consent">
+                    <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+                    <span>Share anonymous usage (city-level location, no account) and session insights with on-screen text masked, to help improve VinaX. Change it anytime in Settings.</span>
+                  </label>
+                </>
+              )}
+              <div className="vx-welcome-cta">
+                <button
+                  onClick={() => void continueFromWelcome()}
+                  disabled={claiming}
+                  className="w-full h-12 rounded-full btn-primary text-[15px] font-bold disabled:opacity-60"
+                >
+                  {claiming ? 'Checking username…' : 'Continue'}
+                </button>
+              </div>
+              <div className="mt-2 pt-4 border-t border-[color:var(--vx-border)] flex items-center justify-center gap-1 flex-wrap text-[13px] text-ink-400">
+                <span>On VinaX elsewhere?</span>
+                <button onClick={() => navigate('/handoff?mode=receive')} className="vx-welcome-link">
+                  Move from old device
+                </button>
+                <span aria-hidden>·</span>
+                <button onClick={() => fileRef.current?.click()} className="vx-welcome-link">
+                  Import a file
+                </button>
+              </div>
+              <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} />
+              {importErr && (
+                <p className="vx-welcome-msg is-bad text-center">
+                  Couldn’t read that file. Export it from Settings → Your data on the other device, then import the .json here.
+                </p>
+              )}
             </div>
-            <p className="mt-3 text-center text-xs font-semibold text-ink-400">No account. No login. Private by design.</p>
-            <p className="mt-4 text-center text-xs text-ink-400">Already using VinaX on another device?</p>
-            <div className="mt-2 flex gap-2">
-              <button
-                onClick={() => navigate('/handoff?mode=receive')}
-                className="flex-1 py-2.5 rounded-full border border-ink-600 text-xs font-semibold text-ink-200 hover:bg-ink-800/40 transition"
-              >
-                Move from old device
-              </button>
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="flex-1 py-2.5 rounded-full border border-ink-600 text-xs font-semibold text-ink-200 hover:bg-ink-800/40 transition"
-              >
-                Import a file
-              </button>
-            </div>
-            <p className="mt-2 text-center text-[11px] text-ink-500">
-              Move: on your old device open Settings → <b>Move to a new device</b>, then scan its QR with this
-              device&rsquo;s camera — or tap Move above and type the code.
-            </p>
-            <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} />
-            {importErr && (
-              <p className="mt-2 text-xs text-red-300 text-center">
-                Couldn’t read that file — export it from another device via Settings → Your Data → Export, then import the .json here.
-              </p>
-            )}
           </>
         ) : slide ? (
-          <>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">
-                YOUR QUICK START · {step + 1} / {TOUR.length}
+          <div className="vx-welcome-body">
+            <div className="flex items-center justify-between mb-6">
+              <span className="text-[13px] font-semibold text-ink-400 tabular-nums">
+                {step + 1} of {TOUR.length}
               </span>
-              <button
-                onClick={finish}
-                className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 hover:text-ink-300 transition"
-              >
+              <button onClick={finish} className="vx-welcome-skip">
                 Skip
               </button>
             </div>
-            <div className="vx-welcome-progress" aria-hidden><span style={{ width: `${((step + 1) / TOUR.length) * 100}%` }} /></div>
-            <div className="text-center mb-4">
-              <div
-                className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3 bg-ember-500/15 text-ember-300"
-                aria-hidden
-              >
-                {slide.icon}
-              </div>
-              <h2 id="vx-onboarding-title" className="text-xl font-bold">{slide.title}</h2>
-            </div>
-            <ul className="space-y-2.5 mb-4">
+            <div className="vx-tour-art" aria-hidden>{slide.icon}</div>
+            <h2 id="vx-onboarding-title" className="mt-5 text-[22px] leading-tight font-extrabold tracking-[-0.02em]">{slide.title}</h2>
+            <div className="mt-2 space-y-1.5">
               {slide.lines.map((line) => (
-                <li key={line} className="flex items-start gap-2 text-sm text-ink-200">
-                  <ChevronDownIcon className="w-3.5 h-3.5 mt-1 -rotate-90 text-ember-400 shrink-0" />
-                  <span>{line}</span>
-                </li>
+                <p key={line} className="text-[15px] leading-relaxed text-ink-300">{line}</p>
               ))}
-            </ul>
+            </div>
             {slide.visual}
             {slide.shortcuts && (
-              <div className="mt-4 flex flex-wrap gap-1.5 justify-center">
+              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
                 {slide.shortcuts.map((s) => (
-                  <span key={s.combo} className="inline-flex items-center gap-1 text-[11px] text-ink-400">
+                  <span key={s.combo} className="inline-flex items-center gap-1.5 text-[13px] text-ink-400">
                     <KeyChip>{s.combo}</KeyChip>
                     <span>{s.label}</span>
                   </span>
                 ))}
               </div>
             )}
-            <div className="flex items-center justify-center gap-1.5 mt-5 mb-4" aria-hidden>
+            <div className="flex items-center gap-1.5 mt-7 mb-5" aria-hidden>
               {TOUR.map((_, i) => (
-                <span key={i} className={i === step ? 'w-6 h-1.5 rounded-full bg-ember-500' : 'w-1.5 h-1.5 rounded-full bg-ink-600'} />
+                <span key={i} className={cn('h-1.5 rounded-full transition-all', i === step ? 'w-5 bg-ink-100' : 'w-1.5 bg-ink-100/25')} />
               ))}
             </div>
-            <div className="flex gap-2.5">
+            <div className="flex gap-2">
               {step > 0 && (
-                <button
-                  onClick={() => setStep(step - 1)}
-                  className="px-5 py-3 rounded-full border border-ink-600 text-sm text-ink-200 hover:bg-ink-800/40 transition"
-                >
+                <button onClick={() => setStep(step - 1)} className="h-12 px-5 rounded-full btn-secondary text-[15px]">
                   Back
                 </button>
               )}
               {step === TOUR.length - 1 && (
                 <button
                   onClick={() => { finish(); useTutorialStore.getState().start('first-song'); }}
-                  className="flex-1 py-3.5 rounded-full btn-secondary text-[15px] font-semibold"
+                  className="flex-1 h-12 rounded-full btn-secondary text-[15px]"
                 >
                   Live walkthrough
                 </button>
               )}
               <button
                 onClick={() => (step < TOUR.length - 1 ? setStep(step + 1) : finish())}
-                className="flex-1 py-3.5 rounded-full btn-primary text-[15px] font-semibold"
+                className="flex-1 h-12 rounded-full btn-primary text-[15px] font-bold"
               >
                 {step < TOUR.length - 1 ? 'Next' : 'Start listening'}
               </button>
             </div>
-          </>
+          </div>
         ) : null}
       </div>
     </div>

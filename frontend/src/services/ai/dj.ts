@@ -307,7 +307,7 @@ export interface DjHints {
  * orders familiar hand-offs first and introduces the rest gradually. Titles
  * and names only; never an id the listener could be identified by.
  */
-export function describePoolSong(s: Song, known: { songIds: Set<string>; artists: Set<string> }): { id: string; title: string; artist: string; language: string | null; album?: string; year?: string; known?: true } {
+export function describePoolSong(s: Song, known: { songIds: Set<string>; artists: Set<string> }): { id: string; title: string; artist: string; language: string | null; album?: string; year?: string; known?: true; mood?: string; energy?: number; tempo?: number } {
   const lead = primaryArtist(s);
   const album = s.album?.name?.trim();
   return {
@@ -318,6 +318,10 @@ export function describePoolSong(s: Song, known: { songIds: Set<string>; artists
     ...(album ? { album: album.slice(0, 120) } : {}),
     ...(s.year && /^(19|20)\d{2}$/.test(s.year) ? { year: s.year } : {}),
     ...(known.songIds.has(s.id) || known.artists.has(lead.trim().toLowerCase()) ? { known: true as const } : {}),
+    // 8.0.0 — what the catalogue or the classifier knows about the sound, so the DJ can keep tempo and mood hand-offs smooth.
+    ...(s.mood && s.mood !== 'neutral' ? { mood: s.mood.slice(0, 20) } : {}),
+    ...(typeof s.energy === 'number' && s.energy >= 0 && s.energy <= 1 ? { energy: Math.round(s.energy * 100) / 100 } : {}),
+    ...(typeof s.tempo === 'number' && s.tempo >= 40 && s.tempo <= 220 ? { tempo: Math.round(s.tempo) } : {}),
   };
 }
 

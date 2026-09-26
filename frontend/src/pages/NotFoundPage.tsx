@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { WaveIcon } from '@/components/Icons';
+import '@/styles/pages/secondary.css';
 
 export default function NotFoundPage() {
   usePageTitle('Not Found');
@@ -23,12 +24,13 @@ export default function NotFoundPage() {
     return () => window.clearTimeout(t);
   }, []);
   return (
-    <div className="glass-card rounded-3xl max-w-md mx-auto my-24 px-10 py-14 flex flex-col items-center justify-center text-center gap-4">
-      <WaveIcon className="w-14 h-14 text-ink-500" />
-      <p className="text-4xl font-bold">404</p>
-      <p className="text-lg font-extrabold">This track skipped itself</p>
-      <p className="text-sm text-ink-300">The page you’re looking for doesn’t exist or moved.</p>
-      <Link to="/" className="px-5 py-2.5 rounded-full btn-primary">
+    <div className="vx-empty-page">
+      <span className="vx-empty-icon" aria-hidden>
+        <WaveIcon className="w-8 h-8" />
+      </span>
+      <h1>This page skipped itself</h1>
+      <p>The page you’re looking for doesn’t exist or has moved.</p>
+      <Link to="/" className="px-6 py-3 rounded-full btn-primary">
         Back to Home
       </Link>
     </div>

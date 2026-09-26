@@ -8,6 +8,7 @@ import type { ImageVariant, Song } from '@/types';
 import { HeartIcon, PlayIcon } from './Icons';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useReasonStore } from '@/store/reasonStore';
+import '@/styles/pages/tracklist.css';
 
 // Package A8 — dev-mode recommendation debugging: open the app with
 // ?debug=recs and every song card grows a tiny line of its top scoring
@@ -136,8 +137,8 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
           </>
         )}
       </div>
-      {/* Reserved heights keep every shelf row perfectly even. */}
-      <p className={cn('vx-media-title line-clamp-2 min-h-[2.8em]', round && 'text-center')}><Link to={to}>{title}</Link></p>
+      {/* One line each (8.0): every card in a shelf ends on the same baseline. */}
+      <p className={cn('vx-media-title', round && 'text-center')} title={title}><Link to={to}>{title}</Link></p>
       {subtitle && (
         <p className={cn('vx-media-subtitle truncate', round && 'text-center')}>
           {subtitle}

@@ -11,6 +11,7 @@ import { getLocal, setLocal } from '@/services/storage/local';
 import { bestImage } from '@/utils/images';
 import { cn } from '@/utils/cn';
 import { PlayIcon, SparkleIcon } from '@/components/Icons';
+import '@/styles/pages/secondary.css';
 
 const TOTAL = 8;
 const BEST_KEY = 'vinax.quiz.best';
@@ -105,31 +106,30 @@ export default function QuizPage() {
   if (phase === 'intro' || phase === 'done') {
     const finished = phase === 'done';
     return (
-      <div className="max-w-md mx-auto text-center pt-6">
-        <span className="inline-flex w-16 h-16 rounded-3xl bg-premium items-center justify-center shadow-glow mb-5">
-          <SparkleIcon className="w-8 h-8 text-black" />
+      <div className="vx-sec is-narrow text-center pt-6">
+        <span className="inline-grid place-items-center w-[72px] h-[72px] rounded-full bg-ink-850 text-ink-200 mb-6" aria-hidden>
+          <SparkleIcon className="w-8 h-8" />
         </span>
-        <h1 className="text-display tracking-tight mb-1">
-          {finished ? 'Nice run!' : <span className="text-gradient">Guess the Song</span>}
+        <h1 className="vx-page-title mb-2">
+          {finished ? 'Nice run' : 'Guess the song'}
         </h1>
         {finished ? (
           <>
-            <p className="text-sm text-ink-400 mb-6">You scored {score} / {order.length}.</p>
-            <div className="grid grid-cols-2 gap-3 mb-7">
-              <div className="glass-card rounded-2xl p-4">
-                <p className="text-3xl font-extrabold text-gradient">{score}/{order.length}</p>
-                <p className="text-xs text-ink-400 mt-1">This round</p>
+            <p className="text-[15px] text-ink-400 mb-6">You scored {score} of {order.length}.</p>
+            <div className="vx-kpis mb-8 text-left">
+              <div className="vx-kpi">
+                <span className="vx-kpi-label">This round</span>
+                <span className="vx-kpi-value">{score}/{order.length}</span>
               </div>
-              <div className="glass-card rounded-2xl p-4">
-                <p className="text-3xl font-extrabold text-gradient">{best}</p>
-                <p className="text-xs text-ink-400 mt-1">Best streak</p>
+              <div className="vx-kpi">
+                <span className="vx-kpi-label">Best streak</span>
+                <span className="vx-kpi-value">{best}</span>
               </div>
             </div>
           </>
         ) : (
-          <p className="text-sm text-ink-400 mb-7">
-            A song plays — pick its title from four options before the chorus gives it away. Build a
-            streak. Picks are drawn from your recent plays and the charts.
+          <p className="text-[15px] text-ink-400 mb-8 leading-relaxed">
+            A song plays — pick its title from four options. Songs come from your recent plays and the charts.
           </p>
         )}
         {pool.length >= 4 || trending.isLoading ? (
@@ -137,7 +137,7 @@ export default function QuizPage() {
             type="button"
             onClick={begin}
             disabled={pool.length < 4}
-            className="btn-premium w-full py-3.5 rounded-full font-bold text-base disabled:opacity-50"
+            className="btn-primary w-full !min-h-[52px] rounded-full text-base disabled:opacity-50"
           >
             {pool.length < 4 ? 'Loading songs…' : finished ? 'Play again' : 'Start quiz'}
           </button>
@@ -146,7 +146,7 @@ export default function QuizPage() {
           // This used to sit on "Loading songs…" forever; say what happened
           // and offer the retry.
           <div role="alert">
-            <p className="text-sm text-ink-300 mb-3">
+            <p className="text-[15px] text-ink-300 mb-4">
               {trending.isError
                 ? 'We couldn’t reach the music servers to load quiz songs. Check your connection and try again.'
                 : 'Not enough songs to build a round yet — play a few songs, or try again.'}
@@ -155,13 +155,13 @@ export default function QuizPage() {
               type="button"
               onClick={() => void trending.refetch()}
               disabled={trending.isFetching}
-              className="btn-premium w-full py-3.5 rounded-full font-bold text-base disabled:opacity-50"
+              className="btn-primary w-full !min-h-[52px] rounded-full text-base disabled:opacity-50"
             >
               {trending.isFetching ? 'Loading songs…' : 'Retry'}
             </button>
           </div>
         )}
-        <Link to="/explore" className="block mt-4 text-sm text-ink-400 hover:text-ink-100">
+        <Link to="/explore" className="inline-flex items-center min-h-[44px] mt-3 text-sm font-semibold text-ink-400 hover:text-ink-100">
           Back to Explore
         </Link>
       </div>
@@ -171,24 +171,24 @@ export default function QuizPage() {
   // ---- Round / Reveal ----
   const revealed = phase === 'reveal';
   return (
-    <div className="max-w-md mx-auto pt-2">
-      <div className="flex items-center justify-between mb-5 text-sm">
-        <span className="text-ink-400">Question {idx + 1} / {order.length}</span>
-        <span className="flex items-center gap-3">
-          <span className="font-semibold">Score {score}</span>
-          <span className={cn('font-semibold', streak >= 2 ? 'text-gradient' : 'text-ink-400')}>
-            🔥 {streak}
+    <div className="vx-sec is-narrow pt-2">
+      <div className="flex items-center justify-between mb-6 text-[14px] tabular-nums">
+        <span className="text-ink-400 font-medium">Question {idx + 1} of {order.length}</span>
+        <span className="flex items-center gap-4">
+          <span className="font-semibold text-ink-100">Score {score}</span>
+          <span className={cn('font-semibold', streak >= 2 ? 'text-ink-100' : 'text-ink-400')}>
+            Streak {streak}
           </span>
         </span>
       </div>
 
       <div className="flex flex-col items-center mb-6">
-        <div className="relative w-44 h-44 rounded-full overflow-hidden grid place-items-center">
+        <div className="relative w-48 h-48 rounded-xl overflow-hidden grid place-items-center shadow-[var(--vx-art-shadow)]">
           {revealed ? (
             <img src={bestImage(correct.images, 500)} alt="" className="w-full h-full object-cover animate-fade-up" />
           ) : (
             <>
-              <div className="absolute inset-0 bg-ember-500 opacity-90" />
+              <div className="absolute inset-0 bg-ember-500" />
               <div className="absolute inset-0 flex items-end justify-center gap-1.5 pb-12">
                 {[0, 1, 2, 3, 4].map((i) => (
                   <span
@@ -198,19 +198,19 @@ export default function QuizPage() {
                   />
                 ))}
               </div>
-              <PlayIcon className="relative w-9 h-9 text-black/95" />
+              <PlayIcon className="relative w-10 h-10 text-[color:var(--vx-on-accent)]" />
             </>
           )}
         </div>
         {revealed && (
-          <div className="text-center mt-3 animate-fade-up">
-            <p className="font-bold">{correct.title}</p>
-            <p className="text-sm text-ink-300">{correct.subtitle}</p>
+          <div className="text-center mt-4 animate-fade-up">
+            <p className="text-[17px] font-bold text-ink-100">{correct.title}</p>
+            <p className="text-[14px] text-ink-400">{correct.subtitle}</p>
           </div>
         )}
         {!revealed && (
-          <button onClick={() => playSong(correct)} className="mt-3 text-xs font-semibold text-ink-400 hover:text-ink-100">
-            ↻ Replay snippet
+          <button onClick={() => playSong(correct)} className="mt-3 min-h-[44px] px-3 text-[13px] font-semibold text-ink-400 hover:text-ink-100">
+            Replay snippet
           </button>
         )}
       </div>
@@ -225,22 +225,23 @@ export default function QuizPage() {
               onClick={() => answer(opt)}
               disabled={revealed}
               className={cn(
-                'w-full text-left px-4 py-3 rounded-2xl glass-card transition-[color,background-color,border-color,opacity,transform]',
-                !revealed && 'glass-hover active:scale-[0.98]',
-                revealed && isCorrect && 'ring-2 ring-emerald-400 bg-emerald-400/15',
-                revealed && isChosen && !isCorrect && 'ring-2 ring-rose-400 bg-rose-400/15',
+                'vx-quiz-option',
+                revealed && isCorrect && 'is-correct',
+                revealed && isChosen && !isCorrect && 'is-wrong',
                 revealed && !isCorrect && !isChosen && 'opacity-50',
               )}
             >
-              <span className="block font-semibold truncate">{opt.title}</span>
-              <span className="block text-xs text-ink-400 truncate">{opt.subtitle}</span>
+              <span className="block text-[15px] font-semibold text-ink-100 truncate">{opt.title}</span>
+              <span className="block text-[13px] text-ink-400 truncate">{opt.subtitle}</span>
+              {revealed && isCorrect && <span className="sr-only">Correct</span>}
+              {revealed && isChosen && !isCorrect && <span className="sr-only">Your pick, wrong</span>}
             </button>
           );
         })}
       </div>
 
       {revealed && (
-        <button onClick={next} className="btn-premium w-full py-3.5 rounded-full font-bold text-base mt-5">
+        <button onClick={next} className="btn-primary w-full !min-h-[52px] rounded-full text-base mt-6">
           {idx + 1 >= order.length ? 'See results' : 'Next song'}
         </button>
       )}

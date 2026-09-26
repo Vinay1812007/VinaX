@@ -10,6 +10,8 @@ import { VideoCard } from './VideosPage';
 import { ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { PlayIcon } from '@/components/Icons';
+import { SectionHeader } from '@/components/SectionHeader';
+import '@/styles/pages/browse.css';
 
 /**
  * v5.7.9 — cinematic video player (full-screen canvas style): dark
@@ -24,7 +26,7 @@ import { PlayIcon } from '@/components/Icons';
 function VideoSkeleton() {
   return (
     <div className="max-w-4xl mx-auto" role="status" aria-label="Loading video">
-      <div className="skeleton aspect-video rounded-3xl" />
+      <div className="skeleton aspect-video rounded-xl" />
       <div className="skeleton h-6 w-2/3 mt-5" />
       <div className="skeleton h-4 w-1/3 mt-2 mb-8" />
       <ListSkeleton rows={4} />
@@ -98,8 +100,8 @@ export default function VideoPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="relative rounded-3xl overflow-hidden bg-black border border-ink-700/40 shadow-2xl">
+    <div className="max-w-5xl mx-auto">
+      <div className="relative rounded-xl overflow-hidden bg-black shadow-[var(--vx-art-shadow)]">
         {src && !dead ? (
           <video
             key={src}
@@ -132,10 +134,10 @@ export default function VideoPage() {
         )}
       </div>
 
-      <div className="mt-4 flex items-start gap-4 flex-wrap">
+      <div className="mt-5 flex items-center gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-bold truncate">{video.title}</h1>
-          <p className="text-sm text-ink-300 truncate">
+          <h1 className="text-[22px] md:text-[26px] font-extrabold tracking-[-0.02em] leading-tight truncate">{video.title}</h1>
+          <p className="mt-1 text-[14px] text-ink-400 truncate">
             {video.subtitle}
             {video.year ? ` · ${video.year}` : ''}
             {video.language ? ` · ${video.language}` : ''}
@@ -174,8 +176,8 @@ export default function VideoPage() {
 
       {related.data && related.data.filter((v) => v.id !== video.id).length > 0 && (
         <section className="mt-10">
-          <h2 className="text-lg font-bold mb-3">More from {firstArtist}</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <SectionHeader title={`More from ${firstArtist}`} />
+          <div className="vx-video-grid">
             {related.data
               .filter((v) => v.id !== video.id)
               .slice(0, 6)
@@ -187,7 +189,7 @@ export default function VideoPage() {
       )}
 
       <p className="mt-8 text-center">
-        <Link to="/videos" className="text-sm text-ember-300 hover:underline">
+        <Link to="/videos" className="vx-pill-btn">
           Browse all videos
         </Link>
       </p>

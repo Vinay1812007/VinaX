@@ -11,10 +11,15 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
 import { cn } from '@/utils/cn';
+import { SparkleIcon } from '@/components/Icons';
 import { useSessionState } from '@/hooks/useSessionState';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { getSong } from '@/services/api';
 import type { TrendsSnapshot, VerifiedTrend } from '@/services/trends/client';
+import { PageHeader } from '@/components/PageHeader';
+import { Chip } from '@/components/Chip';
+import { moodTone } from '@/features/discover/tones';
+import '@/styles/pages/browse.css';
 import { CATALOGUE_LIST_NOTE, CATALOGUE_LIST_TITLE, movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
 
 /**
@@ -35,11 +40,11 @@ const PERIODS = [
   { id: 'all', label: 'All-time hits', q: 'all time hit songs india' },
 ] as const;
 
-const MOODS: Array<{ label: string; tint: string; to: string }> = [
-  { label: 'Romance', tint: 'rgba(236,72,153,0.18)', to: '/moods' },
-  { label: 'Party', tint: 'rgba(34,211,238,0.18)', to: '/moods' },
-  { label: 'Chill', tint: 'rgba(96,165,250,0.18)', to: '/moods' },
-  { label: 'Workout', tint: 'rgba(167,139,250,0.18)', to: '/moods' },
+const MOODS: Array<{ id: string; label: string; to: string }> = [
+  { id: 'romance', label: 'Romance', to: '/moods' },
+  { id: 'party', label: 'Party', to: '/moods' },
+  { id: 'chill', label: 'Chill', to: '/moods' },
+  { id: 'workout', label: 'Workout', to: '/moods' },
 ];
 
 function isoWeek(): number {
@@ -69,17 +74,12 @@ function useVerifiedTrends(region: string) {
   });
 }
 
-const pillClass = 'h-9 px-4 rounded-full text-xs transition active:scale-95 border';
-const pillOn = 'font-extrabold text-ink-100 border-ember-400/30';
-const pillOff = 'font-bold bg-[var(--tile)] border-[var(--glass-border)] text-ink-300 hover:bg-[var(--tile-hover)]';
-const pillOnStyle = { background: 'linear-gradient(135deg, rgba(34,211,238,0.22), rgba(96,165,250,0.14))' };
-
 function Notice({ children, retry }: { children: ReactNode; retry?: () => void }) {
   return (
-    <div role="status" className="flex items-center justify-between gap-3 rounded-2xl border border-glass bg-[var(--tile)] px-4 py-3 text-sm text-ink-300">
+    <div role="status" className="vx-chart-notice">
       <span className="min-w-0">{children}</span>
       {retry && (
-        <button type="button" onClick={retry} className="btn-secondary shrink-0 px-4 text-xs min-h-[44px]">
+        <button type="button" onClick={retry} className="vx-pill-btn shrink-0">
           Retry
         </button>
       )}
@@ -91,15 +91,15 @@ function VerifiedRow({ item, onPlay, state }: { item: VerifiedTrend; onPlay: () 
   const marker = movementMarker(item);
   return (
     <li>
-      <div className="w-full rounded-2xl bg-[var(--tile-2)] border border-[var(--glass-border)] p-3 flex items-center gap-3">
-        <span className="w-10 text-[15px] font-extrabold shrink-0 text-ink-300">{item.sourceKind === 'editorial' ? 'Pick' : `#${item.sourceRank}`}</span>
+      <div className="vx-chart-row">
+        <span className="vx-chart-rank">{item.sourceKind === 'editorial' ? 'Pick' : `#${item.sourceRank}`}</span>
         <button type="button" onClick={onPlay} className="min-w-0 flex-1 text-left" aria-label={`Play ${item.title}`}>
-          <span className="block text-sm font-bold truncate">{item.title}</span>
-          <span className="block text-xs font-semibold text-ink-400 truncate">{item.artist}</span>
-          <span className="block text-[11px] font-semibold text-ink-400 truncate">{provenanceLine(item)}</span>
+          <span className="vx-chart-title">{item.title}</span>
+          <span className="vx-chart-sub">{item.artist}</span>
+          <span className="vx-chart-sub !text-[12px]">{provenanceLine(item)}</span>
         </button>
         {marker && (
-          <span title={marker.title} className="shrink-0 rounded-full border border-ember-400/30 px-2 py-0.5 text-[11px] font-extrabold text-ember-300">
+          <span title={marker.title} className="search-type-pill">
             {marker.text}
           </span>
         )}
@@ -109,7 +109,7 @@ function VerifiedRow({ item, onPlay, state }: { item: VerifiedTrend; onPlay: () 
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`Evidence for ${item.title}: ${item.sourceKind === 'editorial' ? 'editorial source' : item.sourceLabel}`}
-            className="shrink-0 text-xs font-bold text-ink-300 underline underline-offset-2 hover:text-ink-100"
+            className="vx-text-action shrink-0 inline-flex items-center underline underline-offset-2"
           >
             Source
           </a>
@@ -141,11 +141,8 @@ function VerifiedCharts({ region }: { region: string }) {
 
   const retry = (): void => void q.refetch();
   const header = (
-    <div className="mb-2.5">
-      <h2 id="verified-charts" className="text-[17px] font-extrabold">
-        Public charts
-      </h2>
-      <p className="text-xs font-semibold text-ink-400">Catalogue songs matched to public chart entries and editorial picks, each with its source.</p>
+    <div className="vx-section-header">
+      <h2 id="verified-charts">Public charts</h2>
     </div>
   );
 
@@ -168,9 +165,9 @@ function VerifiedCharts({ region }: { region: string }) {
     } else {
       const lines = view.sources.map((s) => ({ id: s.id, stale: s.status === 'stale', text: sourceLine(s) })).filter((l) => l.text);
       const status = (
-        <ul className="mb-2.5 space-y-0.5" aria-label="Chart sources">
+        <ul className="mb-3 space-y-0.5" aria-label="Chart sources">
           {lines.map((l) => (
-            <li key={l.id} className={cn('text-[11px] font-semibold', l.stale ? 'text-ember-300' : 'text-ink-400')}>
+            <li key={l.id} className={cn('text-[12px] font-semibold', l.stale ? 'text-ink-100' : 'text-ink-400')}>
               {l.text}
             </li>
           ))}
@@ -191,22 +188,15 @@ function VerifiedCharts({ region }: { region: string }) {
           <>
             {status}
             {chips.length > 1 && (
-              <div className="flex flex-wrap items-center gap-2 mb-2.5" role="group" aria-label="Filter by source">
+              <div className="vx-chip-row mb-3" role="group" aria-label="Filter by source">
                 {[{ id: 'all', label: 'All sources', stale: false }, ...chips].map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    aria-pressed={active === c.id}
-                    onClick={() => setFilter(c.id)}
-                    className={cn(pillClass, active === c.id ? pillOn : pillOff)}
-                    style={active === c.id ? pillOnStyle : undefined}
-                  >
+                  <Chip key={c.id} active={active === c.id} onClick={() => setFilter(c.id)}>
                     {c.stale ? `${c.label} · out of date` : c.label}
-                  </button>
+                  </Chip>
                 ))}
               </div>
             )}
-            <ul className="space-y-2">
+            <ul className="vx-track-list">
               {items.map((item) => {
                 const key = `${item.source}:${item.catalogId}`;
                 return <VerifiedRow key={key} item={item} onPlay={() => void play(item)} state={rowState?.id === key ? rowState.state : 'idle'} />;
@@ -219,7 +209,7 @@ function VerifiedCharts({ region }: { region: string }) {
   }
 
   return (
-    <section className="mb-7" aria-labelledby="verified-charts">
+    <section className="vx-section" aria-labelledby="verified-charts">
       {header}
       {body}
     </section>
@@ -240,64 +230,46 @@ export default function ChartsPage() {
   const playsCount = useHistoryStore((s) => s.entries.length);
 
   return (
-    <div className="max-w-screen-xl mx-auto pb-8 vx-stagger">
-      <div className="mb-5">
-        <h1 className="text-page-title">Charts</h1>
-        <p className="text-xs font-semibold text-ink-400">Public charts with their sources, and what’s popular in the catalogue</p>
-      </div>
+    <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
+      <PageHeader title="Charts" />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
-        <div>
+      <div className="vx-chart-layout">
+        <div className="min-w-0">
           <VerifiedCharts region={region} />
 
           {/* catalogue list — labelled as what it is */}
           <section aria-labelledby="catalogue-popular">
-            <div className="flex flex-wrap items-end justify-between gap-3 mb-2.5">
-              <div>
-                <h2 id="catalogue-popular" className="text-[17px] font-extrabold">
-                  {CATALOGUE_LIST_TITLE}
-                </h2>
-                <p className="text-xs font-semibold text-ink-400">{CATALOGUE_LIST_NOTE}</p>
-              </div>
-              <div className="flex items-center gap-2" role="group" aria-label="Catalogue list">
+            <div className="vx-section-header flex-wrap">
+              <h2 id="catalogue-popular">{CATALOGUE_LIST_TITLE}</h2>
+              <div className="vx-chip-row" role="group" aria-label="Catalogue list">
                 {PERIODS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    aria-pressed={period === p.id}
-                    onClick={() => setPeriod(p.id)}
-                    className={cn(pillClass, period === p.id ? pillOn : pillOff)}
-                    style={period === p.id ? pillOnStyle : undefined}
-                  >
+                  <Chip key={p.id} active={period === p.id} onClick={() => setPeriod(p.id)}>
                     {p.label}
-                  </button>
+                  </Chip>
                 ))}
               </div>
             </div>
+            <p className="vx-chart-note">{CATALOGUE_LIST_NOTE}</p>
             {songsQ.isLoading ? (
               <ListSkeleton />
             ) : songsQ.isError ? (
               <ErrorState retry={() => void songsQ.refetch()} />
             ) : (
-              <ul className="space-y-2">
+              <ul className="vx-track-list">
                 {songs.map((s, i) => (
                   <li key={s.id}>
-                    <button
-                      onClick={() => playQueue(songs, i)}
-                      className="w-full rounded-2xl bg-[var(--tile-2)] border border-[var(--glass-border)] p-3 flex items-center gap-3 text-left hover:bg-[var(--tile-hover)] transition card-lift"
-                    >
-                      <span className="w-7 text-[15px] font-bold shrink-0 text-ink-400">{i + 1}</span>
+                    <button type="button" onClick={() => playQueue(songs, i)} className="vx-chart-row">
+                      <span className="vx-chart-rank">{i + 1}</span>
                       <img
                         src={bestImage(s.images, 96)}
                         onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
                         alt=""
-                        className="w-12 h-12 rounded-lg object-cover shrink-0"
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold truncate">{s.title}</span>
-                        <span className="block text-xs font-semibold text-ink-400 truncate">{s.subtitle}</span>
+                        <span className="vx-chart-title">{s.title}</span>
+                        <span className="vx-chart-sub">{s.subtitle}</span>
                       </span>
-                      <span className="text-xs font-bold text-ink-300 shrink-0">{fmtPlays(s.playCount)}</span>
+                      <span className="vx-chart-plays">{fmtPlays(s.playCount)}</span>
                     </button>
                   </li>
                 ))}
@@ -307,48 +279,35 @@ export default function ChartsPage() {
         </div>
 
         {/* moods · hubs · weekly */}
-        <div className="space-y-6">
-          <section>
-            <h2 className="text-[17px] font-extrabold mb-2.5">Moods</h2>
-            <div className="grid grid-cols-2 gap-2">
+        <aside className="min-w-0" aria-label="More to browse">
+          <section className="vx-section">
+            <div className="vx-section-header"><h2>Moods</h2></div>
+            <div className="vx-browse-tiles is-compact !mb-0">
               {MOODS.map((m) => (
-                <Link
-                  key={m.label}
-                  to={m.to}
-                  className="h-[76px] rounded-2xl border border-[var(--glass-border)] flex items-end p-3 text-sm font-extrabold hover:brightness-110 transition card-lift"
-                  style={{ background: `linear-gradient(135deg, ${m.tint}, rgba(255,255,255,0.04))` }}
-                >
-                  {m.label}
+                <Link key={m.label} to={m.to} className={cn('vx-browse-tile', moodTone(m.id))}>
+                  <span className="vx-browse-tile-title">{m.label}</span>
                 </Link>
               ))}
             </div>
           </section>
 
-          <section>
-            <h2 className="text-[17px] font-extrabold mb-2.5">Language hubs</h2>
-            <div className="flex flex-wrap gap-2">
+          <section className="vx-section">
+            <div className="vx-section-header"><h2>Language hubs</h2></div>
+            <div className="vx-chip-row">
               {HUB_LANGUAGES.slice(0, 8).map((l) => (
-                <Link
-                  key={l}
-                  to={`/${l}-songs`}
-                  className="h-[38px] px-4 rounded-full bg-[var(--tile)] border border-[var(--glass-border)] text-[13px] font-bold text-ink-200 inline-flex items-center hover:bg-[var(--tile-hover)] transition"
-                >
+                <Link key={l} to={`/${l}-songs`} className="vx-link-chip">
                   {languageLabel(l)}
                 </Link>
               ))}
             </div>
           </section>
 
-          <Link
-            to="/weekly"
-            className="block rounded-2xl border border-ember-400/20 p-4 card-lift"
-            style={{ background: 'linear-gradient(120deg, rgba(34,211,238,0.14), rgba(96,165,250,0.07))' }}
-          >
-            <p className="text-[11px] font-extrabold tracking-widest text-ember-300">WEEKLY PERSONAL MIX</p>
-            <p className="text-base font-extrabold mt-1">Your Week {isoWeek()} mix {new Date().getDay() === 5 ? 'is here' : 'drops Friday'}</p>
-            <p className="text-xs font-semibold text-ink-300 mt-0.5">{playsCount > 0 ? `Built from your last ${Math.min(playsCount, 500)} plays` : 'Builds from what you play this week'}</p>
+          <Link to="/weekly" className="vx-browse-tile vx-tone-8 !h-auto !min-h-[104px]">
+            <span className="vx-browse-tile-title">Your Week {isoWeek()} mix {new Date().getDay() === 5 ? 'is here' : 'drops Friday'}</span>
+            <span className="vx-browse-tile-meta !max-w-[75%] !whitespace-normal">{playsCount > 0 ? `Built from your last ${Math.min(playsCount, 500)} plays` : 'Builds from what you play this week'}</span>
+            <span className="vx-browse-tile-art" aria-hidden><SparkleIcon /></span>
           </Link>
-        </div>
+        </aside>
       </div>
     </div>
   );

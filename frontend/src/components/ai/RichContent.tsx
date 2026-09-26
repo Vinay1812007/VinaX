@@ -162,11 +162,11 @@ const splitRow = (r: string): string[] =>
 function TableBlock({ head, rows }: { head: string[]; rows: string[][] }): ReactNode {
   return (
     <div className="my-2 overflow-x-auto rounded-xl border ai-hairline-strong">
-      <table className="w-full text-xs">
+      <table className="w-full text-[13px]">
         <thead>
           <tr>
             {head.map((h, k) => (
-              <th key={k} className="text-left px-3 py-2 bg-ink-800/70 border-b ai-hairline-strong font-semibold whitespace-nowrap">
+              <th key={k} className="text-left px-3 py-2 bg-ink-850 border-b ai-hairline-strong font-semibold whitespace-nowrap">
                 {inline(h)}
               </th>
             ))}
@@ -174,7 +174,7 @@ function TableBlock({ head, rows }: { head: string[]; rows: string[][] }): React
         </thead>
         <tbody>
           {rows.map((r, ri) => (
-            <tr key={ri} className="odd:bg-ink-900/40">
+            <tr key={ri}>
               {r.map((c, ci) => (
                 <td key={ci} className="px-3 py-1.5 border-b ai-hairline align-top">
                   {inline(c)}
@@ -509,9 +509,9 @@ function CodeBlock({ lang, code }: { lang: string; code: string }): ReactNode {
   const lineCount = useMemo(() => code.split('\n').length, [code]);
   const flags = useFeatureFlags(); // v5.13.0 — admin kill-switch for Run
   return (
-    <div className="my-2 rounded-xl overflow-hidden border ai-hairline-strong bg-ink-900">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] ai-t2">
-        <span className="uppercase tracking-wide">{lang || 'text'}<span className="normal-case ai-t3"> · {lineCount} lines</span></span>
+    <div className="ai-code">
+      <div className="ai-code-head">
+        <span className="ai-t2">{lang || 'text'}<span className="ai-t3"> · {lineCount} lines</span></span>
         <div className="flex items-center gap-3">
           {RUNNABLE.has(lang) && flagOn(flags, 'codeRun') && (
             <button onClick={() => setRunKey((k) => k + 1)} className="font-bold text-ember-400 hover:text-ember-300 transition">
@@ -554,8 +554,8 @@ function MermaidBlock({ code }: { code: string }): ReactNode {
   if (err) return <CodeBlock lang="mermaid" code={code} />;
   if (!svg) return <div className="my-2 text-xs ai-t3 py-3 px-1">Rendering diagram…</div>;
   return (
-    <div className="my-2 rounded-xl border ai-hairline-strong bg-ink-900 overflow-hidden">
-      <div className="flex justify-end px-3 py-1.5 bg-ink-800/70 text-[11px] ai-t2">
+    <div className="ai-code">
+      <div className="ai-code-head justify-end">
         <CopyBtn text={code} label="Copy source" />
       </div>
       <div className="overflow-x-auto p-3 grid place-items-center" dangerouslySetInnerHTML={{ __html: svg }} />
@@ -610,8 +610,8 @@ function HtmlPreview({ lang, code, streaming = false }: { lang: string; code: st
     setOpenNote(openPreview(srcDoc, token, title) ? '' : 'Your browser blocked the new tab — allow pop-ups for this site.');
   };
   return (
-    <div className="my-2 rounded-xl overflow-hidden border ai-hairline-strong bg-ink-900">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] ai-t2">
+    <div className="ai-code">
+      <div className="ai-code-head">
         <div className="flex gap-3">
           <button
             onClick={() => {
@@ -691,15 +691,15 @@ function CsvBlock({ code }: { code: string }): ReactNode {
   const head = rows[0] ?? [];
   const body = rows.slice(1);
   return (
-    <div className="my-2 rounded-xl overflow-hidden border ai-hairline-strong">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-800/70 text-[11px] ai-t2">
+    <div className="ai-code">
+      <div className="ai-code-head">
         <span>CSV · {body.length} rows</span>
         <button onClick={() => download('data.csv', code, 'text/csv')} className="hover:ai-t1 transition">
           Download .csv
         </button>
       </div>
       <div className="overflow-x-auto max-h-80">
-        <table className="w-full text-xs">
+        <table className="w-full text-[13px]">
           <thead>
             <tr>
               {head.map((h, k) => (
@@ -711,7 +711,7 @@ function CsvBlock({ code }: { code: string }): ReactNode {
           </thead>
           <tbody>
             {body.map((r, ri) => (
-              <tr key={ri} className="odd:bg-ink-900/40">
+              <tr key={ri}>
                 {r.map((c, ci) => (
                   <td key={ci} className="px-3 py-1.5 border-b ai-hairline">
                     {c}
@@ -733,7 +733,7 @@ function CodeRouter({ lang, code, closed, streaming }: { lang: string; code: str
   // it gets the full block — copy, download, run — like any other.
   if (!closed && streaming)
     return (
-      <pre className="my-2 p-3 rounded-xl bg-ink-900 border ai-hairline-strong overflow-x-auto text-xs leading-relaxed font-mono">
+      <pre className="ai-code ai-code-bare p-3 overflow-x-auto text-xs leading-relaxed font-mono">
         <code>{code}</code>
       </pre>
     );
@@ -749,7 +749,7 @@ export function RichContent({ text, streaming = false }: { text: string; streami
   const tokens = useMemo(() => tokenize(text), [text]);
   const picks = useMemo(() => extractSongPicks(text), [text]);
   return (
-    <div className="space-y-1 text-sm break-words">
+    <div className="ai-rich space-y-1 break-words">
       {picks.length >= 2 && <SongPicksBar picks={picks} />}
       {tokens.map((tk, i) =>
         tk.t === 'code' ? (

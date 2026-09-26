@@ -3,15 +3,16 @@ import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
-import { SongRow } from '@/components/SongRow';
+import { SongRow, TrackListHead } from '@/components/SongRow';
+import { EntityAction, EntityHeader, EntityMeta, GlyphCover, PlayFab, songsLabel, totalDuration } from '@/components/EntityHeader';
+import { EmptyState } from '@/components/States';
 import { VirtualChunks } from '@/components/VirtualChunks';
 import type { Song } from '@/types';
-import { PageHeader } from '@/components/PageHeader';
-import { PlayIcon, QueueIcon } from '@/components/Icons';
+import { BookmarkIcon, QueueIcon } from '@/components/Icons';
 import { toast } from '@/store/toastStore';
 
-/** .vx-track-row min-height plus the list's 2px gap — the off-screen size estimate for list chunks. */
-const ROW_HEIGHT = 70;
+/** .vx-track-row min-height — the off-screen size estimate for list chunks. */
+const ROW_HEIGHT = 56;
 const songKey = (song: Song): string => song.id;
 
 /**
@@ -26,15 +27,16 @@ export default function ListenLaterPage() {
 
   const renderRow = useCallback(
     (song: Song, i: number) => (
-      <div className="flex items-center gap-1">
-        <div className="min-w-0 flex-1">
+      <div className="vx-row-with">
+        <div className="vx-row-main">
           <SongRow song={song} songs={later} index={i} />
         </div>
         <button
           type="button"
           onClick={() => useLibraryStore.getState().toggleLater(song)}
           aria-label={`Remove ${song.title} from Listen Later`}
-          className="text-xs font-bold text-ink-400 hover:text-ink-100 px-2 py-2 min-h-touch shrink-0"
+          title="Done — remove from Listen later"
+          className="vx-row-done"
         >
           Done
         </button>
@@ -44,41 +46,41 @@ export default function ListenLaterPage() {
   );
 
   return (
-    <div className="max-w-3xl mx-auto vx-stagger">
-      <PageHeader
-        title="Listen Later"
-        subtitle={later.length ? `${later.length} song${later.length === 1 ? '' : 's'} saved for later` : 'Songs you want to come back to'}
-        compact
+    <div className="vx-entity">
+      <EntityHeader
+        kind="Playlist"
+        title="Listen later"
+        tone="var(--ember-600)"
+        art={<GlyphCover tone="later" icon={<BookmarkIcon />} />}
+        meta={<EntityMeta items={[later.length ? songsLabel(later.length) : 'Songs you want to come back to', totalDuration(later)]} />}
         actions={
           later.length > 0 ? (
             <>
-              <button onClick={() => playQueue(later, 0)} className="btn-primary px-4 py-2 text-sm inline-flex items-center gap-1.5">
-                <PlayIcon className="w-4 h-4" /> Play all
-              </button>
-              <button
+              <PlayFab label="Play all" onClick={() => playQueue(later, 0)} />
+              <EntityAction
+                label="Add to queue"
                 onClick={() => {
                   enqueueAll(later);
                   toast(`Queued ${later.length} songs`);
                 }}
-                className="btn-secondary px-4 py-2 text-sm inline-flex items-center gap-1.5"
               >
-                <QueueIcon className="w-4 h-4" /> Add to queue
-              </button>
+                <QueueIcon />
+              </EntityAction>
             </>
           ) : undefined
         }
       />
       {later.length === 0 ? (
-        <div className="glass-card rounded-2xl p-8 text-center">
-          <p className="font-bold">Nothing saved yet</p>
-          <p className="text-sm text-ink-400 mt-1">
-            Open any song&rsquo;s ⋮ menu and choose <b>Listen later</b>. It lands here, ready when you are.
-          </p>
-          <Link to="/" className="inline-block mt-4 btn-secondary px-4 py-2 text-sm">Browse music</Link>
-        </div>
+        <EmptyState
+          icon={<BookmarkIcon className="w-8 h-8" />}
+          title="Nothing saved yet"
+          message="Open any song’s ⋯ menu and choose Listen later. It lands here, ready when you are."
+          action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse music</Link>}
+        />
       ) : (
-        <div className="space-y-0.5">
-          <VirtualChunks items={later} keyOf={songKey} renderItem={renderRow} rowHeight={ROW_HEIGHT} chunkClassName="space-y-0.5" />
+        <div className="vx-tracklist">
+          <TrackListHead trail={62} />
+          <VirtualChunks items={later} keyOf={songKey} renderItem={renderRow} rowHeight={ROW_HEIGHT} />
         </div>
       )}
     </div>

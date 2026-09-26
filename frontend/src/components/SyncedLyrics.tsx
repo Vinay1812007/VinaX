@@ -10,7 +10,8 @@ interface Props {
   lines: LrcLine[];
   /** Live mode highlights + follows playback and seeks on click. */
   live: boolean;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** `stage`: the player's big bold lines, sized by player.css (.vx-lyrics-stage). */
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'stage';
   className?: string;
 }
 
@@ -19,6 +20,7 @@ const SIZE_CLASSES: Record<NonNullable<Props['size']>, { line: string; active: s
   md: { line: 'text-lg leading-relaxed', active: 'text-xl' },
   lg: { line: 'text-2xl leading-relaxed', active: 'text-3xl' },
   xl: { line: 'text-3xl leading-relaxed', active: 'text-4xl' },
+  stage: { line: '', active: '' },
 };
 
 /** Nearest scrollable ancestor — so following lyrics never scrolls the page. */
@@ -46,7 +48,7 @@ function clockNow(a: TimeAnchor): number {
 }
 
 /**
- * v5.6.0 — Apple-Music-smooth karaoke fill. The store ticks currentTime a few
+ * v5.6.0 — a smooth karaoke fill. The store ticks currentTime a few
  * times a second; animating the sweep off those ticks looked steppy and lagged
  * the voice. The active line now runs its own requestAnimationFrame loop that
  * interpolates wall-clock time from the last store tick and writes --kfill
@@ -182,7 +184,7 @@ export function SyncedLyrics({ lines, live, size = 'md', className }: Props) {
   const sizes = SIZE_CLASSES[size];
 
   return (
-    <div ref={containerRef} className={cn('space-y-1', className)}>
+    <div ref={containerRef} className={cn(size === 'stage' ? 'vx-lyrics-stage space-y-0.5' : 'space-y-1', className)}>
       {lines.map((line, i) => (
         <button
           key={`${line.t}-${i}`}
@@ -193,7 +195,7 @@ export function SyncedLyrics({ lines, live, size = 'md', className }: Props) {
             'block w-full text-left rounded-xl px-3 py-1.5 transition-[color,background-color,border-color,opacity,transform] duration-300',
             live && 'hover:bg-ink-800/60',
             i === activeIndex
-              ? cn('vx-lyric-active font-bold scale-[1.02] origin-left', sizes.active)
+              ? cn('vx-lyric-active font-bold', size !== 'stage' && 'scale-[1.02] origin-left', sizes.active)
               : cn(
                   live && activeIndex >= 0 && i < activeIndex ? 'vx-lyric-passed' : 'vx-lyric-dim',
                   sizes.line,

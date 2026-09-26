@@ -50,7 +50,8 @@ export type CostClass = 'low' | 'medium' | 'high' | 'unknown';
 
 /** Upstream that serves a model. `grq` / `opr` are the two aggregator keys
  *  whose catalogs are discovered at runtime (see _lib/catalog.ts). */
-export type Provider = 'nvidia' | 'grq' | 'opr';
+/** `ggl` (8.0.0) — the maestro lane's own host. */
+export type Provider = 'nvidia' | 'grq' | 'opr' | 'ggl';
 
 export interface ModelSpec {
   /** Provider-facing slug. */
@@ -90,6 +91,15 @@ const T = { training_supported: false as const, fine_tuning_supported: false as 
 
 /** Every model VinaX knows about, keyed by registry id. */
 export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
+  'gemini-2.5-flash': {
+    id: 'gemini-2.5-flash', envKey: 'VINAX_GGL_GEMINI_API_KEY', display_name: 'VinaX Maestro', provider: 'ggl',
+    role: 'Flagship music intelligence — AI DJ ordering, Queue Builder, ranking, playlists, Home builder',
+    capabilities: ['reasoning', 'generation', 'ranking', 'classification', 'creative'], latency_class: 'fast', quality_class: 'premium',
+    cost_class: 'low', output_format: 'json', chat_capable: true,
+    fallback_models: ['gemini-2.5-flash-lite', 'gpt-oss-20b'],
+    verified: false, ...T,
+    notes: 'Added 8.0.0 on the owner\'s new key. Leads the DJ, ranking, playlist and Home-builder ladders; a 429 cools the key for a minute and the ladder answers. VINAX_MAESTRO_MODEL replaces the pin without new code. Probe it in the AI Lab after the secret is set.',
+  },
   'kimi-k3': {
     id: 'moonshotai/kimi-k3', envKey: 'VINAX_KIMI_K3', display_name: 'VinaX K3', provider: 'nvidia',
     role: 'Main AI / agent — chat, complex requests, playlist planning',

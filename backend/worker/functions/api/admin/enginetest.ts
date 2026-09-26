@@ -7,7 +7,7 @@
  *  ?model= overrides the probed slug (default: that lane's pinned model). */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
-import { LANE_MODEL, laneEndpoint, type AiEnv, type Lane } from '../../_lib/ai';
+import { laneEndpoint, laneModel, type AiEnv, type Lane } from '../../_lib/ai';
 
 type Env = AdminEnv & AiEnv;
 
@@ -32,6 +32,7 @@ const BY_SUFFIX: Record<string, { env: keyof AiEnv; lane: Lane }> = {
   LAGUNA_XS: { env: 'VINAX_POOLSIDE_LAGUNA_XS_2_1', lane: 'laguna' },
   DIFFUSIONGEMMA: { env: 'VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT', lane: 'diffusion' },
   GEMMA_4: { env: 'VINAX_GGL_GEMMA_4_31B_IT', lane: 'gemma4' },
+  MAESTRO: { env: 'VINAX_GGL_GEMINI_API_KEY', lane: 'maestro' },
 };
 
 function json(o: unknown, status = 200): Response {
@@ -50,7 +51,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   if (!pick) return json({ error: 'unknown key', keys: Object.keys(BY_SUFFIX) }, 400);
   const key = env[pick.env];
   if (!key) return json({ key: suffix, error: 'env not set', env: pick.env }, 503);
-  const model = url.searchParams.get('model') ?? LANE_MODEL[pick.lane];
+  const model = url.searchParams.get('model') ?? laneModel(env, pick.lane);
   const base = laneEndpoint(env, pick.lane);
   const t0 = Date.now();
   const c = new AbortController();

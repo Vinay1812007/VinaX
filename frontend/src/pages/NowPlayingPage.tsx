@@ -11,17 +11,16 @@ import { clearMoodPin, pinMood } from '@/features/player/moodPin';
 import type { Mood } from '@/services/recommendation/mood';
 import type { ArtistRef, Song } from '@/types';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
-import { LiveLyricLine } from '@/components/LiveLyricLine';
 import { SyncedLyrics } from '@/components/SyncedLyrics';
 import { Seekbar } from '@/components/Seekbar';
 import { FavButton } from '@/components/FavButton';
 import { IconButton } from '@/components/IconButton';
-import { TrackMenu } from '@/components/TrackMenu';
+import { TrackMenu, type TrackMenuItem } from '@/components/TrackMenu';
 import { Marquee } from '@/components/Marquee';
 import { EmptyState } from '@/components/States';
 import {
   ChevronDownIcon,
-  ClockIcon,
+  MicIcon,
   NextIcon,
   PauseIcon,
   PlayIcon,
@@ -32,17 +31,15 @@ import {
   ShuffleIcon,
   SparkleIcon,
   DevicesIcon,
-  UsersIcon,
   VolumeIcon,
 } from '@/components/Icons';
 import { DeviceSheet } from '@/components/DeviceSheet';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { SongCanvas, SongCanvasBackdrop, useSongCanvas } from '@/components/SongCanvas';
-import { extractAverageColor } from '@/utils/color';
+import { extractAverageColor, extractVibrantColor } from '@/utils/color';
 import { acquireWakeLock, releaseWakeLock } from '@/utils/wakeLock';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useAudioOutputStore } from '@/services/audio/outputWatcher';
-import { Visualizer } from '@/components/Visualizer';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useCastStore } from '@/services/cast';
 import { haptic } from '@/services/native';
@@ -58,6 +55,9 @@ import type { TuneIntent } from '@/services/recommendation/tune';
 import { cn } from '@/utils/cn';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { Sheet } from '@/components/Sheet';
+import { scrollBehavior } from '@/utils/motion';
+import '@/styles/pages/player.css';
 
 interface CreditChip {
   icon: string;
@@ -138,11 +138,32 @@ function BookmarkNowButton({ songId }: { songId: string }) {
         useBookmarkStore.getState().add(songId, at);
         toast(`Bookmarked ${fmtTime(at)}`);
       }}
-      className="px-2.5 py-2 rounded-lg text-xs font-bold text-ink-400 hover:text-ink-100"
+      className="vx-np-pill"
       title="Bookmark this moment"
     >
       ＋ {fmtTime(second)}
     </button>
+  );
+}
+
+/** "Sliders" glyph for the playback options (speed, sleep, loops, marks). */
+function SlidersIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className={className} aria-hidden>
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="17" r="2" />
+    </svg>
+  );
+}
+
+/** The stage backdrop: blurred artwork under the artwork's own colour. */
+function StageBackdrop({ artUrl, children }: { artUrl: string | null; children?: React.ReactNode }) {
+  return (
+    <div className="vx-np-bg" aria-hidden>
+      {artUrl && <img src={artUrl} alt="" loading="eager" decoding="async" className="vx-np-bg-art" />}
+      {children}
+    </div>
   );
 }
 
@@ -194,10 +215,13 @@ export default function NowPlayingPage() {
   const [ambientArmed, setAmbientArmed] = useState(true);
   const [ambientIdle, wakeAmbient] = useIdle(ambientArmed && isPlaying && !showMore && !showDevices);
 
-  // Resso-style flow: fling the artwork up for the next song, down for the previous.
+  // Swipe flow: fling the artwork up for the next song, down for the previous.
   const artSwipe = useRef<{ y: number; t: number } | null>(null);
   const [swipeFx, setSwipeFx] = useState<'up' | 'down' | null>(null);
-  const [rightTab, setRightTab] = useState<'queue' | 'lyrics'>('queue');
+  const [rightTab, setRightTab] = useState<'queue' | 'lyrics' | 'about'>('queue');
+  const panelRef = useRef<HTMLElement>(null);
+  // The artwork's own colour for the stage wash (an "R G B" triplet).
+  const [wash, setWash] = useState<string | null>(null);
   // C5 — the manually pinned session mood (45-min override of inference).
   const [moodPin, setMoodPin] = useState<Mood | null>(() => getMoodPin());
   // True from a mood tap until the rebuilt list arrives (or the attempt gives up).
@@ -328,6 +352,20 @@ export default function NowPlayingPage() {
 
   useEffect(() => {
     let alive = true;
+    if (!artUrl) {
+      setWash(null);
+      return;
+    }
+    void extractVibrantColor(artUrl).then((c) => {
+      if (alive) setWash(c);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [artUrl]);
+
+  useEffect(() => {
+    let alive = true;
     if (!dynamicTheme) {
       setCurrentAccent(null);
       return;
@@ -365,7 +403,7 @@ export default function NowPlayingPage() {
           cancelTap();
           doubleSeek(-1);
         }}
-        className="absolute inset-y-0 left-0 w-1/3 rounded-l-3xl"
+        className="absolute inset-y-0 left-0 w-1/3 rounded-l-xl"
       />
       <button
         aria-label={canvasOn ? 'Double tap to favorite, or tap to toggle the controls' : 'Double tap to favorite'}
@@ -384,15 +422,16 @@ export default function NowPlayingPage() {
           cancelTap();
           doubleSeek(1);
         }}
-        className="absolute inset-y-0 right-0 w-1/3 rounded-r-3xl"
+        className="absolute inset-y-0 right-0 w-1/3 rounded-r-xl"
       />
     </>
   );
 
   const upNext = queue.slice(index + 1, index + 6);
-  const playingFrom = song.album?.name ?? 'Your Queue';
+  const playingFrom = song.album?.name ?? 'Your queue';
   const filmTitle = song.album ? filmTitleFromAlbumName(song.album.name) : null;
   const creditChips = buildCreditChips(song, filmTitle);
+  const washStyle = (wash ? { '--np-wash': wash } : undefined) as React.CSSProperties | undefined;
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -405,6 +444,27 @@ export default function NowPlayingPage() {
     toast(dir > 0 ? '+10s' : '−10s');
   };
 
+  // The ⋯ menu carries the player's secondary destinations above the song actions.
+  const menuItems: TrackMenuItem[] = [
+    { label: 'Drive mode', action: () => navigate('/drive') },
+    ...(lyrics.data?.synced ? [{ label: 'Karaoke', action: () => navigate('/karaoke') }] : []),
+    { label: 'Listen together', action: () => navigate('/together') },
+    {
+      label: 'Share now-playing card',
+      action: () =>
+        void shareNowPlayingCard(song).then((r) => {
+          if (r === 'downloaded') toast('Card saved');
+          else if (r === 'failed') toast('Couldn’t create card');
+        }),
+    },
+  ];
+
+  const pickTab = (tab: 'queue' | 'lyrics' | 'about') => {
+    tabTouched.current = true;
+    setRightTab(tab);
+    // Phone: the panel sits under the player — bring it up into view.
+    if (window.innerWidth < 1024) panelRef.current?.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
+  };
 
   // sheet: drag down to dismiss with the finger, animated slide-down on close.
   const closeSheet = () => {
@@ -427,7 +487,8 @@ export default function NowPlayingPage() {
   const onSheetTouchStart = (e: React.TouchEvent) => {
     // Only the upper area starts a dismiss-drag, so the lists/lyrics scroll freely.
     const y = e.touches[0].clientY;
-    drag.current = y < window.innerHeight * 0.45 ? { y, dy: 0 } : null;
+    const scrolled = (document.getElementById('main-content')?.scrollTop ?? 0) > 4;
+    drag.current = !scrolled && y < window.innerHeight * 0.45 ? { y, dy: 0 } : null;
     if (drag.current && sheetRef.current) sheetRef.current.style.transition = 'none';
   };
   const onSheetTouchMove = (e: React.TouchEvent) => {
@@ -451,495 +512,415 @@ export default function NowPlayingPage() {
     }
   };
 
+  const fadeWhenHidden = chromeHidden && 'opacity-0 pointer-events-none';
+
+  const lyricsBody = (immersiveLayer: boolean) =>
+    lyrics.data?.synced ? (
+      <SyncedLyrics lines={lyrics.data.synced} live size="stage" className={immersiveLayer ? 'py-[18vh]' : 'pb-[30vh]'} />
+    ) : lyrics.data?.plain ? (
+      <div className={cn('vx-np-lyrics-plain', immersiveLayer ? 'py-10' : 'pb-10')}>{lyrics.data.plain}</div>
+    ) : (
+      <p className={cn('text-[15px] text-ink-300', immersiveLayer && 'text-center mt-16')}>No lyrics for this song yet.</p>
+    );
+
   return (
-    <div ref={sheetRef} className="vx-now-playing relative -mx-4 md:-mx-8 px-5 md:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[100dvh] -mb-44 md:-mb-28 overflow-hidden" onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd}>
-      {/* Backdrop: the album art, heavily blurred + scaled, under a theme-adaptive
-          darkening gradient (Apple-Music full-player look). Reuses the loaded art. */}
-      <div className="absolute inset-0 -z-10" aria-hidden>
-        {artUrl && (
-          <img
-            src={artUrl}
-            alt=""
-            aria-hidden
-            loading="eager"
-            decoding="async"
-            className="absolute inset-0 h-full w-full scale-125 object-cover opacity-45 blur-3xl"
-          />
-        )}
+    <div
+      ref={sheetRef}
+      className="vx-now-playing vx-np relative -mx-4 md:-mx-8 px-4 md:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[100dvh] -mb-44 md:-mb-28 overflow-hidden"
+      style={washStyle}
+      onTouchStart={onSheetTouchStart}
+      onTouchMove={onSheetTouchMove}
+      onTouchEnd={onSheetTouchEnd}
+    >
+      {/* Backdrop: the artwork blurred under its own colour, darkened (or, in
+          the light theme, lightened) so every line of text keeps its contrast. */}
+      <StageBackdrop artUrl={artUrl}>
         {/* v5.7.12 — the video canvas: the clip fills the whole player behind
             the gradients on every screen size (full-screen canvas style). */}
         {!chromeHidden && <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />}
-        <div
-          aria-hidden
-          className="absolute inset-0 transition-opacity duration-500"
-          style={{
-            background: 'linear-gradient(180deg, rgb(var(--ember-500) / 0.16), transparent 45%)',
-            opacity: canvasOn ? 0.3 : 1,
-          }}
-        />
+        <div className="vx-np-bg-wash" style={{ opacity: canvasOn ? 0.35 : 1 }} />
         {/* v5.8.2 — the scrim thins over a playing clip so the video reads
             instead of drowning, and thins again once the controls are gone.
             It stays bottom-weighted either way, so whatever chrome is still
             on screen keeps its contrast. */}
-        <div
-          aria-hidden
-          className={cn(
-            'absolute inset-0 bg-gradient-to-b',
-            chromeHidden
-              ? 'from-transparent via-transparent to-ink-950/60'
-              : canvasOn
-                ? 'from-ink-950/35 via-ink-950/25 lg:via-ink-950/45 to-ink-950/95'
-                : 'from-ink-950/30 via-ink-950/70 to-ink-950',
-          )}
-        />
-      </div>
-
-      <div className="max-w-md lg:max-w-5xl mx-auto flex flex-col min-h-full">
-        {/* Top bar — width-locked to the artwork column on lg so it never collides with the right panel */}
-        <div
-          className={cn(
-            'flex items-center justify-between lg:max-w-[26rem] transition-opacity duration-300',
-            chromeHidden && 'opacity-0 pointer-events-none',
-          )}
-          aria-hidden={chromeHidden}
-        >
-          <IconButton label="Close" onClick={closeSheet}>
-            <ChevronDownIcon className="w-6 h-6" />
-          </IconButton>
-          <button onClick={toggleFullscreen} className="flex flex-col items-center min-w-0 px-2" title="Toggle fullscreen">
-            <span className="flex items-center gap-2">
-              <Visualizer />
-              <span className="text-[10px] uppercase tracking-[0.18em] text-ink-200/80 font-semibold">Playing from</span>
-            </span>
-            <span className="block text-xs font-bold truncate max-w-[180px]">{playingFrom}</span>
-          </button>
-          <TrackMenu song={song} />
-        </div>
-
-        <div className="lg:grid lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-12 lg:items-start">
-        <div className="flex flex-col min-w-0">
-
-        {/* Artwork */}
-        {/* Artwork card normally; with a clip on (v5.9.0, full-screen canvas), a
-            transparent edge-to-edge pane over the full-screen clip that owns
-            every gesture. Immersive mode is a separate viewport-fixed layer
-            (see the portal below), so nothing here re-flows when the
-            controls come and go. */}
-        <div
-          className={cn(
-            canvasOn
-              ? 'relative -mx-5 md:-mx-8 lg:mx-auto h-[42vh] lg:h-auto mb-5 lg:mt-5 lg:mb-6'
-              : 'relative mt-5 mb-6 mx-auto',
-            swipeFx === 'up' && 'motion-safe:animate-[np-swipe-next_320ms_ease-out]',
-            swipeFx === 'down' && 'motion-safe:animate-[np-swipe-prev_320ms_ease-out]',
-          )}
-        >
-        {/* Desktop keeps a transparent window of the artwork's size while the
-            clip plays (see SongCanvas), so the pane still has a box to fill. */}
-        {canvasOn && <div aria-hidden className="hidden lg:block w-80 h-80" />}
-        <div
-          className={cn(
-            'select-none touch-pan-x',
-            canvasOn ? 'absolute inset-0' : 'relative',
-          )}
-          data-deter-context
-          onTouchStart={onArtTouchStart}
-          onTouchMove={(e) => e.stopPropagation()}
-          onTouchEnd={onArtTouchEnd}
-        >
+        {canvasOn ? (
           <div
-            aria-hidden
             className={cn(
-              // pointer-events-none: this glow overhangs the pane by 24px and was
-              // swallowing taps on the top bar's ⋮ menu (v5.9.2).
-              'pointer-events-none absolute -inset-6 rounded-[2.5rem] blur-2xl transition-opacity duration-700 bg-[radial-gradient(60%_60%_at_50%_45%,rgb(var(--ember-500)/0.32),rgb(var(--aura-violet)/0.16)_58%,transparent_82%)] motion-safe:animate-[aura-pulse_5.5s_ease-in-out_infinite]',
-              // The aura steps aside with the artwork while the canvas plays,
-              // so the full-screen video shows through untinted.
-              canvas.src ? 'opacity-0' : isPlaying ? 'opacity-100' : 'opacity-40',
+              'absolute inset-0 bg-gradient-to-b',
+              chromeHidden
+                ? 'from-transparent via-transparent to-ink-950/60'
+                : 'from-ink-950/35 via-ink-950/25 lg:via-ink-950/45 to-ink-950/95',
             )}
           />
-          {/* Empty window over the clip while the canvas plays; the still
-              artwork the moment it's off (see SongCanvas). */}
-          <SongCanvas canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} hideToggle={chromeHidden} />
-          {tapZones}
-        </div>
-        </div>
-
-        {/* Everything under the clip fades out together in immersive mode. */}
-        <div
-          className={cn('transition-opacity duration-300', chromeHidden && 'opacity-0 pointer-events-none')}
-          aria-hidden={chromeHidden}
-        >
-
-        {/* Title row */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <Marquee text={song.title} className="text-[22px] font-bold" />
-            <p className="text-sm text-ink-300 truncate mt-0.5">
-              {song.artists[0]?.id ? (
-                <Link to={artistPath(song.artists[0])} className="hover:underline">{song.subtitle}</Link>
-              ) : (
-                song.subtitle
-              )}
-            </p>
-            {streamKbps != null && (
-              <span className="inline-block mt-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide bg-ink-800 text-ink-300">
-                {streamKbps >= 320 ? 'HD · ' : ''}{streamKbps} kbps
-              </span>
-            )}
-            {creditChips.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {creditChips.map((c) => (
-                  <Link
-                    key={`${c.role}-${c.name}`}
-                    to={c.to}
-                    className="flex max-w-full items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-ink-800/70 border border-glass text-ink-200 hover:text-ink-100 hover:bg-ink-700 transition-colors"
-                  >
-                    <span aria-hidden="true">{c.icon}</span>
-                    <span className="text-ink-400">{c.role}</span>
-                    <span className="truncate">{c.name}</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-            {reasons[song.id] && (
-              <p className="mt-2 flex items-center gap-1.5 text-xs italic text-ember-300/90">
-                <SparkleIcon className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{reasons[song.id]}</span>
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {castAvailable && (
-              <div className="w-10 h-10 flex items-center justify-center -mr-2">
-                {/* @ts-expect-error custom element */}
-                <cast-media-route-button style={{ width: '24px', height: '24px', '--connected-color': 'rgb(var(--ember-400))', '--disconnected-color': 'rgb(var(--ink-400))' }} />
-              </div>
-            )}
-            <button onClick={() => setShowDevices(true)} aria-label="Connect to a device" className="w-10 h-10 flex items-center justify-center rounded-full text-ink-300 hover:text-ink-100 hover:bg-ink-800">
-              <DevicesIcon className="w-5 h-5" />
-            </button>
-            <FavButton song={song} />
-          </div>
-        </div>
-
-        {(externalDevice || castDeviceName) && (
-          <p className="text-[11px] font-semibold text-tide-400 mt-2 flex items-center gap-1.5">
-            🎧 Playing on {castDeviceName || externalDevice}
-          </p>
+        ) : (
+          <div className="vx-np-bg-scrim" />
         )}
+      </StageBackdrop>
 
-        {/* live lyric strip — tap to open the full lyrics page */}
-        {lyrics.data?.synced ? (
-          <div className={cn(rightTab === 'lyrics' && 'lg:hidden')}>
-            <LiveLyricLine lines={lyrics.data.synced} onOpen={() => setImmersive(true)} />
-          </div>
-        ) : lyrics.data?.plain ? (
-          <button
-            onClick={() => setImmersive(true)}
-            aria-label="Open lyrics"
-            className="w-full text-left mt-3 px-4 py-3.5 rounded-2xl bg-ink-950/30 hover:bg-ink-950/45 transition-colors flex items-center justify-between gap-3"
-          >
-            <span className="text-sm font-bold text-ink-100">Lyrics available</span>
-            <span className="text-xs font-semibold text-ember-300">Open lyrics ›</span>
+      <div className="vx-np-inner">
+        {/* Top bar: close, where this is playing from, the song menu */}
+        <header className={cn('vx-np-top', fadeWhenHidden)} aria-hidden={chromeHidden}>
+          <IconButton label="Close" onClick={closeSheet} className="text-ink-100">
+            <ChevronDownIcon className="w-6 h-6" />
+          </IconButton>
+          <button onClick={toggleFullscreen} className="vx-np-context" title="Toggle fullscreen">
+            <span className="vx-np-context-label">Playing from</span>
+            <span className="vx-np-context-name">{playingFrom}</span>
           </button>
-        ) : null}
+          <span className="vx-np-menu">
+            <TrackMenu song={song} leadItems={menuItems} />
+          </span>
+        </header>
 
-        {/* Seek */}
-        <div className="mt-3">
-          <Seekbar timesBelow />
-        </div>
-
-        {/* Main transport */}
-        <div className="flex items-center justify-between mt-1.5">
-          <IconButton label={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={toggleShuffle} active={shuffle}>
-            <ShuffleIcon className="w-5 h-5" />
-          </IconButton>
-          <IconButton label="Previous" onClick={prev} size="lg" className="text-ink-100">
-            <PrevIcon className="w-8 h-8" />
-          </IconButton>
-          <button
-            onClick={togglePlay}
-            aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="w-16 h-16 rounded-full bg-ink-100 text-ink-950 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
-          >
-            {isBuffering ? (
-              <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            ) : isPlaying ? (
-              <PauseIcon className="w-7 h-7" />
-            ) : (
-              <PlayIcon className="w-7 h-7 ml-1" />
-            )}
-          </button>
-          <IconButton label="Next" onClick={() => next(true)} size="lg" className="text-ink-100">
-            <NextIcon className="w-8 h-8" />
-          </IconButton>
-          <IconButton label={`Repeat: ${repeat}`} onClick={cycleRepeat} active={repeat !== 'off'} className="relative">
-            <RepeatIcon className="w-5 h-5" />
-            {repeat === 'one' && <span className="absolute top-1 right-1.5 text-[9px] font-bold text-ember-400">1</span>}
-          </IconButton>
-        </div>
-
-        {/* Secondary action row */}
-        <div className="flex items-center justify-between mt-4">
-          <button
-            onClick={() => navigate('/drive')}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs btn-secondary"
-          >
-            Drive mode
-          </button>
-          <div className="flex items-center gap-1">
-            <IconButton
-              label="Share link"
-              size="sm"
-              onClick={() => void shareLink(songPath(song), song.title).then((r) => r === 'copied' && toast('Link copied'))}
+        <div className="vx-np-grid">
+          <div className="vx-np-main">
+            {/* Artwork card normally; with a clip on (v5.9.0, full-screen canvas), a
+                transparent edge-to-edge pane over the full-screen clip that owns
+                every gesture. Immersive mode is a separate viewport-fixed layer
+                (see the portal below), so nothing here re-flows when the
+                controls come and go. */}
+            <div
+              className={cn(
+                'vx-np-art',
+                canvasOn && 'is-canvas',
+                swipeFx === 'up' && 'motion-safe:animate-[np-swipe-next_320ms_ease-out]',
+                swipeFx === 'down' && 'motion-safe:animate-[np-swipe-prev_320ms_ease-out]',
+              )}
             >
-              <ShareIcon className="w-4 h-4" />
-            </IconButton>
-            <IconButton
-              label="Share as image"
-              size="sm"
-              onClick={() =>
-                void shareNowPlayingCard(song).then((r) => {
-                  if (r === 'downloaded') toast('Card saved');
-                  else if (r === 'failed') toast('Couldn’t create card');
-                })
-              }
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                <rect x="3" y="3" width="18" height="18" rx="3" />
-                <circle cx="9" cy="9" r="2" />
-                <path d="M21 15l-5-5L5 21" />
-              </svg>
-            </IconButton>
-            <IconButton label="More options" size="sm" onClick={() => setShowMore((v) => !v)} active={showMore}>
-              <ClockIcon className="w-4 h-4" />
-            </IconButton>
-            <Link to="/together" aria-label="Listen together" className="inline-flex items-center justify-center min-w-touch min-h-touch rounded-full text-ink-300 hover:text-ink-100 hover:bg-ink-700/70">
-              <UsersIcon className="w-4 h-4" />
-            </Link>
-            <Link to="/queue" aria-label="Queue" className="inline-flex items-center justify-center min-w-touch min-h-touch rounded-full text-ink-300 hover:text-ink-100 hover:bg-ink-700/70">
-              <QueueIcon className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-
-        {/* Collapsible extras: volume / speed / sleep */}
-        {showMore && (
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2.5 mt-4 p-3 rounded-2xl glass-panel animate-fade-up">
-            <div className="flex items-center gap-1.5">
-              <IconButton label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} size="sm">
-                <VolumeIcon className="w-4 h-4" muted={muted} />
-              </IconButton>
-              <input type="range" aria-label="Volume" aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`} min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={(e) => setVolume(Number(e.target.value))} className="w-24" style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties} />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-ink-400 uppercase">Speed</span>
-              <input
-                type="range"
-                aria-label="Playback speed"
-                min={0.5}
-                max={2.5}
-                step={0.05}
-                value={rate}
-                onChange={(e) => setRate(Number(e.target.value))}
-                className="w-24"
-                style={{ '--fill': `${((rate - 0.5) / 2) * 100}%` } as React.CSSProperties}
-              />
-              <span className="text-[10px] font-bold text-ember-400 w-6 tabular-nums">{rate.toFixed(2)}x</span>
-            </div>
-            <div className="flex items-center gap-0.5" role="group" aria-label="Sleep timer">
-              <ClockIcon className="w-4 h-4 text-ink-400" />
-              {SLEEP_OPTIONS.map((m) => (
-                <button key={m} onClick={() => setSleepTimer(m)} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ink-400 hover:text-ink-100">{m}m</button>
-              ))}
-              <button
-                onClick={() => setSleepAfterTrack(!sleepAfterTrack)}
-                className={cn('px-2.5 py-2 rounded-lg text-xs font-semibold', sleepAfterTrack ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')}
+              <div
+                className="vx-np-art-pane touch-pan-x"
+                data-deter-context
+                onTouchStart={onArtTouchStart}
+                onTouchMove={(e) => e.stopPropagation()}
+                onTouchEnd={onArtTouchEnd}
               >
-                end of song
-              </button>
-              {sleepAt && (
-                <button onClick={() => setSleepTimer(null)} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ember-400">
-                  cancel ({Math.max(0, Math.round((sleepAt - Date.now()) / 60_000))}m)
+                {/* Empty window over the clip while the canvas plays; the still
+                    artwork the moment it's off (see SongCanvas). */}
+                <SongCanvas canvas={canvas} isPlaying={isPlaying} artUrl={artUrl} hideToggle={chromeHidden} />
+                {tapZones}
+              </div>
+            </div>
+
+            {/* Everything under the clip fades out together in immersive mode. */}
+            <div className={cn('vx-np-controls', fadeWhenHidden)} aria-hidden={chromeHidden}>
+              <div className="vx-np-title-row">
+                <div className="min-w-0 flex-1">
+                  <Marquee text={song.title} className="vx-np-title" />
+                  {song.artists[0]?.id ? (
+                    <Link to={artistPath(song.artists[0])} className="vx-np-artist">{song.subtitle}</Link>
+                  ) : (
+                    <p className="vx-np-artist">{song.subtitle}</p>
+                  )}
+                </div>
+                <FavButton song={song} />
+              </div>
+
+              <div className="vx-np-seek">
+                <Seekbar timesBelow remaining />
+              </div>
+
+              {/* Main transport */}
+              <div className="vx-np-transport">
+                <IconButton label={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={toggleShuffle} active={shuffle} aria-pressed={shuffle} size="lg">
+                  <ShuffleIcon className="w-6 h-6" />
+                  {shuffle && <span className="vx-np-dot" aria-hidden />}
+                </IconButton>
+                <IconButton label="Previous" onClick={prev} size="lg">
+                  <PrevIcon className="w-9 h-9" />
+                </IconButton>
+                <button onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="vx-np-play">
+                  {isBuffering ? (
+                    <span className="w-6 h-6 border-[3px] border-current border-t-transparent rounded-full animate-spin" />
+                  ) : isPlaying ? (
+                    <PauseIcon />
+                  ) : (
+                    <PlayIcon className="ml-1" />
+                  )}
                 </button>
-              )}
-            </div>
-            {/* v5.12.0 — sleep after N songs */}
-            <div className="flex items-center gap-0.5" role="group" aria-label="Sleep after songs">
-              <span className="text-[10px] font-bold text-ink-400 uppercase">Songs</span>
-              {[3, 5, 10].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setSleepSongs(sleepSongsLeft === n ? 0 : n)}
-                  className={cn('px-2.5 py-2 rounded-lg text-xs font-semibold', sleepSongsLeft === n ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')}
-                >
-                  {n}
-                </button>
-              ))}
-              {sleepSongsLeft > 0 && <span className="text-[11px] font-semibold text-ember-400 tabular-nums">{sleepSongsLeft} left</span>}
-            </div>
-            {/* v5.12.0 — A-B repeat: loop any passage */}
-            <div className="flex items-center gap-0.5" role="group" aria-label="A-B repeat">
-              <span className="text-[10px] font-bold text-ink-400 uppercase">Loop</span>
-              <button onClick={() => setLoopPoint('A')} className={cn('px-2.5 py-2 rounded-lg text-xs font-bold', loopA != null ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')}>
-                A{loopA != null ? ` ${fmtTime(loopA)}` : ''}
-              </button>
-              <button onClick={() => setLoopPoint('B')} className={cn('px-2.5 py-2 rounded-lg text-xs font-bold', loopB != null ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')}>
-                B{loopB != null ? ` ${fmtTime(loopB)}` : ''}
-              </button>
-              {(loopA != null || loopB != null) && (
-                <button onClick={clearLoop} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ink-400 hover:text-ink-100">clear</button>
-              )}
-            </div>
-            {/* v5.17.0 — bookmarks: moments to come back to */}
-            <div className="flex items-center gap-0.5 flex-wrap" role="group" aria-label="Bookmarks">
-              <span className="text-[10px] font-bold text-ink-400 uppercase">Marks</span>
-              <BookmarkNowButton songId={song.id} />
-              {marks.map((m) => (
-                <span key={m} className="inline-flex items-center rounded-lg bg-ink-800/70">
-                  <button onClick={() => seek(m)} className="pl-2.5 pr-1 py-2 text-xs font-semibold text-ember-400 tabular-nums" title="Jump here">{fmtTime(m)}</button>
-                  <button onClick={() => removeMark(song.id, m)} aria-label={`Remove bookmark at ${fmtTime(m)}`} className="pr-2 py-2 text-[10px] text-ink-500 hover:text-ink-100">×</button>
+                <IconButton label="Next" onClick={() => next(true)} size="lg">
+                  <NextIcon className="w-9 h-9" />
+                </IconButton>
+                <IconButton label={`Repeat: ${repeat}`} onClick={cycleRepeat} active={repeat !== 'off'} aria-pressed={repeat !== 'off'} size="lg">
+                  <RepeatIcon className="w-6 h-6" />
+                  {repeat === 'one' && <span className="absolute top-1.5 right-1.5 text-[10px] font-extrabold">1</span>}
+                  {repeat !== 'off' && <span className="vx-np-dot" aria-hidden />}
+                </IconButton>
+              </div>
+
+              {/* Lyrics · devices · playback options · share · queue */}
+              <div className="vx-np-tools">
+                <IconButton label="Lyrics" onClick={() => setImmersive(true)} className="vx-np-tool">
+                  <MicIcon />
+                </IconButton>
+                <span className="flex items-center">
+                  <IconButton label="Connect to a device" onClick={() => setShowDevices(true)} className="vx-np-tool">
+                    <DevicesIcon />
+                  </IconButton>
+                  {castAvailable && (
+                    <span className="vx-np-cast">
+                      {/* @ts-expect-error custom element */}
+                      <cast-media-route-button style={{ width: '22px', height: '22px', '--connected-color': 'rgb(var(--ember-400))', '--disconnected-color': 'rgb(var(--ink-200))' }} />
+                    </span>
+                  )}
                 </span>
-              ))}
-            </div>
-            {/* v6.5.0 — tune this queue */}
-            <div className="w-full">
-              <span className="block text-[10px] font-bold text-ink-400 uppercase mb-1.5">Tune this queue</span>
-              <TuneChips compact />
-            </div>
-            {/* v5.17.0 — share this exact moment, ambient mode */}
-            <div className="flex items-center gap-0.5 flex-wrap" role="group" aria-label="More options">
-              <button onClick={() => { const at = usePlayerStore.getState().currentTime; void shareLink(`${songPath(song)}?t=${Math.floor(at)}`, `${song.title} at ${fmtTime(at)}`).then((r) => r === 'copied' && toast('Link to this moment copied')); }} className="px-2.5 py-2 rounded-lg text-xs font-semibold text-ink-400 hover:text-ink-100">Share this moment</button>
-              <button onClick={() => setAmbientArmed((v) => !v)} aria-pressed={ambientArmed} className={cn('px-2.5 py-2 rounded-lg text-xs font-semibold', ambientArmed ? 'text-ember-400' : 'text-ink-400 hover:text-ink-100')} title="After 45 s without touching anything, show a calm artwork-and-clock screen">Ambient mode {ambientArmed ? 'on' : 'off'}</button>
+                <IconButton label="More options" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className="vx-np-tool">
+                  <SlidersIcon />
+                </IconButton>
+                <IconButton
+                  label="Share link"
+                  className="vx-np-tool"
+                  onClick={() => void shareLink(songPath(song), song.title).then((r) => r === 'copied' && toast('Link copied'))}
+                >
+                  <ShareIcon />
+                </IconButton>
+                <Link to="/queue" aria-label="Queue" title="Queue" className="vx-np-tool">
+                  <QueueIcon />
+                </Link>
+              </div>
+
+              {(externalDevice || castDeviceName) && (
+                <p className="vx-np-device-line">
+                  <DevicesIcon className="w-3.5 h-3.5" aria-hidden /> Playing on {castDeviceName || externalDevice}
+                </p>
+              )}
             </div>
           </div>
-        )}
 
-        </div>
-
-        </div>
-
-        <div
-          className={cn(
-            'vx-player-context flex flex-col min-w-0 transition-opacity duration-300',
-            chromeHidden && 'opacity-0 pointer-events-none',
-          )}
-          aria-hidden={chromeHidden}
-        >
-        <div className="mt-6 lg:mt-0 flex items-center gap-2" role="tablist" aria-label="Player panels">
-          <button
-            role="tab"
-            aria-selected={rightTab === 'queue'}
-            onClick={() => {
-              tabTouched.current = true;
-              setRightTab('queue');
-            }}
-            className={cn(
-              'px-4 py-2 rounded-full text-xs font-bold transition-colors',
-              rightTab === 'queue' ? 'bg-ink-800 text-ink-100' : 'text-ink-400 hover:text-ink-200',
-            )}
+          {/* Up next · lyrics · credits: a panel under the player on phones, the
+              right-hand column on wide screens. */}
+          <section
+            ref={panelRef}
+            aria-label="Up next, lyrics and credits"
+            className={cn('vx-player-context vx-np-panel transition-opacity duration-300', fadeWhenHidden)}
+            aria-hidden={chromeHidden}
           >
-            Up Next{upNext.length > 0 ? ` · ${upNext.length}` : ''}
-          </button>
-          <button
-            role="tab"
-            aria-selected={rightTab === 'lyrics'}
-            onClick={() => {
-              tabTouched.current = true;
-              setRightTab('lyrics');
-            }}
-            className={cn(
-              'px-4 py-2 rounded-full text-xs font-bold transition-colors',
-              rightTab === 'lyrics' ? 'bg-ink-800 text-ink-100' : 'text-ink-400 hover:text-ink-200',
+            <div className="vx-np-tabbar">
+            <div className="vx-np-tabs" role="tablist" aria-label="Player panels">
+              <button role="tab" aria-selected={rightTab === 'queue'} onClick={() => pickTab('queue')}>
+                Up next
+              </button>
+              <button role="tab" aria-selected={rightTab === 'lyrics'} onClick={() => pickTab('lyrics')}>
+                Lyrics
+              </button>
+              <button role="tab" aria-selected={rightTab === 'about'} onClick={() => pickTab('about')}>
+                Credits
+              </button>
+            </div>
+            {rightTab === 'queue' && <Link to="/queue" className="vx-np-link">Open queue</Link>}
+            {rightTab === 'lyrics' && <Link to={`/lyrics/${song.id}`} className="vx-np-link">Full lyrics</Link>}
+            </div>
+
+            {rightTab === 'queue' && (
+              <div className="vx-np-tabpanel" role="tabpanel" aria-label="Up next">
+                <h2 className="sr-only">Up next</h2>
+                {upNext.length === 0 && (
+                  <p className="text-[15px] text-ink-300 flex items-center gap-2 py-2" role="status">
+                    <SparkleIcon className={cn('w-4 h-4 shrink-0', rebuilding && 'animate-pulse')} />
+                    {rebuilding ? 'Finding what follows this song…' : 'Add songs with Play next or Add to queue.'}
+                  </p>
+                )}
+                {upNext.map((s, i) => {
+                  const line = songLine(s);
+                  return (
+                    <button key={`${s.id}-${i}`} onClick={() => playAt(index + 1 + i)} className="vx-np-row">
+                      <img src={bestImage(s.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" decoding="async" />
+                      <span className="min-w-0 flex-1">
+                        {/* Song – Movie/Album – Artist */}
+                        <span className="vx-np-row-title">{line.title}</span>
+                        <span className="vx-np-row-meta">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
+                        {reasons[s.id] && (
+                          <span className="vx-np-row-why">
+                            <SparkleIcon className="w-3 h-3 shrink-0" aria-hidden />
+                            <span>{reasons[s.id]}</span>
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+
+                {/* C5 / v7.1.0 — pin a mood. It used to set a flag that only nudged the NEXT automatic
+                    extension (possibly eight songs away), so tapping a chip changed nothing you could
+                    see. Now it rebuilds Up Next at once: songs are fetched FOR the mood, in this
+                    queue's language; songs you queued by hand stay where they are. */}
+                <div className="vx-np-mood" role="group" aria-label="Pin a mood">
+                  <div className="vx-np-subhead">
+                    <h3>Pin a mood</h3>
+                    <span className="vx-np-meta">Rebuilds Up next · holds 45 min</span>
+                  </div>
+                  <div className="vx-np-chips">
+                    {MOOD_PINS.map(([m, label, intent]) => (
+                      <Chip
+                        key={m}
+                        active={moodPin === m}
+                        onClick={() => {
+                          const store = usePlayerStore.getState();
+                          if (moodPin === m) {
+                            clearMoodPin();
+                            setMoodPin(null);
+                            store.tuneQueue(null);
+                            toast('Mood unpinned — Up Next goes back to your usual mix');
+                          } else {
+                            pinMood(m);
+                            setMoodPin(m);
+                            store.tuneQueue(intent);
+                            toast(`${label} pinned — rebuilding Up Next`);
+                          }
+                          setRebuilding(true);
+                        }}
+                      >
+                        {label}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
-          >
-            Lyrics
-          </button>
+
+            {rightTab === 'lyrics' && (
+              <div className="vx-np-tabpanel is-lyrics" role="tabpanel" aria-label="Lyrics">
+                <div className="vx-np-lyrics">{lyricsBody(false)}</div>
+              </div>
+            )}
+
+            {rightTab === 'about' && (
+              <div className="vx-np-tabpanel" role="tabpanel" aria-label="Credits">
+                {reasons[song.id] && (
+                  <div className="vx-np-about-block">
+                    <p className="vx-np-about-label">Why this song</p>
+                    <p className="flex items-start gap-2 text-[15px] text-ink-100">
+                      <SparkleIcon className="w-4 h-4 mt-0.5 shrink-0 text-ink-300" aria-hidden />
+                      <span>{reasons[song.id]}</span>
+                    </p>
+                  </div>
+                )}
+                {creditChips.length > 0 && (
+                  <div className="vx-np-about-block">
+                    <p className="vx-np-about-label">Credits</p>
+                    <div className="flex flex-wrap gap-2">
+                      {creditChips.map((c) => (
+                        <Link key={`${c.role}-${c.name}`} to={c.to} className="vx-np-credit">
+                          <span aria-hidden="true">{c.icon}</span>
+                          <span className="vx-np-credit-role">{c.role}</span>
+                          <span className="truncate">{c.name}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {streamKbps != null && (
+                  <div className="vx-np-about-block">
+                    <p className="vx-np-about-label">Stream</p>
+                    <span className="vx-np-badge tabular-nums">
+                      {streamKbps >= 320 ? 'HD · ' : ''}{streamKbps} kbps
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
         </div>
-        {rightTab === 'queue' && (
-        <>
-        {/* C5 / v7.1.0 — pin a mood. It used to set a flag that only nudged the NEXT automatic
-            extension (possibly eight songs away), so tapping a chip changed nothing you could
-            see. Now it rebuilds Up Next at once: songs are fetched FOR the mood, in this
-            queue's language; songs you queued by hand stay where they are. */}
-        <div className="mt-5" role="group" aria-label="Pin a mood">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-2">
-            Pin a mood <span className="normal-case font-semibold text-ink-500 tracking-normal">· rebuilds Up Next, holds for 45 min</span>
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {MOOD_PINS.map(([m, label, intent]) => (
-              <Chip
-                key={m}
-                active={moodPin === m}
-                onClick={() => {
-                  const store = usePlayerStore.getState();
-                  if (moodPin === m) {
-                    clearMoodPin();
-                    setMoodPin(null);
-                    store.tuneQueue(null);
-                    toast('Mood unpinned — Up Next goes back to your usual mix');
-                  } else {
-                    pinMood(m);
-                    setMoodPin(m);
-                    store.tuneQueue(intent);
-                    toast(`${label} pinned — rebuilding Up Next`);
-                  }
-                  setRebuilding(true);
-                }}
-              >
-                {label}
-              </Chip>
+      </div>
+
+      {/* Playback options: volume, speed, sleep, A-B loop, marks, Tune this queue. */}
+      <Sheet open={showMore} onClose={() => setShowMore(false)} labelledBy="vx-np-opts-title" size="lg" className="vx-np-opts">
+        <h2 id="vx-np-opts-title" className="mb-2">Playback</h2>
+        <div className="vx-np-opt">
+          <span className="vx-np-opt-label">Volume</span>
+          <div className="vx-np-opt-controls">
+            <IconButton label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} size="sm">
+              <VolumeIcon className="w-4 h-4" muted={muted} />
+            </IconButton>
+            <input type="range" aria-label="Volume" aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`} min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={(e) => setVolume(Number(e.target.value))} style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties} />
+          </div>
+        </div>
+        <div className="vx-np-opt">
+          <span className="vx-np-opt-label">Speed</span>
+          <div className="vx-np-opt-controls">
+            <input
+              type="range"
+              aria-label="Playback speed"
+              min={0.5}
+              max={2.5}
+              step={0.05}
+              value={rate}
+              onChange={(e) => setRate(Number(e.target.value))}
+              style={{ '--fill': `${((rate - 0.5) / 2) * 100}%` } as React.CSSProperties}
+            />
+            <span className="w-12 text-right text-[13px] font-bold tabular-nums text-ink-100">{rate.toFixed(2)}x</span>
+          </div>
+        </div>
+        <div className="vx-np-opt">
+          <span className="vx-np-opt-label">Sleep timer</span>
+          <div className="vx-np-opt-controls" role="group" aria-label="Sleep timer">
+            {SLEEP_OPTIONS.map((m) => (
+              <button key={m} onClick={() => setSleepTimer(m)} className="vx-np-pill">{m}m</button>
+            ))}
+            <button onClick={() => setSleepAfterTrack(!sleepAfterTrack)} aria-pressed={sleepAfterTrack} className="vx-np-pill">
+              End of song
+            </button>
+            {sleepAt && (
+              <button onClick={() => setSleepTimer(null)} className="vx-np-pill is-on">
+                Cancel ({Math.max(0, Math.round((sleepAt - Date.now()) / 60_000))}m)
+              </button>
+            )}
+          </div>
+        </div>
+        {/* v5.12.0 — sleep after N songs */}
+        <div className="vx-np-opt">
+          <span className="vx-np-opt-label">Sleep after songs</span>
+          <div className="vx-np-opt-controls" role="group" aria-label="Sleep after songs">
+            {[3, 5, 10].map((n) => (
+              <button key={n} onClick={() => setSleepSongs(sleepSongsLeft === n ? 0 : n)} aria-pressed={sleepSongsLeft === n} className="vx-np-pill">
+                {n}
+              </button>
+            ))}
+            {sleepSongsLeft > 0 && <span className="text-[13px] font-bold text-ink-200 tabular-nums">{sleepSongsLeft} left</span>}
+          </div>
+        </div>
+        {/* v5.12.0 — A-B repeat: loop any passage */}
+        <div className="vx-np-opt">
+          <span className="vx-np-opt-label">Loop a passage</span>
+          <div className="vx-np-opt-controls" role="group" aria-label="A-B repeat">
+            <button onClick={() => setLoopPoint('A')} className={cn('vx-np-pill', loopA != null && 'is-on')}>
+              A{loopA != null ? ` ${fmtTime(loopA)}` : ''}
+            </button>
+            <button onClick={() => setLoopPoint('B')} className={cn('vx-np-pill', loopB != null && 'is-on')}>
+              B{loopB != null ? ` ${fmtTime(loopB)}` : ''}
+            </button>
+            {(loopA != null || loopB != null) && (
+              <button onClick={clearLoop} className="vx-np-pill is-quiet">Clear</button>
+            )}
+          </div>
+        </div>
+        {/* v5.17.0 — bookmarks: moments to come back to */}
+        <div className="vx-np-opt">
+          <span className="vx-np-opt-label">Marks</span>
+          <div className="vx-np-opt-controls" role="group" aria-label="Bookmarks">
+            <BookmarkNowButton songId={song.id} />
+            {marks.map((m) => (
+              <span key={m} className="inline-flex items-center rounded-full bg-ink-100/10">
+                <button onClick={() => seek(m)} className="pl-3 pr-1 min-h-[34px] text-[13px] font-semibold text-ink-100 tabular-nums" title="Jump here">{fmtTime(m)}</button>
+                <button onClick={() => removeMark(song.id, m)} aria-label={`Remove bookmark at ${fmtTime(m)}`} className="pl-1 pr-3 min-h-[34px] text-[13px] text-ink-400 hover:text-ink-100">×</button>
+              </span>
             ))}
           </div>
         </div>
+        {/* v6.5.0 — tune this queue */}
+        <div className="vx-np-opt is-block">
+          <span className="vx-np-opt-label">Tune this queue</span>
+          <TuneChips compact />
+        </div>
+        {/* v5.17.0 — share this exact moment, ambient mode */}
+        <div className="vx-np-opt">
+          <span className="vx-np-opt-label">More</span>
+          <div className="vx-np-opt-controls" role="group" aria-label="More options">
+            <button onClick={() => { const at = usePlayerStore.getState().currentTime; void shareLink(`${songPath(song)}?t=${Math.floor(at)}`, `${song.title} at ${fmtTime(at)}`).then((r) => r === 'copied' && toast('Link to this moment copied')); }} className="vx-np-pill">Share this moment</button>
+            <button onClick={() => setAmbientArmed((v) => !v)} aria-pressed={ambientArmed} className="vx-np-pill" title="After 45 s without touching anything, show a calm artwork-and-clock screen">Ambient mode {ambientArmed ? 'on' : 'off'}</button>
+          </div>
+        </div>
+      </Sheet>
 
-        {/* Up next */}
-        <div className="mt-6 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="flex items-center gap-2">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400">Up Next</h2>
-            </span>
-            <Link to="/queue" className="text-xs font-semibold text-ember-400">Full queue</Link>
-          </div>
-          {upNext.length === 0 && (
-            <p className="text-sm text-ink-400 flex items-center gap-1.5" role="status">
-              <SparkleIcon className={`w-4 h-4 text-ember-400 shrink-0 ${rebuilding ? 'animate-pulse' : ''}`} />
-              {rebuilding ? 'Finding what follows this song…' : 'Add songs with Play next or Add to queue.'}
-            </p>
-          )}
-          {upNext.map((s, i) => (
-            <button key={`${s.id}-${i}`} onClick={() => playAt(index + 1 + i)} className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-ink-800/60 text-left">
-              <img src={bestImage(s.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-9 h-9 rounded-lg object-cover" />
-              <span className="min-w-0">
-                {/* Song – Movie/Album – Artist */}
-                <span className="block text-sm truncate">{songLine(s).title}</span>
-                <span className="block text-xs text-ink-400 truncate">{[songLine(s).album, songLine(s).artist].filter(Boolean).join(' – ')}</span>
-                {reasons[s.id] && (
-                  <span className="block text-[11px] text-ember-400/80 truncate italic">✨ {reasons[s.id]}</span>
-                )}
-              </span>
-            </button>
-          ))}
-        </div>
-        </>
-        )}
-        {rightTab === 'lyrics' && (
-          <div className="mt-5">
-            {lyrics.data?.synced ? (
-              <SyncedLyrics lines={lyrics.data.synced} live className="max-h-[30rem] overflow-y-auto pr-1" />
-            ) : lyrics.data?.plain ? (
-              <div className="max-h-[30rem] overflow-y-auto whitespace-pre-wrap text-sm leading-7 text-ink-200 pr-2">
-                {lyrics.data.plain}
-              </div>
-            ) : (
-              <p className="text-sm text-ink-400">No lyrics for this song yet.</p>
-            )}
-          </div>
-        )}
-        </div>
-        </div>
-      </div>
       {/* v5.9.1 — immersive mode is its own layer on <body>, pinned to the
           viewport. Inside the sheet the clip scrolled and dragged with the
           sheet (a black band above the video whenever the page had moved);
@@ -969,52 +950,52 @@ export default function NowPlayingPage() {
           </div>,
           document.body,
         )}
-      {immersive && (
-        <div
-          ref={immersiveRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Immersive lyrics"
-          className="absolute inset-0 z-30 flex flex-col animate-fade-up bg-ink-950/25 backdrop-blur-sm"
-        >
-          <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
-            <IconButton label="Close lyrics" onClick={() => setImmersive(false)}>
-              <ChevronDownIcon className="w-6 h-6" />
-            </IconButton>
-            <span className="min-w-0 px-2 text-xs font-bold uppercase tracking-widest text-ink-300 truncate">
-              {song.title}
-            </span>
-            <span className="w-11" aria-hidden />
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-6 w-full max-w-xl mx-auto overscroll-contain">
-            {lyrics.data?.synced ? (
-              <SyncedLyrics lines={lyrics.data.synced} live size="lg" />
-            ) : lyrics.data?.plain ? (
-              <div className="whitespace-pre-wrap text-xl leading-9 text-ink-100 font-semibold">{lyrics.data.plain}</div>
-            ) : (
-              <p className="text-sm text-ink-400 text-center mt-16">No lyrics for this song yet.</p>
-            )}
-          </div>
-          <div className="px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] w-full max-w-xl mx-auto">
-            <Seekbar timesBelow />
-            <div className="flex items-center justify-center gap-10 mt-1">
-              <IconButton label="Previous" onClick={prev} size="lg" className="text-ink-100">
-                <PrevIcon className="w-7 h-7" />
+      {/* Immersive lyrics: a viewport layer on <body>, so it never scrolls with the page. */}
+      {immersive &&
+        createPortal(
+          <div
+            ref={immersiveRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Immersive lyrics"
+            data-vx-overlay
+            className="vx-np vx-np-immersive animate-fade-up"
+            style={washStyle}
+          >
+            <StageBackdrop artUrl={artUrl}>
+              <div className="vx-np-bg-wash" />
+              <div className="vx-np-bg-scrim" />
+            </StageBackdrop>
+            <div className="vx-np-top px-4 md:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] w-full max-w-3xl mx-auto">
+              <IconButton label="Close lyrics" onClick={() => setImmersive(false)} className="text-ink-100">
+                <ChevronDownIcon className="w-6 h-6" />
               </IconButton>
-              <button
-                onClick={togglePlay}
-                aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="w-14 h-14 rounded-full bg-ink-100 text-ink-950 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
-              >
-                {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6 ml-0.5" />}
-              </button>
-              <IconButton label="Next" onClick={() => next(true)} size="lg" className="text-ink-100">
-                <NextIcon className="w-7 h-7" />
-              </IconButton>
+              <span className="vx-np-context">
+                <span className="vx-np-context-name">{song.title}</span>
+                <span className="vx-np-context-label truncate max-w-full">{song.subtitle}</span>
+              </span>
+              <span className="w-11" aria-hidden />
             </div>
-          </div>
-        </div>
-      )}
+            <div className="vx-np-lyrics px-4 md:px-8 w-full max-w-3xl mx-auto">{lyricsBody(true)}</div>
+            <div className="px-4 md:px-8 pb-[max(1.25rem,env(safe-area-inset-bottom))] w-full max-w-3xl mx-auto">
+              <div className="vx-np-seek !mt-2">
+                <Seekbar timesBelow remaining />
+              </div>
+              <div className="flex items-center justify-center gap-10 mt-1">
+                <IconButton label="Previous" onClick={prev} size="lg" className="text-ink-100">
+                  <PrevIcon className="w-8 h-8" />
+                </IconButton>
+                <button onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="vx-np-play !w-16 !h-16">
+                  {isPlaying ? <PauseIcon /> : <PlayIcon className="ml-0.5" />}
+                </button>
+                <IconButton label="Next" onClick={() => next(true)} size="lg" className="text-ink-100">
+                  <NextIcon className="w-8 h-8" />
+                </IconButton>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
       <DeviceSheet open={showDevices} onClose={() => setShowDevices(false)} />
       {ambientIdle && song && <AmbientOverlay song={song} onWake={wakeAmbient} />}
     </div>

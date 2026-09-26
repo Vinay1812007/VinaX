@@ -137,18 +137,17 @@ export function SongCanvas({
   /** Immersive mode: the controls are gone, so the ART/VIDEO chip goes too. */
   hideToggle?: boolean;
 }) {
-  const baseClasses = cn(
-    'w-72 h-72 sm:w-80 sm:h-80 rounded-3xl transition-[color,background-color,border-color,opacity,transform] duration-500',
-    isPlaying ? 'scale-100' : 'scale-[0.97] opacity-90',
-  );
+  // 8.0 — the artwork fills its column (player.css sizes it); it settles back
+  // a little while paused.
+  const baseClasses = cn('vx-np-art-img', !isPlaying && 'is-paused');
   const toggle = canvas.hasVideo && !hideToggle && (
     <button
       aria-label={canvas.off ? 'Turn the video canvas on' : 'Turn the video canvas off'}
       title={canvas.off ? 'Show video' : 'Show artwork'}
       onClick={canvas.toggle}
-      className="absolute top-2.5 right-2.5 z-10 px-2.5 py-1 rounded-full bg-black/55 backdrop-blur text-white text-[10px] font-bold tracking-wide"
+      className="absolute top-3 right-3 z-10 min-h-[28px] px-3 rounded-full bg-black/55 backdrop-blur text-white text-[11px] font-bold"
     >
-      {canvas.off ? '▶ VIDEO' : 'ART'}
+      {canvas.off ? '▶ Video' : 'Artwork'}
     </button>
   );
   return (
@@ -159,7 +158,7 @@ export function SongCanvas({
           onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
           alt=""
           draggable={false}
-          className={cn(baseClasses, 'object-cover shadow-[0_28px_70px_-14px_rgb(var(--ember-500)/0.4)]')}
+          className={baseClasses}
         />
       )}
       {toggle}

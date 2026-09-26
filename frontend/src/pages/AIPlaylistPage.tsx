@@ -4,7 +4,9 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { PageHeader } from '@/components/PageHeader';
 import { SongRow } from '@/components/SongRow';
 import { EmptyState } from '@/components/States';
-import { SparkleIcon, PlayIcon } from '@/components/Icons';
+import { SparkleIcon } from '@/components/Icons';
+import { EntityMeta, PlayFab, songsLabel, totalDuration } from '@/components/EntityHeader';
+import { CollageCover } from '@/features/library/CollageCover';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
@@ -12,7 +14,7 @@ import { toast } from '@/store/toastStore';
 import { generatePlaylist, type GeneratedPlaylist } from '@/services/ai/playlist';
 
 export default function AIPlaylistPage() {
-  usePageTitle('AI Playlist');
+  usePageTitle('AI playlist');
   const navigate = useNavigate();
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const language = pinned[0] ? pinned[0][0].toUpperCase() + pinned[0].slice(1) : 'Hindi';
@@ -85,12 +87,8 @@ export default function AIPlaylistPage() {
   };
 
   return (
-    <div className="vx-playlist-studio max-w-3xl mx-auto pb-10">
-      <p className="vx-eyebrow">VINAX / PLAYLIST STUDIO</p>
-      <PageHeader
-        title="A soundtrack for whatever’s next."
-        subtitle="Tell us the moment. We’ll find the music."
-      />
+    <div className="vx-playlist-studio max-w-3xl pb-10">
+      <PageHeader title="AI playlist" />
       <div className="vx-prompt-grid">
         {examples.map((example) => (
           <button key={example.title} disabled={loading} onClick={() => { setPrompt(example.prompt); run(example.prompt); }}>
@@ -101,7 +99,7 @@ export default function AIPlaylistPage() {
         ))}
       </div>
 
-      <div className="glass-card rounded-2xl p-4 mb-5">
+      <div className="vx-ai-composer glass-card rounded-2xl p-4 mb-5">
         <label htmlFor="playlist-idea" className="block text-sm font-bold mb-3">
           Describe your perfect mix
         </label>
@@ -141,34 +139,26 @@ export default function AIPlaylistPage() {
       )}
 
       {result && (
-        <div>
-          <div className="flex items-end justify-between gap-3 mb-3">
+        <section className="vx-ai-result" aria-labelledby="ai-result-title">
+          <div className="vx-ai-result-head">
+            <CollageCover songs={result.songs} minPx={300} className="vx-ai-result-art" />
             <div className="min-w-0">
-              <h2 className="text-xl font-extrabold truncate">{result.name}</h2>
-              {result.description && <p className="text-sm text-ink-400">{result.description}</p>}
-              <p className="text-xs text-ink-500 mt-0.5">{result.songs.length} songs</p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={save}
-                className="px-4 py-2 rounded-full border border-ink-600 text-sm font-semibold hover:border-ember-500 hover:text-ember-400"
-              >
-                Save
-              </button>
-              <button
-                onClick={playAll}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm btn-primary"
-              >
-                <PlayIcon className="w-4 h-4" /> Play
-              </button>
+              <p className="vx-ehead-kind">Playlist</p>
+              <h2 id="ai-result-title" className="vx-ai-result-title">{result.name}</h2>
+              {result.description && <p className="vx-ehead-desc !mt-0">{result.description}</p>}
+              <EntityMeta items={[songsLabel(result.songs.length), totalDuration(result.songs)]} />
             </div>
           </div>
-          <div className="space-y-1">
+          <div className="vx-ehead-actions">
+            <PlayFab label="Play" onClick={playAll} />
+            <button onClick={save} className="vx-ehead-pill">Save</button>
+          </div>
+          <div className="vx-tracklist">
             {result.songs.map((song, i) => (
               <SongRow key={song.id} song={song} songs={result.songs} index={i} />
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

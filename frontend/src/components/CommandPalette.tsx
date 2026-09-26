@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Song } from '@/types';
 import { searchSongs } from '@/services/api';
@@ -13,12 +13,14 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { NAV_GROUPS } from '@/constants/nav';
 import { cn } from '@/utils/cn';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { MoonIcon, NextIcon, PlayIcon, PrevIcon, RepeatIcon, SearchIcon, ShuffleIcon, SparkleIcon, VolumeIcon } from './Icons';
 
 interface Entry {
   id: string;
   label: string;
   hint?: string;
   kind: 'song' | 'action' | 'nav';
+  icon?: ComponentType<{ className?: string }>;
   song?: Song;
   run: () => void;
 }
@@ -98,14 +100,15 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
   const staticEntries = useMemo<Entry[]>(() => {
     const p = () => usePlayerStore.getState();
     const actions: Entry[] = [
-      { id: 'a-play', label: 'Play / Pause', hint: 'Player', kind: 'action', run: () => p().togglePlay() },
-      { id: 'a-next', label: 'Next track', hint: 'Player', kind: 'action', run: () => p().next(true) },
-      { id: 'a-prev', label: 'Previous track', hint: 'Player', kind: 'action', run: () => p().prev() },
-      { id: 'a-shuffle', label: 'Toggle shuffle', hint: 'Player', kind: 'action', run: () => p().toggleShuffle() },
-      { id: 'a-repeat', label: 'Cycle repeat', hint: 'Player', kind: 'action', run: () => p().cycleRepeat() },
-      { id: 'a-mute', label: 'Mute / Unmute', hint: 'Player', kind: 'action', run: () => p().toggleMute() },
+      { id: 'a-play', icon: PlayIcon, label: 'Play / Pause', hint: 'Player', kind: 'action', run: () => p().togglePlay() },
+      { id: 'a-next', icon: NextIcon, label: 'Next track', hint: 'Player', kind: 'action', run: () => p().next(true) },
+      { id: 'a-prev', icon: PrevIcon, label: 'Previous track', hint: 'Player', kind: 'action', run: () => p().prev() },
+      { id: 'a-shuffle', icon: ShuffleIcon, label: 'Toggle shuffle', hint: 'Player', kind: 'action', run: () => p().toggleShuffle() },
+      { id: 'a-repeat', icon: RepeatIcon, label: 'Cycle repeat', hint: 'Player', kind: 'action', run: () => p().cycleRepeat() },
+      { id: 'a-mute', icon: VolumeIcon, label: 'Mute / Unmute', hint: 'Player', kind: 'action', run: () => p().toggleMute() },
       {
         id: 'a-surprise',
+        icon: SparkleIcon,
         label: 'Surprise me',
         hint: 'AI DJ · retune the queue',
         kind: 'action',
@@ -121,6 +124,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       },
       {
         id: 'a-theme',
+        icon: MoonIcon,
         label: 'Toggle theme',
         hint: 'Appearance',
         kind: 'action',
@@ -137,6 +141,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         label: it.label,
         hint: `Go to · ${g.label}`,
         kind: 'nav' as const,
+        icon: it.icon,
         run: () => navigate(it.to),
       })),
     );
@@ -178,9 +183,12 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
     it?.run();
   };
 
+  const sectionOf = (e: Entry): string => (e.kind === 'song' ? 'Songs' : e.kind === 'nav' ? 'Go to' : 'Player');
+  const kbd = 'inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-[5px] bg-ink-100/[0.08] border border-[color:var(--vx-border)] text-[11px] font-bold text-ink-300';
+
   return (
     <div
-      className="fixed inset-0 z-[95] bg-black/50 backdrop-blur-sm flex items-start justify-center pt-[12vh] px-4"
+      className="fixed inset-0 z-[95] bg-black/60 flex items-start justify-center pt-[max(12px,var(--safe-top))] sm:pt-[12vh] px-3 sm:px-4"
       role="presentation"
       onClick={onClose}
     >
@@ -189,78 +197,99 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="w-full max-w-lg rounded-2xl bg-[color:var(--surface-modal)] border border-[color:var(--glass-border)] shadow-2xl overflow-hidden animate-fade-up"
+        className="w-full max-w-xl rounded-2xl bg-ink-950 dark:bg-ink-850 border border-[color:var(--vx-border)] shadow-[0_24px_64px_-16px_rgba(0,0,0,0.65)] overflow-hidden animate-fade-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <input
-          autoFocus
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setSel(0);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              onClose();
-            } else if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setSel((s) => Math.min(s + 1, list.length - 1));
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setSel((s) => Math.max(s - 1, 0));
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              runSel(sel);
-            }
-          }}
-          placeholder="Jump to, run, or search songs…"
-          aria-label="Search commands and songs"
-          role="combobox"
-          aria-expanded="true"
-          aria-controls="vx-palette-list"
-          aria-activedescendant={list[sel]?.id}
-          className="w-full px-4 py-3.5 bg-transparent outline-none text-sm border-b border-[color:var(--glass-border)] placeholder:text-ink-400"
-        />
-        <div id="vx-palette-list" role="listbox" ref={listRef} className="max-h-[50vh] overflow-y-auto py-1.5">
-          {list.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-ink-400">No matches — try a song name.</p>
-          )}
-          {list.map((e, i) => (
-            <button
-              key={e.id}
-              id={e.id}
-              role="option"
-              aria-selected={i === sel}
-              tabIndex={-1}
-              onMouseEnter={() => setSel(i)}
-              onClick={() => runSel(i)}
-              className={cn(
-                'w-full flex items-center gap-3 px-3.5 py-2 text-left text-sm',
-                i === sel ? 'bg-ink-700 text-ink-100' : 'text-ink-100',
-              )}
-            >
-              {e.kind === 'song' && (
-                <img
-                  src={e.song ? bestImage(e.song.images, 150) : FALLBACK_ART}
-                  onError={(ev) => ((ev.target as HTMLImageElement).src = FALLBACK_ART)}
-                  alt=""
-                  className="w-8 h-8 rounded-md object-cover shrink-0"
-                />
-              )}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate">{e.label}</span>
-                {e.hint && <span className="block text-[11px] text-ink-400 truncate">{e.hint}</span>}
-              </span>
-              <span className="text-[10px] uppercase tracking-wider text-ink-400 shrink-0">
-                {e.kind === 'song' ? 'Play' : e.kind === 'action' ? 'Action' : 'Go'}
-              </span>
-            </button>
-          ))}
+        <div className="flex items-center gap-3 h-14 px-4 border-b border-[color:var(--vx-border)]">
+          <SearchIcon className="w-5 h-5 shrink-0 text-ink-400" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSel(0);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                onClose();
+              } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSel((s) => Math.min(s + 1, list.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSel((s) => Math.max(s - 1, 0));
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                runSel(sel);
+              }
+            }}
+            placeholder="Search songs, pages and actions"
+            aria-label="Search commands and songs"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="vx-palette-list"
+            aria-activedescendant={list[sel]?.id}
+            className="flex-1 min-w-0 h-12 bg-transparent outline-none text-[16px] font-medium text-ink-100 placeholder:text-ink-400"
+          />
+          <kbd className={cn(kbd, 'hidden sm:inline-flex')}>Esc</kbd>
         </div>
-        <p className="px-4 py-2 text-[10px] text-ink-400 border-t border-[color:var(--glass-border)]">
-          ↑↓ navigate · Enter run · Esc close
-        </p>
+        <div id="vx-palette-list" role="listbox" ref={listRef} className="max-h-[min(60dvh,440px)] overflow-y-auto overscroll-contain p-1.5">
+          {list.length === 0 && (
+            <p className="px-4 py-8 text-center text-[14px] text-ink-400">No matches. Try a song name.</p>
+          )}
+          {list.map((e, i) => {
+            const Icon = e.icon;
+            const heading = i === 0 || sectionOf(list[i - 1]) !== sectionOf(e) ? sectionOf(e) : null;
+            return (
+              <Fragment key={e.id}>
+                {heading && (
+                  <div aria-hidden="true" className={cn('px-2.5 pb-1.5 text-[12px] font-bold text-ink-400', i === 0 ? 'pt-1.5' : 'pt-3')}>
+                    {heading}
+                  </div>
+                )}
+                <button
+                  id={e.id}
+                  role="option"
+                  aria-selected={i === sel}
+                  tabIndex={-1}
+                  onMouseEnter={() => setSel(i)}
+                  onClick={() => runSel(i)}
+                  className={cn(
+                    'w-full flex items-center gap-3 min-h-[44px] px-2.5 py-1.5 rounded-lg text-left text-ink-100 transition-colors',
+                    i === sel && 'bg-ink-800',
+                  )}
+                >
+                  {e.kind === 'song' ? (
+                    <img
+                      src={e.song ? bestImage(e.song.images, 150) : FALLBACK_ART}
+                      onError={(ev) => ((ev.target as HTMLImageElement).src = FALLBACK_ART)}
+                      alt=""
+                      className="w-10 h-10 rounded-md object-cover shrink-0"
+                    />
+                  ) : (
+                    <span className="w-6 flex justify-center shrink-0 text-ink-300" aria-hidden>
+                      {Icon && <Icon className="w-5 h-5" />}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold">{e.label}</span>
+                    {e.kind === 'song' && e.hint && <span className="block truncate text-[13px] text-ink-400">{e.hint}</span>}
+                  </span>
+                  {e.kind === 'action' && e.hint && e.hint !== 'Player' && (
+                    <span className="hidden sm:block shrink-0 max-w-[40%] truncate text-[13px] text-ink-400">{e.hint}</span>
+                  )}
+                  {i === sel && <kbd className={cn(kbd, 'hidden sm:inline-flex')} aria-hidden>↵</kbd>}
+                </button>
+              </Fragment>
+            );
+          })}
+        </div>
+        <div className="hidden sm:flex items-center gap-4 px-4 h-10 text-[12px] font-medium text-ink-400 border-t border-[color:var(--vx-border)]">
+          <span className="flex items-center gap-1.5"><kbd className={kbd}>↑</kbd><kbd className={kbd}>↓</kbd> Move</span>
+          <span className="flex items-center gap-1.5"><kbd className={kbd}>↵</kbd> Open</span>
+          <span className="flex items-center gap-1.5"><kbd className={kbd}>Esc</kbd> Close</span>
+        </div>
       </div>
     </div>
   );

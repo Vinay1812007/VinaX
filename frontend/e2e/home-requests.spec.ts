@@ -144,7 +144,7 @@ test.describe('Home request load', () => {
     await settle(page);
     report('owner-hidden-scrolled', page);
     const text = await page.evaluate(() => document.body.innerText);
-    expect(text).not.toMatch(/Mood Playlists|Trending Artists|Trending Albums/);
+    expect(text).not.toMatch(/Mood Playlists|Trending Artists|Trending Albums/i);
     // The six hidden blocks account for the mood (6), artists, albums, day
     // picks, seasonal and the whole discovery band — none may be requested.
     // Measured: HEAD still ran all 46 searches with these hidden; now 22.

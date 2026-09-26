@@ -49,7 +49,7 @@ The frontend is a static build. The Worker owns every dynamic URL on the same do
 `src/main.tsx` runs in this order:
 
 1. Imports `services/storage/earlyMigrations` first, so renamed storage keys are in place before any store rehydrates.
-2. Renders `<App />` and loads the four style sheets: `index.css`, `flow.css`, `discovery.css`, `festivals.css`.
+2. Renders `<App />` and loads the four global style sheets: `index.css`, `flow.css`, `stage.css`, `festivals.css`. Page styles load with their lazy page chunks (see [design-system.md](design-system.md)).
 3. Removes the `boot-still` class after the first painted frame, and clears the boot-recovery counters in `sessionStorage`.
 4. Listens for `vite:preloadError`. When a lazy chunk fails to load after a deploy, the page reloads once per session. It does not reload when offline.
 5. Sets `device-phone|tablet|desktop|tv` and `pointer-coarse|pointer-fine` classes on `<html>`, so styles can key on capability instead of width alone.
