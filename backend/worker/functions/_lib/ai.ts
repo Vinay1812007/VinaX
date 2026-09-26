@@ -360,6 +360,24 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
  * and model, so a same-key secondary on a different quota is still tried.
  */
 const COOLDOWN_MS = 60_000;
+const DAILY_COOLDOWN_MS = 60 * 60_000;
+const MAX_COOLDOWN_MS = 6 * 60 * 60_000;
+
+/**
+ * 8.0.4 — how long a 429 should keep a lane+model aside. The maestro
+ * provider says so itself: a `retryDelay` ("37s") for a per-minute limit, a
+ * per-day quota id, or "exceeded your current quota … billing" when the
+ * key's allowance is used up. Live on 2026-09-26 the owner's key answered
+ * the billing form on every call; retrying each minute only spent a round
+ * trip per call. Other providers get the plain 60 s.
+ */
+export function cooldownFor(body: string): number {
+  const delay = body.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/i);
+  if (/PerDay|per day|daily/i.test(body)) return DAILY_COOLDOWN_MS;
+  if (delay) return Math.min(MAX_COOLDOWN_MS, Math.max(COOLDOWN_MS, Math.ceil(Number(delay[1]) * 1000)));
+  if (/exceeded your current quota|check your plan and billing/i.test(body)) return DAILY_COOLDOWN_MS;
+  return COOLDOWN_MS;
+}
 const cooldowns = new Map<string, number>();
 const coolKey = (role: Lane, model: string): string => `${role}|${model}`;
 export function laneCoolingDown(role: Lane, model: string, now = Date.now()): boolean {
@@ -573,10 +591,11 @@ export async function chat(
       }
       lastStatus = res.status;
       // The provider's own words, clipped (error envelopes carry no secrets).
-      const errBody = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      const fullBody = await res.text().catch(() => '');
+      const errBody = fullBody.replace(/\s+/g, ' ').slice(0, 200);
       clearTimeout(timer);
       console.log(`[ai] error lane=${role} model=${model} status=${res.status} json=${useJson} body=${errBody}`);
-      if (res.status === 429) cooldowns.set(coolKey(role, model), Date.now() + COOLDOWN_MS);
+      if (res.status === 429) cooldowns.set(coolKey(role, model), Date.now() + cooldownFor(fullBody));
       // JSON mode unsupported on this model -> retry it once in plain mode.
       if (res.status === 400 && useJson) continue;
       // Anything else (dead/exhausted key 401/402/403/429, unknown model
