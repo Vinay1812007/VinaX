@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.0.3': {
+    title: 'The flagship AI engine keeps the lead',
+    changes: [
+      { type: 'fixed', text: 'Song ranking now keeps asking the flagship AI engine first. After its first answer it was being passed over for a quicker, simpler engine, because it takes a moment to think.' },
+    ],
+  },
   '8.0.2': {
     title: 'The flagship AI engine stays current',
     changes: [
