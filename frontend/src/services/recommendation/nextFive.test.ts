@@ -72,7 +72,7 @@ describe('the next five', () => {
     await recommendNextSongs(seed, makeContext({ profile: warmProfile(NOW) }), { limit: 5, tune: 'devotional' });
     expect(seenCtx[0].intentQuery).toBe('telugu devotional songs');
     await recommendNextSongs(seed, makeContext({ profile: warmProfile(NOW), moodPin: 'melancholy' }), { limit: 5 });
-    expect(seenCtx[1].intentQuery).toBe('telugu sad heartbreak songs');
+    expect(seenCtx[1].intentQuery).toBe('telugu sad songs');
     await recommendNextSongs(seed, makeContext({ profile: warmProfile(NOW) }), { limit: 5 });
     expect(seenCtx[2].intentQuery ?? null).toBeNull();
     expect(tuneSearchQuery('same-language', 'telugu')).toBeNull();

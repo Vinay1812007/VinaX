@@ -153,6 +153,9 @@ export function buildDjContext(seed: Song | null, ctx: RecommendationContext): R
     surface: ctx.surface,
     preferredLanguages: ctx.pinnedLanguages.slice(0, 5),
     avoidLanguages: ctx.mutedLanguages.slice(0, 5),
+    // 8.1.0 — 'mix': songs from queueLanguages may follow each other; 'one': the seed's language only.
+    languagePolicy: ctx.queueLanguages === 'one' ? 'one' : 'mix',
+    queueLanguages: [...new Set([...(seed?.language && seed.language !== 'unknown' ? [seed.language] : []), ...ctx.pinnedLanguages, ...topLanguages(ctx.profile, 3).map((l) => l.id)])].filter((l) => l !== 'unknown' && !ctx.mutedLanguages.includes(l)).slice(0, 6),
     ...session,
     recentlyPlayed: ctx.history.slice(0, 12).map((e) => describeSong(e.song)),
     recentlyCompleted: ctx.history.filter((e) => e.completed).slice(0, 10).map((e) => describeSong(e.song)),

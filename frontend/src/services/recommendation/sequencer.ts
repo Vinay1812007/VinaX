@@ -58,6 +58,12 @@ export interface SequenceOptions {
    *                      familiar-language detour can drift in when the arc and
    *                      the pool justify it, and never two in a row by choice.
    */
+  /**
+   * 8.1.0 — under 'prefer' three rules are hard, not priced: the target
+   * language opens the stretch (slots 1 and 2), an off-target song is never
+   * followed by another one, and off-target songs fill at most half the
+   * stretch. They give way only when nothing else is left (`language-mix`).
+   */
   languagePolicy?: 'lock' | 'prefer';
   /** Other languages the listener plays (only matters under 'prefer'). */
   otherLanguages?: string[];
@@ -175,6 +181,7 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
   let totalSec = 0;
   let errSum = 0;
   let discoveryUsed = 0;
+  let offUsed = 0; // 8.1.0 — off-target-language songs placed so far ('prefer' policy)
   const shareCap = Math.floor(discoveryShare * n + 0.5);
   const familiarFirst = opts.familiarFirst !== false;
   const isDiscovery = (c: Scored): boolean => !!opts.discoveryIds?.has(c.song.id);
@@ -197,9 +204,16 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
     const opening = familiarFirst && i < (n >= 4 ? 2 : 1);
     const shareFull = discoveryUsed >= shareCap;
     const discoveryOk = (c: Scored): boolean => !isDiscovery(c) || (!opening && !shareFull);
+    // 8.1.0 — the mix rules ('prefer' policy): the target language opens the
+    // stretch, never two off-target songs in a row, off-target at most half.
+    const isOff = (c: Scored): boolean => !!opts.language && !!c.song.language && c.song.language !== 'unknown' && c.song.language !== opts.language;
+    const prevOffLang = !!(prev?.language && prev.language !== 'unknown' && opts.language && prev.language !== opts.language);
+    const offCap = Math.floor(n / 2);
+    const mixOk = (c: Scored): boolean => !isOff(c) || (i >= 2 && !prevOffLang && offUsed < offCap);
     // The strictest level any remaining song meets: every soft rule, then the
-    // discovery rules given up, then the recent-version hold-back, then both.
-    const levels = [(c: Scored) => !c.held && discoveryOk(c), (c: Scored) => !c.held, discoveryOk, () => true];
+    // discovery rules given up, then the recent-version hold-back, then both,
+    // and only last the language-mix rules.
+    const levels = [(c: Scored) => mixOk(c) && !c.held && discoveryOk(c), (c: Scored) => mixOk(c) && !c.held, (c: Scored) => mixOk(c) && discoveryOk(c), mixOk, () => true];
     const eligible = levels.find((level) => remaining.some(level))!;
     let bestIdx = -1;
     let bestCost = Infinity;
@@ -234,7 +248,13 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
       if (opts.language && c.song.language && c.song.language !== opts.language) {
         const familiar = opts.otherLanguages?.includes(c.song.language);
         const prevOff = !!(prev?.language && prev.language !== opts.language);
-        cost += (familiar ? 1.1 : 2.5) + (prevOff ? 3 : 0);
+        // 8.1.0 — with the mix rules hard (opening, adjacency, half), a
+        // familiar-language detour is priced lightly, and after three or more
+        // songs in the queue language it is invited: a change of language is
+        // what keeps a long stretch fresh for a listener who loves two.
+        const run = runInLanguage(out, opts.language);
+        cost += (familiar ? (run >= 3 ? -0.35 : 0.6) : 2.5) + (prevOff ? 3 : 0);
+        if (familiar && run >= 3) why.push('a change of language after a long run');
         why.push(`a ${c.song.language} detour`);
       }
       if (familiarFirst) {
@@ -277,6 +297,8 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
       if (shareFull) relax('discovery-share', `discovery ${discoveryUsed + 1} over a share of ${shareCap}; no other song was left`);
     }
     if (pick.held) relax('recent-version', 'another version of a song that just played; nothing else was left');
+    if (!mixOk(pick)) relax('language-mix', i < 2 ? 'an off-language song in the opening; nothing in the queue language was left' : prevOffLang ? 'two language changes in a row; nothing in the queue language was left' : 'more than half the stretch off-language; nothing else was left');
+    if (isOff(pick)) offUsed += 1;
     const lead = leadArtist(pick.song);
     if (lead && lastArtists[lastArtists.length - 1] === lead) relax('artist-spacing', remaining.some((r) => leadArtist(r.song) !== lead) ? 'the same lead artist twice in a row; the alternatives fit the arc worse' : 'the same lead artist twice in a row; no other artist was left');
     if (isDiscovery(pick)) discoveryUsed += 1;
@@ -286,6 +308,18 @@ export function sequenceSongs(pool: Song[], opts: SequenceOptions = {}): Sequenc
     if (budget && totalSec >= budget) break;
   }
   return { songs: out, totalSec, arcError: out.length ? errSum / out.length : 0, relaxed, relaxations };
+}
+
+/** How many songs at the end of `out` are in `language` (0 when the last one is not). */
+function runInLanguage(out: SequencedSong[], language: string | null | undefined): number {
+  if (!language) return 0;
+  let n = 0;
+  for (let k = out.length - 1; k >= 0; k -= 1) {
+    const l = out[k].song.language;
+    if (l && l !== 'unknown' && l !== language) break;
+    n += 1;
+  }
+  return n;
 }
 
 /** Mean |energy − target| for a FIXED order (how far it strays from the arc). */

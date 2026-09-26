@@ -41,3 +41,20 @@ describe('tune intents', () => {
     expect(tuneShape('classics')).toBeNull();
   });
 });
+
+describe('tuneSearchQuery (8.1.0)', () => {
+  it('uses the two-word phrasings the catalogue answers in-language, with the language first', async () => {
+    const { tuneSearchQuery } = await import('./tune');
+    expect(tuneSearchQuery('romantic', 'telugu')).toBe('telugu romantic songs');
+    expect(tuneSearchQuery('energetic', 'hindi')).toBe('hindi dance songs');
+    expect(tuneSearchQuery('chill', 'tamil')).toBe('tamil melody songs');
+    expect(tuneSearchQuery('heartbreak', 'telugu')).toBe('telugu sad songs');
+    expect(tuneSearchQuery('classics', 'telugu')).toBe('telugu evergreen hits');
+    expect(tuneSearchQuery('fresh', 'telugu')).toMatch(/^latest telugu songs \d{4}$/);
+    expect(tuneSearchQuery('romantic', null)).toBe('romantic songs');
+    expect(tuneSearchQuery('romantic', 'unknown')).toBe('romantic songs');
+    expect(tuneSearchQuery('surprise', 'telugu')).toBeNull();
+    // Never a phrase the catalogue matched as a song title.
+    for (const i of ['energetic', 'chill', 'romantic', 'heartbreak'] as const) expect(tuneSearchQuery(i, 'telugu')!.split(' ')).toHaveLength(3);
+  });
+});

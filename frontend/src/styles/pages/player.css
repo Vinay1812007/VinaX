@@ -134,7 +134,22 @@ html.light .vx-np-bg-scrim { background: rgb(255 255 255 / 0.42); }
 }
 .vx-np-art-img.is-paused { transform: scale(0.94); box-shadow: 0 18px 40px -20px rgb(0 0 0 / 0.55); }
 html.light .vx-np-art-img { box-shadow: 0 24px 56px -22px rgb(15 20 30 / 0.45), 0 8px 20px -12px rgb(15 20 30 / 0.3); }
-.vx-np-art-pane { position: relative; user-select: none; }
+.vx-np-art-pane { position: relative; user-select: none; transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1); }
+/* 8.1 — swipe the artwork sideways to change the song: it leaves the way the
+   finger sent it (from wherever the drag left it) and the next one arrives
+   from the other side. Vertical drags are the page's to scroll. */
+@keyframes np-swipe-left {
+  0% { transform: translateX(var(--np-swipe-x, 0px)); opacity: 1; }
+  45% { transform: translateX(-40px); opacity: 0; }
+  55% { transform: translateX(40px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes np-swipe-right {
+  0% { transform: translateX(var(--np-swipe-x, 0px)); opacity: 1; }
+  45% { transform: translateX(40px); opacity: 0; }
+  55% { transform: translateX(-40px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
 .vx-np-art.is-canvas .vx-np-art-pane { position: absolute; inset: 0; }
 
 /* ------------------------------------------------------------ title row */
@@ -644,8 +659,8 @@ html.light .vx-rail-lyrics-card { background: rgb(var(--art) / 0.16); }
 
 /* ------------------------------------------------------------------ motion */
 @media (prefers-reduced-motion: reduce) {
-  .vx-np-art-img, .vx-np-art-img.is-paused, .vx-np-play, .vx-np-top, .vx-np-controls, .vx-np-bg-wash, .vx-rail-art img { transition: none !important; }
+  .vx-np-art-img, .vx-np-art-img.is-paused, .vx-np-art-pane, .vx-np-play, .vx-np-top, .vx-np-controls, .vx-np-bg-wash, .vx-rail-art img { transition: none !important; }
   .vx-np-art-img.is-paused { transform: none; }
 }
-html.reduce-motion .vx-np-art-img, html.reduce-motion .vx-np-play, html.reduce-motion .vx-rail-art img { transition: none !important; }
+html.reduce-motion .vx-np-art-img, html.reduce-motion .vx-np-art-pane, html.reduce-motion .vx-np-play, html.reduce-motion .vx-rail-art img { transition: none !important; }
 html.reduce-motion .vx-np-art-img.is-paused { transform: none; }

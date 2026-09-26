@@ -83,7 +83,7 @@ describe('buildModelMenu', () => {
   it('lists every pinned engine and EVERY catalogue model, in sections', () => {
     const menu = buildModelMenu(base);
     expect(menu.map((s) => s.title)).toEqual(['Recommended', 'VinaX engines', 'VinaX GRQ ALL', 'VinaX OPR ALL']);
-    expect(menu[0].rows.map((r) => r.label)).toEqual(['Auto', 'Balanced', 'Fast', 'Deep', 'Creative', 'Translate']);
+    expect(menu[0].rows.map((r) => r.label)).toEqual(['Auto', 'VinaX Maestro', 'Balanced', 'Fast', 'Deep', 'Creative', 'Translate']);
     const total = menu.reduce((n, s) => n + s.rows.length, 0);
     expect(total).toBe(MODES.length + 4);
     const grq = menu[2].rows;
@@ -121,7 +121,7 @@ describe('buildModelMenu', () => {
     const failed = buildModelMenu({ ...base, groups: [], state: 'failed' });
     expect(failed.filter((s) => s.retry)).toHaveLength(2);
     // The pinned engines never depend on the network.
-    expect(failed[0].rows).toHaveLength(6);
+    expect(failed[0].rows).toHaveLength(7);
   });
 
   it('pins recently used models at the top, newest first, at most five', () => {
@@ -185,7 +185,7 @@ describe('persistence', () => {
   });
 
   it('starts on the explicit default, else the last model used, else the everyday seat', () => {
-    expect(loadInitialChoice()).toEqual({ mode: 'muse' });
+    expect(loadInitialChoice()).toEqual({ mode: 'auto' });
     saveLastChoice({ mode: 'router', model: 'lab/big:free' });
     expect(loadInitialChoice()).toEqual({ mode: 'router', model: 'lab/big:free' });
     saveDefaultChoice({ mode: 'scholar', model: 'vendor/agentic' });

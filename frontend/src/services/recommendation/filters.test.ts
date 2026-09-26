@@ -88,3 +88,16 @@ describe('7.2 — provenance and soft mutes in the hard filter', () => {
     expect(classifiedFields(before, before)).toEqual([]);
   });
 });
+
+describe('8.1.0 — the mix policy allow-list', () => {
+  it('rejects a known language outside the allow-list as off-language and passes unknown ones', async () => {
+    const { rejectReasonFor } = await import('./filters');
+    const { makeSong } = await import('@/__fixtures__/songs');
+    const allowedLanguages = new Set(['telugu', 'hindi']);
+    expect(rejectReasonFor(makeSong('a', { language: 'tamil' }), { allowedLanguages })).toBe('off-language');
+    expect(rejectReasonFor(makeSong('b', { language: 'hindi' }), { allowedLanguages })).toBeNull();
+    expect(rejectReasonFor(makeSong('c', { language: 'unknown' }), { allowedLanguages })).toBeNull();
+    expect(rejectReasonFor(makeSong('d', { language: 'tamil' }), {})).toBeNull();
+  });
+});
+

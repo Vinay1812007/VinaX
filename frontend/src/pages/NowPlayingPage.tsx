@@ -8,6 +8,7 @@ import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useReasonStore } from '@/store/reasonStore';
 import { getMoodPin } from '@/services/personalization/session';
 import { clearMoodPin, pinMood } from '@/features/player/moodPin';
+import { beginArtSwipe, endArtSwipe, moveArtSwipe, swipeFollow, type ArtSwipe } from '@/features/player/artSwipe';
 import type { Mood } from '@/services/recommendation/mood';
 import type { ArtistRef, Song } from '@/types';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
@@ -215,9 +216,11 @@ export default function NowPlayingPage() {
   const [ambientArmed, setAmbientArmed] = useState(true);
   const [ambientIdle, wakeAmbient] = useIdle(ambientArmed && isPlaying && !showMore && !showDevices);
 
-  // Swipe flow: fling the artwork up for the next song, down for the previous.
-  const artSwipe = useRef<{ y: number; t: number } | null>(null);
-  const [swipeFx, setSwipeFx] = useState<'up' | 'down' | null>(null);
+  // 8.1 — swipe flow: drag the artwork LEFT for the next song, RIGHT for the
+  // previous. A vertical drag is the page's to scroll (the pane is touch-pan-y),
+  // so nothing here claims it — the up/down fling used to fight the scroll.
+  const artSwipe = useRef<(ArtSwipe & { el: HTMLElement }) | null>(null);
+  const [swipeFx, setSwipeFx] = useState<'left' | 'right' | null>(null);
   const [rightTab, setRightTab] = useState<'queue' | 'lyrics' | 'about'>('queue');
   const panelRef = useRef<HTMLElement>(null);
   // The artwork's own colour for the stage wash (an "R G B" triplet).
@@ -272,26 +275,56 @@ export default function NowPlayingPage() {
     }, 260);
   };
   const tabTouched = useRef(false);
-  const onArtTouchStart = (e: React.TouchEvent) => {
-    e.stopPropagation(); // keep the sheet's dismiss-drag out of the artwork zone
-    artSwipe.current = { y: e.touches[0].clientY, t: Date.now() };
+  const onArtTouchStart = (e: React.TouchEvent<HTMLElement>) => {
+    e.stopPropagation(); // the sheet's dismiss-drag never starts on the artwork
+    const t = e.touches[0];
+    artSwipe.current = { ...beginArtSwipe(t.clientX, t.clientY), el: e.currentTarget };
   };
-  const onArtTouchEnd = (e: React.TouchEvent) => {
+  const onArtTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    const s = artSwipe.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const follow = moveArtSwipe(s, t.clientX, t.clientY);
+    if (follow === null) return; // undecided or vertical: the page scrolls
+    e.stopPropagation();
+    // The immersive layer is a full-screen black sheet: sliding it would show
+    // the page underneath, so only the artwork card follows the finger.
+    if (!s.el.classList.contains('vx-np-art-pane')) return;
+    s.el.style.transition = 'none';
+    s.el.style.transform = `translateX(${follow}px)`;
+  };
+  const settleArt = (el: HTMLElement) => {
+    el.style.transition = '';
+    el.style.transform = '';
+    el.style.removeProperty('--np-swipe-x');
+  };
+  const onArtTouchCancel = () => {
+    const s = artSwipe.current;
+    artSwipe.current = null;
+    if (s) settleArt(s.el);
+  };
+  const onArtTouchEnd = (e: React.TouchEvent<HTMLElement>) => {
     const s = artSwipe.current;
     artSwipe.current = null;
     if (!s) return;
-    const dy = e.changedTouches[0].clientY - s.y;
-    const dt = Date.now() - s.t;
-    if (Math.abs(dy) < 80 || dt > 550) return;
-    if (dy < 0) {
-      setSwipeFx('up');
-      next(true);
-    } else {
-      setSwipeFx('down');
-      prev();
+    const t = e.changedTouches[0];
+    const dir = t ? endArtSwipe(s, t.clientX) : null;
+    if (!dir) {
+      settleArt(s.el); // the pane's own transition snaps it back
+      return;
     }
+    // Slide out from wherever the drag left the artwork; the keyframe reads it.
+    s.el.style.setProperty('--np-swipe-x', `${swipeFollow(s.dx)}px`);
+    s.el.style.transform = '';
+    setSwipeFx(dir === 'next' ? 'left' : 'right');
+    if (dir === 'next') next(true);
+    else prev();
     haptic('light');
-    window.setTimeout(() => setSwipeFx(null), 340);
+    const el = s.el;
+    window.setTimeout(() => {
+      setSwipeFx(null);
+      settleArt(el);
+    }, 340);
   };
 
   const keepScreenOn = useSettingsStore((s) => s.keepScreenOn);
@@ -579,20 +612,18 @@ export default function NowPlayingPage() {
                 every gesture. Immersive mode is a separate viewport-fixed layer
                 (see the portal below), so nothing here re-flows when the
                 controls come and go. */}
-            <div
-              className={cn(
-                'vx-np-art',
-                canvasOn && 'is-canvas',
-                swipeFx === 'up' && 'motion-safe:animate-[np-swipe-next_320ms_ease-out]',
-                swipeFx === 'down' && 'motion-safe:animate-[np-swipe-prev_320ms_ease-out]',
-              )}
-            >
+            <div className={cn('vx-np-art', canvasOn && 'is-canvas')}>
               <div
-                className="vx-np-art-pane touch-pan-x"
+                className={cn(
+                  'vx-np-art-pane touch-pan-y',
+                  swipeFx === 'left' && 'motion-safe:animate-[np-swipe-left_320ms_ease-out]',
+                  swipeFx === 'right' && 'motion-safe:animate-[np-swipe-right_320ms_ease-out]',
+                )}
                 data-deter-context
                 onTouchStart={onArtTouchStart}
-                onTouchMove={(e) => e.stopPropagation()}
+                onTouchMove={onArtTouchMove}
                 onTouchEnd={onArtTouchEnd}
+                onTouchCancel={onArtTouchCancel}
               >
                 {/* Empty window over the clip while the canvas plays; the still
                     artwork the moment it's off (see SongCanvas). */}
@@ -930,11 +961,12 @@ export default function NowPlayingPage() {
         createPortal(
           <div
             data-vx-overlay
-            className="fixed inset-0 z-[60] bg-black select-none touch-pan-x overflow-hidden animate-fade-up"
+            className="fixed inset-0 z-[60] bg-black select-none touch-pan-y overflow-hidden animate-fade-up"
             data-deter-context
             onTouchStart={onArtTouchStart}
-            onTouchMove={(e) => e.stopPropagation()}
+            onTouchMove={onArtTouchMove}
             onTouchEnd={onArtTouchEnd}
+            onTouchCancel={onArtTouchCancel}
           >
             <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />
             <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />

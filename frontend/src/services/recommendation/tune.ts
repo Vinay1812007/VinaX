@@ -115,17 +115,24 @@ export function tuneShape(intent: TuneIntent): ArcShape | null {
  * queue's language. null = the intent needs no pool of its own.
  */
 export function tuneSearchQuery(intent: TuneIntent, language: string | null): string | null {
+  // 8.1.0 — two-word phrasings only. Probed live on 2026-09-26 against the
+  // catalogue in Telugu, Hindi and Tamil: "<language> romantic songs",
+  // "dance songs", "melody songs", "sad songs", "evergreen hits" each return
+  // 20 of 20 songs in that language, while the previous longer phrases
+  // ("romantic love songs", "high energy dance hits", "chill soothing
+  // melodies", "sad heartbreak songs") returned NOTHING, so Pin a mood and
+  // four of the Tune chips rebuilt the queue from an empty pool.
   const lang = language && language !== 'unknown' ? `${language} ` : '';
   switch (intent) {
-    case 'energetic': return `${lang}high energy dance hits`;
-    case 'chill': return `${lang}chill soothing melodies`;
-    case 'romantic': return `${lang}romantic love songs`;
+    case 'energetic': return `${lang}dance songs`;
+    case 'chill': return `${lang}melody songs`;
+    case 'romantic': return `${lang}romantic songs`;
     case 'melody': return `${lang}melody songs`;
-    case 'mass': return `${lang}mass beat songs`;
+    case 'mass': return `${lang}mass songs`;
     case 'devotional': return `${lang}devotional songs`;
-    case 'heartbreak': return `${lang}sad heartbreak songs`;
-    case 'classics': return `${lang}evergreen old classic hits`;
-    case 'fresh': return `${lang}latest new songs ${CURRENT_YEAR}`;
+    case 'heartbreak': return `${lang}sad songs`;
+    case 'classics': return `${lang}evergreen hits`;
+    case 'fresh': return `latest ${lang}songs ${CURRENT_YEAR}`;
     default: return null;
   }
 }

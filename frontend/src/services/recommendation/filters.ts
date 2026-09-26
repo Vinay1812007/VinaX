@@ -44,6 +44,13 @@ export interface HardFilterOptions extends SafetyRules {
   recentKeys?: Set<string>;
   /** Songs skipped in this sitting. */
   sessionSkippedIds?: Set<string>;
+  /**
+   * 8.1.0 — under the 'mix' language policy: the languages a stretch may
+   * draw from (the seed's, the listener's pinned and most-played). A song in
+   * a known language outside this list is rejected as 'off-language'; a song
+   * with no known language passes.
+   */
+  allowedLanguages?: ReadonlySet<string>;
 }
 
 export interface HardFilterResult {
@@ -70,6 +77,8 @@ export function rejectReasonFor(song: Song, o: HardFilterOptions): RejectReason 
   if (o.queuedIds?.has(song.id) || o.queuedKeys?.has(key)) return 'already-queued';
   if (o.recentIds?.has(song.id) || o.recentKeys?.has(key)) return 'recently-played';
   if (o.sessionSkippedIds?.has(song.id)) return 'skipped-this-session';
+  // 8.1.0 — the mix policy admits the listener's languages, never a stranger's.
+  if (o.allowedLanguages && song.language && song.language !== 'unknown' && !o.allowedLanguages.has(song.language)) return 'off-language';
   return null;
 }
 

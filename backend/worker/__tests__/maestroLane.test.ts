@@ -4,7 +4,7 @@
  * from costing every call a wasted round trip.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chat, clearLaneCooldowns, cooldownFor, laneAttempts, laneCoolingDown, laneModel, type AiEnv } from '../functions/_lib/ai';
+import { chat, clearLaneCooldowns, cooldownFor, laneAttempts, laneCoolingDown, laneModel, looksLikeSecret, type AiEnv } from '../functions/_lib/ai';
 import { resetMaestroMode, resetMaestroModels } from '../functions/_lib/maestro';
 
 const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
@@ -38,6 +38,13 @@ describe('maestro lane', () => {
   it('honours VINAX_MAESTRO_MODEL and ignores a malformed one', () => {
     expect(laneModel({ ...env, VINAX_MAESTRO_MODEL: 'gemini-3-flash' }, 'maestro')).toBe('gemini-3-flash');
     expect(laneModel({ ...env, VINAX_MAESTRO_MODEL: 'bad model; drop' }, 'maestro')).toBe('gemini-3.8-flash');
+    // 8.1.0 — the owner once stored the key itself in the override: it must never become the model name.
+    expect(laneModel({ ...env, VINAX_MAESTRO_MODEL: 'AQ.Ab8RN6Kr-abcdefghijklmnopqrstuvwxyz0123456789' }, 'maestro')).toBe('gemini-3.8-flash');
+    expect(laneModel({ ...env, VINAX_MAESTRO_MODEL: 'AIzaSyD-abcdefghijklmnopqrstuvwxyz012345' }, 'maestro')).toBe('gemini-3.8-flash');
+    expect(laneModel({ ...env, VINAX_MAESTRO_MODEL: 'Gemini-3.8-Flash' }, 'maestro')).toBe('gemini-3.8-flash'); // slugs are lowercase
+    expect(laneModel({ ...env, VINAX_MAESTRO_MODEL: 'gemini-3.8-pro-preview-09-2026' }, 'maestro')).toBe('gemini-3.8-pro-preview-09-2026');
+    expect(looksLikeSecret('gemini-2.5-flash')).toBe(false);
+    expect(looksLikeSecret('nvapi-abc')).toBe(true);
     expect(laneModel({ ...env, VINAX_MAESTRO_MODEL: 'gemini-3-flash' }, 'scholar')).not.toBe('gemini-3-flash');
     expect(laneAttempts({ ...env, VINAX_MAESTRO_MODEL: 'gemini-3-flash' }, 'maestro', undefined, [])[0].model).toBe('gemini-3-flash');
   });

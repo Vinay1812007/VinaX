@@ -107,6 +107,50 @@ describe('recommendNextSongs — rules hold with the AI off', () => {
   });
 });
 
+describe('recommendNextSongs — 8.1.0 queue languages', () => {
+  const mixedPool = (): Candidate[] => [
+    ...telugu(12),
+    cand(makeSong('hi1', { artist: 'Arijit Singh', language: 'hindi', playCount: 90_000_000 })),
+    cand(makeSong('hi2', { artist: 'Shreya Ghoshal', language: 'hindi', playCount: 80_000_000 })),
+    cand(makeSong('hi3', { artist: 'Sonu Nigam', language: 'hindi', playCount: 70_000_000 })),
+    cand(makeSong('ta1', { artist: 'Anirudh', language: 'tamil', playCount: 95_000_000 })),
+  ];
+
+  it("'mix' lets the listener's other languages in, keeps the seed language leading and never switches twice in a row", async () => {
+    pool = mixedPool();
+    const out = await recommendNextSongs(seed, ctx({ queueLanguages: 'mix' }), { limit: 8 });
+    expect(out).toHaveLength(8);
+    const langs = out.map((s) => s.language);
+    expect(langs).toContain('hindi');
+    // Tamil is neither pinned nor played by this listener: it stays out even under 'mix'.
+    expect(langs).not.toContain('tamil');
+    expect(langs[0]).toBe('telugu');
+    expect(langs.filter((l) => l === 'telugu').length).toBeGreaterThanOrEqual(4);
+    for (let i = 1; i < langs.length - 1; i += 1) if (langs[i] !== 'telugu') expect(langs[i + 1]).toBe('telugu');
+  });
+
+  it("'mix' never starves the queue: with the seed language used up, the rules give way rather than ship a short stretch", async () => {
+    pool = [...telugu(3), ...['a', 'b', 'c', 'd', 'e'].map((k) => cand(makeSong(`hi-${k}`, { artist: `Singer ${k}`, language: 'hindi', playCount: 50_000_000 })))];
+    const out = await recommendNextSongs(seed, ctx({ queueLanguages: 'mix' }), { limit: 8 });
+    expect(out).toHaveLength(8);
+    expect(out.slice(0, 2).every((s) => s.language === 'telugu')).toBe(true);
+  });
+
+  it("'one' (and a context that says nothing) keeps the 7.1 rule: the seed language only", async () => {
+    pool = mixedPool();
+    for (const over of [{ queueLanguages: 'one' as const }, {}]) {
+      const out = await recommendNextSongs(seed, ctx(over), { limit: 6 });
+      expect(out.every((s) => s.language === 'telugu')).toBe(true);
+    }
+  });
+
+  it("'mix' with only one language changes nothing", async () => {
+    pool = mixedPool();
+    const out = await recommendNextSongs(seed, ctx({ queueLanguages: 'mix', pinnedLanguages: ['telugu'], profile: { ...warmProfile(NOW), languages: {} } }), { limit: 6 });
+    expect(out.every((s) => s.language === 'telugu')).toBe(true);
+  });
+});
+
 describe('recommendNextSongs — the AI DJ is optional and never trusted', () => {
   beforeEach(() => useSettingsStore.setState({ aiDj: true }));
 

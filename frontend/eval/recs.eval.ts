@@ -61,6 +61,8 @@ function applyFixture(fixture: EvalFixture): void {
     djVoice: false,
     mutedLanguages: fixture.mutedLanguages,
     pinnedLanguages: fixture.pinnedLanguages,
+    // 8.1.0 — absent = the seed's language only (what every engine before 8.1 does).
+    ...(fixture.queueLanguages ? { queueLanguages: fixture.queueLanguages } : {}),
     discoveryMode: fixture.discoveryMode,
     recommendationIntensity: 0.7,
     autoplay: true,
@@ -79,6 +81,8 @@ function buildContext(fixture: EvalFixture, salt: number): unknown {
     dayOfWeek: 5,
     region: null,
     pinnedLanguages: fixture.pinnedLanguages,
+    // 8.1.0 — absent = the seed's language only (what every engine before 8.1 does).
+    ...(fixture.queueLanguages ? { queueLanguages: fixture.queueLanguages } : {}),
     mutedLanguages: fixture.mutedLanguages,
     intensity: 0.7,
     favorites: fixture.favorites,
