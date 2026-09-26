@@ -11,6 +11,9 @@ import { SongRow } from '@/components/SongRow';
 import { ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
+import { SectionHeader } from '@/components/SectionHeader';
+import { PlayIcon } from '@/components/Icons';
+import '@/styles/pages/browse.css';
 
 export type ChartVariant = 'top' | 'trending' | 'most-searched';
 
@@ -18,11 +21,9 @@ const YEAR = new Date().getFullYear();
 
 interface VariantConfig {
   path: string;
-  kicker: string;
   h1: string;
   title: string;
   desc: string;
-  intro: string;
   seed: string;
   listName: string;
   showSearches?: boolean;
@@ -31,34 +32,25 @@ interface VariantConfig {
 const CONFIG: Record<ChartVariant, VariantConfig> = {
   top: {
     path: '/top-songs',
-    kicker: 'Charts',
     h1: 'Top Songs',
     title: 'Top Songs — Most Popular Right Now',
     desc: `The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, no login, updated continuously.`,
-    intro:
-      'The biggest songs on VinaX right now, ranked across every language we love. Tap any track to start playing — no account needed.',
     seed: `top hit songs india ${YEAR}`,
     listName: 'Top Songs on VinaX',
   },
   trending: {
     path: '/trending',
-    kicker: 'Right now',
     h1: 'Trending Songs',
     title: 'Trending Songs This Week',
     desc: `Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, no login, refreshed continuously.`,
-    intro:
-      'The songs climbing fastest across VinaX this week. Fresh momentum, real hits, tuned to what people are actually playing right now.',
     seed: `trending songs india this week ${YEAR}`,
     listName: 'Trending Songs on VinaX',
   },
   'most-searched': {
     path: '/most-searched',
-    kicker: 'Popular searches',
     h1: 'Most Searched Songs',
     title: 'Most Searched Songs & Queries',
     desc: `The songs and searches people look for most on VinaX — across Telugu, Hindi, Tamil and more. Discover what everyone is hunting for. Free, no login.`,
-    intro:
-      'What the VinaX community is searching for most. Popular queries and the songs behind them — a quick way to find what everyone else is discovering.',
     seed: `most searched popular songs india ${YEAR}`,
     listName: 'Most Searched Songs on VinaX',
     showSearches: true,
@@ -79,15 +71,11 @@ function SearchChips() {
   const queries = q.data ?? [];
   if (!queries.length) return null;
   return (
-    <section className="mb-8">
-      <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-3">Trending searches</h2>
-      <div className="flex flex-wrap gap-2">
+    <section className="vx-section">
+      <SectionHeader title="Trending searches" />
+      <div className="vx-chip-row">
         {queries.map((query) => (
-          <Link
-            key={query}
-            to={`/search/${encodeURIComponent(query)}`}
-            className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100"
-          >
+          <Link key={query} to={`/search/${encodeURIComponent(query)}`} className="vx-link-chip">
             {query}
           </Link>
         ))}
@@ -125,36 +113,35 @@ export default function ChartLandingPage({ variant }: { variant: ChartVariant })
   );
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <header className="mb-7">
-        <p className="text-xs uppercase tracking-widest text-ink-400 font-semibold mb-1.5">{cfg.kicker}</p>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <h1 className="text-display tracking-tight">{cfg.h1}</h1>
-          {songs.length > 0 && (
-            <button
-              onClick={() => playQueue(songs, 0)}
-              className="h-9 px-4 rounded-full text-xs font-extrabold text-ink-100 border border-ember-400/30"
-              style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.22), rgba(96,165,250,0.14))' }}
-            >
-              Play all
-            </button>
-          )}
+    <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
+      <header className="vx-page-header !mb-4">
+        <div className="min-w-0">
+          <Link to="/charts" className="vx-hub-crumb">Charts</Link>
+          <h1>{cfg.h1}</h1>
         </div>
-        <p className="text-sm text-ink-300 mt-2 max-w-2xl">{cfg.intro}</p>
       </header>
+      {songs.length > 0 && (
+        <div className="vx-action-row !mt-0">
+          <button type="button" onClick={() => playQueue(songs, 0)} className="vx-play-fab" aria-label="Play all">
+            <PlayIcon />
+          </button>
+        </div>
+      )}
 
       {cfg.showSearches && <SearchChips />}
 
-      <section className="mb-8">
+      <section className="vx-section">
         {songsQ.isLoading ? (
           <ListSkeleton />
         ) : songsQ.isError ? (
           <ErrorState retry={() => void songsQ.refetch()} />
         ) : (
           <>
-            {songs.map((song, i) => (
-              <SongRow key={song.id} song={song} songs={songs} index={i} />
-            ))}
+            <div className="vx-track-list">
+              {songs.map((song, i) => (
+                <SongRow key={song.id} song={song} songs={songs} index={i} />
+              ))}
+            </div>
             <InfiniteSentinel
               onVisible={() => songsQ.hasNextPage && !songsQ.isFetchingNextPage && songsQ.fetchNextPage()}
               disabled={!songsQ.hasNextPage}
@@ -164,27 +151,20 @@ export default function ChartLandingPage({ variant }: { variant: ChartVariant })
         )}
       </section>
 
-      <section className="mb-8">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-3">Top songs by language</h2>
-        <div className="flex flex-wrap gap-2">
+      <section className="vx-section" aria-label="Top songs by language">
+        <SectionHeader title="Top songs by language" />
+        <div className="vx-chip-row">
           {HUB_LANGUAGES.map((l) => (
-            <Link
-              key={l}
-              to={`/${l}-songs`}
-              className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100"
-            >
+            <Link key={l} to={`/${l}-songs`} className="vx-link-chip">
               {languageLabel(l)} songs
             </Link>
           ))}
+          <Link to="/top-songs" className="vx-link-chip">Top songs</Link>
+          <Link to="/trending" className="vx-link-chip">Trending</Link>
+          <Link to="/most-searched" className="vx-link-chip">Most searched</Link>
+          <Link to="/discover" className="vx-link-chip">Discover</Link>
+          <Link to="/movies" className="vx-link-chip">Movie soundtracks</Link>
         </div>
-        <p className="text-sm text-ink-400 mt-4">
-          More on VinaX: <Link to="/top-songs" className="text-ember-400 hover:underline">top songs</Link> ·{' '}
-          <Link to="/trending" className="text-ember-400 hover:underline">trending</Link> ·{' '}
-          <Link to="/most-searched" className="text-ember-400 hover:underline">most searched</Link> ·{' '}
-          <Link to="/charts" className="text-ember-400 hover:underline">charts</Link> ·{' '}
-          <Link to="/discover" className="text-ember-400 hover:underline">discover</Link> ·{' '}
-          <Link to="/movies" className="text-ember-400 hover:underline">movie soundtracks</Link>
-        </p>
       </section>
     </div>
   );

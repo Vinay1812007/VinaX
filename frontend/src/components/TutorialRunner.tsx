@@ -140,8 +140,8 @@ export default function TutorialRunner() {
       {rect ? (
         <div
           aria-hidden
-          className="fixed rounded-2xl pointer-events-none transition-[top,left,width,height] duration-200"
-          style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height, boxShadow: '0 0 0 9999px rgba(0,0,0,0.62), 0 0 0 2px rgb(var(--ember-500)), 0 0 30px rgb(var(--ember-500) / 0.5)' }}
+          className="fixed rounded-xl pointer-events-none transition-[top,left,width,height] duration-200 motion-reduce:transition-none"
+          style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height, boxShadow: '0 0 0 9999px rgba(0,0,0,0.62), 0 0 0 2px rgb(var(--ember-500))' }}
         />
       ) : (
         <div aria-hidden className="fixed inset-0 bg-black/62" onClick={stop} />
@@ -150,35 +150,35 @@ export default function TutorialRunner() {
         ref={cardRef}
         tabIndex={-1}
         className={cn(
-          'fixed glass-modal rounded-3xl p-5 shadow-2xl outline-none animate-fade-up max-h-[calc(100dvh-24px)] overflow-y-auto',
+          'fixed bg-ink-950 dark:bg-ink-850 border border-[color:var(--vx-border)] rounded-2xl p-5 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.65)] outline-none animate-fade-up max-h-[calc(100dvh-24px)] overflow-y-auto',
           !rect && 'inset-0 m-auto h-fit max-w-[calc(100vw-24px)]',
           !ready && 'opacity-90',
         )}
         style={cardStyle}
       >
         <div className="flex items-center justify-between gap-3 mb-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">
-            {tutorial.emoji} {tutorial.title} · {step + 1}/{total}
+          <p className="text-[12px] font-bold text-ink-400">
+            {tutorial.title} <span className="tabular-nums">· {step + 1} of {total}</span>
           </p>
           {tutorial.playsMusic && isPlaying && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-ember-400"><span className="w-1.5 h-1.5 rounded-full bg-ember-400 animate-pulse" /> playing</span>
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-ink-300"><span className="w-1.5 h-1.5 rounded-full bg-ember-500" /> Playing</span>
           )}
         </div>
-        <h2 className="text-lg font-extrabold tracking-tight">{current.title}</h2>
-        <p className="mt-1.5 text-sm text-ink-200 leading-relaxed">{ready || !current.target ? current.body : 'Getting things ready…'}</p>
-        {current.tip && <p className="mt-2 text-[11px] text-ink-400">{current.tip}</p>}
+        <h2 className="text-[18px] font-[750] tracking-[-0.015em]">{current.title}</h2>
+        <p className="mt-1.5 text-[14px] text-ink-200 leading-relaxed">{ready || !current.target ? current.body : 'Getting things ready…'}</p>
+        {current.tip && <p className="mt-2 text-[13px] text-ink-400">{current.tip}</p>}
         <div className="mt-3 flex items-center gap-1.5" aria-hidden>
           {tutorial.steps.map((_, i) => (
-            <span key={i} className={i === step ? 'w-5 h-1.5 rounded-full bg-ember-500' : 'w-1.5 h-1.5 rounded-full bg-ink-600'} />
+            <span key={i} className={i === step ? 'w-4 h-1 rounded-full bg-ember-500' : 'w-1 h-1 rounded-full bg-ink-100/25'} />
           ))}
         </div>
         <div className="mt-4 flex items-center gap-2">
-          <button onClick={stop} className="text-xs font-bold text-ink-400 hover:text-ink-100 px-2 py-2">Skip</button>
+          <button onClick={stop} className="-ml-2 min-h-[44px] px-2 text-[13px] font-bold text-ink-400 hover:text-ink-100">Skip</button>
           <div className="flex-1" />
           {step > 0 && (
-            <button onClick={back} className="btn-secondary px-4 py-2 text-sm">Back</button>
+            <button onClick={back} className="btn-secondary px-4 min-h-[40px] text-[14px]">Back</button>
           )}
-          <button onClick={next} className="btn-primary px-5 py-2 text-sm">{step >= total - 1 ? 'Done' : 'Next'}</button>
+          <button onClick={next} className="btn-primary px-5 min-h-[40px] text-[14px]">{step >= total - 1 ? 'Done' : 'Next'}</button>
         </div>
       </div>
     </div>

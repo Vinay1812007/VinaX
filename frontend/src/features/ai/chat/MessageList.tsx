@@ -57,9 +57,9 @@ export function MessageList({ chatId, messages, busy, speakingId, agent, handler
   return (
     <div className="ai-column ai-thread">
       {pinned.length > 0 && (
-        <div className="ai-card px-4 py-3 text-[12px]" role="group" aria-label="Pinned replies">
-          <p className="text-[10px] font-bold uppercase tracking-widest ai-t3 mb-1 flex items-center gap-1.5">
-            <PinIcon className="w-3 h-3 text-ember-400" /> Pinned
+        <div className="ai-card ai-pinned" role="group" aria-label="Pinned replies">
+          <p className="ai-card-heading">
+            <PinIcon className="w-3.5 h-3.5" /> Pinned
           </p>
           {pinned.map(({ m, i }) => (
             <button key={i} type="button" onClick={() => goTo(i)} className="block w-full text-left truncate py-1 ai-t2 hover:ai-t1">

@@ -1,19 +1,20 @@
 import { DestinationGrid } from '@/components/DestinationGrid';
 import { useMemo, useState } from 'react';
-import { songPath } from '@/utils/slug';
 import { Link } from 'react-router-dom';
 import { MediaCard } from '@/components/MediaCard';
-import { Shelf } from '@/components/Shelf';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { orderCollections, useLibraryStore } from '@/store/libraryStore';
+import { orderCollections, useLibraryStore, type LocalCollection, type SavedEntity } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { SongRow } from '@/components/SongRow';
 import { EmptyState } from '@/components/States';
-import { BookmarkIcon, PlusIcon, UsersIcon, XIcon, ClockIcon, DownloadIcon } from '@/components/Icons';
+import { PlusIcon, UsersIcon, XIcon, ClockIcon, SearchIcon, ListIcon, GridIcon, ChevronRightIcon } from '@/components/Icons';
 import { ImportPlaylistSheet } from '@/components/ImportPlaylistSheet';
 import { flagOn, useFeatureFlags } from '@/features/home/useAppConfig';
 import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
+import { IconButton } from '@/components/IconButton';
+import { Chip } from '@/components/Chip';
 import { toast } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
 import { CollageCover } from '@/features/library/CollageCover';
@@ -23,9 +24,21 @@ import { TagChips } from '@/features/library/TagEditor';
 import { useSmartCollectionStore } from '@/store/smartCollectionStore';
 import { describeRules, evaluateSmartCollection } from '@/features/library/smartCollections';
 import { languageLabel } from '@/constants/languages';
+import { useSessionState } from '@/hooks/useSessionState';
+import { FALLBACK_ART } from '@/utils/images';
 import { lazy, Suspense } from 'react';
+import '@/styles/pages/library.css';
 
 const SmartCollectionSheet = lazy(() => import('@/features/library/SmartCollectionSheet').then((m) => ({ default: m.SmartCollectionSheet })));
+
+type Kind = 'all' | SavedEntity['kind'];
+const KIND_CHIPS: Array<{ id: Exclude<Kind, 'all'>; label: string }> = [
+  { id: 'playlist', label: 'Playlists' },
+  { id: 'artist', label: 'Artists' },
+  { id: 'album', label: 'Albums' },
+];
+const KIND_LABEL: Record<SavedEntity['kind'], string> = { album: 'Album', artist: 'Artist', playlist: 'Playlist' };
+const songsText = (n: number) => `${n} song${n === 1 ? '' : 's'}`;
 
 /**
  * v5.17.0 — Library: pinned collections first with collage covers and emoji,
@@ -33,6 +46,8 @@ const SmartCollectionSheet = lazy(() => import('@/features/library/SmartCollecti
  * section that restores a trashed collection within seven days.
  * v5.19.0 — a multi-select tag filter row above the playlists; each tile
  * shows its tags as tiny chips.
+ * v8.0.0 — one list for playlists and saved music (rows with 56px art, or a
+ * grid), filter chips for the kinds, and create / import in the header.
  */
 export default function LibraryPage() {
   usePageTitle('Library');
@@ -45,11 +60,13 @@ export default function LibraryPage() {
   const history = useHistoryStore((s) => s.entries);
   const [libraryQuery, setLibraryQuery] = useState('');
   const [librarySort, setLibrarySort] = useState<'recent' | 'az'>('recent');
-  const [savedKind, setSavedKind] = useState('all');
+  const [savedKind, setSavedKind] = useState<Kind>('all');
+  const [view, setView] = useSessionState<'list' | 'grid'>('vinax.library.view.v1', 'list');
   const matchesLibrary = (title: string, subtitle = '') => `${title} ${subtitle}`.toLocaleLowerCase().includes(libraryQuery.trim().toLocaleLowerCase());
   const visibleSaved = saved.filter(e => matchesLibrary(e.title, e.subtitle) && (savedKind === 'all' || e.kind === savedKind));
   if (librarySort === 'az') visibleSaved.sort((a, b) => a.title.localeCompare(b.title));
   const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   // v6.1.0 — smart collections (rules over the local library).
   const [smartOpen, setSmartOpen] = useState(false);
@@ -96,278 +113,297 @@ export default function LibraryPage() {
   );
   const now = Date.now();
 
+  // What each filter chip shows. "All" is the whole library; a kind narrows
+  // the list to that kind (your own playlists count as playlists).
+  const showAll = savedKind === 'all';
+  const showCollections = showAll || savedKind === 'playlist';
+  const showSaved = saved.length > 0 && !filterOn;
+  const listCollections = showCollections ? shownCollections : [];
+  const listSaved = showSaved ? visibleSaved : [];
+  const createOpen = creating || collections.length === 0;
+
   const removeCollection = (id: string, name: string) => {
     deleteCollection(id);
     toast(`Deleted “${name}”`);
   };
+  const create = () => {
+    if (!newName.trim()) return;
+    createCollection(newName.trim());
+    setNewName('');
+    setCreating(false);
+  };
+
+  const collectionMeta = (col: LocalCollection, songs: LocalCollection['songs'], downloaded: number) =>
+    [
+      col.pinned ? 'Pinned' : null,
+      'Playlist',
+      filterOn ? (songs.length ? `${songs.length} downloaded` : 'Nothing downloaded') : songsText(col.songs.length),
+      !filterOn && hasDownloads && downloaded > 0 ? `${downloaded} downloaded` : null,
+    ].filter(Boolean).join(' · ');
+  const savedMeta = (e: SavedEntity) =>
+    [KIND_LABEL[e.kind], e.kind === 'album' && e.subtitle ? e.subtitle : null].filter(Boolean).join(' · ');
 
   return (
-    <div className="max-w-screen-xl mx-auto">
+    <div className="vx-libpage">
       <PageHeader
-        title="Library"
-        subtitle="Everything here lives on this device only."
+        title="Your library"
         actions={
-          <>
-            <Link to="/later" className="btn-secondary px-3 py-2 text-xs font-bold inline-flex items-center gap-1.5">
-              <BookmarkIcon className="w-4 h-4" /> Listen Later
-            </Link>
-            <button onClick={() => setImporting(true)} data-tour="import-text" className="btn-secondary px-3 py-2 text-xs font-bold">Import from text</button>
-          </>
+          <div className="vx-lib-actions">
+            <button onClick={() => setImporting(true)} data-tour="import-text" className="vx-quiet-btn">Import from text</button>
+            <IconButton label="Create playlist" onClick={() => setCreating((v) => !v)} aria-expanded={createOpen} aria-controls="library-create">
+              <PlusIcon className="w-6 h-6" />
+            </IconButton>
+          </div>
         }
       />
-      <DestinationGrid area="library" />
-      <div className="vx-library-tools" role="search" aria-label="Search your library">
-        <input type="search" value={libraryQuery} onChange={e => setLibraryQuery(e.target.value)} aria-label="Search favorites, saved music and collections" placeholder="Search your collection" />
-        <select aria-label="Sort library" value={librarySort} onChange={e => setLibrarySort(e.target.value as 'recent' | 'az')}><option value="recent">Recently added / pinned</option><option value="az">A–Z</option></select>
-        <select aria-label="Filter saved music" value={savedKind} onChange={e => setSavedKind(e.target.value)}><option value="all">All saved music</option><option value="album">Albums</option><option value="artist">Artists</option><option value="playlist">Playlists</option></select>
-      </div>
       {importing && <ImportPlaylistSheet onClose={() => setImporting(false)} />}
 
-      {hasDownloads && (
-        <div className="flex items-center gap-2 mb-6">
-          <button
-            onClick={() => setDownloadedOnly((v) => !v)}
-            aria-pressed={downloadedOnly}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors',
-              downloadedOnly ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400',
-            )}
-          >
-            <DownloadIcon className="w-3.5 h-3.5" /> Downloaded only
-          </button>
-          {filterOn && <span className="text-[11px] text-ink-500">Showing only songs saved offline.</span>}
-        </div>
-      )}
-
-      {flagOn(flags, 'listenTogether') && <Link
-        to="/together"
-        className="glass-panel rounded-2xl p-4 mb-8 flex items-center gap-3 hover:bg-ink-800/40 transition-colors"
-      >
-        <span className="w-10 h-10 rounded-xl bg-ember-500 text-black flex items-center justify-center shrink-0">
-          <UsersIcon className="w-5 h-5" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-bold text-sm">Listen Together</span>
-          <span className="block text-xs text-ink-400">Play music in sync with friends — start or join a session.</span>
-        </span>
-        <span className="text-ink-400" aria-hidden>
-          ›
-        </span>
-      </Link>}
-
-      <section className="mb-10">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-title">Favorites</h2>
-          {favorites.length > 0 && (
-            <Link to="/favorites" className="text-xs font-semibold text-ember-400">See all ({favorites.length})</Link>
-          )}
-        </div>
-        {favorites.length === 0 ? (
-          <p className="text-sm text-ink-400">Tap the heart on any song to save it here.</p>
-        ) : shownFavorites.length === 0 ? (
-          <p className="text-sm text-ink-400">No favorites match these filters.</p>
-        ) : (
-          shownFavorites.slice(0, 5).map((song, i) => <SongRow key={song.id} song={song} songs={shownFavorites} index={i} />)
-        )}
-      </section>
-
-      {shownFavorites.length > 0 && (
-        <Shelf title="Recently Added" explanation="Your newest favorites">
-          {shownFavorites.slice(0, 12).map((song) => (
-            <MediaCard
-              key={`recent-${song.id}`}
-              to={songPath(song)}
-              image={song.images[song.images.length - 1]?.url ?? ''}
-              title={song.title}
-              subtitle={song.subtitle}
+      {createOpen && (
+        <div id="library-create" className="vx-create-row">
+          <span className="vx-field">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && create()}
+              aria-label="New collection name"
+              placeholder="Playlist name"
+              autoFocus={creating}
             />
-          ))}
-        </Shelf>
-      )}
-
-      {saved.length > 0 && !filterOn && (
-        <Shelf title="Saved & Following" layout="grid" explanation="Albums, artists and playlists you keep">
-          {visibleSaved.map((e) => (
-            <MediaCard
-              key={`${e.kind}-${e.id}`}
-              to={`/${e.kind}/${e.id}`}
-              image={e.image ?? ''}
-              title={e.title}
-              subtitle={e.kind[0].toUpperCase() + e.kind.slice(1)}
-              round={e.kind === 'artist'}
-            />
-          ))}
-        </Shelf>
-      )}
-
-      <section className="mb-10">
-        <h2 className="text-title mb-3">Your playlists & collections</h2>
-        <div className="flex gap-2 mb-4">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            aria-label="New collection name"
-            placeholder="New collection name"
-            className="flex-1 max-w-xs bg-ink-800 border border-ink-600 rounded-xl px-4 py-2 text-sm outline-none focus:border-ember-500"
-          />
-          <button
-            onClick={() => {
-              if (newName.trim()) {
-                createCollection(newName.trim());
-                setNewName('');
-              }
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm btn-primary"
-          >
+          </span>
+          <button onClick={create} className="btn-primary inline-flex items-center gap-1.5 px-4 min-h-[40px] text-sm">
             <PlusIcon className="w-4 h-4" /> Create
           </button>
         </div>
-        {collections.length === 0 && <p className="text-sm text-ink-400">Group songs your way — add any song from its ⋯ menu.</p>}
-        {tagsInUse.length > 0 && (
-          <div role="group" aria-label="Filter playlists by tag" className="flex flex-wrap gap-1.5 mb-4">
-            <button
-              type="button"
-              onClick={() => setSelectedTags([])}
-              aria-pressed={activeTags.length === 0}
-              className={cn(
-                'px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors',
-                activeTags.length === 0 ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400',
-              )}
-            >
-              All
-            </button>
-            {tagsInUse.map((tag) => {
-              const on = activeTags.includes(tag);
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => toggleTag(tag)}
-                  aria-pressed={on}
-                  className={cn(
-                    'px-2.5 py-1 rounded-full border text-xs font-semibold transition-colors',
-                    on ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400',
-                  )}
-                >
-                  #{tag}
-                </button>
-              );
-            })}
+      )}
+
+      {showAll && <DestinationGrid area="library" />}
+
+      <div className="vx-lib-chips" role="group" aria-label="Filter your library">
+        <Chip active={showAll} onClick={() => setSavedKind('all')}>All</Chip>
+        {KIND_CHIPS.map((k) => (
+          <Chip key={k.id} active={savedKind === k.id} onClick={() => setSavedKind(savedKind === k.id ? 'all' : k.id)}>{k.label}</Chip>
+        ))}
+        {hasDownloads && (
+          <Chip active={downloadedOnly} onClick={() => setDownloadedOnly((v) => !v)}>Downloaded</Chip>
+        )}
+      </div>
+
+      <div className="vx-lib-bar" role="search" aria-label="Search your library">
+        <span className="vx-field">
+          <SearchIcon />
+          <input type="search" value={libraryQuery} onChange={e => setLibraryQuery(e.target.value)} aria-label="Search favorites, saved music and collections" placeholder="Search" />
+          {libraryQuery && (
+            <button type="button" onClick={() => setLibraryQuery('')} aria-label="Clear search" className="vx-field-clear"><XIcon className="w-4 h-4" /></button>
+          )}
+        </span>
+        <select className="vx-select" aria-label="Sort library" value={librarySort} onChange={e => setLibrarySort(e.target.value as 'recent' | 'az')}>
+          <option value="recent">Recents</option>
+          <option value="az">Alphabetical</option>
+        </select>
+        <span className="vx-lib-view" role="group" aria-label="Layout">
+          <IconButton size="sm" label="List view" onClick={() => setView('list')} aria-pressed={view === 'list'}><ListIcon className="w-5 h-5" /></IconButton>
+          <IconButton size="sm" label="Grid view" onClick={() => setView('grid')} aria-pressed={view === 'grid'}><GridIcon className="w-5 h-5" /></IconButton>
+        </span>
+      </div>
+      {filterOn && <p className="vx-etools-note -mt-4 mb-6">Showing only songs saved offline.</p>}
+
+
+      <section className="vx-lib-section" aria-label="Playlists and saved music">
+        {showCollections && tagsInUse.length > 0 && (
+          <div role="group" aria-label="Filter playlists by tag" className="flex flex-wrap gap-2 mb-4">
+            <Chip active={activeTags.length === 0} onClick={() => setSelectedTags([])}>All tags</Chip>
+            {tagsInUse.map((tag) => (
+              <Chip key={tag} active={activeTags.includes(tag)} onClick={() => toggleTag(tag)}>#{tag}</Chip>
+            ))}
           </div>
         )}
-        {activeTags.length > 0 && shownCollections.length === 0 && (
-          <p className="text-sm text-ink-400 mb-4">No playlists carry {activeTags.length === 1 ? 'that tag' : 'those tags'}.</p>
+        {showCollections && activeTags.length > 0 && shownCollections.length === 0 && (
+          <p className="vx-lib-empty mb-4">No playlists carry {activeTags.length === 1 ? 'that tag' : 'those tags'}.</p>
         )}
-        <div className="space-y-4">
-          {shownCollections.map(({ col, songs, downloaded }) => (
-            <div key={col.id} className={cn('rounded-2xl border p-4', col.pinned ? 'border-ember-500/40' : 'border-ink-700')}>
-              <div className="flex items-center gap-3 mb-2">
-                <Link to={`/collection/${col.id}`} aria-label={`Open ${col.name}`} className="shrink-0">
-                  <CollageCover songs={col.songs} emoji={col.emoji} className="w-14 h-14" />
-                </Link>
-                <Link to={`/collection/${col.id}`} className="min-w-0 flex-1 font-semibold hover:text-ember-400 text-left">
-                  <span className="flex items-center gap-1.5">
-                    {col.pinned && (
-                      <span role="img" aria-label="Pinned" className="text-ember-400 text-xs" title="Pinned">📌</span>
-                    )}
-                    {col.emoji && <span aria-hidden>{col.emoji}</span>}
-                    <span className="truncate">{col.name}</span>
+        {listCollections.length === 0 && listSaved.length === 0 ? (
+          <p className="vx-lib-empty">
+            {libraryQuery.trim()
+              ? `Nothing in your library matches “${libraryQuery.trim()}”.`
+              : showCollections
+                ? 'Group songs your way — add any song from its ⋯ menu, or save albums, artists and playlists.'
+                : `No saved ${savedKind === 'album' ? 'albums' : 'artists'} yet.`}
+          </p>
+        ) : view === 'list' ? (
+          <div className="vx-lrows">
+            {listCollections.map(({ col, songs, downloaded }) => (
+              <div key={col.id} className="vx-lrow">
+                <Link to={`/collection/${col.id}`} className="vx-lrow-link">
+                  <span className="vx-lrow-art"><CollageCover songs={col.songs} emoji={col.emoji} /></span>
+                  <span className="vx-lrow-text">
+                    <span className="vx-lrow-title">
+                      {col.emoji && <span aria-hidden>{col.emoji}</span>}
+                      <span className="t">{col.name}</span>
+                    </span>
+                    <span className="vx-lrow-meta">{collectionMeta(col, songs, downloaded)}</span>
+                    <TagChips tags={col.tags} className="mt-1" />
                   </span>
-                  <span className="block text-xs text-ink-400 font-normal">
-                    {col.songs.length} song{col.songs.length === 1 ? '' : 's'}
-                    {hasDownloads && downloaded > 0 && <span> · {downloaded} downloaded</span>}
-                  </span>
-                  {col.description && <span className="block text-xs text-ink-300 font-normal truncate">{col.description}</span>}
-                  <TagChips tags={col.tags} className="mt-1 font-normal" />
                 </Link>
-                <button aria-label={`Delete ${col.name}`} onClick={() => removeCollection(col.id, col.name)} className="p-2.5 rounded-full text-ink-400 hover:text-red-400 hover:bg-red-500/10 shrink-0">
+                <button aria-label={`Delete ${col.name}`} title="Delete" onClick={() => removeCollection(col.id, col.name)} className="vx-row-x is-danger">
                   <XIcon className="w-4 h-4" />
                 </button>
               </div>
-              {songs.slice(0, 3).map((song, i) => <SongRow key={song.id} song={song} songs={songs} index={i} showArt={false} />)}
-              {filterOn && col.songs.length > 0 && songs.length === 0 && (
-                <p className="text-xs text-ink-500 px-2">Nothing from this collection is downloaded.</p>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mb-10">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-title">Smart collections</h2>
-          <button onClick={() => setSmartOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold btn-secondary">
-            <PlusIcon className="w-3.5 h-3.5" /> New
-          </button>
-        </div>
-        <p className="text-xs text-ink-500 mb-3">Saved rules — language, artist, length, favourites, recently played — that build a playlist from your local library and keep it up to date. They use the metadata your library already holds.</p>
-        {smartOpen && (
-          <Suspense fallback={null}>
-            <SmartCollectionSheet onClose={() => setSmartOpen(false)} />
-          </Suspense>
-        )}
-        {smart.length === 0 ? (
-          <p className="text-sm text-ink-400">No smart collections yet — try “Telugu favourites played this month”.</p>
+            ))}
+            {listSaved.map((e) => (
+              <div key={`${e.kind}-${e.id}`} className="vx-lrow">
+                <Link to={`/${e.kind}/${e.id}`} className="vx-lrow-link">
+                  <span className={cn('vx-lrow-art', e.kind === 'artist' && 'is-round')}>
+                    <img src={e.image || FALLBACK_ART} onError={(ev) => ((ev.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" decoding="async" />
+                  </span>
+                  <span className="vx-lrow-text">
+                    <span className="vx-lrow-title"><span className="t">{e.title}</span></span>
+                    <span className="vx-lrow-meta">{savedMeta(e)}</span>
+                  </span>
+                </Link>
+              </div>
+            ))}
+          </div>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {smart.map((c) => (
-              <Link key={c.id} to={`/smart/${c.id}`} className="rounded-2xl border border-ink-700 p-3 hover:bg-ink-800/40 transition-colors">
-                <span className="block font-semibold truncate">
-                  {c.emoji && <span className="mr-1.5" aria-hidden>{c.emoji}</span>}
-                  {c.name}
-                </span>
-                <span className="block text-xs text-ink-400 truncate">{describeRules(c.rules, languageLabel)}</span>
-                <span className="block text-xs text-ink-500 mt-0.5">{smartCounts[c.id] ?? 0} song{(smartCounts[c.id] ?? 0) === 1 ? '' : 's'} right now</span>
-              </Link>
+          <div className="vx-lgrid">
+            {listCollections.map(({ col, songs, downloaded }) => (
+              <div key={col.id} className="vx-lgrid-item">
+                <article className="vx-media-card group w-full">
+                  <Link to={`/collection/${col.id}`} className="block">
+                    <div className="vx-media-art"><CollageCover songs={col.songs} emoji={col.emoji} minPx={300} className="w-full h-full rounded-none" /></div>
+                    <p className="vx-media-title">
+                      {col.emoji && <span className="mr-1" aria-hidden>{col.emoji}</span>}
+                      {col.name}
+                    </p>
+                  </Link>
+                  <p className="vx-media-subtitle truncate">{collectionMeta(col, songs, downloaded)}</p>
+                </article>
+                <button aria-label={`Delete ${col.name}`} title="Delete" onClick={() => removeCollection(col.id, col.name)} className="vx-row-x">
+                  <XIcon className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            {listSaved.map((e) => (
+              <MediaCard
+                key={`${e.kind}-${e.id}`}
+                to={`/${e.kind}/${e.id}`}
+                image={e.image ?? ''}
+                title={e.title}
+                subtitle={KIND_LABEL[e.kind]}
+                round={e.kind === 'artist'}
+                fluid
+              />
             ))}
           </div>
         )}
       </section>
 
-      <section className="mb-10">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-title">Recently Played</h2>
-          <Link to="/history" className="text-xs font-semibold text-ember-400">Full history</Link>
-        </div>
-        {history.length === 0 ? (
-          <EmptyState
-            icon={<ClockIcon className="w-8 h-8" />}
-            title="Nothing played yet"
-            message="Your listening history will appear here as you play."
-            action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
-          />
-        ) : shownHistory.length === 0 ? (
-          <p className="text-sm text-ink-400">Nothing you played recently is downloaded.</p>
-        ) : (
-          shownHistory.slice(0, 5).map((e, i) => <SongRow key={`${e.song.id}-${e.ts}`} song={e.song} songs={shownHistory.map((h) => h.song)} index={i} />)
-        )}
-      </section>
+      {showAll && (
+        <section className="vx-lib-section">
+          <SectionHeader title="Liked songs" seeAllTo={favorites.length > 0 ? '/favorites' : undefined} />
+          {favorites.length === 0 ? (
+            <p className="vx-lib-empty">Tap the heart on any song to save it here.</p>
+          ) : shownFavorites.length === 0 ? (
+            <p className="vx-lib-empty">No favorites match these filters.</p>
+          ) : (
+            <div className="vx-tracklist">
+              {shownFavorites.slice(0, 5).map((song, i) => <SongRow key={song.id} song={song} songs={shownFavorites} index={i} />)}
+            </div>
+          )}
+        </section>
+      )}
 
-      {trash.length > 0 && (
-        <section className="mb-10">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-title">Recently deleted</h2>
-            <button onClick={() => { purgeTrash(); toast('Recently deleted cleared'); }} className="text-xs font-semibold text-ink-400 hover:text-red-300">Clear</button>
-          </div>
-          <p className="text-xs text-ink-500 mb-3">Deleted collections stay here for 7 days, then they are gone for good.</p>
-          <div className="space-y-2">
+      {showCollections && (
+        <section className="vx-lib-section">
+          <SectionHeader
+            title="Smart collections"
+            explanation="Rules that build a playlist from your library and keep it up to date."
+            action={
+              <button onClick={() => setSmartOpen(true)} className="vx-quiet-btn">
+                <PlusIcon className="w-4 h-4" /> New
+              </button>
+            }
+          />
+          {smartOpen && (
+            <Suspense fallback={null}>
+              <SmartCollectionSheet onClose={() => setSmartOpen(false)} />
+            </Suspense>
+          )}
+          {smart.length === 0 ? (
+            <p className="vx-lib-empty">No smart collections yet — try “Telugu favourites played this month”.</p>
+          ) : (
+            <div className="vx-smart-grid">
+              {smart.map((c) => (
+                <Link key={c.id} to={`/smart/${c.id}`} className="vx-smart-card">
+                  <span className="t">
+                    {c.emoji && <span className="mr-1.5" aria-hidden>{c.emoji}</span>}
+                    {c.name}
+                  </span>
+                  <span className="m">{describeRules(c.rules, languageLabel)}</span>
+                  <span className="m">{smartCounts[c.id] ?? 0} song{(smartCounts[c.id] ?? 0) === 1 ? '' : 's'} right now</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {showAll && (
+        <section className="vx-lib-section">
+          <SectionHeader title="Recently played" seeAllTo="/history" />
+          {history.length === 0 ? (
+            <EmptyState
+              icon={<ClockIcon className="w-8 h-8" />}
+              title="Nothing played yet"
+              message="Your listening history will appear here as you play."
+              action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
+            />
+          ) : shownHistory.length === 0 ? (
+            <p className="vx-lib-empty">Nothing you played recently is downloaded.</p>
+          ) : (
+            <div className="vx-tracklist">
+              {shownHistory.slice(0, 5).map((e, i) => <SongRow key={`${e.song.id}-${e.ts}`} song={e.song} songs={shownHistory.map((h) => h.song)} index={i} />)}
+            </div>
+          )}
+        </section>
+      )}
+
+      {showAll && flagOn(flags, 'listenTogether') && (
+        <Link to="/together" className="vx-together">
+          <span className="vx-together-glyph"><UsersIcon className="w-5 h-5" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold text-[15px]">Listen Together</span>
+            <span className="block text-meta text-ink-400 truncate">Play in sync with friends</span>
+          </span>
+          <ChevronRightIcon className="w-5 h-5 text-ink-400" />
+        </Link>
+      )}
+
+      {showCollections && trash.length > 0 && (
+        <section className="vx-lib-section">
+          <SectionHeader
+            title="Recently deleted"
+            explanation="Deleted collections stay here for 7 days, then they are gone for good."
+            action={<button onClick={() => { purgeTrash(); toast('Recently deleted cleared'); }} className="vx-quiet-btn is-danger">Clear</button>}
+          />
+          <div className="vx-lrows">
             {trash.map(({ collection: col, deletedAt }) => {
               const days = trashDaysLeft(deletedAt, now);
               return (
-                <div key={col.id} className="flex items-center gap-3 rounded-2xl border border-ink-700 border-dashed p-3">
-                  <CollageCover songs={col.songs} emoji={col.emoji} className="w-10 h-10 opacity-70" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate">
-                      {col.emoji && <span className="mr-1.5" aria-hidden>{col.emoji}</span>}
-                      {col.name}
-                    </p>
-                    <p className="text-xs text-ink-400">
-                      {col.songs.length} song{col.songs.length === 1 ? '' : 's'} · {days} day{days === 1 ? '' : 's'} left
-                    </p>
-                  </div>
+                <div key={col.id} className="vx-lrow is-trashed">
+                  <span className="vx-lrow-link">
+                    <span className="vx-lrow-art"><CollageCover songs={col.songs} emoji={col.emoji} /></span>
+                    <span className="vx-lrow-text">
+                      <span className="vx-lrow-title">
+                        {col.emoji && <span aria-hidden>{col.emoji}</span>}
+                        <span className="t">{col.name}</span>
+                      </span>
+                      <span className="vx-lrow-meta">
+                        {songsText(col.songs.length)} · {days} day{days === 1 ? '' : 's'} left
+                      </span>
+                    </span>
+                  </span>
                   <button
                     onClick={() => { restoreCollection(col.id); toast(`Restored “${col.name}”`); }}
-                    className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 shrink-0"
+                    className="vx-quiet-btn shrink-0"
                   >
                     Restore
                   </button>

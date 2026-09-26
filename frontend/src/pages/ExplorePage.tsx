@@ -25,17 +25,21 @@ import {
   SparkleIcon,
   WaveIcon,
 } from '@/components/Icons';
+import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
+import { moodTone } from '@/features/discover/tones';
+import '@/styles/pages/browse.css';
 
-const tiles: Array<{ to: string; label: string; hint: string; icon: typeof CompassIcon }> = [
-  { to: '/discover', label: 'Discover', hint: 'Fresh picks & playlists', icon: CompassIcon },
-  { to: '/charts', label: 'Charts', hint: 'Top songs by language', icon: WaveIcon },
-  { to: '/videos', label: 'Videos', hint: 'Watch music videos', icon: VideoIcon },
-  { to: '/movies', label: 'Movies', hint: 'Film soundtracks', icon: FilmIcon },
-  { to: '/moods', label: 'Moods', hint: 'Music for every vibe', icon: SparkleIcon },
-  { to: '/languages', label: 'Languages', hint: 'Pin what you listen to', icon: MusicIcon },
-  { to: '/regions', label: 'Regions', hint: 'Tuned to your region', icon: GlobeIcon },
-  { to: '/made-for-you', label: 'Made For You', hint: 'Your personal mixes', icon: HeartIcon },
-  { to: '/quiz', label: 'Music Quiz', hint: 'Guess the song, beat your streak', icon: PlayIcon },
+const tiles: Array<{ to: string; label: string; tone: number; icon: typeof CompassIcon }> = [
+  { to: '/discover', label: 'Discover', tone: 1, icon: CompassIcon },
+  { to: '/charts', label: 'Charts', tone: 8, icon: WaveIcon },
+  { to: '/videos', label: 'Videos', tone: 6, icon: VideoIcon },
+  { to: '/movies', label: 'Movies', tone: 5, icon: FilmIcon },
+  { to: '/moods', label: 'Moods', tone: 3, icon: SparkleIcon },
+  { to: '/languages', label: 'Languages', tone: 2, icon: MusicIcon },
+  { to: '/regions', label: 'Regions', tone: 4, icon: GlobeIcon },
+  { to: '/made-for-you', label: 'Made for you', tone: 7, icon: HeartIcon },
+  { to: '/quiz', label: 'Music quiz', tone: 11, icon: PlayIcon },
 ];
 
 /** Package D3 — the mood × language matrix. Pick a language, tap a mood cell,
@@ -50,28 +54,25 @@ function MoodLanguageGrid() {
   });
   const [lang, setLang] = useState(langs[0]);
   return (
-    <section className="mt-8">
-      <h2 className="text-lg font-extrabold tracking-tight mb-1">Any mood, your language</h2>
-      <p className="text-xs text-ink-400 mb-3">Pick a language, tap a mood — instant results.</p>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
+    <section className="vx-section">
+      <SectionHeader title="Any mood, your language" />
+      <div className="vx-chip-rail">
         {langs.map((l) => (
           <Chip key={l} active={lang === l} onClick={() => setLang(l)}>
             {languageLabel(l)}
           </Chip>
         ))}
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div className="vx-browse-tiles vx-explore-moods !mb-0">
         {MOODS.map((m) => (
           <Link
             key={m.id}
             to={`/search/${encodeURIComponent(moodSeed(m.id, lang))}`}
-            className="glass-card glass-hover rounded-xl px-3 py-3 flex items-center gap-2.5 active:scale-[0.97] transition-transform"
+            className={cn('vx-browse-tile', moodTone(m.id))}
           >
-            <span aria-hidden className="text-lg">{m.emoji}</span>
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold truncate">{m.label}</span>
-              <span className="block text-[10px] text-ink-500 truncate">{languageLabel(lang)}</span>
-            </span>
+            <span className="vx-browse-tile-title">{m.label}</span>
+            <span className="vx-browse-tile-meta">{languageLabel(lang)}</span>
+            <span className="vx-browse-tile-art is-glyph" aria-hidden>{m.emoji}</span>
           </Link>
         ))}
       </div>
@@ -118,10 +119,9 @@ function DecadeRadio() {
     }
   };
   return (
-    <section className="mt-8" aria-label="Decade radio">
-      <h2 className="text-lg font-extrabold tracking-tight mb-1">Decade radio</h2>
-      <p className="text-xs text-ink-400 mb-3">Tap a decade — {languageLabel(lang)} hits from that era start playing.</p>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+    <section className="vx-section" aria-label="Decade radio">
+      <SectionHeader title="Decade radio" />
+      <div className="vx-chip-rail !mb-0">
         {DECADES.map((d) => (
           <button
             key={d.id}
@@ -173,16 +173,15 @@ function YearPicker() {
     }
   };
   return (
-    <section className="mt-8" aria-label="Pick a year">
-      <h2 className="text-lg font-extrabold tracking-tight mb-1">Pick a year</h2>
-      <p className="text-xs text-ink-400 mb-3">Relive one year of {languageLabel(lang)} music.</p>
+    <section className="vx-section" aria-label="Pick a year">
+      <SectionHeader title="Pick a year" />
       <div className="flex items-center gap-2">
         <label className="sr-only" htmlFor="explore-year">Year</label>
         <select
           id="explore-year"
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
-          className="h-10 rounded-full bg-ink-800 border border-transparent focus:border-ink-600 px-4 text-sm font-semibold text-ink-100 outline-none"
+          className="h-11 rounded-full bg-ink-850 border border-transparent focus:border-ink-600 px-4 text-sm font-semibold text-ink-100 outline-none"
         >
           {years.map((y) => (
             <option key={y} value={y}>{y}</option>
@@ -193,7 +192,7 @@ function YearPicker() {
           onClick={() => void play()}
           disabled={busy}
           aria-busy={busy}
-          className="flex items-center gap-1.5 px-4 h-10 rounded-full btn-primary text-sm font-bold active:scale-95 transition-transform disabled:opacity-60"
+          className="flex items-center gap-1.5 px-5 h-11 rounded-full btn-primary text-sm font-bold active:scale-95 transition-transform disabled:opacity-60"
         >
           <PlayIcon className="w-3.5 h-3.5" /> {busy ? 'Loading…' : `Play ${year}`}
         </button>
@@ -217,18 +216,13 @@ function HubGrid() {
   );
   const shown = showAll ? tiles : tiles.slice(0, 12);
   return (
-    <section className="mt-8" aria-label="Language and mood hubs">
-      <h2 className="text-lg font-extrabold tracking-tight mb-1">Language × mood</h2>
-      <p className="text-xs text-ink-400 mb-3">Curated hub pages — your pinned languages come first.</p>
-      <div className="grid grid-cols-3 gap-2">
+    <section className="vx-section" aria-label="Language and mood hubs">
+      <SectionHeader title="Language × mood" />
+      <div className="vx-hub-grid">
         {shown.map((t) => (
-          <Link
-            key={t.to}
-            to={t.to}
-            className="glass-card glass-hover rounded-xl px-3 py-2.5 min-w-0 active:scale-[0.97] transition-transform"
-          >
-            <span className="block text-[13px] font-semibold truncate">{languageLabel(t.lang)}</span>
-            <span className="block text-[11px] text-ink-400 truncate">{t.mood.label}</span>
+          <Link key={t.to} to={t.to} className="vx-hub-cell">
+            <span className="block text-[14px] font-semibold text-ink-100 truncate">{languageLabel(t.lang)}</span>
+            <span className="block text-[13px] text-ink-400 truncate">{t.mood.label}</span>
           </Link>
         ))}
       </div>
@@ -237,7 +231,7 @@ function HubGrid() {
           type="button"
           onClick={() => setShowAll((v) => !v)}
           aria-expanded={showAll}
-          className="mt-3 text-xs font-semibold text-ember-400 hover:text-ember-300"
+          className="vx-text-action mt-2"
         >
           {showAll ? 'Show fewer' : `Show all ${tiles.length} combinations`}
         </button>
@@ -269,7 +263,7 @@ function SurpriseAlbumButton() {
     <button
       type="button"
       onClick={surprise}
-      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full btn-premium text-sm font-bold active:scale-95 transition-transform"
+      className="vx-pill-btn min-h-[44px]"
       aria-label="Open a surprise album from your listening"
     >
       <SparkleIcon className="w-4 h-4" /> Surprise album
@@ -280,30 +274,13 @@ function SurpriseAlbumButton() {
 export default function ExplorePage() {
   usePageTitle('Explore');
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="flex items-start justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-display tracking-tight mb-1">Explore</h1>
-          <p className="text-sm text-ink-400">Everything VinaX has to offer, in one place.</p>
-        </div>
-        <div className="shrink-0 pt-1">
-          <SurpriseAlbumButton />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {tiles.map(({ to, label, hint, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            className="glass-card glass-hover rounded-2xl p-4 flex flex-col gap-3 active:scale-[0.98] transition-transform"
-          >
-            <span className="w-11 h-11 rounded-xl bg-ember-500/15 text-ember-400 flex items-center justify-center">
-              <Icon className="w-6 h-6" />
-            </span>
-            <span>
-              <span className="block font-semibold">{label}</span>
-              <span className="block text-xs text-ink-400">{hint}</span>
-            </span>
+    <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
+      <PageHeader title="Explore" actions={<SurpriseAlbumButton />} />
+      <div className="vx-browse-tiles">
+        {tiles.map(({ to, label, tone, icon: Icon }) => (
+          <Link key={to} to={to} className={cn('vx-browse-tile', `vx-tone-${tone}`)}>
+            <span className="vx-browse-tile-title">{label}</span>
+            <span className="vx-browse-tile-art" aria-hidden><Icon /></span>
           </Link>
         ))}
       </div>

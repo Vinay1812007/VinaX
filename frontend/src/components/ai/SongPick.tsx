@@ -136,9 +136,9 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
         type={song ? 'button' : undefined}
         onClick={song ? play : undefined}
         aria-label={song ? `${isCurrent && isPlaying ? 'Pause' : 'Play'} ${song.title} by ${song.subtitle}${uncertain ? ' (closest match)' : ''}` : undefined}
-        className={cn('flex items-center gap-2.5 min-w-0 flex-1 text-left rounded-l-[11px]', song && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember-400')}
+        className={cn('flex items-center gap-2.5 min-w-0 flex-1 text-left rounded-l-[8px]', song && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember-400')}
       >
-        <div className="relative w-12 h-12 shrink-0 overflow-hidden rounded-l-[11px] bg-ink-800">
+        <div className="relative w-12 h-12 shrink-0 overflow-hidden rounded-l-[8px] bg-ink-800">
           {song ? (
             <img
               src={bestImage(song.images, 150)}
@@ -157,8 +157,8 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
           )}
         </div>
         <div className="min-w-0 flex-1 py-1.5">
-          <p className={cn('text-[13px] font-bold truncate leading-tight', isCurrent && 'text-ember-400')}>{song?.title ?? pick.title}</p>
-          <p className="text-[11px] ai-t3 truncate mt-0.5">
+          <p className={cn('text-[14px] font-semibold truncate leading-tight', isCurrent && 'text-ember-400')}>{song?.title ?? pick.title}</p>
+          <p className="text-[12px] font-medium ai-t3 truncate mt-0.5">
             {song?.subtitle ?? pick.artist}
             {uncertain && <span className="ml-1.5 rounded-md border ai-hairline px-1 py-px text-[10px] font-semibold" title={`You asked for “${pick.title}” by ${pick.artist || 'an unnamed artist'}; this is the closest the catalogue offers.`}>closest match</span>}
           </p>
@@ -232,7 +232,7 @@ export function SongPicksBar({ picks }: { picks: SongPickRef[] }) {
             haptic('medium');
           });
         }}
-        className="btn-primary rounded-xl px-3.5 py-1.5 text-[12px] inline-flex items-center gap-1.5 shrink-0"
+        className="btn-primary px-3.5 py-1.5 text-[13px] inline-flex items-center gap-1.5 shrink-0"
       >
         <PlayIcon className="w-3.5 h-3.5" /> Play all
       </button>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_HOME, HOME_SECTIONS, generateHomeDesign, type HomeDesign, type HomeSection } from '@/services/recommendation/homeDesign';
-import { SparkleIcon } from '@/components/Icons';
+import { ChevronDownIcon, SettingsIcon } from '@/components/Icons';
 
 /**
  * `locked` — shelves the owner turned off for everyone. They show greyed and
@@ -27,11 +27,15 @@ export function HomeStudio({ design, onApply, onReset, locked = [] }: { design: 
     if (result) { setDraft(result); setNotice('Your preview is ready. Review the shelves, then apply.'); }
     else setNotice('AI is unavailable right now. You can still arrange and apply your shelves below.');
   }
-  return <details className="home-studio" onToggle={e => { if (e.currentTarget.open) setDraft(design); }}>
-    <summary><span><SparkleIcon className="w-4 h-4" /><strong>Home Studio</strong></span><span>Make this space yours <span aria-hidden>+</span></span></summary>
+  return <details className="home-studio vxh-studio" onToggle={e => { if (e.currentTarget.open) setDraft(design); }}>
+    <summary>
+      <span className="vxh-studio-icon" aria-hidden><SettingsIcon /></span>
+      <span className="vxh-studio-text"><strong>Customise Home</strong><small>Reorder or hide shelves</small></span>
+      <span className="vxh-studio-chevron" aria-hidden><ChevronDownIcon /></span>
+    </summary>
     <div className="home-studio-body">
-      <div className="home-studio-intro"><p className="vx-eyebrow">YOUR HOME, YOUR WAY</p><h2>Set the mood.<br />Shape your Home.</h2><p>VinaX AI arranges your shelves around your listening. Preview every change before applying it.</p></div>
       <div className="home-studio-editor">
+        <p className="home-studio-lead">Home Studio: describe a mood and VinaX AI arranges your shelves, or order them yourself. Nothing changes until you apply.</p>
         <label htmlFor="home-direction">What do you want to hear?</label>
         <textarea id="home-direction" value={prompt} maxLength={500} onChange={e => setPrompt(e.target.value)} placeholder="A calm evening with Telugu melodies and a few new discoveries…" rows={2} />
         <div className="home-studio-actions"><button className="btn-primary" disabled={busy} onClick={() => void generate()}>{busy ? 'Building preview…' : 'Build with VinaX AI'}</button><button className="btn-secondary" onClick={() => { request.current?.abort(); setBusy(false); setDraft(DEFAULT_HOME); setNotice('Balanced layout ready to preview.'); }}>Balanced layout</button></div>

@@ -9,6 +9,9 @@ import { languageLabel } from '@/constants/languages';
 import { getLocal } from '@/services/storage/local';
 import { KEYS } from '@/constants/storage-keys';
 import { toast } from '@/store/toastStore';
+import { PageHeader } from '@/components/PageHeader';
+import { ShareIcon, SparkleIcon } from '@/components/Icons';
+import '@/styles/pages/secondary.css';
 
 const hourLabel = (h: number): string => {
   const twelve = h % 12 === 0 ? 12 : h % 12;
@@ -48,114 +51,108 @@ export default function RecapPage() {
 
   if (!recapReady(recap)) {
     return (
-      <div className="glass-card rounded-3xl max-w-md mx-auto my-24 px-10 py-14 text-center flex flex-col items-center gap-4">
-        <p className="text-2xl font-extrabold">Your Year in Music</p>
-        <p className="text-sm text-ink-300">
-          Your recap unlocks after about 20 plays. Keep listening — every song you play is counted on this
-          device only, never uploaded.
-        </p>
-        <Link to="/" className="px-5 py-2.5 rounded-full btn-primary text-sm font-bold">
-          Play something
-        </Link>
+      <div className="vx-empty-page">
+        <span className="vx-empty-icon" aria-hidden>
+          <SparkleIcon className="w-8 h-8" />
+        </span>
+        <h1>Your year in music</h1>
+        <p>Your recap unlocks after about 20 plays. Every song is counted on this device only.</p>
+        <Link to="/" className="px-6 py-3 rounded-full btn-primary">Play something</Link>
       </div>
     );
   }
 
+  const numbers: Array<[string, string]> = [
+    [String(recap.totalPlays), 'Songs played'],
+    [`≈${recap.estMinutes.toLocaleString('en-IN')}`, 'Minutes (about)'],
+    [String(recap.completes), 'Played to the end'],
+    [String(recap.favorites), 'Favorites'],
+  ];
+
   return (
-    <div className="max-w-2xl mx-auto pb-8 space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-page-title">Your {recap.year} in Music</h1>
-          <p className="text-xs font-semibold text-ink-400">Computed on this device · never uploaded</p>
-        </div>
-        <button
-          onClick={() => void shareCard()}
-          disabled={sharing}
-          className="h-[38px] px-4 rounded-full btn-primary text-xs font-bold transition active:scale-95 shrink-0 disabled:opacity-60"
-        >
-          {sharing ? 'Painting…' : '↑ Share card'}
-        </button>
-      </div>
+    <div className="vx-sec">
+      <PageHeader
+        title={`Your ${recap.year} in music`}
+        subtitle="Computed on this device · never uploaded"
+        actions={
+          <button onClick={() => void shareCard()} disabled={sharing} className="px-5 py-2.5 rounded-full btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
+            <ShareIcon className="w-4 h-4" />
+            {sharing ? 'Painting…' : 'Share card'}
+          </button>
+        }
+      />
 
       {/* persona hero */}
-      <div
-        className="rounded-3xl border border-ember-400/25 p-6"
-        style={{ background: 'linear-gradient(130deg, rgba(99,102,241,0.22), rgba(45,212,191,0.10))' }}
-      >
-        <p className="text-[11px] font-bold tracking-widest text-ink-300">YOUR LISTENING PERSONA</p>
-        <p className="text-[30px] font-extrabold tracking-tight mt-1">{recap.persona}</p>
-        <p className="text-xs font-semibold text-ink-300 mt-1.5">
-          Peak hour: {hourLabel(recap.peakHour)} · {recap.daysTogether} days of music together
+      <section className="vx-sec-block vx-feature" aria-label="Your listening persona">
+        <p className="text-[13px] font-semibold text-ink-300">Your listening persona</p>
+        <p className="vx-display mt-2">{recap.persona}</p>
+        <p className="mt-3 text-[14px] font-medium text-ink-300">
+          Peak hour {hourLabel(recap.peakHour)} · {recap.daysTogether} days of music together
         </p>
-      </div>
+      </section>
 
-      {/* numbers */}
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          [String(recap.totalPlays), 'SONGS PLAYED'],
-          [`≈${recap.estMinutes.toLocaleString('en-IN')}`, 'MINUTES (ABOUT)'],
-          [String(recap.completes), 'PLAYED TO THE END'],
-          [String(recap.favorites), 'FAVORITES'],
-        ].map(([n, l]) => (
-          <div key={l} className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
-            <p className="text-[26px] font-extrabold leading-tight">{n}</p>
-            <p className="text-[11px] font-bold tracking-widest text-ink-400">{l}</p>
+      <div className="vx-sec-block vx-kpis is-four">
+        {numbers.map(([n, l]) => (
+          <div key={l} className="vx-kpi">
+            <span className="vx-kpi-label">{l}</span>
+            <span className="vx-kpi-value">{n}</span>
           </div>
         ))}
       </div>
 
-      {/* top artists */}
-      {recap.topArtists.length > 0 && (
-        <section className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
-          <h2 className="text-sm font-extrabold mb-3">Top artists</h2>
-          <ol className="space-y-2">
-            {recap.topArtists.map((a, i) => (
-              <li key={a.name} className="flex items-center gap-3">
-                <span className={`w-7 text-center text-sm font-extrabold ${i === 0 ? 'text-ember-400' : 'text-ink-400'}`}>
-                  {i + 1}
-                </span>
-                <span className="text-sm font-bold truncate flex-1">{a.name}</span>
-                <span className="text-[11px] font-semibold text-ink-400 shrink-0">{a.plays} plays</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
+      <div className="grid gap-10 md:grid-cols-2 md:gap-8 vx-sec-block">
+        {recap.topArtists.length > 0 && (
+          <section aria-labelledby="vx-recap-artists">
+            <h2 id="vx-recap-artists" className="vx-sec-title">Top artists</h2>
+            <ol className="vx-group">
+              {recap.topArtists.map((a, i) => (
+                <li key={a.name} className="vx-row">
+                  <span className="vx-row-rank">{i + 1}</span>
+                  <span className="vx-row-main vx-row-label truncate">{a.name}</span>
+                  <span className="vx-row-value">{a.plays} plays</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
 
-      {/* languages */}
-      {recap.topLanguages.length > 0 && (
-        <section className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
-          <h2 className="text-sm font-extrabold mb-3">Your languages</h2>
-          <div className="space-y-2.5">
-            {recap.topLanguages.map((l) => (
-              <div key={l.id}>
-                <div className="flex justify-between text-[11px] font-bold mb-1">
-                  <span>{languageLabel(l.id)}</span>
-                  <span className="text-ink-400">{l.pct}%</span>
+        {recap.topLanguages.length > 0 && (
+          <section aria-labelledby="vx-recap-langs">
+            <h2 id="vx-recap-langs" className="vx-sec-title">Your languages</h2>
+            <div className="vx-group is-padded space-y-4">
+              {recap.topLanguages.map((l) => (
+                <div key={l.id}>
+                  <div className="flex justify-between text-[14px] mb-2">
+                    <span className="font-semibold text-ink-100">{languageLabel(l.id)}</span>
+                    <span className="text-ink-400 tabular-nums">{l.pct}%</span>
+                  </div>
+                  <div className="vx-bar" aria-hidden>
+                    <span style={{ width: `${l.pct}%` }} />
+                  </div>
                 </div>
-                <div className="h-2 rounded-full bg-[var(--track)] overflow-hidden">
-                  <div className="h-full rounded-full bg-ember-500" style={{ width: `${l.pct}%` }} />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {recap.onRepeat && (
+        <section className="vx-sec-block" aria-labelledby="vx-recap-repeat">
+          <h2 id="vx-recap-repeat" className="vx-sec-title">On repeat lately</h2>
+          <div className="vx-group">
+            <div className="vx-row">
+              <span className="vx-row-main">
+                <span className="vx-row-label truncate">{recap.onRepeat.title}</span>
+                <span className="vx-row-hint truncate">{recap.onRepeat.subtitle}</span>
+              </span>
+              <span className="vx-row-value">{recap.onRepeat.count} recent plays</span>
+            </div>
           </div>
         </section>
       )}
 
-      {/* on repeat lately */}
-      {recap.onRepeat && (
-        <div className="rounded-2xl bg-[var(--tile)] border border-[var(--glass-border)] p-4">
-          <p className="text-[11px] font-bold tracking-widest text-ink-400 mb-1">ON REPEAT LATELY</p>
-          <p className="text-[15px] font-extrabold truncate">{recap.onRepeat.title}</p>
-          <p className="text-xs font-semibold text-ink-400 truncate">
-            {recap.onRepeat.subtitle} · {recap.onRepeat.count} recent plays
-          </p>
-        </div>
-      )}
-
-      <p className="text-[11px] text-ink-400 text-center pt-2">
-        Counts are lifetime, from your on-device taste profile. Minutes are an estimate. Nothing here ever
-        leaves your phone.
+      <p className="vx-sec-foot">
+        Counts are lifetime, from your on-device taste profile. Minutes are an estimate.
       </p>
     </div>
   );

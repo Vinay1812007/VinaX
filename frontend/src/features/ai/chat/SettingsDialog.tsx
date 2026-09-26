@@ -72,11 +72,11 @@ function Switch({ checked, onChange, label, hint }: { checked: boolean; onChange
   return (
     <div className="ai-set-row">
       <span className="min-w-0">
-        <span id={`${id}-l`} className="block text-[13.5px] font-semibold ai-t1">
+        <span id={`${id}-l`} className="block text-[14px] font-semibold ai-t1">
           {label}
         </span>
         {hint && (
-          <span id={`${id}-h`} className="block text-[12px] ai-t3 leading-snug mt-0.5">
+          <span id={`${id}-h`} className="block text-[13px] ai-t3 leading-snug mt-0.5">
             {hint}
           </span>
         )}
@@ -171,10 +171,10 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
       className="ai-scope ai-settings"
     >
       <div className="flex items-center gap-3 pb-3">
-        <h2 id={titleId} className="text-lg font-bold tracking-tight flex-1 ai-t1">
+        <h2 id={titleId} className="ai-settings-title flex-1 ai-t1">
           Chat settings
         </h2>
-        <button type="button" onClick={p.onClose} aria-label="Close settings" className="ai-icon-btn -mr-1.5">
+        <button type="button" onClick={p.onClose} aria-label="Close settings" className="ai-icon-btn ai-settings-close">
           <XIcon className="w-4 h-4" />
         </button>
       </div>
@@ -204,7 +204,7 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
           {tab === 'general' && (
             <>
               <div className="ai-set-row">
-                <span className="text-[13.5px] font-semibold ai-t1">Text size</span>
+                <span className="text-[14px] font-semibold ai-t1">Text size</span>
                 <span className="flex gap-1" role="group" aria-label="Text size">
                   {(['s', 'm', 'l'] as const).map((f) => (
                     <button
@@ -223,8 +223,8 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
               <div className="ai-set-block">
                 <div className="ai-set-row">
                   <span className="min-w-0">
-                    <span className="block text-[13.5px] font-semibold ai-t1">Default model</span>
-                    <span className="block text-[12px] ai-t3 leading-snug mt-0.5">
+                    <span className="block text-[14px] font-semibold ai-t1">Default model</span>
+                    <span className="block text-[13px] ai-t3 leading-snug mt-0.5">
                       {p.defaultChoice ? 'Every visit starts on this model.' : 'Every visit starts on the model you used last.'}
                     </span>
                   </span>
@@ -291,10 +291,10 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                 onSongCtx={p.onSongCtx}
               />
               <div className="ai-set-block">
-                <label htmlFor={`${uid}-about`} className="block text-[13.5px] font-semibold ai-t1">
+                <label htmlFor={`${uid}-about`} className="block text-[14px] font-semibold ai-t1">
                   About you
                 </label>
-                <p className="text-[12px] ai-t3 leading-snug mt-0.5 mb-2">Stays on this device and is sent with each message so replies fit you.</p>
+                <p className="text-[13px] ai-t3 leading-snug mt-0.5 mb-2">Stays on this device and is sent with each message so replies fit you.</p>
                 <textarea
                   id={`${uid}-about`}
                   value={p.profile}
@@ -313,7 +313,7 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
           {tab === 'voice' && (
             <>
               <div className="ai-set-block">
-                <label htmlFor={`${uid}-voice`} className="block text-[13.5px] font-semibold ai-t1 mb-1.5">
+                <label htmlFor={`${uid}-voice`} className="block text-[14px] font-semibold ai-t1 mb-1.5">
                   Spoken reply voice
                 </label>
                 <div className="flex items-center gap-2">
@@ -347,7 +347,7 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                     Preview
                   </button>
                 </div>
-                <p className="mt-1.5 text-[12px] ai-t3 leading-snug">{voiceNote}</p>
+                <p className="mt-1.5 text-[13px] ai-t3 leading-snug">{voiceNote}</p>
               </div>
               <Switch
                 checked={p.autoRead}
@@ -362,8 +362,8 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
             <>
               <div className="ai-set-row">
                 <span className="min-w-0">
-                  <span className="block text-[13.5px] font-semibold ai-t1">Storage used</span>
-                  <span className="block text-[12px] ai-t3 leading-snug mt-0.5">
+                  <span className="block text-[14px] font-semibold ai-t1">Storage used</span>
+                  <span className="block text-[13px] ai-t3 leading-snug mt-0.5">
                     {p.chatCount} chat{p.chatCount === 1 ? '' : 's'} kept on this device only. Attached images are never stored.
                   </span>
                 </span>

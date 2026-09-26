@@ -256,7 +256,7 @@ export function PlayerBar() {
           <div className="vx-pb-tools">
             {castAvailable && (
               <div className="w-8 h-8 flex items-center justify-center mr-1">
-                {/* Custom element defined by Google Cast SDK */}
+                {/* Custom element defined by the cast SDK */}
                 {/* @ts-expect-error custom element */}
                 <cast-media-route-button style={{ width: '24px', height: '24px', '--connected-color': 'rgb(var(--ember-400))', '--disconnected-color': 'currentColor' }} />
               </div>

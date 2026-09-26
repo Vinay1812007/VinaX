@@ -2,13 +2,13 @@ import { useCallback, useMemo, useState } from 'react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
-import { SongRow } from '@/components/SongRow';
+import { SongRow, TrackListHead } from '@/components/SongRow';
+import { EntityAction, EntityHeader, EntityMeta, GlyphCover, PlayFab, songsLabel, totalDuration } from '@/components/EntityHeader';
 import { VirtualChunks } from '@/components/VirtualChunks';
 import { EmptyState } from '@/components/States';
 import { Chip } from '@/components/Chip';
-import { PlayIcon, ShuffleIcon, DownloadIcon, HeartIcon } from '@/components/Icons';
+import { ShuffleIcon, DownloadIcon, HeartIcon } from '@/components/Icons';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '@/components/PageHeader';
 import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
 import { downloadMany } from '@/services/downloads';
@@ -18,7 +18,7 @@ import { useSessionState } from '@/hooks/useSessionState';
 type SortMode = 'recent' | 'title' | 'artist';
 
 /** .vx-track-row min-height — the off-screen size estimate for list chunks. */
-const SONG_ROW_HEIGHT = 68;
+const SONG_ROW_HEIGHT = 56;
 const songKey = (song: Song): string => song.id;
 
 function sortSongs(songs: Song[], mode: SortMode): Song[] {
@@ -29,7 +29,7 @@ function sortSongs(songs: Song[], mode: SortMode): Song[] {
 }
 
 export default function FavoritesPage() {
-  usePageTitle('Favorites');
+  usePageTitle('Liked songs');
   const favorites = useLibraryStore((s) => s.favorites);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
@@ -52,37 +52,37 @@ export default function FavoritesPage() {
     else toast(saved ? `Saved ${saved} song${saved === 1 ? '' : 's'} offline` : 'Already saved offline');
   };
 
+  const shufflePlay = () => {
+    if (!shuffle) toggleShuffle();
+    playQueue(sorted, Math.floor(Math.random() * sorted.length));
+  };
+
   return (
-    <div className="max-w-3xl mx-auto vx-stagger">
-      <PageHeader
-        title="Favorites"
-        subtitle={`${favorites.length} songs · stored locally`}
-        compact
+    <div className="vx-entity">
+      <EntityHeader
+        kind="Playlist"
+        title="Liked songs"
+        tone="var(--ember-500)"
+        art={<GlyphCover tone="liked" icon={<HeartIcon filled />} />}
+        meta={<EntityMeta items={[songsLabel(favorites.length), totalDuration(favorites), 'Stored on this device']} />}
         actions={favorites.length > 0 ? (
           <>
-            <button
-              onClick={() => {
-                if (!shuffle) toggleShuffle();
-                playQueue(sorted, Math.floor(Math.random() * sorted.length));
-              }}
-              className="flex items-center gap-2 px-4 min-h-touch rounded-full btn-secondary text-sm active:scale-95 transition-transform"
-            >
-              <ShuffleIcon className="w-4 h-4" /> Shuffle
-            </button>
+            <PlayFab label="Play all" onClick={() => playQueue(sorted, 0)} />
+            <EntityAction label="Shuffle" onClick={shufflePlay}><ShuffleIcon /></EntityAction>
             {isNativePlatform() && (
-              <button onClick={downloadAll} disabled={dlBusy} className="flex items-center gap-2 px-4 min-h-touch rounded-full btn-secondary text-sm active:scale-95 transition-transform disabled:opacity-50">
-                <DownloadIcon className="w-4 h-4" /> {dlBusy ? `${dlDone}/${sorted.length}` : 'Download'}
-              </button>
+              <>
+                <EntityAction label={dlBusy ? `Downloading ${dlDone} of ${sorted.length}` : 'Download'} onClick={() => void downloadAll()} disabled={dlBusy}>
+                  <DownloadIcon />
+                </EntityAction>
+                {dlBusy && <span className="vx-etools-note tabular-nums" aria-hidden>{dlDone}/{sorted.length}</span>}
+              </>
             )}
-            <button onClick={() => playQueue(sorted, 0)} className="flex items-center gap-2 px-5 min-h-touch rounded-full btn-primary">
-              <PlayIcon className="w-4 h-4" /> Play all
-            </button>
           </>
         ) : undefined}
       />
 
       {favorites.length > 0 && (
-        <div className="flex gap-2 mb-4">
+        <div className="vx-etools" role="group" aria-label="Sort liked songs">
           {(['recent', 'title', 'artist'] as SortMode[]).map((m) => (
             <Chip key={m} active={sort === m} onClick={() => setSort(m)}>
               {m === 'recent' ? 'Recently added' : m === 'title' ? 'Title' : 'Artist'}
@@ -94,12 +94,15 @@ export default function FavoritesPage() {
       {favorites.length === 0 ? (
         <EmptyState
           icon={<HeartIcon className="w-8 h-8" />}
-          title="No favorites yet"
+          title="No liked songs yet"
           message="Tap the heart on any song. Favorites power your “Similar to Favorites” recommendations."
           action={<Link to="/discover" className="px-5 py-2.5 rounded-full btn-primary">Discover music</Link>}
         />
       ) : (
-        <VirtualChunks items={sorted} keyOf={songKey} renderItem={renderRow} rowHeight={SONG_ROW_HEIGHT} />
+        <div className="vx-tracklist">
+          <TrackListHead />
+          <VirtualChunks items={sorted} keyOf={songKey} renderItem={renderRow} rowHeight={SONG_ROW_HEIGHT} />
+        </div>
       )}
     </div>
   );

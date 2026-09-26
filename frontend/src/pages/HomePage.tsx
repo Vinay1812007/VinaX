@@ -8,8 +8,9 @@ import { HomeStudio } from '@/features/home/HomeStudio';
 import { HOME_DESIGN_KEY, loadHomeDesign, validateHomeDesign, type HomeDesign, type HomeSection } from '@/services/recommendation/homeDesign';
 import { composeHomeLayout } from '@/features/home/homeLayout';
 import { resetShelfLedger, setShelfBlockOrder, useShelfDedupe } from '@/features/home/shelfLedger';
-import { formatMinutes, listeningTotal } from '@/features/stats/listening';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { listeningTotal } from '@/features/stats/listening';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import '@/styles/pages/home.css';
 import type { ReactNode } from 'react';
 import { useClientConfig } from '@/features/home/useAppConfig';
 import { PromoBanner } from '@/components/PromoBanner';
@@ -19,6 +20,7 @@ import { PullToRefresh } from '@/components/PullToRefresh';
 import { artistPath, songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { Shelf } from '@/components/Shelf';
+import { SectionHeader } from '@/components/SectionHeader';
 import { MediaCard } from '@/components/MediaCard';
 import { ShelfSkeleton, CardGridSkeleton } from '@/components/Skeletons';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
@@ -31,7 +33,7 @@ import { PushPromptCard } from '@/components/PushPromptCard';
 import { NotificationSheet } from '@/components/NotificationSheet';
 import { DownloadCta } from '@/components/DownloadCta';
 import { IconButton } from '@/components/IconButton';
-import {  SearchIcon,  SunIcon, SparkleIcon, PlayIcon } from '@/components/Icons';
+import { BellIcon, MoonIcon, PlayIcon, SearchIcon, SparkleIcon, SunIcon } from '@/components/Icons';
 import { useHistoryStore } from '@/store/historyStore';
 import { onThisDay } from '@/features/home/onThisDay';
 import { localDateKey, pickDailyFavorite, useBecauseYouLiked } from '@/features/home/useBecauseYouLiked';
@@ -159,17 +161,17 @@ function QuickBlock() {
   const mostListened = useMostListened();
   const quickTiles = [
     continueListening.length && {
-      label: 'Continue Listening',
+      label: 'Continue listening',
       image: bestImage(continueListening[0].images, 120),
       go: () => playQueueFeed(continueListening, 0),
     },
     favorites.length && {
-      label: 'Liked Songs',
+      label: 'Liked songs',
       image: bestImage(favorites[0].images, 120),
       go: () => navigate('/favorites'),
     },
     onRepeat.length && {
-      label: 'On Repeat',
+      label: 'On repeat',
       image: bestImage(onRepeat[0].images, 120),
       go: () => playQueueFeed(onRepeat, 0),
     },
@@ -179,42 +181,35 @@ function QuickBlock() {
       go: () => playQueueFeed(daily.data!, 0),
     },
     (weekly.data?.length ?? 0) > 0 && {
-      label: 'For You This Week',
+      label: 'For you this week',
       image: bestImage(weekly.data![0].images, 120),
       go: () => navigate('/weekly'),
     },
     mostListened.length && {
-      label: 'Most Listened',
+      label: 'Most listened',
       image: bestImage(mostListened[0].images, 120),
       go: () => navigate('/history'),
     },
   ].filter((t): t is { label: string; image: string; go: () => void } => !!t).slice(0, 6);
+  // Shortcuts into your own collections: one quiet scrolling row of small tiles.
+  if (quickTiles.length < 2) return null;
   return (
-      <>
-      {quickTiles.length >= 2 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-7">
-          {quickTiles.map((t) => (
-            <button
-              key={t.label}
-              onClick={t.go}
-              className="group flex items-center gap-3 rounded-xl glass-card overflow-hidden pr-3 text-left hover:bg-ink-800/40 transition"
-            >
-              <img
-                src={t.image}
-                onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                alt=""
-                loading="lazy"
-                className="w-12 h-12 md:w-14 md:h-14 object-cover shrink-0"
-              />
-              <span className="text-[13px] font-bold truncate flex-1">{t.label}</span>
-              <span className="w-8 h-8 rounded-full btn-primary hidden md:grid place-items-center text-[11px] opacity-0 group-hover:opacity-100 transition shrink-0">
-                ▶
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-      </>
+    <div className="vxh-shortcuts" role="group" aria-label="Shortcuts">
+      {quickTiles.map((t) => (
+        <button key={t.label} type="button" onClick={t.go} className="vxh-shortcut">
+          <img
+            src={t.image}
+            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+            alt=""
+            width={48}
+            height={48}
+            loading="lazy"
+            decoding="async"
+          />
+          {t.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -243,14 +238,14 @@ function PersonalBlock() {
     <>
       {/* v5.17.0 — streak + song of the day: compact cards, each hides itself when empty.
           v5.19.0 — plus a "Coming up" festival card when one is 1–3 days away. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-6 empty:hidden">
+      <div className="vxh-daily">
         <StreakCard entries={historyEntries} />
         <SongOfTheDayCard favorites={favorites} entries={historyEntries} />
         <FestivalLookaheadCard />
       </div>
 
       {/* 1. Continue Listening — pick up where you left off */}
-      <SongShelf title="Continue Listening" explanation="Pick up where you left off" songs={dedupe(continueListening)} seeAllTo="/history" />
+      <SongShelf title="Continue listening" songs={dedupe(continueListening)} seeAllTo="/history" />
 
       {/* v5.12.0 — On this day: what you played on this date in earlier months/years */}
       {memories && (
@@ -261,24 +256,24 @@ function PersonalBlock() {
       {recentAlbums.isLoading ? (
         <ShelfSkeleton />
       ) : recentAlbums.data && recentAlbums.data.length > 0 ? (
-        <SongShelf title="Recently Played" explanation="Albums you've been listening to" songs={dedupe(recentAlbums.data)} seeAllTo="/history" />
+        <SongShelf title="Recently played" songs={dedupe(recentAlbums.data)} seeAllTo="/history" />
       ) : null}
 
       {/* 4. For You This Week — existing weekly mix */}
       {weekly.isLoading ? (
         <ShelfSkeleton />
       ) : weekly.data && weekly.data.length > 0 ? (
-        <SongShelf title="For You This Week" explanation="A fresh weekly mix · updates every Monday" songs={dedupe(weekly.data)} seeAllTo="/weekly" />
+        <SongShelf title="For you this week" explanation="Updates every Monday" songs={dedupe(weekly.data)} seeAllTo="/weekly" />
       ) : null}
 
       {/* 5. Most Listened Songs */}
-      <SongShelf title="Most Listened Songs" explanation="Your all-time favourites" songs={dedupe(mostListened)} seeAllTo="/history" />
+      <SongShelf title="Most listened" songs={dedupe(mostListened)} seeAllTo="/history" />
 
       {/* 6. On Repeat */}
-      <SongShelf title="On Repeat" explanation="Played 3+ times in the last 14 days" songs={dedupe(onRepeat)} />
+      <SongShelf title="On repeat" explanation="Played 3+ times in the last 14 days" songs={dedupe(onRepeat)} />
 
       {/* 7. Repeat Rewind */}
-      <SongShelf title="Repeat Rewind" explanation="Old favourites you haven't touched lately" songs={dedupe(repeatRewind)} />
+      <SongShelf title="Repeat rewind" explanation="Old favourites you haven't played lately" songs={dedupe(repeatRewind)} />
 
       {/* 8. Because You Listened To … */}
       {because.isLoading ? (
@@ -286,7 +281,6 @@ function PersonalBlock() {
       ) : because.data && because.data.length > 0 && becauseSeed ? (
         <SongShelf
           title={`Because you listened to ${becauseSeed.subtitle}`}
-          explanation="More from an artist you love"
           songs={dedupe(because.data)}
         />
       ) : null}
@@ -297,7 +291,6 @@ function PersonalBlock() {
       ) : likedSeed && becauseLiked.data && becauseLiked.data.length > 0 ? (
         <SongShelf
           title={`Because you liked “${likedSeed.title}”`}
-          explanation="Songs that sit well next to a favourite of yours"
           songs={dedupe(becauseLiked.data)}
           seeAllTo="/favorites"
         />
@@ -313,12 +306,12 @@ function PersonalBlock() {
       {daily.isLoading ? (
         <ShelfSkeleton />
       ) : (
-        <SongShelf title="VinaX Daily" explanation="A fresh mix for today, built from your taste" songs={dedupe(daily.data ?? [])} />
+        <SongShelf title="VinaX Daily" explanation="A fresh mix for today" songs={dedupe(daily.data ?? [])} />
       )}
 
       {/* 10. Your Favorite Artists (existing Your Artists) */}
       {yourArtists.length >= 3 && (
-        <Shelf title="Your Favorite Artists" explanation="The voices you keep coming back to">
+        <Shelf title="Your favourite artists">
           {yourArtists.map((a) => (
             <MediaCard
               key={a.id || a.name}
@@ -346,7 +339,7 @@ function AiHomeBlock() {
   }
   return (
     <section aria-label="Designed for you" className="mb-2">
-      <p className="text-[11px] font-extrabold tracking-[0.22em] text-ember-400 uppercase mb-3">Designed for you · AI shelves</p>
+      <h2 className="vxh-band-title">Designed for you</h2>
       {shelves.data.map((shelf) => (
         <SongShelf key={shelf.title} title={shelf.title} explanation={shelf.description || shelf.reason} songs={dedupe(shelf.songs)} seeAllTo={`/search/${encodeURIComponent(shelf.query)}`} />
       ))}
@@ -379,8 +372,7 @@ function DiscoveryBlock() {
         <ShelfSkeleton />
       ) : nearYou.data && nearYou.data.length > 0 ? (
         <SongShelf
-          title={region?.country ? `Trending Near You · ${region.regionLabel ?? region.country}` : 'Trending Near You'}
-          explanation="Regional popular tracks"
+          title={region?.country ? `Trending near you · ${region.regionLabel ?? region.country}` : 'Trending near you'}
           songs={dedupe(nearYou.data)}
         />
       ) : null}
@@ -403,7 +395,6 @@ function DiscoveryBlock() {
       ) : (
         <SongShelf
           title={`Trending · ${languageLabel(primaryLang)}`}
-          explanation={region?.country === 'IN' ? 'Popular in your region' : 'Trending in your languages'}
           songs={dedupe(trending.data ?? [])}
           seeAllTo={
             (HUB_LANGUAGES as readonly string[]).includes(primaryLang)
@@ -417,35 +408,34 @@ function DiscoveryBlock() {
       {newReleases.isLoading ? (
         <ShelfSkeleton />
       ) : newReleases.data && newReleases.data.length > 0 ? (
-        <SongShelf title="New Releases" explanation="Fresh drops in your languages" songs={dedupe(newReleases.data)} />
+        <SongShelf title="New releases" songs={dedupe(newReleases.data)} />
       ) : null}
 
       {/* 14. Popular (existing) */}
       {popular.isLoading ? (
         <ShelfSkeleton />
       ) : popular.data && popular.data.length > 0 ? (
-        <SongShelf title="Popular" explanation="Most-played in your languages" songs={dedupe(popular.data)} seeAllTo="/charts" />
+        <SongShelf title="Popular in your languages" songs={dedupe(popular.data)} seeAllTo="/charts" />
       ) : null}
 
       {/* 15. Fresh Finds */}
       {freshFinds.isLoading ? (
         <ShelfSkeleton />
       ) : freshFinds.data && freshFinds.data.length > 0 ? (
-        <SongShelf title="Fresh Finds" explanation="New artists making waves" songs={dedupe(freshFinds.data)} />
+        <SongShelf title="Fresh finds" songs={dedupe(freshFinds.data)} />
       ) : null}
 
       {/* 16. Hidden Gems */}
       {hiddenGems.isLoading ? (
         <ShelfSkeleton />
       ) : hiddenGems.data && hiddenGems.data.length > 0 ? (
-        <SongShelf title="Hidden Gems" explanation="Deep cuts worth discovering" songs={dedupe(hiddenGems.data)} />
+        <SongShelf title="Hidden gems" songs={dedupe(hiddenGems.data)} />
       ) : null}
 
       {/* 16b. Decade Rewind (4.16.0) — generated: 90s classics, primary language */}
       {decadeRewind.data && decadeRewind.data.length > 0 && (
         <SongShelf
-          title="Decade Rewind · 90s"
-          explanation={`Golden-era ${languageLabel(primaryLang)} classics`}
+          title={`90s ${languageLabel(primaryLang)} classics`}
           songs={dedupe(decadeRewind.data)}
         />
       )}
@@ -454,7 +444,6 @@ function DiscoveryBlock() {
       {secondLang && trendingSecond.data && trendingSecond.data.length > 0 && (
         <SongShelf
           title={`Trending · ${languageLabel(secondLang)}`}
-          explanation="From your second language"
           songs={dedupe(trendingSecond.data)}
           seeAllTo={
             (HUB_LANGUAGES as readonly string[]).includes(secondLang)
@@ -469,40 +458,25 @@ function DiscoveryBlock() {
 
 function ChartsBlock() {
   const region = useRegion();
+  const tiles = [
+    { kicker: 'Top 50', title: 'Global', tone: 5 },
+    { kicker: 'Top 50', title: region?.regionLabel ?? region?.country ?? 'Your country', tone: 3 },
+    { kicker: 'Viral 50', title: 'Right now', tone: 2 },
+  ];
   return (
-      <>
-      {/* 17. Top 50 Global / Top 50 Country / Viral 50 — nav cards to /charts */}
-      <section aria-label="Charts" className="mb-8">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Link
-            to="/charts"
-            className="glass-card rounded-xl p-4 flex flex-col justify-between hover:bg-ink-800/40 transition-colors min-h-24"
-          >
-            <p className="text-xs font-bold uppercase tracking-widest text-ember-300">Top 50</p>
-            <p className="text-lg font-extrabold mt-1">Global</p>
-            <p className="text-xs text-ink-400">The biggest songs worldwide</p>
+    // 17. Top 50 Global / Top 50 Country / Viral 50 — category tiles into /charts
+    <section aria-label="Charts" className="vxh-section">
+      <SectionHeader title="Charts" />
+      <div className="vxh-cat-grid is-rail-phone">
+        {tiles.map((t) => (
+          <Link key={`${t.kicker}-${t.title}`} to="/charts" className={`vxh-cat tone-${t.tone}`}>
+            <span className="vxh-cat-kicker">{t.kicker}</span>
+            <span className="vxh-cat-title">{t.title}</span>
+            <span className="vxh-cat-shape" aria-hidden />
           </Link>
-          <Link
-            to="/charts"
-            className="glass-card rounded-xl p-4 flex flex-col justify-between hover:bg-ink-800/40 transition-colors min-h-24"
-          >
-            <p className="text-xs font-bold uppercase tracking-widest text-ember-300">Top 50</p>
-            <p className="text-lg font-extrabold mt-1">
-              {region?.regionLabel ?? region?.country ?? 'Your Country'}
-            </p>
-            <p className="text-xs text-ink-400">Charts in your region</p>
-          </Link>
-          <Link
-            to="/charts"
-            className="glass-card rounded-xl p-4 flex flex-col justify-between hover:bg-ink-800/40 transition-colors min-h-24"
-          >
-            <p className="text-xs font-bold uppercase tracking-widest text-tide-300">Viral 50</p>
-            <p className="text-lg font-extrabold mt-1">Right Now</p>
-            <p className="text-xs text-ink-400">Songs going viral this week</p>
-          </Link>
-        </div>
-      </section>
-      </>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -513,7 +487,7 @@ function SeasonalBlock() {
       <>
       {/* 18. Seasonal shelf — only when a season/event matches "now" */}
       {seasonal.season && seasonal.data && seasonal.data.length > 0 && (
-        <SongShelf title={seasonal.season.title} explanation="For the moment" songs={dedupe(seasonal.data)} />
+        <SongShelf title={seasonal.season.title} songs={dedupe(seasonal.data)} />
       )}
       </>
   );
@@ -533,94 +507,64 @@ function MoodsBlock() {
   const moodE = useMoodShelf(moods[4].query, primaryLang, 8);
   const moodF = useMoodShelf(moods[5].query, primaryLang, 8);
   const moodQueries = [moodA, moodB, moodC, moodD, moodE, moodF];
+  if (!moodQueries.some((q) => q.data && q.data.length > 0)) return null;
   return (
-      <>
-      {/* 19. Mood Playlists — a grid of 6 mood shelves, 8 songs each */}
-      {moodQueries.some((q) => q.data && q.data.length > 0) && (
-        <section className="mb-8">
-          <div className="flex items-end justify-between mb-3">
-            <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">Mood Playlists</h2>
-            <Link to="/moods" className="text-xs font-semibold text-ember-400 hover:text-ember-300">See all ›</Link>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {moods.map((mood, idx) => {
-              const q = moodQueries[idx];
-              const songs = dedupe(q.data ?? []);
-              if (!songs.length) return null;
-              return (
-                <div key={mood.id} className="glass-card rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-bold">{mood.title}</p>
-                    <button
-                      onClick={() => playQueueFeed(songs, 0)}
-                      className="text-[11px] font-semibold text-ember-400 hover:text-ember-300"
-                    >
-                      Play
-                    </button>
-                  </div>
-                  <ul className="space-y-1.5">
-                    {songs.slice(0, 8).map((song, i) => (
-                      <li key={song.id}>
-                        <button
-                          onClick={() => playQueueFeed(songs, i)}
-                          className="flex items-center gap-2 w-full text-left rounded-md hover:bg-ink-800/40 p-1"
-                        >
-                          <img
-                            /* 4.18.1: 36px cell — srcset lets 1x screens take
-                               the 50px file, 2x+ keeps 150 (PSI desktop
-                               image-delivery finding). */
-                            src={bestImage(song.images, 150)}
-                            srcSet={artSrcSet(song.images, 150)}
-                            sizes="36px"
-                            width={36}
-                            height={36}
-                            onError={(e) => {
-                              const t = e.target as HTMLImageElement;
-                              t.srcset = '';
-                              t.src = FALLBACK_ART;
-                            }}
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                            className="w-9 h-9 rounded object-cover shrink-0"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="text-xs font-semibold truncate block">{song.title}</span>
-                            <span className="text-[10px] text-ink-400 truncate block">{song.subtitle}</span>
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-      </>
+    // 19. Mood playlists — six colour tiles; a tile plays its eight songs, which
+    // then sit in the queue to pick from.
+    <section className="vxh-section" aria-label="Mood playlists">
+      <SectionHeader title="Mood playlists" seeAllTo="/moods" />
+      <div className="vxh-cat-grid is-six">
+        {moods.map((mood, idx) => {
+          const songs = dedupe(moodQueries[idx].data ?? []);
+          if (!songs.length) return null;
+          const art = bestImage(songs[0].images, 150);
+          return (
+            <button
+              key={mood.id}
+              type="button"
+              onClick={() => playQueueFeed(songs, 0)}
+              aria-label={`Play ${mood.title}, ${songs.length} songs`}
+              className={`vxh-cat tone-${(idx % 8) + 1}`}
+            >
+              <span className="vxh-cat-title">{mood.title}</span>
+              {art && (
+                <img
+                  className="vxh-cat-art"
+                  src={art}
+                  srcSet={artSrcSet(songs[0].images, 150)}
+                  sizes="76px"
+                  width={76}
+                  height={76}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  onError={(e) => {
+                    const t = e.target as HTMLImageElement;
+                    t.srcset = '';
+                    t.src = FALLBACK_ART;
+                  }}
+                />
+              )}
+              <span className="vxh-cat-play" aria-hidden><PlayIcon /></span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
 function GenresBlock() {
   return (
-      <>
-      {/* 20. Genre Collections — compact horizontal row of chip-cards */}
-      <section className="mb-8">
-        <h2 className="text-xl md:text-2xl font-extrabold tracking-tight mb-3">Genre Collections</h2>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-2 px-2 snap-x">
-          {GENRE_SHELVES.map((g) => (
-            <Link
-              key={g.id}
-              to={`/search/${encodeURIComponent(g.query)}`}
-              className="snap-start shrink-0 rounded-full px-4 py-2 glass-card hover:bg-ink-800/40 text-sm font-semibold whitespace-nowrap"
-            >
-              {g.label}
-            </Link>
-          ))}
-        </div>
-      </section>
-      </>
+    // 20. Genre collections — colour tiles on a rail, each a catalogue search
+    <Shelf title="Genres">
+      {GENRE_SHELVES.map((g, i) => (
+        <Link key={g.id} to={`/search/${encodeURIComponent(g.query)}`} className={`vxh-cat is-rail tone-${((i * 3) % 8) + 1}`}>
+          <span className="vxh-cat-title">{g.label}</span>
+          <span className="vxh-cat-shape" aria-hidden />
+        </Link>
+      ))}
+    </Shelf>
   );
 }
 
@@ -630,14 +574,14 @@ function ArtistsBlock() {
       <>
       {/* 21. Trending Artists (round MediaCards) */}
       {trendingArtists.data && trendingArtists.data.length >= 3 && (
-        <Shelf title="Trending Artists" explanation="Names topping the charts">
+        <Shelf title="Trending artists">
           {trendingArtists.data.map((a) => (
             <MediaCard
               key={a.id || a.name}
               to={a.id ? artistPath(a) : `/search/${encodeURIComponent(a.name)}`}
               image={a.image ?? letterAvatar(a.name)}
               title={a.name}
-              subtitle="Trending"
+              subtitle="Artist"
               round
               onPlay={a.id ? () => void playArtist(a.id, a.name) : undefined}
             />
@@ -654,7 +598,7 @@ function AlbumsBlock() {
       <>
       {/* 22. Trending Albums */}
       {trendingAlbums.data && trendingAlbums.data.length > 0 && (
-        <Shelf title="Trending Albums" explanation="The albums everyone's spinning">
+        <Shelf title="Trending albums">
           {trendingAlbums.data.map((album) => (
             <MediaCard
               key={album.id}
@@ -692,7 +636,7 @@ function LovedBlock() {
   return (
       <>
       {/* 23. Recently Loved */}
-      <SongShelf title="Recently Loved" explanation="Your latest favorites" songs={dedupe(favorites.slice(0, 12))} seeAllTo="/favorites" />
+      <SongShelf title="Recently liked" songs={dedupe(favorites.slice(0, 12))} seeAllTo="/favorites" />
       </>
   );
 }
@@ -704,13 +648,10 @@ function FeedBlock() {
   return (
       <>
       {/* Endless feed: keep scrolling to load more songs forever. */}
-      <section className="mt-2">
-        <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">More For You</h2>
-        <p className="text-xs text-ink-400 mt-0.5 mb-3">
-          Picks in your languages, ranked by your taste — scrolls forever
-        </p>
+      <section className="mt-2" aria-label="More for you">
+        <SectionHeader title="More for you" />
         {feed.isLoading && <CardGridSkeleton />}
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-2">
+        <div className="vxh-feed-grid">
           {feedSongs.map((song, i) => (
             <MediaCard
               key={song.id}
@@ -772,7 +713,8 @@ export default function HomePage() {
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
   const navigate = useNavigate();
-  const region = useRegion();
+  // Warms the region lookup the Charts and Trending-near-you blocks read.
+  useRegion();
   const historyEntries = useHistoryStore((s) => s.entries);
 
   // This week's listening, from local history only — one shared rule
@@ -918,117 +860,111 @@ export default function HomePage() {
   // Since each block owns its queries, a deferred block also FETCHES only
   // when it mounts.
 
+  const streakDays = getStreak();
+  const applyDesign = (value: HomeDesign) => {
+    const checked = validateHomeDesign(value); setHomeDesign(checked);
+    try { localStorage.setItem(HOME_DESIGN_KEY, JSON.stringify(checked)); toast('Your Home layout is saved'); }
+    catch { toast('Layout applied for this visit. Device storage is unavailable.'); }
+  };
+  const resetDesign = () => { setHomeDesign(null); try { localStorage.removeItem(HOME_DESIGN_KEY); } catch { /* session reset still works */ } };
+  const refreshDiscovery = async () => {
+    setRefreshingDiscovery(true);
+    try { await handleRefresh(); toast('Discovery rotation updated. Available picks will refresh.'); }
+    catch { toast('Could not refresh right now. Try again shortly.'); }
+    finally { setRefreshingDiscovery(false); }
+  };
+  const surprise = () => {
+    // Songs the page already holds — no extra catalogue call for a surprise.
+    const pool = [...heroSongs, ...(trendingNow.data ?? []), ...continueListening];
+    if (!pool.length) {
+      toast('Still loading — try again in a second');
+      return;
+    }
+    const i = Math.floor(Math.random() * pool.length);
+    playQueueFeed(pool, i);
+    toast(`Surprise: ${pool[i].title}`);
+  };
+
+  // Secondary things — shortcuts, the first-run checklist, journeys, app and
+  // notification asks, the owner's promo — sit quietly after the first two
+  // shelf blocks, so music is what a listener sees first.
+  const secondary = (
+    <div className="vxh-more">
+      <div className="vxh-chips" role="group" aria-label="Quick actions">
+        <button type="button" onClick={surprise} className="vxh-chip"><SparkleIcon /> Surprise me</button>
+        <Chip onClick={() => navigate('/charts')}>Charts</Chip>
+        <Chip onClick={() => navigate('/moods')}>Moods</Chip>
+        <Chip onClick={() => navigate('/regions')}>Regions</Chip>
+        <Chip onClick={() => navigate('/made-for-you')}>Made for you</Chip>
+        <button type="button" className="vxh-chip" disabled={refreshingDiscovery} onClick={() => void refreshDiscovery()}>
+          <SparkleIcon />{refreshingDiscovery ? 'Refreshing…' : 'Refresh discovery'}
+        </button>
+      </div>
+      <p className="sr-only" role="status">{refreshingDiscovery ? 'Finding a fresh direction…' : ''}</p>
+      <ListeningGuide />
+      <nav className="vx-journeys vxh-journeys" aria-label="Explore your sound">
+        <Link to="/VinaXAI"><SparkleIcon /><div><strong>Meet VinaX AI</strong><span>Ask, create, explore</span></div></Link>
+        <Link to="/made-for-you"><PlayIcon /><div><strong>Made for your day</strong><span>Mixes shaped by your listening</span></div></Link>
+        <Link to="/moods"><SearchIcon /><div><strong>Find a feeling</strong><span>A soundtrack for every headspace</span></div></Link>
+      </nav>
+      <GetAppBanner />
+      <DownloadCta />
+      <PushPromptCard />
+      {/* Owner-published promo banner (admin → Banner & Promotion). */}
+      <PromoBanner />
+    </div>
+  );
+  // Customise Home sits at the end of the page — just above the endless
+  // feed when there is one, since nothing below an endless feed is reachable.
+  const studio = (
+    <HomeStudio design={design} locked={layout.ownerHidden} onApply={applyDesign} onReset={resetDesign} />
+  );
+  const blocks = layout.visible;
+  const secondaryAt = Math.min(1, blocks.length - 1);
+  const feedAt = blocks.indexOf('feed');
+
   return (
    <PullToRefresh onRefresh={handleRefresh}>
     <div className="max-w-screen-2xl mx-auto vx-stagger vx-home">
       <TopBarActions>
-        <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}><SunIcon className="w-5 h-5" /></IconButton>
-        <IconButton label="Notifications" onClick={() => setNotifOpen(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5" aria-hidden><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M9 21h6" /></svg></IconButton>
+        <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}</IconButton>
+        <IconButton label="Notifications" onClick={() => setNotifOpen(true)}><BellIcon className="w-5 h-5" /></IconButton>
       </TopBarActions>
       <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
-      {/* Hero — full-bleed colour wash that fades into the page */}
-      <div className={`mb-6 pb-2 bg-gradient-to-b ${
-        ({
-          morning: 'from-transparent to-transparent',
-          afternoon: 'from-transparent to-transparent',
-          evening: 'from-transparent to-transparent',
-          'late-night': 'from-transparent to-transparent',
-        } as Record<string, string>)[dayPartLabel()] ?? 'from-transparent to-transparent'
-      }`}>
-        <p className="text-[11px] font-extrabold tracking-[0.22em] text-ember-400 uppercase mb-1.5">
-          {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} · made for you
-        </p>
-        <h1 className="text-page-title font-extrabold tracking-tight">{hello.title}</h1>
-        <p className="text-ink-200 mt-1.5 text-sm font-medium">{clientCfg?.greeting?.text ?? hello.subtitle}</p>
-        <p className="text-ink-300 mt-1 text-sm">
-          {region?.country ? `Tuned for ${region.country}` : 'Tuned to you'} · recommendations that grow with you
-          {weekEntries.length > 0 && (
-            <span className="text-ink-400"> · this week: {weekEntries.length} plays · {formatMinutes(weekTotal)}</span>
-          )}
-          {getStreak() > 1 && <span className="text-ember-400 font-semibold"> · 🔥 {getStreak()}-day streak</span>}
-        </p>
-
-      </div>
+      {/* Greeting + language chips. The chips link where the old language rail did. */}
+      <header className="vxh-greet">
+        <div className="vxh-greet-row">
+          <h1>{hello.title}</h1>
+          {streakDays > 1 && <span className="vxh-streak">{streakDays}-day streak</span>}
+        </div>
+        {clientCfg?.greeting?.text && <p className="vxh-greet-note">{clientCfg.greeting.text}</p>}
+        <nav className="vxh-chips" aria-label="Languages">
+          <Link to="/languages" className="vxh-chip is-on">All</Link>
+          {railLangs.map((l) => (
+            <Link key={l} to={`/${l}-songs`} className="vxh-chip">
+              {languageLabel(l)}
+            </Link>
+          ))}
+        </nav>
+      </header>
 
       <HomeOpening design={design} songs={heroSongs} recent={continueListening}
         onPlay={() => heroSongs.length && playQueueFeed(heroSongs, 0)}
         onResume={index => usePlayerStore.getState().playQueue(continueListening, index)} />
 
-      <HomeStudio design={design} locked={layout.ownerHidden} onApply={value => {
-        const checked = validateHomeDesign(value); setHomeDesign(checked);
-        try { localStorage.setItem(HOME_DESIGN_KEY, JSON.stringify(checked)); toast('Your Home layout is saved'); }
-        catch { toast('Layout applied for this visit. Device storage is unavailable.'); }
-      }} onReset={() => { setHomeDesign(null); try { localStorage.removeItem(HOME_DESIGN_KEY); } catch { /* session reset still works */ } }} />
-
-
-
-        <div className="flex gap-2 mb-6 flex-wrap">
-          <button
-            onClick={() => {
-              // Songs the page already holds — no extra catalogue call for a surprise.
-              const pool = [...heroSongs, ...(trendingNow.data ?? []), ...continueListening];
-              if (!pool.length) {
-                toast('Still loading — try again in a second');
-                return;
-              }
-              const i = Math.floor(Math.random() * pool.length);
-              playQueueFeed(pool, i);
-              toast(`Surprise: ${pool[i].title}`);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full btn-premium text-sm font-bold"
-          >
-            <SparkleIcon className="w-4 h-4" /> Surprise me
-          </button>
-          <Chip onClick={() => navigate('/charts')}>Charts</Chip>
-          <Chip onClick={() => navigate('/moods')}>Moods</Chip>
-          <Chip onClick={() => navigate('/regions')}>Regions</Chip>
-          <Chip onClick={() => navigate('/made-for-you')}>Made For You</Chip>
-        </div>
-      <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
-        <p className="text-sm text-ink-400" role="status">{refreshingDiscovery ? 'Finding a fresh direction…' : 'Ready for a different discovery?'}</p>
-        <button className="vx-fresh-button" disabled={refreshingDiscovery} onClick={async () => {
-          setRefreshingDiscovery(true);
-          try { await handleRefresh(); toast('Discovery rotation updated. Available picks will refresh.'); }
-          catch { toast('Could not refresh right now. Try again shortly.'); }
-          finally { setRefreshingDiscovery(false); }
-        }}><SparkleIcon className="w-4 h-4" />{refreshingDiscovery ? 'Refreshing…' : 'Refresh discovery'}</button>
-      </div>
-      <nav className="vx-journeys" aria-label="Explore your sound">
-        <Link to="/VinaXAI"><SparkleIcon /><div><strong>Meet VinaX AI</strong><span>Ask, create, explore</span></div></Link>
-        <Link to="/made-for-you"><PlayIcon /><div><strong>Made for your day</strong><span>Mixes shaped by your listening</span></div></Link>
-        <Link to="/moods"><SearchIcon /><div><strong>Find a feeling</strong><span>A soundtrack for every headspace</span></div></Link>
-      </nav>
-
-      <ListeningGuide />
-
-      {/* Fusion layer (4.12.0) — language rail + tile-grid
-          quick grid over the existing shelves. Pure recomposition of data the
-          page already loads; tiles hide until their source has content. */}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-2 px-2 mb-4 snap-x" aria-label="Languages">
-        <Link to="/languages" className="snap-start shrink-0 px-4 py-2 rounded-full text-xs font-extrabold btn-primary">For You</Link>
-        {railLangs.map((l) => (
-          <Link
-            key={l}
-            to={`/${l}-songs`}
-            className="snap-start shrink-0 px-4 py-2 rounded-full text-xs font-bold glass-card hover:bg-ink-800/40 whitespace-nowrap"
-          >
-            {languageLabel(l)}
-          </Link>
-        ))}
-      </div>
-
-      <GetAppBanner />
-      <DownloadCta />
-      <PushPromptCard />
-
-      {/* Owner-published promo banner (admin → Banner & Promotion). */}
-      <PromoBanner className="mb-8" />
-
-      {layout.visible.map((k, i) => {
+      {blocks.length === 0 && secondary}
+      {blocks.map((k, i) => {
         const Block = HOME_BLOCKS[k];
-        return i < 2 ? <Block key={k} /> : <DeferredBlock key={k} render={() => <Block />} />;
+        return (
+          <Fragment key={k}>
+            {i === feedAt && studio}
+            {i < 2 ? <Block /> : <DeferredBlock render={() => <Block />} />}
+            {i === secondaryAt && secondary}
+          </Fragment>
+        );
       })}
+      {feedAt < 0 && studio}
 
     </div>
    </PullToRefresh>

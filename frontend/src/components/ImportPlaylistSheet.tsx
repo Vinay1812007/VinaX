@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
-import { Sheet } from '@/components/Sheet';
+import { Sheet, SheetHeader } from '@/components/Sheet';
 import { fetchPickMatch, parseSongLine, pickQueryKey, type MatchResult, type SongPickRef } from '@/components/ai/SongPick';
 import { cn } from '@/utils/cn';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
@@ -177,11 +177,16 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
 
   return (
     <Sheet onClose={close} labelledBy="import-playlist-title" size="2xl">
-        <h2 id="import-playlist-title" className="text-lg font-bold">{review ? 'Review your import' : 'Import a playlist'}</h2>
+        <SheetHeader
+          id="import-playlist-title"
+          title={review ? 'Review your import' : 'Import a playlist'}
+          subtitle={review ? undefined : <>One song per line, as <b className="font-semibold text-ink-300">Title — Artist</b>. You review every match before anything is saved.</>}
+          onClose={close}
+          className="mb-4"
+        />
 
         {!review ? (
           <>
-            <p className="text-xs text-ink-400 mt-0.5 mb-3">One song per line — <b>Title — Artist</b> works best; a bare title is fine too. You will review every match before anything is saved.</p>
             <label htmlFor="import-playlist-name" className="sr-only">Playlist name (optional)</label>
             <input
               id="import-playlist-name"
@@ -189,7 +194,7 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
               onChange={(e) => setName(e.target.value)}
               placeholder="Playlist name (optional)"
               disabled={busy}
-              className="w-full mb-2 px-3 py-2 rounded-full bg-ink-800 text-sm outline-none placeholder:text-ink-400 focus:ring-1 focus:ring-ink-100 disabled:opacity-60"
+              className="w-full px-4 bg-ink-100/[0.06] border border-[color:var(--vx-border)] text-[15px] text-ink-100 outline-none placeholder:text-ink-400 focus:border-ember-500/70 focus:ring-2 focus:ring-ember-500/20 disabled:opacity-60 mb-2 h-12 rounded-xl"
             />
             <label htmlFor="import-playlist-text" className="sr-only">Songs, one per line</label>
             <textarea
@@ -199,60 +204,60 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
               rows={7}
               disabled={busy}
               placeholder={'Kesariya — Arijit Singh\nSrivalli — Sid Sriram\nNaatu Naatu'}
-              className="w-full px-3 py-2 rounded-2xl bg-ink-800 text-sm outline-none resize-none placeholder:text-ink-500 focus:ring-1 focus:ring-ink-100 font-mono disabled:opacity-60"
+              className="w-full px-4 bg-ink-100/[0.06] border border-[color:var(--vx-border)] text-[15px] text-ink-100 outline-none placeholder:text-ink-400 focus:border-ember-500/70 focus:ring-2 focus:ring-ember-500/20 disabled:opacity-60 py-3 rounded-xl resize-none leading-relaxed"
             />
-            <div className="mt-2 flex items-center justify-between text-[11px] text-ink-400">
+            <div className="mt-2 flex items-center justify-between gap-3 text-[13px] text-ink-400">
               <span>{lines.length ? `${lines.length} song${lines.length === 1 ? '' : 's'} to look up` : 'Paste a list to begin'}</span>
               {/* Announced politely so screen-reader users hear the count move. */}
               <span role="status" aria-live="polite" aria-atomic="true">
                 {busy ? `Finding ${progress.done} of ${progress.total}…` : ''}
               </span>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2 justify-end">
-              <button type="button" onClick={close} className="btn-secondary px-4 py-2 text-sm min-h-[44px]">
+            <div className="mt-5 flex gap-2 sm:justify-end">
+              <button type="button" onClick={close} className="flex-1 sm:flex-none btn-secondary px-5 text-[14px] min-h-[44px]">
                 {busy ? 'Cancel import' : 'Cancel'}
               </button>
-              <button type="button" onClick={() => void lookUp()} disabled={!lines.length || busy} className="btn-primary px-4 py-2 text-sm min-h-[44px] disabled:opacity-50">
+              <button type="button" onClick={() => void lookUp()} disabled={!lines.length || busy} className="flex-1 sm:flex-none btn-primary px-6 text-[14px] min-h-[44px] disabled:opacity-50">
                 {busy ? 'Looking up…' : 'Find songs'}
               </button>
             </div>
           </>
         ) : (
           <>
-            <p className="text-xs text-ink-400 mt-0.5 mb-3" role="status">
+            <p className="-mt-2 mb-3 text-[13px] text-ink-400" role="status">
               {counts.matched} matched · {counts.uncertain} closest match{counts.uncertain === 1 ? '' : 'es'} · {counts.missing} not found. Nothing is saved until you confirm.
             </p>
-            <ul className="space-y-2" aria-label="Import results">
+            <ul className="divide-y divide-[color:var(--vx-border)] border-y border-[color:var(--vx-border)]" aria-label="Import results">
               {review.map((it, index) => {
                 const status = statusOf(it);
                 const alternatives = it.match?.alternatives ?? [];
                 return (
-                  <li key={`${it.line.raw}-${index}`} className={cn('rounded-2xl border p-3', it.skipped ? 'border-ink-700 opacity-60' : status === 'matched' ? 'border-emerald-500/30' : status === 'uncertain' ? 'border-amber-400/40' : 'border-red-400/30')}>
+                  <li key={`${it.line.raw}-${index}`} className={cn('py-3', it.skipped && 'opacity-60')}>
                     <div className="flex items-start gap-3">
                       {it.chosen ? (
-                        <img src={bestImage(it.chosen.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0" />
+                        <img src={bestImage(it.chosen.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-12 h-12 rounded-md object-cover shrink-0" />
                       ) : (
-                        <span className="w-11 h-11 rounded-lg bg-ink-800 shrink-0" aria-hidden />
+                        <span className="w-12 h-12 rounded-md bg-ink-800 shrink-0" aria-hidden />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold tracking-widest uppercase">
-                          <span className={status === 'matched' ? 'text-emerald-400' : status === 'uncertain' ? 'text-amber-300' : 'text-red-300'}>
+                        <p className="text-[12px] font-bold">
+                          <span className={status === 'matched' ? 'text-[color:var(--vx-success)]' : status === 'uncertain' ? 'text-amber-600 dark:text-amber-300' : 'text-[color:var(--vx-danger)]'}>
                             {status === 'matched' ? 'Matched' : status === 'uncertain' ? 'Closest match' : 'Not found'}
                           </span>
-                          {it.skipped && <span className="text-ink-500"> · skipped</span>}
+                          {it.skipped && <span className="text-ink-400"> · skipped</span>}
                         </p>
-                        <p className="text-sm font-semibold truncate">{it.chosen ? it.chosen.title : it.pick.title}</p>
-                        <p className="text-xs text-ink-400 truncate">{it.chosen ? it.chosen.subtitle : it.pick.artist || 'no artist given'}</p>
+                        <p className="text-[14px] font-semibold truncate">{it.chosen ? it.chosen.title : it.pick.title}</p>
+                        <p className="text-[13px] text-ink-400 truncate">{it.chosen ? it.chosen.subtitle : it.pick.artist || 'no artist given'}</p>
                         {it.chosen && (it.chosen.title !== it.pick.title || status === 'uncertain') && (
-                          <p className="text-[11px] text-ink-500 truncate">You asked for “{it.pick.title}”{it.pick.artist ? ` by ${it.pick.artist}` : ''}</p>
+                          <p className="text-[12px] text-ink-400 truncate">You asked for “{it.pick.title}”{it.pick.artist ? ` by ${it.pick.artist}` : ''}</p>
                         )}
                       </div>
-                      <label className="flex items-center gap-1.5 text-xs shrink-0 min-h-[36px]">
-                        <input type="checkbox" checked={!it.skipped && !!it.chosen} disabled={!it.chosen} onChange={() => setReview((r) => r && r.map((x, i) => (i === index ? { ...x, skipped: !x.skipped } : x)))} aria-label={`Include ${it.pick.title}`} className="w-4 h-4 accent-[rgb(var(--ember-400))]" />
+                      <label className="flex items-center gap-2 text-[13px] font-semibold text-ink-300 shrink-0 min-h-[44px]">
+                        <input type="checkbox" checked={!it.skipped && !!it.chosen} disabled={!it.chosen} onChange={() => setReview((r) => r && r.map((x, i) => (i === index ? { ...x, skipped: !x.skipped } : x)))} aria-label={`Include ${it.pick.title}`} className="w-5 h-5 accent-[rgb(var(--ember-500))]" />
                         Save
                       </label>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 pl-[60px] flex flex-wrap items-center gap-2">
                       {alternatives.length > 1 && (
                         <>
                           <label htmlFor={`alt-${index}`} className="sr-only">Alternative for {it.pick.title}</label>
@@ -263,7 +268,7 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
                               const pickSong = alternatives.find((s) => s.id === e.target.value) ?? null;
                               setReview((r) => r && r.map((x, i) => (i === index ? { ...x, chosen: pickSong, skipped: false } : x)));
                             }}
-                            className="bg-ink-800 border border-ink-600 rounded-xl px-2 py-1.5 text-xs text-ink-100 outline-none focus:border-ember-500 max-w-full min-h-[36px]"
+                            className="bg-ink-100/[0.06] border border-[color:var(--vx-border)] rounded-lg px-2.5 text-[13px] text-ink-100 outline-none focus:border-ember-500 max-w-full min-h-[36px]"
                           >
                             {alternatives.map((s) => (
                               <option key={s.id} value={s.id}>{s.title} — {s.subtitle}</option>
@@ -277,25 +282,25 @@ export function ImportPlaylistSheet({ onClose }: { onClose(): void }) {
                         value={editing[index] ?? ''}
                         onChange={(e) => setEditing((m) => ({ ...m, [index]: e.target.value }))}
                         placeholder="Edit: Title — Artist"
-                        className="glass-input flex-1 min-w-[9rem] px-2 py-1.5 rounded-xl text-xs"
+                        className="flex-1 min-w-[9rem] min-h-[36px] px-3 rounded-lg bg-ink-100/[0.06] border border-[color:var(--vx-border)] text-[13px] text-ink-100 outline-none placeholder:text-ink-400 focus:border-ember-500/70"
                       />
-                      <button type="button" onClick={() => void retry(index)} disabled={it.retrying} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 disabled:opacity-50 min-h-[36px]">
+                      <button type="button" onClick={() => void retry(index)} disabled={it.retrying} className="px-3.5 rounded-full vx-chip-idle text-[13px] font-semibold text-ink-100 min-h-[36px] disabled:opacity-50">
                         {it.retrying ? 'Searching…' : 'Retry'}
                       </button>
-                      <button type="button" onClick={() => setShowRaw((m) => ({ ...m, [index]: !m[index] }))} aria-expanded={!!showRaw[index]} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 min-h-[36px]">
+                      <button type="button" onClick={() => setShowRaw((m) => ({ ...m, [index]: !m[index] }))} aria-expanded={!!showRaw[index]} className="px-3.5 rounded-full vx-chip-idle text-[13px] font-semibold text-ink-100 min-h-[36px]">
                         {showRaw[index] ? 'Hide original' : 'Original'}
                       </button>
                     </div>
-                    {showRaw[index] && <pre className="mt-2 text-[11px] text-ink-300 whitespace-pre-wrap break-words font-mono bg-ink-900/50 rounded-lg px-2 py-1.5">{it.line.raw}</pre>}
+                    {showRaw[index] && <pre className="mt-2 ml-[60px] text-[12px] text-ink-300 whitespace-pre-wrap break-words font-mono bg-ink-100/[0.05] rounded-lg px-3 py-2">{it.line.raw}</pre>}
                   </li>
                 );
               })}
             </ul>
             <div className="mt-4 flex flex-wrap gap-2 justify-end items-center">
-              <span className="text-[11px] text-ink-400 mr-auto" role="status" aria-live="polite">{toSave.length} of {review.length} will be saved</span>
-              <button type="button" onClick={() => setReview(null)} className="btn-secondary px-4 py-2 text-sm min-h-[44px]">Back</button>
-              <button type="button" onClick={() => commit(true)} disabled={!toSave.length} className="btn-secondary px-4 py-2 text-sm min-h-[44px] disabled:opacity-50">Save &amp; play</button>
-              <button type="button" onClick={() => commit(false)} disabled={!toSave.length} className="btn-primary px-4 py-2 text-sm min-h-[44px] disabled:opacity-50">Save {toSave.length} song{toSave.length === 1 ? '' : 's'}</button>
+              <span className="w-full sm:w-auto text-[13px] text-ink-400 sm:mr-auto" role="status" aria-live="polite">{toSave.length} of {review.length} will be saved</span>
+              <button type="button" onClick={() => setReview(null)} className="btn-secondary px-5 text-[14px] min-h-[44px]">Back</button>
+              <button type="button" onClick={() => commit(true)} disabled={!toSave.length} className="btn-secondary px-5 text-[14px] min-h-[44px] disabled:opacity-50">Save &amp; play</button>
+              <button type="button" onClick={() => commit(false)} disabled={!toSave.length} className="flex-1 sm:flex-none btn-primary px-6 text-[14px] min-h-[44px] disabled:opacity-50">Save {toSave.length} song{toSave.length === 1 ? '' : 's'}</button>
             </div>
           </>
         )}

@@ -13,6 +13,9 @@ import { CHANGELOG_V2 } from '@/constants/changelog';
 import { DISPLAY_VERSION, LATEST_VERSION } from '@/constants/version';
 import { isNativePlatform } from '@/services/native';
 import { cn } from '@/utils/cn';
+import { IconButton } from '@/components/IconButton';
+import { ChevronDownIcon, ChevronRightIcon, SearchIcon, XIcon } from '@/components/Icons';
+import '@/styles/pages/secondary.css';
 
 /**
  * v5.20.0 — Help & Feedback, rebuilt around what the app can do today
@@ -34,7 +37,7 @@ const GUIDES: Guide[] = [
   { group: 'Listening', title: 'Sleep, alarm and Drive mode', steps: ['The sleep timer fades the last 30 seconds out before it stops.', 'Settings → Wake-up alarm starts music at a time you set, with a gentle fade-in.', 'Drive mode (from the full-screen player) gives big targets and fewer distractions.'] },
   { group: 'Listening', title: 'Sound: equaliser, balance, mono', steps: ['Settings → Sound → turn on Sound effects.', 'Pick a preset or move the five bands; set left/right balance; switch on Mono for one-ear listening or Loudness normalisation for even volume.', 'If a source cannot be processed the status line says “Not available for this source” and playback continues untouched.'] },
   { group: 'Recommendations', title: 'Familiar, Balanced or Discover', steps: ['Settings → Recommendations → Discovery. Familiar brings back favourites and songs you finished; new artists are rare.', 'Balanced is mostly your taste with about one new artist in every four or five songs. Discover ranks never-played artists higher.', 'In every mode a queue stays in the language of its song and opens with a familiar hand-off.'] },
-  { group: 'Recommendations', title: 'Home and “Popular picks for you”', steps: ['Play my mix starts a mix built from your pinned languages and your listening on this device.', '“Popular picks for you” is what is popular in the catalogue, put in the order your taste suggests; with AI-designed shelves on, VinaX AI orders it. Public charts, with their source and update time, are on the Charts page.', 'Home shows a song once: a song already in an earlier shelf is left out of later ones. Home Studio reorders or hides shelves.'] },
+  { group: 'Recommendations', title: 'Home and “Popular picks for you”', steps: ['The play button on the Aura Mix card starts a mix built from your pinned languages and your listening on this device.', '“Popular picks for you” is what is popular in the catalogue, put in the order your taste suggests; with AI-designed shelves on, VinaX AI orders it. Public charts, with their source and update time, are on the Charts page.', 'Home shows a song once: a song already in an earlier shelf is left out of later ones. Home Studio reorders or hides shelves.'] },
   { group: 'Finding music', title: 'Search', steps: ['Results appear as you type; Enter opens the full results with All, Songs, Albums, Artists and Playlists tabs.', 'Sort songs by relevance, popularity, newest, length or A to Z, then Play all or Queue all.', 'A search with no songs offers “Did you mean …?”. Recent searches can be pinned (hover or long-press).'] },
   { group: 'Finding music', title: 'Find a song by its lyrics', steps: ['Type a line you remember into Search. With five words or more VinaX offers Search by lyrics.', 'Matches show the lyric snippet; when the lyrics service has no hit, VinaX falls back to titles.', 'Tap a match to play it.'] },
   { group: 'Your music', title: 'Listen Later and playlists', steps: ['Choose Listen later in any song menu, or swipe a song row left on a touch screen.', 'Playlists: pin, tag and filter by tag, sort, shuffle-play and remove duplicates.', 'Deleted a playlist by mistake? Library → Recently deleted keeps it for seven days.'] },
@@ -144,64 +147,70 @@ export default function HelpPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto pb-10">
-      <PageHeader title="Help & Feedback" subtitle="Live tutorials, guides, answers — and a direct line to the team." />
+    <div className="vx-sec">
+      <PageHeader title="Help & feedback" />
 
-      <div className="relative mb-5">
+      <div className="vx-search-field">
+        <SearchIcon />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search help… (queue, mood, backup, lyrics, equaliser)"
+          placeholder="Search help"
           aria-label="Search help"
-          className="w-full glass-input pl-4 pr-10 py-2.5 rounded-full text-sm outline-none focus:ring-1 focus:ring-ink-100/40"
+          className="vx-field"
         />
         {query && (
-          <button onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-100 text-sm font-bold">×</button>
+          <IconButton label="Clear search" size="sm" onClick={() => setQuery('')}>
+            <XIcon className="w-4 h-4" />
+          </IconButton>
         )}
       </div>
-      {nothing && <p className="mb-5 text-sm text-ink-400">Nothing matches “{q}”. Try another word, or ask below and the team will answer.</p>}
+      {nothing && <p className="vx-sec-lede mt-0">Nothing matches “{q}”. Try another word, or ask the team below.</p>}
 
       {!q && (
-        <section className="glass-panel rounded-2xl p-5 mb-5">
-          <div className="flex items-end justify-between gap-3 mb-1">
-            <h2 className="text-base font-bold">Live tutorials</h2>
-            <span className="text-[11px] text-ink-400">{done.length}/{TUTORIALS.length} done</span>
+        <section className="vx-sec-block" aria-labelledby="vx-help-tutorials">
+          <div className="vx-sec-title-row">
+            <h2 id="vx-help-tutorials" className="vx-sec-title">Live tutorials</h2>
+            <span className="vx-sec-meta tabular-nums">{done.length} of {TUTORIALS.length} done</span>
           </div>
-          <p className="text-xs text-ink-400 mb-3">Guided walkthroughs inside the real app. The first one starts a song so you can hear every control.</p>
-          <div className="grid sm:grid-cols-2 gap-2.5">
+          <div className="grid sm:grid-cols-2 gap-3">
             {TUTORIALS.map((t) => (
               <button
                 key={t.id}
                 onClick={() => startTutorial(t.id)}
-                className={cn('text-left rounded-2xl border border-glass bg-[var(--tile)] p-3.5 hover:border-glass-strong transition-colors', done.includes(t.id) && 'opacity-80')}
+                className="vx-help-tile text-left"
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-xl" aria-hidden>{t.emoji}</span>
-                  <p className="font-bold text-sm flex-1 min-w-0 truncate">{t.title}</p>
-                  {done.includes(t.id) && <span className="text-[10px] font-bold text-ember-400">DONE</span>}
-                </div>
-                <p className="mt-1 text-xs text-ink-300 leading-relaxed">{t.blurb}</p>
-                <p className="mt-2 text-[11px] font-semibold text-ink-400">{t.minutes} min{t.playsMusic ? ' · plays music' : ''} · {t.steps.length} steps</p>
+                <span className="vx-row-lead" aria-hidden>{t.emoji}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="vx-row-label truncate flex-1">{t.title}</span>
+                    {done.includes(t.id) && <span className="text-[12px] font-semibold text-ink-400">Done</span>}
+                  </span>
+                  <span className="vx-row-hint">{t.blurb}</span>
+                  <span className="mt-2 block text-[12px] font-medium text-ink-400">
+                    {t.minutes} min{t.playsMusic ? ' · plays music' : ''} · {t.steps.length} steps
+                  </span>
+                </span>
               </button>
             ))}
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button onClick={openTour} className="btn-secondary px-4 py-2 text-xs font-bold">Replay the welcome tour</button>
-            <Link to="/settings" className="btn-secondary px-4 py-2 text-xs font-bold">Open Settings</Link>
+          <div className="vx-sec-actions mt-4">
+            <button onClick={openTour} className="vx-pill-btn">Replay the welcome tour</button>
+            <Link to="/settings" className="vx-pill-btn">Open Settings</Link>
           </div>
         </section>
       )}
 
       {!q && latest && (
-        <section className="glass-panel rounded-2xl p-5 mb-5">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <h2 className="text-base font-bold">What’s new in {DISPLAY_VERSION}</h2>
-            {latest.title && <span className="text-[11px] text-ink-400 truncate">{latest.title}</span>}
+        <section className="vx-sec-block" aria-labelledby="vx-help-new">
+          <div className="vx-sec-title-row">
+            <h2 id="vx-help-new" className="vx-sec-title">What’s new in {DISPLAY_VERSION}</h2>
+            {latest.title && <span className="vx-sec-meta truncate">{latest.title}</span>}
           </div>
-          <ul className="space-y-1.5">
+          <ul className="vx-group">
             {latest.changes.slice(0, 4).map((c) => (
-              <li key={c.text} className="text-sm text-ink-200 leading-relaxed flex gap-2">
-                <span className={cn('mt-1.5 w-1.5 h-1.5 rounded-full shrink-0', c.type === 'new' ? 'bg-ember-400' : c.type === 'fixed' ? 'bg-tide-400' : 'bg-ink-400')} />
+              <li key={c.text} className="vx-row text-[14px] text-ink-200 leading-relaxed" style={{ alignItems: 'flex-start', paddingTop: 14, paddingBottom: 14 }}>
+                <span className={cn('mt-[9px] w-1.5 h-1.5 rounded-full shrink-0', c.type === 'new' ? 'bg-ember-500' : 'bg-ink-400')} aria-hidden />
                 <span>{c.text}</span>
               </li>
             ))}
@@ -210,22 +219,24 @@ export default function HelpPage() {
       )}
 
       {guides.length > 0 && (
-        <section className="glass-panel rounded-2xl p-5 mb-5">
-          <h2 className="text-base font-bold mb-3">How to use VinaX</h2>
-          <div className="space-y-4">
+        <section className="vx-sec-block" aria-labelledby="vx-help-guides">
+          <h2 id="vx-help-guides" className="vx-sec-title">How to use VinaX</h2>
+          <div className="space-y-6">
             {groups.map((group) => (
               <div key={group}>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">{group}</p>
-                <div className="divide-y divide-ink-800">
+                <p className="vx-sec-caption">{group}</p>
+                <div className="vx-group">
                   {guides.filter((g) => g.group === group).map((g) => (
-                    <details key={g.title} className="py-2 group" open={!!q}>
-                      <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-sm font-semibold py-1">
-                        {g.title}
-                        <span className="text-ink-500 group-open:rotate-180 transition-transform">⌄</span>
+                    <details key={g.title} open={!!q}>
+                      <summary className="vx-row">
+                        <span className="vx-row-main vx-row-label">{g.title}</span>
+                        <ChevronDownIcon className="vx-row-toggle" />
                       </summary>
-                      <ol className="mt-1 mb-1 space-y-1.5 pl-5 list-decimal text-sm text-ink-300 leading-relaxed">
-                        {g.steps.map((s) => <li key={s}>{s}</li>)}
-                      </ol>
+                      <div className="vx-disclose-body">
+                        <ol>
+                          {g.steps.map((st) => <li key={st}>{st}</li>)}
+                        </ol>
+                      </div>
                     </details>
                   ))}
                 </div>
@@ -236,16 +247,16 @@ export default function HelpPage() {
       )}
 
       {faq.length > 0 && (
-        <section className="glass-panel rounded-2xl p-5 mb-5">
-          <h2 className="text-base font-bold mb-3">FAQ</h2>
-          <div className="divide-y divide-ink-800">
+        <section className="vx-sec-block" aria-labelledby="vx-help-faq">
+          <h2 id="vx-help-faq" className="vx-sec-title">Questions</h2>
+          <div className="vx-group">
             {faq.map((f) => (
-              <details key={f.q} className="py-2 group" open={!!q}>
-                <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-sm font-semibold py-1">
-                  {f.q}
-                  <span className="text-ink-500 group-open:rotate-180 transition-transform">⌄</span>
+              <details key={f.q} open={!!q}>
+                <summary className="vx-row">
+                  <span className="vx-row-main vx-row-label">{f.q}</span>
+                  <ChevronDownIcon className="vx-row-toggle" />
                 </summary>
-                <p className="text-sm text-ink-300 leading-relaxed pb-2 pt-1">{f.a}</p>
+                <p className="vx-disclose-body">{f.a}</p>
               </details>
             ))}
           </div>
@@ -253,44 +264,42 @@ export default function HelpPage() {
       )}
 
       {shortcuts.length > 0 && (
-        <section className="glass-panel rounded-2xl p-5 mb-5">
-          <h2 className="text-base font-bold mb-3">Keyboard & gesture reference</h2>
-          <div className="space-y-1.5">
+        <section className="vx-sec-block" aria-labelledby="vx-help-keys">
+          <h2 id="vx-help-keys" className="vx-sec-title">Keyboard and gestures</h2>
+          <div className="vx-group">
             {shortcuts.map(([k, v]) => (
-              <p key={k} className="text-sm text-ink-200">
-                <span className="inline-block min-w-44 font-mono text-xs bg-ink-800/70 rounded-md px-2 py-1 mr-2">{k}</span>
-                {v}
-              </p>
+              <div key={k} className="vx-row">
+                <span className="vx-row-main text-[14px] text-ink-200">{v}</span>
+                <kbd className="shrink-0 rounded-md bg-ink-100/[0.08] px-2 py-1 font-sans text-[12px] font-semibold text-ink-100 text-right">{k}</kbd>
+              </div>
             ))}
           </div>
         </section>
       )}
 
       {!q && (
-        <section className="glass-panel rounded-2xl p-5 mb-5">
-          <h2 className="text-base font-bold mb-2">Copyright & legal</h2>
-          <p className="text-sm text-ink-200 leading-relaxed mb-2">
-            VinaX is a free player. Music, artwork and lyrics stream from third-party public catalogues — VinaX hosts no
-            media files and sells nothing. All songs, recordings, artwork and lyrics remain the property of their
-            respective artists, labels and rights holders.
+        <section className="vx-sec-block" aria-labelledby="vx-help-legal">
+          <h2 id="vx-help-legal" className="vx-sec-title">Copyright and legal</h2>
+          <p className="vx-sec-lede">
+            VinaX hosts no media files and sells nothing. Songs, recordings, artwork and lyrics belong to their artists,
+            labels and rights holders, who can request removal at any time.
           </p>
-          <p className="text-sm text-ink-200 leading-relaxed mb-3">
-            Rights holders can request removal of any content at any time — see the DMCA / takedown page. Your personal
-            data never leaves your device except anonymous usage statistics, which are off unless you opt in (Settings → Region &amp; Privacy).
-          </p>
-          <p className="text-sm">
-            <Link to="/terms" className="text-ember-400 hover:underline">Terms of Use</Link> ·{' '}
-            <Link to="/privacy" className="text-ember-400 hover:underline">Privacy</Link> ·{' '}
-            <Link to="/dmca" className="text-ember-400 hover:underline">DMCA & takedowns</Link> ·{' '}
-            <Link to="/contact" className="text-ember-400 hover:underline">Contact</Link> ·{' '}
-            <a href="https://status.sirimillavinay.online" target="_blank" rel="noreferrer" className="text-ember-400 hover:underline">Status</a>
-          </p>
+          <nav aria-label="Legal" className="vx-group">
+            <Link to="/terms" className="vx-row is-link"><span className="vx-row-main vx-row-label">Terms of use</span><ChevronRightIcon className="vx-row-chev" /></Link>
+            <Link to="/privacy" className="vx-row is-link"><span className="vx-row-main vx-row-label">Privacy</span><ChevronRightIcon className="vx-row-chev" /></Link>
+            <Link to="/dmca" className="vx-row is-link"><span className="vx-row-main vx-row-label">Copyright and takedowns</span><ChevronRightIcon className="vx-row-chev" /></Link>
+            <Link to="/contact" className="vx-row is-link"><span className="vx-row-main vx-row-label">Contact</span><ChevronRightIcon className="vx-row-chev" /></Link>
+            <a href="https://status.sirimillavinay.online" target="_blank" rel="noreferrer" className="vx-row is-link">
+              <span className="vx-row-main vx-row-label">Service status</span>
+              <ChevronRightIcon className="vx-row-chev" />
+            </a>
+          </nav>
         </section>
       )}
 
-      <section className="glass-panel rounded-2xl p-5">
-        <h2 className="text-base font-bold mb-1">Report a bug or share an idea</h2>
-        <p className="text-xs text-ink-400 mb-3">Goes straight to the VinaX team. A coarse location (city level) is included to help reproduce issues; nothing personal.</p>
+      <section className="vx-sec-block" aria-labelledby="vx-help-feedback">
+        <h2 id="vx-help-feedback" className="vx-sec-title">Report a bug or share an idea</h2>
+        <p className="vx-sec-lede">Goes straight to the VinaX team, with a city-level location to help reproduce issues.</p>
         <div className="flex gap-2 mb-3">
           {(['bug', 'idea', 'other'] as const).map((t) => (
             <Chip key={t} active={type === t} onClick={() => setType(t)}>
@@ -304,13 +313,14 @@ export default function HelpPage() {
           placeholder={type === 'bug' ? 'What happened, what you expected, and the song or page if it matters…' : 'Tell us what you’d love to see…'}
           rows={4}
           maxLength={2000}
-          className="glass-input w-full px-4 py-3 rounded-xl text-sm resize-none"
+          aria-label="Your message"
+          className="vx-field"
         />
-        <label className="mt-2 flex items-center gap-2 text-xs text-ink-300">
-          <input type="checkbox" checked={diagnostics} onChange={(e) => setDiagnostics(e.target.checked)} className="accent-[rgb(var(--ember-500))]" />
+        <label className="mt-3 flex items-center gap-2.5 min-h-[44px] text-[14px] text-ink-300">
+          <input type="checkbox" checked={diagnostics} onChange={(e) => setDiagnostics(e.target.checked)} className="w-4 h-4 accent-[rgb(var(--ember-500))]" />
           Include app version, platform, screen size, language and theme
         </label>
-        <button onClick={() => void submit()} disabled={sending} className="mt-3 px-5 py-2.5 rounded-full btn-primary">
+        <button onClick={() => void submit()} disabled={sending} className="mt-2 px-6 py-3 rounded-full btn-primary">
           {sending ? 'Sending…' : 'Send feedback'}
         </button>
       </section>

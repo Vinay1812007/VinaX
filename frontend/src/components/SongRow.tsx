@@ -9,6 +9,8 @@ import { cn } from '@/utils/cn';
 import { rememberCtxSong } from '@/utils/ctxSongs';
 import { FavButton } from './FavButton';
 import { TrackMenu } from './TrackMenu';
+import { ClockIcon, PlayIcon } from './Icons';
+import '@/styles/pages/tracklist.css';
 
 interface Props {
   song: Song;
@@ -61,6 +63,7 @@ function SongRowImpl({ song, songs, index, showArt = true }: Props) {
   // Feed the right-click context menu (idempotent; cheap map write).
   rememberCtxSong(song);
 
+  const numbered = index != null;
   return (
     <div
       onTouchStart={onTouchStart}
@@ -71,49 +74,85 @@ function SongRowImpl({ song, songs, index, showArt = true }: Props) {
       className={cn(
         'vx-track-row group',
         isCurrent && 'is-current',
+        isPlaying && 'is-playing',
+        numbered && 'is-numbered',
+        !showArt && 'no-art',
       )}
     >
-      {index != null && <span className="vx-track-number" aria-hidden>{index + 1}</span>}
       <button type="button" className="vx-track-play" onClick={onPlay} aria-label={`Play ${song.title} by ${song.subtitle}`} aria-current={isCurrent ? 'true' : undefined}>
-      {showArt && (
-        <div className="relative w-11 h-11 shrink-0">
-          <img
-            src={bestImage(song.images, 150)}
-            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="w-11 h-11 rounded-lg object-cover"
-          />
-          {isPlaying && (
-            <div className="absolute inset-0 rounded-lg bg-ink-950/60 flex items-end justify-center gap-0.5 pb-2">
-              {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  className="w-1 h-4 rounded-full animate-pulse-bar origin-bottom bg-gradient-to-t from-ember-400 to-tide-400"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      <span className="min-w-0 flex-1">
-        <span className={cn('block text-sm font-medium truncate', isCurrent && 'text-ember-400')}>
-          {song.title}
-          {song.explicit && <span className="ml-1.5 text-[9px] align-middle px-1 py-0.5 rounded bg-ink-600 text-ink-200">E</span>}
+        {numbered && (
+          // The # column lives inside the play target: on hover it becomes a
+          // play glyph, and on the playing row an equaliser.
+          <span className="vx-track-number" aria-hidden>
+            <span className="vx-track-index">{index + 1}</span>
+            <PlayIcon className="vx-track-glyph" />
+            {isPlaying && <Equalizer />}
+          </span>
+        )}
+        {showArt && (
+          <span className="vx-track-art">
+            <img
+              src={bestImage(song.images, 150)}
+              onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              width={40}
+              height={40}
+            />
+            <span className="vx-track-art-over" aria-hidden>
+              {isPlaying && <Equalizer />}
+              <PlayIcon className="vx-track-art-glyph" />
+            </span>
+          </span>
+        )}
+        <span className="vx-track-text">
+          <span className="vx-track-title">
+            <span>{song.title}</span>
+            {song.explicit && <span className="vx-explicit" title="Explicit">E</span>}
+          </span>
+          <span className="vx-track-sub">{song.subtitle}</span>
         </span>
-        <span className="block text-meta text-ink-300 truncate">{song.subtitle}</span>
-      </span>
       </button>
-      <span className="vx-track-album hidden 2xl:block truncate">{song.album?.name}</span>
-      <span className="hidden sm:block text-xs tabular-nums text-ink-400">
-        {formatDuration(song.duration)}
-      </span>
-      <div className="flex items-center gap-1 hover-reveal">
-        <FavButton song={song} />
-        <TrackMenu song={song} />
+      <span className="vx-track-album">{song.album?.name}</span>
+      <span className="vx-track-like hover-reveal"><FavButton song={song} /></span>
+      <span className="vx-track-duration">{song.duration ? formatDuration(song.duration) : ''}</span>
+      <span className="vx-track-more hover-reveal"><TrackMenu song={song} /></span>
+    </div>
+  );
+}
+
+/** Three quiet bars for the row that is audibly playing. */
+function Equalizer() {
+  return <span className="vx-eq" aria-hidden><i /><i /><i /></span>;
+}
+
+/**
+ * Desktop column labels for a numbered track list (#, Title, Album, duration).
+ * Decorative (each row's play button already names its song), so it is
+ * hidden from assistive tech. Render it inside a `.vx-tracklist` wrapper so
+ * the album column lines up with the rows.
+ */
+export function TrackListHead({ numbered = true, lead = 0, trail = 0 }: {
+  numbered?: boolean;
+  /** Width in px of controls a page renders BEFORE each row (a checkbox). */
+  lead?: number;
+  /** Width in px of controls a page renders AFTER each row (remove, reorder). */
+  trail?: number;
+}) {
+  return (
+    <div className={cn('vx-tracklist-head', !numbered && 'no-num')} aria-hidden>
+      {lead > 0 && <span style={{ flex: `0 0 ${lead}px` }} />}
+      {/* Same box as a SongRow, so the percentage album column lines up. */}
+      <div className="h-row">
+        {numbered && <span className="h-num">#</span>}
+        <span className="h-title">Title</span>
+        <span className="h-album">Album</span>
+        <span className="h-btn" />
+        <span className="h-dur"><ClockIcon /></span>
+        <span className="h-btn" />
       </div>
+      {trail > 0 && <span style={{ flex: `0 0 ${trail}px` }} />}
     </div>
   );
 }

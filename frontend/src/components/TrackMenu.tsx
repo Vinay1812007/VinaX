@@ -16,11 +16,16 @@ import { downloadSong, removeDownload } from '@/services/downloads';
 import { SOFT_MUTE_DAYS } from '@/services/personalization/softMutes';
 import { lessLikeThis, moreLikeThis, tuneLabel } from '@/features/queue/steer';
 import { DotsIcon } from './Icons';
+import { MENU_GLYPHS, type MenuGlyph } from './MenuIcons';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { bestImage, FALLBACK_ART } from '@/utils/images';
+import { cn } from '@/utils/cn';
+import '@/styles/overlays.css';
 // v5.17.0 — lazy: the memories sheet is a rare tap, never first-load code.
 const SongMemoriesSheet = lazy(() => import('./SongMemoriesSheet'));
 
-const PANEL_WIDTH = 224; // w-56
+const PANEL_WIDTH = 256; // .vx-menu width (styles/overlays.css)
 const EDGE = 8; // keep this far inside the viewport
 const GAP = 4; // between trigger and panel
 
@@ -109,7 +114,7 @@ interface PanelProps {
   leadItems?: TrackMenuItem[];
 }
 
-type MenuEntry = (TrackMenuItem & { submenu?: boolean; id?: string }) | 'divider' | null;
+type MenuEntry = (TrackMenuItem & { submenu?: boolean; id?: string; icon?: MenuGlyph; danger?: boolean }) | 'divider' | null;
 
 const fmtDate = (ts: number): string => new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
@@ -134,6 +139,8 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
 
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<PanelPos | null>(null);
+  // 8.0.0 — on phones the same menu opens as a bottom sheet with the song on top.
+  const asSheet = useMediaQuery('(max-width: 767px)');
   // 7.2 — "Less like this" asks for how long in a second view of the same menu.
   const [view, setView] = useState<'main' | 'less'>('main');
   const returnTo = useRef<string | null>(null);
@@ -295,37 +302,39 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
 
   const entries: MenuEntry[] = [
     ...(leadItems?.length ? [...leadItems, 'divider' as const] : []),
-    { label: 'Start song radio', action: () => startRadio(song) },
-    { label: 'Play next', action: () => enqueueNext(song) },
-    { label: 'Add to queue', action: () => enqueue(song) },
+    { label: 'Start song radio', icon: 'radio', action: () => startRadio(song) },
+    { label: 'Play next', icon: 'playNext', action: () => enqueueNext(song) },
+    { label: 'Add to queue', icon: 'addQueue', action: () => enqueue(song) },
     // 7.2 — steer what comes next. "More like this" is for this sitting and
     // retunes the DJ picks now; "Less like this" plays the artist less for a
     // while (a soft mute that ends on its own).
-    { label: 'More like this', action: moreLike },
-    artist ? { id: 'less', label: 'Less like this…', action: openLess, submenu: true } : null,
+    { label: 'More like this', icon: 'moreLike', action: moreLike },
+    artist ? { id: 'less', label: 'Less like this…', icon: 'lessLike', action: openLess, submenu: true } : null,
     // C4 — only offered when this song was actually recommended (an entry
     // exists); library/search results aren't automatic picks, so no item.
-    whyLine ? { label: 'Why this song?', action: () => toast(whyLine) } : null,
+    whyLine ? { label: 'Why this song?', icon: 'why', action: () => toast(whyLine) } : null,
     'divider',
     // v5.12.0 — Listen Later: the one-tap "come back to this" list.
     {
       label: inLater ? 'Remove from Listen Later' : 'Listen later',
+      icon: 'later',
       action: () => {
         toggleLater(song);
         toast(inLater ? 'Removed from Listen Later' : 'Saved to Listen Later', { action: { label: 'Undo', onClick: () => toggleLater(song) } });
       },
     },
-    { label: 'Song details', action: () => navigate(songPath(song)) },
+    { label: 'Song details', icon: 'details', action: () => navigate(songPath(song)) },
     // v5.17.0 — your own history with this song, from on-device data.
-    { label: 'Your history with this song', action: onShowMemories },
-    song.album?.id ? { label: 'Go to album', action: () => navigate(albumPath(song.album!)) } : null,
+    { label: 'Your history with this song', icon: 'history', action: onShowMemories },
+    song.album?.id ? { label: 'Go to album', icon: 'album', action: () => navigate(albumPath(song.album!)) } : null,
     song.artists[0]?.id
-      ? { label: 'Go to artist', action: () => navigate(artistPath(song.artists[0])) }
+      ? { label: 'Go to artist', icon: 'artist', action: () => navigate(artistPath(song.artists[0])) }
       : null,
-    { label: 'View lyrics', action: () => navigate(`/lyrics/${song.id}`) },
+    { label: 'View lyrics', icon: 'lyrics', action: () => navigate(`/lyrics/${song.id}`) },
     isNativePlatform()
       ? {
           label: downloading ? 'Downloading…' : downloaded ? 'Remove download' : 'Download',
+          icon: 'download' as const,
           action: () => {
             if (downloading) return;
             if (downloaded) void removeDownload(song.id).then(() => toast('Removed download'));
@@ -335,6 +344,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
       : null,
     ...collections.map((c) => ({
       label: `Add to “${c.name}”`,
+      icon: 'addTo' as const,
       action: () => {
         addToCollection(c.id, song);
         toast(`Added to ${c.name}`);
@@ -342,6 +352,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     })),
     {
       label: 'New playlist…',
+      icon: 'newList',
       action: () => {
         const name = window.prompt('Playlist name');
         if (name && name.trim()) {
@@ -353,6 +364,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     },
     {
       label: 'Report broken track',
+      icon: 'report',
       action: () =>
         void sendFeedback('broken', `Broken/incorrect: ${song.title} — ${song.subtitle} [${song.id}]`).then((ok) =>
           toast(ok ? 'Thanks — reported' : 'Could not send report'),
@@ -362,6 +374,8 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     // Permanent blocks, kept apart from the temporary "Less like this" above.
     {
       label: 'Not interested',
+      icon: 'notInterested',
+      danger: true,
       action: () => {
         toggleHidden(song.id);
         toast('We’ll show this less', { action: { label: 'Undo', onClick: () => toggleHidden(song.id) } });
@@ -374,6 +388,8 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
           // The name is truncated by CSS, never by slicing: a cut in the middle
           // of an Indic cluster leaves a dangling vowel sign.
           label: `Never play ${artist}`,
+          icon: 'neverPlay' as const,
+          danger: true,
           action: () => {
             toggleHiddenArtist(artist);
             toast(`${artist} won’t play again`, { action: { label: 'Undo', onClick: () => toggleHiddenArtist(artist) } });
@@ -383,11 +399,13 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     'divider',
     {
       label: 'Share',
+      icon: 'share',
       action: () => void shareLink(songPath(song), song.title).then((r) => r === 'copied' && toast('Link copied')),
     },
     {
       // D15 — pre-filled share to a messaging app (works on app + web).
       label: 'Share to WhatsApp',
+      icon: 'message',
       action: () =>
         window.open(
           `https://wa.me/?text=${encodeURIComponent(`🎵 ${song.title} — ${song.subtitle}\nListen free on VinaX: ${window.location.origin}${songPath(song)}`)}`,
@@ -398,6 +416,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     {
       // D15 — pre-filled Telegram share.
       label: 'Share to Telegram',
+      icon: 'send',
       action: () =>
         window.open(
           `https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}${songPath(song)}`)}&text=${encodeURIComponent(`🎵 ${song.title} — ${song.subtitle} · free on VinaX`)}`,
@@ -407,19 +426,21 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     },
     {
       label: 'Share as image',
+      icon: 'image',
       action: () => void shareSongCard(song).then((ok) => { if (!ok) toast('Could not create image'); }),
     },
     {
       // D15 — a 9:16 card for status and story formats.
       label: 'Share as story',
+      icon: 'story',
       action: () => void shareSongStoryCard(song).then((ok) => { if (!ok) toast('Could not create image'); }),
     },
   ];
 
   const lessEntries: MenuEntry[] = [
-    ...SOFT_MUTE_DAYS.map((d) => ({ label: `${d} days`, action: () => lessLike(d) })),
+    ...SOFT_MUTE_DAYS.map((d) => ({ label: `${d} days`, icon: 'clock' as const, action: () => lessLike(d) })),
     'divider',
-    { id: 'back', label: 'Back', action: leaveLess, submenu: true },
+    { id: 'back', label: 'Back', icon: 'back', action: leaveLess, submenu: true },
   ];
 
   // Dividers only between real items: none leading, trailing or doubled.
@@ -427,34 +448,42 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
   const visible = shown.filter((e, i) => e !== 'divider' || (i > 0 && i < shown.length - 1 && shown[i - 1] !== 'divider'));
 
   const stop = (e: React.SyntheticEvent): void => e.stopPropagation();
-  const itemClass = 'w-full text-left rounded-sm px-3 py-2.5 min-h-touch text-[14px] font-medium text-ink-100 hover:bg-ink-700 focus-visible:bg-ink-700 truncate';
+  const Chevron = MENU_GLYPHS.chevron;
 
   return createPortal(
     // Touch + click are stopped here for the same portal-bubbling reason as
     // keydown: a swipe on the menu must not swipe the song row that owns it.
     <div ref={overlayRef} data-vx-overlay onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop} onClick={stop}>
-      <div className="fixed inset-0 z-[70] bg-black/40" onClick={onClose} />
+      <div className={cn('fixed inset-0 z-[70]', asSheet ? 'bg-black/60' : 'bg-black/30')} onClick={onClose} />
       <div
         ref={menuRef}
         role="menu"
         aria-label={view === 'less' ? `Less like this: play less of ${artist} for how long?` : `More options for ${song.title}`}
         onKeyDown={onMenuKeyDown}
-        className="fixed z-[71] w-56 rounded-md p-1 animate-fade-up max-h-72 overflow-y-auto overscroll-contain bg-[color:var(--surface-modal)] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)]"
-        style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
+        className={cn('vx-menu fixed z-[71] overflow-y-auto overscroll-contain', asSheet && 'is-sheet')}
+        style={pos ? (asSheet ? undefined : { top: pos.top, left: pos.left }) : { top: 0, left: 0, visibility: 'hidden' }}
       >
+        {/* The song this menu acts on — shown on the phone sheet only (CSS). */}
+        <div role="presentation" className="vx-menu-head">
+          <img src={bestImage(song.images, 150) || FALLBACK_ART} alt="" loading="lazy" onError={(e) => { e.currentTarget.src = FALLBACK_ART; }} />
+          <div className="min-w-0">
+            <p className="vx-menu-head-title">{song.title}</p>
+            {song.subtitle && <p className="vx-menu-head-sub">{song.subtitle}</p>}
+          </div>
+        </div>
         {view === 'less' && (
           // Not a menu item: the heading of the "how long?" view.
-          <div role="presentation" className="px-3 pt-2 pb-1.5">
-            <p className="text-[12px] font-semibold text-ink-300 leading-snug">
+          <div role="presentation" className="vx-menu-note">
+            <p>
               Play less of <span className="text-ink-100 break-words">{artist}</span> for:
             </p>
-            <p className="mt-1 text-[11px] text-ink-400 leading-snug">Ends on its own. “Never play” is the permanent block.</p>
+            <p>Ends on its own. “Never play” is the permanent block.</p>
           </div>
         )}
-        {visible.map((item, i) =>
-          item === 'divider' ? (
-            <div key={`divider-${i}`} role="separator" className="my-1 h-px bg-[var(--glass-border)]" />
-          ) : (
+        {visible.map((item, i) => {
+          if (item === 'divider') return <div key={`divider-${i}`} role="separator" className="vx-menu-sep" />;
+          const Glyph = MENU_GLYPHS[item.icon ?? 'generic'];
+          return (
             <button
               key={item.id ?? item.label}
               type="button"
@@ -472,12 +501,14 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
                 onClose();
                 item.action();
               }}
-              className={itemClass}
+              className={cn('vx-menu-item', item.danger && 'is-danger')}
             >
-              {item.label}
+              <Glyph />
+              <span className="vx-menu-label">{item.label}</span>
+              {item.id === 'less' && <span className="vx-menu-chev"><Chevron /></span>}
             </button>
-          ),
-        )}
+          );
+        })}
       </div>
     </div>,
     document.body,

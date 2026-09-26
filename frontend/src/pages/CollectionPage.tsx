@@ -1,19 +1,18 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { PageHeader } from '@/components/PageHeader';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { EmptyState } from '@/components/States';
-import { bestImage, FALLBACK_ART } from '@/utils/images';
-import { formatDuration } from '@/utils/format';
 import { cn } from '@/utils/cn';
-import { PlayIcon, ShuffleIcon, XIcon, DownloadIcon, LibraryIcon, ShareIcon } from '@/components/Icons';
+import { ChevronDownIcon, SearchIcon, ShuffleIcon, XIcon, DownloadIcon, LibraryIcon, ShareIcon } from '@/components/Icons';
+import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab, songsLabel, totalDuration } from '@/components/EntityHeader';
+import { SongRow, TrackListHead } from '@/components/SongRow';
 import { toast } from '@/store/toastStore';
 import { isNativePlatform } from '@/services/native';
 import { downloadMany } from '@/services/downloads';
-import { CollageCover } from '@/features/library/CollageCover';
+import { collageArt, CollageCover } from '@/features/library/CollageCover';
 import { findDuplicates } from '@/features/library/duplicates';
 import { SORT_OPTIONS, shuffled, sortSongs, type CollectionSort } from '@/features/library/sort';
 import { canShareText, collectionToText, copyText, shareText } from '@/features/library/collectionText';
@@ -208,155 +207,146 @@ export default function CollectionPage() {
   };
 
   const pinLabel = collection.pinned ? 'Unpin' : 'Pin';
-  const secondaryBtn = 'flex items-center gap-2 px-4 py-2.5 rounded-full border border-ink-600 text-sm font-semibold hover:border-ink-400 disabled:opacity-50';
+  const togglePin = () => {
+    togglePinCollection(collection.id);
+    toast(collection.pinned ? 'Unpinned' : 'Pinned to the top of your Library');
+  };
 
   return (
-    <div className="max-w-2xl mx-auto pb-10">
-      <PageHeader title="Playlist" />
-      <div className="flex items-start gap-4 mb-1">
-        <CollageCover songs={songs} emoji={collection.emoji} minPx={300} className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl" />
-        <div className="min-w-0 flex-1">
-          {editing ? (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <input
-                  value={emoji}
-                  onChange={(e) => setEmoji(e.target.value)}
-                  aria-label="Emoji"
-                  placeholder="🙂"
-                  maxLength={8}
-                  className="glass-input w-14 px-2 py-2 rounded-xl text-center text-xl"
-                />
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && saveEdit()}
-                  aria-label="Name"
-                  autoFocus
-                  className="glass-input flex-1 min-w-0 px-4 py-2 rounded-xl text-xl font-bold"
-                />
-              </div>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                aria-label="Description"
-                placeholder="What is this collection for? (optional)"
-                rows={2}
-                maxLength={280}
-                className="glass-input w-full px-4 py-2 rounded-xl text-sm resize-none"
+    <div className="vx-entity">
+      <EntityHeader
+        kind="Playlist"
+        title={<>{collection.emoji && <span className="mr-3" aria-hidden>{collection.emoji}</span>}{collection.name}</>}
+        titleText={collection.name}
+        art={<CollageCover songs={songs} emoji={collection.emoji} minPx={300} />}
+        artUrl={collageArt(songs, 150)[0]}
+        description={!editing && collection.description ? collection.description : undefined}
+        meta={
+          <EntityMeta
+            items={[
+              songsLabel(songs.length),
+              totalDuration(songs),
+              hasDownloads && downloadedCount > 0 && `${downloadedCount} downloaded`,
+              collection.pinned && 'Pinned',
+            ]}
+          />
+        }
+        actions={
+          <>
+            <PlayFab label="Play" onClick={playAll} disabled={!visible.length} />
+            <EntityAction label="Shuffle play" onClick={shufflePlay} disabled={!visible.length}><ShuffleIcon /></EntityAction>
+            {isNativePlatform() && (
+              <>
+                <EntityAction label={dlBusy ? `Downloading ${dlDone} of ${songs.length}` : 'Download'} onClick={() => void downloadAll()} disabled={!songs.length || dlBusy}>
+                  <DownloadIcon />
+                </EntityAction>
+                {dlBusy && <span className="vx-etools-note tabular-nums" aria-hidden>{dlDone}/{songs.length}</span>}
+              </>
+            )}
+            {canShareText() && (
+              <EntityAction label="Share as text" onClick={() => void shareAsText()} disabled={!songs.length}><ShareIcon /></EntityAction>
+            )}
+            <EntityMenu
+              items={[
+                { label: 'Edit details', onSelect: startEdit },
+                { label: pinLabel, onSelect: togglePin },
+                { label: 'Copy as text', onSelect: () => void copyAsText(), disabled: !songs.length },
+                duplicates > 0 && { label: 'Remove duplicates', onSelect: dedupe },
+                { label: 'Delete playlist', onSelect: remove, danger: true },
+              ]}
+            />
+          </>
+        }
+      >
+        {editing ? (
+          <div className="vx-edit-form">
+            <div className="flex gap-2">
+              <input
+                value={emoji}
+                onChange={(e) => setEmoji(e.target.value)}
+                aria-label="Emoji"
+                placeholder="🙂"
+                maxLength={8}
+                className="glass-input w-14 px-2 py-2 rounded-xl text-center text-xl"
               />
-              <TagEditor tags={tags} onChange={setTags} suggestions={tagSuggestions} />
-              <div className="flex gap-2">
-                <button onClick={saveEdit} className="px-4 py-1.5 rounded-full btn-primary text-xs font-bold">Save</button>
-                <button onClick={() => setEditing(false)} className="px-4 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400">Cancel</button>
-              </div>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && saveEdit()}
+                aria-label="Name"
+                autoFocus
+                className="glass-input flex-1 min-w-0 px-4 py-2 rounded-xl text-lg font-bold"
+              />
             </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <h1 className="text-page-title flex-1 min-w-0 truncate">
-                  {collection.emoji && <span className="mr-2" aria-hidden>{collection.emoji}</span>}
-                  {collection.name}
-                </h1>
-                <button onClick={startEdit} className="text-xs font-semibold text-ink-300 hover:text-ink-100 shrink-0">Edit</button>
-                <button
-                  onClick={() => { togglePinCollection(collection.id); toast(collection.pinned ? 'Unpinned' : 'Pinned to the top of your Library'); }}
-                  aria-pressed={!!collection.pinned}
-                  className={cn('text-xs font-semibold shrink-0', collection.pinned ? 'text-ember-400' : 'text-ink-300 hover:text-ink-100')}
-                >
-                  {pinLabel}
-                </button>
-              </div>
-              {collection.description && <p className="text-sm text-ink-300 mt-1 line-clamp-3">{collection.description}</p>}
-              <TagChips tags={collection.tags} className="mt-1.5" />
-            </>
-          )}
-          <p className="text-sm text-ink-400 mt-1">
-            {songs.length} song{songs.length === 1 ? '' : 's'}
-            {hasDownloads && downloadedCount > 0 && <span> · {downloadedCount} downloaded</span>}
-            {collection.pinned && <span className="ml-2 text-ember-400 text-xs font-semibold">Pinned</span>}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2 mt-5 mb-4">
-        <button onClick={playAll} disabled={!visible.length} className="flex items-center gap-2 px-5 py-2.5 rounded-full btn-primary disabled:opacity-50">
-          <PlayIcon className="w-4 h-4" /> Play
-        </button>
-        <button onClick={shufflePlay} disabled={!visible.length} className={secondaryBtn}>
-          <ShuffleIcon className="w-4 h-4" /> Shuffle play
-        </button>
-        {isNativePlatform() && (
-          <button onClick={downloadAll} disabled={!songs.length || dlBusy} className={secondaryBtn}>
-            <DownloadIcon className="w-4 h-4" /> {dlBusy ? `${dlDone}/${songs.length}` : 'Download'}
-          </button>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              aria-label="Description"
+              placeholder="What is this collection for? (optional)"
+              rows={2}
+              maxLength={280}
+              className="glass-input w-full px-4 py-2 rounded-xl text-sm resize-none"
+            />
+            <TagEditor tags={tags} onChange={setTags} suggestions={tagSuggestions} />
+            <div className="flex gap-2">
+              <button onClick={saveEdit} className="px-4 py-1.5 rounded-full btn-primary text-sm font-bold">Save</button>
+              <button onClick={() => setEditing(false)} className="vx-quiet-btn">Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <TagChips tags={collection.tags} className="mt-2" />
         )}
-        <button onClick={() => void copyAsText()} disabled={!songs.length} className={secondaryBtn}>Copy as text</button>
-        {canShareText() && (
-          <button onClick={() => void shareAsText()} disabled={!songs.length} className={secondaryBtn} aria-label="Share as text">
-            <ShareIcon className="w-4 h-4" /> Share
-          </button>
-        )}
-        <button onClick={remove} className="ml-auto px-4 py-2.5 rounded-full border border-ink-600 text-sm text-ink-300 hover:border-red-400 hover:text-red-300">Delete</button>
-      </div>
+      </EntityHeader>
 
       {duplicates > 0 && (
-        <div role="status" className="flex items-center gap-3 glass-panel rounded-2xl px-4 py-3 mb-4">
-          <span className="text-sm flex-1">
+        <div role="status" className="vx-strip">
+          <span className="vx-strip-text">
             <b>{duplicates} duplicate{duplicates === 1 ? '' : 's'}</b>
-            <span className="text-ink-400"> — the same song appears more than once.</span>
+            <span> — the same song appears more than once.</span>
           </span>
-          <button onClick={dedupe} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 shrink-0">Remove duplicates</button>
+          <button onClick={dedupe} className="vx-quiet-btn">Remove duplicates</button>
         </div>
       )}
 
       {songs.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="vx-etools">
           <label htmlFor="collection-search" className="sr-only">Search in this playlist</label>
-          <input
-            id="collection-search"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search in this playlist"
-            className="glass-input flex-1 min-w-[10rem] px-3 py-1.5 rounded-xl text-xs"
-          />
+          <span className="vx-field">
+            <SearchIcon />
+            <input
+              id="collection-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search in this playlist"
+            />
+          </span>
           <button
             type="button"
             onClick={() => (selecting ? exitSelect() : setSelecting(true))}
             aria-pressed={selecting}
-            className={cn('px-3 py-1.5 rounded-full border text-xs font-semibold min-h-[36px]', selecting ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400')}
+            className="vx-quiet-btn"
           >
             {selecting ? 'Done' : 'Select'}
           </button>
-          <label className="flex items-center gap-2 text-xs text-ink-400">
-            Sort
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as CollectionSort)}
-              aria-label="Sort songs"
-              className="bg-ink-800 border border-ink-600 rounded-xl px-3 py-1.5 text-xs text-ink-100 outline-none focus:border-ember-500"
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </label>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as CollectionSort)}
+            aria-label="Sort songs"
+            className="vx-select"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
           {hasDownloads && (
-            <button
-              onClick={() => setDownloadedOnly((v) => !v)}
-              aria-pressed={downloadedOnly}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors',
-                downloadedOnly ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400',
-              )}
-            >
-              <DownloadIcon className="w-3.5 h-3.5" /> Downloaded only{downloadedOnly ? ` (${downloadedCount})` : ''}
+            <button onClick={() => setDownloadedOnly((v) => !v)} aria-pressed={downloadedOnly} className="vx-quiet-btn">
+              <DownloadIcon className="w-4 h-4" /> Downloaded only{downloadedOnly ? ` (${downloadedCount})` : ''}
             </button>
           )}
-          {!reorderable && <span className="text-[11px] text-ink-500">View only — the stored order is unchanged.</span>}
+          {!reorderable && <span className="vx-etools-note">View only — the stored order is unchanged.</span>}
           {filtering && (
-            <span className="text-[11px] text-ink-500" role="status">
+            <span className="vx-etools-note" role="status">
               {visible.length ? `${songCount(visible.length)} match` : 'No songs match'} “{query.trim()}”
             </span>
           )}
@@ -364,9 +354,9 @@ export default function CollectionPage() {
       )}
 
       {selecting && (
-        <div role="region" aria-label="Selected songs" className="glass-panel rounded-2xl px-3 py-2.5 mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold" aria-live="polite">{selectedIds.length} selected</span>
-          <button type="button" onClick={selectAllVisible} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 min-h-[36px]">
+        <div role="region" aria-label="Selected songs" className="vx-strip">
+          <span className="text-sm font-bold mr-1" aria-live="polite">{selectedIds.length} selected</span>
+          <button type="button" onClick={selectAllVisible} className="vx-quiet-btn">
             Select all shown
           </button>
           <label htmlFor="collection-target" className="sr-only">Target playlist</label>
@@ -374,23 +364,23 @@ export default function CollectionPage() {
             id="collection-target"
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
-            className="bg-ink-800 border border-ink-600 rounded-xl px-3 py-1.5 text-xs text-ink-100 outline-none focus:border-ember-500 min-h-[36px]"
+            className="vx-select"
           >
             <option value="">Choose a playlist…</option>
             {otherCollections.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <button type="button" onClick={copySelected} disabled={!selectedIds.length || !targetId} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 disabled:opacity-40 min-h-[36px]">
+          <button type="button" onClick={copySelected} disabled={!selectedIds.length || !targetId} className="vx-quiet-btn">
             Copy
           </button>
-          <button type="button" onClick={moveSelected} disabled={!selectedIds.length || !targetId} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold hover:border-ink-400 disabled:opacity-40 min-h-[36px]">
+          <button type="button" onClick={moveSelected} disabled={!selectedIds.length || !targetId} className="vx-quiet-btn">
             Move
           </button>
-          <button type="button" onClick={removeSelected} disabled={!selectedIds.length} className="px-3 py-1.5 rounded-full border border-ink-600 text-xs font-semibold text-ink-300 hover:border-red-400 hover:text-red-300 disabled:opacity-40 min-h-[36px]">
+          <button type="button" onClick={removeSelected} disabled={!selectedIds.length} className="vx-quiet-btn is-danger">
             Remove
           </button>
-          {!otherCollections.length && <span className="text-[11px] text-ink-500">Create another playlist to copy or move songs.</span>}
+          {!otherCollections.length && <span className="vx-etools-note">Create another playlist to copy or move songs.</span>}
         </div>
       )}
 
@@ -403,48 +393,48 @@ export default function CollectionPage() {
           <EmptyState icon={<DownloadIcon className="w-8 h-8" />} title="Nothing downloaded here yet" message="Turn off the Downloaded only filter, or download this collection." />
         )
       ) : (
-        <div className="space-y-1">
+        <div className="vx-tracklist">
+          <TrackListHead lead={selecting ? 38 : 0} trail={(hasDownloads ? 26 : 0) + (reorderable ? 76 : 0) + (selecting ? 0 : 38)} />
           {/* Long playlists: rows render in content-visibility chunks so off-screen
               ones cost no layout or paint. Keys are index-free, so Move up / down
               re-orders DOM nodes instead of remounting the rows. */}
           <VirtualChunks
             items={visible}
             keyOf={(_song: Song, i: number) => rowKeys[i]}
-            rowHeight={60}
-            chunkClassName="space-y-1"
+            rowHeight={56}
             renderItem={(song: Song, i: number) => (
-            <div className={cn('flex items-center gap-2.5 glass-card rounded-xl p-2', selecting && selected.has(song.id) && 'ring-1 ring-ember-400')}>
-              {selecting ? (
-                <input
-                  type="checkbox"
-                  checked={selected.has(song.id)}
-                  onChange={() => toggleSelected(song.id)}
-                  aria-label={`Select ${song.title}`}
-                  className="w-5 h-5 shrink-0 accent-[rgb(var(--ember-400))]"
-                />
-              ) : (
-                <span className="w-5 text-center text-xs text-ink-500 shrink-0">{i + 1}</span>
-              )}
-              <button onClick={() => usePlayerStore.getState().playQueue(visible, i)} className="shrink-0" aria-label={`Play ${song.title}`}>
-                <img src={bestImage(song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" decoding="async" className="w-10 h-10 rounded-lg object-cover" />
-              </button>
-              <button onClick={() => usePlayerStore.getState().playQueue(visible, i)} className="min-w-0 flex-1 text-left">
-                <span className="block text-sm font-semibold truncate">{song.title}</span>
-                <span className="block text-xs text-ink-400 truncate">
-                  {song.subtitle}
-                  {song.year && <span className="text-ink-500"> · {song.year}</span>}
+            <div className={cn('vx-row-with vx-crow glass-card', selecting && selected.has(song.id) && 'is-picked')}>
+              {selecting && (
+                <span className="vx-crow-check">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(song.id)}
+                    onChange={() => toggleSelected(song.id)}
+                    aria-label={`Select ${song.title}`}
+                    className="w-5 h-5 accent-[rgb(var(--ember-500))]"
+                  />
                 </span>
-              </button>
-              <span className="hidden sm:block text-xs tabular-nums text-ink-400 shrink-0">{formatDuration(song.duration)}</span>
-              {downloads[song.id] && <span className="text-tide-400 shrink-0" role="img" aria-label="Downloaded"><DownloadIcon className="w-3.5 h-3.5" /></span>}
+              )}
+              <div className="vx-row-main">
+                <SongRow song={song} songs={visible} index={i} />
+              </div>
+              {hasDownloads && (
+                <span className="vx-crow-dl">
+                  {downloads[song.id] && <span role="img" aria-label="Downloaded"><DownloadIcon className="w-3.5 h-3.5" /></span>}
+                </span>
+              )}
               {reorderable && (
                 <>
-                  <button aria-label="Move up" disabled={i === 0} onClick={() => moveInCollection(collection.id, i, i - 1)} className="p-1.5 text-ink-400 hover:text-ink-100 disabled:opacity-25 shrink-0">↑</button>
-                  <button aria-label="Move down" disabled={i === visible.length - 1} onClick={() => moveInCollection(collection.id, i, i + 1)} className="p-1.5 text-ink-400 hover:text-ink-100 disabled:opacity-25 shrink-0">↓</button>
+                  <button aria-label="Move up" disabled={i === 0} onClick={() => moveInCollection(collection.id, i, i - 1)} className="vx-row-x vx-crow-move">
+                    <ChevronDownIcon className="w-4 h-4 rotate-180" />
+                  </button>
+                  <button aria-label="Move down" disabled={i === visible.length - 1} onClick={() => moveInCollection(collection.id, i, i + 1)} className="vx-row-x vx-crow-move">
+                    <ChevronDownIcon className="w-4 h-4" />
+                  </button>
                 </>
               )}
               {!selecting && (
-                <button aria-label={`Remove ${song.title} from playlist`} onClick={() => removeOne(song)} className="p-2 text-ink-400 hover:text-red-300 shrink-0 min-w-[36px] min-h-[36px] grid place-items-center">
+                <button aria-label={`Remove ${song.title} from playlist`} onClick={() => removeOne(song)} className="vx-row-x is-danger">
                   <XIcon className="w-4 h-4" />
                 </button>
               )}

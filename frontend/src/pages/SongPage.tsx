@@ -9,7 +9,8 @@ import { SongRow } from '@/components/SongRow';
 import { FavButton } from '@/components/FavButton';
 import { HeaderSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
-import { PlayIcon, PlusIcon, ShareIcon } from '@/components/Icons';
+import { PlusIcon, ShareIcon } from '@/components/Icons';
+import { EntityAction, EntityHeader, EntityMeta, PlayFab } from '@/components/EntityHeader';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { formatDuration, formatCount } from '@/utils/format';
 import { languageLabel } from '@/constants/languages';
@@ -39,69 +40,68 @@ export default function SongPage() {
   if (isLoading) return <div className="max-w-4xl mx-auto"><HeaderSkeleton /><ListSkeleton /></div>;
   if (isError || !song) return <ErrorState retry={() => refetch()} />;
 
+  const art = bestImage(song.images, 500);
+  const play = () => {
+    playQueue([song, ...(suggestions.data ?? [])], 0);
+    // v5.17.0 — a shared "moment" link (?t=seconds) starts right there.
+    const t = Number(new URLSearchParams(window.location.search).get('t'));
+    if (t > 0) window.setTimeout(() => usePlayerStore.getState().seek(t), 900);
+  };
+
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-6 mb-8">
-        <img
-          src={bestImage(song.images, 500)}
-          onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-          alt=""
-          className="w-44 h-44 sm:w-52 sm:h-52 rounded-2xl object-cover shadow-2xl"
-          data-deter-context
-        />
-        <div className="min-w-0">
-          <p className="text-xs uppercase tracking-widest text-ink-400 font-semibold mb-1.5">Song</p>
-          <h1 className="text-display tracking-tight">{song.title}</h1>
-          <p className="text-ink-300 mt-2 text-sm">
-            {song.artists.map((a, i) => (
-              <span key={`${a.id}-${i}`}>
-                {i > 0 && ', '}
-                {a.id ? <Link to={artistPath(a)} className="hover:text-ember-400 hover:underline">{a.name}</Link> : a.name}
-              </span>
-            ))}
-          </p>
-          <p className="text-xs text-ink-400 mt-1.5">
-            {song.album?.id && <Link to={albumPath(song.album)} className="hover:underline">{song.album.name}</Link>}
-            {song.year && <> · {song.year}</>}
-            {song.language && <> · {languageLabel(song.language)}</>}
-            {song.duration != null && <> · {formatDuration(song.duration)}</>}
-            {song.playCount != null && <> · {formatCount(song.playCount)} plays</>}
-          </p>
-          <div className="flex items-center gap-2 mt-4">
-            <button
-              onClick={() => {
-                playQueue([song, ...(suggestions.data ?? [])], 0);
-                // v5.17.0 — a shared "moment" link (?t=seconds) starts right there.
-                const t = Number(new URLSearchParams(window.location.search).get('t'));
-                if (t > 0) window.setTimeout(() => usePlayerStore.getState().seek(t), 900);
-              }}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-full btn-primary"
-            >
-              <PlayIcon className="w-4 h-4" /> Play
-            </button>
-            <button onClick={() => enqueue(song)} aria-label="Add to queue" className="p-2.5 rounded-full btn-secondary">
-              <PlusIcon className="w-4 h-4" />
-            </button>
-            <FavButton song={song} className="border border-ink-600" />
-            <button onClick={() => void shareLink(songPath(song), song.title)} aria-label="Share" className="p-2.5 rounded-full btn-secondary">
-              <ShareIcon className="w-4 h-4" />
-            </button>
+    <div className="vx-entity">
+      <EntityHeader
+        kind="Song"
+        title={song.title}
+        titleText={song.title}
+        artUrl={art}
+        art={<img src={art} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" data-deter-context />}
+        meta={
+          <EntityMeta
+            items={[
+              song.artists.length ? (
+                <>
+                  {song.artists.map((a, i) => (
+                    <span key={`${a.id}-${i}`}>
+                      {i > 0 && ', '}
+                      {a.id ? <Link to={artistPath(a)}>{a.name}</Link> : a.name}
+                    </span>
+                  ))}
+                </>
+              ) : song.subtitle,
+              song.album?.id ? <Link to={albumPath(song.album)}>{song.album.name}</Link> : null,
+              song.year,
+              song.language && languageLabel(song.language),
+              song.duration != null ? formatDuration(song.duration) : null,
+              song.playCount != null ? `${formatCount(song.playCount)} plays` : null,
+            ]}
+          />
+        }
+        actions={
+          <>
+            <PlayFab label="Play" onClick={play} />
+            <FavButton song={song} className="vx-ehead-fav" />
+            <EntityAction label="Add to queue" onClick={() => enqueue(song)}><PlusIcon /></EntityAction>
+            <EntityAction label="Share" onClick={() => void shareLink(songPath(song), song.title)}><ShareIcon /></EntityAction>
             {song.hasLyrics && (
-              <Link to={`/lyrics/${song.id}`} className="px-4 py-2 rounded-full border border-ink-600 text-sm text-ink-200 hover:border-ink-400">
+              <Link to={`/lyrics/${song.id}`} className="vx-ehead-pill ml-1">
                 Lyrics
               </Link>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      <h2 className="text-title mb-2">Similar Tracks</h2>
-      <p className="text-xs text-ink-400 mb-3">Based on this song — plays as a queue</p>
-      {suggestions.isLoading && <ListSkeleton rows={5} />}
-      {(suggestions.data ?? []).map((s, i) => (
-        <SongRow key={s.id} song={s} songs={suggestions.data} index={i} />
-      ))}
-      {suggestions.isError && <p className="text-sm text-ink-400">Similar tracks aren’t available right now.</p>}
+      <section className="vx-esection !mt-2" aria-labelledby="song-similar">
+        <h2 id="song-similar">Similar tracks</h2>
+        {suggestions.isLoading && <ListSkeleton rows={5} />}
+        <div className="vx-tracklist">
+          {(suggestions.data ?? []).map((s, i) => (
+            <SongRow key={s.id} song={s} songs={suggestions.data} index={i} />
+          ))}
+        </div>
+        {suggestions.isError && <p className="text-sm text-ink-400">Similar tracks aren’t available right now.</p>}
+      </section>
     </div>
   );
 }

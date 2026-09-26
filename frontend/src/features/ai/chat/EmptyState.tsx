@@ -1,17 +1,13 @@
 import { memo, useEffect, useState, type ReactNode } from 'react';
-import { SparkleIcon } from '@/components/Icons';
 import { buildTodayBrief, type TodayBrief } from '@/features/ai/todayBrief';
 import { firstName, timeOfDay } from './storage';
 
-/** The centred greeting on an empty chat: the mark, "Good evening, <first
- *  name>", one quiet line. The composer sits directly beneath it. */
+/** The centred greeting on an empty chat: "Good evening, <first name>" and
+ *  nothing else. The composer sits directly beneath it. */
 export const Greeting = memo(function Greeting({ userName }: { userName: string }): ReactNode {
   const name = firstName(userName);
   return (
     <div className="ai-column ai-greeting ai-enter">
-      <span className="ai-greeting-mark" aria-hidden>
-        <SparkleIcon className="w-7 h-7" />
-      </span>
       <h2 className="ai-display text-balance">
         Good {timeOfDay()}
         {name && (
@@ -20,7 +16,6 @@ export const Greeting = memo(function Greeting({ userName }: { userName: string 
           </>
         )}
       </h2>
-      <p className="ai-greeting-sub">Where should we take your ideas today?</p>
     </div>
   );
 });

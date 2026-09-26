@@ -108,7 +108,7 @@ export function ModelMenu({ state, groups, current, recents, agentOnly, onPick, 
   return (
     <div className={cn('ai-model-menu ai-popover', className)} style={style} onKeyDown={onKeyDown}>
       <label className="ai-model-search">
-        <SearchIcon className="w-3.5 h-3.5 shrink-0 ai-t3" />
+        <SearchIcon className="w-4 h-4 shrink-0 ai-t3" />
         <input
           ref={inputRef}
           value={query}
@@ -157,8 +157,8 @@ export function ModelMenu({ state, groups, current, recents, agentOnly, onPick, 
                   }}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className={cn('block truncate', row.mono ? 'font-mono text-[12px]' : 'text-[13px] font-bold')}>{row.label}</span>
-                    {row.hint && <span className="block truncate text-[11px] font-medium ai-t3">{row.hint}</span>}
+                    <span className={cn('ai-model-label', row.mono && 'ai-model-label-mono')}>{row.label}</span>
+                    {row.hint && <span className="ai-model-hint">{row.hint}</span>}
                   </span>
                   {row.agent && <span className="ai-badge ai-badge-accent">Agent</span>}
                   {row.badge && <span className="ai-badge">{row.badge}</span>}

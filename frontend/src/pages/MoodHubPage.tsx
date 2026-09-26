@@ -10,7 +10,11 @@ import { SongRow } from '@/components/SongRow';
 import { ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
-import { MOOD_HUBS, type MoodHub } from '@/constants/hubs';
+import type { MoodHub } from '@/constants/hubs';
+import { SectionHeader } from '@/components/SectionHeader';
+import { PlayIcon } from '@/components/Icons';
+import { HubMoodTiles } from '@/features/discover/HubMoodTiles';
+import '@/styles/pages/browse.css';
 
 /**
  * Mood × language landing page (/telugu-romantic-songs …): a real, playable
@@ -45,27 +49,28 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
   );
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <header className="mb-7">
-        <p className="text-xs uppercase tracking-widest text-ink-400 font-semibold mb-1.5">
-          <Link to={`/${language}-songs`} className="hover:text-ink-200">{label} songs</Link> · {mood.label}
-        </p>
-        <h1 className="text-display tracking-tight">{label} {mood.label} Songs</h1>
-        <p className="text-sm text-ink-300 mt-2 max-w-2xl">
-          {label} {mood.label.toLowerCase()} songs — {mood.blurb}. Free, no login, updated from the live catalog.
-        </p>
-        {songs.length > 0 && (
-          <button onClick={() => playQueue(songs, 0)} className="btn-primary px-6 py-2.5 rounded-full mt-4">
-            Play all
-          </button>
-        )}
+    <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
+      <header className="vx-page-header !mb-4">
+        <div className="min-w-0">
+          <Link to={`/${language}-songs`} className="vx-hub-crumb">{label} songs</Link>
+          <h1>{label} {mood.label} Songs</h1>
+        </div>
       </header>
+      {songs.length > 0 && (
+        <div className="vx-action-row !mt-0">
+          <button type="button" onClick={() => playQueue(songs, 0)} className="vx-play-fab" aria-label="Play all">
+            <PlayIcon />
+          </button>
+        </div>
+      )}
 
-      <section className="mb-8">
+      <section className="vx-section">
         {q.isLoading && <ListSkeleton />}
-        {songs.map((song, i) => (
-          <SongRow key={song.id} song={song} songs={songs} index={i} />
-        ))}
+        <div className="vx-track-list">
+          {songs.map((song, i) => (
+            <SongRow key={song.id} song={song} songs={songs} index={i} />
+          ))}
+        </div>
         {/* The old copy said "Pull to refresh" on a page with no pull-to-refresh,
             and did not tell a failure from an empty result. */}
         {q.isError && songs.length === 0 && <ErrorState retry={() => void q.refetch()} />}
@@ -87,19 +92,16 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
         />
       </section>
 
-      <section className="mb-6">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-3">More {label} moods</h2>
-        <div className="flex flex-wrap gap-2 mb-5">
-          {MOOD_HUBS.filter((m) => m.slug !== mood.slug).map((m) => (
-            <Link key={m.slug} to={`/${language}-${m.slug}-songs`} className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100">
-              {label} {m.label.toLowerCase()} songs
-            </Link>
-          ))}
-        </div>
-        <h2 className="text-sm font-bold uppercase tracking-widest text-ink-400 mb-3">{mood.label} songs in other languages</h2>
-        <div className="flex flex-wrap gap-2">
+      <section className="vx-section" aria-label={`More ${label} moods`}>
+        <SectionHeader title={`More ${label} moods`} />
+        <HubMoodTiles language={language} exclude={mood.slug} />
+      </section>
+
+      <section className="vx-section" aria-label={`${mood.label} songs in other languages`}>
+        <SectionHeader title="In other languages" />
+        <div className="vx-chip-row">
           {HUB_LANGUAGES.filter((l) => l !== language).slice(0, 8).map((l) => (
-            <Link key={l} to={`/${l}-${mood.slug}-songs`} className="px-3.5 py-2 rounded-full text-xs font-semibold bg-ink-800/70 text-ink-200 border border-glass transition hover:bg-ink-700 hover:text-ink-100">
+            <Link key={l} to={`/${l}-${mood.slug}-songs`} className="vx-link-chip">
               {languageLabel(l)} {mood.label.toLowerCase()} songs
             </Link>
           ))}

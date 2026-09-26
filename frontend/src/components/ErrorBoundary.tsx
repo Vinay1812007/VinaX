@@ -73,18 +73,23 @@ export class ErrorBoundary extends Component<Props, State> {
         String(this.state.error?.message ?? ''),
       );
       return (
-        <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-          <p className="text-2xl font-semibold">
+        <div className="flex flex-col items-center justify-center px-4 py-20 text-center">
+          <span className="flex items-center justify-center w-14 h-14 rounded-full bg-ink-850 text-ink-200" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
+              {isChunk ? <path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5" /> : <path d="M12 8v5M12 16.5v.01M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />}
+            </svg>
+          </span>
+          <p className="mt-4 text-[18px] font-bold tracking-[-0.01em]">
             {isChunk ? 'An update just went live' : 'Something hit a wrong note'}
           </p>
-          <p className="text-ink-300 max-w-md">
+          <p className="mt-1.5 max-w-sm text-[14px] leading-relaxed text-ink-400">
             {isChunk
-              ? 'VinaX was updating while this page loaded. Tap below to get the new version — your music and data are safe.'
-              : 'A part of this page failed to render. Your music and data are safe.'}
+              ? 'Reload to get the new version. Your music and data are safe.'
+              : 'Part of this page failed to load. Your music and data are safe.'}
           </p>
           <button
             onClick={() => window.location.reload()}
-            className="px-5 py-2.5 rounded-full btn-primary"
+            className="mt-5 px-6 min-h-[44px] rounded-full btn-primary"
           >
             {isChunk ? 'Load the new version' : 'Try again'}
           </button>
@@ -127,14 +132,14 @@ export class PlayerErrorBoundary extends Component<PlayerBoundaryProps, State> {
     if (this.state.error) {
       if (this.props.silent) return null;
       return (
-        <div className="glass-navbar px-4 py-3 flex items-center justify-between gap-3 text-sm">
-          <span className="text-ink-300 min-w-0 truncate">The player hit a snag — a quick reload fixes it.</span>
+        <div className="bg-ink-950 border-t border-[color:var(--vx-border)] px-4 py-2 flex items-center justify-between gap-3 text-[14px]">
+          <span className="text-ink-300 min-w-0 truncate">The player hit a snag. A reload fixes it.</span>
           <button
             onClick={() => {
               clearPlayerData();
               window.location.reload();
             }}
-            className="px-4 py-1.5 rounded-full btn-primary shrink-0"
+            className="px-5 min-h-[40px] rounded-full btn-primary shrink-0"
           >
             Reload
           </button>
@@ -150,10 +155,11 @@ export function RouteError() {
   const error = useRouteError();
   if (import.meta.env.DEV) console.error('[vinax:route]', error);
   return (
-    <div className="h-dvh flex flex-col items-center justify-center gap-4 bg-ink-900 text-ink-100">
-      <p className="text-3xl font-bold">Off the beat</p>
-      <p className="text-ink-300">This page failed to load.</p>
-      <Link to="/" className="px-5 py-2.5 rounded-full btn-primary">
+    <div className="h-dvh flex flex-col items-center justify-center px-6 text-center bg-ink-900 text-ink-100">
+      <img src="/icons/icon.svg" alt="" className="w-14 h-14 rounded-2xl" />
+      <p className="mt-5 text-[24px] font-extrabold tracking-[-0.02em]">Off the beat</p>
+      <p className="mt-1.5 text-[14px] text-ink-400">This page failed to load.</p>
+      <Link to="/" className="mt-6 px-6 min-h-[44px] inline-flex items-center rounded-full btn-primary">
         Back to Home
       </Link>
       <button
@@ -161,7 +167,7 @@ export function RouteError() {
           clearPlayerData();
           window.location.assign('/');
         }}
-        className="text-sm text-ink-400 underline underline-offset-4 hover:text-ink-200"
+        className="mt-3 min-h-[44px] text-[13px] font-semibold text-ink-400 hover:text-ink-100"
       >
         Still stuck? Reset player data and reload
       </button>

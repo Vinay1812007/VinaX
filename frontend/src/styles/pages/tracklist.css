@@ -1,0 +1,241 @@
+/* ============================================================================
+   VinaX 8 — track rows, track-list header and media cards.
+
+   Imported by components/SongRow.tsx and components/MediaCard.tsx, so it
+   travels with whichever chunk first needs a row or a card. Builds on the
+   .vx-track-row / .vx-media-* rules in stage.css; selectors here are one step
+   more specific so they win without !important.
+
+   Row anatomy (one flex line, every column optional):
+     [ play button: # | art | title + artist ]  [ album ]  [ ♥ ]  [ 3:45 ]  [ ⋯ ]
+   The number sits INSIDE the play button, so the whole left block is one
+   target and the number can turn into a play glyph on hover. The header row
+   (.vx-tracklist-head) uses the same column widths.
+   ========================================================================= */
+
+.vx-track-row.vx-track-row {
+  --vx-col-album: 28%;
+  --vx-col-dur: 52px;
+  --vx-col-btn: 36px;
+  gap: 8px;
+  min-height: 56px;
+  padding: 0 8px;
+  border-radius: 6px;
+  transition: background-color 140ms var(--ease-calm);
+}
+.vx-track-row.vx-track-row:hover { background: rgb(var(--ink-100) / 0.07); }
+.vx-track-row.vx-track-row.is-current { background: transparent; }
+.vx-track-row.vx-track-row.is-current:hover { background: rgb(var(--ink-100) / 0.07); }
+
+.vx-track-row .vx-track-play {
+  gap: 14px;
+  min-height: 56px;
+  padding: 8px 0;
+  border-radius: 6px;
+}
+.vx-track-row .vx-track-play:focus-visible { outline-offset: -2px; }
+
+/* # column: index, hover play glyph, equaliser when this row is playing. */
+.vx-track-row .vx-track-number {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: rgb(var(--ink-400));
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.vx-track-index { grid-area: 1 / 1; }
+.vx-track-glyph { grid-area: 1 / 1; width: 16px; height: 16px; color: rgb(var(--ink-100)); opacity: 0; }
+.vx-track-number .vx-eq { grid-area: 1 / 1; }
+.vx-track-row.is-current .vx-track-index { color: rgb(var(--ember-400)); }
+.vx-track-row.is-playing .vx-track-index { opacity: 0; }
+@media (hover: hover) and (pointer: fine) {
+  .vx-track-row:hover .vx-track-index,
+  .vx-track-row:hover .vx-track-number .vx-eq { opacity: 0; }
+  .vx-track-row:hover .vx-track-glyph { opacity: 1; }
+}
+.vx-track-play:focus-visible .vx-track-index,
+.vx-track-play:focus-visible .vx-track-number .vx-eq { opacity: 0; }
+.vx-track-play:focus-visible .vx-track-glyph { opacity: 1; }
+
+/* Artwork. */
+.vx-track-art {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgb(var(--ink-800));
+}
+.vx-track-art img { width: 100%; height: 100%; object-fit: cover; }
+.vx-track-art-over {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.5);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-calm);
+}
+.vx-track-art-over svg { width: 18px; height: 18px; }
+.vx-track-row.is-playing .vx-track-art-over { opacity: 1; }
+.vx-track-art-over .vx-track-art-glyph { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .vx-track-row:not(.is-numbered):hover .vx-track-art-over { opacity: 1; }
+  .vx-track-row:not(.is-numbered):hover .vx-track-art-over .vx-eq { display: none; }
+  .vx-track-row:not(.is-numbered):hover .vx-track-art-over .vx-track-art-glyph { display: block; }
+}
+.vx-track-row.is-numbered .vx-track-art-over { display: none; }
+
+/* Title + artist. */
+.vx-track-text { display: block; min-width: 0; flex: 1; }
+.vx-track-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: rgb(var(--ink-100));
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.006em;
+}
+.vx-track-title > span:first-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-track-row.is-current .vx-track-title { color: rgb(var(--ember-400)); }
+.vx-track-sub {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: rgb(var(--ink-400));
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.vx-explicit {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: rgb(var(--ink-400));
+  color: rgb(var(--ink-900));
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Album, like, duration, menu. */
+.vx-track-row .vx-track-album {
+  display: none;
+  flex: 0 0 var(--vx-col-album);
+  width: auto;
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 12px;
+  color: rgb(var(--ink-400));
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+@media (min-width: 1536px) { .vx-track-row .vx-track-album { display: block; } }
+@media (min-width: 1024px) { .vx-tracklist .vx-track-row .vx-track-album { display: block; } }
+
+.vx-track-like, .vx-track-more { display: inline-flex; flex: 0 0 var(--vx-col-btn); justify-content: center; }
+.vx-track-like button, .vx-track-more button { color: rgb(var(--ink-400)); }
+.vx-track-like button:hover, .vx-track-more button:hover { color: rgb(var(--ink-100)); background: transparent; }
+.vx-track-like button[aria-pressed='true'] { color: rgb(var(--ember-500)); }
+/* A liked song keeps its heart visible; everything else waits for hover. */
+.vx-track-like:has(button[aria-pressed='true']) { opacity: 1; transform: none; }
+.vx-track-duration {
+  display: none;
+  flex: 0 0 var(--vx-col-dur);
+  color: rgb(var(--ink-400));
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+@media (min-width: 640px) { .vx-track-duration { display: block; } }
+
+/* Equaliser glyph for the playing row (quiet, one accent, off for reduced motion). */
+.vx-eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+.vx-eq i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 1px;
+  background: rgb(var(--ember-400));
+  transform-origin: bottom;
+  animation: vx-eq 900ms var(--ease-calm) infinite alternate;
+}
+.vx-track-art-over .vx-eq i { background: #fff; }
+.vx-eq i:nth-child(2) { animation-delay: -300ms; animation-duration: 700ms; }
+.vx-eq i:nth-child(3) { animation-delay: -600ms; animation-duration: 1100ms; }
+@keyframes vx-eq { from { transform: scaleY(0.25); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .vx-eq i { animation: none; transform: scaleY(0.7); } .vx-eq i:nth-child(2) { transform: scaleY(1); } }
+html.reduce-motion .vx-eq i { animation: none; transform: scaleY(0.7); }
+
+/* Phone: art + title + artist + ♥ + ⋯ (no number, no duration). */
+@media (max-width: 767px) {
+  .vx-track-row.vx-track-row { padding: 0 4px 0 0; gap: 2px; }
+  .vx-track-row .vx-track-play { gap: 12px; }
+  .vx-track-row .vx-track-number { display: none; }
+  .vx-track-row.no-art .vx-track-play { padding-left: 4px; }
+  .vx-track-row.is-numbered .vx-track-art-over { display: grid; }
+}
+html[data-density='compact'] .vx-track-row.vx-track-row,
+html[data-density='compact'] .vx-track-row .vx-track-play { min-height: 48px; }
+
+/* -------------------------------------------------- track-list header row */
+.vx-tracklist { margin: 0 -8px; }
+@media (max-width: 767px) { .vx-tracklist { margin: 0; } }
+.vx-tracklist-head {
+  display: none;
+  align-items: center;
+  height: 36px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--vx-border);
+  color: rgb(var(--ink-400));
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+@media (min-width: 768px) { .vx-tracklist-head { display: flex; } }
+.vx-tracklist-head .h-row { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; padding: 0 8px; }
+.vx-tracklist-head .h-num { width: 24px; flex-shrink: 0; text-align: center; }
+.vx-tracklist-head .h-title { flex: 1; min-width: 0; margin-left: 14px; }
+.vx-tracklist-head.no-num .h-title { margin-left: 0; }
+.vx-tracklist-head .h-album { display: none; flex: 0 0 28%; padding-right: 12px; }
+@media (min-width: 1024px) { .vx-tracklist-head .h-album { display: block; } }
+.vx-tracklist-head .h-btn { flex: 0 0 36px; }
+.vx-tracklist-head .h-dur { display: flex; flex: 0 0 52px; justify-content: flex-end; }
+.vx-tracklist-head .h-dur svg { width: 16px; height: 16px; }
+
+/* ------------------------------------------------------------ media cards */
+.vx-media-card .vx-media-title {
+  margin-top: 10px;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.vx-media-card .vx-media-title a { color: rgb(var(--ink-100)); }
+.vx-media-card .vx-media-subtitle { margin-top: 2px; line-height: 1.35; }
+.vx-media-card .vx-media-art { aspect-ratio: 1; background: rgb(var(--ink-850)); }
+.vx-media-card .vx-media-art.is-artist { border-radius: 50%; }
+
+/* Album pages: every row shares the album, so the column goes. */
+.vx-tracklist.no-album .vx-track-row .vx-track-album,
+.vx-tracklist.no-album .vx-tracklist-head .h-album { display: none; }

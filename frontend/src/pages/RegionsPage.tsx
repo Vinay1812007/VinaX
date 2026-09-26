@@ -13,6 +13,8 @@ import { useTrendingForLanguage } from '@/features/home/useHomeShelves';
 import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
 import { languageLabel } from '@/constants/languages';
+import { PageHeader } from '@/components/PageHeader';
+import '@/styles/pages/browse.css';
 
 function RegionalShelf({ language, regionLabel }: { language: string; regionLabel: string }) {
   const { data, isLoading, isError, refetch } = useTrendingForLanguage(language);
@@ -22,7 +24,7 @@ function RegionalShelf({ language, regionLabel }: { language: string; regionLabe
   if (isError && !data?.length) return <InlineError label={`${regionLabel} · ${languageLabel(language)}`} retry={() => void refetch()} />;
   if (!data?.length) return null;
   return (
-    <Shelf title={`${regionLabel} · ${languageLabel(language)}`} explanation="Popular in this region">
+    <Shelf title={`${regionLabel} · ${languageLabel(language)}`}>
       {data.map((song, i) => (
         <MediaCard key={song.id} to={songPath(song)} image={bestImage(song.images)} images={song.images} title={song.title} subtitle={song.subtitle} onPlay={() => playQueue(data, i)} />
       ))}
@@ -40,37 +42,40 @@ export default function RegionsPage() {
   const def = REGIONS.find((r) => r.id === selected) ?? REGIONS[0];
 
   return (
-    <div className="max-w-screen-2xl mx-auto">
-      <h1 className="text-display tracking-tight mb-1">Regions</h1>
-      <p className="text-sm text-ink-400 mb-6">
-        {region?.country
-          ? `Detected: ${region.country}${region.regionLabel ? ` · ${region.regionLabel}` : ''} (${region.source === 'edge' ? 'edge inferred' : region.source === 'manual' ? 'manual override' : 'browser inferred'})`
-          : 'Region unknown — set one below.'}{' '}
-        Only coarse country/region is ever stored. Never your IP.
-      </p>
+    <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
+      <PageHeader title="Regions" />
 
-      <div className="mb-3 text-sm font-semibold text-ink-300">Country override</div>
-      <div className="flex flex-wrap gap-2 mb-8">
-        <Chip active={!manualCountry} onClick={() => setManualCountry(null)}>Auto</Chip>
-        {COUNTRIES.map((c) => (
-          <Chip key={c.id} active={manualCountry === c.id} onClick={() => setManualCountry(c.id)}>
-            {c.label}
-          </Chip>
-        ))}
-      </div>
-
-      <div className="mb-3 text-sm font-semibold text-ink-300">Browse regional charts</div>
-      <div className="flex flex-wrap gap-2 mb-8">
-        {regionsForCountry(region?.country ?? null).map((r) => (
-          <Chip key={r.id} active={selected === r.id} onClick={() => setSelected(r.id)}>
-            {r.label}
-          </Chip>
-        ))}
-      </div>
+      <section className="vx-control-group" aria-label="Regional charts">
+        <div className="vx-chip-row">
+          {regionsForCountry(region?.country ?? null).map((r) => (
+            <Chip key={r.id} active={selected === r.id} onClick={() => setSelected(r.id)}>
+              {r.label}
+            </Chip>
+          ))}
+        </div>
+      </section>
 
       {def.languages.slice(0, 2).map((lang) => (
         <RegionalShelf key={lang} language={lang} regionLabel={def.label} />
       ))}
+
+      <section className="vx-control-group mt-2" aria-label="Country override">
+        <h2 className="vx-subhead">Country</h2>
+        <div className="vx-chip-row mb-3">
+          <Chip active={!manualCountry} onClick={() => setManualCountry(null)}>Auto</Chip>
+          {COUNTRIES.map((c) => (
+            <Chip key={c.id} active={manualCountry === c.id} onClick={() => setManualCountry(c.id)}>
+              {c.label}
+            </Chip>
+          ))}
+        </div>
+        <p className="vx-meta-line">
+          {region?.country
+            ? `Detected: ${region.country}${region.regionLabel ? ` · ${region.regionLabel}` : ''} (${region.source === 'edge' ? 'edge inferred' : region.source === 'manual' ? 'manual override' : 'browser inferred'})`
+            : 'Region unknown — set one above.'}{' '}
+          Only coarse country/region is ever stored. Never your IP.
+        </p>
+      </section>
     </div>
   );
 }

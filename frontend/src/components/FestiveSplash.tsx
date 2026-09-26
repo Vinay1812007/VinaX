@@ -247,8 +247,8 @@ export function FestiveSplash() {
       ))}
       <div className="text-center animate-fade-up">
         <div className="fest-splash-rule" aria-hidden />
-        <p className="text-3xl font-bold tracking-tight">{festival.greeting}!</p>
-        <p className="text-sm text-ink-300 mt-2">{festival.name}</p>
+        <p className="text-[32px] font-extrabold tracking-[-0.025em]">{festival.greeting}!</p>
+        <p className="text-[14px] font-medium text-ink-300 mt-2">{festival.name}</p>
       </div>
     </div>
    </>

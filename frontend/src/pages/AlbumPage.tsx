@@ -1,15 +1,16 @@
-import { HeroMedia } from '@/components/HeroMedia';
-import { useParams } from 'react-router-dom';
-import { albumPath, extractId } from '@/utils/slug';
+import { Link, useParams } from 'react-router-dom';
+import { albumPath, artistPath, extractId } from '@/utils/slug';
 import { useCanonicalRedirect, useJsonLd } from '@/hooks/useSeo';
 import { buildAlbumBreadcrumbs, buildAlbumJsonLd } from '@/utils/schema';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { useAlbum } from '@/features/albums/useAlbum';
 import { usePlayerStore } from '@/store/playerStore';
-import { SongRow } from '@/components/SongRow';
+import { SongRow, TrackListHead } from '@/components/SongRow';
+import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab, songsLabel, totalDuration } from '@/components/EntityHeader';
+import { shuffled } from '@/features/library/sort';
 import { HeaderSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
-import { PlayIcon, ShareIcon } from '@/components/Icons';
+import { ShareIcon, ShuffleIcon } from '@/components/Icons';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { SaveButton } from '@/components/SaveButton';
 import { shareLink } from '@/utils/share';
@@ -37,41 +38,55 @@ export default function AlbumPage() {
   if (isLoading) return <div className="max-w-screen-xl mx-auto"><HeaderSkeleton /><ListSkeleton /></div>;
   if (isError || !album) return <ErrorState retry={() => refetch()} />;
 
+  const art = bestImage(album.images, 500);
+  const artist = album.artists[0];
+  const shufflePlay = () => {
+    if (!album.songs.length) return;
+    const p = usePlayerStore.getState();
+    if (!p.shuffle) p.toggleShuffle();
+    p.playQueue(shuffled(album.songs), 0);
+  };
+
   return (
-    <div className="max-w-screen-xl mx-auto">
-      <HeroMedia>
-        <img src={bestImage(album.images, 500)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-44 h-44 sm:w-52 sm:h-52 rounded-2xl object-cover shadow-float" data-deter-context />
-        <div className="min-w-0 break-words">
-          <p className="text-xs uppercase tracking-widest text-ink-400 font-semibold mb-1.5">Album</p>
-          <h1 className="text-display tracking-tight">{album.title}</h1>
-          <p className="text-sm text-ink-300 mt-2">{album.subtitle}</p>
-          <p className="text-xs text-ink-400 mt-1">
-            {album.year}
-            {album.language && <> · {languageLabel(album.language)}</>}
-            {album.songCount != null && <> · {album.songCount} songs</>}
-          </p>
-          <div className="flex gap-2 mt-4">
+    <div className="vx-entity">
+      <EntityHeader
+        kind="Album"
+        title={album.title}
+        titleText={album.title}
+        artUrl={art}
+        art={<img src={art} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" data-deter-context />}
+        meta={
+          <EntityMeta
+            items={[
+              artist?.id ? <Link to={artistPath(artist)}>{album.subtitle || artist.name}</Link> : album.subtitle,
+              album.year,
+              album.language && languageLabel(album.language),
+              (album.songCount ?? album.songs.length) ? songsLabel(album.songCount ?? album.songs.length) : null,
+              totalDuration(album.songs),
+            ]}
+          />
+        }
+        actions={
+          <>
+            {album.songs.length > 0 && <PlayFab label="Play all" onClick={() => playQueue(album.songs, 0)} />}
             {album.songs.length > 0 && (
-              <>
-                <button onClick={() => playQueue(album.songs, 0)} className="flex items-center gap-2 px-6 min-h-touch rounded-full btn-primary">
-                  <PlayIcon className="w-4 h-4" /> Play all
-                </button>
-                <button onClick={() => enqueueAll(album.songs)} className="px-4 min-h-touch rounded-full btn-secondary text-sm">
-                  + Queue
-                </button>
-              </>
+              <EntityAction label="Shuffle play" onClick={shufflePlay}><ShuffleIcon /></EntityAction>
             )}
-            <button onClick={() => void shareLink(albumPath(album), album.title)} aria-label="Share" className="p-2.5 rounded-full btn-secondary">
-              <ShareIcon className="w-4 h-4" />
-            </button>
-            <SaveButton entity={{ id: album.id, kind: 'album', title: album.title, subtitle: album.subtitle, image: bestImage(album.images, 300) }} />
-          </div>
-        </div>
-      </HeroMedia>
+            <SaveButton variant="icon" entity={{ id: album.id, kind: 'album', title: album.title, subtitle: album.subtitle, image: bestImage(album.images, 300) }} />
+            <EntityAction label="Share" onClick={() => void shareLink(albumPath(album), album.title)}><ShareIcon /></EntityAction>
+            <EntityMenu
+              items={[album.songs.length > 0 && { label: 'Add to queue', onSelect: () => enqueueAll(album.songs) }]}
+            />
+          </>
+        }
+      />
       {album.songs.length === 0 ? (
         <EmptyState title="Track list unavailable" message="We couldn’t load this album’s tracks right now. Please try again in a moment." />
       ) : (
-        album.songs.map((song, i) => <SongRow key={song.id} song={song} songs={album.songs} index={i} />)
+        <div className="vx-tracklist no-album">
+          <TrackListHead />
+          {album.songs.map((song, i) => <SongRow key={song.id} song={song} songs={album.songs} index={i} showArt={false} />)}
+        </div>
       )}
     </div>
   );

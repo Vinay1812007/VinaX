@@ -35,11 +35,11 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
   if (!song) return <p className="whitespace-pre-wrap leading-relaxed">{fallback}</p>;
   const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   return (
-    <div className="ai-card w-80 max-w-full select-none p-3">
+    <div className="ai-card ai-player-card w-80 max-w-full select-none p-3">
       <div className="flex items-center gap-3">
-        <img src={bestImage(song.images, 120)} alt="" className="w-12 h-12 rounded-[10px] object-cover shrink-0 shadow-card" />
+        <img src={bestImage(song.images, 120)} alt="" className="w-12 h-12 rounded-md object-cover shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold truncate flex items-center gap-1.5">
+          <p className="text-[14px] font-semibold truncate flex items-center gap-1.5">
             {isPlaying && (
               <span className="vx-eq" aria-hidden>
                 <i />
@@ -49,7 +49,7 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
             )}
             <span className="truncate">{song.title}</span>
           </p>
-          <p className="text-[11px] text-ink-400 truncate">{song.subtitle}</p>
+          <p className="text-[12px] font-medium text-ink-400 truncate">{song.subtitle}</p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={() => prev()} aria-label="Previous song" className="ai-icon-btn w-8 h-8">
@@ -58,7 +58,7 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
           <button
             onClick={togglePlay}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="w-9 h-9 rounded-full bg-ember-500 text-black flex items-center justify-center hover:bg-ember-400 transition"
+            className="w-9 h-9 rounded-full bg-ember-500 text-[color:var(--vx-on-accent)] flex items-center justify-center hover:bg-ember-400 transition"
           >
             {isPlaying ? <PauseIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
           </button>
@@ -67,7 +67,7 @@ export function ChatPlayerCard({ fallback }: { fallback: string }) {
           </button>
         </div>
       </div>
-      <div className="mt-2.5 flex items-center gap-2 text-[10px] font-semibold text-ink-400 tabular-nums">
+      <div className="mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-ink-400 tabular-nums">
         <span>{fmt(currentTime)}</span>
         <button
           aria-label="Seek"

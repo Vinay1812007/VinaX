@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/States';
-import { SongRow } from '@/components/SongRow';
-import { PlayIcon, ShuffleIcon } from '@/components/Icons';
+import { SongRow, TrackListHead } from '@/components/SongRow';
+import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab, totalDuration } from '@/components/EntityHeader';
+import { collageArt, CollageCover } from '@/features/library/CollageCover';
+import { PlusIcon, ShuffleIcon } from '@/components/Icons';
 import { languageLabel } from '@/constants/languages';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
@@ -72,41 +73,38 @@ export default function SmartCollectionPage() {
     toast(`Deleted “${victim.name}”`, { action: { label: 'Undo', onClick: () => restore(victim) }, duration: 7000 });
     navigate('/library');
   };
-  const secondaryBtn = 'flex items-center gap-2 px-4 py-2.5 rounded-full border border-ink-600 text-sm font-semibold hover:border-ink-400 disabled:opacity-50';
-
   return (
-    <div className="max-w-2xl mx-auto pb-10">
-      <PageHeader title="Smart collection" />
+    <div className="vx-entity">
       {editing && <SmartCollectionSheet existing={def} onClose={() => setEditing(false)} />}
-      <div className="mb-1">
-        <div className="flex items-center gap-2">
-          <h1 className="text-page-title flex-1 min-w-0 truncate">
-            {def.emoji && <span className="mr-2" aria-hidden>{def.emoji}</span>}
-            {def.name}
-          </h1>
-          <button onClick={() => setEditing(true)} className="text-xs font-semibold text-ink-300 hover:text-ink-100 shrink-0">Edit rules</button>
-        </div>
-        <p className="text-sm text-ink-300 mt-1">{describeRules(def.rules, languageLabel)}</p>
-        <p className="text-sm text-ink-400 mt-1">
-          {songCount(songs.length)} right now · built from your local library, updates itself as you listen
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-2 mt-5 mb-4">
-        <button onClick={play} disabled={!songs.length} className="flex items-center gap-2 px-5 py-2.5 rounded-full btn-primary disabled:opacity-50">
-          <PlayIcon className="w-4 h-4" /> Play
-        </button>
-        <button onClick={shufflePlay} disabled={!songs.length} className={secondaryBtn}>
-          <ShuffleIcon className="w-4 h-4" /> Shuffle play
-        </button>
-        <button onClick={freeze} disabled={!songs.length} className={secondaryBtn} title="Copy today's result into a regular playlist">Save as playlist</button>
-        <button onClick={del} className="ml-auto px-4 py-2.5 rounded-full border border-ink-600 text-sm text-ink-300 hover:border-red-400 hover:text-red-300">Delete</button>
-      </div>
+      <EntityHeader
+        kind="Smart collection"
+        title={<>{def.emoji && <span className="mr-3" aria-hidden>{def.emoji}</span>}{def.name}</>}
+        titleText={def.name}
+        art={<CollageCover songs={songs} emoji={def.emoji} minPx={300} />}
+        artUrl={collageArt(songs, 150)[0]}
+        description={describeRules(def.rules, languageLabel)}
+        meta={<EntityMeta items={[`${songCount(songs.length)} right now`, totalDuration(songs), 'Updates itself as you listen']} />}
+        actions={
+          <>
+            <PlayFab label="Play" onClick={play} disabled={!songs.length} />
+            <EntityAction label="Shuffle play" onClick={shufflePlay} disabled={!songs.length}><ShuffleIcon /></EntityAction>
+            <EntityAction label="Save as playlist" onClick={freeze} disabled={!songs.length}><PlusIcon /></EntityAction>
+            <EntityMenu
+              items={[
+                { label: 'Edit rules', onSelect: () => setEditing(true) },
+                { label: 'Save as playlist', onSelect: freeze, disabled: !songs.length },
+                { label: 'Delete smart collection', onSelect: del, danger: true },
+              ]}
+            />
+          </>
+        }
+      />
 
       {!songs.length ? (
         <EmptyState title="No matches yet" message="Nothing on this device matches these rules. Edit the rules, or listen to more music — smart collections only see songs your library already knows." />
       ) : (
-        <div className="space-y-1">
+        <div className="vx-tracklist">
+          <TrackListHead />
           {songs.map((song, i) => (
             <SongRow key={song.id} song={song} songs={songs} index={i} />
           ))}

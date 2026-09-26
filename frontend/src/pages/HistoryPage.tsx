@@ -4,13 +4,13 @@ import { XIcon } from '@/components/Icons';
 import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useHistoryStore } from '@/store/historyStore';
-import { SongRow } from '@/components/SongRow';
+import { SongRow, TrackListHead } from '@/components/SongRow';
+import { EntityHeader, EntityMenu, EntityMeta, GlyphCover, PlayFab } from '@/components/EntityHeader';
 import { EmptyState } from '@/components/States';
 import { Chip } from '@/components/Chip';
 import { relativeTime } from '@/utils/format';
 import { usePlayerStore } from '@/store/playerStore';
-import { PlayIcon, ClockIcon } from '@/components/Icons';
-import { PageHeader } from '@/components/PageHeader';
+import { ClockIcon, SearchIcon } from '@/components/Icons';
 import { languageLabel } from '@/constants/languages';
 import type { HistoryEntry } from '@/types';
 import { useSessionState } from '@/hooks/useSessionState';
@@ -112,67 +112,53 @@ export default function HistoryPage() {
   const filtering = lang != null || range !== 'all' || q.length > 0;
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <PageHeader
-        title="History"
-        subtitle="Stored only on this device"
+    <div className="vx-entity">
+      <EntityHeader
+        kind="History"
+        title="Recently played"
+        tone="var(--ink-500)"
+        art={<GlyphCover tone="history" icon={<ClockIcon />} />}
+        meta={<EntityMeta items={[entries.length ? `${entries.length} play${entries.length === 1 ? '' : 's'}` : null, 'Stored only on this device']} />}
         actions={entries.length > 0 ? (
           <>
-            <button
+            <PlayFab
+              label={filtering ? `Play these ${shownSongs.length}` : 'Play all'}
               onClick={() => shownSongs.length && playQueue(shownSongs, 0)}
-              className="flex items-center gap-1.5 px-4 min-h-touch rounded-full text-sm btn-primary active:scale-95 transition-transform disabled:opacity-50"
               disabled={shownSongs.length === 0}
-            >
-              <PlayIcon className="w-3.5 h-3.5" /> {filtering ? `Play these ${shownSongs.length}` : 'Play all'}
-            </button>
-            <button onClick={clearHistoryWithUndo} className="px-4 min-h-touch rounded-full border border-ink-600 text-sm text-ink-200 hover:border-red-400 hover:text-red-300 active:scale-95 transition-transform">
-              Clear
-            </button>
+            />
+            <EntityMenu items={[{ label: 'Clear all history', onSelect: clearHistoryWithUndo, danger: true }]} />
           </>
         ) : undefined}
       />
 
       {entries.length > 0 && (
-        <div className="mb-4 space-y-2">
+        <div className="mb-6 space-y-3">
           {/* v5.17.0 — search within history + scoped clears */}
-          <div className="flex items-center gap-2">
-            <label className="relative flex-1 min-w-0">
+          <div className="vx-etools !mb-0">
+            <label className="vx-field">
               <span className="sr-only">Search your history</span>
+              <SearchIcon />
               <input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search title or artist…"
+                placeholder="Search title or artist"
                 autoComplete="off"
-                className="w-full h-10 rounded-full bg-ink-800 border border-transparent focus:border-ink-600 px-4 pr-9 text-sm text-ink-100 placeholder:text-ink-500 outline-none"
               />
               {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  aria-label="Clear search"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full grid place-items-center text-ink-400 hover:text-ink-100 hover:bg-ink-700"
-                >
-                  <XIcon className="w-3.5 h-3.5" />
+                <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="vx-field-clear">
+                  <XIcon className="w-4 h-4" />
                 </button>
               )}
             </label>
-            <button
-              type="button"
-              onClick={() => clearWindow('the last hour', Date.now() - 3_600_000)}
-              className="px-3 h-10 rounded-full border border-ink-600 text-xs font-semibold text-ink-200 hover:border-red-400 hover:text-red-300 active:scale-95 transition-transform whitespace-nowrap"
-            >
+            <button type="button" onClick={() => clearWindow('the last hour', Date.now() - 3_600_000)} className="vx-quiet-btn is-danger">
               Clear last hour
             </button>
-            <button
-              type="button"
-              onClick={() => clearWindow('today', startOfToday())}
-              className="px-3 h-10 rounded-full border border-ink-600 text-xs font-semibold text-ink-200 hover:border-red-400 hover:text-red-300 active:scale-95 transition-transform whitespace-nowrap"
-            >
+            <button type="button" onClick={() => clearWindow('today', startOfToday())} className="vx-quiet-btn is-danger">
               Clear today
             </button>
           </div>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
             {RANGES.map((r) => (
               <Chip key={r.id} active={range === r.id} onClick={() => setRange(r.id)}>
                 {r.label}
@@ -180,7 +166,7 @@ export default function HistoryPage() {
             ))}
           </div>
           {langs.length >= 2 && (
-            <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
               <Chip active={lang == null} onClick={() => setLang(null)}>All languages</Chip>
               {langs.map((l) => (
                 <Chip key={l} active={lang === l} onClick={() => setLang(lang === l ? null : l)}>
@@ -211,29 +197,32 @@ export default function HistoryPage() {
           }
         />
       ) : (
-        groups.map((g) => (
-          <section key={g.label} className="mb-6">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-ink-400 px-2 mb-1.5">{g.label}</h2>
-            {g.items.map(({ entry, index }) => (
-              <div key={`${entry.song.id}-${entry.ts}`} className="flex items-center gap-2">
-                <div className="flex-1 min-w-0">
-                  <SongRow song={entry.song} songs={shownSongs} index={index} />
+        <div className="vx-tracklist">
+          <TrackListHead trail={108} />
+          {groups.map((g) => (
+            <section key={g.label} aria-label={g.label}>
+              <h2 className="vx-day-label px-2">{g.label}</h2>
+              {g.items.map(({ entry, index }) => (
+                <div key={`${entry.song.id}-${entry.ts}`} className="vx-row-with">
+                  <div className="vx-row-main">
+                    <SongRow song={entry.song} songs={shownSongs} index={index} />
+                  </div>
+                  <span className="vx-row-when">{relativeTime(entry.ts)}</span>
+                  {/* v5.17.0 — remove a single play */}
+                  <button
+                    type="button"
+                    onClick={() => { removeEntry(entry.ts); toast('Removed from history'); }}
+                    aria-label={`Remove ${entry.song.title} from history`}
+                    title="Remove"
+                    className="vx-row-x is-danger"
+                  >
+                    <XIcon className="w-4 h-4" />
+                  </button>
                 </div>
-                <span className="text-[11px] text-ink-500 w-16 text-right shrink-0">{relativeTime(entry.ts)}</span>
-                {/* v5.17.0 — remove a single play */}
-                <button
-                  type="button"
-                  onClick={() => { removeEntry(entry.ts); toast('Removed from history'); }}
-                  aria-label={`Remove ${entry.song.title} from history`}
-                  title="Remove"
-                  className="w-8 h-8 shrink-0 rounded-full grid place-items-center text-ink-500 hover:text-red-300 hover:bg-ink-800 active:scale-95 transition-transform"
-                >
-                  <XIcon className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-          </section>
-        ))
+              ))}
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );

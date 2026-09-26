@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { PageHeader } from '@/components/PageHeader';
-import { SongRow } from '@/components/SongRow';
+import { SongRow, TrackListHead } from '@/components/SongRow';
+import { EntityAction, EntityHeader, EntityMeta, PlayFab, songsLabel, totalDuration } from '@/components/EntityHeader';
+import { collageArt, CollageCover } from '@/features/library/CollageCover';
 import { EmptyState, ErrorState } from '@/components/States';
 import { ListSkeleton } from '@/components/Skeletons';
-import { PlayIcon, ShuffleIcon } from '@/components/Icons';
+import { PlusIcon, ShuffleIcon } from '@/components/Icons';
 import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { toast } from '@/store/toastStore';
@@ -34,38 +35,23 @@ export default function WeeklyMixPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <PageHeader
-        title="For You This Week"
-        subtitle="A fresh personalized mix · refreshes every Monday"
-        compact
+    <div className="vx-entity">
+      <EntityHeader
+        kind="Mix"
+        title="For you this week"
+        art={<CollageCover songs={songs} minPx={300} />}
+        artUrl={collageArt(songs, 150)[0]}
+        meta={<EntityMeta items={[songs.length ? songsLabel(songs.length) : null, totalDuration(songs), 'Refreshes every Monday']} />}
         actions={
           songs.length > 0 ? (
             <>
-              <button
-                onClick={() => play(true)}
-                className="flex items-center gap-2 px-4 min-h-touch rounded-full btn-secondary text-sm active:scale-95 transition-transform"
-              >
-                <ShuffleIcon className="w-4 h-4" /> Shuffle
-              </button>
-              <button
-                onClick={() => play(false)}
-                className="flex items-center gap-2 px-5 min-h-touch rounded-full btn-primary"
-              >
-                <PlayIcon className="w-4 h-4" /> Play
-              </button>
+              <PlayFab label="Play" onClick={() => play(false)} />
+              <EntityAction label="Shuffle" onClick={() => play(true)}><ShuffleIcon /></EntityAction>
+              <EntityAction label="Save as playlist" onClick={save}><PlusIcon /></EntityAction>
             </>
           ) : undefined
         }
       />
-
-      {songs.length > 0 && (
-        <div className="mb-4">
-          <button onClick={save} className="px-4 py-2 rounded-full border border-ink-600 text-sm font-semibold hover:border-ember-500 hover:text-ember-400">
-            Save as playlist
-          </button>
-        </div>
-      )}
 
       {isLoading && <ListSkeleton rows={10} />}
       {/* A network error used to read as "Building your week" — forever. */}
@@ -73,11 +59,14 @@ export default function WeeklyMixPage() {
       {!isLoading && !isError && !songs.length && (
         <EmptyState title="Building your week" message="Play a few songs and your weekly mix will appear here." />
       )}
-      <div className="space-y-1">
-        {songs.map((song, i) => (
-          <SongRow key={song.id} song={song} songs={songs} index={i} />
-        ))}
-      </div>
+      {songs.length > 0 && (
+        <div className="vx-tracklist">
+          <TrackListHead />
+          {songs.map((song, i) => (
+            <SongRow key={song.id} song={song} songs={songs} index={i} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

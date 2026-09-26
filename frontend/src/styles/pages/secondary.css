@@ -1,0 +1,326 @@
+/* ============================================================================
+   VinaX 8 — secondary pages (About, Help, Stats, Recap, Taste profile, legal,
+   Listen Together, Handoff, Quiz, Download, Ads, 404). Imported by each of
+   those pages, so it lands in their lazy chunks.
+
+   The same inset-list language as Settings: flat ink-850 groups with a 12px
+   radius, 52px rows, hairlines between rows, chevrons on rows that navigate.
+   No bordered panels around sections; titles carry the hierarchy.
+   ========================================================================= */
+
+.vx-sec { max-width: 720px; margin: 0 auto; padding-bottom: 48px; }
+.vx-sec.is-narrow { max-width: 560px; }
+.vx-sec.is-wide { max-width: 860px; }
+.vx-sec-block { margin-bottom: 40px; }
+.vx-sec-block:last-child { margin-bottom: 0; }
+@media (max-width: 767px) {
+  .vx-sec-block { margin-bottom: 32px; }
+}
+.vx-sec-title {
+  margin-bottom: 12px;
+  color: rgb(var(--ink-100));
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+.vx-sec-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.vx-sec-title-row .vx-sec-title { margin-bottom: 0; }
+.vx-sec-meta { color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
+.vx-sec-lede { margin: -4px 0 16px; color: rgb(var(--ink-400)); font-size: 14px; line-height: 1.5; }
+.vx-sec-foot { margin-top: 12px; color: rgb(var(--ink-400)); font-size: 12.5px; line-height: 1.5; }
+.vx-sec-caption {
+  margin: 0 4px 8px;
+  color: rgb(var(--ink-400));
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------ inset lists */
+.vx-group {
+  overflow: hidden;
+  background: rgb(var(--ink-850));
+  border-radius: 12px;
+}
+.vx-group.is-padded { padding: 16px; }
+@media (min-width: 768px) {
+  .vx-group.is-padded { padding: 20px; }
+}
+.vx-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 16px;
+  color: rgb(var(--ink-100));
+  text-align: left;
+}
+.vx-row + .vx-row::before, .vx-row + details::before, details + .vx-row::before, details + details::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 1px;
+  background: var(--vx-border);
+}
+.vx-group > details { position: relative; }
+.vx-row.is-link, button.vx-row, a.vx-row, summary.vx-row { cursor: pointer; transition: background-color 140ms var(--ease-calm); }
+@media (hover: hover) and (pointer: fine) {
+  .vx-row.is-link:hover, button.vx-row:hover, a.vx-row:hover, summary.vx-row:hover { background: var(--vx-hover); }
+}
+.vx-row.is-link:active, button.vx-row:active, a.vx-row:active, summary.vx-row:active { background: var(--vx-pressed); }
+.vx-row:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: -2px; }
+.vx-row-main { flex: 1; min-width: 0; }
+.vx-row-label { display: block; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 600; line-height: 1.35; }
+.vx-row-hint { display: block; margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.4; }
+.vx-row-value { flex-shrink: 0; color: rgb(var(--ink-400)); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.vx-row-chev { flex-shrink: 0; width: 18px; height: 18px; color: rgb(var(--ink-500)); }
+.vx-row-lead {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: rgb(var(--ink-200));
+  background: rgb(var(--ink-100) / 0.07);
+  font-size: 18px;
+}
+.vx-row-art { width: 44px; height: 44px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: rgb(var(--ink-800)); }
+.vx-row-rank { width: 20px; flex-shrink: 0; color: rgb(var(--ink-400)); font-size: 14px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* Disclosure rows (guides, FAQ). */
+.vx-group summary { list-style: none; }
+.vx-group summary::-webkit-details-marker { display: none; }
+.vx-row-toggle { flex-shrink: 0; width: 18px; height: 18px; color: rgb(var(--ink-400)); transition: transform 180ms var(--ease-calm); }
+details[open] > summary .vx-row-toggle { transform: rotate(180deg); }
+.vx-disclose-body { padding: 0 16px 16px; color: rgb(var(--ink-300)); font-size: 14px; line-height: 1.6; }
+.vx-disclose-body ol { padding-left: 20px; list-style: decimal; }
+.vx-disclose-body li + li { margin-top: 6px; }
+
+/* ------------------------------------------------------------- KPI tiles */
+.vx-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 768px) {
+  .vx-kpis.is-four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .vx-kpis.is-three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+}
+.vx-kpis.is-three-always { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.vx-kpi { min-width: 0; padding: 16px; background: rgb(var(--ink-850)); border-radius: 12px; }
+.vx-kpi-label {
+  display: block;
+  overflow: hidden;
+  color: rgb(var(--ink-400));
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.vx-kpi-value {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  color: rgb(var(--ink-100));
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.vx-kpi-delta { display: block; margin-top: 6px; overflow: hidden; font-size: 12px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+@media (max-width: 767px) {
+  .vx-kpis.is-three-always .vx-kpi { padding: 12px; }
+  .vx-kpis.is-three-always .vx-kpi-value { font-size: 22px; }
+}
+
+/* Bars (top artists, languages, hour histogram). */
+.vx-bar { height: 6px; overflow: hidden; border-radius: 3px; background: rgb(var(--ink-100) / 0.08); }
+.vx-bar > span { display: block; height: 100%; border-radius: 3px; background: rgb(var(--ember-500)); }
+.vx-meter { display: grid; grid-template-columns: minmax(0, 9rem) 1fr 4.5rem; align-items: center; gap: 12px; min-height: 36px; font-size: 14px; }
+@media (min-width: 640px) { .vx-meter { grid-template-columns: minmax(0, 12rem) 1fr 5rem; } }
+.vx-meter > span:first-child { overflow: hidden; color: rgb(var(--ink-200)); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.vx-meter > span:last-child { color: rgb(var(--ink-400)); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* A single feature card with a quiet accent wash (recap persona, weekly report). */
+.vx-feature {
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgb(var(--ember-500) / 0.22), transparent 60%),
+    rgb(var(--ink-850));
+}
+@media (min-width: 768px) { .vx-feature { padding: 24px; } }
+
+/* ----------------------------------------------------------- legal pages */
+.vx-article { max-width: 68ch; color: rgb(var(--ink-200)); font-size: 15px; line-height: 1.65; }
+.vx-article h2 {
+  margin: 32px 0 8px;
+  color: rgb(var(--ink-100));
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.vx-article h2:first-child { margin-top: 8px; }
+.vx-article p + p { margin-top: 12px; }
+.vx-article a { color: rgb(var(--ink-100)); font-weight: 600; text-decoration: underline; text-decoration-color: rgb(var(--ink-100) / 0.35); text-underline-offset: 3px; }
+.vx-article a:hover { text-decoration-color: currentColor; }
+.vx-article strong, .vx-article b { color: rgb(var(--ink-100)); font-weight: 700; }
+.vx-article .vx-article-end { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--vx-border); color: rgb(var(--ink-400)); font-size: 14px; }
+
+/* Plain inline link inside secondary copy (never the accent). */
+.vx-link { color: rgb(var(--ink-100)); font-weight: 600; text-decoration: underline; text-decoration-color: rgb(var(--ink-100) / 0.35); text-underline-offset: 3px; }
+.vx-link:hover { text-decoration-color: currentColor; }
+
+/* ----------------------------------------------------------- empty state */
+.vx-empty-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 400px;
+  margin: 12vh auto 0;
+  padding: 0 16px;
+  text-align: center;
+}
+.vx-empty-page .vx-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  color: rgb(var(--ink-300));
+  background: rgb(var(--ink-850));
+}
+.vx-empty-page h1, .vx-empty-page h2 { color: rgb(var(--ink-100)); font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.vx-empty-page p { margin-top: 8px; color: rgb(var(--ink-400)); font-size: 15px; line-height: 1.5; }
+.vx-empty-page .btn-primary { margin-top: 24px; }
+
+/* ------------------------------------------------------------- controls */
+.vx-sec-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.vx-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  color: rgb(var(--ink-100));
+  background: rgb(var(--ink-100) / 0.08);
+  font-size: 14px;
+  font-weight: 650;
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.vx-pill-btn:hover { background: rgb(var(--ink-100) / 0.14); }
+.vx-pill-btn:active { transform: scale(0.97); }
+.vx-pill-btn:disabled { opacity: 0.5; pointer-events: none; }
+.vx-pill-btn.is-danger { color: var(--vx-danger); }
+.vx-field {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  color: rgb(var(--ink-100));
+  background: rgb(var(--ink-850));
+  border: 1px solid var(--vx-border);
+  border-radius: 10px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
+}
+.vx-field::placeholder { color: rgb(var(--ink-500)); }
+.vx-field:focus { border-color: rgb(var(--ember-500) / 0.7); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.18); }
+textarea.vx-field { min-height: 120px; padding: 12px 16px; line-height: 1.5; resize: none; }
+.vx-group .vx-field { background: rgb(var(--ink-900)); }
+
+.vx-search-field { position: relative; margin-bottom: 32px; }
+.vx-search-field > svg { position: absolute; top: 50%; left: 16px; width: 20px; height: 20px; color: rgb(var(--ink-400)); transform: translateY(-50%); pointer-events: none; }
+.vx-search-field > input { padding-left: 46px; padding-right: 44px; border-radius: 12px; }
+.vx-search-field > button { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); }
+
+/* Room code, handoff code. */
+.vx-code { color: rgb(var(--ink-100)); font-size: 40px; font-weight: 800; letter-spacing: 0.2em; font-variant-numeric: tabular-nums; }
+.vx-status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--ember-500)); }
+
+/* ------------------------------------------------------------- light */
+html.light .vx-group, html.light .vx-kpi, html.light .vx-empty-page .vx-empty-icon {
+  background: rgb(var(--ink-950));
+  box-shadow: inset 0 0 0 1px var(--vx-border);
+}
+html.light .vx-feature {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgb(var(--ember-500) / 0.12), transparent 60%),
+    rgb(var(--ink-950));
+  box-shadow: inset 0 0 0 1px var(--vx-border);
+}
+html.light .vx-field { background: rgb(var(--ink-950)); }
+html.light .vx-group .vx-field { background: rgb(var(--ink-900)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .vx-row-toggle, .vx-pill-btn { transition: none; }
+}
+html.reduce-motion .vx-row-toggle, html.reduce-motion .vx-pill-btn { transition: none; }
+
+/* Stats: the daily-goal ring sits on the same flat surface as the groups. */
+.vx-stats-goal > div { background: rgb(var(--ink-850)); border: 0; border-radius: 12px; }
+html.light .vx-stats-goal > div { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--vx-border); }
+
+/* Help: tutorial tiles. */
+.vx-help-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgb(var(--ink-850));
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.vx-help-tile:hover { background: rgb(var(--ink-800)); }
+.vx-help-tile:active { transform: scale(0.99); }
+html.light .vx-help-tile { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--vx-border); }
+html.light .vx-help-tile:hover { background: rgb(var(--ink-850)); }
+
+/* Handoff: honest error lines. */
+.vx-handoff-error { margin-bottom: 16px; color: var(--vx-danger); font-size: 14px; line-height: 1.5; }
+
+/* Rows wrapped in list items still get their hairline. */
+.vx-group > li + li > .vx-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 1px;
+  background: var(--vx-border);
+}
+
+/* Quiz answer options. Right / wrong also carries an outline and a hidden word, not colour alone. */
+.vx-quiz-option {
+  display: block;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  text-align: left;
+  background: rgb(var(--ink-850));
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm), opacity 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.vx-quiz-option:not(:disabled):hover { background: rgb(var(--ink-800)); }
+.vx-quiz-option:not(:disabled):active { transform: scale(0.98); }
+.vx-quiz-option.is-correct { box-shadow: inset 0 0 0 2px var(--vx-success); }
+.vx-quiz-option.is-wrong { box-shadow: inset 0 0 0 2px var(--vx-danger); }
+html.light .vx-quiz-option { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--vx-border); }
+html.light .vx-quiz-option.is-correct { box-shadow: inset 0 0 0 2px var(--vx-success); }
+html.light .vx-quiz-option.is-wrong { box-shadow: inset 0 0 0 2px var(--vx-danger); }
+@media (max-width: 767px) {
+  .vx-delta-ctx { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}

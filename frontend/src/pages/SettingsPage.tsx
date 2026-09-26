@@ -37,22 +37,38 @@ import { UI_LANGS } from '@/i18n';
 import type { AudioQualityPref } from '@/services/audio/engine';
 import { PageHeader } from '@/components/PageHeader';
 import { SoundSettings } from '@/components/SoundSettings';
+import { Sheet } from '@/components/Sheet';
+import { IconButton } from '@/components/IconButton';
 import { cn } from '@/utils/cn';
 import { createContext, useContext, useLayoutEffect } from 'react';
-import { ClockIcon, DownloadIcon, HelpIcon, SettingsIcon, ShieldIcon, SparkleIcon } from '@/components/Icons';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import {
+  BellIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  DownloadIcon,
+  HelpIcon,
+  PlayIcon,
+  SearchIcon,
+  ShieldIcon,
+  SparkleIcon,
+  SunIcon,
+  WaveIcon,
+  XIcon,
+} from '@/components/Icons';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { handleStatus, retryPendingClaim, type HandleStatus } from '@/features/identity/handleClaim';
 import { useUiStore } from '@/store/uiStore';
 import { lazy, Suspense } from 'react';
+import '@/styles/pages/settings.css';
 
 const BackupCenter = lazy(() => import('@/features/settings/BackupCenter').then((m) => ({ default: m.BackupCenter })));
 const ResetTasteSheet = lazy(() => import('@/features/personalization/ResetTasteSheet').then((m) => ({ default: m.ResetTasteSheet })));
 
 /**
  * v5.19.0 — Settings search. A query at the top filters every row by its
- * label and note (case-insensitive, all words must match); sections with
- * no visible rows collapse; matches are highlighted.
+ * label, note and keywords (case-insensitive, all words must match); sections
+ * with no visible rows collapse; matches are highlighted.
  */
 const SettingsSearchCtx = createContext('');
 function matchesQuery(q: string, ...texts: Array<string | undefined>): boolean {
@@ -68,7 +84,7 @@ function Highlight({ text, q }: { text: string; q: string }) {
   return (
     <>
       {text.slice(0, i)}
-      <mark className="bg-ember-500/30 text-inherit rounded px-0.5">{text.slice(i, i + w.length)}</mark>
+      <mark className="vx-set-mark">{text.slice(i, i + w.length)}</mark>
       {text.slice(i + w.length)}
     </>
   );
@@ -92,25 +108,23 @@ function intensityWords(v: number): string {
   return 'A mix of what is trending and what you play';
 }
 
-function Row({ label, note, children, stack }: { label: string; note?: string; children: ReactNode; stack?: boolean }) {
+/* ------------------------------------------------------------ primitives */
+
+/**
+ * One settings row: label (+ hint) on the left, the control on the right.
+ * `stack` — for wide controls (segmented choices, sliders, swatches): on
+ * phones the control drops below the label at full width.
+ */
+function Row({ label, note, keywords, children, stack }: { label: string; note?: string; keywords?: string; children: ReactNode; stack?: boolean }) {
   const q = useContext(SettingsSearchCtx);
-  if (!matchesQuery(q, label, note)) return null;
-  // `stack` — for wide controls (color swatches, sliders, chip groups): on
-  // phones the control drops BELOW the label at full width instead of
-  // crushing the label column into one-word-per-line text.
+  if (!matchesQuery(q, label, note, keywords)) return null;
   return (
-    <div
-      data-settings-row
-      className={cn(
-        'py-3.5 border-b border-[color:var(--glass-border)] last:border-0',
-        stack ? 'flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4' : 'flex items-start justify-between gap-4',
-      )}
-    >
-      <div>
-        <p className="text-sm font-medium"><Highlight text={label} q={q} /></p>
-        {note && <p className="text-xs text-ink-400 mt-0.5 max-w-md leading-relaxed"><Highlight text={note} q={q} /></p>}
+    <div data-settings-row className={cn('vx-set-row', stack && 'is-stack')}>
+      <div className="vx-set-text">
+        <p className="vx-set-label"><Highlight text={label} q={q} /></p>
+        {note && <p className="vx-set-hint"><Highlight text={note} q={q} /></p>}
       </div>
-      <div className={stack ? 'sm:shrink-0' : 'shrink-0'}>{children}</div>
+      <div className="vx-set-control">{children}</div>
     </div>
   );
 }
@@ -119,63 +133,103 @@ function Row({ label, note, children, stack }: { label: string; note?: string; c
  * A full-width settings block: like `Row`, but the control sits under the
  * label instead of beside it. Takes part in Settings search like every row.
  */
-function Block({ label, note, keywords, children }: { label: string; note?: string; keywords?: string; children: ReactNode }) {
+function Block({ label, note, keywords, action, children }: { label: string; note?: string; keywords?: string; action?: ReactNode; children: ReactNode }) {
   const q = useContext(SettingsSearchCtx);
   if (!matchesQuery(q, label, note, keywords)) return null;
   const id = `vx-block-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`;
   return (
-    <div data-settings-row className="py-3.5 border-b border-[color:var(--glass-border)] last:border-0">
-      <p id={id} className="text-sm font-medium"><Highlight text={label} q={q} /></p>
-      {note && <p className="text-xs text-ink-400 mt-0.5 mb-3 max-w-md leading-relaxed"><Highlight text={note} q={q} /></p>}
-      <div className={note ? undefined : 'mt-3'}>{children}</div>
+    <div data-settings-row className="vx-set-row is-block">
+      <div className="vx-set-block-head">
+        <div className="vx-set-text">
+          <p id={id} className="vx-set-label"><Highlight text={label} q={q} /></p>
+          {note && <p className="vx-set-hint"><Highlight text={note} q={q} /></p>}
+        </div>
+        {action}
+      </div>
+      <div className="vx-set-block-body">{children}</div>
     </div>
   );
 }
 
-/** v5.12.0 — artists blocked with “Never play …” from a song menu, with undo. */
-function NeverPlayRow() {
-  const hiddenArtists = useLibraryStore((s) => s.hiddenArtists);
-  const toggleHiddenArtist = useLibraryStore((s) => s.toggleHiddenArtist);
-  if (!hiddenArtists.length) return null;
-  return (
-    <Row stack label="Never play" note="These artists are skipped everywhere. Tap one to allow them again.">
-      <div className="flex flex-wrap gap-1.5">
-        {hiddenArtists.map((a) => (
-          <Chip key={a} active onClick={() => toggleHiddenArtist(a)}>
-            {a.replace(/\b\w/g, (c) => c.toUpperCase())} ✕
-          </Chip>
-        ))}
-      </div>
-    </Row>
+/** A row that goes somewhere: the whole row is the link (or button), with a chevron. */
+function LinkRow({ to, onClick, label, note, keywords, value }: { to?: string; onClick?: () => void; label: string; note?: string; keywords?: string; value?: string }) {
+  const q = useContext(SettingsSearchCtx);
+  if (!matchesQuery(q, label, note, keywords)) return null;
+  const inner = (
+    <>
+      <span className="vx-set-text">
+        <span className="vx-set-label"><Highlight text={label} q={q} /></span>
+        {note && <span className="vx-set-hint"><Highlight text={note} q={q} /></span>}
+      </span>
+      <span className="vx-set-control">
+        {value && <span className="vx-set-value">{value}</span>}
+        <ChevronRightIcon className="vx-set-chev" />
+      </span>
+    </>
+  );
+  return to ? (
+    <Link data-settings-row to={to} className="vx-set-row is-link">{inner}</Link>
+  ) : (
+    <button data-settings-row type="button" onClick={onClick} className="vx-set-row is-link">{inner}</button>
   );
 }
 
+/** A proper switch: accent track when on, a white knob that slides. */
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <button
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={() => onChange(!on)}
-      className={cn('vx-tap w-11 h-6 rounded-full transition-colors', on ? 'bg-ember-500' : 'bg-ink-600')}
-    >
-      <span className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white transition-[color,background-color,border-color,opacity,transform]', on ? 'left-[22px]' : 'left-0.5')} />
+    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} className="vx-tap vx-switch">
+      <span />
     </button>
   );
 }
 
-function Section({
-  title,
-  icon: Icon,
-  id,
-  children,
+/** A small set of mutually exclusive choices as one segmented control. */
+function Segmented<T extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
 }: {
+  label: string;
+  value: T;
+  options: Array<{ value: T; label: string; title?: string }>;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="vx-seg">
+      {options.map((o) => (
+        <button
+          key={String(o.value)}
+          type="button"
+          aria-pressed={value === o.value}
+          aria-label={o.title}
+          title={o.title}
+          onClick={() => onChange(o.value)}
+          className="vx-seg-item"
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A compact action button at the right edge of a row. */
+function RowButton({ onClick, children, tone, disabled, label }: { onClick: () => void; children: ReactNode; tone?: 'danger' | 'danger-solid'; disabled?: boolean; label?: string }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={label} className={cn('vx-tap vx-set-btn', tone === 'danger' && 'is-danger', tone === 'danger-solid' && 'is-danger-solid')}>
+      {children}
+    </button>
+  );
+}
+
+interface SectionDef {
+  id: string;
   title: string;
   icon: ComponentType<{ className?: string }>;
-  /** Anchor target, so other screens can link straight to this section. */
-  id?: string;
-  children: ReactNode;
-}) {
+}
+
+function Section({ title, id, children }: { title: string; id: string; children: ReactNode }) {
   const q = useContext(SettingsSearchCtx);
   const ref = useRef<HTMLElement>(null);
   const [empty, setEmpty] = useState(false);
@@ -185,18 +239,73 @@ function Section({
     setEmpty(!!q && !el.querySelector('[data-settings-row]'));
   }, [q]);
   return (
-    <section ref={ref} id={id} className={cn('mb-6 scroll-mt-[calc(var(--vx-topbar-h)+16px)]', empty && 'hidden')} data-settings-section>
-      <div className="flex items-center gap-2.5 px-1 mb-2.5">
-        <span className="w-7 h-7 rounded-lg bg-ember-500/15 text-ember-500 flex items-center justify-center shrink-0">
-          <Icon className="w-4 h-4" />
-        </span>
-        <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-300">{title}</h2>
-      </div>
-      <div className="rounded-2xl glass-card px-5">{children}</div>
+    <section ref={ref} id={id} className={cn('vx-set-section', empty && 'hidden')} data-settings-section aria-labelledby={`${id}-title`}>
+      <h2 id={`${id}-title`} className="vx-set-title">{title}</h2>
+      <div className="vx-set-group">{children}</div>
     </section>
   );
 }
 
+/** Desktop: the section index on the left, following the scroll. */
+function SectionIndex({ sections }: { sections: SectionDef[] }) {
+  const [active, setActive] = useState(sections[0]?.id);
+  useEffect(() => {
+    let frame = 0;
+    const measure = (): void => {
+      frame = 0;
+      let current = sections[0]?.id;
+      for (const s of sections) {
+        const el = document.getElementById(s.id);
+        if (!el || el.offsetParent === null) continue;
+        if (el.getBoundingClientRect().top <= 140) current = s.id;
+      }
+      setActive(current);
+    };
+    const onScroll = (): void => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    measure();
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('scroll', onScroll, { capture: true });
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [sections]);
+  return (
+    <nav aria-label="Settings sections" className="vx-set-index">
+      {sections.map(({ id, title, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          aria-current={active === id ? 'true' : undefined}
+          onClick={() => document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: scrollBehavior() })}
+          className="vx-set-index-item"
+        >
+          <Icon className="w-5 h-5" />
+          <span>{title}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** v5.12.0 — artists blocked with “Never play …” from a song menu, with undo. */
+function NeverPlayRow() {
+  const hiddenArtists = useLibraryStore((s) => s.hiddenArtists);
+  const toggleHiddenArtist = useLibraryStore((s) => s.toggleHiddenArtist);
+  if (!hiddenArtists.length) return null;
+  return (
+    <Block label="Never play" note="Skipped everywhere. Tap an artist to allow them again." keywords="blocked artists hidden">
+      <div className="flex flex-wrap gap-2">
+        {hiddenArtists.map((a) => (
+          <Chip key={a} active onClick={() => toggleHiddenArtist(a)}>
+            {a.replace(/\b\w/g, (c) => c.toUpperCase())} ✕
+          </Chip>
+        ))}
+      </div>
+    </Block>
+  );
+}
 
 // C7 — human names for every KEYS entry the erase modal lists. Derived from
 // the registry at render, so a new storage key can never silently go unlisted
@@ -205,6 +314,7 @@ const ERASE_LABELS: Record<string, string> = {
   schemaVersion: 'Storage schema version',
   settings: 'Settings & preferences',
   player: 'Player state & queue',
+  queueOwnership: 'Who queued each song',
   library: 'Favorites, collections & hidden songs',
   history: 'Listening history',
   search: 'Recent searches',
@@ -212,13 +322,13 @@ const ERASE_LABELS: Record<string, string> = {
   profileKid: 'Kid-mode taste profile',
   region: 'Region preference',
   onboarded: 'Onboarding state',
-  lastSeenVersion: 'What\u2019s-New read state',
+  lastSeenVersion: 'What’s-New read state',
   deviceId: 'Anonymous device id',
   userName: 'Your name',
   userHandle: 'Your username',
   userHandlePending: 'Username waiting to be confirmed',
   signedDeviceId: 'Service-issued device token',
-  updateSnooze: '\u201cUpdate later\u201d choice',
+  updateSnooze: '“Update later” choice',
   analyticsConsent: 'Analytics consent choice',
   downloads: 'Downloads index',
   alarm: 'Wake alarm',
@@ -244,7 +354,13 @@ function NoMatches({ q }: { q: string }) {
     return () => window.clearTimeout(t);
   }, [q]);
   if (!none) return null;
-  return <p className="mb-6 text-sm text-ink-400">No setting matches “{q}”. Try a different word — theme, alarm, quality, language.</p>;
+  return (
+    <div className="vx-set-empty">
+      <SearchIcon className="w-6 h-6" />
+      <p className="vx-set-empty-title">No results for “{q}”</p>
+      <p className="vx-set-hint">Try theme, alarm, quality or language.</p>
+    </div>
+  );
 }
 
 /**
@@ -284,15 +400,18 @@ function UsernameRow() {
           ? 'That username was already taken when VinaX tried to confirm it. Pick another.'
           : 'Usernames are claimed from the welcome step.';
   return (
-    <Row label={label} note={note}>
+    <Row label={label} note={note} keywords="username handle account">
       {status.state === 'pending' ? (
-        <button onClick={() => void retry()} disabled={busy} className="vx-tap px-4 py-2 rounded-full glass-button text-sm disabled:opacity-50">
+        <RowButton onClick={() => void retry()} disabled={busy}>
           {busy ? 'Confirming…' : 'Confirm now'}
-        </button>
+        </RowButton>
       ) : status.state === 'taken' || status.state === 'none' ? (
-        <button onClick={openTour} className="vx-tap px-4 py-2 rounded-full glass-button text-sm">Choose</button>
+        <RowButton onClick={openTour}>Choose</RowButton>
       ) : (
-        <span className="text-xs font-semibold text-emerald-400 px-2 py-2">Confirmed</span>
+        <span className="vx-set-status">
+          <CheckIcon className="w-4 h-4" />
+          Confirmed
+        </span>
       )}
     </Row>
   );
@@ -310,16 +429,43 @@ function FestivalRow() {
       ? `Next: ${next.festival.name} in ${next.inDays} day${next.inDays === 1 ? '' : 's'}`
       : 'No festival on the calendar';
   return (
-    <Row label="Festival themes" note={`Every festival brings its own look — accent, background, glow and a greeting. ${line}.`}>
+    <Row label="Festival themes" note={`${line}.`} keywords="every festival brings its own look accent background glow greeting">
       <Toggle on={on} onChange={setOn} label="Festival themes" />
     </Row>
   );
 }
 
+/** A labelled range with words at both ends (sentence case, not an eyebrow). */
+function RangeRow({ from, to, children }: { from: string; to: string; children: ReactNode }) {
+  return (
+    <div className="vx-set-range">
+      <span aria-hidden>{from}</span>
+      {children}
+      <span aria-hidden>{to}</span>
+    </div>
+  );
+}
+
+/** What the Sound block answers to in Settings search. */
+const SOUND_KEYWORDS = 'sound effects equalizer equaliser eq presets bass vocal treble loud podcast balance left right mono audio loudness normalisation normalization volume status';
+
+const SECTIONS: SectionDef[] = [
+  { id: 'appearance', title: 'Appearance', icon: SunIcon },
+  { id: 'playback', title: 'Playback', icon: PlayIcon },
+  { id: 'sound', title: 'Sound', icon: WaveIcon },
+  { id: 'recommendations', title: 'Recommendations', icon: SparkleIcon },
+  { id: 'notifications', title: 'Notifications', icon: BellIcon },
+  { id: 'alarm', title: 'Wake-up alarm', icon: ClockIcon },
+  { id: 'privacy', title: 'Region & privacy', icon: ShieldIcon },
+  { id: 'your-data', title: 'Your data', icon: DownloadIcon },
+  { id: 'help', title: 'Help & about', icon: HelpIcon },
+];
+
 export default function SettingsPage() {
   const [settingsQuery, setSettingsQuery] = useState('');
   usePageTitle('Settings');
   const s = useSettingsStore();
+  const wide = useMediaQuery('(min-width: 1024px)');
   // Usage-sharing consent lives outside the settings store (it is never part of a backup).
   const [usageSharing, setUsageSharing] = useState<boolean>(() => getLocal<boolean>(KEYS.analyticsConsent, false) === true);
   const region = useRegion();
@@ -328,9 +474,6 @@ export default function SettingsPage() {
   const [eraseOpen, setEraseOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false); // C7 deletion receipt
   const [resetOpen, setResetOpen] = useState(false); // 7.2 taste reset, backup first
-  useDismissOnBack(eraseOpen, () => setEraseOpen(false));
-  const eraseRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(eraseRef, eraseOpen, () => setEraseOpen(false));
   useEffect(() => {
     if (isNativePlatform()) void getNotificationPermission().then(setNotifPerm);
   }, []);
@@ -368,621 +511,580 @@ export default function SettingsPage() {
     el?.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
   }, [hash]);
 
+  const showNotifications = pushSupported() || isNativePlatform();
+  const sections = showNotifications ? SECTIONS : SECTIONS.filter((x) => x.id !== 'notifications');
+
   return (
     <SettingsSearchCtx.Provider value={settingsQuery.trim()}>
-    <div className="max-w-2xl mx-auto">
-      <PageHeader title="Settings" subtitle="Manage your preferences — everything stays on this device." />
-      <div className="mb-5 relative">
-        <input
-          value={settingsQuery}
-          onChange={(e) => setSettingsQuery(e.target.value)}
-          placeholder="Search settings… (theme, sleep, language, alarm)"
-          aria-label="Search settings"
-          className="w-full glass-input pl-4 pr-10 py-2.5 rounded-full text-sm outline-none focus:ring-1 focus:ring-ink-100/40"
-        />
-        {settingsQuery && (
-          <button onClick={() => setSettingsQuery('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-100 text-sm font-bold">×</button>
-        )}
-      </div>
-      {settingsQuery && <NoMatches q={settingsQuery} />}
-      {(pushSupported() || isNativePlatform()) && (
-        <Section title="Notifications" icon={SparkleIcon}>
-          {pushSupported() ? (
-            <Row label="Push notifications" note="Get new song picks on this device. Turn off anytime.">
-              <Toggle on={pushOn} onChange={(v) => void togglePush(v)} label="Push notifications" />
-            </Row>
-          ) : (
-            <Row label="New-music alerts" note="When the app opens, new announcements appear as notifications.">
-              <Toggle
-                on={appAlerts}
-                onChange={(v) => {
-                  setAppAlerts(v);
-                  setAppAlertsEnabled(v);
-                  toast(v ? 'Alerts on' : 'Alerts off');
-                }}
-                label="New-music alerts"
-              />
-            </Row>
-          )}
-        </Section>
-      )}
-      <Section title="Help & Support" icon={HelpIcon}>
-        <Row label="Help & Feedback" note="FAQs, how-tos, and report a bug or share an idea.">
-          <Link to="/help" className="vx-tap px-4 py-2 rounded-full btn-secondary text-sm">Open</Link>
-        </Row>
-      </Section>
-      <Section title="Wake-up alarm" icon={ClockIcon}>
-        <Row label="Wake alarm" note="Plays music at the set time. Most reliable with the app open and your phone charging.">
-          <Toggle on={alarm.enabled} onChange={(v) => alarm.setEnabled(v)} label="Wake alarm" />
-        </Row>
-        {alarm.enabled && (
-          <>
-            <Row label="Time">
-              <input type="time" value={alarm.time} onChange={(e) => alarm.setTime(e.target.value)} className="glass-input px-3 py-1.5 rounded-lg text-sm" />
-            </Row>
-            <Row stack label="Wake with">
-              <div className="flex gap-1.5 flex-wrap">
-                {(['favorites', 'resume'] as const).map((a) => (
-                  <Chip key={a} active={alarm.action === a} onClick={() => alarm.setAction(a)}>
-                    {a === 'favorites' ? 'Shuffle favorites' : 'Resume'}
-                  </Chip>
-                ))}
-                {/* v5.17.0 — any of your playlists */}
-                {collections.map((c) => (
-                  <Chip key={c.id} active={alarm.action === 'collection' && alarm.collectionId === c.id} onClick={() => { alarm.setAction('collection'); alarm.setCollectionId(c.id); }}>
-                    {c.name}
-                  </Chip>
-                ))}
-              </div>
-            </Row>
-            <Row label="Gentle wake" note="Start quietly and rise to your volume over 30 seconds.">
-              <Toggle on={alarm.fadeIn} onChange={alarm.setFadeIn} label="Gentle wake" />
-            </Row>
-          </>
-        )}
-      </Section>
-
-      <Section title="Appearance & Playback" icon={SettingsIcon}>
-        <Row label="App language" note="Choose the app's display language.">
-          <div className="flex flex-wrap gap-1.5">
-            {UI_LANGS.map((l) => (
-              <Chip key={l.id} active={s.uiLanguage === l.id} onClick={() => s.setUiLanguage(l.id)}>
-                {l.label}
-              </Chip>
-            ))}
-          </div>
-        </Row>
-        <Row stack label="Theme">
-          <div className="flex gap-1.5">
-            {(['dark', 'amoled', 'light', 'system', 'auto'] as const).map((t) => (
-              <Chip key={t} active={s.theme === t} onClick={() => s.setTheme(t)}>
-                {t === 'dark' ? 'Dark' : t === 'light' ? 'Light' : t === 'amoled' ? 'Black' : t === 'system' ? 'System' : 'Auto (day/night)'}
-              </Chip>
-            ))}
-          </div>
-        </Row>
-        <FestivalRow />
-        <Row stack label="Custom accent" note="Pick any colour; VinaX derives the full palette, with a readable variant for the light theme.">
-          <div className="flex items-center gap-2">
-            <input type="color" aria-label="Custom accent colour" value={s.accentCustom ?? '#1ed760'} onChange={(e) => s.setAccentCustom(e.target.value)} className="w-9 h-9 rounded-full bg-transparent border-0 p-0 cursor-pointer" />
-            <input value={s.accentCustom ?? ''} onChange={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-fA-F]{6}$/.test(v)) s.setAccentCustom(v); }} placeholder="#1ed760" maxLength={7} className="glass-input px-3 py-1.5 rounded-lg text-sm font-mono w-28" aria-label="Custom accent hex" />
-            {s.accent === 'custom' && <Chip active={false} onClick={() => s.setAccentCustom(null)}>Use a preset</Chip>}
-          </div>
-        </Row>
-        <Row stack label="Display size" note="Text and controls, everywhere.">
-          <div className="flex gap-1.5">
-            {(['sm', 'md', 'lg'] as const).map((v) => (
-              <Chip key={v} active={s.uiScale === v} onClick={() => s.setUiScale(v)}>{v === 'sm' ? 'Small' : v === 'md' ? 'Default' : 'Large'}</Chip>
-            ))}
-          </div>
-        </Row>
-        <Row label="High contrast" note="Brighter secondary text, visible borders and a strong focus ring.">
-          <Toggle on={s.highContrast} onChange={s.setHighContrast} label="High contrast" />
-        </Row>
-        <Row stack label="Startup page" note="What opens first: Home, Search, Library, or wherever you left off.">
-          <div className="flex gap-1.5 flex-wrap">
-            {(['home', 'search', 'library', 'last'] as const).map((v) => (
-              <Chip key={v} active={s.startPage === v} onClick={() => s.setStartPage(v)}>{v === 'home' ? 'Home' : v === 'search' ? 'Search' : v === 'library' ? 'Library' : 'Where I left off'}</Chip>
-            ))}
-          </div>
-        </Row>
-        <Row stack label="Accent color" note="The highlight color across buttons, links and the player. Every choice stays readable in light and dark.">
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Accent color">
-            {ACCENT_OPTIONS.map((a) => (
-              <button
-                key={a.id}
-                role="radio"
-                aria-checked={s.accent === a.id}
-                aria-label={`${a.label} accent`}
-                title={a.label}
-                onClick={() => s.setAccent(a.id)}
-                className={`w-8 h-8 rounded-full border-2 transition active:scale-95 ${
-                  s.accent === a.id ? 'border-ink-100 scale-110 shadow-glow' : 'border-transparent opacity-80 hover:opacity-100'
-                }`}
-                style={{ backgroundColor: a.dot }}
-              />
-            ))}
-          </div>
-        </Row>
-        <Row stack label="Glass effect" note="How see-through panels and bars feel — iOS-style frosted glass. Left is classic solid, right is deep glass.">
-          <div className="flex items-center gap-3 w-full max-w-[260px]">
-            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">SOLID</span>
+      <div className="vx-settings">
+        {wide && !settingsQuery && <SectionIndex sections={sections} />}
+        <div className="vx-set-main">
+          <PageHeader title="Settings" />
+          <div className="vx-set-search">
+            <SearchIcon className="vx-set-search-icon" />
             <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={s.glassLevel}
-              aria-label="Glass effect intensity"
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                s.setGlassLevel(v);
-                applyGlassLevel(v, s.glassBlur);
-              }}
-              className="flex-1 accent-ember-500"
+              value={settingsQuery}
+              onChange={(e) => setSettingsQuery(e.target.value)}
+              placeholder="Search settings"
+              aria-label="Search settings"
+              type="search"
+              enterKeyHint="search"
             />
-            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">GLASS</span>
-          </div>
-        </Row>
-        <Row stack label="Background blur" note="Independent from glass — dial from sharp glass to a soft, hazy backdrop.">
-          <div className="flex items-center gap-3 w-full max-w-[260px]">
-            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">SHARP</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={s.glassBlur}
-              aria-label="Background blur intensity"
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                s.setGlassBlur(v);
-                applyGlassLevel(s.glassLevel, v);
-              }}
-              className="flex-1 accent-ember-500"
-            />
-            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">HAZY</span>
-          </div>
-        </Row>
-        <Row label="Autoplay" note="Start playback immediately when you pick a song.">
-          <Toggle on={s.autoplay} onChange={s.setAutoplay} label="Autoplay" />
-        </Row>
-        <Row label="Keep screen on in player" note="Holds a screen wake lock while the full-screen player is open and playing.">
-          <Toggle on={s.keepScreenOn} onChange={s.setKeepScreenOn} label="Keep screen on in player" />
-        </Row>
-        {isNativePlatform() && (
-          <Row label="Lock screen lyrics" note="Show the current synced line on your lock screen and media controls as a song plays.">
-            <Toggle on={s.lockScreenLyrics} onChange={(v) => { s.setLockScreenLyrics(v); if (v) void ensureNotificationPermission().then(() => getNotificationPermission().then(setNotifPerm)); }} label="Lock screen lyrics" />
-          </Row>
-        )}
-        {notifPerm === 'denied' && (
-          <div className="mx-1 mb-3 p-3 rounded-xl bg-ember-500/10 border border-ember-500/30 text-xs text-ink-200 flex items-center justify-between gap-3">
-            <span>Notifications are off — lock-screen lyrics and playback controls need them to appear.</span>
-            <button
-              onClick={() => void ensureNotificationPermission().then(() => getNotificationPermission().then(setNotifPerm))}
-              className="shrink-0 px-3 py-1.5 rounded-full btn-primary"
-            >
-              Enable
-            </button>
-          </div>
-        )}
-        <Row label="Crossfade" note="Smoothly fade between tracks and fade new songs in.">
-          <Toggle on={s.crossfade} onChange={s.setCrossfade} label="Crossfade" />
-        </Row>
-        {s.crossfade && (
-          <Row label="Crossfade length">
-            <div className="flex gap-1.5">
-              {[3, 5, 8, 12].map((n) => (
-                <Chip key={n} active={s.crossfadeSeconds === n} onClick={() => s.setCrossfadeSeconds(n)}>
-                  {n}s
-                </Chip>
-              ))}
-            </div>
-          </Row>
-        )}
-        <Row label="DJ voice" note="The DJ talks as each song starts: the AI DJ’s own segue line when it sequenced the queue, otherwise “Now playing … by …”. Speaks in the voice you chose under Voice (the studio voice sends the line to the service); your device’s voice is the offline fallback. The music ducks while the DJ talks.">
-          <Toggle on={s.djVoice} onChange={s.setDjVoice} label="DJ voice" />
-        </Row>
-        <Row stack label="Daily listening goal" note="A ring on Your VinaX fills as you listen through the day.">
-          <div className="flex flex-wrap gap-1.5">
-            {[0, 15, 30, 60, 120].map((n) => (
-              <Chip key={n} active={s.dailyGoalMinutes === n} onClick={() => s.setDailyGoalMinutes(n)}>
-                {n === 0 ? 'Off' : n >= 60 ? `${n / 60}h` : `${n} min`}
-              </Chip>
-            ))}
-          </div>
-        </Row>
-        <NeverPlayRow />
-        <Row label="Resume playback" note="Pick up longer tracks where you left off.">
-          <Toggle on={s.resumePlayback} onChange={s.setResumePlayback} label="Resume playback" />
-        </Row>
-        {isNativePlatform() && (
-          <Row label="Haptics" note="Subtle vibration on key actions in the app.">
-            <Toggle on={s.haptics} onChange={s.setHaptics} label="Haptics" />
-          </Row>
-        )}
-        <Row label="Dynamic theme" note="Extract accent color from current track artwork (experimental).">
-          <Toggle on={s.dynamicTheme} onChange={s.setDynamicTheme} label="Dynamic theme" />
-        </Row>
-        <Row label="Reduce motion" note="Minimise animations and transitions across the app (better for motion sensitivity and older phones).">
-          <Toggle on={s.reduceMotion} onChange={(v) => { s.setReduceMotion(v); document.documentElement.classList.toggle('reduce-motion', v); }} label="Reduce motion" />
-        </Row>
-        <Row stack label="Density" note="Comfortable spacing or compact for more on screen.">
-          <div className="flex gap-1.5">
-            {(['comfortable', 'compact'] as const).map((d) => (
-              <Chip key={d} active={s.density === d} onClick={() => s.setDensity(d)}>
-                {d === 'comfortable' ? 'Comfortable' : 'Compact'}
-              </Chip>
-            ))}
-          </div>
-        </Row>
-        <Row label="App version" note={isNativePlatform() ? 'Checks the website for a newer signed APK.' : 'Web version updates automatically on deploy.'}>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-ink-300">{DISPLAY_VERSION}</span>
-            {isNativePlatform() && (
-              <button
-                onClick={() =>
-                  void checkForUpdate({ manual: true }).then((u) => {
-                    if (u) useUpdateStore.getState().setInfo(u);
-                    else toast('You’re on the latest version');
-                  })
-                }
-                className="vx-tap px-4 py-2 rounded-full glass-button text-sm"
-              >
-                Check for updates
-              </button>
+            {settingsQuery && (
+              <IconButton label="Clear search" size="sm" onClick={() => setSettingsQuery('')} className="vx-set-search-clear">
+                <XIcon className="w-4 h-4" />
+              </IconButton>
             )}
           </div>
-        </Row>
-        {!isNativePlatform() && (
-          <Row label="Keyboard shortcuts" note="Space, arrows, N/P, M, S, R, F — or press ? anywhere.">
-            <button
-              onClick={() => window.dispatchEvent(new Event('vinax:shortcuts'))}
-              className="vx-tap px-4 py-2 rounded-full glass-button text-sm"
-            >
-              View
-            </button>
-          </Row>
-        )}
-        <Row label="Data saver" note="Lightest audio stream, no video canvas, lighter artwork. Good on mobile data.">
-          <Toggle on={s.dataSaver} onChange={s.setDataSaver} label="Data saver" />
-        </Row>
-        <Row stack label="Audio quality" note="Picks the closest available stream; falls back automatically.">
-          <div className="flex gap-1.5">
-            {(['low', 'medium', 'high'] as AudioQualityPref[]).map((q) => (
-              <Chip key={q} active={s.audioQuality === q} onClick={() => s.setAudioQuality(q)}>
-                {q}
-              </Chip>
-            ))}
-          </div>
-        </Row>
-        <Row stack label="Lyrics size" note="Text size for synced lyrics in the player, karaoke, and lyrics page.">
-          <div className="flex gap-1.5">
-            {(['sm', 'md', 'lg', 'xl'] as const).map((z) => (
-              <Chip key={z} active={s.lyricsSize === z} onClick={() => s.setLyricsSize(z)}>
-                {z === 'sm' ? 'Small' : z === 'md' ? 'Medium' : z === 'lg' ? 'Large' : 'Huge'}
-              </Chip>
-            ))}
-          </div>
-        </Row>
-      </Section>
+          {settingsQuery && <NoMatches q={settingsQuery} />}
 
-      {/* v5.19.0 — on-device sound processing (its rows take part in Settings search) */}
-      <div data-tour="sound"><SoundSettings /></div>
-      <Section title="Recommendations" icon={SparkleIcon}>
-        {/* 7.2 — what the app believes about this listener, before the switches that change it. */}
-        <Block
-          label="What VinaX thinks you like"
-          note="Read from the taste profile on this device. Nothing here is uploaded."
-          keywords="personalization preview taste languages artists muted"
-        >
-          <PersonalizationPreview />
-        </Block>
-        <Block
-          label="Trending vs. your taste"
-          note="How much Home and the DJ lean on what is popular right now, against what you actually play."
-          keywords="intensity personalization trending"
-        >
-          <div className="flex items-center gap-3 max-w-[320px]">
-            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">TRENDING</span>
-            <input
-              type="range"
-              aria-label="Trending vs. your taste"
-              aria-valuetext={intensityWords(s.recommendationIntensity)}
-              min={0}
-              max={1}
-              step={0.1}
-              value={s.recommendationIntensity}
-              onChange={(e) => s.setRecommendationIntensity(Number(e.target.value))}
-              className="flex-1 accent-ember-500"
-              style={{ '--fill': `${s.recommendationIntensity * 100}%` } as React.CSSProperties}
-            />
-            <span className="text-[10px] font-bold tracking-widest text-ink-400 shrink-0">YOUR TASTE</span>
-          </div>
-          <p className="mt-2 text-xs text-ink-300">{intensityWords(s.recommendationIntensity)}.</p>
-        </Block>
-        <Row label="AI DJ" note="Lets the VinaX DJ engine sequence what plays next — an energy arc, no repeats, a reason for every song — and suggest a few songs beyond the app’s own picks, each checked against the catalogue before it can play. Off keeps the on-device order.">
-          <Toggle on={s.aiDj} onChange={s.setAiDj} label="AI DJ" />
-        </Row>
-        <Row label="DJ builds every queue" note="Tap any song — in an album, a playlist or a shelf — and it starts alone while the DJ builds what follows from it. Off makes playback follow the list you tapped. Queue Builder plans and songs you queue by hand are never replaced.">
-          <Toggle on={s.djTakeover} onChange={s.setDjTakeover} label="DJ builds every queue" />
-        </Row>
-        <Row label="AI-designed shelves on Home" note="A “Designed for you” block with shelves the AI titles from your taste and the time of day, filled from the catalogue, and an AI-ordered “Trending for you”. Off hides the block and keeps Trending in your on-device taste order.">
-          <Toggle on={s.aiHomeShelves} onChange={s.setAiHomeShelves} label="AI-designed shelves" />
-        </Row>
-        <Block
-          label="Discovery"
-          note="How far recommendations roam. In every mode a queue stays in the language of the song that is playing and opens with songs you know."
-          keywords="familiar balanced discover explore new artists"
-        >
-          <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="Discovery mode">
-            {DISCOVERY_OPTIONS.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                aria-label={o.label}
-                aria-pressed={s.discoveryMode === o.value}
-                aria-describedby={`vx-discovery-${o.value}`}
-                onClick={() => s.setDiscoveryMode(o.value)}
-                className={cn(
-                  'text-left rounded-xl border p-3 min-h-touch transition-colors',
-                  s.discoveryMode === o.value
-                    ? 'border-ember-400/50 bg-ember-500/10'
-                    : 'border-[color:var(--glass-border)] bg-ink-850/40 hover:bg-ink-800/60',
-                )}
-              >
-                <span className={cn('block text-sm font-semibold', s.discoveryMode === o.value && 'text-ember-400')}>{o.label}</span>
-                <span id={`vx-discovery-${o.value}`} className="block text-[11px] text-ink-400 mt-0.5 leading-snug">{o.line}</span>
-              </button>
-            ))}
-          </div>
-        </Block>
-        {/* 7.2 — the temporary mutes, kept well away from the permanent "Never play" list. */}
-        <Block
-          label="Playing less of"
-          note="Artists you asked to hear less of with “Less like this”. Each one comes back on its own. For a permanent block use Never play, under Appearance & Playback."
-          keywords="soft mute muted less like this artists"
-        >
-          <SoftMuteList />
-        </Block>
-        <Row label="Kid mode" note="Hides songs the catalog marks explicit — everywhere — and keeps a separate taste profile so a child’s listening never shapes yours. Favorites and downloads stay shared. Only as good as the catalog’s explicit flags.">
-          <Toggle
-            on={s.kidMode}
-            onChange={(v) => {
-              s.setKidMode(v);
-              toast(v ? 'Kid mode on — explicit songs hidden, separate taste profile active' : 'Kid mode off — back to your own taste profile');
-            }}
-            label="Kid mode"
-          />
-        </Row>
-        <div className="py-3.5 border-b border-[color:var(--glass-border)]">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div>
-              <p className="text-sm font-medium">Preferred languages</p>
-              <p className="text-xs text-ink-400 mt-0.5">Pinned languages get boosted everywhere.</p>
+          <Section title="Appearance" id="appearance">
+            <Row stack label="App language" keywords="display language interface">
+              <Segmented label="App language" value={s.uiLanguage} onChange={s.setUiLanguage} options={UI_LANGS.map((l) => ({ value: l.id, label: l.label }))} />
+            </Row>
+            <Row stack label="Theme" keywords="dark light black system auto day night mode">
+              <Segmented
+                label="Theme"
+                value={s.theme}
+                onChange={s.setTheme}
+                options={[
+                  { value: 'dark', label: 'Dark' },
+                  { value: 'amoled', label: 'Black' },
+                  { value: 'light', label: 'Light' },
+                  { value: 'system', label: 'System' },
+                  { value: 'auto', label: 'Auto', title: 'Auto (day/night)' },
+                ]}
+              />
+            </Row>
+            <FestivalRow />
+            <Row stack label="Accent color" keywords="colour highlight buttons links player">
+              <div className="vx-set-swatches" role="radiogroup" aria-label="Accent color">
+                {ACCENT_OPTIONS.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={s.accent === a.id}
+                    aria-label={`${a.label} accent`}
+                    title={a.label}
+                    onClick={() => s.setAccent(a.id)}
+                    className="vx-set-swatch"
+                    style={{ backgroundColor: a.dot }}
+                  />
+                ))}
+              </div>
+            </Row>
+            <Row stack label="Custom accent" note="Any colour. VinaX builds a readable palette from it." keywords="colour color palette hex">
+              <div className="flex items-center gap-2">
+                <input type="color" aria-label="Custom accent colour" value={s.accentCustom ?? '#1ed760'} onChange={(e) => s.setAccentCustom(e.target.value)} className="vx-set-color" />
+                <input value={s.accentCustom ?? ''} onChange={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-fA-F]{6}$/.test(v)) s.setAccentCustom(v); }} placeholder="#1ed760" maxLength={7} className="vx-set-input w-28 font-mono" aria-label="Custom accent hex" />
+                {s.accent === 'custom' && <RowButton onClick={() => s.setAccentCustom(null)}>Use a preset</RowButton>}
+              </div>
+            </Row>
+            <Row stack label="Display size" note="Text and controls, everywhere." keywords="scale font zoom">
+              <Segmented label="Display size" value={s.uiScale} onChange={s.setUiScale} options={[{ value: 'sm', label: 'Small' }, { value: 'md', label: 'Default' }, { value: 'lg', label: 'Large' }]} />
+            </Row>
+            <Row stack label="Density" keywords="comfortable compact spacing">
+              <Segmented label="Density" value={s.density} onChange={s.setDensity} options={[{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }]} />
+            </Row>
+            <Row label="High contrast" note="Brighter text, visible borders and a strong focus ring." keywords="accessibility">
+              <Toggle on={s.highContrast} onChange={s.setHighContrast} label="High contrast" />
+            </Row>
+            <Row stack label="Glass effect" note="From solid panels to frosted glass." keywords="transparency see-through classic">
+              <RangeRow from="Solid" to="Glass">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={s.glassLevel}
+                  aria-label="Glass effect intensity"
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    s.setGlassLevel(v);
+                    applyGlassLevel(v, s.glassBlur);
+                  }}
+                />
+              </RangeRow>
+            </Row>
+            <Row stack label="Background blur" note="From sharp to a soft, hazy backdrop." keywords="glass haze">
+              <RangeRow from="Sharp" to="Hazy">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={s.glassBlur}
+                  aria-label="Background blur intensity"
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    s.setGlassBlur(v);
+                    applyGlassLevel(s.glassLevel, v);
+                  }}
+                />
+              </RangeRow>
+            </Row>
+            <Row label="Dynamic theme" note="Takes the accent from the playing song’s artwork." keywords="experimental colour">
+              <Toggle on={s.dynamicTheme} onChange={s.setDynamicTheme} label="Dynamic theme" />
+            </Row>
+            <Row label="Reduce motion" note="Fewer animations and transitions." keywords="accessibility motion sensitivity older phones">
+              <Toggle on={s.reduceMotion} onChange={(v) => { s.setReduceMotion(v); document.documentElement.classList.toggle('reduce-motion', v); }} label="Reduce motion" />
+            </Row>
+            <Block label="Startup page" note="What opens first." keywords="home search library last where I left off">
+              <div className="flex gap-2 flex-wrap">
+                {(['home', 'search', 'library', 'last'] as const).map((v) => (
+                  <Chip key={v} active={s.startPage === v} onClick={() => s.setStartPage(v)}>{v === 'home' ? 'Home' : v === 'search' ? 'Search' : v === 'library' ? 'Library' : 'Where I left off'}</Chip>
+                ))}
+              </div>
+            </Block>
+          </Section>
+
+          <Section title="Playback" id="playback">
+            <Row label="Autoplay" note="Start playing as soon as you pick a song.">
+              <Toggle on={s.autoplay} onChange={s.setAutoplay} label="Autoplay" />
+            </Row>
+            <Row label="Crossfade" note="Fade between songs and fade new songs in." keywords="smooth transition">
+              <Toggle on={s.crossfade} onChange={s.setCrossfade} label="Crossfade" />
+            </Row>
+            {s.crossfade && (
+              <Row stack label="Crossfade length">
+                <Segmented label="Crossfade length" value={s.crossfadeSeconds} onChange={s.setCrossfadeSeconds} options={[3, 5, 8, 12].map((n) => ({ value: n, label: `${n}s` }))} />
+              </Row>
+            )}
+            <Row label="Resume playback" note="Pick up longer tracks where you left off.">
+              <Toggle on={s.resumePlayback} onChange={s.setResumePlayback} label="Resume playback" />
+            </Row>
+            <Row stack label="Audio quality" note="The closest available stream; falls back automatically." keywords="bitrate low medium high">
+              <Segmented<AudioQualityPref> label="Audio quality" value={s.audioQuality} onChange={s.setAudioQuality} options={[{ value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }]} />
+            </Row>
+            <Row label="Data saver" note="Lightest audio, no video canvas, lighter artwork." keywords="mobile data">
+              <Toggle on={s.dataSaver} onChange={s.setDataSaver} label="Data saver" />
+            </Row>
+            <Row label="Keep screen on in player" note="While the full-screen player is open and playing." keywords="wake lock">
+              <Toggle on={s.keepScreenOn} onChange={s.setKeepScreenOn} label="Keep screen on in player" />
+            </Row>
+            {isNativePlatform() && (
+              <Row label="Lock screen lyrics" note="The current synced line on your lock screen and media controls.">
+                <Toggle on={s.lockScreenLyrics} onChange={(v) => { s.setLockScreenLyrics(v); if (v) void ensureNotificationPermission().then(() => getNotificationPermission().then(setNotifPerm)); }} label="Lock screen lyrics" />
+              </Row>
+            )}
+            {notifPerm === 'denied' && (
+              <div className="vx-set-banner">
+                <span>Notifications are off — lock-screen lyrics and playback controls need them to appear.</span>
+                <button
+                  type="button"
+                  onClick={() => void ensureNotificationPermission().then(() => getNotificationPermission().then(setNotifPerm))}
+                  className="vx-tap vx-set-btn is-accent"
+                >
+                  Enable
+                </button>
+              </div>
+            )}
+            <Row
+              label="DJ voice"
+              note="The DJ introduces each song while the music ducks. The studio voice sends the line to the service; your device’s voice is the offline fallback."
+              keywords="segue now playing speak voice talk"
+            >
+              <Toggle on={s.djVoice} onChange={s.setDjVoice} label="DJ voice" />
+            </Row>
+            <Row stack label="Lyrics size" note="Synced lyrics in the player, karaoke and lyrics page." keywords="text">
+              <Segmented label="Lyrics size" value={s.lyricsSize} onChange={s.setLyricsSize} options={[{ value: 'sm', label: 'Small' }, { value: 'md', label: 'Medium' }, { value: 'lg', label: 'Large' }, { value: 'xl', label: 'Huge' }]} />
+            </Row>
+            {isNativePlatform() && (
+              <Row label="Haptics" note="Subtle vibration on key actions.">
+                <Toggle on={s.haptics} onChange={s.setHaptics} label="Haptics" />
+              </Row>
+            )}
+            <Row stack label="Daily listening goal" note="A ring on Your VinaX fills as you listen." keywords="minutes target">
+              <Segmented
+                label="Daily listening goal"
+                value={s.dailyGoalMinutes}
+                onChange={s.setDailyGoalMinutes}
+                options={[0, 15, 30, 60, 120].map((n) => ({ value: n, label: n === 0 ? 'Off' : n >= 60 ? `${n / 60}h` : `${n} min` }))}
+              />
+            </Row>
+            <NeverPlayRow />
+          </Section>
+
+          {/* v5.19.0 — on-device sound processing (restyled to this list from settings.css).
+              Its rows are its own markup, so search matches the block as a whole. */}
+          {matchesQuery(settingsQuery.trim(), SOUND_KEYWORDS) && (
+            <div data-tour="sound" id="sound" className="vx-set-sound">
+              {settingsQuery.trim() && <span data-settings-row hidden />}
+              <SoundSettings />
             </div>
-            <button
-              onClick={() => {
-                const allPinned = s.pinnedLanguages.length === LANGUAGES.length;
-                s.setPinnedLanguages(allPinned ? [] : LANGUAGES.map((l) => l.id));
-                if (!allPinned) s.setMutedLanguages([]);
-              }}
-              className="shrink-0 px-3 py-1.5 rounded-full glass-button text-xs font-semibold"
-            >
-              {s.pinnedLanguages.length === LANGUAGES.length ? 'Clear all' : 'All languages'}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {LANGUAGES.map((l) => (
-              <Chip key={l.id} active={s.pinnedLanguages.includes(l.id)} onClick={() => s.togglePinnedLanguage(l.id)}>
-                {l.label}
-              </Chip>
-            ))}
-          </div>
-        </div>
-        <div className="py-3.5">
-          <p className="text-sm font-medium">Muted languages</p>
-          <p className="text-xs text-ink-400 mt-0.5 mb-3">Never recommended anywhere.</p>
-          <div className="flex flex-wrap gap-2">
-            {LANGUAGES.map((l) => (
-              <Chip key={l.id} active={s.mutedLanguages.includes(l.id)} tone="danger" onClick={() => s.toggleMutedLanguage(l.id)}>
-                {l.label}
-              </Chip>
-            ))}
-          </div>
-        </div>
-      </Section>
+          )}
 
-      <div className="mb-6 rounded-2xl p-5 glass-card relative overflow-hidden">
-        <div
-          aria-hidden
-          className="absolute -inset-px pointer-events-none bg-[radial-gradient(60%_100%_at_0%_0%,rgb(var(--aura-violet)/0.12),transparent_70%)]"
-        />
-        <div className="relative flex items-start gap-4">
-          <div className="w-11 h-11 rounded-2xl bg-ember-500/15 text-ember-400 flex items-center justify-center shrink-0">
-            <ShieldIcon className="w-6 h-6" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-base font-bold">Private by design</h2>
-            <p className="text-sm text-ink-300 mt-1 leading-relaxed">
-              No login. No profile servers. Your taste — favorites, history, recommendations — lives on this
-              device, stays yours to export, and can be erased any time.
-            </p>
-            <p className="text-xs text-ink-400 mt-2.5">
-              <Link to="/privacy" className="text-ember-400 hover:underline">How privacy works</Link>
-              {' · '}
-              <Link to="/taste-profile" className="text-ember-400 hover:underline">See what VinaX knows about you</Link>
-            </p>
-          </div>
+          <Section title="Recommendations" id="recommendations">
+            {/* 7.2 — what the app believes about this listener, before the switches that change it. */}
+            <Block
+              label="What VinaX thinks you like"
+              note="From the taste profile on this device. Nothing here is uploaded."
+              keywords="personalization preview taste languages artists muted"
+            >
+              <div className="vx-set-preview">
+                <PersonalizationPreview />
+              </div>
+            </Block>
+            <Block
+              label="Trending vs. your taste"
+              note="How much Home and the DJ lean on what is popular right now."
+              keywords="intensity personalization trending against what you actually play"
+            >
+              <RangeRow from="Trending" to="Your taste">
+                <input
+                  type="range"
+                  aria-label="Trending vs. your taste"
+                  aria-valuetext={intensityWords(s.recommendationIntensity)}
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={s.recommendationIntensity}
+                  onChange={(e) => s.setRecommendationIntensity(Number(e.target.value))}
+                  style={{ '--fill': `${s.recommendationIntensity * 100}%` } as React.CSSProperties}
+                />
+              </RangeRow>
+              <p className="vx-set-hint mt-2">{intensityWords(s.recommendationIntensity)}.</p>
+            </Block>
+            <Block
+              label="Discovery"
+              note="How far recommendations roam. Every queue stays in the language of the song that is playing and opens with songs you know."
+              keywords="familiar balanced discover explore new artists"
+            >
+              <div className="vx-set-options" role="group" aria-label="Discovery mode">
+                {DISCOVERY_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    aria-label={o.label}
+                    aria-pressed={s.discoveryMode === o.value}
+                    aria-describedby={`vx-discovery-${o.value}`}
+                    onClick={() => s.setDiscoveryMode(o.value)}
+                    className="vx-set-option"
+                  >
+                    <span className="vx-set-option-title">
+                      {o.label}
+                      <CheckIcon className="vx-set-option-check" />
+                    </span>
+                    <span id={`vx-discovery-${o.value}`} className="vx-set-option-line">{o.line}</span>
+                  </button>
+                ))}
+              </div>
+            </Block>
+            <Row
+              label="AI DJ"
+              note="The DJ engine orders what plays next — an energy arc, no repeats — and suggests a few songs beyond the app’s picks, each checked against the catalogue. Off keeps the on-device order."
+              keywords="sequence queue reason"
+            >
+              <Toggle on={s.aiDj} onChange={s.setAiDj} label="AI DJ" />
+            </Row>
+            <Row
+              label="DJ builds every queue"
+              note="Tap any song and the DJ builds what follows from it. Off plays the list you tapped. Songs you queue by hand are never replaced."
+              keywords="album playlist shelf queue builder takeover"
+            >
+              <Toggle on={s.djTakeover} onChange={s.setDjTakeover} label="DJ builds every queue" />
+            </Row>
+            <Row
+              label="AI-designed shelves on Home"
+              note="A “Designed for you” block titled from your taste and the time of day, and an AI-ordered “Trending for you”. Off keeps Trending in your own order."
+              keywords="home shelves designed for you"
+            >
+              <Toggle on={s.aiHomeShelves} onChange={s.setAiHomeShelves} label="AI-designed shelves" />
+            </Row>
+            {/* 7.2 — the temporary mutes, kept well away from the permanent "Never play" list. */}
+            <Block
+              label="Playing less of"
+              note="Artists you asked to hear less of with “Less like this”. Each one comes back on its own; Never play, under Playback, is the permanent block."
+              keywords="soft mute muted less like this artists"
+            >
+              <SoftMuteList />
+            </Block>
+            <Row
+              label="Kid mode"
+              note="Hides songs the catalogue marks explicit, everywhere, and keeps a separate taste profile. Favourites and downloads stay shared. Only as good as the catalogue’s flags."
+              keywords="children explicit family"
+            >
+              <Toggle
+                on={s.kidMode}
+                onChange={(v) => {
+                  s.setKidMode(v);
+                  toast(v ? 'Kid mode on — explicit songs hidden, separate taste profile active' : 'Kid mode off — back to your own taste profile');
+                }}
+                label="Kid mode"
+              />
+            </Row>
+            <Block
+              label="Preferred languages"
+              note="Pinned languages get boosted everywhere."
+              keywords="pinned language boost"
+              action={
+                <RowButton
+                  onClick={() => {
+                    const allPinned = s.pinnedLanguages.length === LANGUAGES.length;
+                    s.setPinnedLanguages(allPinned ? [] : LANGUAGES.map((l) => l.id));
+                    if (!allPinned) s.setMutedLanguages([]);
+                  }}
+                >
+                  {s.pinnedLanguages.length === LANGUAGES.length ? 'Clear all' : 'All languages'}
+                </RowButton>
+              }
+            >
+              <div className="flex flex-wrap gap-2">
+                {LANGUAGES.map((l) => (
+                  <Chip key={l.id} active={s.pinnedLanguages.includes(l.id)} onClick={() => s.togglePinnedLanguage(l.id)}>
+                    {l.label}
+                  </Chip>
+                ))}
+              </div>
+            </Block>
+            <Block label="Muted languages" note="Never recommended anywhere." keywords="mute language hide">
+              <div className="flex flex-wrap gap-2">
+                {LANGUAGES.map((l) => (
+                  <Chip key={l.id} active={s.mutedLanguages.includes(l.id)} tone="danger" onClick={() => s.toggleMutedLanguage(l.id)}>
+                    {l.label}
+                  </Chip>
+                ))}
+              </div>
+            </Block>
+          </Section>
+
+          {showNotifications && (
+            <Section title="Notifications" id="notifications">
+              {pushSupported() ? (
+                <Row label="Push notifications" note="New song picks on this device. Turn off anytime.">
+                  <Toggle on={pushOn} onChange={(v) => void togglePush(v)} label="Push notifications" />
+                </Row>
+              ) : (
+                <Row label="New-music alerts" note="New announcements appear as notifications when the app opens.">
+                  <Toggle
+                    on={appAlerts}
+                    onChange={(v) => {
+                      setAppAlerts(v);
+                      setAppAlertsEnabled(v);
+                      toast(v ? 'Alerts on' : 'Alerts off');
+                    }}
+                    label="New-music alerts"
+                  />
+                </Row>
+              )}
+            </Section>
+          )}
+
+          <Section title="Wake-up alarm" id="alarm">
+            <Row label="Wake alarm" note="Most reliable with the app open and your phone charging." keywords="plays music at the set time">
+              <Toggle on={alarm.enabled} onChange={(v) => alarm.setEnabled(v)} label="Wake alarm" />
+            </Row>
+            {alarm.enabled && (
+              <>
+                <Row label="Time">
+                  <input type="time" aria-label="Alarm time" value={alarm.time} onChange={(e) => alarm.setTime(e.target.value)} className="vx-set-input" />
+                </Row>
+                <Block label="Wake with">
+                  <div className="flex gap-2 flex-wrap">
+                    {(['favorites', 'resume'] as const).map((a) => (
+                      <Chip key={a} active={alarm.action === a} onClick={() => alarm.setAction(a)}>
+                        {a === 'favorites' ? 'Shuffle favorites' : 'Resume'}
+                      </Chip>
+                    ))}
+                    {/* v5.17.0 — any of your playlists */}
+                    {collections.map((c) => (
+                      <Chip key={c.id} active={alarm.action === 'collection' && alarm.collectionId === c.id} onClick={() => { alarm.setAction('collection'); alarm.setCollectionId(c.id); }}>
+                        {c.name}
+                      </Chip>
+                    ))}
+                  </div>
+                </Block>
+                <Row label="Gentle wake" note="Starts quietly and rises to your volume over 30 seconds.">
+                  <Toggle on={alarm.fadeIn} onChange={alarm.setFadeIn} label="Gentle wake" />
+                </Row>
+              </>
+            )}
+          </Section>
+
+          <Section title="Region & privacy" id="privacy">
+            <Row
+              label="Share anonymous usage"
+              note="City-level location, no account, and session insights with all on-screen text masked, to help improve VinaX. Off by default. Turning it off stops usage events at once and session insights after the next reload."
+              keywords="analytics telemetry consent"
+            >
+              <Toggle
+                on={usageSharing}
+                label="Share anonymous usage"
+                onChange={(v) => {
+                  setLocal(KEYS.analyticsConsent, v);
+                  setUsageSharing(v);
+                  if (v) {
+                    void import('@/services/analytics/telemetry').then((m) => m.registerUser());
+                    void import('@/services/analytics/sessionInsights').then((m) => m.initSessionInsights());
+                  }
+                  toast(v ? 'Thank you — anonymous usage sharing is on' : 'Usage sharing is off');
+                }}
+              />
+            </Row>
+            <Row
+              label="Allow region inference"
+              note={`Coarse country only, from the network edge or your browser’s locale and time zone. Your IP is never stored. Now: ${region ? `${region.country ?? 'unknown'} (${region.source})` : 'unknown'}.`}
+              keywords="location country ip"
+            >
+              <Toggle on={s.allowRegionInference} onChange={s.setAllowRegionInference} label="Allow region inference" />
+            </Row>
+            <Row label="Country override" keywords="location">
+              <select
+                aria-label="Country override"
+                value={s.manualCountry ?? ''}
+                onChange={(e) => s.setManualCountry(e.target.value || null)}
+                className="vx-set-select"
+              >
+                <option value="">Auto-detect</option>
+                {COUNTRIES.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </Row>
+            <Row label="Region override" keywords="location state">
+              <select
+                aria-label="Region override"
+                value={s.manualRegionLabel ?? ''}
+                onChange={(e) => s.setManualRegionLabel(e.target.value || null)}
+                className="vx-set-select"
+              >
+                <option value="">None</option>
+                {REGIONS.map((r) => (
+                  <option key={r.id} value={r.label}>{r.label}</option>
+                ))}
+              </select>
+            </Row>
+            <LinkRow to="/privacy" label="How privacy works" note="No accounts. Your taste lives on this device." keywords="private by design login servers" />
+            <LinkRow to="/taste-profile" label="What VinaX knows about you" note="Your taste profile, in full." keywords="see taste profile" />
+          </Section>
+
+          <Section title="Your data" id="your-data">
+            <UsernameRow />
+            <LinkRow to="/handoff" label="Move to a new device" note="An encrypted, one-use QR. Parked for 10 minutes." keywords="handoff transfer qr" />
+            <Row label="Backup Center" note="What a backup holds and leaves out; restore with a merge-or-replace preview and undo." keywords="restore merge">
+              <RowButton onClick={() => setBackupOpen(true)}>Open</RowButton>
+            </Row>
+            {backupOpen && (
+              <Suspense fallback={null}>
+                <BackupCenter onClose={() => setBackupOpen(false)} />
+              </Suspense>
+            )}
+            <Row
+              label="Export a backup"
+              note="A JSON file of your settings, library, history and taste profile. Never downloaded audio, device identity or caches."
+              keywords="download json smart collections saved searches bookmarks home layout name username"
+            >
+              <RowButton onClick={() => { downloadProfileExport(); toast('Backup file downloaded'); }}>Export</RowButton>
+            </Row>
+            <Row label="Restore a backup (quick)" note="Replaces the same categories on this device. A damaged file changes nothing." keywords="import older exports migrated">
+              <>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  aria-label="Choose a VinaX backup file"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!f) return;
+                    const read = await readBackupFile(f);
+                    if (!read.ok) {
+                      toast(read.error, { duration: 7000 });
+                      return;
+                    }
+                    const out = importProfileJson(read.text);
+                    if (!out.ok) {
+                      const detail = out.rejected?.[0] ? ` ${out.rejected[0].label}: ${out.rejected[0].error}` : '';
+                      toast(`${out.error}${detail}`, { duration: 7000 });
+                    }
+                  }}
+                />
+                <RowButton onClick={() => fileRef.current?.click()}>Restore</RowButton>
+              </>
+            </Row>
+            <Row label="Clear history"><RowButton tone="danger" onClick={clearHistoryWithUndo} label="Clear history">Clear</RowButton></Row>
+            <Row label="Clear favorites"><RowButton tone="danger" onClick={clearFavoritesWithUndo} label="Clear favorites">Clear</RowButton></Row>
+            <Row label="Clear queue"><RowButton tone="danger" onClick={clearQueue} label="Clear queue">Clear</RowButton></Row>
+            <Row label="Clear cached metadata" note="Drops the in-memory cache; data refetches on demand." keywords="api cache">
+              <RowButton tone="danger" onClick={clearCachedMetadata} label="Clear cached metadata">Clear</RowButton>
+            </Row>
+            <Row
+              label="Reset taste profile"
+              note="Erases what VinaX learned and the event log behind it. Offers a backup first. Favorites, playlists and history stay."
+              keywords="languages artists habits dials less like this mutes"
+            >
+              <RowButton tone="danger" onClick={() => setResetOpen(true)} label="Reset taste profile">Reset</RowButton>
+            </Row>
+            {resetOpen && (
+              <Suspense fallback={null}>
+                <ResetTasteSheet onClose={() => setResetOpen(false)} showDataLink={false} />
+              </Suspense>
+            )}
+            <Row label="Reset app state" note="Erases everything VinaX stores on this device and reloads." keywords="erase delete everything">
+              <RowButton tone="danger-solid" onClick={() => setEraseOpen(true)}>Reset</RowButton>
+            </Row>
+          </Section>
+
+          <Section title="Help & about" id="help">
+            <LinkRow to="/help" label="Help & Feedback" note="Guides, answers, and a way to report a bug or share an idea." keywords="faq support how-to" />
+            {!isNativePlatform() && (
+              <LinkRow onClick={() => window.dispatchEvent(new Event('vinax:shortcuts'))} label="Keyboard shortcuts" note="Or press ? anywhere." keywords="space arrows keys" />
+            )}
+            <Row label="App version" note={isNativePlatform() ? 'Checks the website for a newer signed APK.' : 'Updates automatically on deploy.'} keywords="update">
+              <div className="flex items-center gap-2">
+                <span className="vx-set-value">{DISPLAY_VERSION}</span>
+                {isNativePlatform() && (
+                  <RowButton
+                    onClick={() =>
+                      void checkForUpdate({ manual: true }).then((u) => {
+                        if (u) useUpdateStore.getState().setInfo(u);
+                        else toast('You’re on the latest version');
+                      })
+                    }
+                  >
+                    Check for updates
+                  </RowButton>
+                )}
+              </div>
+            </Row>
+          </Section>
         </div>
       </div>
 
-      <Section title="Region & Privacy" icon={ShieldIcon}>
-        <Row
-          label="Share anonymous usage"
-          note="City-level location, no account, and session insights with all on-screen text masked — to help improve VinaX. Off by default. Turning it off stops new usage events at once; session insights stop after the next reload."
-        >
-          <Toggle
-            on={usageSharing}
-            label="Share anonymous usage"
-            onChange={(v) => {
-              setLocal(KEYS.analyticsConsent, v);
-              setUsageSharing(v);
-              if (v) {
-                void import('@/services/analytics/telemetry').then((m) => m.registerUser());
-                void import('@/services/analytics/sessionInsights').then((m) => m.initSessionInsights());
-              }
-              toast(v ? 'Thank you — anonymous usage sharing is on' : 'Usage sharing is off');
-            }}
-          />
-        </Row>
-        <Row
-          label="Allow region inference"
-          note={`Coarse country only — from Cloudflare's edge country header or your browser locale/timezone. Your IP is never stored. Current: ${region ? `${region.country ?? 'unknown'} (${region.source})` : 'unknown'}.`}
-        >
-          <Toggle on={s.allowRegionInference} onChange={s.setAllowRegionInference} label="Allow region inference" />
-        </Row>
-        <Row label="Country override">
-          <select
-            aria-label="Country override"
-            value={s.manualCountry ?? ''}
-            onChange={(e) => s.setManualCountry(e.target.value || null)}
-            className="glass-input rounded-xl px-3 py-2 text-sm"
-          >
-            <option value="">Auto-detect</option>
-            {COUNTRIES.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
+      {/* C7 — the deletion receipt: exactly what "erase everything" removes,
+          listed from the live KEYS registry so it can never drift stale. */}
+      {eraseOpen && (
+        <Sheet label="Erase everything" onClose={() => setEraseOpen(false)} closeOnBackdrop={false} layout="column" maxHeight="medium" backdropClassName="bg-black/70" className="vx-settings-erase">
+          <h2 className="vx-sheet-title !pt-0">Erase everything?</h2>
+          <p className="vx-sheet-sub mb-4 shrink-0">
+            This deletes the following from this device only. VinaX has no servers holding a copy, so there is no undo.
+          </p>
+          <ul className="vx-erase-list" tabIndex={0} aria-label="What will be erased">
+            {eraseItems.map((item) => (
+              <li key={item}>{item}</li>
             ))}
-          </select>
-        </Row>
-        <Row label="Region override">
-          <select
-            aria-label="Region override"
-            value={s.manualRegionLabel ?? ''}
-            onChange={(e) => s.setManualRegionLabel(e.target.value || null)}
-            className="glass-input rounded-xl px-3 py-2 text-sm"
-          >
-            <option value="">None</option>
-            {REGIONS.map((r) => (
-              <option key={r.id} value={r.label}>{r.label}</option>
-            ))}
-          </select>
-        </Row>
-      </Section>
-
-      <Section title="Your Data" icon={DownloadIcon} id="your-data">
-        <UsernameRow />
-        <Row label="Move to a new device" note="Encrypted QR handoff — scan on the new phone and everything comes across. Parked 10 minutes, burned after one use.">
-          <Link to="/handoff" className="vx-tap px-4 py-2 rounded-full glass-button text-sm inline-block">Start</Link>
-        </Row>
-        <Row label="Backup Center" note="See exactly what a backup includes and leaves out, when you last exported, and restore from a file with a merge-or-replace preview and undo.">
-          <button onClick={() => setBackupOpen(true)} className="vx-tap px-4 py-2 rounded-full glass-button text-sm">Open</button>
-        </Row>
-        {backupOpen && (
-          <Suspense fallback={null}>
-            <BackupCenter onClose={() => setBackupOpen(false)} />
-          </Suspense>
-        )}
-        <Row label="Export a backup" note="A versioned JSON file of your portable data: settings, library, smart collections, history, taste profile, saved searches, bookmarks, Home layout, name and username. Never includes downloaded audio, device identity, host keys or caches.">
-          <button onClick={() => { downloadProfileExport(); toast('Backup file downloaded'); }} className="vx-tap px-4 py-2 rounded-full glass-button text-sm">Export</button>
-        </Row>
-        <Row label="Restore a backup (quick)" note="Replaces the same categories on this device. A damaged file changes nothing; older exports are migrated. Use the Backup Center to preview or merge.">
-          <>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/json"
-              className="hidden"
-              aria-label="Choose a VinaX backup file"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                e.target.value = '';
-                if (!f) return;
-                const read = await readBackupFile(f);
-                if (!read.ok) {
-                  toast(read.error, { duration: 7000 });
-                  return;
-                }
-                const out = importProfileJson(read.text);
-                if (!out.ok) {
-                  const detail = out.rejected?.[0] ? ` ${out.rejected[0].label}: ${out.rejected[0].error}` : '';
-                  toast(`${out.error}${detail}`, { duration: 7000 });
-                }
+          </ul>
+          <div className="vx-sheet-actions">
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(eraseItems.join('\n')).then(() => toast('List copied'));
               }}
-            />
-            <button onClick={() => fileRef.current?.click()} className="vx-tap px-4 py-2 rounded-full glass-button text-sm">Restore</button>
-          </>
-        </Row>
-        <Row label="Clear history"><button onClick={clearHistoryWithUndo} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
-        <Row label="Clear favorites"><button onClick={clearFavoritesWithUndo} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
-        <Row label="Clear queue"><button onClick={clearQueue} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button></Row>
-        <Row label="Clear cached metadata" note="Drops the in-memory API cache; data refetches on demand.">
-          <button onClick={clearCachedMetadata} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Clear</button>
-        </Row>
-        <Row label="Reset taste profile" note="Erases what VinaX learned — languages, artists, habits, dials and “Less like this” mutes — and the event log behind them. Offers a backup first. Favorites, playlists and history stay.">
-          <button onClick={() => setResetOpen(true)} className="vx-tap px-4 py-2 rounded-full border border-ink-600 text-sm hover:border-red-400 hover:text-red-300">Reset</button>
-        </Row>
-        {resetOpen && (
-          <Suspense fallback={null}>
-            <ResetTasteSheet onClose={() => setResetOpen(false)} showDataLink={false} />
-          </Suspense>
-        )}
-        <Row label="Reset app state" note="Erases everything VinaX stores on this device and reloads.">
-          <button
-            onClick={() => setEraseOpen(true)}
-            className="vx-tap px-4 py-2 rounded-full bg-red-500/15 border border-red-500/50 text-red-300 text-sm font-semibold hover:bg-red-500/25"
-          >
-            Reset
-          </button>
-        </Row>
-        {/* C7 — the deletion receipt: exactly what "erase everything" removes,
-            listed from the live KEYS registry so it can never drift stale. */}
-        {eraseOpen && (
-          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-ink-950/80 backdrop-blur-sm p-0 sm:p-6" role="dialog" aria-modal="true" aria-label="Erase everything">
-            <div ref={eraseRef} className="w-full sm:max-w-md glass-modal rounded-t-3xl sm:rounded-3xl p-6 max-h-[85vh] overflow-y-auto">
-              <h2 className="text-xl font-bold mb-1">Erase everything?</h2>
-              <p className="text-xs text-ink-400 mb-4">
-                This deletes the following from THIS device only — VinaX has no servers holding a copy, so there is no undo.
-              </p>
-              <ul className="space-y-1 mb-4 text-[13px] text-ink-200">
-                {eraseItems.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span aria-hidden className="text-red-300 mt-0.5">✕</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex gap-2.5">
-                <button
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(eraseItems.join('\n')).then(() => toast('List copied'));
-                  }}
-                  className="px-4 py-2.5 rounded-full border border-ink-600 text-sm text-ink-200"
-                >
-                  Copy list
-                </button>
-                <button onClick={() => setEraseOpen(false)} className="flex-1 px-4 py-2.5 rounded-full border border-ink-600 text-sm font-semibold text-ink-200">
-                  Keep my data
-                </button>
-                <button
-                  onClick={() => void resetAppState()}
-                  className="px-4 py-2.5 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 text-sm font-bold hover:bg-red-500/30"
-                >
-                  Erase all
-                </button>
-              </div>
-            </div>
+              className="btn-secondary !flex-none px-4 text-sm"
+            >
+              Copy list
+            </button>
+            <button type="button" onClick={() => setEraseOpen(false)} className="btn-secondary text-sm">
+              Keep my data
+            </button>
+            <button type="button" onClick={() => void resetAppState()} className="vx-erase-confirm">
+              Erase all
+            </button>
           </div>
-        )}
-      </Section>
-
-      <p className="text-xs text-ink-400 leading-relaxed mb-8 px-1">
-        Privacy: VinaX has no accounts and no user backend. Favorites, history, queue, settings, and
-        your taste profile exist only in this browser/app. Region awareness uses, at most, a coarse
-        country code from Cloudflare’s edge or your browser locale — raw IP addresses are never read
-        by the app and never stored. Your taste profile stays on your device.
-      </p>
-    </div>
+        </Sheet>
+      )}
     </SettingsSearchCtx.Provider>
   );
 }

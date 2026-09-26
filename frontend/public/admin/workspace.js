@@ -477,15 +477,14 @@
     var root = host();
     if (!root) return;
     root.innerHTML =
-      '<div class="ops-hero"><div><span class="ops-eyebrow">YOUR OPERATIONS WORKSPACE</span><h2>Stay ahead of the next play.</h2><p>Audience pulse, search recovery, and the work that matters.</p></div><div class="ops-hero-actions">' +
-      button(busy ? 'Refreshing…' : 'Refresh sources', 'refresh', busy ? 'disabled' : '') +
-      button('Download handover ↓', 'report') +
-      '</div></div>' +
-      '<div class="ops-meta"><span>' +
+      '<div class="ops-hero"><div class="ops-meta"><span>' +
       (fetchedAt
         ? 'Sources checked ' + new Date(fetchedAt).toLocaleTimeString()
         : 'Sources have not been checked yet') +
-      '</span><span>Preferences, tasks & notes · this browser only</span></div>' +
+      '</span><span>Preferences, tasks and notes stay in this browser</span></div><div class="ops-hero-actions">' +
+      button('Download handover', 'report') +
+      button(busy ? 'Refreshing…' : 'Refresh sources', 'refresh', busy ? 'disabled' : '').replace('class="ghost" ', '') +
+      '</div></div>' +
       (storageFailed
         ? '<p class="ops-warning" role="alert">Browser storage is unavailable. These changes will be lost on reload. Download a handover to keep a copy.</p>'
         : '') +

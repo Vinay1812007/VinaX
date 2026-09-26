@@ -8,13 +8,9 @@ import { DISPLAY_VERSION } from '@/constants/version';
 // on the effect that actually needs it (audit finding: undid the P2-shape
 // win from the "Living Glass" consolidation).
 import type { VersionInfo, ChangeEntry } from '@/constants/changelog';
-import { Sheet } from './Sheet';
+import { Sheet, SheetHeader } from './Sheet';
 
-const TYPE_META: Record<ChangeEntry['type'], { label: string; dot: string; bg: string; text: string }> = {
-  new:      { label: 'New',      dot: 'bg-emerald-400', bg: 'bg-emerald-400/10', text: 'text-emerald-400' },
-  improved: { label: 'Improved', dot: 'bg-sky-400',     bg: 'bg-sky-400/10',     text: 'text-sky-400' },
-  fixed:    { label: 'Fixed',    dot: 'bg-amber-400',   bg: 'bg-amber-400/10',   text: 'text-amber-400' },
-};
+const TYPE_LABEL: Record<ChangeEntry['type'], string> = { new: 'New', improved: 'Improved', fixed: 'Fixed' };
 
 /** Group ChangeEntry[] by type, preserving order within each group. */
 function groupByType(changes: ChangeEntry[]): Record<ChangeEntry['type'], ChangeEntry[]> {
@@ -82,63 +78,51 @@ export function WhatsNewSheet() {
 
   if (!open || !notes) return null;
 
+  // The release title usually opens with the version already ("VinaX 8.0 — …").
+  const subtitle = !notes.title
+    ? DISPLAY_VERSION
+    : notes.title.startsWith(DISPLAY_VERSION)
+      ? notes.title
+      : `${DISPLAY_VERSION} · ${notes.title}`;
+
   return (
     // Backdrop taps do not dismiss this one (as before): it closes through
     // its button, Escape or back — all of which stamp the fingerprint.
-    <Sheet onClose={dismiss} labelledBy="whats-new-title" z={60} padding="lg" layout="column" maxHeight="medium" closeOnBackdrop={false} backdropClassName="bg-ink-950/80 backdrop-blur-sm">
-        <div className="flex items-center gap-3 mb-4">
-          <img src="/icons/icon.svg" alt="" className="w-10 h-10 rounded-xl" />
-          <div>
-            <h2 id="whats-new-title" className="text-xl font-bold">What&apos;s new</h2>
-            <p className="text-xs text-ink-400">
-              {DISPLAY_VERSION}
-              {notes.title && (
-                <span className="ml-1.5 text-ink-300 font-medium">— {notes.title}</span>
-              )}
-            </p>
-          </div>
-        </div>
+    <Sheet onClose={dismiss} labelledBy="whats-new-title" z={60} padding="lg" layout="column" maxHeight="medium" closeOnBackdrop={false} backdropClassName="bg-black/60">
+      <SheetHeader id="whats-new-title" title="What’s new" subtitle={subtitle} className="shrink-0" />
 
-        <div className="overflow-y-auto flex-1 -mx-1 px-1 mb-6">
-          <StructuredNotes changes={notes.changes} />
-        </div>
+      <div className="overflow-y-auto overscroll-contain flex-1 min-h-0 -mx-1 px-1">
+        <StructuredNotes changes={notes.changes} />
+      </div>
 
-        <button type="button" onClick={dismiss} className="w-full py-3 rounded-full btn-primary shrink-0">
-          Nice — let&apos;s go
-        </button>
+      <button type="button" onClick={dismiss} className="mt-6 w-full sm:w-auto sm:self-end sm:px-8 min-h-[48px] rounded-full btn-primary shrink-0">
+        Let&rsquo;s go
+      </button>
     </Sheet>
   );
 }
 
-/** Renders v2-style categorized changelog with colored badges and section headers. */
+/** The release notes, grouped New / Improved / Fixed: a small label, then a hairline list. */
 function StructuredNotes({ changes }: { changes: ChangeEntry[] }) {
   const groups = groupByType(changes);
   const order: ChangeEntry['type'][] = ['new', 'improved', 'fixed'];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {order.map((type) => {
         const items = groups[type];
         if (items.length === 0) return null;
-        const meta = TYPE_META[type];
         return (
-          <div key={type}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`inline-block w-2 h-2 rounded-full ${meta.dot}`} />
-              <span className={`text-xs font-semibold uppercase tracking-wider ${meta.text}`}>
-                {meta.label}
-              </span>
-              <span className="text-xs text-ink-500">{items.length}</span>
-            </div>
-            <ul className="space-y-1.5 pl-4">
+          <section key={type} aria-label={TYPE_LABEL[type]}>
+            <h3 className="mb-1 text-[13px] font-bold text-ink-400">{TYPE_LABEL[type]}</h3>
+            <ul className="divide-y divide-[color:var(--vx-border)]">
               {items.map((item) => (
-                <li key={item.text} className="text-sm text-ink-200 leading-relaxed flex items-start gap-2">
-                  <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot} opacity-50`} />
-                  <span>{item.text}</span>
+                <li key={item.text} className="py-2.5 text-[14px] leading-relaxed text-ink-200">
+                  {item.text}
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         );
       })}
     </div>

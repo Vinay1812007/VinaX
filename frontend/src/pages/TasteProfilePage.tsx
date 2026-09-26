@@ -12,28 +12,30 @@ import { EmptyState, ErrorState } from '@/components/States';
 import { SoftMuteList } from '@/features/personalization/SoftMuteList';
 import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
 import { Link } from 'react-router-dom';
+import { PageHeader } from '@/components/PageHeader';
+import '@/styles/pages/secondary.css';
 
 const ResetTasteSheet = lazy(() => import('@/features/personalization/ResetTasteSheet').then((m) => ({ default: m.ResetTasteSheet })));
 
 function Bar({ label, value, max, suffix }: { label: string; value: number; max: number; suffix?: string }) {
   const pct = max > 0 ? Math.max(4, Math.round((value / max) * 100)) : 0;
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="w-32 sm:w-44 truncate text-ink-200" title={label}>{label}</span>
-      <div className="flex-1 h-2.5 rounded-full bg-ink-800 overflow-hidden">
-        <div className="h-full rounded-full bg-gradient-to-r from-ember-600 to-ember-400" style={{ width: `${pct}%` }} />
+    <div className="vx-meter">
+      <span title={label}>{label}</span>
+      <div className="vx-bar" aria-hidden>
+        <span style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-14 text-right text-xs text-ink-400 tabular-nums">{suffix ?? value.toFixed(0)}</span>
+      <span>{suffix ?? value.toFixed(0)}</span>
     </div>
   );
 }
 
 function Section({ title, children, note }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-ink-700 bg-ink-850/50 p-5 mb-5">
-      <h2 className="text-base font-bold mb-1">{title}</h2>
-      {note && <p className="text-xs text-ink-400 mb-3">{note}</p>}
-      <div className="space-y-2.5 mt-3">{children}</div>
+    <section className="vx-sec-block">
+      <h2 className="vx-sec-title">{title}</h2>
+      {note && <p className="vx-sec-lede">{note}</p>}
+      <div className="vx-group is-padded space-y-1">{children}</div>
     </section>
   );
 }
@@ -70,12 +72,12 @@ function TasteDials() {
   return (
     <Section
       title="Fine-tune your mix"
-      note="Nudge these to steer your recommendations. Centre means your listening decides. Saved only on this device."
+      note="Centre means your listening decides. Saved only on this device."
     >
-      <div className="space-y-4 mt-1">
+      <div className="space-y-6">
         {DIALS.map((d) => (
           <div key={d.key}>
-            <div className="flex justify-between text-xs font-semibold text-ink-200 mb-1.5">
+            <div className="flex justify-between text-[14px] font-semibold text-ink-100 mb-2">
               <span>{d.left}</span>
               <span>{d.right}</span>
             </div>
@@ -90,7 +92,7 @@ function TasteDials() {
               aria-valuetext={vals[d.key] <= 0.3 ? d.left : vals[d.key] >= 0.7 ? d.right : 'Balanced'}
               className="w-full accent-ember-500 cursor-pointer"
             />
-            <p className="text-[11px] text-ink-500 mt-1">{d.hint}</p>
+            <p className="text-[13px] text-ink-400 mt-1.5">{d.hint}</p>
           </div>
         ))}
       </div>
@@ -127,14 +129,11 @@ export default function TasteProfilePage() {
   const maxDay = Math.max(...data.recentTrend.map((d) => d.plays), 1);
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h1 className="text-display tracking-tight mb-1">Your Taste Profile</h1>
-      <p className="text-sm text-ink-400 mb-5">
-        Everything below is computed and stored only on this device. It powers Made For You.
-      </p>
+    <div className="vx-sec">
+      <PageHeader title="Your taste profile" subtitle="Computed and stored only on this device. It powers Made for you." />
 
       {/* 7.2 — the same plain-words preview Settings shows, and the way to add to it. */}
-      <div className="mb-5">
+      <div className="vx-sec-block">
         <PersonalizationPreview showProfileLink={false} />
       </div>
 
@@ -152,64 +151,59 @@ export default function TasteProfilePage() {
             <Bar label="Profile confidence" value={data.confidence * 100} max={100} suffix={`${Math.round(data.confidence * 100)}%`} />
           </Section>
 
-          <Section title="Top Languages" note="Time-decayed affinity from plays, completions, favorites, and skips.">
+          <Section title="Top languages" note="Time-decayed affinity from plays, completions, favorites, and skips.">
             {data.topLanguages.map((l) => (
               <Bar key={l.id} label={l.label} value={l.score} max={maxLang} suffix={`${l.plays} plays`} />
             ))}
             {data.topLanguages.length === 0 && <p className="text-sm text-ink-400">No language signal yet.</p>}
           </Section>
 
-          <Section title="Top Artists">
+          <Section title="Top artists">
             {data.topArtists.map((a) => (
               <Bar key={a.name} label={a.name} value={a.score} max={maxArtist} suffix={`${a.plays} plays`} />
             ))}
           </Section>
 
-          <Section title="Most Replayed">
+          <Section title="Most replayed">
             {data.mostReplayed.map((s) => (
-              <div key={s.songId} className="flex items-center justify-between text-sm">
-                <Link to={songPath({ id: s.songId, title: s.title })} className="truncate hover:text-ember-400">{s.title}</Link>
-                <span className="text-xs text-ink-400 shrink-0 ml-3">{s.count}×</span>
+              <div key={s.songId} className="flex items-center justify-between min-h-[36px] text-[14px]">
+                <Link to={songPath({ id: s.songId, title: s.title })} className="truncate font-semibold text-ink-100 hover:underline">{s.title}</Link>
+                <span className="text-ink-400 shrink-0 ml-3 tabular-nums">{s.count}×</span>
               </div>
             ))}
             {data.mostReplayed.length === 0 && <p className="text-sm text-ink-400">No repeats yet.</p>}
           </Section>
 
-          <Section title="Listening Clock" note="Plays by hour of day — feeds time-of-day shelves like Night Vibes.">
-            <div className="flex items-end gap-1 h-24">
+          <Section title="Listening clock" note="Plays by hour of day — feeds time-of-day shelves like Night Vibes.">
+            <div className="flex items-end gap-1 h-28 pb-4 relative">
               {data.hourHistogram.map((v, h) => (
-                <div key={h} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full rounded-t bg-tide-500/70" style={{ height: `${Math.max(3, (v / maxHour) * 100)}%` }} />
-                  {h % 6 === 0 && <span className="text-[9px] text-ink-500">{h}</span>}
+                <div key={h} className="flex-1 h-full flex flex-col justify-end items-center relative">
+                  <div className="w-full rounded-t-[3px] bg-ember-500/80" style={{ height: `${Math.max(3, (v / maxHour) * 100)}%` }} />
+                  {h % 6 === 0 && <span className="absolute -bottom-4 text-[10px] font-semibold text-ink-400 tabular-nums">{h}</span>}
                 </div>
               ))}
             </div>
           </Section>
 
-          <Section title="Last 7 Days">
+          <Section title="Last 7 days">
             {data.recentTrend.map((d) => (
               <Bar key={d.day} label={d.day} value={d.plays} max={maxDay} suffix={`${d.plays}`} />
             ))}
           </Section>
 
-          <Section title="Completion vs Skips" note="Low-skip listening strengthens recommendations for that language/artist.">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-              <div className="rounded-xl bg-ink-800 p-3">
-                <p className="text-2xl font-bold text-tide-400">{data.listeningMinutes >= 60 ? `${Math.floor(data.listeningMinutes / 60)}h ${data.listeningMinutes % 60}m` : `${data.listeningMinutes}m`}</p>
-                <p className="text-xs text-ink-400">listened (≈)</p>
-              </div>
-              <div className="rounded-xl bg-ink-800 p-3">
-                <p className="text-2xl font-bold">{data.totals.completes}</p>
-                <p className="text-xs text-ink-400">completed</p>
-              </div>
-              <div className="rounded-xl bg-ink-800 p-3">
-                <p className="text-2xl font-bold text-ember-400">{data.totals.skips}</p>
-                <p className="text-xs text-ink-400">skipped</p>
-              </div>
-              <div className="rounded-xl bg-ink-800 p-3">
-                <p className="text-2xl font-bold">{data.completionRate != null ? `${Math.round(data.completionRate * 100)}%` : '—'}</p>
-                <p className="text-xs text-ink-400">completion rate</p>
-              </div>
+          <Section title="Completion and skips" note="Low-skip listening strengthens recommendations for that language/artist.">
+            <div className="vx-kpis is-four">
+              {[
+                [data.listeningMinutes >= 60 ? `${Math.floor(data.listeningMinutes / 60)}h ${data.listeningMinutes % 60}m` : `${data.listeningMinutes}m`, 'Listened (≈)'],
+                [String(data.totals.completes), 'Completed'],
+                [String(data.totals.skips), 'Skipped'],
+                [data.completionRate != null ? `${Math.round(data.completionRate * 100)}%` : '—', 'Completion rate'],
+              ].map(([v, l]) => (
+                <div key={l} className="vx-kpi !p-0 !bg-transparent !shadow-none">
+                  <span className="vx-kpi-label">{l}</span>
+                  <span className="vx-kpi-value">{v}</span>
+                </div>
+              ))}
             </div>
           </Section>
         </>
@@ -217,33 +211,31 @@ export default function TasteProfilePage() {
 
       <Section
         title="Playing less of"
-        note="Artists you asked to hear less of with “Less like this”. Each one comes back on its own; “Never play” (Settings → Appearance & Playback) is the permanent block."
+        note="Artists you asked to hear less of with “Less like this”. Each comes back on its own; Never play, in Settings, is the permanent block."
       >
         <SoftMuteList />
       </Section>
 
-      <Section
-        title="How recommendations are formed"
-        note="Your taste profile stays on your device."
-      >
-        <p className="text-sm text-ink-300 leading-relaxed">
+      <Section title="How recommendations are formed">
+        <p className="text-[14px] text-ink-300 leading-relaxed">
           Each candidate song is scored by language affinity, artist affinity, popularity, low-skip
           rate, and source (similar-to / trending / rediscovery), with time decay and a repetition
           guard. Region source:{' '}
           <span className="text-ink-100 font-medium">
             {region ? `${region.country ?? 'unknown'} (${region.source})` : 'unknown'}
           </span>
-          . Adjust intensity in <Link to="/settings" className="text-ember-400">Settings</Link>.
+          . Adjust intensity in <Link to="/settings" className="vx-link">Settings</Link>.
         </p>
       </Section>
 
-      <button
-        onClick={() => setResetOpen(true)}
-        className="w-full mt-2 px-5 py-3 min-h-touch rounded-2xl border border-red-500/40 text-red-300 font-semibold hover:bg-red-500/10"
-      >
-        Reset personalization
-      </button>
-      <p className="mt-2 text-xs text-ink-400">A backup is offered first — your favourites, playlists and history are not touched.</p>
+      <div className="vx-group">
+        <button onClick={() => setResetOpen(true)} className="vx-row">
+          <span className="vx-row-main">
+            <span className="vx-row-label" style={{ color: 'var(--vx-danger)' }}>Reset personalization</span>
+            <span className="vx-row-hint">A backup is offered first. Favourites, playlists and history are not touched.</span>
+          </span>
+        </button>
+      </div>
       {resetOpen && (
         <Suspense fallback={null}>
           <ResetTasteSheet onClose={() => setResetOpen(false)} onDone={afterReset} />

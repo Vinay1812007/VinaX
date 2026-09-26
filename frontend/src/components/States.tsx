@@ -1,36 +1,26 @@
 import type { ReactNode } from 'react';
 import { WaveIcon } from './Icons';
 
+/**
+ * 8.0 — the empty / error pattern: an icon in a quiet circle, a title, one
+ * muted line and at most one action. Centred in the workspace, no card.
+ */
 function StateShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex justify-center px-4 py-16">
-      <div className="w-full max-w-md px-4 py-8 flex flex-col items-center text-center gap-3">
-        {children}
-      </div>
+    <div className="flex justify-center px-4 py-14 sm:py-20">
+      <div className="w-full max-w-sm flex flex-col items-center text-center">{children}</div>
     </div>
   );
 }
 
-/**
- * The illustration slot. Package F1: the badge now carries a faint tint of
- * the living-artwork colour (--art) so empty states feel part of the app
- * rather than a dead grey card. Pages pass a context icon (Heart for
- * Favorites, Clock for History, …); it falls back to the neutral wave.
- */
+/** The icon slot. Pages pass a context icon (heart for Favorites, clock for History…); defaults to the wave. */
 function StateBadge({ icon }: { icon?: ReactNode }) {
   return (
     <span
-      className="flex items-center justify-center w-16 h-16 rounded-2xl bg-ink-850"
-      style={{
-        // A whisper of the artwork accent — 12% fill, 24% ring. Falls back to
-        // a neutral slate when nothing is playing (--art defaults set in CSS).
-        background: 'rgb(var(--art) / 0.10)',
-        boxShadow: 'inset 0 0 0 1px rgb(var(--art) / 0.22)',
-        color: 'var(--vx-accent-hover)',
-      }}
+      className="flex items-center justify-center w-14 h-14 rounded-full bg-ink-850 text-ink-200 [&>svg]:w-7 [&>svg]:h-7"
       aria-hidden
     >
-      {icon ?? <WaveIcon className="w-8 h-8" />}
+      {icon ?? <WaveIcon className="w-7 h-7" />}
     </span>
   );
 }
@@ -50,9 +40,9 @@ export function EmptyState({
   return (
     <StateShell>
       <StateBadge icon={icon} />
-      <p className="mt-1 text-xl font-semibold">{title}</p>
-      <p className="text-sm text-ink-300">{message}</p>
-      {action && <div className="mt-2">{action}</div>}
+      <p className="mt-4 text-[18px] font-bold tracking-[-0.01em] text-ink-100">{title}</p>
+      <p className="mt-1.5 text-[14px] leading-relaxed text-ink-400">{message}</p>
+      {action && <div className="mt-5">{action}</div>}
     </StateShell>
   );
 }
@@ -72,16 +62,12 @@ export function ErrorState({
   return (
     <StateShell>
       <StateBadge icon={icon} />
-      <p className="mt-1 text-xl font-semibold">{title ?? 'Couldn’t reach the music servers'}</p>
-      <p className="text-sm text-ink-300">
-        {message ?? 'We can’t reach the music servers right now. This usually clears up on its own — check your connection or try again.'}
+      <p className="mt-4 text-[18px] font-bold tracking-[-0.01em] text-ink-100">{title ?? 'Couldn’t reach the music servers'}</p>
+      <p className="mt-1.5 text-[14px] leading-relaxed text-ink-400">
+        {message ?? 'Check your connection and try again.'}
       </p>
       {retry && (
-        <button
-          type="button"
-          onClick={retry}
-          className="mt-2 px-5 py-2.5 rounded-full btn-primary active:scale-95 transition-transform"
-        >
+        <button type="button" onClick={retry} className="mt-5 px-6 min-h-[44px] rounded-full btn-primary active:scale-[0.97] transition-transform">
           Retry
         </button>
       )}
@@ -96,9 +82,9 @@ export function ErrorState({
  */
 export function InlineError({ label, retry }: { label?: string; retry: () => void }) {
   return (
-    <div role="alert" className="mb-8 flex items-center justify-between gap-3 rounded-2xl border border-glass bg-[var(--tile)] px-4 py-2 text-sm text-ink-300">
+    <div role="alert" className="mb-8 flex items-center justify-between gap-3 min-h-[56px] rounded-xl bg-ink-850 pl-4 pr-2 py-1.5 text-[14px] text-ink-300">
       <span className="min-w-0">{label ? `Couldn’t load ${label}.` : 'Couldn’t load this section.'}</span>
-      <button type="button" onClick={retry} className="btn-secondary shrink-0 px-4 text-xs min-h-[44px]">
+      <button type="button" onClick={retry} className="shrink-0 px-4 min-h-[44px] rounded-full text-[13px] font-bold text-ink-100 hover:bg-ink-800 transition-colors">
         Retry
       </button>
     </div>

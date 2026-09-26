@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { PageHeader } from '@/components/PageHeader';
+import { EntityHeader, EntityMeta, GlyphCover, PlayFab, totalDuration } from '@/components/EntityHeader';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { removeDownload } from '@/services/downloads';
 import { usePlayerStore } from '@/store/playerStore';
@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/States';
 import { toast } from '@/store/toastStore';
 import { VirtualChunks } from '@/components/VirtualChunks';
 import type { Song } from '@/types';
+import '@/styles/pages/tracklist.css';
 
 // Package D8 — estimated on-disk size. The catalog doesn't expose real file
 // sizes, so we estimate from duration at the high-quality bitrate (320 kbps ≈
@@ -25,8 +26,8 @@ function fmtBytes(n: number): string {
   return `${Math.round(n / 1024)} KB`;
 }
 
-/** Card padding + 44px art + the list's 8px gap — the off-screen size estimate for list chunks. */
-const ROW_HEIGHT = 72;
+/** Row height (40px art + padding) — the off-screen size estimate for list chunks. */
+const ROW_HEIGHT = 60;
 const songKey = (song: Song): string => song.id;
 
 interface RowProps {
@@ -41,47 +42,48 @@ interface RowProps {
 /** Memoised: ticking a checkbox re-renders that row, not the whole downloads list. */
 const DownloadRow = memo(function DownloadRow({ song, index, selecting, picked, onTogglePick, onPlay }: RowProps) {
   return (
-    <div className="flex items-center gap-3 glass-card rounded-xl p-2.5">
+    <div className="vx-drow group">
       {selecting && (
-        <input
-          type="checkbox"
-          checked={picked}
-          onChange={() => onTogglePick(song.id)}
-          aria-label={`Select ${song.title}`}
-          className="w-[18px] h-[18px] accent-ember-500 shrink-0 cursor-pointer"
-        />
+        <span className="vx-crow-check">
+          <input
+            type="checkbox"
+            checked={picked}
+            onChange={() => onTogglePick(song.id)}
+            aria-label={`Select ${song.title}`}
+            className="w-5 h-5 accent-[rgb(var(--ember-500))] cursor-pointer"
+          />
+        </span>
       )}
-      <button type="button" onClick={() => (selecting ? onTogglePick(song.id) : onPlay(index))} className="relative shrink-0 group" aria-label={`Play ${song.title}`}>
+      <button type="button" onClick={() => (selecting ? onTogglePick(song.id) : onPlay(index))} className="vx-track-art vx-drow-art" aria-label={`Play ${song.title}`}>
         <img
           src={bestImage(song.images, 150)}
           onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
           alt=""
           loading="lazy"
           decoding="async"
-          className="w-11 h-11 rounded-lg object-cover"
         />
         {!selecting && (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-            <PlayIcon className="w-5 h-5 text-white" />
+          <span className="vx-drow-over" aria-hidden>
+            <PlayIcon className="w-4 h-4" />
           </span>
         )}
       </button>
       {selecting ? (
-        <button type="button" onClick={() => onTogglePick(song.id)} className="min-w-0 flex-1 text-left">
-          <span className="block text-sm font-semibold truncate">{song.title}</span>
-          <span className="block text-xs text-ink-400 truncate">{song.subtitle}</span>
+        <button type="button" onClick={() => onTogglePick(song.id)} className="vx-drow-text">
+          <span className="vx-track-title"><span>{song.title}</span></span>
+          <span className="vx-track-sub">{song.subtitle}</span>
         </button>
       ) : (
-        <Link to={songPath(song)} className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold truncate">{song.title}</span>
-          <span className="block text-xs text-ink-400 truncate">{song.subtitle}</span>
+        <Link to={songPath(song)} className="vx-drow-text">
+          <span className="vx-track-title"><span>{song.title}</span></span>
+          <span className="vx-track-sub">{song.subtitle}</span>
         </Link>
       )}
       {!selecting && (
         <button
           type="button"
           onClick={() => void removeDownload(song.id).then(() => toast('Removed download'))}
-          className="text-xs font-semibold text-ink-400 hover:text-red-300 shrink-0 px-2 py-1"
+          className="vx-quiet-btn is-danger"
         >
           Remove
         </button>
@@ -126,10 +128,21 @@ export default function OfflinePage() {
     toast(`Removed ${ids.length} download${ids.length === 1 ? '' : 's'}`);
   };
 
+  const header = (actions?: React.ReactNode, meta?: React.ReactNode) => (
+    <EntityHeader
+      kind="On this device"
+      title="Downloads"
+      tone="var(--ink-500)"
+      art={<GlyphCover tone="downloads" icon={<DownloadIcon />} />}
+      meta={meta}
+      actions={actions}
+    />
+  );
+
   if (!list.length && !inFlight) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <PageHeader title="Downloads" />
+      <div className="vx-entity">
+        {header()}
         <EmptyState
           icon={<DownloadIcon className="w-8 h-8" />}
           title="No downloads yet"
@@ -154,65 +167,59 @@ export default function OfflinePage() {
   const estBytes = totalSec * BYTES_PER_SEC;
 
   return (
-    <div className="max-w-2xl mx-auto pb-10">
-      <PageHeader
-        title="Downloads"
-        actions={
-          list.length > 0 ? (
-            selecting ? (
+    <div className="vx-entity">
+      {header(
+        list.length > 0 ? (
+          <>
+            {!selecting && <PlayFab label="Play all" onClick={() => playFrom(0)} />}
+            {selecting ? (
               <>
-                <button
-                  onClick={() => void deletePicked()}
-                  disabled={picked.size === 0}
-                  className="px-4 min-h-touch rounded-full text-sm font-semibold bg-red-500/15 text-red-300 hover:bg-red-500/25 disabled:opacity-40 transition"
-                >
+                <button onClick={() => void deletePicked()} disabled={picked.size === 0} className="vx-quiet-btn is-danger">
                   Delete {picked.size || ''}
                 </button>
-                <button
-                  onClick={() => { setSelecting(false); setPicked(new Set()); }}
-                  className="px-4 min-h-touch rounded-full border border-ink-600 text-sm text-ink-200"
-                >
+                <button onClick={() => { setSelecting(false); setPicked(new Set()); }} className="vx-quiet-btn">
                   Cancel
                 </button>
               </>
             ) : (
-              <button onClick={() => setSelecting(true)} className="px-4 min-h-touch rounded-full border border-ink-600 text-sm text-ink-200 hover:bg-ink-800/40">
+              <button onClick={() => setSelecting(true)} className="vx-quiet-btn">
                 Select
               </button>
-            )
-          ) : undefined
-        }
-      />
+            )}
+          </>
+        ) : undefined,
+        list.length > 0 ? <EntityMeta items={[`${list.length} song${list.length > 1 ? 's' : ''}`, totalDuration(songs), `≈ ${fmtBytes(estBytes)}`]} /> : undefined,
+      )}
 
       {/* D8 — storage summary bar (estimate; the catalog hides real sizes). */}
       {list.length > 0 && (
-        <div className="glass-card rounded-xl p-3.5 mb-4">
-          <div className="flex items-center justify-between text-sm mb-2">
+        <div className="vx-strip vx-storage">
+          <div className="flex items-center justify-between w-full text-sm">
             <span className="font-semibold">{list.length} song{list.length > 1 ? 's' : ''} offline</span>
             <span className="text-ink-400 text-xs">≈ {fmtBytes(estBytes)} on device</span>
           </div>
-          <div className="h-1.5 rounded-full bg-ink-800 overflow-hidden" aria-hidden>
+          <div className="h-1 w-full rounded-full bg-ink-700 overflow-hidden" aria-hidden>
             <div
-              className="h-full rounded-full bg-gradient-to-r from-ember-600 to-ember-400"
+              className="h-full rounded-full bg-ember-500"
               style={{ width: `${Math.min(100, (estBytes / (2 * 1024 * 1024 * 1024)) * 100)}%` }}
             />
           </div>
-          <p className="mt-1.5 text-[10px] text-ink-500">Estimated at high quality · change quality in Settings → Playback</p>
+          <p className="text-[11px] text-ink-400">Estimated at high quality · change quality in Settings → Playback</p>
         </div>
       )}
 
       {/* D8 — in-flight downloads strip (indeterminate; no byte progress from the pipe). */}
       {inFlight > 0 && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-tide-500/30 bg-tide-500/10 px-3.5 py-2.5 mb-4">
-          <span className="w-3.5 h-3.5 rounded-full border-2 border-tide-400 border-t-transparent animate-spin shrink-0" aria-hidden />
-          <p className="text-xs font-semibold text-tide-300">
+        <div className="vx-strip" role="status">
+          <span className="w-3.5 h-3.5 rounded-full border-2 border-ember-400 border-t-transparent animate-spin shrink-0" aria-hidden />
+          <p className="text-sm font-semibold">
             Downloading {inFlight} song{inFlight > 1 ? 's' : ''}… they appear below as they finish.
           </p>
         </div>
       )}
 
-      <div className="space-y-2">
-        <VirtualChunks items={songs} keyOf={songKey} renderItem={renderRow} rowHeight={ROW_HEIGHT} chunkClassName="space-y-2" />
+      <div className="vx-tracklist">
+        <VirtualChunks items={songs} keyOf={songKey} renderItem={renderRow} rowHeight={ROW_HEIGHT} />
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDownIcon } from './Icons';
 import { IconButton } from './IconButton';
-import { PRIMARY_NAV } from '@/constants/nav';
+import { NAV_GROUPS, PRIMARY_NAV } from '@/constants/nav';
 import { KEYS } from '@/constants/storage-keys';
 import { getLocal } from '@/services/storage/local';
 import { cn } from '@/utils/cn';
@@ -21,7 +21,7 @@ const ACTIONS_SLOT = 'vx-topbar-actions';
 export function TopBar({ onCommands }: { onCommands: () => void }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const title = PRIMARY_NAV.find((i) => i.to === pathname)?.label ?? 'VinaX';
+  const title = [...PRIMARY_NAV, ...NAV_GROUPS.flatMap((g) => g.items)].find((i) => i.to === pathname)?.label ?? 'VinaX';
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const main = document.getElementById('main-content');
