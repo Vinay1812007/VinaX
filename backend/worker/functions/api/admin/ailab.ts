@@ -12,7 +12,7 @@
  * story. maxTokens is capped at 1000 — this is a bench, not a workload.
  */
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
-import { LANE_ENV, LANE_MODEL, isExternalEndpoint, isRefusalCode, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
+import { LANE_ENV, LANE_MODEL, laneModel, isExternalEndpoint, isRefusalCode, laneEndpoint, reasoningOffParams, type AiEnv, type Lane } from '../../_lib/ai';
 import { catalogDefaultModel, type CatalogProvider } from '../../_lib/catalog';
 import { aggregateLaneHealth, type AiEventRow } from '../../_lib/laneHealth';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
@@ -27,7 +27,7 @@ type Env = AdminEnv & AiEnv & SupabaseEnv;
 // 2026-09-09, this bench is how each row earns `verified: true` back.
 const LANES: readonly Lane[] = [
   'chat', 'fast', 'deep', 'scholar', 'home', 'dj', 'search',
-  'pro', 'mini', 'agent', 'router',
+  'pro', 'mini', 'agent', 'router', 'maestro',
   'vision', 'vision90',
   'dsflash', 'muse', 'rank', 'laguna', 'diffusion', 'gemma4',
 ];
@@ -106,7 +106,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // not a slug the provider retired. An explicit override always wins.
   const catalogProvider: CatalogProvider | null = lane === 'scholar' ? 'grq' : lane === 'router' ? 'opr' : null;
   const model =
-    overrideModel ?? (catalogProvider ? ((await catalogDefaultModel(env, catalogProvider)) ?? LANE_MODEL[lane]) : LANE_MODEL[lane]);
+    overrideModel ?? (catalogProvider ? ((await catalogDefaultModel(env, catalogProvider)) ?? LANE_MODEL[lane]) : laneModel(env, lane));
   const key = env[LANE_ENV[lane]];
   if (!key) return json({ error: 'not_configured', status: 0, head: `${LANE_ENV[lane]} is not set`, lane, model });
 

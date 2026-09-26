@@ -30,6 +30,14 @@ describe('parseSections', () => {
     expect(typed[0]).toEqual({ title: 'Late Night Telugu', description: 'Smooth Telugu tracks for a late-night session', query: 'telugu romantic melody', reason: 'Based on recent late-night listening', type: 'mood' });
     expect(typed[1].type).toBe('other');
   });
+  it('8.0.0 — carries the language, kind and subject the server names', () => {
+    const out = parseSections({ sections: [
+      { title: 'A', query: 'sid sriram telugu songs', kind: 'artist', language: 'Telugu', subject: 'Sid Sriram', type: 'artist' },
+      { title: 'B', query: 'telugu melody songs', kind: 'mood', language: '<x>', subject: 'melody' },
+    ] });
+    expect(out[0]).toMatchObject({ language: 'telugu', kind: 'artist', subject: 'Sid Sriram' });
+    expect(out[1].language).toBeUndefined();
+  });
   it('needs at least two usable sections and tolerates junk', () => {
     expect(parseSections({ sections: [{ title: 'Only one', query: 'q' }] })).toEqual([]);
     expect(parseSections(null)).toEqual([]);

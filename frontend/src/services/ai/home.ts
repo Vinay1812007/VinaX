@@ -21,6 +21,11 @@ export interface AiShelfDefinition {
   query: string;
   reason: string;
   type: ShelfType;
+  /** 8.0.0 — the language every song on the shelf must be in (lowercase), when the server named one. */
+  language?: string;
+  /** 8.0.0 — what the shelf is built from: 'artist' shelves keep only songs crediting `subject`. */
+  kind?: string;
+  subject?: string;
 }
 
 /** Alias kept for callers that predate the description/type fields. */
@@ -57,7 +62,14 @@ export function parseSections(raw: unknown): AiShelfDefinition[] {
     titles.add(t);
     queries.add(q);
     const type = SHELF_TYPES.includes(item.type as ShelfType) ? (item.type as ShelfType) : 'other';
-    out.push({ title, query, reason, description, type });
+    const shelf: AiShelfDefinition = { title, query, reason, description, type };
+    const language = clean(item.language, 30).toLowerCase();
+    const kind = clean(item.kind, 20).toLowerCase();
+    const subject = clean(item.subject, 60);
+    if (/^[\p{L} ]{2,30}$/u.test(language)) shelf.language = language;
+    if (kind) shelf.kind = kind;
+    if (subject && !BANNED.test(subject)) shelf.subject = subject;
+    out.push(shelf);
     if (out.length >= 8) break;
   }
   return out.length >= 2 ? out : [];

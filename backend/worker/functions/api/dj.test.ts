@@ -21,10 +21,10 @@ const pool = [
 ];
 const env = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k' };
 let ip = 0;
-const post = async (body: unknown) => {
+const post = async (body: unknown, extraEnv: Record<string, string> = {}) => {
   ip += 1;
   const req = new Request('https://x.test/api/dj', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.0.0.${ip}` }, body: JSON.stringify(body) });
-  const res = await onRequestPost({ request: req, env });
+  const res = await onRequestPost({ request: req, env: { ...env, ...extraEnv } });
   return { status: res.status, json: (await res.json()) as Record<string, unknown> };
 };
 
@@ -86,6 +86,14 @@ describe('POST /api/dj', () => {
     expect(opts.lane).toBe('scholar');
     expect(opts.ladder[0]).toBe('dj');
     expect(opts.skipSecondary).toBe(true);
+  });
+  it('8.0.0 — the maestro lane leads the set when its key is set, with scholar as the first failover', async () => {
+    chatMock.mockResolvedValue({ content: JSON.stringify({ intro: '', songs: [{ title: 'Butta Bomma', artist: 'Armaan Malik' }] }), model: 'm', keyRole: 'maestro', status: 200, error: null });
+    await post({ context: { seedSong: 'Butta Bomma — Armaan Malik', currentLanguage: 'telugu' }, pool, count: 5 }, { VINAX_GGL_GEMINI_API_KEY: 'k' });
+    const [, messages, opts] = chatMock.mock.calls[0] as [unknown, Array<{ content: string }>, { lane: string; ladder: string[] }];
+    expect(opts.lane).toBe('maestro');
+    expect(opts.ladder[0]).toBe('scholar');
+    expect(messages[0].content).toMatch(/music director is the strongest style signal/);
   });
   it('v7.1.0 — forwards album, year and familiarity to the DJ, sanitised, and asks for familiar-first ordering in the seed language', async () => {
     chatMock.mockResolvedValue({ content: JSON.stringify({ intro: '', songs: [] }), model: 'm', keyRole: 'dj', status: 200, error: null });

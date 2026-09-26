@@ -21,6 +21,7 @@ Backend paths below are relative to `backend/worker/functions/`; frontend paths 
 
 | Lane | Role |
 | --- | --- |
+| `maestro` | 8.0 flagship: leads the DJ, the Queue Builder, AI Playlist, `ranking` and the Home builder. Its own host and key (`VINAX_GGL_GEMINI_API_KEY`); `VINAX_MAESTRO_MODEL` replaces the pin. Skipped without a round trip when the key is unset |
 | `dj` | Creative generation: playlists, the DJ's first failover |
 | `chat` | Everyday assistant chat (shares the `dj` lane's key) |
 | `deep` | Deep reasoning (the chat's Think engine) |
@@ -137,7 +138,8 @@ The client sends a listening context and a pool of real songs it has already gat
 - A pick is matched to the pool by id first, then by canonical title and artist. An id that is not in the pool never becomes a pool song. Repeats are dropped.
 - An off-pool pick is kept only when discovery was requested, as `fromPool: false` with `songId: null`, up to `maxDiscover`, and never when its title appears in the context's avoided, recent or skipped songs.
 - With discovery on and a pool under 12 songs, the `scholar` lane first gathers up to 30 supplementary candidates (3.5 s, optional).
-- Budget: 26 s. The `scholar` lane leads with a 9 s leash; the ladder is `dj → fast → chat → home` at 11 s each; the secondary is skipped.
+- Budget: 26 s. With the maestro key set, `maestro` leads with a 12 s leash and the ladder is `scholar → dj → fast → chat → home`; without it `scholar` leads with 9 s and the ladder is `dj → fast → chat → home`. Later attempts get 10 s; the secondary is skipped.
+- 8.0: pool entries may carry `mood`, `energy` (0–1) and `tempo` (40–220), validated on the server, and the prompt adds sequencing craft rules — tempo within about 10% between neighbours, composer continuity, never three songs in a row by one singer, a familiar anchor at least every fourth song, no same-album neighbours.
 
 **Client rules** (`services/ai/dj.ts`, `services/recommendation/engine.ts`)
 
@@ -153,10 +155,10 @@ One route, four tasks. The body is `{ task, data }`; an unknown task or missing 
 
 | Task | Used for | Lane order | Server budget | Client leash |
 | --- | --- | --- | --- | --- |
-| `metadata` | Classifies songs: mood, vibe, genre, context, language, dialect, energy, tempo | `scholar → fast → chat → search` | 6 s | 6.5 s |
-| `ranking` | Orders a supplied list of songs for a context (Home re-rank, next-song re-rank when the DJ is off, "Trending for you") | `scholar → dj → chat → home` | 9 s | 10.5 s |
-| `home` | Orders the Home blocks for a listener request | `dj → scholar → chat → home` | 9 s | 10.5 s |
-| `shelves` | Designs 4–6 titled Home shelves, each with a catalogue query | pitch on `scholar` + `fast`, curate on `scholar → dj → fast → chat` | 14 s | 16 s |
+| `metadata` | Classifies songs: mood, vibe, genre, context, language, dialect, energy, tempo | `scholar → maestro → fast → chat` | 6 s | 6.5 s |
+| `ranking` | Orders a supplied list of songs for a context (Home re-rank, next-song re-rank when the DJ is off, "Trending for you") | `maestro → scholar → dj → chat` | 9 s | 10.5 s |
+| `home` | Orders the Home blocks for a listener request | `scholar → maestro → fast → chat → dj` (8.0: the slow dj engine no longer leads — it failed two calls in three) | 9 s | 10.5 s |
+| `shelves` | Designs 4–6 titled Home shelves, each with a catalogue query | pitch on `maestro` + `scholar` + `fast` (each on its own key), curate on `maestro → scholar → dj → fast → chat` | 14 s | 16 s |
 
 The first attempt gets 3.5 s (`metadata`) or 5 s; later attempts get 4 s. Lanes that failed or were slow in the last 60 s are tried later.
 
@@ -165,7 +167,7 @@ The first attempt gets 3.5 s (`metadata`) or 5 s; later attempts get 4 s. Lanes 
 - `metadata` — only ids the client supplied; mood must be one of romantic, energetic, chill, melancholy, devotional, neutral; tag lists are clipped to 6; energy must be 0–1 and tempo 40–220, otherwise null. The prompt forbids claiming measured audio features.
 - `ranking` — `{ ids }` containing only supplied ids, without duplicates. The client (`aiRerankSongs`) also discards any id it did not send, so AI can change the order and never the contents.
 - `home` — `{ title, description, order, hidden }`; `order` may contain only the known Home block keys; title (60) and description (160) are dropped if they contain markup or a link.
-- `shelves` — served by `_lib/homeShelves.ts`: two lanes pitch ideas in parallel (4.5 s), one curate call picks and refines them (6 s leashes), titles and queries the listener was shown recently are filtered out. If the curate fails, the pitched ideas are used; if there are none, deterministic on-taste fallback shelves are returned. The task answers 503 only when no lane is configured. The client (`services/ai/home.ts`) rejects any shelf whose text contains markup, links or a disallowed name, and fills each shelf itself from the catalogue; the model never supplies songs.
+- `shelves` — 8.0: the model names each shelf's `kind` (artist, composer, mood, era, film, fresh, trending, classics), `language` and `subject`, and `buildShelfQuery()` writes the catalogue search ("<language> <mood> songs", "<artist> <language> songs", "<language> 90s hits"). Free-form queries were matched by the catalogue as song titles (live: "under-the-radar hits" returned instrumentals titled "Under the Radar"). Each shelf carries its `language`; the client keeps only songs in it, and artist shelves only songs crediting that singer (`belongsOnShelf`). A short AI set is topped up with deterministic shelves. Served by `_lib/homeShelves.ts`: two lanes pitch ideas in parallel (4.5 s), one curate call picks and refines them (6 s leashes), titles and queries the listener was shown recently are filtered out. If the curate fails, the pitched ideas are used; if there are none, deterministic on-taste fallback shelves are returned. The task answers 503 only when no lane is configured. The client (`services/ai/home.ts`) rejects any shelf whose text contains markup, links or a disallowed name, and fills each shelf itself from the catalogue; the model never supplies songs.
 
 The `metadata` results are cached on the device for 30 days (500 songs at most). After a failure the client skips `metadata` and `ranking` calls for 30 s; after a 404 or 405 it skips every curate task for 10 minutes.
 

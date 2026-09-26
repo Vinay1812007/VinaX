@@ -55,6 +55,15 @@ HOW TO BUILD THE SET
 7. Respect tuneInstruction (if present) as the highest-priority adjustment.
 8. arcShape (if present) names the energy arc the app wants: steady (settle, one gentle peak, ease off), build (climb steadily), wind-down (descend), wave (rise and fall twice), lift (come up a notch quickly with sure favourites, then hold). listenerGoal (if present) is what the listener asked the Queue Builder for — honour it inside the pool.
 
+THE CRAFT (8.0) — how a master programmer sequences Indian music
+9. Tempo: adjacent songs stay within about 10% of each other's tempo, or sit at a clean half-time / double-time relation. Where the pool carries tempo or energy, use it; otherwise judge from what you know of the song.
+10. The music director is the strongest style signal in film music. Stay with one composer's sound, or a closely related one, for two or three songs before moving on; an era change goes through a song that bridges both eras.
+11. Voice: never three songs in a row led by the same singer; a duet is a good bridge between a male-led and a female-led song.
+12. Melodic colour: keep the raga or scale mood coherent — a bright, major-feeling song does not follow a mournful one without a bridge.
+13. Anchors: the listener must meet something they know at least every fourth song (a "known" pool entry or a preferredArtists name). A discovery is always followed by a familiar song, never by a second discovery.
+14. Never place two songs from the same album or film next to each other unless the pool offers nothing else that fits.
+15. When two picks fit equally, prefer the one the listener completed or liked over one merely played.
+
 OUTPUT — JSON only, exactly this shape:
 {"intro":"one warm spoken sentence introducing this stretch, max 22 words, no song titles","songs":[{"songId":"the pool entry's id, copied exactly","title":"exact pool title","artist":"exact pool artist","reason":"why it fits and how it flows, max 12 words, e.g. similar energy, same language vocals, smoother transition","segue":"one natural spoken line a DJ would say as this song starts, max 20 words, may name the song and artist (an empty string when the brief says segues are not needed)","confidence":0.0,"fromPool":true}]}
 confidence is your 0..1 belief that this pick flows well from the previous one. Return exactly the requested number of songs when the pool allows. Copy songId, title and artist EXACTLY as they appear in the pool and set fromPool to true for them.`;
@@ -88,7 +97,8 @@ export function canonKey(title: string, artist: string): string {
 }
 
 /** v7.1.0 — album (film / album name), year and `known` (the listener has played this song or artist) are optional facts the DJ orders by. */
-export interface PoolSong { id?: string; title: string; artist: string; language?: string | null; album?: string; year?: string; known?: boolean }
+export interface PoolSong { id?: string; title: string; artist: string; language?: string | null; album?: string; year?: string; known?: boolean; mood?: string; energy?: number; tempo?: number }
+const MOODS = new Set(['romantic', 'energetic', 'chill', 'melancholy', 'devotional']);
 export interface DjPick { songId: string | null; title: string; artist: string; reason: string; segue: string; confidence: number; fromPool: boolean }
 export interface Candidate { title: string; artist: string }
 
@@ -197,7 +207,7 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
   const pool: PoolSong[] = Array.isArray(body.pool)
     ? (body.pool as unknown[])
         .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
-        .map((p) => ({ ...(clip(p.id, 128) ? { id: clip(p.id, 128) } : {}), title: clip(p.title, 200), artist: clip(p.artist, 200), language: typeof p.language === 'string' ? p.language.slice(0, 40) : null, ...(clip(p.album, 120) ? { album: clip(p.album, 120) } : {}), ...(typeof p.year === 'string' && /^(19|20)\d{2}$/.test(p.year) ? { year: p.year } : {}), ...(p.known === true ? { known: true } : {}) }))
+        .map((p) => ({ ...(clip(p.id, 128) ? { id: clip(p.id, 128) } : {}), title: clip(p.title, 200), artist: clip(p.artist, 200), language: typeof p.language === 'string' ? p.language.slice(0, 40) : null, ...(clip(p.album, 120) ? { album: clip(p.album, 120) } : {}), ...(typeof p.year === 'string' && /^(19|20)\d{2}$/.test(p.year) ? { year: p.year } : {}), ...(p.known === true ? { known: true } : {}), ...(typeof p.mood === 'string' && MOODS.has(p.mood) ? { mood: p.mood } : {}), ...(typeof p.energy === 'number' && p.energy >= 0 && p.energy <= 1 ? { energy: Math.round(p.energy * 100) / 100 } : {}), ...(typeof p.tempo === 'number' && p.tempo >= 40 && p.tempo <= 220 ? { tempo: Math.round(p.tempo) } : {}) }))
         .filter((p) => p.title && p.artist)
         .slice(0, 60)
     : [];
@@ -233,8 +243,9 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
           { role: 'system', content: CANDIDATE_PROMPT },
           { role: 'user', content: `Seed + session context (JSON):\n${ctxJson}\n\nvarietySeed: "${seed}" — vary the list between rounds. List about 20 candidate songs as JSON.` },
         ],
-        ['scholar'],
-        { temperature: 0.7, maxTokens: 900, timeoutMs: 3_500, deadlineAt: Math.min(deadlineAt, Date.now() + 3_500), feature: 'dj' },
+        // 8.0.0 — the maestro lane knows far more real songs; both lanes pitch in parallel on their own keys.
+        ['maestro', 'scholar'],
+        { temperature: 0.7, maxTokens: 900, timeoutMs: 4_500, deadlineAt: Math.min(deadlineAt, Date.now() + 4_500), soloLadder: true, feature: 'dj' },
       );
       const seen = new Set(pool.map((p) => canonKey(p.title, p.artist)));
       for (const g of gathered) {
@@ -268,7 +279,10 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
     // another 11 s. The Groq scholar lane answers the same JSON in 1–3 s, so
     // it leads, the dj engine is the first failover, and the secondary is
     // skipped — a set lands in a few seconds instead of a 408 at 26 s.
-    { temperature: 0.8, lane: 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 11_000, firstTimeoutMs: 9_000, skipSecondary: true, ladder: ['dj', 'fast', 'chat', 'home'], deadlineAt, feature: 'dj' },
+    // 8.0.0 — the maestro lane leads when its key is set (a stronger musical
+    // ear for transitions, eras and composers); scholar is its first failover.
+    // Its same-key lighter sibling is skipped: scholar is faster than a retry.
+    { temperature: 0.75, lane: env.VINAX_GGL_GEMINI_API_KEY ? 'maestro' : 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: env.VINAX_GGL_GEMINI_API_KEY ? 12_000 : 9_000, skipSecondary: true, ladder: env.VINAX_GGL_GEMINI_API_KEY ? ['scholar', 'dj', 'fast', 'chat', 'home'] : ['dj', 'fast', 'chat', 'home'], deadlineAt, feature: 'dj' },
   );
   // The controls changed while this request ran: same honest 503, nothing logged as a failed call.
   if (isAiBlocked(r.error)) return refuse(r.error);

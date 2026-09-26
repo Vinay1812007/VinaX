@@ -12,7 +12,7 @@
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { LANE_MODEL, laneEndpoint, type AiEnv } from '../../_lib/ai';
+import { LANE_MODEL, laneEndpoint, laneModel, type AiEnv } from '../../_lib/ai';
 import { catalogDefaultModel } from '../../_lib/catalog';
 
 type Env = AdminEnv & SupabaseEnv & AiEnv;
@@ -64,7 +64,8 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     catalogDefaultModel(env, 'grq'),
     catalogDefaultModel(env, 'opr'),
   ]);
-  const [dj, chat, sage, swift, scholar, home, search, router, vision, lastEvents] = await Promise.all([
+  const [maestro, dj, chat, sage, swift, scholar, home, search, router, vision, lastEvents] = await Promise.all([
+    pingKey('VinaX Maestro · DJ · Queue Builder · Home builder', env.VINAX_GGL_GEMINI_API_KEY, laneModel(env, 'maestro'), laneEndpoint(env, 'maestro')),
     pingKey('VinaX LTNG · chat · playlists', env.VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B, LANE_MODEL.dj, laneEndpoint(env, 'dj')),
     pingKey('VinaX Balanced · chat · playlists', env.VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B, LANE_MODEL.chat, laneEndpoint(env, 'chat')),
     pingKey('VinaX NMTRN SUP · deep reasoning', env.VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B, LANE_MODEL.deep, laneEndpoint(env, 'deep')),
@@ -84,7 +85,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   return new Response(
     JSON.stringify({
       time: new Date().toISOString(),
-      ai: [dj, chat, sage, swift, scholar, home, search, router, vision],
+      ai: [maestro, dj, chat, sage, swift, scholar, home, search, router, vision],
       supabase: {
         configured: supabaseConfigured(env),
         readable: dbReadable,

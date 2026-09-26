@@ -9,9 +9,16 @@ export const TASK_ROUTES = {
   // v6.5.2 — small JSON tasks lead with the sub-second Groq scholar lane;
   // measured live, the NVIDIA dj/fast engines need 8–12 s for any JSON and
   // burnt the whole ranking budget (two timeouts) before scholar was tried.
-  metadata: { lanes: ['scholar', 'fast', 'chat', 'search'] as Lane[], budget: 6000, tokens: 1800 },
-  ranking: { lanes: ['scholar', 'dj', 'chat', 'home'] as Lane[], budget: 9000, tokens: 1200 },
-  home: { lanes: ['dj', 'scholar', 'chat', 'home'] as Lane[], budget: 9000, tokens: 900 },
+  // 8.0.0 — the maestro lane (when its key is set) leads ranking, where its
+  // music knowledge matters most, and backs up metadata. A lane with no key
+  // is skipped without a round trip.
+  metadata: { lanes: ['scholar', 'maestro', 'fast', 'chat'] as Lane[], budget: 6000, tokens: 1800 },
+  ranking: { lanes: ['maestro', 'scholar', 'dj', 'chat'] as Lane[], budget: 9000, tokens: 1200 },
+  // 8.0.0 — Home Studio's "Build with VinaX AI" failed two calls in three on
+  // 2026-09-26: the dj engine led, spent its 5 s leash and the next lane ran
+  // out of budget (a fresh isolate has no health data to reorder by). The
+  // fast lanes lead now; dj is last.
+  home: { lanes: ['scholar', 'maestro', 'fast', 'chat', 'dj'] as Lane[], budget: 9000, tokens: 900 },
   // v6.2.0 — AI-designed Home shelves: titled sections with a catalogue query each.
   // v6.5.0 — served by _lib/homeShelves (pitch → curate → deterministic fallback); the row keeps the task registered.
   shelves: { lanes: ['dj', 'chat', 'fast', 'home'] as Lane[], budget: 14000, tokens: 900 },

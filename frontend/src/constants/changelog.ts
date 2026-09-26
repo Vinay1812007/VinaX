@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.0.0': {
+    title: 'VinaX 8.0 — a sharper DJ and a Home that finally fits you',
+    changes: [
+      { type: 'fixed', text: 'Designed for you shelves now hold the songs they promise. A Telugu shelf could fill up with Tamil, Malayalam or instrumental tracks that only shared a word with its title; every shelf now keeps to its language, and an artist shelf plays only that artist.' },
+      { type: 'fixed', text: 'Build with VinaX AI in Home Studio works again. It failed about two times in three with “AI is unavailable right now”; it now asks the fastest engines first and answers in a moment.' },
+      { type: 'new', text: 'A new flagship AI engine now leads the DJ, the Queue Builder, AI Playlist, song ranking and the Home builder. It was chosen for its music knowledge, so more of its suggestions are real songs VinaX can find and play. When it is busy, the other engines take over, and everything still works on your device.' },
+      { type: 'improved', text: 'The DJ sequences like a seasoned programmer: tempo stays close from one song to the next, songs by the same music director are grouped, one singer never leads three in a row, and you meet a song you know at least every fourth track.' },
+    ],
+  },
   '7.2.0': {
     title: 'VinaX 7.2 — a queue that listens, charts you can check, and a control room that tells the truth',
     changes: [

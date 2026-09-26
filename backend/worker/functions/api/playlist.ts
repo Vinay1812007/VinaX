@@ -257,7 +257,8 @@ async function handlePost(context: {
     // The degraded chat lane is deliberately OFF this ladder; so is the slow
     // deep reasoning lane. 14s pinned shot, then fast JSON generators with the
     // remaining budget — a full playlist always fits inside client patience.
-    { temperature: 0.95, lane: 'dj', maxTokens: 2000, json: true, reasoningEffort: 'low', timeoutMs: 14_000, firstTimeoutMs: 14_000, ladder: ['home', 'fast', 'scholar'], deadlineAt, feature: 'playlist' },
+    // 8.0.0 — the maestro lane leads: every suggestion must match a real catalogue song, and it knows the most real songs.
+    { temperature: 0.9, lane: env.VINAX_GGL_GEMINI_API_KEY ? 'maestro' : 'dj', maxTokens: 2000, json: true, reasoningEffort: 'low', timeoutMs: 14_000, firstTimeoutMs: 14_000, skipSecondary: !!env.VINAX_GGL_GEMINI_API_KEY, ladder: ['dj', 'scholar', 'fast', 'home'], deadlineAt, feature: 'playlist' },
   );
   if (isAiBlocked(r.error)) return refuse(r.error);
   let parsed = parsePlaylist(r.error ? null : r.content);

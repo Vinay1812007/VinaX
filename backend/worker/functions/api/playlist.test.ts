@@ -92,7 +92,7 @@ describe('onRequestPost — variety plumbing end to end', () => {
       env: { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key' },
     });
 
-  it('pins the dj engine at temp 0.95 and injects nonce + avoidTitles into the prompt', async () => {
+  it('pins the dj engine at temp 0.9 and injects nonce + avoidTitles into the prompt', async () => {
     const calls = stubUpstream();
     const res = await post({ prompt: 'rainy telugu melodies', languages: ['telugu'], avoidTitles: ['Old Repeat'] });
     expect(res.status).toBe(200);
@@ -100,7 +100,7 @@ describe('onRequestPost — variety plumbing end to end', () => {
     expect(curate).toBeDefined();
     // v5.4.0: dj lane re-pinned to nemotron-3.5-lightning (probed on its key).
     expect(curate!.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
-    expect(curate!.temperature).toBe(0.95);
+    expect(curate!.temperature).toBe(0.9);
     expect(curate!.user).toMatch(/varietySeed: "[0-9a-f]{8} · IST /);
     expect(curate!.user).toContain('avoidTitles: ["Old Repeat"]');
   });
