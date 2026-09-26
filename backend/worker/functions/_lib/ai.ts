@@ -324,13 +324,40 @@ export interface LaneAttempt {
  * its same-key secondary pin (when one exists), then the cross-lane ladder.
  * Each attempt carries its lane's endpoint so mixed-provider failover signs
  * every hop against the right base. */
-/** The lane's pinned model, honouring the maestro override var. */
+/**
+ * A value that is a credential, not a model name. Live on 2026-09-26 the
+ * owner stored the API key itself in VINAX_MAESTRO_MODEL, so every call
+ * asked the provider for a model called "AQ.…" (400) and the key was printed
+ * in the request log. Provider key shapes: AQ., AIza, sk-, gsk_, nvapi-,
+ * and anything with a long run of mixed-case letters and digits.
+ */
+export function looksLikeSecret(value: string): boolean {
+  const v = value.trim();
+  if (/^(AQ\.|AIza|sk-|gsk_|nvapi-|hf_|xai-|pk_|rk_)/.test(v)) return true;
+  return v.length >= 32 && /[A-Z]/.test(v) && /[a-z]/.test(v) && /\d/.test(v) && !/[\s/:]/.test(v) && !/^gemini/i.test(v);
+}
+
+/** A model slug as providers publish them: lowercase, "gemini-3.8-flash", "meta/llama-3.2-11b:free". */
+const MODEL_SLUG = /^[a-z0-9][a-z0-9._-]{1,60}(?:\/[a-z0-9][a-z0-9._-]{1,60})?(?::[a-z0-9-]{1,20})?$/;
+
+/** The lane's pinned model, honouring the maestro override var. A value that
+ * is not a model slug (a pasted key, a sentence) is ignored and logged once. */
+let warnedOverride = false;
 export function laneModel(env: AiEnv, lane: Lane): string {
   if (lane === 'maestro') {
     const override = typeof env.VINAX_MAESTRO_MODEL === 'string' ? env.VINAX_MAESTRO_MODEL.trim() : '';
-    if (/^[\w.:/-]{3,80}$/.test(override)) return override;
+    if (override && MODEL_SLUG.test(override) && !looksLikeSecret(override)) return override;
+    if (override && !warnedOverride) {
+      warnedOverride = true;
+      console.log(`[ai] VINAX_MAESTRO_MODEL ignored: ${looksLikeSecret(override) ? 'it looks like a key, not a model name' : 'not a model slug'} (using ${LANE_MODEL.maestro})`);
+    }
   }
   return LANE_MODEL[lane];
+}
+
+/** What a log line may say about a model: a key-shaped value is masked. */
+export function loggableModel(model: string): string {
+  return looksLikeSecret(model) ? '[masked]' : model;
 }
 
 export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, ladder?: Lane[], skipSecondary = false): LaneAttempt[] {
@@ -473,6 +500,9 @@ export async function chat(
     /** 7.2.0 — the product feature this call serves, for the owner's per-feature
      * switch. Without it only the emergency stop and the spend caps apply. */
     feature?: AiFeature;
+    /** 8.1.0 — ground the answer in the provider's live web search. Only the
+     * maestro lane can; every other attempt ignores it. */
+    grounded?: boolean;
   } = {},
 ): Promise<ChatResult> {
   const lane = opts.lane ?? 'chat';
@@ -488,7 +518,7 @@ export async function chat(
   let attemptNo = 0;
   for (const { key, model, role, endpoint } of attempts) {
     if (laneCoolingDown(role, model)) {
-      console.log(`[ai] lane=${role} model=${model} status=cooldown`);
+      console.log(`[ai] lane=${role} model=${loggableModel(model)} status=cooldown`);
       lastStatus = lastStatus || 429;
       continue;
     }
@@ -523,6 +553,7 @@ export async function chat(
       if (isMaestroEndpoint(endpoint)) {
         payload.reasoning_effort = opts.reasoningEffort ?? 'low';
         payload.max_tokens = (opts.maxTokens ?? 6000) + 1024;
+        if (opts.grounded) payload.grounded = true;
       }
       // nemotron a3b-family models leak BARE chain-of-thought unless reasoning
       // is switched off at the chat-template level (probed live — see
@@ -551,7 +582,7 @@ export async function chat(
       } catch {
         // Network error or timeout: fail over to the next lane pair.
         clearTimeout(timer);
-        console.log(`[ai] lane=${role} model=${model} status=timeout ms=${Date.now() - startedAt} leash=${Math.min(leash, remainingMs)}`);
+        console.log(`[ai] lane=${role} model=${loggableModel(model)} status=timeout ms=${Date.now() - startedAt} leash=${Math.min(leash, remainingMs)}`);
         lastStatus = 0;
         break;
       }
@@ -561,7 +592,7 @@ export async function chat(
       // abort there surfaces as a blank answer and the ladder walks on.
       // v6.5.2 — one compact line per attempt so `wrangler tail` shows which
       // engine answered, how fast, or why it did not (no secrets, no prompt).
-      console.log(`[ai] lane=${role} model=${model} status=${res.status} ms=${Date.now() - startedAt}`);
+      console.log(`[ai] lane=${role} model=${loggableModel(model)} status=${res.status} ms=${Date.now() - startedAt}`);
       if (res.ok) {
         const data = (await res.json().catch(() => null)) as
           | { choices?: Array<{ message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown }; finish_reason?: unknown }>; usage?: unknown }
@@ -585,7 +616,7 @@ export async function chat(
         // reasoning model that spent the whole token budget thinking shows
         // up here as finish=length with a long `reasoning` field.
         const c0 = data?.choices?.[0];
-        console.log(`[ai] blank lane=${role} model=${model} finish=${String(c0?.finish_reason ?? '?')} keys=${msg ? Object.keys(msg).join(',') : 'none'} reasoning_len=${typeof msg?.reasoning === 'string' ? msg.reasoning.length : 0} completion=${usage?.completion_tokens ?? '?'}`);
+        console.log(`[ai] blank lane=${role} model=${loggableModel(model)} finish=${String(c0?.finish_reason ?? '?')} keys=${msg ? Object.keys(msg).join(',') : 'none'} reasoning_len=${typeof msg?.reasoning === 'string' ? msg.reasoning.length : 0} completion=${usage?.completion_tokens ?? '?'}`);
         lastStatus = 200;
         break;
       }
@@ -594,7 +625,7 @@ export async function chat(
       const fullBody = await res.text().catch(() => '');
       const errBody = fullBody.replace(/\s+/g, ' ').slice(0, 200);
       clearTimeout(timer);
-      console.log(`[ai] error lane=${role} model=${model} status=${res.status} json=${useJson} body=${errBody}`);
+      console.log(`[ai] error lane=${role} model=${loggableModel(model)} status=${res.status} json=${useJson} body=${errBody}`);
       if (res.status === 429) cooldowns.set(coolKey(role, model), Date.now() + cooldownFor(fullBody));
       // JSON mode unsupported on this model -> retry it once in plain mode.
       if (res.status === 400 && useJson) continue;

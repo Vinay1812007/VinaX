@@ -206,7 +206,10 @@ function ruleContext(fixture: EvalFixture, queue: Song[], played: Song[]): RuleC
     recentKeys,
     queuedIds: new Set(queue.map((s) => s.id)),
     queuedKeys: new Set(queue.map((s) => workKey(s))),
-    lock: fixture.seed.language && fixture.seed.language !== 'unknown' ? fixture.seed.language : null,
+    lock: fixture.queueLanguages === 'mix' ? null : fixture.seed.language && fixture.seed.language !== 'unknown' ? fixture.seed.language : null,
+    mix: fixture.queueLanguages === 'mix'
+      ? { lead: fixture.seed.language && fixture.seed.language !== 'unknown' ? fixture.seed.language : null, allowed: new Set([...fixture.pinnedLanguages, ...Object.keys(fixture.profile.languages), ...(fixture.seed.language ? [fixture.seed.language] : [])].filter((l) => !fixture.mutedLanguages.includes(l))) }
+      : null,
   };
 }
 

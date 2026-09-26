@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shown in the artwork slot while nothing plays (real covers are rounded
+     in VinaxPlayerWidget.rounded() because RemoteViews cannot clip). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/vinax_widget_art_bg" />
+    <item
+        android:drawable="@drawable/vinax_ic_note_accent"
+        android:gravity="center"
+        android:width="28dp"
+        android:height="28dp" />
+</layer-list>

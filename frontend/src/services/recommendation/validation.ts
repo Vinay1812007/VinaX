@@ -38,6 +38,13 @@ export interface ValidateOptions extends HardFilterOptions {
   limit: number;
   /** The queue's language under a 'lock' policy; null = no lock. */
   lockLanguage?: string | null;
+  /**
+   * 8.1.0 — the queue's language under the 'mix' policy: songs in other
+   * languages may ship, but this one opens the stretch (slots 1 and 2), an
+   * off-language song is never followed by another, and off-language songs
+   * fill at most half the stretch. Gives way only when nothing else is left.
+   */
+  leadLanguage?: string | null;
   /** Languages the listener plays: the first fallback when a locked queue runs short. */
   familiarLanguages?: string[];
   /** Fewest songs worth shipping before the language lock is relaxed. */
@@ -139,7 +146,13 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
   const shareOk = (s: Song): boolean => !isDiscovery(s) || discoveries < discoveryCap;
   const openOk = (s: Song): boolean => !isDiscovery(s) || out.length >= openingSlots;
   const apartOk = (s: Song): boolean => !prevLead || leadOf(s) !== prevLead;
-  const policy = (s: Song): boolean => capOk(s) && shareOk(s) && openOk(s);
+  const leadLang = options.leadLanguage ?? null;
+  const offLang = (s: Song): boolean => !!leadLang && !!s.language && s.language !== 'unknown' && s.language !== leadLang;
+  let offCount = 0;
+  let prevOff = false;
+  const offCap = Math.floor(limit / 2);
+  const mixOk = (s: Song): boolean => !offLang(s) || (out.length >= 2 && !prevOff && offCount < offCap);
+  const policy = (s: Song): boolean => capOk(s) && shareOk(s) && openOk(s) && mixOk(s);
   // Most rules first; each later tier gives one more rule way, in the order a
   // listener minds least: the discovery allocation (an internal budget), then
   // the familiar opening, then the artist cap, and only last the rule against
@@ -149,8 +162,9 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
   // shipped runs of one artist while other artists sat in the reserve.)
   const tiers: Array<(s: Song) => boolean> = [
     (s) => policy(s) && apartOk(s),
-    (s) => capOk(s) && openOk(s) && apartOk(s),
-    (s) => capOk(s) && apartOk(s),
+    (s) => capOk(s) && openOk(s) && mixOk(s) && apartOk(s),
+    (s) => capOk(s) && mixOk(s) && apartOk(s),
+    (s) => mixOk(s) && apartOk(s),
     apartOk,
     () => true,
   ];
@@ -165,6 +179,9 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
     if (!capOk(song)) relax({ rule: 'artist-cap', ...at, detail: `song ${(perArtist.get(leadOf(song)) ?? 0) + 1} by one artist over a cap of ${cap}; nothing else could fill the slot` });
     if (!shareOk(song)) relax({ rule: 'discovery-share', ...at, detail: `discovery ${discoveries + 1} over a cap of ${discoveryCap}; nothing else could fill the slot` });
     if (!openOk(song)) relax({ rule: 'familiar-opening', ...at, detail: 'a discovery in the opening; no familiar song was left' });
+    if (!mixOk(song)) relax({ rule: 'language-mix', ...at, detail: out.length < 2 ? 'an off-language song in the opening; nothing in the queue language was left' : prevOff ? 'two language changes in a row; nothing in the queue language was left' : 'more than half the stretch off-language; nothing else was left' });
+    if (offLang(song)) offCount += 1;
+    prevOff = offLang(song);
     if (leadOf(song)) perArtist.set(leadOf(song), (perArtist.get(leadOf(song)) ?? 0) + 1);
     if (isDiscovery(song)) discoveries += 1;
     out.push(song);

@@ -26,6 +26,7 @@ export function getRecommendationContext(seedSong: Song | null = null, surface: 
     dayOfWeek: new Date().getDay(),
     region: resolvedRegion(),
     pinnedLanguages: settings.pinnedLanguages,
+    queueLanguages: settings.queueLanguages === 'one' ? 'one' : 'mix',
     mutedLanguages: settings.mutedLanguages,
     intensity: settings.recommendationIntensity,
     favorites,

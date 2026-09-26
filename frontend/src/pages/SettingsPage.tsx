@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 
 import { Link, useLocation } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { scrollBehavior } from '@/utils/motion';
-import { useSettingsStore, type DiscoveryMode } from '@/store/settingsStore';
+import { useSettingsStore, type DiscoveryMode, type QueueLanguages } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useRegion } from '@/features/location/useRegion';
 import {
@@ -95,6 +95,12 @@ function Highlight({ text, q }: { text: string; q: string }) {
  * one-line explanation, shown together, so the choice can be read rather
  * than tried. The lines say what CHANGES, not how it feels.
  */
+/** 8.1.0 — which languages a queue may draw from. */
+const QUEUE_LANGUAGE_OPTIONS: Array<{ value: QueueLanguages; label: string; line: string }> = [
+  { value: 'mix', label: 'Your languages', line: 'The playing song’s language leads; songs from your other languages can follow, never two switches in a row.' },
+  { value: 'one', label: 'One language', line: 'Every queue stays in the language of the song that is playing.' },
+];
+
 const DISCOVERY_OPTIONS: Array<{ value: DiscoveryMode; label: string; line: string }> = [
   { value: 'familiar', label: 'Familiar', line: 'Mostly songs and artists you already play. New artists are rare.' },
   { value: 'balanced', label: 'Balanced', line: 'Your taste first, with about one new artist in every four or five songs.' },
@@ -748,7 +754,7 @@ export default function SettingsPage() {
             </Block>
             <Block
               label="Discovery"
-              note="How far recommendations roam. Every queue stays in the language of the song that is playing and opens with songs you know."
+              note="How far recommendations roam. Every queue opens with songs you know."
               keywords="familiar balanced discover explore new artists"
             >
               <div className="vx-set-options" role="group" aria-label="Discovery mode">
@@ -767,6 +773,31 @@ export default function SettingsPage() {
                       <CheckIcon className="vx-set-option-check" />
                     </span>
                     <span id={`vx-discovery-${o.value}`} className="vx-set-option-line">{o.line}</span>
+                  </button>
+                ))}
+              </div>
+            </Block>
+            <Block
+              label="Queue languages"
+              note="Whether what plays next may move between the languages you listen in."
+              keywords="language mix telugu hindi tamil english queue switch"
+            >
+              <div className="vx-set-options" role="group" aria-label="Queue languages">
+                {QUEUE_LANGUAGE_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    aria-label={o.label}
+                    aria-pressed={(s.queueLanguages ?? 'mix') === o.value}
+                    aria-describedby={`vx-queue-languages-${o.value}`}
+                    onClick={() => s.setQueueLanguages(o.value)}
+                    className="vx-set-option"
+                  >
+                    <span className="vx-set-option-title">
+                      {o.label}
+                      <CheckIcon className="vx-set-option-check" />
+                    </span>
+                    <span id={`vx-queue-languages-${o.value}`} className="vx-set-option-line">{o.line}</span>
                   </button>
                 ))}
               </div>

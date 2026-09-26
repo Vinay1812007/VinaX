@@ -12,6 +12,18 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.1.0': {
+    title: 'VinaX 8.1 — queues in your languages, a sharper flagship engine, a better swipe',
+    changes: [
+      { type: 'new', text: 'Queues in your languages. What plays next can now move between the languages you listen in: the playing song’s language leads, a song from another of your languages can follow, and there are never two switches in a row. Settings → Recommendations → Queue languages switches back to one language.' },
+      { type: 'fixed', text: 'Pin a mood and the Tune chips work again. Romantic, Energetic, Chill and Melancholy searched the catalogue with phrases it could not answer, so Up next did not change. Each mood now rebuilds the list within about a second.' },
+      { type: 'improved', text: 'The flagship AI engine now searches the live web itself when you turn on Web search in VinaX AI, and shows the pages it used. It streams its answers, and it is the engine Auto picks. A setting that had been given a key instead of a model name is now ignored instead of breaking every request.' },
+      { type: 'improved', text: 'VinaX AI no longer tells its engines how to write. Every engine answers the way it does on its own; pick the one whose answers you like from the model menu.' },
+      { type: 'improved', text: 'The DJ knows which of your languages a queue may draw on, and grounds its discoveries in current releases when the flagship engine is available.' },
+      { type: 'fixed', text: 'In the full-screen player, swipe the artwork left for the next song and right for the previous one. Up and down now scroll the page, so the player no longer fights your finger.' },
+      { type: 'improved', text: 'Android: the Now Playing widget has a new look with artwork and controls, and background playback from the notification and widgets is more reliable on recent Android versions.' },
+    ],
+  },
   '8.0.4': {
     title: 'The flagship AI engine is spent where it matters',
     changes: [

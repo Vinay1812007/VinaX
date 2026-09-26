@@ -75,6 +75,8 @@ export interface EvalFixture {
   history: HistoryEntry[];
   profile: EvalProfile;
   sessionIntent?: EvalSessionIntent;
+  /** 8.1.0 — 'mix' lets the listener's other languages into a stretch; absent = the seed's language only. */
+  queueLanguages?: 'one' | 'mix';
   ai: AiScript;
   /** Batches of five to plan in one sitting. */
   batches: number;
@@ -200,6 +202,16 @@ export function buildFixtures(now: number): EvalFixture[] {
   mixed.hiddenArtists = [hi.artists[7]];
 
   // Mixed preferences: two clusters, quiet melodies and loud dance cuts.
+  // 8.1.0 — the same listener with the mix policy on: songs from their other
+  // languages may follow the Hindi seed; Hindi opens the stretch, never two
+  // language changes in a row, and a language they never chose stays out.
+  const mixedQueue = listener(now, 'hindi', { id: 'mixed-queue', title: 'Mixed-language profile, queue languages: mix (8.1)', notes: 'Hindi seed, Hindi + Telugu + Tamil listener, mix policy on: the queue may change language within the rules.', queueLanguages: 'mix' });
+  mixedQueue.pinnedLanguages = ['hindi', 'telugu', 'tamil'];
+  mixedQueue.profile = warmProfile(now, { languages: { hindi: 30, telugu: 22, tamil: 14 }, artists: [...hi.artists.slice(0, 2), ...te.artists.slice(0, 2)] });
+  // Enough Hindi for a whole sitting (the `mixed` fixture starves its lock on purpose; this one measures the mix rules under supply).
+  mixedQueue.related = [...pool('hindi', { prefix: 'mixq-r', count: 26, offset: 1 }), ...pool('telugu', { prefix: 'mixq-t', count: 8, offset: 2 }), ...pool('tamil', { prefix: 'mixq-x', count: 8, offset: 3 }), ...pool('punjabi', { prefix: 'mixq-p', count: 4, offset: 4 })];
+  mixedQueue.search = [...pool('hindi', { prefix: 'mixq-s', count: 12, offset: 9, artistPattern: [3, 4, 5, 6, 7, 3, 8, 9, 4, 5, 6, 7] }), ...pool('telugu', { prefix: 'mixq-st', count: 4, offset: 5 })];
+
   const prefs = listener(now, 'telugu', { id: 'prefs', title: 'Mixed preferences (quiet and loud)', notes: 'Two clusters in one pool: the arc and the energy step rules decide the order.' });
   prefs.related = [
     ...pool('telugu', { prefix: 'prefs-quiet', count: 8, offset: 1 }).map((s) => ({ ...s, energy: 0.15, tempo: 72, mood: 'melancholy' })),
@@ -293,7 +305,7 @@ export function buildFixtures(now: number): EvalFixture[] {
   const softMuted = listener(now, 'telugu', { id: 'soft-muted', title: 'Soft-muted artists ("show fewer like this")', notes: 'A soft mute is a rule while it lasts: those artists must not come back in a continuation.' });
   softMuted.profile = warmProfile(now, { languages: { telugu: 30 }, artists: te.artists.slice(0, 3), softMuted: [te.artists[0], te.artists[2]] });
 
-  return [cold, warm, familiar, discover, tamil, punjabi, malayalam, mixed, prefs, skips, partial, offline, sparse, versions, small, kid, muted, hidden, softMuted];
+  return [cold, warm, familiar, discover, tamil, punjabi, malayalam, mixed, mixedQueue, prefs, skips, partial, offline, sparse, versions, small, kid, muted, hidden, softMuted];
 }
 
 /** The fixture the latency conditions use (a warm Telugu listener with a full pool). */

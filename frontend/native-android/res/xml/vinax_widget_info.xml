@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Quick-play widget: a static card, one tap plays the listener's mix. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
     android:minHeight="40dp"
+    android:minResizeWidth="180dp"
     android:targetCellWidth="4"
     android:targetCellHeight="1"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/vinax_widget_quickplay"
+    android:previewLayout="@layout/vinax_widget_quickplay"
+    android:description="@string/vinax_widget_quickplay_desc"
     android:resizeMode="horizontal"
     android:widgetCategory="home_screen" />

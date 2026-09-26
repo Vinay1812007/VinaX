@@ -255,6 +255,15 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   /** The song this stretch follows in the queue (the caller's last entry), when that is not the seed. */
   const previous = options.previous ?? null;
   const seedLanguage = seed.language && seed.language !== 'unknown' ? seed.language : null;
+  // 8.1.0 — the language policy. 'mix' (the default) lets the listener's other
+  // languages into the stretch: the seed's language leads, a song in another
+  // language the listener pinned or plays may follow at a cost (the sequencer's
+  // 'prefer' policy: never two switches in a row), and a language the listener
+  // never chose stays out (the hard filter's allow-list). 'one' is the 7.1 rule.
+  const listenerLanguages = [...new Set([...ctx.pinnedLanguages, ...topLanguages(ctx.profile, 3).map((l) => l.id)])].filter((l) => l && l !== 'unknown' && !ctx.mutedLanguages.includes(l));
+  // Opt-in per context: a caller that says nothing (tests, the offline evaluation) keeps the 7.1 rule.
+  const mix = ctx.queueLanguages === 'mix' && listenerLanguages.filter((l) => l !== seedLanguage).length > 0;
+  const allowedLanguages = mix ? new Set<string>([...(seedLanguage ? [seedLanguage] : []), ...listenerLanguages]) : undefined;
   // v7.1.0 — an active tune (or a pinned mood) gathers its own candidates, in the queue's language.
   const intentQuery = tune ? tuneSearchQuery(tune, tune === 'different-language' ? null : seedLanguage) : ctx.moodPin ? moodPinQuery(ctx.moodPin, seedLanguage) : null;
   // 7.2.0 — verified charts, read from the snapshot already in memory (never waited for).
@@ -297,6 +306,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     hideExplicit: kidModeOn(),
     // 7.2.0 — soft mutes are a rule at every stage (the DJ's gate and validation included), not only a candidate filter.
     softMuted: ctx.profile.softMuted,
+    ...(allowedLanguages ? { allowedLanguages } : {}),
   };
   const filtered = hardFilter(candidates, rules);
   const rejected: RejectedCandidate[] = [...filtered.rejected];
@@ -352,20 +362,22 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     ? ctx.pinnedLanguages.find((l) => l !== seedLang) ?? orderedPool.map((s) => s.language).find((l) => l && l !== 'unknown' && l !== seedLang) ?? null
     : null;
   const lock = switchTo ?? seedLang;
-  const otherLanguages = ctx.pinnedLanguages.filter((l) => l !== lock);
+  const otherLanguages = (mix ? listenerLanguages : ctx.pinnedLanguages).filter((l) => l !== lock);
+  const languagePolicy: 'lock' | 'prefer' = mix && !switchTo ? 'prefer' : 'lock';
   const discoveryShare = Math.max(0, Math.min(0.5, (tune === 'surprise' ? DISCOVERY_SHARE.discover : DISCOVERY_SHARE[mode]) + (intent ? intent.discoveryAppetite * 0.15 : 0)));
-  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy: 'lock', otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
+  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy, otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
 
   // 10 — validation. The arc first, then the rest of the ranked pool as the
   // reserve a short or language-locked arc is topped up from.
   const familiarLanguages = [...new Set([...ctx.pinnedLanguages, ...topLanguages(ctx.profile, 3).map((l) => l.id)])];
   // 7.2.0 — the final policy, for every order that ships (local, AI, reserve top-up):
   // the discovery allocation and the familiar opening are enforced here too.
-  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: lock, familiarLanguages, discoveryIds, discoveryShare, previous };
+  // Under 'prefer' the sequencer already priced every detour; validation keeps the allow-list (in `rules`) and drops the lock.
+  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: languagePolicy === 'lock' ? lock : null, leadLanguage: languagePolicy === 'prefer' ? lock : null, familiarLanguages, discoveryIds, discoveryShare, previous };
   const arcIds = new Set(arc.songs.map((s) => s.song.id));
   const local = validateSequence([...arc.songs.map((s) => s.song), ...orderedPool.filter((s) => !arcIds.has(s.id))], validateOptions);
   const songs = local.songs;
-  const trace: DebugTrace = { mode, shape, lock, languagePolicy: 'lock', discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed])], repairs: local.repairs };
+  const trace: DebugTrace = { mode, shape, lock, languagePolicy, discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed])], repairs: local.repairs };
   publishDebug(ranked, songs, 'local', { trace, rejected: [...rejected, ...local.rejected] });
 
   const shipped = new Set(songs.map((s) => s.id));
@@ -408,7 +420,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       // v6.5.0 — a rotating slice of the ranked pool (top ranks always, the rest sampled).
       const pool = dj.samplePool(orderedPool.slice(0, 40), 10, 30);
       // Each proposal is verified in the catalogue and must pass the same rules as everything else.
-      const gate = { language: lock, admit: (song: Song) => rejectReasonFor(song, rules) === null };
+      // Under the mix policy a proposal may be in any allowed language (the hard filter's allow-list checks it).
+      const gate = { language: languagePolicy === 'lock' ? lock : null, admit: (song: Song) => rejectReasonFor(song, rules) === null };
       const controller = new AbortController();
       const cancel = (): void => controller.abort();
       if (signal?.aborted) return { rejected: 'ai_unavailable' };

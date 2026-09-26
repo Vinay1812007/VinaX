@@ -81,9 +81,10 @@ describe('maestro transport', () => {
     expect((calls[1].body.generationConfig as Record<string, unknown>).thinkingConfig).toBeUndefined();
   });
 
-  it('streams the whole answer as one event for streaming callers', async () => {
-    install(() => nativeOk('hello'));
+  it('a streaming caller on a native mode is served from the streaming endpoint (8.1.0)', async () => {
+    install(() => new Response(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'hello' }] } }] })}\n\n`, { status: 200, headers: { 'content-type': 'text/event-stream' } }));
     const res = await maestroFetch('AQ.k', 'm', { ...payload, stream: true });
+    expect(calls[0].url).toContain('streamGenerateContent?alt=sse');
     const text = await res.text();
     expect(text).toContain('"delta":{"content":"hello"}');
     expect(text.trim().endsWith('data: [DONE]')).toBe(true);
@@ -129,5 +130,58 @@ describe('maestro transport', () => {
     expect(pickModel(['models/gemini-3.8-flash-lite', 'models/gemini-3.8-flash', 'models/gemini-3.9-flash-preview', 'models/gemini-2.5-flash'])).toBe('gemini-3.8-flash');
     expect(pickModel(['models/gemini-3.9-flash-preview'])).toBe('gemini-3.9-flash-preview');
     expect(pickModel(['models/text-embedding'])).toBeNull();
+  });
+});
+
+describe('maestro transport — streaming and grounding (8.1.0)', () => {
+  const sse = (frames: unknown[]): Response => new Response(frames.map((f) => `data: ${JSON.stringify(f)}\n\n`).join(''), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  const chunk = (text: string, extra: Record<string, unknown> = {}) => ({ candidates: [{ content: { parts: [{ text }] }, ...extra }] });
+
+  it('streams the native endpoint token by token as OpenAI-shaped deltas, then usage and sources', async () => {
+    install((url) => {
+      expect(url).toContain(':streamGenerateContent?alt=sse');
+      return sse([
+        { candidates: [{ content: { parts: [{ text: 'hmm', thought: true }] } }] },
+        chunk('Hello'),
+        chunk(' world', { groundingMetadata: { groundingChunks: [{ web: { uri: 'https://example.org/a', title: 'A' } }, { web: { uri: 'https://example.org/a', title: 'dup' } }, { web: { uri: 'ftp://x', title: 'no' } }] } }),
+        { candidates: [{ content: { parts: [] } }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, thoughtsTokenCount: 1 } },
+      ]);
+    });
+    const res = await maestroFetch('AQ.k', 'gemini-3.8-flash', { ...payload, stream: true, grounded: true });
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    const text = await res.text();
+    const frames = text.split('\n\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6));
+    expect(frames.at(-1)).toBe('[DONE]');
+    const parsed = frames.slice(0, -1).map((f) => JSON.parse(f) as Record<string, unknown>);
+    const deltas = parsed.map((p) => (p.choices as Array<{ delta?: { content?: string } }>)[0]?.delta?.content).filter(Boolean);
+    expect(deltas).toEqual(['Hello', ' world']);
+    expect(parsed.find((p) => p.usage)?.usage).toEqual({ prompt_tokens: 5, completion_tokens: 3 });
+    expect(parsed.find((p) => p.vinax_sources)?.vinax_sources).toEqual([{ title: 'A', url: 'https://example.org/a' }]);
+    // The request carried the search tool and no JSON mode (the provider refuses both together).
+    expect(calls[0].body.tools).toEqual([{ google_search: {} }]);
+    expect((calls[0].body.generationConfig as Record<string, unknown>).responseMimeType).toBeUndefined();
+  });
+
+  it('a non-streaming grounded answer carries its sources beside the OpenAI shape', async () => {
+    install(() => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Grounded [1]' }] }, groundingMetadata: { groundingChunks: [{ web: { uri: 'https://news.example/x', title: 'X' } }] } }] }), { status: 200 }));
+    const res = await maestroFetch('AQ.k', 'm', { ...payload, grounded: true });
+    const j = (await res.json()) as { choices: Array<{ message: { content: string } }>; vinax_sources: unknown };
+    expect(j.choices[0].message.content).toBe('Grounded [1]');
+    expect(j.vinax_sources).toEqual([{ title: 'X', url: 'https://news.example/x' }]);
+  });
+
+  it('ungrounded native requests keep JSON mode and carry no tool', async () => {
+    install(() => nativeOk('{}'));
+    await maestroFetch('AQ.k', 'm', payload);
+    expect(calls[0].body.tools).toBeUndefined();
+    expect((calls[0].body.generationConfig as Record<string, unknown>).responseMimeType).toBe('application/json');
+  });
+
+  it('the OpenAI-compatible endpoint streams as served and never sees the grounded flag', async () => {
+    install(() => new Response('data: {"choices":[{"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } }));
+    const res = await maestroFetch('AIzaKey', 'm', { ...payload, stream: true, grounded: true });
+    expect(await res.text()).toContain('"content":"hi"');
+    expect(calls[0].body.stream).toBe(true);
+    expect(calls[0].body.grounded).toBeUndefined();
   });
 });

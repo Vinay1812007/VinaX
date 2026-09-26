@@ -23,7 +23,9 @@ export type Mode =
   | 'ising15'
   | 'laguna'
   | 'gemma4'
-  | 'router';
+  | 'router'
+  /** 8.1.0 — the flagship engine on the owner's newest key: live web grounding, the DJ's own brain. */
+  | 'maestro';
 
 /** Which live catalogue a seat opens. */
 export type CatalogGroupId = 'grq' | 'opr';

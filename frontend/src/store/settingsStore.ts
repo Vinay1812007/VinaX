@@ -11,6 +11,8 @@ export function isDiscoveryMode(v: unknown): v is DiscoveryMode {
   return v === 'familiar' || v === 'balanced' || v === 'discover';
 }
 
+export type QueueLanguages = 'one' | 'mix';
+
 /** The effective mode, tolerant of a settings record restored from before 7.0 (no `discoveryMode`). */
 export function resolveDiscoveryMode(s: { discoveryMode?: unknown; exploreMode?: unknown }): DiscoveryMode {
   return isDiscoveryMode(s.discoveryMode) ? s.discoveryMode : s.exploreMode === true ? 'discover' : 'balanced';
@@ -63,6 +65,14 @@ export interface SettingsState {
    * is kept in step (true ⇔ 'discover') so older backups and readers work.
    */
   discoveryMode: DiscoveryMode;
+  /**
+   * 8.1.0 — what languages a queue may draw from. 'one' keeps the 7.1 rule
+   * (the seed song's language, always). 'mix' lets songs from the listener's
+   * other languages (pinned and played) in at a cost, so a Telugu song can
+   * hand off to a Hindi one and come back — the seed's language still leads
+   * the stretch and two switches never land back to back.
+   */
+  queueLanguages: QueueLanguages;
   /** v6.2.0 — AI DJ: the queue's next stretch is sequenced by the DJ engine
    *  (from real, already-filtered candidates); off = local recommender only. */
   aiDj: boolean;
@@ -132,6 +142,7 @@ export interface SettingsState {
   setRecommendationIntensity(v: number): void;
   setExploreMode(v: boolean): void;
   setDiscoveryMode(v: DiscoveryMode): void;
+  setQueueLanguages(v: QueueLanguages): void;
   setAiDj(v: boolean): void;
   setAiHomeShelves(v: boolean): void;
   setAiAssist(v: boolean): void;
@@ -195,6 +206,7 @@ const defaults = {
   recommendationIntensity: 0.7,
   exploreMode: false,
   discoveryMode: 'balanced' as DiscoveryMode,
+  queueLanguages: 'mix' as QueueLanguages,
   aiDj: true,
   aiHomeShelves: true,
   aiAssist: true,
@@ -227,6 +239,7 @@ const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
   lyricsSize: ['sm', 'md', 'lg', 'xl'],
   uiLanguage: ['en', 'te', 'hi', 'ta'],
   discoveryMode: ['familiar', 'balanced', 'discover'],
+  queueLanguages: ['one', 'mix'],
 };
 const SETTINGS_RANGES: Partial<Record<keyof SettingsData, readonly [number, number]>> = {
   dailyGoalMinutes: [0, 600],
@@ -317,6 +330,7 @@ export const useSettingsStore = create<SettingsState>()(
       setRecommendationIntensity: (v) =>
         set({ recommendationIntensity: Math.min(1, Math.max(0, v)) }),
       setExploreMode: (exploreMode) => set({ exploreMode, discoveryMode: exploreMode ? 'discover' : 'balanced' }),
+      setQueueLanguages: (queueLanguages) => set({ queueLanguages: queueLanguages === 'one' ? 'one' : 'mix' }),
       setDiscoveryMode: (mode) => {
         const discoveryMode = isDiscoveryMode(mode) ? mode : 'balanced';
         set({ discoveryMode, exploreMode: discoveryMode === 'discover' });

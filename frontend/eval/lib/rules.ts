@@ -28,7 +28,10 @@ export type ViolationKind =
   | 'soft-muted-artist'
   | 'recently-played'
   | 'duplicate-identity'
-  | 'off-language';
+  | 'off-language'
+  // 8.1.0 — the mix policy's own rules (only counted when a fixture asks for 'mix').
+  | 'language-opening'
+  | 'language-run';
 
 export const VIOLATION_KINDS: ViolationKind[] = [
   'explicit-in-kid-mode',
@@ -39,6 +42,8 @@ export const VIOLATION_KINDS: ViolationKind[] = [
   'recently-played',
   'duplicate-identity',
   'off-language',
+  'language-opening',
+  'language-run',
 ];
 
 export interface RuleContext {
@@ -57,6 +62,13 @@ export interface RuleContext {
   queuedKeys: Set<string>;
   /** The language the stretch is locked to (the seed's), or null. */
   lock: string | null;
+  /**
+   * 8.1.0 — the mix policy: songs in `allowed` (the listener's languages) may
+   * ship; `lead` (the seed's language) must open the stretch and an off-lead
+   * song is never followed by another. A language outside `allowed` is still
+   * off-language.
+   */
+  mix?: { lead: string | null; allowed: Set<string> } | null;
 }
 
 export type Violations = Record<ViolationKind, number>;
@@ -86,13 +98,20 @@ export function violationsOf(songs: Song[], rc: RuleContext): Violations {
     if (seen.has(key)) counts['duplicate-identity'] += 1;
     seen.add(key);
     if (rc.lock && song.language && song.language !== 'unknown' && song.language !== rc.lock) counts['off-language'] += 1;
+    if (rc.mix && song.language && song.language !== 'unknown' && !rc.mix.allowed.has(song.language)) counts['off-language'] += 1;
+  }
+  if (rc.mix?.lead) {
+    const lead = rc.mix.lead;
+    const off = (s: Song): boolean => !!s.language && s.language !== 'unknown' && s.language !== lead;
+    songs.slice(0, Math.min(2, songs.length)).forEach((s) => { if (off(s)) counts['language-opening'] += 1; });
+    for (let i = 1; i < songs.length; i += 1) if (off(songs[i]) && off(songs[i - 1])) counts['language-run'] += 1;
   }
   return counts;
 }
 
 /** Songs from the fixture's catalogue that this continuation could have used. */
 export function eligible(poolSongs: Song[], rc: RuleContext): Song[] {
-  return poolSongs.filter((s) => !breaksRule(s, rc) && (!rc.lock || !s.language || s.language === 'unknown' || s.language === rc.lock));
+  return poolSongs.filter((s) => !breaksRule(s, rc) && (!rc.lock || !s.language || s.language === 'unknown' || s.language === rc.lock) && (!rc.mix || !s.language || s.language === 'unknown' || rc.mix.allowed.has(s.language)));
 }
 
 export function addViolations(into: Violations, from: Violations): Violations {

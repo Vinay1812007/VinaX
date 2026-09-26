@@ -21,7 +21,8 @@ export const MODES: Array<{
   catalog?: CatalogGroupId;
 }> = [
   { id: 'auto', label: 'Auto', hint: 'Picks the best engine for each question', tier: 'core' },
-  { id: 'muse', label: 'Balanced', hint: 'Everyday chat · recommended', tier: 'core' },
+  { id: 'maestro', label: 'VinaX Maestro', hint: 'Flagship · live web answers · recommended', tier: 'core' },
+  { id: 'muse', label: 'Balanced', hint: 'Everyday chat', tier: 'core' },
   { id: 'swift', label: 'Fast', hint: 'Quickest answers · VinaX OAI OSS 20B', tier: 'core' },
   { id: 'sage', label: 'Deep', hint: 'Careful reasoning · VinaX NVD NMTRN SUP', tier: 'core' },
   {
@@ -109,6 +110,8 @@ export const ADVANCED_MODES = MODES.filter((m) => m.tier === 'advanced');
 // derived from the served model slug so failovers are reported honestly.
 // Order matters: specific slugs sit BEFORE the generic llama/vision row.
 const ENGINE_NICK: Array<[RegExp, string]> = [
+  // 8.1.0 — the flagship lane's models all share one nickname.
+  [/^gemini/i, 'VinaX Maestro'],
   // v5.4.0 engines (probe-verified pins) — specific slugs sit first so the
   // legacy rows below can never mislabel them.
   [/nemotron-3\.5-lightning/i, 'VinaX NVD NMTRN 3.5 LTNG 30B'],
@@ -503,7 +506,8 @@ export function saveDefaultChoice(choice: ModelChoice | null): void {
 /** Where a visit starts: the explicit default, else the last model used,
  *  else the everyday seat. */
 export function loadInitialChoice(): ModelChoice {
-  return loadDefaultChoice() ?? reviveChoice(readJson(LAST_MODEL_KEY)) ?? { mode: 'muse' };
+  // 8.1.0 — a listener who never chose gets Auto, which the service resolves to the flagship engine when its key is set.
+  return loadDefaultChoice() ?? reviveChoice(readJson(LAST_MODEL_KEY)) ?? { mode: 'auto' };
 }
 
 export function saveLastChoice(choice: ModelChoice): void {

@@ -143,6 +143,12 @@ export async function setMediaHandlers(h: MediaHandlers): Promise<void> {
           // the full-screen player.
           window.dispatchEvent(new CustomEvent('vx:np'));
           break;
+        case 'resync':
+          // The native side lost a push (Android 12+ refuses to start the
+          // foreground service from the background) and the activity is
+          // visible again: replay everything it holds.
+          resyncNative();
+          break;
         case 'playFromId':
           if (d.mediaId && d.mediaId.startsWith('song_')) {
             const id = d.mediaId.replace('song_', '');
@@ -198,10 +204,15 @@ export async function setMediaHandlers(h: MediaHandlers): Promise<void> {
 }
 
 // Cached current metadata so the lyric line can be pushed cheaply to BOTH the
-// native notification and the web Media Session (lock-screen / OS media UI).
+// native notification and the web Media Session (lock-screen / OS media UI),
+// and so a native "resync" can replay the whole session after a lost push.
 let _song: Song | null = null;
 let _artwork = '';
 let _lyricLine: string | null = null;
+let _playing = false;
+let _position: { duration: number; position: number; rate: number } | null = null;
+// Last position handed to native; ticks closer than 1 s to it are skipped.
+let lastSentPosition = -10;
 
 function pushNativeMetadata(): void {
   if (!native || !VinaxMedia || !_song) return;
@@ -213,6 +224,33 @@ function pushNativeMetadata(): void {
   })
     .then(() => record('setMetadata', true))
     .catch((e) => record('setMetadata', false, String(e)));
+}
+
+function pushNativeState(): void {
+  if (!native || !VinaxMedia) return;
+  const state = _playing ? 'playing' : 'paused';
+  void VinaxMedia.setPlaybackState({ playbackState: state })
+    .then(() => record(`setPlaybackState(${state})`, true))
+    .catch((e) => record('setPlaybackState', false, String(e)));
+}
+
+function pushNativePosition(): void {
+  if (!native || !VinaxMedia || !_position) return;
+  lastSentPosition = _position.position;
+  void VinaxMedia.setPosition({
+    duration: _position.duration,
+    position: _position.position,
+    playbackRate: _position.rate,
+  }).catch((e) => record('setPosition', false, String(e)));
+}
+
+/** Replay metadata, state and position — the native side asked for it. */
+function resyncNative(): void {
+  if (!native || !VinaxMedia || !_song) return;
+  record('resync', true);
+  pushNativeMetadata();
+  pushNativeState();
+  pushNativePosition();
 }
 
 function pushWebMetadata(): void {
@@ -228,11 +266,25 @@ function pushWebMetadata(): void {
 }
 
 export function updateMediaMetadata(song: Song | null): void {
+  const changed = song?.id !== _song?.id;
   _song = song;
   _lyricLine = null;
   _artwork = '';
+  if (changed) {
+    // A new track starts at 0: let its first tick through the 1 s gate so
+    // the lock-screen seek bar gets the new duration at once.
+    _position = null;
+    lastSentPosition = -10;
+  }
   if (native && VinaxMedia) {
-    if (!song) return;
+    if (!song) {
+      // Nothing to show: end the session, which also clears the widget.
+      _playing = false;
+      void VinaxMedia.stop()
+        .then(() => record('stop', true))
+        .catch((e) => record('stop', false, String(e)));
+      return;
+    }
     pushNativeMetadata(); // show immediately; artwork fills in once decoded
     const artUrl = bestImage(song.images, 500);
     void artworkDataUrl(artUrl)
@@ -264,23 +316,26 @@ export function setLockScreenLyricLine(line: string | null): void {
 }
 
 export function updatePlaybackState(playing: boolean): void {
+  _playing = playing;
   if (native && VinaxMedia) {
-    void VinaxMedia.setPlaybackState({ playbackState: playing ? 'playing' : 'paused' })
-      .then(() => record(`setPlaybackState(${playing ? 'playing' : 'paused'})`, true))
-      .catch((e) => record('setPlaybackState', false, String(e)));
+    pushNativeState();
+    // The session's PlaybackState carries the position it was set with: send
+    // the current one so the seek bar does not jump after a pause / resume,
+    // and let the next tick through regardless of the 1 s gate.
+    pushNativePosition();
+    lastSentPosition = -10;
     return;
   }
   if (!webSupported()) return;
   navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
 }
 
-let lastSentPosition = -10;
 export function updatePositionState(duration: number, position: number, rate: number): void {
   if (!(duration > 0) || position > duration) return;
   if (native && VinaxMedia) {
+    _position = { duration, position, rate };
     if (Math.abs(position - lastSentPosition) < 1) return;
-    lastSentPosition = position;
-    void VinaxMedia.setPosition({ duration, position, playbackRate: rate }).catch(() => undefined);
+    pushNativePosition();
     return;
   }
   if (!webSupported() || !navigator.mediaSession.setPositionState) return;

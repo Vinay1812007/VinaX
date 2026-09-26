@@ -165,6 +165,8 @@ export interface RecommendationContext {
   hour: number;
   region: RegionInfo | null;
   pinnedLanguages: string[];
+  /** 8.1.0 — 'mix' lets the listener's other languages into a stretch (see settingsStore.queueLanguages); absent or 'one' = the seed's language only. */
+  queueLanguages?: 'one' | 'mix';
   mutedLanguages: string[];
   /** 0..1 — recommendation intensity from settings. */
   intensity: number;
@@ -215,14 +217,14 @@ export interface RecommendationContext {
 }
 
 /** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */
-export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'soft-muted' | 'language-lock' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'discovery-share' | 'invalid';
+export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'soft-muted' | 'language-lock' | 'off-language' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'discovery-share' | 'invalid';
 
 /**
  * 7.2.0 — a soft rule the sequencer or the validator had to give up on
  * because the pool could not fill the stretch otherwise. Hard rules (the
  * `RejectReason`s the hard filter returns) are never relaxed.
  */
-export type RelaxedRule = 'language-lock' | 'artist-cap' | 'discovery-share' | 'familiar-opening' | 'recent-version' | 'artist-spacing';
+export type RelaxedRule = 'language-lock' | 'language-mix' | 'artist-cap' | 'discovery-share' | 'familiar-opening' | 'recent-version' | 'artist-spacing';
 
 /** 7.2.0 — one relaxation, with what gave and why (the developer breakdown shows these). */
 export interface Relaxation {
