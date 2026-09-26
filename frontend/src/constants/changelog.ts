@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.0.1': {
+    title: 'The flagship AI engine connects',
+    changes: [
+      { type: 'fixed', text: 'The new flagship AI engine behind the DJ, the Queue Builder, AI Playlist and the Home builder now accepts every kind of access key its provider issues. With the newer keys it used to stay silent and the other engines answered instead.' },
+    ],
+  },
   '8.0.0': {
     title: 'VinaX 8.0 — a new look, a sharper DJ and a Home that fits you',
     changes: [

@@ -7,7 +7,8 @@
  *  ?model= overrides the probed slug (default: that lane's pinned model). */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
-import { laneEndpoint, laneModel, type AiEnv, type Lane } from '../../_lib/ai';
+import { isMaestroEndpoint, laneEndpoint, laneModel, type AiEnv, type Lane } from '../../_lib/ai';
+import { maestroFetch, maestroLearnedMode } from '../../_lib/maestro';
 
 type Env = AdminEnv & AiEnv;
 
@@ -59,15 +60,19 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   // the fetch resolves (audit finding L7).
   const timerId = setTimeout(() => c.abort(), 15_000);
   try {
-    const up = await fetch(base, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], max_tokens: 8, temperature: 0 }),
-      signal: c.signal,
-    });
+    const probe = { model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], max_tokens: 8, temperature: 0 };
+    const up = isMaestroEndpoint(base)
+      ? await maestroFetch(key, model, probe, c.signal)
+      : await fetch(base, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+          body: JSON.stringify(probe),
+          signal: c.signal,
+        });
     const ms = Date.now() - t0;
     const txt = await up.text().catch(() => '');
-    return json({ key: suffix, model, status: up.status, ms, head: txt.slice(0, 220) });
+    // The maestro transport also says which of the provider's endpoints accepted this key.
+    return json({ key: suffix, model, status: up.status, ms, head: txt.slice(0, 220), ...(isMaestroEndpoint(base) ? { mode: maestroLearnedMode() } : {}) });
   } catch (e) {
     return json({ key: suffix, model, status: 0, ms: Date.now() - t0, exception: e instanceof Error ? e.message : String(e) });
   } finally {

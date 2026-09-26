@@ -12,7 +12,8 @@
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { LANE_MODEL, laneEndpoint, laneModel, type AiEnv } from '../../_lib/ai';
+import { LANE_MODEL, isMaestroEndpoint, laneEndpoint, laneModel, type AiEnv } from '../../_lib/ai';
+import { maestroFetch } from '../../_lib/maestro';
 import { catalogDefaultModel } from '../../_lib/catalog';
 
 type Env = AdminEnv & SupabaseEnv & AiEnv;
@@ -31,12 +32,15 @@ async function pingKey(name: string, key: string | undefined, model: string, bas
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 9000);
   try {
-    const res = await fetch(base, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, max_tokens: 4, messages: [{ role: 'user', content: 'ping' }] }),
-      signal: controller.signal,
-    });
+    const ping = { model, max_tokens: 4, messages: [{ role: 'user', content: 'ping' }] };
+    const res = isMaestroEndpoint(base)
+      ? await maestroFetch(key, model, ping, controller.signal)
+      : await fetch(base, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+          body: JSON.stringify(ping),
+          signal: controller.signal,
+        });
     // Audit finding M-SRV-5: the previous line dropped up to 180 bytes of the
     // raw upstream body straight into the admin JSON — some providers echo the
     // bearer key or internal stack lines in their 4xx bodies. A sanitized

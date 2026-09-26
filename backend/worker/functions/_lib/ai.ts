@@ -60,6 +60,7 @@
  * NVIDIA_BASE_URL optional DEFAULT endpoint override — applies only
  * to lanes without their own LANE_BASE pin
  */
+import { maestroFetch } from './maestro';
 import { dbErrorCode, sbInsert, sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 export interface AiEnv {
@@ -516,12 +517,16 @@ export async function chat(
       const timer = setTimeout(() => controller.abort(), Math.min(leash, remainingMs));
       let res: Response;
       try {
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
+        // 8.0.1 — the maestro lane speaks through its own transport (the
+        // provider's key shapes need different endpoints; see _lib/maestro.ts).
+        res = isMaestroEndpoint(endpoint)
+          ? await maestroFetch(key, model, payload, controller.signal)
+          : await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+              body: JSON.stringify(payload),
+              signal: controller.signal,
+            });
       } catch {
         // Network error or timeout: fail over to the next lane pair.
         clearTimeout(timer);

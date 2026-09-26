@@ -21,7 +21,7 @@ Backend paths below are relative to `backend/worker/functions/`; frontend paths 
 
 | Lane | Role |
 | --- | --- |
-| `maestro` | 8.0 flagship: leads the DJ, the Queue Builder, AI Playlist, `ranking` and the Home builder. Its own host and key (`VINAX_GGL_GEMINI_API_KEY`); `VINAX_MAESTRO_MODEL` replaces the pin. Skipped without a round trip when the key is unset |
+| `maestro` | 8.0 flagship: leads the DJ, the Queue Builder, AI Playlist, `ranking` and the Home builder. Its own key (`VINAX_GGL_GEMINI_API_KEY`); `VINAX_MAESTRO_MODEL` replaces the pin. Skipped without a round trip when the key is unset. 8.0.1: every call goes through `_lib/maestro.ts`, which tries the provider's OpenAI-compatible endpoint, its native API and its cloud host in the order that suits the key's shape (`AQ.` keys start native), moves on only on a wrong-key answer (401/403/404 or a 400 naming the key), remembers the endpoint that worked, and translates both ways. The engine test (`/api/admin/enginetest?key=MAESTRO`) reports the `mode` that answered |
 | `dj` | Creative generation: playlists, the DJ's first failover |
 | `chat` | Everyday assistant chat (shares the `dj` lane's key) |
 | `deep` | Deep reasoning (the chat's Think engine) |
