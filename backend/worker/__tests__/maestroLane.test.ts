@@ -4,7 +4,7 @@
  * from costing every call a wasted round trip.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chat, clearLaneCooldowns, laneAttempts, laneModel, type AiEnv } from '../functions/_lib/ai';
+import { chat, clearLaneCooldowns, cooldownFor, laneAttempts, laneCoolingDown, laneModel, type AiEnv } from '../functions/_lib/ai';
 import { resetMaestroMode, resetMaestroModels } from '../functions/_lib/maestro';
 
 const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
@@ -57,4 +57,17 @@ describe('maestro lane', () => {
     expect(second.content).toBe('fallback');
     expect(calls.slice(2).map((c) => c.url.includes('generativelanguage'))).toEqual([false]);
   });
+
+  it('8.0.4 — a quota answer keeps the key aside as long as the provider says', async () => {
+    expect(cooldownFor('{"error":{"code":429,"details":[{"retryDelay":"37s"}]}}')).toBe(60_000);
+    expect(cooldownFor('{"error":{"details":[{"retryDelay":"300s"}]}}')).toBe(300_000);
+    expect(cooldownFor('quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier')).toBe(3_600_000);
+    expect(cooldownFor('You exceeded your current quota, please check your plan and billing details.')).toBe(3_600_000);
+    expect(cooldownFor('rate limited')).toBe(60_000);
+    install((url) => (url.includes('generativelanguage') ? new Response('{"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details."}}', { status: 429 }) : ok('fallback')));
+    await chat(env, [{ role: 'user', content: 'x' }], { lane: 'maestro', skipSecondary: true, ladder: ['scholar'] });
+    expect(laneCoolingDown('maestro', 'gemini-3.8-flash', Date.now() + 30 * 60_000)).toBe(true);
+    expect(laneCoolingDown('maestro', 'gemini-3.8-flash', Date.now() + 61 * 60_000)).toBe(false);
+  });
 });
+

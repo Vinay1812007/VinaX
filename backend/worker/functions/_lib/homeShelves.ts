@@ -293,7 +293,9 @@ export async function designShelves(env: AiEnv, data: Record<string, unknown>, b
         { role: 'system', content: GATHER_PROMPT },
         { role: 'user', content: body },
       ],
-      ['maestro', 'scholar', 'fast'],
+      // 8.0.4 — the pitch round stays off the maestro lane (one call per Home
+      // open is enough of its allowance: the curate below leads with it).
+      ['scholar', 'fast'],
       { temperature: 0.95, maxTokens: 900, timeoutMs: 4_500, deadlineAt: Math.min(deadlineAt, Date.now() + 4_500), soloLadder: true, feature: 'curate-shelves' },
     );
     const seen = new Set<string>();

@@ -12,7 +12,9 @@ export const TASK_ROUTES = {
   // 8.0.0 — the maestro lane (when its key is set) leads ranking, where its
   // music knowledge matters most, and backs up metadata. A lane with no key
   // is skipped without a round trip.
-  metadata: { lanes: ['scholar', 'maestro', 'fast', 'chat'] as Lane[], budget: 6000, tokens: 1800 },
+  // 8.0.4 — metadata is the highest-volume task (every new song); it stays off
+  // the maestro lane so that key's allowance goes to ordering what plays next.
+  metadata: { lanes: ['scholar', 'fast', 'chat'] as Lane[], budget: 6000, tokens: 1800 },
   ranking: { lanes: ['maestro', 'scholar', 'dj', 'chat'] as Lane[], budget: 9000, tokens: 1200 },
   // 8.0.0 — Home Studio's "Build with VinaX AI" failed two calls in three on
   // 2026-09-26: the dj engine led, spent its 5 s leash and the next lane ran

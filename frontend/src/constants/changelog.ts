@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.0.4': {
+    title: 'The flagship AI engine is spent where it matters',
+    changes: [
+      { type: 'improved', text: 'The flagship AI engine now works on what plays next: the DJ, the Queue Builder, AI Playlist and song ranking. Background jobs such as tagging new songs use the other engines, so its allowance lasts longer.' },
+      { type: 'fixed', text: 'When the flagship engine’s allowance runs out, VinaX waits until it is available again instead of asking every minute, and the other engines answer in the meantime.' },
+    ],
+  },
   '8.0.3': {
     title: 'The flagship AI engine keeps the lead',
     changes: [
