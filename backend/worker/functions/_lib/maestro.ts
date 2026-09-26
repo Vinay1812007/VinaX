@@ -147,29 +147,118 @@ async function tryMode(mode: MaestroMode, key: string, model: string, payload: C
 }
 
 /**
+ * 8.0.2 — the provider retires models (live, 2026-09-26: "This model
+ * models/gemini-2.5-flash is no longer available to new users. Please update
+ * your code to use models/gemini-3.8-flash"). A 404 that talks about the
+ * MODEL is not a wrong door: the key and endpoint are right, the name is old.
+ * The replacement is the model the error names, else the newest general
+ * "flash" model this key can list; it is remembered per isolate so later
+ * calls go straight to it.
+ */
+const modelSwap = new Map<string, string>();
+/** Test hook. */
+export function resetMaestroModels(): void {
+  modelSwap.clear();
+}
+/** The model a pinned name currently resolves to in this isolate. */
+export function maestroModelFor(model: string): string {
+  return modelSwap.get(model) ?? model;
+}
+
+/** True when an error answer says the requested model is unavailable (retired, unknown or not for this key). */
+export function isModelGone(status: number, body: string): boolean {
+  if (status !== 404 && status !== 400) return false;
+  if (/api[ _-]?key|API_KEY_INVALID|UNAUTHENTICATED/i.test(body)) return false;
+  return /model/i.test(body) && /(not found|no longer available|not supported|is not available|does not exist|update your code|deprecated|retired)/i.test(body);
+}
+
+/** The model an error message tells us to use instead ("…use models/gemini-3.8-flash…"). */
+export function suggestedModel(body: string): string | null {
+  const m = body.match(/\buse\s+(?:the\s+)?(?:models\/)?(gemini-[\w.-]*[\w])/i);
+  return m ? m[1] : null;
+}
+
+/**
+ * The best general model from a list of names: gemini, "flash", not a lite,
+ * image, audio, speech, live, embedding or tuning variant; stable before
+ * preview/experimental; highest version first.
+ */
+export function pickModel(names: string[]): string | null {
+  const clean = names.map((n) => n.replace(/^models\//, '')).filter((n) => /^gemini-/i.test(n) && /flash/i.test(n) && !/lite|image|audio|tts|speech|live|embed|tuning|thinking-exp|robotics|computer/i.test(n));
+  const version = (n: string): number => {
+    const v = n.match(/^gemini-(\d+)(?:\.(\d+))?/i);
+    return v ? Number(v[1]) * 100 + Number(v[2] ?? 0) : 0;
+  };
+  const unstable = (n: string): number => (/preview|exp|latest/i.test(n) ? 1 : 0);
+  clean.sort((a, b) => unstable(a) - unstable(b) || version(b) - version(a) || a.length - b.length);
+  return clean[0] ?? null;
+}
+
+/** The models this key can use, from the provider's own list (native, then the OpenAI-compatible list). */
+export async function listMaestroModels(key: string, signal?: AbortSignal): Promise<string[]> {
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', { headers: { 'x-goog-api-key': key }, signal });
+    if (res.ok) {
+      const j = (await res.json()) as { models?: Array<{ name?: unknown; supportedGenerationMethods?: unknown }> };
+      const names = (j.models ?? [])
+        .filter((m) => !Array.isArray(m.supportedGenerationMethods) || (m.supportedGenerationMethods as unknown[]).includes('generateContent'))
+        .map((m) => (typeof m.name === 'string' ? m.name : ''))
+        .filter(Boolean);
+      if (names.length) return names;
+    }
+  } catch {
+    /* try the other list */
+  }
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/models', { headers: { authorization: `Bearer ${key}` }, signal });
+    if (res.ok) {
+      const j = (await res.json()) as { data?: Array<{ id?: unknown }> };
+      return (j.data ?? []).map((m) => (typeof m.id === 'string' ? m.id : '')).filter(Boolean);
+    }
+  } catch {
+    /* no list */
+  }
+  return [];
+}
+
+function finish(res: Response, payload: ChatPayload, mode: MaestroMode): Promise<Response> | Response {
+  learned = mode;
+  if (payload.stream === true) return res.json().catch(() => ({})).then((body) => asSse(body as Record<string, unknown>));
+  return res;
+}
+
+/**
  * Send one chat-completions payload to the maestro provider, whatever the
  * key's shape. Resolves with a Response in chat-completions form (or its SSE
  * form when `payload.stream` is true). Network errors and aborts reject, as
  * fetch() does, so callers' timeout handling is unchanged.
  */
-export async function maestroFetch(rawKey: string, model: string, payload: ChatPayload, signal?: AbortSignal): Promise<Response> {
+export async function maestroFetch(rawKey: string, requested: string, payload: ChatPayload, signal?: AbortSignal): Promise<Response> {
   // A pasted secret often carries a trailing newline or spaces.
   const key = rawKey.trim();
+  const model = maestroModelFor(requested);
   const modes = maestroModes(key);
   let last: Response | null = null;
   for (let i = 0; i < modes.length; i += 1) {
     const mode = modes[i];
     const res = await tryMode(mode, key, model, payload, signal);
-    if (res.ok) {
-      learned = mode;
-      if (payload.stream === true) {
-        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-        return asSse(body);
+    if (res.ok) return finish(res, payload, mode);
+    const body = await res.clone().text().catch(() => '');
+    last = res;
+    if (isModelGone(res.status, body)) {
+      // The door is right, the name is old: find the current model and ask again on this mode.
+      const replacement = suggestedModel(body) ?? pickModel(await listMaestroModels(key, signal));
+      console.log(`[ai] maestro mode=${mode} model=${model} gone → ${replacement ?? 'no replacement found'}`);
+      if (replacement && replacement !== model) {
+        const retry = await tryMode(mode, key, replacement, payload, signal);
+        if (retry.ok) {
+          modelSwap.set(requested, replacement);
+          return finish(retry, payload, mode);
+        }
+        return retry;
       }
       return res;
     }
-    const body = await res.clone().text().catch(() => '');
-    last = res;
     const more = i < modes.length - 1;
     console.log(`[ai] maestro mode=${mode} status=${res.status}${more && isWrongDoor(res.status, body) ? ' → next mode' : ''}`);
     if (!isWrongDoor(res.status, body)) return res;

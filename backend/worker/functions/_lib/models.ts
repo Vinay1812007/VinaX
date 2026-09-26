@@ -91,14 +91,14 @@ const T = { training_supported: false as const, fine_tuning_supported: false as 
 
 /** Every model VinaX knows about, keyed by registry id. */
 export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
-  'gemini-2.5-flash': {
-    id: 'gemini-2.5-flash', envKey: 'VINAX_GGL_GEMINI_API_KEY', display_name: 'VinaX Maestro', provider: 'ggl',
+  'gemini-3.8-flash': {
+    id: 'gemini-3.8-flash', envKey: 'VINAX_GGL_GEMINI_API_KEY', display_name: 'VinaX Maestro', provider: 'ggl',
     role: 'Flagship music intelligence — AI DJ ordering, Queue Builder, ranking, playlists, Home builder',
     capabilities: ['reasoning', 'generation', 'ranking', 'classification', 'creative'], latency_class: 'fast', quality_class: 'premium',
     cost_class: 'low', output_format: 'json', chat_capable: true,
-    fallback_models: ['gemini-2.5-flash-lite', 'gpt-oss-20b'],
+    fallback_models: ['gpt-oss-20b'],
     verified: false, ...T,
-    notes: 'Added 8.0.0 on the owner\'s new key. Leads the DJ, ranking, playlist and Home-builder ladders; a 429 cools the key for a minute and the ladder answers. VINAX_MAESTRO_MODEL replaces the pin without new code. Probe it in the AI Lab after the secret is set.',
+    notes: 'Added 8.0.0 on the owner\'s new key. Leads the DJ, ranking, playlist and Home-builder ladders; a 429 cools the key for a minute and the ladder answers. VINAX_MAESTRO_MODEL replaces the pin without new code. 8.0.2: re-pinned from gemini-2.5-flash (retired for new accounts, live 404 on 2026-09-26); a retired pin is replaced at runtime by the provider\'s suggested model or its newest listed flash model. Probe it in the AI Lab after the secret is set.',
   },
   'kimi-k3': {
     id: 'moonshotai/kimi-k3', envKey: 'VINAX_KIMI_K3', display_name: 'VinaX K3', provider: 'nvidia',

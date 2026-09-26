@@ -3,7 +3,7 @@
  * one chat-completions answer comes back.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fromNativeAnswer, isWrongDoor, maestroFetch, maestroLearnedMode, maestroModes, resetMaestroMode, toNativeRequest } from '../functions/_lib/maestro';
+import { fromNativeAnswer, isModelGone, isWrongDoor, maestroFetch, maestroLearnedMode, maestroModelFor, maestroModes, pickModel, resetMaestroMode, resetMaestroModels, suggestedModel, toNativeRequest } from '../functions/_lib/maestro';
 
 const calls: Array<{ url: string; headers: Record<string, string>; body: Record<string, unknown> }> = [];
 function install(plan: (url: string) => Response): void {
@@ -17,7 +17,7 @@ function install(plan: (url: string) => Response): void {
 const nativeOk = (text: string): Response => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'thinking…', thought: true }, { text }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 4, thoughtsTokenCount: 6 } }), { status: 200 });
 const payload = { model: 'm', messages: [{ role: 'system', content: 'Be brief.' }, { role: 'user', content: 'hi' }], temperature: 0.3, max_tokens: 1924, response_format: { type: 'json_object' }, reasoning_effort: 'low' };
 
-beforeEach(() => resetMaestroMode());
+beforeEach(() => { resetMaestroMode(); resetMaestroModels(); });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('maestro transport', () => {
@@ -94,5 +94,40 @@ describe('maestro transport', () => {
     expect(isWrongDoor(400, 'API key not valid. Please pass a valid API key.')).toBe(true);
     expect(isWrongDoor(400, 'Invalid JSON payload')).toBe(false);
     expect(isWrongDoor(429, '')).toBe(false);
+  });
+
+  it('8.0.2 — a retired model: follows the name the error suggests and remembers it', async () => {
+    const gone = '[{"error":{"code":404,"message":"This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features","status":"NOT_FOUND"}}]';
+    install((url) => (url.includes('gemini-2.5-flash') ? new Response(gone, { status: 404 }) : nativeOk('new model')));
+    const res = await maestroFetch('AQ.k', 'gemini-2.5-flash', payload);
+    expect(((await res.json()) as { choices: Array<{ message: { content: string } }> }).choices[0].message.content).toBe('new model');
+    expect(calls.map((c) => c.url.split('/models/')[1])).toEqual(['gemini-2.5-flash:generateContent', 'gemini-3.8-flash:generateContent']);
+    expect(maestroModelFor('gemini-2.5-flash')).toBe('gemini-3.8-flash');
+    calls.length = 0;
+    await maestroFetch('AQ.k', 'gemini-2.5-flash', payload);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain('gemini-3.8-flash');
+  });
+
+  it('8.0.2 — a retired model with no suggestion: picks the newest general flash model the key lists', async () => {
+    install((url) => {
+      if (url.includes('/v1beta/models?')) return new Response(JSON.stringify({ models: ['gemini-2.0-flash', 'gemini-3.9-flash-lite', 'gemini-3.8-flash', 'gemini-4.0-flash-preview', 'gemini-3.8-flash-image', 'text-embedding-9'].map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ['generateContent'] })) }), { status: 200 });
+      if (url.includes('old-model')) return new Response('{"error":{"message":"models/old-model is not found for API version v1beta"}}', { status: 404 });
+      return nativeOk('listed');
+    });
+    const res = await maestroFetch('AQ.k', 'old-model', payload);
+    expect(res.status).toBe(200);
+    expect(calls.at(-1)!.url).toContain('/models/gemini-3.8-flash:generateContent');
+  });
+
+  it('8.0.2 — reads model errors apart from key errors', () => {
+    expect(isModelGone(404, 'This model models/x is no longer available to new users')).toBe(true);
+    expect(isModelGone(404, 'Requested entity was not found.')).toBe(false);
+    expect(isModelGone(400, 'API key not valid')).toBe(false);
+    expect(suggestedModel('Please update your code to use models/gemini-3.8-flash for the latest features')).toBe('gemini-3.8-flash');
+    expect(suggestedModel('nothing here')).toBeNull();
+    expect(pickModel(['models/gemini-3.8-flash-lite', 'models/gemini-3.8-flash', 'models/gemini-3.9-flash-preview', 'models/gemini-2.5-flash'])).toBe('gemini-3.8-flash');
+    expect(pickModel(['models/gemini-3.9-flash-preview'])).toBe('gemini-3.9-flash-preview');
+    expect(pickModel(['models/text-embedding'])).toBeNull();
   });
 });
