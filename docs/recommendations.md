@@ -1,6 +1,6 @@
 # Recommendations
 
-This document covers how VinaX decides what to play and show as of 7.2: the ten-stage next-song pipeline, the scoring weights, the long-term taste profile and its event weights, the short-term session intent, the Familiar / Balanced / Discover modes, the 7.1 queue rules (the next five, same language, familiar first, tunes and pinned moods, hand-queued songs first), the "Trending for you" shelf, Home de-duplication, and the developer breakdown. Everything described here runs on the device. The optional AI steps are described in [ai.md](ai.md); what is stored and what leaves the device is in [data-and-privacy.md](data-and-privacy.md).
+This document covers how VinaX decides what to play and show as of 8.1: the ten-stage next-song pipeline, the scoring weights, the long-term taste profile and its event weights, the short-term session intent, the Familiar / Balanced / Discover modes, the queue rules (the next five, queue languages, familiar first, tunes and pinned moods, hand-queued songs first), the "Trending for you" shelf, Home de-duplication, and the developer breakdown. Everything described here runs on the device. The optional AI steps are described in [ai.md](ai.md); what is stored and what leaves the device is in [data-and-privacy.md](data-and-privacy.md).
 
 All paths below are relative to `frontend/src/`.
 
@@ -45,14 +45,14 @@ Seeking to the last seconds and letting the song end is therefore neither a PLAY
 | # | Stage | Module | What it does |
 | --- | --- | --- | --- |
 | 1 | Candidate generation | `candidates.ts` | Gathers a pool from several sources in parallel. Every fetch is individually fault tolerant: a failed source shrinks the pool and nothing else. |
-| 2 | Hard filtering | `filters.ts` | Applies rules, not preferences. Each rejection has a named reason. Versions of one song collapse onto the best cut. Runs before feature extraction so the classifier only sees songs that can play. |
+| 2 | Hard filtering | `filters.ts` | Applies rules, not preferences. Each rejection has a named reason. Versions of one song collapse onto the best cut. Runs before feature extraction so the classifier only sees songs that can play. Under the "Your languages" setting it also holds the allow-list of languages a stretch may draw from (`allowedLanguages`; rejection `off-language`). |
 | 3 | Feature extraction | `services/ai/recommendations.ts` (`enrichSongs`) | Adds classifier metadata (mood, vibe, genre, energy, tempo) when it is cached or arrives within 1.8 s. Optional. Results are cached for 30 days, at most 500 songs. |
 | 4 | Context scoring | `scoring.ts` | Scores each candidate against the seed, the taste profile, the hour, the weekday and the session window. Every term is recorded as a reason. |
 | 5 | Diversity and repeat penalties | `reranking.ts`, `scoring.ts` | A greedy diversity re-rank penalises repeated artists, genres and languages against the last four picks; artist fatigue and the recent-play demotion apply in the scorer. |
 | 6 | Session adjustment | `sessionIntent.ts`, `scoring.ts` | This sitting's behaviour pulls artists and languages up or down, steers energy and sets the appetite for discovery. |
 | 7 | Exploration tuning | `scoring.ts`, `engine.ts` | The discovery mode sets a signed novelty swing in the score and the share of a queue that may go to never-played artists. |
 | 8 | Ranking | `scoring.ts`, `engine.ts` | Sorts, shuffles within 0.05-wide score bands using the session salt, re-ranks for diversity, then applies any active tune's per-song nudge. When the AI DJ is off, an optional AI re-rank of the top 30 adds up to +0.12 per song here. |
-| 9 | Queue sequencing | `sequencer.ts` | Orders the top 40 into a stretch: energy arc, mood flow, transition memory, artist and album spacing, era, language lock, discovery budget, familiar first. |
+| 9 | Queue sequencing | `sequencer.ts` | Orders the top 40 into a stretch: energy arc, mood flow, transition memory, artist and album spacing, era, language policy, discovery budget, familiar first. |
 | 9b | AI DJ (optional) | `services/ai/dj.ts` | May re-order a sample of the pool and propose a few catalogue-verified songs. See [ai.md](ai.md). |
 | 10 | Validation | `validation.ts` | Re-checks the final order, whoever produced it, against every rule. |
 
@@ -123,7 +123,7 @@ Canonical identity (`identityCore.ts`, `songKey`) is the normalised title plus t
 | Familiar first: a "sure" song | − 0.9 × (1 − progress) |
 | Familiar first: a discovery | + 1.1 × (1 − progress) |
 
-One recording family (`songKey`) appears once per stretch, and a version of the seed or of a recent play is used only when nothing else fits. `languagePolicy` is `lock` (strict, what a queue uses) or `prefer` (optional exploration at a cost). Every soft rule a small pool forced to give way is reported in `relaxed` and, per slot, in `relaxations`.
+One recording family (`songKey`) appears once per stretch, and a version of the seed or of a recent play is used only when nothing else fits. `languagePolicy` is `lock` or `prefer` (see [Queue languages](#queue-languages)). Under `lock` a candidate whose known language differs from the target never enters. Under `prefer` it stays in the pool at a cost: +0.6 for a language in `otherLanguages` (the listener's own), or −0.35 once three or more songs in the target language have run in a row ("a change of language after a long run"), +2.5 for any other known language, and +3 on top right after another off-target song. Three mix rules are hard under `prefer`, not priced: the target language fills slots 1 and 2, an off-target song never follows another, and off-target songs fill at most ⌊n ÷ 2⌋ of the stretch. They give way only when no candidate satisfies them, after every other soft rule, and the trace records `language-mix` with the reason (opening, two changes in a row, or more than half). Songs with no language, or `unknown`, pass under either policy. Every soft rule a small pool forced to give way is reported in `relaxed` and, per slot, in `relaxations`.
 
 Arc shapes are `steady`, `build`, `wind-down`, `wave` and `lift`. The engine chooses the shape in this order: the active tune's shape, then `lift` when the sitting has a skip streak of two or more, then the listener-energy read (`restless` or `wavering` → `lift`, late hours → `wind-down`, otherwise `steady`).
 
@@ -135,13 +135,13 @@ Transition memory (`transitions.ts`, `transitionTracker.ts`) records how each ha
 
 1. The hard filter again, for every song.
 2. One song per canonical identity.
-3. The language lock. Songs whose language is known and differs from the lock are dropped. If that leaves fewer than three songs, languages the listener plays (pinned languages and the profile's top three) are let back in; only if that is still short is the rest allowed. The trace records `language-lock` as relaxed.
+3. The language rule, in the form the engine chose (see [Queue languages](#queue-languages)). Under `lock` (`lockLanguage`): songs whose language is known and differs from the lock are dropped. If that leaves fewer than three songs, languages the listener plays (pinned languages and the profile's top three) are let back in; only if that is still short is the rest allowed. The trace records `language-lock` as relaxed. Under `prefer` (`leadLanguage`, 8.1): there is no lock — the allow-list already ran in the hard filter — and the three mix rules are applied as policy in the tier order below: the lead language fills slots 1 and 2, an off-lead song never follows another, and at most ⌊limit ÷ 2⌋ songs are off-lead. When one gives way the trace records `language-mix`.
 4. An artist cap of ⌈limit ÷ 4⌉ songs per lead artist (two in a stretch of five). Overflow returns only when the pool cannot otherwise fill the stretch; the trace records `artist-cap` as relaxed.
 5. No lead artist back to back, counting the seed as the previous song. A later song is pulled forward to break a pair; the trace counts these repairs.
 6. The discovery allocation, ⌊share × limit + 0.5⌋ (7.2).
 7. The familiar opening (7.2): no discovery in slot 1, nor in slot 2 when four or more songs ship, as long as a non-discovery song is available.
 
-When nothing else fits, soft rules give way in the order a listener minds least: the discovery allocation first, then the familiar opening, then the artist cap, and only last the rule against the same lead artist twice in a row. Each relaxation is reported with its slot, as is the language-lock step that was used. (Until 7.2 adjacency gave way first, so a Familiar-mode queue — whose discovery budget is nearly zero — shipped runs of three songs by one artist while other artists sat unused in the reserve. The offline evaluation counts it: 162 back-to-back repeats over 3,432 songs before the change, 24 after, against 59 for 7.1.) Hard rules (explicit, blocked, muted language, soft-muted artist, recently played, skipped this sitting, invalid, junk) never relax. Order is otherwise preserved.
+When nothing else fits, soft rules give way in the order a listener minds least: the discovery allocation first, then the familiar opening, then the artist cap, then the mix rules (8.1), and only last the rule against the same lead artist twice in a row. Each relaxation is reported with its slot, as is the language-lock step that was used. (Until 7.2 adjacency gave way first, so a Familiar-mode queue — whose discovery budget is nearly zero — shipped runs of three songs by one artist while other artists sat unused in the reserve. The offline evaluation counts it: 162 back-to-back repeats over 3,432 songs before the change, 24 after, against 59 for 7.1.) Hard rules (explicit, blocked, muted language, soft-muted artist, recently played, skipped this sitting, invalid, junk) never relax. Order is otherwise preserved.
 
 This is the final policy for every order that ships: the on-device one, the AI DJ's, and a top-up from the reserve.
 
@@ -245,12 +245,12 @@ The mode is set in Settings under Recommendations → Discovery (`discoveryMode`
 | Lean (before the sitting's appetite) | −1 | 0 | +1 |
 | Novelty swing on a never-played artist | −0.08 | 0 | +0.08 |
 | Share of a stretch open to never-played artists | 5 % | 20 % | 45 % |
-| Extra candidate source | Favourites and finished songs (`history`) | — | Trending picks in unheard languages (`explore`). They reach Home shelves; in a queue the language lock removes them. |
-| Queue language | Seed's language | Seed's language | Seed's language |
+| Extra candidate source | Favourites and finished songs (`history`) | — | Trending picks in unheard languages (`explore`). They reach Home shelves; in a queue the language rule removes them (the lock under "One language", the allow-list under "Your languages"). |
+| Queue languages | The Queue languages setting, the same in every mode (see [Queue languages](#queue-languages)) | same | same |
 
 The share is clamped to 0–50 % after the appetite is applied. A discovery is a song whose lead artist the listener has never played, or an `explore` candidate. Songs fetched for an active tune or pinned mood are never counted as discoveries: they are the request itself.
 
-## The 7.1 queue rules
+## The queue rules
 
 ### The next five
 
@@ -258,9 +258,16 @@ One continuation adds five songs (`NEXT_BATCH = 5` in `store/playerStore.ts`). T
 
 With the "DJ builds every queue" setting on (`djTakeover`, the default), tapping a song makes that song the seed: the queue becomes that one song and the first continuation is requested at once. Callers that pass `keepList` (Queue Builder plans, explicit queues) keep their list.
 
-### Same language
+### Queue languages
 
-Every continuation is locked to the seed song's language in all three discovery modes. The sequencer drops candidates whose known language differs, the DJ is told the current language and its proposals are gated on it, and validation enforces the lock last. Songs with no language, or `unknown`, pass. The only way to move the lock is the "Switch language" tune, which moves it to another pinned language (or another language present in the pool); the queue still speaks one language. The lock relaxes only in validation, and only when fewer than three songs would remain.
+Which languages a continuation may draw from is the setting **Settings → Recommendations → Queue languages** (`queueLanguages` in `store/settingsStore.ts`; `'mix'`, shown as "Your languages", is the default; `'one'` is "One language"). It applies in all three discovery modes. `engine.ts` decides per plan:
+
+- The listener's languages are the pinned languages plus the profile's top three (`topLanguages`), minus muted ones and `unknown`.
+- The mix applies only when the setting is `'mix'` **and** at least one of those languages differs from the seed's. A listener with one language, or a caller whose context does not set `queueLanguages` (tests, the offline evaluation), keeps the 7.1 rule.
+- Under the mix the hard filter receives `allowedLanguages` — the seed's language plus the listener's — and rejects any other known language as `off-language`, so a language the listener never chose stays out. The sequencer runs with `languagePolicy: 'prefer'` and validation with `leadLanguage` (no lock): the seed's language opens the stretch (slots 1 and 2), fills at least half of it, and two changes of language never land back to back. See [Stage 9](#stage-9--the-sequencer) and [Stage 10](#stage-10--validation) for the costs and the relaxation order.
+- "One language" (`'one'`) is the 7.1 rule: `languagePolicy: 'lock'` on the seed's language. The sequencer drops candidates whose known language differs and validation enforces the lock last, relaxing it only when fewer than three songs would remain.
+
+Songs with no language, or `unknown`, pass under both settings. The AI DJ is told which rule is in force (`languagePolicy` and `queueLanguages` in the context, rule 4b of its prompt; see [ai.md](ai.md#post-apidj--the-ai-dj)); its proposals are gated on the lock under "One language" and on the allow-list under "Your languages", and its order passes the same validation as the local one. The "Switch language" tune moves a lock to another pinned language (or another language present in the pool) under either setting, so that stretch speaks one language. The "Same language" tune is a preference, not a policy change: it adds a score nudge and a DJ instruction and leaves the setting as it is.
 
 ### Familiar first, then gradual introduction
 
@@ -276,7 +283,7 @@ The sequencer's `familiarFirst` option is on by default. Discovery is held out o
 
 | What | How |
 | --- | --- |
-| Candidates | Nine of the twelve intents have a catalogue query (`tuneSearchQuery`), prefixed with the queue's language; two pages of results enter the pool with source `intent`. "Same language", "Switch language" and "Surprise me" have none. A pinned mood with no active tune uses the same table. |
+| Candidates | Nine of the twelve intents have a catalogue query (`tuneSearchQuery`), a two-word phrasing prefixed with the queue's language: `dance songs` (energetic), `melody songs` (chill and melody), `romantic songs`, `mass songs` (beats), `devotional songs`, `sad songs` (heartbreak), `evergreen hits` (classics) and `latest <language> songs <year>` (new). Two pages of results enter the pool with source `intent`. "Same language", "Switch language" and "Surprise me" have none. A pinned mood with no active tune uses the same table (Melancholy maps to the heartbreak query). 8.1: the longer phrasings used before ("romantic love songs", "high energy dance hits", "chill soothing melodies", "sad heartbreak songs") returned nothing from the catalogue, so Pin a mood and four of the chips rebuilt the queue from an empty pool; the two-word forms were probed live in three languages and each returns a full page in that language. |
 | Score | `tuneScoreAdjust` adds +0.35 when the song's mood is the asked-for mood, plus per-intent nudges: classics +0.5 / −0.4 by release year, new +0.5 / −0.3, same language +0.3 / −0.6, switch language +0.4 / −0.6, energetic and chill ±0.4 by energy, title cues for devotional (+0.6), beats and melody (+0.35). |
 | Arc | Energetic and beats → `build`; chill, melody, romantic, heartbreak, devotional → `wind-down`; surprise → `wave`. |
 | DJ brief | A one-sentence instruction is sent as the highest-priority adjustment, and the DJ's arc tolerance is relaxed to 0.2. |
@@ -294,7 +301,7 @@ The player tracks two id sets in memory: songs the recommender appended and song
 
 ### Adaptive re-plan
 
-Two consecutive skips of automatic songs re-sequence the remaining automatic tail (three songs or more) with the `lift` shape, bringing in up to four favourites in the queue's language. The favourites and the final order pass the admission gate, so a favourite is not exempt from Kid mode, hidden artists, muted languages, soft mutes or recent plays; if fewer than three songs survive, nothing changes. A completed song or a skip of a hand-queued song resets the streak. A re-plan cannot run again for 90 seconds.
+Two consecutive skips of automatic songs re-sequence the remaining automatic tail (three songs or more) with the `lift` shape, bringing in up to four favourites in the playing song's language; the re-plan sequences under the lock on that language whatever the Queue languages setting says. The favourites and the final order pass the admission gate, so a favourite is not exempt from Kid mode, hidden artists, muted languages, soft mutes or recent plays; if fewer than three songs survive, nothing changes. A completed song or a skip of a hand-queued song resets the streak. A re-plan cannot run again for 90 seconds.
 
 ## Home shelves
 
@@ -321,4 +328,6 @@ The store keeps the last 12 continuations. Each shows:
 
 ## Tests
 
-The rules above are pinned by unit tests next to the modules: `nextFive.test.ts` (same language in every mode, familiar opening, intent candidates), `discoveryModes.test.ts`, `sequencer.test.ts`, `validation.test.ts`, `filters.test.ts`, `tune.test.ts`, `adaptive.test.ts`, `songIdentity.test.ts`, `sessionIntent.test.ts`, `eventWeights.test.ts` and `services/ai/trending.test.ts`. See [testing.md](testing.md) for how to run them.
+The rules above are pinned by unit tests next to the modules: `nextFive.test.ts` (one language in every mode under the lock, which a context without `queueLanguages` keeps; familiar opening; intent candidates), `engine.test.ts` (8.1: "Your languages" lets the listener's other languages in with the seed's language leading and never two switches in a row, never starves the queue, and changes nothing for a listener with one language), `filters.test.ts` (8.1: the allow-list rejects a known language outside it as `off-language` and passes unknown ones), `discoveryModes.test.ts`, `sequencer.test.ts`, `validation.test.ts`, `tune.test.ts`, `adaptive.test.ts`, `songIdentity.test.ts`, `sessionIntent.test.ts`, `eventWeights.test.ts` and `services/ai/trending.test.ts`. See [testing.md](testing.md) for how to run them.
+
+The offline evaluation ([evaluation.md](evaluation.md)) has a mixed-language scenario since 8.1: the `mixed-queue` fixture (`frontend/eval/fixtures/index.ts`) is a Hindi seed for a listener who plays Hindi, Telugu and Tamil with `queueLanguages: 'mix'`, and its pool also holds a language the listener never chose. Its rules (`eval/lib/rules.ts`) count a song outside the listener's languages as `off-language`, an off-lead song in slot 1 or 2 as `language-opening`, and two off-lead songs back to back as `language-run`; all three count as hard violations, so the harness fails if the mix rules break. Run `node scripts/eval-recs.mjs` from `frontend/` to prove or disprove a change to any of this.

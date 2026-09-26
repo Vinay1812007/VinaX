@@ -84,7 +84,7 @@ const TOUR: TourSlide[] = [
     icon: <PlayIcon className="w-7 h-7" />,
     title: 'Tap one song',
     lines: [
-      'Tap any song. The DJ lines up five more in its language, familiar first.',
+      'Tap any song. The DJ lines up five more, led by its language, familiar first.',
       'Songs you queue yourself go first.',
     ],
     shortcuts: [{ combo: 'Space', label: 'play / pause' }, { combo: 'N', label: 'next song' }, { combo: 'F', label: 'favourite' }],

@@ -94,6 +94,7 @@ played minutes ago" means the same thing on both sides.
 | --- | --- |
 | Hard-rule violation | A queued song that is explicit under Kid mode, in a muted language, by a hidden or soft-muted artist, hidden by id, another cut of one of the last twenty plays, or a second cut of a song already in the queue |
 | Off-language under the lock | A queued song in a known language other than the seed's. Counted as a violation only when at least three in-language candidates were still available; otherwise it is the documented relaxation |
+| The mix rules (8.1) | For a fixture with `queueLanguages: 'mix'` there is no lock. A queued song in a known language outside the listener's languages (pinned, played, the seed's; muted ones removed) is `off-language`; a song in another language in slot 1 or 2 is `language-opening`; two off-lead songs back to back are `language-run`. All three count as hard violations |
 | Repetition | The same lead artist back to back (the boundary between two continuations included), the same lead within three songs, the same identity twice in a sitting |
 | Artist coverage | Distinct lead artists per continuation, and per sitting as a share of its songs |
 | Discovery share | Songs whose lead artist this listener has never played, against the mode's allocation (5 / 20 / 45 % plus the sitting's appetite). The pipeline's own count (`plan.discoveryIds`) is recorded next to it |
@@ -103,9 +104,10 @@ played minutes ago" means the same thing on both sides.
 
 ## The fixtures (version 1.0.0)
 
-Nineteen fixtures, each a pure function of the timestamp the harness passes
-in. Songs, titles and artists are fictional, written in Telugu, Hindi, Tamil,
-Punjabi, Malayalam and Latin scripts.
+Twenty fixtures (nineteen at 7.2; 8.1 added `mixed-queue`), each a pure
+function of the timestamp the harness passes in. Songs, titles and artists
+are fictional, written in Telugu, Hindi, Tamil, Punjabi, Malayalam and Latin
+scripts.
 
 | Fixture | What it is for |
 | --- | --- |
@@ -117,6 +119,7 @@ Punjabi, Malayalam and Latin scripts.
 | `punjabi` | Punjabi, AI off |
 | `malayalam` | Malayalam, Familiar mode |
 | `mixed` | A listener who plays Hindi, Telugu and Tamil, with a mixed pool and a DJ that proposes an off-language song, an explicit one and a hidden artist |
+| `mixed-queue` | 8.1: the same listener with Queue languages on "Your languages" (`queueLanguages: 'mix'`): a Hindi seed, Hindi, Telugu and Tamil pinned, and a pool that also holds Punjabi, which the listener never chose. The queue may change language within the mix rules; Punjabi must stay out |
 | `prefs` | Mixed preferences: a quiet cluster and a loud one in one pool |
 | `skips` | A skip streak of three, with the skipped songs in the pool |
 | `partial-outage` | The seed-suggestions source throws; the searches answer |
@@ -145,7 +148,11 @@ never touched. The baseline has no `planNextSongs`, so the harness calls
 included — in one call.
 
 Run on `19ee9ec` (7.2, with the concurrently merged retrieval, ranking and
-validation work), fixtures 1.0.0, harness 1.0.0, 12 salts per fixture.
+validation work), fixtures 1.0.0, harness 1.0.0, 12 salts per fixture. The
+numbers below predate the `mixed-queue` fixture: both pipelines were measured
+on the nineteen fixtures of that time, and a context without `queueLanguages`
+keeps the lock, so the baseline and the current pipeline speak one language
+in every row.
 
 | Metric | Baseline `7c4e2f5` | Current `19ee9ec` | Samples |
 | --- | ---: | ---: | --- |
@@ -399,7 +406,9 @@ the experiment.
 
 The harness has no assertions about taste. It fails only when the run is not
 reproducible, when it produces no data, or — for the current pipeline — when
-a hard rule was broken. The unit tests that pin the rules themselves live next
+a hard rule was broken (since 8.1 that includes the mix rules of
+`mixed-queue`: a language outside the listener's, an off-lead opening, or two
+changes of language in a row). The unit tests that pin the rules themselves live next
 to the modules (see [testing.md](testing.md)); the telemetry and experiment
 contracts are pinned by `services/analytics/recTelemetry.test.ts`,
 `services/analytics/telemetry.test.ts` and

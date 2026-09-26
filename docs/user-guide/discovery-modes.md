@@ -23,10 +23,10 @@ Two buttons sit under it:
 
 Two rules hold in every mode:
 
-1. A queue stays in the language of the song that is playing.
+1. The language of the song that is playing leads the queue. Whether your other languages may follow is the **Queue languages** setting below, not the mode.
 2. A queue opens with a familiar hand-off; new artists come after it.
 
-So Discover changes *how much* is new, not *where* a queue starts or what language it is in. To change language on purpose, use **Tune this queue → Switch language** (see [The player and the queue](player-and-queue.md)).
+So Discover changes *how much* is new, not *where* a queue starts or which language leads it. To change language on purpose, use **Tune this queue → Switch language** (see [The player and the queue](player-and-queue.md)).
 
 ## What VinaX learns from, in one sitting and over time
 
@@ -44,6 +44,7 @@ The taste profile is computed and stored on this device. **Taste Profile** (Libr
 | Setting | What it does |
 |---|---|
 | Trending vs. your taste | How much Home and the DJ lean on what is popular right now against your own listening. The line under the slider says what the setting you are on means. |
+| Queue languages | **Your languages** (the default): the playing song's language leads — the first two songs and at least half of every five — and songs from your other languages can follow, never two changes in a row; a language you never pinned or played stays out. **One language**: every queue stays in the language of the song that is playing. |
 | AI DJ | Lets the AI service order what plays next and suggest a few extra songs, each checked against the catalogue before it can play. Off keeps the on-device order. |
 | DJ builds every queue | Tap a song and the DJ builds what follows. Off makes playback follow the list you tapped. |
 | AI-designed shelves on Home | Shows the “Designed for you” block and lets VinaX AI order “Trending for you”. Off hides the block and keeps Trending in your on-device taste order. |

@@ -190,7 +190,7 @@ export function armFixture(fixture: EvalFixture, seedId: string, over: { suggest
   resetAi(over.ai ?? fixture.ai);
 }
 
-function ruleContext(fixture: EvalFixture, queue: Song[], played: Song[]): RuleContext {
+function ruleContext(fixture: EvalFixture, queue: Song[], played: Song[], seed: Song = fixture.seed): RuleContext {
   // "Recently played" is the documented window: the profile's recent ids, or
   // the identity of any of the LAST TWENTY plays — this sitting's plays
   // included, and they push older ones out of it (docs/recommendations.md).
@@ -208,7 +208,8 @@ function ruleContext(fixture: EvalFixture, queue: Song[], played: Song[]): RuleC
     queuedKeys: new Set(queue.map((s) => workKey(s))),
     lock: fixture.queueLanguages === 'mix' ? null : fixture.seed.language && fixture.seed.language !== 'unknown' ? fixture.seed.language : null,
     mix: fixture.queueLanguages === 'mix'
-      ? { lead: fixture.seed.language && fixture.seed.language !== 'unknown' ? fixture.seed.language : null, allowed: new Set([...fixture.pinnedLanguages, ...Object.keys(fixture.profile.languages), ...(fixture.seed.language ? [fixture.seed.language] : [])].filter((l) => !fixture.mutedLanguages.includes(l))) }
+      // The lead is the language of the song this stretch continues from (it may have drifted under 'mix').
+      ? { lead: seed.language && seed.language !== 'unknown' ? seed.language : null, allowed: new Set([...fixture.pinnedLanguages, ...Object.keys(fixture.profile.languages), ...(fixture.seed.language ? [fixture.seed.language] : [])].filter((l) => !fixture.mutedLanguages.includes(l))) }
       : null,
   };
 }
@@ -250,7 +251,7 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
       // the no-repeat-artist rule has to judge (7.2).
       previous: queue[queue.length - 1],
     });
-    const rc = ruleContext(fixture, queue, played);
+    const rc = ruleContext(fixture, queue, played, seed);
     const known = knownArtists(fixture, played);
     const isDiscovery = (s: Song): boolean => !known.has(leadName(s));
     const pool = eligible(poolAll, rc);

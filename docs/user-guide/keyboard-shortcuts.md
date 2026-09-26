@@ -53,6 +53,6 @@ The command palette lists pages, player actions (including retuning the queue) a
 |---|---|
 | Long-press (or right-click) a song | Song menu |
 | Swipe a song row right / left | Add to queue / Listen Later |
-| Flick the player artwork up / down | Next / previous song |
+| Swipe the player artwork left / right | Next / previous song (dragging up or down scrolls) |
 | Double-tap the artwork's edges / centre | Seek / like |
 | Pull down on Home | Refresh Home |
