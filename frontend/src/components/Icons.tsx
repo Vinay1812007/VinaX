@@ -1,6 +1,8 @@
 /** Original minimal icon set — no third-party icon assets. */
 interface IconProps {
   className?: string;
+  /** 8.0.0 — the solid variant, used for the active destination in the sidebar and the tab bar. */
+  filled?: boolean;
 }
 
 const base = (className?: string) => ({
@@ -8,7 +10,8 @@ const base = (className?: string) => ({
   viewBox: '0 0 24 24',
   fill: 'none' as const,
   stroke: 'currentColor',
-  strokeWidth: 2,
+  // 8.0.0 — a lighter 1.8 stroke reads crisper at 20–24px on dense screens.
+  strokeWidth: 1.8,
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
 });
@@ -53,27 +56,79 @@ export const HeartIcon = ({ className, filled }: IconProps & { filled?: boolean 
     <path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 000-7.8z" />
   </svg>
 );
-export const SearchIcon = ({ className }: IconProps) => (
-  <svg {...base(className)}>
+export const SearchIcon = ({ className, filled }: IconProps) => (
+  <svg {...base(className)} strokeWidth={filled ? 2.6 : 1.8}>
     <circle cx="11" cy="11" r="7" />
     <path d="M21 21l-4.3-4.3" />
   </svg>
 );
-export const HomeIcon = ({ className }: IconProps) => (
-  <svg {...base(className)}>
-    <path d="M3 10.5L12 3l9 7.5" />
-    <path d="M5 9.5V21h14V9.5" />
+export const HomeIcon = ({ className, filled }: IconProps) =>
+  filled ? (
+    <svg {...base(className)} fill="currentColor" stroke="none">
+      <path d="M12.7 2.6a1 1 0 0 0-1.3 0l-8.5 7.1A1 1 0 0 0 2.5 10.5V20a1.5 1.5 0 0 0 1.5 1.5h5v-6.5h6v6.5h5a1.5 1.5 0 0 0 1.5-1.5v-9.5a1 1 0 0 0-.4-.8z" />
+    </svg>
+  ) : (
+    <svg {...base(className)}>
+      <path d="M3.5 10.2 12 3.2l8.5 7V20a1 1 0 0 1-1 1H15v-6.5H9V21H4.5a1 1 0 0 1-1-1z" />
+    </svg>
+  );
+export const CompassIcon = ({ className, filled }: IconProps) =>
+  filled ? (
+    <svg {...base(className)} fill="currentColor" stroke="none">
+      <path fillRule="evenodd" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19zm3.9 5.6-2.1 5.3a.8.8 0 0 1-.4.4l-5.3 2.1 2.1-5.3a.8.8 0 0 1 .4-.4z" />
+    </svg>
+  ) : (
+    <svg {...base(className)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M15.5 8.5l-2 5-5 2 2-5z" />
+    </svg>
+  );
+export const LibraryIcon = ({ className, filled }: IconProps) => (
+  <svg {...base(className)} strokeWidth={filled ? 2.6 : 1.8}>
+    <path d="M4.5 4v16M9.5 4v16M14 5l5 15" />
   </svg>
 );
-export const CompassIcon = ({ className }: IconProps) => (
+/** 8.0.0 — lyrics. */
+export const MicIcon = ({ className }: IconProps) => (
   <svg {...base(className)}>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M15.5 8.5l-2 5-5 2 2-5z" />
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
   </svg>
 );
-export const LibraryIcon = ({ className }: IconProps) => (
+/** 8.0.0 — notifications. */
+export const BellIcon = ({ className }: IconProps) => (
   <svg {...base(className)}>
-    <path d="M4 4v16M9 4v16M14 5l5 15" />
+    <path d="M18 8.5a6 6 0 0 0-12 0c0 6.5-2.5 8-2.5 8h17S18 15 18 8.5M10 20a2.2 2.2 0 0 0 4 0" />
+  </svg>
+);
+/** 8.0.0 — open the full-screen player. */
+export const ExpandIcon = ({ className }: IconProps) => (
+  <svg {...base(className)}>
+    <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
+  </svg>
+);
+/** 8.0.0 — list / grid view toggles. */
+export const ListIcon = ({ className }: IconProps) => (
+  <svg {...base(className)}>
+    <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+  </svg>
+);
+export const GridIcon = ({ className }: IconProps) => (
+  <svg {...base(className)}>
+    <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+    <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+    <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+    <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+  </svg>
+);
+export const CheckIcon = ({ className }: IconProps) => (
+  <svg {...base(className)}>
+    <path d="M4.5 12.5l5 5 10-11" />
+  </svg>
+);
+export const ChevronRightIcon = ({ className }: IconProps) => (
+  <svg {...base(className)}>
+    <path d="M9 5l7 7-7 7" />
   </svg>
 );
 export const SettingsIcon = ({ className }: IconProps) => (
@@ -100,8 +155,8 @@ export const DotsIcon = ({ className }: IconProps) => (
     <circle cx="12" cy="19" r="1.8" />
   </svg>
 );
-export const SparkleIcon = ({ className }: IconProps) => (
-  <svg {...base(className)}>
+export const SparkleIcon = ({ className, filled }: IconProps) => (
+  <svg {...base(className)} {...(filled ? { fill: 'currentColor' } : {})}>
     <path d="M12 2l2.2 5.8L20 10l-5.8 2.2L12 18l-2.2-5.8L4 10l5.8-2.2z" />
     <path d="M19 16l1 2.5L22.5 19.5 20 20.5 19 23l-1-2.5-2.5-1L18 18.5z" />
   </svg>

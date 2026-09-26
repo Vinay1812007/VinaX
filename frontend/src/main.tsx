@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import App from './App';
 import './styles/index.css';
 import './styles/flow.css';
+import './styles/stage.css';
 import './styles/discovery.css';
 import './styles/festivals.css';
 
