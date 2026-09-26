@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.0.2': {
+    title: 'The flagship AI engine stays current',
+    changes: [
+      { type: 'fixed', text: 'The flagship AI engine now uses its provider’s current model. The one it started with was retired for new accounts, so it could not answer; when a model is retired again, VinaX moves to the recommended replacement by itself.' },
+    ],
+  },
   '8.0.1': {
     title: 'The flagship AI engine connects',
     changes: [

@@ -1498,7 +1498,7 @@
     // 18 keys (dj and chat share the lightning key). Every secret is new, so
     // this bench is how each engine earns its verified status back.
     // 8.0.0 — the flagship lane on the owner's new key.
-    { lane: 'maestro', name: 'MAESTRO', nick: 'VinaX Maestro', model: 'gemini-2.5-flash' },
+    { lane: 'maestro', name: 'MAESTRO', nick: 'VinaX Maestro', model: 'gemini-3.8-flash' },
     { lane: 'dj', name: 'NMTRN 3.5 LTNG', nick: 'VinaX NVD NMTRN 3.5 LTNG 30B', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
     { lane: 'chat', name: 'BALANCED', nick: 'VinaX Balanced (LTNG key)', model: 'nvidia/nemotron-3.5-lightning-30b-a3b' },
     { lane: 'fast', name: 'OSS 20B', nick: 'VinaX OAI OSS 20B', model: 'openai/gpt-oss-20b' },

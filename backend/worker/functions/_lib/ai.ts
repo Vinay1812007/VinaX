@@ -233,7 +233,10 @@ export const LANE_MODEL: Record<Lane, string> = {
   // trusted on its own: every call site resolves the catalog first.
   router: 'nvidia/nemotron-3-super:free',
   // 8.0.0 — the owner's new key. VINAX_MAESTRO_MODEL overrides the pin.
-  maestro: 'gemini-2.5-flash',
+  // 8.0.2 — the provider retired 2.5 flash for new accounts and names this
+  // successor; if it is retired too, _lib/maestro.ts follows the provider's
+  // own suggestion or its live model list.
+  maestro: 'gemini-3.8-flash',
   vision: 'meta/llama-3.2-11b-vision-instruct',
   vision90: 'meta/llama-3.2-90b-vision-instruct',
   // Inventory bench lanes — one per remaining key, no feature depends on them.
@@ -262,8 +265,8 @@ export const LANE_SECONDARY: Partial<Record<Lane, string>> = {
   scholar: 'openai/gpt-oss-120b',
   vision: 'meta/llama-3.2-90b-vision-instruct',
   vision90: 'meta/llama-3.2-11b-vision-instruct',
-  // Same key, lighter sibling: answers when the flagship is busy or retired.
-  maestro: 'gemini-2.5-flash-lite',
+  // 8.0.2 — no fixed secondary for maestro: a guessed sibling slug can be
+  // retired too, and _lib/maestro.ts already resolves a live replacement.
 };
 
 /** Env var that holds each lane's key — exported for the admin AI Lab bench. */
