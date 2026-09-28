@@ -19,7 +19,8 @@ import { queryClient } from '@/services/queryClient';
 import type { ArcShape } from './sequencer';
 import { tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape, type TuneIntent } from './tune';
 import type { Mood } from './mood';
-import { activeWeightsVersion } from './weights';
+import { activeWeightsVersion, STYLE_MIN_SHARE } from './weights';
+import { matchesStyle, remixWorkKey, sessionStyle, styleEvidence, styleLabel, styleWhy } from './style';
 import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from './deadlines';
 import { trendSignalNow } from '@/services/trends/signal';
 import { useDownloadsStore } from '@/store/downloadsStore';
@@ -161,8 +162,9 @@ export interface NextRecommendationOptions {
 }
 
 /** 7.2.0 — the pipeline's own version, recorded with every continuation (developer breakdown, opt-in telemetry).
- *  8.2.0 — new sources (related artist, album, genre, proven picks), the no-audio rule, taste fit and the served/seed memories. */
-export const PIPELINE_VERSION = '8.2.0';
+ *  8.2.0 — new sources (related artist, album, genre, proven picks), the no-audio rule, taste fit and the served/seed memories.
+ *  8.3.0 — the listener's style (DJ remixes, folk, devotional) is kept going: a style source, a style term and a style quota. */
+export const PIPELINE_VERSION = '8.3.0';
 export function algorithmVersion(): string {
   // The weights part names an owner override while one is applied ("1.2.0+rc7").
   return `${PIPELINE_VERSION}/${activeWeightsVersion()}`;
@@ -283,11 +285,17 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const allowedLanguages = mix ? new Set<string>([...(seedLanguage ? [seedLanguage] : []), ...listenerLanguages]) : undefined;
   // v7.1.0 — an active tune (or a pinned mood) gathers its own candidates, in the queue's language.
   const intentQuery = tune ? tuneSearchQuery(tune, tune === 'different-language' ? null : seedLanguage) : ctx.moodPin ? moodPinQuery(ctx.moodPin, seedLanguage) : null;
+  // 8.3.0 — the style the listener is in (DJ remixes, folk, devotional): from
+  // the tune, the seed, and the plays behind it (./style.ts). It brings its own
+  // candidates, lifts songs in it, and holds most of the stretch to it.
+  const activeStyle = sessionStyle({ seed, recent: ctx.history.slice(0, 6).map((e) => e.song), previous, tune, moodPin: ctx.moodPin });
+  const style = activeStyle?.style ?? null;
+  const isStyled = (s: Song): boolean => !!style && matchesStyle(s, style);
   // 7.2.0 — verified charts, read from the snapshot already in memory (never waited for).
   const trend = trendSignalNow(ctx);
   // 8.2.0 — what other surfaces showed lately, and how the last accepted
   // continuation after this same song opened: small penalties in the scorer.
-  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery, trendBonus: trend.bonus, trendLabel: trend.label, servedKeys: servedKeySet(), seedRepeatIds: lastSeedContinuation(seed) };
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery, style, trendBonus: trend.bonus, trendLabel: trend.label, servedKeys: servedKeySet(), seedRepeatIds: lastSeedContinuation(seed) };
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
   const library = useLibraryStore.getState();
@@ -367,6 +375,38 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     // so the intent holds even when the DJ is unavailable.
     ranked = ranked.map((item) => ({ ...item, score: item.score + tuneScoreAdjust(item.candidate.song, tune, seedLang) })).sort((a, b) => b.score - a.score);
   }
+  // 8.3.0 — one remix of a song per sitting, whoever remixed it: the identity
+  // key keeps the remixer (two singers' songs of one title are two songs), so
+  // "Nadakallo Nadaka (DJ Remix)" by two DJs would otherwise both ship. Only
+  // REMIXES are folded by title — a remix against anything heard, queued or
+  // already kept, and a plain song against a remix of it — so two different
+  // songs that happen to share a title both stay. Style sessions only.
+  const around = [seed, ...(previous ? [previous] : []), ...ctx.history.slice(0, 20).map((e) => e.song)];
+  const queuedTitles = new Set((options.excludeKeys ?? []).map((k) => k.split('|')[0]).filter(Boolean));
+  const foldRemixes = (songs: Song[], onDrop?: (s: Song) => void): Song[] => {
+    if (!style) return songs;
+    const isRemix = (s: Song): boolean => styleEvidence(s).dj === 'text';
+    const heard = new Set(around.map(remixWorkKey));
+    const heardRemixes = new Set(around.filter(isRemix).map(remixWorkKey));
+    const kept = new Set<string>();
+    const keptRemixes = new Set<string>();
+    return songs.filter((song) => {
+      const work = remixWorkKey(song);
+      const remixed = isRemix(song);
+      const repeat = remixed ? heard.has(work) || kept.has(work) || queuedTitles.has(songKey(song).split('|')[0]) : heardRemixes.has(work) || keptRemixes.has(work);
+      if (repeat) {
+        onDrop?.(song);
+        return false;
+      }
+      kept.add(work);
+      if (remixed) keptRemixes.add(work);
+      return true;
+    });
+  };
+  if (style) {
+    const folded = new Set(foldRemixes(ranked.map((item) => item.candidate.song), (song) => rejected.push({ song, reason: 'duplicate-version', stage: 'rank' })).map((s) => s.id));
+    ranked = ranked.filter((item) => folded.has(item.candidate.song.id));
+  }
   const orderedPool: Song[] = ranked.map((item) => item.candidate.song);
   // 8.2.0 — warm the embedding cache for this pool in the background, so the
   // next stretch can use vectors this one did not have. Never awaited.
@@ -387,7 +427,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const discoveryIds = new Set(
     ranked
       // A song fetched FOR the listener's stated intent is the request itself, not a discovery to ration.
-      .filter((item) => item.candidate.source !== 'intent')
+      // 8.3.0 — so is a song in the listener's style: DJ remixes come from DJs nobody has heard of.
+      .filter((item) => item.candidate.source !== 'intent' && !isStyled(item.candidate.song))
       .filter((item) => item.candidate.source === 'explore' || !frame.knownArtists.has((item.candidate.song.artists[0]?.name ?? '').trim().toLowerCase()))
       .map((item) => item.candidate.song.id),
   );
@@ -400,7 +441,11 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const otherLanguages = (mix ? listenerLanguages : ctx.pinnedLanguages).filter((l) => l !== lock);
   const languagePolicy: 'lock' | 'prefer' = mix && !switchTo ? 'prefer' : 'lock';
   const discoveryShare = Math.max(0, Math.min(0.5, (tune === 'surprise' ? DISCOVERY_SHARE.discover : DISCOVERY_SHARE[mode]) + (intent ? intent.discoveryAppetite * 0.15 : 0)));
-  const arc = sequenceSongs(orderedPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy, otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
+  // 8.3.0 — in a style session the arc is drawn from the style alone while
+  // the pool holds a stretch of it; validation then tops up from the rest.
+  const styledPool = style ? orderedPool.filter(isStyled) : [];
+  const arcPool = style && styledPool.length >= limit ? styledPool : orderedPool;
+  const arc = sequenceSongs(arcPool.slice(0, 40), { seed, shape, limit, language: lock, languagePolicy, otherLanguages, discovery: discoveryShare, discoveryIds, sureIds, recent: ctx.history.slice(0, 3).map((e) => e.song) });
 
   // 10 — validation. The arc first, then the rest of the ranked pool as the
   // reserve a short or language-locked arc is topped up from.
@@ -408,7 +453,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // 7.2.0 — the final policy, for every order that ships (local, AI, reserve top-up):
   // the discovery allocation and the familiar opening are enforced here too.
   // Under 'prefer' the sequencer already priced every detour; validation keeps the allow-list (in `rules`) and drops the lock.
-  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: languagePolicy === 'lock' ? lock : null, leadLanguage: languagePolicy === 'prefer' ? lock : null, familiarLanguages, discoveryIds, discoveryShare, previous };
+  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: languagePolicy === 'lock' ? lock : null, leadLanguage: languagePolicy === 'prefer' ? lock : null, familiarLanguages, discoveryIds, discoveryShare, previous, ...(style ? { style: { matches: isStyled, min: Math.ceil(STYLE_MIN_SHARE * limit), label: styleLabel(style) } } : {}) };
   const arcIds = new Set(arc.songs.map((s) => s.song.id));
   const local = validateSequence([...arc.songs.map((s) => s.song), ...orderedPool.filter((s) => !arcIds.has(s.id))], validateOptions);
   const songs = local.songs;
@@ -429,7 +474,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       /* the memory is optional */
     }
     // Arc reasons are more specific than scorer reasons; let them win.
-    if (whyFromArc) useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why && ids.has(s.song.id)).map((s) => [s.song.id, s.why]));
+    // 8.3.0 — a song that keeps the style says so first ("Keeps the DJ remix going · holds the energy").
+    if (whyFromArc) useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why && ids.has(s.song.id)).map((s) => [s.song.id, style && isStyled(s.song) ? `${styleWhy(style)} · ${s.why}` : s.why]));
     publishReasons(ranked.filter((item) => ids.has(item.candidate.song.id)));
   };
   const topUp = (seedNow: Song, n: number, exclude: { ids: Set<string>; keys: Set<string> }): Song[] => {
@@ -470,7 +516,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       const timer = setTimeout(cancel, Math.max(0, aiDeadlineAt - Date.now()));
       let set: Awaited<ReturnType<typeof dj.djSequence>>;
       try {
-        set = await dj.djSequence(seed, nextCtx, pool, limit, controller.signal, { shape, discover: true, gate, ...(tune ? { tune: tunePromptHint(tune) } : {}) });
+        set = await dj.djSequence(seed, nextCtx, pool, limit, controller.signal, { shape, discover: true, gate, ...(tune ? { tune: tunePromptHint(tune) } : {}), ...(style ? { style } : {}) });
       } finally {
         clearTimeout(timer);
         signal?.removeEventListener('abort', cancel);
@@ -483,6 +529,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       const proposed: Song[] = [];
       for (const p of set.picks) if (!used.has(p.song.id)) { used.add(p.song.id); proposed.push(p.song); }
       for (const s of songs) if (!used.has(s.id)) { used.add(s.id); proposed.push(s); }
+      // 8.3.0 — a DJ discovery is held to the one-remix-per-song rule too.
+      proposed.splice(0, proposed.length, ...foldRemixes(proposed));
       // The DJ's order goes through the same validation as the local one, and
       // is accepted only when it still keeps the arc about as tight (a tune
       // relaxes the tolerance: the listener asked for a change of direction).
@@ -492,6 +540,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
       const djIds = new Set(set.picks.map((p) => p.song.id));
       const survived = checked.songs.filter((s) => djIds.has(s.id)).length;
       if (survived < Math.min(3, limit) || arcErrorOf(checked.songs, seed, shape) > arcErrorOf(songs, seed, shape) + (tune ? 0.2 : 0.08)) return { rejected: 'ai_rejected' };
+      // 8.3.0 — the DJ may reorder a style session, never water it down.
+      if (style && checked.songs.filter(isStyled).length < songs.filter(isStyled).length) return { rejected: 'ai_rejected' };
       publishDebug(ranked, checked.songs, 'ai', {
         trace: { ...trace, stages: { ...trace.stages, validated: checked.songs.length }, relaxed: checked.relaxed, repairs: checked.repairs },
         rejected: [...rejected, ...checked.rejected],

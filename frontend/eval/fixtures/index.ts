@@ -1,5 +1,6 @@
 import type { HistoryEntry, Song } from '../../src/types';
 import type { AiScript, Behaviour } from '../lib/mocks';
+import type { EvalStyle } from '../lib/rules';
 import { pool, song, versionFamily, WORDS, type LangId } from './catalogue';
 
 /**
@@ -14,7 +15,7 @@ import { pool, song, versionFamily, WORDS, type LangId } from './catalogue';
  * Bump EVAL_FIXTURES_VERSION whenever a fixture changes, or two reports stop
  * being comparable.
  */
-export const EVAL_FIXTURES_VERSION = '1.1.0'; // 8.1.0 — the mixed-queue scenario
+export const EVAL_FIXTURES_VERSION = '1.2.0'; // 8.3.0 — the DJ-remix and folk sittings (1.1.0: the mixed-queue scenario)
 
 /** Far enough ahead that a soft mute is active whenever the evaluation runs, without reading the clock. */
 export const FAR_FUTURE = 4_102_444_800_000;
@@ -80,6 +81,14 @@ export interface EvalFixture {
   ai: AiScript;
   /** Batches of five to plan in one sitting. */
   batches: number;
+  /**
+   * 8.3.0 — the sitting is in a style. Searches whose query matches `pattern`
+   * answer from `search` a page at a time (lib/mocks.ts), as the catalogue
+   * answers "telugu dj remix" / "telugu folk songs"; every other search
+   * answers from the fixture's ordinary `search`. The report measures the
+   * share of each continuation in `kind` (lib/rules.ts `inEvalStyle`).
+   */
+  style?: { kind: EvalStyle; pattern: RegExp; search: Song[] };
 }
 
 function emptyProfile(now: number): EvalProfile {
@@ -305,7 +314,48 @@ export function buildFixtures(now: number): EvalFixture[] {
   const softMuted = listener(now, 'telugu', { id: 'soft-muted', title: 'Soft-muted artists ("show fewer like this")', notes: 'A soft mute is a rule while it lasts: those artists must not come back in a continuation.' });
   softMuted.profile = warmProfile(now, { languages: { telugu: 30 }, artists: te.artists.slice(0, 3), softMuted: [te.artists[0], te.artists[2]] });
 
-  return [cold, warm, familiar, discover, tamil, punjabi, malayalam, mixed, mixedQueue, prefs, skips, partial, offline, sparse, versions, small, kid, muted, hidden, softMuted];
+  // 8.3.0 — a DJ-remix sitting. A listener who usually plays film songs
+  // starts a Telugu DJ remix. The seed's suggestions are mostly popular film
+  // songs with three remixes among them; the catalogue's DJ-remix search holds
+  // remixes by DJs this listener has never played, among them "Version N"
+  // cuts of one remix and another DJ's remix of the seed. The stretch should
+  // stay DJ, one remix per song.
+  const djArtists = ['డీజే శ్రీను', 'డీజే రాజు', 'పెద్దపులి ఈశ్వర్', 'క్లెమెంట్ రావు', 'అశోక్ కుమార్', 'హేమ చంద్ర'];
+  const remix = (id: string, t: number, artist: string, cut = '(DJ Remix Song)'): Song =>
+    song(id, { title: `${te.titles[t]} బీట్ ${cut}`, artist, language: 'telugu', album: { id: `al-${id}`, name: `${te.titles[t]} బీట్ ${cut}` }, year: '2024', energy: 0.82 + (t % 3) * 0.04, tempo: 126 + (t % 4) * 4, mood: 'energetic', genre: null, playCount: 900_000 - t * 20_000 });
+  const filmOnly = (songs: Song[]): Song[] => songs.map((s) => ({ ...s, genre: 'film', mood: s.mood === 'devotional' ? 'romantic' : s.mood }));
+  const djSession = listener(now, 'telugu', { id: 'dj-session', title: 'DJ-remix sitting (Telugu)', notes: 'A DJ remix is playing: what follows should be DJ remixes, one per song, though the seed’s suggestions are mostly film songs.' });
+  djSession.seed = remix('seed-dj-session', 0, djArtists[0]);
+  djSession.related = [...filmOnly(pool('telugu', { prefix: 'djs-r', count: 12, offset: 1 })), remix('djs-rr0', 1, djArtists[1]), remix('djs-rr1', 2, djArtists[2]), remix('djs-rr2', 3, djArtists[3])];
+  djSession.search = filmOnly(pool('telugu', { prefix: 'djs-s', count: 10, offset: 5, artistPattern: [2, 3, 4, 5, 6, 7, 2, 4, 6, 3] }));
+  djSession.style = {
+    kind: 'dj',
+    pattern: /\b(dj|remix)\b/i,
+    search: [
+      ...Array.from({ length: 12 }, (_, i) => remix(`djs-x${i}`, 4 + i, djArtists[i % djArtists.length])),
+      // Two "Version N" cuts of remixes already in the list (same DJ): one of each may ship.
+      remix('djs-v3', 4, djArtists[0], '(DJ Remix Song Version 3)'),
+      remix('djs-v2', 5, djArtists[1], '(Dj Remix Version 2)'),
+      // Another DJ's remix of the seed, and of a song in the list.
+      remix('djs-o0', 0, djArtists[3], '- Dj Remix'),
+      remix('djs-o6', 6, djArtists[4], '(Remix)'),
+    ],
+  };
+
+  // 8.3.0 — a folk sitting. Folk songs say so only in their ALBUM ("Telugu
+  // Folk Songs Telangana Janapadalu Vol - 6"). The AI DJ answers with an
+  // order of its own, which may not trade folk songs for film songs.
+  const folkAlbums = ['Telugu Folk Songs Telangana Janapadalu Vol - 6', 'Telangana Janapadalu, Vol. 2', 'Telugu Folk Songs', 'Palle Patalu (Best Folk Songs)', 'Telugu Folk DJ Songs, Vol. 2'];
+  const folkSingers = ['వడ్లకొండ అనిల్', 'జాడల రమేష్', 'ఏ. రమాదేవి', 'అకునూరి దేవయ్య', 'మావూరి మల్లేష్', 'సాయి చంద్'];
+  const folkSong = (id: string, t: number, singer: string): Song =>
+    song(id, { title: `${te.titles[t]} పల్లె పాట`, artist: singer, language: 'telugu', album: { id: `al-folk-${t % folkAlbums.length}`, name: folkAlbums[t % folkAlbums.length] }, year: String(2016 + (t % 8)), energy: 0.55 + (t % 5) * 0.06, tempo: 100 + (t % 5) * 6, mood: null, genre: null, playCount: 500_000 - t * 10_000 });
+  const folkSession = listener(now, 'telugu', { id: 'folk-session', title: 'Folk sitting (Telugu), AI DJ answering', notes: 'A Telangana folk song is playing (folk only in its album name): what follows should be folk, and the AI DJ’s order may not trade folk for film songs.', ai: { mode: 'dj', answer: 'reorder' } });
+  folkSession.seed = folkSong('seed-folk-session', 0, folkSingers[0]);
+  folkSession.related = [...filmOnly(pool('telugu', { prefix: 'folk-r', count: 12, offset: 1 })), folkSong('folk-rr0', 1, folkSingers[1]), folkSong('folk-rr1', 2, folkSingers[2])];
+  folkSession.search = filmOnly(pool('telugu', { prefix: 'folk-s', count: 10, offset: 5, artistPattern: [2, 3, 4, 5, 6, 7, 2, 4, 6, 3] }));
+  folkSession.style = { kind: 'folk', pattern: /\bfolk\b|janapad/i, search: Array.from({ length: 13 }, (_, i) => folkSong(`folk-x${i}`, 3 + i, folkSingers[i % folkSingers.length])) };
+
+  return [cold, warm, familiar, discover, tamil, punjabi, malayalam, mixed, mixedQueue, prefs, skips, partial, offline, sparse, versions, small, kid, muted, hidden, softMuted, djSession, folkSession];
 }
 
 /** The fixture the latency conditions use (a warm Telugu listener with a full pool). */

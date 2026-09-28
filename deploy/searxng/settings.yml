@@ -1,0 +1,55 @@
+# VinaX web search — SearXNG settings (deploy/searxng/README.md explains every step).
+#
+# Starts from SearXNG's own defaults and changes only what VinaX needs:
+#   - the JSON API (search.formats) the VinaX Worker reads;
+#   - short upstream timeouts, so one slow engine never stalls a reply;
+#   - the built-in limiter OFF: the reverse proxy in front of this container
+#     (proxy.conf) refuses every request that does not carry the VinaX token,
+#     so nothing reaches SearXNG except the VinaX Worker. With the limiter on,
+#     its bot detection would block the Worker (datacenter addresses, no
+#     browser headers).
+#
+# Never publish port 8080 of this container directly: only the proxy may
+# reach it (docker-compose.yml keeps it on the internal network).
+
+use_default_settings: true
+
+general:
+  instance_name: "VinaX web search"
+  debug: false
+  enable_metrics: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "all"
+  # html stays for the owner's own browser check; json is what VinaX calls.
+  formats:
+    - html
+    - json
+  # A failing engine is benched quickly and retried soon.
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 120
+
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  # Refuses to start until SEARXNG_SECRET is set in the environment
+  # (docker-compose.yml passes it from .env): SearXNG will not run with this
+  # placeholder outside debug mode, which is exactly the point.
+  secret_key: "ultrasecretkey"
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+outgoing:
+  # Each upstream engine gets 3 s; the VinaX Worker gives the whole call ~5 s.
+  request_timeout: 3.0
+  max_request_timeout: 4.5
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+
+ui:
+  query_in_title: false

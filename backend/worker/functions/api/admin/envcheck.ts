@@ -26,6 +26,8 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'GITHUB_REPO', group: 'Releases', required: false, note: 'owner/repo for releases' },
   { name: 'BRAVE_API_KEY', group: 'AI', required: false, note: 'live web search (keyless fallback otherwise)' },
   { name: 'NVIDIA_BASE_URL', group: 'AI', required: false, note: 'provider base override' },
+  { name: 'SEARXNG_URL', group: 'AI', required: false, note: 'your own web search instance (AI web search, the music expert, DJ and playlist freshness, the web trend source)' },
+  { name: 'SEARXNG_TOKEN', group: 'AI', required: false, note: 'bearer token your web search instance requires' },
   // The owner's 18 AI secrets (2026-09-09 rotation) — one row each, so a key
   // that was never pasted into Cloudflare shows up here instead of silently
   // degrading its lane through the failover ladder.

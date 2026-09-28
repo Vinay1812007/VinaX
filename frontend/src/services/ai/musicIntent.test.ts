@@ -69,3 +69,25 @@ describe('intentTitle', () => {
     expect(intentTitle(parseMusicIntent('sad songs'))).toBe('Heartbreak Mix');
   });
 });
+
+describe('8.3.0 — styles in a request', () => {
+  it('reads DJ, folk and devotional styles', () => {
+    expect(parseMusicIntent('telugu dj songs')).toMatchObject({ languages: ['telugu'], style: 'dj' });
+    expect(parseMusicIntent('folk songs').style).toBe('folk');
+    expect(parseMusicIntent('janapadalu').style).toBe('folk');
+    expect(parseMusicIntent('hindi bhajans').style).toBe('devotional');
+    expect(parseMusicIntent('sad tollywood songs').style).toBeNull();
+  });
+
+  it('asks the catalogue for the style first, and does not dilute DJ with generic party songs', () => {
+    expect(catalogQueries(parseMusicIntent('telugu dj songs'), [], 3)).toEqual(['telugu dj remix', 'telugu remix songs']);
+    expect(catalogQueries(parseMusicIntent('folk songs'), ['tamil'], 3)).toEqual(['tamil folk songs']);
+    expect(catalogQueries(parseMusicIntent('sad folk songs'), ['telugu'], 3)).toEqual(['telugu folk songs', 'telugu sad songs']);
+    expect(catalogQueries(parseMusicIntent('dj remix hindi and punjabi'), [], 4)).toEqual(['hindi dj remix', 'punjabi dj remix', 'hindi remix songs', 'punjabi remix songs']);
+  });
+
+  it('names the playlist after the style', () => {
+    expect(intentTitle(parseMusicIntent('telugu dj songs'))).toBe('Telugu DJ Remix Mix');
+    expect(intentTitle(parseMusicIntent('kannada folk songs'))).toBe('Kannada Folk Mix');
+  });
+});

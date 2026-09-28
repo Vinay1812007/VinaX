@@ -295,6 +295,21 @@ With the "DJ builds every queue" setting on (`djTakeover`, the default) and Auto
 
 Seeds found by a search skip songs the listener hid. The DJ builds the rest under the same rules as any continuation.
 
+### Staying in a style (8.3)
+
+`services/recommendation/style.ts` reads three styles from a song: `dj` (DJ remixes), `folk` and `devotional`. Words are strong evidence — the title, album, subtitle and credited artists, on word boundaries (folk songs are usually marked only in the album name, e.g. "… Folk Songs Telangana Janapadalu Vol - 6"; an album counts as DJ only with a phrase such as "DJ Songs" or "Remix", so a film called "DJ …" is not a DJ set; a credited "DJ …" artist counts). Genre, genres and mood are weak evidence.
+
+`sessionStyle` decides the style the listener is in: a style tune sets it and a mood tune clears it (except energetic or beats over DJ/folk, chill or melody over devotional); a seed whose words carry a style sets it; a metadata-only seed needs 2 of the last 3 plays to carry it in words; an ordinary song played by hand starts a fresh queue and clears it. "More like this" on a styled song tunes to its style (`features/queue/steer.ts`).
+
+While a style is active:
+- a required `style` candidate source searches the live-probed catalogue phrases `<language> dj remix`, `<language> remix songs`, `<language> folk songs`, `<language> devotional songs` (rotated by salt and page);
+- scoring adds `STYLE_WEIGHTS` (weights.ts): +0.4 for a word match, +0.25 for a metadata-only match, −0.3 off-style, and a 0.1 source boost;
+- validation keeps at least ⌈0.8 × limit⌉ songs in the style while the pool has them — it outranks the artist cap, gives way before the language-mix and back-to-back rules, relaxes as `style`, and never empties the list;
+- style songs do not count against the discovery share, and only one remix of each song plays per sitting (`remixWorkKey`, also applied to the DJ's proposals);
+- the DJ request carries `context.style`, and a DJ order with fewer style songs than the local order is rejected.
+
+"Why this song?" reads "Keeps the DJ remix going", "More folk songs, like the one playing", or "Held back — not a DJ remix song". The eval has `dj-session` and `folk-session` fixtures and a style-continuity metric.
+
 ### Queue languages
 
 Which languages a continuation may draw from is the setting **Settings → Recommendations → Queue languages** (`queueLanguages` in `store/settingsStore.ts`; `'mix'`, shown as "Your languages", is the default; `'one'` is "One language"). It applies in all three discovery modes. `engine.ts` decides per plan:

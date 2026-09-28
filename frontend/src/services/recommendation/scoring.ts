@@ -14,7 +14,8 @@ import { coPlayAffinity, coPlayIndexFor } from './coplay';
 import type { Candidate, ReasonComponent, ReasonKind, RecommendationContext, ScoredCandidate } from './types';
 import { moodMatchScore } from './mood';
 import { buildSongProfile, overlap, type SongProfile } from './profiles';
-import { RECOMMENDATION_WEIGHTS, TASTE_WEIGHTS } from './weights';
+import { RECOMMENDATION_WEIGHTS, STYLE_WEIGHTS, TASTE_WEIGHTS } from './weights';
+import { styleEvidence, type MusicStyle } from './style';
 import { rerankCandidates } from './reranking';
 import { songKey } from './songIdentity';
 import { dot, embeddingTasteVector, songVector, tasteVector } from './vectors';
@@ -42,6 +43,8 @@ const SOURCE_BOOST: Record<Candidate['source'], number> = {
   proven: 0.12,
   // 8.2.0 — the seed's genre or mood in its language: broad, a little above trending.
   genre: 0.07,
+  // 8.3.0 — the catalogue's own DJ-remix / folk / devotional search, in the seed's language.
+  style: STYLE_WEIGHTS.sourceBoost,
 };
 
 /** How each source's boost is explained (favourite-artist and -album name what they came from). */
@@ -58,6 +61,7 @@ const SOURCE_REASON: Record<Candidate['source'], ReasonKind> = {
   'related-artist': 'similar-artist',
   proven: 'proven',
   genre: 'genre',
+  style: 'style',
 };
 
 /** 7.2.0 — per extra source that found the same song, capped: agreement is evidence, not a trump card. */
@@ -335,7 +339,15 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   if (song.language && profile.languages[song.language]) add('low-skip', (lowSkipScore(profile.languages[song.language]) - 0.5) * 0.2 * blend, song.language);
   add('low-skip', (artistSkipScore(profile, artistIds, artistNames) - 0.5) * 0.14 * blend, leadName);
 
-  add(SOURCE_REASON[c.source], SOURCE_BOOST[c.source], c.source === 'explore' ? song.language : c.source === 'genre' ? undefined : c.source !== 'trending' && c.source !== 'history' && c.source !== 'rediscovery' && c.source !== 'intent' ? c.seedTitle : undefined);
+  add(SOURCE_REASON[c.source], SOURCE_BOOST[c.source], c.source === 'explore' ? song.language : c.source === 'style' ? ctx.style : c.source === 'genre' ? undefined : c.source !== 'trending' && c.source !== 'history' && c.source !== 'rediscovery' && c.source !== 'intent' ? c.seedTitle : undefined);
+
+  // 8.3.0 — the listener's style (DJ remixes, folk, devotional): a song in it
+  // rises, a song outside it sinks, so a DJ session goes on with DJ remixes
+  // rather than drifting to the film songs the seed's suggestions also hold.
+  if (ctx.style) {
+    const [kind, weight] = styleTerm(song, ctx.style);
+    add('style', weight, kind);
+  }
 
   // 7.2.0 — several independent sources found this song: a little more
   // confidence it belongs, bounded so it never outweighs a real taste match.
@@ -419,6 +431,18 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   }
 
   return { candidate: c, score, reasons: reasons.sort((a, b) => b.weight - a.weight) };
+}
+
+/**
+ * 8.3.0 — the style term: STYLE_WEIGHTS.match for a song that says the style
+ * in its words, metaMatch when only its genre or mood does, offStyle
+ * otherwise. The detail is the style, or "off-<style>" for a song outside it.
+ */
+export function styleTerm(song: Song, style: MusicStyle): [string, number] {
+  const ev = styleEvidence(song)[style];
+  if (ev === 'text') return [style, STYLE_WEIGHTS.match];
+  if (ev === 'meta') return [style, STYLE_WEIGHTS.metaMatch];
+  return [`off-${style}`, STYLE_WEIGHTS.offStyle];
 }
 
 function mulberry32(seed: number): () => number {

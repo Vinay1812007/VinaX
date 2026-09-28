@@ -223,4 +223,14 @@ describe('8.2.0 — intent-aware playlists', () => {
     const pool = await gatherCataloguePool(parseMusicIntent('telugu party'), ['telugu'], [], ['Avoided']);
     expect(pool.map((s) => s.id)).toEqual(['t1']);
   });
+
+  it('8.3.0 — a request that names a style gathers the style’s own catalogue phrases', async () => {
+    vi.mocked(searchSongs).mockClear();
+    vi.mocked(searchSongs).mockImplementation(async () => []);
+    await gatherCataloguePool(parseMusicIntent('telugu dj songs'), ['hindi'], []);
+    expect(vi.mocked(searchSongs).mock.calls.map((c) => c[0])).toEqual(['telugu dj remix', 'telugu remix songs']);
+    vi.mocked(searchSongs).mockClear();
+    await gatherCataloguePool(parseMusicIntent('janapadalu'), ['telugu'], []);
+    expect(vi.mocked(searchSongs).mock.calls.map((c) => c[0])).toEqual(['telugu folk songs']);
+  });
 });

@@ -1,7 +1,7 @@
 import type { Song } from '../../src/types';
 import type { EvalFixture } from '../fixtures';
 import { ai, resetAi, resetCatalogue, type Behaviour } from './mocks';
-import { addViolations, eligible, leadName, noViolations, violationsOf, workKey, type RuleContext, type Violations } from './rules';
+import { addViolations, eligible, inEvalStyle, leadName, noViolations, violationsOf, workKey, type RuleContext, type Violations } from './rules';
 
 /**
  * One sitting, as the player would run it: plan a stretch of five, queue it,
@@ -68,6 +68,10 @@ export interface BatchRecord {
   distinctArtists: number;
   aiSongsShipped: number;
   timedOut: boolean;
+  /** 8.3.0 — songs of this continuation in the fixture's style (null when the fixture has none). */
+  inStyle: number | null;
+  /** 8.3.0 — songs in the style still eligible when this batch was planned (the most it could have held). */
+  styleAvailable: number | null;
 }
 
 export interface SessionRecord {
@@ -186,6 +190,7 @@ export function armFixture(fixture: EvalFixture, seedId: string, over: { suggest
     searchBehaviour: over.search ?? fixture.outage?.search ?? 'ok',
     searchNeverAfter: over.searchNeverAfter ?? null,
     slow: over.slow ?? false,
+    styleSearch: fixture.style ? { pattern: fixture.style.pattern, songs: fixture.style.search } : null,
   });
   resetAi(over.ai ?? fixture.ai);
 }
@@ -255,6 +260,8 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
     const known = knownArtists(fixture, played);
     const isDiscovery = (s: Song): boolean => !known.has(leadName(s));
     const pool = eligible(poolAll, rc);
+    const style = fixture.style?.kind ?? null;
+    const stylePool = style ? eligible([...poolAll, ...(fixture.style?.search ?? [])], rc).filter((s) => inEvalStyle(s, style)) : [];
     const familiarAvailable = pool.filter((s) => !isDiscovery(s)).length;
     const inLanguage = pool.length;
     const violations = violationsOf(outcome.final, rc);
@@ -289,6 +296,8 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
       distinctArtists: new Set(outcome.final.map(leadName)).size,
       aiSongsShipped: outcome.final.filter((s) => ai.proposed.has(s.id)).length,
       timedOut: outcome.timedOut,
+      inStyle: style ? outcome.final.filter((s) => inEvalStyle(s, style)).length : null,
+      styleAvailable: style ? new Set(stylePool.map(workKey)).size : null,
     });
     if (!outcome.final.length) break;
     queue.push(...outcome.final);

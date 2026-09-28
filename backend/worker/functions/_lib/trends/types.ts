@@ -7,13 +7,14 @@
  * catalogue song is a separate, scored step (matcher.ts), and only confident
  * matches are ever shown to listeners. See docs/trends.md.
  */
+import type { SearxngEnv } from '../searxng';
 import type { SupabaseEnv } from '../supabase';
 
 export type ProviderKind = 'public-chart' | 'editorial';
 export type ProviderStatus = 'ok' | 'not_configured' | 'disabled';
 
 /** Worker env the trend code reads. Every name is documented in backend/.env.example. */
-export interface TrendsEnv extends SupabaseEnv {
+export interface TrendsEnv extends SupabaseEnv, SearxngEnv {
   /** The video platform's Data API key. Missing → that provider is `not_configured`. */
   YOUTUBE_API_KEY?: string;
   /** Comma-separated ISO 3166-1 alpha-2 regions to ingest. Default `IN`. */
@@ -36,6 +37,10 @@ export interface TrendsEnv extends SupabaseEnv {
    * metrics unless its derived-metrics amendment has been accepted.
    */
   TRENDS_DERIVED_METRICS_SOURCES?: string;
+  /** 8.3.0 — languages the web source searches, comma-separated. Default telugu,hindi,tamil. */
+  TRENDS_WEB_LANGUAGES?: string;
+  /** 8.3.0 — owner-chosen label for the web source (UI text). */
+  TRENDS_WEB_LABEL?: string;
 }
 
 /** One item exactly as a source reported it, before any catalogue matching. */
@@ -100,6 +105,13 @@ export interface TrendProvider {
   dailyUnitBudget(env: TrendsEnv): number | null;
   /** Whether the provider's terms permit derived metrics (rank change, new entry). */
   derivedMetricsAllowed(env: TrendsEnv): boolean;
+  /**
+   * 8.3.0 — every match waits for the owner's review, however confident: the
+   * source is evidence that people mention a song, not a verified chart.
+   */
+  requiresReview?: boolean;
+  /** 8.3.0 — deadline for one fetch attempt when the default 8 s is too short. */
+  attemptTimeoutMs?: number;
   fetch(env: TrendsEnv, opts: FetchOptions): Promise<RawTrendItem[]>;
 }
 

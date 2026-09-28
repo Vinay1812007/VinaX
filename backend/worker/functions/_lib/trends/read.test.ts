@@ -119,7 +119,7 @@ describe('readPublicTrends', () => {
   it('labels the short-video source disabled and a keyless video chart not_configured, with no items from either', async () => {
     const { body } = await readPublicTrends({ SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk' }, { region: 'IN', limit: 20, now: NOW });
     const status = Object.fromEntries(body.sources.map((s) => [s.id, s.status]));
-    expect(status).toEqual({ youtube: 'not_configured', instagram: 'disabled', editorial: 'unavailable' });
+    expect(status).toEqual({ youtube: 'not_configured', instagram: 'disabled', web: 'not_configured', editorial: 'unavailable' });
     expect(body.items).toEqual([]);
   });
 

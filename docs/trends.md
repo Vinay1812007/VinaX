@@ -86,6 +86,12 @@ Decision: the adapter is **disabled** and never fetches. A permission granted fo
 
 The FAQ at <https://developers.tiktok.com/docs/en/research-api-faq> could not be read directly: the host refused TLS connections from the environment used for this work (both fetch tools). Search results from that official domain quote the eligibility rules: access is for "independent and academic researchers who conduct research on a non-for-profit basis", applicants "must be independent of commercial interests", and "Commercial users are not eligible for access to the Research Tools." It is not a commercial trend feed, eligibility cannot be verified for this app, and no adapter exists. The same platform's ads library is advertising data and is never used as a signal of music popularity.
 
+### Your own web search instance — adapter `web` (8.3, review only)
+
+When `SEARXNG_URL` (and usually `SEARXNG_TOKEN`) point at the owner's own SearXNG instance (`deploy/searxng/`), `_lib/trends/webSignal.ts` searches the video category over the last week for "new X songs" and "trending X songs this week" in each language of `TRENDS_WEB_LANGUAGES` (default telugu, hindi, tamil). A rule-based filter keeps result titles that look like one song ("Song | Film | Cast | Composer") and drops playlists, jukeboxes, top-N lists, headlines, trailers and non-music; candidates are merged across queries, ranked by how many results agree, and run through the same matcher as the video chart.
+
+The web is not a chart: there is no rank and no count. So the source uses kind `editorial` (no momentum), a 72-hour display window, and `requiresReview` — every item, even a confident match, is filed as `review` with reason `needs_review_web_source` and the proposed song kept, so accepting it is one click. Nothing from this source is published without a person. Without `SEARXNG_URL` it reports `not_configured`; an unreachable instance is a retryable error for this source only. `TRENDS_DISABLED_SOURCES=web` turns it off.
+
 ## The pieces
 
 | File | Role |
@@ -277,7 +283,7 @@ CSV header (any order): `title,artist,catalog_id,region,language,position,eviden
 
 ## Environment
 
-All optional; documented in `backend/.env.example`: `YOUTUBE_API_KEY`, `TRENDS_REGIONS`, `TRENDS_VIDEO_CHART_LABEL`, `TRENDS_EDITORIAL_LABEL`, `TRENDS_DISABLED_SOURCES`, `TRENDS_VIDEO_DAILY_UNIT_BUDGET`, `TRENDS_VIDEO_CATEGORY_ID`, `TRENDS_VIDEO_PAGES`, `TRENDS_DERIVED_METRICS_SOURCES`. The scheduled job also needs `CRON_SECRET`; storage needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+All optional; documented in `backend/.env.example`: `YOUTUBE_API_KEY`, `TRENDS_REGIONS`, `TRENDS_VIDEO_CHART_LABEL`, `TRENDS_EDITORIAL_LABEL`, `TRENDS_DISABLED_SOURCES`, `TRENDS_VIDEO_DAILY_UNIT_BUDGET`, `TRENDS_VIDEO_CATEGORY_ID`, `TRENDS_VIDEO_PAGES`, `TRENDS_DERIVED_METRICS_SOURCES`, and for the web source `SEARXNG_URL`, `SEARXNG_TOKEN`, `TRENDS_WEB_LANGUAGES`, `TRENDS_WEB_LABEL`. The scheduled job also needs `CRON_SECRET`; storage needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Limits
 
