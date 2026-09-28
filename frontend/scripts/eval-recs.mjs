@@ -153,6 +153,9 @@ function metricRows(base, now) {
     ['…the mode’s allocation', base?.discovery.allocation ?? 0, now.discovery.allocation, null],
     ['Continuations over the allocation (familiar songs were free)', base?.discovery.overAllocatedBatches ?? 0, now.discovery.overAllocatedBatches, true],
     ['Familiar-first compliance (slot 1)', base?.familiarFirst.compliance ?? 0, now.familiarFirst.compliance, false],
+    // 8.3.0 — style continuity, over the DJ-remix and folk sittings only.
+    ['Style continuity: share of a DJ / folk stretch in its style', base?.style?.share ?? 0, now.style?.share ?? 0, false],
+    ['…share of stretches holding four of five in style (when the pool could)', base?.style?.held ?? 0, now.style?.held ?? 0, false],
     ['Queue-ready latency p50', base?.latency.p50 ?? 0, now.latency.p50, true],
     ['Queue-ready latency p95', base?.latency.p95 ?? 0, now.latency.p95, true],
   ];
@@ -177,9 +180,11 @@ function markdown(now, base) {
   lines.push(...metricRows(base?.quality.overall, now.quality.overall));
   lines.push('');
   lines.push('## Per fixture (current pipeline)', '');
-  lines.push('| Fixture | Continuations | Songs | Empty | Hard violations | Discovery share | Slot-1 misses |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
+  lines.push('| Fixture | Continuations | Songs | Empty | Hard violations | Discovery share | Slot-1 misses | In style (baseline) |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const [id, f] of Object.entries(now.quality.perFixture)) {
-    lines.push(`| ${f.title} (\`${id}\`) | ${f.batches} | ${f.songs} | ${f.emptyBatches} | ${f.hardViolations} | ${pct(f.discovery.share)} | ${f.familiarFirst.slot1Misses}/${f.familiarFirst.opportunities} |`);
+    const b = base?.quality?.perFixture?.[id];
+    const style = f.style ? `${pct(f.style.share)}${b?.style ? ` (${pct(b.style.share)})` : ''}` : '—';
+    lines.push(`| ${f.title} (\`${id}\`) | ${f.batches} | ${f.songs} | ${f.emptyBatches} | ${f.hardViolations} | ${pct(f.discovery.share)} | ${f.familiarFirst.slot1Misses}/${f.familiarFirst.opportunities} | ${style} |`);
   }
   lines.push('');
   lines.push('## Latency', '');
@@ -241,9 +246,10 @@ console.log(`same lead back to back ${o.repetition.sameLeadBackToBack} (batch bo
 console.log(`distinct artists per continuation ${o.coverage.distinctArtistsPerBatch} · discovery ${pct(o.discovery.share)} against an allocation of ${pct(o.discovery.allocation)}`);
 console.log(`familiar-first compliance ${pct(o.familiarFirst.compliance)} · pickers ${JSON.stringify(o.pickers)} · fallbacks ${JSON.stringify(o.fallbacks)}`);
 console.log(`queue-ready latency p50 ${ms(o.latency.p50)} · p95 ${ms(o.latency.p95)} (instant sources, ${o.latency.samples} samples)`);
+if (o.style) console.log(`style continuity ${pct(o.style.share)} of a DJ / folk stretch in its style · ${o.style.heldBatches}/${o.style.heldOpportunities} stretches held four of five`);
 if (baseline) {
   const b = baseline.quality.overall;
-  console.log(`baseline ${baseline.ref}: hard violations ${b.hardViolations} · identity repeats ${b.repetition.repeatedIdentity} · same lead back to back ${b.repetition.sameLeadBackToBack} (avoidable ${b.repetition.sameLeadBackToBackAvoidable ?? 'n-a'})`);
+  console.log(`baseline ${baseline.ref}: hard violations ${b.hardViolations} · identity repeats ${b.repetition.repeatedIdentity} · same lead back to back ${b.repetition.sameLeadBackToBack} (avoidable ${b.repetition.sameLeadBackToBackAvoidable ?? 'n-a'})${b.style ? ` · style continuity ${pct(b.style.share)} (${b.style.heldBatches}/${b.style.heldOpportunities} held)` : ''}`);
 }
 console.log(`\nreports: ${jsonPath.replace(FRONTEND, 'frontend')} · ${mdPath.replace(FRONTEND, 'frontend')}`);
 console.log('These numbers are rule compliance, diversity mechanics and latency — not enjoyment.');

@@ -267,6 +267,29 @@ describe('8.2 — sources around the seed', () => {
     expect(searched()).not.toContain('romantic telugu songs');
   });
 
+  it('8.3 — asks the catalogue for the listener’s style in the seed’s language, rotating with the salt, and only in a style session', async () => {
+    const seed = makeSong('seed', { title: 'Nadakallo Nadaka (DJ Remix Song)', artist: 'P.N. Lingaraju' });
+    respond = (c) => (c.fn === 'search' && c.key.startsWith('telugu dj remix#') ? { songs: [makeSong('dj1', { title: 'Mama Nagulo (DJ Remix Song)', artist: 'Peddapuli Eeswar' })], ms: 1 } : { songs: [], ms: 1 });
+    const out = await generateNextCandidates(seed, makeContext({ style: 'dj', salt: 0 }));
+    expect(calls.filter((c) => c.fn === 'search').map((c) => c.key)).toEqual(expect.arrayContaining(['telugu dj remix#1#20', 'telugu remix songs#1#20']));
+    expect(out.find((c) => c.song.id === 'dj1')).toMatchObject({ source: 'style', seedTitle: 'telugu dj remix' });
+    // Another salt reaches other pages / the other phrasing first.
+    calls = [];
+    resetCandidateCache();
+    await generateNextCandidates(makeSong('f', { title: 'Folk', language: 'tamil' }), makeContext({ style: 'folk', salt: 4 }));
+    expect(calls.filter((c) => c.fn === 'search').map((c) => c.key)).toEqual(expect.arrayContaining(['tamil folk songs#2#20', 'tamil folk songs#3#20']));
+    // No style: no style search.
+    calls = [];
+    resetCandidateCache();
+    await generateNextCandidates(seed, makeContext());
+    expect(searched().some((q) => /remix|folk songs/.test(q))).toBe(false);
+    // Never in a muted language.
+    calls = [];
+    resetCandidateCache();
+    await generateNextCandidates(seed, makeContext({ style: 'dj', mutedLanguages: ['telugu'] }));
+    expect(searched().some((q) => /remix/.test(q))).toBe(false);
+  });
+
   it('offers songs like earlier automatic picks that worked, and a rested one itself', async () => {
     const proven = makeSong('p1', { title: 'Worked', artist: 'Past' });
     recordAutoOutcome(proven, 'success', NOW - 5 * 86_400_000);

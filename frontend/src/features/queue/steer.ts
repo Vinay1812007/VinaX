@@ -4,6 +4,7 @@ import { noteSessionEvent } from '@/services/personalization/sessionIntent';
 import { muteArtist, softMuteKey, type MuteReceipt } from '@/services/personalization/softMutes';
 import { inferMood, moodFromText, type Mood } from '@/services/recommendation/mood';
 import { TUNE_OPTIONS, type TuneIntent } from '@/services/recommendation/tune';
+import { songStyle } from '@/services/recommendation/style';
 import { upcomingMix } from './origin';
 
 /**
@@ -30,8 +31,11 @@ const MOOD_TUNE: Partial<Record<Mood, TuneIntent>> = {
   devotional: 'devotional',
 };
 
-/** The "Tune this queue" intent that matches this song's mood, if it has a clear one. */
+/** The "Tune this queue" intent that matches this song: its style (8.3.0 — a DJ
+ *  remix, folk or devotional song keeps that style), else its mood, if clear. */
 export function tuneForSong(song: Song): TuneIntent | null {
+  const style = songStyle(song);
+  if (style) return style;
   const tagged = song.mood ? moodFromText(song.mood) : 'neutral';
   const mood = tagged !== 'neutral' ? tagged : inferMood(song);
   return MOOD_TUNE[mood] ?? null;

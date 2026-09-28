@@ -118,6 +118,16 @@ async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Prom
   return out;
 }
 
+/**
+ * 8.3.0 — a provider that `requiresReview` never auto-matches: a confident
+ * match is kept as the proposal (so accepting it is one click) but filed for
+ * review. Pure; exported for tests.
+ */
+export function holdForReview(provider: TrendProvider, d: MatchDecision): MatchDecision {
+  if (!provider.requiresReview || d.status !== 'matched') return d;
+  return { ...d, status: 'review', reason: 'needs_review_web_source' };
+}
+
 function matchRow(item: RawTrendItem, d: MatchDecision, nowIso: string): Record<string, unknown> {
   return {
     source: item.source,
@@ -206,7 +216,7 @@ async function runOne(ctx: Ctx, provider: TrendProvider, region: string): Promis
       sleep: deps.sleep,
       random: deps.random,
       signal: deps.signal,
-      attemptTimeoutMs: deps.attemptTimeoutMs ?? 8_000,
+      attemptTimeoutMs: deps.attemptTimeoutMs ?? provider.attemptTimeoutMs ?? 8_000,
     });
     items = out.value;
     summary.attempts = out.attempts;
@@ -306,7 +316,7 @@ async function matchNewItems(ctx: Ctx, provider: TrendProvider, items: RawTrendI
   const fresh = items.filter((i, idx) => !known.has(i.sourceItemId) && items.findIndex((j) => j.sourceItemId === i.sourceItemId) === idx);
   const search = ctx.deps.search ?? searchCatalogSongs;
   const lookup = ctx.deps.lookup ?? lookupCatalogSong;
-  const decisions = await mapLimited(fresh, MATCH_CONCURRENCY, (item) => matchRawItem(item, { search, lookup, budget: ctx.budget }));
+  const decisions = (await mapLimited(fresh, MATCH_CONCURRENCY, (item) => matchRawItem(item, { search, lookup, budget: ctx.budget }))).map((d) => (d ? holdForReview(provider, d) : d));
   const newRows: Record<string, unknown>[] = [];
   decisions.forEach((d, i) => {
     if (!d) {

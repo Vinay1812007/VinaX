@@ -33,7 +33,7 @@ import { armFixture, planOnce, runSession, LIMIT, type EngineLike, type SessionR
 import { percentile, round, summarise } from './lib/metrics';
 
 /** Bump when the harness changes what it measures. */
-export const EVAL_HARNESS_VERSION = '1.0.0';
+export const EVAL_HARNESS_VERSION = '1.1.0'; // 8.3.0 — style continuity (the DJ-remix and folk sittings)
 
 /** One fixed instant. Fixtures never read the clock; the harness hands them this. */
 const NOW = 1_800_000_000_000;

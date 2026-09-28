@@ -37,6 +37,13 @@ export interface CatalogueScript {
   searchNeverAfter: number | null;
   /** Deterministic delays, taken in call order, when a behaviour is 'slow'. */
   slow: boolean;
+  /**
+   * 8.3.0 — a search whose query names a style ("telugu dj remix", "telugu
+   * folk songs") answers from this list instead, a page at a time, the way the
+   * real catalogue answers those phrasings. Absent = every search answers
+   * from `search`, as before.
+   */
+  styleSearch: { pattern: RegExp; songs: Song[] } | null;
 }
 
 export const catalogue: CatalogueScript = {
@@ -47,6 +54,7 @@ export const catalogue: CatalogueScript = {
   searchBehaviour: 'ok',
   searchNeverAfter: null,
   slow: false,
+  styleSearch: null,
 };
 
 /** A fixed ladder of delays, taken in call order: a slow source is slow in a reproducible way. */
@@ -55,7 +63,7 @@ let calls = 0;
 let searchCalls = 0;
 
 export function resetCatalogue(script: Partial<CatalogueScript> = {}): void {
-  Object.assign(catalogue, { seedId: '', related: [], search: [], suggestions: 'ok', searchBehaviour: 'ok', searchNeverAfter: null, slow: false }, script);
+  Object.assign(catalogue, { seedId: '', related: [], search: [], suggestions: 'ok', searchBehaviour: 'ok', searchNeverAfter: null, slow: false, styleSearch: null }, script);
   calls = 0;
   searchCalls = 0;
 }
@@ -75,7 +83,14 @@ function answer<T>(behaviour: Behaviour, value: T, slow: boolean): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), delay));
 }
 
-function searchAnswer(): Promise<Song[]> {
+function searchAnswer(query = '', page = 1): Promise<Song[]> {
+  const style = catalogue.styleSearch;
+  if (style && style.pattern.test(query)) {
+    // A page of the style catalogue: page 2 starts where page 1 ended (wrapping).
+    const n = style.songs.length;
+    const start = n ? ((Math.max(1, page) - 1) * 12) % n : 0;
+    return answer(catalogue.searchBehaviour, [...style.songs.slice(start), ...style.songs.slice(0, start)].slice(0, 20), catalogue.slow);
+  }
   const call = searchCalls++;
   const hangs = catalogue.searchNeverAfter !== null && call >= catalogue.searchNeverAfter;
   return answer(hangs ? 'never' : catalogue.searchBehaviour, window(catalogue.search, call), catalogue.slow);
@@ -84,8 +99,8 @@ function searchAnswer(): Promise<Song[]> {
 export const apiMock = {
   getSongSuggestions: (id: string, _n?: number): Promise<Song[]> =>
     answer(catalogue.suggestions, id === catalogue.seedId ? catalogue.related : [], catalogue.slow),
-  searchSongsPage: (_q: string, _page?: number, _n?: number): Promise<Song[]> => searchAnswer(),
-  searchSongs: (_q: string, _n?: number): Promise<Song[]> => searchAnswer(),
+  searchSongsPage: (q: string, page?: number, _n?: number): Promise<Song[]> => searchAnswer(q, page),
+  searchSongs: (q: string, _n?: number): Promise<Song[]> => searchAnswer(q, 1),
   getAlbum: (): Promise<null> => Promise.resolve(null),
   // 8.2 — an artist's catalogue is the songs of the fixture pool that credit
   // that artist, answering like a search does (the same outage behaviour).

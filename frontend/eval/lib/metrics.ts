@@ -65,6 +65,13 @@ export interface Summary {
   /** 8.1.0 — language-opening / language-run breaks the engine reported as its own `language-mix` give-way (nothing in the queue language was left). */
   languageMixExcused: number;
   latency: { p50: number; p95: number; max: number; samples: number };
+  /**
+   * 8.3.0 — style continuity, over the continuations of fixtures that are in
+   * a style (a DJ-remix or a folk sitting): the mean share of each
+   * continuation in that style, and how many held four of five (⌈0.8 n⌉)
+   * while the pool still had that many. null when no fixture has a style.
+   */
+  style: { batches: number; share: number; heldBatches: number; heldOpportunities: number; held: number } | null;
 }
 
 const MIX_KINDS = ['language-opening', 'language-run'] as const;
@@ -99,6 +106,9 @@ function summariseBatches(sessions: SessionRecord[]): Summary {
     for (const r of b.relaxed) relaxed[r] = (relaxed[r] ?? 0) + 1;
   }
   const songs = batches.reduce((n, b) => n + b.n, 0);
+  const styled = batches.filter((b) => b.inStyle !== null && b.n > 0);
+  const styleChances = styled.filter((b) => (b.styleAvailable ?? 0) >= Math.ceil(0.8 * b.n));
+  const heldBatches = styleChances.filter((b) => (b.inStyle ?? 0) >= Math.ceil(0.8 * b.n)).length;
   const offLanguageUnexcused = Math.max(0, violations['off-language'] - excused);
   const mixUnexcused = Math.max(0, mixBreaks(violations) - mixExcused);
   const hard = totalViolations(violations, ['off-language', ...MIX_KINDS]) + offLanguageUnexcused + mixUnexcused;
@@ -142,6 +152,9 @@ function summariseBatches(sessions: SessionRecord[]): Summary {
     refinements: count(batches.map((b) => b.refinement)),
     relaxed,
     aiSongsShipped: batches.reduce((n, b) => n + b.aiSongsShipped, 0),
+    style: styled.length
+      ? { batches: styled.length, share: mean(styled.map((b) => (b.inStyle ?? 0) / b.n)), heldBatches, heldOpportunities: styleChances.length, held: styleChances.length ? round(heldBatches / styleChances.length) : 1 }
+      : null,
     latency: {
       p50: percentile(batches.map((b) => b.queueReadyMs), 50),
       p95: percentile(batches.map((b) => b.queueReadyMs), 95),

@@ -70,6 +70,40 @@ export const TASTE_WEIGHTS = Object.freeze({
   seedRepeat: 0.1,
 } as const);
 
+/**
+ * 8.3.0 — keeping a style going (DJ remixes, folk, devotional; ./style.ts).
+ * Fixed defaults like TASTE_WEIGHTS, outside the owner-override contract for
+ * the same reason. Applied only while a style is active (the context's
+ * `style`); every other continuation and every Home shelf scores as before.
+ *
+ * Sized against the rest of the score: a candidate's total is typically
+ * 0.4–1.2, the strongest source boost is 0.24 and the language match 0.12.
+ * The gap between an in-style song (+match) and an off-style one (offStyle)
+ * is 0.7 — more than any one taste term — so a film song that fits the
+ * listener's taste well does not outrank a DJ remix in a DJ session, while
+ * the off-style cost alone rarely takes a song to zero (the ranker drops
+ * those): an off-style song stays in the pool for when the style runs dry.
+ * Validation then holds the stretch to STYLE_MIN_SHARE (validation.ts).
+ * Checked against the offline evaluation's style fixtures (scripts/eval-recs.mjs).
+ */
+export const STYLE_WEIGHTS = Object.freeze({
+  /** A song that says the style in its title, album or credits. */
+  match: 0.4,
+  /** A song whose style is only in its genre / mood metadata (the classifier's guess counts for less). */
+  metaMatch: 0.25,
+  /** A song outside the style. */
+  offStyle: -0.3,
+  /** The catalogue search for the style, as a source: broad like the genre source, a little above it. */
+  sourceBoost: 0.1,
+} as const);
+
+/**
+ * 8.3.0 — the share of a stretch that must be in the style while the pool
+ * holds enough such songs: ⌈0.8 × 5⌉ = 4 of the next five. It gives way
+ * only when the pool runs short of the style (validation.ts, rule 'style').
+ */
+export const STYLE_MIN_SHARE = 0.8;
+
 export type RecommendationWeightKey = keyof typeof DEFAULT_WEIGHTS;
 export type RecommendationWeights = Record<RecommendationWeightKey, number>;
 

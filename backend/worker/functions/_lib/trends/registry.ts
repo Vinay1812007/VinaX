@@ -7,8 +7,11 @@ import { editorialProvider } from './editorial';
 import { shortVideoProvider } from './shortVideo';
 import type { TrendProvider } from './types';
 import { videoChartProvider } from './videoChart';
+import { webSignalProvider } from './webSignal';
 
-export const PROVIDERS: readonly TrendProvider[] = [videoChartProvider, shortVideoProvider, editorialProvider];
+// 8.3.0 — the web source sits before editorial: its items only ever reach
+// listeners after the owner accepts them in the review queue.
+export const PROVIDERS: readonly TrendProvider[] = [videoChartProvider, shortVideoProvider, webSignalProvider, editorialProvider];
 
 export function providerById(id: string): TrendProvider | null {
   return PROVIDERS.find((p) => p.id === id) ?? null;

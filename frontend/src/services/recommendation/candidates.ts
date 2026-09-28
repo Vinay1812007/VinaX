@@ -10,6 +10,7 @@ import { buildSongProfile, softMutedArtist } from './profiles';
 import type { ArtistRef, Song } from '@/types';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { provenPicks } from './recMemory';
+import { styleQueries } from './style';
 
 const REDISCOVERY_AGE_MS = 14 * 86_400_000;
 
@@ -259,6 +260,15 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
     // v7.1.0 — the listener asked for something (a tune, a pinned mood): fetch songs
     // FOR that intent, in the queue's language, instead of only re-scoring the seed's pool.
     if (ctx.intentQuery) for (const page of [1, 2 + (salt % 2)]) add('intent', `p${page}`, search(ctx.intentQuery, page, 20), ctx.intentQuery, true);
+    // 8.3.0 — the listener's style (DJ remixes, folk, devotional): the
+    // catalogue's own search for it, in the seed's language — two pages or
+    // phrasings, rotated by the salt so the next stretch reaches other songs.
+    // The first is required: in a style session it is the pool that matters.
+    // (A tune for the same style asks the same query: identical requests are shared.)
+    const styleLanguage = seed.language && seed.language !== 'unknown' ? seed.language : ctx.pinnedLanguages[0] ?? null;
+    if (ctx.style && styleLanguage && !ctx.mutedLanguages.includes(styleLanguage)) {
+      styleQueries(ctx.style, styleLanguage, salt).forEach((q, i) => add('style', `${q.query}:p${q.page}`, search(q.query, q.page, 20), q.query, i === 0));
+    }
     if (seed.language && !ctx.mutedLanguages.includes(seed.language)) add('trending', 'seed', search(`${seed.language} ${seed.genre ?? ''}`.trim(), 1, 15), seed.language);
     // 8.2.0 — the seed's own album (the same film or record), artists who work
     // with the seed's artist, and one more search for its genre or mood.

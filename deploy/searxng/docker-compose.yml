@@ -1,0 +1,75 @@
+# VinaX web search — a self-hosted SearXNG instance behind a token-checking
+# reverse proxy. Read README.md in this folder first.
+#
+#   cp .env.example .env    # then fill in the three values
+#   docker compose up -d
+#
+# Only the proxy is published (ports 80/443, with an automatic HTTPS
+# certificate for SEARXNG_HOSTNAME). SearXNG itself listens on the internal
+# network only, and the proxy forwards a request to it only when it carries
+# `Authorization: Bearer <SEARXNG_TOKEN>` — so the instance is never an open
+# proxy for anyone who finds the hostname.
+
+name: vinax-search
+
+services:
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      # server.secret_key — SearXNG refuses to start without it.
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?Set SEARXNG_SECRET in .env (openssl rand -hex 32)}
+      SEARXNG_BASE_URL: https://${SEARXNG_HOSTNAME:?Set SEARXNG_HOSTNAME in .env}/
+      SEARXNG_SETTINGS_PATH: /etc/searxng/settings.yml
+      # settings.yml is mounted read-only; do not try to chown it.
+      FORCE_OWNERSHIP: "false"
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml:ro
+      - searxng-cache:/var/cache/searxng
+    expose:
+      - "8080"
+    networks:
+      - internal
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
+
+  proxy:
+    image: docker.io/library/caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - searxng
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SEARXNG_HOSTNAME: ${SEARXNG_HOSTNAME:?Set SEARXNG_HOSTNAME in .env}
+      SEARXNG_TOKEN: ${SEARXNG_TOKEN:?Set SEARXNG_TOKEN in .env (openssl rand -hex 32)}
+    volumes:
+      - ./proxy.conf:/etc/caddy/Caddyfile:ro
+      - proxy-data:/data
+      - proxy-config:/config
+    networks:
+      - internal
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
+
+networks:
+  internal:
+
+volumes:
+  searxng-cache:
+  proxy-data:
+  proxy-config:

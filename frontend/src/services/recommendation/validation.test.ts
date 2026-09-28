@@ -145,3 +145,38 @@ describe('7.2.0 — the stretch follows the last queued song, not the one playin
     expect(withPrevious.repairs).toBe(1);
   });
 });
+
+describe('8.3.0 — the style quota', () => {
+  const dj = (id: string, artist: string) => makeSong(id, { title: `Song ${id} (DJ Remix Song)`, artist });
+  const film = (id: string, artist: string) => makeSong(id, { title: `Film ${id}`, artist });
+  const style = { matches: (s: { title: string }) => /\bdj\b/i.test(s.title), min: 4, label: 'DJ remix' };
+
+  it('keeps four of the next five in the style while the pool holds them, pulling style songs past off-style ones', () => {
+    const order = [film('f1', 'A'), film('f2', 'B'), dj('d1', 'C'), film('f3', 'D'), dj('d2', 'E'), dj('d3', 'F'), dj('d4', 'G'), dj('d5', 'H')];
+    const out = validateSequence(order, { limit: 5, style });
+    expect(out.songs).toHaveLength(5);
+    expect(out.songs.filter(style.matches).length).toBe(4);
+    // Order is otherwise kept: the first off-style song takes the one open slot.
+    expect(ids(out.songs)).toEqual(['f1', 'd1', 'd2', 'd3', 'd4']);
+    expect(out.relaxed).toEqual([]);
+  });
+
+  it('gives way gracefully when the pool is short of the style, and never ships nothing', () => {
+    const short = validateSequence([film('f1', 'A'), dj('d1', 'B'), film('f2', 'C'), film('f3', 'D'), film('f4', 'E')], { limit: 5, style });
+    expect(short.songs).toHaveLength(5);
+    expect(short.songs.filter(style.matches).length).toBe(1);
+    expect(short.relaxed).toEqual(['style']);
+    expect(short.relaxations[0].detail).toContain('1 DJ remix songs for 4 slots');
+    const none = validateSequence([film('f1', 'A'), film('f2', 'B'), film('f3', 'C')], { limit: 5, style });
+    expect(ids(none.songs)).toEqual(['f1', 'f2', 'f3']);
+  });
+
+  it('holds past the artist cap before it lets an off-style song in, but never past the rule against one artist twice in a row', () => {
+    // Four remixes, three by one DJ, and two film songs: two per artist is the cap for a stretch of five.
+    const order = [dj('a1', 'Eshwar'), dj('b1', 'Clement'), dj('a2', 'Eshwar'), dj('a3', 'Eshwar'), film('f1', 'X'), film('f2', 'Y')];
+    const out = validateSequence(order, { limit: 5, style });
+    expect(ids(out.songs)).toEqual(['a1', 'b1', 'a2', 'f1', 'a3']);
+    for (let i = 1; i < out.songs.length; i += 1) expect(out.songs[i].artists[0].name).not.toBe(out.songs[i - 1].artists[0].name);
+    expect(out.relaxed).toContain('artist-cap');
+  });
+});

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { scoreCandidate, rankCandidates } from './scoring';
+import { scoreCandidate, rankCandidates, styleTerm } from './scoring';
+import { STYLE_WEIGHTS } from './weights';
 import { songKey as songKeyOf } from './songIdentity';
 import type { Candidate, RecommendationContext } from './types';
 import { createEmptyProfile, type TasteSliders } from '../personalization/profile';
@@ -241,5 +242,29 @@ describe('8.2.0 — an artist skipped in this sitting sinks (verified, unchanged
     const neutral = scoreCandidate(cand(s), ctx({ sessionIntent: intent(0) }));
     expect(skipped.score).toBeLessThan(neutral.score);
     expect(skipped.reasons.find((r) => r.kind === 'intent')?.weight).toBeLessThan(0);
+  });
+});
+
+describe('8.3.0 — the style term', () => {
+  const remix = song({ id: 'r', title: 'Mama Nagulo (DJ Remix Song)' });
+  const plain = song({ id: 'p', title: 'Film Song', playCount: 90_000_000 });
+  const tagged = song({ id: 't', title: 'Village Song', genre: 'folk' });
+
+  it('lifts a song in the style, less for metadata alone, and costs a song outside it', () => {
+    expect(styleTerm(remix, 'dj')).toEqual(['dj', STYLE_WEIGHTS.match]);
+    expect(styleTerm(tagged, 'folk')).toEqual(['folk', STYLE_WEIGHTS.metaMatch]);
+    expect(styleTerm(plain, 'dj')).toEqual(['off-dj', STYLE_WEIGHTS.offStyle]);
+  });
+
+  it('is on the record as a reason, and absent without a style', () => {
+    const on = scoreCandidate(cand(remix), ctx({ style: 'dj' }));
+    const off = scoreCandidate(cand(remix), ctx());
+    expect(on.reasons).toContainEqual({ kind: 'style', weight: STYLE_WEIGHTS.match, detail: 'dj' });
+    expect(on.score - off.score).toBeCloseTo(STYLE_WEIGHTS.match, 6);
+    expect(off.reasons.some((r) => r.kind === 'style')).toBe(false);
+    // A very popular film song ranks below a remix in a DJ session, above it without one.
+    const ranked = (style: 'dj' | null) => rankCandidates([cand(plain), cand(remix)], ctx({ style })).map((x) => x.candidate.song.id);
+    expect(ranked('dj')[0]).toBe('r');
+    expect(ranked(null)[0]).toBe('p');
   });
 });

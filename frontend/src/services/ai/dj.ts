@@ -9,6 +9,7 @@ import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { getSliders, sliderDialLines } from '@/services/personalization/dials';
 import { getMoodPin } from '@/services/personalization/session';
 import { inferMood } from '@/services/recommendation/mood';
+import type { MusicStyle } from '@/services/recommendation/style';
 import { useReasonStore } from '@/store/reasonStore';
 import { useDjStore } from '@/store/djStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -303,6 +304,12 @@ export interface DjHints {
   discover?: boolean;
   /** v6.5.0 — gate for discovered songs: language lock and the caller's admission rules. */
   gate?: DiscoveryGate;
+  /**
+   * 8.3.0 — the style the listener is in (DJ remixes, folk, devotional;
+   * services/recommendation/style.ts). Sent as `context.style`: the server
+   * tells the DJ to keep it and to look for more of it.
+   */
+  style?: MusicStyle | null;
 }
 
 /**
@@ -388,6 +395,7 @@ export async function djSequence(seed: Song | null, ctx: RecommendationContext, 
           ...(hints.shape ? { arcShape: hints.shape } : {}),
           ...(hints.goal ? { listenerGoal: hints.goal.slice(0, 160) } : {}),
           ...(hints.tune ? { tuneInstruction: hints.tune.slice(0, 240) } : {}),
+          ...(hints.style ? { style: hints.style } : {}),
         },
         pool: pool.slice(0, 40).map((s) => describePoolSong(s, known)),
         count: Math.max(1, Math.min(20, limit)),

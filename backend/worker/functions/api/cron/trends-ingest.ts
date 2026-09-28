@@ -13,6 +13,11 @@
  * 502 when any run failed (so the workflow's retry and failure issue fire),
  * 503 when the database is not configured. Providers that are disabled or
  * not configured are listed as `notRun`, which is not a failure.
+ *
+ * 8.3.0 — the `web` source (_lib/trends/webSignal.ts) runs here too, but
+ * only when SEARXNG_URL is set (otherwise it is `notRun: not_configured`);
+ * `?source=web` runs it alone. Its matches always wait for the owner's
+ * review before any listener sees them.
  */
 import { safeEqual } from '../../_lib/safe-compare';
 import { runIngest } from '../../_lib/trends/ingest';

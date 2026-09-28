@@ -115,6 +115,11 @@ routes = [
 # Host of the Pages deployment serving the static frontend.
 ASSETS_HOST = "vinax.pages.dev"
 GITHUB_REPO = "Vinay1812007/VinaX"
+# 8.3.0 — the owner's self-hosted web search instance (deploy/searxng/README.md).
+# Uncomment with the real https address, or set it as a secret instead; the
+# token is always a secret: npx wrangler secret put SEARXNG_TOKEN --config worker/wrangler.toml
+# SEARXNG_URL = "https://search.example.org"
+# TRENDS_WEB_LANGUAGES = "telugu,hindi,tamil"
 
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in

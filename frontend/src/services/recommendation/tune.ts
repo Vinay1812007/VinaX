@@ -15,6 +15,9 @@ export type TuneIntent =
   | 'melody'
   | 'mass'
   | 'devotional'
+  /** 8.3.0 — keep the queue on DJ remixes / folk songs (a style: ./style.ts). */
+  | 'dj'
+  | 'folk'
   | 'heartbreak'
   | 'classics'
   | 'fresh'
@@ -34,6 +37,8 @@ export const TUNE_OPTIONS: readonly TuneOption[] = [
   { id: 'melody', label: 'More melody' },
   { id: 'mass', label: 'More beats' },
   { id: 'devotional', label: 'Devotional' },
+  { id: 'dj', label: 'DJ remix' },
+  { id: 'folk', label: 'Folk' },
   { id: 'heartbreak', label: 'Heartbreak' },
   { id: 'classics', label: 'More classics' },
   { id: 'fresh', label: 'More new' },
@@ -67,6 +72,10 @@ export function tunePromptHint(intent: TuneIntent): string {
       return 'Shift toward MASS/DANCE numbers: thumping beats, high tempo, festival and celebration energy.';
     case 'devotional':
       return "Shift toward DEVOTIONAL/bhakti songs in the listener's languages; keep it respectful and uplifting.";
+    case 'dj':
+      return "Keep the queue on DJ REMIX songs (DJ versions, remixes) in the listener's language; no ordinary film cuts in between.";
+    case 'folk':
+      return "Keep the queue on FOLK songs (janapada, village and regional folk) in the listener's language; no ordinary film songs in between.";
     case 'heartbreak':
       return 'Shift toward SAD, heartbreak, longing and pathos songs.';
     case 'classics':
@@ -130,6 +139,9 @@ export function tuneSearchQuery(intent: TuneIntent, language: string | null): st
     case 'melody': return `${lang}melody songs`;
     case 'mass': return `${lang}mass songs`;
     case 'devotional': return `${lang}devotional songs`;
+    // 8.3.0 — probed live 2026-09-28: 20 of 20 in-language in eight languages (./style.ts).
+    case 'dj': return `${lang}dj remix`;
+    case 'folk': return `${lang}folk songs`;
     case 'heartbreak': return `${lang}sad songs`;
     case 'classics': return `${lang}evergreen hits`;
     case 'fresh': return `latest ${lang}songs ${CURRENT_YEAR}`;
