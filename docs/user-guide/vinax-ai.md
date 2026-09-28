@@ -1,6 +1,6 @@
 # VinaX AI
 
-This page covers the VinaX AI destination: what the chat can do, the model menu, Agent mode, slash commands, songs you can play from a reply, controlling the player by message, chat settings, and what is sent to the AI service. The engineering description is in [ai](../ai.md).
+This page covers the VinaX AI destination: what the chat can do, the model menu, Agent mode, slash commands, songs you can play from a reply, controlling the player by message, chat settings, when a reply does not arrive, AI Playlist, and what is sent to the AI service. The engineering description is in [ai](../ai.md).
 
 ## The chat
 
@@ -26,7 +26,7 @@ Chats are kept on this device. The chat list lets you search, rename, pin and de
 
 The model button in the composer opens one menu with a search field over every model VinaX can reach. Recently used models come first, then the recommended ones (Auto, VinaX Maestro, Balanced, Fast, Deep, Creative, Translate), then the other VinaX engines, then one section for each live catalogue with every model in it. Arrow keys move, Enter picks, Esc closes.
 
-**Auto** answers with VinaX Maestro whenever that engine is available, and otherwise picks an engine from the shape of the question. **VinaX Maestro** is the flagship engine: its replies stream as they are written, and with Web search on it uses its own live search and lists its sources. The chip under a reply names the engine that actually answered.
+**Auto** answers with VinaX Maestro whenever that engine is available and not resting after a recent failure, and otherwise picks an engine from the shape of the question. **VinaX Maestro** is the flagship engine: its replies stream as they are written, and with Web search on it uses its own live search and lists its sources. The chip under a reply names the engine that actually answered.
 
 A chat opens on your default model, else the model you used last, else Auto. **Chat settings → General → Default model** sets the default.
 
@@ -71,6 +71,16 @@ The gear in the chat header opens a dialog with five tabs.
 
 Saved prompts and reply preferences are included in a backup; see [Library and backup](library-and-backup.md).
 
+## When a reply does not arrive
+
+If an engine fails or runs out of allowance, VinaX moves to another one by itself, and the chip under the reply names the engine that answered. If no reply starts at all because the service was briefly busy, VinaX asks once more by itself after a moment. If that fails too, the reply says so and offers **Retry**, which asks the same question again.
+
+Two answers are not worth retrying, so they have no Retry: “VinaX AI is switched off right now” and “VinaX AI has reached its limit for today”. The rest of the app works as usual either way.
+
+## AI Playlist
+
+**AI Playlist** (Discover's shortcuts, or `/playlist` in the chat) turns a description into a playlist of songs from the catalogue. A language you name in the description wins over your saved languages, so “a Telugu workout playlist with high-energy songs” gives Telugu songs even if you listen mostly in Hindi. The list is filled out to 25 songs where enough fit. When the AI curator cannot answer, VinaX still builds a playlist from catalogue searches that match your idea, if it finds at least eight songs, and says so in the playlist's description.
+
 ## What is sent
 
-To answer, the AI service receives the messages in the chat, anything you attached, and, when relevant, a short taste summary or the song that is playing. Your library, history and playlists are not uploaded. If the AI service cannot answer, the chat shows an error; music playback and on-device recommendations keep working. See [data and privacy](../data-and-privacy.md).
+To answer, the AI service receives the messages in the chat, anything you attached, and, when relevant, a short taste summary or the song that is playing. Your library, history and playlists are not uploaded. If the AI service cannot answer, the chat says so (see [When a reply does not arrive](#when-a-reply-does-not-arrive)); music playback and on-device recommendations keep working. See [data and privacy](../data-and-privacy.md).

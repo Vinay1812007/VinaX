@@ -47,7 +47,7 @@ untouched.
 
 The harness runs the REAL pipeline through its public entry points —
 `planNextSongs` (7.2) or `recommendNextSongs` (the baseline's only one) — so
-it keeps working when the modules underneath them change. Four
+it keeps working when the modules underneath them change. Five
 network-facing modules are replaced, and nothing else:
 
 | Replaced | By |
@@ -56,6 +56,9 @@ network-facing modules are replaced, and nothing else:
 | `@/services/ai/recommendations` | A classifier that never answers, and the re-rank the real client returns when the curator is unreachable |
 | `@/services/ai/dj` | A scripted DJ: unavailable, timing out, answering with an order of its own, or proposing songs that break the rules |
 | `@/services/queryClient` | No cached owner flags |
+| `@/services/ai/embeddings` (8.2) | No learned vectors on the device and no network: the taste fit runs on the on-device vectors alone, and a background warm-up can never make two runs differ |
+
+The catalogue mock answers the 8.2 sources too. `getAlbum` returns nothing, so the `album` source adds no songs. `getArtistTopSongs` returns the fixture songs that credit the artist, with the fixture's outage behaviour; fixture songs credit one artist each, so the `related-artist` source finds no collaborators and costs a call without adding songs. Fixture songs carry no stream URLs, so no candidate is marked `unplayable` and the `no-audio` rule never fires. The harness clears `localStorage` for each fixture and never calls a plan's `commit`, so the proven-pick and seed memories start empty and stay empty. Nothing in a run records served songs either (Home and AI Playlist do that), so the served-recently penalty does not fire. What the harness measures of 8.2 is therefore mainly the `genre` source (the catalogue mock answers every search with the fixture's search pool) and the taste fit on the device's vectors. The comparison numbers below are the 7.2 measurement; they do not include the 8.2 changes.
 
 Mocking one level below `candidates.ts` is deliberate: the candidate stage
 carries rules of its own (soft mutes, Kid mode, blocked songs, junk titles),
@@ -102,7 +105,7 @@ played minutes ago" means the same thing on both sides.
 | Fallback | `plan.fallback` and the refinement's outcome: `deadline`, `ai_timeout`, `ai_unavailable`, `ai_rejected`, `error`, or none |
 | Queue-ready latency | Wall time from the call to a list the player could queue. For 7.2 that is the local plan; for the baseline it is the whole call, AI included |
 
-## The fixtures (version 1.0.0)
+## The fixtures (version 1.1.0)
 
 Twenty fixtures (nineteen at 7.2; 8.1 added `mixed-queue`), each a pure
 function of the timestamp the harness passes in. Songs, titles and artists

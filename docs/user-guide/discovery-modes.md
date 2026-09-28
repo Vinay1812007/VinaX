@@ -46,8 +46,8 @@ The taste profile is computed and stored on this device. **Taste Profile** (Libr
 | Trending vs. your taste | How much Home and the DJ lean on what is popular right now against your own listening. The line under the slider says what the setting you are on means. |
 | Queue languages | **Your languages** (the default): the playing song's language leads — the first two songs and at least half of every five — and songs from your other languages can follow, never two changes in a row; a language you never pinned or played stays out. **One language**: every queue stays in the language of the song that is playing. |
 | AI DJ | Lets the AI service order what plays next and suggest a few extra songs, each checked against the catalogue before it can play. Off keeps the on-device order. |
-| DJ builds every queue | Tap a song and the DJ builds what follows. Off makes playback follow the list you tapped. |
-| AI-designed shelves on Home | Shows the “Designed for you” block and lets VinaX AI order “Trending for you”. Off hides the block and keeps Trending in your on-device taste order. |
+| DJ builds every queue | Tap a song and the DJ builds what follows. Off makes playback follow the list you tapped. The **Smart Queue** switch on the Queue page turns this and Autoplay on together. |
+| AI-designed shelves on Home | Shows the “Designed for you” block and lets VinaX AI order “Popular picks for you”. Off hides the block and keeps Popular picks in your on-device taste order. |
 | Kid mode | Hides songs the catalogue marks explicit and keeps a separate taste profile |
 | Preferred languages | Pinned languages are boosted everywhere |
 
@@ -73,6 +73,6 @@ The permanent block is a different list: **Settings → Appearance & Playback �
 
 **Settings → Your Data → Reset taste profile** (or **Reset personalization** at the foot of the Taste Profile page) erases what VinaX learned: languages, artists, habits, the dials and any “Less like this” mutes. It offers to download a backup first, and says what stays — favourites, playlists, history, the Never play list and your settings. There is no undo, so take the backup.
 
-## Trending for you
+## Popular picks for you
 
-Home's **Trending for you** shelf is the current trending pool in the order your taste suggests. With AI-designed shelves on, VinaX AI orders it instead; the shelf's subtitle says which one did. Home shows a song once: a song that appeared in an earlier shelf is left out of later ones.
+Home's **Popular picks for you** shelf is what is popular in the catalogue, in the order your taste suggests. With AI-designed shelves on, VinaX AI orders it instead; the shelf's subtitle says which one did. Home shows a song once: a song that appeared in an earlier shelf is left out of later ones.

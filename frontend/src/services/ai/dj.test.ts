@@ -91,7 +91,7 @@ describe('djSequence', () => {
   });
 
   it('gives up cleanly: 503 disables the DJ for the session, errors back off, thin answers are ignored', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 503 })));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"ai_disabled"}', { status: 503 })));
     expect(await djSequence(pool[0], ctx, pool, 8)).toBeNull();
     expect(djAvailable()).toBe(false);
     resetDjAvailability();
@@ -102,6 +102,32 @@ describe('djSequence', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ songs: [{ title: 'Butta Bomma', artist: 'Armaan Malik' }] }), { status: 200 })));
     expect(await djSequence(pool[0], ctx, pool, 8)).toBeNull();
     expect(djAvailable()).toBe(true);
+  });
+
+  it('8.2.0 — only "not set up" or "switched off" is final; over budget and outages back off and come back', async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now');
+    try {
+      for (const [body, wait] of [['{"error":"ai_over_budget"}', 15 * 60_000], ['{"error":"engine_unreachable"}', 60_000], ['{}', 60_000]] as const) {
+        resetDjAvailability();
+        clock.mockReturnValue(now);
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 503 })));
+        expect(await djSequence(pool[0], ctx, pool, 8)).toBeNull();
+        expect(lastDjOutcome()).toBe('unavailable');
+        expect(djAvailable()).toBe(false);
+        // Past the back-off (plus its jitter), the DJ is asked again.
+        clock.mockReturnValue(now + wait * 1.25);
+        expect(djAvailable()).toBe(true);
+      }
+      resetDjAvailability();
+      clock.mockReturnValue(now);
+      vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"ai_not_configured"}', { status: 503 })));
+      await djSequence(pool[0], ctx, pool, 8);
+      clock.mockReturnValue(now + 24 * 60 * 60_000);
+      expect(djAvailable()).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('never calls the network for a pool that is too small', async () => {

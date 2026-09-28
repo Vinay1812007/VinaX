@@ -12,6 +12,23 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.2.0': {
+    title: 'VinaX 8.2 — AI Radio, a Home that arranges itself, and downloads that work on Android',
+    changes: [
+      { type: 'fixed', text: 'Downloads on Android work again. Songs without a top-quality file now save in the best quality that exists, a stalled download gives up instead of holding up Download all, and a failed download tells you why: no internet, not available to download, not enough space, or a stalled connection.' },
+      { type: 'fixed', text: 'Opening the app without internet no longer deletes your downloaded songs or stops the app from opening offline later. It tells you you’re offline and finishes loading when the connection returns. A downloaded song whose offline copy went missing is rebuilt from the file on your phone.' },
+      { type: 'new', text: 'AI Radio. Start endless music from a song, an artist, a mood, or a few words like “Telugu 90s melodies”, and the DJ keeps adding songs that follow. Find it on Home, on an empty queue, and as Start AI Radio in every song menu and on artist pages.' },
+      { type: 'new', text: 'Home arranges itself around you: the sections you use most, the time of day, whether you finish or skip new discoveries, and the genres you like. It never moves while you are looking at it, and an order you set in Customise Home is kept exactly.' },
+      { type: 'new', text: 'New on Home: Your playlists, Your top genres, and Trending and Lyrics shortcuts. Lyrics appears while a song is playing.' },
+      { type: 'new', text: 'Search understands descriptions. Type something like “sad telugu songs for rain” and a Songs that match section appears, with artists and playlists that fit.' },
+      { type: 'new', text: 'Smart Queue on the Queue page: one switch for Autoplay plus the DJ building every queue, with a short note on what it does. New DJ picks is now called Refresh up next.' },
+      { type: 'improved', text: 'What plays next is smarter. It draws on the playing song’s album, artists similar to it, its genre, and songs you finished or liked when autoplay picked them before. It leans toward songs that resemble your favourites as a whole, skips songs that can’t be streamed unless you downloaded them, and starting again from the same song gives a different opening. Why this song? explains the new reasons.' },
+      { type: 'improved', text: 'AI Playlist understands requests like “a Telugu workout playlist with high-energy songs”, even when your saved language is different, fills the list out to 25 songs, and still makes a playlist from the catalogue when the AI is busy.' },
+      { type: 'improved', text: 'When an AI engine fails or runs out of allowance, VinaX switches to another one by itself and skips the resting engine for a while, so answers start faster. An unusable answer is asked again of another engine, and photo questions try several image engines.' },
+      { type: 'new', text: 'Settings → Recommendations has an AI in recommendations switch. Off keeps every pick on your device and sends nothing about your listening to an AI engine. Reset taste profile now also forgets what Home and autoplay learned from their own picks.' },
+      { type: 'improved', text: 'VinaX AI retries a failed reply once by itself and then offers a Retry button. It says plainly when AI is switched off or has reached today’s limit, and the DJ comes back by itself after a temporary outage.' },
+    ],
+  },
   '8.1.0': {
     title: 'VinaX 8.1 — queues in your languages, a sharper flagship engine, a better swipe',
     changes: [

@@ -172,12 +172,15 @@ export async function onRequestPost({ request, env, waitUntil }: { request: Requ
       { role: 'user', content: JSON.stringify(body.data) },
     // v6.5.2 — leashes sized to the engines measured live (a warm metadata
     // call lands in ~4 s; 2.5 s aborted it before it could answer).
-    ], { lane: lanes[0], ladder: lanes.slice(1), json: true, temperature: 0.25, maxTokens: route.tokens, firstTimeoutMs: task === 'metadata' ? 3500 : 5000, timeoutMs: 4000, deadlineAt: now + route.budget, reasoningEffort: 'low', feature });
+    ], { lane: lanes[0], ladder: lanes.slice(1), json: true, temperature: 0.25, maxTokens: route.tokens, firstTimeoutMs: task === 'metadata' ? 3500 : 5000, timeoutMs: 4000, deadlineAt: now + route.budget, reasoningEffort: 'low', feature,
+      // 8.2.0 — an answer with nothing valid left after sanitising asks the next lane (same deadline).
+      accept: (content) => sanitizeCurated(task, extractJson(content), body.data) !== null });
     if (isAiBlocked(result.error)) return refuse(result.error);
     // Never hand the engine's JSON through as-is — validate and clip it first.
     const data = sanitizeCurated(task, extractJson(result.content), body.data);
     const servedLane = lanes.includes(result.keyRole as Lane) ? result.keyRole as Lane : lanes[0];
     health.set(servedLane, { latency: Date.now() - now, failed: !data, at: Date.now() });
+    // `invalid_output` also covers "every engine answered, none usably" (chat's accept check).
     return data ? json({ data }) : json({ error: result.error ?? 'invalid_output' }, result.error === 'not_configured' ? 503 : 502);
   } catch {
     return json({ error: 'bad_request' }, 400);

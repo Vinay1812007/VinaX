@@ -203,7 +203,7 @@ test('Keep this song holds a DJ pick through a rebuild', async ({ page, baseURL 
   await expect(kept.getByText('Added by you')).toBeVisible();
 
   // A deliberate rebuild replaces the other DJ picks and leaves this one alone.
-  await page.getByRole('button', { name: 'New DJ picks' }).click();
+  await page.getByRole('button', { name: 'Refresh up next' }).click();
   await expect.poll(() => page.locator('li[data-row-key]', { hasText: keptTitle }).count(), { timeout: 25_000 }).toBe(1);
   await expect(page.locator('li[data-row-key]', { hasText: keptTitle }).first().getByText('Added by you')).toBeVisible();
 });

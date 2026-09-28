@@ -228,7 +228,16 @@ export const AssistantMessage = memo(function AssistantMessage({
               <RichContent text={streaming ? hideFollowupLine(m.content) : m.content} streaming={streaming} />
               {streaming && <span className="ai-caret" aria-hidden />}
             </div>
-            {!busy && (
+            {!busy && m.failed ? (
+              // 8.2.0 — no reply arrived: one clear action instead of the reply toolbar.
+              last ? (
+                <div className="ai-toolbar mt-2 -ml-1.5 flex flex-wrap items-center gap-0.5" role="group" aria-label="Reply actions">
+                  <button type="button" onClick={handlers.regenerate} className="ai-tool" aria-label="Retry this question" title="Ask again">
+                    <RefreshIcon /> Retry
+                  </button>
+                </div>
+              ) : null
+            ) : !busy && (
               <div className="ai-toolbar mt-2 -ml-1.5 flex flex-wrap items-center gap-0.5" role="group" aria-label="Reply actions">
                 <CopyButton text={m.content} />
                 {readAloudSupported() && (

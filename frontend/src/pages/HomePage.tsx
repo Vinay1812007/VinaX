@@ -7,6 +7,13 @@ import { ListeningGuide } from '@/features/home/ListeningGuide';
 import { HomeStudio } from '@/features/home/HomeStudio';
 import { HOME_DESIGN_KEY, loadHomeDesign, validateHomeDesign, type HomeDesign, type HomeSection } from '@/services/recommendation/homeDesign';
 import { composeHomeLayout } from '@/features/home/homeLayout';
+import { orderHomeBlocks, sessionHomeOrder } from '@/features/home/homeOrder';
+import { attributeSong, installHomeOutcomeTracking, loadHomeSignals, noteBlockTap } from '@/features/home/homeSignals';
+import { blockForTap } from '@/features/home/homeTaps';
+import { genreAffinityStrength, rankGenreTiles, topGenreShelves } from '@/features/home/genreAffinity';
+import { YourPlaylistsShelf } from '@/features/home/YourPlaylists';
+import { RadioGlyph } from '@/features/radio/RadioGlyph';
+import { buildUserRecommendationProfile } from '@/services/recommendation/profiles';
 import { resetShelfLedger, setShelfBlockOrder, useShelfDedupe } from '@/features/home/shelfLedger';
 import { listeningTotal } from '@/features/stats/listening';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
@@ -33,7 +40,7 @@ import { PushPromptCard } from '@/components/PushPromptCard';
 import { NotificationSheet } from '@/components/NotificationSheet';
 import { DownloadCta } from '@/components/DownloadCta';
 import { IconButton } from '@/components/IconButton';
-import { BellIcon, MoonIcon, PlayIcon, SearchIcon, SparkleIcon, SunIcon } from '@/components/Icons';
+import { BellIcon, MoonIcon, PlayIcon, SparkleIcon, SunIcon } from '@/components/Icons';
 import { useHistoryStore } from '@/store/historyStore';
 import { onThisDay } from '@/features/home/onThisDay';
 import { localDateKey, pickDailyFavorite, useBecauseYouLiked } from '@/features/home/useBecauseYouLiked';
@@ -66,7 +73,7 @@ import { useAiTrending } from '@/features/home/useAiTrending';
 import { useAiHome } from '@/features/home/useAiHome';
 import { useFeatureEnabled } from '@/features/home/useAppConfig';
 import { moodRotationOfTheDay, useMoodShelf } from '@/features/home/useMoodShelves';
-import { GENRE_SHELVES } from '@/features/home/useGenreShelves';
+import { GENRE_SHELVES, useGenreShelf } from '@/features/home/useGenreShelves';
 import { useSeasonalShelf } from '@/features/home/useSeasonalShelf';
 import { useExperiment } from '@/features/experiments/useExperiment';
 import { EXP_HOME_SHELF_ORDER, homeShelfOrder } from '@/features/experiments/homeShelfOrder';
@@ -76,7 +83,7 @@ import { letterAvatar } from '@/utils/avatar';
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
-import { usePlayerStore } from '@/store/playerStore';
+import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useRegion } from '@/features/location/useRegion';
 import { FALLBACK_ART, artSrcSet, bestImage } from '@/utils/images';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
@@ -160,6 +167,8 @@ function QuickBlock() {
   const weekly = useWeeklyMix();
   const mostListened = useMostListened();
   const quickTiles = [
+    // 8.2.0 — AI Radio: always here, always first, so it is one tap from Home.
+    { label: 'AI Radio', image: '', go: () => navigate('/radio') },
     continueListening.length && {
       label: 'Continue listening',
       image: bestImage(continueListening[0].images, 120),
@@ -190,22 +199,25 @@ function QuickBlock() {
       image: bestImage(mostListened[0].images, 120),
       go: () => navigate('/history'),
     },
-  ].filter((t): t is { label: string; image: string; go: () => void } => !!t).slice(0, 6);
+  ].filter((t): t is { label: string; image: string; go: () => void } => !!t).slice(0, 7);
   // Shortcuts into your own collections: one quiet scrolling row of small tiles.
-  if (quickTiles.length < 2) return null;
   return (
     <div className="vxh-shortcuts" role="group" aria-label="Shortcuts">
       {quickTiles.map((t) => (
         <button key={t.label} type="button" onClick={t.go} className="vxh-shortcut">
-          <img
-            src={t.image}
-            onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-            alt=""
-            width={48}
-            height={48}
-            loading="lazy"
-            decoding="async"
-          />
+          {t.image ? (
+            <img
+              src={t.image}
+              onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+              alt=""
+              width={48}
+              height={48}
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <span className="vxh-shortcut-glyph" aria-hidden><RadioGlyph /></span>
+          )}
           {t.label}
         </button>
       ))}
@@ -246,6 +258,9 @@ function PersonalBlock() {
 
       {/* 1. Continue Listening — pick up where you left off */}
       <SongShelf title="Continue listening" songs={dedupe(continueListening)} seeAllTo="/history" />
+
+      {/* 8.2.0 — Your playlists: the ones you made and the ones you saved. Hidden when there are none. */}
+      <YourPlaylistsShelf />
 
       {/* v5.12.0 — On this day: what you played on this date in earlier months/years */}
       {memories && (
@@ -554,17 +569,50 @@ function MoodsBlock() {
   );
 }
 
+/** 8.2.0 — the listener's genre (and language) affinity, read once when the block mounts. */
+function readTaste(): { genres: Record<string, number>; languages: Record<string, number> } {
+  const profile = loadProfile();
+  const user = buildUserRecommendationProfile(profile, useLibraryStore.getState().favorites, useHistoryStore.getState().entries);
+  return { genres: user.genres, languages: Object.fromEntries(Object.entries(profile.languages).map(([k, v]) => [k, v.score])) };
+}
+
 function GenresBlock() {
+  const dedupe = useShelfDedupe('genres');
+  const pinnedLang = useSettingsStore((s) => s.pinnedLanguages[0] ?? null);
+  // Read once per mount: shelf titles never change under a scrolling listener.
+  const [taste] = useState(readTaste);
+  const language = pinnedLang ?? topLanguages(loadProfile(), 1)[0]?.id ?? null;
+  const picks = useMemo(() => topGenreShelves(taste.genres, language, 2), [taste, language]);
+  const tiles = useMemo(() => rankGenreTiles(GENRE_SHELVES, taste.genres, taste.languages), [taste]);
+  const first = useGenreShelf(picks[0]?.query ?? '');
+  const second = useGenreShelf(picks[1]?.query ?? '');
+  const genreShelves = [first, second];
   return (
-    // 20. Genre collections — colour tiles on a rail, each a catalogue search
+    <>
+    {/* 8.2.0 — Your top genres: the one or two genres you lean towards, in your language. */}
+    {picks.map((pick, i) => {
+      const q = genreShelves[i];
+      if (q.isLoading) return <ShelfSkeleton key={pick.id} />;
+      return (
+        <SongShelf
+          key={pick.id}
+          title={`Your top genres · ${pick.label}`}
+          explanation={language ? `${languageLabel(language)} ${pick.label.toLowerCase()} songs, from what you like and play` : 'From what you like and play'}
+          songs={dedupe(q.data ?? [])}
+          seeAllTo={`/search/${encodeURIComponent(pick.query)}`}
+        />
+      );
+    })}
+    {/* 20. Genre collections — colour tiles on a rail, each a catalogue search; the genres you lean towards first */}
     <Shelf title="Genres">
-      {GENRE_SHELVES.map((g, i) => (
+      {tiles.map((g, i) => (
         <Link key={g.id} to={`/search/${encodeURIComponent(g.query)}`} className={`vxh-cat is-rail tone-${((i * 3) % 8) + 1}`}>
           <span className="vxh-cat-title">{g.label}</span>
           <span className="vxh-cat-shape" aria-hidden />
         </Link>
       ))}
     </Shelf>
+    </>
   );
 }
 
@@ -701,6 +749,14 @@ const HOME_BLOCK_KEYS: HomeSection[] = [
   'genres', 'artists', 'albums', 'daypicks', 'loved', 'feed',
 ];
 
+/** 8.2.0 — the playing song's lyrics, one tap from Home. Its own component so a track change re-renders only the chip. */
+function LyricsChip() {
+  const song = useCurrentSong();
+  const navigate = useNavigate();
+  if (!song) return null;
+  return <Chip onClick={() => navigate(`/lyrics/${song.id}`)}>Lyrics</Chip>;
+}
+
 // The old static greeting() lives on inside personalMessage's day-part
 // titles — every listener now gets their own line on top of it.
 
@@ -716,6 +772,8 @@ export default function HomePage() {
   // Warms the region lookup the Charts and Trending-near-you blocks read.
   useRegion();
   const historyEntries = useHistoryStore((s) => s.entries);
+  // 8.2.0 — how songs started from Home end feeds the dynamic order (discovery behaviour).
+  useEffect(() => installHomeOutcomeTracking(), []);
 
   // This week's listening, from local history only — one shared rule
   // (features/stats/listening.ts), labelled as an estimate when it is one.
@@ -848,8 +906,19 @@ export default function HomePage() {
       : HOME_BLOCK_KEYS;
   // Listener order wins; owner-disabled shelves stay disabled (homeLayout.ts).
   const layout = composeHomeLayout(homeDesign, clientCfg?.homeLayout, defaultOrder);
-  const design = layout.design;
-  setShelfBlockOrder(layout.visible);
+  // 8.2.0 — when nobody chose an order (no Home Studio layout, no owner order,
+  // no running shelf-order experiment), Home orders itself by time of day, what
+  // the listener uses, how discovery picks go and genre affinity. Computed once
+  // per session (homeOrder.ts): nothing moves while the listener scrolls.
+  const blocks =
+    layout.orderChosen || shelfOrder !== 'control'
+      ? layout.visible
+      : sessionHomeOrder(layout.visible, () =>
+          orderHomeBlocks({ base: layout.visible, hour: new Date().getHours(), now: Date.now(), signals: loadHomeSignals(), genreStrength: genreAffinityStrength(readTaste().genres) }),
+        );
+  // Home Studio starts from the order the listener actually sees.
+  const design = layout.orderChosen ? layout.design : { ...layout.design, order: [...blocks, ...layout.design.order.filter((k) => !blocks.includes(k))] };
+  setShelfBlockOrder(blocks);
   // Progressive mount v2 (4.18.3, PSI TBT pass): v1 (4.17.0) mounted the
   // first two blocks immediately and ALL remaining ~10 blocks in one idle
   // callback — a single giant long task (hundreds of DOM nodes + effects)
@@ -892,7 +961,10 @@ export default function HomePage() {
     <div className="vxh-more">
       <div className="vxh-chips" role="group" aria-label="Quick actions">
         <button type="button" onClick={surprise} className="vxh-chip"><SparkleIcon /> Surprise me</button>
+        <Chip onClick={() => navigate('/trending')}>Trending</Chip>
         <Chip onClick={() => navigate('/charts')}>Charts</Chip>
+        {/* 8.2.0 — the playing song's lyrics, one tap from Home. */}
+        <LyricsChip />
         <Chip onClick={() => navigate('/moods')}>Moods</Chip>
         <Chip onClick={() => navigate('/regions')}>Regions</Chip>
         <Chip onClick={() => navigate('/made-for-you')}>Made for you</Chip>
@@ -905,7 +977,7 @@ export default function HomePage() {
       <nav className="vx-journeys vxh-journeys" aria-label="Explore your sound">
         <Link to="/VinaXAI"><SparkleIcon /><div><strong>Meet VinaX AI</strong><span>Ask, create, explore</span></div></Link>
         <Link to="/made-for-you"><PlayIcon /><div><strong>Made for your day</strong><span>Mixes shaped by your listening</span></div></Link>
-        <Link to="/moods"><SearchIcon /><div><strong>Find a feeling</strong><span>A soundtrack for every headspace</span></div></Link>
+        <Link to="/radio"><RadioGlyph /><div><strong>AI Radio</strong><span>Endless music from a song, a mood or a few words</span></div></Link>
       </nav>
       <GetAppBanner />
       <DownloadCta />
@@ -919,13 +991,24 @@ export default function HomePage() {
   const studio = (
     <HomeStudio design={design} locked={layout.ownerHidden} onApply={applyDesign} onReset={resetDesign} />
   );
-  const blocks = layout.visible;
   const secondaryAt = Math.min(1, blocks.length - 1);
   const feedAt = blocks.indexOf('feed');
+  // 8.2.0 — usage signal: which block a tap landed in, and the song it started (if any).
+  const noteTap = (e: React.MouseEvent<HTMLDivElement>) => {
+    const block = blockForTap(e.currentTarget, e.target);
+    if (!block) return;
+    noteBlockTap(block);
+    const before = usePlayerStore.getState().queue[usePlayerStore.getState().index]?.id;
+    window.setTimeout(() => {
+      const st = usePlayerStore.getState();
+      const started = st.queue[st.index]?.id;
+      if (started && started !== before) attributeSong(started, block);
+    }, 0);
+  };
 
   return (
    <PullToRefresh onRefresh={handleRefresh}>
-    <div className="max-w-screen-2xl mx-auto vx-stagger vx-home">
+    <div className="max-w-screen-2xl mx-auto vx-stagger vx-home" onClickCapture={noteTap}>
       <TopBarActions>
         <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}</IconButton>
         <IconButton label="Notifications" onClick={() => setNotifOpen(true)}><BellIcon className="w-5 h-5" /></IconButton>
@@ -959,7 +1042,10 @@ export default function HomePage() {
         return (
           <Fragment key={k}>
             {i === feedAt && studio}
+            {/* Invisible block markers for the usage signal (features/home/homeTaps.ts). */}
+            <span hidden data-home-block={k} />
             {i < 2 ? <Block /> : <DeferredBlock render={() => <Block />} />}
+            <span hidden data-home-block="" />
             {i === secondaryAt && secondary}
           </Fragment>
         );

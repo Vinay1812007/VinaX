@@ -15,10 +15,12 @@ This document says where VinaX keeps a listener's data, what the backup file con
 | --- | --- | --- |
 | `localStorage`, keys starting `vinax.` | Settings, library, history (last 150 plays), taste profile (and a separate Kid-mode profile), searches, bookmarks, smart collections, Home layout, name and username, alarm, lyric offsets, karaoke history, streak, output choice, update reminders, downloads index, room host keys, the install id and the service-issued signed id, the usage-sharing choice | `constants/storage-keys.ts` is the registry. Some features keep their own `vinax.*` keys next to it (for example the DJ's "already surfaced" list and AI shelf caches). |
 | `localStorage`, key `vinax_ai_chats_v1` | VinaX AI conversations | Attachments are stripped before saving. |
-| `sessionStorage` | Boot-recovery counters, the restore Undo snapshot (`vinax.backup.undo.v1`), session flags | Gone when the tab closes. |
+| `localStorage`, 8.2 keys | `vinax.home.signals.v1` (how often each Home section is tapped, and whether songs started from it were finished or skipped, decayed with a 14-day half-life), `vinax.recs.outcomes.v1` (up to 60 songs the DJ queued automatically and whether each was finished, liked or skipped early; kept 60 days), `vinax.recs.seedmemo.v1` (the opening songs after up to 40 recent seed songs; kept 12 hours), `vinax.embed.model.v1` (the name of the embedding model whose vectors are cached) | Removed by "Erase everything" with every other `vinax` key. "Clear personalization profile" removes the Home signals and both recommendation memories (`resetHomeSignals`, `resetRecMemory`); the model name stays. |
+| `sessionStorage` | Boot-recovery counters, the restore Undo snapshot (`vinax.backup.undo.v1`), session flags, this session's Home order (`vinax.home.order.session.v1`, 8.2) | Gone when the tab closes. |
 | IndexedDB | The listen-event log behind taste insights | `services/storage/idb.ts`. Cleared by "Clear personalization profile". |
+| IndexedDB `vinax-embeddings` (8.2) | Song vectors from the embedding route: song id, model name, the vector and when it was stored, at most 5,000 songs | `services/ai/embeddings.ts`. "Erase everything" deletes the database (`eraseEmbeddings`). "Clear personalization profile" keeps it: the vectors describe songs, not your taste. |
 | Cache storage `vinax-shell-*` | App shell and hashed build assets | Managed by the service worker. |
-| Cache storage `vinax-audio-v1` | Downloaded songs | Never cleared by a service-worker update. |
+| Cache storage `vinax-audio-v1` | Downloaded songs | Never cleared by a service-worker update, nor by boot recovery (8.2), which only purges caches when the origin answers and always skips this one. |
 | Android app storage | Downloaded audio files | Android only; paths are recorded in the downloads index. |
 
 Every persisted store writes through the guarded layer described in [architecture.md](architecture.md#stores-and-persistence): a full device shows one warning instead of breaking playback, and writes are frozen between a restore and its reload.
@@ -93,7 +95,7 @@ This is the one path that carries device identity. The payload is a backup plus 
 | --- | --- |
 | Clear history / Clear favourites | Clears the list and offers Undo in a toast |
 | Clear personalization profile | Erases the taste profile and the event log after a confirmation; favourites stay |
-| Erase everything | Clears the event log and removes every `localStorage` key that starts with `vinax` (the AI chats key included), then reloads Home (`resetAppState`) |
+| Erase everything | Clears the event log, deletes the `vinax-embeddings` database and removes every `localStorage` key that starts with `vinax` (the AI chats key included), then reloads Home (`resetAppState`) |
 
 Because nothing personal is held by the service, a local erase is a complete erase — except anonymous usage rows sent earlier while usage sharing was on.
 
@@ -107,7 +109,8 @@ Because nothing personal is held by the service, a local erase is a complete era
 | Opening lyrics | An open lyrics database, then the catalogue as fallback | Track title, artist and duration |
 | The DJ orders or extends a queue (`/api/dj`) | The Worker, then an AI lane | The seed song, preferred and muted languages, a pinned mood or tune instruction, up to 12 recently played, 10 finished, 10 skipped and 15 liked song lines, top artists and languages, taste-dial lines, and up to 40 candidate songs described by title, artist, album or film, year and whether the listener knows them. No device id. |
 | Home AI shelves, ranking and "Trending for you" (`/api/curate`) | The Worker, then an AI lane | A task name and the data for that task: candidate songs and a taste summary |
-| AI Playlist (`/api/playlist`) | The Worker, then an AI lane | The prompt, chosen languages, the taste snapshot, and titles to avoid |
+| AI Playlist (`/api/playlist`) | The Worker, then an AI lane | The prompt, the languages (the ones the prompt names, else the chosen ones), the taste snapshot, and titles to avoid. AI Radio uses the same route for a request its catalogue searches cannot answer. |
+| Natural-language search, AI Playlist's pool and the next-song taste fit (`/api/embed`, 8.2) | The Worker, then an embedding engine on an AI lane's key | Search words, or short song descriptions: title, up to four artists, album, language, year, genres, mood, vibes and an energy band. Candidate songs, favourites and recent plays can be described this way. Sent only while `aiAssist` is on; no device id. |
 | VinaX AI chat (`/api/vinaxai`) | The Worker, then an AI lane; a web-search provider when the model asks for a search | The conversation, attachments for that message, and the taste snapshot (`services/ai/taste.ts`): time of day, preferred and avoided languages, top artists, top, liked and recently played song lines |
 | DJ voice and read-aloud (`/api/tts`) | The Worker, then a speech lane | The text to speak |
 | Choosing a username (`/api/username`) | The Worker | The username, display name and install id |

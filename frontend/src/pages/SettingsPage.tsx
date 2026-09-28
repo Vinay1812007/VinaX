@@ -646,7 +646,7 @@ export default function SettingsPage() {
           </Section>
 
           <Section title="Playback" id="playback">
-            <Row label="Autoplay" note="Start playing as soon as you pick a song.">
+            <Row label="Autoplay" note="As your list runs out, similar songs keep the music going. Smart Queue on the Queue page turns this and “DJ builds every queue” on together.">
               <Toggle on={s.autoplay} onChange={s.setAutoplay} label="Autoplay" />
             </Row>
             <Row label="Crossfade" note="Fade between songs and fade new songs in." keywords="smooth transition">
@@ -803,6 +803,13 @@ export default function SettingsPage() {
               </div>
             </Block>
             <Row
+              label="AI in recommendations"
+              note="Lets AI engines tag songs, re-rank what plays next, run the DJ and read descriptions you type in Search. Off keeps every pick on your device; nothing about your listening is sent for recommendations."
+              keywords="ai assist privacy on-device embeddings ranking"
+            >
+              <Toggle on={s.aiAssist} onChange={s.setAiAssist} label="AI in recommendations" />
+            </Row>
+            <Row
               label="AI DJ"
               note="The DJ engine orders what plays next — an energy arc, no repeats — and suggests a few songs beyond the app’s picks, each checked against the catalogue. Off keeps the on-device order."
               keywords="sequence queue reason"
@@ -811,7 +818,7 @@ export default function SettingsPage() {
             </Row>
             <Row
               label="DJ builds every queue"
-              note="Tap any song and the DJ builds what follows from it. Off plays the list you tapped. Songs you queue by hand are never replaced."
+              note="Tap any song and the DJ builds what follows from it. Off plays the list you tapped. Songs you queue by hand are never replaced. Needs Autoplay; Smart Queue on the Queue page turns both on."
               keywords="album playlist shelf queue builder takeover"
             >
               <Toggle on={s.djTakeover} onChange={s.setDjTakeover} label="DJ builds every queue" />

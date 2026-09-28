@@ -136,6 +136,19 @@ describe('POST /api/curate', () => {
     expect(rows[1]).toMatchObject({ id: 's2', energy: 0.5, tempo: null, supplied: ['energy'] });
   });
 
+  it('8.2.0 — hands chat() an accept check built from the same sanitiser, so junk moves to the next lane', async () => {
+    chatMock.mockResolvedValue(answer({ ids: ['s1'] }));
+    await post({ task: 'ranking', data: { songs } });
+    const opts = chatMock.mock.calls[0][2] as { accept?: (c: string) => boolean };
+    expect(opts.accept!('{"ids":["ghost"]}')).toBe(false);
+    expect(opts.accept!('no json')).toBe(false);
+    expect(opts.accept!('{"ids":["s2"]}')).toBe(true);
+    chatMock.mockResolvedValue({ content: null, model: null, error: 'invalid_output', status: 200 });
+    const res = await post({ task: 'ranking', data: { songs } });
+    expect(res.status).toBe(502);
+    expect(res.json.error).toBe('invalid_output');
+  });
+
   it('when every engine fails the route answers at once with the failure, not a hang', async () => {
     chatMock.mockResolvedValue({ content: null, model: null, error: 'failed', status: 0 });
     const { status, json } = await post({ task: 'metadata', data: { songs } });

@@ -77,7 +77,13 @@ export interface ModelSpec {
   /** True = the key serves a whole catalog, not one pinned model; the live
    *  list comes from _lib/catalog.ts and the `id` below is only the default. */
   catalog_key?: boolean;
-  /** Registry ids to try when this model fails (same capability family). */
+  /** Registry ids to try when this model fails (same capability family).
+   *  Descriptive only (8.2.0 decision): routing does not read it. Almost
+   *  every id here is another lane's pinned model on another key, and the
+   *  cross-lane ladder in _lib/ai.ts already reaches those — with the right
+   *  key, host and cooldown state for each hop. Wiring this list in as extra
+   *  same-key attempts would sign a model with a key that was never issued
+   *  for it. Same-key rescues live in LANE_SECONDARY instead. */
   fallback_models: string[];
   /** Unknown — never invent context limits. */
   max_context: null;

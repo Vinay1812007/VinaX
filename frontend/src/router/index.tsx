@@ -101,6 +101,8 @@ const AdsPage = lazy(() => import('@/pages/AdsPage'));
 // v5.7.9 — music videos: browse + cinematic player.
 const VideosPage = lazy(() => import('@/pages/VideosPage'));
 const VideoPage = lazy(() => import('@/pages/VideoPage'));
+// 8.2.0 — AI Radio: endless radio from a song, an artist, a mood or a few words.
+const AiRadioPage = lazy(() => import('@/pages/AiRadioPage'));
 
 export const router = createBrowserRouter([
   {
@@ -146,6 +148,7 @@ export const router = createBrowserRouter([
       { path: 'later', element: <ListenLaterPage /> },
       { path: 'history', element: <HistoryPage /> },
       { path: 'queue', element: <QueuePage /> },
+      { path: 'radio', element: <AiRadioPage /> },
       { path: 'now-playing', element: <NowPlayingPage /> },
       { path: 'languages', element: <LanguagesPage /> },
       ...HUB_LANGUAGES.map((l) => ({ path: `${l}-songs`, element: <LanguageHubPage language={l} /> })),

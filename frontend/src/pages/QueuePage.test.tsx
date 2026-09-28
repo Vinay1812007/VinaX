@@ -21,7 +21,7 @@ vi.mock('@/services/media-session', () => ({
 }));
 vi.mock('@/services/native', () => ({ checkNotificationOnFirstPlay: vi.fn(), haptic: vi.fn(), isNativePlatform: () => false, platformName: () => 'web' }));
 vi.mock('@/services/feedback', () => ({ sendFeedback: vi.fn(async () => true) }));
-vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn() }));
+vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn(), lastDownloadFailure: vi.fn(() => null), downloadFailureMessage: vi.fn(() => 'Download failed — please try again') }));
 vi.mock('@/services/personalization/updater', () => ({
   recordComplete: vi.fn(), recordPlay: vi.fn(), recordQueueAdd: vi.fn(), recordSkip: vi.fn(), recordFavorite: vi.fn(), softMuteArtist: vi.fn(),
 }));
@@ -176,24 +176,24 @@ describe('QueuePage ownership', () => {
     expect(within(openMenu('Pick one')).queryByRole('menuitem', { name: 'Keep this song' })).toBeNull();
   });
 
-  it('"New DJ picks" says what it replaces, keeps hand-queued songs and reports when nothing comes back', () => {
+  it('"Refresh up next" says what it replaces, keeps hand-queued songs and reports when nothing comes back', () => {
     seedOwnership();
     vi.useFakeTimers();
     const regenerateAutoTail = vi.fn();
     usePlayerStore.setState({ regenerateAutoTail });
     mount();
-    const button = screen.getByRole('button', { name: 'New DJ picks' });
+    const button = screen.getByRole('button', { name: 'Refresh up next' });
     // Three songs came from the list that was tapped, so the note says so.
     // 7.2.0 — a rebuild replaces the DJ's picks only; the list the listener started stays.
     expect(screen.getByText(/Replaces the 2 DJ picks after this song\. Songs you added, and the list you started, stay\./)).toBeTruthy();
     expect(button.getAttribute('aria-describedby')).toBe('vx-rebuild-note');
     fireEvent.click(button);
     expect(regenerateAutoTail).toHaveBeenCalled();
-    expect(status()).toBe('Getting new DJ picks. Songs you added stay.');
+    expect(status()).toBe('Refreshing up next. Songs you added stay.');
     act(() => {
       vi.advanceTimersByTime(12_000);
     });
-    expect(screen.getByRole('alert').textContent).toMatch(/Couldn’t get new DJ picks/);
+    expect(screen.getByRole('alert').textContent).toMatch(/Couldn’t refresh up next/);
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
     vi.useRealTimers();
   });

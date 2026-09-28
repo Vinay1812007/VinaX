@@ -20,6 +20,7 @@ vi.mock('@/services/api', async () => (await import('./lib/mocks')).apiMock);
 vi.mock('@/services/ai/recommendations', async () => (await import('./lib/mocks')).recommendationsMock);
 vi.mock('@/services/ai/dj', async () => (await import('./lib/mocks')).djMock);
 vi.mock('@/services/queryClient', async () => (await import('./lib/mocks')).queryClientMock);
+vi.mock('@/services/ai/embeddings', async () => (await import('./lib/mocks')).embeddingsMock);
 
 import * as engineModule from '@/services/recommendation/engine';
 import * as candidatesModule from '@/services/recommendation/candidates';

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { failureMessage, runChatStream } from './streamClient';
+import { canRetry, failureFromResponse, failureMessage, runChatStream } from './streamClient';
 
 const sse = (chunks: string[], status = 200): Response => {
   const enc = new TextEncoder();
@@ -26,13 +26,56 @@ describe('runChatStream', () => {
     expect(updates[updates.length - 1]).toBe('Hi there');
   });
 
-  it('reports a throttled or failed request without throwing', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('{}', { status: 429 }))));
-    expect((await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal })).failure).toBe('busy');
+  it('reports a throttled or failed request without throwing (after its one re-ask)', async () => {
+    const busy = vi.fn(() => Promise.resolve(new Response('{}', { status: 429 })));
+    vi.stubGlobal('fetch', busy);
+    expect((await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal, retryDelayMs: 0 })).failure).toBe('busy');
+    expect(busy).toHaveBeenCalledTimes(2);
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network'))));
-    const out = await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal });
-    expect(out).toMatchObject({ failure: 'unavailable', aborted: false });
+    const out = await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal, retryDelayMs: 0 });
+    expect(out).toMatchObject({ failure: 'unavailable', aborted: false, retries: 1 });
     expect(failureMessage(out.failure)).toMatch(/try again/);
+    expect(canRetry(out.failure)).toBe(true);
+  });
+
+  it('8.2.0 — a transient failure is asked once more, and the second answer is what the listener sees', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{"error":"engine_unreachable"}', { status: 503 }))
+      .mockResolvedValueOnce(sse(['data: {"delta":"Back again"}\n\ndata: {"done":true}\n\n']));
+    vi.stubGlobal('fetch', fetchMock);
+    const onRetry = vi.fn();
+    const out = await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal, retryDelayMs: 0, onRetry });
+    expect(out).toMatchObject({ failure: null, retries: 1 });
+    expect(out.state.text).toBe('Back again');
+    expect(onRetry).toHaveBeenCalledWith('unavailable');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('8.2.0 — switched off or over its limit: told apart, never re-asked, no Retry', async () => {
+    for (const [code, failure] of [['ai_disabled', 'disabled'], ['ai_not_configured', 'disabled'], ['ai_over_budget', 'over_budget']] as const) {
+      const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: code }), { status: 503 })));
+      vi.stubGlobal('fetch', fetchMock);
+      const out = await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal, retryDelayMs: 0 });
+      expect(out.failure).toBe(failure);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(canRetry(out.failure)).toBe(false);
+    }
+    expect(failureMessage('disabled')).toMatch(/switched off/);
+    expect(failureMessage('over_budget')).toMatch(/limit for today/);
+    expect(failureFromResponse(503, 'engine_unreachable')).toBe('unavailable');
+  });
+
+  it('8.2.0 — Stop during the pause before the re-ask is a stop, not a failure', async () => {
+    const ctl = new AbortController();
+    const fetchMock = vi.fn(() => Promise.resolve(new Response('{}', { status: 500 })));
+    vi.stubGlobal('fetch', fetchMock);
+    const pending = runChatStream({ endpoint: '/x', body: {}, signal: ctl.signal, retryDelayMs: 60_000 });
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    ctl.abort();
+    expect(await pending).toMatchObject({ failure: null, aborted: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('never calls the network while the device is offline', async () => {

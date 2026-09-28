@@ -60,7 +60,7 @@
  * NVIDIA_BASE_URL optional DEFAULT endpoint override — applies only
  * to lanes without their own LANE_BASE pin
  */
-import { maestroFetch } from './maestro';
+import { isModelGone, maestroFetch } from './maestro';
 import { dbErrorCode, sbInsert, sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 export interface AiEnv {
@@ -309,7 +309,17 @@ export const LANE_ENV: Record<Lane, keyof AiEnv> = {
  * call. `router` is out too: chat() is synchronous about model choice and a
  * catalog lane has no trustworthy fixed slug, so it is only used where the
  * catalog can be resolved first (the assistant, the bench, health). */
-const LADDER: Lane[] = ['chat', 'search', 'deep', 'fast', 'dj', 'scholar', 'mini', 'pro', 'home'];
+const LADDER: Lane[] = ['chat', 'search', 'deep', 'fast', 'dj', 'scholar', 'mini', 'pro', 'maestro', 'home'];
+// 8.2.0 — the flagship lane is a LATE fallback in the general ladder: a pinned
+// seat (the assistant, the lyrics tools, every chat engine) can now reach it
+// when all the everyday lanes are down, without spending its small quota
+// while they are healthy. With no key set it is skipped like any other lane.
+
+/** The general failover ladder, for callers that walk it themselves (the
+ * streaming chat route). A copy: nobody may reorder the shared one. */
+export function defaultLadder(): Lane[] {
+  return [...LADDER];
+}
 
 export interface LaneAttempt {
   key: string;
@@ -381,14 +391,37 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
 }
 
 /**
- * 8.0.0 — rate-limit cooldown, per isolate. A key that answered 429 is
- * skipped for a minute instead of costing every call in that minute a wasted
- * round trip (the maestro key may sit on a small free quota). Keyed by lane
- * and model, so a same-key secondary on a different quota is still tried.
+ * Cooldowns — per isolate, on purpose.
+ *
+ * 8.0.0 — a key that answered 429 is skipped for a while instead of costing
+ * every call in that window a wasted round trip (the maestro key may sit on a
+ * small free quota). Keyed by lane and model, so a same-key secondary on a
+ * different quota is still tried.
+ *
+ * 8.2.0 — more failure classes cool down, and the streaming chat route obeys
+ * the same table as chat() (it used to walk its own ladder and hit a
+ * quota-dead lane first on every turn):
+ *   429                    rate limit    lane+model, as long as the provider says (cooldownFor)
+ *   404 / 410, or a 400 that says the model is gone
+ *                          model gone    lane+model, 1 h
+ *   401 / 402              key rejected  the whole lane (every model on it), 10 min
+ *   403                    not entitled  lane+model, 10 min (some providers answer 403
+ *                          for one model the key may not use; its secondary may work)
+ *   5xx                    upstream      lane+model, 30 s
+ * Timeouts and plain 400s do not cool down: a slow answer or a bad request
+ * says nothing lasting about the engine.
+ *
+ * The state lives in module memory, so each Worker isolate learns on its own
+ * and forgets on restart. That is deliberate: no storage round trip on the
+ * hot path, and a wrong verdict heals by itself within minutes. The price is
+ * that a fresh isolate pays one failed hop before it learns.
  */
 const COOLDOWN_MS = 60_000;
 const DAILY_COOLDOWN_MS = 60 * 60_000;
 const MAX_COOLDOWN_MS = 6 * 60 * 60_000;
+export const MODEL_GONE_COOLDOWN_MS = 60 * 60_000;
+export const KEY_REJECTED_COOLDOWN_MS = 10 * 60_000;
+export const UPSTREAM_COOLDOWN_MS = 30_000;
 
 /**
  * 8.0.4 — how long a 429 should keep a lane+model aside. The maestro
@@ -405,13 +438,56 @@ export function cooldownFor(body: string): number {
   if (/exceeded your current quota|check your plan and billing/i.test(body)) return DAILY_COOLDOWN_MS;
   return COOLDOWN_MS;
 }
+
+export type CooldownReason = 'rate_limited' | 'model_gone' | 'key_rejected' | 'upstream_error';
+export interface Cooldown {
+  ms: number;
+  /** `model` = this lane+model only; `lane` = every model on the lane's key. */
+  scope: 'model' | 'lane';
+  reason: CooldownReason;
+}
+
+/** 8.2.0 — the cooldown an error answer earns, or null when it earns none. Pure. */
+export function cooldownForFailure(status: number, body: string): Cooldown | null {
+  if (status === 429) return { ms: cooldownFor(body), scope: 'model', reason: 'rate_limited' };
+  if (status === 404 || status === 410 || (status === 400 && isModelGone(400, body))) return { ms: MODEL_GONE_COOLDOWN_MS, scope: 'model', reason: 'model_gone' };
+  if (status === 401 || status === 402) return { ms: KEY_REJECTED_COOLDOWN_MS, scope: 'lane', reason: 'key_rejected' };
+  if (status === 403) return { ms: KEY_REJECTED_COOLDOWN_MS, scope: 'model', reason: 'key_rejected' };
+  if (status >= 500 && status <= 599) return { ms: UPSTREAM_COOLDOWN_MS, scope: 'model', reason: 'upstream_error' };
+  return null;
+}
+
 const cooldowns = new Map<string, number>();
 const coolKey = (role: Lane, model: string): string => `${role}|${model}`;
-export function laneCoolingDown(role: Lane, model: string, now = Date.now()): boolean {
-  const until = cooldowns.get(coolKey(role, model));
+const laneCoolKey = (role: Lane): string => `${role}|*`;
+const coolingUntil = (key: string, now: number): boolean => {
+  const until = cooldowns.get(key);
   if (until === undefined) return false;
-  if (until <= now) { cooldowns.delete(coolKey(role, model)); return false; }
+  if (until <= now) {
+    cooldowns.delete(key);
+    return false;
+  }
   return true;
+};
+/** True while this lane+model (or the whole lane) is set aside. */
+export function laneCoolingDown(role: Lane, model: string, now = Date.now()): boolean {
+  return coolingUntil(laneCoolKey(role), now) || coolingUntil(coolKey(role, model), now);
+}
+/** Set a lane+model (scope `model`) or a whole lane (scope `lane`) aside for
+ * `ms`. Never shortens a longer cooldown already in force. */
+export function markCooldown(role: Lane, model: string, ms: number, scope: 'model' | 'lane' = 'model', now = Date.now()): void {
+  const key = scope === 'lane' ? laneCoolKey(role) : coolKey(role, model);
+  const until = now + ms;
+  if ((cooldowns.get(key) ?? 0) < until) cooldowns.set(key, until);
+}
+/** Record a failed attempt: applies the cooldown its status earns (if any)
+ * and returns it, so a caller can log why a lane went quiet. */
+export function noteLaneFailure(role: Lane, model: string, status: number, body = ''): Cooldown | null {
+  const c = cooldownForFailure(status, body);
+  if (!c) return null;
+  markCooldown(role, model, c.ms, c.scope);
+  console.log(`[ai] cooldown lane=${role}${c.scope === 'model' ? ` model=${loggableModel(model)}` : ' (whole lane)'} reason=${c.reason} s=${Math.round(c.ms / 1000)}`);
+  return c;
 }
 /** Test hook. */
 export function clearLaneCooldowns(): void {
@@ -419,7 +495,8 @@ export function clearLaneCooldowns(): void {
 }
 
 /** `disabled` / `over_budget` (7.2.0): refused by the owner's AI controls before any provider was called. */
-export type ChatError = 'not_configured' | 'unreachable' | 'failed' | AiBlock;
+/** `invalid_output` (8.2.0): every engine that answered was refused by the caller's `accept` check. */
+export type ChatError = 'not_configured' | 'unreachable' | 'failed' | 'invalid_output' | AiBlock;
 
 /** Provider-reported token usage for one call (OpenAI-compatible `usage`). */
 export interface TokenUsage {
@@ -503,6 +580,12 @@ export async function chat(
     /** 8.1.0 — ground the answer in the provider's live web search. Only the
      * maestro lane can; every other attempt ignores it. */
     grounded?: boolean;
+    /** 8.2.0 — the caller's check on a 200 answer (JSON that parses, at least
+     * one valid pick…). An answer it refuses counts as a failed attempt and
+     * the next lane/model is asked, inside the same deadline; a throw counts
+     * as a refusal. When every answer is refused the error is
+     * `invalid_output`. Refusals never cool a lane down. */
+    accept?: (content: string) => boolean;
   } = {},
 ): Promise<ChatResult> {
   const lane = opts.lane ?? 'chat';
@@ -516,6 +599,9 @@ export async function chat(
   const wantJson = opts.json === true;
   let lastStatus = 0;
   let attemptNo = 0;
+  // 8.2.0 — true while the most recent failure was the caller refusing an answer.
+  let lastRefused = false;
+  const failure = (status: number): ChatResult => ({ content: null, model: null, error: lastRefused ? 'invalid_output' : 'failed', status });
   for (const { key, model, role, endpoint } of attempts) {
     if (laneCoolingDown(role, model)) {
       console.log(`[ai] lane=${role} model=${loggableModel(model)} status=cooldown`);
@@ -529,7 +615,7 @@ export async function chat(
     for (let jsonAttempt = wantJson ? 0 : 1; jsonAttempt < 2; jsonAttempt += 1) {
       // Aggregate budget check: never START an attempt we can't finish.
       const remainingMs = opts.deadlineAt ? opts.deadlineAt - Date.now() : Infinity;
-      if (remainingMs <= 1500) return { content: null, model: null, error: 'failed', status: lastStatus || 408 };
+      if (remainingMs <= 1500) return failure(lastStatus || 408);
       const useJson = wantJson && jsonAttempt === 0;
       const payload: Record<string, unknown> = {
         model,
@@ -584,6 +670,7 @@ export async function chat(
         clearTimeout(timer);
         console.log(`[ai] lane=${role} model=${loggableModel(model)} status=timeout ms=${Date.now() - startedAt} leash=${Math.min(leash, remainingMs)}`);
         lastStatus = 0;
+        lastRefused = false;
         break;
       }
       // The leash stays armed through the BODY read below: an engine that sends
@@ -611,6 +698,14 @@ export async function chat(
           return t || null;
         };
         const content = clean(msg?.content) ?? clean(msg?.reasoning_content);
+        if (content && opts.accept && !acceptable(opts.accept, content)) {
+          // 8.2.0 — a 200 the caller cannot use (unparseable JSON, no valid
+          // pick) is a failed attempt: the next engine gets the question.
+          console.log(`[ai] refused lane=${role} model=${loggableModel(model)} len=${content.length}`);
+          lastStatus = 200;
+          lastRefused = true;
+          break;
+        }
         if (content) return { content, model, keyRole: role, ...(usage ? { usage } : {}) };
         // 200 but blank — fail over to the next lane pair. Say why: a
         // reasoning model that spent the whole token budget thinking shows
@@ -618,23 +713,37 @@ export async function chat(
         const c0 = data?.choices?.[0];
         console.log(`[ai] blank lane=${role} model=${loggableModel(model)} finish=${String(c0?.finish_reason ?? '?')} keys=${msg ? Object.keys(msg).join(',') : 'none'} reasoning_len=${typeof msg?.reasoning === 'string' ? msg.reasoning.length : 0} completion=${usage?.completion_tokens ?? '?'}`);
         lastStatus = 200;
+        lastRefused = false;
         break;
       }
       lastStatus = res.status;
+      lastRefused = false;
       // The provider's own words, clipped (error envelopes carry no secrets).
       const fullBody = await res.text().catch(() => '');
       const errBody = fullBody.replace(/\s+/g, ' ').slice(0, 200);
       clearTimeout(timer);
       console.log(`[ai] error lane=${role} model=${loggableModel(model)} status=${res.status} json=${useJson} body=${errBody}`);
-      if (res.status === 429) cooldowns.set(coolKey(role, model), Date.now() + cooldownFor(fullBody));
-      // JSON mode unsupported on this model -> retry it once in plain mode.
-      if (res.status === 400 && useJson) continue;
+      // 8.2.0 — 429, a gone model, a rejected key and a 5xx each set the
+      // lane (or lane+model) aside for a while; see cooldownForFailure.
+      const cooled = noteLaneFailure(role, model, res.status, fullBody);
+      // JSON mode unsupported on this model -> retry it once in plain mode
+      // (not when the answer said the model itself is gone).
+      if (res.status === 400 && useJson && !cooled) continue;
       // Anything else (dead/exhausted key 401/402/403/429, unknown model
       // 400/404, upstream 5xx) -> next key+model pair in the ladder.
       break;
     }
   }
-  return { content: null, model: null, error: 'failed', status: lastStatus };
+  return failure(lastStatus);
+}
+
+/** The caller's accept check, where a throw is a refusal. */
+function acceptable(accept: (content: string) => boolean, content: string): boolean {
+  try {
+    return accept(content) === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -745,7 +854,7 @@ export async function gatherDetailed(
 // open. Caps are soft by up to one cache period plus in-flight calls.
 // ============================================================================
 
-export const AI_FEATURES = ['dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image'] as const;
+export const AI_FEATURES = ['dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed'] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
 
 export interface AiControls {

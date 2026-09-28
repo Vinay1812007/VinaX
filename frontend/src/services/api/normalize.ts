@@ -217,7 +217,24 @@ export function normalizeArtist(raw: any): Artist | null {
           .map(normalizeAlbum)
           .filter((a): a is Album => a !== null)
       : [],
+    similarArtists: similarArtistRefs(raw.similarArtists ?? raw.similar_artists),
   };
+}
+
+/** 8.2.0 — the artist page's "similar artists" list, in either dialect the bases speak. */
+function similarArtistRefs(raw: unknown): ArtistRef[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ArtistRef[] = [];
+  for (const a of raw as any[]) {
+    if (!a || typeof a !== 'object') continue;
+    const id = str(a.id, a.artistId);
+    const name = decodeHtml(str(a.name, a.title));
+    if (!id || !name) continue;
+    const image = typeof a.image_url === 'string' ? a.image_url : typeof a.image === 'string' ? a.image : null;
+    out.push({ id, name, image });
+    if (out.length >= 20) break;
+  }
+  return out;
 }
 
 export function normalizeLyrics(raw: any): Lyrics | null {

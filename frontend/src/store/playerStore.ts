@@ -96,7 +96,12 @@ export interface PlayerState {
   clearQueue(): void;
   togglePlay(): void;
   next(manual?: boolean): void;
-  startRadio(song?: Song): void;
+  /**
+   * Endless radio from a song (default: the one playing). 8.2.0 — AI Radio:
+   * `seeds` play first after the song (a mood's or a request's picks, up to
+   * RADIO_SEED_MAX in all) and `tune` steers every continuation the DJ adds.
+   */
+  startRadio(song?: Song, opts?: { seeds?: Song[]; tune?: TuneIntent | null }): void;
   /** v6.3.0 — songs the recommender appended (not hand-queued), after the current one. */
   autoTail(): Song[];
   isAutoQueued(id: string): boolean;
@@ -129,6 +134,8 @@ export interface PlayerState {
   setFollowMode(v: boolean): void;
 }
 
+/** 8.2.0 — AI Radio: the most songs a radio starts with before the DJ takes over. */
+export const RADIO_SEED_MAX = 5;
 /** How many songs one continuation adds. */
 const NEXT_BATCH = 5;
 /** 7.2.0 — inside the last seconds of a song the next track is committed: an AI refinement leaves it alone. */
@@ -1190,11 +1197,16 @@ export const usePlayerStore = create<PlayerState>()(
           preloadUpcoming();
         },
 
-        startRadio: (song) => {
+        startRadio: (song, opts = {}) => {
           const seed = song ?? get().queue[get().index];
           if (!seed) return;
-          const queue = stripExplicit([seed]);
+          // 8.2.0 — AI Radio seeds: distinct, valid, Kid-mode safe, at most RADIO_SEED_MAX.
+          const seen = new Set<string>();
+          const queue = stripExplicit([seed, ...(opts.seeds ?? []).filter(isValidSong)])
+            .filter((s) => !seen.has(s.id) && !!seen.add(s.id))
+            .slice(0, RADIO_SEED_MAX);
           if (!queue.length) return;
+          const tune = opts.tune === 'surprise' ? randomTune() : opts.tune && isTuneIntent(opts.tune) ? opts.tune : null;
           finalizePlayback('replaced');
           invalidateQueue();
           radio = true;
@@ -1203,9 +1215,10 @@ export const usePlayerStore = create<PlayerState>()(
           manualIds.clear();
           lastRemoval = null;
           sessionPlayed.clear();
-          set({ queue, index: 0, currentTime: 0, duration: 0, isPlaying: true, tuneIntent: null });
-          startTrack(seed, true);
-          void appendRecommendations(seed);
+          set({ queue, index: 0, currentTime: 0, duration: 0, isPlaying: true, tuneIntent: tune });
+          startTrack(queue[0], true);
+          // Plan the first continuation at once, after the last seed, so Up next shows where the radio goes.
+          void appendRecommendations(queue[queue.length - 1]);
         },
 
         prev: () => {

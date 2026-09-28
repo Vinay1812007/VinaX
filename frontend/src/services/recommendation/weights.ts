@@ -49,6 +49,27 @@ const DEFAULT_WEIGHTS = Object.freeze({
 
 export const SCORING_WEIGHTS_VERSION = '1.2.0';
 
+/**
+ * 8.2.0 — the next-song engine's newer terms. Kept OUT of DEFAULT_WEIGHTS on
+ * purpose: that table is the owner console's override contract, mirrored
+ * key for key by the Worker (clientConfig.ts, pinned by a parity test), so a
+ * key added there must land in both at once. Until then these are fixed
+ * defaults, read by the scorer like the table above, and not overridable.
+ * Each value was checked against the offline evaluation (scripts/eval-recs.mjs).
+ */
+export const TASTE_WEIGHTS = Object.freeze({
+  /**
+   * Taste fit: the cosine (0..1) of the candidate's on-device vector and the
+   * listener's taste vector (favourites + decayed history, ./vectors.ts),
+   * times this, times the personal blend (confidence × intensity).
+   */
+  tasteFit: 0.15,
+  /** A song another surface showed in the last week (songIdentity's served memory). */
+  servedRecently: 0.04,
+  /** A song that opened the last continuation the player accepted after this same seed. */
+  seedRepeat: 0.1,
+} as const);
+
 export type RecommendationWeightKey = keyof typeof DEFAULT_WEIGHTS;
 export type RecommendationWeights = Record<RecommendationWeightKey, number>;
 

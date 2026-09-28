@@ -309,6 +309,17 @@ html.light .vx-home .vxh-feature::before {
 .vx-home .vxh-shortcut:hover { background: var(--vxh-tile-hover); }
 .vx-home .vxh-shortcut:active { transform: scale(0.97); }
 .vx-home .vxh-shortcut img { width: 48px; height: 48px; object-fit: cover; }
+/* 8.2.0 — the AI Radio shortcut: a glyph square on the accent instead of artwork. */
+.vx-home .vxh-shortcut-glyph {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
+}
+.vx-home .vxh-shortcut-glyph svg { width: 24px; height: 24px; }
 
 /* -------------------------------------------------- personal cards (daily) */
 .vx-home .vxh-daily { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: var(--vxh-section); }

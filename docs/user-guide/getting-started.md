@@ -35,11 +35,14 @@ Discover and Library each open with a grid of shortcuts to their other pages:
 
 ## Play a first song
 
-- On Home, press **Play my mix**. The mix is built from your pinned languages and your listening on this device.
+- On Home, press the play button on the **Aura Mix** card. The mix is built from your pinned languages and your listening on this device.
+- Or tap **AI Radio**, the first tile in Home's shortcut row, and start endless music from a mood, an artist or a few words. See [The player and the queue](player-and-queue.md#ai-radio).
 - Or tap any song anywhere. The song starts, and the DJ builds the next five songs from it, led by that song's language and starting with familiar songs. See [The player and the queue](player-and-queue.md).
 - Tap the heart to save a song to your favourites. Likes, skips and finished songs shape your taste profile, which stays on this device.
 
-Home also has **Jump back in** (recently played), **Trending for you** (the current trending songs in the order your taste suggests) and **Home Studio**, which reorders or hides shelves.
+Home also has **Jump back in** (recently played), **Your playlists** (the ones you made, then the ones you saved), **Popular picks for you** (popular songs in the order your taste suggests), **Your top genres** once you have liked or played enough of one genre, and quick chips such as **Trending**, **Charts** and **Lyrics** (Lyrics appears while a song is loaded in the player).
+
+Until you arrange Home yourself, it arranges itself: the sections you use most, the time of day, whether you finish or skip new discoveries, and the genres you like decide the order. It is worked out when you open the app and never moves while you are looking at it. **Customise Home**, near the end of the page, reorders or hides sections; an order you set there is kept exactly.
 
 ## Live tutorials
 

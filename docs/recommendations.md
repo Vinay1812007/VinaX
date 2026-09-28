@@ -1,6 +1,6 @@
 # Recommendations
 
-This document covers how VinaX decides what to play and show as of 8.1: the ten-stage next-song pipeline, the scoring weights, the long-term taste profile and its event weights, the short-term session intent, the Familiar / Balanced / Discover modes, the queue rules (the next five, queue languages, familiar first, tunes and pinned moods, hand-queued songs first), the "Trending for you" shelf, Home de-duplication, and the developer breakdown. Everything described here runs on the device. The optional AI steps are described in [ai.md](ai.md); what is stored and what leaves the device is in [data-and-privacy.md](data-and-privacy.md).
+This document covers how VinaX decides what to play and show as of 8.2: the ten-stage next-song pipeline (with 8.2's album, related-artist, genre and proven-pick sources, the `no-audio` rule, the taste fit and the served and seed memories), the scoring weights, the long-term taste profile and its event weights, the short-term session intent, the Familiar / Balanced / Discover modes, the queue rules (the next five, queue languages, familiar first, tunes and pinned moods, hand-queued songs first, AI Radio and Smart Queue), the "Popular picks for you" shelf, Home's own order, Home de-duplication, and the developer breakdown. Everything described here runs on the device. The optional AI steps are described in [ai.md](ai.md); what is stored and what leaves the device is in [data-and-privacy.md](data-and-privacy.md).
 
 All paths below are relative to `frontend/src/`.
 
@@ -17,6 +17,9 @@ All paths below are relative to `frontend/src/`.
 | Queue ownership (automatic tail vs. hand-queued songs) | `store/playerStore.ts` | In memory; a reload starts clean |
 | Playback-session measurement (what was heard; PLAY / SKIP / COMPLETE) | `services/playback/session.ts` | Per playback instance |
 | Admission gate for every automatic queue change | `services/recommendation/admission.ts` | Reads the listener's current state on each call |
+| On-device taste vectors (8.2) | `services/recommendation/vectors.ts` | Computed per scoring pass |
+| The engine's memory of its own picks (8.2): outcomes of automatic picks, and each seed's last opening | `services/recommendation/recMemory.ts` | `localStorage`; 60 songs for 60 days, 40 seeds for 12 hours |
+| Home usage signals and the session's Home order (8.2) | `features/home/homeSignals.ts`, `homeOrder.ts` | `localStorage` (decayed, 14-day half-life); the order in `sessionStorage` |
 
 ## How listening becomes taste
 
@@ -45,10 +48,10 @@ Seeking to the last seconds and letting the song end is therefore neither a PLAY
 | # | Stage | Module | What it does |
 | --- | --- | --- | --- |
 | 1 | Candidate generation | `candidates.ts` | Gathers a pool from several sources in parallel. Every fetch is individually fault tolerant: a failed source shrinks the pool and nothing else. |
-| 2 | Hard filtering | `filters.ts` | Applies rules, not preferences. Each rejection has a named reason. Versions of one song collapse onto the best cut. Runs before feature extraction so the classifier only sees songs that can play. Under the "Your languages" setting it also holds the allow-list of languages a stretch may draw from (`allowedLanguages`; rejection `off-language`). |
+| 2 | Hard filtering | `filters.ts` | Applies rules, not preferences. Each rejection has a named reason. Versions of one song collapse onto the best cut. Runs before feature extraction so the classifier only sees songs that can play; since 8.2 that includes turning away songs the catalogue cannot stream (`no-audio`). Under the "Your languages" setting it also holds the allow-list of languages a stretch may draw from (`allowedLanguages`; rejection `off-language`). |
 | 3 | Feature extraction | `services/ai/recommendations.ts` (`enrichSongs`) | Adds classifier metadata (mood, vibe, genre, energy, tempo) when it is cached or arrives within 1.8 s. Optional. Results are cached for 30 days, at most 500 songs. |
-| 4 | Context scoring | `scoring.ts` | Scores each candidate against the seed, the taste profile, the hour, the weekday and the session window. Every term is recorded as a reason. |
-| 5 | Diversity and repeat penalties | `reranking.ts`, `scoring.ts` | A greedy diversity re-rank penalises repeated artists, genres and languages against the last four picks; artist fatigue and the recent-play demotion apply in the scorer. |
+| 4 | Context scoring | `scoring.ts` | Scores each candidate against the seed, the taste profile, the hour, the weekday and the session window, and (8.2) its taste fit on the device's vectors. Every term is recorded as a reason. |
+| 5 | Diversity and repeat penalties | `reranking.ts`, `scoring.ts` | A greedy diversity re-rank penalises repeated artists, genres and languages against the last four picks; artist fatigue and the recent-play demotion apply in the scorer, and (8.2) small penalties for songs another surface showed recently and for the last opening after the same seed. |
 | 6 | Session adjustment | `sessionIntent.ts`, `scoring.ts` | This sitting's behaviour pulls artists and languages up or down, steers energy and sets the appetite for discovery. |
 | 7 | Exploration tuning | `scoring.ts`, `engine.ts` | The discovery mode sets a signed novelty swing in the score and the share of a queue that may go to never-played artists. |
 | 8 | Ranking | `scoring.ts`, `engine.ts` | Sorts, shuffles within 0.05-wide score bands using the session salt, re-ranks for diversity, then applies any active tune's per-song nudge. When the AI DJ is off, an optional AI re-rank of the top 30 adds up to +0.12 per song here. |
@@ -85,21 +88,27 @@ Every automatic change to the queue — a continuation, an AI refinement, the ad
 | `favorite-album` | The rest of up to 2 albums the listener has favourited songs from |
 | `trending` | A search for the seed's language and genre (15), plus trending seeds for the listener's top 2 and first 3 pinned languages (15 each). With no language signal at all the pool falls back to two default languages. |
 | `intent` | Two pages of a catalogue search for the active tune or pinned mood, in the queue's language (20 each). Only present when an intent is active. |
+| `album` | 8.2: the rest of the seed's own album (the same film or record, usually the same composer), up to 12 |
+| `related-artist` | 8.2: popular songs by artists related to the seed's lead artist, up to 12: first the artists featured on the seed, then the lead artist's related artists — the catalogue's own similar artists when its artist page lists them, then everyone co-credited on the lead artist's top songs, most often first — salt-rotated among the first four. Two artists, six songs each, fetched one after another. The related list is cached per artist for 30 minutes (50 artists). |
+| `genre` | 8.2: one catalogue search "<genre> <language> songs" for the seed's first genre not already searched, else its mood's word (party, chill, sad, romantic, devotional), in the seed's language (12). Skipped while an intent is active and for a muted or unknown language. |
+| `proven` | 8.2: catalogue suggestions (10 each) for two salt-rotated automatic picks the listener finished or liked before, and, from the device, up to four of those picks themselves once they have not played for three days (see [The engine's memory](#the-engines-memory-of-its-own-picks-82)) |
 | `explore` | Discover mode only: trending picks in 2 languages the listener has never played, pinned or muted (10 each) |
 | `history` | Familiar mode only: up to 12 favourites and 10 finished songs, in the seed's language, without a fetch |
 | `rediscovery` | Up to 15 songs completed more than 14 days ago, without a fetch |
 
 Before the pool leaves this stage it drops blocked songs, junk tracks, artists under an active "show fewer like this" soft mute, and explicit songs when kid mode is on.
 
+**Playable (8.2).** A response that carried stream URLs for some of its songs and none for another marks that one `unplayable`; a response with no stream URL at all is a catalogue that resolves audio at play time and marks nothing. When one id arrives from several sources, a copy that can stream replaces one that cannot, and the candidate stays `unplayable` only if every copy was.
+
 **Bounded work (7.2).** At most six catalogue requests are in flight at once. Identical requests (same endpoint, query and page) share one fetch, and responses are reused for three minutes (sixty kept). After a soft deadline the gather resolves as soon as the pool holds enough songs and the required sources — the seed's suggestions and the intent search — have answered; at the hard deadline it resolves with whatever has settled and abandons the rest, passing its `AbortSignal` to the requests that accept one. The deadlines come from the plan's own budget.
 
-**Provenance (7.2).** A song found by several sources arrives once, carrying every source (`sources`, primary chosen by the priority intent, related, favorite-artist, favorite-album, history, rediscovery, explore, trending) and the seeds it came from, so intent and trend evidence is not lost when the same id appears twice.
+**Provenance (7.2).** A song found by several sources arrives once, carrying every source (`sources`, primary chosen by the priority intent, related, favorite-artist, album, favorite-album, related-artist, proven, history, rediscovery, genre, explore, trending — the 8.2 order) and the seeds it came from, so intent and trend evidence is not lost when the same id appears twice.
 
 **Cold start (7.2).** With no taste yet: pinned languages, then the languages of liked songs, then default languages that are not muted. With no artists in the profile, the artists of liked songs seed the artist searches.
 
 ### Stage 2 — hard filter reasons
 
-`rejectReasonFor` checks, in this order: `invalid` (no id, title or artist list), `junk` (dialogue, background score, jukebox, trailer, promo, ringtone and similar titles), `too-short` (a known duration under 90 s), `explicit` (kid mode), `blocked`, `muted-language`, `soft-muted` (a lead artist the listener asked less of, until it expires), `seed` (the seed or another version of it), `already-queued` (by id or canonical identity), `recently-played` (the profile's recent ids, or the identity of any of the last 20 history entries), `skipped-this-session`. Survivors that share a canonical identity are collapsed with reason `duplicate-version`, keeping the original over a remaster over an alternate cut, then the more-played one.
+`rejectReasonFor` checks, in this order: `invalid` (no id, title or artist list), `junk` (dialogue, background score, jukebox, trailer, promo, ringtone and similar titles), `too-short` (a known duration under 90 s), `explicit` (kid mode), `blocked`, `muted-language`, `soft-muted` (a lead artist the listener asked less of, until it expires), `seed` (the seed or another version of it), `already-queued` (by id or canonical identity), `recently-played` (the profile's recent ids, or the identity of any of the last 20 history entries), `skipped-this-session`, and (8.2) `no-audio`: a candidate marked `unplayable` that is not in the downloads index. Survivors that share a canonical identity are collapsed with reason `duplicate-version`, keeping the original over a remaster over an alternate cut, then the more-played one.
 
 Canonical identity (`identityCore.ts`, `songKey`) is the normalised title plus the primary artist. Since 7.2 the same file, byte for byte, serves the Worker, and both test suites run the vectors in `shared/identity-vectors.json`. Normalisation is Unicode-safe: NFKC, invisible characters dropped, Latin accents folded ("Café" = "Cafe"), every other combining mark kept so Indic vowel signs survive ("కల" ≠ "కాల"). It strips version decorations in brackets or after a dash (film credit, remix, remaster, live, lofi, a year, and so on), bracketed or trailing featured credits, and uses the first credited artist whatever the separator (comma, ampersand, "feat."). `recordingKey` adds the version tag, so a remix or a live cut stays distinguishable from its work family; when the listener starts an alternate cut, de-duplication prefers that cut within a family.
 
@@ -127,7 +136,7 @@ One recording family (`songKey`) appears once per stretch, and a version of the 
 
 Arc shapes are `steady`, `build`, `wind-down`, `wave` and `lift`. The engine chooses the shape in this order: the active tune's shape, then `lift` when the sitting has a skip streak of two or more, then the listener-energy read (`restless` or `wavering` → `lift`, late hours → `wind-down`, otherwise `steady`).
 
-Transition memory (`transitions.ts`, `transitionTracker.ts`) records how each hand-off went, from the playback instance's heard time: 70 % or more heard counts as completed, under 30 % as skipped, failed playback judges nothing.
+Transition memory (`transitions.ts`, `transitionTracker.ts`) records how each hand-off went, from the playback instance's heard time: 70 % or more heard counts as completed, under 30 % as skipped, failed playback judges nothing. Since 8.2 the same subscription also feeds [the engine's memory of its own picks](#the-engines-memory-of-its-own-picks-82).
 
 ### Stage 10 — validation
 
@@ -193,7 +202,19 @@ Each candidate also receives a source boost:
 | `explore` | 0.08 |
 | `trending` | 0.06 |
 
+8.2 adds four sources and their boosts: `proven` 0.12, `album` 0.10, `related-artist` 0.10, `genre` 0.07. Their reasons are `proven`, `album`, `similar-artist` and `genre`; the first three name what they came from (the earlier pick, the seed's title, the seed's lead artist). When one of them, `taste` or `served` is a song's top reason, "Why this song?" (`explanations.ts`) reads: “Like “…”, which you enjoyed before”, “From the same album as “…””, “By an artist close to …”, “Close to the songs you love”, or “Held back a little — you were shown this recently”.
+
 Every term is recorded as a reason and the reasons sum to the score. Unknown features score 0 rather than a guessed value; title-inferred and classifier-filled features are scaled by confidence (catalogue metadata 1, classifier 0.6, title inference 0.35), so a song with no metadata is not rewarded for a similarity nobody measured. A song found by several sources earns +0.02 per extra source, capped at +0.04. The weekday term (7.2) is the candidate's language share of this weekday's plays minus its share of all plays, so it can change the order between two candidates instead of adding the same amount to every one; it is zero below five plays on that weekday and for profiles recorded before 7.2.
+
+**Taste fit and the served memories (8.2).** Three terms live in `TASTE_WEIGHTS` (`weights.ts`), kept out of the override table on purpose: that table is the owner console's contract, mirrored key for key by the Worker, so these are fixed defaults for now.
+
+| Key | Weight | Used for |
+| --- | ---: | --- |
+| `tasteFit` | 0.15 | × the taste fit (0–1) × the personal blend; reason `taste` |
+| `servedRecently` | 0.04 | Subtracted when another surface showed the song in the last week (`songIdentity`'s served memory, by canonical identity); reason `served` |
+| `seedRepeat` | 0.10 | Subtracted when the song opened the last continuation the player accepted after this same seed; reason `served` |
+
+The taste fit is the cosine of the candidate's vector and the listener's taste vector in the on-device space (`vectors.ts`): each song hashes its artists (lead 1, others 0.5), album 0.5, language 0.3, genres 0.5, mood 0.4 (only when something named it), vibes 0.35 and release decade 0.3 into 256 signed slots, scaled to unit length. The taste vector is the sum of up to 60 favourites at weight 1 and up to 200 history entries decayed with a 14-day half-life (finished +1, skipped −0.5, anything else +0.25), scaled to unit length; with nothing to go on it is null and the term is 0. When the engine has loaded the embedding module by the time the pool is gathered (the plan never waits for it), and the device already holds learned vectors for at least three taste songs and three candidates, the fit moves by how far the candidate's embedding cosine with the embedded taste sits above or below the pool's mean; the two spaces are never compared with each other, and the result is clamped to 0–1. After ranking, the engine warms the embedding cache for the top 60 of the pool in the background. The served penalties are never rules: a song that is clearly the best fit still wins.
 
 Other fixed terms in the scorer: a song in the profile's recent list loses 0.5; an artist played in the last seven days gains 0.05 × blend; an active festival window adds 0.14 for its languages and 0.10 for its moods; the four taste dials (adventurous, recency, energy, vocal) add small signed nudges that are zero at the neutral default. A candidate in a muted language scores −1. Candidates scoring 0 or less are dropped with reason `low-score`.
 
@@ -254,9 +275,25 @@ The share is clamped to 0–50 % after the appetite is applied. A discovery is a
 
 ### The next five
 
-One continuation adds five songs (`NEXT_BATCH = 5` in `store/playerStore.ts`). The player asks for a continuation when a song starts and two or fewer songs remain after it, provided autoplay (or radio) is on, follow mode is off and repeat is off. Only one request runs per queue version, and a queue change cancels it; a result that arrives after the listener started something else is discarded. Additions pass the [admission gate](#the-admission-gate) before they are appended and marked as automatic, and the DJ's order arrives later as a refinement of the entries that have not started.
+One continuation adds five songs (`NEXT_BATCH = 5` in `store/playerStore.ts`). Every plan carries `alg`, the pipeline version (`PIPELINE_VERSION`, `8.2.0` since this release) and the weights version. The player asks for a continuation when a song starts and two or fewer songs remain after it, provided autoplay (or radio) is on, follow mode is off and repeat is off. Only one request runs per queue version, and a queue change cancels it; a result that arrives after the listener started something else is discarded. Additions pass the [admission gate](#the-admission-gate) before they are appended and marked as automatic, and the DJ's order arrives later as a refinement of the entries that have not started.
 
-With the "DJ builds every queue" setting on (`djTakeover`, the default), tapping a song makes that song the seed: the queue becomes that one song and the first continuation is requested at once. Callers that pass `keepList` (Queue Builder plans, explicit queues) keep their list.
+With the "DJ builds every queue" setting on (`djTakeover`, the default) and Autoplay on, tapping a song makes that song the seed: the queue becomes that one song and the first continuation is requested at once. Callers that pass `keepList` (Queue Builder plans, explicit queues) keep their list.
+
+**Smart Queue (8.2, `features/queue/SmartQueue.tsx`).** One switch on the Queue page over the two existing settings, never a third: it reads on when `autoplay && djTakeover`. Turning it on sets Autoplay (if off) and `djTakeover`; turning it off clears `djTakeover` only, so Autoplay keeps extending the listener's own list. The line beside it explains the current state, and says when the AI DJ is off that the picks are on-device.
+
+### AI Radio (8.2)
+
+`/radio` (`pages/AiRadioPage.tsx`, `features/radio/aiRadio.ts`) only finds the first songs; the player's radio mode and the pipeline do the rest. `startRadio(song, { seeds, tune })` puts the song and its seeds (distinct, valid, explicit ones removed in Kid mode, at most `RADIO_SEED_MAX = 5`) in the queue as the listener's list, sets radio mode (so continuations run even with Autoplay off), sets `tune` as the active tune intent for every continuation, and plans the first continuation from the last seed at once.
+
+| Start | Seeds |
+| --- | --- |
+| A song (song menu **Start AI Radio**, the page's current and recent songs) | The song alone |
+| An artist page's menu (**Start AI Radio**) | The artist's first top song, then the next four |
+| One of the listener's artists on the page | A catalogue search for the name (25), kept to songs that credit that artist, rotated by a random offset of 0–7 so the same artist opens differently |
+| A mood chip (Melody, Romantic, Dance, Chill, Sad, Devotional, Beats, Classics, New) | The tune's catalogue query in the listener's first language (pinned, else the profile's top), rotated likewise; the chip's tune steers every continuation |
+| Free text (`seedsForPrompt`) | `parseRadioPrompt` reads a language (names and industry nicknames), a decade ("90s") and a mood family into a tune. Queries, most specific first: the tune's query, "<decade>s <language> songs", then the words themselves; the results are merged round-robin, one per title, language kept, the decade's songs first. With fewer than two seeds the playlist builder is asked instead (`generatePlaylist`), and its catalogue fallback applies. |
+
+Seeds found by a search skip songs the listener hid. The DJ builds the rest under the same rules as any continuation.
 
 ### Queue languages
 
@@ -297,19 +334,43 @@ The player tracks two id sets in memory: songs the recommender appended and song
 - "Add to queue" inserts the song before the first automatic song after the current one, behind the listener's own list and earlier hand-queued songs.
 - "Play next" inserts it directly after the current song and marks it as hand-queued.
 - An adaptive re-plan and a tune replace only the automatic tail. Hand-queued songs keep their place and order.
-- "Keep this song" turns an automatic entry into the listener's own; "Regenerate automatic picks" rebuilds every automatic entry after the current song on purpose. Removing an upcoming song offers Undo while the same song is playing.
+- "Keep this song" turns an automatic entry into the listener's own; **Refresh up next** on the Queue page (called New DJ picks before 8.2; `regenerateAutoTail`, which re-runs the active tune) rebuilds every automatic entry after the current song on purpose. Removing an upcoming song offers Undo while the same song is playing.
 
 ### Adaptive re-plan
 
 Two consecutive skips of automatic songs re-sequence the remaining automatic tail (three songs or more) with the `lift` shape, bringing in up to four favourites in the playing song's language; the re-plan sequences under the lock on that language whatever the Queue languages setting says. The favourites and the final order pass the admission gate, so a favourite is not exempt from Kid mode, hidden artists, muted languages, soft mutes or recent plays; if fewer than three songs survive, nothing changes. A completed song or a skip of a hand-queued song resets the streak. A re-plan cannot run again for 90 seconds.
 
+## The engine's memory of its own picks (8.2)
+
+`recMemory.ts` keeps two small device-local memories, never uploaded:
+
+- **Outcomes.** When a playback instance of an automatically queued song ends, `autoOutcomeFor` (`transitionTracker.ts`) judges it once per run: liked, or a natural end with the song completed, is a success; a manual skip before the play counted or inside its first 30 % is a miss; anything else, failed playback included, says nothing. One entry per canonical identity, 60 at most, forgotten after 60 days. `provenPicks` returns those with more successes than misses, strongest and most recent first; they feed the `proven` source.
+- **Seed memory.** When the player accepts a continuation (`commit`), the first five songs are remembered against the seed's identity for 12 hours (40 seeds at most). The next plan from the same seed passes them to the scorer as `seedRepeatIds`.
+
+"Clear personalization profile" and "Erase everything" both clear these memories.
+
 ## Home shelves
 
 `buildRecommendations(ctx)` gathers the same candidate sources without a seed, enriches, ranks, moves identities served in the last seven days behind fresh ones, and assembles shelves in `mixes.ts`. On a profile with at least five plays the optional AI re-rank may reorder the top 30. The result is memoised for ten minutes per profile state. Every song placed on a shelf gets a plain-language reason for the track menu's "Why this song?".
 
-### Trending for you
+### Popular picks for you
 
-`services/ai/trending.ts` and `features/home/useAiTrending.ts` build Home's trending shelf from the catalogue's trending results and nothing else. The pool passes the hard filter (mutes, blocks, explicit, junk) and is collapsed by canonical identity. The on-device scorer orders it; songs the scorer drops still appear after the ranked ones. When the listener's "AI-designed shelves on Home" setting and the owner's `aiHome` flag are both on, an AI re-order of the top 30 may replace that order if it arrives within 4 seconds and actually changes it. The AI answers with ids from the list it was given, so it can change the order and never the contents. The shelf reports whether the order is `ai` or `local`. One curation runs per trending pool and is kept for 15 minutes.
+`services/ai/trending.ts` and `features/home/useAiTrending.ts` (still named for "Trending for you", the shelf's title before 7.2) build Home's "Popular picks for you" shelf from the catalogue's trending results and nothing else. The pool passes the hard filter (mutes, blocks, explicit, junk) and is collapsed by canonical identity. The on-device scorer orders it; songs the scorer drops still appear after the ranked ones. When the listener's "AI-designed shelves on Home" setting and the owner's `aiHome` flag are both on, an AI re-order of the top 30 may replace that order if it arrives within 4 seconds and actually changes it. The AI answers with ids from the list it was given, so it can change the order and never the contents. The shelf reports whether the order is `ai` or `local`. One curation runs per trending pool and is kept for 15 minutes.
+
+### Home's own order (8.2)
+
+When nobody chose an order — no listener layout from Customise Home, no owner-published order (`composeHomeLayout` reports `orderChosen`), and no running shelf-order experiment — `orderHomeBlocks` (`features/home/homeOrder.ts`) reorders the visible blocks. It is pure and deterministic; `sessionHomeOrder` computes it once per session (memory and `sessionStorage`) so nothing moves while the listener scrolls, and a changed set of blocks computes afresh. Customise Home then starts from the order the listener sees.
+
+| Signal | Lift, in places (positive = earlier) |
+| --- | --- |
+| Time of day | Morning (5–12): day picks +2, moods +0.5, charts −0.5. Afternoon (12–17): discovery +1, charts +0.5. Evening (17–22): moods +1, day picks +0.5, loved +0.5. Night: moods +1, loved +1.5, discovery −0.5, charts −1 |
+| Usage | Taps inside each block (`homeTaps.ts` finds the block from invisible markers around it), decayed with a 14-day half-life. From 3 taps on: (share − even share) × number of blocks, clamped to −1.5..+2.5 |
+| Outcomes | Songs started from a block and heard through or skipped (`homeSignals.ts`). From 2 outcomes on: (done − skipped) ÷ (done + skipped + 2), × 2.5 for the discovery block |
+| Genre affinity | The top genre's share of genre affinity (`genreAffinityStrength`); above 0.2 the genre block gains min(2, share × 3) |
+
+Each block moves at most three places from its default slot; the shortcut row and the endless feed never move. Ties go to the stronger lift, then to the default order.
+
+8.2 also adds, inside existing blocks: the **AI Radio** tile first in the shortcut row (which now always renders), **Your playlists** after Continue listening (the listener's own playlists, pinned first then newest, then saved playlists, 16 at most; hidden when there are none), and **Your top genres** in the genre block: one or two shelves for genres with an affinity of at least 2, each a catalogue search "<language> <genre word> songs" in the pinned (else top) language. The genre tiles are ordered by genre affinity (language affinity for the language tiles). The quick chips gain **Trending** (`/trending`) and **Lyrics** (the current song's lyrics page, shown only when a song is loaded), and the journey cards gain **AI Radio** in place of "Find a feeling".
 
 ### De-duplication across shelves
 
@@ -328,6 +389,6 @@ The store keeps the last 12 continuations. Each shows:
 
 ## Tests
 
-The rules above are pinned by unit tests next to the modules: `nextFive.test.ts` (one language in every mode under the lock, which a context without `queueLanguages` keeps; familiar opening; intent candidates), `engine.test.ts` (8.1: "Your languages" lets the listener's other languages in with the seed's language leading and never two switches in a row, never starves the queue, and changes nothing for a listener with one language), `filters.test.ts` (8.1: the allow-list rejects a known language outside it as `off-language` and passes unknown ones), `discoveryModes.test.ts`, `sequencer.test.ts`, `validation.test.ts`, `tune.test.ts`, `adaptive.test.ts`, `songIdentity.test.ts`, `sessionIntent.test.ts`, `eventWeights.test.ts` and `services/ai/trending.test.ts`. See [testing.md](testing.md) for how to run them.
+The rules above are pinned by unit tests next to the modules. 8.2 adds `candidates.test.ts` cases for the album, related-artist, genre and proven sources and the `unplayable` mark, `filters.test.ts` for `no-audio`, `scoring.test.ts` and `engine.taste.test.ts` for the taste fit and the served penalties, `vectors.test.ts`, `recMemory.test.ts`, `transitionTracker.test.ts` for `autoOutcomeFor`, `features/home/homeOrder.test.ts`, `homeSignals.test.ts`, `homeTaps.test.ts`, `genreAffinity.test.ts`, `features/radio/aiRadio.test.ts`, `store/playerStore.radio.test.ts` and `features/queue/SmartQueue.test.tsx`. Earlier ones: `nextFive.test.ts` (one language in every mode under the lock, which a context without `queueLanguages` keeps; familiar opening; intent candidates), `engine.test.ts` (8.1: "Your languages" lets the listener's other languages in with the seed's language leading and never two switches in a row, never starves the queue, and changes nothing for a listener with one language), `filters.test.ts` (8.1: the allow-list rejects a known language outside it as `off-language` and passes unknown ones), `discoveryModes.test.ts`, `sequencer.test.ts`, `validation.test.ts`, `tune.test.ts`, `adaptive.test.ts`, `songIdentity.test.ts`, `sessionIntent.test.ts`, `eventWeights.test.ts` and `services/ai/trending.test.ts`. See [testing.md](testing.md) for how to run them.
 
 The offline evaluation ([evaluation.md](evaluation.md)) has a mixed-language scenario since 8.1: the `mixed-queue` fixture (`frontend/eval/fixtures/index.ts`) is a Hindi seed for a listener who plays Hindi, Telugu and Tamil with `queueLanguages: 'mix'`, and its pool also holds a language the listener never chose. Its rules (`eval/lib/rules.ts`) count a song outside the listener's languages as `off-language`, an off-lead song in slot 1 or 2 as `language-opening`, and two off-lead songs back to back as `language-run`; all three count as hard violations, so the harness fails if the mix rules break. Run `node scripts/eval-recs.mjs` from `frontend/` to prove or disprove a change to any of this.

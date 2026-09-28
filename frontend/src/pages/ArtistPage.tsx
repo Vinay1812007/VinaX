@@ -90,7 +90,7 @@ export default function ArtistPage() {
         {songs.length > 0 && <PlayFab label="Play top songs" onClick={() => playQueue(songs, 0)} />}
         {songs.length > 0 && <EntityAction label="Shuffle play" onClick={shufflePlay}><ShuffleIcon /></EntityAction>}
         <SaveButton className="vx-ehead-pill vx-follow" entity={{ id: artist.id, kind: 'artist', title: artist.name, subtitle: 'Artist', image: bestImage(artist.images, 300) }} />
-        <EntityMenu items={[songs.length > 0 && { label: 'Song radio', onSelect: () => startRadio(songs[0]) }]} />
+        <EntityMenu items={[songs.length > 0 && { label: 'Start AI Radio', onSelect: () => startRadio(songs[0], { seeds: songs.slice(1, 5) }) }]} />
       </div>
 
       {songs.length > 0 && (

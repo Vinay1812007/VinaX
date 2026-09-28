@@ -65,6 +65,12 @@ export async function requestCurator(task: 'metadata' | 'ranking' | 'home' | 'sh
       body: JSON.stringify({ task, data }), signal: controller.signal,
     });
     if (res.status === 404 || res.status === 405) { routeMissingUntil = Date.now() + withJitter(10 * 60_000); return null; }
+    // 8.2.0 — switched off, not set up or over today's budget will not change
+    // in 30 s: those wait ten minutes (the on-device paths answer meanwhile).
+    if (res.status === 503) {
+      const code = object(await res.json().catch(() => null)).error;
+      if (code === 'ai_disabled' || code === 'ai_not_configured' || code === 'ai_over_budget') { retryAfter = Date.now() + withJitter(10 * 60_000); return null; }
+    }
     if (!res.ok) throw new Error('Curator unavailable');
     return object(await res.json()).data ?? null;
   } catch {

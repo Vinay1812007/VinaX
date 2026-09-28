@@ -11,7 +11,7 @@ import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab, songsLabel
 import { SongRow, TrackListHead } from '@/components/SongRow';
 import { toast } from '@/store/toastStore';
 import { isNativePlatform } from '@/services/native';
-import { downloadMany } from '@/services/downloads';
+import { downloadMany, downloadFailureMessage } from '@/services/downloads';
 import { collageArt, CollageCover } from '@/features/library/CollageCover';
 import { findDuplicates } from '@/features/library/duplicates';
 import { SORT_OPTIONS, shuffled, sortSongs, type CollectionSort } from '@/features/library/sort';
@@ -95,11 +95,11 @@ export default function CollectionPage() {
     if (dlBusy || !songs.length) return;
     setDlBusy(true);
     setDlDone(0);
-    const { saved, failed } = await downloadMany(songs, (d) => setDlDone(d));
+    const { saved, failed, reason } = await downloadMany(songs, (d) => setDlDone(d));
     setDlBusy(false);
     // Honest reporting: a total failure used to read "Already saved offline".
     if (failed && saved) toast(`Saved ${saved} offline — ${failed} failed (check your connection)`);
-    else if (failed) toast(`Downloads failed (${failed}) — check your connection and try again`);
+    else if (failed) toast(downloadFailureMessage(reason));
     else toast(saved ? `Saved ${saved} song${saved === 1 ? '' : 's'} offline` : 'Already saved offline');
   };
   const playAll = () => {

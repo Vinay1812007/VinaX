@@ -141,7 +141,9 @@ async function blurbFor(env: Env, song: Pick, lang: string, allowAi: boolean): P
         },
         { role: 'user', content: `Song: ${song.name} by ${song.artist || 'unknown'}.` },
       ],
-      { lane: 'fast', maxTokens: 60, temperature: 0.8 },
+      // 8.2.0 — bounded like every other AI call: a leash per engine, one
+      // deadline for the ladder, and the owner's DJ switch (a song pitch).
+      { lane: 'fast', maxTokens: 60, temperature: 0.8, timeoutMs: 8_000, deadlineAt: Date.now() + 15_000, feature: 'dj' },
     );
     if (res.content) return res.content.trim().replace(/^["']|["']$/g, '').slice(0, 120);
   } catch {

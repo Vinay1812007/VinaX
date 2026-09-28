@@ -51,6 +51,12 @@ export interface HardFilterOptions extends SafetyRules {
    * with no known language passes.
    */
   allowedLanguages?: ReadonlySet<string>;
+  /**
+   * 8.2.0 — is this song saved on the device? A candidate the catalogue
+   * marked `unplayable` (no stream URL where its neighbours had one) is
+   * rejected as 'no-audio' unless it is. Absent = nothing is downloaded.
+   */
+  downloaded?: (id: string) => boolean;
 }
 
 export interface HardFilterResult {
@@ -108,7 +114,9 @@ export function hardFilter(candidates: Candidate[], options: HardFilterOptions =
   // 7.2.0 — the same catalogue id from several sources is ONE candidate that
   // keeps every source (it used to keep the first and drop the rest silently).
   for (const c of mergeCandidates(candidates)) {
-    const reason = rejectReasonFor(c.song, options);
+    // 8.2.0 — a song that cannot stream is turned away BEFORE it reaches the
+    // queue (it used to fail there, after a refetch), unless it is saved.
+    const reason = rejectReasonFor(c.song, options) ?? (c.unplayable && !options.downloaded?.(c.song.id) ? 'no-audio' : null);
     if (!reason) passed.push(c);
     else if (c.song?.id) rejected.push({ song: c.song, reason, stage: 'filter' }); // a record with no id has nothing to show
   }

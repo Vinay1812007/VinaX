@@ -66,6 +66,17 @@ export function explainReasons(reasons: ReasonComponent[]): string {
       return top.weight < 0 ? 'Held back by your taste dials' : 'Nudged up by your taste dials';
     case 'popularity':
       return 'Popular right now';
+    // 8.2.0
+    case 'taste':
+      return 'Close to the songs you love';
+    case 'served':
+      return 'Held back a little — you were shown this recently';
+    case 'album':
+      return top.detail ? `From the same album as “${top.detail}”` : 'From the same album';
+    case 'similar-artist':
+      return top.detail ? `By an artist close to ${top.detail}` : 'By an artist close to this one';
+    case 'proven':
+      return top.detail ? `Like “${top.detail}”, which you enjoyed before` : 'Like picks you enjoyed before';
     default:
       return 'Picked from your listening';
   }

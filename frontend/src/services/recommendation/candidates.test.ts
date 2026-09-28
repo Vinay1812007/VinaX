@@ -10,12 +10,14 @@ import { createEmptyProfile } from '@/services/personalization/profile';
  * response cache, soft and hard deadlines) and a cold start that uses what
  * the listener told us before any default.
  */
-type Call = { fn: 'suggest' | 'search' | 'album'; key: string; signal?: AbortSignal };
+type Call = { fn: 'suggest' | 'search' | 'album' | 'artist'; key: string; signal?: AbortSignal };
 let calls: Call[] = [];
 let inFlight = 0;
 let maxInFlight = 0;
 /** Per-call behaviour: songs and a delay in ms (Infinity = never answers unless aborted). */
 let respond: (call: Call) => { songs: Song[]; ms: number } = () => ({ songs: [], ms: 0 });
+/** 8.2.0 — the artist page call; rejects by default (the songs-only route answers instead). */
+let artistPage: (id: string) => Promise<{ similarArtists?: { id: string; name: string }[]; topSongs?: Song[] }> = () => Promise.reject(new Error('no artist page'));
 
 function fake(call: Call): Promise<Song[]> {
   calls.push(call);
@@ -33,11 +35,15 @@ vi.mock('@/services/api', () => ({
   getSongSuggestions: (id: string, limit: number) => fake({ fn: 'suggest', key: `${id}#${limit}` }),
   searchSongsPage: (q: string, page: number, limit: number, opts?: { signal?: AbortSignal }) => fake({ fn: 'search', key: `${q}#${page}#${limit}`, signal: opts?.signal }),
   getAlbum: (id: string) => fake({ fn: 'album', key: id }).then((songs) => ({ id, title: `Album ${id}`, songs })),
+  getArtistTopSongs: (id: string) => fake({ fn: 'artist', key: id }),
+  getArtist: (id: string) => artistPage(id),
 }));
 
 import { gatherCandidates, generateNextCandidates, resetCandidateCache, CANDIDATE_FETCH_CONCURRENCY } from './candidates';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
+import { recordAutoOutcome, resetRecMemory } from './recMemory';
+import { mergeCandidates } from './types';
 
 const NOW = 1_800_000_000_000;
 const many = (prefix: string, n: number, over: Partial<Song> & { artist?: string } = {}) => Array.from({ length: n }, (_, i) => makeSong(`${prefix}${i}`, { artist: `${prefix} artist ${i}`, ...over }));
@@ -49,6 +55,7 @@ beforeEach(() => {
   maxInFlight = 0;
   respond = () => ({ songs: [], ms: 0 });
   resetCandidateCache();
+  resetRecMemory();
   localStorage.clear();
   useSettingsStore.setState({ kidMode: false, mutedLanguages: [] });
   useLibraryStore.setState({ hiddenSongIds: [], hiddenArtists: [] });
@@ -143,7 +150,10 @@ describe('bounded work', () => {
     const searches = calls.filter((c) => c.fn === 'search');
     expect(searches.length).toBeGreaterThan(0);
     expect(searches.every((c) => c.signal?.aborted)).toBe(true);
-    expect(report.mock.calls[0][0].abandoned.length).toBe(searches.length);
+    // 8.2.0 — plus the related-artist lookup: the artist catalogue call takes no signal, so it is abandoned, not cancelled.
+    const abandoned = report.mock.calls[0][0].abandoned as string[];
+    expect(abandoned.filter((l) => !l.startsWith('related-artist')).length).toBe(searches.length);
+    expect(abandoned.filter((l) => l.startsWith('related-artist'))).toHaveLength(1);
   });
 
   it('honours the caller’s abort signal', async () => {
@@ -195,5 +205,103 @@ describe('safety at the source', () => {
     useLibraryStore.setState({ hiddenSongIds: ['hid'] });
     const out = await gatherCandidates(makeContext({ profile, pinnedLanguages: ['telugu'] }));
     expect(out.map((c) => c.song.id)).toEqual(['ok']);
+  });
+});
+
+describe('8.2 — sources around the seed', () => {
+  const withAudio = (song: Song): Song => ({ ...song, audio: [{ quality: '160kbps', url: `https://cdn.test/${song.id}.mp4` }] });
+
+  it('reads the seed’s own album', async () => {
+    const seed = makeSong('seed', { title: 'Seed', artist: 'Sid Sriram', album: { id: 'alb', name: 'The Film' } });
+    respond = (c) => (c.fn === 'album' && c.key === 'alb' ? { songs: [seed, makeSong('t2', { artist: 'Chinmayi' })], ms: 1 } : { songs: [], ms: 1 });
+    const out = await generateNextCandidates(seed, makeContext());
+    const t2 = out.find((c) => c.song.id === 't2');
+    expect(t2?.source).toBe('album');
+    expect(t2?.seedTitle).toBe('Seed');
+  });
+
+  it('reads artists who work with the seed’s artist: featured first, then collaborators, and caches who they are', async () => {
+    const seed = makeSong('seed', { title: 'Seed', artist: 'Lead', artists: [{ id: 'lead', name: 'Lead' }, { id: 'feat', name: 'Feat' }] });
+    const duet = (id: string, other: string) => makeSong(id, { artists: [{ id: 'lead', name: 'Lead' }, { id: other, name: other.toUpperCase() }] });
+    respond = (c) => {
+      if (c.fn !== 'artist') return { songs: [], ms: 1 };
+      if (c.key === 'lead') return { songs: [duet('d1', 'c1'), duet('d2', 'c1'), duet('d3', 'c2')], ms: 1 };
+      return { songs: Array.from({ length: 8 }, (_, i) => makeSong(`${c.key}-${i}`, { artist: c.key.toUpperCase() })), ms: 1 };
+    };
+    let clock = NOW;
+    const out = await generateNextCandidates(seed, makeContext({ salt: 0 }), { now: () => clock });
+    const artistCalls = calls.filter((c) => c.fn === 'artist').map((c) => c.key);
+    expect(artistCalls).toEqual(['lead', 'feat', 'c1']);
+    const related = out.filter((c) => c.source === 'related-artist');
+    expect(related.map((c) => c.song.id)).toEqual([...Array.from({ length: 6 }, (_, i) => `feat-${i}`), ...Array.from({ length: 6 }, (_, i) => `c1-${i}`)]);
+    expect(related[0].seedTitle).toBe('Lead');
+    // Past the response cache, inside the collaborator cache: the lead artist's catalogue is not read again.
+    calls = [];
+    clock += 5 * 60_000;
+    await generateNextCandidates(seed, makeContext({ salt: 0 }), { now: () => clock });
+    expect(calls.filter((c) => c.fn === 'artist').map((c) => c.key)).toEqual(['feat', 'c1']);
+  });
+
+  it('prefers the catalogue’s similar artists over co-credits when the artist page lists them', async () => {
+    const seed = makeSong('seed', { title: 'Seed', artist: 'Lead', artists: [{ id: 'lead', name: 'Lead' }] });
+    const duet = makeSong('d1', { artists: [{ id: 'lead', name: 'Lead' }, { id: 'c1', name: 'C1' }] });
+    artistPage = async (id) => (id === 'lead' ? { similarArtists: [{ id: 's1', name: 'S1' }, { id: 'lead', name: 'Lead' }], topSongs: [duet] } : {});
+    respond = (c) => (c.fn === 'artist' ? { songs: Array.from({ length: 8 }, (_, i) => makeSong(`${c.key}-${i}`, { artist: c.key.toUpperCase() })), ms: 1 } : { songs: [], ms: 1 });
+    try {
+      const out = await generateNextCandidates(seed, makeContext({ salt: 0 }), { now: () => NOW });
+      // The artist page answered, so the lead's songs-only route is never read; the similar artist leads, the co-credit follows.
+      expect(calls.filter((c) => c.fn === 'artist').map((c) => c.key)).toEqual(['s1', 'c1']);
+      expect(out.filter((c) => c.source === 'related-artist')[0].song.id).toBe('s1-0');
+    } finally {
+      artistPage = () => Promise.reject(new Error('no artist page'));
+    }
+  });
+
+  it('searches the seed’s genre (or mood) in its language, once, and not when an intent is active', async () => {
+    const seed = makeSong('seed', { title: 'Love Story', artist: 'Sid Sriram', genre: 'film' });
+    await generateNextCandidates(seed, makeContext());
+    expect(searched()).toContain('romantic telugu songs');
+    calls = [];
+    resetCandidateCache();
+    await generateNextCandidates(seed, makeContext({ intentQuery: 'telugu devotional songs' }));
+    expect(searched()).not.toContain('romantic telugu songs');
+  });
+
+  it('offers songs like earlier automatic picks that worked, and a rested one itself', async () => {
+    const proven = makeSong('p1', { title: 'Worked', artist: 'Past' });
+    recordAutoOutcome(proven, 'success', NOW - 5 * 86_400_000);
+    recordAutoOutcome(makeSong('m1', { artist: 'Missed' }), 'miss', NOW - 5 * 86_400_000);
+    const seed = makeSong('seed', { title: 'Seed', artist: 'Sid Sriram' });
+    respond = (c) => (c.fn === 'suggest' && c.key.startsWith('p1#') ? { songs: [makeSong('like-p1', { artist: 'Kin' })], ms: 1 } : { songs: [], ms: 1 });
+    const out = await generateNextCandidates(seed, makeContext(), { now: () => NOW });
+    expect(calls.some((c) => c.fn === 'suggest' && c.key.startsWith('m1#'))).toBe(false);
+    expect(out.find((c) => c.song.id === 'like-p1')).toMatchObject({ source: 'proven', seedTitle: 'Worked' });
+    expect(out.find((c) => c.song.id === 'p1')?.source).toBe('proven');
+    // Not on Home: proven picks are a next-song source.
+    calls = [];
+    await gatherCandidates(makeContext(), { now: () => NOW });
+    expect(calls.some((c) => c.key.startsWith('p1#'))).toBe(false);
+  });
+
+  it('marks a song with no stream URL as unplayable only when its response streamed other songs', async () => {
+    const seed = makeSong('seed', { title: 'Seed', artist: 'Sid Sriram' });
+    respond = (c) => {
+      if (c.fn === 'suggest') return { songs: [withAudio(makeSong('ok', { artist: 'A' })), makeSong('mute', { artist: 'B' })], ms: 1 };
+      if (c.fn === 'search' && c.key.startsWith('Sid Sriram')) return { songs: [makeSong('lazy', { artist: 'C' })], ms: 1 };
+      return { songs: [], ms: 1 };
+    };
+    const out = await generateNextCandidates(seed, makeContext());
+    expect(out.find((c) => c.song.id === 'ok')?.unplayable).toBeUndefined();
+    expect(out.find((c) => c.song.id === 'mute')?.unplayable).toBe(true);
+    expect(out.find((c) => c.song.id === 'lazy')?.unplayable).toBeUndefined();
+  });
+
+  it('keeps the copy that can stream when several sources found one song', () => {
+    const bare = makeSong('x', { artist: 'A' });
+    const merged = mergeCandidates([{ song: bare, source: 'trending', unplayable: true }, { song: withAudio(bare), source: 'related' }]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].song.audio).toHaveLength(1);
+    expect(merged[0].unplayable).toBeUndefined();
+    expect(mergeCandidates([{ song: bare, source: 'trending', unplayable: true }, { song: bare, source: 'related', unplayable: true }])[0].unplayable).toBe(true);
   });
 });

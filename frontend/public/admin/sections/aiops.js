@@ -28,6 +28,7 @@
     ['tts', 'Spoken replies and the DJ voice'],
     ['lyrics', 'Lyric tools (romanise, translate, explain)'],
     ['image', 'Image generation'],
+    ['embed', 'Song and search embeddings (natural-language search, taste fit)'],
   ];
   var days = null;
   var last = null;      // last aiops payload

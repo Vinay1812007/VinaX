@@ -71,7 +71,8 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
     ...(s.voiceLive ? [user(VOICE_RULE)] : []),
     ...(think ? [user(THINK_RULE)] : []),
     ...(research ? [user(RESEARCH_RULE)] : []),
-    ...t.conversation,
+    // 8.2.0 — a failure line is the app talking, not the assistant: never send it back.
+    ...t.conversation.filter((m) => !m.failed),
     t.userMsg,
     ...(t.previousReply
       ? [{ role: 'assistant' as const, content: t.previousReply.slice(0, 12000) }, user(REGENERATE_RULE)]

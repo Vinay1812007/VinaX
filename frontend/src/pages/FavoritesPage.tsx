@@ -11,7 +11,7 @@ import { ShuffleIcon, DownloadIcon, HeartIcon } from '@/components/Icons';
 import { Link } from 'react-router-dom';
 import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
-import { downloadMany } from '@/services/downloads';
+import { downloadMany, downloadFailureMessage } from '@/services/downloads';
 import { toast } from '@/store/toastStore';
 import { useSessionState } from '@/hooks/useSessionState';
 
@@ -44,11 +44,11 @@ export default function FavoritesPage() {
     if (dlBusy || !sorted.length) return;
     setDlBusy(true);
     setDlDone(0);
-    const { saved, failed } = await downloadMany(sorted, (d) => setDlDone(d));
+    const { saved, failed, reason } = await downloadMany(sorted, (d) => setDlDone(d));
     setDlBusy(false);
     // Honest reporting: a total failure used to read "Already saved offline".
     if (failed && saved) toast(`Saved ${saved} offline — ${failed} failed (check your connection)`);
-    else if (failed) toast(`Downloads failed (${failed}) — check your connection and try again`);
+    else if (failed) toast(downloadFailureMessage(reason));
     else toast(saved ? `Saved ${saved} song${saved === 1 ? '' : 's'} offline` : 'Already saved offline');
   };
 

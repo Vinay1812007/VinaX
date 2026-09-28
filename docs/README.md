@@ -1,22 +1,22 @@
 # VinaX documentation
 
-This is the index of the current documentation. Everything here describes the product and the code as they are now (8.1). Dated records — release write-ups, audits, phase plans — are in [history/](history/README.md) and are not kept up to date. Start with the [project README](../README.md) if you have not run the app yet.
+This is the index of the current documentation. Everything here describes the product and the code as they are now (8.2). Dated records — release write-ups, audits, phase plans — are in [history/](history/README.md) and are not kept up to date. Start with the [project README](../README.md) if you have not run the app yet.
 
 ## For people working on the code
 
 | Document | Read it when you need to know |
 | --- | --- |
 | [architecture.md](architecture.md) | What the pieces are and how data flows: app shell, routes and lazy chunks, stores and persistence, the catalogue client, the audio engine, the service worker, Worker routes, the owner console |
-| [recommendations.md](recommendations.md) | How the next song is chosen: the ten-stage pipeline, the weights, session intent, event weights, Familiar / Balanced / Discover, the 7.2 playback and admission contracts, the queue rules (the next five, the 8.1 Queue languages setting, tunes and pinned moods), Home shelves, the `?debug=recs` breakdown |
-| [ai.md](ai.md) | How AI is used and bounded: lanes and failover (the flagship lane's streaming and grounding), each AI route's contract, the minimal assistant prompt, timeouts and budgets, what happens with every provider down |
+| [recommendations.md](recommendations.md) | How the next song is chosen: the ten-stage pipeline, the weights, session intent, event weights, Familiar / Balanced / Discover, the 7.2 playback and admission contracts, the queue rules (the next five, the 8.1 Queue languages setting, tunes and pinned moods, 8.2 AI Radio and Smart Queue), the 8.2 candidate sources and taste fit, Home shelves and Home's own order, the `?debug=recs` breakdown |
+| [ai.md](ai.md) | How AI is used and bounded: lanes, failover and the 8.2 cooldown table (the flagship lane's streaming and grounding), each AI route's contract including 8.2's `/api/embed`, the minimal assistant prompt, timeouts and budgets, what happens with every provider down |
 | [trends.md](trends.md) | Verified trend ingestion: the provider adapters and what each provider's rules allow, scheduled jobs and quota, catalogue matching and confidence, momentum, the admin review queue, and the honest labels the app shows |
-| [evaluation.md](evaluation.md) | The offline evaluation of next-song selection: fixtures (with the 8.1 mixed-language scenario), metrics, the 7.1 comparison, and how to read an A/B result |
+| [evaluation.md](evaluation.md) | The offline evaluation of next-song selection: fixtures (with the 8.1 mixed-language scenario), the mocks (8.2 adds embeddings and artist pages), metrics, the 7.1 comparison, and how to read an A/B result |
 | [audit-7.2.md](audit-7.2.md) | The 7.2 review: every finding with its severity, evidence, reproduction, fix and validation |
 | [progress-7.2.md](progress-7.2.md) | What 7.2 landed, what is deferred and why, and the decisions the owner owes |
 | [design-system.md](design-system.md) | The Flow tokens, the medium control scale, the hit-area rule, overlays and `data-vx-overlay`, motion rules, the top bar actions slot |
 | [data-and-privacy.md](data-and-privacy.md) | What is stored where, the backup format, restore / merge / undo rules, what leaves the device and when |
 | [testing.md](testing.md) | Unit tests, the browser suite and its harness, fixture shapes, the bundle budget and the `core` chunk group, verifying a commit in a throw-away worktree |
-| [android.md](android.md) | How the Android project is generated and patched, the native media service, downloads, the update flow, what needs a device |
+| [android.md](android.md) | How the Android project is generated and patched, the native media service, downloads (the 8.2 bitrate ladder, timeouts and failure reasons), the update flow, what needs a device |
 
 ## For people running the service
 
@@ -35,7 +35,7 @@ This is the index of the current documentation. Everything here describes the pr
 | --- | --- |
 | [user-guide/README.md](user-guide/README.md) | The guide's index |
 | [user-guide/getting-started.md](user-guide/getting-started.md) | First run, the five destinations, playing a first song |
-| [user-guide/player-and-queue.md](user-guide/player-and-queue.md) | The player, Up Next, Pin a mood, Tune this queue, queueing by hand |
+| [user-guide/player-and-queue.md](user-guide/player-and-queue.md) | The player, Up Next, AI Radio, Smart Queue, Pin a mood, Tune this queue, queueing by hand |
 | [user-guide/discovery-modes.md](user-guide/discovery-modes.md) | Familiar, Balanced and Discover |
 | [user-guide/search.md](user-guide/search.md) | Finding music |
 | [user-guide/library-and-backup.md](user-guide/library-and-backup.md) | Favourites, playlists, backup and restore |

@@ -13,6 +13,7 @@ import { occurrenceKeys, VirtualChunks } from '@/components/VirtualChunks';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
 import { TuneChips } from '@/features/queue/TuneChips';
+import { SmartQueue } from '@/features/queue/SmartQueue';
 import { OriginBadge } from '@/features/queue/OriginBadge';
 import { originOf, type QueueOrigin } from '@/features/queue/origin';
 import { TrackMenu, type TrackMenuItem } from '@/components/TrackMenu';
@@ -388,7 +389,7 @@ export default function QueuePage() {
     el.scrollIntoView?.({ block: 'nearest' });
   }, [queue]);
 
-  // ---- "New DJ picks": a deliberate rebuild, with its own states ---------
+  // ---- "Refresh up next": a deliberate rebuild, with its own states -------
   // `base` is how many automatic entries were left the moment the rebuild was
   // asked for (the player drops them synchronously): the wait ends when more
   // than that many are back, never merely because some already were.
@@ -403,7 +404,7 @@ export default function QueuePage() {
     }
   }, [rebuild, mix.auto]);
   const regenerate = useCallback(() => {
-    setAnnouncement('Getting new DJ picks. Songs you added stay.');
+    setAnnouncement('Refreshing up next. Songs you added stay.');
     const player = usePlayerStore.getState();
     player.regenerateAutoTail();
     setRebuild({ phase: 'working', base: player.autoTail().length });
@@ -485,6 +486,7 @@ export default function QueuePage() {
           action={
             <span className="flex flex-wrap gap-2 justify-center">
               <button onClick={() => setBuilding(true)} className="vx-tap px-5 py-2.5 rounded-full btn-primary">Build a queue</button>
+              <Link to="/radio" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Start AI Radio</Link>
               <Link to="/" className="vx-tap px-5 py-2.5 rounded-full btn-secondary inline-flex items-center">Browse Home</Link>
             </span>
           }
@@ -518,7 +520,7 @@ export default function QueuePage() {
               aria-describedby="vx-rebuild-note"
               className="vx-queue-btn is-outline"
             >
-              {rebuild.phase === 'working' ? 'Getting picks…' : 'New DJ picks'}
+              {rebuild.phase === 'working' ? 'Refreshing…' : 'Refresh up next'}
             </button>
           )}
           {queue.length >= 2 && (
@@ -556,6 +558,9 @@ export default function QueuePage() {
         </section>
       )}
 
+      {/* 8.2.0 — Smart Queue: Autoplay + "DJ builds every queue" as one switch, explained. */}
+      <SmartQueue />
+
       {/* v6.5.0 — tune chips */}
       <section aria-label="Tune this queue" className="vx-queue-tune">
         <TuneChips compact />
@@ -587,7 +592,7 @@ export default function QueuePage() {
         )}
         {rebuild.phase === 'failed' && (
           <div role="alert" className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-ink-850 px-3 py-2 text-[13px] text-ink-200">
-            <span>Couldn’t get new DJ picks just now.</span>
+            <span>Couldn’t refresh up next just now.</span>
             <button type="button" onClick={regenerate} className="vx-queue-btn is-outline shrink-0">
               Try again
             </button>
@@ -622,7 +627,7 @@ export default function QueuePage() {
             <p className="text-[15px] text-ink-400 py-4">
               Nothing queued yet — use <span className="text-ink-100 font-semibold">Play next</span> or{' '}
               <span className="text-ink-100 font-semibold">Add to queue</span> in any song menu
-              {canRebuild ? ', or ask the DJ for new picks above.' : '.'}
+              {canRebuild ? ', or use Refresh up next above.' : '.'}
             </p>
           )
         ) : (

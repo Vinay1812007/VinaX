@@ -12,19 +12,22 @@
  * is required for the feature to work.
  */
 import {
-  LANE_ENV,
   LANE_MODEL,
   defaultEndpoint,
   isExternalEndpoint,
   isGroqEndpoint,
   isMaestroEndpoint,
   laneAttempts,
-  laneEndpoint,
+  laneCoolingDown,
+  laneModel,
   logAiEvent,
+  loggableModel,
+  noteLaneFailure,
   reasoningOffParams,
   usageFromJson,
   type AiEnv,
   type Lane,
+  type LaneAttempt,
   aiBlockCode,
   aiGate,
   logAiRefusal,
@@ -432,6 +435,37 @@ const STREAM_BUDGET_MS = 90_000;
 /** A failover drain that starts late still gets at least this long. */
 const STREAM_MIN_DRAIN_MS = 15_000;
 
+/** 8.2.0 — how long the attempt walk may spend finding an engine that starts
+ * streaming (the ladder keeps hopping while this lasts). The quick seats get
+ * less: the Search page's expert client gives up at 30 s, and a spoken reply
+ * that waits longer than this is not a conversation. */
+const HEADER_BUDGET_MS = 40_000;
+const QUICK_HEADER_BUDGET_MS = 22_000;
+/** The shortest leash worth starting a hop with. */
+const MIN_HOP_MS = 2_500;
+
+/** 8.2.0 — true when Auto should lead with the flagship: its key is set and
+ * this isolate has not seen it fail recently (quota, key, model or upstream). */
+export function flagshipReady(env: AiEnv): boolean {
+  return !!env.VINAX_GGL_GEMINI_API_KEY && !laneCoolingDown('maestro', laneModel(env, 'maestro'));
+}
+
+/**
+ * 8.2.0 — image understanding as a ladder instead of one attempt: the vision
+ * lane (11B, then its same-key 90B secondary), the 90B lane on its own key,
+ * then — because default-base keys are account-scoped — the first text
+ * attempt on the default base carrying the 11B model. Pairs that are resting
+ * are left out (unless every one is). Empty when no key can sign a vision call.
+ */
+export function visionLadder(env: AiEnv, textAttempts: LaneAttempt[]): LaneAttempt[] {
+  const out = laneAttempts(env, VISION_LANE, undefined, ['vision90']);
+  const nvBase = defaultEndpoint(env);
+  const borrowed = textAttempts.find((a) => a.endpoint === nvBase);
+  if (borrowed && !out.some((a) => a.key === borrowed.key)) out.push({ ...borrowed, model: LANE_MODEL[VISION_LANE] });
+  const live = out.filter((a) => !laneCoolingDown(a.role, a.model));
+  return live.length ? live : out;
+}
+
 /** Request-body ceiling: the 6 MB inline-image budget plus a long pasted thread. */
 const MAX_BODY_BYTES = 12_000_000;
 
@@ -520,7 +554,10 @@ async function handleChat(
       .map((m) => String(m.content))
       .pop() ?? '';
   // 8.1.0 — Auto is the flagship engine whenever its key is set; the question-shape router is the fallback.
-  const mode: Mode = pickedMode === 'auto' ? (env.VINAX_GGL_GEMINI_API_KEY ? 'maestro' : pickAutoMode(lastUserRaw.slice(0, 2000))) : pickedMode;
+  // 8.2.0 — …and whenever the flagship lane is cooling down (quota spent, key
+  // rejected, model gone), Auto goes straight to the question-shape pick: no
+  // round trip is spent on a lane this isolate already knows is resting.
+  const mode: Mode = pickedMode === 'auto' ? (flagshipReady(env) ? 'maestro' : pickAutoMode(lastUserRaw.slice(0, 2000))) : pickedMode;
   const profile =
     typeof body.profile === 'string'
       ? [...body.profile].filter((ch) => ch === '\n' || ch === '\t' || ch.charCodeAt(0) >= 32).join('').trim().slice(0, 1500)
@@ -580,8 +617,17 @@ async function handleChat(
   // Lane routing: the engine's own key+model pair first, then the next live
   // pairs in the cross-lane failover ladder, so one dead key or retired
   // model degrades to a healthy sibling instead of failing the chat.
-  const attempts = laneAttempts(env, LANE_BY_MODE[mode], pickedModel ?? undefined);
-  if (!attempts.length) return jsonErr({ error: 'ai_not_configured' }, 503);
+  const allAttempts = laneAttempts(env, LANE_BY_MODE[mode], pickedModel ?? undefined);
+  if (!allAttempts.length) return jsonErr({ error: 'ai_not_configured' }, 503);
+  // 8.2.0 — the same cooldown table chat() obeys: a lane+model that answered
+  // 429 / model-gone / key-rejected / 5xx recently is not asked again until it
+  // has rested. Only when EVERY pair is resting are they all tried anyway —
+  // one more round trip beats a certain error.
+  const liveAttempts = allAttempts.filter((a) => !laneCoolingDown(a.role, a.model));
+  const obeyCooldown = liveAttempts.length > 0;
+  const attempts = obeyCooldown ? liveAttempts : allAttempts;
+  if (liveAttempts.length < allAttempts.length)
+    console.log(`[vinaxai] resting: ${allAttempts.filter((a) => !liveAttempts.includes(a)).map((a) => `${a.role}/${loggableModel(a.model)}`).join(', ')}`);
   // 7.2.0 — the owner's AI switches and spend caps, before any engine or web
   // search is called; the chat page shows its "paused" line on a 503.
   const blocked = await aiGate(env, 'vinaxai');
@@ -693,16 +739,11 @@ async function handleChat(
 
   // Vision runs on a model hosted on the DEFAULT base, so it must ride a key
   // that lives there — an external aggregator key can't sign that call.
-  // v5.21.0: the vision model finally has its OWN secret, so use it when it
-  // is configured; otherwise fall back to the first default-base attempt in
-  // the ladder (those keys are account-scoped, so any served model works on
-  // any of them) and, failing that, to the seat's own primary.
-  const nvBase = defaultEndpoint(env);
-  const visionKey = env[LANE_ENV[VISION_LANE]];
-  const visionAttempt = visionKey
-    ? { key: visionKey, model: LANE_MODEL[VISION_LANE], role: VISION_LANE, endpoint: laneEndpoint(env, VISION_LANE) }
-    : (attempts.find((a) => a.endpoint === nvBase) ?? primary);
-  const model = useVision ? LANE_MODEL[VISION_LANE] : primary.model;
+  // 8.2.0 — a ladder instead of one attempt (see visionLadder): the 11B
+  // default, the 90B on the same key, the 90B on its own key, then any
+  // default-base text key carrying the 11B (those keys are account-scoped).
+  const vision = useVision ? visionLadder(env, attempts) : [];
+  const model = useVision ? (vision[0]?.model ?? LANE_MODEL[VISION_LANE]) : primary.model;
 
   // v5.16.0 — ask the default base to append a usage chunk to the stream so
   // the AI Cost panel sees real token counts. The scholar lane's external
@@ -764,67 +805,83 @@ async function handleChat(
   // code logged @${keyRole} — the primary lane's role captured once at line
   // 504 — even after failover swapped model/key/endpoint to a sibling lane,
   // so the admin AI-Monitoring dashboard undercounted rescues and could not
-  // detect a persistently-broken primary (audit finding H15). Only the
-  // model and role are needed for logging; the key/endpoint are consumed
-  // inline in each callStream invocation below.
+  // detect a persistently-broken primary (audit finding H15).
   let usedModel = model;
-  let usedRole = useVision ? visionAttempt.role : primary.role;
+  let usedRole: Lane = useVision ? (vision[0]?.role ?? primary.role) : primary.role;
+  // Pairs that failed before streaming a byte in this request: the
+  // empty-stream rescue below never asks them again.
+  const failed = new Set<LaneAttempt>();
   // Cold serverless engines can HANG without an HTTP response (observed live
   // on retired engines), and a DEGRADED engine rejects instantly with a 400
-  // (observed live post-rewire) — so walk up to FOUR lane pairs: the mode's
-  // own engine first, then the next live pairs in the cross-lane ladder.
-  // Observed worst hour live: one degraded + two hanging engines at once —
-  // four pairs still reaches a healthy one. The PRIMARY gets a patient 18s
-  // leash; laddered hops get a tight 10s each so the walk stays inside client
-  // patience. (The old 20s scholar special case died with the move to the
-  // sub-second external base — probed stream TTFB ~120 ms.) Each hop calls
-  // ITS OWN lane endpoint: providers are mixed now.
-  const plan = useVision
-    ? [{ model, key: visionAttempt.key, role: visionAttempt.role, endpoint: visionAttempt.endpoint }]
-    : attempts.slice(0, 4);
-  let up: Response | null = null;
-  for (let i = 0; i < plan.length; i += 1) {
-    const a = plan[i];
-    usedModel = a.model;
-    usedRole = a.role;
-    const leash = i === 0 ? 18_000 : 10_000;
-    try {
-      up = await callStream(a.model, a.key, a.endpoint, msgs, leash);
-    } catch {
-      up = null; // hang / network abort — the next pair takes the call
-    }
-    if (up?.ok) break;
-    // A 400 while the usage opt-in rode the request: drop the option for the
-    // rest of this request and re-ask the SAME pair once, so token accounting
-    // can never cost a listener their answer. A degraded key 400s again and
-    // the ladder walks on as before.
-    if (up?.status === 400 && usageOptIn && !isGroqEndpoint(a.endpoint)) {
-      usageOptIn = false;
+  // (observed live post-rewire). The PRIMARY gets a patient 18s leash;
+  // laddered hops get a tight 10s each. Each hop calls ITS OWN lane
+  // endpoint: providers are mixed now.
+  // 8.2.0 — the walk is bounded by TIME, not by a count of four: it keeps
+  // hopping down the full ladder while the header budget lasts, so Auto and
+  // every pinned seat fall through to the last healthy engine instead of
+  // erroring after the fourth. Each failure also teaches the cooldown table.
+  const headerDeadline = t0 + (mode === 'expert' || mode === 'voice' ? QUICK_HEADER_BUDGET_MS : HEADER_BUDGET_MS);
+  const walk = async (plan: LaneAttempt[], messages: OutMsg[]): Promise<{ up: Response | null; used: LaneAttempt | null }> => {
+    let last: Response | null = null;
+    let tried = 0;
+    for (const a of plan) {
+      const remaining = headerDeadline - Date.now();
+      // The first try always runs; later hops only while there is time for one.
+      if (tried > 0 && remaining < MIN_HOP_MS) break;
+      if (tried > 0 && obeyCooldown && laneCoolingDown(a.role, a.model)) continue;
+      const leash = Math.max(MIN_HOP_MS, Math.min(tried === 0 ? 18_000 : 10_000, remaining));
+      tried += 1;
+      let res: Response | null;
       try {
-        up = await callStream(a.model, a.key, a.endpoint, msgs, leash);
+        res = await callStream(a.model, a.key, a.endpoint, messages, leash);
       } catch {
-        up = null;
+        res = null; // hang / network abort — the next pair takes the call
       }
-      if (up?.ok) break;
+      // A 400 while the usage opt-in rode the request: drop the option for the
+      // rest of this request and re-ask the SAME pair once, so token accounting
+      // can never cost a listener their answer. A degraded key 400s again and
+      // the ladder walks on as before.
+      if (res?.status === 400 && usageOptIn && !isGroqEndpoint(a.endpoint)) {
+        void res.body?.cancel().catch(() => undefined);
+        usageOptIn = false;
+        try {
+          res = await callStream(a.model, a.key, a.endpoint, messages, leash);
+        } catch {
+          res = null;
+        }
+      }
+      if (res?.ok && res.body) return { up: res, used: a };
+      failed.add(a);
+      if (res) {
+        const errBody = await res.text().catch(() => '');
+        noteLaneFailure(a.role, a.model, res.status, errBody);
+        last = res;
+      }
+      // Log the real status (timeout=0, degraded/bad id=4xx, upstream 5xx) for
+      // diagnosis; meta reports the engine that finally answered.
+      if (waitUntil)
+        waitUntil(
+          logAiEvent(env, {
+            feature: 'assistant',
+            model: `${a.model} @${a.role}`,
+            ok: false,
+            status: res ? res.status : 0,
+            error: res ? `engine_fallback_${res.status}` : 'engine_timeout',
+            client: isApp ? 'app' : 'web',
+            latency_ms: Date.now() - t0,
+          }),
+        );
     }
-    // Log the real status (timeout=0, degraded/bad id=4xx, upstream 5xx) for
-    // diagnosis; meta reports the engine that finally answered.
-    if (waitUntil)
-      waitUntil(
-        logAiEvent(env, {
-          feature: 'assistant',
-          model: `${a.model} @${a.role}`,
-          ok: false,
-          status: up ? up.status : 0,
-          error: up ? `engine_fallback_${up.status}` : 'engine_timeout',
-          client: isApp ? 'app' : 'web',
-          latency_ms: Date.now() - t0,
-        }),
-      );
-  }
+    return { up: last, used: null };
+  };
 
-  // Vision unavailable on this key -> fall back to a text-only answer with a note.
-  if ((!up || !up.ok) && useVision) {
+  let activePlan: LaneAttempt[] = useVision ? vision : attempts;
+  let activeMsgs: OutMsg[] = msgs;
+  let { up, used } = await walk(activePlan, msgs);
+
+  // Vision unavailable on every vision pair -> a text-only answer with a note,
+  // down the seat's own text ladder.
+  if (!used && useVision) {
     const noteMsgs: OutMsg[] = msgs.map((mm) => ({ ...mm }));
     const last = noteMsgs[noteMsgs.length - 1];
     last.content =
@@ -835,19 +892,19 @@ async function handleChat(
       role: 'system',
       content: `${sys}\n\n(The user attached an image, but image understanding is offline right now — answer the text part and mention that you couldn't view the image.)`,
     };
-    usedModel = primary.model;
-    usedRole = primary.role;
+    activePlan = attempts;
+    activeMsgs = noteMsgs;
     // An aborted fetch here must not escape as a raw 500 exception JSON — an
     // honest engine_unreachable is something the client can render (DQA-02).
-    try {
-      up = await callStream(primary.model, primary.key, primary.endpoint, noteMsgs);
-    } catch {
-      up = null;
-    }
+    ({ up, used } = await walk(attempts, noteMsgs));
   }
 
+  if (used) {
+    usedModel = used.model;
+    usedRole = used.role;
+  }
   if (!up) return jsonErr({ error: 'engine_unreachable' }, 503);
-  if (!up.ok || !up.body) {
+  if (!used || !up.ok || !up.body) {
     const status = up.status;
     if (waitUntil)
       waitUntil(
@@ -864,6 +921,7 @@ async function handleChat(
     // 500, not 502: Cloudflare swallows origin 502 bodies (DQA-02).
     return jsonErr({ error: 'upstream', status }, 500);
   }
+  const served: LaneAttempt = used;
 
   const upBody = up.body;
   const encoder = new TextEncoder();
@@ -1050,7 +1108,7 @@ async function handleChat(
       // that made the call. The client sees a meta update — web badge +
       // sources — exactly like a Research turn. Later drains run 'strip', so
       // a second marker can never loop or leak.
-      let liveMsgs = msgs;
+      let liveMsgs = activeMsgs;
       const fetchQ = fetchBox.q;
       if (fetchQ && !full && canFetch) {
         const rl2 = await rateLimitAsync(request, 'vinaxai-web', { capacity: 5, refillPerMinute: 5 }, env);
@@ -1066,9 +1124,8 @@ async function handleChat(
         }
         liveMsgs = [{ role: 'system', content: sys2 }, ...msgs.slice(1)];
         send({ meta: { model: usedModel, mode, web: webStatus, sources } });
-        const cur = plan.find((a) => a.model === usedModel) ?? plan[0];
         try {
-          const up2 = await callStream(cur.model, cur.key, cur.endpoint, liveMsgs, 20_000);
+          const up2 = await callStream(served.model, served.key, served.endpoint, liveMsgs, 20_000);
           if (up2.ok && up2.body) full = await drain(up2.body, 'strip');
         } catch {
           /* the empty-stream ladder below takes over with liveMsgs */
@@ -1093,7 +1150,7 @@ async function handleChat(
       // Fail over transparently along the SAME lane ladder instead of handing
       // the client an empty reply — with one engine degraded upstream, a
       // single hard-coded sibling isn't enough (observed live post-rewire).
-      if (!full && !useVision) {
+      if (!full) {
         if (waitUntil)
           waitUntil(
             logAiEvent(env, {
@@ -1106,9 +1163,14 @@ async function handleChat(
               latency_ms: Date.now() - t0,
             }),
           );
-        for (const a of plan) {
+        // 8.2.0 — the whole remaining ladder, not the first four: every pair
+        // that has not already failed this request and is not resting, while
+        // the reply's overall budget still has room for a hop.
+        for (const a of activePlan) {
           if (full) break;
-          if (a.model === usedModel) continue;
+          if (a === served || failed.has(a)) continue;
+          if (obeyCooldown && laneCoolingDown(a.role, a.model)) continue;
+          if (streamDeadline - Date.now() < STREAM_MIN_DRAIN_MS) break;
           try {
             // liveMsgs: after a B3 restart this carries the fetched results,
             // so a failover engine answers WITH them instead of re-fetching.
@@ -1118,9 +1180,13 @@ async function handleChat(
               usedRole = a.role;
               send({ meta: { model: usedModel, mode, web: webStatus, sources } });
               full = await drain(upFb.body, 'strip');
+            } else {
+              failed.add(a);
+              noteLaneFailure(a.role, a.model, upFb.status, await upFb.text().catch(() => ''));
             }
           } catch {
             /* this pair failed too — try the next one */
+            failed.add(a);
           }
         }
       }

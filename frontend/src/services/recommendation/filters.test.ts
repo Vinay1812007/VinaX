@@ -101,3 +101,20 @@ describe('8.1.0 — the mix policy allow-list', () => {
   });
 });
 
+
+describe('8.2.0 — songs the catalogue cannot stream', () => {
+  it('rejects an unplayable candidate as no-audio unless it is downloaded; a song with no flag passes', () => {
+    const mute = makeSong('mute', { artist: 'M' });
+    const lazy = makeSong('lazy', { artist: 'L' });
+    const pool: Candidate[] = [{ ...cand(mute), unplayable: true }, cand(lazy)];
+    const out = hardFilter(pool, {});
+    expect(out.admitted.map((c) => c.song.id)).toEqual(['lazy']);
+    expect(out.rejected).toEqual([{ song: mute, reason: 'no-audio', stage: 'filter' }]);
+    expect(hardFilter(pool, { downloaded: (id) => id === 'mute' }).admitted.map((c) => c.song.id)).toEqual(['mute', 'lazy']);
+  });
+
+  it('names a harder rule first', () => {
+    const out = hardFilter([{ ...cand(makeSong('b', { artist: 'B' })), unplayable: true }], { blocked: () => true });
+    expect(out.rejected[0].reason).toBe('blocked');
+  });
+});

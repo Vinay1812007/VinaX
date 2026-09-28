@@ -30,6 +30,16 @@ function json(body: unknown, status = 200): Response {
 export const onRequestOptions = async (): Promise<Response> =>
   new Response(null, { status: 204, headers: CORS });
 
+/** 8.2.0 — true when an engine's answer is one the route can return. */
+export function usableLyricsAnswer(mode: string, content: string, lineCount: number): boolean {
+  if (mode === 'explain') {
+    const parsed = extractJson<{ summary?: unknown }>(content);
+    return typeof parsed?.summary === 'string' && parsed.summary.trim().length > 0;
+  }
+  const parsed = extractJson<{ lines?: unknown }>(content);
+  return Array.isArray(parsed?.lines) && parsed.lines.length === lineCount;
+}
+
 /** POST-only: answer GET with an honest 405 instead of the SPA shell (DQA-07). */
 export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
@@ -82,7 +92,11 @@ async function handlePost(context: {
     // Scholar rides a sub-second external base now (v2.7.3, probed TTFB
     // ~120 ms) — a 12s first leash covers even a big JSON payload with room
     // to spare, and ladder hops stay tight at 10s inside the 32s deadline.
-    { temperature: 0.3, maxTokens: 4000, lane: 'scholar', json: true, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: 12_000, deadlineAt: t0 + 32_000, feature: 'lyrics' },
+    // 8.2.0 — an answer the app cannot use (no JSON, or a line count that
+    // would break synced timing — the client drops those anyway) asks the
+    // next engine inside the same deadline. The default ladder now ends with
+    // the flagship lane when its key is set.
+    { temperature: 0.3, maxTokens: 4000, lane: 'scholar', json: true, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: 12_000, deadlineAt: t0 + 32_000, feature: 'lyrics', accept: (content) => usableLyricsAnswer(mode, content, lines.length) },
   );
   if (isAiBlocked(r.error)) return refuse(r.error);
   if (mode === 'explain') {
