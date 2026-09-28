@@ -64,6 +64,12 @@ export interface SequenceOptions {
    * followed by another one, and off-target songs fill at most half the
    * stretch. They give way only when nothing else is left (`language-mix`).
    */
+  /**
+   * 8.1.0 — under 'prefer' three rules are hard, not priced: the target
+   * language opens the stretch (slots 1 and 2), an off-target song is never
+   * followed by another one, and off-target songs fill at most half the
+   * stretch. They give way only when nothing else is left (`language-mix`).
+   */
   languagePolicy?: 'lock' | 'prefer';
   /** Other languages the listener plays (only matters under 'prefer'). */
   otherLanguages?: string[];
