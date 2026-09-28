@@ -8,7 +8,7 @@ Open **VinaX AI** from the dock or sidebar. The composer takes any question: wri
 
 | Control | What it does |
 |---|---|
-| **+** (Attach and tools) | Upload files or a folder, and switch on Web search, Think, Research or image creation. Saved prompts open from the same menu. Files stay on your device until you send. |
+| **+** (Attach and tools) | Upload files or a folder, and switch on Web search, Think or Research. Saved prompts open from the same menu. Files stay on your device until you send. |
 | Agent | Turns Agent mode on or off (see below) |
 | Model button | Opens the model menu |
 | Live voice chat / Voice input | Talk hands-free, or dictate a message, when the device supports speech |
@@ -16,7 +16,7 @@ Open **VinaX AI** from the dock or sidebar. The composer takes any question: wri
 
 | Tool | What it does |
 |---|---|
-| Web search | Lets the reply use current web results |
+| Web search | Lets the reply use current web results. When VinaX Maestro answers, it searches the web itself and the reply lists the pages it used under **Sources**. |
 | Think | Sends the message to a slower, more careful engine |
 | Research | Searches the web and cross-checks more than one source |
 
@@ -24,9 +24,11 @@ Chats are kept on this device. The chat list lets you search, rename, pin and de
 
 ## The model menu
 
-The model button in the composer opens one menu with a search field over every model VinaX can reach. Recently used models come first, then the recommended ones, then the built-in VinaX engines, then one section for each live catalogue with every model in it. **Auto** picks an engine for each question. Arrow keys move, Enter picks, Esc closes.
+The model button in the composer opens one menu with a search field over every model VinaX can reach. Recently used models come first, then the recommended ones (Auto, VinaX Maestro, Balanced, Fast, Deep, Creative, Translate), then the other VinaX engines, then one section for each live catalogue with every model in it. Arrow keys move, Enter picks, Esc closes.
 
-**Chat settings → General → Default model** sets what a new chat starts with.
+**Auto** answers with VinaX Maestro whenever that engine is available, and otherwise picks an engine from the shape of the question. **VinaX Maestro** is the flagship engine: its replies stream as they are written, and with Web search on it uses its own live search and lists its sources. The chip under a reply names the engine that actually answered.
+
+A chat opens on your default model, else the model you used last, else Auto. **Chat settings → General → Default model** sets the default.
 
 ## Agent mode
 

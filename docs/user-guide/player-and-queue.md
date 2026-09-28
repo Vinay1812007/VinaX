@@ -9,7 +9,7 @@ Tap any song, in a shelf, an album, a playlist or search results. With the defau
 | Rule | What it means |
 |---|---|
 | Five at a time | A continuation is the next five songs. When a song starts with two or fewer songs left after it, the DJ builds five more from that song, so it can follow what you skip and finish in this sitting. |
-| Same language | Every continuation stays in the language of the song that started it, in every discovery mode. |
+| Queue languages | With **Settings → Recommendations → Queue languages** on **Your languages** (the default), the playing song's language leads: it fills the first two slots and at least half of the five, songs from your other languages (the ones you pinned or play most) may follow, never two changes of language in a row, and a language you never chose stays out. **One language** keeps every continuation in the language of the song that started it. Either way the rule is the same in every discovery mode. |
 | Familiar first | The first songs are a familiar hand-off. Artists you have never played are introduced later in the five, not at the start. |
 | No repeats | A song already in the queue, or another version of it, is not added again. |
 
@@ -46,13 +46,13 @@ Tune this queue is a row of one-tap chips. It is on the **Queue** page, under **
 |---|
 | More energetic · More chill · More romantic · More melody · More beats · Devotional · Heartbreak · More classics · More new · Same language · Switch language · Surprise me |
 
-Tapping a chip rebuilds Up Next at once with songs fetched for that intent. What already played, the current song and your hand-queued songs stay. The tune stays active until you start a fresh song. **Surprise me** picks one of the other chips at random.
+Tapping a chip rebuilds Up Next at once with songs fetched for that intent, in the playing song's language. What already played, the current song and your hand-queued songs stay. The tune stays active until you start a fresh song. **Surprise me** picks one of the other chips at random. **Switch language** moves the whole stretch to another of your languages; **Same language** leans the picks toward the playing song's language without changing the Queue languages setting.
 
 ## Pin a mood
 
 Pin a mood is in the full-screen player, in the **Up Next** tab: Romantic, Energetic, Chill, Melancholy or Devotional.
 
-- Pinning rebuilds Up Next at once with songs fetched for that mood, in the queue's language.
+- Pinning rebuilds Up Next at once with songs fetched for that mood, in the playing song's language.
 - The pin holds for 45 minutes. Tap the same chip again to unpin; Up Next goes back to your usual mix.
 - Hand-queued songs keep their place.
 
@@ -76,7 +76,7 @@ If the DJ cannot reach the catalogue, the page says so and offers **Try again**;
 
 | Gesture or control | What it does |
 |---|---|
-| Flick the artwork up / down | Next / previous song |
+| Swipe the artwork left / right | Next / previous song. The artwork follows your finger and slides out when you let go after about 70 pixels of travel, or on a quick flick. Dragging up or down scrolls the page instead. |
 | Double-tap the artwork's edges | Seek back / forward |
 | Double-tap the centre | Like the song |
 | Up Next / Lyrics tabs | The coming songs with Pin a mood, or synced lyrics |

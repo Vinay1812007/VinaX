@@ -14,7 +14,7 @@ import { pool, song, versionFamily, WORDS, type LangId } from './catalogue';
  * Bump EVAL_FIXTURES_VERSION whenever a fixture changes, or two reports stop
  * being comparable.
  */
-export const EVAL_FIXTURES_VERSION = '1.0.0';
+export const EVAL_FIXTURES_VERSION = '1.1.0'; // 8.1.0 — the mixed-queue scenario
 
 /** Far enough ahead that a soft mute is active whenever the evaluation runs, without reading the clock. */
 export const FAR_FUTURE = 4_102_444_800_000;

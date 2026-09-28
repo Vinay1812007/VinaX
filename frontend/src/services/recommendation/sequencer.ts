@@ -52,11 +52,17 @@ export interface SequenceOptions {
    * How strictly `language` holds. Songs with no language, or 'unknown', pass either way.
    *   'lock' (default) — strict: a song in another known language never enters
    *                      the stretch, even if that leaves it short.
-   *   'prefer'         — optional exploration: other languages stay in the pool
-   *                      at a cost (1.1 for one in `otherLanguages`, 2.5 for any
-   *                      other, +3 right after another off-language song), so a
-   *                      familiar-language detour can drift in when the arc and
-   *                      the pool justify it, and never two in a row by choice.
+   *   'prefer'         — the 8.1 mix policy: other languages stay in the pool
+   *                      at a cost (0.6 for one in `otherLanguages`, or −0.35
+   *                      after three or more songs in the queue language; 2.5
+   *                      for any other; +3 right after another off-language
+   *                      song), inside the hard rules below.
+   */
+  /**
+   * 8.1.0 — under 'prefer' three rules are hard, not priced: the target
+   * language opens the stretch (slots 1 and 2), an off-target song is never
+   * followed by another one, and off-target songs fill at most half the
+   * stretch. They give way only when nothing else is left (`language-mix`).
    */
   /**
    * 8.1.0 — under 'prefer' three rules are hard, not priced: the target
