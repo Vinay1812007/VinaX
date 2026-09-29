@@ -20,6 +20,18 @@ export const creditedNames = (s: Song): string[] =>
 export const workKey = (s: Song): string => canonicalKey(s.title, s.artists?.[0]?.name ?? s.subtitle ?? '');
 export const cutKey = (s: Song): string => recordingKey(s.title, s.artists?.[0]?.name ?? s.subtitle ?? '');
 
+/**
+ * 8.3.0 — the style a fixture's sitting is in, read the way a listener would:
+ * a DJ remix says "DJ" or "Remix" in its title or album; a folk song's album
+ * says "Folk" or "Janapadalu". Written out here rather than imported from
+ * services/recommendation/style.ts, so the evaluation cannot agree with a bug.
+ */
+export type EvalStyle = 'dj' | 'folk';
+export function inEvalStyle(s: Song, style: EvalStyle): boolean {
+  const text = `${s.title ?? ''} ${s.album?.name ?? ''}`.toLowerCase();
+  return style === 'dj' ? /\b(dj|remix)\b/.test(text) : /\bfolk\b|janapad/.test(text);
+}
+
 export type ViolationKind =
   | 'explicit-in-kid-mode'
   | 'muted-language'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Song } from '@/types';
-import { TUNE_OPTIONS, isTuneIntent, randomTune, tunePromptHint, tuneScoreAdjust, tuneShape } from './tune';
+import { TUNE_OPTIONS, isTuneIntent, randomTune, tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape } from './tune';
 
 const song = (extra: Partial<Song>): Song => ({
   kind: 'song', id: 'x', title: 'Song', subtitle: 'A', artists: [{ id: 'a', name: 'A' }], album: null, images: [], audio: [],
@@ -14,6 +14,8 @@ describe('tune intents', () => {
     expect(isTuneIntent('chill')).toBe(true);
     expect(isTuneIntent('nope')).toBe(false);
     for (let i = 0; i < 20; i += 1) expect(randomTune()).not.toBe('surprise');
+    // 8.3.1 — a surprise never locks the queue to a style.
+    for (let i = 0; i < 200; i += 1) expect(['surprise', 'dj', 'folk', 'devotional']).not.toContain(randomTune());
   });
 
   it('nudges era and language deterministically from catalogue metadata', () => {
@@ -56,5 +58,15 @@ describe('tuneSearchQuery (8.1.0)', () => {
     expect(tuneSearchQuery('surprise', 'telugu')).toBeNull();
     // Never a phrase the catalogue matched as a song title.
     for (const i of ['energetic', 'chill', 'romantic', 'heartbreak'] as const) expect(tuneSearchQuery(i, 'telugu')!.split(' ')).toHaveLength(3);
+  });
+});
+
+describe('8.3.0 — DJ remix and Folk tunes', () => {
+  it('are tune options with catalogue queries the catalogue answers, and no energy arc of their own', () => {
+    expect(TUNE_OPTIONS.map((o) => o.id)).toEqual(expect.arrayContaining(['dj', 'folk']));
+    expect(tuneSearchQuery('dj', 'telugu')).toBe('telugu dj remix');
+    expect(tuneSearchQuery('folk', 'kannada')).toBe('kannada folk songs');
+    expect(tuneShape('dj')).toBeNull();
+    expect(tunePromptHint('folk')).toMatch(/FOLK/);
   });
 });

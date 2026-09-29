@@ -1,4 +1,5 @@
 import { LANGUAGES } from '@/constants/languages';
+import { styleFromText, styleQueries, type MusicStyle } from '@/services/recommendation/style';
 
 /**
  * 8.2.0 — what a free-text music request is asking for.
@@ -25,6 +26,12 @@ export interface MusicIntent {
   decade: number | null;
   /** Old songs ("classic", "evergreen", "retro") or new ones ("latest", "new"). */
   era: 'classic' | 'fresh' | null;
+  /**
+   * 8.3.0 — a style the text names: DJ remixes ("telugu dj songs", "remix"),
+   * folk ("folk songs", "janapadalu", "palle patalu", "lok geet") or
+   * devotional ("bhajans"). See services/recommendation/style.ts.
+   */
+  style: MusicStyle | null;
   /** Content words left after the recognised cues and filler are removed. */
   keywords: string[];
   /** How many cues were recognised (language, mood, activity, energy, era). */
@@ -80,9 +87,17 @@ export function words(text: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * 8.3.1 — "dj" is the party activity only when the words ask for the DJ
+ * sound ("telugu dj songs", "dj remix"); in "DJ Tillu" it is part of a name.
+ */
+const djIsName = (text: string): boolean => styleFromText(text) !== 'dj';
+
 export function parseMusicIntent(text: string): MusicIntent {
   const lower = ` ${text.toLowerCase()} `;
   const list = words(text);
+  const style = styleFromText(text);
+  const djName = style !== 'dj';
   const languages: string[] = [];
   const moods: IntentMood[] = [];
   let activity: IntentActivity | null = null;
@@ -96,7 +111,7 @@ export function parseMusicIntent(text: string): MusicIntent {
     }
     const mood = MOOD_WORDS[w];
     if (mood && !moods.includes(mood)) moods.push(mood);
-    const act = ACTIVITY_WORDS[w];
+    const act = w === 'dj' && djName ? undefined : ACTIVITY_WORDS[w];
     if (act && !activity) activity = act;
     const dec = /^(?:19|20)?(\d)0s$/.exec(w);
     if (dec && !decade) {
@@ -111,8 +126,8 @@ export function parseMusicIntent(text: string): MusicIntent {
   if (activity && !moods.length && ACTIVITY_MOOD[activity]) moods.push(ACTIVITY_MOOD[activity] as IntentMood);
   if (energy === 'high' && !moods.includes('energetic') && !moods.includes('melancholy')) moods.push('energetic');
   const era = CLASSIC.test(lower) || (decade !== null && decade < 2010) ? 'classic' : FRESH.test(lower) ? 'fresh' : null;
-  const cues = languages.length + moods.length + (activity ? 1 : 0) + (energy ? 1 : 0) + (era ? 1 : 0);
-  return { languages, moods, activity, energy, decade, era, keywords, cues };
+  const cues = languages.length + moods.length + (activity ? 1 : 0) + (energy ? 1 : 0) + (era ? 1 : 0) + (style ? 1 : 0);
+  return { languages, moods, activity, energy, decade, era, style, keywords, cues };
 }
 
 /** Words that mark a description of music rather than a title. */
@@ -132,8 +147,9 @@ export function looksLikeNaturalLanguage(query: string): boolean {
   if (list.length < 3 || list.length > 20) return false;
   // Cue WORDS actually typed (an activity's implied energy does not count twice).
   const lower = ` ${list.join(' ')} `;
+  const djName = djIsName(query);
   const typed =
-    list.filter((w) => MOOD_WORDS[w] || ACTIVITY_WORDS[w] || /^(?:19|20)?\d0s$/.test(w)).length +
+    list.filter((w) => MOOD_WORDS[w] || (ACTIVITY_WORDS[w] && !(w === 'dj' && djName)) || /^(?:19|20)?\d0s$/.test(w)).length +
     (HIGH_ENERGY.test(lower) || LOW_ENERGY.test(lower) ? 1 : 0) +
     (CLASSIC.test(lower) || FRESH.test(lower) ? 1 : 0);
   if (typed < 1) return false;
@@ -151,8 +167,18 @@ const CURRENT_YEAR = new Date().getFullYear();
  * "<language> romantic songs", "<language> devotional songs",
  * "<language> evergreen hits"): the catalogue answers a longer description
  * such as "telugu high energy workout songs" with nothing at all.
+ *
+ * 8.3.0 — a named style leads with the style's own phrases ("<language> dj
+ * remix", "<language> remix songs", "<language> folk songs"), and the
+ * activity a word like "dj" implies (party) adds nothing generic after them:
+ * "telugu dj songs" asks for DJ remixes, not film dance numbers.
  */
 export function catalogQueries(intent: MusicIntent, fallbackLanguages: readonly string[] = [], max = 4): string[] {
+  if (intent.style) return styleCatalogQueries(intent, intent.style, intent.languages.length ? intent.languages : fallbackLanguages.slice(0, 2), max);
+  // 8.3.1 — words and a language but no mood, activity, energy or era ("telugu dj tillu movie songs"):
+  // the words are a name, and the catalogue is asked for them first.
+  const named = intent.cues === intent.languages.length ? keywordQuery(intent) : null;
+  if (named) return [named, ...catalogQueries({ ...intent, keywords: [] }, fallbackLanguages, max)].filter((q, i, all) => all.indexOf(q) === i).slice(0, max);
   const terms: string[] = [];
   const add = (...t: string[]) => {
     for (const x of t) if (!terms.includes(x)) terms.push(x);
@@ -198,10 +224,41 @@ export function catalogQueries(intent: MusicIntent, fallbackLanguages: readonly 
   return [...new Set(out)].slice(0, max);
 }
 
+const MOOD_TERM: Record<IntentMood, string> = { energetic: 'dance songs', melancholy: 'sad songs', romantic: 'romantic songs', devotional: 'devotional songs', chill: 'melody songs' };
+
+/** Words that name nothing the catalogue can search for ("movie songs", "film songs"). */
+const QUERY_NOISE = new Set(['movie', 'movies', 'film', 'films', 'cinema', 'album', 'albums', 'soundtrack', 'ost', 'tonight', 'today', 'now']);
+const STYLE_WORD: Record<MusicStyle, string> = { dj: 'remix', folk: 'folk', devotional: 'devotional' };
+
+/** The request's own words (a singer, a film, a song), without noise and — in a style request — the style's words; null when there are none. */
+function keywordQuery(intent: MusicIntent): string | null {
+  const styleWord = (w: string): boolean => !!intent.style && (w === 'mix' || !!styleFromText(w));
+  const kw = intent.keywords.filter((w) => !QUERY_NOISE.has(w) && !styleWord(w)).slice(0, 4).join(' ');
+  return kw.length >= 3 ? kw : null;
+}
+
+/**
+ * The style's phrases in each language (interleaved), with the request's own
+ * words in the style second ("arijit singh remix" for "arijit singh dj
+ * remix"), then the moods the text also names, in the first language.
+ */
+function styleCatalogQueries(intent: MusicIntent, style: MusicStyle, langs: readonly string[], max: number): string[] {
+  const out: string[] = [];
+  const list = langs.length ? langs : [''];
+  const phrases = list.map((l) => styleQueries(style, l || null, 0).map((q) => q.query));
+  for (let i = 0; i < 2; i += 1) for (const p of phrases) if (p[i]) out.push(p[i]);
+  const own = keywordQuery(intent);
+  if (own) out.splice(1, 0, `${own} ${STYLE_WORD[style]}`);
+  const lead = list[0] ? `${list[0]} ` : '';
+  for (const mood of intent.moods) if (!(style === 'devotional' && mood === 'devotional') && !(style === 'dj' && mood === 'energetic')) out.push(`${lead}${MOOD_TERM[mood]}`);
+  return [...new Set(out)].slice(0, max);
+}
+
 /** A short title for a playlist built from an intent ("Telugu Workout Mix"). */
 export function intentTitle(intent: MusicIntent): string {
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const lang = intent.languages[0] ? cap(intent.languages[0]) + ' ' : '';
+  if (intent.style) return `${lang}${intent.style === 'dj' ? 'DJ Remix' : cap(intent.style)} Mix`;
   if (intent.activity) return `${lang}${cap(intent.activity)} Mix`;
   const mood = intent.moods[0];
   const moodName: Record<IntentMood, string> = { romantic: 'Romance', energetic: 'Energy', chill: 'Chill', melancholy: 'Heartbreak', devotional: 'Devotion' };

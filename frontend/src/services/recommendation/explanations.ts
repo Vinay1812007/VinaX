@@ -1,6 +1,7 @@
 import { languageLabel } from '@/constants/languages';
 import { dayPartLabel } from '@/utils/time';
 import type { ReasonComponent, RecommendationContext } from './types';
+import { MUSIC_STYLES, offStyleWhy, styleWhy, type MusicStyle } from './style';
 
 /** Honest, human one-liners for shelves and suggestions. */
 export function explainReasons(reasons: ReasonComponent[]): string {
@@ -77,6 +78,13 @@ export function explainReasons(reasons: ReasonComponent[]): string {
       return top.detail ? `By an artist close to ${top.detail}` : 'By an artist close to this one';
     case 'proven':
       return top.detail ? `Like “${top.detail}”, which you enjoyed before` : 'Like picks you enjoyed before';
+    // 8.3.0 — the listener's style (detail: the style, or "off-<style>").
+    case 'style': {
+      const off = top.detail?.startsWith('off-');
+      const style = MUSIC_STYLES.find((s) => s === (off ? top.detail!.slice(4) : top.detail)) as MusicStyle | undefined;
+      if (!style) return top.weight < 0 ? 'Held back — a different style from what is playing' : 'Keeps the style that is playing';
+      return off || top.weight < 0 ? offStyleWhy(style) : styleWhy(style);
+    }
     default:
       return 'Picked from your listening';
   }

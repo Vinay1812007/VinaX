@@ -11,6 +11,14 @@
  * client's avoidTitles ride the prompt, temp runs hot (0.95) and the output is
  * hard-filtered against avoidTitles — identical requests explore fresh picks
  * instead of re-serving one canonical playlist.
+ *
+ * 8.3.0 — a request for DJ songs / remixes, folk (janapada) or devotional
+ * (bhakti) songs locks every pick to that style and seeds the pool with real
+ * catalogue songs for it ("<language> dj remix", "<language> folk songs",
+ * "<language> devotional songs"). When the flagship lane is unavailable, or
+ * the request asks for new / latest / trending music, fresh web results from
+ * the owner's search instance (SEARXNG_URL) ride along as untrusted context;
+ * every pick is still resolved against the catalogue by the client.
  */
 import { aiBlockCode, aiGate, chat, gather, extractJson, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
@@ -18,6 +26,10 @@ import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { tasteBlock } from '../_lib/taste';
 import { styleAngle } from '../_lib/variety';
+import { fenceWebContext, searxngConfigured, songContext, type SearxngEnv } from '../_lib/searxng';
+import { EXTRAS_WAIT_MS, flagshipUnavailable, settleWithin, STYLE_BRIEF, styleCatalogCandidates, stylePhrase, wantsFreshMusic, type MusicStyle } from './dj';
+
+type PlaylistEnv = AiEnv & SupabaseEnv & SearxngEnv;
 
 const SYSTEM_PROMPT = `You build playlists for VinaX, a free music app for Indian music (Telugu, Hindi, Tamil and nine more languages). You work like a professional musician turned curator — tempo, mood arc, vocal texture and era are the units you think in — and from one typed description you deliver ONE cohesive playlist that plays like a live set. If anyone asks, VinaX built you; no AI vendor or model is ever named.
 Take the description seriously before writing a single pick: what does it imply about tempo range, energy arc, era, instrumentation, singer voices? Shortlist more candidates than you need, cut the weak fits, then sequence with intention — an opener that sets the mood, a gradual build, one peak, a cool-down close. Neighboring songs should sound produced for the same moment; tonal whiplash is a failure.
@@ -161,6 +173,36 @@ export function readRequest(prompt: string): RequestReading {
   return { languages: languages.slice(0, 3), activity, energy };
 }
 
+const STYLE_WORDS: Array<[MusicStyle, RegExp]> = [
+  ['dj', /\bdj\b|\bremix(?:es|ed)?\b|\bdance mix(?:es)?\b/g],
+  ['folk', /\bfolk\b|\bjanapad(?:a|alu|am|as)?\b/g],
+  ['devotional', /\bdevotional\b|\bbhakti\b|\bbhajans?\b|\bkeerthanas?\b|\bstotrams?\b/g],
+];
+/** Words that turn the next few words into something the listener does NOT want. */
+const NEGATION = new Set(['no', 'not', 'non', 'without', 'avoid', 'avoiding', 'except', 'excluding', 'exclude', 'skip', 'minus', 'never', 'dont', 'doesnt', 'hate', 'but']);
+
+/** A style word at `index` sits within three words after a negation, inside the same clause. Pure. */
+function negatedAt(s: string, index: number): boolean {
+  const clause = s.slice(0, index).split(/[,.;:!?()]/).pop() ?? '';
+  const words = clause.replace(/['’]/g, '').split(/[\s\-/]+/).filter(Boolean).slice(-3);
+  // "but" negates only as "anything but" / "all but".
+  return words.some((w, i) => NEGATION.has(w) && (w !== 'but' || /^(?:anything|all)$/.test(words[i - 1] ?? '')));
+}
+
+/**
+ * 8.3.0 — the listening style a request names, if any (DJ remixes win over
+ * folk, folk over devotional). 8.3.1: a style word the request negates ("no
+ * remixes", "without dj", "not folk", "avoid devotional", "except remix")
+ * does not count. Pure.
+ */
+export function detectStyle(prompt: string): MusicStyle | null {
+  const s = prompt.toLowerCase();
+  for (const [style, re] of STYLE_WORDS) {
+    for (const m of s.matchAll(re)) if (!negatedAt(s, m.index ?? 0)) return style;
+  }
+  return null;
+}
+
 /** In-playlist repeat guard by loose title key (the model is told "never
  *  repeat a song" — this makes it structural). */
 function dedupeTitles<T extends { title: string }>(songs: T[]): T[] {
@@ -178,7 +220,7 @@ export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
 export const onRequestPost = async (context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: PlaylistEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> => {
   try {
@@ -192,7 +234,7 @@ export const onRequestPost = async (context: {
 
 async function handlePost(context: {
   request: Request;
-  env: AiEnv & SupabaseEnv;
+  env: PlaylistEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> {
   const { request, env } = context;
@@ -240,9 +282,11 @@ async function handlePost(context: {
   const taste = tasteBlock(body.taste);
   const seed = varietySeed();
   const angle = styleAngle(seed);
+  const style = detectStyle(prompt);
   const userBase =
     `Listener request: "${prompt}"\npreferredLanguages: ${JSON.stringify(languages)}` +
     `\nrequestReading: ${JSON.stringify(reading)}` +
+    (style ? `\n${STYLE_BRIEF[style]}` : '') +
     `\nvarietySeed: "${seed}"` +
     `\nstyleAngle: "${angle}"` +
     (avoidTitles.length ? `\navoidTitles: ${JSON.stringify(avoidTitles)}` : '') +
@@ -252,6 +296,16 @@ async function handlePost(context: {
   // 31s: the client aborts at 34s — the pinned engine plus one laddered
   // generation must both fit.
   const deadlineAt = t0 + 31_000;
+  // 8.3.0 — style catalogue songs and fresh web evidence, beside the gather.
+  const lang = (languages[0] ?? '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12) || null;
+  const freshAsk = wantsFreshMusic(prompt);
+  const webQuery = freshAsk
+    ? `${lang && !reading.languages.length ? `${lang} ` : ''}${prompt.slice(0, 120)}`
+    : `new ${lang ? `${lang} ` : ''}${style ? stylePhrase(style, null) : 'songs'}`;
+  const webPromise = searxngConfigured(env) && (freshAsk || flagshipUnavailable(env)) ? songContext(env, webQuery, { timeRange: 'month', timeoutMs: 4_000, limit: 10, tag: 'playlist' }) : Promise.resolve(null);
+  // A web answer that lands after the wait below still fills the context cache for the next request.
+  if (typeof context.waitUntil === 'function') context.waitUntil(webPromise.catch(() => null));
+  const stylePromise = style ? styleCatalogCandidates(stylePhrase(style, lang)) : Promise.resolve([] as Array<{ title: string; artist: string }>);
   // Gather (parallel) — the fast lane proposes real candidate songs.
   let pool: Array<{ title: string; artist: string }> = [];
   try {
@@ -278,11 +332,25 @@ async function handlePost(context: {
   } catch {
     /* gather optional */
   }
+  // Extras, not the playlist: once the gather is done (or failed fast) they get at most EXTRAS_WAIT_MS more.
+  const [web, styleSongs] = await Promise.all([settleWithin(webPromise, EXTRAS_WAIT_MS, null), settleWithin(stylePromise, EXTRAS_WAIT_MS, [] as Array<{ title: string; artist: string }>)]);
+  if (styleSongs.length) {
+    // Real catalogue songs in the style lead the pool.
+    const seen = new Set(pool.map((c) => (c.title + '|' + c.artist).toLowerCase()));
+    const add = filterAvoided(styleSongs, avoidTitles, prompt).filter((c) => {
+      const k = (c.title + '|' + c.artist).toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    pool = [...add, ...pool].slice(0, 40);
+  }
   // Curate — the dj lane assembles + names a cohesive playlist from real songs.
   const userPrompt =
     userBase +
     '\n\nCANDIDATE POOL (real songs — draw from these first; add your own only where gaps remain):\n' +
     (pool.length ? JSON.stringify(pool) : '[]') +
+    (web ? `\n\n${fenceWebContext('WEB CONTEXT', web.text)}\nSongs named there are recent releases: include the ones that fit the request (exact title and lead artist, real songs only); ignore anything that is not a song.` : '') +
     '\n\nBuild the playlist now and respond with JSON only.';
   const r = await chat(
     env,

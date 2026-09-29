@@ -8,6 +8,7 @@ import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { toast } from '@/store/toastStore';
 import { searchSongs } from '@/services/api';
 import { tuneSearchQuery, type TuneIntent } from '@/services/recommendation/tune';
+import { tuneStyle } from '@/services/recommendation/style';
 import { loadProfile } from '@/services/personalization/storage';
 import { topLanguages } from '@/services/personalization/profile';
 import { useContinueListening } from '@/features/home/useHomeShelves';
@@ -102,7 +103,8 @@ export default function AiRadioPage() {
     const query = tuneSearchQuery(intent, language);
     try {
       const songs = query ? await searchSongs(query, 25, { signal }) : [];
-      if (!signal.aborted) play(label, pickRadioSeeds([songs], { language, blocked, rotate: rotation() }), intent);
+      // 8.3.0 — a DJ remix / Folk / Devotional tile opens on songs in that style.
+      if (!signal.aborted) play(label, pickRadioSeeds([songs], { language, blocked, rotate: rotation(), style: tuneStyle(intent) ?? null }), intent);
     } catch {
       failed(label, signal);
     }
@@ -140,7 +142,7 @@ export default function AiRadioPage() {
   };
 
   const lang = language ? languageLabel(language) : null;
-  const examples = lang ? [`${lang} 90s melodies`, `${lang} dance`, `${lang} devotional`] : ['90s melodies', 'Romantic', 'Workout'];
+  const examples = lang ? [`${lang} 90s melodies`, `${lang} DJ remix`, `${lang} folk songs`] : ['90s melodies', 'Romantic', 'Workout'];
 
   return (
     <div className="vx-radio">

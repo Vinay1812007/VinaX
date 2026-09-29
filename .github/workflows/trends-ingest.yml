@@ -7,13 +7,20 @@ name: Trends ingest
 # Set the CRON_SECRET repository secret to match the Worker's CRON_SECRET.
 #
 # Cadence: every six hours. One run reads one page of 50 per region at 1 quota
-# unit a request (at most 3 with the endpoint's own retries, 9 if this
-# workflow also retries a failing run), so four runs a day use 4 units per
-# region normally and 36 at worst, against the provider's default
-# 10,000-unit daily quota and the app's own ceiling
-# (TRENDS_VIDEO_DAILY_UNIT_BUDGET, default 200). The chart
-# does not move fast enough for more to help, the stale threshold (18 hours)
-# tolerates two missed runs, and each run's catalogue matching is budgeted.
+# unit a request, at most 3 with the endpoint's own retries. This workflow
+# calls the endpoint again only when the answer is NOT the endpoint's own JSON
+# (an edge or network failure, after which the endpoint may still have run),
+# at most three calls, so four runs a day use 4 units per region normally and
+# 36 at worst, against the provider's default 10,000-unit daily quota and the
+# app's own ceiling (TRENDS_VIDEO_DAILY_UNIT_BUDGET, default 200). The web
+# source spends no quota. The chart does not move fast enough for more to
+# help, the stale threshold (18 hours) tolerates two missed runs, and each
+# run's catalogue matching is budgeted.
+#
+# Everything the endpoint answers is untrusted text in this log: it is
+# flattened to one line and every "::" is broken up before it is printed, so a
+# source's error message can never run a workflow command, and the failure
+# summary is written to GITHUB_OUTPUT with a random heredoc delimiter.
 on:
   schedule:
     - cron: '17 */6 * * *' # 00:17, 06:17, 12:17, 18:17 UTC — off the hour, away from the other jobs
@@ -23,6 +30,12 @@ permissions:
   contents: read
   issues: write
 
+# One ingest at a time: a manual run and a scheduled one never overlap, and a
+# queued run waits instead of cancelling one that is already storing a snapshot.
+concurrency:
+  group: trends-ingest
+  cancel-in-progress: false
+
 jobs:
   ingest:
     runs-on: ubuntu-latest
@@ -30,16 +43,60 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Trigger trends ingest
-        # Retry transient failures (edge blips, cold starts) before giving up.
+        id: ingest
+        # Retry only what a retry can fix: a network error, a timeout, an edge
+        # blip or a cold start (anything that is not the endpoint's own JSON
+        # answer). A JSON 502 means the endpoint ran and a source failed; it
+        # already retried each source with backoff, so calling it again would
+        # only spend quota. Print why instead: `curl -f` used to hide the body.
         # A re-run inside the same hour is idempotent: the endpoint stores
         # nothing twice and spends no quota on a snapshot it already has.
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          set -eu
+          set -u
+          # Endpoint text → one safe log line: no CR/LF, no "::" workflow commands.
+          CLEAN='def clean: tostring | gsub("[\\r\\n]+"; " ") | gsub("::"; ": :");'
+          summary() {
+            delim="SUMMARY_$(openssl rand -hex 16)"
+            {
+              echo "summary<<${delim}"
+              printf '%s\n' "$1" | tr '\r\n' '  ' | sed 's/::/: :/g' | cut -c1-600
+              echo
+              echo "${delim}"
+            } >> "$GITHUB_OUTPUT"
+          }
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::The CRON_SECRET repository secret is not set"
+            summary "The CRON_SECRET repository secret is not set."
+            exit 1
+          fi
           attempt=1
-          until curl -fsS -X POST "https://www.sirimillavinay.online/api/cron/trends-ingest" \
-              -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"; do
+          while :; do
+            # Never read a previous attempt's answer as this one's.
+            rm -f body.json
+            code=$(curl -sS -o body.json -w '%{http_code}' --max-time 120 -X POST \
+              "https://www.sirimillavinay.online/api/cron/trends-ingest" \
+              -H "x-cron-secret: ${CRON_SECRET}") || code=000
+            echo "attempt $attempt: HTTP $code"
+            if jq -e 'type == "object"' body.json >/dev/null 2>&1; then
+              # The endpoint's own answer: show every run and every source not run.
+              jq -r "$CLEAN"' (.runs // [])[] | "run \(.source | clean)/\(.region | clean): \(.status | clean)\(if .reason then " — \(.reason | clean)" else "" end) (fetched \(.fetched), inserted \(.inserted), matched \(.matched), review \(.review), deferred \(.deferred))"' body.json || true
+              jq -r "$CLEAN"' (.notRun // [])[] | "not run \(.source | clean): \(.status | clean)\(if .reason then " — \(.reason | clean)" else "" end)"' body.json || true
+              jq -r "$CLEAN"' select(.error) | "error: \(.error | clean)"' body.json || true
+              if [ "$code" = "200" ]; then exit 0; fi
+              failed=$(jq -r "$CLEAN"' [(.runs // [])[] | select(.status == "error") | "\(.source | clean)/\(.region | clean): \(.reason // "unknown" | clean)"] | join("; ")' body.json 2>/dev/null || true)
+              [ -n "$failed" ] || failed=$(jq -r "$CLEAN"' .error // "unknown" | clean' body.json 2>/dev/null || echo unknown)
+              echo "::error::trends-ingest answered HTTP $code — $failed"
+              summary "HTTP $code — $failed"
+              exit 1
+            fi
+            # Not the endpoint's JSON: an edge or network failure worth retrying.
+            head -c 300 body.json 2>/dev/null | tr '\r\n' '  ' | sed 's/::/: :/g' || true
+            echo
             if [ "$attempt" -ge 3 ]; then
-              echo "::error::trends-ingest endpoint failed after $attempt attempts"
+              echo "::error::trends-ingest endpoint unreachable after $attempt attempts (last HTTP $code)"
+              summary "Endpoint unreachable after $attempt attempts (last HTTP $code)."
               exit 1
             fi
             echo "attempt $attempt failed; sleeping 30s"
@@ -47,11 +104,21 @@ jobs:
             sleep 30
           done
 
-      - name: Open failure issue
+      - name: Report failure
+        # One open issue for the failure, updated on each failed run, instead
+        # of a new issue every six hours.
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SUMMARY: ${{ steps.ingest.outputs.summary }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          gh issue create \
-            --title "cron trends ingest failed" \
-            --body "The scheduled trends ingest workflow failed. Open Trend Operations in the owner console for the failing source and its error. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          set -eu
+          title="cron trends ingest failed"
+          body="The scheduled trends ingest failed: ${SUMMARY:-see the run log}. Open Trend Operations in the owner console for the failing source and its error. Run: ${RUN_URL}"
+          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number,title -q ".[] | select(.title == \"$title\") | .number" | head -n 1)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

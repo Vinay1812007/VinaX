@@ -199,6 +199,16 @@ describe('v6.5.0 — generative DJ, verified in the catalogue', () => {
     expect(useReasonStore.getState().reasons.n1).toBe('a discovery');
   });
 
+  it('8.3.0 — sends the listener’s style as context.style, and nothing when there is none', async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ songs: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', f);
+    await djSequence(pool[0], ctx, pool, 5, undefined, { style: 'folk' });
+    await djSequence(pool[0], ctx, pool, 5, undefined, {});
+    const bodies = f.mock.calls.map((c) => JSON.parse((c as unknown as [string, { body: string }])[1].body) as { context: Record<string, unknown> });
+    expect(bodies[0].context.style).toBe('folk');
+    expect('style' in bodies[1].context).toBe(false);
+  });
+
   it('commits only the accepted songs of a proposal', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ intro: 'Hi.', songs: [{ songId: '3', title: 'Ramuloo Ramulaa', artist: 'Anurag Kulkarni', reason: 'kept', segue: 'one' }, { songId: '4', title: 'Inkem Inkem', artist: 'Sid Sriram', reason: 'dropped', segue: 'two' }, { songId: '2', title: 'Butta Bomma', artist: 'Armaan Malik', reason: 'dropped too', segue: 'three' }] }), { status: 200 })));
     const set = await djSequence(pool[0], ctx, pool, 8);

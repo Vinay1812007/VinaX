@@ -166,6 +166,10 @@ A matched module with no handler for the request method answers `405`.
 | `/api/push/*`, `/api/cron/*` | Push subscription and the scheduled jobs the workflows call with `x-cron-secret` |
 | `/api/admin/*` | Owner console data and actions, all behind server-side admin auth — see [admin-console.md](admin-console.md). A failed database read answers `502` with its kind (unavailable, unauthorized, schema missing, bad request), never an empty `200`; every database request has a deadline (`_lib/supabase.ts`). |
 
+### Web search (8.3)
+
+The Worker's web search goes through two modules. `_lib/searxng.ts` talks to the owner's self-hosted SearXNG instance (`SEARXNG_URL`, bearer token `SEARXNG_TOKEN`; the deploy kit is `deploy/searxng/`): bounded calls that never throw, a per-isolate rest after a failure, and fenced, untrusted results for model prompts. `_lib/websearch.ts` `liveSearch` puts SearXNG first and keeps the older keyless sources as the fallback. Callers: `/api/vinaxai` (web search, the Search-page expert's grounding), `/api/dj` and `/api/playlist` (fresh discoveries), the `web` trends source in `_lib/trends/webSignal.ts`, and `/api/admin/health`. Nothing a result says is played without a catalogue match. [ai.md](ai.md#web-search-83) has the details.
+
 ## Owner console
 
 `frontend/public/admin/` is a separate static page (plain scripts, no build step) that ships inside the frontend build and is served at `/admin/`. It holds no secrets. Every read and write goes to `/api/admin/*`, where the Worker checks the admin session on each request. What the owner publishes there — feature flags, the Home layout, banners, search synonyms, disabled catalogue bases, announcements — reaches the app through `/api/appconfig` and related public routes, which the app reads with a 5-minute stale time (`features/home/useAppConfig.ts`). [admin-console.md](admin-console.md) has the details.

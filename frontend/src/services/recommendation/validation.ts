@@ -26,10 +26,15 @@ import type { RejectedCandidate, Relaxation, RelaxedRule } from './types';
  *        c. 7.2.0 — the familiar opening: no discovery in slot 1, nor in
  *           slot 2 of a stretch of four or more;
  *        d. no lead artist twice in a row (the seed counts as the previous
- *           song).
+ *           song);
+ *        e. 8.3.0 — the style: while a style is active (DJ remixes, folk,
+ *           devotional), at least `style.min` of the stretch is in it, or as
+ *           many as the pool holds — off-style songs fill only the rest.
  *      When no remaining song satisfies all of them, they give way in the
- *      order d, a, b, c — each only for that slot, and a, b and c are
- *      reported in `relaxed` (d never was: it is counted in `repairs`).
+ *      order b, c, a, e, then the language-mix rules, then d — each only for
+ *      that slot; a, b, c and e are reported in `relaxed` (d never was: it is
+ *      counted in `repairs`). A pool that holds fewer style songs than
+ *      `style.min` is reported once as a 'style' relaxation.
  *
  * Order is otherwise preserved, so an accepted arc stays an arc. The local
  * order, the AI order and the reserve top-up all pass through here.
@@ -63,6 +68,12 @@ export interface ValidateOptions extends HardFilterOptions {
   discoveryShare?: number;
   /** 7.2.0 — hold discoveries out of the opening (slot 1; slot 2 too when four or more ship). Default true when `discoveryIds` is given. */
   familiarOpening?: boolean;
+  /**
+   * 8.3.0 — the listener's style: `matches` tells a song in the style, and at
+   * least `min` songs of the stretch must match while the pool holds that
+   * many (./style.ts, weights.ts STYLE_MIN_SHARE). Absent = no style rule.
+   */
+  style?: { matches: (s: Song) => boolean; min: number; label?: string } | null;
 }
 
 export interface ValidateResult {
@@ -152,7 +163,16 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
   let prevOff = false;
   const offCap = Math.floor(limit / 2);
   const mixOk = (s: Song): boolean => !offLang(s) || (out.length >= 2 && !prevOff && offCount < offCap);
-  const policy = (s: Song): boolean => capOk(s) && shareOk(s) && openOk(s) && mixOk(s);
+  // 8.3.0 — the style quota: off-style songs may fill only what the style cannot.
+  const style = options.style ?? null;
+  const inStyle = (s: Song): boolean => !style || style.matches(s);
+  const styleAvailable = style ? pool.filter(style.matches).length : 0;
+  const styleWanted = style ? Math.min(n, Math.max(0, Math.floor(style.min))) : 0;
+  const offStyleCap = style ? n - Math.min(styleWanted, styleAvailable) : Infinity;
+  let offStyle = 0;
+  const styleOk = (s: Song): boolean => inStyle(s) || offStyle < offStyleCap;
+  if (style && styleAvailable < styleWanted) relax({ rule: 'style', detail: `${styleAvailable} ${style.label ?? 'in-style'} songs for ${styleWanted} slots; the rest may be other songs` });
+  const policy = (s: Song): boolean => capOk(s) && shareOk(s) && openOk(s) && mixOk(s) && styleOk(s);
   // Most rules first; each later tier gives one more rule way, in the order a
   // listener minds least: the discovery allocation (an internal budget), then
   // the familiar opening, then the artist cap, and only last the rule against
@@ -160,10 +180,13 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
   // thing a listener actually hears. (7.2: the old order gave adjacency away
   // first, so a Familiar-mode queue, whose discovery budget is nearly zero,
   // shipped runs of one artist while other artists sat in the reserve.)
+  // 8.3.0 — the style holds past the artist cap: in a DJ session a second
+  // remix by one DJ is easier on the ear than a film song in the middle of it.
   const tiers: Array<(s: Song) => boolean> = [
     (s) => policy(s) && apartOk(s),
-    (s) => capOk(s) && openOk(s) && mixOk(s) && apartOk(s),
-    (s) => capOk(s) && mixOk(s) && apartOk(s),
+    (s) => capOk(s) && openOk(s) && mixOk(s) && styleOk(s) && apartOk(s),
+    (s) => capOk(s) && mixOk(s) && styleOk(s) && apartOk(s),
+    (s) => mixOk(s) && styleOk(s) && apartOk(s),
     (s) => mixOk(s) && apartOk(s),
     apartOk,
     () => true,
@@ -180,6 +203,8 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
     if (!shareOk(song)) relax({ rule: 'discovery-share', ...at, detail: `discovery ${discoveries + 1} over a cap of ${discoveryCap}; nothing else could fill the slot` });
     if (!openOk(song)) relax({ rule: 'familiar-opening', ...at, detail: 'a discovery in the opening; no familiar song was left' });
     if (!mixOk(song)) relax({ rule: 'language-mix', ...at, detail: out.length < 2 ? 'an off-language song in the opening; nothing in the queue language was left' : prevOff ? 'two language changes in a row; nothing in the queue language was left' : 'more than half the stretch off-language; nothing else was left' });
+    if (!styleOk(song)) relax({ rule: 'style', ...at, detail: `another song outside the ${style?.label ?? 'style'}; no song in it fit the other rules` });
+    if (!inStyle(song)) offStyle += 1;
     if (offLang(song)) offCount += 1;
     prevOff = offLang(song);
     if (leadOf(song)) perArtist.set(leadOf(song), (perArtist.get(leadOf(song)) ?? 0) + 1);

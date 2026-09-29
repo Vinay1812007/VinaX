@@ -5,6 +5,7 @@ import type { TasteProfile } from '@/services/personalization/profile';
 import type { UserRecommendationProfile, SessionRecommendationProfile } from './profiles';
 import type { DiscoveryMode } from '@/store/settingsStore';
 import type { SessionIntent } from '@/services/personalization/sessionIntent';
+import type { MusicStyle } from './style';
 
 export type CandidateSource =
   | 'related'
@@ -24,14 +25,16 @@ export type CandidateSource =
   /** 8.2.0 — the seed's genre or mood, in its language. */
   | 'genre'
   /** 8.2.0 — earlier automatic picks the listener finished or liked, and songs like them (./recMemory.ts). */
-  | 'proven';
+  | 'proven'
+  /** 8.3.0 — the listener's style (DJ remixes, folk, devotional) in the seed's language (./style.ts). */
+  | 'style';
 
 /**
  * 7.2.0 — which source a song "belongs to" when several found it: the first
  * of these it has. The listener's stated intent wins, then the seed and taste
  * sources, then the broad ones (the order of the scorer's source boosts).
  */
-export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'album', 'favorite-album', 'related-artist', 'proven', 'history', 'rediscovery', 'genre', 'explore', 'trending'];
+export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'album', 'favorite-album', 'related-artist', 'style', 'proven', 'history', 'rediscovery', 'genre', 'explore', 'trending'];
 
 const rank = (s: CandidateSource): number => SOURCE_PRIORITY.indexOf(s);
 const titlesOf = (c: Candidate): string[] => c.seedTitles ?? (c.seedTitle ? [c.seedTitle] : []);
@@ -154,7 +157,9 @@ export type ReasonKind =
   /** 8.2.0 — by an artist similar to, or credited with, the seed's artist. */
   | 'similar-artist'
   /** 8.2.0 — like (or one of) the automatic picks the listener finished or liked before. */
-  | 'proven';
+  | 'proven'
+  /** 8.3.0 — in (or outside) the style the listener is in: DJ remixes, folk, devotional (./style.ts). */
+  | 'style';
 
 export interface ReasonComponent {
   kind: ReasonKind;
@@ -259,6 +264,21 @@ export interface RecommendationContext {
   servedKeys?: ReadonlySet<string>;
   /** 8.2.0 — ids that opened the last accepted continuation after this same seed (./recMemory.ts): held back a little. */
   seedRepeatIds?: ReadonlySet<string>;
+  /**
+   * 8.3.0 — the style the listener is in (DJ remixes, folk songs, devotional
+   * songs), set by the next-song engine from the seed, the last plays and the
+   * tune (./style.ts `sessionStyle`). It adds a style candidate source and a
+   * same-style boost / off-style cost to the score (weights.ts STYLE_WEIGHTS).
+   * Absent = no style: every surface that does not set it scores as before.
+   */
+  style?: MusicStyle | null;
+  /**
+   * 8.3.1 — the language the style source searches in, when it is not the
+   * seed's: the language "Switch language" moves the queue to, or null when
+   * there is none to switch to (the source is then skipped). Absent = the
+   * seed's language.
+   */
+  styleLanguage?: string | null;
 }
 
 /** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */
@@ -269,7 +289,7 @@ export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'dupl
  * because the pool could not fill the stretch otherwise. Hard rules (the
  * `RejectReason`s the hard filter returns) are never relaxed.
  */
-export type RelaxedRule = 'language-lock' | 'language-mix' | 'artist-cap' | 'discovery-share' | 'familiar-opening' | 'recent-version' | 'artist-spacing';
+export type RelaxedRule = 'language-lock' | 'language-mix' | 'artist-cap' | 'discovery-share' | 'familiar-opening' | 'recent-version' | 'artist-spacing' | 'style';
 
 /** 7.2.0 — one relaxation, with what gave and why (the developer breakdown shows these). */
 export interface Relaxation {

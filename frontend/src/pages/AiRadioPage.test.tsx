@@ -57,6 +57,20 @@ describe('AI Radio page', () => {
     expect(screen.getByRole('link', { name: 'See what’s next' }).getAttribute('href')).toBe('/queue');
   });
 
+  it('8.3.0 — the DJ remix tile opens on DJ remixes and keeps the radio on them', async () => {
+    const film = makeSong('film', { title: 'Film Hit', artist: 'X', playCount: 90_000_000 });
+    const remixes = ['Mama Nagulo', 'Peddha Puli', 'Silaka 2', 'Balamani Balamani'].map((t, i) => makeSong(`dj${i}`, { title: `${t} (DJ Remix Song)`, artist: `DJ ${i}` }));
+    search.mockResolvedValue([film, ...remixes]);
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Start DJ remix radio' }));
+    await waitFor(() => expect(startRadio).toHaveBeenCalledOnce());
+    expect(search.mock.calls[0][0]).toBe('telugu dj remix');
+    const [seed, opts] = startRadio.mock.calls[0] as [Song, { seeds: Song[]; tune: string }];
+    expect(opts.tune).toBe('dj');
+    expect(seed.id).toMatch(/^dj/);
+    expect(screen.getByRole('button', { name: 'Start Folk radio' })).toBeTruthy();
+  });
+
   it('free text finds seeds in the catalogue and steers the radio by the mood it names', async () => {
     search.mockImplementation(async (q: string) => (q === 'telugu melody songs' ? [makeSong('m1', { year: '1994' }), makeSong('m2', { year: '2020' })] : [makeSong('x1')]));
     mount();
@@ -67,6 +81,19 @@ describe('AI Radio page', () => {
     expect(seed.id).toBe('m1'); // the 90s song opens
     expect(opts.tune).toBe('melody');
     expect(generatePlaylist).not.toHaveBeenCalled();
+  });
+
+  it('8.3.1 — a film called "DJ Tillu" is a search for the film, not DJ remix radio', async () => {
+    const pataas = makeSong('pataas', { title: 'Pataas Pilla', artist: 'Anirudh Ravichander', album: { id: 'djt', name: 'DJ Tillu' } });
+    search.mockImplementation(async (q: string) => (q === 'dj tillu' ? [pataas, makeSong('nuvvala', { title: 'Nuvvala (Male)', artist: 'Siddhu Jonnalagadda', album: { id: 'djt', name: 'DJ Tillu' } })] : []));
+    mount();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Describe your radio' }), { target: { value: 'DJ Tillu' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start radio' }));
+    await waitFor(() => expect(startRadio).toHaveBeenCalledOnce());
+    expect(search.mock.calls.map((c) => c[0])).toEqual(['dj tillu']);
+    const [seed, opts] = startRadio.mock.calls[0] as [Song, { seeds: Song[]; tune: string | null }];
+    expect(['pataas', 'nuvvala']).toContain(seed.id);
+    expect(opts.tune).toBeNull();
   });
 
   it('asks VinaX AI only when the catalogue finds too little, and says so when nothing works', async () => {

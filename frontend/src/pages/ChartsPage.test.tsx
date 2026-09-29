@@ -149,6 +149,22 @@ describe('ChartsPage', () => {
     expect(screen.getByText('Chart Song')).toBeTruthy();
   });
 
+  it('8.3.1 — a song found on the web is labelled as found on the web, never as an editorial pick', async () => {
+    const webSource = { id: 'web', label: 'New on the web', kind: 'web' as const, status: 'ok' as const, lastSuccessAt: iso(1), region: 'IN' };
+    fetchVerifiedTrends.mockResolvedValue({
+      generatedAt: iso(0),
+      sources: [chartSource, editorialSource, webSource],
+      items: [trend({ catalogId: 'w1', title: 'Web Song', source: 'web', sourceLabel: 'New on the web', sourceKind: 'web', sourceRank: 1, sourceUrl: 'https://example.org/upload/1' })],
+    });
+    mount();
+    expect(await screen.findByText('Web Song')).toBeTruthy();
+    expect(screen.getByText('Web')).toBeTruthy();
+    expect(screen.getByText('New on the web · found on the web, checked by VinaX · IN · seen 2 h ago')).toBeTruthy();
+    expect(screen.queryByText(/Editorial pick/)).toBeNull();
+    expect(screen.queryByText('Pick')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Evidence for Web Song: the web page it was found on' })).toBeTruthy();
+  });
+
   it('labels an out-of-date source as out of date and still shows its entries', async () => {
     fetchVerifiedTrends.mockResolvedValue({ generatedAt: iso(0), sources: [{ ...chartSource, status: 'stale', lastSuccessAt: iso(20) }], items: [trend({ observedAt: iso(20) })] });
     mount();

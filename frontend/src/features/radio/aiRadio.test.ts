@@ -91,3 +91,48 @@ describe('RADIO_MOODS', () => {
     for (const m of RADIO_MOODS) expect(tuneSearchQuery(m.id, 'telugu')).toBeTruthy();
   });
 });
+
+describe('8.3.0 — DJ remix and folk radio', () => {
+  const dj = (id: string, title: string, artist = 'P.N. Lingaraju') => makeSong(id, { title, artist, album: { id, name: title } });
+  const folk = (id: string, title: string) => makeSong(id, { title, artist: 'A. Ramadevi', album: { id: 'f', name: 'Telugu Folk Songs Telangana Janapadalu Vol - 6' } });
+
+  it('offers DJ remix and Folk tiles', () => {
+    expect(RADIO_MOODS.map((m) => m.id)).toEqual(expect.arrayContaining(['dj', 'folk', 'devotional']));
+    expect(RADIO_MOODS.find((m) => m.id === 'dj')?.label).toBe('DJ remix');
+  });
+
+  it('reads a style from the words and asks the catalogue for it', () => {
+    expect(parseRadioPrompt('telugu dj songs')).toMatchObject({ language: 'telugu', intent: 'dj' });
+    expect(parseRadioPrompt('folk songs').intent).toBe('folk');
+    expect(parseRadioPrompt('janapadalu').intent).toBe('folk');
+    expect(promptQueries(parseRadioPrompt('telugu dj songs'), 'hindi')).toEqual(['telugu dj remix', 'telugu remix songs', 'telugu dj songs']);
+    expect(promptQueries(parseRadioPrompt('folk songs'), 'kannada')).toEqual(['kannada folk songs', 'folk songs']);
+  });
+
+  it('opens a style radio on songs in the style, one cut per song', () => {
+    const list = [makeSong('film', { title: 'Film Hit', artist: 'X' }), dj('v1', 'Nadakallo Nadaka (DJ Remix Song)'), dj('v5', 'Nadakallo Nadaka (DJ Remix Song Version 5)'), dj('d2', 'Mama Nagulo (DJ Remix Song)', 'Peddapuli Eeswar'), folk('f1', 'Chelle Chandramma')];
+    for (let rotate = 0; rotate < 4; rotate += 1) {
+      const seeds = pickRadioSeeds([list], { style: 'dj', rotate });
+      expect(seeds.map((s) => s.id).filter((id) => id.startsWith('v'))).toHaveLength(1);
+      expect(['v1', 'd2']).toContain(seeds[0].id);
+    }
+    expect(pickRadioSeeds([list], { style: 'folk' })[0].id).toBe('f1');
+  });
+
+  it('8.3.1 — "dj" in a film name, or a remix turned down, is no DJ radio', () => {
+    expect(parseRadioPrompt('DJ Tillu').intent).toBeNull();
+    expect(promptQueries(parseRadioPrompt('dj tillu songs'), 'telugu')).toEqual(['dj tillu songs']);
+    expect(parseRadioPrompt('arijit singh songs without remix').intent).toBeNull();
+    expect(promptQueries(parseRadioPrompt('arijit singh songs without remix'), 'hindi')).toEqual(['arijit singh songs without remix']);
+    // Native-script words name a style too.
+    expect(parseRadioPrompt('भजन').intent).toBe('devotional');
+    expect(parseRadioPrompt('జానపద పాటలు').intent).toBe('folk');
+  });
+
+  it('a style request seeds from the style', async () => {
+    const search = vi.fn(async (q: string) => (q === 'telugu dj remix' ? [makeSong('film', { title: 'Film Hit', artist: 'X' }), dj('d1', 'Silaka 2 (DJ Remix)', 'Laxmi Dasa'), dj('d2', 'Mama Nagulo (DJ Remix Song)', 'Peddapuli Eeswar')] : []));
+    const r = await seedsForPrompt('telugu dj songs', null, { search });
+    expect(r.parsed.intent).toBe('dj');
+    expect(r.seeds.slice(0, 2).map((s) => s.id).sort()).toEqual(['d1', 'd2']);
+  });
+});

@@ -12,6 +12,28 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.3.1': {
+    title: 'Styles that read songs right, and a steadier web search',
+    changes: [
+      { type: 'fixed', text: 'Film songs from movies called “DJ” or “DJ Tillu”, and songs by singers named Aarti or about a Keerthana, no longer switch the queue to DJ remixes or devotional songs.' },
+      { type: 'fixed', text: 'Skip two DJ remixes, folk songs or devotional songs and the queue stops insisting on that style until you let one play through. A style you pick in Tune this queue stays. Surprise me never locks a style.' },
+      { type: 'fixed', text: 'Typing “DJ Tillu” or “songs without remix” in AI Radio, Search or AI Playlist no longer starts DJ remixes, and “no remixes” in a playlist request is respected. “Arijit Singh remix” now finds that singer’s remixes, and words like भजन, జానపద and பக்தி start the matching style.' },
+      { type: 'improved', text: 'Switch language in a DJ remix session finds DJ remixes in the new language, and several remixes of one song by different DJs play only once.' },
+      { type: 'improved', text: 'The DJ and AI Playlist no longer wait for web search before they start, and reuse recent web results, so they answer sooner.' },
+      { type: 'improved', text: 'On Charts, songs found on the web are labelled New on the web and listed after the editor’s picks, instead of looking like editor’s picks.' },
+    ],
+  },
+  '8.3.0': {
+    title: 'VinaX 8.3 — DJ remixes and folk songs keep going, and AI that searches the web',
+    changes: [
+      { type: 'new', text: 'Play a DJ remix and the songs that follow are DJ remixes too, instead of drifting back to film songs. The same goes for folk songs and devotional songs, in autoplay, Smart Queue, AI Radio and the DJ. Play an ordinary song yourself and the queue moves on with you.' },
+      { type: 'new', text: 'AI Radio has DJ remix and Folk tiles, and typing “telugu dj songs”, “folk songs” or “janapadalu” starts a radio that stays in that style. Tune this queue has DJ remix and Folk chips, and More like this on a DJ remix or folk song keeps that style.' },
+      { type: 'improved', text: 'AI Playlist and search by description find real DJ remixes, folk songs and devotional songs when you ask for them, and keep the whole list in that style.' },
+      { type: 'fixed', text: 'Several versions of the same remix, or different DJs’ remixes of one song, no longer play one after another.' },
+      { type: 'improved', text: 'VinaX AI, the music expert in Search, the DJ and AI Playlist can look things up on the web, so they know about songs released recently when you ask for new or trending music.' },
+      { type: 'new', text: 'Charts can show new songs found on the web, each one checked before it appears.' },
+    ],
+  },
   '8.2.0': {
     title: 'VinaX 8.2 — AI Radio, a Home that arranges itself, and downloads that work on Android',
     changes: [

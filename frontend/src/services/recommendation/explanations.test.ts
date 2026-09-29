@@ -42,3 +42,13 @@ describe('7.2.0 — every recorded reason has its own line', () => {
     }
   });
 });
+
+describe('8.3.0 — the style line', () => {
+  it('says the style is kept, or that a song outside it was held back', () => {
+    expect(explainReasons([r('style', 0.4, 'dj')])).toBe('Keeps the DJ remix going');
+    expect(explainReasons([r('style', 0.25, 'folk')])).toBe('More folk songs, like the one playing');
+    expect(explainReasons([r('style', 0.4, 'devotional')])).toBe('More devotional songs, like the one playing');
+    expect(explainReasons([r('style', -0.3, 'off-dj')])).toBe('Held back — not a DJ remix song');
+    expect(explainReasons([r('style', 0.1)])).toBe('Keeps the style that is playing');
+  });
+});

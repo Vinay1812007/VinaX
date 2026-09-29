@@ -11,15 +11,24 @@
  * configured, purely because it returns better results; everything works
  * without it.
  *
+ * 8.3.0 — when the owner's self-hosted SearXNG instance is configured
+ * (SEARXNG_URL, see _lib/searxng.ts) it LEADS: general results, plus news
+ * narrowed to the question's time window when the question is time-sensitive
+ * ("latest", "this week", "trending", this year…), plus any direct answer or
+ * infobox it computed. The sources below are the fallback whenever SearXNG is
+ * unset, resting after a failure, or finds nothing.
+ *
  * WHAT COMES BACK IS UNTRUSTED. These are arbitrary pages from the open web,
  * fetched and stripped of markup. Callers must hand the text to a model as
  * DATA, inside a fence, never as instructions.
  */
 
-/** Env slice this module reads. */
+import { freshnessRange, searxngQuery, searxngReady, type SearxngEnv, type SearxngResponse } from './searxng';
+
 const UA = 'VinaX/1.0 (+https://www.sirimillavinay.online)';
 
-export interface WebSearchEnv {
+/** Env slice this module reads. */
+export interface WebSearchEnv extends SearxngEnv {
   BRAVE_API_KEY?: string;
 }
 
@@ -55,8 +64,9 @@ interface Item {
   url: string;
 }
 
-/** Merge, de-duplicate by URL, cap and number a set of search results. */
-function itemsToHit(items: Item[]): SearchHit | null {
+/** Merge, de-duplicate by URL, cap and number a set of search results.
+ *  `preface` (direct answers, an infobox) leads the text when present. */
+function itemsToHit(items: Item[], preface: string[] = []): SearchHit | null {
   const seen = new Set<string>();
   const uniq: Item[] = [];
   for (const it of items) {
@@ -67,7 +77,8 @@ function itemsToHit(items: Item[]): SearchHit | null {
   }
   if (!uniq.length) return null;
   const text = uniq.map((x, i) => `[${i + 1}] ${x.title}\n${x.snippet}\n${x.url}`.trim()).join('\n\n');
-  return { text, sources: uniq.map((x) => x.url) };
+  const lead = preface.filter(Boolean).join('\n');
+  return { text: lead ? `${lead}\n\n${text}` : text, sources: uniq.map((x) => x.url) };
 }
 
 // --- Brave (optional upgrade — only used if a key happens to be configured) ---
@@ -249,9 +260,39 @@ async function ddgSearch(q: string): Promise<Item[]> {
   }
 }
 
-// Free, keyless web context: DuckDuckGo (real HTML results + instant answers) and
-// Google, merged and de-duplicated. Brave is used only if a key is configured.
+// --- SearXNG (8.3.0 — the owner's own instance, leads when configured) ---
+function toItems(r: SearxngResponse): Item[] {
+  return r.results.map((x) => ({ title: x.title, snippet: x.publishedDate ? `${x.content} (${x.publishedDate.slice(0, 10)})`.trim() : x.content, url: x.url }));
+}
+
+/**
+ * General results, plus news in the question's time window when it is
+ * time-sensitive (news first then: that is the fresh part). Direct answers and
+ * the infobox lead the text. Null when SearXNG is unset, resting or empty.
+ * Exported for tests.
+ */
+export async function searxngHit(env: WebSearchEnv, q: string): Promise<SearchHit | null> {
+  if (!searxngReady(env)) return null;
+  const range = freshnessRange(q);
+  const [general, news] = await Promise.all([
+    searxngQuery(env, q, { categories: 'general', limit: 8, tag: 'web' }),
+    range ? searxngQuery(env, q, { categories: 'news', timeRange: range, limit: 6, tag: 'web-news' }) : Promise.resolve(null),
+  ]);
+  const preface: string[] = [];
+  for (const a of [...general.answers, ...(news?.answers ?? [])].slice(0, 2)) preface.push(`Direct answer: ${a}`);
+  if (general.infobox) preface.push(`Summary: ${general.infobox}`);
+  // At most four news items, so general results still make the eight-item cut.
+  const items = [...(news ? toItems(news).slice(0, 4) : []), ...toItems(general)];
+  return itemsToHit(items, preface);
+}
+
+// SearXNG first when configured (see the header); otherwise — and whenever it
+// comes back empty — free, keyless web context: DuckDuckGo (real HTML results
+// + instant answers) and Google, merged and de-duplicated. Brave is used only
+// if a key is configured.
 export async function liveSearch(env: WebSearchEnv, q: string): Promise<SearchHit | null> {
+  const own = await searxngHit(env, q);
+  if (own) return own;
   if (env.BRAVE_API_KEY) {
     const hit = itemsToHit(await braveSearch(env.BRAVE_API_KEY, q));
     if (hit) return hit;
