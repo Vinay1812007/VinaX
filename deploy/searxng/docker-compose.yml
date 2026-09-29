@@ -73,6 +73,9 @@ services:
       - "443:443/udp"
     environment:
       SEARXNG_HOSTNAME: ${SEARXNG_HOSTNAME:?Set SEARXNG_HOSTNAME in .env}
+      # What the proxy listens on: the hostname (automatic HTTPS) unless the
+      # tunnel overlay (docker-compose.tunnel.yml) says otherwise.
+      SEARXNG_SITE_ADDRESS: ${SEARXNG_SITE_ADDRESS:-${SEARXNG_HOSTNAME}}
       SEARXNG_TOKEN: ${SEARXNG_TOKEN:?Set SEARXNG_TOKEN in .env (openssl rand -hex 32)}
       # Only while rotating the token (README.md): the old value, still
       # accepted until the Worker has the new one. Unset → the current token.

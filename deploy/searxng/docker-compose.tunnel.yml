@@ -1,0 +1,40 @@
+# VinaX web search — tunnel mode, for a machine with no public ports (a free
+# cloud VM, a home server). Use it ON TOP of docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
+#
+# (vm-setup.sh does all of this for you.)
+#
+# What changes:
+# - the proxy publishes no ports and serves plain http on :8888 inside the
+#   stack (the token check is unchanged);
+# - a Cloudflare Tunnel connector joins the proxy's network namespace, so the
+#   tunnel's route `http://localhost:8888` reaches the proxy — the same route
+#   that works for SearXNG on a laptop, so the tunnel config never changes.
+#
+# Needs CLOUDFLARE_TUNNEL_TOKEN in .env (the connector token of the tunnel
+# `vinax-search`). The connector image is pinned like the others.
+
+services:
+  proxy:
+    ports: !reset []
+    environment:
+      SEARXNG_SITE_ADDRESS: "http://:8888"
+
+  cloudflared:
+    image: docker.io/cloudflare/cloudflared:2026.9.3
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN in .env (the vinax-search tunnel's connector token)}
+    # Share the proxy's network stack: `localhost:8888` is the proxy.
+    network_mode: "service:proxy"
+    depends_on:
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"

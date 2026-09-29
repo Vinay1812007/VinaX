@@ -151,6 +151,43 @@ address changes every time it restarts, and the Worker then gets Cloudflare's
 This path has no token gate unless the tunnel points at the proxy from this
 folder; a plain local SearXNG answers anyone who knows the address.
 
+### Free cloud VM (tunnel mode, recommended without a server)
+
+Runs SearXNG, the token-checking proxy and the Cloudflare Tunnel connector on
+an always-free VM, so web search no longer depends on a laptop being on. The VM
+needs **no open ports and no certificate**: the connector dials out to
+Cloudflare, and the tunnel `vinax-search` (created by the workflow above) keeps
+its address and its route `http://localhost:8888` — in tunnel mode the proxy
+listens there (`docker-compose.tunnel.yml`).
+
+1. **Create the VM** (either is free for good):
+   - *Oracle Cloud* → Compute → Instances → Create: image **Ubuntu 24.04**,
+     shape **VM.Standard.A1.Flex** (1 OCPU, 6 GB is plenty) or
+     **VM.Standard.E2.1.Micro**. Keep the default network; add your SSH key.
+   - *Google Cloud* → Compute Engine → Create instance: **e2-micro** in
+     `us-west1`, `us-central1` or `us-east1`, **Ubuntu 24.04**, standard disk.
+     (The free tier includes 1 GB of outbound traffic a month — plenty for
+     search answers to the Worker.)
+2. **SSH in and run the setup** (it installs Docker, downloads this folder,
+   asks for two values and starts everything):
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/Vinay1812007/VinaX/main/deploy/searxng/vm-setup.sh -o vm-setup.sh
+   bash vm-setup.sh
+   ```
+   - *Tunnel token*: Cloudflare dashboard → Networking → Tunnels →
+     `vinax-search` → Configure → copy the long value after `--token`.
+   - *SEARXNG_TOKEN*: the value set on the Worker, or press Enter for a new
+     one and then set it on the Worker (the script prints the command).
+3. **Switch off the laptop connector** so every request goes to the VM:
+   `sudo cloudflared service uninstall` (and close any `cloudflared tunnel
+   run` window). The tunnel page should show one healthy replica.
+4. **Check**: `curl -s -H "Authorization: Bearer <SEARXNG_TOKEN>"
+   "https://search.sirimillavinay.online/search?q=telugu+songs&format=json" | head -c 120`
+   prints JSON, and System health shows the result count.
+
+Updating later: SSH in and run `bash vm-setup.sh` again — it keeps `.env`,
+refreshes the files and restarts the stack.
+
 ## 4. Check it from the Worker
 
 - **Owner console → Technical → System health**: the row "Web search engine"
