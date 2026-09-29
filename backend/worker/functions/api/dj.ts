@@ -30,26 +30,22 @@
  * DJ remixes, folk / janapada songs or devotional songs, and discovery then
  * also draws real catalogue songs for that style ("<language> dj remix",
  * "<language> folk songs", "<language> devotional songs" — phrases probed
- * live to return a full page of in-language results). When the flagship lane
- * is unavailable, or the context asks for new / trending music, fresh web
- * results from the owner's search instance (SEARXNG_URL) ride along as
- * untrusted context for the discoveries — which the client still verifies
- * in the catalogue, exactly as before.
+ * live to return a full page of in-language results). The client still
+ * verifies every discovery in the catalogue, exactly as before.
  *
  *   POST { context: {..., style?}, pool: [{ id?, title, artist, language?, album?, year?, known? }], count?, discover?, maxDiscover? }
  *   → 200 { intro, songs: [{ songId, title, artist, reason, segue, confidence, fromPool }], model }
  *   → 400 bad_request | 503 ai_not_configured | 500 { error }
  */
-import { aiBlockCode, aiGate, chat, extractJson, gather, isAiBlocked, laneCoolingDown, laneModel, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, extractJson, gather, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { pickBySeed, styleAngle } from '../_lib/variety';
 import { canonicalKey } from '../_lib/identityCore';
-import { fenceWebContext, searxngConfigured, songContext, type SearxngEnv } from '../_lib/searxng';
 import { searchCatalogSongs } from '../_lib/trends/catalog';
 
-type DjEnv = AiEnv & SupabaseEnv & SearxngEnv;
+type DjEnv = AiEnv & SupabaseEnv;
 
 /** 8.3.0 — the three listening styles a DJ set (or an AI playlist) can be locked to. */
 export type MusicStyle = 'dj' | 'folk' | 'devotional';
@@ -93,10 +89,9 @@ export async function styleCatalogCandidates(phrase: string, timeoutMs = 4_000):
 }
 
 /**
- * 8.3.1 — how long the web context and the style catalogue songs may still
- * hold up the model call once everything else is ready. They are extras: a
- * lookup that has not answered by then is left out of this round (and a
- * web answer that lands later is cached for the next one).
+ * 8.3.1 — how long the style catalogue songs may still hold up the model
+ * call once everything else is ready. They are extras: a lookup that has not
+ * answered by then is left out of this round.
  */
 export const EXTRAS_WAIT_MS = 1_000;
 
@@ -110,15 +105,6 @@ export async function settleWithin<T>(p: Promise<T>, ms: number, fallback: T): P
   }
 }
 
-/** The listener (or the DJ context) asks for new / trending music. Pure. */
-export function wantsFreshMusic(text: string): boolean {
-  return /\b(new|newest|latest|fresh|trending|recent|recently released|this (?:week|month|year)|just released|20\d\d)\b/i.test(text);
-}
-
-/** The flagship grounded lane cannot serve right now (no key, or resting after a failure). */
-export function flagshipUnavailable(env: AiEnv): boolean {
-  return !env.VINAX_GGL_GEMINI_API_KEY || laneCoolingDown('maestro', laneModel(env, 'maestro'));
-}
 
 const SYSTEM_PROMPT = `You are the AI DJ of VinaX, a music app for Indian music in Telugu, Hindi, Tamil and more. You program the next stretch of a listener's queue the way a live radio DJ reads a room: tempo, mood, vocal texture and era all register, and every hand-off is a musical segue. Work ONLY from the context you are handed. Never invent listener history. If asked, VinaX built you; never name any AI vendor or model.
 
@@ -325,16 +311,9 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
   // Optional: a slow or empty gather costs at most 5 s and never fails the set.
   let candidates: Candidate[] = [];
   const language = typeof ctx.currentLanguage === 'string' && ctx.currentLanguage ? ctx.currentLanguage : Array.isArray(ctx.preferredLanguages) && typeof ctx.preferredLanguages[0] === 'string' ? (ctx.preferredLanguages[0] as string) : null;
-  // 8.3.0 — fresh web evidence for discoveries (see the header), and real
-  // catalogue songs for a locked style. Both run beside the gather; once it
-  // is done (or when there is none) they get at most EXTRAS_WAIT_MS more, so
-  // they never hold the set up by their own 4 s leashes.
-  const freshAsk = wantsFreshMusic([ctx.discoveryFocus, ctx.tuneInstruction, ctx.listenerGoal].filter((x) => typeof x === 'string').join(' '));
-  const langWord = (language ?? '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12);
-  const webQuery = `new ${langWord ? `${langWord} ` : ''}${style === 'dj' ? 'dj remix songs' : style === 'folk' ? 'folk songs' : style === 'devotional' ? 'devotional songs' : 'songs'}`;
-  const webPromise = maxDiscover > 0 && searxngConfigured(env) && (freshAsk || flagshipUnavailable(env)) ? songContext(env, webQuery, { timeRange: 'month', timeoutMs: 4_000, limit: 10, tag: 'dj' }) : Promise.resolve(null);
-  // A web answer that lands after the wait still fills the context cache for the next round.
-  if (typeof context.waitUntil === 'function') context.waitUntil(webPromise.catch(() => null));
+  // 8.3.0 — real catalogue songs for a locked style. The lookup runs beside
+  // the gather; once it is done (or when there is none) it gets at most
+  // EXTRAS_WAIT_MS more, so it never holds the set up by its own 4 s leash.
   const stylePromise = maxDiscover > 0 && style ? styleCatalogCandidates(stylePhrase(style, language)) : Promise.resolve([] as Candidate[]);
   if (discover && pool.length < 12) {
     try {
@@ -362,7 +341,7 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
       /* the gather is optional */
     }
   }
-  const [web, styleSongs] = await Promise.all([settleWithin(webPromise, EXTRAS_WAIT_MS, null), settleWithin(stylePromise, EXTRAS_WAIT_MS, [] as Candidate[])]);
+  const styleSongs = await settleWithin(stylePromise, EXTRAS_WAIT_MS, [] as Candidate[]);
   if (styleSongs.length) {
     // Catalogue songs for the style lead the candidates: they are known to exist.
     const seen = new Set([...pool, ...candidates].map((p) => canonKey(p.title, p.artist)));
@@ -377,7 +356,7 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
   const user =
     `Listener context (JSON):\n${ctxJson}\n\nPOOL — real songs, guaranteed playable (JSON):\n${JSON.stringify(pool)}\n\n` +
     (style ? `${STYLE_BRIEF[style]}\n\n` : '') +
-    (maxDiscover > 0 ? `${DISCOVERY_BRIEF(maxDiscover)}\n` + (candidates.length ? `SUPPLEMENTARY CANDIDATES from a music expert — real songs, use them as discoveries only when they fit (JSON):\n${JSON.stringify(candidates)}\n` : '') + (web ? `${fenceWebContext('WEB CONTEXT for discoveries', web.text)}\nSongs named there are recent releases: prefer them for discoveries when they fit the hand-off and currentLanguage (exact title and lead artist only); ignore anything that is not a song.\n` : '') + '\n' : '') +
+    (maxDiscover > 0 ? `${DISCOVERY_BRIEF(maxDiscover)}\n` + (candidates.length ? `SUPPLEMENTARY CANDIDATES from a music expert — real songs, use them as discoveries only when they fit (JSON):\n${JSON.stringify(candidates)}\n` : '') + '\n' : '') +
     `Return exactly ${Math.min(count, pool.length + maxDiscover)} songs, sequenced as a set. varietySeed: "${seed}" — a fresh round must differ from the last one for the same seed. ` +
     `styleAngle: "${angle}" — let it colour one or two picks. Opening feel: ${opener}. ` +
     (wantSegues ? '' : 'Segues are NOT needed this round: set every "segue" to "". ') +

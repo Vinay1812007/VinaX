@@ -34,7 +34,6 @@ describe('GET /api/trends', () => {
       ['youtube', 'public-chart', 'ok'],
       ['instagram', 'public-chart', 'disabled'],
       ['editorial', 'editorial', 'unavailable'],
-      ['web', 'web', 'not_configured'],
     ]);
     expect(Object.keys(body.items[0]).sort()).toEqual(
       ['catalogId', 'title', 'artist', 'language', 'region', 'source', 'sourceLabel', 'sourceKind', 'sourceRank', 'sourceUrl', 'observedAt', 'expiresAt', 'mappingConfidence', 'momentum', 'newEntry'].sort(),
@@ -46,7 +45,7 @@ describe('GET /api/trends', () => {
     const res = await get('', {});
     const body = (await res.json()) as { sources: Array<{ id: string; status: string }>; items: unknown[] };
     expect(body.items).toEqual([]);
-    expect(Object.fromEntries(body.sources.map((s) => [s.id, s.status]))).toEqual({ youtube: 'not_configured', instagram: 'disabled', web: 'not_configured', editorial: 'not_configured' });
+    expect(Object.fromEntries(body.sources.map((s) => [s.id, s.status]))).toEqual({ youtube: 'not_configured', instagram: 'disabled', editorial: 'not_configured' });
     // Degraded answers are cached briefly.
     expect(res.headers.get('cache-control')).toBe('public, max-age=15, s-maxage=30');
   });

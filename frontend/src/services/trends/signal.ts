@@ -1,5 +1,4 @@
 import type { RecommendationContext } from '@/services/recommendation/types';
-import type { TrendKind } from './client';
 
 /**
  * 7.2 — verified charts as ONE bounded signal for the next song.
@@ -16,9 +15,7 @@ import type { TrendKind } from './client';
  * cannot admit a song the hard rules reject, it cannot break the language
  * lock, and at `TREND_MAX` it is smaller than a candidate source boost, so it
  * nudges an order rather than dictating it. Editorial picks count for less
- * than a chart position, because someone chose them by hand; a song found on
- * the web (8.3.1, kind `web`) counts for less still — people mention it, but
- * nothing measured its popularity.
+ * than a chart position, because someone chose them by hand.
  */
 export interface TrendSignal {
   /** Catalogue id → bonus in score units (already capped). */
@@ -33,8 +30,6 @@ export interface TrendSignal {
 export const TREND_MAX = 0.06;
 /** An editorial pick is a person's choice, not a measured position. */
 export const TREND_EDITORIAL_MAX = 0.03;
-/** A web mention a person accepted: evidence of buzz, not of rank. */
-export const TREND_WEB_MAX = 0.015;
 /** How long a snapshot is used before a refresh is started. */
 const FRESH_MS = 15 * 60_000;
 /** How long a failed read is remembered, so a dead endpoint is not polled every round. */
@@ -55,8 +50,8 @@ export function resetTrendSignal(): void {
   retryAfter = 0;
 }
 
-function bonusFor(rank: number, kind: TrendKind, confidence: number): number {
-  const cap = kind === 'editorial' ? TREND_EDITORIAL_MAX : kind === 'web' ? TREND_WEB_MAX : TREND_MAX;
+function bonusFor(rank: number, kind: 'public-chart' | 'editorial', confidence: number): number {
+  const cap = kind === 'editorial' ? TREND_EDITORIAL_MAX : TREND_MAX;
   const position = Math.max(0, 1 - (Math.max(1, rank) - 1) / CONSIDER);
   // A match the server is less sure of is worth less, and never more than the cap.
   return Math.min(cap, cap * position * Math.max(0, Math.min(1, confidence)));

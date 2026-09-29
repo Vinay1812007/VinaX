@@ -77,25 +77,24 @@ describe('fetchVerifiedTrends', () => {
     expect(snap?.items.map((i) => i.catalogId)).toEqual(['c1']);
   });
 
-  it('8.3.1 — keeps a `web` source and item; a kind this build does not know is dropped, never shown or crashed on', async () => {
-    const webItem = { ...goodItem, catalogId: 'w1', source: 'web', sourceLabel: 'New on the web', sourceKind: 'web', sourceRank: 1, momentum: null };
+  it('drops a source or item of a kind this build does not know, never showing it or crashing on it', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify(
           body({
             sources: [
-              { id: 'web', label: 'New on the web', kind: 'web', status: 'ok', lastSuccessAt: earlier, region: 'IN' },
+              { id: 'editorial', label: 'Editor’s picks', kind: 'editorial', status: 'ok', lastSuccessAt: earlier, region: 'IN' },
               { id: 'future', label: 'Future source', kind: 'some-later-kind', status: 'ok', lastSuccessAt: earlier, region: 'IN' },
             ],
-            items: [webItem, { ...goodItem, catalogId: 'f1', source: 'future', sourceKind: 'some-later-kind' }],
+            items: [{ ...goodItem, catalogId: 'e1', source: 'editorial', sourceLabel: 'Editor’s picks', sourceKind: 'editorial', sourceRank: 1, momentum: null }, { ...goodItem, catalogId: 'f1', source: 'future', sourceKind: 'some-later-kind' }],
           }),
         ),
         { status: 200 },
       ),
     );
     const snap = await fetchVerifiedTrends({});
-    expect(snap?.sources.map((s) => [s.id, s.kind])).toEqual([['web', 'web']]);
-    expect(snap?.items.map((i) => [i.catalogId, i.sourceKind])).toEqual([['w1', 'web']]);
+    expect(snap?.sources.map((s) => [s.id, s.kind])).toEqual([['editorial', 'editorial']]);
+    expect(snap?.items.map((i) => [i.catalogId, i.sourceKind])).toEqual([['e1', 'editorial']]);
   });
 
   it('keeps only https evidence links and never reports a new entry alongside a rank change', async () => {

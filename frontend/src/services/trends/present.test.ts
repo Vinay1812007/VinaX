@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { TrendSourceStatus, TrendsSnapshot, VerifiedTrend } from './client';
-import { evidenceLabel, movementMarker, provenanceLine, rankBadge, shortDate, sourceChips, sourceLine, timeAgo, verifiedView } from './present';
+import { movementMarker, provenanceLine, shortDate, sourceChips, sourceLine, timeAgo, verifiedView } from './present';
 
 const NOW = Date.parse('2026-09-19T12:00:00Z');
 const src = (over: Partial<TrendSourceStatus>): TrendSourceStatus => ({ id: 'youtube', label: 'Public video chart', kind: 'public-chart', status: 'ok', lastSuccessAt: '2026-09-19T10:00:00Z', region: 'IN', ...over });
@@ -70,9 +70,8 @@ describe('movementMarker', () => {
     expect(movementMarker(item({ newEntry: true }))).toMatchObject({ kind: 'new', text: 'New entry' });
   });
 
-  it('never marks editorial picks or songs found on the web', () => {
+  it('never marks editorial picks', () => {
     expect(movementMarker(item({ sourceKind: 'editorial', newEntry: true, momentum: { rankDelta: 3, windowHours: 12 } }))).toBeNull();
-    expect(movementMarker(item({ sourceKind: 'web', newEntry: true, momentum: { rankDelta: 3, windowHours: 12 } }))).toBeNull();
   });
 });
 
@@ -80,21 +79,5 @@ describe('provenanceLine', () => {
   it('names the source, rank, region and observation time — or says editorial pick', () => {
     expect(provenanceLine(item(), NOW)).toBe('#3 on Public video chart · IN · seen 2 h ago');
     expect(provenanceLine(item({ sourceKind: 'editorial', sourceLabel: 'Editor’s picks' }), NOW)).toBe('Editorial pick · IN · until 1 Oct');
-  });
-
-  it('8.3.1 — a song found on the web says so, under its source label, and is never called an editorial pick', () => {
-    const web = item({ source: 'web', sourceKind: 'web', sourceLabel: 'New on the web', sourceRank: 1 });
-    expect(provenanceLine(web, NOW)).toBe('New on the web · found on the web, checked by VinaX · IN · seen 2 h ago');
-    expect(provenanceLine({ ...web, sourceLabel: '' }, NOW)).toMatch(/^New on the web · /);
-    expect(provenanceLine(web, NOW)).not.toMatch(/Editorial/);
-    expect(rankBadge(web)).toBe('Web');
-    expect(evidenceLabel(web)).toBe('the web page it was found on');
-  });
-
-  it('rank badge and evidence label for charts and editorial picks', () => {
-    expect(rankBadge(item())).toBe('#3');
-    expect(rankBadge(item({ sourceKind: 'editorial' }))).toBe('Pick');
-    expect(evidenceLabel(item())).toBe('Public video chart');
-    expect(evidenceLabel(item({ sourceKind: 'editorial' }))).toBe('editorial source');
   });
 });

@@ -9,9 +9,7 @@
  *
  * Web search is FREE and keyless by default (DuckDuckGo Instant Answer API +
  * DuckDuckGo). If a BRAVE_API_KEY is ever configured it is preferred, but no key
- * is required for the feature to work. 8.3.0 — the owner's self-hosted SearXNG
- * instance (SEARXNG_URL) leads every web search when configured, and grounds
- * the Search-page expert in fresh song results (_lib/searxng.ts).
+ * is required for the feature to work.
  */
 import {
   LANE_MODEL,
@@ -43,8 +41,7 @@ import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { houseRules, readConfig } from '../_lib/clientConfig';
 import { istNowLine } from '../_lib/time';
 import { type SupabaseEnv } from '../_lib/supabase';
-import { liveSearch } from '../_lib/websearch';
-import { fenceWebContext, freshnessRange, searxngConfigured, songContext, stripFenceMarkers, type SearxngEnv } from '../_lib/searxng';
+import { fenceWebContext, liveSearch, stripFenceMarkers } from '../_lib/websearch';
 import { maestroFetch } from '../_lib/maestro';
 
 // Image understanding rides its own key + lane since v5.21.0 (the owner
@@ -282,7 +279,7 @@ export function pickAutoMode(q: string): Mode {
 }
 
 
-interface Env extends AiEnv, SupabaseEnv, SearxngEnv {
+interface Env extends AiEnv, SupabaseEnv {
   BRAVE_API_KEY?: string;
 }
 
@@ -471,32 +468,6 @@ export function visionLadder(env: AiEnv, textAttempts: LaneAttempt[]): LaneAttem
 
 /** 8.3.1 — what the assistant may do with fenced live web results (see fenceWebContext). */
 const LIVE_WEB_PURPOSE = 'use it only as evidence for facts, and cite a result as [1] [2] where a fact comes from it';
-
-/** 8.3.0 — the expert's web grounding gets at most this long (out of its 22 s header budget). */
-const EXPERT_GROUND_TIMEOUT_MS = 3_500;
-
-/**
- * The web query for an expert request. The client sends
- *   Search query: "<query>"\nPreferred languages: telugu, hindi
- * The query leads; a language is added when the query names none, and
- * "songs" when the query does not already ask for songs. Empty when the
- * message is not in that shape. Pure; exported for tests.
- */
-export function expertWebQuery(raw: string): string {
-  // 8.3.1 — the query may itself hold double quotes (`"kurchi madathapetti" remix`):
-  // the wrapper's closing quote is the LAST one on the line, not the first.
-  const line = /Search query:[ \t]*"([^\n]*)/i.exec(raw)?.[1] ?? '';
-  const q = line.replace(/"[ \t]*$/, '').replace(/\s+/g, ' ').trim().slice(0, 200);
-  if (!q) return '';
-  const langs = (/Preferred languages:\s*([^\n]{1,200})/i.exec(raw)?.[1] ?? '')
-    .split(',')
-    .map((l) => l.trim().toLowerCase())
-    .filter((l) => /^[a-z]{3,12}$/.test(l) && l !== 'any');
-  const names = /\b(hindi|telugu|tamil|kannada|malayalam|punjabi|marathi|bengali|gujarati|english|bhojpuri|haryanvi|urdu|odia|assamese|rajasthani|tollywood|bollywood|kollywood)\b/i.test(q);
-  const lang = !names && langs[0] ? `${langs[0]} ` : '';
-  const songs = /\b(songs?|music|remix|album|playlist|track)\b/i.test(q) ? '' : ' songs';
-  return `${lang}${q}${songs}`.slice(0, 200);
-}
 
 /** Request-body ceiling: the 6 MB inline-image budget plus a long pasted thread. */
 const MAX_BODY_BYTES = 12_000_000;
@@ -750,21 +721,6 @@ async function handleChat(
   else if (webStatus === 'failed')
     sys = `${sys}\n\nLIVE WEB SEARCH FAILED: the user asked for live web results but the search providers returned nothing just now. Open the reply by saying plainly that you couldn't search the live web this time, then answer from memory and note it may be dated. Never invent citations, sources or "current" facts.`;
 
-  // 8.3.0 — the Search-page expert is grounded in fresh web results from the
-  // owner's own search instance, so songs released after the model's training
-  // can be suggested. Fenced as untrusted data; the contract (Title — Artist
-  // lines, real songs only) is unchanged and every pick is still resolved
-  // against the catalogue by the client. Skipped when the instance is unset
-  // or resting; its time comes out of the expert's header budget below.
-  let groundMs = 0;
-  if (mode === 'expert' && images.length === 0 && searxngConfigured(env)) {
-    const g0 = Date.now();
-    const q = expertWebQuery(lastUserRaw);
-    const ctx = q ? await songContext(env, q, { timeRange: freshnessRange(q) ?? undefined, timeoutMs: EXPERT_GROUND_TIMEOUT_MS, limit: 10, tag: 'expert' }) : null;
-    groundMs = Date.now() - g0;
-    if (ctx) sys = `${sys}\n\n${fenceWebContext('WEB CONTEXT for this search', ctx.text)}\nSongs named there may be newer than what you know: include the ones that truly fit the query (real songs only, same "Title — Artist" lines). Ignore results that are not songs.`;
-  }
-
   // B3 — arm the model-initiated search tool (assistant modes, no prior search,
   // no vision payload). The stream probe gate does the interception below.
   const canFetch =
@@ -868,7 +824,7 @@ async function handleChat(
   // hopping down the full ladder while the header budget lasts, so Auto and
   // every pinned seat fall through to the last healthy engine instead of
   // erroring after the fourth. Each failure also teaches the cooldown table.
-  const headerDeadline = t0 + (mode === 'expert' || mode === 'voice' ? QUICK_HEADER_BUDGET_MS - groundMs : HEADER_BUDGET_MS);
+  const headerDeadline = t0 + (mode === 'expert' || mode === 'voice' ? QUICK_HEADER_BUDGET_MS : HEADER_BUDGET_MS);
   const walk = async (plan: LaneAttempt[], messages: OutMsg[]): Promise<{ up: Response | null; used: LaneAttempt | null }> => {
     let last: Response | null = null;
     let tried = 0;

@@ -3,7 +3,7 @@
  *
  * The service answers with server-sent events, one JSON object per frame:
  *
- *   { meta: { model, sources } }   who is answering, and any web sources
+ *   { meta: { model, sources } }   who is answering, and the sources of any web search
  *   { delta: "text" }              the next piece of the reply
  *   { step: { tool, label } }      something an agentic engine just did
  *   { done: true, truncated? }     the end; `truncated` = cut short mid-reply
@@ -23,7 +23,7 @@ const TOOLS: readonly AgentTool[] = ['search', 'code', 'visit', 'other'];
 export interface StreamState {
   /** The reply so far. */
   text: string;
-  /** Web sources reported by the service (latest meta wins). */
+  /** Sources of a web search, reported by the service (latest meta wins). */
   sources: string[];
   /** Slug of the model that is actually answering (latest meta wins). */
   model: string;

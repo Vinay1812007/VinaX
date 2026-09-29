@@ -4,8 +4,7 @@ import { isNativePlatform } from '@/services/native';
  * 7.2 — verified trends (GET /api/trends; contract in docs/trends.md).
  *
  * A verified trend is a CATALOGUE song that the server matched with
- * confidence to an entry of an outside chart, an editorial pick or (8.3.1,
- * kind `web`) a song found on the web and accepted by a person, with the
+ * confidence to an entry of an outside chart or an editorial pick, with the
  * source, its rank, the region, when it was observed and an evidence link.
  * Nothing here is a catalogue search result, and nothing may be labelled as a
  * public chart unless it came through this client.
@@ -14,15 +13,14 @@ import { isNativePlatform } from '@/services/native';
  * unavailable (offline, timeout, HTTP error, malformed answer), so callers
  * can fall back to catalogue lists that are labelled as catalogue lists. Every
  * field is re-validated here; an item that fails is dropped, never repaired —
- * including an item or source of a kind this build does not know, which is
- * how builds before 8.3.1 skip `web` items safely.
+ * including an item or source of a kind this build does not know, so a
+ * newer server can add a kind without breaking older builds.
  *
  * Load this module lazily (`import('@/services/trends/client')`): it is not
  * part of the first-load bundle.
  */
 
-/** 8.3.1 — `web`: found through web search, then checked and accepted by a person. */
-export type TrendKind = 'public-chart' | 'editorial' | 'web';
+export type TrendKind = 'public-chart' | 'editorial';
 
 export interface TrendSourceStatus {
   id: string;
@@ -65,7 +63,7 @@ export interface TrendsSnapshot {
 
 const ENDPOINT = isNativePlatform() ? 'https://www.sirimillavinay.online/api/trends' : '/api/trends';
 const TIMEOUT_MS = 8_000;
-const KINDS = new Set<string>(['public-chart', 'editorial', 'web'] satisfies TrendKind[]);
+const KINDS = new Set<string>(['public-chart', 'editorial'] satisfies TrendKind[]);
 const STATUSES = new Set(['ok', 'stale', 'unavailable', 'disabled', 'not_configured']);
 
 const text = (v: unknown, max = 300): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
