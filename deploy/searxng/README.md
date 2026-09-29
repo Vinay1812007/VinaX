@@ -124,6 +124,33 @@ SEARXNG_TOKEN=
 
 (an empty token sends no header, which suits a local instance without the proxy).
 
+### Without a server: a named tunnel, set up from GitHub
+
+If SearXNG runs on a machine that is not reachable from the internet (a
+laptop, a home box), a Cloudflare Tunnel gives it a permanent address on your
+own domain. Do not use a quick `trycloudflare.com` tunnel for production: its
+address changes every time it restarts, and the Worker then gets Cloudflare's
+`530` until `SEARXNG_URL` is updated.
+
+1. Give the `CLOUDFLARE_API_TOKEN` repository secret these permissions as well
+   as the Workers ones: **Account · Cloudflare Tunnel · Edit**, **Zone · Zone ·
+   Read** and **Zone · DNS · Edit** (for the zone of the hostname).
+2. GitHub → Actions → **Web search tunnel** → Run workflow. The defaults create
+   (or reuse) the tunnel `vinax-search`, route `https://search.sirimillavinay.online`
+   to `http://localhost:8888`, add the DNS record and set the Worker's
+   `SEARXNG_URL`. Re-running it is safe.
+3. On the machine running SearXNG, install the connector so it survives
+   reboots: Cloudflare dashboard → Zero Trust → Networks → Tunnels →
+   `vinax-search` → Configure → copy the install command
+   (`sudo cloudflared service install <token>`). The workflow never prints
+   that token.
+4. Keep SearXNG itself running on that machine (as a service, or the
+   `docker compose` stack above with its proxy published on
+   `localhost` instead of ports 80/443).
+
+This path has no token gate unless the tunnel points at the proxy from this
+folder; a plain local SearXNG answers anyone who knows the address.
+
 ## 4. Check it from the Worker
 
 - **Owner console → Technical → System health**: the row "Web search engine"
