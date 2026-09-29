@@ -12,6 +12,15 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.4.0': {
+    title: 'Pages worth reading, and one ad where it belongs',
+    changes: [
+      { type: 'new', text: 'Song pages show who sang it, who wrote the music and the lyrics, the release date and label, the rest of the album and more by the same artist. Album pages list every song with its singers and length, and artist pages add their albums, singles and similar artists.' },
+      { type: 'new', text: 'Every language page has a short guide to its music: the composers, singers and traditions behind it, with search ideas to start from. Home ends with a plain-words About VinaX.' },
+      { type: 'improved', text: 'The website now shows one labelled advertisement at the end of song, artist, album, language and mood pages. There are never ads in the player, the queue, VinaX AI, your library, the Android app or Kid mode, and Privacy explains exactly how they work.' },
+      { type: 'improved', text: 'The separate Ads page and its Discover shortcut are gone; old links open Discover.' },
+    ],
+  },
   '8.3.2': {
     title: 'Web lookups removed from the DJ, AI Playlist and Charts',
     changes: [

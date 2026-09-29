@@ -95,6 +95,7 @@ import { loadProfile } from '@/services/personalization/storage';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 import { trendingSeed } from '@/constants/seeds';
 import type { Song } from '@/types';
+import { HomeAbout } from '@/features/home/HomeAbout';
 
 /**
  * Mounts a home block only when it scrolls within ~800px of the viewport
@@ -1052,6 +1053,7 @@ export default function HomePage() {
       })}
       {feedAt < 0 && studio}
 
+      <HomeAbout />
     </div>
    </PullToRefresh>
   );

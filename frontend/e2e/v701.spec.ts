@@ -8,7 +8,7 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  *    cause was AppLayout's wheel rescue forwarding wheels from our own
  *    portalled overlays to <main>;
  *  - the top bar has no search box; Home's actions live in the bar;
- *  - Discover offers Ads on a phone.
+ *  - Discover's shortcut grid on a phone (no Ads tile since 8.4.0).
  */
 const TITLES = ['Samajavaragamana', 'Butta Bomma', 'Ramuloo Ramulaa', 'Inkem Inkem', 'Naatu Naatu', 'Vachinde', 'Rowdy Baby', 'Arabic Kuthu', 'Srivalli', 'Oo Antava', 'Kalaavathi', 'Jai Balayya'];
 const mk = (base: string, i: number) => ({
@@ -72,7 +72,7 @@ for (const where of [{ name: 'the player', path: '/now-playing' }, { name: 'a so
   });
 }
 
-test('top bar: no search box, Home actions live in it; Discover offers Ads on a phone', async ({ page, baseURL }) => {
+test('top bar: no search box, Home actions live in it; Discover has no Ads tile on a phone', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 412, height: 915 });
   await seed(page, baseURL!);
   await page.goto('/');
@@ -87,6 +87,8 @@ test('top bar: no search box, Home actions live in it; Discover offers Ads on a 
   await expect(page.getByRole('combobox', { name: 'Search music' })).toHaveCount(1); // the page's own field is the only search box
   await page.screenshot({ path: 'test-results/v701-search-412.png' });
   await page.goto('/discover');
-  await expect(page.getByRole('navigation', { name: 'Browse music' }).getByRole('link', { name: 'Ads' })).toBeVisible();
+  // 8.4.0: the standalone Ads page is gone (ads sit at the end of browsing pages).
+  await expect(page.getByRole('navigation', { name: 'Browse music' }).getByRole('link', { name: 'Charts' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Browse music' }).getByRole('link', { name: 'Ads' })).toHaveCount(0);
   await page.screenshot({ path: 'test-results/v701-discover-412.png' });
 });

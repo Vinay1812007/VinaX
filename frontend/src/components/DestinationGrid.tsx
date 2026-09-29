@@ -5,7 +5,6 @@ import {
   FilmIcon,
   GlobeIcon,
   HeartIcon,
-  MegaphoneIcon,
   MusicIcon,
   SparkleIcon,
   VideoIcon,
@@ -25,7 +24,6 @@ const DISCOVER_TILES: Array<[string, string, number, typeof MusicIcon]> = [
   ['/made-for-you', 'Made for you', 7, HeartIcon],
   ['/weekly', 'Your week', 8, ClockIcon],
   ['/ai-playlist', 'AI playlist', 9, SparkleIcon],
-  ['/ads', 'Ads', 10, MegaphoneIcon],
 ];
 const LIBRARY_ROUTES = ['/favorites', '/later', '/offline', '/history', '/stats', '/taste-profile'];
 

@@ -120,13 +120,16 @@ test.describe('Home request load', () => {
     // The ceiling is 28 to leave room for that timing, not for new sources:
     // a real increase in what Home asks for must be measured and justified here.
     expect(initial).toBeLessThanOrEqual(28);
-    // Scrolling must still load the rest.
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(500);
-    for (let i = 0; i < 6; i += 1) {
-      await page.evaluate(() => document.querySelector('#main-content')?.scrollTo(0, 1e9));
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await page.waitForTimeout(400);
+    // Scrolling must still load the rest. Step down the page the way a
+    // listener does: since 8.4.0 Home ends with the About VinaX text, and an
+    // instant jump to the very bottom lands past the visibility-mounted
+    // blocks without ever bringing them near the viewport.
+    for (let i = 0; i < 40; i += 1) {
+      await page.evaluate(() => {
+        document.querySelector('#main-content')?.scrollBy(0, 500);
+        window.scrollBy(0, 500);
+      });
+      await page.waitForTimeout(120);
     }
     await settle(page);
     report('after-scroll', page);

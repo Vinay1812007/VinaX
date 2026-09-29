@@ -93,7 +93,7 @@ export const TUTORIALS: Tutorial[] = [
       { route: '/search', target: '[data-tour="search-input"]', title: 'Remember only the words?', body: 'Type five or more words of a lyric and VinaX offers Search by lyrics.', placement: 'bottom' },
       { route: '/search', title: 'Sort and play all', body: 'On the Songs tab, sort by relevance, popularity, newest, length or A to Z, then Play all or Queue all.' },
       { route: '/search', title: 'Recents and trending', body: 'Long-press or hover a recent search to pin it. Trending searches show what listeners look for now.', tip: 'Press ⌘/Ctrl+K anywhere for the command palette.' },
-      { route: '/discover', target: 'nav[aria-label="Browse music"]', title: 'Discover’s shortcuts', body: 'Charts, Languages, Moods, Regions, Movies, Videos, Made For You, Your Week, AI Playlist and Ads, one tap each.', placement: 'bottom' },
+      { route: '/discover', target: 'nav[aria-label="Browse music"]', title: 'Discover’s shortcuts', body: 'Charts, Languages, Moods, Regions, Movies, Videos, Made For You, Your Week and AI Playlist, one tap each.', placement: 'bottom' },
     ],
   },
   {

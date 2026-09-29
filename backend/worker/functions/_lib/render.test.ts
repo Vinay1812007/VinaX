@@ -209,3 +209,124 @@ describe('renderEntity — prerendered shell (4.17.6 regression)', () => {
     expect((m as RegExpExecArray)[1].length).toBeGreaterThanOrEqual(25);
   });
 });
+
+describe('renderEntity — 8.4.0 content depth (low-value content fix)', () => {
+  const mainOf = (html: string) => /<main id="seo-content">([\s\S]*?)<\/main>/.exec(html)?.[1] ?? '';
+  const words = (html: string) => mainOf(html).replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
+
+  const CREDITED = {
+    data: [{
+      ...SONG.data[0],
+      releaseDate: '2021-08-06', label: 'Aditya Music', copyright: '℗ 2021 Aditya Music',
+      artists: {
+        primary: [{ id: 'ar7', name: 'Anurag Kulkarni' }],
+        all: [
+          { id: 'ar7', name: 'Anurag Kulkarni', role: 'singer' },
+          { id: 'ar8', name: 'Chaitan Bharadwaj', role: 'music' },
+          { id: 'ar9', name: 'Krishna Kanth', role: 'lyricist' },
+        ],
+      },
+    }],
+  };
+  const ALBUM = {
+    data: {
+      id: 'al9', name: 'Sr Kalyanamandapam', year: 2021, language: 'telugu',
+      songs: [
+        { id: 'abc123', name: 'Chukkala Chunni', duration: 245 },
+        { id: 's2', name: 'Choosale Kallaraa', duration: 230, artists: { all: [{ name: 'Sid Sriram', role: 'singer' }] } },
+      ],
+    },
+  };
+  const ARTIST = {
+    data: {
+      id: 'ar7', name: 'Anurag Kulkarni', dominantType: 'singer', dominantLanguage: 'telugu', availableLanguages: ['telugu', 'kannada', 'unknown'],
+      topSongs: [{ id: 's3', name: 'Ramuloo Ramulaa', duration: 250, artists: { primary: [{ name: 'Anurag Kulkarni' }] } }],
+      topAlbums: [{ id: 'al1', name: 'Ala Vaikunthapurramuloo', year: 2020 }],
+      similarArtists: [{ id: 'ar2', name: 'Sid Sriram' }],
+      bio: [{ title: 'Early life', text: 'A playback singer from Hyderabad.' }],
+    },
+  };
+  const catalog = (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (!url.includes('saavn.sumit.co')) return Promise.resolve(new Response('', { status: 500 }));
+    if (url.includes('/songs/')) return Promise.resolve(Response.json(CREDITED));
+    if (url.includes('/albums')) return Promise.resolve(Response.json(ALBUM));
+    if (url.includes('/artists/')) return Promise.resolve(Response.json(ARTIST));
+    return Promise.resolve(new Response('', { status: 404 }));
+  };
+
+  it('a song page carries credits, release details, the rest of the album, more by the artist and hub links', async () => {
+    vi.stubGlobal('fetch', catalog);
+    const html = await (await renderEntity('song', 'chukkala-chunni-abc123', req(), env())).text();
+    const main = mainOf(html);
+    expect(main).toContain('sung by Anurag Kulkarni with music by Chaitan Bharadwaj and lyrics by Krishna Kanth');
+    expect(main).toContain('released on 6 August 2021 by Aditya Music');
+    expect(main).toContain('<dt>Lyrics</dt><dd>Krishna Kanth</dd>');
+    expect(main).toContain('More from Sr Kalyanamandapam');
+    expect(main).toContain('href="/song/choosale-kallaraa-s2"');
+    expect(main).not.toContain('href="/song/chukkala-chunni-abc123"'); // not listed under itself
+    expect(main).toContain('More by Anurag Kulkarni');
+    expect(main).toContain('href="/telugu-romantic-songs"');
+    expect(main.toLowerCase()).not.toContain('no ads');
+    expect(words(html)).toBeGreaterThan(90);
+  });
+
+  it('reads the raw catalog shape (more_info) too: album, credits and duration survive', async () => {
+    const raw = {
+      data: [{
+        id: 'abc123', title: 'Chukkala Chunni', name: 'Chukkala Chunni', language: 'telugu', year: '2021', primaryArtists: 'Anurag Kulkarni',
+        more_info: {
+          album: 'Sr Kalyanamandapam', album_id: 'al9', duration: '245', label: 'Aditya Music', release_date: '2021-08-06',
+          artistMap: { primary_artists: [{ id: 'ar7', name: 'Anurag Kulkarni' }], artists: [{ id: 'ar8', name: 'Chaitan Bharadwaj', role: 'music' }] },
+        },
+      }],
+    };
+    vi.stubGlobal('fetch', (input: RequestInfo | URL) =>
+      String(input).includes('/songs/') ? Promise.resolve(Response.json(raw)) : Promise.resolve(new Response('', { status: 500 })));
+    const html = await (await renderEntity('song', 'abc123', req(), env())).text();
+    expect(html).toContain('property="music:duration" content="245"');
+    expect(mainOf(html)).toContain('with music by Chaitan Bharadwaj');
+    expect(mainOf(html)).toContain('href="/album/sr-kalyanamandapam-al9"');
+  });
+
+  it('a slow album/artist mirror drops only those sections, never the page', async () => {
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('saavn.sumit.co') && url.includes('/songs/')) return Promise.resolve(Response.json(CREDITED));
+      if (!url.includes('/albums') && !url.includes('/artists/')) return Promise.resolve(new Response('', { status: 500 }));
+      // Album/artist mirrors hang and ignore aborts: only the render's own cap can end the wait.
+      void init;
+      return new Promise<Response>(() => {});
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      const pending = renderEntity('song', 'abc123', req(), env());
+      await vi.advanceTimersByTimeAsync(10_000);
+      const html = await (await pending).text();
+      expect(mainOf(html)).toContain('Song details');
+      expect(mainOf(html)).not.toContain('More from');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an album page lists tracks with singers and lengths, plus credits', async () => {
+    vi.stubGlobal('fetch', catalog);
+    const html = await (await renderEntity('album', 'sr-kalyanamandapam-al9', new Request('https://www.sirimillavinay.online/album/x-al9'), env())).text();
+    const main = mainOf(html);
+    expect(main).toContain('Sr Kalyanamandapam is a 2021 Telugu album');
+    expect(main).toContain('Its 2 songs run about 8 minutes in all');
+    expect(main).toContain('Choosale Kallaraa</a> — Sid Sriram (3:50)');
+    expect(main).toContain('<h2>Credits</h2>');
+  });
+
+  it('an artist page has a written intro, albums, biography and similar artists', async () => {
+    vi.stubGlobal('fetch', catalog);
+    const html = await (await renderEntity('artist', 'anurag-kulkarni-ar7', new Request('https://www.sirimillavinay.online/artist/x-ar7'), env())).text();
+    const main = mainOf(html);
+    expect(main).toContain('Anurag Kulkarni is a singer whose songs on VinaX are mostly in Telugu, with others in Kannada.');
+    expect(main).toContain('href="/album/ala-vaikunthapurramuloo-al1"');
+    expect(main).toContain('A playback singer from Hyderabad.');
+    expect(main).toContain('href="/artist/sid-sriram-ar2"');
+  });
+});

@@ -15,6 +15,9 @@ https://sirimillavinay.online/* https://www.sirimillavinay.online/:splat 301
 # Route aliases — legacy/guessable paths land on the real pages.
 /downloads  /offline  301
 /listen-together  /together  301
+# 8.4.0: the standalone Ads page is gone (placements now sit at the end of
+# song, artist, album and hub pages); old links land on Discover.
+/ads  /discover  301
 
 # Status page — status.sirimillavinay.online lands on the standalone status
 # app (public/status/, plain static files — fully independent of the SPA
