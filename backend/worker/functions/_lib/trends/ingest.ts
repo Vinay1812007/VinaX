@@ -118,16 +118,6 @@ async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Prom
   return out;
 }
 
-/**
- * 8.3.0 — a provider that `requiresReview` never auto-matches: a confident
- * match is kept as the proposal (so accepting it is one click) but filed for
- * review. Pure; exported for tests.
- */
-export function holdForReview(provider: TrendProvider, d: MatchDecision): MatchDecision {
-  if (!provider.requiresReview || d.status !== 'matched') return d;
-  return { ...d, status: 'review', reason: 'needs_review_web_source' };
-}
-
 function matchRow(item: RawTrendItem, d: MatchDecision, nowIso: string): Record<string, unknown> {
   return {
     source: item.source,
@@ -152,21 +142,7 @@ interface Ctx {
   deps: IngestDeps;
   now: () => Date;
   budget: { remaining: number };
-  /** The run's whole match budget, and what each provider has spent of it (for `maxMatchShare`). */
-  budgetTotal: number;
-  spent: Map<string, number>;
   trigger: IngestRequest['trigger'];
-}
-
-/**
- * 8.3.1 — the catalogue calls `provider` may spend now: the run's remaining
- * budget, capped by the provider's `maxMatchShare` of the whole budget less
- * what it already spent in this run. Pure; exported for tests.
- */
-export function providerBudget(provider: TrendProvider, remaining: number, total: number, spent: number): number {
-  if (provider.maxMatchShare === undefined) return Math.max(0, remaining);
-  const cap = Math.floor(total * Math.max(0, Math.min(1, provider.maxMatchShare)));
-  return Math.max(0, Math.min(remaining, cap - spent));
 }
 
 async function finishRun(env: TrendsEnv, id: string, s: RunSummary, now: Date): Promise<void> {
@@ -230,13 +206,13 @@ async function runOne(ctx: Ctx, provider: TrendProvider, region: string): Promis
       sleep: deps.sleep,
       random: deps.random,
       signal: deps.signal,
-      attemptTimeoutMs: deps.attemptTimeoutMs ?? provider.attemptTimeoutMs ?? 8_000,
+      attemptTimeoutMs: deps.attemptTimeoutMs ?? 8_000,
     });
     items = out.value;
     summary.attempts = out.attempts;
   } catch (err) {
     const f = err instanceof RetryFailure ? err : null;
-    summary.status = f?.last.skip ? 'skipped' : 'error';
+    summary.status = 'error';
     summary.attempts = f?.attempts ?? 1;
     summary.reason = f ? `${f.last.code}: ${f.last.message}`.slice(0, 300) : 'fetch_failed';
     summary.quotaUnits = meter.units;
@@ -330,12 +306,7 @@ async function matchNewItems(ctx: Ctx, provider: TrendProvider, items: RawTrendI
   const fresh = items.filter((i, idx) => !known.has(i.sourceItemId) && items.findIndex((j) => j.sourceItemId === i.sourceItemId) === idx);
   const search = ctx.deps.search ?? searchCatalogSongs;
   const lookup = ctx.deps.lookup ?? lookupCatalogSong;
-  const allowed = providerBudget(provider, ctx.budget.remaining, ctx.budgetTotal, ctx.spent.get(provider.id) ?? 0);
-  const budget = { remaining: allowed };
-  const decisions = (await mapLimited(fresh, MATCH_CONCURRENCY, (item) => matchRawItem(item, { search, lookup, budget }))).map((d) => (d ? holdForReview(provider, d) : d));
-  const used = allowed - budget.remaining;
-  ctx.budget.remaining -= used;
-  ctx.spent.set(provider.id, (ctx.spent.get(provider.id) ?? 0) + used);
+  const decisions = await mapLimited(fresh, MATCH_CONCURRENCY, (item) => matchRawItem(item, { search, lookup, budget: ctx.budget }));
   const newRows: Record<string, unknown>[] = [];
   decisions.forEach((d, i) => {
     if (!d) {
@@ -373,8 +344,7 @@ export async function runIngest(env: TrendsEnv, req: IngestRequest, deps: Ingest
   const now = deps.now ?? (() => new Date());
   const providers = (deps.providers ?? PROVIDERS).filter((p) => !req.sources?.length || req.sources.includes(p.id));
   const regions = req.regions?.length ? req.regions.filter((r) => REGION_RE.test(r)) : configuredRegions(env);
-  const budgetTotal = deps.matchBudget ?? TRENDS_POLICY.matchBudgetPerRun;
-  const ctx: Ctx = { env, deps, now, budget: { remaining: budgetTotal }, budgetTotal, spent: new Map(), trigger: req.trigger };
+  const ctx: Ctx = { env, deps, now, budget: { remaining: deps.matchBudget ?? TRENDS_POLICY.matchBudgetPerRun }, trigger: req.trigger };
   const result: IngestResult = { ok: true, runs: [], notRun: [], pruned: null };
   if (!supabaseConfigured(env)) return { ...result, ok: false, notRun: providers.map((p) => ({ source: p.id, status: 'unavailable', reason: 'db_not_configured' })) };
 

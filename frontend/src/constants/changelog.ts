@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.3.2': {
+    title: 'Web lookups removed from the DJ, AI Playlist and Charts',
+    changes: [
+      { type: 'improved', text: 'The DJ, AI Playlist and the music expert in Search no longer look up new releases on the web. They pick from the songs they know and from the VinaX catalogue, as they did before 8.3.' },
+      { type: 'improved', text: 'Charts no longer has the New on the web list. Public charts and editor’s picks are unchanged.' },
+      { type: 'improved', text: 'Web search in VinaX AI keeps working, and DJ remix, folk and devotional sessions still keep their style.' },
+    ],
+  },
   '8.3.1': {
     title: 'Styles that read songs right, and a steadier web search',
     changes: [

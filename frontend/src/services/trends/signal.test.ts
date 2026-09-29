@@ -5,7 +5,7 @@ import type { TrendsSnapshot } from './client';
 const fetchVerifiedTrends = vi.fn<() => Promise<TrendsSnapshot | null>>();
 vi.mock('./client', () => ({ fetchVerifiedTrends: () => fetchVerifiedTrends() }));
 
-import { resetTrendSignal, trendSignalNow, TREND_EDITORIAL_MAX, TREND_MAX, TREND_WEB_MAX } from './signal';
+import { resetTrendSignal, trendSignalNow, TREND_EDITORIAL_MAX, TREND_MAX } from './signal';
 
 const ctx = (country: string | null) => ({ region: country ? { country, regionLabel: null, source: 'edge' as const } : null, pinnedLanguages: ['telugu'] });
 const item = (over: Partial<TrendsSnapshot['items'][number]>) => ({
@@ -42,20 +42,6 @@ describe('verified charts as one bounded signal', () => {
     expect(s.bonus.get('pick')!).toBeLessThanOrEqual(TREND_EDITORIAL_MAX);
     for (const v of s.bonus.values()) expect(v).toBeLessThanOrEqual(TREND_MAX);
     expect(s.label.get('pick')).toBe('Editorial pick');
-  });
-
-  it('8.3.1 — a song found on the web gets the smallest bonus, below an editorial pick', async () => {
-    fetchVerifiedTrends.mockResolvedValue({ generatedAt: '', sources: [], items: [
-      item({ catalogId: 'web', sourceRank: 1, sourceKind: 'web', sourceLabel: 'New on the web' }),
-      item({ catalogId: 'pick', sourceRank: 1, sourceKind: 'editorial', sourceLabel: 'Editorial pick' }),
-    ] });
-    trendSignalNow(ctx('IN'));
-    await settle();
-    const s = trendSignalNow(ctx('IN'));
-    expect(TREND_WEB_MAX).toBeLessThan(TREND_EDITORIAL_MAX);
-    expect(s.bonus.get('web')).toBeCloseTo(TREND_WEB_MAX);
-    expect(s.bonus.get('web')!).toBeLessThan(s.bonus.get('pick')!);
-    expect(s.label.get('web')).toBe('New on the web');
   });
 
   it('is empty when the read is unavailable, and does not poll again at once', async () => {

@@ -43,7 +43,6 @@ describe('POST /api/cron/trends-ingest', () => {
     expect(body.notRun.map((n) => [n.source, n.status])).toEqual([
       ['youtube', 'not_configured'],
       ['instagram', 'disabled'],
-      ['web', 'not_configured'],
     ]);
     expect(body.runs.map((r) => [r.source, r.status])).toEqual([['editorial', 'ok']]);
     expect(body.pruned).toMatchObject({ snapshots: true, matches: true, runs: true, editorial: true });

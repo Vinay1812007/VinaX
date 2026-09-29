@@ -7,15 +7,13 @@
  * catalogue song is a separate, scored step (matcher.ts), and only confident
  * matches are ever shown to listeners. See docs/trends.md.
  */
-import type { SearxngEnv } from '../searxng';
 import type { SupabaseEnv } from '../supabase';
 
-/** 8.3.1 — `web`: songs found through web search and accepted by a person (webSignal.ts). */
-export type ProviderKind = 'public-chart' | 'editorial' | 'web';
+export type ProviderKind = 'public-chart' | 'editorial';
 export type ProviderStatus = 'ok' | 'not_configured' | 'disabled';
 
 /** Worker env the trend code reads. Every name is documented in backend/.env.example. */
-export interface TrendsEnv extends SupabaseEnv, SearxngEnv {
+export interface TrendsEnv extends SupabaseEnv {
   /** The video platform's Data API key. Missing → that provider is `not_configured`. */
   YOUTUBE_API_KEY?: string;
   /** Comma-separated ISO 3166-1 alpha-2 regions to ingest. Default `IN`. */
@@ -38,10 +36,6 @@ export interface TrendsEnv extends SupabaseEnv, SearxngEnv {
    * metrics unless its derived-metrics amendment has been accepted.
    */
   TRENDS_DERIVED_METRICS_SOURCES?: string;
-  /** 8.3.0 — languages the web source searches, comma-separated. Default telugu,hindi,tamil. */
-  TRENDS_WEB_LANGUAGES?: string;
-  /** 8.3.0 — owner-chosen label for the web source (UI text). */
-  TRENDS_WEB_LABEL?: string;
 }
 
 /** One item exactly as a source reported it, before any catalogue matching. */
@@ -106,15 +100,6 @@ export interface TrendProvider {
   dailyUnitBudget(env: TrendsEnv): number | null;
   /** Whether the provider's terms permit derived metrics (rank change, new entry). */
   derivedMetricsAllowed(env: TrendsEnv): boolean;
-  /**
-   * 8.3.0 — every match waits for the owner's review, however confident: the
-   * source is evidence that people mention a song, not a verified chart.
-   */
-  requiresReview?: boolean;
-  /** 8.3.0 — deadline for one fetch attempt when the default 8 s is too short. */
-  attemptTimeoutMs?: number;
-  /** 8.3.1 — the largest share (0–1) of a run's catalogue-match budget this provider may spend, across its regions. Unset = no cap. */
-  maxMatchShare?: number;
   fetch(env: TrendsEnv, opts: FetchOptions): Promise<RawTrendItem[]>;
 }
 
@@ -123,15 +108,12 @@ export class TrendFetchError extends Error {
   readonly code: string;
   readonly retryable: boolean;
   readonly httpStatus: number | null;
-  /** 8.3.1 — nothing failed, there is just nothing to store this time: the run is recorded `skipped` and the last snapshot stays. */
-  readonly skip: boolean;
-  constructor(code: string, message: string, opts: { retryable: boolean; httpStatus?: number | null; skip?: boolean }) {
+  constructor(code: string, message: string, opts: { retryable: boolean; httpStatus?: number | null }) {
     super(message);
     this.name = 'TrendFetchError';
     this.code = code;
     this.retryable = opts.retryable;
     this.httpStatus = opts.httpStatus ?? null;
-    this.skip = opts.skip === true;
   }
 }
 

@@ -42,7 +42,6 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 | Identity signing | `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET` | Signed install ids fall back as described in `.env.example` |
 | Scheduled jobs | `CRON_SECRET` (also a repository Actions secret with the same value) | `/api/cron/*` rejects every call |
 | Optional | `BRAVE_API_KEY` (web search in VinaX AI), `GITHUB_REPO`, `GITHUB_TOKEN` (Android update source) | The feature is off or rate-limited |
-| Web search (8.3) | `SEARXNG_URL` (plain var or secret), `SEARXNG_TOKEN` (secret) — the owner's self-hosted SearXNG instance, see [Web search](#web-search-searxng) | Every feature keeps its pre-8.3 behaviour: the keyless search sources, no expert grounding, no web context for the DJ and playlists, no `web` trends source |
 
 Non-secret Worker settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext for ten minutes.
 
@@ -188,16 +187,6 @@ All schedules are workflows in `.github/workflows/`. They call the Worker; none 
 | `weekly-digest.yml` | Monday 03:30 UTC | Calls `/api/cron/weekly-digest`; the result is the digest card on the console's Overview. |
 | `diagnose.yml` | On demand and on push | Loads the live page in a headless browser and reports whether the app mounted. |
 | `lighthouse.yml` | Push to `main`, on demand | Accessibility and search checks are hard failures; performance scores are advisory. |
-
-## Web search (SearXNG)
-
-8.3: VinaX AI web search, the Search-page music expert, the AI DJ's and AI Playlist's fresh discoveries and the `web` trends source use a SearXNG instance the owner runs. Listeners only ever see "web search".
-
-- **Setup.** `deploy/searxng/` is the kit: SearXNG on an internal network behind a reverse proxy that issues the HTTPS certificate and forwards only `GET /search` and `GET /healthz`, only with `Authorization: Bearer <SEARXNG_TOKEN>` (everything else is `401`/`404`, so the instance is not an open proxy). `deploy/searxng/README.md` has every step, the `curl` checks and token rotation.
-- **Worker config.** `SEARXNG_URL` — https only (http for localhost in development), trailing slash fine, a URL with credentials or a query string is ignored. `SEARXNG_TOKEN` — `npx wrangler secret put SEARXNG_TOKEN --config worker/wrangler.toml`, the same value as on the instance. Trends: `TRENDS_WEB_LANGUAGES` (default `telugu,hindi,tamil`), `TRENDS_WEB_LABEL` (default "New on the web"); `TRENDS_DISABLED_SOURCES=web` switches the source off.
-- **Health.** Owner console → Technical → System health, row "Web search engine": result count and latency, or the reason (`not configured`; `invalid address` when `SEARXNG_URL` is set but not https, or carries a user name, password or query; `token refused — check SEARXNG_TOKEN` for a 401; `forbidden — check that search.formats in settings.yml includes json` for a 403; `timed out`; `network error`; `resting after <the failure that started the rest> (retries in about N min)`). Worker logs: one `[searxng]` line per call.
-- **Failure behaviour.** A failure that says the instance is unwell rests it per isolate — 60 s after a network error, 5xx, 429, 403, a non-JSON answer or a timeout of the full default leash; 10 minutes after a 401 — and every caller falls back without waiting: web search to the previous sources, the expert, DJ and playlist to their ungrounded prompts. A caller's own shorter leash rests nothing. The trends run records the failure as an error for the `web` source only: retried when a retry can help (timeout, network, 5xx, 429, or searches that returned nothing at all), not retried into a rest (`searxng_cooling`, naming the original failure), and `skipped` — keeping the last snapshot — when the searches worked but held no single-song upload.
-- **Trends review.** Items from the `web` source are never shown until accepted: even a confident catalogue match is filed in the review queue (reason `needs_review_web_source`) with its proposal, so accepting is one click. `POST /api/cron/trends-ingest?source=web` runs it by hand.
 
 ## Monitoring
 

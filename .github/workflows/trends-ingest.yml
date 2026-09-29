@@ -12,8 +12,8 @@ name: Trends ingest
 # (an edge or network failure, after which the endpoint may still have run),
 # at most three calls, so four runs a day use 4 units per region normally and
 # 36 at worst, against the provider's default 10,000-unit daily quota and the
-# app's own ceiling (TRENDS_VIDEO_DAILY_UNIT_BUDGET, default 200). The web
-# source spends no quota. The chart does not move fast enough for more to
+# app's own ceiling (TRENDS_VIDEO_DAILY_UNIT_BUDGET, default 200). The
+# chart does not move fast enough for more to
 # help, the stale threshold (18 hours) tolerates two missed runs, and each
 # run's catalogue matching is budgeted.
 #
