@@ -1,6 +1,6 @@
 # Search
 
-This page covers the Search destination: searching as you type, the results tabs, sorting, lyrics search, voice search, recent and trending searches, and the shortcut grid on Discover for when you would rather browse.
+This page covers the Search destination: searching as you type, the results tabs, sorting, searching by description, lyrics search, voice search, recent and trending searches, and the shortcut grid on Discover for when you would rather browse.
 
 ## Searching
 
@@ -15,6 +15,12 @@ On the **Songs** tab you can sort by relevance, popularity, newest, longest, sho
 If a search finds no songs, VinaX may offer **Did you mean …?** based on trending searches, your recent searches and common names.
 
 Tapping a song from search results starts it and the DJ builds the next five from it, like anywhere else. See [The player and the queue](player-and-queue.md).
+
+## Search by description
+
+Describe what you want to hear, such as “sad telugu songs for rain” or “90s hindi dance”. When a search has three or more words and names a mood, an activity, an era or an energy, the results open with **Songs that match**: songs ranked by how well each fits your words, drawn from the results, your liked and recent songs, and catalogue searches for the language and mood you named. **Play all** plays them. **Artists that fit** and **Playlists that fit** follow when there are any.
+
+To rank them, VinaX sends your words and short song descriptions (title, artists, album, language, year, genre, mood) to its AI service; when that service is busy or switched off, the ranking is done on your device. If no title uses your exact words, **Ask AI instead** asks the music expert.
 
 ## Search by lyrics
 

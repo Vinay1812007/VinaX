@@ -6,7 +6,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { isNativePlatform } from '@/services/native';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { albumPath, artistPath, playlistPath } from '@/utils/slug';
 import { Link, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -63,9 +63,13 @@ import { candidatePool, COMMON_NAMES, didYouMean } from '@/features/search/didYo
 import { useQuickResults } from '@/features/search/useQuickResults';
 import { putCachedQuick, QUICK_LIMIT } from '@/features/search/quickResults';
 import { PageHeader } from '@/components/PageHeader';
+import { looksLikeNaturalLanguage } from '@/services/ai/musicIntent';
 import { Shelf } from '@/components/Shelf';
 import { IconButton } from '@/components/IconButton';
 import '@/styles/pages/browse.css';
+
+// 8.2.0 — natural-language matches load only for queries that read like a description.
+const SemanticMatches = lazy(() => import('@/features/search/SemanticMatches'));
 
 const TABS = ['All', 'Songs', 'Albums', 'Artists', 'Playlists'] as const;
 type Tab = (typeof TABS)[number];
@@ -367,10 +371,11 @@ export default function SearchPage() {
       setAiSongs(res.songs);
       return;
     }
-    if (res.reason === 'not_configured')
-      setAiError('AI features are not enabled on this server yet.');
+    // 8.2.0 — `not_configured` is now only a real switch-off or a missing
+    // setup; a busy, over-budget or briefly unavailable service is `error`.
+    if (res.reason === 'not_configured') setAiError('The music expert is switched off on this server.');
     else if (res.reason === 'empty') setAiError('The music expert came up empty — try rephrasing.');
-    else setAiError('Something went wrong. Please try again.');
+    else setAiError('The music expert is unavailable right now — try again in a minute.');
   };
 
   // A new search query starts a fresh round with the expert — and clears any
@@ -485,6 +490,7 @@ export default function SearchPage() {
   const playlists = useInfinitePlaylists(q, tab === 'Playlists' && !lyricsMode);
 
   const active = q.length > 1;
+  const naturalQuery = useMemo(() => looksLikeNaturalLanguage(q), [q]);
   // v5.17.0 — lyric-line search: the lyrics service finds the candidates and
   // the catalogue resolves each one to a playable song.
   const lyricsQ = useLyricsSearch(q, lyricsMode && active);
@@ -1217,6 +1223,11 @@ export default function SearchPage() {
                   aria-busy={allPlaceholder}
                   className={cn('transition-opacity', allPlaceholder && 'opacity-40')}
                 >
+                  {naturalQuery && !allPlaceholder && (
+                    <Suspense fallback={null}>
+                      <SemanticMatches key={q} query={q} results={all.data} />
+                    </Suspense>
+                  )}
                   {(topResult || rankedAllSongs.length > 1) && (
                     <div className="search-results-lead">
                       {topResult && (
@@ -1336,7 +1347,26 @@ export default function SearchPage() {
                   {rankedAllSongs.length === 0 &&
                     all.data.albums.length === 0 &&
                     all.data.artists.length === 0 &&
-                    all.data.playlists.length === 0 && (
+                    all.data.playlists.length === 0 &&
+                    naturalQuery && (
+                      <div className="mt-2">
+                        <p className="vx-meta-line mb-3">No titles use those exact words.</p>
+                        <button
+                          type="button"
+                          onClick={() => void askExpert(q)}
+                          disabled={aiLoading}
+                          className="px-5 py-2.5 rounded-full btn-primary disabled:opacity-50"
+                        >
+                          {aiLoading ? '✨ Asking the expert…' : '✨ Ask AI instead'}
+                        </button>
+                        {expertPanel}
+                      </div>
+                    )}
+                  {rankedAllSongs.length === 0 &&
+                    all.data.albums.length === 0 &&
+                    all.data.artists.length === 0 &&
+                    all.data.playlists.length === 0 &&
+                    !naturalQuery && (
                       <>
                         <EmptyState
                           icon={<SearchIcon className="w-8 h-8" />}

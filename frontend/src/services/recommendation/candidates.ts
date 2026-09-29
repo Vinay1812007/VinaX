@@ -1,4 +1,4 @@
-import { getAlbum, getSongSuggestions, searchSongsPage } from '@/services/api';
+import { getAlbum, getArtist, getArtistTopSongs, getSongSuggestions, searchSongsPage } from '@/services/api';
 import { isBlockedSong } from '@/services/content/blocklist';
 import { isJunkTrack } from './quality';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
@@ -6,9 +6,10 @@ import { trendingSeed } from '@/constants/seeds';
 import { LANGUAGES } from '@/constants/languages';
 import { kidModeOn } from '@/services/kidMode';
 import { mergeCandidates, type Candidate, type CandidateSource, type RecommendationContext } from './types';
-import { softMutedArtist } from './profiles';
-import type { Song } from '@/types';
+import { buildSongProfile, softMutedArtist } from './profiles';
+import type { ArtistRef, Song } from '@/types';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
+import { provenPicks } from './recMemory';
 
 const REDISCOVERY_AGE_MS = 14 * 86_400_000;
 
@@ -19,6 +20,14 @@ const CACHE_TTL_MS = 3 * 60_000;
 const CACHE_CAP = 60;
 /** Cold start, after the profile, pinned languages and liked songs have all come up empty. */
 const DEFAULT_LANGUAGES = ['hindi', 'english', 'tamil', 'telugu'];
+/** 8.2.0 — an artist's collaborators are re-read at most every 30 minutes; at most 50 artists are kept. */
+const COLLAB_TTL_MS = 30 * 60_000;
+const COLLAB_CAP = 50;
+/** 8.2.0 — collaborators a related-artist gather reads, and songs taken from each. */
+const RELATED_ARTISTS = 2;
+const SONGS_PER_RELATED_ARTIST = 6;
+/** 8.2.0 — the catalogue word for a seed's mood, when its genre is unknown. */
+const MOOD_QUERY: Record<string, string> = { romantic: 'romantic', energetic: 'party', chill: 'chill', melancholy: 'sad', devotional: 'devotional' };
 
 const effectiveMode = (ctx: RecommendationContext): 'familiar' | 'balanced' | 'discover' => ctx.discoveryMode ?? (ctx.explore ? 'discover' : 'balanced');
 
@@ -65,10 +74,87 @@ interface Task {
 }
 
 const cache = new Map<string, { at: number; limit: number; songs: Song[] }>();
+const collaborators = new Map<string, { at: number; refs: ArtistRef[] }>();
 
 /** Tests: forget every cached provider response. */
 export function resetCandidateCache(): void {
   cache.clear();
+  collaborators.clear();
+}
+
+/** 8.2.0 — does the song carry a stream URL? */
+const streams = (song: Song): boolean => Array.isArray(song.audio) && song.audio.some((a) => !!a?.url);
+
+/**
+ * 8.2.0 — the artists related to `artistId`: the catalogue's own "similar
+ * artists" when its artist page carries them, then everyone else credited on
+ * its most popular songs, most often first (how the artist page lists
+ * related artists). Cached per artist for COLLAB_TTL_MS.
+ */
+async function collaboratorsOf(artistId: string, now: () => number): Promise<ArtistRef[]> {
+  const hit = collaborators.get(artistId);
+  if (hit && now() - hit.at < COLLAB_TTL_MS) return hit.refs;
+  let similar: ArtistRef[] = [];
+  let songs: Song[] | null = null;
+  try {
+    const artist = await getArtist(artistId);
+    similar = (artist?.similarArtists ?? []).filter((a) => a?.id && a.id !== artistId);
+    if (artist?.topSongs?.length) songs = artist.topSongs;
+  } catch {
+    /* the songs-only route below still answers */
+  }
+  if (!songs) songs = await getArtistTopSongs(artistId, 0);
+  const count = new Map<string, { ref: ArtistRef; n: number }>();
+  for (const song of songs ?? []) {
+    for (const a of Array.isArray(song?.artists) ? song.artists : []) {
+      if (!a?.id || a.id === artistId) continue;
+      const c = count.get(a.id);
+      if (c) c.n += 1;
+      else count.set(a.id, { ref: a, n: 1 });
+    }
+  }
+  const credited = [...count.values()].sort((x, y) => y.n - x.n).map((x) => x.ref);
+  const refs = [...similar, ...credited.filter((a) => !similar.some((s) => s.id === a.id))].slice(0, 12);
+  collaborators.delete(artistId);
+  collaborators.set(artistId, { at: now(), refs });
+  if (collaborators.size > COLLAB_CAP) collaborators.delete(collaborators.keys().next().value!);
+  return refs;
+}
+
+/**
+ * 8.2.0 — the related-artist source: popular songs by the artists featured
+ * on the seed, then by the lead artist's most frequent collaborators
+ * (salt-rotated among the first four): the catalogue's similar artists
+ * when it lists them, co-credits otherwise. The requests run one after another
+ * inside the task's single concurrency slot and stop once the gather is over.
+ */
+async function relatedArtistSongs(seed: Song, limit: number, signal: AbortSignal, salt: number, now: () => number): Promise<Song[]> {
+  const lead = seed.artists?.[0];
+  if (!lead?.id) return [];
+  const featured = seed.artists.slice(1).filter((a) => a?.id && a.id !== lead.id);
+  const collabs = await collaboratorsOf(lead.id, now);
+  const seen = new Set<string>();
+  const top = collabs.slice(0, 4);
+  const start = top.length ? Math.abs(salt) % top.length : 0;
+  const picks = [...featured, ...top.slice(start), ...top.slice(0, start)].filter((a) => {
+    if (seen.has(a.id)) return false;
+    seen.add(a.id);
+    return true;
+  }).slice(0, RELATED_ARTISTS);
+  const out: Song[] = [];
+  for (const artist of picks) {
+    if (signal.aborted || out.length >= limit) break;
+    out.push(...((await getArtistTopSongs(artist.id, 0)) ?? []).slice(0, SONGS_PER_RELATED_ARTIST));
+  }
+  return out.slice(0, limit);
+}
+
+/** 8.2.0 — the genre source's query: the seed's first genre not already searched, else its mood, in its language. */
+function genreQuery(seed: Song, language: string): string | null {
+  const p = buildSongProfile(seed);
+  const searched = (seed.genre ?? '').trim().toLowerCase();
+  const term = p.genres.find((g) => g && g !== searched) ?? (p.confidence.mood > 0 ? MOOD_QUERY[p.mood] : undefined);
+  return term ? `${term} ${language} songs` : null;
 }
 
 async function cached(key: string, limit: number, fetch: (limit: number) => Promise<Song[]>, now: () => number): Promise<Song[]> {
@@ -174,6 +260,17 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
     // FOR that intent, in the queue's language, instead of only re-scoring the seed's pool.
     if (ctx.intentQuery) for (const page of [1, 2 + (salt % 2)]) add('intent', `p${page}`, search(ctx.intentQuery, page, 20), ctx.intentQuery, true);
     if (seed.language && !ctx.mutedLanguages.includes(seed.language)) add('trending', 'seed', search(`${seed.language} ${seed.genre ?? ''}`.trim(), 1, 15), seed.language);
+    // 8.2.0 — the seed's own album (the same film or record), artists who work
+    // with the seed's artist, and one more search for its genre or mood.
+    if (seed.album?.id) {
+      const albumId = seed.album.id;
+      add('album', albumId, { key: `a|${albumId}`, limit: 12, fetch: (_n, signal) => getAlbum(albumId, { signal }).then((a) => a?.songs ?? []) }, seed.title);
+    }
+    if (seed.artists?.[0]?.id) add('related-artist', seed.artists[0].id, { key: `ra|${seed.artists[0].id}|${salt % 3}`, limit: 12, fetch: (n, signal) => relatedArtistSongs(seed, n, signal, salt, now) }, seed.artists[0].name);
+    const genre = !ctx.intentQuery && seed.language && seed.language !== 'unknown' && !ctx.mutedLanguages.includes(seed.language) ? genreQuery(seed, seed.language) : null;
+    if (genre) add('genre', 'seed', search(genre, 1 + (salt % 2), 12), seed.title);
+    // 8.2.0 — earlier automatic picks the listener finished or liked: songs like two of them.
+    for (const pick of rotate(provenPicks({ now: now(), limit: 12 }).filter((p) => p.song.id !== seed.id), ctx.salt, 2)) add('proven', pick.song.id, suggest(pick.song.id, 10), pick.song.title);
   }
 
   // 1. Related to recent listens (strongest signal).
@@ -228,6 +325,9 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
     for (const song of [...rotate(ctx.favorites.filter(fits), ctx.salt, 12), ...rotate(finished, ctx.salt, 10)]) local.push({ song, source: 'history' });
   }
 
+  // 4d. 8.2.0 — a proven pick itself, once it has rested (recMemory's cooldown).
+  if (ctx.seedSong) for (const pick of rotate(provenPicks({ now: now(), cooledOnly: true, limit: 12 }), ctx.salt, 4)) local.push({ song: pick.song, source: 'proven' });
+
   // 5. Rediscovery: completed listens older than two weeks (no fetch needed).
   const cutoff = now() - REDISCOVERY_AGE_MS;
   for (const e of ctx.history.filter((h) => h.completed && h.ts < cutoff).slice(0, 15)) local.push({ song: e.song, source: 'rediscovery' });
@@ -235,7 +335,14 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
   const results = await runTasks(tasks, new Set(local.map((c) => c.song.id)).size, opts, now);
   const pool: Candidate[] = [];
   // Task order, not arrival order: the pool is the same however the network raced.
-  tasks.forEach((t, i) => { for (const song of results[i] ?? []) pool.push({ song, source: t.source, seedTitle: t.seedTitle }); });
+  // 8.2.0 — a response that carried stream URLs for some songs and none for
+  // others marks those as unplayable (the hard filter decides); a response
+  // with no stream URL at all is a catalogue that resolves audio at play time.
+  tasks.forEach((t, i) => {
+    const songs = results[i] ?? [];
+    const answerStreams = songs.some(streams);
+    for (const song of songs) pool.push({ song, source: t.source, seedTitle: t.seedTitle, ...(answerStreams && !streams(song) ? { unplayable: true } : {}) });
+  });
 
   // The rules every later stage re-checks, applied at the source too: blocked
   // (hidden by the listener or on the server list), junk, a soft-muted artist

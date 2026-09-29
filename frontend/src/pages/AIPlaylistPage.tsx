@@ -11,7 +11,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
-import { generatePlaylist, type GeneratedPlaylist } from '@/services/ai/playlist';
+import { generatePlaylist, playlistErrorCopy, type GeneratedPlaylist } from '@/services/ai/playlist';
 
 export default function AIPlaylistPage() {
   usePageTitle('AI playlist');
@@ -66,11 +66,7 @@ export default function AIPlaylistPage() {
       setResult(res.playlist);
       return;
     }
-    if (res.reason === 'not_configured')
-      setError('AI features are not enabled on this server yet.');
-    else if (res.reason === 'empty')
-      setError('No fresh matches this time — try another artist, era or mood.');
-    else setError('Something went wrong. Please try again.');
+    setError(playlistErrorCopy(res.reason));
   };
 
   const playAll = () => {

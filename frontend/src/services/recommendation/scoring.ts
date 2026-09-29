@@ -14,8 +14,11 @@ import { coPlayAffinity, coPlayIndexFor } from './coplay';
 import type { Candidate, ReasonComponent, ReasonKind, RecommendationContext, ScoredCandidate } from './types';
 import { moodMatchScore } from './mood';
 import { buildSongProfile, overlap, type SongProfile } from './profiles';
-import { RECOMMENDATION_WEIGHTS } from './weights';
+import { RECOMMENDATION_WEIGHTS, TASTE_WEIGHTS } from './weights';
 import { rerankCandidates } from './reranking';
+import { songKey } from './songIdentity';
+import { dot, embeddingTasteVector, songVector, tasteVector } from './vectors';
+import type { Song } from '@/types';
 
 const SOURCE_BOOST: Record<Candidate['source'], number> = {
   related: 0.18,
@@ -31,6 +34,14 @@ const SOURCE_BOOST: Record<Candidate['source'], number> = {
   trending: 0.06,
   // v7.0.0 — Familiar mode's own favourites and finished songs.
   history: 0.1,
+  // 8.2.0 — the seed's own album: the same film or record, usually the same composer.
+  album: 0.1,
+  // 8.2.0 — artists who work with the seed's artist: one step further out than the seed's own.
+  'related-artist': 0.1,
+  // 8.2.0 — like picks this listener finished or liked before (or, after a cooldown, one of them).
+  proven: 0.12,
+  // 8.2.0 — the seed's genre or mood in its language: broad, a little above trending.
+  genre: 0.07,
 };
 
 /** How each source's boost is explained (favourite-artist and -album name what they came from). */
@@ -43,6 +54,10 @@ const SOURCE_REASON: Record<Candidate['source'], ReasonKind> = {
   intent: 'intent',
   trending: 'trending',
   history: 'familiar',
+  album: 'album',
+  'related-artist': 'similar-artist',
+  proven: 'proven',
+  genre: 'genre',
 };
 
 /** 7.2.0 — per extra source that found the same song, capped: agreement is evidence, not a trump card. */
@@ -78,6 +93,16 @@ export interface ScoringFrame {
   year: number;
   /** 0 = Sunday. */
   day: number;
+  /** 8.2.0 — the listener's taste in the on-device vector space (null with no favourites or history). */
+  taste: Float32Array | null;
+  /** 8.2.0 — the same in a learned embedding space, from vectors the device holds (null when it holds too few). */
+  embeddingTaste: Float32Array | null;
+  /**
+   * 8.2.0 — the pool's mean embedding fit, set by `rankCandidates`. The
+   * embedding only moves a candidate's taste fit by how far it sits above or
+   * below this, so candidates with and without a cached vector stay comparable.
+   */
+  embeddingPoolMean: number | null;
 }
 
 const MODE_LEAN = { familiar: -1, balanced: 0, discover: 1 } as const;
@@ -117,7 +142,37 @@ export function buildScoringFrame(ctx: RecommendationContext): ScoringFrame {
     intentRamp: intent ? Math.min(1, intent.size / 3) : 0,
     year: new Date().getFullYear(),
     day: ctx.dayOfWeek ?? new Date().getDay(),
+    taste: tasteVector(ctx.favorites, ctx.history),
+    embeddingTaste: ctx.embeddingOf ? embeddingTasteVector(ctx.favorites, ctx.history, ctx.embeddingOf) : null,
+    embeddingPoolMean: null,
   };
+}
+
+/** A cached learned embedding for a song, or null (a lookup that throws counts as none). */
+function embeddingFor(ctx: RecommendationContext, id: string, dims: number): Float32Array | null {
+  try {
+    const v = ctx.embeddingOf?.(id) ?? null;
+    return v && v.length === dims ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 8.2.0 — how well a candidate fits the listener's taste, 0..1: the cosine
+ * of its on-device vector and the taste vector. When the device holds a
+ * learned embedding for the candidate AND for enough taste songs, the fit
+ * moves by how far the candidate's embedding cosine sits above or below the
+ * pool's mean — the two spaces are never compared with each other.
+ */
+export function tasteFit(song: Song, ctx: RecommendationContext, frame: ScoringFrame, profile?: SongProfile, classified?: Candidate['classified']): number {
+  if (!frame.taste) return 0;
+  let fit = Math.max(0, dot(songVector(song, classified, profile), frame.taste));
+  if (frame.embeddingTaste && frame.embeddingPoolMean != null) {
+    const e = embeddingFor(ctx, song.id, frame.embeddingTaste.length);
+    if (e) fit += dot(e, frame.embeddingTaste) - frame.embeddingPoolMean;
+  }
+  return Math.max(0, Math.min(1, fit));
 }
 
 /**
@@ -228,6 +283,17 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
 
   add('popularity', song.playCount ? Math.min(Math.log10(song.playCount + 1) / 8, 1) * W.popularity * 3 : 0.04);
 
+  // 8.2.0 — taste fit: the whole-song resemblance to what the listener loves
+  // and plays lately (artists, album, language, genres, mood, vibes, decade
+  // at once), which the per-feature terms above only see one at a time.
+  add('taste', tasteFit(song, ctx, frame, cp, c.classified) * TASTE_WEIGHTS.tasteFit * blend);
+
+  // 8.2.0 — no surface re-serves what another just showed, and asking again
+  // from the same song does not hand back the same opening: small penalties,
+  // never rules — a song that is clearly the best fit still wins.
+  if (ctx.servedKeys?.size && ctx.servedKeys.has(songKey(song))) add('served', -TASTE_WEIGHTS.servedRecently, 'shown recently');
+  if (ctx.seedRepeatIds?.has(song.id)) add('served', -TASTE_WEIGHTS.seedRepeat, 'same song, same opening');
+
   // Time-of-day affinity: boost languages you tend to play around this hour.
   add('time', timeOfDayWeight(profile, song.language, ctx.hour) * 0.08 * blend);
 
@@ -269,7 +335,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   if (song.language && profile.languages[song.language]) add('low-skip', (lowSkipScore(profile.languages[song.language]) - 0.5) * 0.2 * blend, song.language);
   add('low-skip', (artistSkipScore(profile, artistIds, artistNames) - 0.5) * 0.14 * blend, leadName);
 
-  add(SOURCE_REASON[c.source], SOURCE_BOOST[c.source], c.source === 'explore' ? song.language : c.source === 'related' || c.source === 'favorite-artist' || c.source === 'favorite-album' ? c.seedTitle : undefined);
+  add(SOURCE_REASON[c.source], SOURCE_BOOST[c.source], c.source === 'explore' ? song.language : c.source === 'genre' ? undefined : c.source !== 'trending' && c.source !== 'history' && c.source !== 'rediscovery' && c.source !== 'intent' ? c.seedTitle : undefined);
 
   // 7.2.0 — several independent sources found this song: a little more
   // confidence it belongs, bounded so it never outweighs a real taste match.
@@ -391,6 +457,20 @@ export function rankCandidates(candidates: Candidate[], ctx: RecommendationConte
   const seen = new Set<string>();
   const out: ScoredCandidate[] = [];
   const frame = buildScoringFrame(ctx);
+  // 8.2.0 — the embedding refinement needs the pool's own mean, and a pool
+  // where too few songs have a cached vector does not get one at all.
+  if (frame.embeddingTaste) {
+    let sum = 0;
+    let n = 0;
+    for (const c of candidates) {
+      const e = embeddingFor(ctx, c.song.id, frame.embeddingTaste.length);
+      if (!e) continue;
+      sum += dot(e, frame.embeddingTaste);
+      n += 1;
+    }
+    if (n >= 3) frame.embeddingPoolMean = sum / n;
+    else frame.embeddingTaste = null;
+  }
   for (const c of candidates) {
     if (seen.has(c.song.id)) continue;
     seen.add(c.song.id);

@@ -52,7 +52,7 @@ import {
   writeFlag,
   writePref,
 } from '@/features/ai/chat/storage';
-import { failureMessage, runChatStream, type ChatStreamResult } from '@/features/ai/chat/streamClient';
+import { canRetry, failureMessage, runChatStream, type ChatStreamResult } from '@/features/ai/chat/streamClient';
 import { initialStreamState } from '@/features/ai/chat/streamReducer';
 import type { Conversation, ModelChoice, Msg } from '@/features/ai/chat/types';
 import { useModelCatalog } from '@/features/ai/chat/useModelCatalog';
@@ -666,8 +666,12 @@ export default function VinaXAIPage(): ReactNode {
       : now.choice.model && state.model === now.choice.model
         ? slugLabel(state.model)
         : nickForModel(state.model);
+    // 8.2.0 — nothing arrived (the stream client already asked once more):
+    // the line says why and the reply offers Retry, unless waiting cannot help.
+    const failed = !result.aborted && !state.text && canRetry(result.failure);
     replaceLastAssistant(chatId, (m) => ({
       ...m,
+      failed: failed || undefined,
       content: finalText || '…',
       sources: state.sources.length ? state.sources : undefined,
       engine: engine || undefined,
@@ -691,7 +695,9 @@ export default function VinaXAIPage(): ReactNode {
     if (busy || messages.length < 2) return;
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
     if (!lastUser) return;
-    const previousReply = [...messages].reverse().find((m) => m.role === 'assistant')?.content ?? '';
+    const lastReply = [...messages].reverse().find((m) => m.role === 'assistant');
+    // A failed turn is asked again as it was, not "differently from" a failure line.
+    const previousReply = lastReply && !lastReply.failed ? lastReply.content : '';
     void send(lastUser.content, [], { history: messages.slice(0, messages.lastIndexOf(lastUser)), previousReply, user: lastUser });
   };
   const rewriteLast = (how: 'shorter' | 'longer' | 'simpler'): void => {

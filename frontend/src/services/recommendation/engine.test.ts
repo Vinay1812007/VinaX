@@ -22,6 +22,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useRecsDebugStore } from '@/store/recsDebugStore';
 import { resetTransitionMemory } from './transitions';
+import { resetRecMemory } from './recMemory';
 
 const NOW = 1_800_000_000_000;
 const seed = makeSong('seed', { title: 'Seed', artist: 'Sid Sriram' });
@@ -76,6 +77,8 @@ describe('recommendNextSongs — rules hold with the AI off', () => {
   it('is deterministic for a fixed context', async () => {
     pool = telugu(14);
     const a = await recommendNextSongs(seed, ctx(), { limit: 8 });
+    // 8.2.0 — the engine remembers the opening it served after this seed; a fixed context includes that memory.
+    resetRecMemory();
     const b = await recommendNextSongs(seed, ctx(), { limit: 8 });
     expect(a.map((s) => s.id)).toEqual(b.map((s) => s.id));
   });
@@ -159,8 +162,11 @@ describe('recommendNextSongs — the AI DJ is optional and never trusted', () =>
     useSettingsStore.setState({ aiDj: false });
     const local = await recommendNextSongs(seed, ctx(), { limit: 8 });
     useSettingsStore.setState({ aiDj: true });
+    // Each call starts without the per-seed memory the previous one left (8.2.0), so only the DJ differs.
+    resetRecMemory();
     djSequence.mockResolvedValueOnce(null); // timed out / 503 / unconfigured all surface as null
     expect((await recommendNextSongs(seed, ctx(), { limit: 8 })).map((s) => s.id)).toEqual(local.map((s) => s.id));
+    resetRecMemory();
     djSequence.mockResolvedValueOnce({ intro: '', picks: [] }); // an answer with nothing usable in it
     expect((await recommendNextSongs(seed, ctx(), { limit: 8 })).map((s) => s.id)).toEqual(local.map((s) => s.id));
   });

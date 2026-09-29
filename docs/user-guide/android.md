@@ -19,6 +19,17 @@ Your data does not follow you automatically, because there is no account. Use **
 | Push notifications | **Settings → Notifications → Push notifications**. Off means nothing is sent to this device. |
 | Haptics | Light feedback on navigation and skips |
 
+A song is saved in the highest quality the catalogue has for it; when the top quality does not exist, the next one down is used. A download that stalls gives up instead of holding up **Download all**. When a download fails, VinaX says why:
+
+| Message | What to do |
+|---|---|
+| No internet connection | Connect and try again |
+| This song isn’t available to download | Try another version of the song |
+| Couldn’t save to your phone | Free up some space and try again |
+| The download stalled | Check your connection and try again |
+
+Opening the app without internet never deletes your downloads. If the app cannot finish loading offline, it says you are offline and finishes loading when the connection returns. If a downloaded song's offline copy goes missing, VinaX rebuilds it from the file on your phone.
+
 Downloaded audio stays on the phone that downloaded it. It is never part of a backup.
 
 Keyboard shortcuts are not active in the Android app.

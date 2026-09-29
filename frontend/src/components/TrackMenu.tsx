@@ -12,7 +12,7 @@ import { isNativePlatform } from '@/services/native';
 import { sendFeedback } from '@/services/feedback';
 import { useReasonStore } from '@/store/reasonStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
-import { downloadSong, removeDownload } from '@/services/downloads';
+import { downloadFailureMessage, downloadSong, lastDownloadFailure, removeDownload } from '@/services/downloads';
 import { SOFT_MUTE_DAYS } from '@/services/personalization/softMutes';
 import { lessLikeThis, moreLikeThis, tuneLabel } from '@/features/queue/steer';
 import { DotsIcon } from './Icons';
@@ -302,7 +302,8 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
 
   const entries: MenuEntry[] = [
     ...(leadItems?.length ? [...leadItems, 'divider' as const] : []),
-    { label: 'Start song radio', icon: 'radio', action: () => startRadio(song) },
+    // 8.2.0 — AI Radio: this song starts, and the DJ keeps adding songs that follow from it.
+    { label: 'Start AI Radio', icon: 'radio', action: () => { startRadio(song); toast(`AI Radio: ${song.title}`); } },
     { label: 'Play next', icon: 'playNext', action: () => enqueueNext(song) },
     { label: 'Add to queue', icon: 'addQueue', action: () => enqueue(song) },
     // 7.2 — steer what comes next. "More like this" is for this sitting and
@@ -338,7 +339,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
           action: () => {
             if (downloading) return;
             if (downloaded) void removeDownload(song.id).then(() => toast('Removed download'));
-            else void downloadSong(song).then((ok) => toast(ok ? 'Saved for offline' : 'Download failed'));
+            else void downloadSong(song).then((ok) => toast(ok ? 'Saved for offline' : downloadFailureMessage(lastDownloadFailure(song.id))));
           },
         }
       : null,

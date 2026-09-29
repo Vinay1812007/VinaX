@@ -7,39 +7,142 @@ import { reportError } from '@/services/analytics/telemetry';
 
 /**
  * Offline downloads (Android app only). Audio is fetched with native HTTP (no
- * CORS) and saved into the app's own folder on device storage, so saved songs
- * play from local files exactly like any offline-first player.
+ * CORS) and saved into the app's own folder, so saved songs play from local
+ * files exactly like any offline-first player.
  *
- * v5.7.3 — offline sources are now available the INSTANT the app opens. The
- * boot rebuild used to fill the playable-URL map asynchronously (base64 file
- * reads, cache writes — seconds of work), so an offline launch that tapped a
- * downloaded song in its first moments found an EMPTY map, fell through to
- * streaming URLs, and died with "music servers unreachable" — the exact
- * failure reported from the field. Two changes kill that race for good:
- *   1. getOfflineSources() derives the service-worker route (a pure function
- *      of the id) and the file-bridge URL (from the uri persisted at save
- *      time) synchronously — no boot work needed for a saved song to play.
- *   2. New downloads store into the app's folder on device storage
- *      (Android/data/<app>/files), with the internal data directory as the
- *      fallback; every file operation honors the directory each item was
- *      saved under, so old downloads keep playing untouched.
+ * 8.2.0 — downloads that failed on Android, fixed at the root:
+ *   1. The native downloader never creates the `vinax-downloads/` folder
+ *      (its `recursive` flag is ignored), so every download used to fail
+ *      there and fall back to shipping the whole file through the JS bridge
+ *      as base64. The folder is now created first.
+ *   2. A download walks the bitrate ladder (320 → 160 → 96 → 48) instead of
+ *      failing when the top bitrate does not exist for a song.
+ *   3. Connect/read timeouts plus a hard cap per attempt: a stalled transfer
+ *      can no longer hang "download all" forever.
+ *   4. Success no longer waits on the Cache API copy — that runs in the
+ *      background, reading the file back in slices instead of one giant
+ *      base64 string.
+ *   5. New downloads go to the internal data directory (no storage
+ *      permission on any Android version); items saved to device storage
+ *      by earlier versions keep their directory tag and keep playing.
+ *   6. Failures carry a reason, so the listener hears "No internet
+ *      connection" or "This song isn't available to download" instead of a
+ *      bare "Download failed".
+ *
+ * v5.7.3 — getOfflineSources() derives the service-worker route (a pure
+ * function of the id) and the file-bridge URL (from the uri persisted at save
+ * time) synchronously, so a download is playable from the app's first frame.
  *
  * v5.6.0 — downloads play best from blob: URLs materialized out of the Cache
  * API: the bytes never touch the network stack, the service worker or the
  * WebView's request-interception layer at play time. The /offline-audio/ SW
- * route and the file-bridge URL remain as ordered fallbacks, and every saved
- * song exposes ALL of its offline sources to the audio engine.
+ * route and the file-bridge URL remain as ordered fallbacks.
  */
 const urlMap = new Map<string, string>();
 
 /** File-bridge (convertFileSrc) URLs — the last-resort offline source. */
 const bridgeMap = new Map<string, string>();
 
-/** Same-origin cache bucket the service worker serves audio from (sw.js). */
+/** Same-origin cache bucket the service worker serves audio from (sw.js).
+ *  Nothing may ever delete this bucket wholesale — not the SW's activate
+ *  prune, not the boot recovery in index.html. */
 const AUDIO_CACHE = 'vinax-audio-v1';
 
+/** Folder (inside the app's directory) that holds the saved files. */
+const FOLDER = 'vinax-downloads';
+
+/** Native HTTP timeouts. The read timeout is per read — a live but slow
+ *  transfer keeps going; a dead socket fails in 30 s. */
+const CONNECT_TIMEOUT_MS = 15_000;
+const READ_TIMEOUT_MS = 30_000;
+/** Hard cap on one attempt, in case the native side never answers at all. */
+const ATTEMPT_TIMEOUT_MS = 5 * 60_000;
+
+/** Why a download failed — picks the message the listener sees. */
+export type DownloadFailure = 'offline' | 'unavailable' | 'storage' | 'timeout' | 'unknown';
+
+const FAILURE_MESSAGES: Record<DownloadFailure, string> = {
+  offline: 'No internet connection — connect and try again',
+  unavailable: 'This song isn’t available to download',
+  storage: 'Couldn’t save to your phone — free up some space and try again',
+  timeout: 'The download stalled — check your connection and try again',
+  unknown: 'Download failed — please try again',
+};
+
+/** The words to show for a failed download. */
+export function downloadFailureMessage(reason: DownloadFailure | null | undefined): string {
+  return FAILURE_MESSAGES[reason ?? 'unknown'];
+}
+
+/** Why the most recent download of this song failed (null after a success). */
+const lastFailure = new Map<string, DownloadFailure>();
+export function lastDownloadFailure(id: string): DownloadFailure | null {
+  return lastFailure.get(id) ?? null;
+}
+
+class DownloadError extends Error {
+  constructor(
+    readonly reason: DownloadFailure,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+const noSpace = (msg: string): boolean => /ENOSPC|No space left|disk full/i.test(msg);
+
+/**
+ * Map a native/HTTP error to a reason. The Android downloader reports an
+ * HTTP 404 as a FileNotFoundException whose message is just the URL, other
+ * HTTP errors as "Server returned HTTP response code: N".
+ */
+export function classifyDownloadError(e: unknown): DownloadFailure {
+  if (e instanceof DownloadError) return e.reason;
+  const msg = e instanceof Error ? e.message : String(e ?? '');
+  if (noSpace(msg)) return 'storage';
+  if (/timed? ?out|timeout/i.test(msg)) return 'timeout';
+  if (
+    /Unable to resolve host|UnknownHost|Network is unreachable|ENETUNREACH|ECONNREFUSED|ECONNRESET|Connection reset|connection abort|failed to connect|No address associated|INTERNET_DISCONNECTED|Failed to fetch/i.test(
+      msg,
+    )
+  ) {
+    return 'offline';
+  }
+  if (/response code: 4\d\d|\bhttp 4\d\d\b/i.test(msg) || /^(Error downloading file: )?https?:\/\/\S+$/i.test(msg)) {
+    return 'unavailable';
+  }
+  if (/EACCES|EROFS|ENOENT|open failed|No such file|Permission/i.test(msg)) return 'storage';
+  return 'unknown';
+}
+
+/** Definitely offline (navigator.onLine can only be trusted when false). */
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new DownloadError('timeout', `no answer after ${ms} ms`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e: unknown) => {
+        clearTimeout(t);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      },
+    );
+  });
+}
+
+type Fs = typeof import('@capacitor/filesystem');
 type FsDirectory = import('@capacitor/filesystem').Directory;
 type FsDirectoryEnum = typeof import('@capacitor/filesystem').Directory;
+
+/** The filesystem plugin, loaded once on first use (native only). */
+let fsModule: Promise<Fs> | null = null;
+const loadFs = (): Promise<Fs> => (fsModule ??= import('@capacitor/filesystem'));
 
 /** Resolve a persisted directory tag to the runtime enum (legacy → Data). */
 function dirOf(D: FsDirectoryEnum, tag?: DownloadDir): FsDirectory {
@@ -50,14 +153,19 @@ export function getOfflineUrl(id: string): string | null {
   return urlMap.get(id) ?? null;
 }
 
+/** Per-song result of the Cache API copy this session: true = the
+ *  /offline-audio/ entry exists, false = it could not be built. */
+const cacheState = new Map<string, boolean>();
+
 /**
  * Every offline source for a song, best first: the blob: URL (no network
  * stack at all), the /offline-audio/ service-worker route, then the file
  * bridge. The audio engine tries them in order before any streaming URL.
  *
- * v5.7.3 — for a saved song the SW route and the bridge are derived HERE,
- * synchronously, instead of waiting on the async boot rebuild: a download
- * always has playable offline sources from the app's very first frame.
+ * 8.2.0 — a saved song whose cache entry is missing gets it rebuilt from the
+ * file on disk in the background (the next play uses it), and the SW route
+ * is left out once it is known to be missing, so the engine does not spend
+ * a failed load on it.
  */
 export function getOfflineSources(id: string): string[] {
   const out: string[] = [];
@@ -65,8 +173,9 @@ export function getOfflineSources(id: string): string[] {
   if (main) out.push(main);
   const item = isNativePlatform() ? useDownloadsStore.getState().items[id] : undefined;
   if (item) {
+    if (!cacheState.has(id)) void ensureCached(id);
     const sw = audioUrlFor(id);
-    if (!out.includes(sw)) out.push(sw);
+    if (cacheState.get(id) !== false && !out.includes(sw)) out.push(sw);
     let bridge = bridgeMap.get(id) ?? null;
     if (!bridge && item.uri) {
       bridge = Capacitor.convertFileSrc(item.uri);
@@ -111,17 +220,24 @@ function mimeForPath(path: string): string {
   }
 }
 
-function bestAudioUrl(song: Song): string | null {
-  // Parse the NUMBER out of the quality label instead of exact-matching
-  // '320kbps' strings — upstreams label variants '320', '320 kbps', etc.,
-  // and an exact-match miss used to sort them last and download whatever
-  // happened to be first (often the lowest quality).
+/**
+ * Every download URL for a song, highest bitrate first. 8.2.0 — the service
+ * lists a URL for every bitrate whether or not that file exists, so taking
+ * only the top one made any song without a 320 kbps master fail outright.
+ * The download walks this ladder like the player does. The NUMBER is parsed
+ * out of the label ('320kbps', '320', '320 kbps' all rank the same).
+ */
+export function downloadUrls(song: Song): string[] {
   const kbps = (q: string | undefined): number => {
     const m = /(\d+)/.exec(q ?? '');
     return m ? Number(m[1]) : 0;
   };
-  const sorted = [...song.audio].filter((v) => v.url).sort((a, b) => kbps(b.quality) - kbps(a.quality));
-  return sorted[0]?.url ?? song.audio[0]?.url ?? null;
+  const urls = [...song.audio]
+    .filter((v) => v.url)
+    .sort((a, b) => kbps(b.quality) - kbps(a.quality))
+    // Some variants are http:// — Android blocks cleartext, so force TLS.
+    .map((v) => v.url.replace(/^http:\/\//, 'https://'));
+  return [...new Set(urls)];
 }
 
 /** A saved file smaller than this cannot be a real song — it's an upstream
@@ -129,17 +245,47 @@ function bestAudioUrl(song: Song): string | null {
  *  with a 200. Even a 10-second 48 kbps jingle is ~60 KB. */
 const MIN_VALID_BYTES = 10 * 1024;
 
-/** Decode base64 into a Blob in bounded slices (each a multiple of 4 chars). */
-function base64ToBlob(b64: string, mime: string): Blob {
+/** Decode base64 into bytes in bounded slices (each a multiple of 4 chars). */
+function base64ToParts(b64: string): Uint8Array[] {
   const CHUNK = 0x8000 * 4;
-  const parts: BlobPart[] = [];
+  const parts: Uint8Array[] = [];
   for (let i = 0; i < b64.length; i += CHUNK) {
     const bin = atob(b64.slice(i, i + CHUNK));
     const arr = new Uint8Array(bin.length);
     for (let j = 0; j < bin.length; j += 1) arr[j] = bin.charCodeAt(j);
     parts.push(arr);
   }
-  return new Blob(parts, { type: mime });
+  return parts;
+}
+
+/** Bytes per read when copying a file into the Cache API (a multiple of 3,
+ *  so every slice is whole base64). */
+const READ_SLICE = 3 * 1024 * 1024;
+
+/**
+ * Read a saved file back as a Blob, one slice at a time — no single
+ * multi-megabyte base64 string crosses the bridge. An older native plugin
+ * that ignores offset/length hands back the whole file on the first read;
+ * that is detected (more bytes than asked for) and used as-is.
+ */
+async function readFileBlob(fs: FilesystemPlugin, path: string, directory: FsDirectory): Promise<Blob> {
+  const parts: BlobPart[] = [];
+  for (let offset = 0; ; offset += READ_SLICE) {
+    const { data } = await fs.readFile({ path, directory, offset, length: READ_SLICE });
+    let size: number;
+    if (typeof data === 'string') {
+      const bytes = base64ToParts(data);
+      parts.push(...(bytes as BlobPart[]));
+      size = bytes.reduce((n, b) => n + b.length, 0);
+    } else if (data instanceof Blob) {
+      parts.push(data);
+      size = data.size;
+    } else {
+      throw new Error('unreadable file data');
+    }
+    if (size !== READ_SLICE) break; // last slice — or the whole file at once
+  }
+  return new Blob(parts, { type: mimeForPath(path) });
 }
 
 /**
@@ -162,7 +308,7 @@ async function blobUrlFromCache(id: string): Promise<string | null> {
 /**
  * Copy a downloaded file from disk into the Cache API so the service worker
  * can serve it at /offline-audio/<id>. Returns true when the cache entry is
- * in place. One song at a time, so the transient base64 read stays bounded.
+ * in place.
  */
 async function cacheAudioFromDisk(
   id: string,
@@ -172,18 +318,7 @@ async function cacheAudioFromDisk(
 ): Promise<boolean> {
   try {
     if (typeof caches === 'undefined') return false;
-    const { data } = await fs.readFile({ path, directory });
-    let blob: Blob;
-    if (typeof data === 'string') {
-      // Chunked base64 decode — a giant data: URL fetch proved fragile on
-      // real devices for 320kbps files; atob over bounded slices is boring
-      // and works at any size.
-      blob = base64ToBlob(data, mimeForPath(path));
-    } else if (data instanceof Blob) {
-      blob = data;
-    } else {
-      return false;
-    }
+    const blob = await readFileBlob(fs, path, directory);
     if (blob.size < MIN_VALID_BYTES) return false;
     const cache = await caches.open(AUDIO_CACHE);
     await cache.put(
@@ -216,6 +351,51 @@ async function hasCachedAudio(id: string): Promise<boolean> {
   }
 }
 
+/** Cache copies run one at a time, so the transient file read stays bounded. */
+let cacheQueue: Promise<unknown> = Promise.resolve();
+const cacheJobs = new Map<string, Promise<boolean>>();
+
+/**
+ * Make sure a saved song has its /offline-audio/ cache entry (rebuilding it
+ * from the file on disk if it is missing) and upgrade its playable URL to a
+ * blob: handle. Queued and de-duplicated; never throws.
+ */
+function ensureCached(id: string): Promise<boolean> {
+  const running = cacheJobs.get(id);
+  if (running) return running;
+  const job = cacheQueue
+    // Capped, so one file read that never answers can't wedge the queue.
+    .then(() => withTimeout(cacheOne(id), 2 * 60_000))
+    .catch(() => false)
+    .finally(() => cacheJobs.delete(id));
+  cacheQueue = job;
+  cacheJobs.set(id, job);
+  return job;
+}
+
+async function cacheOne(id: string): Promise<boolean> {
+  const it = useDownloadsStore.getState().items[id];
+  if (!it?.path) return false;
+  let ok = await hasCachedAudio(id);
+  if (!ok) {
+    const { Filesystem, Directory } = await loadFs();
+    ok = await cacheAudioFromDisk(id, it.path, Filesystem, dirOf(Directory, it.dir));
+  }
+  if (!useDownloadsStore.getState().items[id]) {
+    // Removed while we were copying — don't leave an orphan entry behind.
+    if (ok && typeof caches !== 'undefined') await caches.open(AUDIO_CACHE).then((c) => c.delete(audioUrlFor(id))).catch(() => undefined);
+    return false;
+  }
+  cacheState.set(id, ok);
+  if (ok) {
+    if (!urlMap.get(id)?.startsWith('blob:')) urlMap.set(id, (await blobUrlFromCache(id)) ?? audioUrlFor(id));
+  } else if (!urlMap.has(id)) {
+    const bridge = bridgeMap.get(id);
+    if (bridge) urlMap.set(id, bridge);
+  }
+  return ok;
+}
+
 /**
  * Rebuild the playable-URL map from persisted downloads (native only).
  * Phased so a saved song is playable before ANY heavy work happens:
@@ -235,7 +415,7 @@ export async function initDownloads(): Promise<void> {
     if (uri && !bridgeMap.has(id)) bridgeMap.set(id, Capacitor.convertFileSrc(uri));
   }
   try {
-    const { Filesystem, Directory } = await import('@capacitor/filesystem');
+    const { Filesystem, Directory } = await loadFs();
     // Phase 2 — light: legacy items (saved before uris were persisted) get
     // theirs resolved and written back, so the NEXT boot skips this pass.
     for (const id of ids) {
@@ -249,24 +429,12 @@ export async function initDownloads(): Promise<void> {
         /* file gone — derived sources will fall through to streaming */
       }
     }
-    // Phase 3 — heavy: cache entries + blob upgrades, one song at a time.
-    for (const id of ids) {
-      const it = items[id];
-      if (!it.path) continue;
-      const directory = dirOf(Directory, it.dir);
-      try {
-        if ((await hasCachedAudio(id)) || (await cacheAudioFromDisk(id, it.path, Filesystem, directory))) {
-          urlMap.set(id, (await blobUrlFromCache(id)) ?? audioUrlFor(id));
-          continue;
-        }
-        const bridge = bridgeMap.get(id);
-        if (bridge) urlMap.set(id, bridge);
-      } catch {
-        /* leave unmapped — getOfflineSources still derives SW + bridge */
-      }
-    }
   } catch {
     /* filesystem unavailable */
+  }
+  // Phase 3 — heavy: cache entries + blob upgrades, one song at a time.
+  for (const id of ids) {
+    if (items[id].path) await ensureCached(id);
   }
 }
 
@@ -286,100 +454,138 @@ export async function downloadSong(song: Song): Promise<boolean> {
   return job;
 }
 
+/**
+ * One attempt: one URL into one directory. Streams straight to disk with the
+ * native downloader; the bridge transfer is only the fallback for a native
+ * layer that can't (an older plugin) — never for an HTTP error, a dead
+ * network or a storage error, which it would just repeat.
+ */
+async function saveOnce({ Filesystem }: Fs, url: string, path: string, directory: FsDirectory): Promise<void> {
+  // The native downloader ignores `recursive` and fails on a missing folder.
+  await Filesystem.mkdir({ path: FOLDER, directory, recursive: true }).catch(() => undefined);
+  const http = { connectTimeout: CONNECT_TIMEOUT_MS, readTimeout: READ_TIMEOUT_MS };
+  try {
+    await withTimeout(Filesystem.downloadFile({ url, path, directory, recursive: true, ...http }), ATTEMPT_TIMEOUT_MS);
+  } catch (e) {
+    if (classifyDownloadError(e) !== 'unknown') throw e;
+    const msg = e instanceof Error ? e.message : String(e);
+    const { CapacitorHttp } = await import('@capacitor/core');
+    const res = await withTimeout(CapacitorHttp.get({ url, responseType: 'blob', ...http }), ATTEMPT_TIMEOUT_MS);
+    if (res.status !== 200 || typeof res.data !== 'string') {
+      throw new DownloadError(res.status >= 400 && res.status < 500 ? 'unavailable' : 'unknown', `${msg}; fallback http ${res.status}`);
+    }
+    await Filesystem.writeFile({ path, data: res.data, directory, recursive: true });
+  }
+  // Validate the bytes on disk: the downloader streams whatever the server
+  // sent, so a 200-shaped error page would otherwise be saved as a "song"
+  // and fail silently at play time.
+  let size: number | undefined;
+  try {
+    size = (await Filesystem.stat({ path, directory })).size;
+  } catch {
+    /* stat unsupported — keep the file, playback fallback still covers us */
+  }
+  if (typeof size === 'number' && size < MIN_VALID_BYTES) {
+    throw new DownloadError('unavailable', `invalid download (${size} bytes)`);
+  }
+}
+
+/**
+ * v8.2.0 — new downloads go to the internal data directory: it needs no
+ * storage permission on any Android version (device storage did on Android
+ * 10 and older), and the files are just as private. Device storage stays as
+ * the fallback when the data directory can't take the file.
+ */
+const SAVE_DIRS: DownloadDir[] = ['DATA', 'EXTERNAL'];
+
 async function runDownload(song: Song): Promise<boolean> {
-  const rawUrl = bestAudioUrl(song);
-  if (!rawUrl) return false;
-  // Some CDN variants are http:// — Android blocks cleartext, so force TLS.
-  const url = rawUrl.replace(/^http:\/\//, 'https://');
+  const urls = downloadUrls(song);
+  if (!urls.length) return fail(song, 'unavailable', 'no audio variants');
+  if (isOffline()) return fail(song, 'offline', 'device offline');
 
   useDownloadsStore.getState().setDownloading(song.id, true);
   try {
-    const { Filesystem, Directory } = await import('@capacitor/filesystem');
-    const path = `vinax-downloads/${safeId(song.id)}.${extOf(url)}`;
-    const saveTo = async (directory: FsDirectory): Promise<void> => {
-      try {
-        // Preferred: stream straight to disk — no base64 through the JS
-        // bridge, so big 320kbps files cannot blow the bridge or memory.
-        await Filesystem.downloadFile({ url, path, directory, recursive: true });
-      } catch {
-        // Fallback for older plugin versions: bridge transfer.
-        const { CapacitorHttp } = await import('@capacitor/core');
-        const res = await CapacitorHttp.get({ url, responseType: 'blob' });
-        if (res.status !== 200 || typeof res.data !== 'string') {
-          throw new Error(`http ${res.status}`);
+    const fs = await loadFs();
+    const { Filesystem, Directory } = fs;
+    let reason: DownloadFailure = 'unknown';
+    let detail = '';
+    // Walk the bitrate ladder: a variant that doesn't exist (or answers with
+    // an error body) moves on to the next; a dead network, a stall or a full
+    // disk stops — every other variant would fail the same way.
+    for (const url of urls) {
+      const path = `${FOLDER}/${safeId(song.id)}.${extOf(url)}`;
+      for (const dirTag of SAVE_DIRS) {
+        const directory = dirOf(Directory, dirTag);
+        try {
+          await saveOnce(fs, url, path, directory);
+        } catch (e) {
+          reason = classifyDownloadError(e);
+          detail = e instanceof Error ? e.message : String(e);
+          // Don't strand a half-written file (best-effort).
+          await Filesystem.deleteFile({ path, directory }).catch(() => undefined);
+          if (reason === 'storage') continue; // this directory can't take it — try the other
+          break;
         }
-        await Filesystem.writeFile({ path, data: res.data, directory, recursive: true });
+        await finishSave(song, path, dirTag, fs);
+        return true;
       }
-    };
-    // v5.7.3 — save into the app's own folder on device storage
-    // (Android/data/<app>/files/vinax-downloads) so downloads live with the
-    // app like any offline-first player; devices without usable external
-    // storage fall back to the internal data directory.
-    let dirTag: DownloadDir = 'EXTERNAL';
-    try {
-      await saveTo(dirOf(Directory, 'EXTERNAL'));
-    } catch {
-      // Don't strand a half-written file on device storage (best-effort).
-      await Filesystem.deleteFile({ path, directory: dirOf(Directory, 'EXTERNAL') }).catch(() => undefined);
-      dirTag = 'DATA';
-      await saveTo(dirOf(Directory, 'DATA'));
+      if (reason !== 'unavailable' && reason !== 'unknown') break;
     }
-    const directory = dirOf(Directory, dirTag);
-    // Validate the bytes on disk: the downloader streams whatever the server
-    // sent, so a 200-shaped error page would otherwise be saved as a "song"
-    // and fail silently at play time.
-    try {
-      const st = await Filesystem.stat({ path, directory });
-      if (typeof st.size === 'number' && st.size < MIN_VALID_BYTES) {
-        await Filesystem.deleteFile({ path, directory }).catch(() => undefined);
-        throw new Error(`invalid download (${st.size} bytes)`);
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message.startsWith('invalid download')) throw e;
-      /* stat unsupported — keep the file, playback fallback still covers us */
-    }
-    // Resolve the absolute uri ONCE and persist it with the item — this is
-    // what makes the file-bridge source available instantly on future boots.
-    let uri: string | undefined;
-    try {
-      const r = await Filesystem.getUri({ path, directory });
-      uri = r.uri;
-      bridgeMap.set(song.id, Capacitor.convertFileSrc(r.uri));
-    } catch {
-      /* bridge unavailable */
-    }
-    if (await cacheAudioFromDisk(song.id, path, Filesystem, directory)) {
-      urlMap.set(song.id, (await blobUrlFromCache(song.id)) ?? audioUrlFor(song.id));
-    } else {
-      const bridge = bridgeMap.get(song.id);
-      if (bridge) urlMap.set(song.id, bridge);
-    }
-    useDownloadsStore.getState().add(song, path, uri, dirTag);
-    return true;
+    if (isOffline()) reason = 'offline';
+    return fail(song, reason, detail);
   } catch (e) {
-    // Surface the real device error in Technical Monitoring instead of dying silently.
-    reportError('download', `${song.title}: ${e instanceof Error ? e.message : String(e)}`);
-    return false;
+    return fail(song, classifyDownloadError(e), e instanceof Error ? e.message : String(e));
   } finally {
     useDownloadsStore.getState().setDownloading(song.id, false);
   }
 }
 
-/** Download a list of songs sequentially (native only). Already-saved tracks are skipped. */
+function fail(song: Song, reason: DownloadFailure, detail: string): false {
+  lastFailure.set(song.id, reason);
+  // Surface the real device error in Technical Monitoring instead of dying silently.
+  reportError('download', `${song.title}: ${reason}: ${detail}`);
+  return false;
+}
+
+async function finishSave(song: Song, path: string, dirTag: DownloadDir, { Filesystem, Directory }: Fs): Promise<void> {
+  lastFailure.delete(song.id);
+  // Resolve the absolute uri ONCE and persist it with the item — this is
+  // what makes the file-bridge source available instantly on future boots.
+  let uri: string | undefined;
+  try {
+    uri = (await Filesystem.getUri({ path, directory: dirOf(Directory, dirTag) })).uri;
+    bridgeMap.set(song.id, Capacitor.convertFileSrc(uri));
+  } catch {
+    /* bridge unavailable */
+  }
+  cacheState.delete(song.id);
+  useDownloadsStore.getState().add(song, path, uri, dirTag);
+  // The Cache API copy is background work: the song is saved and playable
+  // (SW route / file bridge) whether or not the copy has landed yet.
+  void ensureCached(song.id);
+}
+
+/** Download a list of songs sequentially (native only). Already-saved tracks
+ *  are skipped. `reason` is why the failures failed (the first failure's);
+ *  once the device is offline the rest are counted as failed without trying. */
 export async function downloadMany(
   songs: Song[],
   onProgress?: (done: number, total: number) => void,
-): Promise<{ saved: number; failed: number }> {
+): Promise<{ saved: number; failed: number; reason?: DownloadFailure }> {
   if (!isNativePlatform()) return { saved: 0, failed: 0 };
   let saved = 0;
   let failed = 0;
+  let reason: DownloadFailure | undefined;
   for (let i = 0; i < songs.length; i++) {
-    const ok = await downloadSong(songs[i]);
+    const ok = reason !== 'offline' && (await downloadSong(songs[i]));
     if (ok) saved += 1;
-    else failed += 1;
+    else {
+      failed += 1;
+      reason ??= lastDownloadFailure(songs[i].id) ?? 'unknown';
+    }
     onProgress?.(i + 1, songs.length);
   }
-  return { saved, failed };
+  return reason ? { saved, failed, reason } : { saved, failed };
 }
 
 export async function removeDownload(id: string): Promise<void> {
@@ -394,6 +600,7 @@ export async function removeDownload(id: string): Promise<void> {
   }
   urlMap.delete(id);
   bridgeMap.delete(id);
+  cacheState.delete(id);
   useDownloadsStore.getState().remove(id);
   try {
     if (typeof caches !== 'undefined') {
@@ -405,7 +612,7 @@ export async function removeDownload(id: string): Promise<void> {
   }
   if (isNativePlatform() && item?.path) {
     try {
-      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { Filesystem, Directory } = await loadFs();
       await Filesystem.deleteFile({ path: item.path, directory: dirOf(Directory, item.dir) });
     } catch {
       /* already gone */

@@ -2,7 +2,7 @@
 
 VinaX is a music app with no login: it plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, with an edge Worker behind it for the catalogue gateway, AI features and the owner console.
 
-This README covers what the product does as of 8.1, how to run it locally in five minutes, where things are in the repository, how personalisation and privacy work in brief, the validation commands, how a release reaches production, and links to every other document.
+This README covers what the product does as of 8.2, how to run it locally in five minutes, where things are in the repository, how personalisation and privacy work in brief, the validation commands, how a release reaches production, and links to every other document.
 
 [Documentation index](docs/README.md) · [User guide](docs/user-guide/README.md) · [Deployment](DEPLOYMENT.md)
 
@@ -11,19 +11,20 @@ This README covers what the product does as of 8.1, how to run it locally in fiv
 | Area | What a listener can do |
 | --- | --- |
 | Five destinations | Home, Discover, Search, Library and VinaX AI sit in the dock on phones and in the sidebar on wide screens. The top bar shows where you are on the left and the page's actions on the right; it has no search box. |
-| Home | A greeting, an Aura Mix, shelves built from taste and the catalogue, "Popular picks for you" (the catalogue's popular songs in the listener's order), optional AI-designed shelves, and Home Studio to reorder or hide shelves. |
+| Home | A greeting, an Aura Mix, a shortcut row that always starts with AI Radio, shelves built from taste and the catalogue (Your playlists, Your top genres, "Popular picks for you" — the catalogue's popular songs in the listener's order), Trending and Lyrics chips, optional AI-designed shelves, and Customise Home (Home Studio) to reorder or hide shelves. Until someone chooses an order, Home orders its sections once per visit from the time of day, the sections the listener uses, how songs started from them went, and genre taste; nothing moves while the page is open. |
 | Discover | A shortcut grid — Charts, Languages, Moods, Regions, Movies, Videos, Made For You, Your Week, AI Playlist, Ads — then trending, mood, new-release and film shelves for a chosen language. |
-| Search | Its own page and field. Understands "song + singer" and Indic scripts, tolerates misspellings, and offers trending, recent, pinned and saved searches. |
-| The next five | Tap any song and the DJ builds the next five songs, led by that song's language, the most familiar hand-off first and newer artists later. Settings → Recommendations → Queue languages decides whether songs from the listener's other languages may follow (never two changes in a row) or every queue stays in one language. More arrive as the queue runs down. |
-| Steering the queue | **Pin a mood** (full-screen player) and **Tune this queue** (Queue page and player) fetch songs for that choice and rebuild Up Next at once. The queue says which songs the DJ picked and which you added; **Keep this song** makes a pick yours, **New DJ picks** rebuilds only the automatic ones, remove offers Undo, and rows reorder from the keyboard. **More like this** and **Less like this** (7, 14 or 30 days, with Undo) steer from any song menu. |
+| Search | Its own page and field. Understands "song + singer" and Indic scripts, tolerates misspellings, and offers trending, recent, pinned and saved searches. A search that reads like a description ("sad telugu songs for rain") adds **Songs that match**, with artists and playlists that fit. |
+| The next five | Tap any song and the DJ builds the next five songs, led by that song's language, the most familiar hand-off first and newer artists later. The picks draw on the song's album, artists similar to its artist, its genre and earlier picks the listener finished or liked, and lean toward songs that resemble the listener's favourites. Settings → Recommendations → Queue languages decides whether songs from the listener's other languages may follow (never two changes in a row) or every queue stays in one language. More arrive as the queue runs down. |
+| AI Radio | Endless music from a song, an artist, a mood or a few words ("Telugu 90s melodies"), at `/radio`, from Home, from an empty queue, and as **Start AI Radio** in every song menu and on artist pages. The first songs come from catalogue searches (a request they cannot answer goes to the playlist builder); the DJ keeps adding more. |
+| Steering the queue | **Pin a mood** (full-screen player) and **Tune this queue** (Queue page and player) fetch songs for that choice and rebuild Up Next at once. The queue says which songs the DJ picked and which you added; **Keep this song** makes a pick yours, **Refresh up next** rebuilds only the automatic ones, the **Smart Queue** switch turns Autoplay and "DJ builds every queue" on together, remove offers Undo, and rows reorder from the keyboard. **More like this** and **Less like this** (7, 14 or 30 days, with Undo) steer from any song menu. |
 | Charts | Public charts with their source, region, update time and a link to check, when a provider is configured; otherwise the catalogue's popular songs, labelled as that. |
 | Discovery modes | Familiar, Balanced or Discover in Settings → Recommendations changes ranking and how many never-played artists a queue admits. |
 | Player | Queue with reorder and Queue Builder, synced lyrics where available, sleep timer, crossfade, sound settings, DJ voice, lock-screen and headset controls, casting, a drive mode and karaoke. |
 | Library | Favourites, playlists with search and multi-select edits, Listen Later, smart collections, history, listening stats and recap, downloads (Android). |
 | Backup | Export one file from Settings → Your Data. The Backup Center previews a file, restores by merge or replace, and offers Undo. "Move to a new device" transfers everything through an encrypted one-use hand-off. |
-| VinaX AI | A chat that knows the listener's taste summary, can play music from the conversation, accepts attachments and offers a choice of models, led by VinaX Maestro, which streams its replies and, with Web search on, searches the web itself and lists its sources. AI Playlist turns a description into a playlist of catalogue-verified songs. |
+| VinaX AI | A chat that knows the listener's taste summary, can play music from the conversation, accepts attachments and offers a choice of models, led by VinaX Maestro, which streams its replies and, with Web search on, searches the web itself and lists its sources. A reply that fails is asked again once by itself, then offers **Retry**. AI Playlist turns a description into a playlist of catalogue-verified songs, filled out to 25, and still builds one from catalogue searches when the AI is busy. |
 | Together | Listening rooms with a shared queue and a room code. |
-| Android | The same app with a native media service, home-screen widgets, downloads, background notifications and in-app updates. |
+| Android | The same app with a native media service, home-screen widgets, downloads (the best quality that exists, with the reason when one fails), background notifications and in-app updates. |
 | Accessibility and comfort | Keyboard shortcuts, reduced motion, themes, display size, high contrast, Kid mode, app language. |
 
 Music and AI results depend on the catalogue and the AI lanes configured for the deployment. When AI is slow, down or not configured, every feature that uses it falls back to an on-device path.
@@ -64,7 +65,7 @@ frontend/                       the app (web and Android share this bundle)
   src/services/recommendation/  the next-song pipeline
   src/services/personalization/ taste profile, event weights, session intent
   src/services/api/             catalogue client with the fallback ladder
-  src/services/ai/              DJ, curation, playlist and taste-snapshot clients
+  src/services/ai/              DJ, curation, playlist, taste-snapshot and embedding clients, natural-language ranking
   src/services/audio/           the audio engine and effects
   src/services/media-session/   lock-screen and headset controls, native plugin bridge
   src/services/storage/         guarded localStorage, IndexedDB event log, migrations
@@ -87,16 +88,16 @@ docs/                           current documentation; docs/history/ holds dated
 
 VinaX builds a taste profile on the device from what is played, finished, skipped, liked and queued. A play counts after five seconds of **listening** — seeks, pauses and buffering do not count, and one song looped all evening teaches the profile once (`services/playback/session.ts`). The profile is stored only on the device; AI features receive a bounded summary of it with each request.
 
-The next-song engine is one ten-stage pipeline: candidate generation, hard filtering, feature extraction, context scoring, diversity and repeat penalties, session adjustment, exploration tuning, ranking, sequencing and validation. A continuation is the next five songs, led by the seed song's language (with Queue languages on "Your languages", songs in the listener's other languages may follow, never two changes in a row; "One language" keeps the whole queue in one), with the most familiar hand-off first. A session-intent layer follows the current sitting — skips, finishes, likes, searches, hand queue-adds — without writing it into long-term taste. The AI DJ may re-order the pool or propose a few catalogue-verified songs, but its output passes the same final validation, and the on-device order plays whenever AI is slow or unavailable.
+The next-song engine is one ten-stage pipeline: candidate generation, hard filtering, feature extraction, context scoring, diversity and repeat penalties, session adjustment, exploration tuning, ranking, sequencing and validation. A continuation is the next five songs, led by the seed song's language (with Queue languages on "Your languages", songs in the listener's other languages may follow, never two changes in a row; "One language" keeps the whole queue in one), with the most familiar hand-off first. Candidates come from the seed's suggestions, its album, related artists (the catalogue's similar artists, else co-credited ones), its genre, the listener's artists and languages, and earlier automatic picks that were finished or liked; a taste-fit term scores how closely each resembles the listener's favourites and recent plays, using small hashed vectors computed on the device (learned embeddings refine it when the device already holds them). A session-intent layer follows the current sitting — skips, finishes, likes, searches, hand queue-adds — without writing it into long-term taste. The AI DJ may re-order the pool or propose a few catalogue-verified songs, but its output passes the same final validation, and the on-device order plays whenever AI is slow or unavailable.
 
-On Home, "Popular picks for you" only re-orders what the catalogue reports as popular, and a song shown on one shelf is not repeated on a later one. Public charts — with their source, region, update time and stale state — are a separate thing, on the Charts page: see [docs/trends.md](docs/trends.md).
+On Home, "Popular picks for you" only re-orders what the catalogue reports as popular, and a song shown on one shelf is not repeated on a later one. When neither the listener nor the owner has set an order, Home orders its sections once per session from signals kept on the device (`features/home/homeOrder.ts`). Public charts — with their source, region, update time and stale state — are a separate thing, on the Charts page: see [docs/trends.md](docs/trends.md).
 
 The full description, with the real weights, is in [docs/recommendations.md](docs/recommendations.md). The AI side is in [docs/ai.md](docs/ai.md). Add `?debug=recs` to any URL (it is always on in a development build) to see why each song was selected, passed over or rejected.
 
 ## Privacy in plain words
 
 - No account. Library, history, settings, taste profile and AI chats stay on the device. Clearing site or app data removes them, so export a backup first (Settings → Your Data).
-- "On the device" does not mean "no network". Searching sends search words to the catalogue. AI features send a bounded summary of taste and recent listening — song titles and artist names, no identity. Choosing a username checks it with the service.
+- "On the device" does not mean "no network". Searching sends search words to the catalogue. AI features send a bounded summary of taste and recent listening — song titles and artist names, no identity. Natural-language search, AI Playlist and the next-song taste fit also send search words and short song descriptions (title, artists, album, language, year, genre, mood) to the Worker's embedding route. Choosing a username checks it with the service.
 - Usage statistics and session insights are sent only when the listener opts in. The box on the welcome sheet is unticked by default, and **Settings → Region & Privacy → Share anonymous usage** changes the choice at any time.
 - A backup file never contains credentials, the device identity, downloads or the queue.
 
@@ -141,7 +142,7 @@ Settings, manual commands, release checks and what to do when a deploy does not 
 | [docs/README.md](docs/README.md) | The index |
 | [docs/architecture.md](docs/architecture.md) | The pieces and how data flows between them |
 | [docs/recommendations.md](docs/recommendations.md) | The next-song pipeline, weights, session intent, discovery modes, the queue rules |
-| [docs/ai.md](docs/ai.md) | AI lanes and failover, each AI route's contract, budgets, behaviour with every provider down |
+| [docs/ai.md](docs/ai.md) | AI lanes, failover and cooldowns, each AI route's contract (embeddings included), budgets, behaviour with every provider down |
 | [docs/trends.md](docs/trends.md) | Verified trend ingestion: providers, what each one's rules allow, matching, momentum, admin review |
 | [docs/evaluation.md](docs/evaluation.md) | The offline evaluation of next-song selection, and how to read an A/B result honestly |
 | [docs/audit-7.2.md](docs/audit-7.2.md) | The 7.2 review: findings, evidence, fixes and validation |

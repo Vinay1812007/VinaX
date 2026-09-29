@@ -80,6 +80,8 @@ export interface Artist {
   bio: string | null;
   topSongs: Song[];
   albums: Album[];
+  /** 8.2.0 — the catalogue's own "similar artists", when it sends them. */
+  similarArtists?: ArtistRef[];
 }
 
 export interface Lyrics {

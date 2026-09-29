@@ -52,6 +52,12 @@ interface InMsg {
   content?: unknown;
 }
 
+/** 8.2.0 — a reply worth showing: real text, not the prompt's own scaffolding echoed back. */
+export function usableReply(content: string): boolean {
+  const t = content.trim();
+  return t.length > 0 && !/^(?:you are vinax assistant|---\s*user message)/i.test(t);
+}
+
 /** POST-only: answer GET with an honest 405 instead of the SPA shell (DQA-07). */
 export const onRequestGet = async (): Promise<Response> => methodNotAllowed();
 
@@ -108,7 +114,9 @@ async function handlePost(context: {
   const r = await chat(
     env,
     [{ role: 'system', content: sysPrompt }, ...history],
-    { temperature: 0.65, lane: 'chat', maxTokens: 950, timeoutMs: 15_000, deadlineAt: t0 + 28_000, feature: 'assistant' },
+    // 8.2.0 — the default ladder now ends with the flagship lane (when its key
+    // is set), and a blank or prompt-echo reply asks the next engine.
+    { temperature: 0.65, lane: 'chat', maxTokens: 950, timeoutMs: 15_000, deadlineAt: t0 + 28_000, feature: 'assistant', accept: usableReply },
   );
   if (isAiBlocked(r.error)) return refuse(r.error);
   const reply = r.error ? null : (r.content ?? '').trim();

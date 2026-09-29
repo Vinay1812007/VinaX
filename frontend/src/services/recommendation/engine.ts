@@ -22,6 +22,17 @@ import type { Mood } from './mood';
 import { activeWeightsVersion } from './weights';
 import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from './deadlines';
 import { trendSignalNow } from '@/services/trends/signal';
+import { useDownloadsStore } from '@/store/downloadsStore';
+import { lastSeedContinuation, rememberSeedContinuation } from './recMemory';
+
+type EmbeddingsModule = typeof import('@/services/ai/embeddings');
+
+/** 8.2.0 — the optional learned-embedding module, loaded on first use; a failed load means "none". */
+let embeddings: Promise<EmbeddingsModule | null> | null = null;
+function loadEmbeddings(): Promise<EmbeddingsModule | null> {
+  embeddings ??= import('@/services/ai/embeddings').catch(() => null);
+  return embeddings;
+}
 
 function aiContext(ctx: RecommendationContext): string {
   return JSON.stringify({ surface: ctx.surface, seed: ctx.seedSong?.title, mood: ctx.sessionMood, energy: ctx.sessionEnergy,
@@ -149,8 +160,9 @@ export interface NextRecommendationOptions {
   previous?: Song | null;
 }
 
-/** 7.2.0 — the pipeline's own version, recorded with every continuation (developer breakdown, opt-in telemetry). */
-export const PIPELINE_VERSION = '7.2.0';
+/** 7.2.0 — the pipeline's own version, recorded with every continuation (developer breakdown, opt-in telemetry).
+ *  8.2.0 — new sources (related artist, album, genre, proven picks), the no-audio rule, taste fit and the served/seed memories. */
+export const PIPELINE_VERSION = '8.2.0';
 export function algorithmVersion(): string {
   // The weights part names an owner override while one is applied ("1.2.0+rc7").
   return `${PIPELINE_VERSION}/${activeWeightsVersion()}`;
@@ -220,11 +232,16 @@ function within<T>(p: Promise<T>, ms: number, fallback: T, signal?: AbortSignal)
  * v7.0.0 — one explicit pipeline, each stage in code and each stage traced
  * for the developer breakdown (`?debug=recs`):
  *
- *   1  candidate generation   seed-related, artist, language, taste-wide, rediscovery (./candidates)
- *   2  hard filtering         rules with a named reason per rejection (./filters)
+ *   1  candidate generation   seed-related, the seed's album, artists who work with the
+ *                             seed's artist, genre, artist, language, taste-wide,
+ *                             rediscovery, earlier picks that worked (./candidates)
+ *   2  hard filtering         rules with a named reason per rejection, songs that
+ *                             cannot stream included (./filters)
  *   3  feature extraction     classifier metadata: mood, genre, energy, tempo (bounded wait)
- *   4  context scoring        taste, seed similarity, time, session vector (./scoring)
- *   5  diversity + repeats    MMR re-rank, artist fatigue, recent-play demotion
+ *   4  context scoring        taste fit (on-device vectors, ./vectors), seed similarity,
+ *                             time, session vector (./scoring)
+ *   5  diversity + repeats    MMR re-rank, artist fatigue, recent-play demotion, songs
+ *                             other surfaces just showed, the last opening after this seed
  *   6  session adjustment     this sitting's intent: skips, likes, searches, queue-adds
  *   7  exploration tuning     Familiar / Balanced / Discover: novelty lean and discovery share
  *   8  ranking                the scored, re-ranked pool (plus any "Tune this queue" nudge)
@@ -268,7 +285,9 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const intentQuery = tune ? tuneSearchQuery(tune, tune === 'different-language' ? null : seedLanguage) : ctx.moodPin ? moodPinQuery(ctx.moodPin, seedLanguage) : null;
   // 7.2.0 — verified charts, read from the snapshot already in memory (never waited for).
   const trend = trendSignalNow(ctx);
-  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery, trendBonus: trend.bonus, trendLabel: trend.label };
+  // 8.2.0 — what other surfaces showed lately, and how the last accepted
+  // continuation after this same song opened: small penalties in the scorer.
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery, trendBonus: trend.bonus, trendLabel: trend.label, servedKeys: servedKeySet(), seedRepeatIds: lastSeedContinuation(seed) };
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
   const library = useLibraryStore.getState();
@@ -280,6 +299,10 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // exists (soft deadline) and settles with what it has at the hard one; `within`
   // is only the outer guard.
   const gatherBudget = Math.max(0, left() - RANK_RESERVE_MS);
+  // 8.2.0 — the embedding module loads alongside the gather and is used only
+  // if it is already there when the pool is: the plan never waits for it.
+  let embedder = null as EmbeddingsModule | null;
+  void loadEmbeddings().then((m) => { embedder = m; });
   const [gathered, { hardFilter, rejectReasonFor, classifiedFields }] = await Promise.all([
     within(
       generateNextCandidates(seed, nextCtx, { signal, softDeadlineMs: Math.min(2_000, gatherBudget / 2), hardDeadlineMs: gatherBudget, minPool: 40 }).catch(() => [] as Candidate[]),
@@ -289,6 +312,9 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     ),
     import('./filters'),
   ]);
+  // 8.2.0 — learned embeddings refine the taste fit only where the device already holds them.
+  const vectors = embedder as EmbeddingsModule | null;
+  if (vectors) nextCtx.embeddingOf = (id) => vectors.getCachedEmbedding(id);
   if (signal?.aborted) return emptyPlan(null);
   if (gathered.late) fallback = 'deadline';
   const candidates = gathered.value;
@@ -307,6 +333,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     // 7.2.0 — soft mutes are a rule at every stage (the DJ's gate and validation included), not only a candidate filter.
     softMuted: ctx.profile.softMuted,
     ...(allowedLanguages ? { allowedLanguages } : {}),
+    downloaded: (id) => !!useDownloadsStore.getState().items[id],
   };
   const filtered = hardFilter(candidates, rules);
   const rejected: RejectedCandidate[] = [...filtered.rejected];
@@ -341,6 +368,14 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     ranked = ranked.map((item) => ({ ...item, score: item.score + tuneScoreAdjust(item.candidate.song, tune, seedLang) })).sort((a, b) => b.score - a.score);
   }
   const orderedPool: Song[] = ranked.map((item) => item.candidate.song);
+  // 8.2.0 — warm the embedding cache for this pool in the background, so the
+  // next stretch can use vectors this one did not have. Never awaited.
+  if (orderedPool.length) {
+    const warm = orderedPool.slice(0, 60);
+    void loadEmbeddings()
+      .then((m) => m?.embedSongs(warm))
+      .catch(() => undefined); // warming is optional
+  }
 
   // 9 — queue sequencing. Lazy: the sequencer and the session-context reader are only needed once a queue is extended.
   const [{ sequenceSongs, arcErrorOf }, { readListenerEnergy }, { validateSequence }] = await Promise.all([import('./sequencer'), import('@/services/ai/sessionContext'), import('./validation')]);
@@ -387,6 +422,12 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     const ids = new Set(accepted.map((s) => s.id).filter((id) => !committed.has(id)));
     if (!ids.size) return;
     for (const id of ids) committed.add(id);
+    // 8.2.0 — the opening the listener got after this seed, so asking again gives a different one.
+    try {
+      rememberSeedContinuation(seed, accepted);
+    } catch {
+      /* the memory is optional */
+    }
     // Arc reasons are more specific than scorer reasons; let them win.
     if (whyFromArc) useReasonStore.getState().setReasons(arc.songs.filter((s) => s.why && ids.has(s.song.id)).map((s) => [s.song.id, s.why]));
     publishReasons(ranked.filter((item) => ids.has(item.candidate.song.id)));

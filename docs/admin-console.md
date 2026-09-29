@@ -232,11 +232,12 @@ The controls editor publishes the `ai-controls` key through `POST /api/admin/app
 
 ```
 { emergencyOff: boolean,
-  features: { dj, curate-metadata, curate-ranking, curate-home, curate-shelves, playlist, vinaxai, assistant, tts, lyrics, image: boolean },
+  features: { dj, curate-metadata, curate-ranking, curate-home, curate-shelves, playlist, vinaxai, assistant, tts, lyrics, image, embed: boolean },
   dailyTokenCap: number | null, dailyCostCapUsd: number | null, updatedAt, updatedBy? }
 ```
 
 - A feature is on unless it is exactly `false`. Empty cap fields mean no cap.
+- `embed` (8.2) switches off `/api/embed`, which serves natural-language search, the AI Playlist pool and the next-song taste fit; the app then ranks on the device. Since 8.2 the scheduled push jobs' AI calls also obey the `dj` switch.
 - Switching all AI off asks for confirmation in the panel before anything is sent. Cancelling sends nothing.
 - Before publishing, the panel re-reads the stored value. If someone published after the panel loaded (a different `updatedAt`), it refuses and asks the operator to discard their edits and look first.
 - The panel shows when the controls were last published and by whom. "By" is an optional name the publisher types (`updatedBy`); with one shared token there is no verified operator identity.

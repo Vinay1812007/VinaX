@@ -12,6 +12,10 @@ import type { Song } from '../../src/types';
  *                                   titles are filtered by the app's own code.
  *   @/services/ai/recommendations   the classifier and the AI re-rank.
  *   @/services/ai/dj                the AI DJ client.
+ *   @/services/ai/embeddings        learned song vectors (8.2): none on the
+ *                                   device, so the taste term runs on the
+ *                                   on-device vectors alone and a background
+ *                                   warm-up can never make two runs differ.
  *   @/services/queryClient          the cached owner flags.
  *
  * Everything else — filtering, scoring, diversity, sequencing, validation,
@@ -83,6 +87,19 @@ export const apiMock = {
   searchSongsPage: (_q: string, _page?: number, _n?: number): Promise<Song[]> => searchAnswer(),
   searchSongs: (_q: string, _n?: number): Promise<Song[]> => searchAnswer(),
   getAlbum: (): Promise<null> => Promise.resolve(null),
+  // 8.2 — an artist's catalogue is the songs of the fixture pool that credit
+  // that artist, answering like a search does (the same outage behaviour).
+  // Fixture songs credit one artist each, so the related-artist source finds
+  // no collaborators here: it costs a call and adds nothing.
+  getArtistTopSongs: (id: string, _page?: number): Promise<Song[]> =>
+    answer(catalogue.searchBehaviour, [...catalogue.related, ...catalogue.search].filter((s) => s.artists.some((a) => a.id === id)), catalogue.slow),
+};
+
+export const embeddingsMock = {
+  getCachedEmbedding: (): null => null,
+  embedSongs: async (): Promise<void> => undefined,
+  embedQuery: async (): Promise<null> => null,
+  cosine: (): number => 0,
 };
 
 /* ---- the AI lanes ---- */

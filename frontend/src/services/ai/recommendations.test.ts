@@ -29,6 +29,23 @@ describe('AI recommendation adapter', () => {
     expect(enriched.energy).toBe(0.7);
   });
 
+  it('8.2.0 — a switched-off or over-budget curator is left alone for ten minutes, not re-asked every 30 s', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"error":"ai_over_budget"}', { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    try {
+      await expect(classifySongs([song])).resolves.toEqual([]);
+      const calls = fetchMock.mock.calls.length;
+      expect(calls).toBeGreaterThan(0);
+      clock.mockReturnValue(now + 5 * 60_000);
+      await classifySongs([{ ...song, id: 's-later' }]);
+      expect(fetchMock.mock.calls.length).toBe(calls);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('falls back to cached/empty metadata when the AI endpoint is unavailable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     await expect(classifySongs([song])).resolves.toEqual([]);

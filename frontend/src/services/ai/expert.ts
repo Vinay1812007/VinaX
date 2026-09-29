@@ -70,7 +70,12 @@ export async function expertSongSearch(
       }),
       signal: ctrl.signal,
     });
-    if (res.status === 503) return { ok: false, reason: 'not_configured' };
+    // 8.2.0 — only "not set up / switched off" reads as not enabled; a busy
+    // or briefly unavailable service is an ordinary, retryable error.
+    if (res.status === 503) {
+      const code = ((await res.json().catch(() => null)) as { error?: unknown } | null)?.error;
+      return { ok: false, reason: code === 'ai_not_configured' || code === 'ai_disabled' ? 'not_configured' : 'error' };
+    }
     if (!res.ok || !res.body) return { ok: false, reason: 'error' };
     // Drain the SSE stream and accumulate the deltas into the full reply.
     const reader = res.body.getReader();

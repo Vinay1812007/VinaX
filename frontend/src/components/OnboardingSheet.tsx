@@ -77,7 +77,7 @@ const TOUR: TourSlide[] = [
     title: 'Home learns your taste',
     lines: [
       'The Aura Mix on Home plays a mix built from your languages and listening.',
-      'Trending for you puts today’s popular songs in your order.',
+      'Popular picks for you puts popular songs in your order.',
     ],
   },
   {

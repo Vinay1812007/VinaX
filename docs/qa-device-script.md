@@ -33,6 +33,9 @@ Run each section on the devices it names: **A** the Android app (newest package)
 1. Download three songs. They appear under Downloads.
 2. Airplane mode on. Play each download, seek inside one, and let one run into the next.
 3. Open Library, Settings and Help while offline. Each page opens; none reloads in a loop.
+4. Still offline, try to download a new song. The message says there is no internet connection.
+5. Back online, use **Download all** on a playlist of twenty songs or more. It finishes (a stalled song gives up instead of stopping the rest), and any failure names its reason.
+6. Airplane mode on, swipe the app closed and open it again twice. It opens both times and every download still plays.
 
 ## 5. Notifications (A, B, C)
 

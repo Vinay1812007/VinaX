@@ -222,10 +222,11 @@
       // deploy edge skew, flaky network, or \u2014 the outage this now recovers
       // from \u2014 a stale SW serving cached HTML whose asset chunks the origin
       // has already rotated away), retry up to 2 times. After that, PANIC:
-      // unregister every service worker + purge every cache and reload once
-      // more, bypassing the poisoned shell. Only then, if the fresh load
-      // still fails, do we surface the honest "check your connection"
-      // message \u2014 because at that point it really is the network.
+      // unregister every service worker + purge every cache (never the
+      // downloaded songs) and reload once more, bypassing the poisoned
+      // shell. Only then, if the fresh load still fails, do we surface the
+      // honest "check your connection" message \u2014 because at that point
+      // it really is the network. Offline, none of that runs (8.2.0).
       (function () {
         var KEY = 'vinax.bootRetry';
         var PANIC = 'vinax.bootPanicked';
@@ -236,25 +237,65 @@
         var HEAL = 'vinax.bootHealed';
         var healed = false;
         try { healed = sessionStorage.getItem(HEAL) === '1'; } catch (e) { /* ignore */ }
-        function nukeAndReload() {
-          try { sessionStorage.setItem(PANIC, '1'); } catch (e) { /* proceed anyway */ }
-          var jobs = [];
+        // Downloaded songs live in this bucket (sw.js AUDIO_CACHE). Recovery
+        // must NEVER delete it \u2014 that silently un-downloads every saved song.
+        var AUDIO_CACHE = 'vinax-audio-v1';
+        function isOffline() {
+          try { return navigator.onLine === false; } catch (e) { return false; }
+        }
+        // Offline (8.2.0): purging caches and unregistering the worker cannot
+        // fetch a fresh app \u2014 it only destroys the offline copy, so every
+        // later offline launch showed the browser's error page. Keep
+        // everything, say what is going on, and reload the moment the
+        // connection returns (only if the app still hasn't mounted).
+        var waiting = false;
+        function waitForConnection(bs) {
+          if (bs) bs.textContent = 'You\u2019re offline \u2014 VinaX will finish loading when you reconnect.';
+          if (waiting) return;
+          waiting = true;
+          window.addEventListener('online', function () {
+            if (document.getElementById('boot')) location.reload();
+          });
+        }
+        // navigator.onLine is only trustworthy when it says false (a phone on
+        // wifi without internet reports true), so ask the origin itself.
+        function originReachable(done) {
+          if (isOffline()) { done(false); return; }
+          var settled = false;
+          function finish(ok) { if (!settled) { settled = true; done(ok); } }
+          setTimeout(function () { finish(false); }, 5000);
           try {
-            if ('serviceWorker' in navigator) {
-              jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
-                return Promise.all(rs.map(function (r) { return r.unregister(); }));
-              }).catch(function () {}));
-            }
-          } catch (e) { /* ignore */ }
-          try {
-            if (typeof caches !== 'undefined' && caches.keys) {
-              jobs.push(caches.keys().then(function (keys) {
-                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-              }).catch(function () {}));
-            }
-          } catch (e) { /* ignore */ }
-          Promise.all(jobs).catch(function () {}).then(function () {
-            location.replace(location.pathname + '?bust=' + Date.now());
+            fetch('/manifest.webmanifest?vxprobe=' + Date.now(), { cache: 'no-store' })
+              .then(function (r) { finish(!!r && r.ok); }, function () { finish(false); });
+          } catch (e) { finish(false); }
+        }
+        var recovering = false;
+        function nukeAndReload(bs) {
+          if (recovering) return;
+          recovering = true;
+          originReachable(function (online) {
+            recovering = online;
+            if (!online) { waitForConnection(bs); return; }
+            if (bs) bs.textContent = 'Refreshing app\u2026';
+            try { sessionStorage.setItem(PANIC, '1'); } catch (e) { /* proceed anyway */ }
+            var jobs = [];
+            try {
+              if ('serviceWorker' in navigator) {
+                jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+                  return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                }).catch(function () {}));
+              }
+            } catch (e) { /* ignore */ }
+            try {
+              if (typeof caches !== 'undefined' && caches.keys) {
+                jobs.push(caches.keys().then(function (keys) {
+                  return Promise.all(keys.filter(function (k) { return k !== AUDIO_CACHE; }).map(function (k) { return caches.delete(k); }));
+                }).catch(function () {}));
+              }
+            } catch (e) { /* ignore */ }
+            Promise.all(jobs).catch(function () {}).then(function () {
+              location.replace(location.pathname + '?bust=' + Date.now());
+            });
           });
         }
         window.addEventListener('error', function (e) {
@@ -283,9 +324,10 @@
               return;
             } catch (e3) { /* fall through to the reload ladder */ }
           }
+          // Offline, a reload re-reads the same cached copy \u2014 wait instead.
+          if (isOffline()) { waitForConnection(bs); return; }
           if (n >= 2 && !panicked) {
-            if (bs) bs.textContent = 'Refreshing app\u2026';
-            nukeAndReload();
+            nukeAndReload(bs);
             return;
           }
           if (n >= 3) {
@@ -302,17 +344,18 @@
         // ladder above never runs, and the shell sits forever (observed on
         // both web and the Android shell while the origin was verified
         // healthy). If React has not replaced the boot row within 15 seconds,
-        // run the same recovery: one panic (unregister SWs + purge caches +
-        // reload \u2014 PANIC persists in sessionStorage so this cannot loop),
-        // then the honest connection message. main.tsx clears the flags on
-        // every successful boot, and a mounted app removes #boot, making the
-        // watchdog a no-op on healthy loads.
+        // run the same recovery: one panic (unregister SWs + purge caches
+        // except downloaded songs + reload \u2014 PANIC persists in
+        // sessionStorage so this cannot loop), then the honest connection
+        // message. The panic only runs when the origin answers; offline the
+        // shell waits for the connection instead. main.tsx clears the flags
+        // on every successful boot, and a mounted app removes #boot, making
+        // the watchdog a no-op on healthy loads.
         setTimeout(function () {
           if (!document.getElementById('boot')) return; // app mounted
           var bs = document.querySelector('#boot .bs');
           if (!panicked) {
-            if (bs) bs.textContent = 'Refreshing app\u2026';
-            nukeAndReload();
+            nukeAndReload(bs);
           } else if (bs) {
             bs.textContent = 'Having trouble loading \u2014 please check your connection and refresh.';
           }

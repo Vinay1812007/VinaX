@@ -3,6 +3,8 @@ import { MAX_BACKUP_BYTES, applyTransferPayload, createBackup, createTransferPay
 import { clearEvents } from '@/services/storage/idb';
 import { resetProfile } from '@/services/personalization/storage';
 import { invalidateRecommendationCache } from '@/services/recommendation/engine';
+import { resetRecMemory } from '@/services/recommendation/recMemory';
+import { resetHomeSignals } from '@/features/home/homeSignals';
 import { queryClient } from '@/services/queryClient';
 import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
@@ -99,12 +101,17 @@ export function clearCachedMetadata(): void {
 
 export async function clearPersonalization(): Promise<void> {
   await resetProfile();
+  // 8.2.0 — what autoplay and Home learned from their own picks is taste too.
+  resetRecMemory();
+  resetHomeSignals();
   invalidateRecommendationCache();
   await queryClient.invalidateQueries({ queryKey: ['mixes'] });
 }
 
 export async function resetAppState(): Promise<void> {
   await clearEvents();
+  // 8.2.0 — the song vectors live in their own IndexedDB database.
+  await import('@/services/ai/embeddings').then((m) => m.eraseEmbeddings()).catch(() => undefined);
   clearAllVinaxStorage();
   window.location.assign('/');
 }

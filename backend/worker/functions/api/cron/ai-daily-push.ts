@@ -352,7 +352,7 @@ async function aiPickAndCompose(env: Env, slot: Slot, target: GeoTarget, cohort:
 {"song_query":"<song name and main artist>","title":"<max 55 chars>","body":"<max 120 chars>","reason":"<why it fits, max 200 chars>"}
 
 Rules:
-- Pick a REAL song in jiosaavn's catalog. The song's AUDIO LANGUAGE MUST match the target listener's language cohort.
+- Pick a REAL song on the major Indian streaming catalogs. The song's AUDIO LANGUAGE MUST match the target listener's language cohort.
 - song_query = clean search text: song name + main artist. No punctuation like quotes or hashtags.
 - title: a short hook. Use the city name if provided. English words are fine even for non-English audio songs — the app UI is multilingual, notifications read fine in English. Avoid emoji unless the vibe demands one.
 - body: ONE reason to open. Warm and human. Not marketing.
@@ -374,11 +374,15 @@ Reply with JSON only. The song_query must resolve to a ${langLabel} song.`;
     const res = await chat(
       env,
       [{ role: 'system', content: sys }, { role: 'user', content: usr }],
-      { lane: 'dj', maxTokens: 260, temperature: 0.85 },
+      // 8.2.0 — a leash per engine, one deadline for the whole ladder, the
+      // owner's DJ switch (this is the DJ lane picking a song), and a 200 that
+      // does not parse asks the next engine instead of the retry below.
+      { lane: 'dj', maxTokens: 260, temperature: 0.85, timeoutMs: 12_000, deadlineAt: Date.now() + 30_000, feature: 'dj', accept: (c) => parseAiJson(c) !== null },
     );
     rawOutput = res.content ?? null;
-    if (!rawOutput) return { pick: null, rawOutput: null, laneError: 'empty_response' };
-    const parsed = parseAiJson(rawOutput);
+    // Every engine answered but none parsed: the narrow retry below still gets its turn.
+    if (!rawOutput && res.error !== 'invalid_output') return { pick: null, rawOutput: null, laneError: res.error === 'disabled' || res.error === 'over_budget' ? `ai_${res.error}` : 'empty_response' };
+    const parsed = rawOutput ? parseAiJson(rawOutput) : null;
     if (parsed) return { pick: parsed, rawOutput, laneError: null };
     // Second try — fall back to the fast lane with a very narrow prompt.
     // Some models (esp. the big DJ engine) occasionally add preamble even
@@ -390,7 +394,7 @@ Reply with JSON only. The song_query must resolve to a ${langLabel} song.`;
           { role: 'system', content: 'Return ONLY a JSON object matching {"song_query":"...","title":"...","body":"..."}. No prose. No code fences.' },
           { role: 'user', content: `Pick a "${slot.vibe}" song in ${langLabel} for ${targetLabel}. Return the JSON.` },
         ],
-        { lane: 'fast', maxTokens: 200, temperature: 0.7 },
+        { lane: 'fast', maxTokens: 200, temperature: 0.7, timeoutMs: 10_000, deadlineAt: Date.now() + 20_000, feature: 'dj', accept: (c) => parseAiJson(c) !== null },
       );
       if (res2.content) {
         rawOutput = (rawOutput ?? '') + '\n---retry---\n' + res2.content;

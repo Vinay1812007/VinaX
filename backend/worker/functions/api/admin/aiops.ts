@@ -35,7 +35,7 @@ export const ROW_CAP = 20_000;
 
 /** The switchable AI features of the `ai-controls` contract, in display order. */
 export const AI_CONTROL_FEATURES = [
-  'dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image',
+  'dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed',
 ] as const;
 export type AiControlFeature = (typeof AI_CONTROL_FEATURES)[number];
 

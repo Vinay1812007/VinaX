@@ -1,0 +1,246 @@
+/* ============================================================================
+   VinaX 8.2 — AI Radio page and the Queue's Smart Queue card.
+   Imported by pages/AiRadioPage.tsx and features/queue/SmartQueue.tsx, so it
+   ships in their lazy chunks only. Stage rules: sentence case, artwork
+   first, pill buttons, no eyebrows.
+   ========================================================================= */
+
+/* ----------------------------------------------------------- AI Radio page */
+.vx-radio {
+  /* Mood tile tones — the same deep, theme-fixed set as Home's category tiles. */
+  --vxr-t1: 91 33 182;
+  --vxr-t2: 15 118 110;
+  --vxr-t3: 190 24 93;
+  --vxr-t4: 180 83 9;
+  --vxr-t5: 30 64 175;
+  --vxr-t6: 4 120 87;
+  --vxr-t7: 14 116 144;
+  --vxr-t8: 159 18 57;
+  max-width: 960px;
+  margin: 0 auto;
+  padding-bottom: 48px;
+}
+.vx-radio-section { margin-top: 32px; }
+.vx-radio-title {
+  margin-bottom: 12px;
+  color: rgb(var(--ink-100));
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+@media (min-width: 1024px) { .vx-radio-title { font-size: 22px; } }
+
+.vx-radio-status { min-height: 20px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; }
+.vx-radio-status:empty { min-height: 0; }
+.vx-radio-status a, .vx-radio-note a { color: rgb(var(--ink-100)); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.vx-radio-spin {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid rgb(var(--ink-600));
+  border-top-color: rgb(var(--ember-400));
+  border-radius: 50%;
+  animation: vx-radio-spin 0.8s linear infinite;
+}
+@keyframes vx-radio-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .vx-radio-spin { animation: none; } }
+.vx-radio-error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgb(var(--ink-850));
+  color: rgb(var(--ink-200));
+  font-size: 14px;
+}
+
+/* Describe it: one field, one pill. */
+.vx-radio-ask { display: flex; gap: 8px; }
+.vx-radio-ask input {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  padding: 0 18px;
+  border-radius: 9999px;
+  background: rgb(var(--ink-100) / 0.08);
+  color: rgb(var(--ink-100));
+  font-size: 16px;
+  font-weight: 500;
+  outline: none;
+  transition: background-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
+}
+.vx-radio-ask input::placeholder { color: rgb(var(--ink-400)); }
+.vx-radio-ask input:focus-visible { background: rgb(var(--ink-100) / 0.12); box-shadow: 0 0 0 2px rgb(var(--ember-500)); }
+.vx-radio-btn {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm), opacity 140ms var(--ease-calm);
+}
+.vx-radio-btn.is-primary { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
+.vx-radio-btn.is-primary:hover { background: rgb(var(--ember-400)); }
+.vx-radio-btn:active { transform: scale(0.97); }
+.vx-radio-btn:disabled { opacity: 0.5; transform: none; }
+
+.vx-radio-chips {
+  display: flex;
+  gap: 8px;
+  margin: 12px calc(-1 * var(--vx-gutter)) 0;
+  padding: 4px var(--vx-gutter);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vx-radio-chips::-webkit-scrollbar { display: none; }
+.vx-radio-chip {
+  position: relative;
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  background: rgb(var(--ink-100) / 0.08);
+  color: rgb(var(--ink-100));
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vx-radio-chip::after { content: ''; position: absolute; inset: -4px 0; }
+.vx-radio-chip:hover { background: rgb(var(--ink-100) / 0.14); }
+.vx-radio-chip:disabled { opacity: 0.6; }
+
+/* Moods: colour tiles, two columns on a phone. */
+.vx-radio-moods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 640px) { .vx-radio-moods { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .vx-radio-moods { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.vx-radio-mood {
+  --tone: var(--vxr-t1);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  height: 88px;
+  padding: 14px 16px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgb(var(--tone)) 0%, rgb(var(--tone) / 0.82) 100%);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: left;
+  transition: transform 160ms var(--ease-calm), filter 160ms var(--ease-calm), opacity 160ms var(--ease-calm);
+}
+.vx-radio-mood:hover { filter: brightness(1.08); }
+.vx-radio-mood:active { transform: scale(0.97); }
+.vx-radio-mood:disabled { opacity: 0.6; transform: none; }
+.vx-radio-mood-glyph { position: absolute; right: 10px; bottom: 8px; width: 40px; height: 40px; color: rgb(255 255 255 / 0.5); }
+.vx-radio-mood.tone-1 { --tone: var(--vxr-t1); }
+.vx-radio-mood.tone-2 { --tone: var(--vxr-t2); }
+.vx-radio-mood.tone-3 { --tone: var(--vxr-t3); }
+.vx-radio-mood.tone-4 { --tone: var(--vxr-t4); }
+.vx-radio-mood.tone-5 { --tone: var(--vxr-t5); }
+.vx-radio-mood.tone-6 { --tone: var(--vxr-t6); }
+.vx-radio-mood.tone-7 { --tone: var(--vxr-t7); }
+.vx-radio-mood.tone-8 { --tone: var(--vxr-t8); }
+
+/* From a song: artwork-first tiles. */
+.vx-radio-songs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 768px) { .vx-radio-songs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; } }
+.vx-radio-song {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  height: 56px;
+  padding-right: 10px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgb(var(--ink-100) / 0.07);
+  text-align: left;
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.vx-radio-song:hover { background: rgb(var(--ink-100) / 0.12); }
+.vx-radio-song:active { transform: scale(0.98); }
+.vx-radio-song img { width: 56px; height: 56px; flex-shrink: 0; object-fit: cover; }
+.vx-radio-song-title, .vx-radio-song-sub { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-radio-song-title { color: rgb(var(--ink-100)); font-size: 14px; font-weight: 600; }
+.vx-radio-song-sub { color: rgb(var(--ink-400)); font-size: 12px; font-weight: 500; }
+
+.vx-radio-artists {
+  display: flex;
+  gap: 16px;
+  margin: 20px calc(-1 * var(--vx-gutter)) 0;
+  padding: 4px var(--vx-gutter);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vx-radio-artists::-webkit-scrollbar { display: none; }
+.vx-radio-artist {
+  display: flex;
+  flex: 0 0 88px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: rgb(var(--ink-100));
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+.vx-radio-artist img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; box-shadow: var(--vx-art-shadow); transition: transform 140ms var(--ease-calm); }
+.vx-radio-artist:hover img { transform: scale(1.04); }
+.vx-radio-artist span { display: block; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-radio-artist:disabled { opacity: 0.6; }
+
+.vx-radio-note { margin-top: 40px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.5; }
+
+/* ------------------------------------------------------ Smart Queue (Queue) */
+.vx-smartq {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgb(var(--ink-100) / 0.06);
+}
+.vx-smartq-text { flex: 1; min-width: 0; }
+.vx-smartq-label { display: block; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; }
+.vx-smartq-desc { display: block; margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.45; }
+.vx-smartq-desc a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 3px; }
+.vx-smartq [role='switch'] {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+  margin-top: 2px;
+  border-radius: 9999px;
+  background: rgb(var(--ink-100) / 0.2);
+  transition: background-color 180ms var(--ease-calm);
+}
+.vx-smartq [role='switch']::after { content: ''; position: absolute; inset: -9px -4px; }
+.vx-smartq [role='switch'][aria-checked='true'] { background: rgb(var(--ember-500)); }
+.vx-smartq [role='switch'] > span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  transition: transform 180ms var(--ease-calm);
+}
+.vx-smartq [role='switch'][aria-checked='true'] > span { transform: translateX(18px); }
+.vx-smartq [role='switch']:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 2px; }
+html.light .vx-smartq [role='switch'] { background: rgb(var(--ink-100) / 0.16); }
+html.light .vx-smartq [role='switch'][aria-checked='true'] { background: rgb(var(--ember-500)); }
+@media (prefers-reduced-motion: reduce) {
+  .vx-smartq [role='switch'], .vx-smartq [role='switch'] > span { transition: none; }
+}

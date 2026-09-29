@@ -1,6 +1,6 @@
 # The player and the queue
 
-This page covers what happens after you tap a song: how the DJ builds the next five, how Pin a mood and Tune this queue rebuild Up Next, why songs you queue by hand go first, and the player's other tools (resume, sleep timer, A-B repeat, bookmarks). For the recommendation settings see [Discovery modes](discovery-modes.md); for the engineering detail see [recommendations](../recommendations.md).
+This page covers what happens after you tap a song: how the DJ builds the next five, AI Radio, the Smart Queue switch, how Pin a mood and Tune this queue rebuild Up Next, why songs you queue by hand go first, and the player's other tools (resume, sleep timer, A-B repeat, bookmarks). For the recommendation settings see [Discovery modes](discovery-modes.md); for the engineering detail see [recommendations](../recommendations.md).
 
 ## Tap a song: the next five
 
@@ -11,11 +11,30 @@ Tap any song, in a shelf, an album, a playlist or search results. With the defau
 | Five at a time | A continuation is the next five songs. When a song starts with two or fewer songs left after it, the DJ builds five more from that song, so it can follow what you skip and finish in this sitting. |
 | Queue languages | With **Settings → Recommendations → Queue languages** on **Your languages** (the default), the playing song's language leads: it fills the first two slots and at least half of the five, songs from your other languages (the ones you pinned or play most) may follow, never two changes of language in a row, and a language you never chose stays out. **One language** keeps every continuation in the language of the song that started it. Either way the rule is the same in every discovery mode. |
 | Familiar first | The first songs are a familiar hand-off. Artists you have never played are introduced later in the five, not at the start. |
-| No repeats | A song already in the queue, or another version of it, is not added again. |
+| No repeats | A song already in the queue, or another version of it, is not added again. Start again from the same song and the DJ avoids opening with the same songs as last time. |
+| Songs that can play | A song the catalogue says it cannot stream is left out, unless you downloaded it. |
 
-This behaviour is the setting **Settings → Recommendations → DJ builds every queue** (on by default). Turn it off and playback follows the list you tapped, in order. The DJ also steps aside when Autoplay is off, when repeat is on, and while you are a guest in a Listen Together room.
+The picks come from songs like the one playing, the rest of its album, artists similar to its artist, its genre, your favourite artists and languages, and songs you finished or liked when the DJ picked them before. They lean toward songs that resemble your favourites and what you have played lately. On a DJ pick, **Why this song?** in the song menu says which of these it was.
+
+This behaviour is the setting **Settings → Recommendations → DJ builds every queue** (on by default). Turn it off and playback follows the list you tapped, in order. The DJ also steps aside when Autoplay is off, when repeat is on, and while you are a guest in a Listen Together room. The **Smart Queue** switch on the Queue page sets both at once (see below).
 
 **AI DJ** (same section) lets the AI service order the songs and suggest a few extra ones. Every suggestion is checked against the catalogue and the same rules before it can play. When the AI is slow or unavailable, the on-device order is used; you do not have to do anything.
+
+## AI Radio
+
+AI Radio plays endless music from one starting point. Open it from the **AI Radio** tile on Home, the **AI Radio** card further down Home, **Start AI Radio** on an empty Queue page, or go to `/radio`.
+
+| Start from | What happens |
+|---|---|
+| **Describe it** | Type a few words, such as “Telugu 90s melodies”, or tap an example. VinaX reads the language, the decade and the mood from your words and finds the first songs in the catalogue. If that finds too little, it asks VinaX AI instead. |
+| **Pick a mood** | Melody, Romantic, Dance, Chill, Sad, Devotional, Beats, Classics or New, in your first language. The DJ keeps following that mood for the whole radio. |
+| **From a song or artist** | The song playing now, your recent songs and your artists. |
+
+Every song menu also has **Start AI Radio**: that song starts and the DJ keeps adding songs that follow from it. An artist page has it in its ⋯ menu. Starting the same mood or artist again usually opens with different songs. Your skips steer what comes next, and songs you add yourself still go first.
+
+## Smart Queue
+
+**Smart Queue** is a switch on the Queue page. On, it turns on both **Autoplay** and **DJ builds every queue**: the song you start leads and the DJ builds what follows and keeps the music going. Off, it turns off DJ builds every queue and leaves Autoplay as it was, so your list plays in the order you chose; with Autoplay on, similar songs follow when the list ends. The line next to the switch says which of these is happening, and **More in Settings** opens the full settings.
 
 ## Songs you queue by hand go first
 
@@ -28,7 +47,7 @@ On the Queue page every upcoming song says which it is:
 
 | Mark | What it means |
 |---|---|
-| **DJ pick** | The DJ chose it. A tune, a pinned mood or **New DJ picks** replaces it. The line under it is the DJ's own reason for choosing it. |
+| **DJ pick** | The DJ chose it. A tune, a pinned mood or **Refresh up next** replaces it. The line under it is the DJ's own reason for choosing it. |
 | **Added by you** | You added it with Play next, Add to queue, or **Keep this song**. Nothing the DJ does moves or removes it. |
 | No mark | It came from the album, playlist or list you tapped. A rebuild replaces these too, and the button says so before you press it. |
 
@@ -65,9 +84,10 @@ Open **Queue** from the queue button in the player or from the command palette.
 | The handle (⠿) | Drag to reorder. With a keyboard, focus it and press ↑ or ↓ — the row moves one place, keeps focus, and the new position is read out. |
 | ⋯ on a row | Keep this song, Move up, Move down, Clear from here down, Remove — plus everything a song menu offers. Every drag has a button here, so nothing needs a pointer. |
 | ✕ on a row | Removes that song, and offers **Undo** for a few seconds. |
-| **New DJ picks** | Asks the DJ for a fresh set. The line under it says how many songs it will replace before you press it; songs you added always stay. |
+| **Refresh up next** | Asks the DJ for a fresh set. The line under it says how many songs it will replace before you press it; songs you added always stay. |
 | Sort chips | Reorder the upcoming songs by energy, calm, newest, classics or mood arc. The playing song never moves. |
 | **Save as playlist** | Freezes the queue into a playlist you keep. |
+| **Smart Queue** | Autoplay and DJ builds every queue in one switch (see [Smart Queue](#smart-queue)). |
 | **Build a queue** | Plans a longer session: you say how long, what mood and how the energy should move, review the plan, then add it after the current song or play it. |
 
 If the DJ cannot reach the catalogue, the page says so and offers **Try again**; while you are offline it says the queue keeps playing but new picks need a connection.

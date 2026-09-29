@@ -21,6 +21,8 @@ export interface ComposedHomeLayout {
   /** Shelves that render, in display order. */
   visible: HomeSection[];
   source: 'listener' | 'owner' | 'default';
+  /** 8.2.0 — someone chose this order (the listener's Home Studio layout, or an owner-published order). */
+  orderChosen: boolean;
 }
 
 const isSection = (v: unknown): v is HomeSection => typeof v === 'string' && (DEFAULT_HOME.order as string[]).includes(v);
@@ -64,5 +66,6 @@ export function composeHomeLayout(local: HomeDesign | null, owner: unknown, defa
   // A layout with nothing left is useless: fall back to the owner's rules
   // alone (the listener's hides are ignored, the owner's still hold).
   if (!visible.length) visible = design.order.filter((k) => !ownerHidden.includes(k));
-  return { design: { ...design, hidden }, ownerHidden, visible, source };
+  const orderChosen = source === 'listener' || (source === 'owner' && !!own?.hasOrder);
+  return { design: { ...design, hidden }, ownerHidden, visible, source, orderChosen };
 }

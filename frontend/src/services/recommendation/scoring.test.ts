@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { scoreCandidate, rankCandidates } from './scoring';
+import { songKey as songKeyOf } from './songIdentity';
 import type { Candidate, RecommendationContext } from './types';
 import { createEmptyProfile, type TasteSliders } from '../personalization/profile';
 import { sliderDialLines, DEFAULT_SLIDERS } from '../personalization/dials';
@@ -188,5 +189,57 @@ describe('rankCandidates', () => {
     );
     expect(out.length).toBe(2);
     expect(out[0].score).toBeGreaterThanOrEqual(out[1].score);
+  });
+});
+
+describe('8.2.0 — taste fit and served memory', () => {
+  const loved = song({ id: 'loved', artists: [{ id: 'sid', name: 'Sid Sriram' }], album: { id: 'alb', name: 'Film' }, genre: 'film' });
+  const kin = song({ id: 'kin', artists: [{ id: 'sid', name: 'Sid Sriram' }], album: { id: 'alb', name: 'Film' }, genre: 'film' });
+  const stranger = song({ id: 'str', artists: [{ id: 'zz', name: 'Stranger' }], album: { id: 'other', name: 'Other' }, genre: 'rock', year: '1990' });
+  const taste = (c: ReturnType<typeof scoreCandidate>) => c.reasons.filter((r) => r.kind === 'taste').reduce((s, r) => s + r.weight, 0);
+
+  it('adds a bounded taste term that favours what resembles favourites, and nothing without taste', () => {
+    const c = ctx({ favorites: [loved] });
+    const near = taste(scoreCandidate(cand(kin), c));
+    const far = taste(scoreCandidate(cand(stranger), c));
+    expect(near).toBeGreaterThan(far);
+    expect(near).toBeLessThanOrEqual(0.15);
+    expect(taste(scoreCandidate(cand(kin), ctx()))).toBe(0);
+  });
+
+  it('holds back songs other surfaces showed and the last opening after this seed, as penalties with a reason', () => {
+    const base = scoreCandidate(cand(kin), ctx()).score;
+    const shown = scoreCandidate(cand(kin), ctx({ servedKeys: new Set(['sentinel']) }));
+    expect(shown.score).toBe(base); // not served: unchanged
+    const served = scoreCandidate(cand(kin), ctx({ servedKeys: new Set([songKeyOf(kin)]) }));
+    expect(served.score).toBeCloseTo(base - 0.04, 6);
+    expect(served.reasons.some((r) => r.kind === 'served' && r.weight < 0)).toBe(true);
+    const repeat = scoreCandidate(cand(kin), ctx({ seedRepeatIds: new Set(['kin']) }));
+    expect(repeat.score).toBeCloseTo(base - 0.1, 6);
+  });
+
+  it('uses a learned embedding only relative to the pool, and never for a candidate without one', () => {
+    const x = Float32Array.from([1, 0]);
+    const y = Float32Array.from([0, 1]);
+    const favorites = ['f1', 'f2', 'f3'].map((id) => song({ id, artists: [{ id: 'sid', name: 'Sid Sriram' }] }));
+    const vectors: Record<string, Float32Array> = { f1: x, f2: x, f3: x, a: x, b: y, c: y };
+    const pool = ['a', 'b', 'c', 'd'].map((id) => cand(song({ id, artists: [{ id: `ar-${id}`, name: `Artist ${id}` }] })));
+    const withVectors = rankCandidates(pool, ctx({ favorites, embeddingOf: (id) => vectors[id] ?? null }));
+    const without = rankCandidates(pool, ctx({ favorites }));
+    const fit = (list: typeof withVectors, id: string) => taste(list.find((s) => s.candidate.song.id === id)!);
+    expect(fit(withVectors, 'a')).toBeGreaterThan(fit(without, 'a'));
+    expect(fit(withVectors, 'b')).toBeLessThanOrEqual(fit(without, 'b'));
+    expect(fit(withVectors, 'd')).toBeCloseTo(fit(without, 'd'), 9); // no vector: the on-device fit alone
+  });
+});
+
+describe('8.2.0 — an artist skipped in this sitting sinks (verified, unchanged)', () => {
+  it('pulls the score down through the session intent', () => {
+    const s = song({ id: 'x', artists: [{ id: 'a1', name: 'Anirudh' }] });
+    const intent = (pull: number) => ({ skipStreak: 1, completionStreak: 0, artistPull: { anirudh: pull }, languagePull: {}, skippedSongIds: new Set<string>(), energySteer: 0, discoveryAppetite: 0, size: 3 });
+    const skipped = scoreCandidate(cand(s), ctx({ sessionIntent: intent(-1) }));
+    const neutral = scoreCandidate(cand(s), ctx({ sessionIntent: intent(0) }));
+    expect(skipped.score).toBeLessThan(neutral.score);
+    expect(skipped.reasons.find((r) => r.kind === 'intent')?.weight).toBeLessThan(0);
   });
 });

@@ -1,0 +1,211 @@
+import { LANGUAGES } from '@/constants/languages';
+
+/**
+ * 8.2.0 — what a free-text music request is asking for.
+ *
+ * "Make me a Telugu workout playlist with high-energy songs" →
+ * { languages: ['telugu'], activity: 'workout', energy: 'high', moods: ['energetic'] }.
+ *
+ * Shared by natural-language search, the AI playlist builder and the
+ * on-device vectors (localVectors.ts), so all three read a request the same
+ * way. Deterministic, dependency-free and cheap enough to run per keystroke.
+ */
+
+export type IntentMood = 'romantic' | 'energetic' | 'chill' | 'melancholy' | 'devotional';
+export type IntentActivity = 'workout' | 'party' | 'drive' | 'focus' | 'sleep' | 'rain' | 'wedding' | 'travel';
+export type IntentEnergy = 'high' | 'low';
+
+export interface MusicIntent {
+  /** Languages the text names ("telugu", "hindi"), in the order written. */
+  languages: string[];
+  moods: IntentMood[];
+  activity: IntentActivity | null;
+  energy: IntentEnergy | null;
+  /** First year of a named decade ("90s" → 1990), else null. */
+  decade: number | null;
+  /** Old songs ("classic", "evergreen", "retro") or new ones ("latest", "new"). */
+  era: 'classic' | 'fresh' | null;
+  /** Content words left after the recognised cues and filler are removed. */
+  keywords: string[];
+  /** How many cues were recognised (language, mood, activity, energy, era). */
+  cues: number;
+}
+
+const LANGUAGE_WORDS: Record<string, string> = Object.fromEntries(LANGUAGES.map((l) => [l.id, l.id]));
+// Common spellings and names people type for a language.
+Object.assign(LANGUAGE_WORDS, { tollywood: 'telugu', bollywood: 'hindi', kollywood: 'tamil', mollywood: 'malayalam', sandalwood: 'kannada', telgu: 'telugu', tamizh: 'tamil', hindustani: 'hindi', panjabi: 'punjabi', oriya: 'odia', bangla: 'bengali' });
+
+const MOOD_WORDS: Record<string, IntentMood> = {
+  sad: 'melancholy', heartbreak: 'melancholy', heartbroken: 'melancholy', breakup: 'melancholy', lonely: 'melancholy', emotional: 'melancholy', pathos: 'melancholy', crying: 'melancholy', cry: 'melancholy', missing: 'melancholy', melancholy: 'melancholy',
+  romantic: 'romantic', romance: 'romantic', love: 'romantic', lovely: 'romantic', date: 'romantic',
+  happy: 'energetic', energetic: 'energetic', upbeat: 'energetic', dance: 'energetic', dancing: 'energetic', mass: 'energetic', hype: 'energetic', pump: 'energetic', peppy: 'energetic', celebration: 'energetic', festive: 'energetic',
+  chill: 'chill', calm: 'chill', relax: 'chill', relaxing: 'chill', soothing: 'chill', mellow: 'chill', soft: 'chill', peaceful: 'chill', lofi: 'chill', melody: 'chill', melodies: 'chill', slow: 'chill', acoustic: 'chill',
+  devotional: 'devotional', bhakti: 'devotional', god: 'devotional', prayer: 'devotional', spiritual: 'devotional', temple: 'devotional', bhajan: 'devotional', bhajans: 'devotional',
+};
+
+const ACTIVITY_WORDS: Record<string, IntentActivity> = {
+  workout: 'workout', gym: 'workout', exercise: 'workout', running: 'workout', run: 'workout', jog: 'workout', jogging: 'workout', cardio: 'workout', training: 'workout', lifting: 'workout',
+  party: 'party', club: 'party', dj: 'party',
+  drive: 'drive', driving: 'drive', road: 'drive', roadtrip: 'drive', car: 'drive',
+  focus: 'focus', study: 'focus', studying: 'focus', work: 'focus', coding: 'focus', concentration: 'focus',
+  sleep: 'sleep', sleeping: 'sleep', bedtime: 'sleep', lullaby: 'sleep',
+  rain: 'rain', rainy: 'rain', monsoon: 'rain', rains: 'rain',
+  wedding: 'wedding', sangeet: 'wedding', marriage: 'wedding', baraat: 'wedding',
+  travel: 'travel', trip: 'travel', journey: 'travel', vacation: 'travel',
+};
+
+/** Activities that imply an energy when the text does not say one. */
+const ACTIVITY_ENERGY: Partial<Record<IntentActivity, IntentEnergy>> = { workout: 'high', party: 'high', wedding: 'high', sleep: 'low', focus: 'low', rain: 'low' };
+const ACTIVITY_MOOD: Partial<Record<IntentActivity, IntentMood>> = { workout: 'energetic', party: 'energetic', wedding: 'energetic', sleep: 'chill', focus: 'chill', rain: 'chill' };
+
+const HIGH_ENERGY = /\b(high[\s-]?energy|high[\s-]?tempo|energetic|upbeat|fast|pumping|power|intense|beats?|banger|bangers|hype|loud|peppy)\b/;
+const LOW_ENERGY = /\b(low[\s-]?energy|slow|calm|soft|quiet|gentle|mellow|soothing|relaxing|chill)\b/;
+const CLASSIC = /\b(old|oldies|classic|classics|evergreen|retro|vintage|golden)\b/;
+const FRESH = /\b(new|latest|recent|fresh|trending|this year)\b/;
+
+/** Words that carry no musical meaning in a request. */
+const FILLER = new Set(
+  'a an and the of for to in on with my me i some any make give play create build want need songs song music tracks track playlist mix list please that are is be like from by best top good great hits hit vibes vibe feel feeling kind type sort style mood moods energy high low tempo about who which can you get find show just really very more most something few lot lots all its it this these those when while during at or but so'.split(' '),
+);
+
+/** Lower-case, punctuation-free word list (Indic letters and marks kept). */
+export function words(text: string): string[] {
+  return text
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/['‘’]/g, '')
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+}
+
+export function parseMusicIntent(text: string): MusicIntent {
+  const lower = ` ${text.toLowerCase()} `;
+  const list = words(text);
+  const languages: string[] = [];
+  const moods: IntentMood[] = [];
+  let activity: IntentActivity | null = null;
+  const keywords: string[] = [];
+  let decade: number | null = null;
+  for (const w of list) {
+    const lang = LANGUAGE_WORDS[w];
+    if (lang) {
+      if (!languages.includes(lang)) languages.push(lang);
+      continue;
+    }
+    const mood = MOOD_WORDS[w];
+    if (mood && !moods.includes(mood)) moods.push(mood);
+    const act = ACTIVITY_WORDS[w];
+    if (act && !activity) activity = act;
+    const dec = /^(?:19|20)?(\d)0s$/.exec(w);
+    if (dec && !decade) {
+      const d = Number(dec[1]);
+      decade = w.length >= 5 ? Number(w.slice(0, 4)) : d >= 5 ? 1900 + d * 10 : 2000 + d * 10;
+      continue;
+    }
+    if (!mood && !act && !FILLER.has(w) && w.length > 1) keywords.push(w);
+  }
+  let energy: IntentEnergy | null = HIGH_ENERGY.test(lower) ? 'high' : LOW_ENERGY.test(lower) ? 'low' : null;
+  if (!energy && activity) energy = ACTIVITY_ENERGY[activity] ?? null;
+  if (activity && !moods.length && ACTIVITY_MOOD[activity]) moods.push(ACTIVITY_MOOD[activity] as IntentMood);
+  if (energy === 'high' && !moods.includes('energetic') && !moods.includes('melancholy')) moods.push('energetic');
+  const era = CLASSIC.test(lower) || (decade !== null && decade < 2010) ? 'classic' : FRESH.test(lower) ? 'fresh' : null;
+  const cues = languages.length + moods.length + (activity ? 1 : 0) + (energy ? 1 : 0) + (era ? 1 : 0);
+  return { languages, moods, activity, energy, decade, era, keywords, cues };
+}
+
+/** Words that mark a description of music rather than a title. */
+const DESCRIBING = new Set(['songs', 'song', 'music', 'playlist', 'tracks', 'mix', 'vibes', 'for', 'to']);
+
+/**
+ * True when a search reads like a description ("sad telugu songs for rain",
+ * "high energy workout hindi") rather than a title or a name. Needs three or
+ * more words and a mood, activity, energy or era cue, plus either a second
+ * cue (a language counts) or a describing word ("songs", "for", "playlist").
+ * A language alone ("telugu songs"), a name ("arijit singh") or a title that
+ * happens to hold a mood word ("love me like you do", "party all night") is
+ * an ordinary search.
+ */
+export function looksLikeNaturalLanguage(query: string): boolean {
+  const list = words(query);
+  if (list.length < 3 || list.length > 20) return false;
+  // Cue WORDS actually typed (an activity's implied energy does not count twice).
+  const lower = ` ${list.join(' ')} `;
+  const typed =
+    list.filter((w) => MOOD_WORDS[w] || ACTIVITY_WORDS[w] || /^(?:19|20)?\d0s$/.test(w)).length +
+    (HIGH_ENERGY.test(lower) || LOW_ENERGY.test(lower) ? 1 : 0) +
+    (CLASSIC.test(lower) || FRESH.test(lower) ? 1 : 0);
+  if (typed < 1) return false;
+  const languages = list.filter((w) => LANGUAGE_WORDS[w]).length;
+  return typed + languages >= 2 || list.some((w) => DESCRIBING.has(w));
+}
+
+const CURRENT_YEAR = new Date().getFullYear();
+
+/**
+ * Catalogue searches that fetch candidates for an intent.
+ *
+ * Only phrasings probed to work are used ("<language> dance songs",
+ * "<language> mass songs", "<language> melody songs", "<language> sad songs",
+ * "<language> romantic songs", "<language> devotional songs",
+ * "<language> evergreen hits"): the catalogue answers a longer description
+ * such as "telugu high energy workout songs" with nothing at all.
+ */
+export function catalogQueries(intent: MusicIntent, fallbackLanguages: readonly string[] = [], max = 4): string[] {
+  const terms: string[] = [];
+  const add = (...t: string[]) => {
+    for (const x of t) if (!terms.includes(x)) terms.push(x);
+  };
+  if (intent.era === 'classic') add('evergreen hits');
+  switch (intent.activity) {
+    case 'workout':
+    case 'party':
+    case 'wedding':
+      add('dance songs', 'mass songs');
+      break;
+    case 'drive':
+    case 'travel':
+      add('dance songs', 'melody songs');
+      break;
+    case 'focus':
+    case 'sleep':
+      add('melody songs');
+      break;
+    case 'rain':
+      add(intent.moods.includes('melancholy') ? 'sad songs' : 'melody songs', 'melody songs');
+      break;
+    default:
+      break;
+  }
+  for (const mood of intent.moods) {
+    if (mood === 'energetic') add('dance songs', 'mass songs');
+    else if (mood === 'melancholy') add('sad songs');
+    else if (mood === 'romantic') add('romantic songs');
+    else if (mood === 'devotional') add('devotional songs');
+    else if (mood === 'chill') add('melody songs');
+  }
+  if (intent.energy === 'high') add('dance songs');
+  if (intent.energy === 'low') add('melody songs');
+  const langs = intent.languages.length ? intent.languages : fallbackLanguages.slice(0, 2);
+  if (intent.era === 'fresh') {
+    return (langs.length ? langs : ['']).map((l) => `latest ${l ? `${l} ` : ''}songs ${CURRENT_YEAR}`).concat(terms.map((t) => (langs[0] ? `${langs[0]} ${t}` : t))).slice(0, max);
+  }
+  if (!terms.length) add('melody songs', 'dance songs');
+  const out: string[] = [];
+  // Interleave languages so a two-language request gets both early.
+  for (const t of terms) for (const l of langs.length ? langs : ['']) out.push(l ? `${l} ${t}` : t);
+  return [...new Set(out)].slice(0, max);
+}
+
+/** A short title for a playlist built from an intent ("Telugu Workout Mix"). */
+export function intentTitle(intent: MusicIntent): string {
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const lang = intent.languages[0] ? cap(intent.languages[0]) + ' ' : '';
+  if (intent.activity) return `${lang}${cap(intent.activity)} Mix`;
+  const mood = intent.moods[0];
+  const moodName: Record<IntentMood, string> = { romantic: 'Romance', energetic: 'Energy', chill: 'Chill', melancholy: 'Heartbreak', devotional: 'Devotion' };
+  if (mood) return `${lang}${moodName[mood]} Mix`;
+  if (intent.era === 'classic') return `${lang}Evergreen Mix`;
+  return `${lang}Mix`.trim();
+}

@@ -16,14 +16,22 @@ export type CandidateSource =
   /** Package A4 — the exploration budget: deliberately unlike your usual. */
   | 'explore'
   /** v7.1.0 — fetched FOR the listener's stated intent (a tune, a pinned mood). */
-  | 'intent';
+  | 'intent'
+  /** 8.2.0 — other songs from the seed song's own album. */
+  | 'album'
+  /** 8.2.0 — popular songs by artists who work with the seed's artist (co-credited in its catalogue). */
+  | 'related-artist'
+  /** 8.2.0 — the seed's genre or mood, in its language. */
+  | 'genre'
+  /** 8.2.0 — earlier automatic picks the listener finished or liked, and songs like them (./recMemory.ts). */
+  | 'proven';
 
 /**
  * 7.2.0 — which source a song "belongs to" when several found it: the first
  * of these it has. The listener's stated intent wins, then the seed and taste
  * sources, then the broad ones (the order of the scorer's source boosts).
  */
-export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'favorite-album', 'history', 'rediscovery', 'explore', 'trending'];
+export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'album', 'favorite-album', 'related-artist', 'proven', 'history', 'rediscovery', 'genre', 'explore', 'trending'];
 
 const rank = (s: CandidateSource): number => SOURCE_PRIORITY.indexOf(s);
 const titlesOf = (c: Candidate): string[] => c.seedTitles ?? (c.seedTitle ? [c.seedTitle] : []);
@@ -33,6 +41,10 @@ const titlesOf = (c: Candidate): string[] => c.seedTitles ?? (c.seedTitle ? [c.s
  * that found it (`sources`, priority order), every seed title it carried and,
  * as `source`, the strongest of them. Keeps first-appearance order. Used by
  * the gatherer and again by the hard filter (for callers that merge pools).
+ *
+ * 8.2.0 — a copy that can stream wins over one that cannot: when the first
+ * arrival had no audio and a later one does, the later song object is kept,
+ * and the candidate is `unplayable` only if every copy was.
  */
 export function mergeCandidates(list: Candidate[]): Candidate[] {
   const out: Candidate[] = [];
@@ -48,7 +60,12 @@ export function mergeCandidates(list: Candidate[]): Candidate[] {
     const prev = out[i];
     const sources = [...new Set([...prev.sources!, ...(c.sources ?? [c.source])])].sort((a, b) => rank(a) - rank(b));
     const lead = rank(c.source) < rank(prev.source) ? c : prev;
-    out[i] = { ...prev, source: sources[0], sources, seedTitles: [...new Set([...prev.seedTitles!, ...titlesOf(c)])], seedTitle: lead.seedTitle ?? prev.seedTitle };
+    const streams = (x: Candidate): boolean => Array.isArray(x.song.audio) && x.song.audio.length > 0;
+    const song = !streams(prev) && streams(c) ? c.song : prev.song;
+    const merged: Candidate = { ...prev, song, source: sources[0], sources, seedTitles: [...new Set([...prev.seedTitles!, ...titlesOf(c)])], seedTitle: lead.seedTitle ?? prev.seedTitle };
+    if (prev.unplayable && c.unplayable) merged.unplayable = true;
+    else delete merged.unplayable;
+    out[i] = merged;
   }
   return out;
 }
@@ -77,6 +94,14 @@ export interface Candidate {
    * the song is catalogue metadata.
    */
   classified?: SongFeature[];
+  /**
+   * 8.2.0 — the response this song came in carried stream URLs for other
+   * songs but none for this one: the catalogue cannot play it. The hard
+   * filter turns it away ('no-audio') unless it is downloaded. Absent when
+   * the response carried no stream URLs at all (a catalogue that resolves
+   * audio at play time) and for songs from the device.
+   */
+  unplayable?: boolean;
 }
 
 export type ReasonKind =
@@ -119,7 +144,17 @@ export type ReasonKind =
   /** 7.2.0 — an active festival's languages or moods. */
   | 'festival'
   /** 7.2.0 — the listener's taste dials. */
-  | 'dial';
+  | 'dial'
+  /** 8.2.0 — close to what the listener loves and plays (the on-device taste vector, ./vectors.ts). */
+  | 'taste'
+  /** 8.2.0 — recently shown on another surface, or opened the last continuation after this same song. */
+  | 'served'
+  /** 8.2.0 — from the seed song's own album. */
+  | 'album'
+  /** 8.2.0 — by an artist similar to, or credited with, the seed's artist. */
+  | 'similar-artist'
+  /** 8.2.0 — like (or one of) the automatic picks the listener finished or liked before. */
+  | 'proven';
 
 export interface ReasonComponent {
   kind: ReasonKind;
@@ -214,10 +249,20 @@ export interface RecommendationContext {
    */
   trendBonus?: ReadonlyMap<string, number>;
   trendLabel?: ReadonlyMap<string, string>;
+  /**
+   * 8.2.0 — a learned song embedding the device already holds (synchronous,
+   * never fetches), for the taste term's optional refinement. Absent = the
+   * on-device taste vector alone.
+   */
+  embeddingOf?: (songId: string) => Float32Array | null;
+  /** 8.2.0 — canonical keys other surfaces showed recently (songIdentity's served memory): a small penalty, never a rule. */
+  servedKeys?: ReadonlySet<string>;
+  /** 8.2.0 — ids that opened the last accepted continuation after this same seed (./recMemory.ts): held back a little. */
+  seedRepeatIds?: ReadonlySet<string>;
 }
 
 /** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */
-export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'soft-muted' | 'language-lock' | 'off-language' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'discovery-share' | 'invalid';
+export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'soft-muted' | 'language-lock' | 'off-language' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'discovery-share' | 'invalid' | 'no-audio';
 
 /**
  * 7.2.0 — a soft rule the sequencer or the validator had to give up on

@@ -27,7 +27,7 @@ vi.mock('@/services/personalization/updater', async (importOriginal) => {
   };
 });
 vi.mock('@/services/feedback', () => ({ sendFeedback: vi.fn(async () => true) }));
-vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn() }));
+vi.mock('@/services/downloads', () => ({ downloadSong: vi.fn(), removeDownload: vi.fn(), lastDownloadFailure: vi.fn(() => null), downloadFailureMessage: vi.fn(() => 'Download failed — please try again') }));
 
 import { usePlayerStore } from '@/store/playerStore';
 import { useToastStore } from '@/store/toastStore';
@@ -192,6 +192,16 @@ describe('<TrackMenu />', () => {
     expect(removed).toBe(2);
     add.mockRestore();
     remove.mockRestore();
+  });
+
+  it('8.2 — "Start AI Radio" starts endless radio from the song and says so', () => {
+    const startRadio = vi.fn();
+    usePlayerStore.setState({ startRadio });
+    mount();
+    fireEvent.click(trigger());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Start AI Radio' }));
+    expect(startRadio).toHaveBeenCalledWith(song);
+    expect(useToastStore.getState().toasts.slice(-1)[0]?.message).toBe(`AI Radio: ${song.title}`);
   });
 });
 

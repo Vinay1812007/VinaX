@@ -20,7 +20,7 @@
  * nothing usable (or the key is missing), and the caller says so plainly
  * rather than falling back to a stale hard-coded menu.
  */
-import { LANE_BASE, type AiEnv } from './ai';
+import { LANE_BASE, laneCoolingDown, type AiEnv, type Lane } from './ai';
 
 /** Slug fragments that mark a model as a TEXT-TO-SPEECH engine. The chat
  *  filter throws these away; the voice picker is the one place they belong.
@@ -268,14 +268,24 @@ export async function resolveCatalogModel(
  *  usable. Callers must treat that as "this lane is not available right now"
  *  rather than falling back to a guessed slug. */
 export async function catalogDefaultModel(env: AiEnv, provider: CatalogProvider): Promise<string | null> {
-  const models = await fetchCatalog(env, provider);
-  if (!models.length) return null;
+  const all = await fetchCatalog(env, provider);
+  if (!all.length) return null;
+  // 8.2.0 — a listed model that just answered 404/5xx/429 on this lane is
+  // cooling down (see _lib/ai.ts): the default moves to the next listed one
+  // instead of sending every listener to the same dead slug. When every row
+  // is cooling the full list is used, so the lane is never emptied by it.
+  const lane = CATALOG_LANE[provider];
+  const live = all.filter((m) => !laneCoolingDown(lane, m.id));
+  const models = live.length ? live : all;
   for (const want of PREFERRED[provider]) {
     const hit = models.find((m) => m.id.toLowerCase().includes(want));
     if (hit) return hit.id;
   }
   return models[0].id;
 }
+
+/** The chat lane each catalog key rides (see LANE_ENV in _lib/ai.ts). */
+const CATALOG_LANE: Record<CatalogProvider, Lane> = { grq: 'scholar', opr: 'router' };
 
 /** Clear the isolate caches — tests only. */
 export function resetCatalogCache(): void {

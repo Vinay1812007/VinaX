@@ -5,7 +5,7 @@
  * degraded chat lane — the trio that broke "AI always generates the same
  * playlist". */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { filterAvoided, onRequestPost, titleKey, varietySeed } from './playlist';
+import { filterAvoided, onRequestPost, readRequest, titleKey, varietySeed } from './playlist';
 
 describe('varietySeed', () => {
   it('emits a hex nonce plus an IST date-hour stamp', () => {
@@ -139,5 +139,40 @@ describe('onRequestPost — variety plumbing end to end', () => {
     expect(nonces).toHaveLength(2);
     expect(nonces[0]).toBeDefined();
     expect(nonces[0]).not.toBe(nonces[1]);
+  });
+});
+
+describe('readRequest (8.2.0)', () => {
+  it('reads language, activity and energy from a workout request', () => {
+    expect(readRequest('Make me a Telugu workout playlist with high-energy songs.')).toEqual({ languages: ['telugu'], activity: 'workout', energy: 'high' });
+  });
+  it('infers the energy an activity implies and reads film-industry names', () => {
+    expect(readRequest('bollywood songs for the gym')).toEqual({ languages: ['hindi'], activity: 'workout', energy: 'high' });
+    expect(readRequest('something to study to')).toMatchObject({ activity: 'focus', energy: 'low' });
+  });
+  it('leaves unknowns empty', () => {
+    expect(readRequest('surprise me')).toEqual({ languages: [], activity: null, energy: null });
+  });
+});
+
+describe('onRequestPost — request reading (8.2.0)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('puts the reading in the prompt and lets a named language outrank saved preferences', async () => {
+    const users: string[] = [];
+    vi.stubGlobal('fetch', async (_url: unknown, init?: { body?: string }) => {
+      const payload = JSON.parse(init?.body ?? '{}') as { messages: Array<{ content: string }> };
+      users.push(payload.messages[1]?.content ?? '');
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ name: 'Lift', description: 'd', songs: [{ title: 'A', artist: 'B' }] }) } }] }), { status: 200 });
+    });
+    const res = await onRequestPost({
+      request: new Request('http://localhost/api/playlist', { method: 'POST', body: JSON.stringify({ prompt: 'Make me a Telugu workout playlist with high-energy songs.', languages: ['hindi'] }) }),
+      env: { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key' },
+    });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { reading: unknown };
+    expect(data.reading).toEqual({ languages: ['telugu'], activity: 'workout', energy: 'high' });
+    expect(users.some((u) => u.includes('preferredLanguages: ["telugu"]'))).toBe(true);
+    expect(users.some((u) => u.includes('requestReading: {"languages":["telugu"],"activity":"workout","energy":"high"}'))).toBe(true);
   });
 });

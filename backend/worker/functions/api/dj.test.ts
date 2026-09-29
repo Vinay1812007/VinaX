@@ -95,6 +95,21 @@ describe('POST /api/dj', () => {
     expect(opts.ladder[0]).toBe('scholar');
     expect(messages[0].content).toMatch(/music director is the strongest style signal/);
   });
+  it('8.2.0 — hands chat() an accept check: an answer with no usable pick asks the next engine', async () => {
+    chatMock.mockResolvedValue({ content: JSON.stringify({ intro: '', songs: [{ title: 'Butta Bomma', artist: 'Armaan Malik' }] }), model: 'm', keyRole: 'scholar', status: 200, error: null });
+    await post({ context: { seedSong: 'Butta Bomma — Armaan Malik' }, pool, count: 5 });
+    const opts = chatMock.mock.calls[0][2] as { accept?: (c: string) => boolean };
+    expect(typeof opts.accept).toBe('function');
+    expect(opts.accept!('not json at all')).toBe(false);
+    expect(opts.accept!(JSON.stringify({ songs: [{ title: 'Invented', artist: 'Nobody' }] }))).toBe(false);
+    expect(opts.accept!(JSON.stringify({ songs: [{ songId: 'p2' }] }))).toBe(true);
+  });
+  it('8.2.0 — every engine refused: the route still answers an honest 500, not a hang', async () => {
+    chatMock.mockResolvedValue({ content: null, model: null, error: 'invalid_output', status: 200 });
+    const { status, json } = await post({ context: { seedSong: 'x' }, pool, count: 5 });
+    expect(status).toBe(500);
+    expect(json.error).toBe('invalid_output');
+  });
   it('v7.1.0 — forwards album, year and familiarity to the DJ, sanitised, and asks for familiar-first ordering in the seed language', async () => {
     chatMock.mockResolvedValue({ content: JSON.stringify({ intro: '', songs: [] }), model: 'm', keyRole: 'dj', status: 200, error: null });
     const rich = pool.map((p, i) => ({ ...p, album: i === 0 ? `  Ala   Vaikunthapurramuloo  ` : 'x'.repeat(500), year: i === 0 ? '2020' : 'last year', known: i === 0 ? true : 'yes' }));

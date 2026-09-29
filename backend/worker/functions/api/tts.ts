@@ -92,21 +92,32 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     text = text.slice(0, sp > 80 ? sp : INPUT_MAX).trim();
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), UPSTREAM_LEASH_MS);
-  let upstream: Response;
-  try {
-    upstream = await fetch(SPEECH_ENDPOINT, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, voice, input: text, response_format: 'wav' }),
-      signal: controller.signal,
-    });
-  } catch {
-    clearTimeout(timer);
-    return json({ error: 'unreachable' }, 502);
+  const speak = async (m: string): Promise<Response | null> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPSTREAM_LEASH_MS);
+    try {
+      return await fetch(SPEECH_ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model: m, voice, input: text, response_format: 'wav' }),
+        signal: controller.signal,
+      });
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  let upstream = await speak(model);
+  // 8.2.0 — the listener's chosen voice model failed (retired between the
+  // catalog read and now, or the provider's side of it is down): the default
+  // voice model answers instead of the device's fallback voice. A 429 is the
+  // key's budget, which the default shares, so it is passed through as is.
+  if (model !== TTS_MODEL && (!upstream || (!upstream.ok && upstream.status !== 429))) {
+    void upstream?.body?.cancel().catch(() => undefined);
+    upstream = await speak(TTS_MODEL);
   }
-  clearTimeout(timer);
+  if (!upstream) return json({ error: 'unreachable' }, 502);
   if (!upstream.ok || !upstream.body) {
     void upstream.body?.cancel().catch(() => undefined);
     // 429 passes through so the client can tell budget from breakage; every

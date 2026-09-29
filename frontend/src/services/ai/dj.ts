@@ -56,7 +56,9 @@ const DISCOVERY_FOCI = [
   'a deep cut from a favourite album',
 ];
 
-let aiAvailable: boolean | null = null; // false after a 503: the key is not configured on this deployment
+// false after a 503 that says the DJ is not set up or switched off on this
+// deployment (ai_not_configured / ai_disabled) — the only permanent answer.
+let aiAvailable: boolean | null = null;
 let retryAfter = 0;
 
 /** 7.2.0 — how the last DJ request ended, for the caller's fallback accounting. */
@@ -398,9 +400,12 @@ export async function djSequence(seed: Song | null, ctx: RecommendationContext, 
       signal: controller.signal,
     });
     if (res.status === 503) {
-      // Not configured, switched off by the owner, or over its budget: the
-      // on-device order plays for the rest of this session.
-      aiAvailable = false;
+      // 8.2.0 — only "not set up" or "switched off" is final for the session.
+      // Over today's budget or a passing outage just backs off: the DJ comes
+      // back on its own once the service does.
+      const code = ((await res.json().catch(() => null)) as { error?: unknown } | null)?.error;
+      if (code === 'ai_not_configured' || code === 'ai_disabled') aiAvailable = false;
+      else backOff(code === 'ai_over_budget' ? 15 * 60_000 : 60_000);
       lastOutcome = 'unavailable';
       return null;
     }

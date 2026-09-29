@@ -10,8 +10,14 @@ import type { Song } from '@/types';
 vi.mock('@/services/native', () => ({ isNativePlatform: () => false }));
 vi.mock('@/services/ai/taste', () => ({ buildTasteSnapshot: () => ({}) }));
 vi.mock('@/services/api', () => ({ searchSongs: vi.fn() }));
+// 8.2.0 — the server embedding engine is out of these tests (the catalogue pool ranks on-device).
+vi.mock('@/services/ai/embeddings', async (importActual) => {
+  const actual = await importActual<typeof import('./embeddings')>();
+  return { cosine: actual.cosine, activeEmbeddingModel: () => null, embedQueryDetailed: async () => null, embedSongs: async () => undefined, getCachedEmbedding: () => null };
+});
 
-import { generatePlaylist, loadAvoidTitles, recordAvoidTitles, resolveSuggestions } from './playlist';
+import { failureReason, gatherCataloguePool, generatePlaylist, loadAvoidTitles, playlistErrorCopy, recordAvoidTitles, resolveSuggestions } from './playlist';
+import { parseMusicIntent } from './musicIntent';
 import { searchSongs } from '@/services/api';
 
 const AVOID_KEY = 'vinax.aiplaylist.avoid.v1';
@@ -71,8 +77,9 @@ describe('generatePlaylist — avoid-list plumbing', () => {
     expect(sentBody.avoidTitles).toEqual(['Previously Generated']);
     // The new generation's titles now lead the memory for the NEXT request:
     // resolved catalog titles first (mock resolves "<title> <artist>" as the
-    // catalog title), then the model's own titles, then the old memory.
-    expect(loadAvoidTitles().slice(0, 5)).toEqual(['Alpha X', 'Beta Y', 'Alpha', 'Beta', 'Previously Generated']);
+    // catalog title), then the model's own titles, then (8.2.0) the catalogue
+    // songs that filled the list, then the old memory.
+    expect(loadAvoidTitles().slice(0, 6)).toEqual(['Alpha X', 'Beta Y', 'Alpha', 'Beta', 'melody songs', 'Previously Generated']);
   });
 });
 
@@ -134,8 +141,9 @@ describe('v7.0.0 — the catalogue song that IS the suggestion wins', () => {
     vi.mocked(searchSongs).mockImplementation(async (q: string) => [song(`id-${q}`, q)]);
     const res = await generatePlaylist('evening drive', [], []);
     vi.unstubAllGlobals();
-    expect(res).toMatchObject({ ok: true, playlist: { name: 'evening drive', description: '' } });
-    expect(res.ok && res.playlist.songs).toHaveLength(1);
+    expect(res).toMatchObject({ ok: true, playlist: { name: 'evening drive', description: '', source: 'ai' } });
+    // The one valid suggestion leads; 8.2.0 — the catalogue pool fills in behind it.
+    expect(res.ok && res.playlist.songs[0].id).toBe('id-Gamma Z');
   });
 
   it('stops resolving when the caller goes away', async () => {
@@ -144,5 +152,75 @@ describe('v7.0.0 — the catalogue song that IS the suggestion wins', () => {
     vi.mocked(searchSongs).mockReset();
     expect(await resolveSuggestions([{ title: 'Alpha', artist: 'X' }], 25, [], [], [], ctrl.signal)).toEqual([]);
     expect(searchSongs).not.toHaveBeenCalled();
+  });
+});
+
+describe('8.2.0 — intent-aware playlists', () => {
+  const lang = (id: string, language: string, title = id): Song => ({ ...song(id, title), language, artists: [] }) as unknown as Song;
+
+  it('lets a language named in the prompt outrank the saved languages, and searches the catalogue in short phrasings', async () => {
+    let sent: Record<string, unknown> = {};
+    vi.stubGlobal('fetch', async (_url: unknown, init?: { body?: string }) => {
+      sent = JSON.parse(init?.body ?? '{}') as Record<string, unknown>;
+      return { ok: true, status: 200, json: async () => ({ name: 'Lift', description: 'd', songs: [{ title: 'Pick', artist: 'A' }] }) } as unknown as Response;
+    });
+    vi.mocked(searchSongs).mockImplementation(async (q: string) =>
+      q === 'Pick A' ? [lang('pick', 'telugu', 'Pick')] : Array.from({ length: 5 }, (_, i) => lang(`${q}-${i}`, i % 2 ? 'hindi' : 'telugu', `${q} ${i}`)),
+    );
+    const res = await generatePlaylist('Make me a Telugu workout playlist with high-energy songs.', ['hindi'], []);
+    vi.unstubAllGlobals();
+    expect(sent.languages).toEqual(['telugu']);
+    const queries = vi.mocked(searchSongs).mock.calls.map((c) => c[0]);
+    expect(queries).toContain('telugu dance songs');
+    expect(queries).toContain('telugu mass songs');
+    expect(queries.some((q) => /workout|high/.test(q))).toBe(false);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.playlist.songs[0].id).toBe('pick');
+    expect(res.playlist.songs.length).toBeGreaterThan(1);
+    expect(res.playlist.songs.every((s) => s.language === 'telugu')).toBe(true);
+  });
+
+  it('builds from the catalogue when the curator is over budget', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'ai_over_budget' }), { status: 503 }));
+    // Fresh titles: the served-songs memory (module-level) remembers the previous test's.
+    vi.mocked(searchSongs).mockImplementation(async (q: string) => Array.from({ length: 6 }, (_, i) => lang(`b-${q}-${i}`, 'telugu', `Budget ${q} ${i}`)));
+    const res = await generatePlaylist('telugu workout songs', [], []);
+    vi.unstubAllGlobals();
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.playlist.source).toBe('catalogue');
+    expect(res.playlist.name).toBe('Telugu Workout Mix');
+    expect(res.playlist.songs.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('reports a temporary refusal as busy and a switch-off as disabled when the catalogue cannot help', async () => {
+    vi.mocked(searchSongs).mockResolvedValue([]);
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'ai_over_budget' }), { status: 503 }));
+    expect(await generatePlaylist('telugu workout songs', [], [])).toEqual({ ok: false, reason: 'busy' });
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: 'ai_disabled' }), { status: 503 }));
+    expect(await generatePlaylist('telugu workout songs', [], [])).toEqual({ ok: false, reason: 'disabled' });
+    vi.unstubAllGlobals();
+  });
+
+  it('maps failed answers to reasons', async () => {
+    expect(await failureReason(new Response('{"error":"ai_disabled"}', { status: 503 }))).toBe('disabled');
+    expect(await failureReason(new Response('{"error":"ai_not_configured"}', { status: 503 }))).toBe('not_configured');
+    expect(await failureReason(new Response('{"error":"ai_over_budget"}', { status: 503 }))).toBe('busy');
+    expect(await failureReason(new Response('', { status: 503 }))).toBe('busy');
+    expect(await failureReason(new Response('', { status: 429 }))).toBe('busy');
+    expect(await failureReason(new Response('', { status: 500 }))).toBe('error');
+  });
+
+  it('only says AI is off when it really is', () => {
+    expect(playlistErrorCopy('disabled')).toMatch(/turned off/);
+    expect(playlistErrorCopy('busy')).toMatch(/try again in a minute/);
+    expect(playlistErrorCopy('busy')).not.toMatch(/not enabled|turned off/);
+  });
+
+  it('keeps the catalogue pool in the named language and out of the avoid list', async () => {
+    vi.mocked(searchSongs).mockImplementation(async () => [lang('t1', 'telugu', 'Keep'), lang('h1', 'hindi', 'Other'), lang('t2', 'telugu', 'Avoided')]);
+    const pool = await gatherCataloguePool(parseMusicIntent('telugu party'), ['telugu'], [], ['Avoided']);
+    expect(pool.map((s) => s.id)).toEqual(['t1']);
   });
 });

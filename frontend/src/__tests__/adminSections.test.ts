@@ -287,7 +287,7 @@ describe('AI Operations', () => {
     expect(body.key).toBe('ai-controls');
     expect(body.value.emergencyOff).toBe(true);
     expect(body.value.features.tts).toBe(false);
-    expect(Object.keys(body.value.features)).toHaveLength(11);
+    expect(Object.keys(body.value.features)).toHaveLength(12);
     expect(body.value.dailyTokenCap).toBe(100000);
   });
 

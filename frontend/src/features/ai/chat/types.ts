@@ -81,6 +81,9 @@ export interface Msg {
   followups?: string[];
   /** v7.1 — what an agentic engine did on the way to this reply. */
   steps?: AgentStep[];
+  /** 8.2.0 — no reply arrived (the text is the failure line); the thread
+   *  offers Retry, and the line is never sent back to the assistant. */
+  failed?: boolean;
 }
 
 export interface Conversation {

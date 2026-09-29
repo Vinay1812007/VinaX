@@ -56,7 +56,7 @@ import { decideRecVariant, EXP_REC_CONFIG, EXP_REC_NEXT_SONGS, resetRecExperimen
 import { applyWeightOverrides, resetWeightOverrides } from '@/services/recommendation/weights';
 
 const song = (id: string): Song => ({ kind: 'song', id, title: `Title ${id}`, subtitle: `Artist ${id}`, artists: [{ id: `a-${id}`, name: `Artist ${id}` }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: '2024', explicit: false, hasLyrics: false, playCount: null });
-const ALG = '7.2.0/1.2.0';
+const ALG = '8.2.0/1.2.0';
 
 let experiments: unknown[] = [];
 const fetchMock = vi.fn(async (url: unknown, _init?: unknown) => {

@@ -268,6 +268,9 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
     `styleAngle: "${angle}" — let it colour one or two picks. Opening feel: ${opener}. ` +
     (wantSegues ? '' : 'Segues are NOT needed this round: set every "segue" to "". ') +
     'JSON only.';
+  // Structural anti-repeat for proposals: whatever the model claims, a title
+  // the listener just heard or was already offered never comes back.
+  const avoidBlob = maxDiscover > 0 ? (JSON.stringify(ctx.avoidSongs ?? '') + JSON.stringify(ctx.recentlyPlayed ?? '') + JSON.stringify(ctx.skippedSongs ?? '')).toLowerCase() : '';
   const r = await chat(
     env,
     [
@@ -282,13 +285,13 @@ async function handlePost(context: { request: Request; env: AiEnv & SupabaseEnv;
     // 8.0.0 — the maestro lane leads when its key is set (a stronger musical
     // ear for transitions, eras and composers); scholar is its first failover.
     // Its same-key lighter sibling is skipped: scholar is faster than a retry.
-    { temperature: 0.75, lane: env.VINAX_GGL_GEMINI_API_KEY ? 'maestro' : 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: env.VINAX_GGL_GEMINI_API_KEY ? 12_000 : 9_000, skipSecondary: true, ladder: env.VINAX_GGL_GEMINI_API_KEY ? ['scholar', 'dj', 'fast', 'chat', 'home'] : ['dj', 'fast', 'chat', 'home'], deadlineAt, feature: 'dj' },
+    { temperature: 0.75, lane: env.VINAX_GGL_GEMINI_API_KEY ? 'maestro' : 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: env.VINAX_GGL_GEMINI_API_KEY ? 12_000 : 9_000, skipSecondary: true, ladder: env.VINAX_GGL_GEMINI_API_KEY ? ['scholar', 'dj', 'fast', 'chat', 'home'] : ['dj', 'fast', 'chat', 'home'], deadlineAt, feature: 'dj',
+      // 8.2.0 — a 200 with no usable pick (unparseable JSON, ids outside the
+      // pool) asks the next engine instead of failing the set.
+      accept: (content) => parsePicks(content, pool, count, maxDiscover, avoidBlob).songs.length > 0 },
   );
   // The controls changed while this request ran: same honest 503, nothing logged as a failed call.
   if (isAiBlocked(r.error)) return refuse(r.error);
-  // Structural anti-repeat for proposals: whatever the model claims, a title
-  // the listener just heard or was already offered never comes back.
-  const avoidBlob = maxDiscover > 0 ? (JSON.stringify(ctx.avoidSongs ?? '') + JSON.stringify(ctx.recentlyPlayed ?? '') + JSON.stringify(ctx.skippedSongs ?? '')).toLowerCase() : '';
   const { intro, songs } = r.error ? { intro: '', songs: [] as DjPick[] } : parsePicks(r.content, pool, count, maxDiscover, avoidBlob);
   if (r.error !== 'not_configured') {
     const log = logAiEvent(env, {

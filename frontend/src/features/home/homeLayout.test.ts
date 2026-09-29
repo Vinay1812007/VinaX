@@ -64,6 +64,14 @@ describe('composeHomeLayout', () => {
     expect(after.source).toBe('listener');
   });
 
+  it('8.2 — says whether someone chose the order, so Home only reorders itself when nobody did', () => {
+    expect(composeHomeLayout(null, undefined).orderChosen).toBe(false);
+    expect(composeHomeLayout(null, { hidden: ['feed'] }).orderChosen).toBe(false); // owner hid shelves only
+    expect(composeHomeLayout(null, { title: 'Festival week' }).orderChosen).toBe(false);
+    expect(composeHomeLayout(null, { order: ['charts', 'quick'] }).orderChosen).toBe(true);
+    expect(composeHomeLayout({ ...DEFAULT_HOME }, null).orderChosen).toBe(true); // Home Studio layout
+  });
+
   it('never yields an empty Home: listener hides are dropped if they would hide everything', () => {
     const local = { ...DEFAULT_HOME, hidden: ALL.slice(1) as never[] };
     const c = composeHomeLayout(local, { hidden: ['quick'] });
