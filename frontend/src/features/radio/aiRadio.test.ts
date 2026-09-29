@@ -119,6 +119,16 @@ describe('8.3.0 — DJ remix and folk radio', () => {
     expect(pickRadioSeeds([list], { style: 'folk' })[0].id).toBe('f1');
   });
 
+  it('8.3.1 — "dj" in a film name, or a remix turned down, is no DJ radio', () => {
+    expect(parseRadioPrompt('DJ Tillu').intent).toBeNull();
+    expect(promptQueries(parseRadioPrompt('dj tillu songs'), 'telugu')).toEqual(['dj tillu songs']);
+    expect(parseRadioPrompt('arijit singh songs without remix').intent).toBeNull();
+    expect(promptQueries(parseRadioPrompt('arijit singh songs without remix'), 'hindi')).toEqual(['arijit singh songs without remix']);
+    // Native-script words name a style too.
+    expect(parseRadioPrompt('भजन').intent).toBe('devotional');
+    expect(parseRadioPrompt('జానపద పాటలు').intent).toBe('folk');
+  });
+
   it('a style request seeds from the style', async () => {
     const search = vi.fn(async (q: string) => (q === 'telugu dj remix' ? [makeSong('film', { title: 'Film Hit', artist: 'X' }), dj('d1', 'Silaka 2 (DJ Remix)', 'Laxmi Dasa'), dj('d2', 'Mama Nagulo (DJ Remix Song)', 'Peddapuli Eeswar')] : []));
     const r = await seedsForPrompt('telugu dj songs', null, { search });

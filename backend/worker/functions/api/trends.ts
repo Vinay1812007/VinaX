@@ -1,7 +1,8 @@
 /**
  * GET /api/trends?region=&language=&source=&limit=
  *
- * Verified trends: public-chart and editorial entries that were matched with
+ * Verified trends: public-chart and editorial entries, and (8.3.1, kind `web`)
+ * songs found on the web and accepted by a person, that were matched with
  * confidence to catalogue songs, each with its source, rank, evidence link
  * and observation time, plus the status of every source (ok, stale,
  * unavailable, disabled, not_configured). The contract and every threshold

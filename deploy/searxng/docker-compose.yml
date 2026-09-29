@@ -9,12 +9,16 @@
 # network only, and the proxy forwards a request to it only when it carries
 # `Authorization: Bearer <SEARXNG_TOKEN>` — so the instance is never an open
 # proxy for anyone who finds the hostname.
+#
+# Both images are pinned. To update, pick newer tags (SearXNG publishes
+# `YYYY.M.D-<commit>` tags; the proxy `2.<minor>-alpine`), change them here,
+# then `docker compose pull && docker compose up -d` (README.md, Maintenance).
 
 name: vinax-search
 
 services:
   searxng:
-    image: docker.io/searxng/searxng:latest
+    image: docker.io/searxng/searxng:2026.9.25-12f8b6515
     restart: unless-stopped
     environment:
       # server.secret_key — SearXNG refuses to start without it.
@@ -30,12 +34,25 @@ services:
       - "8080"
     networks:
       - internal
+    # The image's entrypoint neither changes owners (FORCE_OWNERSHIP is off)
+    # nor switches users, so SearXNG needs no capability at all. Because of
+    # that it cannot read a settings.yml that only your login may read: keep
+    # the file world-readable (chmod 644), see README.md.
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    # The proxy waits for this before it starts forwarding.
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/searxng/.venv/bin/python
+        - -c
+        - "import urllib.request as u\nfor h in ('127.0.0.1', '[::1]'):\n  try:\n    u.urlopen(f'http://{h}:8080/healthz', timeout=3)\n    raise SystemExit(0)\n  except OSError:\n    pass\nraise SystemExit(1)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging:
       driver: json-file
       options:
@@ -43,10 +60,13 @@ services:
         max-file: "3"
 
   proxy:
-    image: docker.io/library/caddy:2-alpine
+    image: docker.io/library/caddy:2.11-alpine
     restart: unless-stopped
     depends_on:
-      - searxng
+      searxng:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "80:80"
       - "443:443"
@@ -54,6 +74,9 @@ services:
     environment:
       SEARXNG_HOSTNAME: ${SEARXNG_HOSTNAME:?Set SEARXNG_HOSTNAME in .env}
       SEARXNG_TOKEN: ${SEARXNG_TOKEN:?Set SEARXNG_TOKEN in .env (openssl rand -hex 32)}
+      # Only while rotating the token (README.md): the old value, still
+      # accepted until the Worker has the new one. Unset → the current token.
+      SEARXNG_TOKEN_PREVIOUS: ${SEARXNG_TOKEN_PREVIOUS:-${SEARXNG_TOKEN}}
     volumes:
       - ./proxy.conf:/etc/caddy/Caddyfile:ro
       - proxy-data:/data

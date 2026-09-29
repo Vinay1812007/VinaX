@@ -20,7 +20,8 @@ import type { ArcShape } from './sequencer';
 import { tunePromptHint, tuneScoreAdjust, tuneSearchQuery, tuneShape, type TuneIntent } from './tune';
 import type { Mood } from './mood';
 import { activeWeightsVersion, STYLE_MIN_SHARE } from './weights';
-import { matchesStyle, remixWorkKey, sessionStyle, styleEvidence, styleLabel, styleWhy } from './style';
+import { matchesStyle, remixWorkKey, sessionStyle, styleEvidence, styleLabel, styleWhy, type StylePlay } from './style';
+import { isSkippedPlay } from '@/utils/plays';
 import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from './deadlines';
 import { trendSignalNow } from '@/services/trends/signal';
 import { useDownloadsStore } from '@/store/downloadsStore';
@@ -208,6 +209,8 @@ const AI_BUDGET_MS = 24_000;
 const RANK_RESERVE_MS = 700;
 /** Songs kept in the validated reserve behind a continuation. */
 const RESERVE_SIZE = 12;
+/** 8.3.1 — a sitting ends after this much silence (as in services/personalization/sessionIntent). */
+const SITTING_GAP_MS = 45 * 60_000;
 
 /** Resolve with `fallback` once `ms` passes or the signal aborts; a late answer is ignored. */
 function within<T>(p: Promise<T>, ms: number, fallback: T, signal?: AbortSignal): Promise<{ value: T; late: boolean }> {
@@ -288,14 +291,28 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // 8.3.0 — the style the listener is in (DJ remixes, folk, devotional): from
   // the tune, the seed, and the plays behind it (./style.ts). It brings its own
   // candidates, lifts songs in it, and holds most of the stretch to it.
-  const activeStyle = sessionStyle({ seed, recent: ctx.history.slice(0, 6).map((e) => e.song), previous, tune, moodPin: ctx.moodPin });
+  // 8.3.1 — a skipped play does not say the style (only plays the listener let run count),
+  // and two skipped songs of the style this sitting end a style the songs set.
+  const skippedNow = (e: { song: Song; completed?: boolean; skipped?: boolean; listenedSec?: number }): boolean => isSkippedPlay(e) || !!ctx.sessionIntent?.skippedSongIds.has(e.song.id);
+  const sitting: StylePlay[] = [];
+  for (let i = 0, edge = t0; i < Math.min(ctx.history.length, 12); i += 1) {
+    const e = ctx.history[i];
+    if (!e?.song || edge - e.ts > SITTING_GAP_MS) break;
+    sitting.push({ song: e.song, skipped: skippedNow(e) });
+    edge = e.ts;
+  }
+  const heard = ctx.history.slice(0, 12).filter((e) => e?.song && !skippedNow(e)).slice(0, 6).map((e) => e.song);
+  const activeStyle = sessionStyle({ seed, recent: heard, sitting, previous, tune, moodPin: ctx.moodPin });
   const style = activeStyle?.style ?? null;
   const isStyled = (s: Song): boolean => !!style && matchesStyle(s, style);
   // 7.2.0 — verified charts, read from the snapshot already in memory (never waited for).
   const trend = trendSignalNow(ctx);
   // 8.2.0 — what other surfaces showed lately, and how the last accepted
   // continuation after this same song opened: small penalties in the scorer.
-  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery, style, trendBonus: trend.bonus, trendLabel: trend.label, servedKeys: servedKeySet(), seedRepeatIds: lastSeedContinuation(seed) };
+  // 8.3.1 — under "Switch language" the style is searched in the language the queue switches TO
+  // (the same pinned-first choice as the lock below); with no such language, not at all.
+  const styleLanguage = tune === 'different-language' ? ctx.pinnedLanguages.find((l) => l !== seedLanguage) ?? null : undefined;
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery, style, ...(styleLanguage !== undefined ? { styleLanguage } : {}), trendBonus: trend.bonus, trendLabel: trend.label, servedKeys: servedKeySet(), seedRepeatIds: lastSeedContinuation(seed) };
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
   const library = useLibraryStore.getState();

@@ -20,12 +20,13 @@ import { PageHeader } from '@/components/PageHeader';
 import { Chip } from '@/components/Chip';
 import { moodTone } from '@/features/discover/tones';
 import '@/styles/pages/browse.css';
-import { CATALOGUE_LIST_NOTE, CATALOGUE_LIST_TITLE, movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
+import { CATALOGUE_LIST_NOTE, CATALOGUE_LIST_TITLE, evidenceLabel, movementMarker, provenanceLine, rankBadge, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
 
 /**
  * 7.2 — two different things, labelled as what they are:
  *   - "Public charts": catalogue songs the server matched with confidence to
- *     an outside chart entry or an editorial pick, each with its source, rank,
+ *     an outside chart entry, an editorial pick or a song found on the web
+ *     and checked by a person (8.3.1), each with its source, rank,
  *     region, update time and evidence link (services/trends). "Rising" and
  *     "New entry" appear only when the snapshot carries them.
  *   - "Popular in the catalogue": catalogue search results for popular songs.
@@ -92,7 +93,7 @@ function VerifiedRow({ item, onPlay, state }: { item: VerifiedTrend; onPlay: () 
   return (
     <li>
       <div className="vx-chart-row">
-        <span className="vx-chart-rank">{item.sourceKind === 'editorial' ? 'Pick' : `#${item.sourceRank}`}</span>
+        <span className="vx-chart-rank">{rankBadge(item)}</span>
         <button type="button" onClick={onPlay} className="min-w-0 flex-1 text-left" aria-label={`Play ${item.title}`}>
           <span className="vx-chart-title">{item.title}</span>
           <span className="vx-chart-sub">{item.artist}</span>
@@ -108,7 +109,7 @@ function VerifiedRow({ item, onPlay, state }: { item: VerifiedTrend; onPlay: () 
             href={item.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={`Evidence for ${item.title}: ${item.sourceKind === 'editorial' ? 'editorial source' : item.sourceLabel}`}
+            aria-label={`Evidence for ${item.title}: ${evidenceLabel(item)}`}
             className="vx-text-action shrink-0 inline-flex items-center underline underline-offset-2"
           >
             Source

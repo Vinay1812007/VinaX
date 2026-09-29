@@ -46,7 +46,7 @@ import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { pickBySeed, styleAngle } from '../_lib/variety';
 import { canonicalKey } from '../_lib/identityCore';
-import { fenceWebContext, searxngReady, songContext, type SearxngEnv } from '../_lib/searxng';
+import { fenceWebContext, searxngConfigured, songContext, type SearxngEnv } from '../_lib/searxng';
 import { searchCatalogSongs } from '../_lib/trends/catalog';
 
 type DjEnv = AiEnv & SupabaseEnv & SearxngEnv;
@@ -69,7 +69,7 @@ export const STYLE_BRIEF: Record<MusicStyle, string> = {
 
 /** The catalogue phrase for a style, e.g. "telugu dj remix" (lowercase language; probed live to return 20 in-language results). */
 export function stylePhrase(style: MusicStyle, language: string | null): string {
-  const lang = (language ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  const lang = (language ?? '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12);
   const tail = style === 'dj' ? 'dj remix' : style === 'folk' ? 'folk songs' : 'devotional songs';
   return lang ? `${lang} ${tail}` : tail;
 }
@@ -87,6 +87,24 @@ export async function styleCatalogCandidates(phrase: string, timeoutMs = 4_000):
     return found.map((c) => ({ title: c.title, artist: c.primaryArtists[0] ?? '' })).filter((c) => c.title && c.artist);
   } catch {
     return [];
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * 8.3.1 — how long the web context and the style catalogue songs may still
+ * hold up the model call once everything else is ready. They are extras: a
+ * lookup that has not answered by then is left out of this round (and a
+ * web answer that lands later is cached for the next one).
+ */
+export const EXTRAS_WAIT_MS = 1_000;
+
+/** `p`'s value when it settles within `ms`, else `fallback` (a rejection is `fallback` too). Never throws. */
+export async function settleWithin<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([p.catch(() => fallback), new Promise<T>((resolve) => (timer = setTimeout(() => resolve(fallback), ms)))]);
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -308,12 +326,15 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
   let candidates: Candidate[] = [];
   const language = typeof ctx.currentLanguage === 'string' && ctx.currentLanguage ? ctx.currentLanguage : Array.isArray(ctx.preferredLanguages) && typeof ctx.preferredLanguages[0] === 'string' ? (ctx.preferredLanguages[0] as string) : null;
   // 8.3.0 — fresh web evidence for discoveries (see the header), and real
-  // catalogue songs for a locked style. Both run beside the gather, so they
-  // add no latency of their own beyond its 4.5 s.
+  // catalogue songs for a locked style. Both run beside the gather; once it
+  // is done (or when there is none) they get at most EXTRAS_WAIT_MS more, so
+  // they never hold the set up by their own 4 s leashes.
   const freshAsk = wantsFreshMusic([ctx.discoveryFocus, ctx.tuneInstruction, ctx.listenerGoal].filter((x) => typeof x === 'string').join(' '));
   const langWord = (language ?? '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12);
   const webQuery = `new ${langWord ? `${langWord} ` : ''}${style === 'dj' ? 'dj remix songs' : style === 'folk' ? 'folk songs' : style === 'devotional' ? 'devotional songs' : 'songs'}`;
-  const webPromise = maxDiscover > 0 && searxngReady(env) && (freshAsk || flagshipUnavailable(env)) ? songContext(env, webQuery, { timeRange: 'month', timeoutMs: 4_000, limit: 10, tag: 'dj' }) : Promise.resolve(null);
+  const webPromise = maxDiscover > 0 && searxngConfigured(env) && (freshAsk || flagshipUnavailable(env)) ? songContext(env, webQuery, { timeRange: 'month', timeoutMs: 4_000, limit: 10, tag: 'dj' }) : Promise.resolve(null);
+  // A web answer that lands after the wait still fills the context cache for the next round.
+  if (typeof context.waitUntil === 'function') context.waitUntil(webPromise.catch(() => null));
   const stylePromise = maxDiscover > 0 && style ? styleCatalogCandidates(stylePhrase(style, language)) : Promise.resolve([] as Candidate[]);
   if (discover && pool.length < 12) {
     try {
@@ -341,7 +362,7 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
       /* the gather is optional */
     }
   }
-  const [web, styleSongs] = await Promise.all([webPromise, stylePromise]);
+  const [web, styleSongs] = await Promise.all([settleWithin(webPromise, EXTRAS_WAIT_MS, null), settleWithin(stylePromise, EXTRAS_WAIT_MS, [] as Candidate[])]);
   if (styleSongs.length) {
     // Catalogue songs for the style lead the candidates: they are known to exist.
     const seen = new Set([...pool, ...candidates].map((p) => canonKey(p.title, p.artist)));

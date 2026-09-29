@@ -197,6 +197,26 @@ describe('readPublicTrends', () => {
     expect(chartOnly.body.items.map((i) => i.catalogId)).toEqual(['c1']);
   });
 
+  it('8.3.1 — accepted web items carry their own `web` kind and come after editorial picks, so a short list keeps the picks', async () => {
+    const env = { ...BASE, SEARXNG_URL: 'https://search.example.org' };
+    snapshot('web', 'web-new-songs', 1, [['web-a', 1], ['web-b', 2]]);
+    snapshot('editorial', 'editorial', 1, [['ed-1', 1]], { expiresInHours: 100 });
+    successfulRun('web', 1);
+    successfulRun('editorial', 1);
+    match('web', 'web-a', 'w1', 'accepted', 0.95);
+    match('web', 'web-b', 'w2', 'accepted', 0.9);
+    match('editorial', 'ed-1', 'c9', 'matched', 1);
+    const all = await readPublicTrends(env, { region: 'IN', limit: 20, now: NOW });
+    expect(all.body.items.map((i) => [i.source, i.sourceKind, i.sourceLabel])).toEqual([
+      ['editorial', 'editorial', 'Editor’s picks'],
+      ['web', 'web', 'New on the web'],
+      ['web', 'web', 'New on the web'],
+    ]);
+    expect(all.body.sources.find((s) => s.id === 'web')).toMatchObject({ kind: 'web', status: 'ok' });
+    const short = await readPublicTrends(env, { region: 'IN', limit: 1, now: NOW });
+    expect(short.body.items.map((i) => i.catalogId)).toEqual(['c9']);
+  });
+
   it('reports a failed database read as degraded, never as an empty chart that is fine', async () => {
     db.failing.set('vinax_trend_snapshots', 503);
     const { body, degraded } = await readPublicTrends(BASE, { region: 'IN', limit: 20, now: NOW });

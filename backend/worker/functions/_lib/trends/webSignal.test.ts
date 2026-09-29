@@ -8,11 +8,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetSearxngCooldown, type SearxngResponse, type SearxngResult } from '../searxng';
 import { createFakeRest, type FakeRest } from './fakeRest.testutil';
-import { holdForReview, runIngest } from './ingest';
+import { holdForReview, providerBudget, runIngest } from './ingest';
 import type { CatalogCandidate, MatchDecision } from './matcher';
 import { PROVIDERS, providerById } from './registry';
 import { TrendFetchError } from './types';
-import { extractWebCandidates, looksLikeOneSong, mentionKey, webLanguages, webQueries, webSignalProvider } from './webSignal';
+import { extractWebCandidates, looksLikeOneSong, mentionKey, toRawItems, webLanguages, webQueries, webRunFailure, webSignalProvider } from './webSignal';
+import { editorialProvider } from './editorial';
 
 const result = (title: string, over: Partial<SearxngResult> = {}): SearxngResult => ({ title, url: `https://v.example/${encodeURIComponent(title).slice(0, 40)}`, content: '', engines: ['e1'], category: 'videos', author: null, publishedDate: null, score: 1, ...over });
 const ok = (results: SearxngResult[]): SearxngResponse => ({ ok: true, status: 'ok', httpStatus: 200, latencyMs: 10, results, answers: [], infobox: null, suggestions: [], unresponsive: [] });
@@ -72,6 +73,27 @@ describe('extractWebCandidates', () => {
     expect(mentionKey(endhayya)).toBe(mentionKey(`${endhayya} | Label`));
   });
 
+  it('never gives two songs, or two versions of one song, the same identity (a reviewed mapping is reused by it)', async () => {
+    const remix = 'Chuttamalle (DJ Remix) | Devara | Telugu Song';
+    const lyrical = '#Chuttamalle Lyrical Video Song | Devara | Telugu';
+    const fullVideo = 'Chuttamalle Full Video Song | Devara | Telugu';
+    const neeveA = 'Neeve Neeve Song | Amma Nanna O Tamila Ammayi | Ravi Teja';
+    const neeveB = 'Neeve Neeve | Happy | Allu Arjun | Telugu';
+    const neeveFrom = 'Neeve Neeve (From "Happy") | Telugu';
+    expect(mentionKey(remix)).not.toBe(mentionKey(lyrical));
+    expect(mentionKey(neeveA)).not.toBe(mentionKey(neeveB));
+    // Two uploads of the SAME song and version still merge.
+    expect(mentionKey(lyrical)).toBe(mentionKey(fullVideo));
+    // A title with no film segment is told apart by its uploader.
+    expect(mentionKey('Neeve Neeve - Telugu Song', 'Label A')).not.toBe(mentionKey('Neeve Neeve - Telugu Song', 'Label B'));
+    expect(mentionKey(neeveFrom, 'Label A')).toBe(mentionKey(neeveFrom, 'Label B'));
+
+    const cands = extractWebCandidates([{ language: 'telugu', query: 'q', res: ok([result(remix, { score: 3 }), result(lyrical, { score: 2 }), result(neeveA, { score: 1.5 }), result(neeveB, { score: 1 })]) }]);
+    expect(cands).toHaveLength(4);
+    const items = await toRawItems(cands, 'IN', '2026-09-28T06:00:00.000Z');
+    expect(new Set(items.map((i) => i.sourceItemId)).size).toBe(4);
+  });
+
   it('keeps at most twelve per leading language', () => {
     const many = Array.from({ length: 20 }, (_, i) => result(`Song Number ${String.fromCharCode(65 + i)}${String.fromCharCode(65 + i)} | Film ${i} | Full Song`, { score: 20 - i }));
     expect(extractWebCandidates([{ language: 'hindi', query: 'q', res: ok(many) }])).toHaveLength(12);
@@ -79,10 +101,11 @@ describe('extractWebCandidates', () => {
 });
 
 describe('webSignalProvider', () => {
-  it('is registered before editorial, editorial-kind, review-gated, and needs SEARXNG_URL', () => {
-    expect(PROVIDERS.map((p) => p.id)).toEqual(['youtube', 'instagram', 'web', 'editorial']);
+  it('is registered last, is its own `web` kind, review-gated, capped to a third of the match budget, and needs SEARXNG_URL', () => {
+    expect(PROVIDERS.map((p) => p.id)).toEqual(['youtube', 'instagram', 'editorial', 'web']);
     expect(providerById('web')).toBe(webSignalProvider);
-    expect(webSignalProvider.kind).toBe('editorial');
+    expect(webSignalProvider.kind).toBe('web');
+    expect(webSignalProvider.maxMatchShare).toBeCloseTo(1 / 3, 5);
     expect(webSignalProvider.requiresReview).toBe(true);
     expect(webSignalProvider.derivedMetricsAllowed({})).toBe(false);
     expect(webSignalProvider.status({})).toBe('not_configured');
@@ -126,7 +149,86 @@ describe('webSignalProvider', () => {
     vi.stubGlobal('fetch', async () => new Response('down', { status: 503 }));
     const err = await webSignalProvider.fetch({ SEARXNG_URL: 'https://search.example.org' }, { region: 'IN' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(TrendFetchError);
-    expect(err).toMatchObject({ retryable: true, httpStatus: 503 });
+    expect(err).toMatchObject({ code: 'searxng_http_error', retryable: true, httpStatus: 503 });
+  });
+
+  it('a retry that finds the instance resting does not spin: not retryable, and it keeps the ORIGINAL cause', async () => {
+    vi.stubGlobal('fetch', async () => new Response('bad gateway', { status: 502 }));
+    await webSignalProvider.fetch({ SEARXNG_URL: 'https://search.example.org' }, { region: 'IN' }).catch(() => undefined);
+    const err = await webSignalProvider.fetch({ SEARXNG_URL: 'https://search.example.org' }, { region: 'IN' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'searxng_cooling', retryable: false, httpStatus: 502 });
+    expect((err as Error).message).toContain('http_error, HTTP 502');
+  });
+
+  it('a refused token is not retried', async () => {
+    vi.stubGlobal('fetch', async () => new Response('no', { status: 401 }));
+    const err = await webSignalProvider.fetch({ SEARXNG_URL: 'https://search.example.org' }, { region: 'IN' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'searxng_http_error', retryable: false, httpStatus: 401 });
+  });
+
+  it('answers with no result at all are a retryable failure (naming the engines that did not answer), never an empty snapshot', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ results: [], unresponsive_engines: [['video-engine', 'timeout']] }), { status: 200 }));
+    const err = await webSignalProvider.fetch({ SEARXNG_URL: 'https://search.example.org' }, { region: 'IN' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'web_no_results', retryable: true, skip: false });
+    expect((err as Error).message).toContain('video-engine');
+  });
+
+  it('results with no single-song upload skip the run and keep the last snapshot', () => {
+    const e = webRunFailure([{ res: ok([result('Latest Telugu Songs | Playlist')]) }], 0);
+    expect(e).toMatchObject({ code: 'web_no_songs', retryable: false, skip: true });
+    expect(webRunFailure([{ res: ok([result('x')]) }], 1)).toBeNull();
+  });
+});
+
+describe('a run with nothing to store', () => {
+  it('is recorded as skipped — no empty snapshot hides accepted items — and does not fail the job', async () => {
+    const db = createFakeRest();
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const handled = db.handle(url, init);
+      if (handled) return handled;
+      if (url.startsWith('https://search.example.org/')) return Promise.resolve(new Response(JSON.stringify({ results: [{ url: 'https://v.example/p', title: 'Latest Telugu Songs | Playlist', score: 1 }] }), { status: 200 }));
+      return Promise.resolve(new Response('not stubbed', { status: 599 }));
+    });
+    const out = await runIngest(
+      { SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk', SEARXNG_URL: 'https://search.example.org', TRENDS_WEB_LANGUAGES: 'telugu' },
+      { trigger: 'cron', sources: ['web'] },
+      { now: () => new Date('2026-09-28T06:05:00Z'), search: async () => [], lookup: async () => null, sleep: async () => undefined, random: () => 0 },
+    );
+    expect(out.ok).toBe(true);
+    expect(out.runs[0]).toMatchObject({ source: 'web', status: 'skipped', attempts: 1 });
+    expect(out.runs[0].reason).toMatch(/^web_no_songs/);
+    expect(db.tables.vinax_trend_snapshots ?? []).toHaveLength(0);
+  });
+});
+
+describe('match budget share', () => {
+  it('a capped provider gets at most its share of the whole run, less what it already spent; others get what remains', () => {
+    expect(providerBudget(webSignalProvider, 20, 20, 0)).toBe(6);
+    expect(providerBudget(webSignalProvider, 20, 20, 4)).toBe(2);
+    expect(providerBudget(webSignalProvider, 3, 20, 0)).toBe(3);
+    expect(providerBudget(webSignalProvider, 20, 20, 9)).toBe(0);
+    expect(providerBudget(editorialProvider, 14, 20, 0)).toBe(14);
+  });
+
+  it('in a real run the web source stops at its share and defers the rest', async () => {
+    const db = createFakeRest();
+    const titles = Array.from({ length: 10 }, (_, i) => ({ url: `https://v.example/${i}`, title: `Song${String.fromCharCode(65 + i)} Title | Film ${String.fromCharCode(65 + i)} | Full Song | Composer`, score: 10 - i, engines: ['e1'] }));
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const handled = db.handle(url, init);
+      if (handled) return handled;
+      if (url.startsWith('https://search.example.org/')) return Promise.resolve(new Response(JSON.stringify({ results: titles }), { status: 200 }));
+      return Promise.resolve(new Response('not stubbed', { status: 599 }));
+    });
+    let searches = 0;
+    const out = await runIngest(
+      { SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'srk', SEARXNG_URL: 'https://search.example.org', TRENDS_WEB_LANGUAGES: 'telugu' },
+      { trigger: 'cron', sources: ['web'] },
+      { now: () => new Date('2026-09-28T06:05:00Z'), matchBudget: 9, search: async () => { searches += 1; return []; }, lookup: async () => null, sleep: async () => undefined, random: () => 0 },
+    );
+    expect(searches).toBeLessThanOrEqual(3);
+    expect(out.runs[0].deferred).toBeGreaterThan(0);
   });
 });
 

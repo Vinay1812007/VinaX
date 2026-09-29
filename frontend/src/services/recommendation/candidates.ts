@@ -265,7 +265,9 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
     // phrasings, rotated by the salt so the next stretch reaches other songs.
     // The first is required: in a style session it is the pool that matters.
     // (A tune for the same style asks the same query: identical requests are shared.)
-    const styleLanguage = seed.language && seed.language !== 'unknown' ? seed.language : ctx.pinnedLanguages[0] ?? null;
+    // 8.3.1 — under "Switch language" the engine names the language switched to (ctx.styleLanguage):
+    // searching the seed's would fetch only songs the language lock then rejects.
+    const styleLanguage = ctx.styleLanguage !== undefined ? ctx.styleLanguage : seed.language && seed.language !== 'unknown' ? seed.language : ctx.pinnedLanguages[0] ?? null;
     if (ctx.style && styleLanguage && !ctx.mutedLanguages.includes(styleLanguage)) {
       styleQueries(ctx.style, styleLanguage, salt).forEach((q, i) => add('style', `${q.query}:p${q.page}`, search(q.query, q.page, 20), q.query, i === 0));
     }

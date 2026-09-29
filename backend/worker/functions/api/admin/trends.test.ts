@@ -78,8 +78,8 @@ describe('GET dashboard', () => {
     expect(d.providers.map((p: { id: string; status: string }) => [p.id, p.status])).toEqual([
       ['youtube', 'not_configured'],
       ['instagram', 'disabled'],
-      ['web', 'not_configured'],
       ['editorial', 'ok'],
+      ['web', 'not_configured'],
     ]);
     expect(d.providers[1].reason).toMatch(/No verified API/);
     const editorial = d.freshness.find((f: { source: string }) => f.source === 'editorial');

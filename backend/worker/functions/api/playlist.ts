@@ -26,8 +26,8 @@ import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { tasteBlock } from '../_lib/taste';
 import { styleAngle } from '../_lib/variety';
-import { fenceWebContext, searxngReady, songContext, type SearxngEnv } from '../_lib/searxng';
-import { flagshipUnavailable, STYLE_BRIEF, styleCatalogCandidates, stylePhrase, wantsFreshMusic, type MusicStyle } from './dj';
+import { fenceWebContext, searxngConfigured, songContext, type SearxngEnv } from '../_lib/searxng';
+import { EXTRAS_WAIT_MS, flagshipUnavailable, settleWithin, STYLE_BRIEF, styleCatalogCandidates, stylePhrase, wantsFreshMusic, type MusicStyle } from './dj';
 
 type PlaylistEnv = AiEnv & SupabaseEnv & SearxngEnv;
 
@@ -173,12 +173,33 @@ export function readRequest(prompt: string): RequestReading {
   return { languages: languages.slice(0, 3), activity, energy };
 }
 
-/** 8.3.0 — the listening style a request names, if any (DJ remixes win over folk, folk over devotional). Pure. */
+const STYLE_WORDS: Array<[MusicStyle, RegExp]> = [
+  ['dj', /\bdj\b|\bremix(?:es|ed)?\b|\bdance mix(?:es)?\b/g],
+  ['folk', /\bfolk\b|\bjanapad(?:a|alu|am|as)?\b/g],
+  ['devotional', /\bdevotional\b|\bbhakti\b|\bbhajans?\b|\bkeerthanas?\b|\bstotrams?\b/g],
+];
+/** Words that turn the next few words into something the listener does NOT want. */
+const NEGATION = new Set(['no', 'not', 'non', 'without', 'avoid', 'avoiding', 'except', 'excluding', 'exclude', 'skip', 'minus', 'never', 'dont', 'doesnt', 'hate', 'but']);
+
+/** A style word at `index` sits within three words after a negation, inside the same clause. Pure. */
+function negatedAt(s: string, index: number): boolean {
+  const clause = s.slice(0, index).split(/[,.;:!?()]/).pop() ?? '';
+  const words = clause.replace(/['’]/g, '').split(/[\s\-/]+/).filter(Boolean).slice(-3);
+  // "but" negates only as "anything but" / "all but".
+  return words.some((w, i) => NEGATION.has(w) && (w !== 'but' || /^(?:anything|all)$/.test(words[i - 1] ?? '')));
+}
+
+/**
+ * 8.3.0 — the listening style a request names, if any (DJ remixes win over
+ * folk, folk over devotional). 8.3.1: a style word the request negates ("no
+ * remixes", "without dj", "not folk", "avoid devotional", "except remix")
+ * does not count. Pure.
+ */
 export function detectStyle(prompt: string): MusicStyle | null {
   const s = prompt.toLowerCase();
-  if (/\bdj\b|\bremix(?:es|ed)?\b|\bdance mix\b/.test(s)) return 'dj';
-  if (/\bfolk\b|\bjanapad(?:a|alu|am|as)?\b/.test(s)) return 'folk';
-  if (/\bdevotional\b|\bbhakti\b|\bbhajans?\b|\bkeerthanas?\b|\bstotrams?\b/.test(s)) return 'devotional';
+  for (const [style, re] of STYLE_WORDS) {
+    for (const m of s.matchAll(re)) if (!negatedAt(s, m.index ?? 0)) return style;
+  }
   return null;
 }
 
@@ -281,7 +302,9 @@ async function handlePost(context: {
   const webQuery = freshAsk
     ? `${lang && !reading.languages.length ? `${lang} ` : ''}${prompt.slice(0, 120)}`
     : `new ${lang ? `${lang} ` : ''}${style ? stylePhrase(style, null) : 'songs'}`;
-  const webPromise = searxngReady(env) && (freshAsk || flagshipUnavailable(env)) ? songContext(env, webQuery, { timeRange: 'month', timeoutMs: 4_000, limit: 10, tag: 'playlist' }) : Promise.resolve(null);
+  const webPromise = searxngConfigured(env) && (freshAsk || flagshipUnavailable(env)) ? songContext(env, webQuery, { timeRange: 'month', timeoutMs: 4_000, limit: 10, tag: 'playlist' }) : Promise.resolve(null);
+  // A web answer that lands after the wait below still fills the context cache for the next request.
+  if (typeof context.waitUntil === 'function') context.waitUntil(webPromise.catch(() => null));
   const stylePromise = style ? styleCatalogCandidates(stylePhrase(style, lang)) : Promise.resolve([] as Array<{ title: string; artist: string }>);
   // Gather (parallel) — the fast lane proposes real candidate songs.
   let pool: Array<{ title: string; artist: string }> = [];
@@ -309,7 +332,8 @@ async function handlePost(context: {
   } catch {
     /* gather optional */
   }
-  const [web, styleSongs] = await Promise.all([webPromise, stylePromise]);
+  // Extras, not the playlist: once the gather is done (or failed fast) they get at most EXTRAS_WAIT_MS more.
+  const [web, styleSongs] = await Promise.all([settleWithin(webPromise, EXTRAS_WAIT_MS, null), settleWithin(stylePromise, EXTRAS_WAIT_MS, [] as Array<{ title: string; artist: string }>)]);
   if (styleSongs.length) {
     // Real catalogue songs in the style lead the pool.
     const seen = new Set(pool.map((c) => (c.title + '|' + c.artist).toLowerCase()));

@@ -49,9 +49,12 @@ export const TUNE_OPTIONS: readonly TuneOption[] = [
 
 export const isTuneIntent = (v: unknown): v is TuneIntent => TUNE_OPTIONS.some((o) => o.id === v);
 
-/** "Surprise me" picks a concrete intent at random (never itself). */
+/** Styles (./style.ts): a surprise should not lock the queue to DJ remixes, folk or devotional songs. */
+const NOT_A_SURPRISE: ReadonlySet<TuneIntent> = new Set<TuneIntent>(['surprise', 'dj', 'folk', 'devotional']);
+
+/** "Surprise me" picks a concrete intent at random (never itself, never a style). */
 export function randomTune(): TuneIntent {
-  const pool = TUNE_OPTIONS.filter((o) => o.id !== 'surprise');
+  const pool = TUNE_OPTIONS.filter((o) => !NOT_A_SURPRISE.has(o.id));
   return pool[Math.floor(Math.random() * pool.length)].id;
 }
 

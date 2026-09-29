@@ -12,6 +12,17 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.3.1': {
+    title: 'Styles that read songs right, and a steadier web search',
+    changes: [
+      { type: 'fixed', text: 'Film songs from movies called “DJ” or “DJ Tillu”, and songs by singers named Aarti or about a Keerthana, no longer switch the queue to DJ remixes or devotional songs.' },
+      { type: 'fixed', text: 'Skip two DJ remixes, folk songs or devotional songs and the queue stops insisting on that style until you let one play through. A style you pick in Tune this queue stays. Surprise me never locks a style.' },
+      { type: 'fixed', text: 'Typing “DJ Tillu” or “songs without remix” in AI Radio, Search or AI Playlist no longer starts DJ remixes, and “no remixes” in a playlist request is respected. “Arijit Singh remix” now finds that singer’s remixes, and words like भजन, జానపద and பக்தி start the matching style.' },
+      { type: 'improved', text: 'Switch language in a DJ remix session finds DJ remixes in the new language, and several remixes of one song by different DJs play only once.' },
+      { type: 'improved', text: 'The DJ and AI Playlist no longer wait for web search before they start, and reuse recent web results, so they answer sooner.' },
+      { type: 'improved', text: 'On Charts, songs found on the web are labelled New on the web and listed after the editor’s picks, instead of looking like editor’s picks.' },
+    ],
+  },
   '8.3.0': {
     title: 'VinaX 8.3 — DJ remixes and folk songs keep going, and AI that searches the web',
     changes: [

@@ -127,6 +127,41 @@ describe('8.3.0 — a style keeps going', () => {
     expect(lastGatherCtx()).toMatchObject({ style: null });
   });
 
+  it('8.3.1 — skipped remixes do not keep the sitting on DJ: three skipped, then a favourite film song', async () => {
+    const now = Date.now();
+    const remixes = [djSong('r3', 'Silaka', 'Laxmi Dasa'), djSong('r2', 'Koi Koi Kodini Koy', 'Mesala Gurrappa'), djSong('r1', 'Kallu Thaagi', 'Clement')];
+    const earlier = [djSong('r0', 'Peddha Puli', 'Ashok'), djSong('r00', 'Mama Nagulo', 'Hema Chandra')];
+    const plays = (skipped: boolean) => [
+      ...remixes.map((s, i) => makePlay(s, now - (i + 1) * 60_000, skipped ? { completed: false, skipped: true } : {})),
+      ...earlier.map((s, i) => makePlay(s, now - (i + 5) * 60_000)),
+    ];
+    const favourite = film('fav', 'Sid Sriram');
+    const next = djSong('next', 'Jubilee Hills Peddamma Thalli Bonalu', 'Hema Chandra');
+    pool = djPool();
+    // Played through, the same remixes carry the style past the film song…
+    await planNextSongs(favourite, ctx({ history: plays(false) }), { limit: 5, previous: next });
+    expect(lastGatherCtx()).toMatchObject({ style: 'dj' });
+    // …skipped, they do not.
+    await planNextSongs(favourite, ctx({ history: plays(true) }), { limit: 5, previous: next });
+    expect(lastGatherCtx()).toMatchObject({ style: null });
+    // A skip the sitting recorded (no flag on the play) counts the same, and so does the next automatic remix as seed.
+    const intent = { skipStreak: 3, completionStreak: 0, artistPull: {}, languagePull: {}, skippedSongIds: new Set(remixes.map((s) => s.id)), energySteer: 0, discoveryAppetite: 0, size: 3 };
+    const out = await recommendNextSongs(next, ctx({ history: plays(false), sessionIntent: intent }), { limit: 5, previous: next });
+    expect(lastGatherCtx()).toMatchObject({ style: null });
+    // Nothing is held to the style or said to keep it going.
+    expect(out.some((s) => /Keeps the DJ remix going/.test(useReasonStore.getState().reasons[s.id] ?? ''))).toBe(false);
+  });
+
+  it('8.3.1 — "Switch language" in a DJ sitting searches the style in the new language', async () => {
+    pool = djPool();
+    await planNextSongs(seed, ctx({ pinnedLanguages: ['telugu', 'hindi'] }), { limit: 5, tune: 'different-language' });
+    expect(lastGatherCtx()).toMatchObject({ style: 'dj', styleLanguage: 'hindi' });
+    await planNextSongs(seed, ctx({ pinnedLanguages: ['telugu'] }), { limit: 5, tune: 'different-language' });
+    expect(lastGatherCtx()).toMatchObject({ style: 'dj', styleLanguage: null });
+    await planNextSongs(seed, ctx(), { limit: 5 });
+    expect(lastGatherCtx()).not.toHaveProperty('styleLanguage');
+  });
+
   it('a DJ remix or Folk tune sets the style for any seed; a mood tune clears it', async () => {
     pool = djPool();
     await planNextSongs(film('plain', 'Sid Sriram'), ctx(), { limit: 5, tune: 'dj' });

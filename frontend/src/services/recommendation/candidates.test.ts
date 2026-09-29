@@ -290,6 +290,17 @@ describe('8.2 — sources around the seed', () => {
     expect(searched().some((q) => /remix/.test(q))).toBe(false);
   });
 
+  it('8.3.1 — under "Switch language" the style is searched in the language switched to, or not at all', async () => {
+    const seed = makeSong('seed', { title: 'Nadakallo Nadaka (DJ Remix Song)', artist: 'P.N. Lingaraju', language: 'telugu' });
+    await generateNextCandidates(seed, makeContext({ style: 'dj', styleLanguage: 'hindi', salt: 0 }));
+    expect(searched()).toEqual(expect.arrayContaining(['hindi dj remix', 'hindi remix songs']));
+    expect(searched().some((q) => q.startsWith('telugu') && /remix/.test(q))).toBe(false);
+    calls = [];
+    resetCandidateCache();
+    await generateNextCandidates(seed, makeContext({ style: 'dj', styleLanguage: null }));
+    expect(searched().some((q) => /remix/.test(q))).toBe(false);
+  });
+
   it('offers songs like earlier automatic picks that worked, and a rested one itself', async () => {
     const proven = makeSong('p1', { title: 'Worked', artist: 'Past' });
     recordAutoOutcome(proven, 'success', NOW - 5 * 86_400_000);

@@ -86,6 +86,21 @@ describe('8.3.0 — styles in a request', () => {
     expect(catalogQueries(parseMusicIntent('dj remix hindi and punjabi'), [], 4)).toEqual(['hindi dj remix', 'punjabi dj remix', 'hindi remix songs', 'punjabi remix songs']);
   });
 
+  it('8.3.1 — a film called "DJ Tillu" is a name, and the request keeps its own words', () => {
+    const tillu = parseMusicIntent('telugu dj tillu movie songs');
+    expect(tillu).toMatchObject({ style: null, activity: null });
+    expect(catalogQueries(tillu, [], 3)[0]).toBe('dj tillu');
+    expect(looksLikeNaturalLanguage('dj tillu songs')).toBe(false);
+    expect(parseMusicIntent('dj tillu songs for party')).toMatchObject({ style: null, activity: 'party' });
+    // A style with other words: the words are asked for in the style, second.
+    expect(catalogQueries(parseMusicIntent('arijit singh dj remix'), ['hindi'], 3)).toEqual(['hindi dj remix', 'arijit singh remix', 'hindi remix songs']);
+    expect(catalogQueries(parseMusicIntent('spb devotional songs'), ['kannada'], 2)).toEqual(['kannada devotional songs', 'spb devotional']);
+    // A remix turned down names no style.
+    expect(parseMusicIntent('arijit singh songs without remix').style).toBeNull();
+    // Still a party cue when it asks for the DJ sound.
+    expect(parseMusicIntent('telugu dj songs')).toMatchObject({ style: 'dj', activity: 'party' });
+  });
+
   it('names the playlist after the style', () => {
     expect(intentTitle(parseMusicIntent('telugu dj songs'))).toBe('Telugu DJ Remix Mix');
     expect(intentTitle(parseMusicIntent('kannada folk songs'))).toBe('Kannada Folk Mix');

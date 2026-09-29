@@ -14,6 +14,8 @@ describe('tune intents', () => {
     expect(isTuneIntent('chill')).toBe(true);
     expect(isTuneIntent('nope')).toBe(false);
     for (let i = 0; i < 20; i += 1) expect(randomTune()).not.toBe('surprise');
+    // 8.3.1 — a surprise never locks the queue to a style.
+    for (let i = 0; i < 200; i += 1) expect(['surprise', 'dj', 'folk', 'devotional']).not.toContain(randomTune());
   });
 
   it('nudges era and language deterministically from catalogue metadata', () => {

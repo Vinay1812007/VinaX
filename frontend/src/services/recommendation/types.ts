@@ -272,6 +272,13 @@ export interface RecommendationContext {
    * Absent = no style: every surface that does not set it scores as before.
    */
   style?: MusicStyle | null;
+  /**
+   * 8.3.1 — the language the style source searches in, when it is not the
+   * seed's: the language "Switch language" moves the queue to, or null when
+   * there is none to switch to (the source is then skipped). Absent = the
+   * seed's language.
+   */
+  styleLanguage?: string | null;
 }
 
 /** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */

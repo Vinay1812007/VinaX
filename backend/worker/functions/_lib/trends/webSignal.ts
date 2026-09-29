@@ -25,10 +25,13 @@
  *      confident match is filed for the owner's review (ingest.ts) and is
  *      never shown to listeners until a person accepts it.
  *
- * Kind `editorial`: no rank semantics and no momentum — its order is search
- * agreement, not an observed chart position.
+ * Kind `web` (8.3.1; `editorial` in 8.3.0): no rank semantics and no
+ * momentum — its order is search agreement, not an observed chart position —
+ * and listeners see it as "found on the web, checked by VinaX", never as an
+ * editor's pick. Clients older than 8.3.1 do not know the kind and skip these
+ * items.
  */
-import { searxngConfigured, searxngQuery, type SearxngResponse } from '../searxng';
+import { searxngConfigured, searxngLastFailure, searxngQuery, type SearxngResponse, type SearxngStatus } from '../searxng';
 import { normalizeIdentityText } from '../identityCore';
 import { IMPORT_LANGUAGES } from './importer';
 import { parseSourceTitle, scriptLanguage } from './matcher';
@@ -89,10 +92,22 @@ export function looksLikeOneSong(title: string): boolean {
   return lead.length >= 2 && !/^(?:new|latest|trending|songs?|music|video|audio|[a-z]+ songs?)$/i.test(lead);
 }
 
-/** The identity of a mention across runs and languages: the lead title, the film, and a language the title names. */
-export function mentionKey(title: string): string {
+/**
+ * The identity of a mention across runs and languages — and so its
+ * `sourceItemId`, which a reviewed mapping is reused by. 8.3.1: every part
+ * that tells two songs or two versions apart is in it: the lead title, the
+ * film (named "(From X)" or the segment after the title), the version tag
+ * (a DJ remix is not the original), a language the title names and, when the
+ * title names no film, the uploader. Two uploads of one song with the same
+ * film still merge ("Lyrical Video" and "Full Video Song"); "Chuttamalle (DJ
+ * Remix) | Devara" and "Chuttamalle Lyrical | Devara" never do. Pure.
+ */
+export function mentionKey(title: string, author?: string | null): string {
   const p = parseSourceTitle(title);
-  return `${normalizeIdentityText(p.titles[0] ?? title)}|${normalizeIdentityText(p.movie ?? '')}|${p.languageHint ?? ''}`;
+  const lead = p.titles[0] ?? title;
+  const film = p.movie ?? p.segments[1] ?? '';
+  const who = film ? '' : normalizeIdentityText(author ?? '');
+  return [normalizeIdentityText(lead), normalizeIdentityText(film), p.versionTag, p.languageHint ?? '', who].join('|');
 }
 
 /**
@@ -106,7 +121,7 @@ export function extractWebCandidates(responses: Array<{ language: string; query:
   for (const { language, query, res } of responses) {
     for (const r of res.results) {
       if (!looksLikeOneSong(r.title)) continue;
-      const key = mentionKey(r.title);
+      const key = mentionKey(r.title, r.author);
       const gain = Math.max(0.1, r.score) + 0.25 * Math.max(0, r.engines.length - 1);
       const had = byKey.get(key);
       if (had) {
@@ -167,13 +182,60 @@ export async function toRawItems(candidates: WebCandidate[], region: string, obs
   );
 }
 
+/** Plain words for a search failure, for the run record. */
+function failureText(status: SearxngStatus | string, httpStatus: number | null): string {
+  return `${status}${httpStatus ? `, HTTP ${httpStatus}` : ''}`;
+}
+
+/** Failures a retry a few seconds later can fix: an overloaded or unreachable instance. */
+function retryableFailure(status: SearxngStatus, httpStatus: number | null): boolean {
+  if (status === 'timeout' || status === 'network') return true;
+  return status === 'http_error' && httpStatus !== null && (httpStatus === 429 || httpStatus >= 500);
+}
+
+/**
+ * Why a run found nothing usable, as a TrendFetchError — never an empty list:
+ * an empty snapshot would be stored as this source's newest and hide every
+ * item the owner already accepted. Null when there are songs to store.
+ * Exported for tests.
+ */
+export function webRunFailure(answers: Array<{ res: SearxngResponse }>, candidates: number): TrendFetchError | null {
+  const responses = answers.map((a) => a.res);
+  if (!responses.some((r) => r.ok)) {
+    // A call that found the instance resting says nothing new: report the
+    // failure that started the rest, and do not retry into the same rest.
+    const real = responses.find((r) => r.status !== 'cooling');
+    if (!real) {
+      const cause = searxngLastFailure();
+      const why = cause ? failureText(cause.status, cause.httpStatus) : 'an earlier failure';
+      return new TrendFetchError('searxng_cooling', `The web search instance is resting after a recent failure (${why}); the next run tries again.`, { retryable: false, httpStatus: cause?.httpStatus ?? null });
+    }
+    return new TrendFetchError(`searxng_${real.status}`, `The web search instance did not answer (${failureText(real.status, real.httpStatus)}).`, {
+      retryable: retryableFailure(real.status, real.httpStatus),
+      httpStatus: real.httpStatus,
+    });
+  }
+  const found = responses.reduce((n, r) => n + r.results.length, 0);
+  if (!found) {
+    const down = [...new Set(responses.flatMap((r) => r.unresponsive))].slice(0, 6);
+    return new TrendFetchError('web_no_results', `No search returned any result${down.length ? ` (engines not answering: ${down.join(', ')})` : ''}.`, { retryable: true });
+  }
+  if (!candidates) {
+    // The instance works; this week's results just held no single-song upload. Keep the last snapshot.
+    return new TrendFetchError('web_no_songs', `The searches returned ${found} results but none looked like one song's upload.`, { retryable: false, skip: true });
+  }
+  return null;
+}
+
 export const webSignalProvider: TrendProvider = {
   id: 'web',
-  kind: 'editorial',
+  kind: 'web',
   chart: 'web-new-songs',
   snapshotPolicy: 'hourly',
   displayHours: 72,
   requiresReview: true,
+  // Last in the registry, and at most a third of a run's catalogue calls, so the editorial source is never starved.
+  maxMatchShare: 1 / 3,
   // Up to ten searches in parallel, each on a 6 s leash, inside one attempt.
   attemptTimeoutMs: 15_000,
   label(env) {
@@ -202,13 +264,9 @@ export const webSignalProvider: TrendProvider = {
     const answers = await Promise.all(
       plan.map(async (p) => ({ ...p, res: await searxngQuery(env, p.query, { categories: 'videos', timeRange: 'week', limit: 30, timeoutMs: 6_000, signal: opts.signal, tag: 'trends' }) })),
     );
-    if (!answers.some((a) => a.res.ok)) {
-      const first = answers[0]?.res;
-      throw new TrendFetchError(`searxng_${first?.status ?? 'failed'}`, `The web search instance did not answer (${first?.status ?? 'failed'}${first?.httpStatus ? `, HTTP ${first.httpStatus}` : ''}).`, {
-        retryable: first?.status !== 'not_configured',
-        httpStatus: first?.httpStatus ?? null,
-      });
-    }
-    return toRawItems(extractWebCandidates(answers.filter((a) => a.res.ok)), opts.region, observedAt);
+    const candidates = extractWebCandidates(answers.filter((a) => a.res.ok));
+    const failure = webRunFailure(answers, candidates.length);
+    if (failure) throw failure;
+    return toRawItems(candidates, opts.region, observedAt);
   },
 };

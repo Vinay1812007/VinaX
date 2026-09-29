@@ -33,8 +33,8 @@ describe('GET /api/trends', () => {
     expect(body.sources.map((s) => [s.id, s.kind, s.status])).toEqual([
       ['youtube', 'public-chart', 'ok'],
       ['instagram', 'public-chart', 'disabled'],
-      ['web', 'editorial', 'not_configured'],
       ['editorial', 'editorial', 'unavailable'],
+      ['web', 'web', 'not_configured'],
     ]);
     expect(Object.keys(body.items[0]).sort()).toEqual(
       ['catalogId', 'title', 'artist', 'language', 'region', 'source', 'sourceLabel', 'sourceKind', 'sourceRank', 'sourceUrl', 'observedAt', 'expiresAt', 'mappingConfidence', 'momentum', 'newEntry'].sort(),

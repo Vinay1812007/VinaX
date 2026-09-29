@@ -59,9 +59,9 @@ export function sourceChips(snapshot: TrendsSnapshot): Array<{ id: string; label
   return snapshot.sources.filter((s) => withItems.has(s.id)).map((s) => ({ id: s.id, label: s.label, stale: s.status === 'stale' }));
 }
 
-/** Rising / new entry markers — only what the observations support. */
+/** Rising / new entry markers — only what the observations support. Editorial and web items have no chart position to move. */
 export function movementMarker(item: VerifiedTrend): { kind: 'rising' | 'new'; text: string; title: string } | null {
-  if (item.sourceKind === 'editorial') return null;
+  if (item.sourceKind !== 'public-chart') return null;
   if (item.momentum && item.momentum.rankDelta > 0) {
     return { kind: 'rising', text: `Rising ▲${item.momentum.rankDelta}`, title: `Up ${item.momentum.rankDelta} places in ${item.momentum.windowHours} h on ${item.sourceLabel}` };
   }
@@ -77,8 +77,26 @@ export function shortDate(iso: string): string {
   return Number.isFinite(d.getTime()) ? `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}` : '';
 }
 
+/** The default name of the web source when the server sends none. */
+export const WEB_SOURCE_LABEL = 'New on the web';
+
 /** The provenance line under a verified row. */
 export function provenanceLine(item: VerifiedTrend, now: number = Date.now()): string {
   if (item.sourceKind === 'editorial') return `Editorial pick · ${item.region} · until ${shortDate(item.expiresAt)}`;
+  if (item.sourceKind === 'web') return `${item.sourceLabel || WEB_SOURCE_LABEL} · found on the web, checked by VinaX · ${item.region} · seen ${timeAgo(item.observedAt, now)}`;
   return `#${item.sourceRank} on ${item.sourceLabel} · ${item.region} · seen ${timeAgo(item.observedAt, now)}`;
+}
+
+/** The short marker in the rank column: a chart position, or what the entry is when it has none. */
+export function rankBadge(item: VerifiedTrend): string {
+  if (item.sourceKind === 'editorial') return 'Pick';
+  if (item.sourceKind === 'web') return 'Web';
+  return `#${item.sourceRank}`;
+}
+
+/** What the "Source" link opens, for its accessible name. */
+export function evidenceLabel(item: VerifiedTrend): string {
+  if (item.sourceKind === 'editorial') return 'editorial source';
+  if (item.sourceKind === 'web') return 'the web page it was found on';
+  return item.sourceLabel;
 }

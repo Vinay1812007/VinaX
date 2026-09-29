@@ -90,7 +90,11 @@ The FAQ at <https://developers.tiktok.com/docs/en/research-api-faq> could not be
 
 When `SEARXNG_URL` (and usually `SEARXNG_TOKEN`) point at the owner's own SearXNG instance (`deploy/searxng/`), `_lib/trends/webSignal.ts` searches the video category over the last week for "new X songs" and "trending X songs this week" in each language of `TRENDS_WEB_LANGUAGES` (default telugu, hindi, tamil). A rule-based filter keeps result titles that look like one song ("Song | Film | Cast | Composer") and drops playlists, jukeboxes, top-N lists, headlines, trailers and non-music; candidates are merged across queries, ranked by how many results agree, and run through the same matcher as the video chart.
 
-The web is not a chart: there is no rank and no count. So the source uses kind `editorial` (no momentum), a 72-hour display window, and `requiresReview` — every item, even a confident match, is filed as `review` with reason `needs_review_web_source` and the proposed song kept, so accepting it is one click. Nothing from this source is published without a person. Without `SEARXNG_URL` it reports `not_configured`; an unreachable instance is a retryable error for this source only. `TRENDS_DISABLED_SOURCES=web` turns it off.
+The web is not a chart: there is no rank and no count. So the source has its own kind, `web` (8.3.1; it was `editorial` in 8.3.0, which made accepted items read "Editorial pick"): no momentum, a 72-hour display window, and `requiresReview` — every item, even a confident match, is filed as `review` with reason `needs_review_web_source` and the proposed song kept, so accepting it is one click. Nothing from this source is published without a person. The app shows an accepted item as "<label> · found on the web, checked by VinaX", with a "Web" badge instead of a rank, and gives it the smallest next-song bonus (`TREND_WEB_MAX`, below an editorial pick). Clients older than 8.3.1 drop items and sources of a kind they do not know, so they simply do not show web items. Without `SEARXNG_URL` it reports `not_configured`. `TRENDS_DISABLED_SOURCES=web` turns it off.
+
+A mention's identity (`mentionKey`, and so its `sourceItemId`, by which a reviewed mapping is reused on later runs) is built from the lead title, the film (named "(From X)" or the segment after the title), the version tag (a DJ remix is not the original), a language the title names and — when no film is named — the uploader. So "Chuttamalle (DJ Remix) | Devara" and "Chuttamalle Lyrical Video | Devara" never share an id, nor do two different "Neeve Neeve" songs; two uploads of one version of one song still merge. 8.3.1 changed the key, so mentions seen before it are filed for review once more.
+
+A run never stores an empty snapshot for this source (it would hide every accepted item): an unreachable instance or searches that returned no result at all are a retryable error; a retry that finds the instance resting after that failure stops at once (`searxng_cooling`, naming the original failure); searches that worked but held no single-song upload mark the run `skipped` and keep the last snapshot. The source runs after editorial and may spend at most a third of a run's catalogue-match budget (`maxMatchShare`), so it never starves the editorial source; in the public read its items come after editorial picks.
 
 ## The pieces
 
@@ -119,8 +123,8 @@ The web is not a chart: there is no rank and no count. So the source uses kind `
 
 ```ts
 interface TrendProvider {
-  id: string;                               // 'youtube' | 'instagram' | 'editorial'
-  kind: 'public-chart' | 'editorial';
+  id: string;                               // 'youtube' | 'instagram' | 'editorial' | 'web'
+  kind: 'public-chart' | 'editorial' | 'web';
   chart: string;                            // snapshots are compared only within one chart
   snapshotPolicy: 'hourly' | 'content';
   displayHours: number | null;              // chart items: 72; editorial: the entry's own expiry
@@ -129,6 +133,9 @@ interface TrendProvider {
   maxUnitsPerRun(env): number;              // every attempt of every page
   dailyUnitBudget(env): number | null;
   derivedMetricsAllowed(env): boolean;
+  requiresReview?: boolean;                 // 8.3: every match waits for a person
+  attemptTimeoutMs?: number;                // 8.3: one attempt's deadline when 8 s is too short
+  maxMatchShare?: number;                   // 8.3.1: largest share of a run's match budget
   fetch(env, { region, signal, meter }): Promise<RawTrendItem[]>;
 }
 ```
@@ -223,7 +230,8 @@ Query: `region` (ISO alpha-2; default the first of `TRENDS_REGIONS`, else `IN`; 
   "sources": [
     { "id": "youtube", "label": "Public video chart", "kind": "public-chart", "status": "ok", "lastSuccessAt": "2026-09-19T11:17:04.000Z", "region": "IN" },
     { "id": "instagram", "label": "Short-video audio", "kind": "public-chart", "status": "disabled", "lastSuccessAt": null, "region": "IN" },
-    { "id": "editorial", "label": "Editor’s picks", "kind": "editorial", "status": "ok", "lastSuccessAt": "2026-09-19T11:17:05.000Z", "region": "IN" }
+    { "id": "editorial", "label": "Editor’s picks", "kind": "editorial", "status": "ok", "lastSuccessAt": "2026-09-19T11:17:05.000Z", "region": "IN" },
+    { "id": "web", "label": "New on the web", "kind": "web", "status": "not_configured", "lastSuccessAt": null, "region": "IN" }
   ],
   "items": [
     {
@@ -237,7 +245,7 @@ Query: `region` (ISO alpha-2; default the first of `TRENDS_REGIONS`, else `IN`; 
 ```
 
 - `sources` always lists every provider. `status`: `ok` (a successful run within 18 hours), `stale` (the last success is older — its unexpired items are still returned, labelled by this status), `unavailable` (configured but never succeeded, or the database read failed), `disabled`, `not_configured`.
-- `items` are only matches with status `matched`, `accepted` or `corrected`, confidence ≥ 0.8, from the newest snapshot of each source, not expired (chart items expire 72 hours after observation; editorial items with their entry). One source's two entries of one song (a lyric video and a video song) appear once, at the better rank. Public charts come first, then editorial, each in rank order.
+- `items` are only matches with status `matched`, `accepted` or `corrected`, confidence ≥ 0.8, from the newest snapshot of each source, not expired (chart items expire 72 hours after observation; editorial items with their entry). One source's two entries of one song (a lyric video and a video song) appear once, at the better rank. Public charts come first, then editorial, then (8.3.1) songs found on the web, each in rank order.
 - `newEntry` is an addition to the originally specified item shape; `momentum` is exactly `null | { rankDelta, windowHours }`.
 
 ## Owner console — `GET/POST /api/admin/trends`
@@ -263,7 +271,7 @@ CSV header (any order): `title,artist,catalog_id,region,language,position,eviden
 ## In the app
 
 - `frontend/src/services/trends/client.ts` exports `fetchVerifiedTrends({ region, language, limit, signal }): Promise<TrendsSnapshot | null>`. It never throws; `null` means unavailable (offline, timeout, HTTP error, malformed answer). It validates every field it passes on and drops items that fail. It is loaded lazily and is not in the first-load bundle.
-- The **Charts** page shows verified public charts with the source label, region, update time and status, per-source filters, "Rising" and "New entry" markers only when the read carries them, and editorial entries marked "Editorial pick". Below, the catalogue lists are headed "Popular in the catalogue" and explained as catalogue search results, not a live chart. With no source configured or the read unavailable, the page says so and the catalogue lists remain.
+- The **Charts** page shows verified public charts with the source label, region, update time and status, per-source filters, "Rising" and "New entry" markers only when the read carries them, editorial entries marked "Editorial pick", and (8.3.1) accepted web items marked "found on the web, checked by VinaX". Below, the catalogue lists are headed "Popular in the catalogue" and explained as catalogue search results, not a live chart. With no source configured or the read unavailable, the page says so and the catalogue lists remain.
 - On Home, the shelf formerly titled "Trending for you" is "Popular picks for you": popular catalogue songs in the order the listener's taste (or VinaX AI) suggests. It is not a public chart.
 
 ## Runbook

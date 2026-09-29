@@ -10,7 +10,8 @@
 import type { SearxngEnv } from '../searxng';
 import type { SupabaseEnv } from '../supabase';
 
-export type ProviderKind = 'public-chart' | 'editorial';
+/** 8.3.1 — `web`: songs found through web search and accepted by a person (webSignal.ts). */
+export type ProviderKind = 'public-chart' | 'editorial' | 'web';
 export type ProviderStatus = 'ok' | 'not_configured' | 'disabled';
 
 /** Worker env the trend code reads. Every name is documented in backend/.env.example. */
@@ -112,6 +113,8 @@ export interface TrendProvider {
   requiresReview?: boolean;
   /** 8.3.0 — deadline for one fetch attempt when the default 8 s is too short. */
   attemptTimeoutMs?: number;
+  /** 8.3.1 — the largest share (0–1) of a run's catalogue-match budget this provider may spend, across its regions. Unset = no cap. */
+  maxMatchShare?: number;
   fetch(env: TrendsEnv, opts: FetchOptions): Promise<RawTrendItem[]>;
 }
 
@@ -120,12 +123,15 @@ export class TrendFetchError extends Error {
   readonly code: string;
   readonly retryable: boolean;
   readonly httpStatus: number | null;
-  constructor(code: string, message: string, opts: { retryable: boolean; httpStatus?: number | null }) {
+  /** 8.3.1 — nothing failed, there is just nothing to store this time: the run is recorded `skipped` and the last snapshot stays. */
+  readonly skip: boolean;
+  constructor(code: string, message: string, opts: { retryable: boolean; httpStatus?: number | null; skip?: boolean }) {
     super(message);
     this.name = 'TrendFetchError';
     this.code = code;
     this.retryable = opts.retryable;
     this.httpStatus = opts.httpStatus ?? null;
+    this.skip = opts.skip === true;
   }
 }
 

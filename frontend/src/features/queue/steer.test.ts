@@ -14,6 +14,13 @@ describe('tuneForSong', () => {
     expect(tuneForSong(song)).toBe('folk');
   });
 
+  it('8.3.1 — locks a style only when the song says it in words, never from a genre guess', () => {
+    expect(tuneForSong(makeSong('g', { title: 'Film Song', genre: 'folk', mood: 'romantic' }))).toBe('romantic');
+    expect(tuneForSong(makeSong('e', { title: 'Film Song', genres: ['Electronic'], mood: 'romantic' }))).toBe('romantic');
+    const husn = makeSong('h', { title: 'Husn Hai Ya Koi Qayamat Hai', artist: 'Aarti Mukherji', subtitle: 'Mohammed Rafi, Aarti Mukherji - Saudagar', mood: 'romantic' });
+    expect(tuneForSong(husn)).toBe('romantic');
+  });
+
   it('falls back to the mood for an ordinary song', () => {
     expect(tuneForSong(makeSong('r', { title: 'Film Song', mood: 'romantic' }))).toBe('romantic');
   });

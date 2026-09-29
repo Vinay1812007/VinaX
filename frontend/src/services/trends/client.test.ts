@@ -77,6 +77,27 @@ describe('fetchVerifiedTrends', () => {
     expect(snap?.items.map((i) => i.catalogId)).toEqual(['c1']);
   });
 
+  it('8.3.1 — keeps a `web` source and item; a kind this build does not know is dropped, never shown or crashed on', async () => {
+    const webItem = { ...goodItem, catalogId: 'w1', source: 'web', sourceLabel: 'New on the web', sourceKind: 'web', sourceRank: 1, momentum: null };
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          body({
+            sources: [
+              { id: 'web', label: 'New on the web', kind: 'web', status: 'ok', lastSuccessAt: earlier, region: 'IN' },
+              { id: 'future', label: 'Future source', kind: 'some-later-kind', status: 'ok', lastSuccessAt: earlier, region: 'IN' },
+            ],
+            items: [webItem, { ...goodItem, catalogId: 'f1', source: 'future', sourceKind: 'some-later-kind' }],
+          }),
+        ),
+        { status: 200 },
+      ),
+    );
+    const snap = await fetchVerifiedTrends({});
+    expect(snap?.sources.map((s) => [s.id, s.kind])).toEqual([['web', 'web']]);
+    expect(snap?.items.map((i) => [i.catalogId, i.sourceKind])).toEqual([['w1', 'web']]);
+  });
+
   it('keeps only https evidence links and never reports a new entry alongside a rank change', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body({ items: [{ ...goodItem, sourceUrl: 'javascript:alert(1)', newEntry: true }] })), { status: 200 }));
     const snap = await fetchVerifiedTrends({});

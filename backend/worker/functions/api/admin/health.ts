@@ -19,7 +19,7 @@ import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } fro
 import { LANE_MODEL, isMaestroEndpoint, laneEndpoint, laneModel, type AiEnv } from '../../_lib/ai';
 import { maestroFetch } from '../../_lib/maestro';
 import { catalogDefaultModel } from '../../_lib/catalog';
-import { searxngConfigured, searxngQuery, type SearxngEnv } from '../../_lib/searxng';
+import { searxngConfigured, searxngCoolingRemainingMs, searxngLastFailure, searxngQuery, searxngUrlSet, type SearxngEnv } from '../../_lib/searxng';
 
 type Env = AdminEnv & SupabaseEnv & AiEnv & SearxngEnv;
 
@@ -27,20 +27,40 @@ const SEARCH_ROW = 'Web search engine · research · Search expert · trends';
 
 /** Reachability of the web search instance, in the same row shape as the AI keys. Exported for tests. */
 export async function pingSearch(env: SearxngEnv): Promise<KeyHealth> {
-  if (!searxngConfigured(env)) return { key: SEARCH_ROW, configured: false, ok: false, status: null, model: null, note: 'not configured' };
+  if (!searxngConfigured(env)) {
+    // Set but refused by the Worker: say so, instead of "not configured".
+    const note = searxngUrlSet(env) ? 'invalid address — SEARXNG_URL must be https:// (http only for localhost), with no user name, password or query' : 'not configured';
+    return { key: SEARCH_ROW, configured: searxngUrlSet(env), ok: false, status: null, model: null, note };
+  }
   const r = await searxngQuery(env, 'telugu songs', { categories: 'general', limit: 5, timeoutMs: 6_000, tag: 'health' });
   if (r.ok) {
     const note = r.results.length ? `${r.results.length} results · ${r.latencyMs} ms${r.unresponsive.length ? ` · ${r.unresponsive.length} engine(s) down` : ''}` : `reachable but no results · ${r.latencyMs} ms`;
     return { key: SEARCH_ROW, configured: true, ok: r.results.length > 0, status: r.httpStatus, model: null, note };
   }
+  if (r.status === 'cooling') {
+    const cause = searxngLastFailure();
+    const mins = Math.max(1, Math.ceil(searxngCoolingRemainingMs() / 60_000));
+    const why = cause ? searchFailureNote(cause.status, cause.httpStatus) : 'a recent failure';
+    return { key: SEARCH_ROW, configured: true, ok: false, status: cause?.httpStatus ?? null, model: null, note: `resting after ${why} (retries in about ${mins} min)` };
+  }
+  return { key: SEARCH_ROW, configured: true, ok: false, status: r.httpStatus, model: null, note: searchFailureNote(r.status, r.httpStatus) };
+}
+
+/** Plain words for a failed search call. Pure; exported for tests. */
+export function searchFailureNote(status: string, httpStatus: number | null): string {
+  if (status === 'http_error') {
+    if (httpStatus === 401) return 'token refused — check SEARXNG_TOKEN';
+    if (httpStatus === 403) return 'forbidden — check that search.formats in settings.yml includes json';
+    if (httpStatus === 429) return 'rate limited by the instance';
+    return `error answer${httpStatus ? ` (HTTP ${httpStatus})` : ''}`;
+  }
   const why: Record<string, string> = {
-    cooling: 'resting after a recent failure (retries within a minute)',
-    http_error: r.httpStatus === 401 || r.httpStatus === 403 ? 'token refused — check SEARXNG_TOKEN' : 'error answer',
     timeout: 'timed out',
     network: 'network error',
-    bad_json: 'JSON format is off on the instance (search.formats)',
+    bad_json: 'the answer was not JSON — check the address and the proxy in front of the instance',
+    too_large: 'the answer was too large',
   };
-  return { key: SEARCH_ROW, configured: true, ok: false, status: r.httpStatus, model: null, note: why[r.status] ?? r.status };
+  return why[status] ?? status;
 }
 
 interface KeyHealth {

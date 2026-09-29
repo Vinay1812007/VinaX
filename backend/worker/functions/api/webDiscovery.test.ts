@@ -17,7 +17,7 @@ const catalogMock = vi.fn(async (_q: string, _n: number): Promise<unknown[]> => 
 vi.mock('../_lib/trends/catalog', () => ({ searchCatalogSongs: (q: string, n: number) => catalogMock(q, n), lookupCatalogSong: async () => null }));
 
 import { resetSearxngCooldown } from '../_lib/searxng';
-import { onRequestPost as djPost, sanitizeStyle, STYLE_BRIEF, stylePhrase, wantsFreshMusic } from './dj';
+import { onRequestPost as djPost, sanitizeStyle, settleWithin, STYLE_BRIEF, stylePhrase, wantsFreshMusic } from './dj';
 import { detectStyle, onRequestPost as playlistPost } from './playlist';
 
 const POOL = [
@@ -40,6 +40,7 @@ beforeEach(() => {
   catalogMock.mockReset();
   catalogMock.mockResolvedValue([]);
   searx = [];
+  background = [];
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.stubGlobal('fetch', async (input: string | URL) => {
     const u = new URL(String(input));
@@ -55,19 +56,34 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+let background: Array<Promise<unknown>> = [];
+const waitUntil = (p: Promise<unknown>): void => {
+  background.push(p);
+};
+const lastUser = (): string => (chatMock.mock.calls.length ? String((chatMock.mock.calls[chatMock.mock.calls.length - 1][1] as Array<{ content: string }>)[1].content) : '');
 const dj = async (body: Record<string, unknown>, env: Record<string, string> = {}) => {
   ip += 1;
   const req = new Request('https://x.test/api/dj', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.9.0.${ip}` }, body: JSON.stringify(body) });
-  const res = await djPost({ request: req, env: { ...KEY, ...env } });
-  const user = chatMock.mock.calls.length ? String((chatMock.mock.calls[0][1] as Array<{ content: string }>)[1].content) : '';
-  return { status: res.status, user };
+  const t0 = Date.now();
+  const res = await djPost({ request: req, env: { ...KEY, ...env }, waitUntil });
+  return { status: res.status, user: lastUser(), ms: Date.now() - t0 };
 };
 const playlist = async (prompt: string, env: Record<string, string> = {}) => {
   ip += 1;
   const req = new Request('https://x.test/api/playlist', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.9.1.${ip}` }, body: JSON.stringify({ prompt }) });
-  const res = await playlistPost({ request: req, env: { ...KEY, ...env } });
-  const user = chatMock.mock.calls.length ? String((chatMock.mock.calls[0][1] as Array<{ content: string }>)[1].content) : '';
-  return { status: res.status, user };
+  const t0 = Date.now();
+  const res = await playlistPost({ request: req, env: { ...KEY, ...env }, waitUntil });
+  return { status: res.status, user: lastUser(), ms: Date.now() - t0 };
+};
+/** Every search answer arrives `ms` late. */
+const slowSearch = (ms: number): void => {
+  vi.stubGlobal('fetch', async (input: string | URL) => {
+    const u = new URL(String(input));
+    if (u.hostname !== 'search.example.org') return new Response('not stubbed', { status: 599 });
+    searx.push(u);
+    await new Promise((r) => setTimeout(r, ms));
+    return new Response(JSON.stringify({ results: [{ url: 'https://v.example/1', title: 'Fresh Hit | New Film | Full Song | Composer', score: 3 }] }), { status: 200 });
+  });
 };
 
 describe('style helpers', () => {
@@ -80,6 +96,8 @@ describe('style helpers', () => {
     expect(stylePhrase('folk', 'hindi')).toBe('hindi folk songs');
     expect(stylePhrase('devotional', 'tamil')).toBe('tamil devotional songs');
     expect(stylePhrase('folk', null)).toBe('folk songs');
+    // A language is capped like the web query's, whatever the context carries.
+    expect(stylePhrase('dj', 'x'.repeat(500))).toBe(`${'x'.repeat(12)} dj remix`);
   });
   it('detectStyle reads a playlist request', () => {
     expect(detectStyle('telugu dj songs for the baraat')).toBe('dj');
@@ -89,6 +107,21 @@ describe('style helpers', () => {
     expect(detectStyle('morning bhakti songs')).toBe('devotional');
     expect(detectStyle('tamil devotional')).toBe('devotional');
     expect(detectStyle('rainy telugu melodies')).toBeNull();
+  });
+  it('detectStyle ignores a style the request negates', () => {
+    for (const p of ['telugu love songs, no remixes', 'hindi party songs without dj', 'melodies, not folk', 'avoid devotional, just film songs', 'romantic songs except remix', "tamil hits but i don't want dj versions", 'anything but folk please']) {
+      expect(detectStyle(p), p).toBeNull();
+    }
+    // A negation elsewhere, or in another clause, does not hide a wanted style.
+    expect(detectStyle('no sad songs, just folk')).toBe('folk');
+    expect(detectStyle('not too slow, telugu dj songs')).toBe('dj');
+    expect(detectStyle('bhakti songs, no remixes')).toBe('devotional');
+    expect(detectStyle('dj remix songs with no slow ones')).toBe('dj');
+  });
+  it('settleWithin answers the value in time, else the fallback, and never throws', async () => {
+    expect(await settleWithin(Promise.resolve(5), 50, 0)).toBe(5);
+    expect(await settleWithin(new Promise<number>((r) => setTimeout(() => r(5), 200)), 20, 0)).toBe(0);
+    expect(await settleWithin(Promise.reject(new Error('x')), 50, 7)).toBe(7);
   });
   it('wantsFreshMusic spots new / latest / trending asks', () => {
     expect(wantsFreshMusic('fresh releases from the last year')).toBe(true);
@@ -148,6 +181,39 @@ describe('AI DJ — fresh web context', () => {
     expect(searx).toHaveLength(0);
     await dj({ context: { currentLanguage: 'telugu', discoveryFocus: 'fresh releases from the last year' }, pool: POOL, discover: true }, env);
     expect(searx).toHaveLength(1);
+  });
+});
+
+describe('extras never hold the model call up', () => {
+  it('the DJ without a gather waits about a second for a slow web answer, not four — and the late answer serves the next set', async () => {
+    slowSearch(1_800);
+    const first = await dj({ context: { currentLanguage: 'telugu' }, pool: POOL, discover: true }, SEARX);
+    expect(first.status).toBe(200);
+    expect(first.ms).toBeLessThan(1_600);
+    expect(first.user).not.toContain('WEB CONTEXT');
+    await Promise.all(background);
+    const second = await dj({ context: { currentLanguage: 'telugu' }, pool: POOL, discover: true }, SEARX);
+    expect(searx).toHaveLength(1);
+    expect(second.user).toContain('[1] Fresh Hit | New Film | Full Song | Composer');
+    expect(second.ms).toBeLessThan(500);
+  });
+
+  it('slow style catalogue songs are left out after about a second', async () => {
+    catalogMock.mockImplementation(() => new Promise((r) => setTimeout(() => r([cat('f1', 'Late Folk Song', 'Singer')]), 1_800)));
+    const { status, user, ms } = await dj({ context: { currentLanguage: 'telugu', style: 'folk' }, pool: POOL, discover: true });
+    expect(status).toBe(200);
+    expect(ms).toBeLessThan(1_600);
+    expect(user).toContain(STYLE_BRIEF.folk);
+    expect(user).not.toContain('Late Folk Song');
+  });
+
+  it('a playlist whose gather fails fast does not wait out the web leash', async () => {
+    slowSearch(1_800);
+    gatherMock.mockRejectedValue(new Error('down'));
+    const { status, user, ms } = await playlist('latest telugu songs', SEARX);
+    expect(status).toBe(200);
+    expect(ms).toBeLessThan(1_600);
+    expect(user).not.toContain('WEB CONTEXT');
   });
 });
 
