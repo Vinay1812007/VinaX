@@ -11,7 +11,7 @@ import { consented } from '@/services/analytics/telemetry';
  *     (`data-clarity-mask` on <body>), so song titles, names, history and
  *     VinaX AI chats never appear in a replay — only layout, taps and scrolls;
  *   - the consent signal says analytics storage is granted and ad storage is
- *     denied — VinaX has no ads.
+ *     denied — session insights are never used for advertising.
  *
  * Loaded from this module instead of an inline <head> snippet so the CSP's
  * sha256 hash list stays untouched (public/_headers, cspHashes.test.ts); the

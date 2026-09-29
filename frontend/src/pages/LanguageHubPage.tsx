@@ -22,7 +22,9 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { Shelf } from '@/components/Shelf';
 import { PlayIcon } from '@/components/Icons';
 import { HubMoodTiles } from '@/features/discover/HubMoodTiles';
+import { LanguageGuide } from '@/features/discover/LanguageGuide';
 import '@/styles/pages/browse.css';
+import { AdSlot } from '@/components/AdSlot';
 
 
 function HubSection({ heading, songs, loading, error, retry }: { heading: string; songs: Song[] | undefined; loading: boolean; error: boolean; retry: () => void }) {
@@ -154,6 +156,9 @@ export default function LanguageHubPage({ language }: { language: string }) {
         <SectionHeader title="Browse by mood" />
         <HubMoodTiles language={language} />
       </section>
+
+      <LanguageGuide language={language} label={label} />
+      <AdSlot />
 
       <section className="vx-section">
         <SectionHeader title={`More ${label} songs`} />

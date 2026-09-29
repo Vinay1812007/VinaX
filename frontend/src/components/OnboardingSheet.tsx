@@ -101,7 +101,7 @@ const TOUR: TourSlide[] = [
     icon: <SearchIcon className="w-7 h-7" />,
     title: 'Find something new',
     lines: [
-      'Discover has shortcuts to charts, languages, moods, films, videos, mixes and Ads.',
+      'Discover has shortcuts to charts, languages, moods, films, videos and mixes.',
       'Search takes songs, artists, films or a lyric line.',
     ],
   },

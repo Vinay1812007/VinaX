@@ -19,6 +19,7 @@ import { EntityAction, EntityMenu, EntityMeta, PlayFab, useArtTone } from '@/com
 import { shuffled } from '@/features/library/sort';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { SaveButton } from '@/components/SaveButton';
+import { AdSlot } from '@/components/AdSlot';
 
 export default function ArtistPage() {
   const { id: rawId } = useParams();
@@ -145,6 +146,7 @@ export default function ArtistPage() {
           <p className="vx-artist-bio line-clamp-[12]">{artist.bio}</p>
         </section>
       )}
+      <AdSlot className="vx-esection" />
     </div>
   );
 }

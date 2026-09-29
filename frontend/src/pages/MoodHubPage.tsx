@@ -15,6 +15,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { PlayIcon } from '@/components/Icons';
 import { HubMoodTiles } from '@/features/discover/HubMoodTiles';
 import '@/styles/pages/browse.css';
+import { AdSlot } from '@/components/AdSlot';
 
 /**
  * Mood × language landing page (/telugu-romantic-songs …): a real, playable
@@ -107,6 +108,7 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
           ))}
         </div>
       </section>
+      <AdSlot />
     </div>
   );
 }

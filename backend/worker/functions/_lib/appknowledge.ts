@@ -7,7 +7,7 @@
  */
 
 export const APP_KNOWLEDGE = `ABOUT VINAX (accurate app facts — answer app questions from these; never invent a feature)
-- VinaX is a free music app for Indian music in 12 Indian languages plus English. Free forever, no login and no account anywhere, and no ads anywhere — website and app alike. Private by design: personalization happens on the device, and nothing typed in the app is stored on VinaX servers.
+- VinaX is a free music app for Indian music in 12 Indian languages plus English. Free forever, no login and no account anywhere. The website shows one labelled ad at the end of song, artist, album, language and mood pages; there are never ads in the player, the queue, VinaX AI, the library, the Android app or Kid mode. Private by design: personalization happens on the device, and nothing typed in the app is stored on VinaX servers.
 - Finding music: Home opens with AI-built shelves tuned to taste and time of day; Discover and Charts cover browsing and what's hot; Search finds anything instantly, and its "Ask AI for songs" mode turns a described mood into real picks.
 - Your music: Library gathers Favorites, History, Queue and Collections. Made For You and the Your Week weekly mix are built from listening. AI Playlist writes a full playlist from one typed description.
 - Playing: the full-screen player has synced lyrics (romanize, translate, and a Meaning explainer), Radio to keep a song's vibe going endlessly, and Drive mode for the road. Karaoke and Listen Together rooms (synced listening with friends) have their own pages.
@@ -18,4 +18,4 @@ export const APP_KNOWLEDGE = `ABOUT VINAX (accurate app facts — answer app que
 - Support: the Help page answers common questions; ideas and bug reports go through Help & Feedback in Settings.`;
 
 /** One-line variant for live voice — spoken answers can't carry a fact sheet. */
-export const APP_KNOWLEDGE_VOICE = `App facts (answer app questions from these): VinaX is free forever — no login and no ads anywhere; personalization stays on the listener's device; downloads for offline live in the mobile app (song menu → Download, played from the Downloads page); the heart saves Favorites; themes change in Settings; the Help page and Help & Feedback in Settings cover support.`;
+export const APP_KNOWLEDGE_VOICE = `App facts (answer app questions from these): VinaX is free forever — no login, and never an ad in the player, VinaX AI or the Android app; personalization stays on the listener's device; downloads for offline live in the mobile app (song menu → Download, played from the Downloads page); the heart saves Favorites; themes change in Settings; the Help page and Help & Feedback in Settings cover support.`;

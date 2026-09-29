@@ -22,7 +22,7 @@ export default function PrivacyPage() {
           During onboarding you choose whether to share anonymous usage statistics. If you opt in, the app sends
           events like &ldquo;a song was played&rdquo; or &ldquo;a search found nothing&rdquo; with a random device ID,
           your app version, platform and city-level location. <strong>IP addresses are never stored.</strong> No names,
-          no emails, no precise location, no advertising identifiers — those don&rsquo;t exist here. Opting out stops
+          no emails, no precise location and no advertising identifiers. Opting out stops
           this entirely, anytime.
         </p>
         <p>
@@ -63,10 +63,29 @@ export default function PrivacyPage() {
         </p>
         <H>Trackers and ads — the honest version</H>
         <p>
-          Unless you opt in above, VinaX sets no tracking cookies and runs no third-party analytics — and even if
-          you do, your taste profile, history and favorites never leave your device. <b>There are no ads anywhere</b> — not on the website, not in the
-          Android app, and never in Kid mode — so there are no ad cookies, no ad networks, and nothing VinaX
-          stores about your listening is ever shared with any advertiser.
+          Unless you opt in above, VinaX sets no tracking cookies of its own and runs no third-party analytics — and
+          even if you do, your taste profile, history and favorites never leave your device.
+        </p>
+        <p>
+          <b>Where ads appear.</b> On the website, one clearly labelled advertisement sits at the end of browsing pages:
+          song, artist, album, language and mood pages. There are never ads in the player, the queue, VinaX AI, your
+          library, the Android app or Kid mode, and the ad code is not loaded on those screens at all.
+        </p>
+        <p>
+          <b>Who serves them.</b> Those ads are served by Google. Third-party vendors, including Google, use cookies to
+          serve ads based on your prior visits to this website or other websites. Google&rsquo;s use of advertising
+          cookies enables it and its partners to serve ads to you based on your visits to this site and/or other sites
+          on the internet. You can opt out of personalised advertising in{' '}
+          <a href="https://adssettings.google.com" target="_blank" rel="noreferrer">
+            Ads Settings
+          </a>
+          , or opt out of third-party vendors&rsquo; cookies for personalised advertising at{' '}
+          <a href="https://www.aboutads.info/choices" target="_blank" rel="noreferrer">
+            aboutads.info
+          </a>
+          . Visitors in regions that require consent are asked before any advertising cookie is set. Nothing VinaX
+          stores about your listening — history, favorites, taste profile, AI chats — is ever shared with an
+          advertiser.
         </p>
         <H>Your controls</H>
         <p>

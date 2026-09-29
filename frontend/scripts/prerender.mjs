@@ -1,10 +1,26 @@
 // Build-time prerender: writes per-route static HTML for high-value static
 // routes so crawlers see real content + unique head (title/description/canonical/OG)
-// without running JS. Fully defensive — never fails the build.
+// without running JS.
+//
+// 8.4.0: the body is the page's REAL text, not a one-line summary. The ad
+// network's review (and any crawler that does not run JS) saw ~300 characters
+// per page — a title, one sentence and the nav — and rejected the site as
+// low-value content. Info pages (About, Privacy, Terms, Contact, Copyright)
+// are server-rendered from their React components; Home, Help and the
+// language hubs render the same shared components/data the app shows
+// (HomeAbout, helpContent, LanguageGuide), so crawlers and listeners read
+// identical words. Any failure exits non-zero: a silent fallback to thin
+// pages is exactly the outage this guards against.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { createServer } from 'vite';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 
-const DIST = 'dist';
+// PRERENDER_DIST lets a scratch build (vite build --outDir …) be prerendered
+// without touching the checkout's dist/.
+const DIST = process.env.PRERENDER_DIST || 'dist';
 const ORIGIN = 'https://www.sirimillavinay.online';
 const esc = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -31,7 +47,17 @@ const ROUTES = [
   { p: '/privacy', t: 'Privacy', d: 'No accounts. Your data stays on your device. Private by design.', h1: 'Privacy' },
   { p: '/terms', t: 'Terms of Use', d: 'Content is sourced from third parties; no DRM circumvention. Plain-language terms.', h1: 'Terms of Use' },
   { p: '/contact', t: 'Contact & Takedowns', d: 'Contact VinaX for support, bug reports, or rights / takedown requests.', h1: 'Contact & Takedowns' },
+  { p: '/dmca', t: 'Copyright & Takedowns', d: 'How VinaX credits artists and labels, and how rights holders can have content removed within minutes.', h1: 'Copyright and takedowns' },
 ];
+
+// Routes whose body is the React page itself (it carries its own <h1>).
+const PAGE_COMPONENTS = {
+  '/about': 'AboutPage',
+  '/privacy': 'PrivacyPage',
+  '/terms': 'TermsPage',
+  '/contact': 'ContactPage',
+  '/dmca': 'DmcaPage',
+};
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const HUB_LANGS = ['hindi', 'telugu', 'tamil', 'english', 'punjabi', 'kannada', 'malayalam', 'bengali', 'marathi', 'bhojpuri', 'gujarati', 'urdu'];
@@ -105,6 +131,78 @@ const jsonForScript = (value) =>
     .replace(/&/g, '\\u0026')
     .replace(/[\u2028\u2029]/g, (c) => c === '\u2028' ? '\\u2028' : '\\u2029');
 
+// Load the shared components through Vite's SSR loader (aliases, TSX and CSS
+// imports resolve exactly as in the app build). Only store-free modules are
+// loaded here: HelpPage itself pulls in stores and timers, so Help renders
+// from its data module instead.
+const markup = (el) =>
+  renderToStaticMarkup(createElement(MemoryRouter, null, el))
+    // React 19 hoists resource hints (<link rel=preload>) into the markup.
+    .replace(/<link [^>]*>/g, '');
+let bodies;
+{
+  let vite;
+  try {
+    vite = await createServer({
+      logLevel: 'error',
+      appType: 'custom',
+      server: { middlewareMode: true, hmr: false, watch: null },
+      optimizeDeps: { noDiscovery: true, include: [] },
+    });
+    const load = (p) => vite.ssrLoadModule(p);
+    const pages = {};
+    for (const [route, name] of Object.entries(PAGE_COMPONENTS)) {
+      pages[route] = markup(createElement((await load(`/src/pages/${name}.tsx`)).default));
+    }
+    const { HomeAbout } = await load('/src/features/home/HomeAbout.tsx');
+    const { LanguageGuide } = await load('/src/features/discover/LanguageGuide.tsx');
+    const { GUIDES, FAQ, SHORTCUTS } = await load('/src/features/help/helpContent.ts');
+    const { MOOD_HUBS } = await load('/src/constants/hubs.ts');
+
+    const groups = [...new Set(GUIDES.map((g) => g.group))];
+    const help =
+      `<h2>How to use VinaX</h2>` +
+      groups
+        .map(
+          (group) =>
+            `<h3>${esc(group)}</h3>` +
+            GUIDES.filter((g) => g.group === group)
+              .map((g) => `<p><strong>${esc(g.title)}</strong></p><ol>${g.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>`)
+              .join(''),
+        )
+        .join('') +
+      `<h2>Frequently asked questions</h2>` +
+      FAQ.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('') +
+      `<h2>Keyboard and gesture shortcuts</h2><dl>${SHORTCUTS.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` +
+      `<p>Something not working? Write to <a href="mailto:hello@sirimillavinay.online">hello@sirimillavinay.online</a> or use the feedback form on this page.</p>`;
+
+    bodies = {
+      pages,
+      home: markup(createElement(HomeAbout)),
+      help,
+      hub: (lang, label) =>
+        markup(createElement(LanguageGuide, { language: lang, label })) +
+        `<h2>${esc(label)} songs by mood</h2><p>${MOOD_HUBS.map((m) => `<a href="/${lang}-${m.slug}-songs">${esc(label)} ${esc(m.label.toLowerCase())} songs</a>`).join(' · ')}</p>`,
+    };
+  } catch (e) {
+    console.error('prerender: component render failed:', e && (e.stack || e.message));
+    process.exit(1);
+  } finally {
+    await vite?.close();
+  }
+}
+
+/** The crawlable body for one route: the real page text, then the nav. */
+function bodyFor(r) {
+  if (bodies.pages[r.p]) return bodies.pages[r.p];
+  const intro = `<h1>${esc(r.h1)}</h1><p>${esc(r.d)}</p>`;
+  if (r.p === '/') return intro + bodies.home;
+  if (r.p === '/help') return intro + bodies.help;
+  const hub = /^\/([a-z]+)-songs$/.exec(r.p);
+  if (hub) return intro + bodies.hub(hub[1], cap(hub[1]));
+  return intro;
+}
+
 let ok = 0;
 const failures = [];
 for (const r of ROUTES) {
@@ -121,7 +219,7 @@ for (const r of ROUTES) {
       // (PSI 2026-08: "Document does not have a main landmark" — the audit
       // snapshots the static shell before React mounts <main id="main-content">).
       // React wipes #root children on hydrate, so there is never a duplicate.
-      `<main id="seo-content"><h1>${esc(r.h1)}</h1><p>${esc(r.d)}</p>${NAV}</main>`;
+      `<main id="seo-content">${bodyFor(r)}${NAV}</main>`;
     const html = base
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(r.t)} · VinaX</title>`)
       .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(r.d)}$2`)

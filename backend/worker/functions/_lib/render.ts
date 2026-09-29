@@ -118,6 +118,60 @@ function artistNames(a: any): string {
   return '';
 }
 
+/** Catalog strings arrive HTML-escaped (&quot;, &amp;, &#039;) — decode the
+ *  common entities once so esc() does not double-escape them on the page. */
+const plain = (s: unknown): string =>
+  String(s ?? '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+    .trim();
+
+/** Names for one credit role across both catalog shapes (normalized
+ *  `artists.all[].role` and raw `more_info.artistMap.artists[].role`). */
+function creditNames(d: any, roles: string[]): string[] {
+  const all: any[] = d?.artists?.all ?? d?.more_info?.artistMap?.artists ?? [];
+  const names = (Array.isArray(all) ? all : [])
+    .filter((a) => roles.includes(String(a?.role ?? '').toLowerCase()))
+    .map((a) => plain(a?.name))
+    .filter(Boolean);
+  return [...new Set(names)];
+}
+
+/** Primary artists as {id, name} across both catalog shapes. */
+function primaryArtists(d: any): Array<{ id?: string; name: string }> {
+  const list: any[] = d?.artists?.primary ?? d?.more_info?.artistMap?.primary_artists ?? [];
+  if (Array.isArray(list) && list.length) {
+    return list.map((a) => ({ id: a?.id ? String(a.id) : undefined, name: plain(a?.name) })).filter((a) => a.name);
+  }
+  const s = plain(d?.primaryArtists);
+  return s ? s.split(/,\s*/).map((name) => ({ name })) : [];
+}
+
+const listText = (names: string[]): string =>
+  names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+function minutes(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+/** '2019-02-16' → '16 February 2019'; anything else passes through. */
+function longDate(iso: unknown): string | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso ?? ''));
+  if (!m) return undefined;
+  const month = MONTHS[Number(m[2]) - 1];
+  return month ? `${Number(m[3])} ${month} ${m[1]}` : undefined;
+}
+
+/** Resolve within `ms` or give up with null — enrichment must never hold a
+ *  page render hostage to a slow mirror. */
+function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+}
+
 async function fetchJson(suffix: string): Promise<any> {
   for (const base of BASES) {
     const ctrl = new AbortController();
@@ -148,6 +202,10 @@ interface Meta {
   sub: string;
   tracks: Array<{ id: string; title: string; artist: string }>;
   links?: Array<{ href: string; label: string }>;
+  /** Extra crawlable sections (already-escaped HTML): credits, album
+   *  tracklist, more by the artist, related hubs (8.4.0 — the ad network's
+   *  review rejected one-sentence entity pages as low-value content). */
+  sections?: string;
   jsonld: Record<string, unknown>;
   /** OpenGraph type + music: namespace pairs (the Spotify/JioSaavn share
    *  treatment: og:type music.song with duration/album/musician). */
@@ -158,14 +216,43 @@ interface Meta {
   harvestRows?: SeoRow[];
 }
 
-function songRows(songs: any[]): Array<{ id: string; title: string; artist: string }> {
+function songRows(songs: any[]): Array<{ id: string; title: string; artist: string; duration?: number }> {
   return (Array.isArray(songs) ? songs : [])
     .map((s: any) => ({
       id: String(s?.id ?? ''),
-      title: String(s?.name ?? s?.title ?? ''),
-      artist: artistNames(s?.artists ?? s?.primaryArtists),
+      title: plain(s?.name ?? s?.title),
+      artist: [...new Set((plain(artistNames(s?.artists ?? s?.primaryArtists)) || primaryArtists(s).map((a) => a.name).join(', ')).split(/,\s*/))]
+        .filter(Boolean)
+        .join(', '),
+      duration: Number(s?.duration ?? s?.more_info?.duration) || undefined,
     }))
     .filter((s) => s.title);
+}
+
+const songHref = (t: { id: string; title: string }): string => `/song/${slugify(t.title)}-${t.id}`;
+
+/** An <ol> of linked songs, with artist and length when known. */
+function songList(tracks: Array<{ id: string; title: string; artist: string; duration?: number }>, max: number): string {
+  if (!tracks.length) return '';
+  return `<ol>${tracks
+    .slice(0, max)
+    .map(
+      (t) =>
+        `<li>${t.id ? `<a href="${esc(songHref(t))}">${esc(t.title)}</a>` : esc(t.title)}` +
+        `${t.artist ? ` \u2014 ${esc(t.artist)}` : ''}${t.duration ? ` (${minutes(t.duration)})` : ''}</li>`,
+    )
+    .join('')}</ol>`;
+}
+
+/** Links to the language hub and its mood hubs — the related-browsing block. */
+function hubLinks(lang: unknown): string {
+  if (typeof lang !== 'string' || !LANG_TAG[lang.toLowerCase()]) return '';
+  const l = lang.toLowerCase();
+  const label = capWord(l);
+  const moods = Object.entries(HUB_MOODS)
+    .map(([k, m]) => `<a href="/${l}-${k}-songs">${label} ${m.label.toLowerCase()} songs</a>`)
+    .join(' \u00b7 ');
+  return `<h2>More ${esc(label)} music</h2><p><a href="/${l}-songs">${esc(label)} songs</a>: trending, new releases, top artists and a guide to ${esc(label)} music. By mood: ${moods}.</p>`;
 }
 
 async function buildMeta(type: string, id: string): Promise<Meta | null> {
@@ -173,11 +260,50 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     const j = await fetchJson(`albums?id=${encodeURIComponent(id)}`);
     const d = j?.data;
     if (!d?.name) return null;
-    const artist = artistNames(d.artists ?? d.primaryArtists);
+    d.name = plain(d.name);
+    const artist = primaryArtists(d).map((a) => a.name).join(', ') || plain(artistNames(d.artists ?? d.primaryArtists));
     const image = bestImg(d.image);
-    const tracks = songRows(d.songs);
+    const rawSongs: any[] = Array.isArray(d.songs) ? d.songs : Array.isArray(d.list) ? d.list : [];
+    const tracks = songRows(rawSongs);
     const year = d.year ? ` (${d.year})` : '';
+    const lang = typeof d.language === 'string' ? d.language : undefined;
+    const first = rawSongs[0] ?? {};
+    const label = plain(first.label ?? first.more_info?.label) || undefined;
+    const copyright = plain(first.copyright ?? first.more_info?.copyright_text) || undefined;
+    const released = longDate(first.releaseDate ?? first.more_info?.release_date);
+    const total = tracks.reduce((n, t) => n + (t.duration ?? 0), 0);
+    const tally = (roles: string[]) => {
+      const counts = new Map<string, number>();
+      for (const s of rawSongs) for (const n of creditNames(s, roles)) counts.set(n, (counts.get(n) ?? 0) + 1);
+      return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    };
+    const singers = tally(['singer', 'playbacksinger', 'vocals']);
+    const music = tally(['music']);
+    const lyrics = tally(['lyricist']);
+    // Per-track singers read better than the primary credit on a soundtrack.
+    const trackRows = tracks.map((t, i) => {
+      const s = creditNames(rawSongs[i], ['singer', 'playbacksinger', 'vocals']);
+      return s.length ? { ...t, artist: listText(s) } : t;
+    });
+    const albumPara =
+      `${d.name} is a${d.year ? ` ${d.year}` : ''}${lang ? ` ${capWord(lang)}` : ''} album` +
+      `${music.length ? ` with music by ${listText(music.slice(0, 3))}` : artist ? ` by ${artist}` : ''}.` +
+      (tracks.length ? ` Its ${tracks.length} song${tracks.length === 1 ? '' : 's'}${total ? ` run about ${Math.max(1, Math.round(total / 60))} minutes in all` : ''}${released ? `, released on ${released}` : ''}${label ? ` by ${label}` : ''}.` : '') +
+      (singers.length ? ` The voices on it include ${listText(singers.slice(0, 5))}${lyrics.length ? `, with lyrics by ${listText(lyrics.slice(0, 3))}` : ''}.` : '');
+    const credits: Array<[string, string]> = [
+      ...(music.length ? [['Music', listText(music)] as [string, string]] : []),
+      ...(singers.length ? [['Singers', listText(singers)] as [string, string]] : []),
+      ...(lyrics.length ? [['Lyrics', listText(lyrics)] as [string, string]] : []),
+      ...(label ? [['Label', label] as [string, string]] : []),
+      ...(copyright ? [['Copyright', copyright] as [string, string]] : []),
+    ];
+    const albumSections =
+      (trackRows.length ? `<h2>Track list</h2>${songList(trackRows, 40)}` : '') +
+      (credits.length ? `<h2>Credits</h2><dl>${credits.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '') +
+      hubLinks(lang);
     return {
+      para: albumPara,
+      sections: albumSections,
       harvestRows: [
         seoRow('album', id, d.name, d.language),
         ...artistRows(d.artists),
@@ -190,7 +316,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       image,
       h1: d.name,
       sub: `Album${artist ? ` · ${artist}` : ''}${d.year ? ` · ${d.year}` : ''}`,
-      tracks,
+      tracks: [],
       links:
         artist && d.artists?.primary?.[0]?.id
           ? [{ href: `/artist/${slugify(artist)}-${d.artists.primary[0].id}`, label: artist }]
@@ -252,8 +378,57 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     const j = await fetchJson(`artists/${encodeURIComponent(id)}`);
     const d = j?.data ?? j;
     if (!d?.name) return null;
+    d.name = plain(d.name);
     const image = bestImg(d.image);
+    const ROLE: Record<string, string> = {
+      singer: 'singer', music: 'composer', 'music director': 'composer', composer: 'composer', lyricist: 'lyricist', actor: 'actor',
+    };
+    const role = ROLE[String(d.dominantType ?? '').toLowerCase()] ?? 'artist';
+    const main = typeof d.dominantLanguage === 'string' && d.dominantLanguage !== 'unknown' ? d.dominantLanguage : undefined;
+    const others = (Array.isArray(d.availableLanguages) ? d.availableLanguages : [])
+      .filter((l: unknown): l is string => typeof l === 'string' && l !== 'unknown' && l !== main)
+      .map(capWord);
+    const top = songRows(d.topSongs);
+    const albumLinks = (list: any[], max: number) =>
+      (Array.isArray(list) ? list : [])
+        .map((al) => ({ id: String(al?.id ?? ''), name: plain(al?.name ?? al?.title), year: al?.year ? String(al.year) : '' }))
+        .filter((al) => al.id && al.name)
+        .slice(0, max);
+    const albums = albumLinks(d.topAlbums, 12);
+    const singles = albumLinks(d.singles, 12).filter((s) => !albums.some((a) => a.id === s.id));
+    const similar = (Array.isArray(d.similarArtists) ? d.similarArtists : [])
+      .map((a: any) => ({ id: String(a?.id ?? ''), name: plain(a?.name) }))
+      .filter((a: { id: string; name: string }) => a.id && a.name)
+      .slice(0, 8);
+    // Biography: an array of {title, text} on the normalized mirror, a JSON
+    // string on the raw one. First paragraph only, capped.
+    let bio = '';
+    try {
+      const b = typeof d.bio === 'string' ? JSON.parse(d.bio) : d.bio;
+      const text = Array.isArray(b) ? plain(b.find((x: any) => x?.text)?.text) : '';
+      bio = text.length > 700 ? `${text.slice(0, text.lastIndexOf(' ', 700))}\u2026` : text;
+    } catch {
+      /* malformed bio — skip the section */
+    }
+    const artistPara =
+      `${d.name} is a${/^[aeiou]/.test(role) ? 'n' : ''} ${role}` +
+      (main ? ` whose songs on VinaX are mostly in ${capWord(main)}${others.length ? `, with others in ${listText(others.slice(0, 5))}` : ''}.` : '.') +
+      (top.length ? ` The best-known include ${listText(top.slice(0, 3).map((t) => `\u201c${t.title}\u201d`))}.` : '') +
+      (albums.length ? ` Albums and soundtracks on VinaX include ${listText(albums.slice(0, 3).map((a) => (a.year ? `${a.name} (${a.year})` : a.name)))}.` : '');
+    const linkList = (items: Array<{ id: string; name: string; year: string }>, kind: string) =>
+      `<ul>${items.map((a) => `<li><a href="/${kind}/${esc(slugify(a.name))}-${esc(a.id)}">${esc(a.name)}</a>${a.year ? ` (${esc(a.year)})` : ''}</li>`).join('')}</ul>`;
+    const artistSections =
+      (top.length ? `<h2>Top songs</h2>${songList(top, 20)}` : '') +
+      (albums.length ? `<h2>Albums</h2>${linkList(albums, 'album')}` : '') +
+      (singles.length ? `<h2>Singles</h2>${linkList(singles, 'album')}` : '') +
+      (bio ? `<h2>Biography</h2><p>${esc(bio)}</p>` : '') +
+      (similar.length
+        ? `<h2>Similar artists</h2><p>${similar.map((a: { id: string; name: string }) => `<a href="/artist/${esc(slugify(a.name))}-${esc(a.id)}">${esc(a.name)}</a>`).join(' \u00b7 ')}</p>`
+        : '') +
+      hubLinks(main);
     return {
+      para: artistPara,
+      sections: artistSections,
       harvestRows: [
         seoRow('artist', id, d.name),
         ...(Array.isArray(d.topSongs) ? d.topSongs : []).flatMap(songRowsDeep),
@@ -266,8 +441,8 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       desc: `Top songs, albums and tracks by ${d.name} on VinaX — free, no login.`,
       image,
       h1: d.name,
-      sub: 'Artist',
-      tracks: songRows(d.topSongs),
+      sub: capWord(role),
+      tracks: [],
       jsonld: {
         '@context': 'https://schema.org',
         '@type': 'MusicGroup',
@@ -283,19 +458,71 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
   const j = await fetchJson(`songs/${encodeURIComponent(id)}`);
   const d = Array.isArray(j?.data) ? j.data[0] : j?.data;
   if (!d?.name) return null;
-  const artist = artistNames(d.artists ?? d.primaryArtists);
+  d.name = plain(d.name);
+  const mi = d.more_info ?? {};
+  const prim = primaryArtists(d);
+  const artist = prim.map((a) => a.name).join(', ') || plain(artistNames(d.artists ?? d.primaryArtists));
   const artistId: string | undefined =
-    d.artists?.primary?.[0]?.id ??
+    prim.find((a) => a.id)?.id ??
     (typeof d.primaryArtistsId === 'string' ? d.primaryArtistsId.split(',')[0] : undefined);
-  const album = d.album?.name;
-  const albumId: string | undefined = d.album?.id;
+  const album = plain(d.album?.name ?? mi.album) || undefined;
+  const albumId: string | undefined = d.album?.id ?? mi.album_id ?? undefined;
   const image = bestImg(d.image);
   const year = d.year ? String(d.year) : undefined;
   const lang = typeof d.language === 'string' ? d.language : undefined;
+  const duration = Number(d.duration ?? mi.duration) || undefined;
+  const label = plain(d.label ?? mi.label) || undefined;
+  const copyright = plain(d.copyright ?? mi.copyright_text) || undefined;
+  const released = longDate(d.releaseDate ?? mi.release_date);
+  const singers = creditNames(d, ['singer', 'playbacksinger', 'vocals']);
+  const music = creditNames(d, ['music']);
+  const lyrics = creditNames(d, ['lyricist']);
+  const starring = creditNames(d, ['starring']);
   const links: Array<{ href: string; label: string }> = [];
-  if (artist && artistId) links.push({ href: `/artist/${slugify(artist)}-${artistId}`, label: artist });
+  if (artist && artistId) links.push({ href: `/artist/${slugify(prim[0]?.name || artist)}-${artistId}`, label: artist });
   if (album && albumId) links.push({ href: `/album/${slugify(album)}-${albumId}`, label: album });
+
+  // Enrichment: the rest of the album and more by the lead artist, fetched in
+  // parallel and capped so a slow mirror only drops a section, never the page.
+  const [albumJ, artistJ] = await Promise.all([
+    albumId ? within(fetchJson(`albums?id=${encodeURIComponent(albumId)}`), 2500) : null,
+    artistId ? within(fetchJson(`artists/${encodeURIComponent(artistId)}`), 2500) : null,
+  ]);
+  const albumData = Array.isArray(albumJ?.data) ? null : albumJ?.data;
+  const albumTracks = songRows(albumData?.songs ?? albumData?.list).filter((t) => t.id !== id);
+  const artistData = Array.isArray(artistJ?.data) ? null : (artistJ?.data ?? null);
+  const artistTracks = songRows(artistData?.topSongs)
+    .filter((t) => t.id !== id && !albumTracks.some((a) => a.id === t.id));
+
+  const creditLine = [
+    singers.length ? `sung by ${listText(singers)}` : artist ? `by ${artist}` : '',
+    music.length ? `with music by ${listText(music)}` : '',
+    lyrics.length ? `and lyrics by ${listText(lyrics)}` : '',
+  ].filter(Boolean).join(' ');
+  const para =
+    `\u201c${d.name}\u201d is a${lang ? ` ${capWord(lang)}` : ''} song${creditLine ? ` ${creditLine}` : ''}.` +
+    (album ? ` It appears on ${album === d.name ? 'the album of the same name' : `the album ${album}`}${released ? `, released on ${released}` : year ? `, released in ${year}` : ''}${label ? ` by ${label}` : ''}.` : '') +
+    (duration ? ` It runs ${minutes(duration)}.` : '') +
+    (starring.length ? ` On screen it features ${listText(starring)}.` : '');
+  const rows: Array<[string, string]> = [
+    ...(singers.length ? [['Singers', listText(singers)] as [string, string]] : artist ? [['Artist', artist] as [string, string]] : []),
+    ...(music.length ? [['Music', listText(music)] as [string, string]] : []),
+    ...(lyrics.length ? [['Lyrics', listText(lyrics)] as [string, string]] : []),
+    ...(starring.length ? [['Starring', listText(starring)] as [string, string]] : []),
+    ...(album ? [['Album', album] as [string, string]] : []),
+    ...(lang ? [['Language', capWord(lang)] as [string, string]] : []),
+    ...(released ? [['Released', released] as [string, string]] : year ? [['Year', year] as [string, string]] : []),
+    ...(duration ? [['Length', minutes(duration)] as [string, string]] : []),
+    ...(label ? [['Label', label] as [string, string]] : []),
+    ...(copyright ? [['Copyright', copyright] as [string, string]] : []),
+  ];
+  const sections =
+    (rows.length ? `<h2>Song details</h2><dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '') +
+    (albumTracks.length ? `<h2>More from ${esc(album ?? 'this album')}</h2>${songList(albumTracks, 15)}` : '') +
+    (artistTracks.length ? `<h2>More by ${esc(prim[0]?.name || artist)}</h2>${songList(artistTracks, 10)}` : '') +
+    hubLinks(lang);
   return {
+    sections,
     harvestRows: songRowsDeep(d),
     crumbs: [
       { name: 'Home', item: `${ORIGIN}/` },
@@ -306,7 +533,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     title: `${d.name}${artist ? ` — ${artist}` : ''}${lang ? ` · ${capWord(lang)} Song` : ''} | VinaX`,
     ogType: 'music.song',
     music: [
-      ...(d.duration ? [['music:duration', String(Math.floor(Number(d.duration)))] as [string, string]] : []),
+      ...(duration ? [['music:duration', String(Math.floor(duration))] as [string, string]] : []),
       ...(artist ? [['music:musician', artist] as [string, string]] : []),
       ...(album ? [['music:album', album] as [string, string]] : []),
       ...(year ? [['music:release_date', year] as [string, string]] : []),
@@ -314,8 +541,8 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
     desc: `Listen to ${d.name}${artist ? ` by ${artist}` : ''}${album ? ` from ${album}` : ''}${year ? ` (${year})` : ''}${lang ? ` — ${capWord(lang)} song` : ''} on VinaX — free, no login.`,
     image,
     h1: d.name,
-    sub: `Song${artist ? ` · ${artist}` : ''}${album ? ` · ${album}` : ''}${lang ? ` · ${lang}` : ''}${year ? ` · ${year}` : ''}`,
-    para: `\u201c${d.name}\u201d is a${lang ? ` ${capWord(lang)}` : ''} song${artist ? ` by ${artist}` : ''}${album ? ` from ${album}` : ''}${year ? `, released in ${year}` : ''}. Stream it online free on VinaX \u2014 instant play, synced lyrics, offline downloads, no login and no ads.`,
+    sub: `Song${artist ? ` · ${artist}` : ''}${album ? ` · ${album}` : ''}${lang ? ` · ${capWord(lang)}` : ''}${year ? ` · ${year}` : ''}`,
+    para,
     tracks: [],
     links,
     jsonld: {
@@ -324,7 +551,7 @@ async function buildMeta(type: string, id: string): Promise<Meta | null> {
       '@id': `${ORIGIN}/song/${slugify(d.name)}-${id}#recording`,
       name: d.name,
       image: image || undefined,
-      duration: isoDuration(d.duration),
+      duration: isoDuration(duration),
       datePublished: year,
       inLanguage: langTag(lang),
       genre: typeof d.genre === 'string' ? d.genre : undefined,
@@ -476,7 +703,8 @@ export async function renderHub(
       .join(' \u00b7 ');
     const content =
       `<main id="seo-content"><h1>${esc(label)} ${esc(hub.label)} Songs</h1>` +
-      `<p>${esc(label)} ${esc(hub.label.toLowerCase())} songs \u2014 ${esc(hub.blurb)}. Stream free on VinaX: no login, no ads, synced lyrics and offline downloads.</p>` +
+      `<p>${esc(label)} ${esc(hub.label.toLowerCase())} songs \u2014 ${esc(hub.blurb)}. Stream free on VinaX: no login, synced lyrics and offline downloads in the Android app.</p>` +
+      `<p>Tap any song below to play it, and the VinaX DJ keeps going with the next five songs that follow from it, in ${esc(label)} first. The <a href="/${lang}-songs">${esc(label)} songs</a> page adds trending songs, new releases, top artists and a short guide to ${esc(label)} music, its composers and its singers.</p>` +
       list +
       `<p>${siblings}</p>` +
       `<nav aria-label="VinaX"><a href="/${lang}-songs">${esc(label)} Songs</a> <a href="/">Home</a> <a href="/charts">Charts</a> <a href="/discover">Discover</a></nav></main>`;
@@ -547,6 +775,7 @@ export async function renderEntity(
       `<main id="seo-content"><h1>${esc(meta.h1)}</h1><p>${esc(meta.sub)}</p>${meta.para ? `<p>${esc(meta.para)}</p>` : ''}${xlinks}` +
       (meta.image ? `<img src="${esc(meta.image)}" alt="${esc(meta.h1)}" width="300" height="300"/>` : '') +
       list +
+      (meta.sections ?? '') +
       `<nav aria-label="VinaX"><a href="/">Home</a> <a href="/charts">Charts</a> <a href="/discover">Discover</a> <a href="/telugu-songs">Telugu Songs</a> <a href="/hindi-songs">Hindi Songs</a> <a href="/tamil-songs">Tamil Songs</a></nav></main>`;
     const html = shell
       .replace(/<title>[^<]*<\/title>/, `<title>${esc(meta.title)}</title>`)
