@@ -349,4 +349,17 @@ export default {
     // Host-level middleware (apex 301, update.* / admin.* redirects), then the router.
     return hostMiddleware({ request, next: () => route(request, env, ctx) });
   },
+  /**
+   * 8.5.0 — Cron Trigger (wrangler.toml `[triggers]`): the status probe round
+   * every 30 minutes, so the public status page no longer depends on GitHub's
+   * scheduler (which fired the 30-minute tick only every 4–6 hours).
+   */
+  async scheduled(_event: unknown, env: Env, ctx: ExecCtx): Promise<void> {
+    ctx.waitUntil(
+      m_api_status.recordProbeRound(env as unknown as Parameters<typeof m_api_status.recordProbeRound>[0]).then(
+        (r) => console.log(`[status] scheduled tick recorded ${r.recorded} components`),
+        (e: unknown) => console.warn('[status] scheduled tick failed:', e instanceof Error ? e.message : String(e)),
+      ),
+    );
+  },
 };

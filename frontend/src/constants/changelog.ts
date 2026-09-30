@@ -24,6 +24,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       { type: 'new', text: 'AI Playlist shows a short line under each pick on why it fits what you asked for.' },
       { type: 'improved', text: 'Like the song that’s playing and what comes next leans towards it straight away. Your own queued songs stay where they are.' },
       { type: 'improved', text: 'The DJ sticks to what it knows. Its intros and hand-offs talk about the music and the songs in your queue, and never claim awards, chart places or other facts VinaX can’t check.' },
+      { type: 'fixed', text: 'The VinaX status page no longer shows the service as down while everything is working. Its health check now runs every 30 minutes on its own.' },
     ],
   },
   '8.4.0': {

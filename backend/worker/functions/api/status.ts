@@ -4,7 +4,7 @@
  * GET  /api/status → current state of every monitored component plus 90 days
  *   of daily uptime bars (from Supabase uptime_daily / uptime_last).
  * POST /api/status → runs the probes SERVER-SIDE and records the results.
- *   Called by the status-tick GitHub Action every 30 minutes. Deliberately
+ *   Called by the status-tick GitHub Action (a second, outside tick). Deliberately
  *   unauthenticated: a caller only *triggers* a probe round — every result
  *   is measured here, never taken from the request — so a stranger can at
  *   worst spend one rate-limited probe round.
@@ -14,6 +14,15 @@
  * records the API as up, and the reader marks it down when ticks stop
  * arriving (stale uptime_last) — which is exactly what an API outage or a
  * dead scheduler looks like from outside.
+ *
+ * 8.5.0 — the Worker's own Cron Trigger (wrangler.toml `[triggers]`, every
+ * 30 min) now runs the same round through `recordProbeRound()`. GitHub's
+ * scheduler had been firing the 30-minute workflow only every 4–6 hours
+ * (runs on 2026-09-27…30), so `uptime_last` went stale past STALE_MS and the
+ * public page read "API down / outage" for most of each day while the API
+ * answered normally. A cron event only fires when the Worker runs, so "the
+ * tick ran" still means the API is up; the GitHub tick stays as an outside
+ * check (two ticks only add rows to the same daily up/total counts).
  */
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
 import { sbCount, sbSelect, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
@@ -103,7 +112,16 @@ export const onRequestPost = async (context: { request: Request; env: SupabaseEn
   const limited = rateLimit(request, 'status-tick', { capacity: 6, refillPerMinute: 1 });
   if (limited) return limited;
   if (!supabaseConfigured(env)) return json({ error: 'not_configured' }, 503);
+  const { recorded, results } = await recordProbeRound(env);
+  return json({ ok: true, recorded, results });
+};
 
+/**
+ * One probe round, recorded: shared by POST /api/status and the Worker's
+ * scheduled (Cron Trigger) handler. Returns how many components were written.
+ */
+export async function recordProbeRound(env: SupabaseEnv): Promise<{ recorded: number; results: ProbeResult[] }> {
+  if (!supabaseConfigured(env)) return { recorded: 0, results: [] };
   const results = await runProbes(env);
   const now = new Date().toISOString();
   const day = now.slice(0, 10); // UTC day — the whole page reports in UTC days
@@ -132,8 +150,8 @@ export const onRequestPost = async (context: { request: Request; env: SupabaseEn
     );
     if (okDaily && okLast) wrote += 1;
   }
-  return json({ ok: true, recorded: wrote, results });
-};
+  return { recorded: wrote, results };
+}
 
 /** GET — everything the status page needs, cached a minute at the edge. */
 export const onRequestGet = async (context: { request: Request; env: SupabaseEnv }): Promise<Response> => {

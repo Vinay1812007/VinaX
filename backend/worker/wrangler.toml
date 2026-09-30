@@ -4,6 +4,7 @@ name = "vinax-api"
 main = "index.ts"
 compatibility_date = "2026-08-01"
 
+
 # Same-zone routes: the Worker answers exactly these paths on the production
 # domain; everything else is served by the Pages project attached to the
 # domain (which must stay attached — it is the fallthrough origin).
@@ -168,3 +169,9 @@ enabled = true
 head_sampling_rate = 1
 invocation_logs = true
 persist = true
+
+# 8.5.0 — the status probe round every 30 minutes (index.ts `scheduled`).
+# GitHub's scheduled workflows fired the 30-minute status tick only every
+# 4-6 hours, which read as "API down" on the public status page.
+[triggers]
+crons = ["7,37 * * * *"]
