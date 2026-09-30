@@ -163,8 +163,11 @@ export const useLibraryStore = create<LibraryState>()(
       },
       isArtistHidden: (song) => isSongBlocked(song, get()),
       toggleFavorite: (song) => {
-        if (!get().favorites.some((s) => s.id === song.id))
+        if (!get().favorites.some((s) => s.id === song.id)) {
           void import('@/services/analytics/telemetry').then((m) => m.trackFavorite(song));
+          // 8.5.0 — liking the song that is playing steers what comes next right away.
+          void import('@/services/recommendation/adaptive').then((m) => m.noteLikeAndMaybeReplan(song)).catch(() => undefined);
+        }
         const { favorites, saved, hiddenSongIds } = get();
         const exists = favorites.some((s) => s.id === song.id);
         recordFavorite(song, !exists);

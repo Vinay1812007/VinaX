@@ -44,6 +44,7 @@ import { type SupabaseEnv } from '../_lib/supabase';
 import { pickBySeed, styleAngle } from '../_lib/variety';
 import { canonicalKey } from '../_lib/identityCore';
 import { searchCatalogSongs } from '../_lib/trends/catalog';
+import { buildFacts, groundedLine } from '../_lib/grounding';
 
 type DjEnv = AiEnv & SupabaseEnv;
 
@@ -132,6 +133,7 @@ THE CRAFT (8.0) — how a master programmer sequences Indian music
 13. Anchors: the listener must meet something they know at least every fourth song (a "known" pool entry or a preferredArtists name). A discovery is always followed by a familiar song, never by a second discovery.
 14. Never place two songs from the same album or film next to each other unless the pool offers nothing else that fits.
 15. When two picks fit equally, prefer the one the listener completed or liked over one merely played.
+16. FACTS (8.5): the intro, every reason and every segue use only what the POOL and the listener context say — titles, artists, albums, years, languages, moods — and what anyone can hear in the music (tempo, voice, instruments, feel). Never state awards, charts, sales or stream counts, box office, release stories, biographies, or any name or number that is not in the data. A line that does is removed before anyone hears it.
 
 OUTPUT — JSON only, exactly this shape:
 {"intro":"one warm spoken sentence introducing this stretch, max 22 words, no song titles","songs":[{"songId":"the pool entry's id, copied exactly","title":"exact pool title","artist":"exact pool artist","reason":"why it fits and how it flows, max 12 words, e.g. similar energy, same language vocals, smoother transition","segue":"one natural spoken line a DJ would say as this song starts, max 20 words, may name the song and artist (an empty string when the brief says segues are not needed)","confidence":0.0,"fromPool":true}]}
@@ -201,6 +203,8 @@ const clip = (v: unknown, n: number): string => (typeof v === 'string' ? v.repla
  */
 export function parsePicks(content: string | null, pool: PoolSong[], count: number, maxDiscover = 0, avoidBlob = ''): { intro: string; songs: DjPick[] } {
   const parsed = extractJson<{ intro?: unknown; songs?: unknown }>(content);
+  // 8.5.0 — spoken lines keep to what the pool says (_lib/grounding.ts).
+  const facts = buildFacts(pool.flatMap((p) => [p.title, p.artist, p.album, p.year, p.language]));
   const byId = new Map(pool.filter((p) => p.id).map((p) => [p.id as string, p]));
   const byKey = new Map(pool.map((p) => [canonKey(p.title, p.artist), p]));
   const used = new Set<string>();
@@ -219,19 +223,21 @@ export function parsePicks(content: string | null, pool: PoolSong[], count: numb
       const key = canonKey(hit.title, hit.artist);
       if (used.has(key)) continue;
       used.add(key);
-      songs.push({ songId: hit.id ?? null, title: hit.title, artist: hit.artist, reason: clip(r.reason, 120), segue: clip(r.segue, 160), confidence: conf, fromPool: true });
+      songs.push({ songId: hit.id ?? null, title: hit.title, artist: hit.artist, reason: groundedLine(clip(r.reason, 120), facts), segue: groundedLine(clip(r.segue, 160), facts), confidence: conf, fromPool: true });
     } else if (maxDiscover > 0 && discoveries < maxDiscover && title && artist) {
       const key = canonKey(title, artist);
       if (used.has(key) || (title.length >= 4 && avoidBlob.includes(title.toLowerCase()))) continue;
       used.add(key);
       discoveries += 1;
-      songs.push({ songId: null, title, artist, reason: clip(r.reason, 120), segue: clip(r.segue, 160), confidence: conf, fromPool: false });
+      // A discovery's own title and artist may be named in its lines (the app verifies it in the catalogue before it plays).
+      const own = buildFacts([...facts.words, title, artist]);
+      songs.push({ songId: null, title, artist, reason: groundedLine(clip(r.reason, 120), own), segue: groundedLine(clip(r.segue, 160), own), confidence: conf, fromPool: false });
     } else {
       continue;
     }
     if (songs.length >= count) break;
   }
-  return { intro: clip(parsed?.intro, 200), songs };
+  return { intro: groundedLine(clip(parsed?.intro, 200), facts), songs };
 }
 
 /** Deterministic per-request seed so two rounds for the same seed song differ. */
