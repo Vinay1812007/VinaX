@@ -6,8 +6,10 @@ import { TRASH_TTL_MS } from '@/features/library/trash';
 
 vi.mock('@/services/personalization/updater', () => ({ recordFavorite: () => undefined, recordDislike: vi.fn(), recordPlaylistAdd: vi.fn() }));
 vi.mock('@/services/analytics/telemetry', () => ({ trackDislike: vi.fn(), trackPlaylistAdd: vi.fn(), trackFavorite: vi.fn() }));
+const likeReplan = vi.fn();
+vi.mock('@/services/recommendation/adaptive', () => ({ noteLikeAndMaybeReplan: (...a: unknown[]) => likeReplan(...a) }));
 
-import { orderCollections, useLibraryStore } from './libraryStore';
+import { orderCollections, setNowPlayingProbe, useLibraryStore } from './libraryStore';
 import { recordDislike, recordPlaylistAdd } from '@/services/personalization/updater';
 
 const song = (id: string, title: string, artist = 'Artist'): Song => ({
@@ -183,5 +185,38 @@ describe('libraryStore 8.5.0 — taste signals', () => {
     expect(recordPlaylistAdd).toHaveBeenCalledTimes(1);
     s.addToCollection('missing', song('p4', 'D'));
     expect(recordPlaylistAdd).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('libraryStore 8.5.1 — a like re-plans only for the song that is playing', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    reset();
+    likeReplan.mockClear();
+  });
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it('liking the playing song loads the re-plan; liking any other song does not', async () => {
+    setNowPlayingProbe(() => 'playing');
+    useLibraryStore.getState().toggleFavorite(song('other', 'Other'));
+    await flush();
+    expect(likeReplan).not.toHaveBeenCalled();
+    const playing = song('playing', 'Now');
+    useLibraryStore.getState().toggleFavorite(playing);
+    await flush();
+    expect(likeReplan).toHaveBeenCalledWith(playing);
+  });
+
+  it('un-liking never re-plans, and nothing plays before the player registers', async () => {
+    setNowPlayingProbe(() => 'p1');
+    const s = song('p1', 'Now');
+    useLibraryStore.getState().toggleFavorite(s);
+    useLibraryStore.getState().toggleFavorite(s);
+    await flush();
+    expect(likeReplan).toHaveBeenCalledTimes(1);
+    setNowPlayingProbe(() => null);
+    useLibraryStore.getState().toggleFavorite(song('p2', 'X'));
+    await flush();
+    expect(likeReplan).toHaveBeenCalledTimes(1);
   });
 });
