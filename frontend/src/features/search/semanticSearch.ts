@@ -7,6 +7,8 @@ import { semanticRank } from '@/services/ai/semantic';
 import { stripExplicit } from '@/services/kidMode';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
+import { mergeReading, readSearchOnServer } from '@/services/ai/searchReading';
+import { seedSongs } from './seedSearch';
 
 /**
  * 8.2.0 — natural-language search ("sad telugu songs for rain").
@@ -33,6 +35,8 @@ export interface SemanticMatches {
   playlists: Playlist[];
   /** Where the song ranking came from: the server model, the device, or both. */
   space: 'model' | 'local' | 'mixed';
+  /** 8.5.0 — the "songs like <name>" seed: what was asked, and what the catalogue matched it to (null: not found). */
+  seed?: { asked: string; matched: { kind: 'song'; title: string; artist: string } | { kind: 'artist'; name: string } | null } | null;
 }
 
 export interface SemanticContext {
@@ -68,26 +72,60 @@ function librarySongs(): Song[] {
   return out;
 }
 
+const fetchSongs = (queries: string[], signal?: AbortSignal): Promise<Song[]> =>
+  Promise.allSettled(queries.map((q) => searchSongs(q, 20, { signal }))).then((r) => r.flatMap((x) => (x.status === 'fulfilled' ? x.value : [])));
+
+const inDecade = (s: Song, decade: number): boolean => {
+  const y = Number(String(s.year ?? '').slice(0, 4));
+  return Number.isFinite(y) && y >= decade && y < decade + 10;
+};
+
 export async function findSemanticMatches(query: string, ctx: SemanticContext): Promise<SemanticMatches> {
-  const intent = parseMusicIntent(query);
-  const langs = intent.languages.length ? intent.languages : ctx.pinned.slice(0, 2);
-  const queries = catalogQueries(intent, langs, 2);
-  const [catalogue, lists] = await Promise.all([
-    Promise.allSettled(queries.map((q) => searchSongs(q, 20, { signal: ctx.signal }))).then((r) => r.flatMap((x) => (x.status === 'fulfilled' ? x.value : []))),
+  const local = parseMusicIntent(query);
+  const langs0 = local.languages.length ? local.languages : ctx.pinned.slice(0, 2);
+  const queries = catalogQueries(local, langs0, 2);
+  // 8.5.0 — the server's AI reading runs alongside the first catalogue fetch;
+  // it can only add cues (a mood, a seed, a period) the word lists missed.
+  const [catalogue, lists, reading] = await Promise.all([
+    fetchSongs(queries, ctx.signal),
     queries[0] ? searchPlaylists(queries[0], 12, { signal: ctx.signal }).catch(() => [] as Playlist[]) : Promise.resolve([] as Playlist[]),
+    readSearchOnServer(query, ctx.pinned, ctx.signal),
   ]);
+  const intent = mergeReading(local, reading);
+  const langs = intent.languages.length ? intent.languages : ctx.pinned.slice(0, 2);
+  // What the reading added is fetched too (at most two more searches), plus the seed's similar songs.
+  const extraQueries = intent === local ? [] : catalogQueries(intent, langs, 4).filter((q) => !queries.includes(q)).slice(0, 2);
+  const [extra, seed] = await Promise.all([
+    extraQueries.length ? fetchSongs(extraQueries, ctx.signal) : Promise.resolve([] as Song[]),
+    intent.seed ? seedSongs(intent.seed.text, ctx.signal) : Promise.resolve(null),
+  ]);
+  const seeded = !!seed && seed.songs.length > 0;
+  // A seed with nothing else asked ("songs like <name>"): the catalogue's similar songs ARE the answer.
+  const seedOnly = seeded && intent.cues - 1 - intent.languages.length <= 0;
 
   const library = useLibraryStore.getState();
   const muted = new Set(ctx.muted);
-  let pool = stripExplicit([...(ctx.results?.songs ?? []), ...librarySongs(), ...catalogue]).filter(
-    (s) => !(s.language && muted.has(s.language)) && !isSongBlocked(s, library),
+  const candidates = seeded ? (seedOnly ? seed.songs : [...seed.songs, ...catalogue, ...extra]) : [...(ctx.results?.songs ?? []), ...librarySongs(), ...catalogue, ...extra];
+  const seedKey = seed?.song ? seed.song.id : null;
+  let pool = stripExplicit(candidates).filter(
+    (s) => s.id !== seedKey && !(s.language && muted.has(s.language)) && !isSongBlocked(s, library),
   );
   // A named language is the request's strongest word: keep to it when it leaves enough.
   if (intent.languages.length) {
     const inLang = pool.filter((s) => s.language && intent.languages.includes(s.language));
     if (inLang.length >= 5) pool = inLang;
   }
-  const ranked = await semanticRank(query, pool, { intent, leashMs: 4000, embedLimit: 128, signal: ctx.signal });
+  // 8.5.0 — a named decade is a filter, not only a nudge, whenever enough songs carry a year inside it.
+  if (intent.decade != null) {
+    const decade = intent.decade;
+    const kept = pool.filter((s) => inDecade(s, decade));
+    if (kept.length >= 5) pool = kept;
+  }
+  // The seed's own name is not what to rank against ("songs like X" would favour covers of X).
+  const rankQuery = intent.seed ? query.replace(intent.seed.text, ' ').replace(/\s+/g, ' ').trim() : query;
+  const ranked = seedOnly
+    ? pool.map((song) => ({ song, score: 0, space: 'local' as const }))
+    : await semanticRank(rankQuery || query, pool, { intent, leashMs: 4000, embedLimit: 128, signal: ctx.signal });
   const top = ranked.slice(0, SONGS_SHOWN);
   const spaces = new Set(top.map((x) => x.space));
   const space = spaces.size > 1 ? 'mixed' : spaces.has('model') ? 'model' : 'local';
@@ -117,5 +155,21 @@ export async function findSemanticMatches(query: string, ctx: SemanticContext): 
     .slice(0, 8)
     .map((x) => x.p);
 
-  return { songs: top.map((x) => x.song), artists, playlists, space };
+  const seedInfo = intent.seed
+    ? {
+        asked: intent.seed.text,
+        matched: seed?.song ? { kind: 'song' as const, title: seed.song.title, artist: seed.song.artists[0]?.name ?? seed.song.subtitle } : seed?.artist ? { kind: 'artist' as const, name: seed.artist } : null,
+      }
+    : null;
+  return { songs: top.map((x) => x.song), artists, playlists, space, seed: seedInfo };
 }
+
+/** 8.5.0 — one honest line: whose similar songs these are, or that the named song was not found. */
+export function explainMatches(query: string, seed: SemanticMatches['seed']): string {
+  if (!seed) return `Ranked by how well each song fits “${query}”.`;
+  if (!seed.matched) return `“${seed.asked}” isn’t in the catalogue, so these match the rest of your words.`;
+  return seed.matched.kind === 'song'
+    ? `Songs like “${seed.matched.title}” by ${seed.matched.artist}, from the catalogue’s similar songs.`
+    : `Songs like ${seed.matched.name}’s, from the catalogue’s similar songs.`;
+}
+

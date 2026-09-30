@@ -106,7 +106,8 @@ on any client honouring a flag.
   "features": { "dj": true, "curate-metadata": true, "curate-ranking": true,
                 "curate-home": true, "curate-shelves": true, "playlist": true,
                 "vinaxai": true, "assistant": true, "tts": true,
-                "lyrics": true, "image": true, "embed": true },
+                "lyrics": true, "image": true, "embed": true,
+                "search": true },
   "dailyTokenCap": null, "dailyCostCapUsd": null,
   "updatedAt": "…", "updatedBy": "…" }
 ```
@@ -181,7 +182,7 @@ All schedules are workflows in `.github/workflows/`. They call the Worker; none 
 | Workflow | When | What it does |
 | --- | --- | --- |
 | `synthetic-uptime.yml` | Every 30 minutes | Probes the app shell, `/api/geo` and `/api/handoff` with three attempts each, then runs `frontend/scripts/edge-integrity.mjs`, which fetches the live shell and checks that every asset it references answers with JavaScript. A failure opens one issue titled "Synthetic uptime probe failed" (de-duplicated). |
-| `status-tick.yml` | Every 30 minutes | `POST /api/status`. The Worker runs its component probes itself and records one tick per component for the status page. |
+| `status-tick.yml` | Every 30 minutes (GitHub fires it every 4–6 hours in practice) | `POST /api/status`. The Worker runs its component probes itself and records one tick per component for the status page. Since 8.5 this is the OUTSIDE check: the Worker's own Cron Trigger (`[triggers]` in `backend/worker/wrangler.toml`, `7,37 * * * *`, `scheduled` in `index.ts`) runs the same round every 30 minutes, so the page no longer reads "API down" while ticks are late. The trigger is applied by `wrangler deploy`; check it under the Worker's Settings → Triggers. |
 | `ai-daily-push.yml` | Five times a day | Calls `/api/cron/ai-daily-push` with `x-cron-secret`. The endpoint refuses to fire more than once per 2 h 30 min. |
 | `song-push.yml` | Daily at 13:30 UTC | Calls `/api/cron/song-push`. |
 | `weekly-digest.yml` | Monday 03:30 UTC | Calls `/api/cron/weekly-digest`; the result is the digest card on the console's Overview. |

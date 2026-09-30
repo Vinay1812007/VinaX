@@ -16,6 +16,14 @@ export const EVENT_WEIGHTS = Object.freeze({
   SOFT_MUTE: -3.75,
   /** v7.0.0 — a play that started from the listener's own search: a deliberate choice, not a passive one. */
   SEARCH_PLAY: 1.5,
+  /**
+   * 8.5.0 — "Not interested" on one song: two skips' worth for that song and
+   * its artists (the song itself is hidden for good by the library). The
+   * language is left alone: one disliked song is not a verdict on a language.
+   */
+  DISLIKE: -1.5,
+  /** 8.5.0 — the listener put the song in a playlist of their own: a deliberate keep, worth a play. */
+  PLAYLIST_ADD: 1.0,
 } as const);
 
 /**
@@ -38,4 +46,4 @@ export const DECAY = Object.freeze({
 /** Hard ceiling on any single affinity score (language, artist, song). */
 export const MAX_AFFINITY = 60;
 
-export const EVENT_WEIGHTS_VERSION = '1.1.0';
+export const EVENT_WEIGHTS_VERSION = '1.2.0';

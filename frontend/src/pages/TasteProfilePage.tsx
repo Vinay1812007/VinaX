@@ -100,6 +100,10 @@ function TasteDials() {
   );
 }
 
+const MOOD_LABEL: Record<string, string> = { romantic: 'Romantic', energetic: 'Energetic', chill: 'Chill', melancholy: 'Sad and soulful', devotional: 'Devotional' };
+const MODE_LABEL: Record<string, string> = { familiar: 'Familiar', balanced: 'Balanced', discover: 'Discover' };
+const pct = (v: number | null): string => (v == null ? '—' : `${Math.round(v * 100)}%`);
+
 export default function TasteProfilePage() {
   usePageTitle('Taste Profile');
   const { data, isLoading, isError, refetch } = useTasteInsights();
@@ -205,6 +209,39 @@ export default function TasteProfilePage() {
                 </div>
               ))}
             </div>
+          </Section>
+
+          {/* 8.5.0 — the habits the queue and the mixes adapt to. */}
+          <Section title="How you listen" note="Skips lower what the queue offers next; the new-to-you share is how often you play artists you have barely heard.">
+            <div className="vx-kpis is-three">
+              {[
+                [pct(data.skipRate), 'Skip rate'],
+                [pct(data.newToYouShare), 'New to you (30 days)'],
+                [MODE_LABEL[data.exploration.mode] ?? 'Balanced', 'Discovery mode'],
+              ].map(([v, l]) => (
+                <div key={l} className="vx-kpi !p-0 !bg-transparent !shadow-none">
+                  <span className="vx-kpi-label">{l}</span>
+                  <span className="vx-kpi-value">{v}</span>
+                </div>
+              ))}
+            </div>
+            {data.topMoods.length > 0 && (
+              <div className="mt-4">
+                {data.topMoods.map((m) => (
+                  <Bar key={m.mood} label={MOOD_LABEL[m.mood] ?? m.mood} value={m.share * 100} max={100} suffix={pct(m.share)} />
+                ))}
+              </div>
+            )}
+            {data.topGenres.length > 0 && (
+              <p className="mt-3 text-[14px] text-ink-300">
+                Often in your listening: <span className="text-ink-100 font-medium">{data.topGenres.join(', ')}</span>
+              </p>
+            )}
+            {(data.totals.dislikes ?? 0) > 0 && (
+              <p className="mt-2 text-sm text-ink-400">
+                {data.totals.dislikes === 1 ? 'One song' : `${data.totals.dislikes} songs`} marked Not interested. Those artists come up less; the songs never play.
+              </p>
+            )}
           </Section>
         </>
       )}

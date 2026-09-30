@@ -236,6 +236,14 @@ export function trackComplete(song: Song): void {
 export function trackFavorite(song: Song): void {
   void send('favorite', song);
 }
+/** 8.5.0 — "Not interested" on a song. Like every event, only sent with analytics consent. */
+export function trackDislike(song: Song): void {
+  void send('dislike', song);
+}
+/** 8.5.0 — the listener added a song to one of their playlists. Consent-gated. */
+export function trackPlaylistAdd(song: Song): void {
+  void send('playlist_add', song);
+}
 export function trackShare(): void {
   void send('share', currentSong());
 }

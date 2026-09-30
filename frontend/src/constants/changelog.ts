@@ -12,6 +12,21 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.5.0': {
+    title: 'VinaX learns what you keep and what you pass on',
+    changes: [
+      { type: 'improved', text: 'Not interested now teaches VinaX: that artist comes up less in your mixes and queues, while the language you listen in is left alone. Undo puts things back.' },
+      { type: 'improved', text: 'Songs you add to your own playlists count towards your taste, so your mixes lean towards what you keep. Importing a whole playlist does not.' },
+      { type: 'new', text: 'Your taste profile now shows how you listen: your skip rate, how much of the last month was new to you, your discovery mode, and the moods and styles you play most.' },
+      { type: 'new', text: 'Home has a Similar artists shelf: artists like the ones you play most, that you haven’t played yet. Artists you’ve blocked or asked to hear less of stay out.' },
+      { type: 'new', text: 'Search understands more of what you describe: “songs like” a song or a singer, slow or fast, instrumental, and a decade such as “the 2000s” now keeps to songs from those years. When VinaX AI is on, it also reads descriptions the word lists miss, like “something for a candle-light dinner”.' },
+      { type: 'fixed', text: 'AI Playlist and the music expert only add a song when the catalogue has that exact song. Before, a pick the catalogue didn’t have could be quietly swapped for a different song; now it is left out and a matching catalogue song fills the gap.' },
+      { type: 'new', text: 'AI Playlist shows a short line under each pick on why it fits what you asked for.' },
+      { type: 'improved', text: 'Like the song that’s playing and what comes next leans towards it straight away. Your own queued songs stay where they are.' },
+      { type: 'improved', text: 'The DJ sticks to what it knows. Its intros and hand-offs talk about the music and the songs in your queue, and never claim awards, chart places or other facts VinaX can’t check.' },
+      { type: 'fixed', text: 'The VinaX status page no longer shows the service as down while everything is working. Its health check now runs every 30 minutes on its own.' },
+    ],
+  },
   '8.4.0': {
     title: 'Pages worth reading, and one ad where it belongs',
     changes: [

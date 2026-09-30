@@ -40,8 +40,8 @@ VARIETY ACROSS RUNS: the request carries a varietySeed (a nonce plus the current
 STYLE ANGLE: the request also carries a styleAngle — a specific creative direction (deep cuts, live versions, collaborations, soundtracks, indie, etc). Let it steer the ATMOSPHERE of at least half the picks so consecutive generations for the same prompt land in visibly different neighborhoods.
 AVOID REPEATS: when the request lists avoidTitles (songs this listener's recent generations already used), none of them may appear again — unless the request explicitly asks for one by name.
 Respond with a JSON object of exactly this shape and nothing else:
-{"name":"Short playlist name, max 5 words","description":"One friendly sentence about the playlist","songs":[{"title":"Song name","artist":"Artist name"}]}
-Include 18 to 25 songs.`;
+{"name":"Short playlist name, max 5 words","description":"One friendly sentence about the playlist","songs":[{"title":"Song name","artist":"Artist name","reason":"why it fits THIS request — mood, tempo, language or moment — max 12 words"}]}
+Include 18 to 25 songs. A reason speaks only about how the song fits the request; it never states facts about the artist, the film, awards, dates or chart history.`;
 
 const PLAYLIST_GATHER_PROMPT = `You supply the raw song pool for VinaX's AI Playlist. From a listener's playlist request, list real, well-known songs matching its mood, activity, energy, era and above all its language (a requestReading, when given, is the parsed request: honour its languages, activity and energy): a request that names or implies a language keeps nearly every candidate in it; otherwise preferredLanguages decide. When a LISTENER PROFILE is given, tilt the pool toward its topArtists and languages and leave out its recentlyPlayed songs. The request's varietySeed is a shuffle seed: vary the pool between runs — different eras, artists and worthy deep cuts, never one canonical list — and no song from avoidTitles may appear. Every title + artist pair must be a real, famous, findable song — invented titles, dialogues, BGM and jukebox strips are forbidden. Return ONLY JSON {"songs":[{"title":"...","artist":"..."}]} with about 25 songs. No commentary.`;
 
@@ -68,7 +68,8 @@ export const onRequestOptions = async (): Promise<Response> =>
 interface Parsed {
   name: string;
   description: string;
-  songs: Array<{ title: string; artist: string }>;
+  /** 8.5.0 — `reason` is present when the curator wrote one (the gather pool has none). */
+  songs: Array<{ title: string; artist: string; reason?: string }>;
 }
 
 function parsePlaylist(content: string | null): Parsed {
@@ -76,14 +77,18 @@ function parsePlaylist(content: string | null): Parsed {
   const parsed = extractJson<{
     name?: unknown;
     description?: unknown;
-    songs?: Array<{ title?: unknown; artist?: unknown }>;
+    songs?: Array<{ title?: unknown; artist?: unknown; reason?: unknown }>;
   }>(content);
   if (!parsed) return empty;
   const songs = Array.isArray(parsed.songs)
     ? parsed.songs
         .filter((s) => s && typeof s.title === 'string' && typeof s.artist === 'string')
         // Clipped like every other model string — a runaway title never ships.
-        .map((s) => ({ title: String(s.title).trim().slice(0, 200), artist: String(s.artist).trim().slice(0, 200) }))
+        .map((s) => ({
+          title: String(s.title).trim().slice(0, 200),
+          artist: String(s.artist).trim().slice(0, 200),
+          ...(typeof s.reason === 'string' && s.reason.trim() ? { reason: s.reason.replace(/\s+/g, ' ').trim().slice(0, 120) } : {}),
+        }))
         .filter((s) => s.title && s.artist)
         .slice(0, 30)
     : [];
@@ -234,18 +239,36 @@ async function handlePost(context: {
   env: PlaylistEnv;
   waitUntil?: (p: Promise<unknown>) => void;
 }): Promise<Response> {
+  const run = await runPlaylist(context);
+  if (!run.ok) return run.response;
+  return json({ ...run.parsed, reading: run.reading, model: run.model });
+}
+
+/** 8.5.0 — one generation, shared by /api/playlist (titles) and /api/ai/playlist (catalogue ids). */
+export type PlaylistRun =
+  | { ok: true; parsed: Parsed; reading: RequestReading; model: string | null; prompt: string; languages: string[] }
+  /** `aiUnavailable` (not configured, switched off, over budget, or no usable answer) lets a caller fall back; `prompt` is set once the body was read. */
+  | { ok: false; response: Response; aiUnavailable: boolean; prompt?: string; languages?: string[] };
+
+export async function runPlaylist(context: {
+  request: Request;
+  env: PlaylistEnv;
+  waitUntil?: (p: Promise<unknown>) => void;
+}): Promise<PlaylistRun> {
   const { request, env } = context;
   const isApp = request.headers.get('x-vinax-client') === 'app';
+  // One bucket for both playlist routes: alternating them never doubles the budget.
   const limited = await rateLimitAsync(request, 'playlist', { capacity: 6, refillPerMinute: 3 }, env);
-  if (limited) return limited;
+  if (limited) return { ok: false, response: limited, aiUnavailable: false };
   // 7.2.0 — the owner's AI switches and spend caps.
   // Refusals are logged (error ai_disabled / ai_over_budget) for the console.
-  const refuse = (b: AiBlock): Response => {
+  let prompt = '';
+  let languages: string[] = [];
+  const refuse = (b: AiBlock): PlaylistRun => {
     void logAiRefusal(env, 'playlist', b, isApp ? 'app' : 'web', context.waitUntil);
-    return json({ error: aiBlockCode(b) }, 503);
+    return { ok: false, response: json({ error: aiBlockCode(b) }, 503), aiUnavailable: true, prompt, languages };
   };
-  const blocked = await aiGate(env, 'playlist');
-  if (blocked) return refuse(blocked);
+  const fail = (response: Response): PlaylistRun => ({ ok: false, response, aiUnavailable: false });
 
   // Capped read: a 500-char prompt, 60 avoid-titles and a taste snapshot fit
   // comfortably; content-length is absent on a chunked body, so the read caps too.
@@ -255,18 +278,21 @@ async function handlePost(context: {
     taste?: unknown;
     avoidTitles?: unknown;
   } | null>(request, MAX_BODY_BYTES);
-  if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
-  if (!read.value || typeof read.value !== 'object') return json({ error: 'bad_request' }, 400);
+  if (!read.ok) return fail(read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400));
+  if (!read.value || typeof read.value !== 'object') return fail(json({ error: 'bad_request' }, 400));
   const body = read.value;
-  const prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, 500) : '';
-  if (!prompt) return json({ error: 'bad_request' }, 400);
+  prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, 500) : '';
+  if (!prompt) return fail(json({ error: 'bad_request' }, 400));
   const reading = readRequest(prompt);
   // A language the request names outranks the listener's saved preferences.
-  const languages = reading.languages.length
+  languages = reading.languages.length
     ? reading.languages
     : Array.isArray(body.languages)
       ? body.languages.filter((l): l is string => typeof l === 'string').slice(0, 5)
       : [];
+  // Checked after the body is read, so a switched-off AI still hands the caller the request to fall back on.
+  const blocked = await aiGate(env, 'playlist');
+  if (blocked) return refuse(blocked);
   // Titles the client's recent generations already used (localStorage-backed,
   // capped there at ~60) — steers the model away from repeats (v3.3.1).
   const avoidTitles = Array.isArray(body.avoidTitles)
@@ -381,9 +407,9 @@ async function handlePost(context: {
     });
     if (typeof context.waitUntil === 'function') context.waitUntil(log);
   }
-  if (r.error === 'not_configured') return json({ error: 'ai_not_configured' }, 503);
+  if (r.error === 'not_configured') return { ok: false, response: json({ error: 'ai_not_configured' }, 503), aiUnavailable: true, prompt, languages };
   // 500, not 502: Cloudflare swallows origin 502 bodies (serves its own error
   // page) — 500 keeps the honest JSON envelope visible to clients (DQA-02).
-  if (!parsed.songs.length) return json({ error: r.error ?? 'empty', status: r.status }, 500);
-  return json({ ...parsed, reading, model: r.model });
+  if (!parsed.songs.length) return { ok: false, response: json({ error: r.error ?? 'empty', status: r.status }, 500), aiUnavailable: true, prompt, languages };
+  return { ok: true, parsed, reading, model: r.model, prompt, languages };
 }

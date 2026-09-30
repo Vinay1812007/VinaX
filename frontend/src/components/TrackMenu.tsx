@@ -378,8 +378,8 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
       icon: 'notInterested',
       danger: true,
       action: () => {
-        toggleHidden(song.id);
-        toast('We’ll show this less', { action: { label: 'Undo', onClick: () => toggleHidden(song.id) } });
+        toggleHidden(song.id, song);
+        toast('We’ll show this less', { action: { label: 'Undo', onClick: () => toggleHidden(song.id, song) } });
       },
     },
     artist

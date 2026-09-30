@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalogQueries, intentTitle, looksLikeNaturalLanguage, parseMusicIntent } from './musicIntent';
+import { catalogQueries, intentTitle, looksLikeNaturalLanguage, parseMusicIntent, seedOf } from './musicIntent';
 
 describe('parseMusicIntent', () => {
   it('reads language, activity and energy from a playlist request', () => {
@@ -104,5 +104,35 @@ describe('8.3.0 — styles in a request', () => {
   it('names the playlist after the style', () => {
     expect(intentTitle(parseMusicIntent('telugu dj songs'))).toBe('Telugu DJ Remix Mix');
     expect(intentTitle(parseMusicIntent('kannada folk songs'))).toBe('Kannada Folk Mix');
+  });
+});
+
+describe('8.5.0 — seeds, tempo and instrumental', () => {
+  it('reads the seed name without its "but …" modifier, and keeps its words out of the cues', () => {
+    expect(seedOf('songs like Blinding Lights')).toEqual({ text: 'Blinding Lights' });
+    expect(seedOf('Songs similar to Arijit Singh but more upbeat')).toEqual({ text: 'Arijit Singh' });
+    expect(seedOf('music in the style of "Ilaiyaraaja" songs')).toEqual({ text: 'Ilaiyaraaja' });
+    for (const none of ['love me like you do', 'more like this', 'something like that', 'telugu sad songs']) expect(seedOf(none), none).toBeNull();
+    const i = parseMusicIntent('songs like Love Story');
+    expect(i.seed).toEqual({ text: 'Love Story' });
+    expect(i.moods).toEqual([]);
+    expect(parseMusicIntent('Songs similar to Arijit Singh but more upbeat').energy).toBe('high');
+  });
+
+  it('a seed request always reads as a description', () => {
+    expect(looksLikeNaturalLanguage('songs like Blinding Lights')).toBe(true);
+    expect(looksLikeNaturalLanguage('love me like you do')).toBe(false);
+  });
+
+  it('tempo and instrumental pick the probed catalogue phrasings, never "slow songs"', () => {
+    const slow = parseMusicIntent('slow acoustic songs');
+    expect(slow.tempo).toBe('slow');
+    const q = catalogQueries(slow, ['hindi'], 4);
+    expect(q.slice(0, 2)).toEqual(['hindi acoustic songs', 'hindi unplugged']);
+    for (const x of q) expect(x).not.toMatch(/slow/);
+    const inst = parseMusicIntent('Relaxing instrumental music for studying');
+    expect(inst.instrumental).toBe(true);
+    expect(catalogQueries(inst, ['telugu'], 2)[0]).toBe('telugu instrumental');
+    expect(parseMusicIntent('fast hindi songs').tempo).toBe('fast');
   });
 });

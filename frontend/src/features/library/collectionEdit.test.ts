@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Song } from '@/types';
 import { filterSongs, songMatchesQuery } from './collectionEdit';
 
-vi.mock('@/services/personalization/updater', () => ({ recordFavorite: () => undefined }));
+vi.mock('@/services/personalization/updater', () => ({ recordFavorite: () => undefined, recordDislike: () => undefined, recordPlaylistAdd: () => undefined }));
 import { useLibraryStore } from '@/store/libraryStore';
 
 const song = (id: string, title: string, artist = 'Artist', extra: Partial<Song> = {}): Song => ({

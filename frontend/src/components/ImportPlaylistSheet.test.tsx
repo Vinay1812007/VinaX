@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Song } from '@/types';
 
-vi.mock('@/services/personalization/updater', () => ({ recordFavorite: () => undefined }));
+vi.mock('@/services/personalization/updater', () => ({ recordFavorite: () => undefined, recordDislike: () => undefined, recordPlaylistAdd: () => undefined }));
 
 const song = (id: string, title: string, artist: string): Song => ({
   kind: 'song', id, title, subtitle: artist, artists: [{ id: `a-${artist}`, name: artist }], album: null,

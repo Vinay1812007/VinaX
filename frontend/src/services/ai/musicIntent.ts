@@ -36,6 +36,33 @@ export interface MusicIntent {
   keywords: string[];
   /** How many cues were recognised (language, mood, activity, energy, era). */
   cues: number;
+  /**
+   * 8.5.0 — "songs like <name>" / "similar to <name> but more upbeat": the
+   * song or artist named (as written; the catalogue decides which it is).
+   * Optional so intents built elsewhere keep type-checking.
+   */
+  seed?: { text: string } | null;
+  /** 8.5.0 — "slow" / "fast", separate from energy (a slow song can still be intense). */
+  tempo?: 'slow' | 'fast' | null;
+  /** 8.5.0 — music without vocals ("instrumental", "no lyrics"). */
+  instrumental?: boolean;
+}
+
+/** Pronouns are never a seed: "more like this" and "something like that" name nothing. */
+const NOT_A_SEED = new Set(['this', 'that', 'it', 'me', 'you', 'us', 'them', 'these', 'those', 'him', 'her', 'mine', 'yours']);
+
+/**
+ * 8.5.0 — the name after "songs like" / "similar to" / "in the style of",
+ * without a trailing "but …" modifier. Same reading as the server's
+ * _lib/searchFilters.ts `seedOf`. Null when the text asks for no seed.
+ */
+export function seedOf(text: string): { text: string } | null {
+  const m = /(?:^|\b(?:songs?|music|tracks?|something|anything|more)\s+)(?:like|similar to|such as|in the style of|along the lines of)\s+(.+)$/i.exec(text.trim());
+  if (!m) return null;
+  let name = m[1].split(/\s+(?:but|except|only|and make|with more|with less)\b|[,;]/i)[0];
+  name = name.replace(/\s+(?:songs?|music|tracks?|type|style|vibes?)$/i, '').replace(/^["“'‘]|["”'’]$/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (name.length < 2 || NOT_A_SEED.has(name.toLowerCase())) return null;
+  return { text: name };
 }
 
 const LANGUAGE_WORDS: Record<string, string> = Object.fromEntries(LANGUAGES.map((l) => [l.id, l.id]));
@@ -93,7 +120,10 @@ export function words(text: string): string[] {
  */
 const djIsName = (text: string): boolean => styleFromText(text) !== 'dj';
 
-export function parseMusicIntent(text: string): MusicIntent {
+export function parseMusicIntent(input: string): MusicIntent {
+  // 8.5.0 — the words of a named seed are a name, not cues: "songs like Love Story" is not a romance request.
+  const seed = seedOf(input);
+  const text = seed ? input.replace(seed.text, ' ') : input;
   const lower = ` ${text.toLowerCase()} `;
   const list = words(text);
   const style = styleFromText(text);
@@ -126,8 +156,11 @@ export function parseMusicIntent(text: string): MusicIntent {
   if (activity && !moods.length && ACTIVITY_MOOD[activity]) moods.push(ACTIVITY_MOOD[activity] as IntentMood);
   if (energy === 'high' && !moods.includes('energetic') && !moods.includes('melancholy')) moods.push('energetic');
   const era = CLASSIC.test(lower) || (decade !== null && decade < 2010) ? 'classic' : FRESH.test(lower) ? 'fresh' : null;
-  const cues = languages.length + moods.length + (activity ? 1 : 0) + (energy ? 1 : 0) + (era ? 1 : 0) + (style ? 1 : 0);
-  return { languages, moods, activity, energy, decade, era, style, keywords, cues };
+  if (!energy && /\bmore (?:upbeat|energy|energetic)\b/.test(lower)) energy = 'high';
+  const tempo = /\b(slow(?:er)?|slowed)\b/.test(lower) ? 'slow' : /\b(fast(?:er)?|up-?tempo|high[\s-]?tempo)\b/.test(lower) ? 'fast' : null;
+  const instrumental = /\b(instrumental|instrumentals|no vocals|without (?:vocals|lyrics|words)|no lyrics)\b/.test(lower);
+  const cues = languages.length + moods.length + (activity ? 1 : 0) + (energy ? 1 : 0) + (era ? 1 : 0) + (style ? 1 : 0) + (seed ? 1 : 0) + (instrumental ? 1 : 0);
+  return { languages, moods, activity, energy, decade, era, style, keywords, cues, seed, tempo, instrumental };
 }
 
 /** Words that mark a description of music rather than a title. */
@@ -145,6 +178,8 @@ const DESCRIBING = new Set(['songs', 'song', 'music', 'playlist', 'tracks', 'mix
 export function looksLikeNaturalLanguage(query: string): boolean {
   const list = words(query);
   if (list.length < 3 || list.length > 20) return false;
+  // 8.5.0 — "songs like <name>" always describes; the name alone would be an ordinary search.
+  if (seedOf(query)) return true;
   // Cue WORDS actually typed (an activity's implied energy does not count twice).
   const lower = ` ${list.join(' ')} `;
   const djName = djIsName(query);
@@ -183,6 +218,10 @@ export function catalogQueries(intent: MusicIntent, fallbackLanguages: readonly 
   const add = (...t: string[]) => {
     for (const x of t) if (!terms.includes(x)) terms.push(x);
   };
+  // 8.5.0 — probed live 2026-09-30: "<lang> instrumental", "<lang> acoustic songs" and
+  // "<lang> unplugged" answer 20/20 in-language; "<lang> slow songs" matches titles like "Slow Motion".
+  if (intent.instrumental) add('instrumental');
+  if (intent.tempo === 'slow') add('acoustic songs', 'unplugged');
   if (intent.era === 'classic') add('evergreen hits');
   switch (intent.activity) {
     case 'workout':

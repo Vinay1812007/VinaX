@@ -23,6 +23,11 @@ import { searchSongs } from '@/services/api';
 const AVOID_KEY = 'vinax.aiplaylist.avoid.v1';
 
 const song = (id: string, title: string): Song => ({ id, title, subtitle: 'A' }) as unknown as Song;
+/** 8.5.0 — a catalogue answer that IS the suggestion "<title> <one-letter artist>" (resolution no longer takes a different song). */
+const creditedFor = (q: string): Song => {
+  const m = /^(.+) ([A-Z])$/.exec(q);
+  return m ? ({ id: `id-${m[1]}`, title: m[1], subtitle: m[2], artists: [{ id: `a-${m[2]}`, name: m[2] }] } as unknown as Song) : song(`id-${q}`, q);
+};
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -68,7 +73,7 @@ describe('generatePlaylist — avoid-list plumbing', () => {
         }),
       } as unknown as Response;
     });
-    vi.mocked(searchSongs).mockImplementation(async (q: string) => [song(`id-${q}`, q)]);
+    vi.mocked(searchSongs).mockImplementation(async (q: string) => [creditedFor(q)]);
 
     const res = await generatePlaylist('rainy vibes', [], []);
     vi.unstubAllGlobals();
@@ -76,10 +81,10 @@ describe('generatePlaylist — avoid-list plumbing', () => {
     expect(res.ok).toBe(true);
     expect(sentBody.avoidTitles).toEqual(['Previously Generated']);
     // The new generation's titles now lead the memory for the NEXT request:
-    // resolved catalog titles first (mock resolves "<title> <artist>" as the
-    // catalog title), then the model's own titles, then (8.2.0) the catalogue
-    // songs that filled the list, then the old memory.
-    expect(loadAvoidTitles().slice(0, 6)).toEqual(['Alpha X', 'Beta Y', 'Alpha', 'Beta', 'melody songs', 'Previously Generated']);
+    // resolved catalog titles first, then the model's own titles (the same
+    // words here, so they collapse), then (8.2.0) the catalogue songs that
+    // filled the list, then the old memory.
+    expect(loadAvoidTitles().slice(0, 4)).toEqual(['Alpha', 'Beta', 'melody songs', 'Previously Generated']);
   });
 });
 
@@ -88,8 +93,8 @@ describe('resolveSuggestions — no convergence on one search hit', () => {
     const shared = song('dup-1', 'Same Hit');
     vi.mocked(searchSongs)
       .mockResolvedValueOnce([shared]) // suggestion 1 → top hit
-      .mockResolvedValueOnce([shared, song('alt-2', 'Different Song')]) // suggestion 2 → same top hit + alternative
-      .mockResolvedValueOnce([song('dup-1b', 'Same Hit'), song('alt-3', 'Third Song')]); // same title, new id
+      .mockResolvedValueOnce([shared, song('alt-2', 'Same Hit Reprise')]) // suggestion 2 → same top hit + the song asked for
+      .mockResolvedValueOnce([song('dup-1b', 'Same Hit'), song('alt-3', 'Same Hit Again')]); // same title under a new id, then the song asked for
 
     const out = await resolveSuggestions(
       [
@@ -105,15 +110,15 @@ describe('resolveSuggestions — no convergence on one search hit', () => {
 
   it('excludes recent generations even when the catalog has no fresh alternative', async () => {
     vi.mocked(searchSongs)
-      // Popularity-ranked: the avoided canonical hit first, a fresh one second.
+      // Popularity-ranked: the avoided canonical hit first, the song asked for second.
       .mockResolvedValueOnce([song('pop-1', 'Canonical Hit'), song('new-1', 'Fresh Cut')])
-      // Everything avoided → still resolves (soft preference, not a filter).
+      // The only match is avoided → nothing (and never a different song instead).
       .mockResolvedValueOnce([song('pop-2', 'Canonical Hit Two')]);
 
     const out = await resolveSuggestions(
       [
-        { title: 'Query One', artist: 'A' },
-        { title: 'Query Two', artist: 'B' },
+        { title: 'Fresh Cut', artist: 'A' },
+        { title: 'Canonical Hit Two', artist: 'A' },
       ],
       25,
       [],
@@ -138,12 +143,12 @@ describe('v7.0.0 — the catalogue song that IS the suggestion wins', () => {
   it('never trusts the shape of the model answer', async () => {
     vi.stubGlobal('fetch', async () => ({ ok: true, status: 200, json: async () => ({ name: { evil: true }, description: 42, songs: [{ title: 'Gamma', artist: 'Z' }, { title: 7, artist: null }, null] }) }) as unknown as Response);
     vi.mocked(searchSongs).mockReset();
-    vi.mocked(searchSongs).mockImplementation(async (q: string) => [song(`id-${q}`, q)]);
+    vi.mocked(searchSongs).mockImplementation(async (q: string) => [creditedFor(q)]);
     const res = await generatePlaylist('evening drive', [], []);
     vi.unstubAllGlobals();
     expect(res).toMatchObject({ ok: true, playlist: { name: 'evening drive', description: '', source: 'ai' } });
     // The one valid suggestion leads; 8.2.0 — the catalogue pool fills in behind it.
-    expect(res.ok && res.playlist.songs[0].id).toBe('id-Gamma Z');
+    expect(res.ok && res.playlist.songs[0].id).toBe('id-Gamma');
   });
 
   it('stops resolving when the caller goes away', async () => {
@@ -232,5 +237,24 @@ describe('8.2.0 — intent-aware playlists', () => {
     vi.mocked(searchSongs).mockClear();
     await gatherCataloguePool(parseMusicIntent('janapadalu'), ['telugu'], []);
     expect(vi.mocked(searchSongs).mock.calls.map((c) => c[0])).toEqual(['telugu folk songs']);
+  });
+});
+
+describe('8.5.0 — no substitute songs, and the curator\'s reasons', () => {
+  it('drops a suggestion whose search lists only different songs', async () => {
+    vi.mocked(searchSongs)
+      .mockResolvedValueOnce([song('other', 'A Famous Different Song')])
+      .mockResolvedValueOnce([{ ...song('real', 'Real One'), subtitle: 'B', artists: [{ id: 'b', name: 'B' }] } as unknown as Song]);
+    const out = await resolveSuggestions([{ title: 'Invented Title', artist: 'Nobody' }, { title: 'Real One', artist: 'B' }], 25, []);
+    expect(out.map((s) => s.id)).toEqual(['real']);
+  });
+
+  it('keeps each resolved pick\'s reason, keyed by the catalogue id', async () => {
+    vi.stubGlobal('fetch', async () => ({ ok: true, status: 200, json: async () => ({ name: 'Drive', description: 'd', songs: [{ title: 'Nocturne Road', artist: 'Z', reason: '  Night-time, steady pulse  ' }, { title: 'Quiet Lane', artist: 'Y' }] }) }) as unknown as Response);
+    // Titles no other test serves: the served-songs memory outlives a localStorage clear (session fallback).
+    vi.mocked(searchSongs).mockImplementation(async (q: string) => [creditedFor(q)]);
+    const res = await generatePlaylist('late night drive', [], []);
+    vi.unstubAllGlobals();
+    expect(res.ok && res.playlist.reasons).toEqual({ 'id-Nocturne Road': 'Night-time, steady pulse' });
   });
 });

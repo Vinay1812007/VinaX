@@ -38,12 +38,17 @@ export interface TasteProfile {
     skips: number;
     favorites: number;
     queueAdds: number;
+    /** 8.5.0 — "Not interested" songs and playlist adds. Optional: older profiles load unchanged. */
+    dislikes?: number;
+    playlistAdds?: number;
   };
   /** Recently played song ids — repetition guard for recommendations. */
   recentSongIds: string[];
   /** Song-level negative/positive memories used by recommendations. */
   skippedSongIds?: string[];
   likedSongIds?: string[];
+  /** 8.5.0 — songs marked "Not interested" (newest first, capped at 200). The library hides them; this list is what the AI briefs and the taste page read. */
+  dislikedSongIds?: string[];
   /** Per-language play counts bucketed by 6h slice (0=night,1=morning,2=afternoon,3=evening). */
   hourBuckets: Record<string, number[]>;
   /** Package A3 — "Show fewer like this". Artist keys the user explicitly
@@ -428,6 +433,9 @@ export function normalizeProfile(p: unknown): TasteProfile {
   }
   if (src.skippedSongIds !== undefined) out.skippedSongIds = ids(src.skippedSongIds);
   if (src.likedSongIds !== undefined) out.likedSongIds = ids(src.likedSongIds);
+  if (src.dislikedSongIds !== undefined) out.dislikedSongIds = ids(src.dislikedSongIds).slice(0, 200);
+  if (totals.dislikes !== undefined) out.totals.dislikes = Math.max(0, n(totals.dislikes));
+  if (totals.playlistAdds !== undefined) out.totals.playlistAdds = Math.max(0, n(totals.playlistAdds));
   const energy = obj(src.energyPref);
   if (typeof energy.sum === 'number' && typeof energy.n === 'number' && Number.isFinite(energy.sum) && Number.isFinite(energy.n)) out.energyPref = { sum: energy.sum, n: energy.n };
   if (src.softMuted !== undefined) {

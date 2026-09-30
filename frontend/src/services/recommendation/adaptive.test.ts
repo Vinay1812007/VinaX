@@ -16,7 +16,7 @@ import { usePlayerStore } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { noteCompleted, noteSkipAndMaybeReplan, resetAdaptive, shapeForSession, sureSongIds } from './adaptive';
+import { noteCompleted, noteLikeAndMaybeReplan, noteSkipAndMaybeReplan, resetAdaptive, shapeForSession, sureSongIds } from './adaptive';
 
 const song = (id: string, artist = 'Artist', extra: Partial<Song> = {}): Song => ({
   kind: 'song', id, title: `Song ${id}`, subtitle: artist, artists: [{ id: `a-${artist}`, name: artist }], album: null,
@@ -85,5 +85,43 @@ describe('adaptive re-plan', () => {
     expect(sure.has('f1')).toBe(true);
     expect(sure.has('h1')).toBe(true);
     expect(sure.has('h2')).toBe(false);
+  });
+});
+
+describe('8.5.0 — a like on the playing song re-plans the automatic tail', () => {
+  const setup = () => {
+    const regenerate = vi.fn();
+    const p = usePlayerStore.getState();
+    p.playQueue([song('cur', 'Loved'), song('hand1')], 0);
+    p.replaceAutoTail([song('a1', 'X'), song('a2', 'Y'), song('a3', 'Z')]);
+    usePlayerStore.setState({ regenerateAutoTail: regenerate });
+    return regenerate;
+  };
+
+  it('rebuilds once, then waits out the cooldown', () => {
+    const regenerate = setup();
+    const now = Date.now();
+    expect(noteLikeAndMaybeReplan(song('cur', 'Loved'), now)).toBe(true);
+    expect(regenerate).toHaveBeenCalledTimes(1);
+    expect(noteLikeAndMaybeReplan(song('cur', 'Loved'), now + 30_000)).toBe(false);
+    expect(noteLikeAndMaybeReplan(song('cur', 'Loved'), now + 91_000)).toBe(true);
+    expect(regenerate).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a like on a song that is not playing, and a queue with no automatic tail to rebuild', () => {
+    const regenerate = setup();
+    expect(noteLikeAndMaybeReplan(song('a2', 'Y'))).toBe(false);
+    usePlayerStore.getState().playQueue([song('solo')], 0);
+    expect(noteLikeAndMaybeReplan(song('solo'))).toBe(false);
+    expect(regenerate).not.toHaveBeenCalled();
+  });
+
+  it('shares the cooldown with the skip re-plan, so likes and skips never churn the queue', () => {
+    setup();
+    const now = Date.now();
+    expect(noteLikeAndMaybeReplan(song('cur', 'Loved'), now)).toBe(true);
+    const tail = usePlayerStore.getState().autoTail();
+    expect(noteSkipAndMaybeReplan(tail[0], now + 1_000)).toBe(false);
+    expect(noteSkipAndMaybeReplan(tail[1], now + 2_000)).toBe(false);
   });
 });

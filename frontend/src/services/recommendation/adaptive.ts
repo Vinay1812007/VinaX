@@ -71,6 +71,27 @@ export function noteSkipAndMaybeReplan(skipped: Song, now = Date.now()): boolean
   return true;
 }
 
+/**
+ * 8.5.0 — a like re-plans too. Liking the song that is playing already pulls
+ * its artist and language for this sitting (session intent); this makes the
+ * pull felt NOW by rebuilding the automatic tail, instead of five songs
+ * later. Hand-queued songs are never touched (only the auto tail is rebuilt),
+ * and it shares the skip re-plan's cooldown so a burst of likes and skips
+ * never churns the queue.
+ */
+export function noteLikeAndMaybeReplan(liked: Song, now = Date.now()): boolean {
+  const p = usePlayerStore.getState();
+  const current = p.queue[p.index];
+  if (!current || current.id !== liked.id) return false;
+  if (now - lastReplanAt < REPLAN_COOLDOWN_MS) return false;
+  if (p.autoTail().length < 3) return false;
+  p.regenerateAutoTail();
+  skipStreak = 0;
+  lastReplanAt = now;
+  toast('Liked — more like this is coming up next');
+  return true;
+}
+
 /** Test hook. */
 export function resetAdaptive(): void {
   skipStreak = 0;

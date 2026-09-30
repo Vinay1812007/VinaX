@@ -29,6 +29,7 @@
     ['lyrics', 'Lyric tools (romanise, translate, explain)'],
     ['image', 'Image generation'],
     ['embed', 'Song and search embeddings (natural-language search, taste fit)'],
+    ['search', 'Reading a described search into filters (AI search)'],
   ];
   var days = null;
   var last = null;      // last aiops payload
