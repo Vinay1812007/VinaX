@@ -74,6 +74,21 @@ for (const ref of referenced) {
 }
 if (missing === 0) pass(`all ${referenced.size} assets referenced by index.html exist on disk`);
 
+// 8.5.3 — the service worker fetches every manifest entry; one the build never
+// wrote is a request for a missing chunk on every boot (8 CSS-only chunks did).
+const manifest = JSON.parse(await readFile(join(DIST, 'precache-manifest.json'), 'utf8'));
+const listed = [...(manifest.precache ?? []), ...(manifest.onDemand ?? [])];
+let absent = 0;
+for (const url of listed) {
+  try {
+    await stat(join(DIST, url));
+  } catch {
+    absent += 1;
+    fail(`precache-manifest.json lists a file absent from dist: ${url}`);
+  }
+}
+if (absent === 0) pass(`all ${listed.length} precache-manifest.json entries exist on disk`);
+
 // ---------- static server: SPA fallback + /assets 404 guard ----------
 const server = createServer(async (req, res) => {
   try {
