@@ -47,13 +47,20 @@ export function splitPrecache(bundle: Record<string, { type: 'chunk' | 'asset'; 
 
 const precacheManifest = (): Plugin => ({
   name: 'vinax-precache-manifest',
-  generateBundle(_options, bundle) {
-    const { precache, onDemand } = splitPrecache(bundle as unknown as Parameters<typeof splitPrecache>[0]);
-    this.emitFile({
-      type: 'asset',
-      fileName: 'precache-manifest.json',
-      source: JSON.stringify({ v: 2, precache, onDemand }),
-    });
+  // 8.5.3: 'post' — Vite deletes CSS-only chunks from the bundle in its own
+  // generateBundle. Run before that, the manifest listed 8 .js files the build
+  // never writes; the service worker fetched them on every precache, and
+  // before 8.5.2 the edge cached the SPA shell under those urls for a year.
+  generateBundle: {
+    order: 'post',
+    handler(_options, bundle) {
+      const { precache, onDemand } = splitPrecache(bundle as unknown as Parameters<typeof splitPrecache>[0]);
+      this.emitFile({
+        type: 'asset',
+        fileName: 'precache-manifest.json',
+        source: JSON.stringify({ v: 2, precache, onDemand }),
+      });
+    },
   },
 });
 

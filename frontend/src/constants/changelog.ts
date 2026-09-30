@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.5.3': {
+    title: 'The right version name, and a quieter start',
+    changes: [
+      { type: 'fixed', text: 'Settings, About and What’s New show VinaX 8.5 again. They had kept saying VinaX 8.3 since 8.4.' },
+      { type: 'fixed', text: 'VinaX no longer asks for files that don’t exist when it saves the app for offline use, so starting up makes fewer requests.' },
+    ],
+  },
   '8.5.2': {
     title: 'VinaX opens reliably after an update',
     changes: [
