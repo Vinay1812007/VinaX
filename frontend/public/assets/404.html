@@ -1,0 +1,11 @@
+<!doctype html>
+<!--
+  8.5.2: the answer to a missing /assets/* file. Pages serves the nearest
+  404.html with status 404 (not cached), so a chunk that is not there yet
+  (mid-deploy) or any more (an old tab) can never be stored as the app shell
+  under its hashed url. Keep this file here and keep NO top-level 404.html:
+  that would switch every app route off the SPA fallback. See _redirects.
+-->
+<meta charset="utf-8">
+<title>Not found</title>
+<p>This file is not part of the current VinaX build. Reload the app.</p>
