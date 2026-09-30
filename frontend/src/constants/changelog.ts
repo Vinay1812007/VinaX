@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.5.0': {
+    title: 'VinaX learns what you keep and what you pass on',
+    changes: [
+      { type: 'improved', text: 'Not interested now teaches VinaX: that artist comes up less in your mixes and queues, while the language you listen in is left alone. Undo puts things back.' },
+      { type: 'improved', text: 'Songs you add to your own playlists count towards your taste, so your mixes lean towards what you keep. Importing a whole playlist does not.' },
+    ],
+  },
   '8.4.0': {
     title: 'Pages worth reading, and one ad where it belongs',
     changes: [

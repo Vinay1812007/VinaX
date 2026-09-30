@@ -16,7 +16,7 @@ import { energyOfSong } from './session';
  * Pure reducers (`deriveIntent`) are exported so ranking tests can feed a
  * fixed list of events instead of touching storage.
  */
-export type SessionEventType = 'skip' | 'complete' | 'like' | 'unlike' | 'queue_add' | 'search_play';
+export type SessionEventType = 'skip' | 'complete' | 'like' | 'unlike' | 'queue_add' | 'search_play' | 'dislike';
 
 export interface SessionEvent {
   t: number;
@@ -109,7 +109,7 @@ export function noteSessionEvent(type: SessionEventType, song: Song, now = Date.
 
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 
-const PULL: Record<SessionEventType, number> = { skip: -0.4, complete: 0.15, like: 0.5, unlike: -0.3, queue_add: 0.35, search_play: 0.45 };
+const PULL: Record<SessionEventType, number> = { skip: -0.4, complete: 0.15, like: 0.5, unlike: -0.3, queue_add: 0.35, search_play: 0.45, dislike: -0.6 };
 
 /** Pure: reduce a list of events (oldest first) to the intent as of `now`. */
 export function deriveIntent(events: SessionEvent[], now = Date.now()): SessionIntent {
@@ -150,8 +150,11 @@ export function deriveIntent(events: SessionEvent[], now = Date.now()): SessionI
     if (e.artist) artistPull[e.artist] = clamp((artistPull[e.artist] ?? 0) + w, -1, 1);
     // Languages move slower than artists: one skipped song is not a verdict on a language.
     // It also stops short of the artist's range, so a run of skips inside one language never reads as "not this language".
-    if (e.language) languagePull[e.language] = clamp((languagePull[e.language] ?? 0) + w * 0.4, -LANGUAGE_PULL_MAX, LANGUAGE_PULL_MAX);
-    if (e.type === 'skip') {
+    // 8.5.0 — a "Not interested" is about one song and its artist, never its language.
+    if (e.language && e.type !== 'dislike') languagePull[e.language] = clamp((languagePull[e.language] ?? 0) + w * 0.4, -LANGUAGE_PULL_MAX, LANGUAGE_PULL_MAX);
+    if (e.type === 'dislike') {
+      skippedSongIds.add(e.songId);
+    } else if (e.type === 'skip') {
       skippedSongIds.add(e.songId);
       skipSum += e.energy;
       skipN += 1;

@@ -110,6 +110,41 @@ export function recordQueueAdd(song: Song): void {
 }
 
 /**
+ * 8.5.0 — "Not interested" on one song (the library hides it for good). The
+ * song and its artists lose two skips' worth; the language is untouched. The
+ * undo only forgets the song: scores are floored at zero, so handing the
+ * points back would make a dislike-then-undo NET positive for an artist the
+ * profile knew nothing about. Decay returns them within weeks anyway.
+ */
+export function recordDislike(song: Song, disliked: boolean): void {
+  withProfile((p) => {
+    const ids = (p.dislikedSongIds ?? []).filter((id) => id !== song.id);
+    if (!disliked) {
+      p.dislikedSongIds = ids;
+      return;
+    }
+    for (const artist of song.artists.slice(0, 3)) bumpArtist(p, artist.id, artist.name, EVENT_WEIGHTS.DISLIKE, 'signal');
+    bumpSong(p, song.id, EVENT_WEIGHTS.DISLIKE, 'signal');
+    p.totals.dislikes = (p.totals.dislikes ?? 0) + 1;
+    p.dislikedSongIds = [song.id, ...ids].slice(0, 200);
+    p.likedSongIds = (p.likedSongIds ?? []).filter((id) => id !== song.id);
+  });
+  if (!disliked) return;
+  noteSessionEvent('dislike', song);
+  logEvent('dislike', song);
+}
+
+/** 8.5.0 — the listener put a song in one of their own playlists: worth a play for its artists, language and the song. */
+export function recordPlaylistAdd(song: Song): void {
+  withProfile((p) => {
+    bumpAll(p, song, EVENT_WEIGHTS.PLAYLIST_ADD, 'signal');
+    p.totals.playlistAdds = (p.totals.playlistAdds ?? 0) + 1;
+  });
+  noteSessionEvent('queue_add', song);
+  logEvent('playlist_add', song);
+}
+
+/**
  * v7.0.0 — the listener searched for something and played a result. Counted
  * on top of the ordinary PLAY the player records: a search is the clearest
  * statement of intent the app ever gets, for the long-term profile (a

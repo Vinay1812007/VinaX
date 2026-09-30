@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
-import { recordFavorite } from '@/services/personalization/updater';
+import { recordDislike, recordFavorite, recordPlaylistAdd } from '@/services/personalization/updater';
 import { findDuplicates } from '@/features/library/duplicates';
 import { pruneTrash, type TrashEntry } from '@/features/library/trash';
 import { normalizeTags } from '@/features/library/tags';
@@ -107,7 +107,8 @@ export interface LibraryState {
   restoreFavorites(songs: Song[]): void;
   toggleSaved(entity: Omit<SavedEntity, 'savedAt'>): void;
   isSaved(id: string): boolean;
-  toggleHidden(songId: string): void;
+  /** Hide or un-hide one song. With the song itself (8.5.0), hiding also teaches the taste profile a dislike. */
+  toggleHidden(songId: string, song?: Song): void;
   isHidden(id: string): boolean;
   createCollection(name: string): string;
   deleteCollection(id: string): void;
@@ -196,9 +197,14 @@ export const useLibraryStore = create<LibraryState>()(
         set({ saved: newSaved });
       },
       isSaved: (id) => _savedIds.has(id),
-      toggleHidden: (songId) => {
+      toggleHidden: (songId, song) => {
         const { hiddenSongIds } = get();
-        const next = hiddenSongIds.includes(songId)
+        const hiding = !hiddenSongIds.includes(songId);
+        if (song && song.id === songId) {
+          recordDislike(song, hiding);
+          if (hiding) void import('@/services/analytics/telemetry').then((m) => m.trackDislike(song));
+        }
+        const next = !hiding
           ? hiddenSongIds.filter((i) => i !== songId)
           : [songId, ...hiddenSongIds].slice(0, 500);
         set({ hiddenSongIds: next });
@@ -273,14 +279,23 @@ export const useLibraryStore = create<LibraryState>()(
             return next;
           }),
         }),
-      addToCollection: (collectionId, song) =>
+      addToCollection: (collectionId, song) => {
+        let added = false;
         set({
-          collections: get().collections.map((c) =>
-            c.id === collectionId && !c.songs.some((s) => s.id === song.id)
-              ? { ...c, songs: [...c.songs, song] }
-              : c,
-          ),
-        }),
+          collections: get().collections.map((c) => {
+            if (c.id !== collectionId || c.songs.some((s) => s.id === song.id)) return c;
+            added = true;
+            return { ...c, songs: [...c.songs, song] };
+          }),
+        });
+        // 8.5.0 — a song the listener files into their own playlist is a taste
+        // signal. Bulk imports (addManyToCollection) are deliberately not: a
+        // 200-song import would swamp the profile in one tap.
+        if (added) {
+          recordPlaylistAdd(song);
+          void import('@/services/analytics/telemetry').then((m) => m.trackPlaylistAdd(song));
+        }
+      },
       addManyToCollection: (collectionId, songs) => {
         let added = 0;
         set({

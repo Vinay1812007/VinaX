@@ -4,9 +4,11 @@ import type { Song } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
 import { TRASH_TTL_MS } from '@/features/library/trash';
 
-vi.mock('@/services/personalization/updater', () => ({ recordFavorite: () => undefined }));
+vi.mock('@/services/personalization/updater', () => ({ recordFavorite: () => undefined, recordDislike: vi.fn(), recordPlaylistAdd: vi.fn() }));
+vi.mock('@/services/analytics/telemetry', () => ({ trackDislike: vi.fn(), trackPlaylistAdd: vi.fn(), trackFavorite: vi.fn() }));
 
 import { orderCollections, useLibraryStore } from './libraryStore';
+import { recordDislike, recordPlaylistAdd } from '@/services/personalization/updater';
 
 const song = (id: string, title: string, artist = 'Artist'): Song => ({
   kind: 'song',
@@ -144,5 +146,42 @@ describe('7.2.0 — hiding an artist works in every script', () => {
     const song = { id: 's', title: 't', subtitle: 'సిద్ శ్రీరామ్', artists: [{ id: 'a', name: 'సిద్ శ్రీరామ్' }] } as unknown as Parameters<typeof isSongBlocked>[0];
     expect(isSongBlocked(song, { hiddenSongIds: [], hiddenArtists: [artistKey('సిద్ శ్రీరామ్')] })).toBe(true);
     expect(isSongBlocked(song, { hiddenSongIds: [], hiddenArtists: [artistKey('అనిరుధ్')] })).toBe(false);
+  });
+});
+
+describe('libraryStore 8.5.0 — taste signals', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    reset();
+    vi.mocked(recordDislike).mockClear();
+    vi.mocked(recordPlaylistAdd).mockClear();
+  });
+
+  it('hiding a song with the song in hand records a dislike, and the undo records the un-dislike', () => {
+    const s = song('h1', 'Hidden');
+    useLibraryStore.getState().toggleHidden('h1', s);
+    expect(useLibraryStore.getState().isHidden('h1')).toBe(true);
+    expect(recordDislike).toHaveBeenLastCalledWith(s, true);
+    useLibraryStore.getState().toggleHidden('h1', s);
+    expect(useLibraryStore.getState().isHidden('h1')).toBe(false);
+    expect(recordDislike).toHaveBeenLastCalledWith(s, false);
+  });
+
+  it('an id-only hide (older callers) still hides, without guessing at a taste signal', () => {
+    useLibraryStore.getState().toggleHidden('h2');
+    expect(useLibraryStore.getState().isHidden('h2')).toBe(true);
+    expect(recordDislike).not.toHaveBeenCalled();
+  });
+
+  it('a song filed into a playlist counts once; a duplicate add and a bulk import do not count', () => {
+    const s = useLibraryStore.getState();
+    const id = s.createCollection('Mine');
+    s.addToCollection(id, song('p1', 'A'));
+    s.addToCollection(id, song('p1', 'A'));
+    expect(recordPlaylistAdd).toHaveBeenCalledTimes(1);
+    s.addManyToCollection(id, [song('p2', 'B'), song('p3', 'C')]);
+    expect(recordPlaylistAdd).toHaveBeenCalledTimes(1);
+    s.addToCollection('missing', song('p4', 'D'));
+    expect(recordPlaylistAdd).toHaveBeenCalledTimes(1);
   });
 });

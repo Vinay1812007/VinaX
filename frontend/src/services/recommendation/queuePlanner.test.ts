@@ -4,7 +4,7 @@ import type { Candidate } from './types';
 import type { Song } from '@/types';
 
 vi.mock('@/services/native', () => ({ isNativePlatform: () => false, platformName: () => 'web', haptic: () => undefined }));
-vi.mock('@/services/personalization/updater', () => ({ recordFavorite: () => undefined }));
+vi.mock('@/services/personalization/updater', () => ({ recordFavorite: () => undefined, recordDislike: () => undefined, recordPlaylistAdd: () => undefined }));
 
 const song = (id: string, title: string, artist: string, extra: Partial<Song> = {}): Song => ({
   kind: 'song', id, title, subtitle: artist, artists: [{ id: `a-${artist}`, name: artist }], album: { id: `al-${id}`, name: `Album ${id}` }, images: [], audio: [],
