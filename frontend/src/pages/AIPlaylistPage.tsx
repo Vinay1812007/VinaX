@@ -151,7 +151,11 @@ export default function AIPlaylistPage() {
           </div>
           <div className="vx-tracklist">
             {result.songs.map((song, i) => (
-              <SongRow key={song.id} song={song} songs={result.songs} index={i} />
+              <div key={song.id} className="vx-ai-track">
+                <SongRow song={song} songs={result.songs} index={i} />
+                {/* 8.5.0 — why the curator chose it: about fit only, never facts about the artist. */}
+                {result.reasons?.[song.id] && <p className="vx-ai-track-reason">{result.reasons[song.id]}</p>}
+              </div>
             ))}
           </div>
         </section>

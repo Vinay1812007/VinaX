@@ -21,6 +21,8 @@ export interface GeneratedPlaylist {
   songs: Song[];
   /** 8.2.0 — 'catalogue' when the AI curator could not answer and the list was built on the device from catalogue searches. */
   source?: 'ai' | 'catalogue';
+  /** 8.5.0 — song id → the curator's reason, for the AI's own picks (catalogue fill songs have none). */
+  reasons?: Record<string, string>;
 }
 
 /**
@@ -114,6 +116,8 @@ export async function gatherCataloguePool(
 export interface Suggestion {
   title: string;
   artist: string;
+  /** 8.5.0 — the curator's one line on why the song fits this request (optional; older servers send none). */
+  reason?: string;
 }
 
 // Cross-generation anti-repeat (v3.3.1 — "always the same playlist" fix):
@@ -166,6 +170,8 @@ export async function resolveSuggestions(
   avoid: string[] = [],
   languages: string[] = [],
   signal?: AbortSignal,
+  /** 8.5.0 — filled with song id → the curator's reason for each resolved pick. */
+  reasons?: Map<string, string>,
 ): Promise<Song[]> {
   const out: Song[] = [];
   const seen = new Set<string>();
@@ -176,7 +182,11 @@ export async function resolveSuggestions(
   // The model's strings are untrusted input: typed, trimmed and clipped before they reach a search.
   const valid = suggestions
     .filter((s) => s && typeof s.title === 'string' && typeof s.artist === 'string')
-    .map((s) => ({ title: s.title.replace(/\s+/g, ' ').trim().slice(0, 120), artist: s.artist.replace(/\s+/g, ' ').trim().slice(0, 120) }))
+    .map((s) => ({
+      title: s.title.replace(/\s+/g, ' ').trim().slice(0, 120),
+      artist: s.artist.replace(/\s+/g, ' ').trim().slice(0, 120),
+      reason: typeof s.reason === 'string' ? s.reason.replace(/\s+/g, ' ').trim().slice(0, 120) : '',
+    }))
     .filter((s) => s.title)
     .slice(0, 40);
   for (let i = 0; i < valid.length && out.length < limit; i += 4) {
@@ -190,14 +200,17 @@ export async function resolveSuggestions(
         excludeKeys: served, muted, blocked: (song) => isSongBlocked(song, library),
       }).filter((song) => !languages.length || (song.language != null && languages.includes(song.language)));
       const open = results.filter((song) => !seen.has(song.id) && !seenTitles.has(titleKey(song.title)) && !avoidKeys.has(titleKey(song.title)));
-      // v7.0.0 — the catalogue song that really IS the suggestion (title and
-      // credited artist both match) wins over whatever the search listed first;
-      // only when none matches does the closest fresh hit stand in.
-      const pick = open.find((song) => matchesProposal(song, asked[n].title, asked[n].artist)) ?? open[0];
+      // 8.5.0 — only the catalogue song that really IS the suggestion (title
+      // and credited artist both match) is taken. When none matches, the
+      // suggestion is dropped: the first search hit is a DIFFERENT song, and
+      // passing it off as the curator's pick was a quiet substitution. The
+      // catalogue pool, ranked against the request, fills any gap instead.
+      const pick = open.find((song) => matchesProposal(song, asked[n].title, asked[n].artist));
       if (pick) {
         seen.add(pick.id);
         seenTitles.add(titleKey(pick.title));
         out.push(pick);
+        if (reasons && asked[n].reason) reasons.set(pick.id, asked[n].reason);
       }
     }
   }
@@ -272,7 +285,8 @@ export async function generatePlaylist(
   const suggestions = Array.isArray(data?.songs) ? (data as { songs: Suggestion[] }).songs : [];
   if (!suggestions.length) return fromCatalogue('empty');
 
-  const picked = await resolveSuggestions(suggestions, TARGET, muted, avoidTitles, langs, signal);
+  const reasons = new Map<string, string>();
+  const picked = await resolveSuggestions(suggestions, TARGET, muted, avoidTitles, langs, signal, reasons);
   if (signal?.aborted) return { ok: false, reason: 'error' };
   if (!picked.length) return fromCatalogue('empty');
   // The curator's picks keep their sequence; the catalogue pool, ranked
@@ -298,6 +312,7 @@ export async function generatePlaylist(
       description: typeof data?.description === 'string' ? data.description.trim().slice(0, 240) : '',
       songs,
       source: 'ai',
+      ...(reasons.size ? { reasons: Object.fromEntries(reasons) } : {}),
     },
   };
 }

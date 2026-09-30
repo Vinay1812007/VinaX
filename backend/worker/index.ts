@@ -92,6 +92,7 @@ import * as m_api_lyrics_tools from './functions/api/lyrics-tools';
 import * as m_api_playlist from './functions/api/playlist';
 import * as m_api_recommendations from './functions/api/recommendations';
 import * as m_api_ai_search from './functions/api/ai/search';
+import * as m_api_ai_playlist from './functions/api/ai/playlist';
 import * as m_api_preview from './functions/api/preview';
 import * as m_api_push_fcm_register from './functions/api/push/fcm-register';
 import * as m_api_push_subscribe from './functions/api/push/subscribe';
@@ -223,6 +224,7 @@ const EXACT: Record<string, Mod> = {
   '/api/playlist': m_api_playlist,
   '/api/recommendations': m_api_recommendations,
   '/api/ai/search': m_api_ai_search,
+  '/api/ai/playlist': m_api_ai_playlist,
   '/api/preview': m_api_preview,
   '/api/push/fcm-register': m_api_push_fcm_register,
   '/api/push/subscribe': m_api_push_subscribe,
