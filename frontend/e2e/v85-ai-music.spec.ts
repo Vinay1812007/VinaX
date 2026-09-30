@@ -182,12 +182,22 @@ test('Home shows Similar artists the listener has not played yet', async ({ page
   });
   await page.goto('/');
   await page.waitForSelector('.vx-hero');
-  for (let i = 0; i < 6; i += 1) {
-    await page.evaluate(() => document.querySelector('#main-content')?.scrollTo(0, 1e9));
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(300);
-  }
-  await expect.poll(() => bodyText(page), { timeout: 20_000 }).toMatch(/Similar artists/);
+  // 8.5.1 — the shelf mounts only near the viewport: step down the page the way a
+  // listener does (a jump to the very bottom lands past visibility-mounted blocks).
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(() => {
+          const main = document.querySelector('#main-content');
+          if (main) main.scrollBy(0, 500);
+          window.scrollBy(0, 500);
+        });
+        await page.waitForTimeout(250);
+        return bodyText(page);
+      },
+      { timeout: 25_000 },
+    )
+    .toMatch(/Similar artists/);
   const text = await bodyText(page);
   expect(text).toMatch(/Fresh Voice/);
   expect(text).toMatch(/Like Artist Zero/);

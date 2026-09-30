@@ -26,6 +26,7 @@ import { songKey } from '@/services/recommendation/songIdentity';
 import { admitSongs } from '@/services/recommendation/admission';
 import { isTuneIntent, randomTune, type TuneIntent } from '@/services/recommendation/tune';
 import { noteSessionEvent } from '@/services/personalization/sessionIntent';
+import { setNowPlayingProbe } from '@/store/libraryStore';
 import {
   creditTick,
   emitPlaybackEvent,
@@ -1371,3 +1372,9 @@ export const usePlayerStore = create<PlayerState>()(
 export function useCurrentSong(): Song | null {
   return usePlayerStore((s) => s.queue[s.index] ?? null);
 }
+
+// 8.5.1 — lets a like on the playing song re-plan the queue (libraryStore.toggleFavorite).
+setNowPlayingProbe(() => {
+  const { queue, index } = usePlayerStore.getState();
+  return queue[index]?.id ?? null;
+});

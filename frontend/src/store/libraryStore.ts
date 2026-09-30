@@ -32,6 +32,18 @@ export function artistKey(name: string): string {
 }
 
 /** v5.12.0 — true when a song is hidden outright or credited to a never-play artist. */
+/**
+ * 8.5.1 — who is playing, without this store importing the player store (the
+ * player registers the probe at load). A like re-plans the queue only for the
+ * song that is playing, so the re-plan module is loaded only then — loading it
+ * on every like fetched the whole adaptive chain for nothing (and in tests it
+ * resolved after the environment was torn down: CI EnvironmentTeardownError).
+ */
+let nowPlayingId: () => string | null = () => null;
+export function setNowPlayingProbe(probe: () => string | null): void {
+  nowPlayingId = probe;
+}
+
 export function isSongBlocked(song: Song, state: { hiddenSongIds: string[]; hiddenArtists: string[] }): boolean {
   if (state.hiddenSongIds.includes(song.id)) return true;
   if (!state.hiddenArtists.length) return false;
@@ -166,7 +178,7 @@ export const useLibraryStore = create<LibraryState>()(
         if (!get().favorites.some((s) => s.id === song.id)) {
           void import('@/services/analytics/telemetry').then((m) => m.trackFavorite(song));
           // 8.5.0 — liking the song that is playing steers what comes next right away.
-          void import('@/services/recommendation/adaptive').then((m) => m.noteLikeAndMaybeReplan(song)).catch(() => undefined);
+          if (nowPlayingId() === song.id) void import('@/services/recommendation/adaptive').then((m) => m.noteLikeAndMaybeReplan(song)).catch(() => undefined);
         }
         const { favorites, saved, hiddenSongIds } = get();
         const exists = favorites.some((s) => s.id === song.id);

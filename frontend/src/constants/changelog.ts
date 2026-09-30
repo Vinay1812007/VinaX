@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.5.1': {
+    title: 'A lighter Home',
+    changes: [
+      { type: 'improved', text: 'Similar artists on Home loads as you scroll to it, so Home opens with fewer requests.' },
+      { type: 'improved', text: 'Liking a song only reshapes what’s coming next when it’s the song you’re playing, and does no extra work otherwise.' },
+    ],
+  },
   '8.5.0': {
     title: 'VinaX learns what you keep and what you pass on',
     changes: [
