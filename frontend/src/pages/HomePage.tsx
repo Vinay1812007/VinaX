@@ -58,6 +58,7 @@ import {
   usePopular,
 } from '@/features/home/useHomeShelves';
 import { useYourArtists } from '@/features/home/useYourArtists';
+import { useSimilarArtists } from '@/features/home/useSimilarArtists';
 import { useDailyMix } from '@/features/home/useDailyMix';
 import { useWeeklyMix } from '@/features/weekly/useWeeklyMix';
 import {
@@ -247,6 +248,7 @@ function PersonalBlock() {
   const mixes = useRecommendations();
   const daily = useDailyMix();
   const yourArtists = useYourArtists();
+  const similarArtists = useSimilarArtists();
   return (
     <>
       {/* v5.17.0 — streak + song of the day: compact cards, each hides itself when empty.
@@ -337,6 +339,23 @@ function PersonalBlock() {
               subtitle={`${a.plays} plays`}
               round
               onPlay={a.id ? () => void playArtist(a.id, a.name) : undefined}
+            />
+          ))}
+        </Shelf>
+      )}
+
+      {/* 8.5.0 — Similar artists: the catalogue's own lists for your top artists, minus the ones you already play. */}
+      {(similarArtists.data?.length ?? 0) >= 3 && (
+        <Shelf title="Similar artists" explanation="Artists you haven’t played yet, like the ones you do">
+          {similarArtists.data!.map((a) => (
+            <MediaCard
+              key={a.id}
+              to={artistPath(a)}
+              image={a.image || letterAvatar(a.name)}
+              title={a.name}
+              subtitle={`Like ${a.because}`}
+              round
+              onPlay={() => void playArtist(a.id, a.name)}
             />
           ))}
         </Shelf>

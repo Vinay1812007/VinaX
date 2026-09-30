@@ -90,6 +90,7 @@ import * as m_api_handoff from './functions/api/handoff';
 import * as m_api_image from './functions/api/image';
 import * as m_api_lyrics_tools from './functions/api/lyrics-tools';
 import * as m_api_playlist from './functions/api/playlist';
+import * as m_api_recommendations from './functions/api/recommendations';
 import * as m_api_preview from './functions/api/preview';
 import * as m_api_push_fcm_register from './functions/api/push/fcm-register';
 import * as m_api_push_subscribe from './functions/api/push/subscribe';
@@ -118,6 +119,7 @@ import * as m_sitemap_songs_xml from './functions/sitemap-songs.xml';
 import * as m_sitemap_static_xml from './functions/sitemap-static.xml';
 import * as m_sitemap_xml from './functions/sitemap.xml';
 import * as m_song_id from './functions/song/[id]';
+import * as m_api_recs_similar from './functions/api/recommendations/similar/[songId]';
 import * as m_hub from './functions/[hub]';
 import * as m_api_cat_path from './functions/api/cat/[[path]]';
 import * as m_sitemaps_map from './functions/sitemaps/[map]';
@@ -218,6 +220,7 @@ const EXACT: Record<string, Mod> = {
   '/api/image': m_api_image,
   '/api/lyrics-tools': m_api_lyrics_tools,
   '/api/playlist': m_api_playlist,
+  '/api/recommendations': m_api_recommendations,
   '/api/preview': m_api_preview,
   '/api/push/fcm-register': m_api_push_fcm_register,
   '/api/push/subscribe': m_api_push_subscribe,
@@ -248,6 +251,7 @@ const DYNAMIC: Array<{ re: RegExp; mod: Mod; key: string }> = [
   { re: /^\/artist\/([^/]+)\/?$/, mod: m_artist_id, key: 'id' },
   { re: /^\/playlist\/([^/]+)\/?$/, mod: m_playlist_id, key: 'id' },
   { re: /^\/song\/([^/]+)\/?$/, mod: m_song_id, key: 'id' },
+  { re: /^\/api\/recommendations\/similar\/([^/]+)\/?$/, mod: m_api_recs_similar, key: 'songId' },
   { re: /^\/sitemaps\/([^/]+)\/?$/, mod: m_sitemaps_map, key: 'map' },
 ];
 

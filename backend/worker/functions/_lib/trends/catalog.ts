@@ -75,3 +75,15 @@ export async function lookupCatalogSong(id: string): Promise<CatalogCandidate | 
   const list = Array.isArray(data) ? data : [];
   return list.length ? toCandidate(list[0]) : null;
 }
+
+/**
+ * 8.5.0 — the catalogue's own "similar songs" for one song id (the list the
+ * song page's Similar tracks shows). Empty when the catalogue has none or
+ * does not know the id; throws CatalogUnavailable when it is down.
+ */
+export async function catalogSongSuggestions(id: string): Promise<CatalogCandidate[]> {
+  if (!/^[A-Za-z0-9_-]{2,40}$/.test(id)) return [];
+  const data = await callCatalogue(['songs', id, 'suggestions'], {});
+  const list = Array.isArray(data) ? data : [];
+  return list.map(toCandidate).filter((c: CatalogCandidate | null): c is CatalogCandidate => c !== null);
+}
