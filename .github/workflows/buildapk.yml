@@ -110,9 +110,17 @@ jobs:
         # release intent: those still FAIL loudly when the signing keystore
         # is missing, whereas an ordinary auto-push just SKIPS the release so
         # a normal code push can never go red over an unconfigured keystore.
+        # The commit message is passed through an env var, never pasted into
+        # the script: a message with quotes or backticks (the #65 squash)
+        # broke the shell ("syntax error near unexpected token `newline'") and
+        # skipped the release, and a crafted one could run commands in a job
+        # that holds the signing secrets.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           echo "IS_RELEASE=true" >> "$GITHUB_ENV"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || echo "${{ github.event.head_commit.message }}" | grep -qF '[release]'; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || printf '%s' "$COMMIT_MESSAGE" | grep -qF '[release]'; then
             echo "RELEASE_EXPLICIT=true" >> "$GITHUB_ENV"
           else
             echo "RELEASE_EXPLICIT=false" >> "$GITHUB_ENV"
