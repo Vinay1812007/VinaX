@@ -17,6 +17,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
     changes: [
       { type: 'improved', text: 'Not interested now teaches VinaX: that artist comes up less in your mixes and queues, while the language you listen in is left alone. Undo puts things back.' },
       { type: 'improved', text: 'Songs you add to your own playlists count towards your taste, so your mixes lean towards what you keep. Importing a whole playlist does not.' },
+      { type: 'new', text: 'Your taste profile now shows how you listen: your skip rate, how much of the last month was new to you, your discovery mode, and the moods and styles you play most.' },
     ],
   },
   '8.4.0': {
