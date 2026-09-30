@@ -19,6 +19,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       { type: 'improved', text: 'Songs you add to your own playlists count towards your taste, so your mixes lean towards what you keep. Importing a whole playlist does not.' },
       { type: 'new', text: 'Your taste profile now shows how you listen: your skip rate, how much of the last month was new to you, your discovery mode, and the moods and styles you play most.' },
       { type: 'new', text: 'Home has a Similar artists shelf: artists like the ones you play most, that you haven’t played yet. Artists you’ve blocked or asked to hear less of stay out.' },
+      { type: 'new', text: 'Search understands more of what you describe: “songs like” a song or a singer, slow or fast, instrumental, and a decade such as “the 2000s” now keeps to songs from those years. When VinaX AI is on, it also reads descriptions the word lists miss, like “something for a candle-light dinner”.' },
     ],
   },
   '8.4.0': {

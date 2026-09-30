@@ -232,7 +232,7 @@ The controls editor publishes the `ai-controls` key through `POST /api/admin/app
 
 ```
 { emergencyOff: boolean,
-  features: { dj, curate-metadata, curate-ranking, curate-home, curate-shelves, playlist, vinaxai, assistant, tts, lyrics, image, embed: boolean },
+  features: { dj, curate-metadata, curate-ranking, curate-home, curate-shelves, playlist, vinaxai, assistant, tts, lyrics, image, embed, search: boolean },
   dailyTokenCap: number | null, dailyCostCapUsd: number | null, updatedAt, updatedBy? }
 ```
 

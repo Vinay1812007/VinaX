@@ -103,7 +103,7 @@ Beyond the two feature flags below, the owner publishes one backend-enforced
 record (`vinax_config` key `ai-controls`): an emergency stop, a switch per
 feature (`dj`, `curate-metadata`, `curate-ranking`, `curate-home`,
 `curate-shelves`, `playlist`, `vinaxai`, `assistant`, `tts`, `lyrics`,
-`image`, and 8.2's `embed`) and daily token / cost caps. `chat()` and `gather()` consult it
+`image`, 8.2's `embed` and 8.5's `search`) and daily token / cost caps. `chat()` and `gather()` consult it
 before any provider call, and the streaming routes call `aiGate()` directly.
 
 - A feature is on unless its value is exactly `false`.

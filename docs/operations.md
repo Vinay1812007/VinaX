@@ -106,7 +106,8 @@ on any client honouring a flag.
   "features": { "dj": true, "curate-metadata": true, "curate-ranking": true,
                 "curate-home": true, "curate-shelves": true, "playlist": true,
                 "vinaxai": true, "assistant": true, "tts": true,
-                "lyrics": true, "image": true, "embed": true },
+                "lyrics": true, "image": true, "embed": true,
+                "search": true },
   "dailyTokenCap": null, "dailyCostCapUsd": null,
   "updatedAt": "…", "updatedBy": "…" }
 ```

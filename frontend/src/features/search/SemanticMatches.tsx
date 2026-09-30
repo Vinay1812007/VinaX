@@ -10,7 +10,7 @@ import { playArtist, playPlaylist } from '@/features/player/playEntity';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { letterAvatar } from '@/utils/avatar';
 import { artistPath, playlistPath } from '@/utils/slug';
-import { findSemanticMatches } from './semanticSearch';
+import { explainMatches, findSemanticMatches } from './semanticSearch';
 import { SEARCH_GC_MS, SEARCH_STALE_MS } from './useSearch';
 
 /**
@@ -54,7 +54,7 @@ export default function SemanticMatches({ query, results }: { query: string; res
             Play all
           </button>
         </div>
-        <p className="vx-meta-line mb-2">Ranked by how well each song fits “{query}”.</p>
+        <p className="vx-meta-line mb-2">{explainMatches(query, data.seed)}</p>
         <div className="vx-track-list">
           {data.songs.map((song, i) => (
             <SongRow key={song.id} song={song} songs={data.songs} index={i} />

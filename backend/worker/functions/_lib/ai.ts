@@ -854,7 +854,7 @@ export async function gatherDetailed(
 // open. Caps are soft by up to one cache period plus in-flight calls.
 // ============================================================================
 
-export const AI_FEATURES = ['dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed'] as const;
+export const AI_FEATURES = ['dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed', 'search'] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
 
 export interface AiControls {
