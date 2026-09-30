@@ -8,9 +8,14 @@
 https://sirimillavinay.online/* https://www.sirimillavinay.online/:splat 301
 
 # Hashed build assets must NEVER fall back to the SPA shell: an HTML body
-# cached under the /assets/* immutable header bricks that chunk URL for up to
-# a year. A missing asset is a plain 404 — the app reloads and recovers.
-/assets/*  /assets-404.txt  404
+# cached under the /assets/* one-year header bricks that chunk URL. That is
+# NOT done here (8.5.2): Pages accepts only 200 and 301-308 in this file, so
+# the old `/assets/*  /assets-404.txt  404` line was silently dropped and a
+# missing chunk kept answering 200 + the SPA shell + max-age=31536000. A 200
+# rewrite is no fix either — it overrides the real chunks too. The guard is
+# public/assets/404.html: Pages answers a miss under /assets/ with the nearest
+# 404.html (404, no-store) while app routes keep the SPA fallback, because
+# there is no top-level 404.html.
 
 # Route aliases — legacy/guessable paths land on the real pages.
 /downloads  /offline  301

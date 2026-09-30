@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.5.2': {
+    title: 'VinaX opens reliably after an update',
+    changes: [
+      { type: 'fixed', text: 'Opening VinaX while an update was going out could leave it stuck on “Having trouble loading”, even after refreshing. VinaX now repairs the damaged copy by itself and opens normally.' },
+    ],
+  },
   '8.5.1': {
     title: 'A lighter Home',
     changes: [

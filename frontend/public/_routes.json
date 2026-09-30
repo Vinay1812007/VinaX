@@ -12,7 +12,6 @@
     "/sw.js",
     "/og.png",
     "/robots.txt",
-    "/llms.txt",
-    "/assets-404.txt"
+    "/llms.txt"
   ]
 }

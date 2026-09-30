@@ -275,6 +275,27 @@
               .then(function (r) { finish(!!r && r.ok); }, function () { finish(false); });
           } catch (e) { finish(false); }
         }
+        // 8.5.2: the poison can live in the browser's OWN HTTP cache — an
+        // HTML body stored under a hashed /assets/*.js url for a year.
+        // Unregistering service workers and purging CacheStorage never touch
+        // that cache, and the entry heal below only re-keys the ENTRY url:
+        // its static imports resolve to the same poisoned urls, so the shell
+        // walked the whole ladder to "Having trouble loading". A fetch with
+        // cache: 'reload' goes to the network and overwrites the stored copy,
+        // so re-fetch every chunk this document names before any retry.
+        // Capped at 5 seconds so a stalled request cannot hold up recovery.
+        function refreshAssets() {
+          var urls = [];
+          try {
+            var els = document.querySelectorAll('script[src*="/assets/"], link[rel="modulepreload"][href*="/assets/"]');
+            for (var i = 0; i < els.length; i++) urls.push(els[i].src || els[i].href);
+          } catch (e) { /* nothing to refresh */ }
+          if (!urls.length || typeof fetch !== 'function') return Promise.resolve();
+          var all = Promise.all(urls.map(function (u) {
+            return fetch(u, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
+          })).catch(function () {});
+          return Promise.race([all, new Promise(function (r) { setTimeout(r, 5000); })]);
+        }
         var recovering = false;
         function nukeAndReload(bs) {
           if (recovering) return;
@@ -299,6 +320,7 @@
                 }).catch(function () {}));
               }
             } catch (e) { /* ignore */ }
+            jobs.push(refreshAssets());
             Promise.all(jobs).catch(function () {}).then(function () {
               location.replace(location.pathname + '?bust=' + Date.now());
             });
@@ -316,19 +338,24 @@
           // all returned the SAME poisoned body: none of them change the cache
           // KEY, and the shell sat on "Updating\u2026" forever. A unique query
           // is a different key, so the edge must fetch the chunk again. One
-          // shot, then fall through to the ladder.
+          // shot, then fall through to the ladder. The entry's static imports
+          // keep their urls, so refresh those in the browser cache first.
           if (!healed) {
             healed = true;
             try { sessionStorage.setItem(HEAL, '1'); } catch (e2) { /* retry anyway */ }
             if (bs) bs.textContent = 'Updating\u2026';
-            try {
-              var heal = document.createElement('script');
-              heal.type = 'module';
-              if (t.crossOrigin) heal.crossOrigin = t.crossOrigin;
-              heal.src = t.src + (t.src.indexOf('?') === -1 ? '?' : '&') + 'vxheal=' + Date.now();
-              document.head.appendChild(heal);
-              return;
-            } catch (e3) { /* fall through to the reload ladder */ }
+            var failedSrc = t.src;
+            var failedCors = t.crossOrigin;
+            refreshAssets().then(function () {
+              try {
+                var heal = document.createElement('script');
+                heal.type = 'module';
+                if (failedCors) heal.crossOrigin = failedCors;
+                heal.src = failedSrc + (failedSrc.indexOf('?') === -1 ? '?' : '&') + 'vxheal=' + Date.now();
+                document.head.appendChild(heal);
+              } catch (e3) { location.reload(); }
+            });
+            return;
           }
           // Offline, a reload re-reads the same cached copy \u2014 wait instead.
           if (isOffline()) { waitForConnection(bs); return; }
