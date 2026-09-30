@@ -1,6 +1,6 @@
 # AI in VinaX
 
-This document covers the AI layer of VinaX as of 8.2: how the Worker routes a call through lanes, fails over between them and rests a failing engine, the contract of each AI route (`/api/dj`, `/api/curate`, `/api/playlist`, `/api/vinaxai`, `/api/aimodels`, `/api/embed`), the rule that AI may order or propose but never bypass validation, the timeouts and budgets on both sides, and what the app does when every provider is down. The on-device recommender that AI sits on top of is described in [recommendations.md](recommendations.md). Secret names, provider hosts and key rotation are in [operations.md](operations.md).
+This document covers the AI layer of VinaX as of 8.2: how the Worker routes a call through lanes, fails over between them and rests a failing engine, the contract of each AI route (`/api/dj`, `/api/curate`, `/api/playlist`, `/api/vinaxai`, `/api/aimodels`, `/api/embed`), the rule that AI may order or propose but never bypass validation, the timeouts and budgets on both sides, and what the app does when every provider is down. The on-device recommender that AI sits on top of is described in [recommendations.md](recommendations.md). The 8.5 routes — `/api/ai/search`, `/api/ai/playlist`, `/api/ai/dj` and the catalogue-only `/api/recommendations` — and DJ grounding are in [ai-music.md](ai-music.md). Secret names, provider hosts and key rotation are in [operations.md](operations.md).
 
 Backend paths below are relative to `backend/worker/functions/`; frontend paths are relative to `frontend/src/`.
 
