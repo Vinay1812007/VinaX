@@ -6,6 +6,7 @@ import { useSearchStore } from '@/store/searchStore';
 import { useSearchWorkspaceStore, type SearchPreset } from '@/store/searchWorkspaceStore';
 import { activeFilterCount, resultsCsv, shuffledSongs } from './workspace';
 import { toast } from '@/store/toastStore';
+import { SectionHeader } from '@/components/SectionHeader';
 
 export function SavedSearches({ onOpen }: { onOpen: (preset: SearchPreset) => void }) {
   const presets = useSearchWorkspaceStore((s) => s.presets);
@@ -15,10 +16,7 @@ export function SavedSearches({ onOpen }: { onOpen: (preset: SearchPreset) => vo
   if (!presets.length) return null;
   return (
     <section className="search-saved" aria-label="Saved searches">
-      <div className="search-section-heading">
-        <h2>Your search shortcuts</h2>
-        <span>{presets.length}/20 saved</span>
-      </div>
+      <SectionHeader title="Your search shortcuts" explanation={`${presets.length} of 20 saved on this device`} />
       <div className="search-preset-grid">
         {presets.map((p) => (
           <div key={p.id} className="search-preset">
@@ -45,7 +43,7 @@ export function SavedSearches({ onOpen }: { onOpen: (preset: SearchPreset) => vo
               </form>
             ) : (
               <>
-                <button className="search-preset-open" onClick={() => onOpen(p)}>
+                <button type="button" className="search-preset-open" onClick={() => onOpen(p)}>
                   <span>↗</span>
                   <strong>{p.name}</strong>
                   <small>
@@ -53,10 +51,10 @@ export function SavedSearches({ onOpen }: { onOpen: (preset: SearchPreset) => vo
                   </small>
                 </button>
                 <div className="search-preset-actions">
-                  <button aria-label={`Rename ${p.name}`} onClick={() => setEditing(p.id)}>
+                  <button type="button" aria-label={`Rename ${p.name}`} onClick={() => setEditing(p.id)}>
                     Rename
                   </button>
-                  <button aria-label={`Delete ${p.name}`} onClick={() => remove(p.id)}>
+                  <button type="button" aria-label={`Delete ${p.name}`} onClick={() => remove(p.id)}>
                     Remove
                   </button>
                 </div>
@@ -126,16 +124,17 @@ export function SearchWorkspace({
         </div>
         <div className="search-workspace-actions">
           <button
+            type="button"
             onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
             aria-controls="search-refinements"
           >
             Refine {count > 0 && <b>{count}</b>} <span aria-hidden>⌄</span>
           </button>
-          <button onClick={toggleCompact} aria-pressed={compact}>
+          <button type="button" onClick={toggleCompact} aria-pressed={compact}>
             Compact
           </button>
-          <button onClick={() => setSaving(!saving)} aria-expanded={saving}>
+          <button type="button" onClick={() => setSaving(!saving)} aria-expanded={saving}>
             ＋ Save search
           </button>
         </div>
@@ -219,31 +218,33 @@ export function SearchWorkspace({
         </div>
       )}
       {count > 0 && (
-        <button className="search-reset" onClick={reset}>
+        <button type="button" className="search-reset" onClick={reset}>
           Clear {count} refinements ×
         </button>
       )}
       <div className="search-bulk" aria-label="Actions for filtered songs">
         <button
+          type="button"
           disabled={!songs.length}
           onClick={() => usePlayerStore.getState().playQueue(shuffledSongs(songs), 0)}
         >
           ⇄ Shuffle results
         </button>
-        <button disabled={!songs.length} onClick={addFavorites}>
+        <button type="button" disabled={!songs.length} onClick={addFavorites}>
           ♡ Favorite results
         </button>
-        <button disabled={!songs.length} onClick={addLater}>
+        <button type="button" disabled={!songs.length} onClick={addLater}>
           ＋ Listen later
         </button>
         <button
+          type="button"
           disabled={!songs.length}
           onClick={() => setCreating(!creating)}
           aria-expanded={creating}
         >
           New collection
         </button>
-        <button disabled={!songs.length} onClick={exportCsv}>
+        <button type="button" disabled={!songs.length} onClick={exportCsv}>
           Export CSV ↓
         </button>
       </div>

@@ -40,9 +40,9 @@ export default function MoviesPage() {
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title="Movies" />
+      <PageHeader title="Movies" subtitle="Film soundtracks, from this week’s releases to the classics." />
 
-      <div className="vx-field mb-4 max-w-[720px]">
+      <div className="bx-field mb-4 max-w-[720px]">
         <SearchIcon />
         <input
           type="search"
@@ -52,7 +52,7 @@ export default function MoviesPage() {
           aria-label="Search movies"
         />
         {search && (
-          <div className="vx-field-actions">
+          <div className="bx-field-actions">
             <IconButton label="Clear" size="sm" onClick={() => setSearch('')}>
               <XIcon className="w-4 h-4" />
             </IconButton>
@@ -60,7 +60,7 @@ export default function MoviesPage() {
         )}
       </div>
 
-      <div className="vx-chip-rail !mb-6">
+      <div className="vx-chip-rail !mb-7">
         <div className="flex items-center gap-2 shrink-0" role="group" aria-label="Sort movies">
           {(
             [
@@ -75,12 +75,14 @@ export default function MoviesPage() {
         </div>
         {!searching && (
           <>
-            <span aria-hidden className="search-filters-sep self-center" />
-            {LANGUAGES.map((l) => (
-              <Chip key={l.id} active={lang === l.id} onClick={() => setLang(l.id)}>
-                {l.label}
-              </Chip>
-            ))}
+            <span aria-hidden className="bx-rail-sep" />
+            <div className="flex items-center gap-2 shrink-0" role="group" aria-label="Language">
+              {LANGUAGES.map((l) => (
+                <Chip key={l.id} active={lang === l.id} onClick={() => setLang(l.id)}>
+                  {l.label}
+                </Chip>
+              ))}
+            </div>
           </>
         )}
       </div>
@@ -102,16 +104,17 @@ export default function MoviesPage() {
         <>
           {/* D9 — featured film: the top result as a wide artwork-led card. */}
           {!searching && shown[0] && (
-            <Link to={albumPath(shown[0])} className="vx-feature group">
-              <img src={bestImage(shown[0].images, 500)} alt="" className="vx-feature-bg" aria-hidden />
-              <div className="vx-feature-body">
-                <img src={bestImage(shown[0].images, 250)} alt="" className="vx-feature-art" />
+            <Link to={albumPath(shown[0])} className="bx-feature group">
+              <img src={bestImage(shown[0].images, 150)} alt="" className="bx-feature-bg" aria-hidden decoding="async" />
+              <div className="bx-feature-body">
+                <img src={bestImage(shown[0].images, 250)} alt="" className="bx-feature-art" width={144} height={144} decoding="async" />
                 <div className="min-w-0 flex-1">
-                  <p className="vx-feature-kind">Featured film</p>
-                  <h2 className="vx-feature-title">{filmTitleFromAlbumName(shown[0].title) ?? shown[0].title}</h2>
-                  <p className="vx-feature-meta">{shown[0].subtitle || 'Full soundtrack'}</p>
+                  <p className="bx-feature-kind">Featured film</p>
+                  <h2 className="bx-feature-title">{filmTitleFromAlbumName(shown[0].title) ?? shown[0].title}</h2>
+                  <p className="bx-feature-meta">{shown[0].subtitle || 'Full soundtrack'}</p>
                 </div>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.preventDefault();
                     void playAlbum(shown[0].id, shown[0].title);

@@ -1,10 +1,11 @@
-import { Link } from 'react-router-dom';
 import { HeartIcon, MusicIcon, SparkleIcon, SunIcon, WaveIcon, WaveformIcon } from '@/components/Icons';
 import { MOOD_HUBS } from '@/constants/hubs';
 import { languageLabel } from '@/constants/languages';
+import { BrowseTile, TileGlyph } from './BrowseTile';
 import '@/styles/pages/browse.css';
 
-const HUB_TONE: Record<string, [number, typeof HeartIcon]> = {
+/** Each mood hub's tone and icon, shared with Explore's hub list. */
+export const HUB_TONE: Record<string, [number, typeof HeartIcon]> = {
   romantic: [3, HeartIcon],
   sad: [12, WaveIcon],
   party: [9, SparkleIcon],
@@ -17,20 +18,19 @@ const HUB_TONE: Record<string, [number, typeof HeartIcon]> = {
 export function HubMoodTiles({ language, exclude }: { language: string; exclude?: string }) {
   const label = languageLabel(language);
   return (
-    <div className="vx-browse-tiles vx-hub-tiles">
+    <div className="bx-tile-grid">
       {MOOD_HUBS.filter((m) => m.slug !== exclude).map((m) => {
         const [tone, Icon] = HUB_TONE[m.slug] ?? [1, MusicIcon];
         return (
-          <Link
+          <BrowseTile
             key={m.slug}
             to={`/${language}-${m.slug}-songs`}
-            aria-label={`${label} ${m.label.toLowerCase()} songs`}
-            className={`vx-browse-tile vx-tone-${tone}`}
-          >
-            <span className="vx-browse-tile-title">{m.label}</span>
-            <span className="vx-browse-tile-meta">{label} songs</span>
-            <span className="vx-browse-tile-art" aria-hidden><Icon /></span>
-          </Link>
+            label={`${label} ${m.label.toLowerCase()} songs`}
+            tone={`vx-tone-${tone}`}
+            title={m.label}
+            meta={`${label} songs`}
+            visual={<TileGlyph><Icon /></TileGlyph>}
+          />
         );
       })}
     </div>
