@@ -32,6 +32,8 @@ Encore is VinaX's own identity, taken from the VinaX mark: its violet stroke and
 | `styles/pages/tracklist.css` | Track rows, the track-list header and media cards — the only place they are styled. Imported by `SongRow` and `MediaCard` |
 | `styles/overlays.css` | Sheets, dialogs, menus and the welcome sheet. Imported by `Sheet`, `TrackMenu` and `OnboardingSheet`, not by `main.tsx` |
 | `styles/pages/*.css` | One stylesheet per area (`home`, `browse`, `library`, `player`, `radio`, `settings`, `secondary`), each imported by its page or component, so it ships in that lazy chunk and never in the first load |
+
+Page stylesheets scope their rules under the page's root class (`.vx-home`, `.vx-browse`, …) so two lazy chunks loaded in one session cannot restyle each other; `browse.css`'s shared pieces are the `bx-*` family (the browse tiles — chart covers fanned, language scripts, mood emoji — the hub covers and the pinned search field).
 | `styles/ai.css` | VinaX AI, which renders outside the main shell |
 
 Shell components: `Sidebar`, `TopBar`, `BottomNav`, `PlayerBar` (compact player on phones and tablets, the deck from 1024px), `NowPlayingRail`, and `EntityHeader` (artwork-coloured header with type label, display title, meta line and the action row, shared by album, playlist, collection and library-list pages). Icons have a 1.8 stroke; `HomeIcon`, `CompassIcon`, `SearchIcon`, `LibraryIcon` and `SparkleIcon` take `filled` for the active destination.
