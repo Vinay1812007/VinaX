@@ -8,12 +8,12 @@ import { toast } from '@/store/toastStore';
 import { ChevronRightIcon } from '@/components/Icons';
 import '@/styles/pages/secondary.css';
 
-const LINKS: Array<{ to: string; label: string }> = [
-  { to: '/help', label: 'Help and feedback' },
-  { to: '/privacy', label: 'Privacy' },
-  { to: '/terms', label: 'Terms of use' },
-  { to: '/dmca', label: 'Copyright and takedowns' },
-  { to: '/contact', label: 'Contact' },
+const LINKS: Array<{ to: string; label: string; hint: string }> = [
+  { to: '/help', label: 'Help and feedback', hint: 'Guides, answers and a way to reach the team' },
+  { to: '/privacy', label: 'Privacy', hint: 'What stays on your device, and what you can opt in to' },
+  { to: '/terms', label: 'Terms of use', hint: 'Plain-language terms' },
+  { to: '/dmca', label: 'Copyright and takedowns', hint: 'For artists, labels and rights holders' },
+  { to: '/contact', label: 'Contact', hint: 'One email address for everything' },
 ];
 
 export default function AboutPage() {
@@ -22,31 +22,33 @@ export default function AboutPage() {
   useEffect(() => onInstallAvailable(() => setInstallable(true)), []);
   return (
     <div className="vx-sec">
-      <header className="flex flex-wrap items-center gap-4 sm:gap-5 mb-8">
-        <img src="/icons/icon.svg" alt="" className="w-[72px] h-[72px] rounded-2xl shadow-[var(--vx-art-shadow)]" />
-        <div className="min-w-0 flex-1">
-          <h1 className="vx-page-title">VinaX</h1>
-          <p className="mt-1 text-[13px] font-medium text-ink-400 tabular-nums">{DISPLAY_VERSION}</p>
-        </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          {installable && (
+      <header className="vx-hero-row vx-sec-block">
+        <img src="/icons/icon.svg" alt="" width={96} height={96} className="w-24 h-24 shrink-0 rounded-[var(--vx-radius-panel)] shadow-[var(--vx-art-shadow)]" />
+        <div>
+          <h1 className="vx-display">VinaX</h1>
+          <p className="mt-2 text-[14px] font-semibold text-ink-400 tabular-nums">{DISPLAY_VERSION}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {installable && (
+              <button
+                type="button"
+                onClick={() => void promptInstall().then((ok) => ok && setInstallable(false))}
+                className="px-5 rounded-full btn-primary text-sm"
+              >
+                Install app
+              </button>
+            )}
             <button
-              onClick={() => void promptInstall().then((ok) => ok && setInstallable(false))}
-              className="px-5 py-2.5 rounded-full btn-primary text-sm"
+              type="button"
+              onClick={() => void shareLink('/', 'VinaX — music tuned to you').then((r) => r === 'copied' && toast('Link copied'))}
+              className="px-5 rounded-full btn-secondary text-sm"
             >
-              Install app
+              Share app
             </button>
-          )}
-          <button
-            onClick={() => void shareLink('/', 'VinaX — music tuned to you').then((r) => r === 'copied' && toast('Link copied'))}
-            className="px-5 py-2.5 rounded-full btn-secondary text-sm"
-          >
-            Share app
-          </button>
+          </div>
         </div>
       </header>
 
-      <div className="vx-sec-block space-y-4 text-[15px] leading-[1.65] text-ink-200 max-w-[68ch]">
+      <div className="vx-sec-block vx-doc">
         <p>
           VinaX is free music with no login and no account. It plays across 12 Indian languages and English, and
           learns what you love right here on your device.
@@ -54,8 +56,7 @@ export default function AboutPage() {
         <p>
           No paywalls and no premium tiers. Personalization is computed on your device, nothing you type is stored on
           our servers, and your IP address is never kept. The only data we receive is optional, anonymous usage you
-          can switch off — see what VinaX knows on your{' '}
-          <Link to="/taste-profile" className="vx-link">taste profile</Link>.
+          can switch off — see what VinaX knows on your <Link to="/taste-profile">taste profile</Link>.
         </p>
         <p>
           Inside: VinaX AI with Think, Research and voice chat, synced karaoke lyrics, Listen Together rooms, offline
@@ -67,7 +68,10 @@ export default function AboutPage() {
       <nav aria-label="About VinaX" className="vx-group">
         {LINKS.map((l) => (
           <Link key={l.to} to={l.to} className="vx-row is-link">
-            <span className="vx-row-main vx-row-label">{l.label}</span>
+            <span className="vx-row-main">
+              <span className="vx-row-label">{l.label}</span>
+              <span className="vx-row-hint">{l.hint}</span>
+            </span>
             <ChevronRightIcon className="vx-row-chev" />
           </Link>
         ))}

@@ -79,15 +79,15 @@ export function TasteSetupSheet({ onClose, onSaved }: { onClose: () => void; onS
 
   return (
     <Sheet onClose={onClose} labelledBy="vx-taste-setup-title" size="lg" maxHeight="tall">
-      <h2 id="vx-taste-setup-title" className="text-xl font-bold">Pick languages &amp; artists</h2>
-      <p className="mt-1 text-xs text-ink-400 leading-relaxed">
+      <h2 id="vx-taste-setup-title" className="vx-sheet-title !pt-0">Pick languages &amp; artists</h2>
+      <p className="mt-1 text-[13px] text-ink-400 leading-relaxed">
         Tell VinaX what you like instead of waiting for it to learn. Everything you pick stays on this device and can be changed
         any time.
       </p>
 
       <section aria-labelledby="vx-taste-setup-langs" className="mt-5">
-        <h3 id="vx-taste-setup-langs" className="text-sm font-semibold">Languages you listen in</h3>
-        <p className="text-[11px] text-ink-400 mt-0.5 mb-2">Saved as you tap. These are the same pinned languages as in Settings.</p>
+        <h3 id="vx-taste-setup-langs" className="text-[15px] font-bold text-ink-100">Languages you listen in</h3>
+        <p className="text-[13px] text-ink-400 mt-0.5 mb-3">Saved as you tap. These are the same pinned languages as in Settings.</p>
         <div className="flex flex-wrap gap-2">
           {LANGUAGES.map((l) => (
             <Chip key={l.id} active={pinned.includes(l.id)} onClick={() => togglePinnedLanguage(l.id)}>
@@ -98,12 +98,12 @@ export function TasteSetupSheet({ onClose, onSaved }: { onClose: () => void; onS
       </section>
 
       <section aria-labelledby="vx-taste-setup-artists" className="mt-5">
-        <h3 id="vx-taste-setup-artists" className="text-sm font-semibold">Artists you love</h3>
-        <p className="text-[11px] text-ink-400 mt-0.5 mb-2">
+        <h3 id="vx-taste-setup-artists" className="text-[15px] font-bold text-ink-100">Artists you love</h3>
+        <p className="text-[13px] text-ink-400 mt-0.5 mb-3">
           Popular right now in your languages. Each one you pick counts as much as liking one of their songs.
         </p>
         {!online && artists === null ? (
-          <p className="text-xs text-ink-400">You’re offline. Languages still save; artists need a connection.</p>
+          <p className="text-[13px] text-ink-400">You’re offline. Languages still save; artists need a connection.</p>
         ) : artists === null ? (
           <div className="flex flex-wrap gap-2" aria-hidden>
             {Array.from({ length: 8 }).map((_, i) => (
@@ -112,10 +112,10 @@ export function TasteSetupSheet({ onClose, onSaved }: { onClose: () => void; onS
           </div>
         ) : failed || !artists.length ? (
           <div className="flex flex-wrap items-center gap-3">
-            <p className="text-xs text-ink-400">
+            <p className="text-[13px] text-ink-400">
               {online ? 'Couldn’t load artists just now.' : 'You’re offline, so artists couldn’t load.'}
             </p>
-            <button type="button" onClick={() => setAttempt((a) => a + 1)} className="px-3 py-1.5 min-h-touch rounded-full glass-button text-xs font-bold">
+            <button type="button" onClick={() => setAttempt((a) => a + 1)} className="vx-tap min-h-[36px] px-4 rounded-full vx-chip-idle text-[13px] font-bold text-ink-100">
               Try again
             </button>
           </div>
@@ -133,11 +133,11 @@ export function TasteSetupSheet({ onClose, onSaved }: { onClose: () => void; onS
         )}
       </section>
 
-      <div className="mt-6 flex items-center justify-end gap-2.5">
-        <button type="button" onClick={onClose} className="px-4 py-2.5 min-h-touch rounded-full border border-ink-600 text-sm font-semibold text-ink-200">
+      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" onClick={onClose} className="btn-secondary min-h-touch px-5 text-sm">
           Cancel
         </button>
-        <button type="button" onClick={save} className="vx-tap px-5 py-2.5 rounded-full btn-primary text-sm font-bold">
+        <button type="button" onClick={save} className="btn-primary min-h-touch px-6 text-sm">
           {picked.length ? `Save ${picked.length} ${picked.length === 1 ? 'artist' : 'artists'}` : 'Done'}
         </button>
       </div>

@@ -204,7 +204,7 @@ for (const size of SIZES) {
     await page.setViewportSize(size);
     await seed(page, baseURL!, size.theme);
     await page.goto('/stats');
-    await expect.poll(() => bodyText(page)).toMatch(/LISTENED \(EST\.\)/);
+    await expect.poll(() => bodyText(page)).toMatch(/Listened \(est\.\)/);
     await expect.poll(() => bodyText(page)).toMatch(/≈/);
     await page.screenshot({ path: `test-results/v61-stats-${tag}.png`, fullPage: true });
     await page.goto('/settings');

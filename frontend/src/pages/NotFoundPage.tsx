@@ -26,13 +26,19 @@ export default function NotFoundPage() {
   return (
     <div className="vx-empty-page">
       <span className="vx-empty-icon" aria-hidden>
-        <WaveIcon className="w-8 h-8" />
+        <WaveIcon className="w-9 h-9" />
       </span>
+      <p className="vx-empty-code">Page not found</p>
       <h1>This page skipped itself</h1>
       <p>The page you’re looking for doesn’t exist or has moved.</p>
-      <Link to="/" className="px-6 py-3 rounded-full btn-primary">
-        Back to Home
-      </Link>
+      <div className="mt-7 flex flex-wrap justify-center gap-2">
+        <Link to="/" className="inline-flex items-center px-6 rounded-full btn-primary !mt-0">
+          Back to Home
+        </Link>
+        <Link to="/search" className="inline-flex items-center px-6 rounded-full btn-secondary">
+          Search
+        </Link>
+      </div>
     </div>
   );
 }

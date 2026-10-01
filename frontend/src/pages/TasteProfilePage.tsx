@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -11,8 +11,14 @@ import { PageSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { SoftMuteList } from '@/features/personalization/SoftMuteList';
 import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
+import { ArtistAvatar, Collage, artistPictures, songIndex } from '@/features/stats/artwork';
+import { useHistoryStore } from '@/store/historyStore';
+import { useLibraryStore } from '@/store/libraryStore';
+import { bestImage } from '@/utils/images';
+import type { Song } from '@/types';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
 import '@/styles/pages/secondary.css';
 
 const ResetTasteSheet = lazy(() => import('@/features/personalization/ResetTasteSheet').then((m) => ({ default: m.ResetTasteSheet })));
@@ -22,21 +28,35 @@ function Bar({ label, value, max, suffix }: { label: string; value: number; max:
   return (
     <div className="vx-meter">
       <span title={label}>{label}</span>
-      <div className="vx-bar" aria-hidden>
+      <span className="vx-bar" aria-hidden>
         <span style={{ width: `${pct}%` }} />
-      </div>
+      </span>
       <span>{suffix ?? value.toFixed(0)}</span>
     </div>
   );
 }
 
+/** A titled block of the page: SectionHeader, then its content. */
 function Section({ title, children, note }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <section className="vx-sec-block">
-      <h2 className="vx-sec-title">{title}</h2>
-      {note && <p className="vx-sec-lede">{note}</p>}
-      <div className="vx-group is-padded space-y-1">{children}</div>
+    <section className="vx-sec-block" aria-label={title}>
+      <SectionHeader title={title} explanation={note} />
+      {children}
     </section>
+  );
+}
+
+/** Big tabular numbers with their labels; an estimate says so in its label. */
+function Numbers({ items, columns }: { items: Array<[string, string]>; columns: 'is-three' | 'is-four' }) {
+  return (
+    <div className={`vx-kpis ${columns}`}>
+      {items.map(([v, l]) => (
+        <div key={l} className="vx-kpi">
+          <span className="vx-kpi-label">{l}</span>
+          <span className="vx-kpi-value">{v}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -70,14 +90,11 @@ function TasteDials() {
     persistDial(key, v);
   };
   return (
-    <Section
-      title="Fine-tune your mix"
-      note="Centre means your listening decides. Saved only on this device."
-    >
-      <div className="space-y-6">
+    <Section title="Fine-tune your mix" note="Centre means your listening decides. Saved only on this device.">
+      <div className="vx-group">
         {DIALS.map((d) => (
-          <div key={d.key}>
-            <div className="flex justify-between text-[14px] font-semibold text-ink-100 mb-2">
+          <div key={d.key} className="vx-row !block !py-4">
+            <div className="flex justify-between gap-4 text-[14px] font-semibold text-ink-100 mb-2">
               <span>{d.left}</span>
               <span>{d.right}</span>
             </div>
@@ -103,16 +120,22 @@ function TasteDials() {
 const MOOD_LABEL: Record<string, string> = { romantic: 'Romantic', energetic: 'Energetic', chill: 'Chill', melancholy: 'Sad and soulful', devotional: 'Devotional' };
 const MODE_LABEL: Record<string, string> = { familiar: 'Familiar', balanced: 'Balanced', discover: 'Discover' };
 const pct = (v: number | null): string => (v == null ? '—' : `${Math.round(v * 100)}%`);
+const hours = (h: number): string => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'AM' : 'PM'}`;
 
 export default function TasteProfilePage() {
   usePageTitle('Taste Profile');
   const { data, isLoading, isError, refetch } = useTasteInsights();
   const region = useRegion();
   const queryClient = useQueryClient();
+  const entries = useHistoryStore((s) => s.entries);
+  const favorites = useLibraryStore((s) => s.favorites);
   const [resetOpen, setResetOpen] = useState(false);
   const afterReset = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['taste-insights'] });
   };
+  // Covers and pictures come from songs already on this device — nothing is fetched for them.
+  const songs = useMemo(() => songIndex(entries, favorites), [entries, favorites]);
+  const pictures = useMemo(() => artistPictures(songs.values()), [songs]);
 
   // The read is on-device only, but the event log can still fail to open.
   if (isError) {
@@ -131,15 +154,37 @@ export default function TasteProfilePage() {
   const maxArtist = Math.max(...data.topArtists.map((a) => a.score), 1);
   const maxHour = Math.max(...data.hourHistogram, 1);
   const maxDay = Math.max(...data.recentTrend.map((d) => d.plays), 1);
+  const peakHour = data.hourHistogram.indexOf(Math.max(...data.hourHistogram));
+  // The hero's covers: the songs you replay most, then your newest plays.
+  const heroSongs: Song[] = [...data.mostReplayed.map((r) => songs.get(r.songId)).filter((s): s is Song => !!s), ...entries.map((e) => e.song)];
 
   return (
-    <div className="vx-sec">
+    <div className="vx-sec is-wide">
       <PageHeader title="Your taste profile" subtitle="Computed and stored only on this device. It powers Made for you." />
 
+      {hasSignal && (
+        <section aria-label="Profile confidence" className="vx-sec-block vx-hero-row is-inline">
+          <Collage songs={heroSongs} />
+          <div>
+            <p className="vx-hero-figure">{Math.round(data.confidence * 100)}%</p>
+            <p className="vx-hero-caption">
+              Profile confidence — how much listening signal VinaX has. Recommendations lean on what is popular while this is low.
+            </p>
+            <span className="vx-bar mt-4 max-w-[360px]" aria-hidden>
+              <span style={{ width: `${Math.max(4, Math.round(data.confidence * 100))}%` }} />
+            </span>
+            <p className="mt-3 text-[13px] font-semibold text-ink-400 tabular-nums">
+              {data.totals.plays} {data.totals.plays === 1 ? 'play' : 'plays'} counted
+              {data.hourHistogram.some((v) => v > 0) && <> · most often around {hours(peakHour)}</>}
+            </p>
+          </div>
+        </section>
+      )}
+
       {/* 7.2 — the same plain-words preview Settings shows, and the way to add to it. */}
-      <div className="vx-sec-block">
+      <Section title="What VinaX thinks you like" note="Read from the profile on this device. Nothing here is uploaded.">
         <PersonalizationPreview showProfileLink={false} />
-      </div>
+      </Section>
 
       <TasteDials />
 
@@ -151,94 +196,128 @@ export default function TasteProfilePage() {
         />
       ) : (
         <>
-          <Section title="Confidence" note="How much listening signal your profile has — recommendations blend toward popularity when this is low.">
-            <Bar label="Profile confidence" value={data.confidence * 100} max={100} suffix={`${Math.round(data.confidence * 100)}%`} />
-          </Section>
-
-          <Section title="Top languages" note="Time-decayed affinity from plays, completions, favorites, and skips.">
-            {data.topLanguages.map((l) => (
-              <Bar key={l.id} label={l.label} value={l.score} max={maxLang} suffix={`${l.plays} plays`} />
-            ))}
-            {data.topLanguages.length === 0 && <p className="text-sm text-ink-400">No language signal yet.</p>}
-          </Section>
-
-          <Section title="Top artists">
-            {data.topArtists.map((a) => (
-              <Bar key={a.name} label={a.name} value={a.score} max={maxArtist} suffix={`${a.plays} plays`} />
-            ))}
-          </Section>
-
-          <Section title="Most replayed">
-            {data.mostReplayed.map((s) => (
-              <div key={s.songId} className="flex items-center justify-between min-h-[36px] text-[14px]">
-                <Link to={songPath({ id: s.songId, title: s.title })} className="truncate font-semibold text-ink-100 hover:underline">{s.title}</Link>
-                <span className="text-ink-400 shrink-0 ml-3 tabular-nums">{s.count}×</span>
-              </div>
-            ))}
-            {data.mostReplayed.length === 0 && <p className="text-sm text-ink-400">No repeats yet.</p>}
-          </Section>
-
-          <Section title="Listening clock" note="Plays by hour of day — feeds time-of-day shelves like Night Vibes.">
-            <div className="flex items-end gap-1 h-28 pb-4 relative">
-              {data.hourHistogram.map((v, h) => (
-                <div key={h} className="flex-1 h-full flex flex-col justify-end items-center relative">
-                  <div className="w-full rounded-t-[3px] bg-ember-500/80" style={{ height: `${Math.max(3, (v / maxHour) * 100)}%` }} />
-                  {h % 6 === 0 && <span className="absolute -bottom-4 text-[10px] font-semibold text-ink-400 tabular-nums">{h}</span>}
-                </div>
+          <div className="vx-two vx-sec-block">
+            <section aria-label="Top languages">
+              <SectionHeader title="Top languages" explanation="Time-decayed affinity from plays, completions, favorites and skips." />
+              {data.topLanguages.map((l) => (
+                <Bar key={l.id} label={l.label} value={l.score} max={maxLang} suffix={`${l.plays} plays`} />
               ))}
-            </div>
+              {data.topLanguages.length === 0 && <p className="text-sm text-ink-400">No language signal yet.</p>}
+            </section>
+
+            <section aria-label="Top artists">
+              <SectionHeader title="Top artists" explanation="The same signal, per artist." />
+              <ol className="vx-group">
+                {data.topArtists.map((a) => (
+                  <li key={a.name} className="vx-row !min-h-[56px]">
+                    <ArtistAvatar name={a.name} image={pictures.get(a.name.trim().toLowerCase())} size={40} />
+                    <span className="vx-row-main">
+                      <span className="vx-row-label truncate-1">{a.name}</span>
+                      <span className="vx-bar mt-2" aria-hidden>
+                        <span style={{ width: `${Math.max(4, Math.round((a.score / maxArtist) * 100))}%` }} />
+                      </span>
+                    </span>
+                    <span className="vx-row-value is-plays">{a.plays} plays</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
+
+          <Section title="Most replayed" note="From the listening log on this device.">
+            {data.mostReplayed.length ? (
+              <ol className="vx-group">
+                {data.mostReplayed.map((s, i) => {
+                  const song = songs.get(s.songId);
+                  return (
+                    <li key={s.songId} className="vx-row">
+                      <span className="vx-row-rank">{i + 1}</span>
+                      {song ? <img src={bestImage(song.images, 100)} alt="" className="vx-row-art" loading="lazy" /> : <span className="vx-row-art" aria-hidden />}
+                      <span className="vx-row-main">
+                        <Link to={songPath({ id: s.songId, title: s.title })} className="vx-row-label truncate-1 hover:underline">{s.title}</Link>
+                        {song?.subtitle && <span className="vx-row-hint truncate-1">{song.subtitle}</span>}
+                      </span>
+                      <span className="vx-row-value">{s.count}×</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <p className="text-sm text-ink-400">No repeats yet.</p>
+            )}
           </Section>
 
-          <Section title="Last 7 days">
-            {data.recentTrend.map((d) => (
-              <Bar key={d.day} label={d.day} value={d.plays} max={maxDay} suffix={`${d.plays}`} />
-            ))}
-          </Section>
+          <div className="vx-two vx-sec-block">
+            <section aria-label="Listening clock">
+              <SectionHeader title="Listening clock" explanation="Plays by hour of day — feeds time-of-day shelves like Night Vibes." />
+              <div className="vx-columns" role="img" aria-label={`Plays by hour of day; the busiest hour is ${hours(peakHour)}`}>
+                {data.hourHistogram.map((v, h) => (
+                  <div key={h}>
+                    <i className={v === 0 ? 'is-quiet' : undefined} style={{ height: `${Math.max(3, (v / maxHour) * 100)}%` }} />
+                  </div>
+                ))}
+              </div>
+              <div className="vx-columns-axis" aria-hidden>
+                {data.hourHistogram.map((_, h) => (
+                  <span key={h}>{h % 6 === 0 ? h : ''}</span>
+                ))}
+              </div>
+            </section>
 
-          <Section title="Completion and skips" note="Low-skip listening strengthens recommendations for that language/artist.">
-            <div className="vx-kpis is-four">
-              {[
-                [data.listeningMinutes >= 60 ? `${Math.floor(data.listeningMinutes / 60)}h ${data.listeningMinutes % 60}m` : `${data.listeningMinutes}m`, 'Listened (≈)'],
+            <section aria-label="Last 7 days">
+              <SectionHeader title="Last 7 days" explanation="Plays per day." />
+              <div className="vx-columns">
+                {data.recentTrend.map((d) => (
+                  <div key={d.day}>
+                    <span className="vx-columns-value">{d.plays}</span>
+                    <i className={d.plays === 0 ? 'is-quiet' : undefined} style={{ height: `${Math.max(3, (d.plays / maxDay) * 80)}%` }} />
+                  </div>
+                ))}
+              </div>
+              <div className="vx-columns-axis">
+                {data.recentTrend.map((d) => (
+                  <span key={d.day}>{d.day}</span>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <Section title="Completion and skips" note="Low-skip listening strengthens recommendations for that language and artist.">
+            <Numbers
+              columns="is-four"
+              items={[
+                [data.listeningMinutes >= 60 ? `≈${Math.floor(data.listeningMinutes / 60)}h ${data.listeningMinutes % 60}m` : `≈${data.listeningMinutes}m`, 'Listened (est.)'],
                 [String(data.totals.completes), 'Completed'],
                 [String(data.totals.skips), 'Skipped'],
                 [data.completionRate != null ? `${Math.round(data.completionRate * 100)}%` : '—', 'Completion rate'],
-              ].map(([v, l]) => (
-                <div key={l} className="vx-kpi !p-0 !bg-transparent !shadow-none">
-                  <span className="vx-kpi-label">{l}</span>
-                  <span className="vx-kpi-value">{v}</span>
-                </div>
-              ))}
-            </div>
+              ]}
+            />
           </Section>
 
           {/* 8.5.0 — the habits the queue and the mixes adapt to. */}
           <Section title="How you listen" note="Skips lower what the queue offers next; the new-to-you share is how often you play artists you have barely heard.">
-            <div className="vx-kpis is-three">
-              {[
+            <Numbers
+              columns="is-three"
+              items={[
                 [pct(data.skipRate), 'Skip rate'],
                 [pct(data.newToYouShare), 'New to you (30 days)'],
                 [MODE_LABEL[data.exploration.mode] ?? 'Balanced', 'Discovery mode'],
-              ].map(([v, l]) => (
-                <div key={l} className="vx-kpi !p-0 !bg-transparent !shadow-none">
-                  <span className="vx-kpi-label">{l}</span>
-                  <span className="vx-kpi-value">{v}</span>
-                </div>
-              ))}
-            </div>
+              ]}
+            />
             {data.topMoods.length > 0 && (
-              <div className="mt-4">
+              <div className="mt-6">
                 {data.topMoods.map((m) => (
                   <Bar key={m.mood} label={MOOD_LABEL[m.mood] ?? m.mood} value={m.share * 100} max={100} suffix={pct(m.share)} />
                 ))}
               </div>
             )}
             {data.topGenres.length > 0 && (
-              <p className="mt-3 text-[14px] text-ink-300">
-                Often in your listening: <span className="text-ink-100 font-medium">{data.topGenres.join(', ')}</span>
+              <p className="mt-4 text-[14px] text-ink-300">
+                Often in your listening: <span className="text-ink-100 font-semibold">{data.topGenres.join(', ')}</span>
               </p>
             )}
             {(data.totals.dislikes ?? 0) > 0 && (
-              <p className="mt-2 text-sm text-ink-400">
+              <p className="mt-2 text-[14px] text-ink-400">
                 {data.totals.dislikes === 1 ? 'One song' : `${data.totals.dislikes} songs`} marked Not interested. Those artists come up less; the songs never play.
               </p>
             )}
@@ -254,21 +333,20 @@ export default function TasteProfilePage() {
       </Section>
 
       <Section title="How recommendations are formed">
-        <p className="text-[14px] text-ink-300 leading-relaxed">
-          Each candidate song is scored by language affinity, artist affinity, popularity, low-skip
-          rate, and source (similar-to / trending / rediscovery), with time decay and a repetition
-          guard. Region source:{' '}
-          <span className="text-ink-100 font-medium">
-            {region ? `${region.country ?? 'unknown'} (${region.source})` : 'unknown'}
-          </span>
-          . Adjust intensity in <Link to="/settings" className="vx-link">Settings</Link>.
-        </p>
+        <div className="vx-doc">
+          <p>
+            Each candidate song is scored by language affinity, artist affinity, popularity, low-skip rate, and source
+            (similar-to / trending / rediscovery), with time decay and a repetition guard. Region source:{' '}
+            <strong>{region ? `${region.country ?? 'unknown'} (${region.source})` : 'unknown'}</strong>. Adjust discovery, languages and
+            the trending dial in <Link to="/settings#recommendations">Settings</Link>.
+          </p>
+        </div>
       </Section>
 
       <div className="vx-group">
-        <button onClick={() => setResetOpen(true)} className="vx-row">
+        <button type="button" onClick={() => setResetOpen(true)} className="vx-row vx-row-danger">
           <span className="vx-row-main">
-            <span className="vx-row-label" style={{ color: 'var(--vx-danger)' }}>Reset personalization</span>
+            <span className="vx-row-label">Reset personalization</span>
             <span className="vx-row-hint">A backup is offered first. Favourites, playlists and history are not touched.</span>
           </span>
         </button>

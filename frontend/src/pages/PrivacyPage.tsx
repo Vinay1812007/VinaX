@@ -10,7 +10,7 @@ export default function PrivacyPage() {
   return (
     <div className="vx-sec">
       <PageHeader title="Privacy" subtitle="Last updated September 2026" />
-      <div className="vx-article">
+      <div className="vx-doc">
         <H>What stays on your device</H>
         <p>
           Everything personal: your name, favorites, listening history, downloads, queue, taste profile, streaks,
@@ -92,7 +92,7 @@ export default function PrivacyPage() {
           Settings → Your Data can export your entire profile as one file, import it on a new device, or erase
           everything in one tap. Because nothing personal is on our servers, local erase is total erase.
         </p>
-        <p className="vx-article-end">
+        <p className="vx-doc-end">
           The enforced technical rules behind this page live in the project&rsquo;s privacy baseline. Questions?{' '}
           <Link to="/contact">Contact us</Link>.
         </p>
