@@ -1,6 +1,7 @@
 import { memo, useEffect, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { ChatPlayerCard } from '@/components/ChatPlayerCard';
-import { GlobeIcon, SparkleIcon } from '@/components/Icons';
+import { GlobeIcon, SparkleIcon, WaveIcon } from '@/components/Icons';
 import { RichContent } from '@/components/ai/RichContent';
 import {
   BranchIcon,
@@ -47,7 +48,7 @@ const Images = ({ images }: { images?: string[] }): ReactNode => {
   return (
     <div className="flex flex-wrap gap-2 mb-2">
       {shown.map((src, k) => (
-        <img key={k} src={src} alt="attachment" className="w-24 h-24 object-cover rounded-lg" />
+        <img key={k} src={src} alt="attachment" className="ai-msg-img w-24 h-24 object-cover" />
       ))}
     </div>
   );
@@ -70,10 +71,11 @@ export const UserMessage = memo(function UserMessage({
         <Images images={m.images} />
         <p className="whitespace-pre-wrap">{m.content}</p>
       </div>
+      {/* Beside the bubble, not under it: the thread keeps one rhythm. */}
       {!busy && (
-        <div className="ai-toolbar mt-1 -mr-1">
-          <button type="button" onClick={() => handlers.edit(index, m.content)} className="ai-tool">
-            <PencilIcon className="w-3 h-3" /> Edit
+        <div className="ai-toolbar">
+          <button type="button" onClick={() => handlers.edit(index, m.content)} className="ai-tool" title="Edit and resend">
+            <PencilIcon /> Edit
           </button>
         </div>
       )}
@@ -84,8 +86,9 @@ export const UserMessage = memo(function UserMessage({
 const WAITING = ['Thinking…', 'Reading your question…', 'Gathering ideas…', 'Putting it together…'];
 const WAITING_AGENT = ['Working…', 'Planning the steps…', 'Looking things up…', 'Checking the details…'];
 
-/** The pause before the first token: the VinaX mark breathing beside a short
- *  status that changes every couple of seconds. The accessible name stays
+/** The pause before the first token: the VinaX mark breathing (it takes the
+ *  Iris → Lagoon gradient while it waits) beside a short status in a Lagoon
+ *  shimmer that changes every couple of seconds. The accessible name stays
  *  "Thinking" — a screen reader hears it once, not every rotation. */
 function ThinkingMark({ agent }: { agent: boolean }): ReactNode {
   const lines = agent ? WAITING_AGENT : WAITING;
@@ -97,7 +100,7 @@ function ThinkingMark({ agent }: { agent: boolean }): ReactNode {
   }, [lines.length]);
   return (
     <span className="ai-thinking" role="status" aria-label="Thinking">
-      <span key={i} className="ai-thinking-text" aria-hidden>
+      <span key={i} className="ai-thinking-text ai-shimmer" aria-hidden>
         {lines[i]}
       </span>
     </span>
@@ -120,7 +123,7 @@ function Sources({ sources }: { sources: string[] }): ReactNode {
           try {
             const parsed = new URL(u);
             host = parsed.hostname.replace(/^www\./, '');
-            path = parsed.pathname.length > 1 ? parsed.pathname.slice(0, 40) : '';
+            path = parsed.pathname.length > 1 ? parsed.pathname : '';
           } catch {
             /* show the raw string */
           }
@@ -131,7 +134,7 @@ function Sources({ sources }: { sources: string[] }): ReactNode {
               href={u}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-[var(--ai-hover)] transition-colors min-w-0"
+              className="flex items-center gap-2 rounded-card px-1.5 py-1 hover:bg-[var(--ai-hover)] transition-colors min-w-0"
             >
               <span className="text-[10px] font-bold ai-t3 w-6 shrink-0">[{k + 1}]</span>
               <span
@@ -142,7 +145,7 @@ function Sources({ sources }: { sources: string[] }): ReactNode {
                 {host.charAt(0).toUpperCase()}
               </span>
               <span className="text-[11px] font-semibold ai-t2 truncate">{host}</span>
-              {path && <span className="text-[10px] ai-t3 truncate hidden sm:inline">{path}</span>}
+              {path && <span className="text-[11px] ai-t3 truncate hidden sm:inline min-w-0">{path}</span>}
             </a>
           );
         })}
@@ -171,8 +174,42 @@ function CopyButton({ text }: { text: string }): ReactNode {
       }}
       className="ai-tool"
     >
-      {copied ? <CheckIcon className="w-3.5 h-3.5" /> : <CopyIcon />} {copied ? 'Copied' : 'Copy'}
+      {copied ? <CheckIcon className="w-3.5 h-3.5" /> : <CopyIcon />} <span className="ai-tool-label">{copied ? 'Copied' : 'Copy'}</span>
     </button>
+  );
+}
+
+/** 9.0 — a turn with no reply: the honest line, and the next useful step.
+ *  Retry when asking again can help; when VinaX AI is switched off or out
+ *  for the day, the music side still works, so the notice points there. */
+function ReplyNotice({ m, last, busy, onRetry }: { m: Msg; last: boolean; busy: boolean; onRetry: () => void }): ReactNode {
+  return (
+    <div className="ai-notice">
+      <span className="ai-notice-icon" aria-hidden>
+        <WaveIcon />
+      </span>
+      <div className="ai-notice-text">
+        <p>{m.content}</p>
+        {!busy && last && (
+          <div className="ai-notice-actions" role="group" aria-label="Reply actions">
+            {m.failed ? (
+              <button type="button" onClick={onRetry} className="ai-btn ai-btn-accent" aria-label="Retry this question" title="Ask again">
+                <RefreshIcon /> Retry
+              </button>
+            ) : (
+              <>
+                <Link to="/radio" className="ai-btn">
+                  Start AI Radio
+                </Link>
+                <Link to="/" className="ai-btn">
+                  Back to music
+                </Link>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -207,16 +244,22 @@ export const AssistantMessage = memo(function AssistantMessage({
         { label: 'Simplify', icon: <SimplifyIcon />, onClick: () => handlers.rewrite('simpler') },
       ]
     : [];
+  const waiting = streaming && !m.content;
+  // 8.2.0 / 9.0 — no reply arrived: a notice with one next step instead of the
+  // reply toolbar (Copy / Good response make no sense on a failure line).
+  const noReply = !streaming && !!m.content && (m.failed || m.unavailable);
   return (
     <div id={`ai-msg-${index}`} className="ai-msg ai-msg-assistant ai-enter">
-      <span className={cn('ai-msg-mark', streaming && !m.content && 'ai-pulse')} aria-hidden>
-        <SparkleIcon className="w-[15px] h-[15px]" />
+      <span className={cn('ai-msg-mark', waiting && 'is-waiting')} aria-hidden>
+        <SparkleIcon filled />
       </span>
       <div className="min-w-0 flex-1">
         <Images images={m.images} />
         {m.steps?.length ? <AgentActivity steps={m.steps} working={streaming} /> : null}
         {m.player ? (
           <ChatPlayerCard fallback={m.content} />
+        ) : noReply ? (
+          <ReplyNotice m={m} last={last} busy={busy} onRetry={handlers.regenerate} />
         ) : m.content ? (
           <>
             {/* Markdown renders LIVE while streaming (an unclosed fence shows
@@ -228,17 +271,8 @@ export const AssistantMessage = memo(function AssistantMessage({
               <RichContent text={streaming ? hideFollowupLine(m.content) : m.content} streaming={streaming} />
               {streaming && <span className="ai-caret" aria-hidden />}
             </div>
-            {!busy && m.failed ? (
-              // 8.2.0 — no reply arrived: one clear action instead of the reply toolbar.
-              last ? (
-                <div className="ai-toolbar mt-2 -ml-1.5 flex flex-wrap items-center gap-0.5" role="group" aria-label="Reply actions">
-                  <button type="button" onClick={handlers.regenerate} className="ai-tool" aria-label="Retry this question" title="Ask again">
-                    <RefreshIcon /> Retry
-                  </button>
-                </div>
-              ) : null
-            ) : !busy && (
-              <div className="ai-toolbar mt-2 -ml-1.5 flex flex-wrap items-center gap-0.5" role="group" aria-label="Reply actions">
+            {!busy && (
+              <div className="ai-toolbar mt-2 -ml-2 flex flex-wrap items-center gap-0.5" role="group" aria-label="Reply actions">
                 <CopyButton text={m.content} />
                 {readAloudSupported() && (
                   <button

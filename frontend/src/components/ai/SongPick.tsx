@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Song } from '@/types';
 import { searchSongs } from '@/services/api';
@@ -7,7 +9,9 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { toast } from '@/store/toastStore';
 import { haptic } from '@/services/native';
 import { cn } from '@/utils/cn';
-import { PauseIcon, PlayIcon, QueueIcon } from '@/components/Icons';
+import { FavButton } from '@/components/FavButton';
+import { MusicIcon, PauseIcon, PlayIcon, PlusIcon, QueueIcon, SearchIcon } from '@/components/Icons';
+import { TrackMenu } from '@/components/TrackMenu';
 import { betterMatch, matchPick, type MatchResult, type SongPickRef } from './songMatch';
 
 export type { MatchResult, SongPickRef } from './songMatch';
@@ -15,10 +19,15 @@ export type { MatchResult, SongPickRef } from './songMatch';
 /**
  * v5.10.0 — song picks you can play. Every "Title — Artist" line the
  * assistant writes (the format MUSIC_CONDUCT mandates for recommendations)
- * becomes a chip that resolves to the real catalogue song and plays on tap;
- * a reply with two or more picks gets a Play all / Add to queue bar. Nothing
- * is fetched until the chip is on screen, and identical picks share one
- * lookup through react-query.
+ * becomes a row that resolves to the real catalogue song and plays on tap;
+ * a reply with two or more picks gets a Play all / Add to queue / Save as
+ * playlist bar. Nothing is fetched until the row is on screen, and identical
+ * picks share one lookup through react-query.
+ *
+ * 9.0 — the row is drawn like the app's track rows (squircle artwork, title
+ * over artist, the playing song in Iris) with Add to queue, the heart and
+ * the song menu beside it; a pick the catalogue does not have says so and
+ * offers a search instead of pretending.
  */
 // One song line: optional list marker, then Title <dash> Artist, both short.
 // Same shape threadMemory uses so what the model "remembers recommending"
@@ -121,66 +130,90 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
     haptic('light');
   };
 
-  // Two SIBLING controls, never a button inside a role="button": the main
-  // area is a real <button> (Enter and Space both activate it, focus ring
-  // comes for free) and the queue button sits next to it.
-  const Main = song ? 'button' : 'div';
+  // Sibling controls, never a button inside a role="button": the main area
+  // is a real <button> (Enter and Space both activate it, focus ring comes
+  // for free) and the queue, heart and menu sit next to it.
   return (
     <div
-      className={cn('group/pick ai-pick my-1.5 pr-2 flex items-stretch', song ? 'ai-pick-live' : 'opacity-80')}
+      className={cn('ai-track', song ? 'is-live' : 'is-missing', isCurrent && 'is-current', isCurrent && isPlaying && 'is-playing')}
       data-deter-context
       data-song-id={song?.id}
       data-match={match?.status}
     >
-      <Main
-        type={song ? 'button' : undefined}
-        onClick={song ? play : undefined}
-        aria-label={song ? `${isCurrent && isPlaying ? 'Pause' : 'Play'} ${song.title} by ${song.subtitle}${uncertain ? ' (closest match)' : ''}` : undefined}
-        className={cn('flex items-center gap-2.5 min-w-0 flex-1 text-left rounded-l-[8px]', song && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember-400')}
-      >
-        <div className="relative w-12 h-12 shrink-0 overflow-hidden rounded-l-[8px] bg-ink-800">
-          {song ? (
+      {song ? (
+        <button
+          type="button"
+          onClick={play}
+          aria-label={`${isCurrent && isPlaying ? 'Pause' : 'Play'} ${song.title} by ${song.subtitle}${uncertain ? ' (closest match)' : ''}`}
+          className="ai-track-main"
+        >
+          <span className="ai-track-art">
             <img
               src={bestImage(song.images, 150)}
               onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
               alt=""
               loading="lazy"
-              className="w-12 h-12 object-cover"
+              width={44}
+              height={44}
             />
-          ) : (
-            <span className={cn('absolute inset-0', isLoading && 'skeleton')} aria-hidden />
-          )}
-          {song && (
-            <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 group-hover/pick:opacity-100 group-focus-within/pick:opacity-100 transition-opacity" aria-hidden>
-              {isCurrent && isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
+            <span className="ai-track-over" aria-hidden>
+              {isCurrent && isPlaying ? <PauseIcon /> : <PlayIcon />}
             </span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1 py-1.5">
-          <p className={cn('text-[14px] font-semibold truncate leading-tight', isCurrent && 'text-ember-400')}>{song?.title ?? pick.title}</p>
-          <p className="text-[12px] font-medium ai-t3 truncate mt-0.5">
-            {song?.subtitle ?? pick.artist}
-            {uncertain && <span className="ml-1.5 rounded-md border ai-hairline px-1 py-px text-[10px] font-semibold" title={`You asked for “${pick.title}” by ${pick.artist || 'an unnamed artist'}; this is the closest the catalogue offers.`}>closest match</span>}
-          </p>
-        </div>
-      </Main>
-      {song ? (
-        <button
-          type="button"
-          aria-label={`Add ${song.title} to queue`}
-          title="Add to queue"
-          onClick={() => {
-            enqueue(song);
-            toast(`Queued ${song.title}`);
-          }}
-          className="ai-icon-btn w-8 h-8 self-center"
-        >
-          <QueueIcon className="w-4 h-4" />
+          </span>
+          <span className="ai-track-text">
+            <span className="ai-track-title">{song.title}</span>
+            <span className="ai-track-sub">
+              <span>{song.subtitle}</span>
+              {uncertain && (
+                <span className="ai-track-tag" title={`You asked for “${pick.title}” by ${pick.artist || 'an unnamed artist'}; this is the closest the catalogue offers.`}>
+                  Closest match
+                </span>
+              )}
+            </span>
+          </span>
         </button>
       ) : (
+        <div className="ai-track-main">
+          <span className={cn('ai-track-art', isLoading && 'skeleton')} aria-hidden>
+            {!isLoading && <MusicIcon />}
+          </span>
+          <span className="ai-track-text">
+            <span className="ai-track-title">{pick.title}</span>
+            <span className="ai-track-sub">
+              <span>{pick.artist}</span>
+            </span>
+          </span>
+        </div>
+      )}
+      {song ? (
+        <span className="ai-track-actions">
+          <button
+            type="button"
+            aria-label={`Add ${song.title} to queue`}
+            title="Add to queue"
+            // The store says "Added to queue" (or "Already in queue") itself.
+            onClick={() => enqueue(song)}
+            className="ai-track-btn"
+          >
+            <QueueIcon />
+          </button>
+          <FavButton song={song} className="ai-track-fav" />
+          <TrackMenu song={song} label={`More options for ${song.title}`} />
+        </span>
+      ) : (
         !isLoading && (
-          <span className="text-[10px] font-semibold ai-t3 shrink-0 self-center rounded-md border ai-hairline px-1.5 py-0.5" role="status">
-            not found
+          <span className="ai-track-actions">
+            <span className="ai-track-tag" role="status">
+              Not in the catalogue
+            </span>
+            <Link
+              to={`/search/${encodeURIComponent(`${pick.title} ${pick.artist}`.trim())}`}
+              className="ai-track-btn"
+              aria-label={`Search for ${pick.title}`}
+              title="Search for it"
+            >
+              <SearchIcon />
+            </Link>
           </span>
         )
       )}
@@ -188,26 +221,17 @@ export function SongPickChip({ pick }: { pick: SongPickRef }) {
   );
 }
 
-/** Play all / Add to queue for a reply with two or more picks. */
+/** Play all / Add to queue / Save as playlist for a reply with two or more picks. */
 export function SongPicksBar({ picks }: { picks: SongPickRef[] }) {
   const qc = useQueryClient();
   const playQueue = usePlayerStore((s) => s.playQueue);
-  const enqueue = usePlayerStore((s) => s.enqueue);
+  const enqueueAll = usePlayerStore((s) => s.enqueueAll);
   const createCollection = useLibraryStore((s) => s.createCollection);
   const addToCollection = useLibraryStore((s) => s.addToCollection);
-  // v5.16.0 — one tap turns the picks into a saved playlist.
-  const saveAsPlaylist = (): void => {
-    void resolveAll().then((songs) => {
-      if (!songs.length) return toast('None of these could be found');
-      const name = `AI picks · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
-      const id = createCollection(name);
-      for (const s of songs) addToCollection(id, s);
-      toast(`Saved “${name}” with ${songs.length} songs${closeNote()}`);
-      haptic('light');
-    });
-  };
+  /** Which action is still resolving the picks (a first tap can wait on the catalogue). */
+  const [pending, setPending] = useState<'play' | 'queue' | 'save' | null>(null);
 
-  // Confirmed matches AND the "closest match" chips the listener can already
+  // Confirmed matches AND the "closest match" rows the listener can already
   // see (never a missing one). Uncertain picks are counted so the toast can
   // say so instead of pretending every song is exact.
   let closeCount = 0;
@@ -220,38 +244,71 @@ export function SongPicksBar({ picks }: { picks: SongPickRef[] }) {
       .filter((s): s is Song => !!s && !seen.has(s.id) && (seen.add(s.id), true));
   };
   const closeNote = () => (closeCount ? ` (${closeCount} closest match${closeCount === 1 ? '' : 'es'})` : '');
+  const run = (kind: 'play' | 'queue' | 'save', act: (songs: Song[]) => void): void => {
+    if (pending) return;
+    setPending(kind);
+    void resolveAll()
+      .then((songs) => {
+        if (!songs.length) return toast('None of these could be found');
+        act(songs);
+      })
+      .finally(() => setPending(null));
+  };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 mb-2.5" aria-label="Song picks">
+    <div className="ai-picks-bar" role="group" aria-label="Song picks">
       <button
-        onClick={() => {
-          void resolveAll().then((songs) => {
-            if (!songs.length) return toast('None of these could be found');
+        type="button"
+        aria-busy={pending === 'play' || undefined}
+        onClick={() =>
+          run('play', (songs) => {
             playQueue(songs, 0);
             toast(`Playing ${songs.length} songs${closeNote()}`);
             haptic('medium');
-          });
-        }}
-        className="btn-primary px-3.5 py-1.5 text-[13px] inline-flex items-center gap-1.5 shrink-0"
+          })
+        }
+        className="ai-picks-play"
       >
-        <PlayIcon className="w-3.5 h-3.5" /> Play all
+        <span aria-hidden>
+          <PlayIcon />
+        </span>
+        Play all
       </button>
       <button
-        onClick={() => {
-          void resolveAll().then((songs) => {
-            if (!songs.length) return toast('None of these could be found');
-            for (const s of songs) enqueue(s);
-            toast(`Queued ${songs.length} songs${closeNote()}`);
-          });
-        }}
-        className="ai-chip py-[7px] shrink-0"
+        type="button"
+        aria-busy={pending === 'queue' || undefined}
+        onClick={() =>
+          run('queue', (songs) => {
+            // 9.0 — the list action the rest of the app uses (one "Added N songs
+            // to queue" from the store, not one toast per song); the closest-
+            // match note is ours, so nobody is told every pick was exact.
+            enqueueAll(songs);
+            if (closeCount) toast(`${closeCount} of them ${closeCount === 1 ? 'is the closest match' : 'are the closest matches'} in the catalogue`);
+          })
+        }
+        className="ai-chip"
       >
-        <QueueIcon className="w-3.5 h-3.5" /> Add to queue
+        <QueueIcon /> Add to queue
       </button>
-      <button onClick={saveAsPlaylist} className="ai-chip py-[7px] shrink-0" title="Save these songs as a playlist">
-        Save as playlist
+      {/* v5.16.0 — one tap turns the picks into a saved playlist. */}
+      <button
+        type="button"
+        aria-busy={pending === 'save' || undefined}
+        onClick={() =>
+          run('save', (songs) => {
+            const name = `AI picks · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+            const id = createCollection(name);
+            for (const s of songs) addToCollection(id, s);
+            toast(`Saved “${name}” with ${songs.length} songs${closeNote()}`);
+            haptic('light');
+          })
+        }
+        className="ai-chip"
+        title="Save these songs as a playlist"
+      >
+        <PlusIcon /> Save as playlist
       </button>
-      <span className="text-[11px] font-semibold ai-t3 shrink-0 pl-1">{picks.length} songs</span>
+      <span className="ai-picks-count">{picks.length} songs</span>
     </div>
   );
 }

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/utils/cn';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { useDismissOnBack } from '@/hooks/useDismissOnBack';
-import { ChevronDownIcon, XIcon } from '@/components/Icons';
+import { Sheet } from '@/components/Sheet';
+import { ChevronDownIcon, DotsIcon, XIcon } from '@/components/Icons';
 import { type SlashCommand } from '@/features/ai/slashCommands';
 import { addPrompt, loadPrompts, removePrompt, type SavedPrompt } from '@/features/ai/savedPrompts';
 import { REPLY_LANGS, REPLY_STYLES } from '@/features/ai/replyPrefs';
@@ -102,49 +101,70 @@ export function FollowupChips({ items, onPick, disabled }: { items: string[]; on
   );
 }
 
+/** Saved prompts: the shared Sheet (focus trap, Escape, hardware back and
+ *  scroll lock come with it), portalled with .ai-scope for the chat tokens. */
 export function SavedPromptsSheet({ onClose, onUse, draft }: { onClose(): void; onUse: (t: string) => void; draft: string }) {
   const [list, setList] = useState<SavedPrompt[]>(() => loadPrompts());
   const [title, setTitle] = useState('');
   const [text, setText] = useState(draft);
-  const ref = useRef<HTMLDivElement>(null);
-  useFocusTrap(ref, true, onClose);
-  useDismissOnBack(true, onClose);
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label="Saved prompts" className="w-full sm:max-w-lg glass-modal rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,var(--safe-bottom))] sm:pb-5 ai-enter max-h-[85dvh] overflow-auto overscroll-contain" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-bold tracking-tight">Saved prompts</h2>
-            <p className="text-xs ai-t3 mt-0.5">Your own library, on this device. Type <b className="ai-t2">/prompts</b> in the composer to open it any time.</p>
-          </div>
-          <button onClick={onClose} aria-label="Close" className="ai-icon-btn -mr-2 -mt-1"><XIcon className="w-4 h-4" /></button>
+    <Sheet onClose={onClose} label="Saved prompts" size="lg" maxHeight="medium" className="ai-scope">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="ai-prompts-title ai-t1">Saved prompts</h2>
+          <p className="text-[13px] ai-t3 mt-1 leading-snug">
+            Your own library, on this device. Type <b className="ai-t2">/prompts</b> in the message box to open it any time.
+          </p>
         </div>
-        <div className="mt-4 space-y-2">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="ai-field w-full px-3.5 py-2.5 text-sm outline-none placeholder:ai-t3" />
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Prompt text…" className="ai-field w-full px-3.5 py-2.5 text-sm outline-none resize-none placeholder:ai-t3" />
-        </div>
-        <div className="mt-2.5 flex justify-end">
-          <button disabled={!text.trim()} onClick={() => { setList(addPrompt(text, title || undefined)); setTitle(''); setText(''); }} className="btn-primary rounded-xl px-4 py-2 text-sm disabled:opacity-50">Save prompt</button>
-        </div>
-        <div className="mt-4 space-y-1">
-          {list.length === 0 && (
-            <div className="ai-card py-8 text-center">
-              <p className="text-sm font-semibold ai-t2">Nothing saved yet.</p>
-              <p className="text-xs ai-t3 mt-1">Prompts you save show up here.</p>
-            </div>
-          )}
-          {list.map((p) => (
-            <div key={p.id} className="group flex items-start gap-2 rounded-xl px-2.5 py-2 hover:bg-[var(--ai-hover)] transition-colors">
-              <button onClick={() => { onUse(p.text); onClose(); }} className="min-w-0 flex-1 text-left">
-                <p className="text-sm font-bold truncate">{p.title}</p>
-                <p className="text-xs ai-t3 line-clamp-2 leading-relaxed">{p.text}</p>
-              </button>
-              <button onClick={() => setList(removePrompt(p.id))} aria-label={`Delete ${p.title}`} className="ai-tool mt-0.5 shrink-0">Delete</button>
-            </div>
-          ))}
-        </div>
+        <button type="button" onClick={onClose} aria-label="Close" className="ai-icon-btn ai-settings-close -mt-1">
+          <XIcon className="w-4 h-4" />
+        </button>
       </div>
-    </div>
+      <div className="mt-4 space-y-2">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" aria-label="Prompt title" className="ai-field w-full px-3.5 py-2.5 text-[16px] sm:text-sm outline-none placeholder:ai-t3 ai-t1" />
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Prompt text…" aria-label="Prompt text" className="ai-field w-full px-3.5 py-2.5 text-[16px] sm:text-sm outline-none resize-none placeholder:ai-t3 ai-t1" />
+      </div>
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          disabled={!text.trim()}
+          onClick={() => {
+            setList(addPrompt(text, title || undefined));
+            setTitle('');
+            setText('');
+          }}
+          className="btn-primary px-5 text-sm"
+        >
+          Save prompt
+        </button>
+      </div>
+      <div className="mt-4 space-y-1">
+        {list.length === 0 && (
+          <div className="ai-prompts-empty">
+            <p className="text-sm font-semibold ai-t2">Nothing saved yet.</p>
+            <p className="text-[13px] ai-t3 mt-1">Prompts you save show up here.</p>
+          </div>
+        )}
+        {list.map((p) => (
+          <div key={p.id} className="ai-prompt-row">
+            <button
+              type="button"
+              onClick={() => {
+                onUse(p.text);
+                onClose();
+              }}
+              className="min-w-0 flex-1 text-left"
+            >
+              <p className="text-sm font-bold truncate ai-t1">{p.title}</p>
+              <p className="text-[13px] ai-t3 line-clamp-2 leading-relaxed">{p.text}</p>
+            </button>
+            <button type="button" onClick={() => setList(removePrompt(p.id))} aria-label={`Delete ${p.title}`} className="ai-tool mt-1 shrink-0">
+              Delete
+            </button>
+          </div>
+        ))}
+      </div>
+    </Sheet>
   );
 }
 
@@ -250,8 +270,10 @@ export function MoreMenu({ actions }: { actions: MoreAction[] }) {
         aria-label="More actions"
         className="ai-tool"
       >
-        More
-        <ChevronDownIcon className={cn('w-3 h-3 transition-transform', open && 'rotate-180')} />
+        {/* Phones: the dots alone, so the reply's tools stay on one line. */}
+        <DotsIcon className="ai-more-dots" />
+        <span className="ai-tool-label">More</span>
+        <ChevronDownIcon className={cn('ai-more-chevron w-3 h-3 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
         <>

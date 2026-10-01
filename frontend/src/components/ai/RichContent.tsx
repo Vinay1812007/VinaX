@@ -138,7 +138,7 @@ function inline(text: string): ReactNode[] {
       const mm = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/.exec(tok);
       if (mm)
         out.push(
-          <a key={key} href={mm[2]} target="_blank" rel="noopener noreferrer" className="text-ember-400 underline">
+          <a key={key} href={mm[2]} target="_blank" rel="noopener noreferrer" className="underline">
             {mm[1]}
           </a>,
         );
@@ -161,7 +161,7 @@ const splitRow = (r: string): string[] =>
 
 function TableBlock({ head, rows }: { head: string[]; rows: string[][] }): ReactNode {
   return (
-    <div className="my-2 overflow-x-auto rounded-xl border ai-hairline-strong">
+    <div className="my-2 overflow-x-auto rounded-2xl border ai-hairline-strong">
       <table className="w-full text-[13px]">
         <thead>
           <tr>
@@ -328,7 +328,7 @@ function Prose({ text }: { text: string }): ReactNode {
       const picks = para.map(parseSongLine);
       if (para.length > 1 && picks.every(Boolean)) {
         blocks.push(
-          <div key={blocks.length} className="my-1.5">
+          <div key={blocks.length} className="ai-picks">
             {picks.map((pk, k) => (
               <SongPickChip key={k} pick={pk!} />
             ))}
@@ -347,15 +347,16 @@ function Prose({ text }: { text: string }): ReactNode {
 }
 
 /** A bullet / numbered list — song lines inside it render as playable
- *  chips (v5.10.0), everything else stays ordinary markdown. */
+ *  rows (v5.10.0; one quiet group since 9.0), everything else stays
+ *  ordinary markdown. */
 function ListBlock({ items, ordered }: { items: string[]; ordered: boolean }): ReactNode {
   const picks = items.map(parseSongLine);
   const songy = picks.filter(Boolean).length >= Math.max(1, Math.ceil(items.length / 2));
   if (songy) {
     return (
-      <div className="my-1.5">
+      <div className="ai-picks">
         {items.map((it, k) =>
-          picks[k] ? <SongPickChip key={k} pick={picks[k]!} /> : <p key={k} className="my-1">{inline(it)}</p>,
+          picks[k] ? <SongPickChip key={k} pick={picks[k]!} /> : <p key={k}>{inline(it)}</p>,
         )}
       </div>
     );

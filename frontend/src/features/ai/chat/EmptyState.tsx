@@ -1,13 +1,19 @@
 import { memo, useEffect, useState, type ReactNode } from 'react';
+import { SparkleIcon } from '@/components/Icons';
+import { ArrowUpRightIcon } from '@/components/ai/AiExtras';
 import { buildTodayBrief, type TodayBrief } from '@/features/ai/todayBrief';
 import { firstName, timeOfDay } from './storage';
 
-/** The centred greeting on an empty chat: "Good evening, <first name>" and
- *  nothing else. The composer sits directly beneath it. */
+/** The centred greeting on an empty chat: the VinaX sparkle, "Good evening,
+ *  <first name>" and one line on what the box can do. The composer sits
+ *  directly beneath it. */
 export const Greeting = memo(function Greeting({ userName }: { userName: string }): ReactNode {
   const name = firstName(userName);
   return (
     <div className="ai-column ai-greeting ai-enter">
+      <span className="ai-mark ai-hero-mark" aria-hidden>
+        <SparkleIcon filled />
+      </span>
       <h2 className="ai-display text-balance">
         Good {timeOfDay()}
         {name && (
@@ -16,6 +22,7 @@ export const Greeting = memo(function Greeting({ userName }: { userName: string 
           </>
         )}
       </h2>
+      <p className="ai-greeting-sub">Ask anything. Ask for music, and the songs come back ready to play.</p>
     </div>
   );
 });
@@ -58,7 +65,8 @@ export const Suggestions = memo(function Suggestions({
       <div className="ai-suggest-grid" role="group" aria-label="Suggestions">
         {picks.map((p) => (
           <button key={p} type="button" onClick={() => onSend(p)} className="ai-suggestion">
-            {p}
+            <span>{p}</span>
+            <ArrowUpRightIcon />
           </button>
         ))}
       </div>

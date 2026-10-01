@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { PageHeader } from '@/components/PageHeader';
+import { SparkleIcon, WaveIcon } from '@/components/Icons';
+import { RefreshIcon } from '@/components/ai/AiExtras';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
@@ -28,10 +30,17 @@ const onArtError = (e: React.SyntheticEvent<HTMLImageElement>) => {
 /** A different opening each time the same mood or artist is started. */
 const rotation = () => Math.floor(Math.random() * 8);
 
+/** The last start that was attempted, so a failure can offer Try again. */
+type Attempt = { kind: 'mood'; intent: TuneIntent; label: string } | { kind: 'artist'; name: string } | { kind: 'text'; label: string };
+
 /**
  * 8.2.0 — AI Radio: endless music from a song, an artist, a mood or a few
  * words. The page only finds the first songs; radio mode keeps the DJ adding
  * more for as long as the listener listens.
+ *
+ * 9.0 "Encore" — the chat's composer for the words, mood pills, artwork-first
+ * song cards; the control that was tapped shows it is starting, the live line
+ * says what is on air (Lagoon is for live), and a failure offers Try again.
  */
 export default function AiRadioPage() {
   usePageTitle('AI Radio');
@@ -46,20 +55,22 @@ export default function AiRadioPage() {
   const language = useMemo(() => pinned[0] ?? topLanguages(loadProfile(), 1)[0]?.id ?? null, [pinned]);
 
   const [text, setText] = useState('');
-  /** What is being looked for, and whether VinaX AI was asked (the slower path). */
-  const [busy, setBusy] = useState<{ label: string; ai?: boolean } | null>(null);
+  /** What is being looked for, whether VinaX AI was asked (the slower path),
+   *  and which control asked (so that control can show it is starting). */
+  const [busy, setBusy] = useState<{ label: string; ai?: boolean; key: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [attempt, setAttempt] = useState<Attempt | null>(null);
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const blocked = (s: Song) => isSongBlocked(s, useLibraryStore.getState());
 
-  const begin = (label: string): AbortSignal => {
+  const begin = (label: string, key: string): AbortSignal => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setBusy({ label });
+    setBusy({ label, key });
     setError(null);
     return ctrl.signal;
   };
@@ -78,9 +89,16 @@ export default function AiRadioPage() {
     setBusy(null);
     setError(`Couldn’t start “${label}” right now. Check your connection and try again.`);
   };
+  /** Stop looking: the search in flight is dropped and nothing starts. */
+  const cancel = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setBusy(null);
+  };
 
   const fromSong = (song: Song) => {
     abortRef.current?.abort();
+    setAttempt(null);
     setBusy(null);
     setError(null);
     startRadio(song);
@@ -89,7 +107,8 @@ export default function AiRadioPage() {
   };
 
   const fromArtist = async (name: string) => {
-    const signal = begin(name);
+    setAttempt({ kind: 'artist', name });
+    const signal = begin(name, `artist:${name}`);
     try {
       const songs = byArtist(await searchSongs(name, 25, { signal }), name);
       if (!signal.aborted) play(name, pickRadioSeeds([songs], { blocked, rotate: rotation() }));
@@ -99,7 +118,8 @@ export default function AiRadioPage() {
   };
 
   const fromMood = async (intent: TuneIntent, label: string) => {
-    const signal = begin(label);
+    setAttempt({ kind: 'mood', intent, label });
+    const signal = begin(label, `mood:${intent}`);
     const query = tuneSearchQuery(intent, language);
     try {
       const songs = query ? await searchSongs(query, 25, { signal }) : [];
@@ -113,7 +133,8 @@ export default function AiRadioPage() {
   const fromText = async (raw: string) => {
     const label = raw.replace(/\s+/g, ' ').trim();
     if (!label) return;
-    const signal = begin(label);
+    setAttempt({ kind: 'text', label });
+    const signal = begin(label, 'text');
     try {
       const r = await seedsForPrompt(label, language, {
         search: searchSongs,
@@ -123,7 +144,7 @@ export default function AiRadioPage() {
         // Settings → AI in recommendations off: the catalogue alone finds the seeds.
         ai: aiAssist
           ? async (prompt, languages, sig) => {
-              if (!sig?.aborted) setBusy({ label, ai: true });
+              if (!sig?.aborted) setBusy({ label, ai: true, key: 'text' });
               const { generatePlaylist } = await import('@/services/ai/playlist');
               const res = await generatePlaylist(prompt, languages, muted, sig);
               return res.ok ? res.playlist.songs : [];
@@ -136,6 +157,13 @@ export default function AiRadioPage() {
     }
   };
 
+  const retry = () => {
+    if (!attempt) return;
+    if (attempt.kind === 'mood') void fromMood(attempt.intent, attempt.label);
+    else if (attempt.kind === 'artist') void fromArtist(attempt.name);
+    else void fromText(attempt.label);
+  };
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     void fromText(text);
@@ -143,102 +171,168 @@ export default function AiRadioPage() {
 
   const lang = language ? languageLabel(language) : null;
   const examples = lang ? [`${lang} 90s melodies`, `${lang} DJ remix`, `${lang} folk songs`] : ['90s melodies', 'Romantic', 'Workout'];
+  const liveState = busy ? 'busy' : playing ? 'on' : 'idle';
+  const seeds = [...(current ? [current] : []), ...recent.filter((s) => s.id !== current?.id)].slice(0, 8);
 
   return (
-    <div className="vx-radio">
+    <div className="vx-aistudio vx-radio">
       <PageHeader title="AI Radio" subtitle="Endless music from a song, a mood or a few words. The DJ keeps it going." />
 
-      <p role="status" aria-live="polite" className="vx-radio-status">
+      <form className="vx-aiprompt is-inline" onSubmit={submit}>
+        <span className="vx-ai-mark" aria-hidden>
+          <SparkleIcon filled />
+        </span>
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={80}
+          enterKeyHint="go"
+          placeholder={examples[0]}
+          aria-label="Describe your radio"
+        />
+        <button type="submit" className="btn-primary" disabled={!text.trim() || !!busy}>
+          Start radio
+        </button>
+      </form>
+      <div className="vx-aistudio-chips" role="group" aria-label="Examples">
+        {examples.map((ex) => (
+          <button
+            key={ex}
+            type="button"
+            className="vx-aistudio-chip"
+            disabled={!!busy}
+            onClick={() => {
+              setText(ex);
+              void fromText(ex);
+            }}
+          >
+            {ex}
+          </button>
+        ))}
+      </div>
+
+      <div className="vx-radio-live" data-state={liveState}>
         {busy ? (
-          <>
-            <span className="vx-radio-spin" aria-hidden /> {busy.ai ? 'Asking VinaX AI for' : 'Finding songs for'} “{busy.label}”…
-          </>
+          <span className="vx-ai-mark is-working" aria-hidden>
+            <SparkleIcon filled />
+          </span>
         ) : playing ? (
-          <>
-            Playing AI Radio: {playing}. <Link to="/queue">See what’s next</Link>
-          </>
-        ) : (
-          ''
-        )}
-      </p>
-      {error && (
-        <p role="alert" className="vx-radio-error">
-          {error}
+          <span className="vx-radio-onair" aria-hidden />
+        ) : null}
+        <p role="status" aria-live="polite" className="vx-radio-status">
+          {busy ? (
+            <span className="vx-ai-shimmer">
+              {busy.ai ? 'Asking VinaX AI for' : 'Finding songs for'} “{busy.label}”…
+            </span>
+          ) : playing ? (
+            <>
+              Playing AI Radio: {playing}. <Link to="/queue">See what’s next</Link>
+            </>
+          ) : (
+            ''
+          )}
         </p>
+        {busy && (
+          <button type="button" onClick={cancel} className="btn-secondary">
+            Stop
+          </button>
+        )}
+      </div>
+      {error && (
+        <div className="vx-ainote">
+          <span className="vx-ainote-icon" aria-hidden>
+            <WaveIcon />
+          </span>
+          <div className="vx-ainote-text">
+            <p role="alert" className="vx-ainote-msg">
+              {error}
+            </p>
+            {attempt && (
+              <div className="vx-ainote-actions">
+                <button type="button" onClick={retry} className="btn-primary">
+                  <RefreshIcon /> Try again
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
-      <section className="vx-radio-section" aria-labelledby="vx-radio-ask">
-        <h2 id="vx-radio-ask" className="vx-radio-title">
-          Describe it
-        </h2>
-        <form className="vx-radio-ask" onSubmit={submit}>
-          <input
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            maxLength={80}
-            enterKeyHint="go"
-            placeholder={examples[0]}
-            aria-label="Describe your radio"
-          />
-          <button type="submit" className="vx-radio-btn is-primary" disabled={!text.trim() || !!busy}>
-            Start radio
-          </button>
-        </form>
-        <div className="vx-radio-chips" role="group" aria-label="Examples">
-          {examples.map((ex) => (
-            <button key={ex} type="button" className="vx-radio-chip" disabled={!!busy} onClick={() => { setText(ex); void fromText(ex); }}>
-              {ex}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="vx-radio-section" aria-labelledby="vx-radio-moods">
-        <h2 id="vx-radio-moods" className="vx-radio-title">
+      <section className="vx-aistudio-section" aria-labelledby="vx-radio-moods">
+        <h2 id="vx-radio-moods" className="vx-aistudio-title">
           Pick a mood
         </h2>
         <div className="vx-radio-moods" role="group" aria-label="Moods">
-          {RADIO_MOODS.map((m, i) => (
-            <button
-              key={m.id}
-              type="button"
-              disabled={!!busy}
-              onClick={() => void fromMood(m.id, m.label)}
-              className={`vx-radio-mood tone-${(i % 8) + 1}`}
-              aria-label={`Start ${m.label} radio`}
-            >
-              <span>{m.label}</span>
-              <RadioGlyph className="vx-radio-mood-glyph" />
-            </button>
-          ))}
+          {RADIO_MOODS.map((m, i) => {
+            const starting = busy?.key === `mood:${m.id}`;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={!!busy}
+                aria-busy={starting || undefined}
+                onClick={() => void fromMood(m.id, m.label)}
+                className={`vx-radio-mood tone-${(i % 8) + 1}`}
+                aria-label={`Start ${m.label} radio`}
+              >
+                <span className="vx-radio-mood-glyph" aria-hidden>
+                  {starting ? <span className="vx-ai-spin" /> : <RadioGlyph />}
+                </span>
+                <span>{m.label}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      {(current || recent.length > 0 || artists.length > 0) && (
-        <section className="vx-radio-section" aria-labelledby="vx-radio-from">
-          <h2 id="vx-radio-from" className="vx-radio-title">
+      {(seeds.length > 0 || artists.length > 0) && (
+        <section className="vx-aistudio-section" aria-labelledby="vx-radio-from">
+          <h2 id="vx-radio-from" className="vx-aistudio-title">
             From a song or artist
           </h2>
-          <div className="vx-radio-songs">
-            {[...(current ? [current] : []), ...recent.filter((s) => s.id !== current?.id)].slice(0, 8).map((song, i) => (
-              <button key={song.id} type="button" className="vx-radio-song" onClick={() => fromSong(song)} aria-label={`Start AI Radio from ${song.title}`}>
-                <img src={bestImage(song.images, 150)} alt="" width={56} height={56} loading="lazy" decoding="async" onError={onArtError} />
-                <span className="min-w-0">
-                  <span className="vx-radio-song-title">{song.title}</span>
-                  <span className="vx-radio-song-sub">{i === 0 && current ? 'Playing now' : song.subtitle}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-          {artists.length > 0 && (
-            <div className="vx-radio-artists" role="group" aria-label="Your artists">
-              {artists.map((a) => (
-                <button key={a.id || a.name} type="button" className="vx-radio-artist" disabled={!!busy} onClick={() => void fromArtist(a.name)} aria-label={`Start AI Radio from ${a.name}`}>
-                  <img src={a.image ?? letterAvatar(a.name)} alt="" width={72} height={72} loading="lazy" decoding="async" onError={onArtError} />
-                  <span>{a.name}</span>
+          {seeds.length > 0 && (
+            <div className="vx-radio-seeds">
+              {seeds.map((song, i) => (
+                <button key={song.id} type="button" className="vx-radio-seed" onClick={() => fromSong(song)} aria-label={`Start AI Radio from ${song.title}`}>
+                  <span className="vx-radio-seed-art">
+                    <img src={bestImage(song.images, 300)} alt="" width={152} height={152} loading="lazy" decoding="async" onError={onArtError} />
+                    <span className="vx-radio-seed-badge" aria-hidden>
+                      <RadioGlyph />
+                    </span>
+                  </span>
+                  <span className="vx-radio-seed-title">{song.title}</span>
+                  {i === 0 && current ? (
+                    <span className="vx-radio-seed-sub is-now">Playing now</span>
+                  ) : (
+                    <span className="vx-radio-seed-sub">{song.subtitle}</span>
+                  )}
                 </button>
               ))}
+            </div>
+          )}
+          {artists.length > 0 && (
+            <div className="vx-radio-artists" role="group" aria-label="Your artists">
+              {artists.map((a) => {
+                const starting = busy?.key === `artist:${a.name}`;
+                return (
+                  <button
+                    key={a.id || a.name}
+                    type="button"
+                    className="vx-radio-artist"
+                    disabled={!!busy}
+                    aria-busy={starting || undefined}
+                    onClick={() => void fromArtist(a.name)}
+                    aria-label={`Start AI Radio from ${a.name}`}
+                  >
+                    <span className="vx-radio-artist-art">
+                      <img src={a.image ?? letterAvatar(a.name)} alt="" width={80} height={80} loading="lazy" decoding="async" onError={onArtError} />
+                      {starting && <span className="vx-ai-spin" aria-hidden />}
+                    </span>
+                    <span>{a.name}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </section>
@@ -246,6 +340,7 @@ export default function AiRadioPage() {
 
       <p className="vx-radio-note">
         {aiDj ? 'The AI DJ picks what follows, and your skips steer it. ' : 'AI DJ is off, so the picks that follow come from on-device recommendations. '}
+        {aiAssist ? '' : 'AI in recommendations is off, so the words you type are matched in the catalogue alone. '}
         Any song menu also has <span className="font-semibold text-ink-100">Start AI Radio</span>. <Link to="/settings">Settings</Link>
       </p>
     </div>

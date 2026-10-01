@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import '@/styles/ai.css';
-import { DownloadIcon, PlusIcon, SettingsIcon } from '@/components/Icons';
+import { ChevronDownIcon, DownloadIcon, PlusIcon, SettingsIcon } from '@/components/Icons';
+import { Toasts } from '@/components/Toasts';
 import { SavedPromptsSheet } from '@/components/ai/AiExtras';
 import { droppedFiles, attachmentText, type Attachment } from '@/features/ai/attachments';
 import { splitFollowups } from '@/features/ai/followups';
@@ -65,6 +66,7 @@ import { generatePlaylist } from '@/services/ai/playlist';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
+import { scrollBehavior } from '@/utils/motion';
 import { applyThemeClasses, resolveTheme } from '@/utils/theme';
 
 /**
@@ -191,14 +193,51 @@ export default function VinaXAIPage(): ReactNode {
     window.addEventListener('pagehide', onHide);
     return () => window.removeEventListener('pagehide', onHide);
   }, [chats]);
-  // Follow the newest reply, but ONLY if the reader is already near the
-  // bottom — never yank someone back down while they re-read an earlier reply.
-  useEffect(() => {
+  // Follow the newest reply, but ONLY while the reader is at the bottom —
+  // never yank someone back down while they re-read an earlier reply.
+  // 9.0 — "at the bottom" is what the reader's last scroll left it at, not a
+  // measurement taken after the reply grew (a large chunk, or song rows
+  // resolving, used to push the thread past the threshold and stop the
+  // follow); a reader who scrolled up gets a "Jump to latest" pill instead.
+  // Instant on purpose (an 'auto' scroll is never motion): a smooth scroll
+  // per streamed chunk lags behind a growing reply.
+  const [atBottom, setAtBottom] = useState(true);
+  const stickRef = useRef(true);
+  /** A smooth "Jump to latest" is under way: its own scroll events must not
+   *  bring the pill straight back. */
+  const jumpingRef = useRef(false);
+  const measureBottom = useCallback((): void => {
     const list = listRef.current;
     if (!list) return;
-    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
-    if (nearBottom) list.scrollTo({ top: list.scrollHeight });
-  }, [chats, activeId]);
+    const near = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+    if (jumpingRef.current && !near) return;
+    jumpingRef.current = false;
+    stickRef.current = near;
+    setAtBottom(near);
+  }, []);
+  useEffect(() => {
+    const list = listRef.current;
+    if (list && stickRef.current) list.scrollTo({ top: list.scrollHeight, behavior: 'auto' });
+  }, [chats]);
+  // Opening a chat shows its latest message.
+  useEffect(() => {
+    const list = listRef.current;
+    stickRef.current = true;
+    setAtBottom(true);
+    list?.scrollTo({ top: list.scrollHeight, behavior: 'auto' });
+  }, [activeId]);
+  // The thread also grows without a new chunk (song rows resolving, a diagram
+  // or picture loading): keep a reader who is at the bottom there.
+  useEffect(() => {
+    const list = listRef.current;
+    const content = list?.firstElementChild;
+    if (!list || !content || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      if (stickRef.current) list.scrollTo({ top: list.scrollHeight, behavior: 'auto' });
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [activeId, isEmpty]);
 
   // Browser tab mirrors the open conversation.
   const chatTitle = active && active.messages.length && active.title !== 'New chat' ? active.title : null;
@@ -429,7 +468,8 @@ export default function VinaXAIPage(): ReactNode {
     });
     // An empty chat has nothing to bring back.
     if (!removed.messages.length) return;
-    showToast(`Deleted “${removed.title.slice(0, 40)}”`, () => {
+    // The toast clamps a long title with CSS; slicing could split an Indic syllable.
+    showToast(`Deleted “${removed.title}”`, () => {
       setChats((prev) => {
         if (prev.some((c) => c.id === removed.id)) return prev;
         const next = [...prev];
@@ -606,8 +646,13 @@ export default function VinaXAIPage(): ReactNode {
         c.id === chatId && (c.title === 'New chat' || !c.messages.length) ? { ...c, title: (q || 'Image chat').slice(0, 42) } : c,
       ),
     );
-    // The listener just spoke: the thread follows them to the bottom.
-    requestAnimationFrame(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }));
+    // The listener just spoke: the thread follows them to the bottom (instantly,
+    // so the follow-the-reply check above sees the bottom when the stream starts).
+    stickRef.current = true;
+    requestAnimationFrame(() => {
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'auto' });
+      setAtBottom(true);
+    });
 
     const now = stateRef.current;
     const voiceLive = Boolean(voiceEngineRef.current);
@@ -669,9 +714,13 @@ export default function VinaXAIPage(): ReactNode {
     // 8.2.0 — nothing arrived (the stream client already asked once more):
     // the line says why and the reply offers Retry, unless waiting cannot help.
     const failed = !result.aborted && !state.text && canRetry(result.failure);
+    // 9.0 — nothing arrived and waiting cannot help (switched off, or the
+    // day's limit): presentation only, the thread points back to the music.
+    const unavailable = !result.aborted && !state.text && !canRetry(result.failure);
     replaceLastAssistant(chatId, (m) => ({
       ...m,
       failed: failed || undefined,
+      unavailable: unavailable || undefined,
       content: finalText || '…',
       sources: state.sources.length ? state.sources : undefined,
       engine: engine || undefined,
@@ -1009,7 +1058,7 @@ export default function VinaXAIPage(): ReactNode {
             </div>
           )}
           {isEmpty && <Greeting userName={userName} />}
-          <div ref={listRef} className="ai-scroller" hidden={isEmpty}>
+          <div ref={listRef} className="ai-scroller" hidden={isEmpty} onScroll={measureBottom}>
             {!isEmpty && (
               <MessageList
                 key={active?.id ?? ''}
@@ -1022,6 +1071,33 @@ export default function VinaXAIPage(): ReactNode {
               />
             )}
           </div>
+          {!isEmpty && !atBottom && (
+            <div className="ai-jump-anchor">
+              <button
+                type="button"
+                className="ai-jump"
+                onClick={() => {
+                  const list = listRef.current;
+                  if (!list) return;
+                  // While a reply streams, instant: a smooth scroll would land short of a growing reply.
+                  const behavior = busy ? 'auto' : scrollBehavior();
+                  jumpingRef.current = behavior === 'smooth';
+                  stickRef.current = true;
+                  setAtBottom(true);
+                  list.scrollTo({ top: list.scrollHeight, behavior });
+                  // A reader who scrolls away mid-jump is measured again.
+                  if (jumpingRef.current) {
+                    window.setTimeout(() => {
+                      jumpingRef.current = false;
+                      measureBottom();
+                    }, 900);
+                  }
+                }}
+              >
+                <ChevronDownIcon /> Jump to latest
+              </button>
+            </div>
+          )}
           <Composer
             ref={composerRef}
             busy={busy}
@@ -1069,6 +1145,11 @@ export default function VinaXAIPage(): ReactNode {
       </div>
 
       {toast && <Toast toast={toast} onDone={clearToast} />}
+      {/* The app's own toasts (Queued …, Saved …): this route renders outside
+          AppLayout, so without a host here they were never shown. */}
+      <div className="ai-app-toasts">
+        <Toasts />
+      </div>
     </div>
   );
 }

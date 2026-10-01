@@ -78,8 +78,8 @@ test('AI Playlist shows why each pick fits, and leaves out a suggestion the cata
   expect(text).not.toMatch(/A Famous Different Song/);
   expect(text).not.toMatch(/Would be perfect/);
   // The app scrolls inside its own container: bring the list into view and capture it.
-  await page.locator('.vx-ai-result').scrollIntoViewIfNeeded();
-  await page.locator('.vx-ai-result').screenshot({ path: 'test-results/v85-ai-playlist-reasons.png' });
+  await page.locator('.vx-aip-result').scrollIntoViewIfNeeded();
+  await page.locator('.vx-aip-result').screenshot({ path: 'test-results/v85-ai-playlist-reasons.png' });
 });
 
 test('the taste profile shows how you listen', async ({ page, baseURL }) => {

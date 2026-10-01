@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useSettingsStore } from '@/store/settingsStore';
 import { toast } from '@/store/toastStore';
+import { RadioGlyph } from '@/features/radio/RadioGlyph';
 import '@/styles/pages/radio.css';
 
 /**
@@ -44,6 +45,10 @@ export function SmartQueue() {
   };
   return (
     <div className="vx-smartq">
+      {/* 9.0 — the DJ is an AI moment: the radio mark on a Lagoon tile. */}
+      <span className="vx-smartq-icon" aria-hidden>
+        <RadioGlyph />
+      </span>
       <span className="vx-smartq-text">
         <span id="vx-smartq-label" className="vx-smartq-label">Smart Queue</span>
         <span id="vx-smartq-desc" className="vx-smartq-desc">
