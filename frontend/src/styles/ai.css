@@ -1,50 +1,62 @@
 /* ============================================================================
-   VinaX AI chat surface (v7.1 layout, v8 "Stage" skin).
+   VinaX AI — the chat surface, 9.0 "Encore".
 
    Loaded by the AI page chunk only (imported from pages/VinaXAIPage.tsx, never
-   from main.tsx), so none of this is paid for on first load. It layers on the
-   long-standing .ai-* primitives in index.css / flow.css (tokens, chips,
-   buttons, popovers) and owns everything the v7.1 layout added. Where an older
-   rule in those files disagrees with the Stage language, it is overridden here
-   with a more specific selector (`.ai-root …` / `.ai-shell …`).
+   from main.tsx), so none of this is paid for on first load. The long-standing
+   .ai-* utilities in index.css (ai-t1/2/3, ai-hairline…) still apply; where an
+   older rule there disagrees with Encore it is overridden here with a scoped
+   selector (`.ai-root …` / `.ai-scope …`). Since 9.0 every .ai-* rule that
+   used to sit in the global flow.css / features.css lives in this file.
 
-   Rules of the house:
-   - every selector starts with .ai-
-   - flat surface tiers like the rest of the app: ink-950 chrome (the chat
-     list), ink-900 workspace (the thread), ink-850 raised (composer, user
-     bubbles, tiles, menus); hairlines only around inputs and between rows
-   - the accent is for send, toggles that are on, and focus — nothing else
-   - Manrope scale: greeting 30–40px/800, body 16px/500 at 1.65, meta 13px
-   - motion is transform / opacity / colour only, 200 ms at most, and OFF
-     under reduced motion (the last block in this file)
+   The language (docs/design-system.md, "9.0 Encore"):
+   - the same frame as the music app: ink-950 chrome (the chat list), the
+     conversation on an ink-900 sheet with a 20px radius, ink-850 / ink-800
+     raised (composer, bubbles, tiles, menus); hairlines only around inputs
+     and between rows;
+   - Iris (ember) for send, toggles that are on, the playing song and focus;
+     Lagoon (tide) and the one gradient (--vx-glow) for AI moments only — the
+     sparkle mark, the composer's focus ring, the thinking shimmer;
+   - pills for actions and chips, squircles for artwork and the mark;
+   - Manrope, sentence case, hierarchy from size and weight;
+   - motion 140–220 ms on the calm curve, off under either reduced-motion
+     switch (the last block in this file, and shell.css).
    ========================================================================= */
 
-/* The settings dialog is portalled to <body>, outside .ai-root — it needs the
-   same tokens to read the same way. */
+/* The settings dialog and the saved-prompts sheet are portalled to <body>,
+   outside .ai-root — .ai-scope gives them the same tokens. */
 .ai-shell.ai-root,
 .ai-scope {
   --ai-bg: rgb(var(--ink-900));
+  --ai-chrome: rgb(var(--ink-950));
   --ai-panel: rgb(var(--ink-950));
   --ai-raised: rgb(var(--ink-850));
+  --ai-raised-hover: rgb(var(--ink-800));
+  --ai-composer: rgb(var(--ink-850));
   --ai-line: var(--vx-border);
   --ai-line-soft: var(--vx-border);
   --ai-line-strong: var(--glass-border-strong);
-  --ai-hover: rgb(var(--ink-100) / 0.06);
-  --ai-pressed: rgb(var(--ink-100) / 0.1);
+  --ai-hover: var(--vx-hover);
+  --ai-pressed: var(--vx-pressed);
   --ai-text: rgb(var(--ink-100));
   --ai-text-2: rgb(var(--ink-300));
   --ai-text-3: rgb(var(--ink-400));
-  --ai-menu-shadow: 0 16px 24px rgb(0 0 0 / 0.3), 0 6px 8px rgb(0 0 0 / 0.2);
+  --ai-lagoon: rgb(var(--tide-400));
+  --ai-menu-shadow: 0 18px 40px -14px rgb(0 0 0 / 0.6), 0 4px 10px rgb(0 0 0 / 0.25);
   --ai-shadow: var(--ai-menu-shadow);
   color: var(--ai-text);
 }
 html.light .ai-shell.ai-root,
 html.light .ai-scope {
-  --ai-menu-shadow: 0 12px 32px -8px rgb(15 20 30 / 0.18), 0 2px 6px rgb(15 20 30 / 0.08);
+  /* Paper canvas: the composer is a white card on it, like an input field. */
+  --ai-composer: rgb(var(--ink-950));
+  --ai-menu-shadow: 0 16px 36px -12px rgb(20 20 40 / 0.22), 0 2px 6px rgb(20 20 40 / 0.08);
 }
 .ai-shell.ai-root {
-  background: var(--ai-bg);
+  background: var(--ai-chrome);
   font-weight: 500;
+}
+@media (max-width: 767px) {
+  .ai-shell.ai-root { background: var(--ai-bg); }
 }
 
 /* Breakpoint visibility. Not Tailwind's `hidden md:flex`: .ai-icon-btn and
@@ -55,11 +67,23 @@ html.light .ai-scope {
 @media (max-width: 767px) { .ai-from-md { display: none !important; } }
 @media (min-width: 768px) { .ai-below-md { display: none !important; } }
 
-/* ---------- Shared primitives, re-tuned to the Stage language ---------- */
+/* ------------------------------------------------------------------ marks */
+/* The VinaX sparkle: the one place the Iris → Lagoon gradient is a fill. */
+.ai-mark {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 30%;
+  background: var(--vx-glow);
+  color: #fff;
+}
+.ai-mark svg { width: 55%; height: 55%; }
+
+/* ------------------------------------------------------------- primitives */
 .ai-root .ai-hairline-strong { border-color: var(--ai-line-strong); }
 
-/* Icon buttons: round, 40px in the chrome (header, sidebar head), 36px in the
-   composer. Rows and toolbars keep their own compact sizes. */
+/* Icon buttons: round, 40px in the chrome, 36px in the composer; every one
+   has a 44px hit area (an invisible pad, IconButton's pattern). */
 .ai-root .ai-icon-btn,
 .ai-scope .ai-icon-btn {
   position: relative;
@@ -77,104 +101,130 @@ html.light .ai-scope {
   width: 2.5rem;
   height: 2.5rem;
 }
-/* 44px to hit, whatever the visual size. */
 .ai-header .ai-icon-btn::after,
 .ai-side-head .ai-icon-btn::after,
 .ai-composer-row .ai-icon-btn::after,
 .ai-composer-row .ai-send::after,
-.ai-scope .ai-settings-close::after {
+.ai-scope .ai-settings-close::after,
+.ai-root .ai-side-act::after,
+.ai-root .ai-attachment-chip .ai-icon-btn::after,
+.ai-toast .ai-icon-btn::after {
   content: '';
   position: absolute;
   inset: -4px;
 }
 
-/* Chips: the app's chip — a translucent pill, no outline; ON is the accent
-   tint (a toggle), SOLID is the inverse pill (a selected filter). */
+/* Chips: the app's chip — a quiet translucent pill; ON is the Iris wash (a
+   toggle), SOLID is the inverse pill (a chosen option). 36px to look at,
+   44px to hit. */
 .ai-root .ai-chip,
 .ai-scope .ai-chip {
+  position: relative;
   min-height: 2.25rem;
   padding: 0 0.875rem;
   gap: 0.375rem;
   border: 0;
-  background: rgb(var(--ink-100) / 0.08);
+  background: rgb(var(--ink-100) / 0.07);
   color: rgb(var(--ink-100));
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.2;
   transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
 }
+.ai-root .ai-chip::after,
+.ai-scope .ai-chip::after { content: ''; position: absolute; inset: -4px 0; }
 .ai-root .ai-chip:hover:not(:disabled),
-.ai-scope .ai-chip:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.14); color: rgb(var(--ink-100)); }
+.ai-scope .ai-chip:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.13); color: rgb(var(--ink-100)); }
 .ai-root .ai-chip-on,
 .ai-root .ai-chip-on:hover:not(:disabled),
 .ai-scope .ai-chip-on,
 .ai-scope .ai-chip-on:hover:not(:disabled) {
-  background: rgb(var(--ember-500) / 0.16);
+  background: var(--vx-accent-wash);
   color: rgb(var(--ember-300));
 }
 html.light .ai-root .ai-chip-on,
 html.light .ai-root .ai-chip-on:hover:not(:disabled),
 html.light .ai-scope .ai-chip-on,
-html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
-  background: rgb(var(--ember-500) / 0.1);
-  color: rgb(var(--ember-500));
-}
+html.light .ai-scope .ai-chip-on:hover:not(:disabled) { color: rgb(var(--ember-500)); }
 .ai-root .ai-chip-solid,
 .ai-root .ai-chip-solid:hover:not(:disabled),
 .ai-scope .ai-chip-solid,
 .ai-scope .ai-chip-solid:hover:not(:disabled) {
-  background: rgb(var(--ink-100));
-  color: rgb(var(--ink-950));
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
 }
 
-/* Buttons (sidebar, settings, saved prompts): quiet outlined pills. */
+/* Buttons (settings, saved prompts, notices): outlined pills. */
 .ai-root .ai-btn,
 .ai-scope .ai-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   min-height: 2.5rem;
-  padding: 0 1rem;
+  padding: 0 1.125rem;
+  border: 1px solid rgb(var(--ink-100) / 0.22);
   border-radius: 9999px;
-  border-color: var(--ai-line-strong);
+  background: transparent;
   color: rgb(var(--ink-100));
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
 }
+.ai-root .ai-btn::after,
+.ai-scope .ai-btn::after { content: ''; position: absolute; inset: -3px 0; }
 .ai-root .ai-btn:hover:not(:disabled),
-.ai-scope .ai-btn:hover:not(:disabled) { background: var(--ai-hover); border-color: rgb(var(--ink-100) / 0.3); }
+.ai-scope .ai-btn:hover:not(:disabled) { background: var(--ai-hover); border-color: rgb(var(--ink-100) / 0.5); }
+.ai-root .ai-btn-accent,
+.ai-scope .ai-btn-accent {
+  border-color: rgb(var(--ember-500));
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
+}
+.ai-root .ai-btn-accent:hover:not(:disabled),
+.ai-scope .ai-btn-accent:hover:not(:disabled) { border-color: rgb(var(--ember-400)); background: rgb(var(--ember-400)); }
 
 /* Fields: a hairline input on the surface it sits on. */
 .ai-root .ai-field,
 .ai-scope .ai-field {
-  border-color: var(--ai-line-strong);
-  border-radius: 8px;
+  border: 1px solid var(--ai-line-strong);
+  border-radius: var(--vx-radius-control);
+  background: transparent;
+  transition: border-color 140ms var(--ease-calm);
 }
 .ai-root .ai-field:focus,
 .ai-root .ai-field:focus-within,
 .ai-scope .ai-field:focus,
-.ai-scope .ai-field:focus-within { border-color: rgb(var(--ember-500) / 0.7); }
+.ai-scope .ai-field:focus-within { border-color: rgb(var(--ember-500) / 0.75); }
 
-/* Menus: the track-menu look — 8px panel, 44px rows, 14px labels. */
+/* Menus: the song menu's look — 14px panel, 44px rows, 14px labels. */
 .ai-root .ai-popover,
 .ai-scope .ai-popover {
-  padding: 4px;
+  padding: 6px;
   border: 1px solid var(--ai-line);
-  border-radius: 8px;
+  border-radius: var(--vx-radius-card);
   background: var(--surface-modal);
   box-shadow: var(--ai-menu-shadow);
 }
 .ai-root .ai-menu-item,
 .ai-scope .ai-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
   gap: 0.75rem;
   min-height: 2.75rem;
   padding: 0 0.75rem;
-  border-radius: 6px;
+  border-radius: 10px;
   color: rgb(var(--ink-100));
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 550;
+  text-align: left;
 }
 .ai-root .ai-menu-item:hover,
-.ai-scope .ai-menu-item:hover { background: var(--ai-pressed); color: rgb(var(--ink-100)); }
+.ai-scope .ai-menu-item:hover { background: var(--ai-hover); color: rgb(var(--ink-100)); }
+.ai-root .ai-menu-item:focus-visible { outline-offset: -2px; }
 .ai-root .ai-menu-item svg { width: 1.125rem; height: 1.125rem; }
-.ai-root .ai-menu-sep { margin: 4px 0; background: var(--ai-line); }
+.ai-root .ai-menu-sep { height: 1px; margin: 5px 6px; background: var(--ai-line); }
 .ai-root .ai-menu-heading {
   padding: 8px 12px 4px;
   color: var(--ai-text-3);
@@ -182,11 +232,11 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   font-weight: 700;
 }
 
-/* Cards (sources, pinned replies, the in-chat player): a flat raised tile. */
+/* Cards (sources, pinned replies): a flat raised tile, no outline. */
 .ai-root .ai-card,
 .ai-scope .ai-card {
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--vx-radius-card);
   background: var(--ai-raised);
 }
 .ai-card-heading {
@@ -198,10 +248,12 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   font-size: 12px;
   font-weight: 700;
 }
-.ai-sources { margin-top: 0.875rem; padding: 0.75rem 0.75rem 0.5rem; }
+.ai-sources { margin-top: 1rem; padding: 0.75rem 0.75rem 0.5rem; }
+.ai-sources a { min-height: 2.75rem; }
 .ai-pinned { padding: 0.75rem 1rem; font-size: 13px; }
+.ai-pinned button { min-height: 2.75rem; }
 
-/* ---------- Shell ---------- */
+/* -------------------------------------------------------------- the frame */
 .ai-shell {
   position: relative;
   display: flex;
@@ -217,13 +269,25 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   flex-direction: column;
   background: var(--ai-bg);
 }
+@media (min-width: 768px) {
+  /* The conversation is a rounded sheet inside the chrome, like the
+     music app's workspace. */
+  .ai-main {
+    margin: 8px 8px 8px 0;
+    overflow: hidden;
+    border-radius: var(--vx-radius-panel);
+  }
+  .ai-sidebar-collapsed ~ .ai-main { margin-left: 8px; }
+}
+html.amoled .ai-main { background: #000; }
+
 .ai-root .ai-header {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   gap: 0.25rem;
   min-height: 4rem;
-  padding: 0.75rem 1rem 0.75rem 1.25rem;
+  padding: 0.75rem 0.75rem 0.5rem 1.5rem;
   border-bottom: 0;
 }
 .ai-header-title {
@@ -231,8 +295,8 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   overflow: hidden;
   color: var(--ai-text);
   font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.012em;
+  font-weight: 750;
+  letter-spacing: -0.015em;
   line-height: 1.3;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -242,8 +306,8 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   overflow: hidden;
   margin-top: 1px;
   color: var(--ai-text-3);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 550;
   line-height: 1.3;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -265,7 +329,7 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   .ai-column { padding-inline: 1.5rem; }
 }
 
-/* ---------- Stage: empty (centred) vs conversation (docked) ---------- */
+/* ------------------------------------- stage: empty (centred) or docked */
 .ai-stage {
   position: relative;
   display: flex;
@@ -278,6 +342,7 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .ai-scroller[hidden] { display: none; }
 /* Empty chat: the stage itself scrolls, and auto margins (not
@@ -291,22 +356,46 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
 .ai-stage-empty > .ai-suggest { margin-bottom: auto; }
 
 .ai-greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 1.75rem;
   text-align: center;
-  padding-bottom: 1.5rem;
+}
+.ai-hero-mark {
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: 1.25rem;
+  border-radius: 17px;
+  box-shadow: 0 16px 36px -16px rgb(var(--ember-500) / 0.8);
 }
 .ai-root .ai-greeting .ai-display {
   color: var(--ai-text);
   font-family: 'Manrope', system-ui, sans-serif;
-  font-size: clamp(1.875rem, 1.1rem + 1.6vw, 2.5rem);
+  font-size: clamp(2rem, 1.2rem + 2vw, 3rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.12;
+  letter-spacing: -0.04em;
+  line-height: 1.06;
 }
 .ai-root .ai-greeting .ai-display-name {
   font-style: normal;
   color: var(--ai-text);
   background: none;
   overflow-wrap: anywhere;
+}
+.ai-greeting-sub {
+  max-width: 30rem;
+  margin-top: 0.75rem;
+  color: var(--ai-text-3);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+@media (max-width: 479px) {
+  .ai-hero-mark { width: 2.75rem; height: 2.75rem; margin-bottom: 1rem; border-radius: 14px; }
+  .ai-greeting { padding-bottom: 1.25rem; }
+  .ai-greeting-sub { font-size: 14px; }
 }
 
 .ai-suggest { padding-top: 1.25rem; }
@@ -316,19 +405,20 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
 .ai-suggest-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.625rem;
 }
 @media (max-width: 479px) {
-  .ai-suggest-grid { grid-template-columns: minmax(0, 1fr); }
+  .ai-suggest-grid { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
 }
-/* The brief's compact tile: a flat raised surface, text left, no outline. */
+/* A suggestion: a flat raised tile, text left, an arrow that wakes on hover. */
 .ai-suggestion {
   display: flex;
   align-items: center;
+  gap: 0.75rem;
   min-height: 3.5rem;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 0.875rem 0.75rem 1rem;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--vx-radius-card);
   background: var(--ai-raised);
   color: rgb(var(--ink-200));
   font-size: 14px;
@@ -337,12 +427,15 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   text-align: left;
   transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
 }
+.ai-suggestion > span { flex: 1; min-width: 0; }
+.ai-suggestion > svg { flex-shrink: 0; width: 1rem; height: 1rem; color: rgb(var(--ink-500)); transition: color 140ms var(--ease-calm), transform 140ms var(--ease-calm); }
 .ai-suggestion:active { transform: scale(0.98); }
 @media (hover: hover) {
-  .ai-suggestion:hover { background: rgb(var(--ink-800)); color: var(--ai-text); }
+  .ai-suggestion:hover { background: var(--ai-raised-hover); color: var(--ai-text); }
+  .ai-suggestion:hover > svg { color: var(--ai-lagoon); transform: translate(1px, -1px); }
 }
 @media (max-width: 479px) {
-  .ai-suggestion { min-height: 3rem; padding: 0.625rem 0.875rem; }
+  .ai-suggestion { min-height: 3rem; padding: 0.625rem 0.75rem 0.625rem 0.875rem; }
 }
 .ai-brief {
   margin-top: 1.25rem;
@@ -375,98 +468,106 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   /* Phone: one scrolling row that bleeds to the screen edge. */
   .ai-quick-row { margin-inline: -1rem; padding-inline: 1rem; scroll-padding-inline: 1rem; }
 }
-.ai-root .ai-chip-quiet {
-  min-height: 2.25rem;
-  padding: 0 0.875rem;
-  color: rgb(var(--ink-200));
-}
+.ai-root .ai-chip-quiet { color: rgb(var(--ink-200)); }
 
-/* ---------- Thread ---------- */
+/* ----------------------------------------------------------------- thread */
 .ai-thread {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 2rem;
   padding-block: 1.5rem 2.5rem;
 }
 .ai-root .ai-msg {
   font-weight: 500;
-  line-height: 1.65;
+  line-height: 1.7;
   overflow-wrap: anywhere;
 }
-/* The listener: a compact raised bubble on the right. */
+/* The listener: a raised bubble on the right, its tail corner squared;
+   Edit waits beside it. */
 .ai-msg-user {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
 }
+.ai-msg-user .ai-toolbar { order: -1; flex-shrink: 0; }
 .ai-root .ai-user-bubble {
+  min-width: 0;
   max-width: min(85%, 36rem);
   padding: 0.625rem 1.125rem;
   border: 0;
-  border-radius: 20px;
+  border-radius: 22px 22px 8px 22px;
   background: var(--ai-raised);
   color: var(--ai-text);
   line-height: 1.55;
 }
-/* The assistant: unboxed flowing text — just the VinaX mark where the reply
-   starts. */
+.ai-msg-img { border-radius: 12px; }
+/* The assistant: unboxed flowing text with the VinaX mark where it starts. */
 .ai-msg-assistant {
   display: flex;
   gap: 0.875rem;
 }
 .ai-msg-mark {
-  display: inline-flex;
+  display: inline-grid;
   flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
+  place-items: center;
   width: 1.75rem;
   height: 1.75rem;
-  margin-top: -0.0625rem;
-  border-radius: 9999px;
+  margin-top: 0.0625rem;
+  border-radius: 9px;
   background: var(--ai-raised);
-  color: rgb(var(--ember-400));
+  color: var(--ai-lagoon);
 }
+.ai-msg-mark svg { width: 15px; height: 15px; }
+/* Waiting for the first word: the mark takes the gradient and breathes. */
+.ai-msg-mark.is-waiting { background: var(--vx-glow); color: #fff; animation: ai-breathe 1.6s ease-in-out infinite; }
 @media (max-width: 479px) {
   .ai-msg-assistant { gap: 0.625rem; }
-  .ai-msg-mark { width: 1.5rem; height: 1.5rem; }
+  .ai-msg-mark { width: 1.5rem; height: 1.5rem; border-radius: 8px; }
+  .ai-msg-mark svg { width: 13px; height: 13px; }
 }
 /* Rich replies read at the conversation's text size (Settings → Text size),
    with real paragraph rhythm. */
-.ai-root .ai-rich { font-size: inherit; line-height: 1.65; }
-.ai-root .ai-rich p { line-height: 1.65; }
-.ai-root .ai-rich > :not([hidden]) ~ :not([hidden]) { margin-top: 0.625em; }
+.ai-root .ai-rich { font-size: inherit; line-height: 1.7; }
+.ai-root .ai-rich p { line-height: 1.7; }
+.ai-root .ai-rich > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75em; }
+.ai-root .ai-rich strong { font-weight: 750; color: var(--ai-text); }
 .ai-root .ai-rich code:not(pre code) {
-  padding: 0.1em 0.35em;
-  border-radius: 5px;
+  padding: 0.1em 0.38em;
+  border-radius: 6px;
   background: rgb(var(--ink-100) / 0.08);
   font-size: 0.86em;
 }
-.ai-root .ai-rich table { font-size: 13px; }
+.ai-root .ai-rich table { font-size: 13.5px; }
+.ai-root .ai-rich table th { background: var(--ai-raised); }
+.ai-root .ai-rich a { color: var(--ai-lagoon); text-decoration-color: rgb(var(--tide-400) / 0.45); text-underline-offset: 3px; }
 
 /* Code, diagrams, previews and CSV: the deepest tier with a hairline. */
 .ai-root .ai-code {
   margin-block: 0.75rem;
   overflow: hidden;
   border: 1px solid var(--ai-line-strong);
-  border-radius: 12px;
+  border-radius: var(--vx-radius-card);
   background: rgb(var(--ink-950));
   font-size: 13px;
 }
+html.light .ai-root .ai-code { background: rgb(var(--ink-950)); }
 .ai-root pre.ai-code-bare { font-size: 12.5px; }
 .ai-code-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   padding: 0 0.875rem;
   border-bottom: 1px solid var(--ai-line);
   color: var(--ai-text-2);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 650;
 }
 .ai-code-head.justify-end { justify-content: flex-end; }
-.ai-code-head button { min-height: 2rem; transition: color 140ms var(--ease-calm); }
+.ai-code-head button { position: relative; min-height: 2.25rem; padding-inline: 0.25rem; transition: color 140ms var(--ease-calm); }
+.ai-code-head button::after { content: ''; position: absolute; inset: -4px -2px; }
 .ai-code-head button:hover { color: var(--ai-text); }
 .ai-root .ai-code pre {
   border: 0;
@@ -475,15 +576,25 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   font-size: 12.5px;
   line-height: 1.6;
 }
+.ai-root .ai-rich pre:not(.ai-code pre) { border-radius: var(--vx-radius-card); }
 
+/* Thinking: one short status in a slow Lagoon shimmer. */
 .ai-thinking {
   display: inline-flex;
   align-items: center;
   min-height: 1.75em;
-  color: var(--ai-text-2);
-  font-size: 0.93em;
+  font-size: 0.95em;
+  font-weight: 600;
 }
-.ai-thinking-text { animation: ai-fade 180ms var(--ease-calm) both; }
+.ai-shimmer {
+  background: linear-gradient(90deg, rgb(var(--ink-400)) 0%, rgb(var(--ink-400)) 38%, rgb(var(--tide-400)) 50%, rgb(var(--ink-400)) 62%, rgb(var(--ink-400)) 100%);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ai-shimmer 2s linear infinite;
+}
+.ai-thinking-text { animation: ai-fade 180ms var(--ease-calm) both, ai-shimmer 2s linear infinite; }
 
 /* A soft caret while the reply streams: it breathes rather than blinks. */
 .ai-caret {
@@ -493,116 +604,391 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   margin-left: 0.3em;
   vertical-align: 0.05em;
   border-radius: 9999px;
-  background: rgb(var(--ember-400));
+  background: var(--vx-glow);
   animation: ai-breathe 1.2s ease-in-out infinite;
 }
 .ai-engine-chip {
   display: inline-flex;
   align-items: center;
+  min-height: 1.5rem;
   margin-left: 0.375rem;
-  padding: 2px 7px;
+  padding: 0 8px;
   border-radius: 9999px;
   background: rgb(var(--ink-100) / 0.06);
   color: var(--ai-text-3);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 650;
 }
 
-/* Reply toolbar: quiet 32px tools. */
+/* Reply toolbar: quiet 36px tools with a 44px hit area. Revealed on hover
+   or focus with a pointer; always there on touch. */
+.ai-root .ai-toolbar { opacity: 0; transition: opacity 140ms var(--ease-calm); }
+.ai-root .ai-msg:hover .ai-toolbar,
+.ai-root .ai-msg:focus-within .ai-toolbar,
+.ai-root .ai-toolbar:has([aria-expanded='true']) { opacity: 1; }
+.ai-root .ai-msg:last-child .ai-toolbar { opacity: 1; }
+@media (hover: none) { .ai-root .ai-toolbar { opacity: 1; } }
 .ai-root .ai-tool {
-  min-height: 2rem;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
   padding: 0 0.5rem;
   border-radius: 9999px;
   color: var(--ai-text-3);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
 }
+.ai-root .ai-tool::after { content: ''; position: absolute; inset: -4px -1px; }
 .ai-root .ai-tool svg { width: 1rem; height: 1rem; }
 .ai-root .ai-tool:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-root .ai-tool[aria-pressed='true'] { color: rgb(var(--ember-400)); }
+.ai-root .ai-tool[aria-expanded='true'] { color: var(--ai-text); background: var(--ai-hover); }
+.ai-more-dots { display: none; }
 @media (max-width: 479px) {
-  .ai-root .ai-tool { padding: 0 0.375rem; }
+  /* Icon-only on phones; the label stays for screen readers. */
+  .ai-root .ai-toolbar .ai-tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .ai-root .ai-toolbar .ai-more-dots { display: block; }
+  .ai-root .ai-toolbar .ai-more-chevron { display: none; }
+  .ai-root .ai-toolbar .ai-tool { padding: 0 0.375rem; }
 }
 .ai-followups {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 1rem;
+  margin-top: 1.125rem;
 }
-.ai-followups .ai-chip { white-space: normal; text-align: left; padding-block: 0.4rem; }
+.ai-followups .ai-chip { white-space: normal; text-align: left; padding-block: 0.45rem; }
+.ai-followups .ai-chip svg { color: var(--ai-lagoon); }
 
-/* Song picks in a reply: flat raised rows, square artwork. */
-.ai-root .ai-pick {
-  overflow: hidden;
-  border: 0;
-  border-radius: 8px;
+/* No reply: an honest notice with the next step, never a stuck spinner. */
+.ai-notice {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.875rem 1rem;
+  border-radius: var(--vx-radius-card);
   background: var(--ai-raised);
 }
-.ai-root .ai-pick-live:hover { background: rgb(var(--ink-800)); }
-.ai-root .ai-player-card { padding: 0.875rem; }
-/* "Play all" sits in a row of 36px chips: match their height. */
-.ai-root [aria-label='Song picks'] .btn-primary { min-height: 2.25rem; padding-block: 0; }
+.ai-notice-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 10px;
+  background: rgb(var(--ink-100) / 0.07);
+  color: rgb(var(--ink-200));
+}
+.ai-notice-icon svg { width: 1rem; height: 1rem; }
+.ai-notice-text { min-width: 0; flex: 1; padding-top: 0.25rem; color: rgb(var(--ink-200)); font-size: 0.95em; line-height: 1.55; }
+.ai-notice-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.ai-notice-actions a,
+.ai-notice-actions button { min-height: 2.25rem; padding-inline: 0.875rem; font-size: 13px; }
 
-/* ---------- Agent activity ---------- */
-.ai-activity { margin-bottom: 0.75rem; }
-.ai-activity-head {
+/* "Jump to latest" while the reader is scrolled up in a long thread: it
+   floats just above the docked composer. */
+.ai-jump-anchor { position: relative; height: 0; }
+.ai-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 0.75rem;
+  z-index: 5;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.375rem;
+  min-height: 2.25rem;
+  padding: 0 0.875rem 0 0.625rem;
+  border: 1px solid var(--ai-line-strong);
+  border-radius: 9999px;
+  background: var(--surface-modal);
+  box-shadow: var(--ai-menu-shadow);
+  color: var(--ai-text);
+  font-size: 13px;
+  font-weight: 650;
+  translate: -50% 0;
+  animation: ai-pop 140ms var(--ease-calm) both;
+}
+.ai-jump::after { content: ''; position: absolute; inset: -4px 0; }
+.ai-jump svg { width: 1rem; height: 1rem; }
+
+/* ------------------------------------------------------- music in replies */
+/* Play all / Add to queue / Save as playlist for a reply with picks. */
+.ai-picks-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.875rem;
+}
+.ai-root .ai-picks-play {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0 1.125rem 0 0.375rem;
+  border-radius: 9999px;
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
+  font-size: 13.5px;
+  font-weight: 750;
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.ai-root .ai-picks-play::after { content: ''; position: absolute; inset: -2px 0; }
+.ai-picks-play > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.14);
+}
+html.light .ai-picks-play > span:first-child { background: rgb(255 255 255 / 0.18); }
+.ai-picks-play svg { width: 0.875rem; height: 0.875rem; margin-left: 1px; }
+.ai-root .ai-picks-play:hover:not(:disabled) { background: rgb(var(--ember-400)); }
+.ai-root .ai-picks-play:active:not(:disabled) { transform: scale(0.97); }
+.ai-picks-bar .ai-chip { min-height: 2.5rem; }
+.ai-picks-bar .ai-chip svg { width: 1rem; height: 1rem; }
+.ai-picks-count { padding-left: 0.25rem; color: var(--ai-text-3); font-size: 12.5px; font-weight: 650; }
+.ai-picks-bar [aria-busy='true'] { opacity: 0.7; cursor: progress; }
+
+/* The songs themselves: one quiet group, rows like the app's track rows. */
+.ai-root .ai-picks {
+  margin-block: 0.5rem;
+  padding: 4px;
+  border-radius: 18px;
+  background: rgb(var(--ink-100) / 0.035);
+}
+html.light .ai-root .ai-picks { background: rgb(var(--ink-850) / 0.6); }
+.ai-picks > p { padding: 0.375rem 0.75rem; }
+.ai-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 3.75rem;
+  padding: 0 4px 0 6px;
+  border-radius: 14px;
+  transition: background-color 140ms var(--ease-calm);
+}
+.ai-track.is-live:hover { background: var(--ai-hover); }
+.ai-track.is-current { background: rgb(var(--ember-500) / 0.08); }
+.ai-track.is-current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 3px;
+  background: rgb(var(--ember-500));
+}
+.ai-track-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  min-height: 3.75rem;
+  padding: 0.5rem 0;
+  border-radius: 12px;
+  text-align: left;
+}
+button.ai-track-main:focus-visible { outline-offset: -2px; }
+.ai-track-art {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgb(var(--ink-800));
+  color: rgb(var(--ink-500));
+}
+.ai-track-art img { width: 100%; height: 100%; object-fit: cover; }
+.ai-track-art > svg { width: 1.125rem; height: 1.125rem; }
+.ai-track-over {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.5);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-calm);
+}
+.ai-track-over svg { width: 1.125rem; height: 1.125rem; }
+.ai-track.is-playing .ai-track-over,
+button.ai-track-main:focus-visible .ai-track-over { opacity: 1; }
+@media (hover: hover) and (pointer: fine) {
+  .ai-track.is-live:hover .ai-track-over { opacity: 1; }
+}
+.ai-track-text { display: block; flex: 1; min-width: 0; }
+.ai-track-title {
+  display: block;
+  overflow: hidden;
+  color: var(--ai-text);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.008em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ai-track.is-current .ai-track-title { color: rgb(var(--ember-400)); }
+.ai-track-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  margin-top: 3px;
+  color: var(--ai-text-3);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.ai-track-sub > span:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ai-track.is-missing .ai-track-title { color: var(--ai-text-2); }
+.ai-track-tag {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: rgb(var(--ink-100) / 0.08);
+  color: var(--ai-text-2);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.ai-track-actions { display: inline-flex; flex-shrink: 0; align-items: center; gap: 0; }
+.ai-track-actions > .ai-track-tag { margin-right: 0.25rem; }
+.ai-root .ai-track-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  color: rgb(var(--ink-300));
+  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+}
+.ai-root .ai-track-btn::after { content: ''; position: absolute; inset: -4px; }
+.ai-root .ai-track-btn:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-track-btn svg { width: 1.125rem; height: 1.125rem; }
+.ai-track-actions .ai-track-fav { color: rgb(var(--ink-300)); }
+.ai-track-actions .ai-track-fav[aria-pressed='true'] { color: rgb(var(--ember-500)); }
+.ai-track-actions .ai-track-fav:hover { background: var(--ai-hover); }
+@media (max-width: 479px) {
+  .ai-track { padding: 0 0 0 4px; }
+  .ai-track-main { gap: 0.625rem; }
+  .ai-track-title { font-size: 14.5px; }
+}
+
+/* The live player card a music command answers with (components/ChatPlayerCard). */
+.ai-root .ai-player-card { padding: 0.875rem; border-radius: 18px; }
+.ai-root .ai-player-card img { border-radius: 10px; }
+.ai-root .ai-player-card .bg-ember-500 { border-radius: 12px; }
+
+/* ------------------------------------------------------- agent activity */
+.ai-activity { margin-bottom: 0.875rem; }
+.ai-activity-head {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   max-width: 100%;
-  min-height: 2rem;
+  min-height: 2.25rem;
   margin-left: -0.625rem;
-  padding: 0.25rem 0.625rem;
+  padding: 0.25rem 0.75rem 0.25rem 0.625rem;
   border-radius: 9999px;
   color: var(--ai-text-2);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.3;
   transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
 }
-.ai-activity-head:hover {
-  background: var(--ai-hover);
-  color: var(--ai-text);
-}
+.ai-activity-head::after { content: ''; position: absolute; inset: -4px 0; }
+.ai-activity-head:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-activity-icon { color: var(--ai-lagoon); }
 .ai-activity-chevron {
   color: var(--ai-text-3);
   transition: transform 160ms var(--ease-calm);
 }
 .ai-activity-list {
-  margin: 0.25rem 0 0 0.25rem;
-  padding: 0.125rem 0 0.125rem 0.875rem;
+  margin: 0.375rem 0 0 0.5rem;
+  padding: 0.125rem 0 0.125rem 1rem;
   border-left: 1px solid var(--ai-line-strong);
   list-style: none;
 }
 .ai-activity-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0;
+  padding: 0.3rem 0;
   color: var(--ai-text-2);
   font-size: 13px;
   line-height: 1.45;
   animation: ai-rise 180ms var(--ease-calm) both;
 }
+/* The step in progress: a Lagoon dot on the rail. */
+.ai-activity-row.is-latest::before {
+  content: '';
+  position: absolute;
+  left: calc(-1rem - 4px);
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: rgb(var(--tide-500));
+  box-shadow: 0 0 0 3px rgb(var(--tide-500) / 0.2);
+  animation: ai-breathe 1.6s ease-in-out infinite;
+}
 
-/* ---------- Composer ---------- */
+/* ---------------------------------------------------------------- composer */
 .ai-composer-wrap {
+  position: relative;
   flex-shrink: 0;
   width: 100%;
 }
+/* Docked under a thread: it stays above the on-screen keyboard (the page is
+   100dvh) and clears the home indicator. */
 .ai-composer-docked { padding: 0.25rem 0 max(0.75rem, env(safe-area-inset-bottom)); }
 .ai-root .ai-composer {
   position: relative;
   padding: 0.875rem 0.625rem 0.625rem;
   border: 1px solid var(--ai-line-strong);
-  border-radius: 24px;
-  background: var(--ai-raised);
+  border-radius: 26px;
+  background: var(--ai-composer);
   box-shadow: none;
-  transition: border-color 160ms var(--ease-calm);
+  transition: box-shadow 200ms var(--ease-calm);
 }
+/* Focus: the one Iris → Lagoon ring of the page. */
 .ai-root .ai-composer:focus-within {
-  border-color: rgb(var(--ink-100) / 0.24);
-  box-shadow: none;
+  border-color: transparent;
+  background: linear-gradient(var(--ai-composer), var(--ai-composer)) padding-box, var(--vx-glow) border-box;
+  box-shadow: 0 14px 40px -22px rgb(var(--ember-500) / 0.75);
 }
+html.light .ai-root .ai-composer { box-shadow: 0 1px 2px rgb(20 20 40 / 0.04); }
+html.light .ai-root .ai-composer:focus-within { box-shadow: 0 14px 36px -22px rgb(var(--ember-500) / 0.55); }
 @media (max-width: 479px) {
   .ai-root .ai-composer { border-radius: 22px; padding: 0.75rem 0.5rem 0.5rem; }
 }
@@ -621,10 +1007,11 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   font-weight: 500;
   line-height: 1.5rem;
 }
+.ai-root .ai-composer textarea:focus-visible { outline: none; box-shadow: none; }
 /* On an empty chat the box is the page's one action: give it more room.
    A margin, not a min-height — the autosize reads scrollHeight, and a taller
    empty box would carry its height into the docked composer. */
-.ai-composer-wrap:not(.ai-composer-docked) .ai-composer-row { margin-top: 1.5rem; }
+.ai-composer-wrap:not(.ai-composer-docked) .ai-composer-row { margin-top: 1.75rem; }
 .ai-composer-input::placeholder { color: rgb(var(--ink-500)); opacity: 1; }
 .ai-composer-row {
   display: flex;
@@ -685,9 +1072,11 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   color: var(--ai-text-3);
   transition: transform 160ms var(--ease-calm);
 }
-/* Send: the page's one accent control — a circular button. */
+/* Send: the composer's one accent control. */
 .ai-shell .ai-composer .ai-send {
   position: relative;
+  display: inline-grid;
+  place-items: center;
   width: 2.25rem;
   height: 2.25rem;
   margin-left: 0.25rem;
@@ -722,11 +1111,30 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   text-align: center;
   text-wrap: balance;
 }
+.ai-composer-status .is-on { color: rgb(var(--ember-400)); font-weight: 650; }
+.ai-composer-status .is-note { color: rgb(var(--ink-200)); font-weight: 600; }
+.ai-composer-status .is-thinking { font-weight: 650; }
+.ai-attachment-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
 .ai-root .ai-attachment-notice {
+  margin: 6px 4px 10px;
+  padding: 10px 12px;
   border: 0;
+  border-radius: 12px;
   background: var(--ai-raised);
   color: rgb(var(--ink-200));
+  font-size: 13px;
+  line-height: 1.5;
 }
+.ai-root .ai-attachment-chip { max-width: min(100%, 21rem); min-height: 2.25rem; border-radius: 12px; }
+.ai-root .ai-attachment-chip img,
+.ai-root .ai-attachment-chip .ai-attachment-kind { border-radius: 8px; }
+.ai-root .ai-attachment-chip .ai-icon-btn::after { inset: -8px; }
 .ai-tools-menu {
   position: absolute;
   left: 0;
@@ -736,15 +1144,29 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
 .ai-tools-menu-up { bottom: calc(100% + 0.5rem); }
 .ai-tools-menu-down { top: calc(100% + 0.5rem); }
 .ai-root .ai-drop-overlay {
-  border-color: rgb(var(--ink-100) / 0.3);
-  border-radius: 16px;
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 10px;
+  border: 2px dashed rgb(var(--tide-400) / 0.7);
+  border-radius: var(--vx-radius-panel);
   background: color-mix(in srgb, var(--ai-bg) 94%, transparent);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
-.ai-root .ai-drop-overlay svg { color: var(--ai-text-2); }
+.ai-drop-overlay > div {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: var(--ai-text);
+}
+.ai-root .ai-drop-overlay svg { color: var(--ai-lagoon); }
+.ai-drop-overlay span {
+  color: var(--ai-text-2);
+  font-size: 13px;
+}
 
-/* ---------- Model menu ---------- */
+/* -------------------------------------------------------------- model menu */
 .ai-root .ai-model-menu,
 .ai-scope .ai-model-menu {
   display: flex;
@@ -796,7 +1218,7 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 4px 4px;
+  padding: 0 6px 6px;
   outline: none;
   scroll-padding-block: 2.25rem 0.5rem;
 }
@@ -825,7 +1247,7 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   gap: 0.625rem;
   min-height: 2.75rem;
   padding: 0.375rem 0.75rem;
-  border-radius: 6px;
+  border-radius: 10px;
   color: rgb(var(--ink-100));
   cursor: pointer;
 }
@@ -834,11 +1256,12 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   color: var(--ai-text);
 }
 .ai-model-option[aria-selected='true'] { color: var(--ai-text); }
+.ai-model-option[aria-selected='true'] .ai-model-label { color: rgb(var(--ember-400)); }
 .ai-model-label {
   display: block;
   overflow: hidden;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.35;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -870,7 +1293,7 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   font-weight: 500;
   text-align: left;
 }
-.ai-model-note-btn { border-radius: 6px; }
+.ai-model-note-btn { min-height: 2.75rem; border-radius: 10px; }
 .ai-model-note-btn:hover { background: var(--ai-hover); color: var(--ai-text); }
 .ai-model-foot {
   flex-shrink: 0;
@@ -891,7 +1314,7 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   margin-right: 0.1875rem;
   padding: 0 0.3rem;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: rgb(var(--ink-100) / 0.08);
   color: var(--ai-text-2);
   font: 700 11px/1.6 'Manrope', system-ui, sans-serif;
@@ -899,7 +1322,7 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
 }
 .ai-badge {
   flex-shrink: 0;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border: 0;
   border-radius: 9999px;
   background: rgb(var(--ink-100) / 0.08);
@@ -909,13 +1332,13 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) {
   line-height: 1.5;
   white-space: nowrap;
 }
+/* "Agent" is an AI capability: Lagoon. */
 .ai-badge-accent {
-  background: rgb(var(--ember-500) / 0.16);
-  color: rgb(var(--ember-300));
+  background: rgb(var(--tide-500) / 0.14);
+  color: rgb(var(--tide-400));
 }
-html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rgb(var(--ember-500)); }
 
-/* ---------- Sidebar: the app sidebar's library list ---------- */
+/* ---------------------------------------------------------- the chat list */
 .ai-root .ai-sidebar {
   position: fixed;
   inset-block: 0;
@@ -924,20 +1347,20 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
   display: flex;
   flex-direction: column;
   width: min(18.5rem, 86vw);
-  border-right: 1px solid var(--ai-line);
-  background: var(--ai-panel);
+  border-right: 0;
+  background: var(--ai-chrome);
   box-shadow: 0 0 48px rgb(0 0 0 / 0.4);
   /* Closed: off-screen AND out of the tab order / accessibility tree. The
      visibility flip waits for the slide-out to finish. */
   visibility: hidden;
   transform: translateX(-100%);
-  transition: transform 180ms var(--ease-calm), visibility 0s linear 180ms;
+  transition: transform 200ms var(--ease-calm), visibility 0s linear 200ms;
 }
 .ai-root > aside.ai-sidebar { padding-top: 0; }
 .ai-root .ai-sidebar-open {
   visibility: visible;
   transform: none;
-  transition: transform 180ms var(--ease-calm);
+  transition: transform 200ms var(--ease-calm);
 }
 .ai-scrim {
   position: fixed;
@@ -951,7 +1374,7 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
     position: static;
     z-index: auto;
     flex-shrink: 0;
-    width: var(--vx-sidebar-w, 16rem);
+    width: var(--vx-sidebar-w, 16.5rem);
     box-shadow: none;
     visibility: visible;
     transform: none;
@@ -964,11 +1387,11 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  min-height: 4rem;
-  padding: 0.75rem 0.75rem 0.5rem 1.25rem;
+  min-height: 4.25rem;
+  padding: 0.875rem 0.75rem 0.375rem 1.25rem;
 }
 @media (max-width: 767px) {
-  .ai-side-head { padding-top: max(0.75rem, env(safe-area-inset-top)); }
+  .ai-side-head { padding-top: max(0.875rem, env(safe-area-inset-top)); }
 }
 .ai-side-brand {
   display: flex;
@@ -977,25 +1400,25 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
   gap: 0.625rem;
   min-width: 0;
   color: var(--ai-text);
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
 }
-.ai-side-brand svg { color: rgb(var(--ember-400)); }
+.ai-side-brand .ai-mark { width: 2rem; height: 2rem; border-radius: 10px; }
 .ai-side-tools {
   display: grid;
-  gap: 0.5rem;
-  padding: 0.25rem 0.5rem 0.5rem;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem 0.75rem;
 }
-/* "New chat" and "Music": the app sidebar's nav row. */
+/* "New chat" and "Music": the app sidebar's pill nav row. */
 .ai-side-new {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.875rem;
   width: 100%;
-  min-height: 2.75rem;
-  padding: 0 0.75rem;
-  border-radius: 8px;
+  min-height: 2.875rem;
+  padding: 0 0.875rem;
+  border-radius: 9999px;
   color: rgb(var(--ink-300));
   font-size: 15px;
   font-weight: 650;
@@ -1003,19 +1426,20 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
   transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
 }
 .ai-side-new:hover { color: var(--ai-text); background: var(--ai-hover); }
+.ai-side-tools .ai-side-new { color: var(--ai-text); background: rgb(var(--ink-100) / 0.07); }
+.ai-side-tools .ai-side-new:hover { background: rgb(var(--ink-100) / 0.12); }
 .ai-side-search {
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  min-height: 2.5rem;
-  margin: 0 0.25rem;
-  padding: 0 0.75rem;
-  border-radius: 8px;
-  background: rgb(var(--ink-100) / 0.06);
+  min-height: 2.75rem;
+  padding: 0 0.875rem;
+  border-radius: 9999px;
+  background: rgb(var(--ink-100) / 0.05);
   color: var(--ai-text-3);
   transition: box-shadow 140ms var(--ease-calm);
 }
-.ai-side-search:focus-within { box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.7); color: var(--ai-text-2); }
+.ai-side-search:focus-within { box-shadow: inset 0 0 0 1.5px rgb(var(--ember-500) / 0.8); color: var(--ai-text-2); }
 .ai-side-search input {
   flex: 1;
   min-width: 0;
@@ -1031,22 +1455,28 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
 }
 .ai-side-search input::placeholder { color: rgb(var(--ink-500)); }
 .ai-side-search input:focus-visible { outline: none; box-shadow: none; }
+/* The history sits in its own rounded panel, like the library in the app sidebar. */
 .ai-side-list {
   flex: 1;
   min-height: 0;
+  margin: 0 0.75rem;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 0.5rem 0.5rem;
-  border-top: 1px solid var(--ai-line);
+  padding: 0.25rem 0.375rem 0.5rem;
+  border-top: 0;
+  border-radius: var(--vx-radius-panel);
+  background: rgb(var(--ink-900) / 0.55);
 }
+html.light .ai-side-list { background: rgb(var(--ink-900)); }
 .ai-side-heading {
-  padding: 1rem 0.75rem 0.375rem;
-  color: var(--ai-text-3);
-  font-size: 13px;
+  padding: 0.875rem 0.625rem 0.25rem;
+  color: rgb(var(--ink-500));
+  font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.01em;
 }
 .ai-side-empty {
-  padding: 1rem 0.75rem 0;
+  padding: 1rem 0.625rem;
   color: var(--ai-text-3);
   font-size: 13px;
 }
@@ -1057,16 +1487,17 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
   gap: 0;
   min-height: 2.75rem;
   padding: 0 0.25rem 0 0;
-  border-radius: 8px;
+  border-radius: 12px;
   color: rgb(var(--ink-300));
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 550;
   cursor: default;
   transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
 }
 .ai-root .ai-side-row:hover { background: var(--ai-hover); color: var(--ai-text); }
 .ai-root .ai-side-row-on,
-.ai-root .ai-side-row-on:hover { background: var(--ai-pressed); color: var(--ai-text); font-weight: 600; }
+.ai-root .ai-side-row-on:hover { background: var(--ai-pressed); color: var(--ai-text); font-weight: 650; }
+.ai-root .ai-side-row-on .ai-side-title { color: rgb(var(--ember-400)); }
 .ai-root .ai-side-row-on .ai-side-open { box-shadow: none; }
 .ai-side-open {
   display: flex;
@@ -1076,11 +1507,12 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
   min-width: 0;
   min-height: 2.75rem;
   padding: 0 0.25rem 0 0.75rem;
-  border-radius: 8px;
+  border-radius: 12px;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
+.ai-side-open:focus-visible { outline-offset: -2px; }
 .ai-side-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -1098,13 +1530,14 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
   font-variant-numeric: tabular-nums;
 }
 .ai-root .ai-side-act {
-  width: 2rem;
-  height: 2rem;
+  position: relative;
+  width: 2.25rem;
+  height: 2.25rem;
   color: var(--ai-text-3);
 }
 .ai-root .ai-side-act:hover { background: var(--ai-pressed); color: var(--ai-text); }
 .ai-root .ai-side-act-danger:hover { color: var(--vx-danger); }
-.ai-root .ai-side-pinned { color: rgb(var(--ink-200)); }
+.ai-root .ai-side-pinned { color: rgb(var(--ember-400)); }
 .ai-side-rename {
   margin: 0.25rem 0.25rem 0.25rem 0.375rem;
   padding: 0.375rem 0.5rem;
@@ -1125,50 +1558,65 @@ html.light .ai-badge-accent { background: rgb(var(--ember-500) / 0.1); color: rg
 }
 @media (hover: none) {
   .ai-side-time { display: none; }
+  .ai-root .ai-side-row .ai-side-actions { opacity: 1; }
 }
 .ai-side-foot {
-  padding: 0.5rem 0.5rem max(0.75rem, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--ai-line);
+  padding: 0.5rem 0.75rem max(0.75rem, env(safe-area-inset-bottom));
+  border-top: 0;
 }
 
-/* ---------- Toast ---------- */
+/* ------------------------------------------------------------------ toasts */
 .ai-toast {
   position: absolute;
   left: 50%;
-  bottom: calc(7rem + env(safe-area-inset-bottom));
+  bottom: calc(7.5rem + env(safe-area-inset-bottom));
   z-index: 60;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   max-width: min(26rem, calc(100vw - 2rem));
-  min-height: 3rem;
-  padding: 0.375rem 0.5rem 0.375rem 1rem;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.375rem 0.25rem 1rem;
   border: 0;
-  border-radius: 8px;
+  border-radius: 22px;
   background: rgb(var(--ink-100));
   box-shadow: var(--ai-menu-shadow);
   color: rgb(var(--ink-950));
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 650;
   translate: -50% 0;
 }
+.ai-toast > span:first-child {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .ai-toast-undo {
+  position: relative;
   flex-shrink: 0;
   min-height: 2.25rem;
-  padding: 0 0.75rem;
+  padding: 0 0.875rem;
   border-radius: 9999px;
+  background: rgb(var(--ink-950) / 0.1);
   color: rgb(var(--ink-950));
   font-weight: 800;
 }
-.ai-toast-undo:hover { background: rgb(var(--ink-950) / 0.08); }
+.ai-toast-undo::after { content: ''; position: absolute; inset: -4px 0; }
+.ai-toast-undo:hover { background: rgb(var(--ink-950) / 0.16); }
+.ai-root .ai-toast .ai-icon-btn { position: relative; width: 2.25rem; height: 2.25rem; color: rgb(var(--ink-950) / 0.7); }
+.ai-root .ai-toast .ai-icon-btn:hover { background: rgb(var(--ink-950) / 0.08); color: rgb(var(--ink-950)); }
+/* The app's own toasts (queued, saved…) sit where the chat's do: above the
+   composer, not above a player bar this page does not have. */
+.ai-app-toasts > [aria-live] { bottom: calc(7.5rem + env(safe-area-inset-bottom)); }
 
-/* ---------- Settings dialog ---------- */
+/* ----------------------------------------------------------- the dialogs */
 .ai-settings { --ai-sheet: rgb(var(--ink-850)); }
 html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
 .ai-settings-title {
   font-size: 20px;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
 }
 .ai-scope .ai-settings-close { margin-right: -0.5rem; }
 .ai-settings-body {
@@ -1190,20 +1638,20 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
 .ai-tablist::-webkit-scrollbar { display: none; }
 .ai-tab {
   flex-shrink: 0;
-  min-height: 2.5rem;
-  padding: 0 0.875rem;
+  min-height: 2.75rem;
+  padding: 0 1rem;
   border-radius: 9999px;
   color: var(--ai-text-2);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 650;
   text-align: left;
   white-space: nowrap;
   transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
 }
 .ai-tab:hover { background: var(--ai-hover); color: var(--ai-text); }
 .ai-tab[aria-selected='true'] {
-  background: rgb(var(--ink-100));
-  color: rgb(var(--ink-950));
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
 }
 .ai-tabpanel {
   flex: 1 1 auto;
@@ -1214,20 +1662,20 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
   outline: none;
   padding-right: 0.125rem;
 }
-.ai-tabpanel:focus-visible { box-shadow: inset 0 0 0 2px rgb(var(--ember-500) / 0.4); border-radius: 8px; }
+.ai-tabpanel:focus-visible { box-shadow: inset 0 0 0 2px rgb(var(--ember-500) / 0.5); border-radius: 10px; }
 @media (min-width: 640px) {
   .ai-settings-body { flex-direction: row; gap: 1.5rem; }
   .ai-tablist {
     flex-direction: column;
-    width: 10rem;
+    width: 10.5rem;
     overflow: visible;
     padding: 0 1rem 0 0;
     border-bottom: 0;
     border-right: 1px solid var(--ai-line);
   }
-  /* Desktop: the side list reads like the app sidebar — highlighted row. */
-  .ai-tab { border-radius: 8px; padding: 0 0.75rem; }
-  .ai-tab[aria-selected='true'] { background: var(--ai-pressed); color: var(--ai-text); }
+  /* Desktop: the side list reads like the app sidebar — a highlighted pill. */
+  .ai-tab { padding: 0 0.875rem; }
+  .ai-tab[aria-selected='true'] { background: var(--vx-accent-wash); color: var(--ai-text); }
   .ai-tabpanel { height: 26rem; max-height: 60dvh; }
 }
 .ai-set-row {
@@ -1244,10 +1692,21 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
 .ai-set-row + .ai-set-block,
 .ai-set-block + .ai-set-row,
 .ai-set-block + .ai-set-block { border-top: 1px solid var(--ai-line-soft); }
-.ai-settings .ai-menu-item { min-height: 3.25rem; padding-inline: 0; font-size: 14px; font-weight: 600; color: var(--ai-text); }
+.ai-settings .ai-menu-item { min-height: 3.25rem; padding-inline: 0; font-size: 14px; font-weight: 650; color: var(--ai-text); }
 .ai-settings .ai-menu-item + .ai-menu-item { border-top: 1px solid var(--ai-line-soft); border-radius: 0; }
 .ai-settings .ai-menu-item:hover { background: transparent; }
 .ai-settings .ai-prefs + .ai-set-block { border-top: 1px solid var(--ai-line-soft); }
+.ai-scope .ai-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
 .ai-switch {
   position: relative;
   flex-shrink: 0;
@@ -1255,7 +1714,7 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
   height: 1.625rem;
   border: 0;
   border-radius: 9999px;
-  background: rgb(var(--ink-100) / 0.16);
+  background: rgb(var(--ink-100) / 0.18);
   transition: background-color 160ms var(--ease-calm);
 }
 .ai-switch::after { content: ''; position: absolute; inset: -9px -2px; }
@@ -1279,7 +1738,7 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
 .ai-confirm {
   padding: 0.875rem 1rem;
   border: 1px solid rgb(239 68 68 / 0.35);
-  border-radius: 12px;
+  border-radius: var(--vx-radius-card);
 }
 .ai-shortcuts { margin: 0; }
 .ai-shortcut {
@@ -1294,7 +1753,32 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
 .ai-shortcut dt { flex-shrink: 0; width: 9rem; }
 .ai-shortcut dd { margin: 0; color: var(--ai-text-2); }
 
-/* ---------- Motion (transform / opacity only, ≤ 200 ms) ---------- */
+/* Saved prompts (a Sheet, portalled with .ai-scope). */
+.ai-prompts-title { font-size: 20px; font-weight: 800; letter-spacing: -0.025em; }
+.ai-prompt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 12px;
+  transition: background-color 140ms var(--ease-calm);
+}
+.ai-prompt-row:hover { background: var(--ai-hover); }
+.ai-prompt-row > button:first-child { min-height: 2.75rem; }
+.ai-scope .ai-prompt-row .ai-tool {
+  position: relative;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: 9999px;
+  color: var(--ai-text-3);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.ai-scope .ai-prompt-row .ai-tool::after { content: ''; position: absolute; inset: -4px 0; }
+.ai-scope .ai-prompt-row .ai-tool:hover { background: var(--ai-hover); color: var(--vx-danger); }
+.ai-prompts-empty { padding: 2rem 1rem; border-radius: var(--vx-radius-card); background: var(--ai-raised); text-align: center; }
+
+/* ------------------------------------------------- motion (≤ 220 ms moves) */
 @keyframes ai-rise {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
@@ -1309,10 +1793,14 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
 }
 /* The mark while the assistant thinks: a slow breath, not a bounce. Each
    cycle is long, but it is opacity + scale only and stops under reduced
-   motion; nothing on the page MOVES for more than 200 ms. */
+   motion; nothing on the page MOVES for more than 220 ms. */
 @keyframes ai-breathe {
-  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
   50% { opacity: 1; transform: scale(1); }
+}
+@keyframes ai-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -160% 0; }
 }
 .ai-enter { animation: ai-rise 180ms var(--ease-calm) both; }
 .ai-pop { animation: ai-pop 140ms var(--ease-calm) both; transform-origin: bottom left; }
@@ -1320,9 +1808,6 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
 .ai-model-menu-down.ai-pop { transform-origin: top right; }
 .ai-tools-menu-down.ai-pop { transform-origin: top left; }
 .ai-pulse { animation: ai-breathe 1.6s ease-in-out infinite; }
-
-/* Reply actions fade in on hover / focus; always there on touch. */
-.ai-root .ai-toolbar { transition: opacity 140ms var(--ease-calm); }
 
 @media (prefers-reduced-motion: reduce) {
   .ai-scope *,
@@ -1334,6 +1819,9 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
   .ai-sidebar,
   .ai-sidebar-open,
   .ai-thinking-text,
+  .ai-shimmer,
+  .ai-msg-mark,
+  .ai-jump,
   .ai-activity-row,
   .ai-switch-thumb,
   .ai-plus,
@@ -1344,6 +1832,9 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
     animation: none !important;
     transition: none !important;
   }
+  /* A still shimmer would leave a Lagoon band mid-word: plain text instead. */
+  .ai-shimmer,
+  .ai-thinking-text { background: none; color: var(--ai-text-2); }
 }
 html.reduce-motion .ai-scope *,
 html.reduce-motion .ai-enter,
@@ -1353,8 +1844,14 @@ html.reduce-motion .ai-caret,
 html.reduce-motion .ai-scrim,
 html.reduce-motion .ai-sidebar,
 html.reduce-motion .ai-sidebar-open,
+html.reduce-motion .ai-thinking-text,
+html.reduce-motion .ai-shimmer,
+html.reduce-motion .ai-msg-mark,
+html.reduce-motion .ai-jump,
 html.reduce-motion .ai-suggestion,
 html.reduce-motion .ai-send {
   animation: none !important;
   transition: none !important;
 }
+html.reduce-motion .ai-shimmer,
+html.reduce-motion .ai-thinking-text { background: none; color: var(--ai-text-2); }

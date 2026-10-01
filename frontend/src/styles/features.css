@@ -4,9 +4,10 @@
    What is left of 7.0's flow.css once 9.0 moved the shell and the shared
    primitives into shell.css: a few feature surfaces that several screens
    (or the first paint) use and that have no page stylesheet of their own —
-   Home Studio, the VinaX AI composer pieces, the playlist studio, the
-   listening guide, entity heroes, the queue's ownership marker. A feature
-   that gets its own page stylesheet takes its rules with it.
+   Home Studio, the listening guide, entity heroes, the queue's ownership
+   marker. A feature that gets its own page stylesheet takes its rules with
+   it (9.0: the VinaX AI pieces moved to styles/ai.css, the AI playlist
+   studio to styles/pages/radio.css).
    ========================================================================= */
 /* VinaX Flow: component layout. Theme tokens live only in index.css. */
 /* Home Studio: an optional, quiet editing surface that keeps the listening
@@ -55,107 +56,6 @@
 .home-studio-shelves button:hover:not(:disabled) { background: rgb(var(--ink-100) / .08); color: rgb(var(--ink-100)); }
 .home-studio-shelves button:disabled { opacity: .25; cursor: default; }
 @media (max-width: 700px) { .home-studio-body { grid-template-columns: 1fr; gap: 14px; padding: 20px 16px; } .home-studio-intro > p:last-child { max-width: 100%; } }
-.ai-root > aside {
-  padding-top: 8px;
-}
-.ai-root header {
-  min-height: 68px;
-  border-bottom: 1px solid var(--ai-line-soft);
-}
-.ai-root header h1 {
-  font-size: 16px;
-}
-.ai-ambient {
-  background: none;
-}
-.ai-display {
-  font-family: 'Manrope', system-ui, sans-serif;
-  font-weight: 650;
-  font-size: clamp(30px, 4vw, 48px);
-  letter-spacing: -0.055em;
-}
-.ai-display-name {
-  font-style: normal;
-  color: var(--ai-text);
-}
-.ai-composer {
-  border-radius: 24px;
-  box-shadow: 0 16px 50px #0002;
-}
-.ai-composer textarea {
-  font-size: 16px;
-  line-height: 1.7;
-  min-height: 76px;
-}
-.ai-attachment-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  font-size: 13px;
-}
-.ai-attachment-notice {
-  margin: 6px 4px 10px;
-  padding: 10px 12px;
-  border: 1px solid rgb(var(--ember-400) / 0.28);
-  border-radius: 12px;
-  color: rgb(var(--ink-200));
-  background: rgb(var(--ember-500) / 0.08);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.ai-attachment-chip {
-  max-width: min(100%, 21rem);
-}
-.ai-drop-overlay {
-  position: absolute;
-  z-index: 10;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  margin: 10px;
-  border: 2px dashed rgb(var(--ember-400) / 0.7);
-  border-radius: var(--vx-radius-panel);
-  background: rgb(var(--ai-bg) / 0.92);
-  backdrop-filter: blur(10px);
-}
-.ai-drop-overlay > div {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  color: var(--ai-text);
-}
-.ai-drop-overlay svg {
-  color: rgb(var(--ember-400));
-}
-.ai-drop-overlay span {
-  color: var(--ai-text-2);
-  font-size: 13px;
-}
-.ai-chip,
-.ai-btn {
-  min-height: 36px;
-  font-size: 13px;
-}
-.ai-user-bubble {
-  background: var(--ai-raised);
-  border-radius: 22px 22px 6px 22px;
-}
-.ai-msg {
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-}
-.ai-tool {
-  min-height: 32px;
-  font-size: 12px;
-}
-.ai-root pre {
-  border-radius: 16px;
-  border: 1px solid var(--ai-line);
-}
-.ai-root table {
-  font-size: 14px;
-}
 /* Home Studio — shelves the owner turned off for everyone: visible, greyed, not toggleable. */
 .home-studio-shelves label.home-studio-locked { color: rgb(var(--ink-500)); }
 .home-studio-shelves label.home-studio-locked input { cursor: not-allowed; }
@@ -204,61 +104,6 @@
 .vx-guide-actions span {
   color: rgb(var(--ember-400));
 }
-.vx-playlist-studio {
-  padding-top: 24px;
-}
-.vx-playlist-studio h1 {
-  font-size: clamp(32px, 4vw, 50px);
-  letter-spacing: -0.05em;
-  max-width: 650px;
-  line-height: 1.08;
-}
-.vx-prompt-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin: 30px 0;
-}
-.vx-prompt-grid button {
-  padding: 20px 16px;
-  border: 1px solid var(--glass-border-strong);
-  border-radius: 16px;
-  background: rgb(var(--ink-850));
-  text-align: left;
-}
-.vx-prompt-grid button:hover {
-  border-color: rgb(var(--ember-500));
-  background: rgb(var(--ember-500) / 0.05);
-}
-.vx-prompt-grid svg {
-  color: rgb(var(--ember-400));
-  margin-bottom: 24px;
-}
-.vx-prompt-grid strong {
-  display: block;
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-.vx-prompt-grid span {
-  font-size: 11px;
-  color: rgb(var(--ink-400));
-  line-height: 1.6;
-  display: block;
-}
-.vx-playlist-studio textarea {
-  line-height: 1.8;
-  padding: 16px;
-}
-@media (max-width: 600px) {
-  .vx-prompt-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.vx-playlist-studio h1 { white-space: normal; overflow: visible; }
-
-.vx-playlist-studio textarea.glass-input { border-radius: 16px; }
-
-
 .vx-destinations { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 32px; }
 .vx-destinations a { display: flex; align-items: center; gap: 10px; padding: 10px 14px; min-height: var(--vx-tile-h); background: var(--vx-surface-raised); border-radius: var(--vx-radius-control); font-size: var(--vx-type-meta); font-weight: 650; }
 .vx-destinations a:hover { background: var(--vx-bg-hover); }

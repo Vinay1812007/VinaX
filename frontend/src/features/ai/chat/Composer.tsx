@@ -230,9 +230,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             {pending.map((p, i) => (
               <span key={p.key} className="ai-chip ai-attachment-chip pl-1.5 pr-1 py-1 gap-1.5" title={p.path}>
                 {p.kind === 'image' && p.dataUrl ? (
-                  <img src={p.dataUrl} alt="" className="w-6 h-6 rounded-md object-cover" />
+                  <img src={p.dataUrl} alt="" className="w-6 h-6 object-cover" />
                 ) : (
-                  <span className="w-6 h-6 rounded-md bg-[var(--ai-hover)] flex items-center justify-center text-[9px] font-bold ai-t3" aria-hidden>
+                  <span className="ai-attachment-kind w-6 h-6 bg-[var(--ai-hover)] flex items-center justify-center text-[9px] font-bold ai-t3" aria-hidden>
                     TXT
                   </span>
                 )}
@@ -241,7 +241,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   type="button"
                   aria-label={`Remove ${p.path}`}
                   onClick={() => setPending((prev) => prev.filter((_, k) => k !== i))}
-                  className="ai-icon-btn w-6 h-6 ai-t3"
+                  className="ai-icon-btn w-7 h-7 ai-t3"
                 >
                   <XIcon className="w-3.5 h-3.5" />
                 </button>
@@ -517,11 +517,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
         <p className="ai-composer-status" role={dictation.note ? 'status' : undefined}>
           {dictation.note ? (
-            <span className="text-amber-500 dark:text-amber-400">{dictation.note}</span>
+            <span className="is-note">{dictation.note}</span>
           ) : busy && think ? (
-            <span className="text-ember-400">thinking deeply…</span>
+            <span className="is-thinking ai-shimmer">Thinking it through…</span>
           ) : activeTools.length || agentOn ? (
-            <span className="text-ember-400">{[agentOn && 'Agent', ...activeTools].filter(Boolean).join(' · ')} on</span>
+            <span className="is-on">{[agentOn && 'Agent', ...activeTools].filter(Boolean).join(' · ')} on</span>
           ) : (
             <span className="hidden sm:inline">
               {sendOnEnter ? 'Enter to send · Shift+Enter for a new line' : 'Ctrl/⌘+Enter to send · Enter for a new line'} · / for commands

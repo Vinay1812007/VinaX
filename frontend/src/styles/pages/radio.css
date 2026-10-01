@@ -1,13 +1,335 @@
 /* ============================================================================
-   VinaX 8.2 — AI Radio page and the Queue's Smart Queue card.
-   Imported by pages/AiRadioPage.tsx and features/queue/SmartQueue.tsx, so it
-   ships in their lazy chunks only. Stage rules: sentence case, artwork
-   first, pill buttons, no eyebrows.
+   VinaX 9 "Encore" — the AI studio pages in the shell: AI Radio, AI playlist,
+   and the Queue's Smart Queue card.
+
+   Imported by pages/AiRadioPage.tsx, pages/AIPlaylistPage.tsx and
+   features/queue/SmartQueue.tsx, so it ships in their lazy chunks only.
+   (9.0 moved the AI playlist studio here from the global features.css.)
+
+   One language with the VinaX AI chat (styles/ai.css): the prompt is the
+   chat's composer — an ink-850 card with a hairline that turns into the one
+   Iris → Lagoon ring on focus — the VinaX sparkle marks AI moments, work in
+   progress is a Lagoon shimmer with a Stop, and a failure is a quiet notice
+   with the next useful step. Pills for actions, squircles for artwork,
+   sentence case, motion off under either reduced-motion switch.
    ========================================================================= */
 
-/* ----------------------------------------------------------- AI Radio page */
+.vx-aistudio {
+  --vxs-raised: rgb(var(--ink-850));
+  --vxs-raised-hover: rgb(var(--ink-800));
+  --vxs-field: rgb(var(--ink-850));
+  max-width: 960px;
+  padding-bottom: 48px;
+}
+html.light .vx-aistudio {
+  --vxs-field: rgb(var(--ink-950));
+}
+.vx-aistudio-section { margin-top: 40px; }
+.vx-aistudio-title {
+  margin-bottom: 14px;
+  color: rgb(var(--ink-100));
+  font-size: var(--vx-type-section);
+  font-weight: 780;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+@media (max-width: 767px) {
+  .vx-aistudio-section { margin-top: 32px; }
+  .vx-aistudio-title { font-size: 20px; }
+}
+
+/* ------------------------------------------------------------ the sparkle */
+.vx-ai-mark {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--vx-glow);
+  color: #fff;
+}
+.vx-ai-mark svg { width: 16px; height: 16px; }
+.vx-ai-mark.is-working { animation: vxs-breathe 1.6s ease-in-out infinite; }
+
+/* ------------------------------------------------- the prompt (composer) */
+.vx-aiprompt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 14px 12px 18px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 24px;
+  background: var(--vxs-field);
+  transition: box-shadow 200ms var(--ease-calm);
+}
+html.light .vx-aiprompt { box-shadow: 0 1px 2px rgb(20 20 40 / 0.04); }
+.vx-aiprompt:focus-within {
+  border-color: transparent;
+  background: linear-gradient(var(--vxs-field), var(--vxs-field)) padding-box, var(--vx-glow) border-box;
+  box-shadow: 0 14px 40px -22px rgb(var(--ember-500) / 0.75);
+}
+.vx-aiprompt-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgb(var(--ink-200));
+  font-size: 14px;
+  font-weight: 700;
+}
+.vx-aiprompt-label .vx-ai-mark { width: 28px; height: 28px; border-radius: 9px; }
+.vx-aiprompt-label .vx-ai-mark svg { width: 14px; height: 14px; }
+.vx-aiprompt textarea,
+.vx-aiprompt input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: rgb(var(--ink-100));
+  font: inherit;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+.vx-aiprompt textarea { min-height: 84px; padding: 0; resize: none; }
+.vx-aiprompt textarea:focus-visible,
+.vx-aiprompt input:focus-visible { outline: none; box-shadow: none; }
+.vx-aiprompt textarea::placeholder,
+.vx-aiprompt input::placeholder { color: rgb(var(--ink-500)); opacity: 1; }
+.vx-aiprompt-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.vx-aiprompt-hint {
+  flex: 1 1 220px;
+  min-width: 0;
+  color: rgb(var(--ink-400));
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.vx-aiprompt-row .btn-primary,
+.vx-aiprompt-row .btn-secondary { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+.vx-aiprompt-row svg { width: 16px; height: 16px; }
+
+/* One line: [sparkle] [input] [Start]. A pill, like a search field. */
+.vx-aiprompt.is-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 9999px;
+}
+.vx-aiprompt.is-inline input { flex: 1; height: 48px; font-size: 16px; }
+.vx-aiprompt.is-inline .btn-primary { flex-shrink: 0; min-height: 48px; padding-inline: 22px; }
+@media (max-width: 479px) {
+  .vx-aiprompt { padding: 14px 12px 10px 14px; border-radius: 22px; }
+  .vx-aiprompt textarea { font-size: 16px; }
+  .vx-aiprompt.is-inline { gap: 8px; padding-left: 10px; }
+  .vx-aiprompt.is-inline .vx-ai-mark { width: 28px; height: 28px; border-radius: 9px; }
+  .vx-aiprompt.is-inline .btn-primary { padding-inline: 16px; }
+}
+
+/* Example prompts under the field: quiet pills. */
+.vx-aistudio-chips {
+  display: flex;
+  gap: 8px;
+  margin: 12px calc(-1 * var(--vx-gutter)) 0;
+  padding: 4px var(--vx-gutter);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vx-aistudio-chips::-webkit-scrollbar { display: none; }
+.vx-aistudio-chip {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  background: rgb(var(--ink-100) / 0.07);
+  color: rgb(var(--ink-100));
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background-color 140ms var(--ease-calm);
+}
+.vx-aistudio-chip::after { content: ''; position: absolute; inset: -4px 0; }
+.vx-aistudio-chip:hover:not(:disabled) { background: rgb(var(--ink-100) / 0.13); }
+.vx-aistudio-chip:disabled { opacity: 0.55; }
+.vx-aistudio-chip svg { width: 14px; height: 14px; color: rgb(var(--tide-400)); }
+
+/* ------------------------------------------------- working / notice states */
+.vx-aistate {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 20px;
+  padding: 14px 14px 14px 16px;
+  border-radius: var(--vx-radius-panel);
+  background: rgb(var(--ink-100) / 0.04);
+}
+html.light .vx-aistate { background: rgb(var(--ink-850)); }
+.vx-aistate-text { flex: 1; min-width: 0; }
+.vx-aistate-title {
+  color: rgb(var(--ink-100));
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.vx-aistate-sub { margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.45; }
+.vx-aistate .btn-secondary { flex-shrink: 0; min-height: 40px; padding-inline: 16px; font-size: 13px; }
+.vx-aistate .btn-secondary::after { content: ''; position: absolute; inset: -2px 0; }
+/* The working line: a slow Lagoon shimmer across the words. */
+.vx-ai-shimmer {
+  background: linear-gradient(90deg, rgb(var(--ink-100)) 0%, rgb(var(--ink-100)) 38%, rgb(var(--tide-400)) 50%, rgb(var(--ink-100)) 62%, rgb(var(--ink-100)) 100%);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: vxs-shimmer 2.2s linear infinite;
+}
+.vx-aistate + .vx-aistudio-skel { margin-top: 12px; opacity: 0.7; }
+
+.vx-ainote {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: var(--vx-radius-panel);
+  background: rgb(var(--ink-850));
+}
+.vx-ainote-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgb(var(--ink-100) / 0.07);
+  color: rgb(var(--ink-200));
+}
+.vx-ainote-icon svg { width: 18px; height: 18px; }
+.vx-ainote-text { flex: 1; min-width: 0; padding-top: 1px; }
+.vx-ainote-title { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.35; }
+.vx-ainote-msg { margin-top: 2px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.vx-ainote-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.vx-ainote-actions .btn-primary,
+.vx-ainote-actions .btn-secondary { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding-inline: 16px; font-size: 13px; }
+.vx-ainote-actions .btn-primary::after,
+.vx-ainote-actions .btn-secondary::after { content: ''; position: absolute; inset: -2px 0; }
+.vx-ainote-actions svg { width: 15px; height: 15px; }
+
+/* A small inline spinner (a control that is starting). Still under reduced motion. */
+.vx-ai-spin {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgb(var(--ink-600));
+  border-top-color: rgb(var(--tide-400));
+  border-radius: 50%;
+  animation: vxs-spin 0.8s linear infinite;
+}
+
+/* ------------------------------------------------------------ AI playlist */
+.vx-aip-ideas {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 899px) { .vx-aip-ideas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.vx-aip-idea {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 112px;
+  padding: 16px;
+  border-radius: var(--vx-radius-card);
+  background: var(--vxs-raised);
+  text-align: left;
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+html.light .vx-aip-idea { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--vx-border); }
+.vx-aip-idea:hover:not(:disabled) { background: var(--vxs-raised-hover); }
+html.light .vx-aip-idea:hover:not(:disabled) { background: rgb(var(--ink-850)); }
+.vx-aip-idea:active:not(:disabled) { transform: scale(0.98); }
+.vx-aip-idea:disabled { opacity: 0.55; }
+.vx-aip-idea > svg { width: 20px; height: 20px; color: rgb(var(--tide-400)); }
+.vx-aip-idea strong { display: block; margin-top: 18px; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.3; }
+.vx-aip-idea span { display: block; margin-top: 4px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.4; }
+
+.vx-aip-result { margin-top: 36px; }
+.vx-aip-head { display: flex; align-items: flex-end; gap: 24px; }
+.vx-aip-art {
+  flex-shrink: 0;
+  width: 168px;
+  height: 168px;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: var(--vx-art-shadow);
+}
+.vx-aip-body { min-width: 0; }
+.vx-aip-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgb(var(--ink-300));
+  font-size: 13px;
+  font-weight: 700;
+}
+.vx-aip-kind svg { width: 14px; height: 14px; color: rgb(var(--tide-400)); }
+.vx-aip-title {
+  margin: 6px 0 8px;
+  color: rgb(var(--ink-100));
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+.vx-aip-desc { max-width: 60ch; margin-bottom: 6px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; line-height: 1.5; }
+.vx-aip-prompt { margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.vx-aip-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 24px 0 12px; }
+.vx-aip-actions .btn-secondary { min-height: 44px; }
+@media (max-width: 767px) {
+  .vx-aip-head { gap: 16px; }
+  .vx-aip-art { width: 112px; height: 112px; border-radius: 14px; }
+  .vx-aip-actions { gap: 4px; margin-top: 20px; }
+  .vx-aip-actions .vx-play-fab { margin-right: 8px; }
+  .vx-aip-actions .btn-secondary { padding-inline: 14px; font-size: 14px; }
+}
+/* The curator's one-line reason under each pick, aligned with the title
+   column (tracklist.css: row padding 8 + number 26 + gap 14 + art 44 + gap
+   14; phones drop the number and pad 6 + art 44 + gap 12). */
+.vx-aip-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: -4px 0 10px;
+  padding-inline: 106px 12px;
+  color: rgb(var(--ink-400));
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.vx-aip-reason svg { flex-shrink: 0; width: 12px; height: 12px; margin-top: 3px; color: rgb(var(--tide-400)); }
+@media (max-width: 767px) { .vx-aip-reason { padding-inline-start: 62px; } }
+
+/* --------------------------------------------------------------- AI Radio */
 .vx-radio {
-  /* Mood tile tones — the same deep, theme-fixed set as Home's category tiles. */
+  /* Mood tones — the same deep, theme-fixed set as Home's category tiles. */
   --vxr-t1: 91 33 182;
   --vxr-t2: 15 118 110;
   --vxr-t3: 190 24 93;
@@ -16,131 +338,74 @@
   --vxr-t6: 4 120 87;
   --vxr-t7: 14 116 144;
   --vxr-t8: 159 18 57;
-  max-width: 960px;
-  margin: 0 auto;
-  padding-bottom: 48px;
-}
-.vx-radio-section { margin-top: 32px; }
-.vx-radio-title {
-  margin-bottom: 12px;
-  color: rgb(var(--ink-100));
-  font-size: 20px;
-  font-weight: 750;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
-}
-@media (min-width: 1024px) { .vx-radio-title { font-size: 22px; } }
-
-.vx-radio-status { min-height: 20px; color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; }
-.vx-radio-status:empty { min-height: 0; }
-.vx-radio-status a, .vx-radio-note a { color: rgb(var(--ink-100)); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
-.vx-radio-spin {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  margin-right: 6px;
-  vertical-align: -2px;
-  border: 2px solid rgb(var(--ink-600));
-  border-top-color: rgb(var(--ember-400));
-  border-radius: 50%;
-  animation: vx-radio-spin 0.8s linear infinite;
-}
-@keyframes vx-radio-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .vx-radio-spin { animation: none; } }
-.vx-radio-error {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: rgb(var(--ink-850));
-  color: rgb(var(--ink-200));
-  font-size: 14px;
 }
 
-/* Describe it: one field, one pill. */
-.vx-radio-ask { display: flex; gap: 8px; }
-.vx-radio-ask input {
-  flex: 1;
-  min-width: 0;
-  height: 48px;
-  padding: 0 18px;
-  border-radius: 9999px;
-  background: rgb(var(--ink-100) / 0.08);
-  color: rgb(var(--ink-100));
-  font-size: 16px;
-  font-weight: 500;
-  outline: none;
-  transition: background-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
-}
-.vx-radio-ask input::placeholder { color: rgb(var(--ink-400)); }
-.vx-radio-ask input:focus-visible { background: rgb(var(--ink-100) / 0.12); box-shadow: 0 0 0 2px rgb(var(--ember-500)); }
-.vx-radio-btn {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  padding: 0 22px;
-  border-radius: 9999px;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm), opacity 140ms var(--ease-calm);
-}
-.vx-radio-btn.is-primary { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
-.vx-radio-btn.is-primary:hover { background: rgb(var(--ember-400)); }
-.vx-radio-btn:active { transform: scale(0.97); }
-.vx-radio-btn:disabled { opacity: 0.5; transform: none; }
-
-.vx-radio-chips {
+/* The live line: what is starting, or what is on air. */
+.vx-radio-live { margin-top: 16px; }
+.vx-radio-live[data-state='idle'] { margin-top: 0; }
+.vx-radio-live[data-state='busy'],
+.vx-radio-live[data-state='on'] {
   display: flex;
-  gap: 8px;
-  margin: 12px calc(-1 * var(--vx-gutter)) 0;
-  padding: 4px var(--vx-gutter);
-  overflow-x: auto;
-  scrollbar-width: none;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 12px 10px 16px;
+  border-radius: var(--vx-radius-panel);
+  background: rgb(var(--ink-100) / 0.04);
 }
-.vx-radio-chips::-webkit-scrollbar { display: none; }
-.vx-radio-chip {
+html.light .vx-radio-live[data-state='busy'],
+html.light .vx-radio-live[data-state='on'] { background: rgb(var(--ink-850)); }
+.vx-radio-status { flex: 1; min-width: 0; color: rgb(var(--ink-200)); font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.vx-radio-status:empty { display: none; }
+.vx-radio-status a { color: rgb(var(--tide-400)); font-weight: 700; text-decoration: underline; text-decoration-color: rgb(var(--tide-400) / 0.4); text-underline-offset: 3px; }
+.vx-radio-live .btn-secondary { flex-shrink: 0; min-height: 40px; padding-inline: 16px; font-size: 13px; }
+.vx-radio-live .btn-secondary::after { content: ''; position: absolute; inset: -2px 0; }
+/* On air: a Lagoon dot (live is Lagoon's job). */
+.vx-radio-onair {
   position: relative;
   flex-shrink: 0;
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 9999px;
-  background: rgb(var(--ink-100) / 0.08);
-  color: rgb(var(--ink-100));
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
+  width: 10px;
+  height: 10px;
+  margin: 0 4px;
+  border-radius: 50%;
+  background: rgb(var(--tide-400));
+  box-shadow: 0 0 0 4px rgb(var(--tide-400) / 0.18);
 }
-.vx-radio-chip::after { content: ''; position: absolute; inset: -4px 0; }
-.vx-radio-chip:hover { background: rgb(var(--ink-100) / 0.14); }
-.vx-radio-chip:disabled { opacity: 0.6; }
 
-/* Moods: colour tiles, two columns on a phone. */
-.vx-radio-moods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-@media (min-width: 640px) { .vx-radio-moods { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 1024px) { .vx-radio-moods { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+/* Moods: big pills with a tone-tinted radio glyph. */
+.vx-radio-moods { display: flex; flex-wrap: wrap; gap: 10px; }
 .vx-radio-mood {
   --tone: var(--vxr-t1);
   position: relative;
-  display: flex;
-  align-items: flex-start;
-  height: 88px;
-  padding: 14px 16px;
-  overflow: hidden;
-  border-radius: 12px;
-  background: linear-gradient(160deg, rgb(var(--tone)) 0%, rgb(var(--tone) / 0.82) 100%);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 800;
-  text-align: left;
-  transition: transform 160ms var(--ease-calm), filter 160ms var(--ease-calm), opacity 160ms var(--ease-calm);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 18px 0 6px;
+  border-radius: 9999px;
+  background: rgb(var(--ink-100) / 0.06);
+  color: rgb(var(--ink-100));
+  font-size: 15px;
+  font-weight: 700;
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
 }
-.vx-radio-mood:hover { filter: brightness(1.08); }
-.vx-radio-mood:active { transform: scale(0.97); }
-.vx-radio-mood:disabled { opacity: 0.6; transform: none; }
-.vx-radio-mood-glyph { position: absolute; right: 10px; bottom: 8px; width: 40px; height: 40px; color: rgb(255 255 255 / 0.5); }
+html.light .vx-radio-mood { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--vx-border); }
+.vx-radio-mood:hover:not(:disabled) { background: rgb(var(--tone) / 0.22); }
+.vx-radio-mood:active:not(:disabled) { transform: scale(0.97); }
+.vx-radio-mood:disabled { opacity: 0.55; }
+.vx-radio-mood[aria-busy='true'] { opacity: 1; background: rgb(var(--tone) / 0.22); }
+.vx-radio-mood-glyph {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgb(var(--tone) / 0.34);
+  color: color-mix(in srgb, rgb(var(--tone)) 30%, white);
+}
+html.light .vx-radio-mood-glyph { background: rgb(var(--tone) / 0.12); color: rgb(var(--tone)); }
+.vx-radio-mood-glyph svg { width: 20px; height: 20px; }
 .vx-radio-mood.tone-1 { --tone: var(--vxr-t1); }
 .vx-radio-mood.tone-2 { --tone: var(--vxr-t2); }
 .vx-radio-mood.tone-3 { --tone: var(--vxr-t3); }
@@ -149,29 +414,77 @@
 .vx-radio-mood.tone-6 { --tone: var(--vxr-t6); }
 .vx-radio-mood.tone-7 { --tone: var(--vxr-t7); }
 .vx-radio-mood.tone-8 { --tone: var(--vxr-t8); }
-
-/* From a song: artwork-first tiles. */
-.vx-radio-songs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-@media (min-width: 768px) { .vx-radio-songs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; } }
-.vx-radio-song {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  height: 56px;
-  padding-right: 10px;
-  overflow: hidden;
-  border-radius: 6px;
-  background: rgb(var(--ink-100) / 0.07);
-  text-align: left;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+@media (max-width: 479px) {
+  .vx-radio-moods { gap: 8px; }
+  .vx-radio-mood { min-height: 44px; padding-right: 16px; font-size: 14px; }
+  .vx-radio-mood-glyph { width: 32px; height: 32px; }
 }
-.vx-radio-song:hover { background: rgb(var(--ink-100) / 0.12); }
-.vx-radio-song:active { transform: scale(0.98); }
-.vx-radio-song img { width: 56px; height: 56px; flex-shrink: 0; object-fit: cover; }
-.vx-radio-song-title, .vx-radio-song-sub { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.vx-radio-song-title { color: rgb(var(--ink-100)); font-size: 14px; font-weight: 600; }
-.vx-radio-song-sub { color: rgb(var(--ink-400)); font-size: 12px; font-weight: 500; }
+
+/* From a song: artwork-first cards on a rail; from an artist: circles. */
+.vx-radio-seeds {
+  display: flex;
+  gap: var(--vx-card-gap);
+  margin: 0 calc(-1 * var(--vx-gutter));
+  padding: 4px var(--vx-gutter) 10px;
+  overflow-x: auto;
+  scroll-padding-inline: var(--vx-gutter);
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+.vx-radio-seeds::-webkit-scrollbar { display: none; }
+.vx-radio-seed {
+  display: block;
+  flex: 0 0 152px;
+  min-width: 0;
+  scroll-snap-align: start;
+  text-align: left;
+}
+@media (max-width: 767px) { .vx-radio-seed { flex-basis: 128px; } }
+.vx-radio-seed-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 16px;
+  background: rgb(var(--ink-850));
+  box-shadow: var(--vx-art-shadow);
+  transition: transform 220ms var(--vx-ease-out, var(--ease-calm));
+}
+.vx-radio-seed-art img { width: 100%; height: 100%; object-fit: cover; }
+/* The radio badge: a Lagoon squircle that rises in on hover (always on touch). */
+.vx-radio-seed-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: rgb(var(--tide-400));
+  color: rgb(var(--ink-950));
+  box-shadow: 0 10px 22px -8px rgb(0 0 0 / 0.65);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 180ms var(--ease-calm), transform 180ms var(--ease-calm);
+}
+html.light .vx-radio-seed-badge { background: rgb(var(--tide-500)); color: #fff; }
+.vx-radio-seed-badge svg { width: 20px; height: 20px; }
+.vx-radio-seed:hover .vx-radio-seed-badge,
+.vx-radio-seed:focus-visible .vx-radio-seed-badge,
+.vx-radio-seed[aria-busy='true'] .vx-radio-seed-badge { opacity: 1; transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  .vx-radio-seed:hover .vx-radio-seed-art { transform: translateY(-3px); }
+}
+@media (hover: none), (pointer: coarse) {
+  .vx-radio-seed-badge { opacity: 1; transform: none; width: 34px; height: 34px; border-radius: 11px; }
+  .vx-radio-seed-badge svg { width: 17px; height: 17px; }
+}
+.vx-radio-seed-title,
+.vx-radio-seed-sub { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-radio-seed-title { margin-top: 10px; color: rgb(var(--ink-100)); font-size: 14px; font-weight: 650; line-height: 1.35; }
+.vx-radio-seed-sub { margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.35; }
+.vx-radio-seed-sub.is-now { color: rgb(var(--tide-400)); font-weight: 650; }
 
 .vx-radio-artists {
   display: flex;
@@ -184,42 +497,57 @@
 .vx-radio-artists::-webkit-scrollbar { display: none; }
 .vx-radio-artist {
   display: flex;
-  flex: 0 0 88px;
+  flex: 0 0 96px;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: rgb(var(--ink-100));
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
   text-align: center;
 }
-.vx-radio-artist img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; box-shadow: var(--vx-art-shadow); transition: transform 140ms var(--ease-calm); }
-.vx-radio-artist:hover img { transform: scale(1.04); }
-.vx-radio-artist span { display: block; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-radio-artist-art { position: relative; display: block; }
+.vx-radio-artist img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: var(--vx-art-shadow); transition: transform 140ms var(--ease-calm); }
+.vx-radio-artist:hover:not(:disabled) img { transform: scale(1.04); }
+.vx-radio-artist .vx-ai-spin { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; background: rgb(var(--ink-900)); }
+.vx-radio-artist > span:last-child { display: block; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .vx-radio-artist:disabled { opacity: 0.6; }
 
 .vx-radio-note { margin-top: 40px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.5; }
+.vx-radio-note a { color: rgb(var(--tide-400)); font-weight: 700; text-decoration: underline; text-decoration-color: rgb(var(--tide-400) / 0.4); text-underline-offset: 3px; }
 
 /* ------------------------------------------------------ Smart Queue (Queue) */
 .vx-smartq {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
   margin-top: 16px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgb(var(--ink-100) / 0.06);
+  padding: 14px 16px;
+  border-radius: var(--vx-radius-panel);
+  background: rgb(var(--ink-850));
 }
+html.light .vx-smartq { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--vx-border); }
+.vx-smartq-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: rgb(var(--tide-500) / 0.14);
+  color: rgb(var(--tide-400));
+}
+.vx-smartq-icon svg { width: 20px; height: 20px; }
 .vx-smartq-text { flex: 1; min-width: 0; }
-.vx-smartq-label { display: block; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; }
+.vx-smartq-label { display: block; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.35; }
 .vx-smartq-desc { display: block; margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.45; }
-.vx-smartq-desc a { color: rgb(var(--ink-200)); text-decoration: underline; text-underline-offset: 3px; }
+.vx-smartq-desc a { color: rgb(var(--tide-400)); font-weight: 650; text-decoration: underline; text-decoration-color: rgb(var(--tide-400) / 0.4); text-underline-offset: 3px; }
 .vx-smartq [role='switch'] {
   position: relative;
   flex-shrink: 0;
   width: 44px;
   height: 26px;
-  margin-top: 2px;
+  margin-top: 7px;
   border-radius: 9999px;
   background: rgb(var(--ink-100) / 0.2);
   transition: background-color 180ms var(--ease-calm);
@@ -238,9 +566,23 @@
   transition: transform 180ms var(--ease-calm);
 }
 .vx-smartq [role='switch'][aria-checked='true'] > span { transform: translateX(18px); }
-.vx-smartq [role='switch']:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 2px; }
 html.light .vx-smartq [role='switch'] { background: rgb(var(--ink-100) / 0.16); }
 html.light .vx-smartq [role='switch'][aria-checked='true'] { background: rgb(var(--ember-500)); }
-@media (prefers-reduced-motion: reduce) {
-  .vx-smartq [role='switch'], .vx-smartq [role='switch'] > span { transition: none; }
+
+/* ------------------------------------------------------------------ motion */
+@keyframes vxs-breathe {
+  0%, 100% { opacity: 0.6; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1); }
 }
+@keyframes vxs-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -160% 0; }
+}
+@keyframes vxs-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .vx-aistudio *, .vx-smartq * { animation: none !important; transition: none !important; }
+  .vx-ai-shimmer { background: none; color: rgb(var(--ink-100)); }
+}
+html.reduce-motion .vx-aistudio *,
+html.reduce-motion .vx-smartq * { animation: none !important; transition: none !important; }
+html.reduce-motion .vx-ai-shimmer { background: none; color: rgb(var(--ink-100)); }

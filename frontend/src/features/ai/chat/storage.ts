@@ -190,6 +190,7 @@ function reviveMsg(raw: unknown): Msg | null {
   if (r.rating === 'up' || r.rating === 'down') m.rating = r.rating;
   if (r.pinned === true) m.pinned = true;
   if (r.failed === true) m.failed = true;
+  if (r.unavailable === true) m.unavailable = true;
   if (Array.isArray(r.followups)) {
     const f = r.followups.filter((t): t is string => typeof t === 'string').map((t) => t.slice(0, 200)).slice(0, 3);
     if (f.length) m.followups = f;

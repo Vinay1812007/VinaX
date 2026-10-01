@@ -84,6 +84,10 @@ export interface Msg {
   /** 8.2.0 — no reply arrived (the text is the failure line); the thread
    *  offers Retry, and the line is never sent back to the assistant. */
   failed?: boolean;
+  /** 9.0 — no reply arrived and asking again cannot help right now (VinaX AI
+   *  is switched off, or has reached its limit for the day). Presentation
+   *  only: the thread shows a notice that points back to the music. */
+  unavailable?: boolean;
 }
 
 export interface Conversation {

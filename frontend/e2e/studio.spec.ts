@@ -39,7 +39,7 @@ for (const size of [{ width: 1440, height: 1000, theme: 'dark' }, { width: 390, 
 
     await page.goto('/ai-playlist');
     const generated = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/playlist');
-    await page.locator('.vx-prompt-grid button').first().click();
+    await page.getByRole('group', { name: 'Ideas' }).getByRole('button').first().click();
     // v6.5.0 — an example prompt fills the box AND starts building at once.
     await expect(page.locator('#playlist-idea')).toHaveValue(/Telugu/);
     await expect(page.locator('#playlist-idea')).toHaveValue(/focused afternoon/);
