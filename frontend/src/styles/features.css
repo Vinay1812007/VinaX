@@ -4,17 +4,11 @@
    What is left of 7.0's flow.css once 9.0 moved the shell and the shared
    primitives into shell.css: a few feature surfaces that several screens
    (or the first paint) use and that have no page stylesheet of their own —
-<<<<<<< HEAD
-   Home Studio, the VinaX AI composer pieces, the playlist studio, the
-   listening guide, the queue's ownership marker. A feature that gets its
-   own page stylesheet takes its rules with it (9.0: the entity hero's
-   loading skeleton moved to pages/library.css with the entity pages).
-=======
-   Home Studio, the listening guide, entity heroes, the queue's ownership
-   marker. A feature that gets its own page stylesheet takes its rules with
-   it (9.0: the VinaX AI pieces moved to styles/ai.css, the AI playlist
-   studio to styles/pages/radio.css).
->>>>>>> worktree-agent-a69d3315e965ef09c
+   Home Studio, the listening guide, the queue's ownership marker. A
+   feature that gets its own page stylesheet takes its rules with it (9.0:
+   the VinaX AI pieces moved to styles/ai.css, the AI playlist studio to
+   styles/pages/radio.css, the entity hero's loading skeleton to
+   pages/library.css with the entity pages).
    ========================================================================= */
 /* VinaX Flow: component layout. Theme tokens live only in index.css. */
 /* Home Studio: an optional, quiet editing surface that keeps the listening
