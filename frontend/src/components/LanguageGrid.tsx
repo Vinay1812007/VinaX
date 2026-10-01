@@ -1,22 +1,29 @@
 import { Link } from 'react-router-dom';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
+import { NATIVE_NAMES } from '@/features/discover/scripts';
+import { languageTone } from '@/features/discover/tones';
 import { SectionHeader } from './SectionHeader';
 import '@/styles/pages/browse.css';
 
-const nativeNames: Record<string, string> = { telugu: 'తెలుగు', hindi: 'हिन्दी', tamil: 'தமிழ்', malayalam: 'മലയാളം', kannada: 'ಕನ್ನಡ', punjabi: 'ਪੰਜਾਬੀ', bengali: 'বাংলা', marathi: 'मराठी', gujarati: 'ગુજરાતી', urdu: 'اردو', english: 'English' };
-
-/** Uses only the existing routable language hubs. */
+/** The routable language hubs, each tile led by the language's own script. */
 export function LanguageGrid({ heading = true }: { heading?: boolean }) {
   return (
     <section aria-label="Explore languages">
       {heading && <SectionHeader title="Music in your language" seeAllTo="/languages" />}
-      <div className="vx-lang-tiles">
-        {HUB_LANGUAGES.map((id, i) => (
-          <Link key={id} to={`/${id}-songs`} aria-label={`Explore ${languageLabel(id)} music`} className={`vx-lang-tile vx-tone-${(i % 12) + 1}`}>
-            <strong aria-hidden>{nativeNames[id] || languageLabel(id)}</strong>
-            <span aria-hidden>{languageLabel(id)}</span>
-          </Link>
-        ))}
+      <div className="bx-langs">
+        {HUB_LANGUAGES.map((id) => {
+          const native = NATIVE_NAMES[id];
+          return (
+            <Link key={id} to={`/${id}-songs`} aria-label={`Explore ${languageLabel(id)} music`} className={`bx-lang ${languageTone(id)}`}>
+              <strong className="bx-lang-script" aria-hidden lang={native?.lang} dir={native?.dir}>
+                {native?.text ?? languageLabel(id)}
+              </strong>
+              <span className="bx-lang-name" aria-hidden>
+                {languageLabel(id)}
+              </span>
+            </Link>
+          );
+        })}
       </div>
     </section>
   );

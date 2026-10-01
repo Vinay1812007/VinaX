@@ -17,29 +17,34 @@ import { ListSkeleton } from '@/components/Skeletons';
 import { ErrorState, InlineError } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import type { Song } from '@/types/music';
-import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Shelf } from '@/components/Shelf';
-import { PlayIcon } from '@/components/Icons';
+import { ChevronRightIcon, PlayIcon, ShuffleIcon } from '@/components/Icons';
+import { EntityAction, EntityHeader, EntityMeta, PlayFab } from '@/components/EntityHeader';
+import { HubCover } from '@/features/discover/HubCover';
 import { HubMoodTiles } from '@/features/discover/HubMoodTiles';
 import { LanguageGuide } from '@/features/discover/LanguageGuide';
+import { NATIVE_NAMES } from '@/features/discover/scripts';
+import { languageTone } from '@/features/discover/tones';
+import { shuffledSongs } from '@/features/search/workspace';
 import '@/styles/pages/browse.css';
 import { AdSlot } from '@/components/AdSlot';
 
 
-function HubSection({ heading, songs, loading, error, retry }: { heading: string; songs: Song[] | undefined; loading: boolean; error: boolean; retry: () => void }) {
+function HubSection({ heading, explanation, songs, loading, error, retry }: { heading: string; explanation?: string; songs: Song[] | undefined; loading: boolean; error: boolean; retry: () => void }) {
   const playQueue = usePlayerStore((s) => s.playQueue);
   return (
     <section className="vx-section">
       <SectionHeader
         title={heading}
+        explanation={explanation}
         action={(songs?.length ?? 0) > 0 && (
           <button
             type="button"
             onClick={() => {
               if (songs) playQueue(songs, 0);
             }}
-            className="vx-pill-btn"
+            className="bx-pill"
           >
             <PlayIcon /> Play all
           </button>
@@ -79,6 +84,10 @@ export default function LanguageHubPage({ language }: { language: string }) {
   // Both headline shelves failed with nothing cached: say so, once, with a retry
   // (this page used to render its header over a silent blank).
   const shelvesFailed = trending.isError && fresh.isError && !trending.data?.length && !fresh.data?.length;
+  const native = NATIVE_NAMES[language];
+  const title = `${label} songs`;
+  const headline = [...(trending.data ?? []), ...(fresh.data ?? []).filter((s) => !(trending.data ?? []).some((t) => t.id === s.id))];
+  const playQueue = usePlayerStore((s) => s.playQueue);
 
   usePageMeta({
     title: `${label} Songs — Latest Hits & Trending`,
@@ -102,7 +111,40 @@ export default function LanguageHubPage({ language }: { language: string }) {
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title={`${label} Songs`} />
+      <Link to="/languages" className="bx-crumb">
+        <ChevronRightIcon /> Languages
+      </Link>
+      <div className={languageTone(language)}>
+        <EntityHeader
+          kind="Language"
+          title={title}
+          titleText={title}
+          tone="var(--tone)"
+          art={<HubCover language={language} />}
+          meta={
+            <EntityMeta
+              items={[
+                native && language !== 'english' ? (
+                  <span lang={native.lang} dir={native.dir}>
+                    {native.text}
+                  </span>
+                ) : null,
+                'Trending, new releases and every mood',
+              ]}
+            />
+          }
+          actions={
+            headline.length > 0 && (
+              <>
+                <PlayFab label={`Play ${label} songs`} onClick={() => playQueue(headline, 0)} />
+                <EntityAction label={`Shuffle ${label} songs`} onClick={() => playQueue(shuffledSongs(headline), 0)}>
+                  <ShuffleIcon />
+                </EntityAction>
+              </>
+            )
+          }
+        />
+      </div>
 
       {shelvesFailed ? (
         <ErrorState
@@ -114,8 +156,8 @@ export default function LanguageHubPage({ language }: { language: string }) {
         />
       ) : (
         <>
-          <HubSection heading="Trending now" songs={trending.data} loading={trending.isLoading} error={trending.isError} retry={() => void trending.refetch()} />
-          <HubSection heading="New releases" songs={fresh.data} loading={fresh.isLoading} error={fresh.isError} retry={() => void fresh.refetch()} />
+          <HubSection heading="Trending now" explanation={`Popular ${label} songs in the catalogue`} songs={trending.data} loading={trending.isLoading} error={trending.isError} retry={() => void trending.refetch()} />
+          <HubSection heading="New releases" explanation={`The latest ${label} songs`} songs={fresh.data} loading={fresh.isLoading} error={fresh.isError} retry={() => void fresh.refetch()} />
         </>
       )}
 
@@ -153,7 +195,7 @@ export default function LanguageHubPage({ language }: { language: string }) {
       )}
 
       <section className="vx-section" aria-label={`${label} songs by mood`}>
-        <SectionHeader title="Browse by mood" />
+        <SectionHeader title="Browse by mood" explanation={`${label} songs for every feeling`} />
         <HubMoodTiles language={language} />
       </section>
 

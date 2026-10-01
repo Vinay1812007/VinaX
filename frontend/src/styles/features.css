@@ -148,11 +148,6 @@
 .vx-panel-switch button[aria-pressed='true'] { background: rgb(var(--ember-500) / .12); color: var(--vx-accent-hover); }
 .vx-rail-lyrics { min-height: 180px; }
 .vx-rail-lyrics [data-line] { font-size: 1.25rem; line-height: 1.6; }
-.vx-language-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 32px; }
-.vx-language-grid a { min-height: 104px; padding: 16px; border-radius: var(--vx-radius-card); background: var(--vx-surface-raised); display: flex; flex-direction: column; justify-content: space-between; }
-.vx-language-grid a:hover { background: var(--vx-bg-hover); }
-.vx-language-grid strong { font-size: 1.5rem; font-weight: 650; color: var(--vx-accent-hover); }
-.vx-language-grid span { font-size: var(--vx-type-meta); color: var(--vx-text-secondary); }
 
 .home-studio:not([open]) { border-color: transparent; background: transparent; margin-bottom: 12px; }
 .home-studio:not([open]) > summary { min-height: 44px; padding: 0; }

@@ -9,8 +9,9 @@ import { toast } from '@/store/toastStore';
 import { VideoCard } from './VideosPage';
 import { ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
-import { PlayIcon } from '@/components/Icons';
+import { PlayIcon, VideoIcon } from '@/components/Icons';
 import { SectionHeader } from '@/components/SectionHeader';
+import { LANGUAGES } from '@/constants/languages';
 import '@/styles/pages/browse.css';
 
 /**
@@ -25,8 +26,8 @@ import '@/styles/pages/browse.css';
 /** Mirrors the real page: 16:9 stage, title block, then the related list. */
 function VideoSkeleton() {
   return (
-    <div className="max-w-4xl mx-auto" role="status" aria-label="Loading video">
-      <div className="skeleton aspect-video rounded-xl" />
+    <div className="vx-browse max-w-5xl mx-auto" role="status" aria-label="Loading video">
+      <div className="skeleton aspect-video rounded-sheet" />
       <div className="skeleton h-6 w-2/3 mt-5" />
       <div className="skeleton h-4 w-1/3 mt-2 mb-8" />
       <ListSkeleton rows={4} />
@@ -96,12 +97,12 @@ export default function VideoPage() {
   // A network failure is not "removed from the catalog" — offer the retry.
   if (isError && !video) return <ErrorState retry={() => void refetch()} />;
   if (!video) {
-    return <EmptyState title="Video unavailable" message="This video could not be loaded. It may have been removed from the catalog." />;
+    return <EmptyState icon={<VideoIcon className="w-7 h-7" />} title="Video unavailable" message="This video could not be loaded. It may have been removed from the catalog." />;
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="relative rounded-xl overflow-hidden bg-black shadow-[var(--vx-art-shadow)]">
+    <div className="vx-browse vx-browse-page max-w-5xl mx-auto">
+      <div className="bx-stage">
         {src && !dead ? (
           <video
             key={src}
@@ -112,7 +113,7 @@ export default function VideoPage() {
             autoPlay
             playsInline
             loop={isPreview}
-            className="w-full aspect-video bg-black"
+            className="w-full"
             onError={() => {
               // Walk to the next source; past the last one, fail honestly.
               if (srcIdx < sources.length - 1) setSrcIdx((i) => i + 1);
@@ -120,30 +121,28 @@ export default function VideoPage() {
             }}
           />
         ) : (
-          <div className="aspect-video grid place-items-center text-center px-6">
+          <div className="bx-stage-empty">
             <div>
-              <p className="text-ink-200 font-semibold mb-1">This video can’t be played right now</p>
-              <p className="text-sm text-ink-400">The video source isn’t serving this title yet — the full song still plays below.</p>
+              <p>This video can’t be played right now</p>
+              <p>The video source isn’t serving this title yet — the full song still plays below.</p>
             </div>
           </div>
         )}
         {isPreview && !dead && (
-          <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/70 text-white text-[11px] font-bold tracking-wide">
-            PREVIEW
-          </span>
+          <span className="bx-stage-badge">Preview</span>
         )}
       </div>
 
-      <div className="mt-5 flex items-center gap-3 flex-wrap">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-[22px] md:text-[26px] font-extrabold tracking-[-0.02em] leading-tight truncate">{video.title}</h1>
-          <p className="mt-1 text-[14px] text-ink-400 truncate">
+      <div className="bx-video-head">
+        <div className="min-w-0 flex-1 basis-[280px]">
+          <h1>{video.title}</h1>
+          <p className="mt-1.5 text-[14px] text-ink-400 truncate">
             {video.subtitle}
             {video.year ? ` · ${video.year}` : ''}
-            {video.language ? ` · ${video.language}` : ''}
+            {video.language ? ` · ${LANGUAGES.find((l) => l.id === video.language?.toLowerCase())?.label ?? video.language}` : ''}
           </p>
           {isPreview && (
-            <p className="text-xs text-ink-400 mt-1.5">
+            <p className="text-[13px] text-ink-400 mt-1.5">
               Showing the official preview clip — the full track plays in the music player.
             </p>
           )}
@@ -151,13 +150,14 @@ export default function VideoPage() {
         {/* v5.17.0 — picture-in-picture: keep the clip floating while you browse */}
         {typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && (
           <button
+            type="button"
             onClick={() => {
               const v = videoRef.current;
               if (!v) return;
               if (document.pictureInPictureElement) void document.exitPictureInPicture().catch(() => undefined);
               else void v.requestPictureInPicture().catch(() => toast('Picture-in-picture is not available for this clip'));
             }}
-            className="px-4 py-2.5 rounded-full btn-secondary text-sm font-bold shrink-0"
+            className="btn-secondary shrink-0"
             title="Picture-in-picture"
           >
             Pop out
@@ -165,18 +165,20 @@ export default function VideoPage() {
         )}
         {video.songIds.length > 0 && (
           <button
+            type="button"
             onClick={() => void playFullSong()}
             disabled={songBusy}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full btn-primary text-sm font-bold shrink-0"
+            aria-busy={songBusy}
+            className="btn-primary shrink-0"
           >
-            <PlayIcon className="w-4 h-4" /> {songBusy ? 'Loading…' : 'Play full song'}
+            <PlayIcon /> {songBusy ? 'Loading…' : 'Play full song'}
           </button>
         )}
       </div>
 
       {related.data && related.data.filter((v) => v.id !== video.id).length > 0 && (
-        <section className="mt-10">
-          <SectionHeader title={`More from ${firstArtist}`} />
+        <section className="vx-section mt-12">
+          <SectionHeader title={`More from ${firstArtist}`} seeAllTo={`/search/${encodeURIComponent(firstArtist)}`} />
           <div className="vx-video-grid">
             {related.data
               .filter((v) => v.id !== video.id)
@@ -188,9 +190,9 @@ export default function VideoPage() {
         </section>
       )}
 
-      <p className="mt-8 text-center">
-        <Link to="/videos" className="vx-pill-btn">
-          Browse all videos
+      <p className="mt-2 text-center">
+        <Link to="/videos" className="bx-pill">
+          <VideoIcon /> Browse all videos
         </Link>
       </p>
     </div>

@@ -12,8 +12,11 @@ import { EmptyState, ErrorState } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import type { MoodHub } from '@/constants/hubs';
 import { SectionHeader } from '@/components/SectionHeader';
-import { PlayIcon } from '@/components/Icons';
-import { HubMoodTiles } from '@/features/discover/HubMoodTiles';
+import { ChevronRightIcon, MusicIcon, ShuffleIcon } from '@/components/Icons';
+import { EntityAction, EntityHeader, EntityMeta, PlayFab, songsLabel } from '@/components/EntityHeader';
+import { HubCover } from '@/features/discover/HubCover';
+import { HUB_TONE, HubMoodTiles } from '@/features/discover/HubMoodTiles';
+import { shuffledSongs } from '@/features/search/workspace';
 import '@/styles/pages/browse.css';
 import { AdSlot } from '@/components/AdSlot';
 
@@ -29,6 +32,8 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
   const songs = flattenSongPages(q.data?.pages);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const path = `/${language}-${mood.slug}-songs`;
+  const [tone, Icon] = HUB_TONE[mood.slug] ?? [1, MusicIcon];
+  const title = `${label} ${mood.label.toLowerCase()} songs`;
 
   usePageMeta({
     title: `${label} ${mood.label} Songs — Stream Free`,
@@ -51,19 +56,30 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <header className="vx-page-header !mb-4">
-        <div className="min-w-0">
-          <Link to={`/${language}-songs`} className="vx-hub-crumb">{label} songs</Link>
-          <h1>{label} {mood.label} Songs</h1>
-        </div>
-      </header>
-      {songs.length > 0 && (
-        <div className="vx-action-row !mt-0">
-          <button type="button" onClick={() => playQueue(songs, 0)} className="vx-play-fab" aria-label="Play all">
-            <PlayIcon />
-          </button>
-        </div>
-      )}
+      <Link to={`/${language}-songs`} className="bx-crumb">
+        <ChevronRightIcon /> {label} songs
+      </Link>
+      <div className={`vx-tone-${tone}`}>
+        <EntityHeader
+          kind="Mood"
+          title={title}
+          titleText={title}
+          tone="var(--tone)"
+          art={<HubCover songs={songs} icon={<Icon />} />}
+          description={<span className="bx-cap">{mood.blurb}.</span>}
+          meta={<EntityMeta items={[label, songs.length > 0 && songsLabel(songs.length)]} />}
+          actions={
+            songs.length > 0 && (
+              <>
+                <PlayFab label="Play all" onClick={() => playQueue(songs, 0)} />
+                <EntityAction label="Shuffle" onClick={() => playQueue(shuffledSongs(songs), 0)}>
+                  <ShuffleIcon />
+                </EntityAction>
+              </>
+            )
+          }
+        />
+      </div>
 
       <section className="vx-section">
         {q.isLoading && <ListSkeleton />}
@@ -80,7 +96,7 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
             title="Nothing here right now"
             message={`No ${label} ${mood.label.toLowerCase()} songs surfaced from the catalog just now.`}
             action={
-              <button type="button" onClick={() => void q.refetch()} className="btn-secondary px-5 py-2.5 rounded-full">
+              <button type="button" onClick={() => void q.refetch()} className="btn-secondary min-h-touch">
                 Try again
               </button>
             }
@@ -99,7 +115,7 @@ export default function MoodHubPage({ language, mood }: { language: string; mood
       </section>
 
       <section className="vx-section" aria-label={`${mood.label} songs in other languages`}>
-        <SectionHeader title="In other languages" />
+        <SectionHeader title="In other languages" explanation={`${mood.label} songs in every hub language`} />
         <div className="vx-chip-row">
           {HUB_LANGUAGES.filter((l) => l !== language).slice(0, 8).map((l) => (
             <Link key={l} to={`/${l}-${mood.slug}-songs`} className="vx-link-chip">

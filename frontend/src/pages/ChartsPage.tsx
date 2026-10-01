@@ -11,14 +11,18 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
 import { cn } from '@/utils/cn';
-import { SparkleIcon } from '@/components/Icons';
+import { ChevronRightIcon, SparkleIcon } from '@/components/Icons';
 import { useSessionState } from '@/hooks/useSessionState';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { getSong } from '@/services/api';
 import type { TrendsSnapshot, VerifiedTrend } from '@/services/trends/client';
 import { PageHeader } from '@/components/PageHeader';
 import { Chip } from '@/components/Chip';
-import { moodTone } from '@/features/discover/tones';
+import { SectionHeader } from '@/components/SectionHeader';
+import { BrowseTile, TileGlyph } from '@/features/discover/BrowseTile';
+import { languageTone, moodTone } from '@/features/discover/tones';
+import { NATIVE_NAMES } from '@/features/discover/scripts';
+import { MOODS as MOOD_SEEDS } from '@/constants/seeds';
 import '@/styles/pages/browse.css';
 import { CATALOGUE_LIST_NOTE, CATALOGUE_LIST_TITLE, movementMarker, provenanceLine, sourceChips, sourceLine, verifiedView } from '@/services/trends/present';
 
@@ -79,7 +83,7 @@ function Notice({ children, retry }: { children: ReactNode; retry?: () => void }
     <div role="status" className="vx-chart-notice">
       <span className="min-w-0">{children}</span>
       {retry && (
-        <button type="button" onClick={retry} className="vx-pill-btn shrink-0">
+        <button type="button" onClick={retry} className="bx-pill shrink-0">
           Retry
         </button>
       )}
@@ -109,14 +113,14 @@ function VerifiedRow({ item, onPlay, state }: { item: VerifiedTrend; onPlay: () 
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`Evidence for ${item.title}: ${item.sourceKind === 'editorial' ? 'editorial source' : item.sourceLabel}`}
-            className="vx-text-action shrink-0 inline-flex items-center underline underline-offset-2"
+            className="bx-text-btn shrink-0 underline underline-offset-2"
           >
             Source
           </a>
         )}
       </div>
-      {state === 'loading' && <p className="px-3 pt-1 text-[11px] text-ink-400" role="status">Loading from the catalogue…</p>}
-      {state === 'failed' && <p className="px-3 pt-1 text-[11px] text-ink-300" role="alert">Couldn’t load this song from the catalogue. Try again.</p>}
+      {state === 'loading' && <p className="vx-chart-msg text-ink-400" role="status">Loading from the catalogue…</p>}
+      {state === 'failed' && <p className="vx-chart-msg text-ink-200" role="alert">Couldn’t load this song from the catalogue. Try again.</p>}
     </li>
   );
 }
@@ -142,7 +146,10 @@ function VerifiedCharts({ region }: { region: string }) {
   const retry = (): void => void q.refetch();
   const header = (
     <div className="vx-section-header">
-      <h2 id="verified-charts">Public charts</h2>
+      <div className="min-w-0">
+        <h2 id="verified-charts">Public charts</h2>
+        <p>Outside charts matched to songs you can play here</p>
+      </div>
     </div>
   );
 
@@ -165,7 +172,7 @@ function VerifiedCharts({ region }: { region: string }) {
     } else {
       const lines = view.sources.map((s) => ({ id: s.id, stale: s.status === 'stale', text: sourceLine(s) })).filter((l) => l.text);
       const status = (
-        <ul className="mb-3 space-y-0.5" aria-label="Chart sources">
+        <ul className="vx-chart-status" aria-label="Chart sources">
           {lines.map((l) => (
             <li key={l.id} className={cn('text-[12px] font-semibold', l.stale ? 'text-ink-100' : 'text-ink-400')}>
               {l.text}
@@ -231,8 +238,9 @@ export default function ChartsPage() {
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title="Charts" />
+      <PageHeader title="Charts" subtitle="What is popular right now, and where each list comes from." />
 
+      <div className="vx-chart-wrap">
       <div className="vx-chart-layout">
         <div className="min-w-0">
           <VerifiedCharts region={region} />
@@ -264,6 +272,10 @@ export default function ChartsPage() {
                         src={bestImage(s.images, 96)}
                         onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
                         alt=""
+                        width={48}
+                        height={48}
+                        loading={i < 8 ? undefined : 'lazy'}
+                        decoding="async"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="vx-chart-title">{s.title}</span>
@@ -280,34 +292,58 @@ export default function ChartsPage() {
 
         {/* moods · hubs · weekly */}
         <aside className="min-w-0" aria-label="More to browse">
+          <BrowseTile
+            to="/weekly"
+            shape="lane"
+            tone="vx-tone-8"
+            className="mb-8"
+            title={`Your Week ${isoWeek()} mix ${new Date().getDay() === 5 ? 'is here' : 'drops Friday'}`}
+            meta={playsCount > 0 ? `Built from your last ${Math.min(playsCount, 500)} plays` : 'Builds from what you play this week'}
+            visual={<TileGlyph><SparkleIcon /></TileGlyph>}
+          />
+
           <section className="vx-section">
-            <div className="vx-section-header"><h2>Moods</h2></div>
-            <div className="vx-browse-tiles is-compact !mb-0">
+            <SectionHeader title="Moods" seeAllTo="/moods" />
+            <div className="bx-tile-grid is-pair">
               {MOODS.map((m) => (
-                <Link key={m.label} to={m.to} className={cn('vx-browse-tile', moodTone(m.id))}>
-                  <span className="vx-browse-tile-title">{m.label}</span>
-                </Link>
+                <BrowseTile
+                  key={m.label}
+                  to={m.to}
+                  shape="mood"
+                  tone={moodTone(m.id)}
+                  title={m.label}
+                  visual={<TileGlyph emoji>{MOOD_SEEDS.find((x) => x.id === m.id)?.emoji}</TileGlyph>}
+                />
               ))}
             </div>
           </section>
 
           <section className="vx-section">
-            <div className="vx-section-header"><h2>Language hubs</h2></div>
-            <div className="vx-chip-row">
-              {HUB_LANGUAGES.slice(0, 8).map((l) => (
-                <Link key={l} to={`/${l}-songs`} className="vx-link-chip">
-                  {languageLabel(l)}
-                </Link>
-              ))}
-            </div>
+            <SectionHeader title="Language hubs" seeAllTo="/languages" />
+            <ul className="bx-hub-list">
+              {HUB_LANGUAGES.slice(0, 8).map((l) => {
+                const native = NATIVE_NAMES[l];
+                return (
+                  <li key={l}>
+                    <Link to={`/${l}-songs`} className={cn('bx-hub-link', languageTone(l))}>
+                      <span className="bx-hub-dot" aria-hidden />
+                      <span className="bx-hub-text">
+                        <b>{languageLabel(l)} songs</b>
+                        {native && l !== 'english' && (
+                          <small lang={native.lang} dir={native.dir}>
+                            {native.text}
+                          </small>
+                        )}
+                      </span>
+                      <ChevronRightIcon className="bx-hub-chev" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </section>
-
-          <Link to="/weekly" className="vx-browse-tile vx-tone-8 !h-auto !min-h-[104px]">
-            <span className="vx-browse-tile-title">Your Week {isoWeek()} mix {new Date().getDay() === 5 ? 'is here' : 'drops Friday'}</span>
-            <span className="vx-browse-tile-meta !max-w-[75%] !whitespace-normal">{playsCount > 0 ? `Built from your last ${Math.min(playsCount, 500)} plays` : 'Builds from what you play this week'}</span>
-            <span className="vx-browse-tile-art" aria-hidden><SparkleIcon /></span>
-          </Link>
         </aside>
+      </div>
       </div>
     </div>
   );

@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { searchVideos, type Video } from '@/services/api/videos';
 import { useSettingsStore } from '@/store/settingsStore';
 import { loadProfile } from '@/services/personalization/storage';
 import { topLanguages } from '@/services/personalization/profile';
 import { languageLabel } from '@/constants/languages';
-import { SearchIcon } from '@/components/Icons';
-import { ErrorState, InlineError } from '@/components/States';
+import { PlayIcon, SearchIcon, VideoIcon } from '@/components/Icons';
+import { EmptyState, ErrorState, InlineError } from '@/components/States';
 import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
 import '@/styles/pages/browse.css';
@@ -20,32 +20,26 @@ function fmtDuration(s: number | null): string {
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
-/** 16:9 video card — thumbnail with duration badge, title, artists. */
+/** 16:9 video card — the thumbnail leads (duration in its corner, a play
+ *  squircle on hover), then the title on up to two lines and the artists. */
 export function VideoCard({ v }: { v: Video }) {
   return (
-    <Link to={`/video/${v.id}`} className="group block min-w-0">
-      <div className="relative aspect-video rounded-lg overflow-hidden bg-ink-850 shadow-[var(--vx-art-shadow)]">
+    <Link to={`/video/${v.id}`} className="bx-video">
+      <div className="bx-video-thumb">
         {v.thumbnail ? (
-          <img
-            src={v.thumbnail}
-            alt=""
-            loading="lazy"
-            className="w-full h-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.03]"
-          />
+          <img src={v.thumbnail} alt="" loading="lazy" decoding="async" width={320} height={180} />
         ) : (
-          <div className="w-full h-full grid place-items-center text-ink-500 text-3xl">▶</div>
+          <div className="bx-video-none" aria-hidden>
+            <VideoIcon />
+          </div>
         )}
-        <div className="absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
-          <span className="vx-play-fab !w-12 !h-12 text-lg pl-0.5">▶</span>
-        </div>
-        {v.duration != null && (
-          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/70 text-white text-[11px] font-semibold tabular-nums">
-            {fmtDuration(v.duration)}
-          </span>
-        )}
+        <span className="bx-video-play" aria-hidden>
+          <PlayIcon />
+        </span>
+        {v.duration != null && <span className="bx-video-badge">{fmtDuration(v.duration)}</span>}
       </div>
-      <p className="mt-2.5 text-[14px] font-semibold text-ink-100 truncate group-hover:underline underline-offset-2">{v.title}</p>
-      <p className="mt-0.5 text-[13px] text-ink-400 truncate">
+      <p className="bx-video-title">{v.title}</p>
+      <p className="bx-video-sub">
         {v.subtitle}
         {v.year ? ` · ${v.year}` : ''}
       </p>
@@ -58,7 +52,7 @@ function VideoGridSkeleton({ n = 8 }: { n?: number }) {
     <div className="vx-video-grid">
       {Array.from({ length: n }).map((_, i) => (
         <div key={i}>
-          <div className="skeleton aspect-video rounded-lg" />
+          <div className="skeleton aspect-video rounded-card" />
           <div className="skeleton mt-2 h-3.5 w-3/4" />
           <div className="skeleton mt-1.5 h-3 w-1/2" />
         </div>
@@ -67,12 +61,15 @@ function VideoGridSkeleton({ n = 8 }: { n?: number }) {
   );
 }
 
+/** One shelf's request — shared by the shelf and the page, so both read one cache entry. */
+const shelfQuery = (query: string) => ({
+  queryKey: ['videos-shelf', query],
+  queryFn: () => searchVideos(query, 0, 12),
+  staleTime: 10 * 60_000,
+});
+
 function VideoShelf({ title, query }: { title: string; query: string }) {
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['videos-shelf', query],
-    queryFn: () => searchVideos(query, 0, 12),
-    staleTime: 10 * 60_000,
-  });
+  const { data, isLoading, isError, refetch } = useQuery(shelfQuery(query));
   if (isLoading) {
     return (
       <section className="vx-section">
@@ -114,6 +111,14 @@ export default function VideosPage() {
     const merged = [...new Set([...pinned, ...fromProfile])].slice(0, 3);
     return merged.length ? merged : ['telugu', 'hindi'];
   });
+  const shelves = [
+    ...langs.map((l) => ({ title: `${languageLabel(l)} video songs`, query: `${l} video songs` })),
+    { title: 'Trending videos', query: 'trending video songs' },
+  ];
+  // Each empty shelf hides itself; when every one came back empty, the page
+  // says so instead of showing a blank workspace.
+  const shelfResults = useQueries({ queries: shelves.map((sh) => shelfQuery(sh.query)) });
+  const allEmpty = shelfResults.every((r) => r.isSuccess && !r.data?.length);
   const [input, setInput] = useState('');
   const [q, setQ] = useState('');
   const search = useQuery({
@@ -125,10 +130,11 @@ export default function VideosPage() {
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title="Videos" />
+      <PageHeader title="Videos" subtitle="Music videos in your languages. Every one opens in its own player." />
 
       <form
-        className="vx-field mb-8 max-w-[720px]"
+        role="search"
+        className="bx-field mb-10 max-w-[720px]"
         onSubmit={(e) => {
           e.preventDefault();
           setQ(input);
@@ -141,6 +147,7 @@ export default function VideosPage() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Search music videos…"
           aria-label="Search music videos"
+          enterKeyHint="search"
         />
       </form>
 
@@ -157,14 +164,20 @@ export default function VideosPage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-ink-400 py-10 text-center">No videos found for “{q}”. Try another search.</p>
+          <EmptyState icon={<VideoIcon className="w-7 h-7" />} title="No videos found" message={`Nothing matched “${q}”. Try an artist, a film or a song title.`} />
         )
       ) : (
         <>
-          {langs.map((l) => (
-            <VideoShelf key={l} title={`${languageLabel(l)} video songs`} query={`${l} video songs`} />
+          {shelves.map((sh) => (
+            <VideoShelf key={sh.query} title={sh.title} query={sh.query} />
           ))}
-          <VideoShelf title="Trending videos" query="trending video songs" />
+          {allEmpty && (
+            <EmptyState
+              icon={<VideoIcon className="w-7 h-7" />}
+              title="No videos to show right now"
+              message="The video catalogue sent nothing for your languages just now. Search for an artist or a film above."
+            />
+          )}
         </>
       )}
     </div>

@@ -4,6 +4,8 @@ import { SongRow } from '@/components/SongRow';
 import { MediaCard } from '@/components/MediaCard';
 import { Shelf } from '@/components/Shelf';
 import { ListSkeleton } from '@/components/Skeletons';
+import { SectionHeader } from '@/components/SectionHeader';
+import { PlayIcon } from '@/components/Icons';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { playArtist, playPlaylist } from '@/features/player/playEntity';
@@ -34,11 +36,9 @@ export default function SemanticMatches({ query, results }: { query: string; res
 
   if (matches.isPending) {
     return (
-      <section aria-label="Songs that match" aria-busy="true" className="mb-6">
-        <div className="search-section-heading">
-          <h2>Songs that match</h2>
-        </div>
-        <ListSkeleton />
+      <section aria-label="Songs that match" aria-busy="true" className="search-block">
+        <SectionHeader title="Songs that match" />
+        <ListSkeleton rows={5} />
       </section>
     );
   }
@@ -46,15 +46,17 @@ export default function SemanticMatches({ query, results }: { query: string; res
   if (!data || !data.songs.length) return null;
 
   return (
-    <div className="mb-6">
-      <section aria-label="Songs that match">
-        <div className="search-section-heading">
-          <h2>Songs that match</h2>
-          <button type="button" onClick={() => playQueue(data.songs, 0)}>
-            Play all
-          </button>
-        </div>
-        <p className="vx-meta-line mb-2">{explainMatches(query, data.seed)}</p>
+    <div className="search-block">
+      <section aria-label="Songs that match" className="mb-8">
+        <SectionHeader
+          title="Songs that match"
+          explanation={explainMatches(query, data.seed)}
+          action={
+            <button type="button" className="bx-pill" onClick={() => playQueue(data.songs, 0)}>
+              <PlayIcon /> Play all
+            </button>
+          }
+        />
         <div className="vx-track-list">
           {data.songs.map((song, i) => (
             <SongRow key={song.id} song={song} songs={data.songs} index={i} />
