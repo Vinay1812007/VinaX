@@ -248,13 +248,18 @@ test('Settings explains each discovery mode and what the trending slider changes
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page, baseURL!);
   await page.goto('/settings');
-  const modes = page.getByRole('group', { name: 'Discovery mode' });
-  await expect(modes.getByRole('button', { name: 'Familiar' })).toBeVisible();
-  await expect(modes).toContainText('Mostly songs and artists you already play');
-  await expect(modes).toContainText('about one new artist in every four or five songs');
-  await expect(modes).toContainText('Up to half of a queue from artists you have never played');
-  await modes.getByRole('button', { name: 'Familiar' }).click();
-  await expect(modes.getByRole('button', { name: 'Familiar' })).toHaveAttribute('aria-pressed', 'true');
+  // 9.0 — one radio group; each mode states the share of never-played artists the engine uses.
+  const modes = page.getByRole('radiogroup', { name: 'Discovery mode' });
+  await expect(modes.getByRole('radio', { name: 'Familiar' })).toBeVisible();
+  await expect(modes).toContainText('Mostly artists you already play; about 5% of a queue');
+  await expect(modes).toContainText('about 20% of a queue from artists you have never played');
+  await expect(modes).toContainText('About 45% of a queue from artists you have never played');
+  await modes.getByRole('radio', { name: 'Familiar' }).click();
+  await expect(modes.getByRole('radio', { name: 'Familiar' })).toHaveAttribute('aria-checked', 'true');
+  // Arrow keys move the choice, as in any radio group.
+  await page.keyboard.press('ArrowRight');
+  await expect(modes.getByRole('radio', { name: 'Balanced' })).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('Balanced');
 
   const slider = page.getByLabel('Trending vs. your taste');
   await expect(slider).toBeVisible();

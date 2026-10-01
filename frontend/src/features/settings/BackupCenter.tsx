@@ -109,7 +109,7 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
     window.setTimeout(() => window.location.reload(), 400);
   };
 
-  const box = 'rounded-xl border border-transparent bg-ink-100/[0.05] p-3';
+  const box = 'rounded-card border border-transparent bg-ink-100/[0.05] p-3.5';
   const h3 = 'text-[15px] font-bold text-ink-100';
 
   return (
@@ -122,7 +122,7 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
         />
 
         {undo && (
-          <div role="status" className={cn(box, 'mb-5 border-amber-400/40')}>
+          <div role="status" className={cn(box, 'mb-5 border-[color:rgb(var(--ember-500)/0.5)] bg-[var(--vx-accent-wash)]')}>
             <p className="text-sm font-semibold">A restore was applied {when(undo.at)}.</p>
             <p className="text-xs text-ink-400 mt-0.5">The previous data is kept in this tab until you close it.</p>
             <button onClick={undoRestore} className="mt-2 px-4 py-2 rounded-full btn-secondary text-sm min-h-[44px]">Undo that restore</button>
@@ -138,14 +138,14 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
             {current.map(({ cat, summary, empty }) => (
               <li key={cat.id} className={cn(box, empty && 'opacity-60')}>
                 <p className="text-sm font-semibold">{cat.label}</p>
-                <p className="text-[11px] text-ink-400">{cat.description}</p>
+                <p className="text-[12px] text-ink-400">{cat.description}</p>
                 <p className="text-xs text-ink-200 mt-1">{summary}</p>
               </li>
             ))}
           </ul>
           <div className="mt-3 flex flex-wrap gap-2 items-center">
             <button onClick={() => { downloadProfileExport(); setMeta(backupMeta()); toast('Backup file downloaded'); }} className="px-4 py-2 rounded-full btn-primary text-sm min-h-[44px]">Export a backup now</button>
-            {meta.lastImportAt && <span className="text-[11px] text-ink-400">Last restore: {when(meta.lastImportAt)} ({meta.lastImportMode})</span>}
+            {meta.lastImportAt && <span className="text-[12px] text-ink-400">Last restore: {when(meta.lastImportAt)} ({meta.lastImportMode})</span>}
           </div>
         </section>
 
@@ -163,7 +163,7 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
           <input ref={fileRef} type="file" accept="application/json" className="hidden" aria-label="Choose a VinaX backup file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onFile(f); }} />
           <div className="flex flex-wrap gap-2 items-center">
             <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-full btn-secondary text-sm min-h-[44px]">Choose a backup file…</button>
-            <span className="text-[11px] text-ink-400">You will see what is inside before anything changes.</span>
+            <span className="text-[12px] text-ink-400">You will see what is inside before anything changes.</span>
           </div>
           {parseError && <p role="alert" className="mt-2 text-xs text-[color:var(--vx-danger)]">{parseError}</p>}
 
@@ -173,11 +173,11 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
                 Backup from {parsed.file.exportedAt ? new Date(parsed.file.exportedAt).toLocaleString() : 'an unknown date'}{parsed.file.appVersion ? ` · VinaX ${parsed.file.appVersion}` : ''}
                 {parsed.migratedFrom && ' · older export format, migrated'}
               </p>
-              {parsed.warnings.map((w) => <p key={w} className="text-[11px] text-amber-300">{w}</p>)}
+              {parsed.warnings.map((w) => <p key={w} className="text-[12px] font-semibold text-ink-200">{w}</p>)}
               {parsed.rejected.length > 0 && (
-                <div role="alert" className={cn(box, 'border-red-400/40')}>
+                <div role="alert" className={cn(box, 'border-[color:var(--vx-danger)]')}>
                   <p className="text-xs font-semibold text-[color:var(--vx-danger)]">Damaged sections are left out:</p>
-                  <ul className="text-[11px] text-ink-300 list-disc pl-4">
+                  <ul className="text-[12px] text-ink-300 list-disc pl-4">
                     {parsed.rejected.map((r) => <li key={r.id}>{r.label}: {r.error}</li>)}
                   </ul>
                 </div>
@@ -191,7 +191,7 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
                       <input type="radio" name="restore-mode" value={m} checked={mode === m} onChange={() => setMode(m)} className="mt-0.5 accent-[rgb(var(--ember-400))]" />
                       <span>
                         <span className="block text-sm font-semibold">{m === 'merge' ? 'Merge' : 'Replace'}</span>
-                        <span className="block text-[11px] text-ink-400">
+                        <span className="block text-[12px] text-ink-400">
                           {m === 'merge'
                             ? 'Keeps everything on this device and adds what the file has. A song, playlist, bookmark or saved search that is already here is never added twice. Your alarm, Home layout and lyric timings stay as they are here, the taste profile that has learned more is kept, and settings from the file win.'
                             : 'The chosen categories become exactly what the file holds. Anything in those categories that is only on this device is removed.'}
@@ -212,9 +212,9 @@ export function BackupCenter({ onClose }: { onClose(): void }) {
                         <input type="checkbox" checked={chosen.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Restore ${c.label}`} className="mt-1 w-4 h-4 accent-[rgb(var(--ember-400))]" />
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-semibold">{c.label}</span>
-                          <span className="block text-[11px] text-ink-400">In file: <span className="text-ink-200">{c.summary}</span></span>
-                          <span className="block text-[11px] text-ink-400">On this device: <span className="text-ink-200">{cur?.summary ?? 'Nothing stored yet'}</span></span>
-                          {c.id === 'identity' && <span className="block text-[11px] text-amber-300">The username in the file is re-confirmed with the service after restore; it may already be taken.</span>}
+                          <span className="block text-[12px] text-ink-400">In file: <span className="text-ink-200">{c.summary}</span></span>
+                          <span className="block text-[12px] text-ink-400">On this device: <span className="text-ink-200">{cur?.summary ?? 'Nothing stored yet'}</span></span>
+                          {c.id === 'identity' && <span className="block text-[12px] font-semibold text-ink-200">The username in the file is re-confirmed with the service after restore; it may already be taken.</span>}
                         </span>
                       </li>
                     );

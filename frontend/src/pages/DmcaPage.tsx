@@ -10,7 +10,7 @@ export default function DmcaPage() {
   return (
     <div className="vx-sec">
       <PageHeader title="Copyright and takedowns" subtitle="For artists, labels and rights holders · Last updated July 2026" />
-      <div className="vx-article">
+      <div className="vx-doc">
         <H>Where the music comes from</H>
         <p>
           VinaX is a player over independent third-party public catalogs. We host no media files. All songs,
@@ -43,7 +43,7 @@ export default function DmcaPage() {
           Because sources can re-index content under new IDs, tell us if something returns — blocking is by song
           identity and we extend it promptly.
         </p>
-        <p className="vx-article-end">
+        <p className="vx-doc-end">
           General questions? <Link to="/contact">Contact</Link> · How the
           app works? <Link to="/help">Help</Link>.
         </p>

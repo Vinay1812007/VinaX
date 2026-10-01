@@ -9,10 +9,13 @@ import { toast } from '@/store/toastStore';
 import { weeklyReport } from '@/features/stats/weeklyReport';
 import { calendarCells } from '@/features/stats/calendar';
 import type { CalendarCell } from '@/features/stats/calendar';
+import { ArtistAvatar, Collage, artistPictures, mostPlayed } from '@/features/stats/artwork';
 import { cn } from '@/utils/cn';
 import type { HistoryEntry } from '@/types';
 import { coverageNote, formatHours, historyCoverage, listeningTotal, HISTORY_CAP } from '@/features/stats/listening';
 import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
+import { SongRow } from '@/components/SongRow';
 import { ChevronRightIcon, ShareIcon, WaveIcon } from '@/components/Icons';
 import '@/styles/pages/secondary.css';
 
@@ -20,18 +23,20 @@ import '@/styles/pages/secondary.css';
 const SHARE_ALPHA = [1, 0.72, 0.5, 0.34, 0.2];
 const shareColor = (i: number): string => `rgb(var(--ember-500) / ${SHARE_ALPHA[i % SHARE_ALPHA.length]})`;
 
-/** v5.17.0 — up/down delta pill for the weekly report card. */
+/** v5.17.0 — the change against last week, in an arrow and in words. */
 function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
   if (value === 0) return <span className="vx-kpi-delta text-ink-400">No change<span className="vx-delta-ctx"> from last week</span></span>;
   const up = value > 0;
   return (
     <span className="vx-kpi-delta" style={{ color: up ? 'var(--vx-success)' : 'var(--vx-danger)' }}>
-      {up ? '▲' : '▼'} {Math.abs(value)}{suffix}<span className="vx-delta-ctx"> vs last week</span>
+      <span aria-hidden>{up ? '▲' : '▼'} </span>
+      <span className="sr-only">{up ? 'Up ' : 'Down '}</span>
+      {Math.abs(value)}{suffix}<span className="vx-delta-ctx"> vs last week</span>
     </span>
   );
 }
 
-/** v5.17.0 — Weekly report card: this week against the seven days before. */
+/** v5.17.0 — Weekly report: this week against the seven days before. */
 function WeeklyReportCard({ entries }: { entries: HistoryEntry[] }) {
   const report = useMemo(() => weeklyReport(entries), [entries]);
   const { thisWeek, lastWeek, delta, coverage } = report;
@@ -44,10 +49,7 @@ function WeeklyReportCard({ entries }: { entries: HistoryEntry[] }) {
   ];
   return (
     <section aria-label="Weekly report" className="vx-sec-block">
-      <div className="vx-sec-title-row">
-        <h2 className="vx-sec-title">This week’s report</h2>
-        <span className="vx-sec-meta">Last 7 days vs the 7 before</span>
-      </div>
+      <SectionHeader title="This week’s report" explanation="The last 7 days against the 7 before." />
       <div className="vx-kpis is-three-always">
         {tiles.map((t) => (
           <div key={t.label} className="vx-kpi">
@@ -57,25 +59,19 @@ function WeeklyReportCard({ entries }: { entries: HistoryEntry[] }) {
           </div>
         ))}
       </div>
-      <dl className="vx-group mt-3">
-        <div className="vx-row">
-          <dt className="vx-row-main vx-row-label">Top artist</dt>
-          <dd className="min-w-0 text-right">
-            <span className="block truncate text-[15px] font-semibold text-ink-100">{thisWeek.topArtist ?? '—'}</span>
-            {lastWeek.topArtist && lastWeek.topArtist !== thisWeek.topArtist && (
-              <span className="block truncate text-[12px] text-ink-400">was {lastWeek.topArtist}</span>
-            )}
-          </dd>
-        </div>
-        <div className="vx-row">
-          <dt className="vx-row-main vx-row-label">Top language</dt>
-          <dd className="min-w-0 text-right">
-            <span className="block truncate text-[15px] font-semibold text-ink-100">{thisWeek.topLanguage ?? '—'}</span>
-            {lastWeek.topLanguage && lastWeek.topLanguage !== thisWeek.topLanguage && (
-              <span className="block truncate text-[12px] text-ink-400">was {lastWeek.topLanguage}</span>
-            )}
-          </dd>
-        </div>
+      <dl className="vx-group mt-6">
+        {([
+          ['Top artist', thisWeek.topArtist, lastWeek.topArtist],
+          ['Top language', thisWeek.topLanguage, lastWeek.topLanguage],
+        ] as const).map(([label, now, before]) => (
+          <div key={label} className="vx-row">
+            <dt className="vx-row-main vx-row-label">{label}</dt>
+            <dd className="min-w-0 text-right">
+              <span className="block text-[15px] font-semibold text-ink-100 break-words">{now ?? '—'}</span>
+              {before && before !== now && <span className="block text-[12.5px] text-ink-400">was {before}</span>}
+            </dd>
+          </div>
+        ))}
       </dl>
       {(thisWeek.estimated || note) && (
         <p className="vx-sec-foot">
@@ -110,26 +106,25 @@ function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
     }
     return out;
   }, [cal]);
+  const coverage = coverageNote(cal.coverage, 'this calendar');
   return (
     <section aria-label="Listening calendar" className="vx-sec-block">
-      <div className="vx-sec-title-row">
-        <h2 className="vx-sec-title">Listening calendar</h2>
-        <span className="vx-sec-meta">{cal.activeDays} active days · 12 weeks{cal.estimated ? ' · minutes ≈ estimated' : ''}</span>
-      </div>
-      {coverageNote(cal.coverage, 'this calendar') && (
-        <p className="vx-sec-lede">{coverageNote(cal.coverage, 'this calendar')}</p>
-      )}
-      <div className="vx-group is-padded overflow-x-auto">
+      <SectionHeader
+        title="Listening calendar"
+        explanation={`${cal.activeDays} active ${cal.activeDays === 1 ? 'day' : 'days'} in the last 12 weeks${cal.estimated ? ' · minutes ≈ estimated' : ''}`}
+      />
+      {coverage && <p className="vx-sec-lede">{coverage}</p>}
+      <div className="overflow-x-auto pb-1">
         <div className="flex gap-1.5 min-w-max">
-          <div className="grid grid-rows-7 gap-[3px] pt-[14px]">
+          <div className="grid grid-rows-7 gap-[3px] pt-[16px]">
             {DOW.map((d, i) => (
-              <span key={i} className="h-3 text-[10px] leading-3 font-semibold text-ink-400 w-7">{d}</span>
+              <span key={i} className="h-3.5 text-[10.5px] leading-[14px] font-semibold text-ink-400 w-8">{d}</span>
             ))}
           </div>
           <div>
-            <div className="grid grid-flow-col gap-[3px] mb-[2px]" style={{ gridTemplateColumns: `repeat(${cal.weeks}, 0.75rem)` }}>
+            <div className="grid grid-flow-col gap-[3px] mb-[2px]" style={{ gridTemplateColumns: `repeat(${cal.weeks}, 0.875rem)` }}>
               {monthLabels.map((m, i) => (
-                <span key={i} className="h-3 text-[10px] leading-3 font-semibold text-ink-400 whitespace-nowrap">{m ?? ''}</span>
+                <span key={i} className="h-3.5 text-[10.5px] leading-[14px] font-semibold text-ink-400 whitespace-nowrap">{m ?? ''}</span>
               ))}
             </div>
             <div className="grid grid-flow-col grid-rows-7 gap-[3px]" role="img" aria-label={`Minutes listened per day over the last ${cal.weeks} weeks`}>
@@ -140,7 +135,7 @@ function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
                   tabIndex={c.future ? -1 : 0}
                   aria-label={cellTitle(c)}
                   className={cn(
-                    'block w-3 h-3 rounded-[3px] outline-none focus-visible:ring-2 focus-visible:ring-ember-400',
+                    'block w-3.5 h-3.5 rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-ember-400',
                     c.future ? 'opacity-0' : 'bg-[var(--track)]',
                     c.today && 'ring-1 ring-ink-300',
                   )}
@@ -150,24 +145,24 @@ function ListeningCalendar({ entries }: { entries: HistoryEntry[] }) {
             </div>
           </div>
         </div>
-        <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-[13px] font-medium text-ink-400">
-            Current streak <span className="text-ink-100 font-bold tabular-nums">{cal.currentStreak}</span> day{cal.currentStreak === 1 ? '' : 's'}
-            <span aria-hidden> · </span>
-            Longest <span className="text-ink-100 font-bold tabular-nums">{cal.longestStreak}</span> day{cal.longestStreak === 1 ? '' : 's'}
-          </p>
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-ink-400">
-            Less
-            {LEVEL_ALPHA.map((a, i) => (
-              <span
-                key={i}
-                className={cn('w-2.5 h-2.5 rounded-[2px]', i === 0 && 'bg-[var(--track)]')}
-                style={i > 0 ? { background: `rgb(var(--ember-500) / ${a})` } : undefined}
-              />
-            ))}
-            More
-          </span>
-        </div>
+      </div>
+      <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-[14px] font-medium text-ink-400">
+          Current streak <span className="text-ink-100 font-bold tabular-nums">{cal.currentStreak}</span> day{cal.currentStreak === 1 ? '' : 's'}
+          <span aria-hidden> · </span>
+          Longest <span className="text-ink-100 font-bold tabular-nums">{cal.longestStreak}</span> day{cal.longestStreak === 1 ? '' : 's'}
+        </p>
+        <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-400" aria-hidden>
+          Less
+          {LEVEL_ALPHA.map((a, i) => (
+            <span
+              key={i}
+              className={cn('w-3 h-3 rounded-[3px]', i === 0 && 'bg-[var(--track)]')}
+              style={i > 0 ? { background: `rgb(var(--ember-500) / ${a})` } : undefined}
+            />
+          ))}
+          More
+        </span>
       </div>
     </section>
   );
@@ -208,6 +203,8 @@ export default function StatsPage() {
       langs: langRows.map(([name, c]) => ({ name, pct: Math.round((c / totalLang) * 100) })),
     };
   }, [entries]);
+  const top = useMemo(() => mostPlayed(entries, 5), [entries]);
+  const pictures = useMemo(() => artistPictures([...entries.map((e) => e.song), ...favorites]), [entries, favorites]);
 
   const streak = getStreak();
   const best = getBestStreak();
@@ -225,7 +222,7 @@ export default function StatsPage() {
     return (
       <div className="vx-empty-page">
         <span className="vx-empty-icon" aria-hidden>
-          <WaveIcon className="w-8 h-8" />
+          <WaveIcon className="w-9 h-9" />
         </span>
         <h1>Your VinaX</h1>
         <p>Play a few songs and your stats appear here — computed on this device, never uploaded.</p>
@@ -242,31 +239,47 @@ export default function StatsPage() {
   ];
 
   return (
-    <div className="vx-sec">
+    <div className="vx-sec is-wide">
       <PageHeader
         title="Your VinaX"
         subtitle={`Computed on this device · never uploaded${stats.capped ? ` · history keeps your last ${HISTORY_CAP} plays` : ''}`}
         actions={
-          <button onClick={share} className="vx-pill-btn">
+          <button type="button" onClick={share} className="vx-sec-pill">
             <ShareIcon className="w-4 h-4" /> Share
           </button>
         }
       />
 
-      <div className="vx-sec-block vx-kpis is-four">
-        {kpis.map(([n, l]) => (
-          <div key={l} className="vx-kpi">
-            <span className="vx-kpi-label">{l}</span>
-            <span className="vx-kpi-value">{n}</span>
+      {/* Artwork first: the covers of what you played most, then the four numbers. */}
+      <section aria-label="Your listening at a glance" className="vx-sec-block vx-hero-row is-inline">
+        <Collage songs={top.map((t) => t.song)} />
+        <div className="vx-kpis is-four w-full">
+          {kpis.map(([n, l]) => (
+            <div key={l} className="vx-kpi">
+              <span className="vx-kpi-label">{l}</span>
+              <span className="vx-kpi-value">{n}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {top.length > 0 && (
+        <section aria-label="Most played lately" className="vx-sec-block">
+          <SectionHeader title="Most played lately" explanation={`From your last ${stats.plays} ${stats.plays === 1 ? 'play' : 'plays'}, most played first.`} />
+          <div>
+            {top.map((t, i) => (
+              <SongRow key={t.song.id} song={t.song} songs={top.map((x) => x.song)} index={i} />
+            ))}
           </div>
-        ))}
-      </div>
+        </section>
+      )}
 
       {/* v5.17.0 — weekly report */}
       <WeeklyReportCard entries={entries} />
 
       {/* Streak, daily goal (set in Settings) and the year recap. */}
       <section aria-label="Streak and goal" className="vx-sec-block">
+        <SectionHeader title="Keep it going" />
         <div className="vx-group">
           <div className="vx-row">
             <span className="vx-row-main">
@@ -283,7 +296,7 @@ export default function StatsPage() {
             <ChevronRightIcon className="vx-row-chev" />
           </Link>
         </div>
-        <div className="vx-stats-goal mt-3">
+        <div className="vx-stats-goal mt-2">
           <GoalRing />
         </div>
       </section>
@@ -291,43 +304,42 @@ export default function StatsPage() {
       {/* v5.17.0 — 12-week listening calendar */}
       <ListeningCalendar entries={entries} />
 
-      <div className="grid gap-10 md:grid-cols-2 md:gap-8">
-        <section aria-labelledby="vx-stats-artists">
-          <h2 id="vx-stats-artists" className="vx-sec-title">Top artists</h2>
+      <div className="vx-two">
+        <section aria-label="Top artists">
+          <SectionHeader title="Top artists" explanation="Plays in your history." />
           <ol className="vx-group">
             {stats.topArtists.map(([name, count], i) => (
               <li key={name} className="vx-row">
                 <span className="vx-row-rank">{i + 1}</span>
+                <ArtistAvatar name={name} image={pictures.get(name.trim().toLowerCase())} size={44} />
                 <span className="vx-row-main">
-                  <span className="vx-row-label truncate">{name}</span>
-                  <span className="vx-bar mt-2 block" aria-hidden>
+                  <span className="vx-row-label truncate-1">{name}</span>
+                  <span className="vx-bar mt-2" aria-hidden>
                     <span style={{ width: `${Math.max(6, (count / stats.maxArtist) * 100)}%` }} />
                   </span>
                 </span>
-                <span className="vx-row-value w-10 text-right">{count}</span>
+                <span className="vx-row-value w-10">{count}</span>
               </li>
             ))}
           </ol>
         </section>
 
-        <section aria-labelledby="vx-stats-langs">
-          <h2 id="vx-stats-langs" className="vx-sec-title">Languages</h2>
-          <div className="vx-group is-padded">
-            <div className="h-3 rounded-full overflow-hidden flex gap-[2px]" aria-hidden>
-              {stats.langs.map((l, i) => (
-                <span key={l.name} style={{ width: `${l.pct}%`, background: shareColor(i) }} />
-              ))}
-            </div>
-            <ul className="mt-4 grid gap-2.5">
-              {stats.langs.map((l, i) => (
-                <li key={l.name} className="flex items-center gap-2.5 text-[14px]">
-                  <span className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: shareColor(i) }} aria-hidden />
-                  <span className="flex-1 min-w-0 truncate font-semibold text-ink-100">{l.name}</span>
-                  <span className="text-ink-400 tabular-nums">{l.pct}%</span>
-                </li>
-              ))}
-            </ul>
+        <section aria-label="Languages">
+          <SectionHeader title="Languages" explanation="Share of your plays." />
+          <div className="h-3 rounded-full overflow-hidden flex gap-[2px]" aria-hidden>
+            {stats.langs.map((l, i) => (
+              <span key={l.name} style={{ width: `${l.pct}%`, background: shareColor(i) }} />
+            ))}
           </div>
+          <ul className="vx-group mt-3">
+            {stats.langs.map((l, i) => (
+              <li key={l.name} className="vx-row !min-h-[48px]">
+                <span className="w-3 h-3 rounded-[4px] shrink-0" style={{ background: shareColor(i) }} aria-hidden />
+                <span className="vx-row-main vx-row-label truncate-1">{l.name}</span>
+                <span className="vx-row-value">{l.pct}%</span>
+              </li>
+            ))}
+          </ul>
         </section>
       </div>
     </div>

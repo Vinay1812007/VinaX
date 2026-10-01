@@ -67,8 +67,8 @@ export function SoftMuteList({ labelledBy }: { labelledBy?: string }) {
 
   if (!mutes.length) {
     return (
-      <p ref={emptyRef} tabIndex={-1} className="text-xs text-ink-400 outline-none">
-        Nothing muted right now. Use <span className="text-ink-200 font-semibold">Less like this</span> in any song menu to hear an
+      <p ref={emptyRef} tabIndex={-1} className="max-w-[60ch] text-[14px] leading-relaxed text-ink-400 outline-none">
+        Nothing muted right now. Use <span className="text-ink-100 font-semibold">Less like this</span> in any song menu to hear an
         artist less for a week or a month.
       </p>
     );
@@ -76,14 +76,14 @@ export function SoftMuteList({ labelledBy }: { labelledBy?: string }) {
 
   return (
     <div>
-      <ul ref={listRef} aria-labelledby={labelledBy} className="space-y-1.5">
+      <ul ref={listRef} aria-labelledby={labelledBy}>
         {mutes.map((m, i) => {
           const left = daysLeft(m.until);
           return (
-            <li key={m.key} className="flex items-center gap-3 rounded-xl border border-[var(--glass-border)] bg-ink-850/60 px-3 py-2">
+            <li key={m.key} className="flex items-center gap-3 min-h-[56px] py-2 border-t border-[color:var(--vx-border)] first:border-t-0">
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold break-words">{m.name}</span>
-                <span className="block text-[11px] text-ink-400">
+                <span className="block text-[15px] font-semibold text-ink-100 break-words">{m.name}</span>
+                <span className="block text-[13px] text-ink-400 tabular-nums">
                   Back on {fmt(m.until)} · {left} {left === 1 ? 'day' : 'days'} left
                 </span>
               </span>
@@ -91,7 +91,7 @@ export function SoftMuteList({ labelledBy }: { labelledBy?: string }) {
                 type="button"
                 data-mute-key={m.key}
                 onClick={() => unmute(m, i)}
-                className="shrink-0 px-3 py-1.5 min-h-touch rounded-full glass-button text-xs font-bold"
+                className="vx-tap shrink-0 min-h-[36px] px-4 rounded-full vx-chip-idle text-[13px] font-bold text-ink-100"
               >
                 Unmute<span className="sr-only"> {m.name}</span>
               </button>
@@ -100,7 +100,7 @@ export function SoftMuteList({ labelledBy }: { labelledBy?: string }) {
         })}
       </ul>
       {mutes.length > 1 && (
-        <button type="button" onClick={clearAll} className="mt-2 px-3 py-1.5 min-h-touch rounded-full glass-button text-xs font-bold">
+        <button type="button" onClick={clearAll} className="vx-tap mt-3 min-h-[36px] px-4 rounded-full vx-chip-idle text-[13px] font-bold text-ink-100">
           Unmute all
         </button>
       )}

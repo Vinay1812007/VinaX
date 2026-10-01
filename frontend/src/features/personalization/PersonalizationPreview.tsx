@@ -15,11 +15,12 @@ const DISCOVERY_WORD: Record<string, string> = {
   discover: 'Discover',
 };
 
+/** One line of the preview: a label and what VinaX believes, between hairlines. */
 function Line({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex gap-2 text-xs leading-relaxed">
-      <span className="w-24 shrink-0 text-ink-400">{label}</span>
-      <span className="min-w-0 flex-1 text-ink-200 break-words">{children}</span>
+    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3 py-2.5 border-t border-[color:var(--vx-border)] first:border-t-0 first:pt-0 text-[14px] leading-snug">
+      <dt className="text-ink-400 font-medium">{label}</dt>
+      <dd className="min-w-0 text-ink-100 font-semibold break-words">{children}</dd>
     </div>
   );
 }
@@ -34,6 +35,9 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
  * The profile is not a store, so the card re-reads it on every render and
  * renders again when something it shows changes: a soft mute (the mutes
  * snapshot), a setting (the stores), or the listener's own picks (`refresh`).
+ *
+ * 9.0 — a definition list between hairlines rather than a boxed card, so it
+ * reads the same inside a Settings row and at the top of the taste page.
  */
 export function PersonalizationPreview({ showProfileLink = true }: { showProfileLink?: boolean }) {
   const [setup, setSetup] = useState(false);
@@ -51,35 +55,41 @@ export function PersonalizationPreview({ showProfileLink = true }: { showProfile
   const cold = profile.totals.plays < 5 && !artists.length;
 
   return (
-    <div className="rounded-2xl border border-[var(--glass-border)] bg-ink-850/40 p-4">
-      {cold ? (
-        <p className="text-xs text-ink-300 leading-relaxed">
+    <div>
+      {cold && (
+        <p className="mb-3 max-w-[60ch] text-[14px] text-ink-300 leading-relaxed">
           VinaX hasn’t learned much yet — it needs a few plays. You can also tell it what you like; it takes a minute and stays on
           this device.
         </p>
-      ) : (
-        <div className="space-y-1.5">
-          <Line label="Languages">{languages.length ? languages.join(', ') : 'Nothing learned yet'}</Line>
-          <Line label="Artists">{artists.length ? artists.join(', ') : 'Nothing learned yet'}</Line>
-          <Line label="Discovery">
-            {DISCOVERY_WORD[discoveryMode] ?? 'Balanced'} · {Math.round(profileConfidence(profile) * 100)}% of the way to a
-            confident profile
-          </Line>
-          <Line label="Playing less">
-            {mutes.length ? `${mutes.map((m) => m.name).join(', ')} — until each one runs out` : 'Nobody'}
-          </Line>
-          <Line label="Never play">
-            {hiddenArtists.length ? `${hiddenArtists.length} blocked ${hiddenArtists.length === 1 ? 'artist' : 'artists'}` : 'Nobody'}
-          </Line>
-        </div>
       )}
-      <Line label="Pinned">{pinned.length ? pinned.map((l) => languageLabel(l)).join(', ') : 'No languages pinned'}</Line>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setSetup(true)} className="vx-tap px-3.5 py-2 rounded-full btn-primary text-xs font-bold">
+      <dl>
+        {!cold && (
+          <>
+            <Line label="Languages">{languages.length ? languages.join(', ') : 'Nothing learned yet'}</Line>
+            <Line label="Artists">{artists.length ? artists.join(', ') : 'Nothing learned yet'}</Line>
+            <Line label="Discovery">
+              {DISCOVERY_WORD[discoveryMode] ?? 'Balanced'}
+              <span className="font-medium text-ink-400">
+                {' '}
+                · <span className="tabular-nums">{Math.round(profileConfidence(profile) * 100)}%</span> of the way to a confident profile
+              </span>
+            </Line>
+            <Line label="Playing less">
+              {mutes.length ? `${mutes.map((m) => m.name).join(', ')} — until each one runs out` : 'Nobody'}
+            </Line>
+            <Line label="Never play">
+              {hiddenArtists.length ? `${hiddenArtists.length} blocked ${hiddenArtists.length === 1 ? 'artist' : 'artists'}` : 'Nobody'}
+            </Line>
+          </>
+        )}
+        <Line label="Pinned">{pinned.length ? pinned.map((l) => languageLabel(l)).join(', ') : 'No languages pinned'}</Line>
+      </dl>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setSetup(true)} className="vx-tap inline-flex items-center min-h-[36px] px-4 rounded-full btn-primary text-[13.5px] font-bold">
           Pick languages &amp; artists
         </button>
         {showProfileLink && (
-          <Link to="/taste-profile" className="vx-tap px-3.5 py-2 inline-flex items-center rounded-full glass-button text-xs font-bold">
+          <Link to="/taste-profile" className="vx-tap inline-flex items-center min-h-[36px] px-4 rounded-full vx-chip-idle text-[13.5px] font-bold text-ink-100">
             See the full taste profile
           </Link>
         )}

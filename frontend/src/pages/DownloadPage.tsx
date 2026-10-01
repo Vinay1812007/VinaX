@@ -16,8 +16,8 @@ export default function DownloadPage() {
   return (
     <div className="vx-sec is-narrow">
       <div className="flex flex-col items-center text-center pt-4 sm:pt-8">
-        <img src="/icons/icon.svg" alt="" className="w-24 h-24 rounded-[22px] shadow-[var(--vx-art-shadow)]" />
-        <h1 className="vx-page-title mt-6">VinaX for Android</h1>
+        <img src="/icons/icon.svg" alt="" width={112} height={112} className="w-28 h-28 rounded-[var(--vx-radius-panel)] shadow-[var(--vx-art-shadow)]" />
+        <h1 className="vx-page-title mt-7">VinaX for Android</h1>
         <p className="mt-2 text-[15px] text-ink-400">Free, no account, private by design.</p>
 
         {isNativePlatform() ? (
@@ -30,23 +30,25 @@ export default function DownloadPage() {
         )}
       </div>
 
-      <ul className="vx-group mt-10" aria-label="What the app adds">
+      <ul className="vx-group mt-12" aria-label="What the app adds">
         {FEATURES.map((f) => (
           <li key={f} className="vx-row">
-            <CheckIcon className="w-5 h-5 shrink-0 text-ink-300" />
+            <span className="grid place-items-center w-8 h-8 shrink-0 rounded-full bg-[var(--vx-accent-wash)] text-ember-400" aria-hidden>
+              <CheckIcon className="w-4 h-4" />
+            </span>
             <span className="vx-row-main text-[15px] text-ink-200">{f}</span>
           </li>
         ))}
       </ul>
 
       {!isNativePlatform() && (
-        <p className="vx-sec-foot px-1">
+        <p className="vx-sec-foot">
           Always the newest signed build. Your phone may warn about apps installed from outside the official app store —
           the APK is signed with VinaX’s release key on every build.
         </p>
       )}
 
-      <p className="mt-8 text-center text-sm text-ink-400">
+      <p className="mt-10 text-center text-[14px] text-ink-400">
         Prefer the web? <Link to="/" className="vx-link">Keep listening in the browser</Link>
       </p>
     </div>

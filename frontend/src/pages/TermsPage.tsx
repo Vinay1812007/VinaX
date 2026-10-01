@@ -10,7 +10,7 @@ export default function TermsPage() {
   return (
     <div className="vx-sec">
       <PageHeader title="Terms of use" subtitle="Last updated July 2026" />
-      <div className="vx-article">
+      <div className="vx-doc">
         <H>What VinaX is</H>
         <p>
           VinaX is a free music player for Indian and international music. It streams songs, artwork and lyrics from
@@ -65,7 +65,7 @@ export default function TermsPage() {
           VinaX and its maker are not liable for damages arising from use of the service. Use it in line with the laws
           of your region.
         </p>
-        <p className="vx-article-end">
+        <p className="vx-doc-end">
           Questions? <Link to="/contact">Contact us</Link>.
         </p>
       </div>
