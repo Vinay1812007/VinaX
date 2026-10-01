@@ -12,6 +12,22 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '9.0.0': {
+    title: 'VinaX 9: a new look, and picks that listen better',
+    changes: [
+      { type: 'new', text: 'A completely new look: deep charcoal, the violet and cyan of the VinaX logo, artwork first on every page, a floating player on big screens and a compact one above the tabs on phones. Light, dark and black themes all follow.' },
+      { type: 'new', text: 'Home opens with one big play button for your Aura Mix, then what is yours: your mixes, what to continue, songs like ones you liked, your playlists and your artists. Charts, moods, genres and the endless feed wait under Explore more.' },
+      { type: 'improved', text: 'Home no longer rebuilds every time you open it. It refreshes when you pull down or tap Refresh Home, and on its own after half an hour — and nothing moves while you scroll.' },
+      { type: 'improved', text: 'Skip an artist twice and what plays next leaves them out for the rest of that listening session.' },
+      { type: 'improved', text: 'Up next follows where your listening goes: more from the album and from artists close to the one you are hearing now.' },
+      { type: 'improved', text: 'One busy night of listening no longer takes over your taste: the favourites you have built up keep most of the say.' },
+      { type: 'fixed', text: 'A song that cannot play could sometimes still be queued. It is now left out.' },
+      { type: 'fixed', text: 'Why this song? now gives only the reasons that really chose a song — never a penalty, never “popular” for a song nothing is known about.' },
+      { type: 'fixed', text: 'Hiding a song, muting a language, “Less like this” or turning on Kid mode now clears it from every Home shelf at once, the top of the page included.' },
+      { type: 'fixed', text: 'Resetting your taste now also forgets which songs Home showed you lately.' },
+      { type: 'improved', text: 'Owner console — the artist-affinity and session weights in Recommendation Tuning now change recommendations; before, overriding them did nothing.' },
+    ],
+  },
   '8.6.0': {
     title: 'A new face for the control room',
     changes: [

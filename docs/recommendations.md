@@ -377,6 +377,38 @@ Two consecutive skips of automatic songs re-sequence the remaining automatic tai
 
 `buildRecommendations(ctx)` gathers the same candidate sources without a seed, enriches, ranks, moves identities served in the last seven days behind fresh ones, and assembles shelves in `mixes.ts`. On a profile with at least five plays the optional AI re-rank may reorder the top 30. The result is memoised for ten minutes per profile state. Every song placed on a shelf gets a plain-language reason for the track menu's "Why this song?".
 
+### When Home builds itself again (9.0)
+
+Every Home query that designs or rotates content — the AI-designed shelves, Made For You, the trending / new / popular rotations — carries the Home **generation** in its key and is cached for 30 minutes (`features/home/homeRefresh.ts`). The generation moves only on an explicit refresh (pull to refresh, or **Refresh Home** under Explore more) and when Home opens more than 30 minutes after the generation started; never while the listener is on Home. So:
+
+| Situation | What happens |
+| --- | --- |
+| Back on Home a few minutes later | The same shelves from the cache: no AI design call, no new rotation |
+| Back on Home after half an hour | A new generation: new designs and rotations, with the previous shelves on screen until they land |
+| Pull to refresh / Refresh Home | A new generation and a new discovery round now, with the previous shelves on screen; the day-rotated shelves are invalidated and refetched |
+| Pinned or muted languages, discovery mode, intensity, AI-shelves switch change | The queries whose key holds that setting rebuild at once, the rest stay |
+| Kid mode, a hide, "Not interested", "Never play", a muted language, "Less like this" | Nothing rebuilds: every Home list — the opening included — filters by the current safety settings when it renders, so the song leaves at once, cached lists too (`useShelfSafety`, applied through `useShelfLens` in `features/home/blocks/shared.tsx`) |
+| A song plays while Home is open | Nothing moves; it counts at the next visit |
+
+Made For You is also keyed on a coarse taste stamp read once per visit — five more plays, a new like or dislike, three more skips or a new "Less like this" (`tasteStamp`) — and on the hour the generation started, so crossing an hour while browsing changes nothing. A query that moves to a new key keeps showing the previous data (`keepPreviousData`) and cancels the request of the key it left, so an older answer can never replace newer preferences. Before 9.0 the AI-designed shelves drew a random nonce on every mount with no stale time (a new design call on every visit to Home), and Made For You froze the raw profile stamp per mount (the whole pipeline ran again on the first return after any play).
+
+### Surfaces share one repetition rule (9.0)
+
+`services/recommendation/surfacePolicy.ts` decides how a list treats songs the listener has just heard (the last 20 plays, by identity), skipped in this sitting, or been shown on another surface this week. Each surface keeps its purpose:
+
+| Surface | Heard / skipped | Shown elsewhere |
+| --- | --- | --- |
+| `resume` — Continue listening, Recently played, On repeat, Most listened, On this day, Repeat rewind, Recently liked, Jump back in | Kept (they are the content) | Kept |
+| `personal` — Made For You mixes, the Daily mix, Because you liked / listened to, For you this week, Your top genres | Moved to the back, never removed | Moved to the back |
+| `discovery` — trending, new releases, popular picks, fresh finds, hidden gems, mood, AI-designed and day-part shelves, the feed | Removed | Moved to the back |
+| the automatic queue | Hard rules (`filters.ts`) | A small score penalty |
+
+Home reads the signals once per generation (`HomeSignalsProvider`), so nothing reorders while the listener scrolls, and applies safety first, then the surface rule, then the cross-shelf ledger. Before 9.0 each Home hook made up its own rule: the Daily mix removed every served song but kept recent plays, "Because you liked" applied no safety filter at all until the next fetch, the trending shelves kept both.
+
+### Home's composition (9.0)
+
+The page is composition only (`pages/HomePage.tsx`); the blocks live in `features/home/blocks/`. The opening is one listening action — the Aura Mix's play button — with AI Radio, Surprise me and Jump back in beside it. Then the first four visible blocks (by default the shortcuts, For you, Designed for you and Fresh discoveries); For you shows six personal sections and keeps the rest of the listener's own listening behind **More from your listening**, Fresh discoveries keeps four shelves and the rest behind **More trending**. The remaining blocks (charts, seasonal, moods, genres, artists, albums, day picks, recently liked, the endless feed) wait behind **Show more for you** under Explore more. A disclosure that is closed mounts nothing, so nothing in it fetches; its open state is remembered for the tab's session. Customise Home and the owner's layout still choose the order and the hidden set; the first four of whatever order results are the primary blocks.
+
 ### Popular picks for you
 
 `services/ai/trending.ts` and `features/home/useAiTrending.ts` (still named for "Trending for you", the shelf's title before 7.2) build Home's "Popular picks for you" shelf from the catalogue's trending results and nothing else. The pool passes the hard filter (mutes, blocks, explicit, junk) and is collapsed by canonical identity. The on-device scorer orders it; songs the scorer drops still appear after the ranked ones. When the listener's "AI-designed shelves on Home" setting and the owner's `aiHome` flag are both on, an AI re-order of the top 30 may replace that order if it arrives within 4 seconds and actually changes it. The AI answers with ids from the list it was given, so it can change the order and never the contents. The shelf reports whether the order is `ai` or `local`. One curation runs per trending pool and is kept for 15 minutes.
@@ -398,7 +430,7 @@ Each block moves at most three places from its default slot; the shortcut row an
 
 ### De-duplication across shelves
 
-Home is built from blocks that mount and re-render independently, so `features/home/shelfLedger.ts` keeps a shared ledger keyed by block and shelf position. A shelf filters out songs already claimed by any shelf earlier in display order, then records its own claim; claims are replaced on re-render, so the result is stable. Since 7.1 the ledger claims a song by catalogue id and by canonical identity (`songKey`), so another cut of a song shown on an earlier shelf is dropped too. Identity is also collapsed where the lists are built: in `mixes.ts` for the personal mixes, in the hard filter for queues and in `trending.ts` for the trending shelf. `features/home/dedupeShelves.ts` is an older identity-based helper that is exercised by unit tests and is not called by the Home page.
+Home is built from blocks that mount and re-render independently, so `features/home/shelfLedger.ts` keeps a shared ledger keyed by block and shelf position. A shelf filters out songs already claimed by any shelf earlier in display order, then records its own claim; claims are replaced on re-render, so the result is stable. Since 9.0 a shelf that had at least six songs keeps at least six: when de-duplication would leave it shorter, it takes back songs an earlier shelf showed, in its own order, without claiming them (`SHELF_FLOOR`). Since 7.1 the ledger claims a song by catalogue id and by canonical identity (`songKey`), so another cut of a song shown on an earlier shelf is dropped too. Identity is also collapsed where the lists are built: in `mixes.ts` for the personal mixes, in the hard filter for queues and in `trending.ts` for the trending shelf. `features/home/dedupeShelves.ts` is an older identity-based helper that is exercised by unit tests and is not called by the Home page.
 
 ## Developer breakdown
 

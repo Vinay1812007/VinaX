@@ -696,37 +696,6 @@ html.amoled .vx-lp-link-glyph { background: rgb(var(--ink-800)); }
 .vx-mix-play:hover { background: rgb(var(--ember-400)); }
 .vx-mix-play:active { transform: scale(0.97); }
 
-/* ----------------------------------------------------- AI playlist result */
-.vx-ai-result { margin-top: 32px; }
-.vx-ai-result-head { display: flex; align-items: flex-end; gap: 20px; }
-.vx-ai-result-art { width: 128px; height: 128px; border-radius: var(--vx-radius-card); box-shadow: var(--vx-art-shadow); }
-.vx-ai-result-title { margin: 4px 0 8px; font-size: clamp(22px, 3vw, 32px); font-weight: 800; line-height: 1.1; letter-spacing: -0.025em; overflow-wrap: anywhere; }
-/* 8.5.0 — the curator's one-line reason under each AI pick, aligned with the title column. */
-/* Title column = row padding 8 + number 26 + gap 14 + art 44 + gap 14 (tracklist.css); phones drop the number and padding. */
-.vx-ai-track-reason { margin: -6px 0 6px; padding-inline: 106px 12px; font-size: 13px; line-height: 1.35; color: rgb(var(--ink-400)); overflow-wrap: anywhere; }
-@media (max-width: 767px) { .vx-ai-track-reason { padding-inline-start: 62px; } }
-.vx-ai-result .vx-ehead-actions { padding-top: 20px; }
-@media (max-width: 767px) { .vx-ai-result-art { width: 96px; height: 96px; } .vx-ai-result-head { gap: 16px; } }
-
-/* AI playlist page: flat surfaces, no borders, the accent only on the action. */
-.vx-playlist-studio.vx-playlist-studio { padding-top: 0; }
-.vx-playlist-studio .vx-prompt-grid { gap: 12px; margin: 8px 0 24px; }
-.vx-playlist-studio .vx-prompt-grid button {
-  min-height: 112px;
-  padding: 16px;
-  border: 0;
-  border-radius: var(--vx-radius-card);
-  background: rgb(var(--ink-100) / 0.05);
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
-}
-.vx-playlist-studio .vx-prompt-grid button:hover { background: rgb(var(--ink-100) / 0.1); }
-.vx-playlist-studio .vx-prompt-grid button:active { transform: scale(0.98); }
-.vx-playlist-studio .vx-prompt-grid svg { margin-bottom: 16px; color: rgb(var(--ink-200)); }
-.vx-playlist-studio .vx-prompt-grid strong { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-.vx-playlist-studio .vx-prompt-grid span { font-size: 13px; line-height: 1.4; }
-.vx-playlist-studio .vx-ai-composer.glass-card { border: 0; border-radius: var(--vx-radius-panel); background: rgb(var(--ink-850)); box-shadow: none; }
-.vx-playlist-studio .vx-ai-composer textarea.glass-input { border-radius: var(--vx-radius-card); }
-
 /* ------------------------------------------------------------------- phone */
 @media (max-width: 767px) {
   .vx-ehead-main { flex-direction: column; align-items: stretch; gap: 20px; padding: 8px 0 16px; }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { explainReasons, explainTopReasons } from './explanations';
 import type { ReasonComponent } from './types';
+import type { Song } from '@/types';
 
 const r = (kind: ReasonComponent['kind'], weight: number, detail?: string): ReasonComponent => ({
   kind,
@@ -76,7 +77,7 @@ describe('9.0.0 — "Why this song?" quotes only what added to the score', () =>
   it('a real scored candidate gets reasons from its real terms', async () => {
     const { scoreCandidate } = await import('./scoring');
     const { createEmptyProfile } = await import('../personalization/profile');
-    const song = { kind: 'song', id: 'x', title: 'X', subtitle: 'A', artists: [{ id: 'a', name: 'A' }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: null, explicit: false, hasLyrics: false, playCount: null } as const;
+    const song: Song = { kind: 'song', id: 'x', title: 'X', subtitle: 'A', artists: [{ id: 'a', name: 'A' }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: null, explicit: false, hasLyrics: false, playCount: null };
     const scored = scoreCandidate({ song: { ...song }, source: 'related', seedTitle: 'Seed' }, { profile: createEmptyProfile(0), hour: 12, region: null, pinnedLanguages: [], mutedLanguages: [], intensity: 0.6, favorites: [], history: [], salt: 1, seedSong: { ...song, id: 'seed' } });
     const line = explainTopReasons(scored.reasons);
     expect(line).toContain('Similar to “Seed”');

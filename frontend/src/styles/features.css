@@ -124,7 +124,6 @@
 .vx-journeys strong { font-size: var(--vx-type-meta); }
 .vx-journeys span { display: block; font-size: var(--vx-type-caption); color: var(--vx-text-muted); }
 .vx-fresh-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--vx-type-meta); color: var(--vx-text-secondary); }
-.vx-load-status { display: flex; align-items: center; gap: 12px; font-size: var(--vx-type-meta); color: var(--vx-text-muted); margin-bottom: 24px; }
 .vx-wave-loader { display: flex; align-items: center; gap: 3px; height: 24px; }
 .vx-wave-loader i { width: 3px; height: 14px; background: var(--vx-accent); border-radius: 4px; }
 @media (max-width: 767px) {
