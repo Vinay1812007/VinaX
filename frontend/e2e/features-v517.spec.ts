@@ -157,7 +157,11 @@ test('home, stats, history, explore, library, collection, search, settings rende
   expect(boot.hc).toBe(true);
 
   await visit(page, '/stats', /report[\s\S]*calendar|longest/i);
-  await visit(page, '/history', /clear last hour|clear today/i);
+  await visit(page, '/history', /recently played/i);
+  // 9.0 — the scoped clears sit in the History header's ⋯ menu, beside "Clear all history".
+  await page.getByRole('button', { name: 'More actions', exact: true }).click();
+  await expect.poll(() => bodyText(page)).toMatch(/clear last hour[\s\S]*clear today[\s\S]*clear all history/i);
+  await page.keyboard.press('Escape');
   await visit(page, '/explore', /decade radio[\s\S]*pick a year|surprise album/i);
   await visit(page, '/library', /road trip/i);
   await visit(page, '/collection/c1', /duplicate/i);

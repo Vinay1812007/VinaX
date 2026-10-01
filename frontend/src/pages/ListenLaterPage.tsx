@@ -12,12 +12,13 @@ import { BookmarkIcon, QueueIcon } from '@/components/Icons';
 import { toast } from '@/store/toastStore';
 
 /** .vx-track-row min-height — the off-screen size estimate for list chunks. */
-const ROW_HEIGHT = 56;
+const ROW_HEIGHT = 60;
 const songKey = (song: Song): string => song.id;
 
 /**
  * v5.12.0 — Listen Later. The "I'll come back to this" list: one tap from
  * any song menu, plays or queues in one go, and clears itself as you go.
+ * 9.0 "Encore": the Lagoon cover and header; each row keeps its Done pill.
  */
 export default function ListenLaterPage() {
   usePageTitle('Listen Later');
@@ -50,13 +51,13 @@ export default function ListenLaterPage() {
       <EntityHeader
         kind="Playlist"
         title="Listen later"
-        tone="var(--ember-600)"
+        tone="var(--tide-500)"
         art={<GlyphCover tone="later" icon={<BookmarkIcon />} />}
         meta={<EntityMeta items={[later.length ? songsLabel(later.length) : 'Songs you want to come back to', totalDuration(later)]} />}
         actions={
           later.length > 0 ? (
             <>
-              <PlayFab label="Play all" onClick={() => playQueue(later, 0)} />
+              <PlayFab size="lg" label="Play all" onClick={() => playQueue(later, 0)} />
               <EntityAction
                 label="Add to queue"
                 onClick={() => {

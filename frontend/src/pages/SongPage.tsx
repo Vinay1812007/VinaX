@@ -11,6 +11,7 @@ import { HeaderSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
 import { PlusIcon, ShareIcon } from '@/components/Icons';
 import { EntityAction, EntityHeader, EntityMeta, PlayFab } from '@/components/EntityHeader';
+import { SectionHeader } from '@/components/SectionHeader';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { formatDuration, formatCount } from '@/utils/format';
 import { languageLabel } from '@/constants/languages';
@@ -80,12 +81,12 @@ export default function SongPage() {
         }
         actions={
           <>
-            <PlayFab label="Play" onClick={play} />
+            <PlayFab size="lg" label="Play" onClick={play} />
             <FavButton song={song} className="vx-ehead-fav" />
             <EntityAction label="Add to queue" onClick={() => enqueue(song)}><PlusIcon /></EntityAction>
             <EntityAction label="Share" onClick={() => void shareLink(songPath(song), song.title)}><ShareIcon /></EntityAction>
             {song.hasLyrics && (
-              <Link to={`/lyrics/${song.id}`} className="vx-ehead-pill ml-1">
+              <Link to={`/lyrics/${song.id}`} className="vx-ehead-pill">
                 Lyrics
               </Link>
             )}
@@ -93,8 +94,8 @@ export default function SongPage() {
         }
       />
 
-      <section className="vx-esection !mt-2" aria-labelledby="song-similar">
-        <h2 id="song-similar">Similar tracks</h2>
+      <section className="vx-esection is-first" aria-label="Similar tracks">
+        <SectionHeader title="Similar tracks" />
         {suggestions.isLoading && <ListSkeleton rows={5} />}
         <div className="vx-tracklist">
           {(suggestions.data ?? []).map((s, i) => (

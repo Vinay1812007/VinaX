@@ -65,7 +65,7 @@ export default function PlaylistPage() {
         }
         actions={
           <>
-            {playlist.songs.length > 0 && <PlayFab label="Play all" onClick={() => playQueue(playlist.songs, 0)} />}
+            {playlist.songs.length > 0 && <PlayFab size="lg" label="Play all" onClick={() => playQueue(playlist.songs, 0)} />}
             {playlist.songs.length > 0 && (
               <EntityAction label="Shuffle play" onClick={shufflePlay}><ShuffleIcon /></EntityAction>
             )}

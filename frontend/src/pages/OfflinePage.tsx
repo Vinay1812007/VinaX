@@ -2,16 +2,18 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { songPath } from '@/utils/slug';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { EntityHeader, EntityMeta, GlyphCover, PlayFab, totalDuration } from '@/components/EntityHeader';
+import { EntityAction, EntityHeader, EntityMeta, GlyphCover, PlayFab, totalDuration } from '@/components/EntityHeader';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { removeDownload } from '@/services/downloads';
 import { usePlayerStore } from '@/store/playerStore';
 import { isNativePlatform } from '@/services/native';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
-import { PlayIcon, DownloadIcon } from '@/components/Icons';
+import { PlayIcon, DownloadIcon, ShuffleIcon, XIcon } from '@/components/Icons';
 import { EmptyState } from '@/components/States';
 import { toast } from '@/store/toastStore';
 import { VirtualChunks } from '@/components/VirtualChunks';
+import { shuffled } from '@/features/library/sort';
+import { cn } from '@/utils/cn';
 import type { Song } from '@/types';
 import '@/styles/pages/tracklist.css';
 
@@ -19,6 +21,8 @@ import '@/styles/pages/tracklist.css';
 // sizes, so we estimate from duration at the high-quality bitrate (320 kbps ≈
 // 40 KB/s) and say "≈" honestly in the UI.
 const BYTES_PER_SEC = 40 * 1024;
+/** The bar's scale: 2 GB fills it. An estimate against a round number, not a quota. */
+const BAR_SCALE = 2 * 1024 * 1024 * 1024;
 
 function fmtBytes(n: number): string {
   if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -26,8 +30,8 @@ function fmtBytes(n: number): string {
   return `${Math.round(n / 1024)} KB`;
 }
 
-/** Row height (40px art + padding) — the off-screen size estimate for list chunks. */
-const ROW_HEIGHT = 60;
+/** Row height (44px art + padding) — the off-screen size estimate for list chunks. */
+const ROW_HEIGHT = 64;
 const songKey = (song: Song): string => song.id;
 
 interface RowProps {
@@ -42,7 +46,7 @@ interface RowProps {
 /** Memoised: ticking a checkbox re-renders that row, not the whole downloads list. */
 const DownloadRow = memo(function DownloadRow({ song, index, selecting, picked, onTogglePick, onPlay }: RowProps) {
   return (
-    <div className="vx-drow group">
+    <div className={cn('vx-drow group', selecting && picked && 'is-picked')}>
       {selecting && (
         <span className="vx-crow-check">
           <input
@@ -61,6 +65,8 @@ const DownloadRow = memo(function DownloadRow({ song, index, selecting, picked, 
           alt=""
           loading="lazy"
           decoding="async"
+          width={44}
+          height={44}
         />
         {!selecting && (
           <span className="vx-drow-over" aria-hidden>
@@ -83,15 +89,23 @@ const DownloadRow = memo(function DownloadRow({ song, index, selecting, picked, 
         <button
           type="button"
           onClick={() => void removeDownload(song.id).then(() => toast('Removed download'))}
-          className="vx-quiet-btn is-danger"
+          aria-label={`Remove the download of ${song.title}`}
+          title="Remove download"
+          className="vx-row-x is-danger vx-drow-remove"
         >
-          Remove
+          <XIcon className="w-4 h-4" />
         </button>
       )}
     </div>
   );
 });
 
+/**
+ * Downloads (the Android app's offline copies). 9.0 "Encore": the header
+ * plays or shuffles everything saved, a storage estimate sits under it, a
+ * live strip counts what is still downloading, and Select turns the list
+ * into a batch remover.
+ */
 export default function OfflinePage() {
   usePageTitle('Downloads');
   const items = useDownloadsStore((s) => s.items);
@@ -114,17 +128,26 @@ export default function OfflinePage() {
     [],
   );
   const playFrom = useCallback((i: number): void => usePlayerStore.getState().playQueue(songs, i), [songs]);
+  const shufflePlay = (): void => {
+    if (!songs.length) return;
+    const p = usePlayerStore.getState();
+    if (!p.shuffle) p.toggleShuffle();
+    p.playQueue(shuffled(songs), 0);
+  };
   const renderRow = useCallback(
     (song: Song, i: number) => (
       <DownloadRow song={song} index={i} selecting={selecting} picked={picked.has(song.id)} onTogglePick={togglePick} onPlay={playFrom} />
     ),
     [selecting, picked, togglePick, playFrom],
   );
+  const stopSelecting = (): void => {
+    setSelecting(false);
+    setPicked(new Set());
+  };
   const deletePicked = async (): Promise<void> => {
     const ids = [...picked];
     for (const id of ids) await removeDownload(id);
-    setPicked(new Set());
-    setSelecting(false);
+    stopSelecting();
     toast(`Removed ${ids.length} download${ids.length === 1 ? '' : 's'}`);
   };
 
@@ -142,7 +165,7 @@ export default function OfflinePage() {
   if (!list.length && !inFlight) {
     return (
       <div className="vx-entity">
-        {header()}
+        {header(undefined, isNativePlatform() ? <EntityMeta items={['Songs you save play without a connection']} /> : undefined)}
         <EmptyState
           icon={<DownloadIcon className="w-8 h-8" />}
           title="No downloads yet"
@@ -171,18 +194,19 @@ export default function OfflinePage() {
       {header(
         list.length > 0 ? (
           <>
-            {!selecting && <PlayFab label="Play all" onClick={() => playFrom(0)} />}
+            <PlayFab size="lg" label="Play all" onClick={() => playFrom(0)} disabled={selecting} />
+            <EntityAction label="Shuffle play" onClick={shufflePlay} disabled={selecting}><ShuffleIcon /></EntityAction>
             {selecting ? (
               <>
-                <button onClick={() => void deletePicked()} disabled={picked.size === 0} className="vx-quiet-btn is-danger">
+                <button type="button" onClick={() => void deletePicked()} disabled={picked.size === 0} className="vx-quiet-btn is-danger">
                   Delete {picked.size || ''}
                 </button>
-                <button onClick={() => { setSelecting(false); setPicked(new Set()); }} className="vx-quiet-btn">
+                <button type="button" onClick={stopSelecting} className="vx-quiet-btn">
                   Cancel
                 </button>
               </>
             ) : (
-              <button onClick={() => setSelecting(true)} className="vx-quiet-btn">
+              <button type="button" onClick={() => setSelecting(true)} className="vx-quiet-btn">
                 Select
               </button>
             )}
@@ -191,31 +215,32 @@ export default function OfflinePage() {
         list.length > 0 ? <EntityMeta items={[`${list.length} song${list.length > 1 ? 's' : ''}`, totalDuration(songs), `≈ ${fmtBytes(estBytes)}`]} /> : undefined,
       )}
 
-      {/* D8 — storage summary bar (estimate; the catalog hides real sizes). */}
+      {/* D8 — storage summary (estimate; the catalog hides real sizes). */}
       {list.length > 0 && (
-        <div className="vx-strip vx-storage">
-          <div className="flex items-center justify-between w-full text-sm">
-            <span className="font-semibold">{list.length} song{list.length > 1 ? 's' : ''} offline</span>
-            <span className="text-ink-400 text-xs">≈ {fmtBytes(estBytes)} on device</span>
+        <div className="vx-storage">
+          <div className="vx-storage-head">
+            <span className="vx-storage-title">≈ {fmtBytes(estBytes)} on this device</span>
+            <span className="vx-storage-note">Estimated at high quality · change quality in Settings → Playback</span>
           </div>
-          <div className="h-1 w-full rounded-full bg-ink-700 overflow-hidden" aria-hidden>
-            <div
-              className="h-full rounded-full bg-ember-500"
-              style={{ width: `${Math.min(100, (estBytes / (2 * 1024 * 1024 * 1024)) * 100)}%` }}
-            />
+          <div className="vx-storage-bar" aria-hidden>
+            <i style={{ width: `${Math.max(1.5, Math.min(100, (estBytes / BAR_SCALE) * 100))}%` }} />
           </div>
-          <p className="text-[11px] text-ink-400">Estimated at high quality · change quality in Settings → Playback</p>
         </div>
       )}
 
       {/* D8 — in-flight downloads strip (indeterminate; no byte progress from the pipe). */}
       {inFlight > 0 && (
-        <div className="vx-strip" role="status">
-          <span className="w-3.5 h-3.5 rounded-full border-2 border-ember-400 border-t-transparent animate-spin shrink-0" aria-hidden />
-          <p className="text-sm font-semibold">
-            Downloading {inFlight} song{inFlight > 1 ? 's' : ''}… they appear below as they finish.
+        <div className="vx-strip vx-live-strip" role="status">
+          <span className="vx-live-spin" aria-hidden />
+          <p className="vx-strip-text">
+            <b>Downloading {inFlight} song{inFlight > 1 ? 's' : ''}…</b>
+            <span> they appear below as they finish.</span>
           </p>
         </div>
+      )}
+
+      {selecting && (
+        <p className="vx-etools-note mb-3" aria-live="polite">{picked.size} selected — tap songs to pick them.</p>
       )}
 
       <div className="vx-tracklist">

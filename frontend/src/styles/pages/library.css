@@ -1,116 +1,138 @@
 /* ============================================================================
-   VinaX 8 — entity pages (album, playlist, artist, collections, liked songs,
-   listen later, history, downloads, mixes) and the Library page.
+   VinaX 9 "Encore" — the Library and the entity pages (album, playlist,
+   artist, song, collections, smart collections, liked songs, Listen later,
+   history, downloads, mixes).
 
-   Imported by components/EntityHeader.tsx and the library/entity pages, so it
-   ships in their lazy chunks only. Reads tokens from index.css; builds on the
-   shared primitives in stage.css (.vx-play-fab, .vx-display, chips).
+   Imported by components/EntityHeader.tsx and the library / entity pages, so
+   it ships in their lazy chunks only. Reads tokens from index.css and builds
+   on the shared primitives in shell.css (.vx-play-fab, .vx-display, chips,
+   section headers) and tracklist.css (track rows, .card-play).
+
+   Every class here is namespaced to these pages: generic names such as
+   .vx-field also exist in browse.css and secondary.css, and once two page
+   stylesheets are loaded they would restyle each other. Library fields are
+   .vx-lfield, library selects .vx-lselect, library-page pieces .vx-lp-*.
    ========================================================================= */
 
 /* ------------------------------------------------------------ entity page */
-.vx-entity { position: relative; padding-bottom: 24px; }
+.vx-entity { position: relative; padding-bottom: 32px; }
 
-/* The header: a wash of the artwork colour (--hero, "R G B") fading into the
-   workspace, drawn edge to edge behind the top bar. */
-/* z-index: the ⋯ menu inside must float over the list that follows. */
-.vx-ehead { --wash-a: 0.55; position: relative; z-index: 2; isolation: isolate; }
-html.light .vx-ehead { --wash-a: 0.34; }
+/* The header: a wash of the artwork colour (--hero, "R G B") that glows from
+   behind the cover and fades into the workspace, drawn edge to edge behind
+   the top bar. z-index: the ⋯ menu inside must float over the list below. */
+.vx-ehead { --wash-a: 0.5; position: relative; z-index: 2; isolation: isolate; }
+html.light .vx-ehead { --wash-a: 0.3; }
+html.amoled .vx-ehead { --wash-a: 0.42; }
 .vx-ehead-wash {
   position: absolute;
   z-index: -1;
   top: calc(-1 * (var(--vx-topbar-h) + 8px));
   right: calc(-1 * var(--vx-gutter));
   left: calc(-1 * var(--vx-gutter));
-  height: calc(100% + var(--vx-topbar-h) + 72px);
+  height: calc(100% + var(--vx-topbar-h) + 120px);
   background:
-    linear-gradient(180deg, rgb(var(--hero) / var(--wash-a)) 0%, rgb(var(--hero) / calc(var(--wash-a) * 0.45)) 55%, rgb(var(--hero) / 0) 100%);
+    radial-gradient(70% 85% at 14% 12%, rgb(var(--hero) / var(--wash-a)), rgb(var(--hero) / 0) 72%),
+    linear-gradient(180deg, rgb(var(--hero) / calc(var(--wash-a) * 0.62)) 0%, rgb(var(--hero) / calc(var(--wash-a) * 0.2)) 58%, rgb(var(--hero) / 0) 100%);
   pointer-events: none;
-  transition: background 400ms var(--ease-calm);
 }
 .vx-ehead-main {
   display: flex;
   align-items: flex-end;
   gap: 32px;
-  padding: 24px 0 24px;
+  padding: 20px 0 24px;
 }
 .vx-ehead-art {
   position: relative;
-  width: 232px;
+  width: clamp(184px, 19vw, 240px);
   aspect-ratio: 1;
   flex-shrink: 0;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--vx-radius-panel);
   background: rgb(var(--ink-850));
-  box-shadow: 0 18px 44px -14px rgb(0 0 0 / 0.6);
+  box-shadow: 0 24px 48px -20px rgb(0 0 0 / 0.7);
 }
-html.light .vx-ehead-art { box-shadow: 0 16px 36px -16px rgb(15 20 30 / 0.4); }
+html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(20 20 40 / 0.4); }
 .vx-ehead-art > img,
 .vx-ehead-art > div { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .vx-ehead-art.is-round { border-radius: 50%; }
-.vx-ehead-body { min-width: 0; flex: 1; padding-bottom: 4px; }
-.vx-ehead-kind { color: rgb(var(--ink-100)); font-size: 12px; font-weight: 700; letter-spacing: 0.01em; }
+.vx-ehead-body { min-width: 0; flex: 1; padding-bottom: 6px; }
+.vx-ehead-kind { color: rgb(var(--ink-200)); font-size: 13px; font-weight: 700; }
+/* Line-height leaves room for descenders and Indic vowel signs under the
+   clamp; long titles step down instead of wrapping into five lines. */
 .vx-ehead-title {
   display: -webkit-box;
-  margin: 6px 0 14px;
+  margin: 6px 0 12px;
   overflow: hidden;
   color: rgb(var(--ink-100));
+  line-height: 1.12;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-clamp: 3;
 }
-.vx-ehead-title.is-long { font-size: clamp(28px, 3.4vw, 48px); line-height: 1.06; }
-.vx-ehead-title.is-xlong { font-size: clamp(24px, 2.7vw, 38px); line-height: 1.1; }
+.vx-ehead-title.is-long { font-size: clamp(2rem, 3.2vw, 3rem); line-height: 1.12; }
+.vx-ehead-title.is-xlong { font-size: clamp(1.625rem, 2.4vw, 2.25rem); line-height: 1.18; letter-spacing: -0.03em; }
 .vx-ehead-desc {
   display: -webkit-box;
   max-width: 72ch;
-  margin: -4px 0 10px;
+  margin: -2px 0 10px;
   overflow: hidden;
   color: rgb(var(--ink-300));
   font-size: 14px;
   font-weight: 500;
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
 }
-.vx-ehead-meta { color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; line-height: 1.5; }
+.vx-ehead-meta { color: rgb(var(--ink-300)); font-size: 14px; font-weight: 500; line-height: 1.55; }
 .vx-ehead-meta .is-lead { color: rgb(var(--ink-100)); font-weight: 700; }
-.vx-ehead-meta a:hover { text-decoration: underline; text-underline-offset: 2px; }
+.vx-ehead-meta a { text-underline-offset: 3px; }
+.vx-ehead-meta a:hover { text-decoration: underline; }
 .vx-ehead-dot { color: rgb(var(--ink-400)); }
 
+/* Actions: one Iris squircle, then quiet round buttons and the ⋯ menu. */
 .vx-ehead-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 8px 0 24px;
+  gap: 10px;
+  padding: 4px 0 28px;
 }
-.vx-ehead-fab { margin-right: 8px; }
-.vx-ehead-fab:disabled { opacity: 0.45; pointer-events: none; }
-.vx-ehead-icon.vx-ehead-icon { color: rgb(var(--ink-300)); background: transparent; }
-.vx-ehead-icon.vx-ehead-icon:hover { color: rgb(var(--ink-100)); background: transparent; transform: scale(1.04); }
-.vx-ehead-icon.vx-ehead-icon[aria-pressed='true'] { color: rgb(var(--ember-400)); }
-.vx-ehead-icon svg { width: 26px; height: 26px; }
+.vx-ehead-fab { margin-right: 6px; }
+.vx-ehead-fab:disabled { opacity: 0.45; box-shadow: none; pointer-events: none; }
+.vx-ehead-icon.vx-ehead-icon {
+  color: rgb(var(--ink-200));
+  background: rgb(var(--ink-100) / 0.07);
+  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.vx-ehead-icon.vx-ehead-icon:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.13); }
+.vx-ehead-icon.vx-ehead-icon:active { transform: scale(0.95); }
+.vx-ehead-icon.vx-ehead-icon[aria-pressed='true'],
+.vx-ehead-icon.vx-ehead-icon[aria-expanded='true'] { color: rgb(var(--ember-400)); background: var(--vx-accent-wash); }
+.vx-ehead-icon svg { width: 24px; height: 24px; }
+/* An outlined pill action (Follow, Lyrics, Save on the AI result). */
 .vx-ehead-pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
-  padding: 0 16px;
-  border: 1px solid rgb(var(--ink-100) / 0.3);
-  border-radius: 9999px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid rgb(var(--ink-100) / 0.26);
+  border-radius: 999px;
+  background: transparent;
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 700;
-  transition: border-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  transition: border-color 140ms var(--ease-calm), color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
 }
-.vx-ehead-pill:hover { border-color: rgb(var(--ink-100) / 0.7); }
+.vx-ehead-pill::after { content: ''; position: absolute; inset: -2px 0; }
+.vx-ehead-pill:hover { border-color: rgb(var(--ink-100) / 0.62); }
 .vx-ehead-pill:active { transform: scale(0.97); }
-.vx-ehead-pill[aria-pressed='true'] { border-color: rgb(var(--ink-100) / 0.3); }
-.vx-ehead-pill { position: relative; }
-.vx-ehead-pill::after { content: ''; position: absolute; inset: -4px 0; }
+.vx-ehead-pill[aria-pressed='true'] { border-color: rgb(var(--ember-500)); color: rgb(var(--ember-400)); }
 
-/* Save (plus ring → filled check). */
+/* Save (components/SaveButton icon variant): a plus ring → a filled Iris check. */
 .vx-save-icon {
   position: relative;
   display: inline-grid;
@@ -118,53 +140,79 @@ html.light .vx-ehead-art { box-shadow: 0 16px 36px -16px rgb(15 20 30 / 0.4); }
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  color: rgb(var(--ink-300));
-  transition: color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+  background: rgb(var(--ink-100) / 0.07);
+  color: rgb(var(--ink-200));
+  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
 }
 .vx-save-icon > span {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   border: 2px solid currentColor;
   border-radius: 50%;
 }
-.vx-save-icon > span svg { stroke-width: 2.4; }
-.vx-save-icon:hover { color: rgb(var(--ink-100)); transform: scale(1.04); }
+.vx-save-icon > span svg { width: 14px; height: 14px; stroke-width: 2.6; }
+.vx-save-icon:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.13); }
+.vx-save-icon:active { transform: scale(0.95); }
+.vx-save-icon.is-saved { background: var(--vx-accent-wash); }
 .vx-save-icon.is-saved > span { border-color: rgb(var(--ember-500)); background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 
-/* ⋯ menu. */
+/* The song page's heart, sized like the other round actions. */
+.vx-ehead-fav.vx-ehead-fav {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  background: rgb(var(--ink-100) / 0.07);
+}
+.vx-ehead-fav.vx-ehead-fav:hover { background: rgb(var(--ink-100) / 0.13); }
+.vx-ehead-fav.vx-ehead-fav[aria-pressed='true'] { background: var(--vx-accent-wash); }
+.vx-ehead-fav svg { width: 24px; height: 24px; }
+
+/* ⋯ menu (EntityMenu): inline, anchored to its trigger, flips up near the player. */
 .vx-emenu { position: relative; display: inline-flex; }
 .vx-emenu-panel {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
   z-index: 40;
   min-width: 232px;
-  padding: 4px;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 6px;
   border: 1px solid var(--vx-border);
-  border-radius: 8px;
+  border-radius: var(--vx-radius-card);
   background: rgb(var(--ink-850));
   box-shadow: var(--vx-shadow-overlay);
+  animation: vx-emenu-in 160ms var(--ease-calm) backwards;
 }
+.vx-emenu-panel.is-end { right: 0; left: auto; }
+.vx-emenu-panel.is-up { top: auto; bottom: calc(100% + 6px); }
 html.light .vx-emenu-panel { background: rgb(var(--ink-950)); }
+html.amoled .vx-emenu-panel { background: rgb(var(--ink-800)); }
 .vx-emenu-item {
   display: flex;
   align-items: center;
   width: 100%;
   min-height: 44px;
   padding: 0 12px;
-  border-radius: 6px;
+  border-radius: var(--vx-radius-control);
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 600;
   text-align: left;
 }
-.vx-emenu-item:hover, .vx-emenu-item:focus-visible { background: rgb(var(--ink-100) / 0.08); outline: none; }
+.vx-emenu-item:hover { background: var(--vx-hover); }
+.vx-emenu-item:focus-visible { background: var(--vx-hover); outline: 2px solid var(--vx-focus); outline-offset: -2px; }
 .vx-emenu-item:disabled { opacity: 0.45; }
 .vx-emenu-item.is-danger { color: var(--vx-danger); }
+@keyframes vx-emenu-in { from { opacity: 0; transform: translateY(-4px); } }
+.vx-emenu-panel.is-up { animation-name: vx-emenu-in-up; }
+@keyframes vx-emenu-in-up { from { opacity: 0; transform: translateY(4px); } }
 
-/* Covers without artwork of their own. */
+/* Covers without artwork of their own. The one gradient (Iris → Lagoon) is
+   Liked songs'; Listen later is Lagoon; history and downloads stay neutral. */
 .vx-glyph-cover {
   display: grid;
   place-items: center;
@@ -172,78 +220,106 @@ html.light .vx-emenu-panel { background: rgb(var(--ink-950)); }
   height: 100%;
   color: #fff;
 }
-.vx-glyph-cover svg { width: 38%; height: 38%; }
-.vx-glyph-cover.is-liked { background: linear-gradient(140deg, rgb(var(--ember-600)), rgb(var(--ember-400))); }
-.vx-glyph-cover.is-later { background: linear-gradient(140deg, rgb(var(--ember-600) / 0.85), rgb(var(--tide-400) / 0.75)); }
+.vx-glyph-cover svg { width: 36%; height: 36%; }
+.vx-glyph-cover.is-liked { background: var(--vx-glow); }
+.vx-glyph-cover.is-later { background: linear-gradient(150deg, rgb(var(--tide-500) / 0.92), rgb(var(--tide-500) / 0.34)), rgb(var(--ink-850)); }
+html.light .vx-glyph-cover.is-later { background: linear-gradient(150deg, rgb(var(--tide-400)), rgb(var(--tide-500) / 0.7)), rgb(var(--ink-850)); }
+.vx-glyph-cover.is-smart { background: linear-gradient(150deg, rgb(var(--tide-500) / 0.85), rgb(var(--ink-800))); }
 .vx-glyph-cover.is-history,
-.vx-glyph-cover.is-downloads { background: linear-gradient(140deg, rgb(var(--ink-700)), rgb(var(--ink-800))); color: rgb(var(--ink-100)); }
+.vx-glyph-cover.is-downloads { background: linear-gradient(150deg, rgb(var(--ink-700)), rgb(var(--ink-850))); color: rgb(var(--ink-200)); }
+/* A glyph says less than artwork, so it takes less room. */
+.vx-ehead-art:has(> .vx-glyph-cover) { width: clamp(168px, 16vw, 208px); }
 
-/* Toolbar under the action row (filters, sort, search in list). */
-.vx-etools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; }
-.vx-etools-note { color: rgb(var(--ink-400)); font-size: 12px; font-weight: 500; }
-.vx-field {
+/* The loading header (components/Skeletons HeaderSkeleton) mirrors the real one. */
+.vx-entity-hero { display: flex; align-items: flex-end; gap: 32px; padding: 20px 0 32px; }
+.vx-entity-hero > .skeleton:first-child { border-radius: var(--vx-radius-panel); }
+.vx-entity-hero > div { min-width: 0; }
+
+/* ------------------------------------------------------ tools under a header */
+.vx-etools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 0 0 20px; }
+.vx-etools-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vx-etools-note { color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 500; }
+.vx-etools .vx-quiet-btn,
+.vx-lp-bar .vx-quiet-btn { min-height: 44px; padding: 0 18px; }
+.vx-etools .vx-quiet-btn::after { display: none; }
+
+/* A pill search field. */
+.vx-lfield {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1 1 200px;
+  flex: 1 1 240px;
   min-width: 0;
-  max-width: 360px;
+  max-width: 400px;
 }
-.vx-field > svg { position: absolute; left: 12px; width: 18px; height: 18px; color: rgb(var(--ink-400)); pointer-events: none; }
-.vx-field input {
+.vx-lfield > svg { position: absolute; left: 15px; width: 18px; height: 18px; color: rgb(var(--ink-400)); pointer-events: none; }
+.vx-lfield input {
   width: 100%;
-  height: 40px;
-  padding: 0 36px 0 38px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: rgb(var(--ink-100) / 0.07);
+  height: 44px;
+  padding: 0 42px 0 42px;
+  border: 1px solid var(--vx-border);
+  border-radius: 999px;
+  background: rgb(var(--ink-850));
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 500;
   outline: none;
-  transition: border-color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: border-color 140ms var(--ease-calm), background-color 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm);
 }
-.vx-field input::placeholder { color: rgb(var(--ink-400)); }
-.vx-field input:focus { background: rgb(var(--ink-100) / 0.1); }
-.vx-field input:focus-visible { border-color: rgb(var(--ember-400)); }
-.vx-field input::-webkit-search-cancel-button { display: none; }
-.vx-field-clear {
+.vx-lfield.is-plain input { padding-left: 18px; }
+.vx-lfield input::placeholder { color: rgb(var(--ink-400)); }
+@media (hover: hover) and (pointer: fine) { .vx-lfield input:hover:not(:focus) { background: rgb(var(--ink-800)); } }
+.vx-lfield input:focus { border-color: rgb(var(--ember-400)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.2); }
+.vx-lfield input::-webkit-search-cancel-button { display: none; }
+html.amoled .vx-lfield input { background: rgb(var(--ink-800)); }
+.vx-lfield-clear {
   position: absolute;
   right: 4px;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   color: rgb(var(--ink-400));
 }
-.vx-field-clear:hover { color: rgb(var(--ink-100)); }
-.vx-select {
-  height: 40px;
-  padding: 0 32px 0 12px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: rgb(var(--ink-100) / 0.07) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;
+.vx-lfield-clear::after { content: ''; position: absolute; inset: -4px; }
+.vx-lfield-clear:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
+
+/* A pill select (sort, target playlist). */
+.vx-lselect {
+  height: 44px;
+  max-width: 100%;
+  padding: 0 38px 0 16px;
+  border: 1px solid var(--vx-border);
+  border-radius: 999px;
+  background: rgb(var(--ink-850)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 15px center;
   color: rgb(var(--ink-100));
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 650;
+  text-overflow: ellipsis;
   appearance: none;
   outline: none;
+  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm);
 }
-.vx-select:focus-visible { border-color: rgb(var(--ember-400)); }
-.vx-select option { background: rgb(var(--ink-850)); color: rgb(var(--ink-100)); }
+@media (hover: hover) and (pointer: fine) { .vx-lselect:hover { background-color: rgb(var(--ink-800)); } }
+.vx-lselect:focus-visible { border-color: rgb(var(--ember-400)); box-shadow: 0 0 0 3px rgb(var(--ember-500) / 0.2); }
+.vx-lselect option { background: rgb(var(--ink-850)); color: rgb(var(--ink-100)); }
+html.amoled .vx-lselect { background-color: rgb(var(--ink-800)); }
+
+/* A quiet pill: a translucent fill at rest, solid Iris when pressed. */
 .vx-quiet-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   min-height: 36px;
-  padding: 0 14px;
-  border-radius: 9999px;
+  padding: 0 16px;
+  border-radius: 999px;
   background: rgb(var(--ink-100) / 0.07);
   color: rgb(var(--ink-100));
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   white-space: nowrap;
   transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
 }
@@ -251,34 +327,57 @@ html.light .vx-emenu-panel { background: rgb(var(--ink-950)); }
 .vx-quiet-btn:hover { background: rgb(var(--ink-100) / 0.13); }
 .vx-quiet-btn:active { transform: scale(0.97); }
 .vx-quiet-btn:disabled { opacity: 0.4; pointer-events: none; }
-.vx-quiet-btn[aria-pressed='true'] { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
+.vx-quiet-btn[aria-pressed='true'] { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 .vx-quiet-btn.is-danger:hover { color: var(--vx-danger); }
+.vx-quiet-btn svg { flex-shrink: 0; }
 
-/* A quiet status strip (duplicates, selection bar, downloads summary). */
+/* A quiet status strip (duplicates, the selection bar, live downloads). */
 .vx-strip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
   margin: 0 0 16px;
-  padding: 10px 12px 10px 16px;
-  border-radius: 8px;
+  padding: 10px 10px 10px 16px;
+  border-radius: var(--vx-radius-card);
   background: rgb(var(--ink-850));
   font-size: 14px;
 }
-.vx-strip-text { flex: 1 1 200px; min-width: 0; }
+html.amoled .vx-strip { background: rgb(var(--ink-800)); }
+.vx-strip-text { flex: 1 1 220px; min-width: 0; color: rgb(var(--ink-100)); }
 .vx-strip-text span { color: rgb(var(--ink-400)); }
+/* While songs are being picked the bar stays under the top bar. */
+.vx-select-bar {
+  position: sticky;
+  top: calc(var(--vx-topbar-h) + 8px);
+  z-index: 30;
+  border: 1px solid var(--vx-border);
+  box-shadow: var(--vx-deck-shadow);
+}
+.vx-select-count { margin-right: 4px; font-size: 14px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.vx-select-bar .vx-lselect { width: min(280px, 100%); }
+.vx-live-strip { padding-block: 12px; }
+.vx-live-spin {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 2px solid rgb(var(--tide-400));
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: vx-live-spin 900ms linear infinite;
+}
+@keyframes vx-live-spin { to { transform: rotate(360deg); } }
 
-/* Section title inside an entity page (Popular, Albums…). */
-.vx-esection { margin-top: 32px; }
-.vx-esection > h2 { margin-bottom: 16px; font-size: 22px; font-weight: 750; letter-spacing: -0.018em; }
-.vx-day-label { margin: 24px 0 4px; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; }
-.vx-day-label:first-child { margin-top: 0; }
+/* ------------------------------------------------------- sections and rows */
+.vx-esection { margin-top: 36px; }
+.vx-esection.is-first { margin-top: 4px; }
+.vx-day-label { margin: 28px 0 6px; padding: 0 8px; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 750; letter-spacing: -0.01em; }
+.vx-tracklist > section:first-of-type > .vx-day-label { margin-top: 8px; }
 
 /* Row with a trailing control outside the SongRow (Done, remove, time ago). */
 .vx-row-with { display: flex; align-items: center; gap: 4px; }
 .vx-row-with > .vx-row-main { flex: 1; min-width: 0; }
-.vx-row-when { flex-shrink: 0; width: 64px; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+.vx-row-when { flex-shrink: 0; width: 64px; color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 639px) { .vx-row-when { display: none; } }
 .vx-row-x {
   position: relative;
@@ -289,259 +388,30 @@ html.light .vx-emenu-panel { background: rgb(var(--ink-950)); }
   height: 36px;
   border-radius: 50%;
   color: rgb(var(--ink-400));
-  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+  transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm), opacity 140ms var(--ease-calm);
 }
 .vx-row-x::after { content: ''; position: absolute; inset: -4px; }
-.vx-row-x:hover { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.08); }
+.vx-row-x:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
 .vx-row-x.is-danger:hover { color: var(--vx-danger); }
 .vx-row-x:disabled { opacity: 0.25; pointer-events: none; }
 .vx-row-done {
   position: relative;
   flex-shrink: 0;
   min-height: 32px;
-  padding: 0 12px;
-  border: 1px solid rgb(var(--ink-100) / 0.2);
-  border-radius: 9999px;
+  padding: 0 14px;
+  border: 1px solid rgb(var(--ink-100) / 0.22);
+  border-radius: 999px;
   color: rgb(var(--ink-200));
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
+  transition: border-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
 }
 .vx-row-done::after { content: ''; position: absolute; inset: -6px -2px; }
-.vx-row-done:hover { border-color: rgb(var(--ink-100) / 0.6); color: rgb(var(--ink-100)); }
+.vx-row-done:hover { border-color: rgb(var(--ember-400)); color: rgb(var(--ember-400)); }
 
-/* ------------------------------------------------------------- artist page */
-.vx-artist-banner {
-  --wash-a: 0.5;
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  align-items: flex-end;
-  gap: 28px;
-  min-height: 340px;
-  margin: calc(-1 * (var(--vx-topbar-h) + 8px)) calc(-1 * var(--vx-gutter)) 0;
-  padding: calc(var(--vx-topbar-h) + 32px) var(--vx-gutter) 28px;
-  overflow: hidden;
-  color: #fff;
-}
-.vx-artist-banner-bg { position: absolute; inset: 0; z-index: -2; }
-.vx-artist-banner-bg img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 25%;
-  filter: blur(28px) saturate(1.25);
-  transform: scale(1.2);
-  opacity: 0.85;
-}
-.vx-artist-banner::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(180deg, rgb(0 0 0 / 0.15) 0%, rgb(0 0 0 / 0.35) 45%, rgb(0 0 0 / 0.7) 100%),
-    rgb(var(--hero) / 0.25);
-}
-.vx-artist-avatar {
-  width: 200px;
-  aspect-ratio: 1;
-  flex-shrink: 0;
-  overflow: hidden;
-  border-radius: 50%;
-  box-shadow: 0 18px 44px -12px rgb(0 0 0 / 0.7);
-}
-.vx-artist-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.vx-artist-banner .vx-ehead-kind { color: #fff; display: inline-flex; align-items: center; gap: 6px; }
-.vx-artist-banner h1 { margin: 6px 0 10px; color: #fff; font-size: clamp(40px, 6vw, 88px); line-height: 1; overflow-wrap: anywhere; }
-.vx-artist-banner .vx-ehead-meta { color: rgb(255 255 255 / 0.85); }
-.vx-artist-banner .vx-ehead-meta .is-lead { color: #fff; }
-.vx-artist-actions { padding-top: 24px; }
-.vx-show-more {
-  margin: 8px 0 0;
-  padding: 8px 0;
-  color: rgb(var(--ink-400));
-  font-size: 13px;
-  font-weight: 700;
-}
-.vx-show-more:hover { color: rgb(var(--ink-100)); }
-.vx-artist-bio {
-  max-width: 72ch;
-  color: rgb(var(--ink-300));
-  font-size: 15px;
-  line-height: 1.65;
-  white-space: pre-line;
-}
-
-/* ---------------------------------------------------------- library page */
-.vx-libpage .vx-page-header { margin-bottom: 16px; }
-.vx-lib-actions { display: flex; align-items: center; gap: 4px; }
-.vx-lib-chips { display: flex; gap: 8px; margin: 0 0 16px; overflow-x: auto; scrollbar-width: none; padding: 4px 0; }
-.vx-lib-chips::-webkit-scrollbar { display: none; }
-.vx-lib-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 24px; }
-.vx-lib-bar .vx-field { max-width: none; flex: 1 1 220px; }
-.vx-lib-view { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
-.vx-lib-view button[aria-pressed='true'] { color: rgb(var(--ink-100)); background: rgb(var(--ink-100) / 0.1); }
-
-/* Shortcut tiles (DestinationGrid) — compact, neutral icons. */
-.vx-libpage .vx-destinations { gap: 8px; margin-bottom: 32px; }
-.vx-libpage .vx-destinations a {
-  min-height: 56px;
-  padding: 8px 14px 8px 8px;
-  border-radius: 8px;
-  background: rgb(var(--ink-100) / 0.05);
-  color: rgb(var(--ink-100));
-  font-size: 14px;
-  font-weight: 650;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
-}
-.vx-libpage .vx-destinations a:hover { background: rgb(var(--ink-100) / 0.1); }
-.vx-libpage .vx-destinations a:active { transform: scale(0.98); }
-.vx-libpage .vx-destinations svg {
-  box-sizing: content-box;
-  width: 20px;
-  height: 20px;
-  padding: 10px;
-  border-radius: 6px;
-  background: rgb(var(--ink-100) / 0.08);
-  color: rgb(var(--ink-200));
-}
-@media (min-width: 1100px) { .vx-libpage .vx-destinations { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-
-.vx-lib-section { margin-bottom: 40px; }
-@media (max-width: 767px) { .vx-lib-section { margin-bottom: 32px; } }
-.vx-lib-empty { color: rgb(var(--ink-400)); font-size: 14px; }
-
-/* Rows: 56px art, title, "Playlist · 12 songs". */
-.vx-lrows { display: grid; gap: 2px; margin: 0 -8px; }
-@media (max-width: 767px) { .vx-lrows { margin: 0 -4px; } }
-.vx-lrow {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 72px;
-  padding: 0 4px 0 8px;
-  border-radius: 8px;
-  transition: background-color 140ms var(--ease-calm);
-}
-.vx-lrow:hover { background: rgb(var(--ink-100) / 0.07); }
-.vx-lrow-link { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; min-height: 72px; padding: 8px 0; border-radius: 8px; }
-.vx-lrow-art { width: 56px; height: 56px; flex-shrink: 0; overflow: hidden; border-radius: 6px; background: rgb(var(--ink-850)); }
-.vx-lrow-art > img, .vx-lrow-art > div { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
-.vx-lrow-art.is-round { border-radius: 50%; }
-.vx-lrow-text { display: block; min-width: 0; flex: 1; }
-.vx-lrow-title { display: flex; align-items: center; gap: 6px; min-width: 0; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 600; }
-.vx-lrow-title > .t { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.vx-lrow-meta { display: block; margin-top: 3px; overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
-.vx-lrow-pin { flex-shrink: 0; color: rgb(var(--ember-400)); }
-.vx-lrow-pin svg { width: 14px; height: 14px; }
-.vx-lrow .vx-row-x { opacity: 0.8; }
-@media (hover: hover) and (pointer: fine) {
-  .vx-lrow .vx-row-x { opacity: 0; }
-  .vx-lrow:hover .vx-row-x, .vx-lrow:focus-within .vx-row-x { opacity: 1; }
-}
-.vx-lrow.is-trashed .vx-lrow-art { opacity: 0.6; }
-.vx-lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 24px 16px; }
-@media (max-width: 767px) { .vx-lgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; } }
-.vx-lgrid-item { position: relative; min-width: 0; }
-.vx-lgrid-item > .vx-row-x { position: absolute; top: 6px; right: 6px; z-index: 2; background: rgb(0 0 0 / 0.5); color: #fff; opacity: 0; }
-.vx-lgrid-item:hover > .vx-row-x, .vx-lgrid-item:focus-within > .vx-row-x { opacity: 1; }
-@media (hover: none), (pointer: coarse) { .vx-lgrid-item > .vx-row-x { opacity: 1; } }
-
-.vx-create-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
-.vx-create-row .vx-field { max-width: 360px; }
-.vx-create-row .vx-field input { padding-left: 14px; }
-
-.vx-together {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 40px;
-  padding: 8px 12px 8px 8px;
-  border-radius: 8px;
-  background: rgb(var(--ink-100) / 0.05);
-  transition: background-color 140ms var(--ease-calm);
-}
-.vx-together:hover { background: rgb(var(--ink-100) / 0.1); }
-.vx-together-glyph { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 6px; background: rgb(var(--ink-100) / 0.08); color: rgb(var(--ink-200)); }
-
-.vx-smart-grid { display: grid; gap: 8px; }
-@media (min-width: 768px) { .vx-smart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.vx-smart-card {
-  display: block;
-  min-width: 0;
-  padding: 14px 16px;
-  border-radius: 8px;
-  background: rgb(var(--ink-100) / 0.05);
-  transition: background-color 140ms var(--ease-calm);
-}
-.vx-smart-card:hover { background: rgb(var(--ink-100) / 0.1); }
-.vx-smart-card .t { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
-.vx-smart-card .m { display: block; margin-top: 2px; overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
-
-/* ----------------------------------------------------------------- mixes */
-.vx-mix-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 0 24px; }
-.vx-mix-play {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 14px 0 10px;
-  border-radius: 9999px;
-  background: rgb(var(--ember-500));
-  color: var(--vx-on-accent);
-  font-size: 13px;
-  font-weight: 700;
-  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
-}
-.vx-mix-play:hover { background: rgb(var(--ember-400)); }
-.vx-mix-play:active { transform: scale(0.97); }
-
-/* ------------------------------------------------------------ phone */
-@media (max-width: 767px) {
-  .vx-ehead-main { flex-direction: column; align-items: stretch; gap: 20px; padding: 12px 0 16px; }
-  .vx-ehead-art { align-self: center; width: 200px; }
-  .vx-ehead-title, .vx-ehead-title.is-long { margin: 4px 0 10px; font-size: clamp(26px, 7.4vw, 32px); line-height: 1.1; }
-  .vx-ehead-title.is-xlong { font-size: 24px; }
-  .vx-ehead-meta { font-size: 13px; }
-  .vx-ehead-actions { gap: 0; padding: 0 0 16px; }
-  .vx-ehead-fab { margin-right: 8px; }
-  .vx-artist-banner { flex-direction: column; align-items: flex-start; gap: 16px; min-height: 0; margin-top: -4px; padding-top: 24px; padding-bottom: 20px; }
-  .vx-artist-avatar { width: 148px; }
-  .vx-artist-banner h1 { font-size: clamp(36px, 11vw, 48px); }
-  .vx-artist-actions { padding-top: 16px; }
-  .vx-esection > h2 { font-size: 20px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .vx-ehead-wash, .vx-save-icon, .vx-ehead-icon { transition: none !important; }
-}
-
-/* Dark themes: the banner melts into the workspace instead of ending on an edge.
-   Light keeps a solid dark banner so its white type stays legible. */
-html:not(.light) .vx-artist-banner-bg,
-html:not(.light) .vx-artist-banner::before {
-  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
-}
-
-/* Collection rows: a SongRow flanked by the list's own controls. The legacy
-   .glass-card class stays on the row for older selectors; its surface goes. */
-.vx-crow.glass-card {
-  gap: 2px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-.vx-crow.glass-card:hover { background: transparent; }
-html.light .vx-crow.glass-card { background: transparent; background-image: none; border: 0; }
-/* The glass fallbacks force a solid surface with !important; rows stay flat. */
-@media (prefers-reduced-transparency: reduce) { .vx-crow.glass-card { background: transparent !important; } }
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .vx-crow.glass-card { background: transparent !important; } }
-.vx-crow.is-picked { background: rgb(var(--ember-500) / 0.12); }
+/* Collection rows: a SongRow flanked by the list's own controls. */
+.vx-crow { gap: 2px; border-radius: 14px; transition: background-color 140ms var(--ease-calm); }
+.vx-crow.is-picked { background: var(--vx-accent-wash); }
 .vx-crow-check { display: grid; place-items: center; flex: 0 0 36px; height: 44px; }
 .vx-crow-dl { display: grid; place-items: center; flex-shrink: 0; width: 24px; color: rgb(var(--ink-400)); }
 @media (hover: hover) and (pointer: fine) {
@@ -551,57 +421,292 @@ html.light .vx-crow.glass-card { background: transparent; background-image: none
   .vx-crow:hover .vx-row-x:disabled { opacity: 0.25; }
 }
 @media (max-width: 767px) {
-  .vx-crow .vx-crow-move { width: 32px; }
-  /* Phone: the list's own controls take the room; the heart stays in the ⋯ menu. */
+  /* Phone: the heart stays in the ⋯ menu; Move up / down show only while reordering. */
   .vx-crow .vx-track-like { display: none; }
+  .vx-ctracks:not(.is-reordering) .vx-crow-move { display: none; }
+  .vx-ctracks.is-reordering .vx-crow-remove { display: none; }
+  .vx-ctracks.is-reordering .vx-crow-move { width: 40px; height: 40px; color: rgb(var(--ink-200)); }
 }
-.vx-edit-form { display: grid; gap: 8px; max-width: 520px; margin-top: 12px; }
+@media (min-width: 768px) { .vx-phone-only.vx-phone-only { display: none; } }
+.vx-edit-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; max-width: 520px; margin-top: 14px; }
 
-/* Downloads rows: same rhythm as a track row. */
-.vx-drow { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 0 8px; border-radius: 6px; transition: background-color 140ms var(--ease-calm); }
-.vx-drow:hover { background: rgb(var(--ink-100) / 0.07); }
+/* Downloads rows: the same rhythm as a track row. */
+.vx-drow { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 0 4px 0 8px; border-radius: 14px; transition: background-color 140ms var(--ease-calm); }
+.vx-drow:hover { background: var(--vx-hover); }
+.vx-drow.is-picked { background: var(--vx-accent-wash); }
 .vx-drow-art { position: relative; }
 .vx-drow-over { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.5); color: #fff; opacity: 0; transition: opacity 140ms var(--ease-calm); }
 .vx-drow:hover .vx-drow-over, .vx-drow-art:focus-visible .vx-drow-over { opacity: 1; }
-.vx-drow-text { display: block; flex: 1; min-width: 0; padding: 8px 0; text-align: left; }
-.vx-storage { flex-direction: column; align-items: stretch; gap: 8px; }
-@media (max-width: 767px) { .vx-drow { padding: 0 4px 0 0; } }
+.vx-drow-text { display: block; flex: 1; min-width: 0; padding: 10px 0; text-align: left; }
+@media (hover: hover) and (pointer: fine) {
+  .vx-drow .vx-drow-remove { opacity: 0; }
+  .vx-drow:hover .vx-drow-remove, .vx-drow:focus-within .vx-drow-remove { opacity: 1; }
+}
+@media (max-width: 767px) { .vx-drow { padding: 0 0 0 2px; gap: 12px; } }
 
-/* The song page's heart, sized like the other action glyphs. */
-.vx-ehead-fav.vx-ehead-fav { display: inline-grid; place-items: center; width: 48px; height: 48px; padding: 0; background: transparent; }
-.vx-ehead-fav.vx-ehead-fav:hover { background: transparent; }
-.vx-ehead-fav svg { width: 26px; height: 26px; }
+/* Downloads storage estimate. */
+.vx-storage { margin: 0 0 24px; }
+.vx-storage-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 10px; }
+.vx-storage-title { color: rgb(var(--ink-100)); font-size: 14px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.vx-storage-note { color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 500; }
+.vx-storage-bar { height: 6px; overflow: hidden; border-radius: 999px; background: rgb(var(--ink-100) / 0.1); }
+.vx-storage-bar > i { display: block; height: 100%; border-radius: inherit; background: rgb(var(--ember-500)); }
 
-/* AI playlist result. */
+/* History: search, then the "when" chips and, below them, the language chips. */
+.vx-hist-tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0 0 20px; }
+.vx-hist-tools .vx-lfield { max-width: 420px; }
+.vx-chip-scroll { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0; }
+.vx-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* -------------------------------------------------------------- artist page */
+.vx-show-more { margin-top: 12px; }
+.vx-artist-bio {
+  max-width: 72ch;
+  color: rgb(var(--ink-300));
+  font-size: 15px;
+  line-height: 1.65;
+  white-space: pre-line;
+}
+
+/* ------------------------------------------------------------- library page */
+.vx-lp .vx-page-header { margin-bottom: 22px; }
+.vx-lp-actions { display: flex; align-items: center; gap: 8px; }
+.vx-lp-actions .vx-quiet-btn { min-height: 44px; padding: 0 18px; font-size: 14px; }
+.vx-lp-actions .vx-quiet-btn::after { display: none; }
+.vx-lp-create.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding-inline: 16px 20px;
+  font-size: 14px;
+}
+.vx-lp-create-row .vx-lp-create.btn-primary { padding-inline: 22px; }
+.vx-lp-create-row { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 24px; }
+.vx-lp-create-row .vx-lfield { max-width: 420px; }
+
+/* Shortcuts: a tile per collection, each with its live count. */
+.vx-lp-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 32px; container-type: inline-size; }
+/* Narrow workspaces (tablet rail, phones): the two descriptive notes drop out
+   rather than ellipsize; the counts stay. */
+@container (max-width: 780px) { .vx-lp-tile-meta.is-static { display: none; } }
+.vx-lp-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 12px 14px 12px 12px;
+  border-radius: var(--vx-radius-card);
+  background: rgb(var(--ink-850));
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.vx-lp-tile:hover { background: rgb(var(--ink-800)); }
+.vx-lp-tile:active { transform: scale(0.985); }
+html.amoled .vx-lp-tile { background: rgb(var(--ink-800)); }
+html.amoled .vx-lp-tile:hover { background: rgb(var(--ink-700)); }
+.vx-lp-tile-glyph {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: rgb(var(--ink-800));
+  color: rgb(var(--ink-200));
+  transition: background-color 140ms var(--ease-calm);
+}
+.vx-lp-tile-glyph svg { width: 22px; height: 22px; }
+.vx-lp-tile:hover .vx-lp-tile-glyph.is-plain { background: rgb(var(--ink-700)); }
+html.amoled .vx-lp-tile-glyph.is-plain { background: rgb(var(--ink-700)); }
+.vx-lp-tile-glyph.is-liked { background: var(--vx-glow); color: #fff; }
+.vx-lp-tile-glyph.is-later { background: rgb(var(--tide-400)); color: rgb(var(--ink-950)); }
+html.light .vx-lp-tile-glyph.is-later { background: rgb(var(--tide-500)); color: #fff; }
+.vx-lp-tile-text { display: block; min-width: 0; }
+.vx-lp-tile-title { display: block; overflow: hidden; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; text-overflow: ellipsis; }
+.vx-lp-tile-meta { display: block; margin-top: 2px; overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Filters, search, sort and layout. */
+.vx-lp-tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 0 0 22px; }
+.vx-lp-chips {
+  display: flex;
+  gap: 8px;
+  margin: -4px calc(-1 * var(--vx-gutter));
+  padding: 4px var(--vx-gutter);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vx-lp-chips::-webkit-scrollbar { display: none; }
+.vx-lp-bar { display: flex; align-items: center; gap: 8px; }
+.vx-lp-bar .vx-lfield { flex: 1 1 auto; max-width: none; }
+.vx-lp-bar .vx-lselect { flex-shrink: 0; }
+.vx-lp-view {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--vx-border);
+  border-radius: 999px;
+  background: rgb(var(--ink-850));
+}
+.vx-lp-view button { color: rgb(var(--ink-300)); }
+.vx-lp-view button[aria-pressed='true'] { background: var(--vx-accent-wash); color: rgb(var(--ember-400)); }
+html.amoled .vx-lp-view { background: rgb(var(--ink-800)); }
+.vx-lp-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.vx-lp-note { color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
+
+.vx-lp-section { margin-bottom: 44px; }
+.vx-lp-empty { max-width: 60ch; color: rgb(var(--ink-400)); font-size: 14px; line-height: 1.55; }
+
+/* List view: 56px artwork, title, one meta line, ⋯. */
+/* minmax(0, 1fr): a long title must ellipsize, never widen the column (and the page). */
+.vx-lp-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin: 0 -8px; }
+.vx-lp-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 72px;
+  padding: 0 4px 0 8px;
+  border-radius: var(--vx-radius-card);
+  transition: background-color 140ms var(--ease-calm);
+}
+.vx-lp-row:hover, .vx-lp-row:has(.vx-emenu.is-open) { background: var(--vx-hover); }
+.vx-lp-row:has(.vx-emenu.is-open) { z-index: 3; }
+.vx-lp-row-link { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; min-height: 72px; padding: 8px 0; border-radius: var(--vx-radius-card); }
+.vx-lp-row-link:focus-visible { outline-offset: -2px; }
+.vx-lp-row-art { width: 56px; height: 56px; flex-shrink: 0; overflow: hidden; border-radius: 12px; background: rgb(var(--ink-850)); }
+.vx-lp-row-art > img, .vx-lp-row-art > div { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.vx-lp-row-art.is-round { border-radius: 50%; }
+.vx-lp-row-text { display: block; flex: 1; min-width: 0; }
+.vx-lp-row-title { display: flex; align-items: center; gap: 6px; min-width: 0; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 650; line-height: 1.35; }
+.vx-lp-row-title > .t, .vx-lp-card-title > .t { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-lp-row-meta { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 3px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.35; }
+.vx-lp-row-meta > .m, .vx-lp-card-meta > .m { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-lp-pin { flex-shrink: 0; width: 13px; height: 13px; color: rgb(var(--ember-400)); }
+.vx-lp-emoji { flex-shrink: 0; }
+.vx-lp-more.vx-lp-more { color: rgb(var(--ink-400)); }
+.vx-lp-more.vx-lp-more:hover, .vx-lp-more.vx-lp-more[aria-expanded='true'] { color: rgb(var(--ink-100)); background: var(--vx-pressed); }
+@media (hover: hover) and (pointer: fine) {
+  .vx-lp-row .vx-lp-more { opacity: 0; transition: opacity 140ms var(--ease-calm); }
+  .vx-lp-row:hover .vx-lp-more, .vx-lp-row:focus-within .vx-lp-more, .vx-lp-row .vx-emenu.is-open .vx-lp-more { opacity: 1; }
+}
+.vx-lp-row.is-trashed .vx-lp-row-art { opacity: 0.55; }
+.vx-lp-row.is-trashed .vx-lp-row-title { color: rgb(var(--ink-300)); }
+
+/* Grid view: artwork-led cards. */
+.vx-lp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(164px, 1fr)); gap: 28px var(--vx-card-gap); }
+.vx-lp-card { position: relative; min-width: 0; }
+.vx-lp-card:has(.vx-emenu.is-open) { z-index: 3; }
+.vx-lp-card-art {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  background: rgb(var(--ink-850));
+  box-shadow: var(--vx-art-shadow);
+  transition: transform 220ms var(--vx-ease-out, var(--ease-calm));
+}
+.vx-lp-card-art.is-round { border-radius: 50%; }
+.vx-lp-card-art.is-round .card-play { right: 8%; bottom: 8%; border-radius: 50%; }
+.vx-lp-card-cover { display: block; width: 100%; height: 100%; border-radius: inherit; }
+/* No `display` on the child: the collage cover is a 2 × 2 grid of its own. */
+.vx-lp-card-cover > img, .vx-lp-card-cover > div { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+@media (hover: hover) and (pointer: fine) { .vx-lp-card:hover .vx-lp-card-art { transform: translateY(-3px); } }
+.vx-lp-card-foot { display: flex; align-items: flex-start; gap: 2px; margin-top: 10px; }
+.vx-lp-card-text { display: block; flex: 1; min-width: 0; padding-top: 2px; }
+.vx-lp-card-title { display: flex; gap: 4px; min-width: 0; color: rgb(var(--ink-100)); font-size: 14px; font-weight: 650; line-height: 1.35; letter-spacing: -0.01em; }
+.vx-lp-card-meta { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 3px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.35; }
+.vx-lp-card .vx-lp-more { margin: -6px -8px 0 0; }
+
+/* Smart collections: a Lagoon glyph, since they update themselves live. */
+.vx-lp-smart { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 10px; }
+.vx-lp-smart-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 12px 16px 12px 12px;
+  border-radius: var(--vx-radius-card);
+  background: rgb(var(--ink-850));
+  transition: background-color 140ms var(--ease-calm);
+}
+.vx-lp-smart-card:hover { background: rgb(var(--ink-800)); }
+html.amoled .vx-lp-smart-card { background: rgb(var(--ink-800)); }
+.vx-lp-smart-glyph {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: rgb(var(--tide-500) / 0.16);
+  color: rgb(var(--tide-400));
+  font-size: 22px;
+  line-height: 1;
+}
+.vx-lp-smart-text { display: block; min-width: 0; }
+.vx-lp-smart-text > span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-lp-smart-text .t { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; }
+.vx-lp-smart-text .m { margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
+.vx-lp-smart-text .n { margin-top: 2px; color: rgb(var(--tide-400)); font-size: 12.5px; font-weight: 650; }
+
+/* Link rows (Backup Center, Move to a new device, Listen Together). */
+.vx-lp-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-inline: -8px; }
+.vx-lp-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 12px 8px 8px;
+  border-radius: var(--vx-radius-card);
+  color: inherit;
+  text-align: left;
+  transition: background-color 140ms var(--ease-calm);
+}
+.vx-lp-link:hover { background: var(--vx-hover); }
+.vx-lp-link-glyph { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; background: rgb(var(--ink-850)); color: rgb(var(--ink-200)); }
+html.amoled .vx-lp-link-glyph { background: rgb(var(--ink-800)); }
+.vx-lp-link-text { display: block; flex: 1; min-width: 0; }
+.vx-lp-link-text > span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vx-lp-link-text .t { color: rgb(var(--ink-100)); font-size: 15px; font-weight: 650; }
+.vx-lp-link-text .m { margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
+.vx-lp-link-go { width: 20px; height: 20px; flex-shrink: 0; color: rgb(var(--ink-400)); }
+
+/* -------------------------------------------------------------------- mixes */
+.vx-mix-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 0 24px; }
+.vx-mix-play {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 16px 0 12px;
+  border-radius: 999px;
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
+  font-size: 13px;
+  font-weight: 750;
+  transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
+}
+.vx-mix-play::after { content: ''; position: absolute; inset: -4px 0; }
+.vx-mix-play:hover { background: rgb(var(--ember-400)); }
+.vx-mix-play:active { transform: scale(0.97); }
+
+/* ----------------------------------------------------- AI playlist result */
 .vx-ai-result { margin-top: 32px; }
 .vx-ai-result-head { display: flex; align-items: flex-end; gap: 20px; }
-.vx-ai-result-art { width: 128px; height: 128px; border-radius: 8px; box-shadow: var(--vx-art-shadow); }
+.vx-ai-result-art { width: 128px; height: 128px; border-radius: var(--vx-radius-card); box-shadow: var(--vx-art-shadow); }
 .vx-ai-result-title { margin: 4px 0 8px; font-size: clamp(22px, 3vw, 32px); font-weight: 800; line-height: 1.1; letter-spacing: -0.025em; overflow-wrap: anywhere; }
 /* 8.5.0 — the curator's one-line reason under each AI pick, aligned with the title column. */
-/* Title column = row padding 8 + number 24 + gap 14 + art 40 + gap 14 (tracklist.css); phones drop the number and padding. */
-.vx-ai-track-reason { margin: -6px 0 6px; padding-inline: 100px 12px; font-size: 13px; line-height: 1.35; color: rgb(var(--ink-400)); overflow-wrap: anywhere; }
-@media (max-width: 767px) { .vx-ai-track-reason { padding-inline-start: 52px; } }
+/* Title column = row padding 8 + number 26 + gap 14 + art 44 + gap 14 (tracklist.css); phones drop the number and padding. */
+.vx-ai-track-reason { margin: -6px 0 6px; padding-inline: 106px 12px; font-size: 13px; line-height: 1.35; color: rgb(var(--ink-400)); overflow-wrap: anywhere; }
+@media (max-width: 767px) { .vx-ai-track-reason { padding-inline-start: 62px; } }
 .vx-ai-result .vx-ehead-actions { padding-top: 20px; }
 @media (max-width: 767px) { .vx-ai-result-art { width: 96px; height: 96px; } .vx-ai-result-head { gap: 16px; } }
-
-/* Phone library: shortcuts become one swipeable row, tools share one line. */
-@media (max-width: 767px) {
-  .vx-libpage .vx-destinations {
-    display: flex;
-    gap: 8px;
-    margin: 0 calc(-1 * var(--vx-gutter)) 20px;
-    padding: 0 var(--vx-gutter);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .vx-libpage .vx-destinations::-webkit-scrollbar { display: none; }
-  .vx-libpage .vx-destinations a { flex: 0 0 auto; min-height: 48px; padding: 4px 14px 4px 4px; font-size: 14px; }
-  .vx-libpage .vx-destinations svg { padding: 8px; }
-  .vx-lib-bar { flex-wrap: nowrap; gap: 6px; margin-bottom: 20px; }
-  .vx-lib-bar .vx-field { flex: 1 1 auto; }
-  .vx-lib-bar .vx-select { flex-shrink: 0; width: 112px; }
-  .vx-lib-view { margin-left: 0; }
-}
 
 /* AI playlist page: flat surfaces, no borders, the accent only on the action. */
 .vx-playlist-studio.vx-playlist-studio { padding-top: 0; }
@@ -610,7 +715,7 @@ html.light .vx-crow.glass-card { background: transparent; background-image: none
   min-height: 112px;
   padding: 16px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--vx-radius-card);
   background: rgb(var(--ink-100) / 0.05);
   transition: background-color 140ms var(--ease-calm), transform 140ms var(--ease-calm);
 }
@@ -619,6 +724,56 @@ html.light .vx-crow.glass-card { background: transparent; background-image: none
 .vx-playlist-studio .vx-prompt-grid svg { margin-bottom: 16px; color: rgb(var(--ink-200)); }
 .vx-playlist-studio .vx-prompt-grid strong { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
 .vx-playlist-studio .vx-prompt-grid span { font-size: 13px; line-height: 1.4; }
-.vx-playlist-studio .vx-ai-composer.glass-card { border: 0; border-radius: 12px; background: rgb(var(--ink-850)); box-shadow: none; }
-.vx-playlist-studio .vx-ai-composer textarea.glass-input { border-radius: 8px; }
-html .vx-crow.glass-card.is-picked { background: rgb(var(--ember-500) / 0.12); }
+.vx-playlist-studio .vx-ai-composer.glass-card { border: 0; border-radius: var(--vx-radius-panel); background: rgb(var(--ink-850)); box-shadow: none; }
+.vx-playlist-studio .vx-ai-composer textarea.glass-input { border-radius: var(--vx-radius-card); }
+
+/* ------------------------------------------------------------------- phone */
+@media (max-width: 767px) {
+  .vx-ehead-main { flex-direction: column; align-items: stretch; gap: 20px; padding: 8px 0 16px; }
+  .vx-ehead-art { align-self: center; width: min(216px, 58vw); border-radius: 18px; }
+  .vx-ehead-art.is-round { width: min(200px, 54vw); border-radius: 50%; }
+  .vx-ehead:has(.vx-ehead-art > .vx-glyph-cover) .vx-ehead-main { flex-direction: row; align-items: flex-end; gap: 16px; padding-top: 12px; }
+  .vx-ehead-art:has(> .vx-glyph-cover) { align-self: flex-end; width: 108px; border-radius: 16px; }
+  .vx-ehead-title, .vx-ehead-title.is-long { margin: 4px 0 10px; font-size: clamp(1.75rem, 8vw, 2.25rem); line-height: 1.14; }
+  .vx-ehead-title.is-xlong { font-size: 1.5rem; line-height: 1.2; }
+  .vx-ehead-meta { font-size: 13px; }
+  .vx-ehead-actions { gap: 8px; padding: 0 0 20px; }
+  .vx-ehead .vx-play-fab.is-lg { width: 56px; height: 56px; border-radius: 18px; }
+  .vx-ehead .vx-play-fab.is-lg svg { width: 26px; height: 26px; }
+  .vx-entity-hero { flex-direction: column; align-items: stretch; gap: 20px; padding: 8px 0 24px; }
+  .vx-entity-hero > .skeleton:first-child { border-radius: 18px; }
+  .vx-esection { margin-top: 28px; }
+
+  .vx-etools { gap: 10px 8px; }
+  .vx-etools .vx-lfield { flex-basis: 100%; max-width: none; }
+  .vx-etools-group { flex-wrap: nowrap; margin: -4px calc(-1 * var(--vx-gutter)); padding: 4px var(--vx-gutter); overflow-x: auto; scrollbar-width: none; }
+  .vx-etools-group::-webkit-scrollbar { display: none; }
+  .vx-hist-tools .vx-lfield { max-width: none; }
+  .vx-chip-set { flex-wrap: nowrap; margin: -4px calc(-1 * var(--vx-gutter)); padding: 4px var(--vx-gutter); overflow-x: auto; scrollbar-width: none; }
+  .vx-chip-set::-webkit-scrollbar { display: none; }
+
+  .vx-lp .vx-page-header { margin-bottom: 18px; }
+  .vx-lp-quick { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 24px; }
+  .vx-lp-tile { gap: 10px; min-height: 60px; padding: 8px 10px 8px 8px; }
+  .vx-lp-tile-glyph { width: 44px; height: 44px; border-radius: 12px; }
+  .vx-lp-tile-glyph svg { width: 20px; height: 20px; }
+  .vx-lp-tile-title { font-size: 14px; }
+  .vx-lp-tile-meta { font-size: 12px; }
+  .vx-lp-tools { gap: 12px; margin-bottom: 18px; }
+  .vx-lp-bar { gap: 6px; }
+  .vx-lp-bar .vx-lselect { padding-left: 14px; padding-right: 32px; background-position: right 12px center; }
+  .vx-lp-section { margin-bottom: 36px; }
+  .vx-lp-rows, .vx-lp-links { margin-inline: -4px; }
+  .vx-lp-row { min-height: 68px; padding-left: 4px; }
+  .vx-lp-row-link { gap: 12px; min-height: 68px; }
+  .vx-lp-row-art { width: 52px; height: 52px; }
+  .vx-lp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 12px; }
+}
+/* Phones: one toggle replaces the two-button layout switch. */
+.vx-lp-view-toggle.vx-lp-view-toggle { display: none; }
+@media (max-width: 767px) {
+  .vx-lp-view.vx-lp-view { display: none; }
+  .vx-lp-view-toggle.vx-lp-view-toggle { display: inline-flex; flex-shrink: 0; width: 44px; height: 44px; border: 1px solid var(--vx-border); background: rgb(var(--ink-850)); color: rgb(var(--ink-300)); }
+  .vx-lp-view-toggle.vx-lp-view-toggle[aria-pressed='true'] { color: rgb(var(--ember-400)); background: var(--vx-accent-wash); }
+  html.amoled .vx-lp-view-toggle.vx-lp-view-toggle { background: rgb(var(--ink-800)); }
+}

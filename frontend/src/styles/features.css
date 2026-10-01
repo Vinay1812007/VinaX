@@ -5,8 +5,9 @@
    primitives into shell.css: a few feature surfaces that several screens
    (or the first paint) use and that have no page stylesheet of their own —
    Home Studio, the VinaX AI composer pieces, the playlist studio, the
-   listening guide, entity heroes, the queue's ownership marker. A feature
-   that gets its own page stylesheet takes its rules with it.
+   listening guide, the queue's ownership marker. A feature that gets its
+   own page stylesheet takes its rules with it (9.0: the entity hero's
+   loading skeleton moved to pages/library.css with the entity pages).
    ========================================================================= */
 /* VinaX Flow: component layout. Theme tokens live only in index.css. */
 /* Home Studio: an optional, quiet editing surface that keeps the listening
@@ -263,12 +264,6 @@
 .vx-destinations a { display: flex; align-items: center; gap: 10px; padding: 10px 14px; min-height: var(--vx-tile-h); background: var(--vx-surface-raised); border-radius: var(--vx-radius-control); font-size: var(--vx-type-meta); font-weight: 650; }
 .vx-destinations a:hover { background: var(--vx-bg-hover); }
 .vx-destinations svg { color: var(--vx-accent-hover); flex-shrink: 0; }
-.vx-entity-hero { display: flex; align-items: end; gap: 28px; padding: 24px 0 32px; border-bottom: 1px solid var(--vx-border); margin-bottom: 24px; }
-.vx-entity-hero > img { width: clamp(144px, 18vw, 224px); aspect-ratio: 1; height: auto; border-radius: var(--vx-radius-card); object-fit: cover; }
-.vx-entity-hero > div { min-width: 0; }
-.vx-entity-hero h1 { font-size: var(--vx-type-display); line-height: 1.12; letter-spacing: -.035em; overflow-wrap: anywhere; }
-.vx-entity-hero button { flex-shrink: 0; }
-.vx-entity-hero > div > .flex { flex-wrap: wrap; }
 .vx-home .vx-hero { display: flex; align-items: center; gap: 24px; min-height: 216px; padding: 24px; margin: 0 0 24px; border-radius: var(--vx-radius-panel); background: var(--vx-surface-raised); border: 1px solid var(--vx-border); }
 .vx-hero-cover { width: 176px; height: 176px; object-fit: cover; border-radius: var(--vx-radius-card); }
 .vx-hero-copy { min-width: 0; flex: 1; }
@@ -287,12 +282,7 @@
 .vx-load-status { display: flex; align-items: center; gap: 12px; font-size: var(--vx-type-meta); color: var(--vx-text-muted); margin-bottom: 24px; }
 .vx-wave-loader { display: flex; align-items: center; gap: 3px; height: 24px; }
 .vx-wave-loader i { width: 3px; height: 14px; background: var(--vx-accent); border-radius: 4px; }
-.vx-library-tools { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
-.vx-library-tools input { flex: 1; min-width: 160px; }
-.vx-library-tools input, .vx-library-tools select { min-height: 44px; padding: 8px 12px; background: var(--vx-surface-raised); border: 1px solid var(--vx-border); border-radius: var(--vx-radius-control); }
 @media (max-width: 767px) {
-  .vx-entity-hero { gap: 20px; align-items: start; flex-direction: column; }
-  .vx-entity-hero > img { width: 160px; align-self: center; }
   .vx-home .vx-hero { gap: 16px; padding: 16px; min-height: 0; align-items: start; }
   .vx-hero-cover { width: 88px; height: 88px; }
   .vx-hero-title { font-size: 1.5rem; }
