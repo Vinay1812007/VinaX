@@ -127,3 +127,36 @@ describe('profile persistence', () => {
     expect(p.totals.playlistAdds).toBe(1);
   });
 });
+
+describe('one sitting’s share of the long-term profile (9.0.0)', () => {
+  it('a party night of forty plays by one artist teaches about as much as fourteen ordinary plays — never forty', async () => {
+    const { resetSittingDamping } = await import('./updater');
+    resetSittingDamping();
+    for (let i = 0; i < 40; i += 1) recordPlay(song(`p${i}`, 'Party Voice', 'punjabi'));
+    const p = loadProfile();
+    // 8 in full, 12 at half, 20 at a quarter = 8 + 6 + 5 = 19 play-weights (8.x: 40).
+    expect(p.artists['a-Party Voice'].score).toBeCloseTo(EVENT_WEIGHTS.PLAY * 19, 5);
+    // The language allowance is larger: 12 in full, 18 at half, 10 at a quarter = 23.5.
+    expect(p.languages.punjabi.score).toBeCloseTo(EVENT_WEIGHTS.PLAY * 23.5, 5);
+    // Each song still counts once, in full.
+    expect(p.songs?.p39.score).toBeCloseTo(EVENT_WEIGHTS.PLAY, 5);
+  });
+
+  it('explicit signals always count in full, and a new sitting starts the allowance again', async () => {
+    const { resetSittingDamping } = await import('./updater');
+    resetSittingDamping();
+    vi.useFakeTimers();
+    vi.setSystemTime(1_800_000_000_000);
+    const s = song('fav', 'Loved Voice');
+    for (let i = 0; i < 25; i += 1) recordPlay(song(`q${i}`, 'Loved Voice'));
+    const before = loadProfile().artists['a-Loved Voice'].score;
+    recordFavorite(s, true);
+    expect(loadProfile().artists['a-Loved Voice'].score - before).toBeCloseTo(EVENT_WEIGHTS.FAVORITE, 5);
+    // An hour of silence later, plays count in full again.
+    vi.setSystemTime(1_800_000_000_000 + 60 * 60_000);
+    const again = loadProfile().artists['a-Loved Voice'].score;
+    recordPlay(song('next', 'Loved Voice'));
+    expect(loadProfile().artists['a-Loved Voice'].score - again).toBeGreaterThan(EVENT_WEIGHTS.PLAY * 0.9);
+    vi.useRealTimers();
+  });
+});

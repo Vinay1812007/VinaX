@@ -115,3 +115,38 @@ describe('useAiHome — current safety on cached shelves', () => {
     expect(result.current.data?.map((s) => s.title)).toEqual(['Shelf two']);
   });
 });
+
+describe('useAiHome — the 9.0 refresh policy', () => {
+  it('returning to Home inside the window reuses the design: one call for three visits', async () => {
+    const { resetHomeGeneration } = await import('./homeRefresh');
+    resetHomeGeneration();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    for (let visit = 0; visit < 3; visit += 1) {
+      const view = renderHook(() => useAiHome(true), { wrapper });
+      await waitFor(() => expect(view.result.current.data?.length).toBe(2));
+      view.unmount();
+    }
+    expect(design).toHaveBeenCalledTimes(1);
+  });
+
+  it('an explicit refresh designs again and keeps the old shelves on screen meanwhile', async () => {
+    const { refreshHome, resetHomeGeneration } = await import('./homeRefresh');
+    resetHomeGeneration();
+    const { shown, result } = setup();
+    await waitFor(() => expect(shown()).toContain('b0'));
+    design.mockImplementationOnce(() => new Promise(() => undefined));
+    act(() => { refreshHome(); });
+    await waitFor(() => expect(design).toHaveBeenCalledTimes(2));
+    expect(result.current.isPlaceholderData).toBe(true);
+    expect(shown()).toContain('b0');
+  });
+
+  it('a visit after the window designs again (expiry), a visit inside it does not', async () => {
+    const { expireHomeIfStale, HOME_TTL_MS, resetHomeGeneration, homeGeneration } = await import('./homeRefresh');
+    resetHomeGeneration(1_000);
+    expect(expireHomeIfStale(1_000 + HOME_TTL_MS - 1)).toBe(1);
+    expect(expireHomeIfStale(1_000 + HOME_TTL_MS)).toBe(2);
+    expect(homeGeneration().startedAt).toBe(1_000 + HOME_TTL_MS);
+  });
+});

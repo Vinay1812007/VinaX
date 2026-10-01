@@ -274,11 +274,18 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
     if (seed.language && !ctx.mutedLanguages.includes(seed.language)) add('trending', 'seed', search(`${seed.language} ${seed.genre ?? ''}`.trim(), 1, 15), seed.language);
     // 8.2.0 — the seed's own album (the same film or record), artists who work
     // with the seed's artist, and one more search for its genre or mood.
-    if (seed.album?.id) {
-      const albumId = seed.album.id;
-      add('album', albumId, { key: `a|${albumId}`, limit: 12, fetch: (_n, signal) => getAlbum(albumId, { signal }).then((a) => a?.songs ?? []) }, seed.title);
+    // 9.0.0 — and the same two for the song this stretch follows (the anchor),
+    // when that is another song: the seed is one point of a sitting that moves.
+    // Smaller limits for the anchor; identical requests are shared and cached.
+    const anchor = ctx.anchorSong && ctx.anchorSong.id !== seed.id ? ctx.anchorSong : null;
+    for (const [from, limit] of [[seed, 12], ...(anchor ? [[anchor, 8]] : [])] as Array<[Song, number]>) {
+      if (from.album?.id) {
+        const albumId = from.album.id;
+        add('album', albumId, { key: `a|${albumId}`, limit, fetch: (_n, signal) => getAlbum(albumId, { signal }).then((a) => a?.songs ?? []) }, from.title);
+      }
+      const lead = from.artists?.[0];
+      if (lead?.id) add('related-artist', lead.id, { key: `ra|${lead.id}|${salt % 3}`, limit, fetch: (n, signal) => relatedArtistSongs(from, n, signal, salt, now) }, lead.name);
     }
-    if (seed.artists?.[0]?.id) add('related-artist', seed.artists[0].id, { key: `ra|${seed.artists[0].id}|${salt % 3}`, limit: 12, fetch: (n, signal) => relatedArtistSongs(seed, n, signal, salt, now) }, seed.artists[0].name);
     const genre = !ctx.intentQuery && seed.language && seed.language !== 'unknown' && !ctx.mutedLanguages.includes(seed.language) ? genreQuery(seed, seed.language) : null;
     if (genre) add('genre', 'seed', search(genre, 1 + (salt % 2), 12), seed.title);
     // 8.2.0 — earlier automatic picks the listener finished or liked: songs like two of them.

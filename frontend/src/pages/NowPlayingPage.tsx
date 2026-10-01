@@ -9,10 +9,12 @@ import { useReasonStore } from '@/store/reasonStore';
 import { getMoodPin } from '@/services/personalization/session';
 import { clearMoodPin, pinMood } from '@/features/player/moodPin';
 import { beginArtSwipe, endArtSwipe, moveArtSwipe, swipeFollow, type ArtSwipe } from '@/features/player/artSwipe';
+import { UpNextRows } from '@/features/player/UpNextRows';
+import { SleepTimerButton, SleepTimerOptions, SleepTimerSheet } from '@/features/player/SleepTimer';
+import { StageLyrics } from '@/features/lyrics/StageLyrics';
 import type { Mood } from '@/services/recommendation/mood';
 import type { ArtistRef, Song } from '@/types';
 import { useSyncedLyrics } from '@/features/lyrics/useSyncedLyrics';
-import { SyncedLyrics } from '@/components/SyncedLyrics';
 import { Seekbar } from '@/components/Seekbar';
 import { FavButton } from '@/components/FavButton';
 import { IconButton } from '@/components/IconButton';
@@ -35,7 +37,7 @@ import {
   VolumeIcon,
 } from '@/components/Icons';
 import { DeviceSheet } from '@/components/DeviceSheet';
-import { bestImage, FALLBACK_ART } from '@/utils/images';
+import { bestImage } from '@/utils/images';
 import { SongCanvas, SongCanvasBackdrop, useSongCanvas } from '@/components/SongCanvas';
 import { extractAverageColor, extractVibrantColor } from '@/utils/color';
 import { acquireWakeLock, releaseWakeLock } from '@/utils/wakeLock';
@@ -51,49 +53,46 @@ import { shareNowPlayingCard } from '@/utils/shareCard';
 import { toast } from '@/store/toastStore';
 import { TuneChips } from '@/features/queue/TuneChips';
 import { Chip } from '@/components/Chip';
-import { songLine } from '@/utils/songLine';
 import type { TuneIntent } from '@/services/recommendation/tune';
 import { cn } from '@/utils/cn';
 import { useDismissOnBack } from '@/hooks/useDismissOnBack';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { Sheet } from '@/components/Sheet';
-import { scrollBehavior } from '@/utils/motion';
+import { Sheet, SheetHeader } from '@/components/Sheet';
+import { reducedMotion, scrollBehavior } from '@/utils/motion';
 import '@/styles/pages/player.css';
 
 interface CreditChip {
-  icon: string;
   role: string;
   name: string;
   to: string;
 }
 
 /**
- * v5.5.4 — who-made-this credits under the title, every one clickable.
- * Roles come from the catalog when it provides them (music / singer /
- * lyricist); catalogs that send bare names still get clickable 🎤 Artist
- * chips, and the soundtrack album becomes the 🎬 Film chip.
+ * v5.5.4 — who-made-this credits, every one clickable. Roles come from the
+ * catalog when it provides them (music / singer / lyricist); catalogs that
+ * send bare names still get clickable "Artist" credits, and the soundtrack
+ * album becomes the "Film" credit.
  */
 function buildCreditChips(song: Song, filmTitle: string | null): CreditChip[] {
   const chips: CreditChip[] = [];
   const seen = new Set<string>();
-  const push = (icon: string, role: string, name: string, to: string): void => {
+  const push = (role: string, name: string, to: string): void => {
     const k = name.trim().toLowerCase();
     if (!k || seen.has(k) || chips.length >= 5) return;
     seen.add(k);
-    chips.push({ icon, role, name, to });
+    chips.push({ role, name, to });
   };
   const linkFor = (a: ArtistRef): string => (a.id ? artistPath(a) : `/search/${encodeURIComponent(a.name)}`);
   const roleOf = (a: ArtistRef): string => (a.role ?? '').toLowerCase();
-  for (const a of song.artists) if (/music|compos/.test(roleOf(a))) push('🎼', 'Music', a.name, linkFor(a));
-  for (const a of song.artists) if (/sing|vocal/.test(roleOf(a))) push('🎤', 'Singer', a.name, linkFor(a));
-  for (const a of song.artists) if (/lyric/.test(roleOf(a))) push('✍️', 'Lyrics', a.name, linkFor(a));
+  for (const a of song.artists) if (/music|compos/.test(roleOf(a))) push('Music', a.name, linkFor(a));
+  for (const a of song.artists) if (/sing|vocal/.test(roleOf(a))) push('Singer', a.name, linkFor(a));
+  for (const a of song.artists) if (/lyric/.test(roleOf(a))) push('Lyrics', a.name, linkFor(a));
   // Role-less catalog rows: still credit and link every name we have.
-  for (const a of song.artists) if (!roleOf(a)) push('🎤', 'Artist', a.name, linkFor(a));
-  // v5.6.0 — the film chip no longer needs an album id: when the catalog
-  // sends only a name, the chip searches it, so the movie is ALWAYS tappable.
+  for (const a of song.artists) if (!roleOf(a)) push('Artist', a.name, linkFor(a));
+  // v5.6.0 — the film credit no longer needs an album id: when the catalog
+  // sends only a name, it searches it, so the movie is ALWAYS tappable.
   if (song.album?.name) {
     chips.push({
-      icon: '🎬',
       role: 'Film',
       name: filmTitle ?? song.album.name,
       to: song.album.id ? albumPath(song.album) : `/search/${encodeURIComponent(filmTitle ?? song.album.name)}`,
@@ -102,7 +101,6 @@ function buildCreditChips(song: Song, filmTitle: string | null): CreditChip[] {
   return chips;
 }
 
-const SLEEP_OPTIONS = [15, 30, 60];
 const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
 /**
@@ -115,11 +113,8 @@ function CanvasProgress() {
   const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
   // scaleX instead of width: compositor-only, no layout 4×/s over the blurred canvas.
   return (
-    <div className="mt-3 h-[3px] rounded-full bg-white/25 overflow-hidden">
-      <div
-        className="h-full w-full origin-left bg-white/85 transition-transform duration-300"
-        style={{ transform: `scaleX(${progress})` }}
-      />
+    <div className="vx-np-canvas-progress">
+      <i style={{ transform: `scaleX(${progress})` }} />
     </div>
   );
 }
@@ -134,6 +129,7 @@ function BookmarkNowButton({ songId }: { songId: string }) {
   const second = usePlayerStore((s) => Math.floor(s.currentTime));
   return (
     <button
+      type="button"
       onClick={() => {
         const at = usePlayerStore.getState().currentTime;
         useBookmarkStore.getState().add(songId, at);
@@ -150,7 +146,7 @@ function BookmarkNowButton({ songId }: { songId: string }) {
 /** "Sliders" glyph for the playback options (speed, sleep, loops, marks). */
 function SlidersIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className={className} aria-hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" className={className} aria-hidden>
       <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
       <circle cx="16" cy="7" r="2" />
       <circle cx="10" cy="17" r="2" />
@@ -168,6 +164,15 @@ function StageBackdrop({ artUrl, children }: { artUrl: string | null; children?:
   );
 }
 
+/** The squircle play button — the deck's and the compact player's shape, at stage size. */
+function PlayButton({ isPlaying, isBuffering, onClick, size = 'stage' }: { isPlaying: boolean; isBuffering?: boolean; onClick: () => void; size?: 'stage' | 'compact' }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={isPlaying ? 'Pause' : 'Play'} className={cn('vx-np-play', size === 'compact' && 'is-compact')}>
+      {isBuffering ? <span className="vx-np-spinner" aria-hidden /> : isPlaying ? <PauseIcon /> : <PlayIcon className="vx-np-play-glyph" />}
+    </button>
+  );
+}
+
 /** Mood → the tune intent that rebuilds the queue for it. */
 const MOOD_PINS: Array<[Mood, string, TuneIntent]> = [
   ['romantic', 'Romantic', 'romantic'],
@@ -175,6 +180,13 @@ const MOOD_PINS: Array<[Mood, string, TuneIntent]> = [
   ['chill', 'Chill', 'chill'],
   ['melancholy', 'Melancholy', 'heartbreak'],
   ['devotional', 'Devotional', 'devotional'],
+];
+
+type PanelTab = 'queue' | 'lyrics' | 'about';
+const TABS: Array<[PanelTab, string]> = [
+  ['queue', 'Up next'],
+  ['lyrics', 'Lyrics'],
+  ['about', 'Credits'],
 ];
 
 export default function NowPlayingPage() {
@@ -190,38 +202,34 @@ export default function NowPlayingPage() {
   const rate = usePlayerStore((s) => s.rate);
   const volume = usePlayerStore((s) => s.volume);
   const muted = usePlayerStore((s) => s.muted);
-  const sleepAt = usePlayerStore((s) => s.sleepAt);
-  const sleepAfterTrack = usePlayerStore((s) => s.sleepAfterTrack);
-  const sleepSongsLeft = usePlayerStore((s) => s.sleepSongsLeft);
   const loopA = usePlayerStore((s) => s.loopA);
   const loopB = usePlayerStore((s) => s.loopB);
   const queue = usePlayerStore((s) => s.queue);
   const index = usePlayerStore((s) => s.index);
   const streamKbps = usePlayerStore((s) => s.streamKbps);
-  const {
-    togglePlay, next, prev, cycleRepeat, toggleShuffle, setRate, setVolume, toggleMute,
-    setSleepTimer, setSleepAfterTrack, playAt, setSleepSongs, setLoopPoint, clearLoop,
-  } = usePlayerStore.getState();
+  const { togglePlay, next, prev, cycleRepeat, toggleShuffle, setRate, setVolume, toggleMute, setLoopPoint, clearLoop } =
+    usePlayerStore.getState();
   const reasons = useReasonStore((s) => s.reasons);
 
   const setCurrentAccent = usePlayerStore((s) => s.setCurrentAccent);
   const dynamicTheme = useSettingsStore((s) => s.dynamicTheme);
   const [showMore, setShowMore] = useState(false);
   const [showDevices, setShowDevices] = useState(false);
+  const [showSleep, setShowSleep] = useState(false);
   // v5.17.0 — song bookmarks, ambient mode, data saver.
   const seek = usePlayerStore((s) => s.seek);
   const marks = useBookmarkStore((b) => (song ? b.marks[song.id] : undefined)) ?? [];
   const removeMark = useBookmarkStore((b) => b.remove);
   const dataSaver = useSettingsStore((s) => s.dataSaver);
   const [ambientArmed, setAmbientArmed] = useState(true);
-  const [ambientIdle, wakeAmbient] = useIdle(ambientArmed && isPlaying && !showMore && !showDevices);
+  const [ambientIdle, wakeAmbient] = useIdle(ambientArmed && isPlaying && !showMore && !showDevices && !showSleep);
 
   // 8.1 — swipe flow: drag the artwork LEFT for the next song, RIGHT for the
   // previous. A vertical drag is the page's to scroll (the pane is touch-pan-y),
   // so nothing here claims it — the up/down fling used to fight the scroll.
   const artSwipe = useRef<(ArtSwipe & { el: HTMLElement }) | null>(null);
   const [swipeFx, setSwipeFx] = useState<'left' | 'right' | null>(null);
-  const [rightTab, setRightTab] = useState<'queue' | 'lyrics' | 'about'>('queue');
+  const [rightTab, setRightTab] = useState<PanelTab>('queue');
   const panelRef = useRef<HTMLElement>(null);
   // The artwork's own colour for the stage wash (an "R G B" triplet).
   const [wash, setWash] = useState<string | null>(null);
@@ -233,7 +241,10 @@ export default function NowPlayingPage() {
   // The rebuilt list arrived — or, after a generous wait, it is not coming (offline, empty catalogue).
   useEffect(() => {
     if (!rebuilding) return;
-    if (upcomingCount > 0) { setRebuilding(false); return; }
+    if (upcomingCount > 0) {
+      setRebuilding(false);
+      return;
+    }
     const t = window.setTimeout(() => setRebuilding(false), 35_000);
     return () => window.clearTimeout(t);
   }, [rebuilding, upcomingCount]);
@@ -359,17 +370,25 @@ export default function NowPlayingPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [navigate, chromeHidden]);
 
-  // slide-up entrance: start off-screen before paint, then spring up.
+  // Slide-up entrance: start off-screen before paint, then rise. Skipped
+  // entirely when the listener asked for less motion.
   useLayoutEffect(() => {
     const el = sheetRef.current;
-    if (!el) return;
+    if (!el || reducedMotion()) return;
     el.style.transform = 'translateY(100%)';
     el.style.willChange = 'transform';
     const id = requestAnimationFrame(() => {
       el.style.transition = 'transform 360ms cubic-bezier(0.22, 1, 0.36, 1)';
       el.style.transform = 'translateY(0)';
     });
-    return () => cancelAnimationFrame(id);
+    const done = () => {
+      el.style.willChange = '';
+    };
+    el.addEventListener('transitionend', done, { once: true });
+    return () => {
+      cancelAnimationFrame(id);
+      el.removeEventListener('transitionend', done);
+    };
   }, []);
 
   const artUrl = song ? bestImage(song.images, 500) : null;
@@ -418,7 +437,7 @@ export default function NowPlayingPage() {
       <EmptyState
         title="Nothing playing"
         message="Pick a song and it will take the stage here."
-        action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
+        action={<Link to="/" className="vx-tap px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
       />
     );
   }
@@ -430,15 +449,17 @@ export default function NowPlayingPage() {
   const tapZones = (
     <>
       <button
+        type="button"
         aria-label={canvasOn ? 'Rewind 10 seconds (double tap), or tap to toggle the controls' : 'Rewind 10 seconds (double tap)'}
         onClick={canvasOn ? onCanvasTap : undefined}
         onDoubleClick={() => {
           cancelTap();
           doubleSeek(-1);
         }}
-        className="absolute inset-y-0 left-0 w-1/3 rounded-l-xl"
+        className="vx-np-zone is-left"
       />
       <button
+        type="button"
         aria-label={canvasOn ? 'Double tap to favorite, or tap to toggle the controls' : 'Double tap to favorite'}
         onClick={canvasOn ? onCanvasTap : undefined}
         onDoubleClick={() => {
@@ -446,25 +467,29 @@ export default function NowPlayingPage() {
           useLibraryStore.getState().toggleFavorite(song);
           haptic('medium');
         }}
-        className="absolute inset-y-0 left-1/3 w-1/3"
+        className="vx-np-zone is-middle"
       />
       <button
+        type="button"
         aria-label={canvasOn ? 'Forward 10 seconds (double tap), or tap to toggle the controls' : 'Forward 10 seconds (double tap)'}
         onClick={canvasOn ? onCanvasTap : undefined}
         onDoubleClick={() => {
           cancelTap();
           doubleSeek(1);
         }}
-        className="absolute inset-y-0 right-0 w-1/3 rounded-r-xl"
+        className="vx-np-zone is-right"
       />
     </>
   );
 
-  const upNext = queue.slice(index + 1, index + 6);
+  // Up next preview: the next six (Pin a mood still fits under them on a
+  // desktop); the whole queue is one tap away (Open queue).
+  const upNext = queue.slice(index + 1, index + 7);
   const playingFrom = song.album?.name ?? 'Your queue';
   const filmTitle = song.album ? filmTitleFromAlbumName(song.album.name) : null;
   const creditChips = buildCreditChips(song, filmTitle);
   const washStyle = (wash ? { '--np-wash': wash } : undefined) as React.CSSProperties | undefined;
+  const leadArtist = song.artists[0];
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -492,17 +517,26 @@ export default function NowPlayingPage() {
     },
   ];
 
-  const pickTab = (tab: 'queue' | 'lyrics' | 'about') => {
+  const pickTab = (tab: PanelTab, focus = false) => {
     tabTouched.current = true;
     setRightTab(tab);
+    if (focus) document.getElementById(`vx-np-tab-${tab}`)?.focus();
     // Phone: the panel sits under the player — bring it up into view.
     if (window.innerWidth < 1024) panelRef.current?.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
+  };
+  // Tabs: arrow keys move between them (and select), Home / End jump to the ends.
+  const onTabKey = (e: React.KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const last = TABS.length - 1;
+    const to = e.key === 'ArrowRight' ? (i === last ? 0 : i + 1) : e.key === 'ArrowLeft' ? (i === 0 ? last : i - 1) : e.key === 'Home' ? 0 : e.key === 'End' ? last : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    pickTab(TABS[to][0], true);
   };
 
   // sheet: drag down to dismiss with the finger, animated slide-down on close.
   const closeSheet = () => {
     const el = sheetRef.current;
-    if (!el) {
+    if (!el || reducedMotion()) {
       navigate(-1);
       return;
     }
@@ -545,21 +579,13 @@ export default function NowPlayingPage() {
     }
   };
 
-  const fadeWhenHidden = chromeHidden && 'opacity-0 pointer-events-none';
-
-  const lyricsBody = (immersiveLayer: boolean) =>
-    lyrics.data?.synced ? (
-      <SyncedLyrics lines={lyrics.data.synced} live size="stage" className={immersiveLayer ? 'py-[18vh]' : 'pb-[30vh]'} />
-    ) : lyrics.data?.plain ? (
-      <div className={cn('vx-np-lyrics-plain', immersiveLayer ? 'py-10' : 'pb-10')}>{lyrics.data.plain}</div>
-    ) : (
-      <p className={cn('text-[15px] text-ink-300', immersiveLayer && 'text-center mt-16')}>No lyrics for this song yet.</p>
-    );
+  const fadeWhenHidden = chromeHidden && 'is-hidden';
+  const playingOn = castDeviceName || externalDevice;
 
   return (
     <div
       ref={sheetRef}
-      className="vx-now-playing vx-np relative -mx-4 md:-mx-8 px-4 md:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[100dvh] -mb-44 md:-mb-28 overflow-hidden"
+      className={cn('vx-now-playing vx-np', canvasOn && 'has-canvas')}
       style={washStyle}
       onTouchStart={onSheetTouchStart}
       onTouchMove={onSheetTouchMove}
@@ -571,32 +597,21 @@ export default function NowPlayingPage() {
         {/* v5.7.12 — the video canvas: the clip fills the whole player behind
             the gradients on every screen size (full-screen canvas style). */}
         {!chromeHidden && <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />}
-        <div className="vx-np-bg-wash" style={{ opacity: canvasOn ? 0.35 : 1 }} />
+        <div className="vx-np-bg-wash" />
         {/* v5.8.2 — the scrim thins over a playing clip so the video reads
             instead of drowning, and thins again once the controls are gone.
             It stays bottom-weighted either way, so whatever chrome is still
             on screen keeps its contrast. */}
-        {canvasOn ? (
-          <div
-            className={cn(
-              'absolute inset-0 bg-gradient-to-b',
-              chromeHidden
-                ? 'from-transparent via-transparent to-ink-950/60'
-                : 'from-ink-950/35 via-ink-950/25 lg:via-ink-950/45 to-ink-950/95',
-            )}
-          />
-        ) : (
-          <div className="vx-np-bg-scrim" />
-        )}
+        <div className={cn('vx-np-bg-scrim', canvasOn && 'is-canvas', chromeHidden && 'is-bare')} />
       </StageBackdrop>
 
       <div className="vx-np-inner">
         {/* Top bar: close, where this is playing from, the song menu */}
-        <header className={cn('vx-np-top', fadeWhenHidden)} aria-hidden={chromeHidden}>
-          <IconButton label="Close" onClick={closeSheet} className="text-ink-100">
+        <header className={cn('vx-np-top', fadeWhenHidden)} aria-hidden={chromeHidden} inert={chromeHidden}>
+          <IconButton label="Close player" onClick={closeSheet} className="vx-np-icon">
             <ChevronDownIcon className="w-6 h-6" />
           </IconButton>
-          <button onClick={toggleFullscreen} className="vx-np-context" title="Toggle fullscreen">
+          <button type="button" onClick={toggleFullscreen} className="vx-np-context" title="Toggle fullscreen">
             <span className="vx-np-context-label">Playing from</span>
             <span className="vx-np-context-name">{playingFrom}</span>
           </button>
@@ -633,17 +648,23 @@ export default function NowPlayingPage() {
             </div>
 
             {/* Everything under the clip fades out together in immersive mode. */}
-            <div className={cn('vx-np-controls', fadeWhenHidden)} aria-hidden={chromeHidden}>
+            <div className={cn('vx-np-controls', fadeWhenHidden)} aria-hidden={chromeHidden} inert={chromeHidden}>
               <div className="vx-np-title-row">
-                <div className="min-w-0 flex-1">
-                  <Marquee text={song.title} className="vx-np-title" />
-                  {song.artists[0]?.id ? (
-                    <Link to={artistPath(song.artists[0])} className="vx-np-artist">{song.subtitle}</Link>
+                <div className="vx-np-title-block">
+                  <h1 className="vx-np-title">
+                    <Marquee text={song.title} />
+                  </h1>
+                  {leadArtist?.id ? (
+                    <Link to={artistPath(leadArtist)} className="vx-np-artist">
+                      {song.subtitle}
+                    </Link>
                   ) : (
                     <p className="vx-np-artist">{song.subtitle}</p>
                   )}
                 </div>
-                <FavButton song={song} />
+                <span className="vx-np-like">
+                  <FavButton song={song} />
+                </span>
               </div>
 
               <div className="vx-np-seek">
@@ -652,39 +673,53 @@ export default function NowPlayingPage() {
 
               {/* Main transport */}
               <div className="vx-np-transport">
-                <IconButton label={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={toggleShuffle} active={shuffle} aria-pressed={shuffle} size="lg">
+                <IconButton
+                  label={`Shuffle ${shuffle ? 'on' : 'off'}`}
+                  onClick={toggleShuffle}
+                  active={shuffle}
+                  aria-pressed={shuffle}
+                  size="lg"
+                  className="vx-np-mode"
+                >
                   <ShuffleIcon className="w-6 h-6" />
                   {shuffle && <span className="vx-np-dot" aria-hidden />}
                 </IconButton>
-                <IconButton label="Previous" onClick={prev} size="lg">
-                  <PrevIcon className="w-9 h-9" />
+                <IconButton label="Previous" onClick={prev} size="lg" className="vx-np-skip">
+                  <PrevIcon className="w-8 h-8" />
                 </IconButton>
-                <button onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="vx-np-play">
-                  {isBuffering ? (
-                    <span className="w-6 h-6 border-[3px] border-current border-t-transparent rounded-full animate-spin" />
-                  ) : isPlaying ? (
-                    <PauseIcon />
-                  ) : (
-                    <PlayIcon className="ml-1" />
-                  )}
-                </button>
-                <IconButton label="Next" onClick={() => next(true)} size="lg">
-                  <NextIcon className="w-9 h-9" />
+                <PlayButton isPlaying={isPlaying} isBuffering={isBuffering} onClick={togglePlay} />
+                <IconButton label="Next" onClick={() => next(true)} size="lg" className="vx-np-skip">
+                  <NextIcon className="w-8 h-8" />
                 </IconButton>
-                <IconButton label={`Repeat: ${repeat}`} onClick={cycleRepeat} active={repeat !== 'off'} aria-pressed={repeat !== 'off'} size="lg">
+                <IconButton
+                  label={`Repeat: ${repeat}`}
+                  onClick={cycleRepeat}
+                  active={repeat !== 'off'}
+                  aria-pressed={repeat !== 'off'}
+                  size="lg"
+                  className="vx-np-mode"
+                >
                   <RepeatIcon className="w-6 h-6" />
-                  {repeat === 'one' && <span className="absolute top-1.5 right-1.5 text-[10px] font-extrabold">1</span>}
+                  {repeat === 'one' && (
+                    <span className="vx-np-repeat-one" aria-hidden>
+                      1
+                    </span>
+                  )}
                   {repeat !== 'off' && <span className="vx-np-dot" aria-hidden />}
                 </IconButton>
               </div>
 
-              {/* Lyrics · devices · playback options · share · queue */}
+              {/* Lyrics · output · sleep · share · queue · playback options */}
               <div className="vx-np-tools">
                 <IconButton label="Lyrics" onClick={() => setImmersive(true)} className="vx-np-tool">
                   <MicIcon />
                 </IconButton>
-                <span className="flex items-center">
-                  <IconButton label="Connect to a device" onClick={() => setShowDevices(true)} className="vx-np-tool">
+                <span className="vx-np-tool-group">
+                  <IconButton
+                    label={playingOn ? `Connect to a device. Playing on ${playingOn}` : 'Connect to a device'}
+                    onClick={() => setShowDevices(true)}
+                    className={cn('vx-np-tool', playingOn && 'is-live')}
+                  >
                     <DevicesIcon />
                   </IconButton>
                   {castAvailable && (
@@ -694,9 +729,7 @@ export default function NowPlayingPage() {
                     </span>
                   )}
                 </span>
-                <IconButton label="More options" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className="vx-np-tool">
-                  <SlidersIcon />
-                </IconButton>
+                <SleepTimerButton open={showSleep} onOpen={() => setShowSleep(true)} />
                 <IconButton
                   label="Share link"
                   className="vx-np-tool"
@@ -707,11 +740,15 @@ export default function NowPlayingPage() {
                 <Link to="/queue" aria-label="Queue" title="Queue" className="vx-np-tool">
                   <QueueIcon />
                 </Link>
+                <IconButton label="More options" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className="vx-np-tool">
+                  <SlidersIcon />
+                </IconButton>
               </div>
 
-              {(externalDevice || castDeviceName) && (
+              {playingOn && (
                 <p className="vx-np-device-line">
-                  <DevicesIcon className="w-3.5 h-3.5" aria-hidden /> Playing on {castDeviceName || externalDevice}
+                  <span className="vx-np-live-dot" aria-hidden />
+                  Playing on {playingOn}
                 </p>
               )}
             </div>
@@ -719,56 +756,48 @@ export default function NowPlayingPage() {
 
           {/* Up next · lyrics · credits: a panel under the player on phones, the
               right-hand column on wide screens. */}
-          <section
-            ref={panelRef}
-            aria-label="Up next, lyrics and credits"
-            className={cn('vx-player-context vx-np-panel transition-opacity duration-300', fadeWhenHidden)}
-            aria-hidden={chromeHidden}
-          >
+          <section ref={panelRef} aria-label="Up next, lyrics and credits" className={cn('vx-np-panel', fadeWhenHidden)} aria-hidden={chromeHidden} inert={chromeHidden}>
             <div className="vx-np-tabbar">
-            <div className="vx-np-tabs" role="tablist" aria-label="Player panels">
-              <button role="tab" aria-selected={rightTab === 'queue'} onClick={() => pickTab('queue')}>
-                Up next
-              </button>
-              <button role="tab" aria-selected={rightTab === 'lyrics'} onClick={() => pickTab('lyrics')}>
-                Lyrics
-              </button>
-              <button role="tab" aria-selected={rightTab === 'about'} onClick={() => pickTab('about')}>
-                Credits
-              </button>
-            </div>
-            {rightTab === 'queue' && <Link to="/queue" className="vx-np-link">Open queue</Link>}
-            {rightTab === 'lyrics' && <Link to={`/lyrics/${song.id}`} className="vx-np-link">Full lyrics</Link>}
+              <div className="vx-np-tabs" role="tablist" aria-label="Player panels">
+                {TABS.map(([tab, label], i) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    id={`vx-np-tab-${tab}`}
+                    aria-selected={rightTab === tab}
+                    aria-controls={`vx-np-panel-${tab}`}
+                    tabIndex={rightTab === tab ? 0 : -1}
+                    onClick={() => pickTab(tab)}
+                    onKeyDown={(e) => onTabKey(e, i)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {rightTab === 'queue' && (
+                <Link to="/queue" className="vx-np-link">
+                  Open queue
+                </Link>
+              )}
+              {rightTab === 'lyrics' && (
+                <Link to={`/lyrics/${song.id}`} className="vx-np-link">
+                  Full lyrics
+                </Link>
+              )}
             </div>
 
             {rightTab === 'queue' && (
-              <div className="vx-np-tabpanel" role="tabpanel" aria-label="Up next">
+              <div className="vx-np-tabpanel" role="tabpanel" id="vx-np-panel-queue" aria-labelledby="vx-np-tab-queue">
                 <h2 className="sr-only">Up next</h2>
-                {upNext.length === 0 && (
-                  <p className="text-[15px] text-ink-300 flex items-center gap-2 py-2" role="status">
+                {upNext.length === 0 ? (
+                  <p className="vx-np-empty" role="status">
                     <SparkleIcon className={cn('w-4 h-4 shrink-0', rebuilding && 'animate-pulse')} />
                     {rebuilding ? 'Finding what follows this song…' : 'Add songs with Play next or Add to queue.'}
                   </p>
+                ) : (
+                  <UpNextRows songs={upNext} start={index + 1} variant="stage" />
                 )}
-                {upNext.map((s, i) => {
-                  const line = songLine(s);
-                  return (
-                    <button key={`${s.id}-${i}`} onClick={() => playAt(index + 1 + i)} className="vx-np-row">
-                      <img src={bestImage(s.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" decoding="async" />
-                      <span className="min-w-0 flex-1">
-                        {/* Song – Movie/Album – Artist */}
-                        <span className="vx-np-row-title">{line.title}</span>
-                        <span className="vx-np-row-meta">{[line.album, line.artist].filter(Boolean).join(' – ')}</span>
-                        {reasons[s.id] && (
-                          <span className="vx-np-row-why">
-                            <SparkleIcon className="w-3 h-3 shrink-0" aria-hidden />
-                            <span>{reasons[s.id]}</span>
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
 
                 {/* C5 / v7.1.0 — pin a mood. It used to set a flag that only nudged the NEXT automatic
                     extension (possibly eight songs away), so tapping a chip changed nothing you could
@@ -809,43 +838,50 @@ export default function NowPlayingPage() {
             )}
 
             {rightTab === 'lyrics' && (
-              <div className="vx-np-tabpanel is-lyrics" role="tabpanel" aria-label="Lyrics">
-                <div className="vx-np-lyrics">{lyricsBody(false)}</div>
+              <div className="vx-np-tabpanel is-lyrics" role="tabpanel" id="vx-np-panel-lyrics" aria-labelledby="vx-np-tab-lyrics">
+                <div className="vx-np-lyrics">
+                  <StageLyrics lyrics={lyrics} layer="panel" />
+                </div>
               </div>
             )}
 
             {rightTab === 'about' && (
-              <div className="vx-np-tabpanel" role="tabpanel" aria-label="Credits">
+              <div className="vx-np-tabpanel" role="tabpanel" id="vx-np-panel-about" aria-labelledby="vx-np-tab-about">
                 {reasons[song.id] && (
                   <div className="vx-np-about-block">
-                    <p className="vx-np-about-label">Why this song</p>
-                    <p className="flex items-start gap-2 text-[15px] text-ink-100">
-                      <SparkleIcon className="w-4 h-4 mt-0.5 shrink-0 text-ink-300" aria-hidden />
+                    <h3 className="vx-np-about-label">Why this song</h3>
+                    <p className="vx-np-why">
+                      <SparkleIcon className="w-4 h-4 mt-0.5 shrink-0" />
                       <span>{reasons[song.id]}</span>
                     </p>
                   </div>
                 )}
                 {creditChips.length > 0 && (
                   <div className="vx-np-about-block">
-                    <p className="vx-np-about-label">Credits</p>
-                    <div className="flex flex-wrap gap-2">
+                    <h3 className="vx-np-about-label">Credits</h3>
+                    <ul className="vx-np-credits">
                       {creditChips.map((c) => (
-                        <Link key={`${c.role}-${c.name}`} to={c.to} className="vx-np-credit">
-                          <span aria-hidden="true">{c.icon}</span>
-                          <span className="vx-np-credit-role">{c.role}</span>
-                          <span className="truncate">{c.name}</span>
-                        </Link>
+                        <li key={`${c.role}-${c.name}`}>
+                          <Link to={c.to} className="vx-np-credit">
+                            <span className="vx-np-credit-role">{c.role}</span>
+                            <span className="vx-np-credit-name">{c.name}</span>
+                          </Link>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 )}
                 {streamKbps != null && (
                   <div className="vx-np-about-block">
-                    <p className="vx-np-about-label">Stream</p>
+                    <h3 className="vx-np-about-label">Stream</h3>
                     <span className="vx-np-badge tabular-nums">
-                      {streamKbps >= 320 ? 'HD · ' : ''}{streamKbps} kbps
+                      {streamKbps >= 320 ? 'HD · ' : ''}
+                      {streamKbps} kbps
                     </span>
                   </div>
+                )}
+                {!reasons[song.id] && creditChips.length === 0 && streamKbps == null && (
+                  <p className="vx-np-empty">No credits for this song yet.</p>
                 )}
               </div>
             )}
@@ -853,16 +889,26 @@ export default function NowPlayingPage() {
         </div>
       </div>
 
-      {/* Playback options: volume, speed, sleep, A-B loop, marks, Tune this queue. */}
+      {/* More options: volume, speed, sleep, A-B loop, marks, Tune this queue. */}
       <Sheet open={showMore} onClose={() => setShowMore(false)} labelledBy="vx-np-opts-title" size="lg" className="vx-np-opts">
-        <h2 id="vx-np-opts-title" className="mb-2">Playback</h2>
+        <SheetHeader id="vx-np-opts-title" title="Playback" onClose={() => setShowMore(false)} />
         <div className="vx-np-opt">
           <span className="vx-np-opt-label">Volume</span>
           <div className="vx-np-opt-controls">
             <IconButton label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} size="sm">
               <VolumeIcon className="w-4 h-4" muted={muted} />
             </IconButton>
-            <input type="range" aria-label="Volume" aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`} min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={(e) => setVolume(Number(e.target.value))} style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties} />
+            <input
+              type="range"
+              aria-label="Volume"
+              aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`}
+              min={0}
+              max={1}
+              step={0.05}
+              value={muted ? 0 : volume}
+              onChange={(e) => setVolume(Number(e.target.value))}
+              style={{ '--fill': `${(muted ? 0 : volume) * 100}%` } as React.CSSProperties}
+            />
           </div>
         </div>
         <div className="vx-np-opt">
@@ -878,49 +924,24 @@ export default function NowPlayingPage() {
               onChange={(e) => setRate(Number(e.target.value))}
               style={{ '--fill': `${((rate - 0.5) / 2) * 100}%` } as React.CSSProperties}
             />
-            <span className="w-12 text-right text-[13px] font-bold tabular-nums text-ink-100">{rate.toFixed(2)}x</span>
+            <span className="vx-np-opt-value w-12 text-right tabular-nums">{rate.toFixed(2)}x</span>
           </div>
         </div>
-        <div className="vx-np-opt">
-          <span className="vx-np-opt-label">Sleep timer</span>
-          <div className="vx-np-opt-controls" role="group" aria-label="Sleep timer">
-            {SLEEP_OPTIONS.map((m) => (
-              <button key={m} onClick={() => setSleepTimer(m)} className="vx-np-pill">{m}m</button>
-            ))}
-            <button onClick={() => setSleepAfterTrack(!sleepAfterTrack)} aria-pressed={sleepAfterTrack} className="vx-np-pill">
-              End of song
-            </button>
-            {sleepAt && (
-              <button onClick={() => setSleepTimer(null)} className="vx-np-pill is-on">
-                Cancel ({Math.max(0, Math.round((sleepAt - Date.now()) / 60_000))}m)
-              </button>
-            )}
-          </div>
-        </div>
-        {/* v5.12.0 — sleep after N songs */}
-        <div className="vx-np-opt">
-          <span className="vx-np-opt-label">Sleep after songs</span>
-          <div className="vx-np-opt-controls" role="group" aria-label="Sleep after songs">
-            {[3, 5, 10].map((n) => (
-              <button key={n} onClick={() => setSleepSongs(sleepSongsLeft === n ? 0 : n)} aria-pressed={sleepSongsLeft === n} className="vx-np-pill">
-                {n}
-              </button>
-            ))}
-            {sleepSongsLeft > 0 && <span className="text-[13px] font-bold text-ink-200 tabular-nums">{sleepSongsLeft} left</span>}
-          </div>
-        </div>
+        <SleepTimerOptions />
         {/* v5.12.0 — A-B repeat: loop any passage */}
         <div className="vx-np-opt">
           <span className="vx-np-opt-label">Loop a passage</span>
           <div className="vx-np-opt-controls" role="group" aria-label="A-B repeat">
-            <button onClick={() => setLoopPoint('A')} className={cn('vx-np-pill', loopA != null && 'is-on')}>
+            <button type="button" onClick={() => setLoopPoint('A')} className={cn('vx-np-pill', loopA != null && 'is-on')}>
               A{loopA != null ? ` ${fmtTime(loopA)}` : ''}
             </button>
-            <button onClick={() => setLoopPoint('B')} className={cn('vx-np-pill', loopB != null && 'is-on')}>
+            <button type="button" onClick={() => setLoopPoint('B')} className={cn('vx-np-pill', loopB != null && 'is-on')}>
               B{loopB != null ? ` ${fmtTime(loopB)}` : ''}
             </button>
             {(loopA != null || loopB != null) && (
-              <button onClick={clearLoop} className="vx-np-pill is-quiet">Clear</button>
+              <button type="button" onClick={clearLoop} className="vx-np-pill is-quiet">
+                Clear
+              </button>
             )}
           </div>
         </div>
@@ -930,9 +951,13 @@ export default function NowPlayingPage() {
           <div className="vx-np-opt-controls" role="group" aria-label="Bookmarks">
             <BookmarkNowButton songId={song.id} />
             {marks.map((m) => (
-              <span key={m} className="inline-flex items-center rounded-full bg-ink-100/10">
-                <button onClick={() => seek(m)} className="pl-3 pr-1 min-h-[34px] text-[13px] font-semibold text-ink-100 tabular-nums" title="Jump here">{fmtTime(m)}</button>
-                <button onClick={() => removeMark(song.id, m)} aria-label={`Remove bookmark at ${fmtTime(m)}`} className="pl-1 pr-3 min-h-[34px] text-[13px] text-ink-400 hover:text-ink-100">×</button>
+              <span key={m} className="vx-np-mark">
+                <button type="button" onClick={() => seek(m)} className="vx-np-mark-time tabular-nums" title="Jump here">
+                  {fmtTime(m)}
+                </button>
+                <button type="button" onClick={() => removeMark(song.id, m)} aria-label={`Remove bookmark at ${fmtTime(m)}`} className="vx-np-mark-remove">
+                  ×
+                </button>
               </span>
             ))}
           </div>
@@ -946,11 +971,30 @@ export default function NowPlayingPage() {
         <div className="vx-np-opt">
           <span className="vx-np-opt-label">More</span>
           <div className="vx-np-opt-controls" role="group" aria-label="More options">
-            <button onClick={() => { const at = usePlayerStore.getState().currentTime; void shareLink(`${songPath(song)}?t=${Math.floor(at)}`, `${song.title} at ${fmtTime(at)}`).then((r) => r === 'copied' && toast('Link to this moment copied')); }} className="vx-np-pill">Share this moment</button>
-            <button onClick={() => setAmbientArmed((v) => !v)} aria-pressed={ambientArmed} className="vx-np-pill" title="After 45 s without touching anything, show a calm artwork-and-clock screen">Ambient mode {ambientArmed ? 'on' : 'off'}</button>
+            <button
+              type="button"
+              onClick={() => {
+                const at = usePlayerStore.getState().currentTime;
+                void shareLink(`${songPath(song)}?t=${Math.floor(at)}`, `${song.title} at ${fmtTime(at)}`).then((r) => r === 'copied' && toast('Link to this moment copied'));
+              }}
+              className="vx-np-pill"
+            >
+              Share this moment
+            </button>
+            <button
+              type="button"
+              onClick={() => setAmbientArmed((v) => !v)}
+              aria-pressed={ambientArmed}
+              className="vx-np-pill"
+              title="After 45 s without touching anything, show a calm artwork-and-clock screen"
+            >
+              Ambient mode {ambientArmed ? 'on' : 'off'}
+            </button>
           </div>
         </div>
       </Sheet>
+
+      <SleepTimerSheet open={showSleep} onClose={() => setShowSleep(false)} />
 
       {/* v5.9.1 — immersive mode is its own layer on <body>, pinned to the
           viewport. Inside the sheet the clip scrolled and dragged with the
@@ -961,7 +1005,7 @@ export default function NowPlayingPage() {
         createPortal(
           <div
             data-vx-overlay
-            className="fixed inset-0 z-[60] bg-black select-none touch-pan-y overflow-hidden animate-fade-up"
+            className="vx-np-canvas-layer"
             data-deter-context
             onTouchStart={onArtTouchStart}
             onTouchMove={onArtTouchMove}
@@ -969,14 +1013,11 @@ export default function NowPlayingPage() {
             onTouchCancel={onArtTouchCancel}
           >
             <SongCanvasBackdrop canvas={canvas} isPlaying={isPlaying} />
-            <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
+            <div aria-hidden className="vx-np-canvas-shade" />
             {tapZones}
-            <div
-              aria-hidden
-              className="absolute inset-x-0 bottom-0 px-6 pt-20 pb-[max(1.5rem,env(safe-area-inset-bottom))] pointer-events-none bg-gradient-to-t from-black/85 via-black/45 to-transparent"
-            >
-              <p className="text-lg font-bold text-white truncate">{song.title}</p>
-              <p className="text-sm text-white/70 truncate">{song.subtitle}</p>
+            <div aria-hidden className="vx-np-canvas-caption">
+              <p className="vx-np-canvas-title">{song.title}</p>
+              <p className="vx-np-canvas-artist">{song.subtitle}</p>
               <CanvasProgress />
             </div>
           </div>,
@@ -991,36 +1032,36 @@ export default function NowPlayingPage() {
             aria-modal="true"
             aria-label="Immersive lyrics"
             data-vx-overlay
-            className="vx-np vx-np-immersive animate-fade-up"
+            className="vx-np vx-np-immersive"
             style={washStyle}
           >
             <StageBackdrop artUrl={artUrl}>
               <div className="vx-np-bg-wash" />
               <div className="vx-np-bg-scrim" />
             </StageBackdrop>
-            <div className="vx-np-top px-4 md:px-8 pt-[max(0.75rem,env(safe-area-inset-top))] w-full max-w-3xl mx-auto">
-              <IconButton label="Close lyrics" onClick={() => setImmersive(false)} className="text-ink-100">
+            <div className="vx-np-immersive-top">
+              <IconButton label="Close lyrics" onClick={() => setImmersive(false)} className="vx-np-icon">
                 <ChevronDownIcon className="w-6 h-6" />
               </IconButton>
               <span className="vx-np-context">
                 <span className="vx-np-context-name">{song.title}</span>
-                <span className="vx-np-context-label truncate max-w-full">{song.subtitle}</span>
+                <span className="vx-np-context-label">{song.subtitle}</span>
               </span>
-              <span className="w-11" aria-hidden />
+              <span className="vx-np-immersive-spacer" aria-hidden />
             </div>
-            <div className="vx-np-lyrics px-4 md:px-8 w-full max-w-3xl mx-auto">{lyricsBody(true)}</div>
-            <div className="px-4 md:px-8 pb-[max(1.25rem,env(safe-area-inset-bottom))] w-full max-w-3xl mx-auto">
-              <div className="vx-np-seek !mt-2">
+            <div className="vx-np-lyrics vx-np-immersive-lyrics">
+              <StageLyrics lyrics={lyrics} layer="immersive" />
+            </div>
+            <div className="vx-np-immersive-controls">
+              <div className="vx-np-seek">
                 <Seekbar timesBelow remaining />
               </div>
-              <div className="flex items-center justify-center gap-10 mt-1">
-                <IconButton label="Previous" onClick={prev} size="lg" className="text-ink-100">
+              <div className="vx-np-immersive-transport">
+                <IconButton label="Previous" onClick={prev} size="lg" className="vx-np-skip">
                   <PrevIcon className="w-8 h-8" />
                 </IconButton>
-                <button onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="vx-np-play !w-16 !h-16">
-                  {isPlaying ? <PauseIcon /> : <PlayIcon className="ml-0.5" />}
-                </button>
-                <IconButton label="Next" onClick={() => next(true)} size="lg" className="text-ink-100">
+                <PlayButton isPlaying={isPlaying} onClick={togglePlay} size="compact" />
+                <IconButton label="Next" onClick={() => next(true)} size="lg" className="vx-np-skip">
                   <NextIcon className="w-8 h-8" />
                 </IconButton>
               </div>

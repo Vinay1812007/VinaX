@@ -10,7 +10,7 @@ export default function ContactPage() {
   return (
     <div className="vx-sec">
       <PageHeader title="Contact" />
-      <div className="vx-article">
+      <div className="vx-doc">
         <H>Email</H>
         <p>
           <a href="mailto:hello@sirimillavinay.online">
@@ -35,7 +35,7 @@ export default function ContactPage() {
           <Link to="/dmca">Copyright &amp; Takedowns</Link>. Verified
           removals propagate to all clients within minutes.
         </p>
-        <p className="vx-article-end">
+        <p className="vx-doc-end">
           VinaX is free and login-free, so there&rsquo;s no account support — there are no accounts. Everything else,
           we&rsquo;re happy to help with.
         </p>

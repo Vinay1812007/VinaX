@@ -32,13 +32,15 @@ export function TuneChips({ className, compact = false }: { className?: string; 
             onClick={() => tune(opt.id, opt.label)}
             aria-pressed={on}
             aria-label={`Tune queue: ${opt.label}`}
+            // 9.0 — the Encore chip (shell.css): a quiet fill at rest, solid Iris when chosen;
+            // "Surprise me" is a VinaX moment, so it carries a Lagoon tint.
             className={cn(
               "relative shrink-0 min-h-[36px] px-3.5 py-1.5 rounded-full text-[13px] font-semibold border whitespace-nowrap transition active:scale-95 after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']",
-              opt.id === 'surprise'
-                ? 'text-ink-100 border-ember-400/30 bg-ember-400/15 hover:bg-ember-400/25'
-                : on
-                  ? 'bg-ember-500/15 text-ember-400 border-ember-400/40'
-                  : 'bg-ink-850 text-ink-300 border-glass hover:bg-ink-800 hover:text-ink-100',
+              on
+                ? 'vx-chip-on'
+                : opt.id === 'surprise'
+                  ? 'text-ink-100 border-tide-400/30 bg-tide-500/15 hover:bg-tide-500/25'
+                  : 'vx-chip-idle border-transparent text-ink-100',
             )}
           >
             {opt.label}

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type { ArtistRef, Song } from '@/types';
 import { albumPath, artistPath, extractId } from '@/utils/slug';
@@ -15,7 +15,8 @@ import { HeaderSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
 import { ShuffleIcon } from '@/components/Icons';
-import { EntityAction, EntityMenu, EntityMeta, PlayFab, useArtTone } from '@/components/EntityHeader';
+import { EntityAction, EntityHeader, EntityMenu, EntityMeta, PlayFab } from '@/components/EntityHeader';
+import { SectionHeader } from '@/components/SectionHeader';
 import { shuffled } from '@/features/library/sort';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { SaveButton } from '@/components/SaveButton';
@@ -29,7 +30,6 @@ export default function ArtistPage() {
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const [showAll, setShowAll] = useState(false);
-  const tone = useArtTone(artist ? bestImage(artist.images, 500) : undefined);
   const canonicalPath = artist ? artistPath(artist) : undefined;
   useCanonicalRedirect(canonicalPath);
   usePageMeta({
@@ -68,35 +68,35 @@ export default function ArtistPage() {
 
   return (
     <div className="vx-entity">
-      <header className="vx-artist-banner" style={{ '--hero': tone ?? 'var(--art)' } as CSSProperties}>
-        <div className="vx-artist-banner-bg" aria-hidden>
-          <img src={art} alt="" onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} />
-        </div>
-        <div className="vx-artist-avatar">
-          <img src={art} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" data-deter-context />
-        </div>
-        <div className="min-w-0">
-          <p className="vx-ehead-kind">Artist</p>
-          <h1 className="vx-display">{artist.name}</h1>
+      {/* 9.0 — the shared Encore header; a person gets a circle. */}
+      <EntityHeader
+        kind="Artist"
+        title={artist.name}
+        titleText={artist.name}
+        round
+        artUrl={art}
+        art={<img src={art} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" data-deter-context />}
+        meta={
           <EntityMeta
             items={[
               artist.subtitle && artist.subtitle !== 'Artist' ? artist.subtitle[0].toUpperCase() + artist.subtitle.slice(1) : null,
               artist.albums.length ? `${artist.albums.length} release${artist.albums.length === 1 ? '' : 's'}` : null,
             ]}
           />
-        </div>
-      </header>
-
-      <div className="vx-ehead-actions vx-artist-actions">
-        {songs.length > 0 && <PlayFab label="Play top songs" onClick={() => playQueue(songs, 0)} />}
-        {songs.length > 0 && <EntityAction label="Shuffle play" onClick={shufflePlay}><ShuffleIcon /></EntityAction>}
-        <SaveButton className="vx-ehead-pill vx-follow" entity={{ id: artist.id, kind: 'artist', title: artist.name, subtitle: 'Artist', image: bestImage(artist.images, 300) }} />
-        <EntityMenu items={[songs.length > 0 && { label: 'Start AI Radio', onSelect: () => startRadio(songs[0], { seeds: songs.slice(1, 5) }) }]} />
-      </div>
+        }
+        actions={
+          <>
+            {songs.length > 0 && <PlayFab size="lg" label="Play top songs" onClick={() => playQueue(songs, 0)} />}
+            {songs.length > 0 && <EntityAction label="Shuffle play" onClick={shufflePlay}><ShuffleIcon /></EntityAction>}
+            <SaveButton className="vx-ehead-pill vx-follow" entity={{ id: artist.id, kind: 'artist', title: artist.name, subtitle: 'Artist', image: bestImage(artist.images, 300) }} />
+            <EntityMenu items={[songs.length > 0 && { label: 'Start AI Radio', onSelect: () => startRadio(songs[0], { seeds: songs.slice(1, 5) }) }]} />
+          </>
+        }
+      />
 
       {songs.length > 0 && (
-        <section className="vx-esection" aria-labelledby="artist-popular">
-          <h2 id="artist-popular">Popular</h2>
+        <section className="vx-esection" aria-label="Popular">
+          <SectionHeader title="Popular" />
           <div className="vx-tracklist">
             {shown.map((song, i) => <SongRow key={song.id} song={song} songs={songs} index={i} />)}
           </div>
@@ -108,7 +108,7 @@ export default function ArtistPage() {
             />
           )}
           {songs.length > POPULAR_PREVIEW && (
-            <button type="button" className="vx-show-more" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+            <button type="button" className="vx-quiet-btn vx-show-more" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
               {showAll ? 'Show less' : 'Show more'}
             </button>
           )}
@@ -141,8 +141,8 @@ export default function ArtistPage() {
       </div>
 
       {artist.bio && (
-        <section className="vx-esection" aria-labelledby="artist-about">
-          <h2 id="artist-about">About</h2>
+        <section className="vx-esection" aria-label={`About ${artist.name}`}>
+          <SectionHeader title="About" />
           <p className="vx-artist-bio line-clamp-[12]">{artist.bio}</p>
         </section>
       )}

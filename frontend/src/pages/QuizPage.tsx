@@ -107,8 +107,8 @@ export default function QuizPage() {
     const finished = phase === 'done';
     return (
       <div className="vx-sec is-narrow text-center pt-6">
-        <span className="inline-grid place-items-center w-[72px] h-[72px] rounded-full bg-ink-850 text-ink-200 mb-6" aria-hidden>
-          <SparkleIcon className="w-8 h-8" />
+        <span className="vx-empty-icon mx-auto" aria-hidden>
+          <SparkleIcon className="w-9 h-9" />
         </span>
         <h1 className="vx-page-title mb-2">
           {finished ? 'Nice run' : 'Guess the song'}
@@ -172,8 +172,13 @@ export default function QuizPage() {
   const revealed = phase === 'reveal';
   return (
     <div className="vx-sec is-narrow pt-2">
+      <div className="vx-quiz-progress" aria-hidden>
+        {order.map((s, i) => (
+          <i key={s.id} className={i < idx || (i === idx && revealed) ? 'is-done' : i === idx ? 'is-now' : undefined} />
+        ))}
+      </div>
       <div className="flex items-center justify-between mb-6 text-[14px] tabular-nums">
-        <span className="text-ink-400 font-medium">Question {idx + 1} of {order.length}</span>
+        <span className="text-ink-400 font-semibold">Question {idx + 1} of {order.length}</span>
         <span className="flex items-center gap-4">
           <span className="font-semibold text-ink-100">Score {score}</span>
           <span className={cn('font-semibold', streak >= 2 ? 'text-ink-100' : 'text-ink-400')}>
@@ -183,22 +188,17 @@ export default function QuizPage() {
       </div>
 
       <div className="flex flex-col items-center mb-6">
-        <div className="relative w-48 h-48 rounded-xl overflow-hidden grid place-items-center shadow-[var(--vx-art-shadow)]">
+        <div className="vx-quiz-art">
           {revealed ? (
-            <img src={bestImage(correct.images, 500)} alt="" className="w-full h-full object-cover animate-fade-up" />
+            <img src={bestImage(correct.images, 500)} alt="" className="animate-fade-up" />
           ) : (
             <>
-              <div className="absolute inset-0 bg-ember-500" />
-              <div className="absolute inset-0 flex items-end justify-center gap-1.5 pb-12">
+              <span className="vx-quiz-bars" aria-hidden>
                 {[0, 1, 2, 3, 4].map((i) => (
-                  <span
-                    key={i}
-                    className="w-1.5 rounded-full bg-white/90 animate-pulse-bar origin-bottom"
-                    style={{ height: 28, animationDelay: `${i * 0.12}s` }}
-                  />
+                  <i key={i} className="animate-pulse-bar" style={{ animationDelay: `${i * 0.12}s` }} />
                 ))}
-              </div>
-              <PlayIcon className="relative w-10 h-10 text-[color:var(--vx-on-accent)]" />
+              </span>
+              <PlayIcon className="relative w-11 h-11 text-[color:var(--vx-on-accent)]" />
             </>
           )}
         </div>

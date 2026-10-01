@@ -95,7 +95,8 @@ for (const size of SIZES) {
     await expect(page.locator('h1', { hasText: 'Road trip' })).toBeVisible();
     await page.fill('#collection-search', 'naatu');
     await expect.poll(() => bodyText(page)).toMatch(/1 song match/);
-    await expect(page.locator('.glass-card', { hasText: 'Samajavaragamana' })).toHaveCount(0);
+    await expect(page.locator('.vx-crow', { hasText: 'Naatu Naatu' })).toHaveCount(1);
+    await expect(page.locator('.vx-crow', { hasText: 'Samajavaragamana' })).toHaveCount(0);
     await page.fill('#collection-search', '');
     await page.getByRole('button', { name: 'Select' }).click();
     await page.getByLabel('Select Naatu Naatu').check();
@@ -203,7 +204,7 @@ for (const size of SIZES) {
     await page.setViewportSize(size);
     await seed(page, baseURL!, size.theme);
     await page.goto('/stats');
-    await expect.poll(() => bodyText(page)).toMatch(/LISTENED \(EST\.\)/);
+    await expect.poll(() => bodyText(page)).toMatch(/Listened \(est\.\)/);
     await expect.poll(() => bodyText(page)).toMatch(/≈/);
     await page.screenshot({ path: `test-results/v61-stats-${tag}.png`, fullPage: true });
     await page.goto('/settings');

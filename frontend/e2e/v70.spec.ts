@@ -70,10 +70,10 @@ test('a 6.x device with the explore switch on upgrades to Discover; the three-wa
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page, baseURL!, { exploreMode: true });
   await page.goto('/settings');
-  const group = page.getByRole('group', { name: 'Discovery mode' });
-  await expect(group.getByRole('button', { name: 'Discover' })).toHaveAttribute('aria-pressed', 'true');
-  await group.getByRole('button', { name: 'Familiar' }).click();
-  await expect(group.getByRole('button', { name: 'Familiar' })).toHaveAttribute('aria-pressed', 'true');
+  const group = page.getByRole('radiogroup', { name: 'Discovery mode' });
+  await expect(group.getByRole('radio', { name: 'Discover' })).toHaveAttribute('aria-checked', 'true');
+  await group.getByRole('radio', { name: 'Familiar' }).click();
+  await expect(group.getByRole('radio', { name: 'Familiar' })).toHaveAttribute('aria-checked', 'true');
   await expect.poll(() => settingsState(page).then((s) => s.state?.discoveryMode)).toBe('familiar');
   const saved = await settingsState(page);
   expect(saved.version).toBe(4);

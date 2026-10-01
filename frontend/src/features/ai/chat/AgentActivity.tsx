@@ -14,7 +14,8 @@ const STEP_ICON: Record<AgentTool, (p: { className?: string }) => ReactNode> = {
 
 /**
  * What an agentic engine did on the way to its reply. While the reply
- * streams it is an open "Working…" list, one row per step, newest last; when
+ * streams it is an open "Working…" list, one row per step, newest last (a
+ * Lagoon dot on the rail marks the step in progress); when
  * the answer finishes it folds to one line ("Searched the web · ran code ·
  * 4 steps") that opens again on demand.
  */
@@ -27,8 +28,8 @@ export const AgentActivity = memo(function AgentActivity({ steps, working }: { s
   return (
     <div className="ai-activity" data-working={working || undefined}>
       <button type="button" className="ai-activity-head" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((v) => !v)}>
-        <AgentIcon className={cn('w-3.5 h-3.5 shrink-0 text-ember-400', working && 'ai-pulse')} />
-        <span className="min-w-0 text-left">{working ? 'Working…' : summariseSteps(steps)}</span>
+        <AgentIcon className={cn('ai-activity-icon w-4 h-4 shrink-0', working && 'ai-pulse')} />
+        <span className={cn('min-w-0 text-left', working && 'ai-shimmer')}>{working ? 'Working…' : summariseSteps(steps)}</span>
         {working && <span className="ai-t3 font-medium shrink-0">{steps.length}</span>}
         <ChevronDownIcon className={cn('ai-activity-chevron w-3 h-3 shrink-0', open && 'rotate-180')} />
       </button>
@@ -37,7 +38,7 @@ export const AgentActivity = memo(function AgentActivity({ steps, working }: { s
           {steps.map((s, i) => {
             const Icon = STEP_ICON[s.tool];
             return (
-              <li key={`${i}-${s.label}`} className="ai-activity-row">
+              <li key={`${i}-${s.label}`} className={cn('ai-activity-row', working && i === steps.length - 1 && 'is-latest')}>
                 <Icon className="w-3.5 h-3.5 shrink-0 ai-t3" />
                 <span className="min-w-0">{s.label}</span>
               </li>

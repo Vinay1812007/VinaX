@@ -15,7 +15,7 @@ import { pool, song, versionFamily, WORDS, type LangId } from './catalogue';
  * Bump EVAL_FIXTURES_VERSION whenever a fixture changes, or two reports stop
  * being comparable.
  */
-export const EVAL_FIXTURES_VERSION = '1.2.0'; // 8.3.0 — the DJ-remix and folk sittings (1.1.0: the mixed-queue scenario)
+export const EVAL_FIXTURES_VERSION = '1.3.0'; // 9.0.0 — album/related-artist retrieval, cached embeddings, served songs, a memory sitting, unplayable tracks, sparse history (1.2.0: DJ-remix and folk; 1.1.0: mixed-queue)
 
 /** Far enough ahead that a soft mute is active whenever the evaluation runs, without reading the clock. */
 export const FAR_FUTURE = 4_102_444_800_000;
@@ -89,6 +89,26 @@ export interface EvalFixture {
    * share of each continuation in `kind` (lib/rules.ts `inEvalStyle`).
    */
   style?: { kind: EvalStyle; pattern: RegExp; search: Song[] };
+  /** 9.0.0 — album pages the catalogue answers (`getAlbum`), by album id. */
+  albums?: Record<string, Song[]>;
+  /** 9.0.0 — artist pages' "similar artists", by artist id. */
+  similarArtists?: Record<string, Array<{ id: string; name: string }>>;
+  /** 9.0.0 — songs only an artist page lists (no search or suggestion returns them). */
+  artistSongs?: Song[];
+  /** 9.0.0 — learned vectors the device already holds, by song id. */
+  embeddings?: Record<string, number[]>;
+  /** 9.0.0 — songs another surface (Home, AI Playlist) showed in the last week. */
+  served?: Song[];
+  /** 9.0.0 — keep the recommendation memories for the sitting: commit each accepted continuation and record how its songs went. */
+  memory?: boolean;
+  /** 9.0.0 — songs the catalogue cannot stream (their response carried stream URLs for the others). */
+  unplayableIds?: string[];
+  /**
+   * 9.0.0 — the fixture's DECLARED taste: songs this synthetic listener is
+   * written to like. "Taste agreement" is the share of queued songs in it —
+   * agreement with what the fixture says, never evidence that anyone enjoys them.
+   */
+  tasteTargets?: string[];
 }
 
 function emptyProfile(now: number): EvalProfile {
@@ -355,7 +375,60 @@ export function buildFixtures(now: number): EvalFixture[] {
   folkSession.search = filmOnly(pool('telugu', { prefix: 'folk-s', count: 10, offset: 5, artistPattern: [2, 3, 4, 5, 6, 7, 2, 4, 6, 3] }));
   folkSession.style = { kind: 'folk', pattern: /\bfolk\b|janapad/i, search: Array.from({ length: 13 }, (_, i) => folkSong(`folk-x${i}`, 3 + i, folkSingers[i % folkSingers.length])) };
 
-  return [cold, warm, familiar, discover, tamil, punjabi, malayalam, mixed, mixedQueue, prefs, skips, partial, offline, sparse, versions, small, kid, muted, hidden, softMuted, djSession, folkSession];
+  // 9.0.0 — album and related-artist retrieval. The seed is from a film
+  // soundtrack and its suggestions are thin; the album page holds the rest of
+  // the soundtrack, and the lead artist's page lists two similar artists whose
+  // songs no search returns. The declared taste: the soundtrack and those two.
+  const deep = listener(now, 'telugu', { id: 'deep-sources', title: 'Album and related-artist retrieval (Telugu)', notes: 'Thin suggestions; the seed’s album page and its artist’s similar artists hold songs nothing else returns. They should reach the queue, within the discovery budget.' });
+  deep.seed = song('seed-deep-sources', { title: te.titles[0], artist: te.artists[0], language: 'telugu', year: '2022', energy: 0.55, tempo: 108, mood: 'romantic', genre: 'film', album: { id: 'al-deep-film', name: te.albums[1] } });
+  deep.related = pool('telugu', { prefix: 'deep-r', count: 5, offset: 1 });
+  deep.search = pool('telugu', { prefix: 'deep-s', count: 4, offset: 6, artistPattern: [3, 4, 5, 6] });
+  const deepAlbum = pool('telugu', { prefix: 'deep-al', count: 7, offset: 20, artistPattern: [1, 5, 2, 7, 1, 5, 2] }).map((s) => ({ ...s, album: { id: 'al-deep-film', name: te.albums[1] }, genre: 'film' }));
+  const deepArtists = pool('telugu', { prefix: 'deep-ar', count: 8, offset: 40, artistPattern: [6, 7, 6, 7, 6, 7, 6, 7] });
+  deep.albums = { 'al-deep-film': [deep.seed, ...deepAlbum] };
+  deep.similarArtists = { [`ar-${te.artists[0]}`]: [{ id: `ar-${te.artists[6]}`, name: te.artists[6] }, { id: `ar-${te.artists[7]}`, name: te.artists[7] }] };
+  deep.artistSongs = deepArtists;
+  deep.tasteTargets = [...deepAlbum, ...deepArtists].map((s) => s.id);
+
+  // 9.0.0 — cached learned embeddings. The candidates' metadata says nothing
+  // about which of them fit; the device's learned vectors do: the listener's
+  // taste songs and half the candidates point one way, the other half another.
+  // The declared taste is the first half. The same listener without vectors is
+  // the control (`embeddings-off`).
+  const near = (i: number): number[] => [1, 0.15 + (i % 3) * 0.05, 0, 0.1, 0, 0, 0.05 * (i % 2), 0];
+  const far = (i: number): number[] => [0, 0.1, 1, 0, 0.15 + (i % 3) * 0.05, 0, 0, 0.05 * (i % 2)];
+  const embedded = listener(now, 'telugu', { id: 'embeddings', title: 'Cached learned embeddings (Telugu)', notes: 'The device holds learned vectors for the taste songs and the candidates; only they tell the fitting candidates apart. Compare with `embeddings-off`.' });
+  // A pool three times the sitting, so the order decides what ships (a sitting that empties its pool ships the same songs in any order).
+  embedded.related = pool('telugu', { prefix: 'emb-r', count: 40, offset: 1 });
+  embedded.search = pool('telugu', { prefix: 'emb-s', count: 20, offset: 5, artistPattern: [2, 3, 4, 5, 6, 7, 2, 4, 6, 3] });
+  embedded.embeddings = {};
+  for (const s of [...embedded.favorites, ...embedded.history.map((e) => e.song)]) embedded.embeddings[s.id] = near(0);
+  const embeddedPool = [...embedded.related, ...embedded.search];
+  embeddedPool.forEach((s, i) => { embedded.embeddings![s.id] = i % 2 === 0 ? near(i) : far(i); });
+  embedded.tasteTargets = embeddedPool.filter((_, i) => i % 2 === 0).map((s) => s.id);
+  const embeddedOff: EvalFixture = { ...embedded, id: 'embeddings-off', title: 'The same listener, no vectors on the device', notes: 'Control for `embeddings`: identical, except the device holds no learned vectors.', embeddings: {} };
+
+  // 9.0.0 — Home showed eight of the seed's strongest suggestions this week.
+  const served = listener(now, 'telugu', { id: 'served', title: 'Songs Home showed this week (Telugu)', notes: 'Eight of the strongest suggestions were shown on Home: the served-recently penalty holds them back a little, never as a rule.' });
+  served.served = served.related.slice(0, 8);
+
+  // 9.0.0 — a sitting with memory: every accepted continuation is committed,
+  // and the listener finishes three of each five and skips the fourth.
+  const memorySitting = listener(now, 'telugu', { id: 'memory', title: 'Committed continuations and pick memory (Telugu)', notes: 'Each continuation is committed and its first four songs end (three finished, one skipped): the seed and outcome memories fill as the sitting goes, and no rule may bend for them.', memory: true });
+
+  // 9.0.0 — the catalogue cannot stream every song: the seed's suggestions came
+  // with stream URLs for half of them, so the other half are unplayable.
+  const unplayable = listener(now, 'telugu', { id: 'unplayable', title: 'Unplayable tracks in the pool (Telugu)', notes: 'The suggestions response carries stream URLs for half its songs; the rest cannot play and must never be queued (the no-audio rule).' });
+  unplayable.related = unplayable.related.map((s, i) => (i % 2 === 0 ? { ...s, audio: [{ quality: '160kbps', url: `https://cdn.invalid/${s.id}.mp4` }] } : s));
+  unplayable.unplayableIds = unplayable.related.filter((_, i) => i % 2 === 1).map((s) => s.id);
+
+  // 9.0.0 — a listener with three plays and no favourites: barely past cold.
+  const sparseHistory = listener(now, 'hindi', { id: 'sparse-history', title: 'Sparse history (three plays, Hindi)', notes: 'Three plays, no favourites, one pinned language: taste is a whisper, so popularity and the seed carry the queue.' });
+  sparseHistory.favorites = [];
+  sparseHistory.history = sparseHistory.history.slice(0, 3);
+  sparseHistory.profile = warmProfile(now, { languages: { hindi: 3 }, artists: [hi.artists[0]], plays: 3 });
+
+  return [cold, warm, familiar, discover, tamil, punjabi, malayalam, mixed, mixedQueue, prefs, skips, partial, offline, sparse, versions, small, kid, muted, hidden, softMuted, djSession, folkSession, deep, embedded, embeddedOff, served, memorySitting, unplayable, sparseHistory];
 }
 
 /** The fixture the latency conditions use (a warm Telugu listener with a full pool). */

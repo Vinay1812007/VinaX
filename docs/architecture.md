@@ -1,6 +1,6 @@
 # Architecture
 
-This document names the pieces of VinaX and shows how data moves between them: the app shell and its routes, the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, the service worker, the Worker's routes and the owner console. It describes the code as it is on the `upgrade/7.2` branch. Deep dives live in [recommendations.md](recommendations.md), [ai.md](ai.md), [data-and-privacy.md](data-and-privacy.md), [design-system.md](design-system.md), [android.md](android.md) and [admin-console.md](admin-console.md).
+This document names the pieces of VinaX and shows how data moves between them: the app shell and its routes, the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, the service worker, the Worker's routes and the owner console. It describes the code as of 9.0 (the shell and Home sections were updated for 9.0; the rest has held since 7.2). Deep dives live in [recommendations.md](recommendations.md), [ai.md](ai.md), [data-and-privacy.md](data-and-privacy.md), [design-system.md](design-system.md), [android.md](android.md) and [admin-console.md](admin-console.md).
 
 ## The pieces
 
@@ -49,13 +49,13 @@ The frontend is a static build. The Worker owns every dynamic URL on the same do
 `src/main.tsx` runs in this order:
 
 1. Imports `services/storage/earlyMigrations` first, so renamed storage keys are in place before any store rehydrates.
-2. Renders `<App />` and loads the four global style sheets: `index.css`, `flow.css`, `stage.css`, `festivals.css`. Page styles load with their lazy page chunks (see [design-system.md](design-system.md)).
+2. Renders `<App />` and loads the four global style sheets: `index.css` (tokens and base primitives), `shell.css` (the frame and shared primitives), `features.css` (a few global feature surfaces) and `festivals.css`. Since 9.0 `shell.css` replaces 8.0's `flow.css` + `stage.css` pair. Page styles load with their lazy page chunks (see [design-system.md](design-system.md)).
 3. Removes the `boot-still` class after the first painted frame, and clears the boot-recovery counters in `sessionStorage`.
 4. Listens for `vite:preloadError`. When a lazy chunk fails to load after a deploy, the page reloads once per session. It does not reload when offline.
 5. Sets `device-phone|tablet|desktop|tv` and `pointer-coarse|pointer-fine` classes on `<html>`, so styles can key on capability instead of width alone.
 6. Registers `/sw.js` in production builds on the web, and asks it to precache the full asset graph on every boot and whenever the network returns.
 
-`src/layouts/AppLayout.tsx` is the frame for every route except VinaX AI. It renders the sidebar (wide screens), the top bar, the routed page inside an error boundary, the player bar and the five-destination dock (phones), the now-playing rail on wide workspaces, toasts, the welcome sheet and the command palette. It also runs the one-time bootstrap: storage migrations, `initEngine()` on the player store, downloads, telemetry (consent-gated), lock-screen lyrics, TV spatial navigation, the alarm, the output watcher, the DJ voice and cast. A module-level flag keeps that bootstrap from running again when the layout remounts after a visit to `/VinaXAI`.
+`src/layouts/AppLayout.tsx` is the frame for every route except VinaX AI. It renders the sidebar (from 768px; always the 80px rail below 1100px), the top bar, the routed page inside an error boundary (the workspace is a rounded sheet inside the chrome), the player (a compact card above the five-destination tab bar on phones and tablets, the floating deck from 1024px), the Now Playing panel on wide workspaces, toasts, the welcome sheet and the command palette. It also runs the one-time bootstrap: storage migrations, `initEngine()` on the player store, downloads, telemetry (consent-gated), lock-screen lyrics, TV spatial navigation, the alarm, the output watcher, the DJ voice and cast. A module-level flag keeps that bootstrap from running again when the layout remounts after a visit to `/VinaXAI`.
 
 The layout also owns scroll memory per history entry, hardware-back handling for overlays, and the wheel rescue described in [design-system.md](design-system.md#overlays).
 

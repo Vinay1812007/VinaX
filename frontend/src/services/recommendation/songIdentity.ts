@@ -70,12 +70,20 @@ interface ServedEntry {
   t: number;
 }
 
+/** 9.0.0 — the in-memory copy is the source of truth only while storage refuses writes. */
+let servedStorageFailed = false;
+
 function loadServed(): ServedEntry[] {
-  let raw: unknown = servedMemory;
+  let raw: unknown = servedStorageFailed ? servedMemory : [];
   try {
     const stored = window.localStorage.getItem(SERVED_KEY);
+    // A missing key is an empty memory (it was never written, or a reset removed it).
+    // 8.x fell back to the in-memory copy here, so "Erase everything" left the
+    // served list alive in memory until the next reload.
     if (stored != null) raw = JSON.parse(stored);
-  } catch { /* retain session memory when storage is unavailable */ }
+  } catch {
+    raw = servedMemory; /* retain session memory when storage is unavailable */
+  }
   const cutoff = Date.now() - SERVED_TTL;
   return Array.isArray(raw)
     ? raw.filter((e): e is ServedEntry => e && typeof e.k === 'string' && Number.isFinite(e.t) && e.t > cutoff).slice(0, SERVED_CAP)
@@ -103,8 +111,21 @@ export function recordServed(keys: string[]): void {
     }
     servedMemory = dedup.slice(0, SERVED_CAP);
     window.localStorage.setItem(SERVED_KEY, JSON.stringify(servedMemory));
+    servedStorageFailed = false;
   } catch {
-    /* storage unavailable — memory-less rounds still work, just less varied */
+    /* storage unavailable — this session keeps the memory; rounds still work */
+    servedStorageFailed = true;
+  }
+}
+
+/** 9.0.0 — forget every served identity (taste reset, tests). */
+export function resetServedMemory(): void {
+  servedMemory = [];
+  servedStorageFailed = false;
+  try {
+    window.localStorage.removeItem(SERVED_KEY);
+  } catch {
+    /* nothing stored */
   }
 }
 

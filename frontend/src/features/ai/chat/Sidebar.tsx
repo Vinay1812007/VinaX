@@ -137,7 +137,9 @@ export function Sidebar({ chats, activeId, collapsed, onCollapse, mobileOpen, on
       >
         <div className="ai-side-head">
           <p className="ai-side-brand">
-            <SparkleIcon className="w-5 h-5 shrink-0" />
+            <span className="ai-mark" aria-hidden>
+              <SparkleIcon filled />
+            </span>
             VinaX AI
           </p>
           {desktop ? (

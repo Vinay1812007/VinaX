@@ -57,6 +57,11 @@ const renderHome = () => {
   );
 };
 const markers = () => Array.from(document.querySelectorAll('[data-home-block]')).map((m) => m.getAttribute('data-home-block')).filter(Boolean);
+/** 9.0.0 — the wider catalogue waits behind "Show more for you". */
+const openExplore = async () => {
+  fireEvent.click(await screen.findByRole('button', { name: /Show more for you/ }));
+  await act(async () => {});
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -112,6 +117,7 @@ describe('HomePage 8.2', () => {
     const melodies = ['a', 'b', 'c'].map((id) => makeSong(`m${id}`, { title: `Melody ${id}` }));
     useLibraryStore.setState({ favorites: melodies });
     renderHome();
+    await openExplore();
     expect(await screen.findByRole('heading', { name: 'Your top genres · Melody' })).toBeTruthy();
     expect(searched).toContain('telugu melody songs');
   });
@@ -128,6 +134,7 @@ describe('HomePage 8.2', () => {
     localStorage.setItem(HOME_SIGNALS_KEY, JSON.stringify({ v: 1, taps: { loved: { s: 20, t: now } }, outcomes: { discovery: { done: { s: 0, t: now }, skipped: { s: 9, t: now } } } }));
     const { unmount } = renderHome();
     await screen.findByRole('group', { name: 'Shortcuts' });
+    await openExplore();
     const order = markers();
     expect(order[0]).toBe('quick');
     expect(order[order.length - 1]).toBe('feed');
@@ -138,6 +145,8 @@ describe('HomePage 8.2', () => {
     localStorage.setItem(HOME_SIGNALS_KEY, JSON.stringify({ v: 1, taps: { albums: { s: 50, t: now } }, outcomes: {} }));
     renderHome();
     await screen.findByRole('group', { name: 'Shortcuts' });
+    // The open Explore band is remembered for the session.
+    await act(async () => {});
     expect(markers()).toEqual(order);
   });
 
@@ -147,7 +156,34 @@ describe('HomePage 8.2', () => {
     localStorage.setItem(HOME_DESIGN_KEY, JSON.stringify({ title: 'Mine', description: 'd', order: chosen, hidden: [] }));
     renderHome();
     await screen.findByRole('group', { name: 'Shortcuts' });
-    await act(async () => {});
+    await openExplore();
     expect(markers()).toEqual(chosen);
+  });
+});
+
+describe('HomePage 9.0', () => {
+  it('shows the first four blocks; the wider catalogue mounts (and fetches) only behind "Show more for you"', async () => {
+    useLibraryStore.setState({ favorites: ['a', 'b', 'c'].map((id) => makeSong(`m${id}`, { title: `Melody ${id}` })) });
+    renderHome();
+    await screen.findByRole('group', { name: 'Shortcuts' });
+    await act(async () => {});
+    expect(markers()).toHaveLength(4);
+    expect(markers()[0]).toBe('quick');
+    expect(markers()).not.toContain('genres');
+    expect(searched).not.toContain('telugu melody songs'); // the genres block has not mounted
+    await openExplore();
+    expect(markers()).toHaveLength(13);
+    expect(sessionStorage.getItem('vinax.home.open.explore')).toBe('1');
+  });
+
+  it('a song hidden from a menu leaves every Home shelf at once (no refetch)', async () => {
+    const recent = ['x', 'y', 'z'].map((id) => makeSong(`h${id}`, { title: `Recent ${id}`, artist: `Singer ${id}` }));
+    useHistoryStore.setState({ entries: recent.map((song, i) => ({ song, ts: Date.now() - i * 60_000, completed: true })) });
+    renderHome();
+    const shelf = await screen.findByRole('heading', { name: 'Continue listening' });
+    expect(shelf).toBeTruthy();
+    expect(screen.getAllByText('Recent y').length).toBeGreaterThan(0);
+    act(() => useLibraryStore.getState().toggleHidden('hy'));
+    expect(screen.queryAllByText('Recent y')).toHaveLength(0);
   });
 });

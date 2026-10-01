@@ -39,6 +39,10 @@ export type ViolationKind =
   | 'hidden-song'
   | 'soft-muted-artist'
   | 'recently-played'
+  // 9.0.0 — a song the listener skipped in this sitting (docs: hard-filtered until the sitting ends).
+  | 'skipped-this-sitting'
+  // 9.0.0 — a song the catalogue cannot stream (docs: the no-audio rule).
+  | 'no-audio'
   | 'duplicate-identity'
   | 'off-language'
   // 8.1.0 — the mix policy's own rules (only counted when a fixture asks for 'mix').
@@ -52,6 +56,8 @@ export const VIOLATION_KINDS: ViolationKind[] = [
   'hidden-song',
   'soft-muted-artist',
   'recently-played',
+  'skipped-this-sitting',
+  'no-audio',
   'duplicate-identity',
   'off-language',
   'language-opening',
@@ -69,6 +75,10 @@ export interface RuleContext {
   /** Ids and identities the listener heard recently (profile + history). */
   recentIds: Set<string>;
   recentKeys: Set<string>;
+  /** 9.0.0 — songs skipped in this sitting (the session intent's skipped ids). */
+  sittingSkippedIds?: Set<string>;
+  /** 9.0.0 — songs the fixture's catalogue cannot stream. */
+  unplayableIds?: Set<string>;
   /** Already in the queue when this continuation was asked for (the seed included). */
   queuedIds: Set<string>;
   queuedKeys: Set<string>;
@@ -95,6 +105,8 @@ export function breaksRule(song: Song, rc: RuleContext): ViolationKind | null {
   if (creditedNames(song).some((n) => rc.hiddenArtists.has(n))) return 'hidden-artist';
   if (rc.softMuted.has(leadName(song))) return 'soft-muted-artist';
   if (rc.recentIds.has(song.id) || rc.recentKeys.has(workKey(song))) return 'recently-played';
+  if (rc.sittingSkippedIds?.has(song.id)) return 'skipped-this-sitting';
+  if (rc.unplayableIds?.has(song.id)) return 'no-audio';
   if (rc.queuedIds.has(song.id) || rc.queuedKeys.has(workKey(song))) return 'duplicate-identity';
   return null;
 }

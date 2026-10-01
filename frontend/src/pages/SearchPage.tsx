@@ -1,24 +1,26 @@
 import { DestinationGrid } from '@/components/DestinationGrid';
 import { SearchWorkspace, SavedSearches } from '@/features/search/SearchWorkspace';
+import { RecentSearches } from '@/features/search/RecentSearches';
+import { ArtistTopResult, ResultsSkeleton, SongTopResult } from '@/features/search/TopResult';
+import { BrowseTile, TileGlyph } from '@/features/discover/BrowseTile';
 import { refineSongs } from '@/features/search/workspace';
 import { useSearchWorkspaceStore, type SearchPreset } from '@/store/searchWorkspaceStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { isNativePlatform } from '@/services/native';
 import { useQuery } from '@tanstack/react-query';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { albumPath, artistPath, playlistPath } from '@/utils/slug';
 import { Link, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { SongRow } from '@/components/SongRow';
-import { TrackMenu } from '@/components/TrackMenu';
 import { MediaCard } from '@/components/MediaCard';
 import { Chip } from '@/components/Chip';
-import { ListSkeleton } from '@/components/Skeletons';
+import { CardGridSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
-import { ClockIcon, PlayIcon, SearchIcon, SparkleIcon, XIcon } from '@/components/Icons';
+import { ChevronDownIcon, ClockIcon, MusicIcon, PlayIcon, QueueIcon, SearchIcon, SparkleIcon, XIcon } from '@/components/Icons';
 import { normalizeQuery, rankSongs, useSearchAll } from '@/features/search/useSearch';
 import {
   flattenAlbumPages,
@@ -63,6 +65,8 @@ import { candidatePool, COMMON_NAMES, didYouMean } from '@/features/search/didYo
 import { useQuickResults } from '@/features/search/useQuickResults';
 import { putCachedQuick, QUICK_LIMIT } from '@/features/search/quickResults';
 import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
+import { Button } from '@/components/Button';
 import { looksLikeNaturalLanguage } from '@/services/ai/musicIntent';
 import { Shelf } from '@/components/Shelf';
 import { IconButton } from '@/components/IconButton';
@@ -87,115 +91,70 @@ function loadStickyTab(): Tab {
   }
 }
 
+type GraphemeSegmenter = new (locale?: string, options?: { granularity: 'grapheme' }) => {
+  segment(input: string): Iterable<{ index: number; segment: string }>;
+};
+
+/** Widen [start, end) to whole character clusters, so a highlight never
+ *  splits a conjunct or a vowel sign from its consonant (Indic scripts shape
+ *  across those code points; a split shows broken glyphs). Without
+ *  Intl.Segmenter the range is returned as it came. */
+function clusterBounds(text: string, start: number, end: number): [number, number] {
+  const Seg = (Intl as unknown as { Segmenter?: GraphemeSegmenter }).Segmenter;
+  if (!Seg) return [start, end];
+  let from = start;
+  let to = end;
+  for (const g of new Seg(undefined, { granularity: 'grapheme' }).segment(text)) {
+    const gEnd = g.index + g.segment.length;
+    if (g.index < start && gEnd > start) from = g.index;
+    if (g.index < end && gEnd > end) to = gEnd;
+    if (g.index >= end) break;
+  }
+  return [from, to];
+}
+
 /** Bold the matched substring so suggestions read as completions (P2-30). */
 function Highlight({ text, term }: { text: string; term: string }) {
   const i = term ? text.toLowerCase().indexOf(term.toLowerCase()) : -1;
   if (i < 0) return <>{text}</>;
+  const [from, to] = clusterBounds(text, i, i + term.length);
   return (
     <>
-      {text.slice(0, i)}
-      <span className="text-ink-100 font-extrabold">{text.slice(i, i + term.length)}</span>
-      {text.slice(i + term.length)}
+      {text.slice(0, from)}
+      <span className="search-hl">{text.slice(from, to)}</span>
+      {text.slice(to)}
     </>
   );
 }
 
-/** v5.17.0 — a small push-pin, used on pinned recents. */
-function PinGlyph({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M9 3h6l-1 6.5 3 2.5v2H7v-2l3-2.5L9 3z" />
-      <path d="M12 14v7" />
-    </svg>
-  );
-}
-
-/** v5.17.0 — one recent search: tap opens it, long-press (or the pin
- *  button) pins it to the front, × forgets it.
- *  8.0.0 — a list row (clock or pin sleeve, the words, then the tools). Pin
- *  and × fade in on hover or keyboard focus; on touch screens only × stays
- *  visible and long-press does the pinning. */
-function RecentRow({
-  query,
-  pinned,
-  onOpen,
-  onTogglePin,
-  onRemove,
-}: {
-  query: string;
-  pinned: boolean;
-  onOpen: () => void;
-  onTogglePin: (viaLongPress: boolean) => void;
-  onRemove: () => void;
-}) {
-  const timer = useRef<number | null>(null);
-  const longPressed = useRef(false);
-  const cancel = () => {
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = null;
-  };
-  useEffect(() => cancel, []);
-  return (
-    <li className="search-recent-row">
-      <button
-        type="button"
-        className="search-recent-open"
-        onPointerDown={() => {
-          longPressed.current = false;
-          cancel();
-          timer.current = window.setTimeout(() => {
-            longPressed.current = true;
-            onTogglePin(true);
-          }, 550);
-        }}
-        onPointerUp={cancel}
-        onPointerLeave={cancel}
-        onPointerCancel={cancel}
-        onContextMenu={(e) => {
-          // A long-press on touch also raises contextmenu — swallow it once.
-          if (longPressed.current) e.preventDefault();
-        }}
-        onClick={() => {
-          if (longPressed.current) {
-            longPressed.current = false;
-            return;
-          }
-          onOpen();
-        }}
-      >
-        <span className="search-recent-icon" aria-hidden>
-          {pinned ? <PinGlyph /> : <ClockIcon />}
-        </span>
-        <span className="min-w-0">
-          <span className="search-recent-text">{query}</span>
-          {pinned && <span className="search-recent-meta">Pinned</span>}
-        </span>
-      </button>
-      <span className="search-recent-tools">
-        <button
-          type="button"
-          aria-label={pinned ? `Unpin ${query}` : `Pin ${query}`}
-          aria-pressed={pinned}
-          onClick={() => onTogglePin(false)}
-          className="search-recent-tool search-recent-pin"
-        >
-          <PinGlyph className="w-4 h-4" />
-        </button>
-        <button type="button" aria-label={`Remove ${query}`} onClick={onRemove} className="search-recent-tool">
-          <XIcon className="w-4 h-4" />
-        </button>
-      </span>
-    </li>
-  );
+/** True once the sticky search header has reached the top bar: it then takes
+ *  the bar's frosted surface and a hairline. Measured on scroll, one frame at
+ *  a time; the top bar's height follows the safe-area inset, so it is read,
+ *  not assumed. */
+function useStuck(ref: RefObject<HTMLElement | null>): boolean {
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    const main = document.getElementById('main-content');
+    if (!el || !main) return undefined;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const bar = document.querySelector('.vx-topbar');
+      const limit = bar ? bar.getBoundingClientRect().bottom : main.getBoundingClientRect().top;
+      setStuck(main.scrollTop > 0 && el.getBoundingClientRect().top <= limit + 1);
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(measure);
+    };
+    measure();
+    main.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      main.removeEventListener('scroll', onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [ref]);
+  return stuck;
 }
 
 /** v5.19.0 — one compact, playable "Quick results" row under the suggestions. */
@@ -217,22 +176,21 @@ function QuickRow({ song, onPlay, dim }: { song: Song; onPlay: () => void; dim: 
         pointer.current = null;
         if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12) onPlay();
       }}
-      className={cn(
-        'w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-ink-800/60 transition-opacity',
-        dim && 'opacity-50',
-      )}
+      className={cn('search-quick-row', dim && 'is-stale')}
     >
       <img
         src={bestImage(song.images, 150)}
         onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
         alt=""
-        className="w-9 h-9 rounded-md object-cover shrink-0"
+        width={40}
+        height={40}
+        decoding="async"
       />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm truncate">{song.title}</span>
-        <span className="block text-xs text-ink-400 truncate">{song.subtitle}</span>
+      <span className="search-quick-text">
+        <span className="search-quick-title">{song.title}</span>
+        <span className="search-quick-sub">{song.subtitle}</span>
       </span>
-      <PlayIcon className="w-4 h-4 text-ink-400 shrink-0" />
+      <PlayIcon />
     </button>
   );
 }
@@ -257,6 +215,15 @@ function SearchPlay({ song, children }: { song: Song; children: React.ReactNode 
   );
 }
 
+/** A tab with nothing to show: said once, quietly, with what to try next. */
+function NoMatches({ noun, hint }: { noun: string; hint: string }) {
+  return (
+    <div role="status">
+      <EmptyState icon={<SearchIcon className="w-7 h-7" />} title={`No matching ${noun} yet`} message={hint} />
+    </div>
+  );
+}
+
 /** Loading / error / empty for the Albums, Artists and Playlists tabs — the
  *  same trio, from the same components, the Songs tab shows. */
 function GridTabState({
@@ -268,15 +235,10 @@ function GridTabState({
   count: number;
   noun: string;
 }) {
-  if (result.isLoading) return <ListSkeleton />;
+  if (result.isLoading) return <CardGridSkeleton cards={8} />;
   if (result.isError) return <ErrorState retry={() => void result.refetch()} />;
   if (count > 0) return null;
-  return (
-    <div className="search-no-matches" role="status">
-      <h3>No matching {noun} yet</h3>
-      <p>Try another name or spelling — or look under a different tab.</p>
-    </div>
-  );
+  return <NoMatches noun={noun} hint="Try another name or spelling — or look under a different tab." />;
 }
 
 export default function SearchPage() {
@@ -316,6 +278,8 @@ export default function SearchPage() {
   const [resultFilter, setResultFilter] = useState('');
   const navigationType = useNavigationType();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const stickyRef = useRef<HTMLDivElement>(null);
+  const stuck = useStuck(stickyRef);
   // Focus the box only on a FRESH arrival at /search with no query — never on
   // back-navigation, where a popping keyboard + focus scroll would fight the
   // restored position (delta audit P1-17).
@@ -394,15 +358,17 @@ export default function SearchPage() {
   const expertPanel = (aiLoading || aiError || (aiSongs?.length ?? 0) > 0) && (
     <div className="mt-4">
       {aiLoading && <ListSkeleton />}
-      {!aiLoading && aiError && <p className="text-sm text-ink-400">{aiError}</p>}
+      {!aiLoading && aiError && <p className="search-expert-note" role="status">{aiError}</p>}
       {!aiLoading && aiSongs && aiSongs.length > 0 && (
         <section>
-          <div className="search-section-heading !mb-1">
-            <h2 className="!text-[17px]">Expert picks</h2>
-            <button type="button" onClick={() => playQueue(aiSongs, 0)}>
-              Play all
-            </button>
-          </div>
+          <SectionHeader
+            title="Expert picks"
+            action={
+              <button type="button" className="bx-pill" onClick={() => playQueue(aiSongs, 0)}>
+                <PlayIcon /> Play all
+              </button>
+            }
+          />
           <div className="vx-track-list">
             {aiSongs.map((song, i) => (
               <SongRow key={song.id} song={song} songs={aiSongs} index={i} />
@@ -526,6 +492,14 @@ export default function SearchPage() {
     void import('@/services/analytics/telemetry').then((mm) => mm.trackSearch(q, count));
   }, [q, all.data, allPlaceholder]);
   const topResult = rankedAllSongs[0];
+  // When the words are an artist's exact name, that artist is the clearest top
+  // result; the songs list then starts from the first song instead of the second.
+  const topArtist = useMemo(
+    () => (allPlaceholder ? undefined : all.data?.artists.find((a) => normalizeQuery(a.name) === q)),
+    [all.data, allPlaceholder, q],
+  );
+  const leadFrom = topArtist ? 0 : 1;
+  const leadSongs = rankedAllSongs.slice(leadFrom, leadFrom + 4);
   const songPages = infiniteSongs.data?.pages;
   const allSongList = useMemo(() => flattenSongPages(songPages), [songPages]);
   const availableLangs = [
@@ -700,11 +674,48 @@ export default function SearchPage() {
     </button>
   );
 
+  const playAll = (list: Song[]) => (
+    <button type="button" className="bx-pill" onClick={() => playQueue(list, 0)}>
+      <PlayIcon /> Play all
+    </button>
+  );
+
+  const askButton = (
+    <Button variant="secondary" busy={aiLoading} onClick={() => void askExpert(q)} className="inline-flex items-center gap-2 min-h-touch">
+      <SparkleIcon className="w-4 h-4" />
+      {aiLoading ? 'Asking the expert…' : 'Ask AI instead'}
+    </Button>
+  );
+
+  // The four "moments": each one searches for a feeling, in the listener's
+  // first language where it has one.
+  const moments = [
+    { title: 'After hours', detail: 'Slow down. Tune in.', query: 'late night chill melodies', art: 'night', glyph: '☾', tone: 8 },
+    { title: 'The golden years', detail: 'Forever on repeat.', query: `${pinnedLangs[0] || 'Telugu'} 90s hits`, art: 'gold', glyph: '◎', tone: 11 },
+    { title: 'Full volume', detail: 'Find your second wind.', query: 'workout energetic hits', art: 'energy', glyph: '↗', tone: 7 },
+    { title: 'Heart on sleeve', detail: 'For all the feelings.', query: `${pinnedLangs[0] || 'Telugu'} love melodies`, art: 'love', glyph: '♡', tone: 3 },
+  ];
+
+  // Package D4 — cold-box suggestions straight from the on-device taste
+  // profile: one tap searches an artist you actually play.
+  const myArtists = !active
+    ? topArtists(loadProfile(), 8)
+        .map((a) => a.affinity.name)
+        .filter(Boolean)
+    : [];
+  const trendingTerms = trendingQ.data?.queries ?? [];
+  const noResults =
+    !!all.data &&
+    rankedAllSongs.length === 0 &&
+    all.data.albums.length === 0 &&
+    all.data.artists.length === 0 &&
+    all.data.playlists.length === 0;
+
   return (
     <div className={cn('search-experience vx-browse mx-auto', active && 'is-searching')}>
       <PageHeader title="Search" />
-      <div className="search-sticky">
-        <div className={cn('vx-field search-field', listening && 'is-listening')}>
+      <div ref={stickyRef} className={cn('search-sticky', stuck && 'is-stuck')}>
+        <div className={cn('bx-field search-field', listening && 'is-listening', !!input && voiceReady && 'has-clear')}>
           <SearchIcon />
           <input
             ref={searchInputRef}
@@ -731,6 +742,7 @@ export default function SearchPage() {
             role="combobox"
             aria-expanded={showPanel}
             aria-controls="search-suggest"
+            aria-autocomplete="list"
             aria-activedescendant={suggSel >= 0 ? `sugg-${suggSel}` : undefined}
             onFocus={() => {
               focusedRef.current = true;
@@ -741,6 +753,9 @@ export default function SearchPage() {
               window.setTimeout(() => setFocused(false), 120);
             }}
             data-tour="search-input"
+            enterKeyHint="search"
+            autoComplete="off"
+            spellCheck={false}
             placeholder={
               listening
                 ? 'Listening…'
@@ -749,11 +764,10 @@ export default function SearchPage() {
                   : 'Songs, albums, artists, playlists…'
             }
           />
-          <div className="vx-field-actions">
+          <div className="bx-field-actions">
             {input && (
-              <button
-                type="button"
-                aria-label="Clear"
+              <IconButton
+                label="Clear"
                 onClick={() => {
                   setInput('');
                   setCommitQ(null);
@@ -763,16 +777,15 @@ export default function SearchPage() {
                 className="search-field-btn"
               >
                 <XIcon />
-              </button>
+              </IconButton>
             )}
             {voiceReady && (
-              <button
-                type="button"
-                aria-label={listening ? 'Listening…' : 'Voice search'}
+              <IconButton
+                label={listening ? 'Listening…' : 'Voice search'}
+                aria-pressed={listening}
                 onClick={startVoice}
                 className={cn('search-field-btn', listening && 'is-live')}
               >
-                {listening && <span className="absolute inset-0 rounded-full bg-ember-500/20" aria-hidden />}
                 <svg
                   viewBox="0 0 24 24"
                   fill={listening ? 'currentColor' : 'none'}
@@ -785,7 +798,7 @@ export default function SearchPage() {
                   <rect x="9" y="2" width="6" height="12" rx="3" />
                   <path d="M5 10a7 7 0 0014 0M12 17v5" />
                 </svg>
-              </button>
+              </IconButton>
             )}
           </div>
           {showPanel && (
@@ -803,6 +816,7 @@ export default function SearchPage() {
                     <button
                       key={`${isRecent ? 'r' : 't'}-${text}`}
                       id={`sugg-${i}`}
+                      type="button"
                       role="option"
                       aria-selected={suggSel === i}
                       onClick={(e) => {
@@ -818,13 +832,10 @@ export default function SearchPage() {
                         if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12)
                           applySuggestion(text);
                       }}
-                      className={cn(
-                        'w-full min-h-[44px] flex items-center gap-3 px-4 py-2 text-left hover:bg-ink-800',
-                        suggSel === i && 'bg-ink-800',
-                      )}
+                      className="search-option"
                     >
-                      <Icon className="w-4 h-4 text-ink-400 shrink-0" />
-                      <span className="text-[15px] truncate">
+                      <Icon />
+                      <span>
                         <Highlight text={text} term={trimmed} />
                       </span>
                     </button>
@@ -835,7 +846,7 @@ export default function SearchPage() {
                 <section
                   aria-label="Quick results"
                   aria-busy={quick.loading}
-                  className={cn(showSuggest && 'mt-1 pt-1 border-t border-[var(--vx-border)]')}
+                  className={cn(showSuggest && 'search-panel-split')}
                 >
                   <p className="search-panel-label">Quick results</p>
                   {quickSongs.length === 0 && quick.loading && <ListSkeleton rows={3} />}
@@ -856,7 +867,7 @@ export default function SearchPage() {
           )}
         </div>
         {(active || lyricsMode || !trimmed) && (
-          <div className="search-filters">
+          <div className="search-filters" role="group" aria-label="Search filters">
             {!lyricsMode &&
               TABS.map((t) => (
                 <Chip
@@ -871,18 +882,14 @@ export default function SearchPage() {
                   {t}
                 </Chip>
               ))}
-            {!lyricsMode && <span aria-hidden className="search-filters-sep" />}
+            {!lyricsMode && <span aria-hidden className="bx-rail-sep" />}
             {lyricsChip}
           </div>
         )}
         {suggestLyrics && (
           <div role="status" className="search-hint">
             <span>That reads like a lyric line.</span>
-            <button
-              type="button"
-              onClick={() => setLyricsMode(true)}
-              className="font-bold text-ink-100 underline underline-offset-2"
-            >
+            <button type="button" onClick={() => setLyricsMode(true)} className="bx-text-btn">
               Search by lyrics
             </button>
             <IconButton size="sm" label="Dismiss" onClick={() => setLyricHintDismissed(q)}>
@@ -894,171 +901,96 @@ export default function SearchPage() {
 
       {!active && (
         <div className="search-discovery">
-          {recent.length > 0 && (
-            <section className="search-block" aria-label="Recent searches">
-              <div className="search-section-heading">
-                <h2>Recent searches</h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearRecent();
-                    if (pinned.length) toast('Cleared — pinned searches kept');
-                  }}
-                >
-                  Clear all
-                </button>
+          {(recent.length > 0 || trendingTerms.length > 0) && (
+            <div className="search-pair">
+              <div className="search-pair-grid">
+                {recent.length > 0 && (
+                  <RecentSearches
+                    ordered={recentOrdered}
+                    pinned={pinned}
+                    onOpen={applySuggestion}
+                    onTogglePin={(r, viaLongPress) => {
+                      const isPinned = pinned.includes(r);
+                      togglePin(r);
+                      if (viaLongPress) toast(isPinned ? 'Unpinned' : 'Pinned to the front');
+                    }}
+                    onRemove={removeRecent}
+                    onClear={() => {
+                      clearRecent();
+                      if (pinned.length) toast('Cleared — pinned searches kept');
+                    }}
+                  />
+                )}
+                {trendingTerms.length > 0 && (
+                  <section className="search-block search-trending-queries" aria-label="Trending searches">
+                    <SectionHeader title="Trending searches" explanation="What listeners look for now" />
+                    <ol>
+                      {trendingTerms.slice(0, 8).map((term, i) => (
+                        <li key={term}>
+                          <button type="button" onClick={() => applySuggestion(term)}>
+                            <span className="search-rank">{i + 1}</span>
+                            <span className="search-trend-text">{term}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                )}
               </div>
-              <ul className="search-recent-list">
-                {recentOrdered.map((r) => {
-                  const isPinned = pinned.includes(r);
-                  return (
-                    <RecentRow
-                      key={r}
-                      query={r}
-                      pinned={isPinned}
-                      onOpen={() => applySuggestion(r)}
-                      onTogglePin={(viaLongPress) => {
-                        togglePin(r);
-                        if (viaLongPress) toast(isPinned ? 'Unpinned' : 'Pinned to the front');
-                      }}
-                      onRemove={() => removeRecent(r)}
-                    />
-                  );
-                })}
-              </ul>
-              {pinned.length === 0 && recent.length > 1 && (
-                <p className="search-recent-tip">Long-press (or hover) a search to pin it.</p>
-              )}
-            </section>
+            </div>
           )}
 
           <div className="search-block empty:hidden">
             <SavedSearches onOpen={openPreset} />
           </div>
 
-          {!!trendingQ.data?.queries.length && (
-            <section className="search-block search-trending-queries" aria-label="Trending searches">
-              <div className="search-section-heading">
-                <h2>Trending searches</h2>
+          {(!trimmed || myArtists.length >= 2) && (
+            <div className="search-pair">
+              <div className="search-pair-grid">
+                {!trimmed && (
+                  <section className="search-block" aria-label="Search tips">
+                    <SectionHeader title="Try searching" explanation="A lyric line, an artist and a film, or a mood in your language" />
+                    <div className="vx-chip-row">
+                      {exampleQueries(pinnedLangs).map((ex) => (
+                        <Chip key={ex} onClick={() => applySuggestion(ex)}>
+                          {ex}
+                        </Chip>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {myArtists.length >= 2 && (
+                  <section className="search-block" aria-label="From your artists">
+                    <SectionHeader title="From your artists" explanation="The artists you play most" />
+                    <div className="vx-chip-row">
+                      {myArtists.map((name) => (
+                        <Chip key={name} onClick={() => applySuggestion(name)}>
+                          {name}
+                        </Chip>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
-              <ol>
-                {trendingQ.data.queries.slice(0, 8).map((term, i) => (
-                  <li key={term}>
-                    <button type="button" onClick={() => applySuggestion(term)}>
-                      <span>{i + 1}</span>
-                      <span>{term}</span>
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            </section>
+            </div>
           )}
 
           <section className="search-block search-browse" aria-label="Browse a vibe">
-            <div className="search-section-heading">
-              <h2>Moods and moments</h2>
-              <Link to="/moods">Show all</Link>
-            </div>
+            <SectionHeader title="Moods and moments" seeAllTo="/moods" />
             <div className="search-vibe-grid">
-              {[
-                {
-                  title: 'After hours',
-                  detail: 'Slow down. Tune in.',
-                  query: 'late night chill melodies',
-                  art: 'night',
-                  glyph: '☾',
-                  tone: 8,
-                },
-                {
-                  title: 'The golden years',
-                  detail: 'Forever on repeat.',
-                  query: `${pinnedLangs[0] || 'Telugu'} 90s hits`,
-                  art: 'gold',
-                  glyph: '◎',
-                  tone: 11,
-                },
-                {
-                  title: 'Full volume',
-                  detail: 'Find your second wind.',
-                  query: 'workout energetic hits',
-                  art: 'energy',
-                  glyph: '↗',
-                  tone: 7,
-                },
-                {
-                  title: 'Heart on sleeve',
-                  detail: 'For all the feelings.',
-                  query: `${pinnedLangs[0] || 'Telugu'} love melodies`,
-                  art: 'love',
-                  glyph: '♡',
-                  tone: 3,
-                },
-              ].map((v) => (
-                <button
+              {moments.map((v) => (
+                <BrowseTile
                   key={v.art}
-                  type="button"
-                  className={`search-vibe search-vibe-${v.art} vx-browse-tile vx-tone-${v.tone}`}
+                  className={`search-vibe search-vibe-${v.art}`}
+                  tone={`vx-tone-${v.tone}`}
+                  title={v.title}
+                  meta={v.detail}
                   onClick={() => applySuggestion(v.query)}
-                >
-                  <span className="vx-browse-tile-title">{v.title}</span>
-                  <span className="vx-browse-tile-meta">{v.detail}</span>
-                  <span className="vx-browse-tile-art is-glyph" aria-hidden="true">
-                    {v.glyph}
-                  </span>
-                </button>
+                  visual={<TileGlyph>{v.glyph}</TileGlyph>}
+                />
               ))}
             </div>
-          </section>
-
-          <section className="search-block" aria-label="Browse all">
-            <div className="search-section-heading">
-              <h2>Browse all</h2>
-            </div>
-            <DestinationGrid area="discover" />
-          </section>
-
-          {!trimmed && (
-            <section className="search-block" aria-label="Search tips">
-              <div className="search-section-heading">
-                <h2>Try searching</h2>
-              </div>
-              <div className="vx-chip-row">
-                {exampleQueries(pinnedLangs).map((ex) => (
-                  <Chip key={ex} onClick={() => applySuggestion(ex)}>
-                    {ex}
-                  </Chip>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {(() => {
-            // Package D4 — cold-box suggestions straight from the on-device
-            // taste profile: one tap searches an artist you actually play.
-            const mine = topArtists(loadProfile(), 8)
-              .map((a) => a.affinity.name)
-              .filter(Boolean);
-            return mine.length >= 2 ? (
-              <section className="search-block" aria-label="From your artists">
-                <div className="search-section-heading">
-                  <h2>From your artists</h2>
-                </div>
-                <div className="vx-chip-row">
-                  {mine.map((name) => (
-                    <Chip key={name} onClick={() => applySuggestion(name)}>
-                      {name}
-                    </Chip>
-                  ))}
-                </div>
-              </section>
-            ) : null;
-          })()}
-
-          <section className="search-block" aria-label="In the mood for">
-            <div className="search-section-heading">
-              <h2>In the mood for</h2>
-            </div>
-            <div className="vx-chip-row">
+            <div className="vx-chip-rail search-moods" role="group" aria-label="In the mood for">
               {MOODS.map((m) => (
                 <Chip key={m.id} onClick={() => setInput(m.query)}>
                   <span aria-hidden className="mr-1">
@@ -1070,21 +1002,14 @@ export default function SearchPage() {
             </div>
           </section>
 
+          <section className="search-block" aria-label="Browse all">
+            <SectionHeader title="Browse all" seeAllTo="/discover" />
+            <DestinationGrid area="discover" chartSongs={trendingNow.data} />
+          </section>
+
           <section className="search-block" aria-label="Trending now">
-            <div className="search-section-heading">
-              <h2>Trending now</h2>
-              {(trendingNow.data?.length ?? 0) > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (trendingNow.data) playQueue(trendingNow.data, 0);
-                  }}
-                >
-                  Play all
-                </button>
-              )}
-            </div>
-            {trendingNow.isLoading && <ListSkeleton />}
+            <SectionHeader title="Trending now" action={(trendingNow.data?.length ?? 0) > 0 && playAll(trendingNow.data ?? [])} />
+            {trendingNow.isLoading && <ListSkeleton rows={6} />}
             <div className="vx-track-list max-w-[960px]">
               {(trendingNow.data ?? []).slice(0, 6).map((song, i) => (
                 <SongRow key={song.id} song={song} songs={trendingNow.data ?? []} index={i} />
@@ -1098,19 +1023,20 @@ export default function SearchPage() {
                 type="button"
                 onClick={() => setAiOpen((v) => !v)}
                 aria-expanded={aiOpen}
-                className="search-assist-row"
+                className="search-assist-row is-toggle"
               >
-                <span className="search-assist-icon is-accent">
+                <span className="search-assist-icon is-accent" aria-hidden>
                   <SparkleIcon />
                 </span>
                 <span className="min-w-0">
                   <span className="search-assist-title">Ask AI for songs</span>
                   <span className="search-assist-meta">Describe a mood, an era or a memory</span>
                 </span>
+                <ChevronDownIcon className="search-assist-chevron" />
               </button>
               {aiOpen && (
                 <div className="search-assist-panel">
-                  <div className="flex gap-2">
+                  <div className="search-assist-form">
                     <input
                       value={aiPrompt}
                       maxLength={200}
@@ -1120,29 +1046,24 @@ export default function SearchPage() {
                       }}
                       placeholder="e.g. rainy-evening Telugu melodies"
                       aria-label="Describe the songs you want"
-                      className="flex-1 min-w-0"
                     />
-                    <button
-                      type="button"
-                      onClick={() => void askExpert(aiPrompt)}
-                      disabled={aiLoading || !aiPrompt.trim()}
-                      className="px-5 min-h-[44px] rounded-full btn-primary text-sm font-bold disabled:opacity-50 shrink-0"
-                    >
+                    <Button onClick={() => void askExpert(aiPrompt)} disabled={aiLoading || !aiPrompt.trim()} className="shrink-0">
                       {aiLoading ? 'Asking…' : 'Ask'}
-                    </button>
+                    </Button>
                   </div>
                   {expertPanel}
                 </div>
               )}
             </div>
             <Link to="/VinaXAI" className="search-assist-row">
-              <span className="search-assist-icon">
+              <span className="search-assist-icon" aria-hidden>
                 <SparkleIcon />
               </span>
               <span className="min-w-0">
                 <span className="search-assist-title">Chat with VinaX AI</span>
                 <span className="search-assist-meta">Find songs, talk music, ask anything</span>
               </span>
+              <ChevronDownIcon className="search-assist-chevron -rotate-90" />
             </Link>
           </section>
         </div>
@@ -1157,33 +1078,23 @@ export default function SearchPage() {
           )}
           {lyricMatches && lyricMatches.length === 0 && (
             <EmptyState
-              icon={<SearchIcon className="w-8 h-8" />}
+              icon={<MusicIcon className="w-8 h-8" />}
               title="No song has those words — try a longer line."
               message="The lyrics service matches whole phrases best — a full line beats a couple of words."
-              action={
-                <button
-                  type="button"
-                  onClick={() => setLyricsMode(false)}
-                  className="px-5 py-2.5 rounded-full btn-primary"
-                >
-                  Search titles instead
-                </button>
-              }
+              action={<Button onClick={() => setLyricsMode(false)}>Search titles instead</Button>}
             />
           )}
           {lyricMatches && lyricMatches.length > 0 && (
-            <section>
-              <div className="search-section-heading">
-                <h2>Songs with those words</h2>
-                <button type="button" onClick={() => playQueue(lyricSongs, 0)}>
-                  Play all
-                </button>
-              </div>
-              {lyricMatches.every((m) => m.source === 'catalogue') && (
-                <p className="vx-meta-line mb-2">
-                  The lyrics service had no match — these titles begin with those words.
-                </p>
-              )}
+            <section className="search-block">
+              <SectionHeader
+                title="Songs with those words"
+                explanation={
+                  lyricMatches.every((m) => m.source === 'catalogue')
+                    ? 'The lyrics service had no match — these titles begin with those words.'
+                    : undefined
+                }
+                action={playAll(lyricSongs)}
+              />
               <div className="vx-track-list">
                 {lyricMatches.map((m, i) => (
                   <div key={m.song.id}>
@@ -1212,7 +1123,7 @@ export default function SearchPage() {
         <div className="search-results">
           {tab === 'All' && (
             <>
-              {all.isLoading && <ListSkeleton />}
+              {all.isLoading && <ResultsSkeleton />}
               {all.isError && <ErrorState retry={() => all.refetch()} />}
               {dymBar}
               {allPlaceholder && (
@@ -1228,70 +1139,47 @@ export default function SearchPage() {
                       <SemanticMatches key={q} query={q} results={all.data} />
                     </Suspense>
                   )}
-                  {(topResult || rankedAllSongs.length > 1) && (
-                    <div className="search-results-lead">
-                      {topResult && (
-                        <section aria-label="Top result">
-                          <div className="search-section-heading">
-                            <h2>Top result</h2>
-                          </div>
-                          {/* The whole card plays (the round button is its keyboard target); it is a song, so it feeds the song context menu too. */}
-                          <div
-                            className="search-top-result"
-                            data-song-id={topResult.id}
-                            data-deter-context
-                            onClick={(e) => {
-                              if ((e.target as HTMLElement).closest('button')) return;
-                              playQueue(rankedAllSongs, 0);
-                              recordSearchPlay(topResult);
-                            }}
-                          >
-                            <img
-                              src={bestImage(topResult.images, 300)}
-                              onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                              alt=""
+                  {(topArtist || topResult || rankedAllSongs.length > 1) && (
+                    <div className="search-lead-wrap">
+                      <div className="search-results-lead">
+                        {(topArtist || topResult) && (
+                          <section aria-label="Top result">
+                            <SectionHeader title="Top result" />
+                            {topArtist ? (
+                              <ArtistTopResult artist={topArtist} onPlay={() => void playArtist(topArtist.id, topArtist.name)} />
+                            ) : (
+                              topResult && (
+                                <SongTopResult
+                                  song={topResult}
+                                  onPlay={() => {
+                                    playQueue(rankedAllSongs, 0);
+                                    recordSearchPlay(topResult);
+                                  }}
+                                />
+                              )
+                            )}
+                          </section>
+                        )}
+                        {leadSongs.length > 0 && (
+                          <section aria-label="Songs" className="min-w-0">
+                            <SectionHeader
+                              title="Songs"
+                              action={
+                                <button type="button" className="vx-section-link" onClick={() => setTab('Songs')} aria-label="Show all songs">
+                                  Show all
+                                </button>
+                              }
                             />
-                            <div>
-                              <p className="search-top-result-name">{topResult.title}</p>
-                              <p className="search-top-result-meta">
-                                <span className="search-type-pill">Song</span>
-                                <span>{topResult.subtitle}</span>
-                              </p>
+                            <div className="search-top-songs">
+                              {leadSongs.map((song, i) => (
+                                <SearchPlay key={song.id} song={song}>
+                                  <SongRow song={song} songs={rankedAllSongs} index={leadFrom + i} />
+                                </SearchPlay>
+                              ))}
                             </div>
-                            <div className="search-top-result-menu">
-                              <TrackMenu song={topResult} />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                playQueue(rankedAllSongs, 0);
-                                recordSearchPlay(topResult);
-                              }}
-                              aria-label={`Play ${topResult.title} by ${topResult.subtitle}`}
-                              className="vx-play-fab"
-                            >
-                              <PlayIcon />
-                            </button>
-                          </div>
-                        </section>
-                      )}
-                      {rankedAllSongs.length > 1 && (
-                        <section aria-label="Songs" className="min-w-0">
-                          <div className="search-section-heading">
-                            <h2>Songs</h2>
-                            <button type="button" onClick={() => setTab('Songs')} aria-label="Show all songs">
-                              Show all
-                            </button>
-                          </div>
-                          <div className="search-top-songs">
-                            {rankedAllSongs.slice(1, 5).map((song, i) => (
-                              <SearchPlay key={song.id} song={song}>
-                                <SongRow song={song} songs={rankedAllSongs} index={i + 1} />
-                              </SearchPlay>
-                            ))}
-                          </div>
-                        </section>
-                      )}
+                          </section>
+                        )}
+                      </div>
                     </div>
                   )}
                   {all.data.artists.length > 0 && (
@@ -1344,48 +1232,37 @@ export default function SearchPage() {
                       ))}
                     </Shelf>
                   )}
-                  {rankedAllSongs.length === 0 &&
-                    all.data.albums.length === 0 &&
-                    all.data.artists.length === 0 &&
-                    all.data.playlists.length === 0 &&
-                    naturalQuery && (
-                      <div className="mt-2">
-                        <p className="vx-meta-line mb-3">No titles use those exact words.</p>
-                        <button
-                          type="button"
-                          onClick={() => void askExpert(q)}
-                          disabled={aiLoading}
-                          className="px-5 py-2.5 rounded-full btn-primary disabled:opacity-50"
-                        >
-                          {aiLoading ? '✨ Asking the expert…' : '✨ Ask AI instead'}
-                        </button>
-                        {expertPanel}
+                  {noResults && naturalQuery && (
+                    <div className="search-block">
+                      <div className="search-ask-inline">
+                        <p className="vx-meta-line">No titles use those exact words.</p>
+                        {askButton}
                       </div>
-                    )}
-                  {rankedAllSongs.length === 0 &&
-                    all.data.albums.length === 0 &&
-                    all.data.artists.length === 0 &&
-                    all.data.playlists.length === 0 &&
-                    !naturalQuery && (
-                      <>
-                        <EmptyState
-                          icon={<SearchIcon className="w-8 h-8" />}
-                          title="No results"
-                          message={`Nothing matched “${q}”. Try a shorter or transliterated spelling — or ask the AI.`}
-                          action={
-                            <button
-                              type="button"
-                              onClick={() => void askExpert(q)}
-                              disabled={aiLoading}
-                              className="px-5 py-2.5 rounded-full btn-primary disabled:opacity-50"
-                            >
-                              {aiLoading ? '✨ Asking the expert…' : '✨ Ask AI instead'}
-                            </button>
-                          }
-                        />
-                        {expertPanel}
-                      </>
-                    )}
+                      {expertPanel}
+                    </div>
+                  )}
+                  {noResults && !naturalQuery && (
+                    <>
+                      <EmptyState
+                        icon={<SearchIcon className="w-8 h-8" />}
+                        title="No results"
+                        message={`Nothing matched “${q}”. Try a shorter or transliterated spelling — or ask the AI.`}
+                        action={askButton}
+                      />
+                      <div className="search-empty-help" role="group" aria-label="Other ways to search">
+                        {lyricsChip}
+                        {trendingTerms
+                          .filter((t) => normalizeQuery(t) !== q)
+                          .slice(0, 3)
+                          .map((t) => (
+                            <Chip key={t} onClick={() => applySuggestion(t)}>
+                              {t}
+                            </Chip>
+                          ))}
+                      </div>
+                      {expertPanel}
+                    </>
+                  )}
                 </div>
               )}
             </>
@@ -1423,6 +1300,7 @@ export default function SearchPage() {
                         if (isSongSort(e.target.value)) setSongSort(e.target.value);
                       }}
                       aria-label="Sort results"
+                      className="bx-select"
                     >
                       {SONG_SORTS.map((s) => (
                         <option key={s} value={s}>
@@ -1434,18 +1312,18 @@ export default function SearchPage() {
                   <span className="flex-1" />
                   {displaySongs.length > 0 && (
                     <>
-                      <button type="button" onClick={() => playQueue(displaySongs, 0)} className="vx-pill-btn">
+                      <button type="button" onClick={() => playQueue(displaySongs, 0)} className="bx-pill">
                         <PlayIcon /> Play all
                       </button>
-                      <button type="button" onClick={() => enqueueAll(displaySongs)} className="vx-pill-btn">
-                        Queue all
+                      <button type="button" onClick={() => enqueueAll(displaySongs)} className="bx-pill">
+                        <QueueIcon /> Queue all
                       </button>
                     </>
                   )}
                 </div>
               )}
               {allSongList.length > 0 && (
-                <div className="vx-field search-local-filter">
+                <div className="bx-field search-local-filter">
                   <SearchIcon />
                   <input
                     value={resultFilter}
@@ -1455,7 +1333,7 @@ export default function SearchPage() {
                     placeholder="Filter these results"
                   />
                   {resultFilter && (
-                    <div className="vx-field-actions">
+                    <div className="bx-field-actions">
                       <IconButton size="sm" label="Clear filter" onClick={() => setResultFilter('')}>
                         <XIcon className="w-3.5 h-3.5" />
                       </IconButton>
@@ -1476,14 +1354,14 @@ export default function SearchPage() {
                 </p>
               )}
               {!infiniteSongs.isLoading && !infiniteSongs.isError && displaySongs.length === 0 && (
-                <div className="search-no-matches" role="status">
-                  <h3>No matching songs yet</h3>
-                  <p>
-                    {allSongList.length
+                <NoMatches
+                  noun="songs"
+                  hint={
+                    allSongList.length
                       ? 'Try clearing a refinement, switching languages, or loading more songs.'
-                      : 'Try another title, artist, or spelling.'}
-                  </p>
-                </div>
+                      : 'Try another title, artist, or spelling.'
+                  }
+                />
               )}
               <div className="vx-track-list">
                 {displaySongs.map((song, i) => (

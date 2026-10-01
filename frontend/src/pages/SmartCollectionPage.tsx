@@ -86,7 +86,7 @@ export default function SmartCollectionPage() {
         meta={<EntityMeta items={[`${songCount(songs.length)} right now`, totalDuration(songs), 'Updates itself as you listen']} />}
         actions={
           <>
-            <PlayFab label="Play" onClick={play} disabled={!songs.length} />
+            <PlayFab size="lg" label="Play" onClick={play} disabled={!songs.length} />
             <EntityAction label="Shuffle play" onClick={shufflePlay} disabled={!songs.length}><ShuffleIcon /></EntityAction>
             <EntityAction label="Save as playlist" onClick={freeze} disabled={!songs.length}><PlusIcon /></EntityAction>
             <EntityMenu

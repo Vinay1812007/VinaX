@@ -13,6 +13,7 @@ import { trendingSeed } from '@/constants/seeds';
 import { usePlayerStore } from '@/store/playerStore';
 import { bestImage } from '@/utils/images';
 import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
 import '@/styles/pages/browse.css';
 
 function LanguageShelf({ language }: { language: string }) {
@@ -32,6 +33,11 @@ function LanguageShelf({ language }: { language: string }) {
   );
 }
 
+/**
+ * Languages: the hubs, each in its own script; then the two controls that
+ * steer every recommendation (languages you love, languages to keep out);
+ * then a trending shelf for each language you love.
+ */
 export default function LanguagesPage() {
   usePageTitle('Languages');
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
@@ -40,25 +46,29 @@ export default function LanguagesPage() {
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title="Languages" />
+      <PageHeader title="Languages" subtitle="Every language hub in its own script, and the languages you want more or less of." />
 
       <LanguageGrid heading={false} />
 
-      <section className="vx-control-group" aria-label="Pinned languages">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h2 className="vx-subhead !mb-0">Languages you love<small>Boosted everywhere</small></h2>
-          <div className="flex gap-2">
+      <section className="bx-group" aria-label="Pinned languages">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="bx-subhead">Languages you love</h2>
+            <p className="bx-subhint">Boosted everywhere you browse and search.</p>
+          </div>
+          <div className="flex gap-2 mb-3.5">
             <button
+              type="button"
               onClick={() => {
                 setPinnedLanguages(LANGUAGES.map((l) => l.id));
                 setMutedLanguages([]);
               }}
-              className="vx-pill-btn"
+              className="bx-pill"
             >
               All languages
             </button>
             {pinned.length > 0 && (
-              <button onClick={() => setPinnedLanguages([])} className="vx-pill-btn">
+              <button type="button" onClick={() => setPinnedLanguages([])} className="bx-pill">
                 Clear
               </button>
             )}
@@ -73,8 +83,9 @@ export default function LanguagesPage() {
         </div>
       </section>
 
-      <section className="vx-control-group !mb-10" aria-label="Muted languages">
-        <h2 className="vx-subhead">Muted<small>Never recommended</small></h2>
+      <section className="bx-group !mb-12" aria-label="Muted languages">
+        <h2 className="bx-subhead">Muted</h2>
+        <p className="bx-subhint">Never recommended, and kept out of search results.</p>
         <div className="vx-chip-row">
           {LANGUAGES.map((l) => (
             <Chip key={l.id} active={muted.includes(l.id)} tone="danger" onClick={() => toggleMutedLanguage(l.id)}>
@@ -84,10 +95,14 @@ export default function LanguagesPage() {
         </div>
       </section>
 
-      {pinned.length === 0 && <p className="vx-meta-line mb-6">Pin at least one language to see trending shelves here.</p>}
-      {pinned.map((lang) => (
-        <LanguageShelf key={lang} language={lang} />
-      ))}
+      {pinned.length === 0 ? (
+        <section className="vx-section">
+          <SectionHeader title="Trending in your languages" />
+          <p className="vx-meta-line">Pin at least one language above to see its trending songs here.</p>
+        </section>
+      ) : (
+        pinned.map((lang) => <LanguageShelf key={lang} language={lang} />)
+      )}
     </div>
   );
 }

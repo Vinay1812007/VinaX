@@ -3,7 +3,7 @@ import type { TasteProfile } from '@/services/personalization/profile';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
 
 /**
- * "Your Year in Music" — a Wrapped-style recap computed ENTIRELY on-device
+ * "Your Year in Music" — a year-in-review recap computed ENTIRELY on-device
  * from the taste profile's lifetime aggregates plus recent history. Nothing
  * is fetched, nothing is uploaded; sharing renders a local image the
  * listener chooses to send (the founding invariant).

@@ -6,6 +6,7 @@ import { queryClient } from '@/services/queryClient';
 import { healthRegistry } from '@/services/api';
 import { clearCachedMetadata } from '@/features/settings/actions';
 import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
 import '@/styles/pages/secondary.css';
 
 function fmtBytes(b: number): string {
@@ -43,8 +44,8 @@ export default function CacheInfoPage() {
         subtitle="VinaX streams music. What is cached here is metadata and your own preferences."
         actions={
           <>
-            <button onClick={() => setTick((t) => t + 1)} className="vx-pill-btn">Refresh stats</button>
-            <button onClick={() => { clearCachedMetadata(); setTick((t) => t + 1); }} className="vx-pill-btn">
+            <button onClick={() => setTick((t) => t + 1)} className="vx-sec-pill">Refresh stats</button>
+            <button onClick={() => { clearCachedMetadata(); setTick((t) => t + 1); }} className="vx-sec-pill">
               Clear metadata cache
             </button>
           </>
@@ -61,27 +62,27 @@ export default function CacheInfoPage() {
         ))}
       </div>
 
-      <section className="vx-sec-block" aria-labelledby="vx-cache-health">
-        <h2 id="vx-cache-health" className="vx-sec-title">Source health this session</h2>
-        <div className="vx-group overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-ink-400 text-[12px] font-semibold">
+      <section className="vx-sec-block" aria-label="Source health this session">
+        <SectionHeader title="Source health this session" explanation="How each music source has answered since the app opened." />
+        <div className="overflow-x-auto">
+          <table className="w-full text-[14px]">
+            <thead className="text-ink-400 text-[12.5px] font-semibold">
               <tr>
-                <th className="text-left px-4 h-11 font-semibold">Source</th>
+                <th className="text-left pr-4 h-11 font-semibold">Source</th>
                 <th className="text-right px-4 h-11 font-semibold">OK</th>
                 <th className="text-right px-4 h-11 font-semibold">Fail</th>
                 <th className="text-right px-4 h-11 font-semibold">Latency</th>
-                <th className="text-right px-4 h-11 font-semibold">State</th>
+                <th className="text-right pl-4 h-11 font-semibold">State</th>
               </tr>
             </thead>
             <tbody>
               {health.map((h) => (
                 <tr key={h.id} className="border-t border-[color:var(--vx-border)]">
-                  <td className="px-4 h-[52px] font-semibold text-ink-100">{`Source ${health.indexOf(h) + 1}`}</td>
+                  <td className="pr-4 h-[56px] font-semibold text-ink-100">{`Source ${health.indexOf(h) + 1}`}</td>
                   <td className="px-4 text-right tabular-nums">{h.successes}</td>
                   <td className="px-4 text-right tabular-nums">{h.failures}</td>
                   <td className="px-4 text-right tabular-nums text-ink-300">{Math.round(h.latencyEmaMs)} ms</td>
-                  <td className="px-4 text-right text-[13px]">
+                  <td className="pl-4 text-right text-[13px]">
                     {h.cooldownUntil > Date.now() ? (
                       <span className="text-[color:var(--vx-danger)] font-semibold">Cooling down</span>
                     ) : (

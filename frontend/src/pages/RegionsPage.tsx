@@ -43,10 +43,10 @@ export default function RegionsPage() {
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title="Regions" />
+      <PageHeader title="Regions" subtitle="What each part of the country plays, in its own languages." />
 
-      <section className="vx-control-group" aria-label="Regional charts">
-        <div className="vx-chip-row">
+      <section aria-label="Regional charts">
+        <div className="vx-chip-rail" role="group" aria-label="Region">
           {regionsForCountry(region?.country ?? null).map((r) => (
             <Chip key={r.id} active={selected === r.id} onClick={() => setSelected(r.id)}>
               {r.label}
@@ -59,8 +59,9 @@ export default function RegionsPage() {
         <RegionalShelf key={lang} language={lang} regionLabel={def.label} />
       ))}
 
-      <section className="vx-control-group mt-2" aria-label="Country override">
-        <h2 className="vx-subhead">Country</h2>
+      <section className="bx-group mt-2" aria-label="Country override">
+        <h2 className="bx-subhead">Country</h2>
+        <p className="bx-subhint">Pick one to see its regions, or let VinaX work it out.</p>
         <div className="vx-chip-row mb-3">
           <Chip active={!manualCountry} onClick={() => setManualCountry(null)}>Auto</Chip>
           {COUNTRIES.map((c) => (
@@ -69,7 +70,7 @@ export default function RegionsPage() {
             </Chip>
           ))}
         </div>
-        <p className="vx-meta-line">
+        <p className="vx-meta-line max-w-[68ch]">
           {region?.country
             ? `Detected: ${region.country}${region.regionLabel ? ` · ${region.regionLabel}` : ''} (${region.source === 'edge' ? 'edge inferred' : region.source === 'manual' ? 'manual override' : 'browser inferred'})`
             : 'Region unknown — set one above.'}{' '}

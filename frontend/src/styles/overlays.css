@@ -4,7 +4,7 @@
    Imported by Sheet.tsx and TrackMenu.tsx, so it ships with those chunks and
    never with first load. Surfaces are flat (ink-850 in dark, white in light),
    one hairline, one soft shadow. Phones get a bottom sheet with a grab handle
-   and a 16px top radius; from 640px it is a centred 16px-radius dialog.
+   and a 24px top radius; from 640px it is a centred 22px-radius dialog (9.0).
    ========================================================================= */
 
 /* ------------------------------------------------------------ sheet shell */
@@ -14,14 +14,14 @@
   background: rgb(var(--ink-850));
   border: 1px solid var(--vx-border);
   border-bottom: 0;
-  border-radius: 16px 16px 0 0;
+  border-radius: 24px 24px 0 0;
   box-shadow: 0 -16px 48px -16px rgb(0 0 0 / 0.6);
   animation: vx-sheet-up 240ms var(--ease-calm) backwards;
 }
 @media (min-width: 640px) {
   .vx-sheet {
     border-bottom: 1px solid var(--vx-border);
-    border-radius: 16px;
+    border-radius: 22px;
     box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.65);
     animation-name: vx-dialog-in;
     animation-duration: 200ms;
@@ -104,7 +104,7 @@ html.light .vx-sheet {
   color: rgb(var(--ink-100));
   background: rgb(var(--ink-850));
   border: 1px solid var(--vx-border);
-  border-radius: 8px;
+  border-radius: 16px;
   box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 4px 12px -4px rgb(0 0 0 / 0.35);
   max-height: min(420px, calc(100dvh - 16px));
   animation: vx-dialog-in 160ms var(--ease-calm) backwards;
@@ -120,7 +120,7 @@ html.light .vx-menu {
   width: 100%;
   min-height: 44px;
   padding: 0 12px;
-  border-radius: 6px;
+  border-radius: 10px;
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 550;
@@ -160,7 +160,7 @@ html.light .vx-menu {
   max-height: min(78dvh, calc(100dvh - var(--safe-top) - 48px));
   padding: 0 8px max(12px, var(--safe-bottom));
   border-bottom: 0;
-  border-radius: 16px 16px 0 0;
+  border-radius: 24px 24px 0 0;
   animation: vx-sheet-up 240ms var(--ease-calm) backwards;
 }
 .vx-menu.is-sheet .vx-menu-head {
@@ -208,7 +208,7 @@ html.light .vx-menu {
   position: relative;
   height: 156px;
   overflow: hidden;
-  border-radius: 16px 16px 0 0;
+  border-radius: 24px 24px 0 0;
   background:
     linear-gradient(200deg, rgb(0 0 0 / 0.05) 10%, rgb(0 0 0 / 0.6) 100%),
     radial-gradient(120% 140% at 0% 0%, rgb(var(--ember-500)), rgb(var(--ember-600)) 55%);

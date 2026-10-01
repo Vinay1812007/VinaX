@@ -111,12 +111,10 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
               e.stopPropagation();
               useLibraryStore.getState().toggleFavorite(song);
             }}
-            className={cn(
-              'absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md transition-[color,background-color,border-color,opacity,transform] active:scale-90',
-              isFav ? 'bg-ember-500 text-[var(--vx-on-accent)]' : 'bg-black/40 text-white/90 hover:bg-black/60 hover-reveal',
-            )}
+            // 9.0.0 — a quiet 32px badge (44px to hit): a liked song shows an Iris heart, the rest appear on hover.
+            className={cn('vx-card-fav', isFav ? 'is-on' : 'hover-reveal')}
           >
-            <HeartIcon className="w-4 h-4" />
+            <HeartIcon className="w-4 h-4" filled={isFav} />
           </button>
         )}
         {onPlay && (

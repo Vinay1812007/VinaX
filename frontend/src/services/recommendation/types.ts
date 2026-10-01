@@ -46,8 +46,10 @@ const titlesOf = (c: Candidate): string[] => c.seedTitles ?? (c.seedTitle ? [c.s
  * the gatherer and again by the hard filter (for callers that merge pools).
  *
  * 8.2.0 — a copy that can stream wins over one that cannot: when the first
- * arrival had no audio and a later one does, the later song object is kept,
- * and the candidate is `unplayable` only if every copy was.
+ * arrival had no audio and a later one does, the later song object is kept.
+ * 9.0.0 — a candidate marked `unplayable` stays so until a copy that carries
+ * a stream URL arrives; a copy from a response with no URLs at all does not
+ * clear the mark.
  */
 export function mergeCandidates(list: Candidate[]): Candidate[] {
   const out: Candidate[] = [];
@@ -66,7 +68,13 @@ export function mergeCandidates(list: Candidate[]): Candidate[] {
     const streams = (x: Candidate): boolean => Array.isArray(x.song.audio) && x.song.audio.length > 0;
     const song = !streams(prev) && streams(c) ? c.song : prev.song;
     const merged: Candidate = { ...prev, song, source: sources[0], sources, seedTitles: [...new Set([...prev.seedTitles!, ...titlesOf(c)])], seedTitle: lead.seedTitle ?? prev.seedTitle };
-    if (prev.unplayable && c.unplayable) merged.unplayable = true;
+    // 9.0.0 — a song a stream-carrying response could not stream stays
+    // unplayable until a copy WITH a stream URL arrives. A copy from a response
+    // that carried no URLs at all says nothing either way (that catalogue
+    // resolves audio at play time); 8.x let such a copy clear the mark, so an
+    // unplayable song found again by a search on another catalogue base shipped.
+    const markedOnce = !!prev.unplayable || !!c.unplayable;
+    if (markedOnce && !streams(prev) && !streams(c)) merged.unplayable = true;
     else delete merged.unplayable;
     out[i] = merged;
   }
@@ -235,6 +243,12 @@ export interface RecommendationContext {
   explore?: boolean;
   /** Optional seed/surface metadata used by autoplay, radio and continuation. */
   seedSong?: Song | null;
+  /**
+   * 9.0.0 — the song the new stretch follows in the queue, when it is not the
+   * seed. Its album and its artist's related artists are read too, so the
+   * album and related-artist sources follow where the sitting has moved.
+   */
+  anchorSong?: Song | null;
   surface?: 'home' | 'next' | 'radio' | 'playlist';
   userProfile?: UserRecommendationProfile;
   sessionProfile?: SessionRecommendationProfile;
@@ -289,7 +303,7 @@ export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'dupl
  * because the pool could not fill the stretch otherwise. Hard rules (the
  * `RejectReason`s the hard filter returns) are never relaxed.
  */
-export type RelaxedRule = 'language-lock' | 'language-mix' | 'artist-cap' | 'discovery-share' | 'familiar-opening' | 'recent-version' | 'artist-spacing' | 'style';
+export type RelaxedRule = 'language-lock' | 'language-mix' | 'artist-cap' | 'discovery-share' | 'familiar-opening' | 'recent-version' | 'artist-spacing' | 'style' | 'sitting-avoid';
 
 /** 7.2.0 — one relaxation, with what gave and why (the developer breakdown shows these). */
 export interface Relaxation {

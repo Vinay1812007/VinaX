@@ -45,19 +45,19 @@ export function NextUpCard() {
   const origin = ORIGIN_LABEL[originOf(upcoming.id)];
 
   return (
-    // vx-nextup-card steps aside for the Now Playing rail on wide screens.
-    <div className="vx-nextup-card fixed right-3 sm:right-6 z-30 bottom-[calc(9rem+env(safe-area-inset-bottom))] sm:bottom-24 pointer-events-none">
+    // From 1280px it steps aside for the Now Playing panel (clamp(300px, 22vw, 340px) wide) instead of covering it.
+    <div className="fixed right-3 sm:right-6 xl:right-[calc(clamp(300px,22vw,340px)+24px)] z-30 bottom-[calc(9rem+var(--safe-bottom))] sm:bottom-24 pointer-events-none">
       <button
         type="button"
         onClick={() => usePlayerStore.getState().next(true)}
         aria-label={`Up next: ${upcoming.title}${origin ? `, ${origin.toLowerCase()}` : ''}. Tap to play it now.`}
-        className="pointer-events-auto rounded-xl bg-ink-850 shadow-[0_16px_40px_-16px_rgb(0_0_0/0.6)] p-2 pr-3 flex items-center gap-3 w-64 sm:w-72 text-left animate-fade-up active:scale-[0.98] transition-transform"
+        className="pointer-events-auto rounded-2xl border border-glass bg-ink-850 shadow-[var(--vx-deck-shadow)] p-2 pr-3 flex items-center gap-3 w-64 sm:w-72 text-left animate-fade-up hover:bg-ink-800 active:scale-[0.98] transition-[transform,background-color] duration-150"
       >
         <img
           src={bestImage(upcoming.images, 80)}
           onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
           alt=""
-          className="w-12 h-12 rounded-md object-cover shrink-0"
+          className="w-12 h-12 rounded-card object-cover shrink-0"
         />
         <span className="min-w-0 flex-1">
           <span className="block text-[12px] font-semibold text-ink-400 tabular-nums">
@@ -66,7 +66,9 @@ export function NextUpCard() {
           <span className="block text-[14px] font-semibold text-ink-100 truncate">{upcoming.title}</span>
           <span className="block text-[13px] text-ink-400 truncate">{upcoming.subtitle}</span>
         </span>
-        <NextIcon className="w-5 h-5 text-ink-300 shrink-0" />
+        <span className="w-9 h-9 rounded-xl bg-ink-100 text-ink-950 grid place-items-center shrink-0" aria-hidden>
+          <NextIcon className="w-4 h-4" />
+        </span>
       </button>
     </div>
   );

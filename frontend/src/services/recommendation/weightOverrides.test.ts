@@ -36,7 +36,7 @@ const ctx = (): RecommendationContext => ({
 describe('applyWeightOverrides', () => {
   it('starts on the defaults with the plain version', () => {
     expect({ ...RECOMMENDATION_WEIGHTS }).toEqual({ ...DEFAULT_RECOMMENDATION_WEIGHTS });
-    expect(activeWeightsVersion()).toBe('1.2.0');
+    expect(activeWeightsVersion()).toBe('1.3.0');
     expect(activeWeightOverride()).toBeNull();
   });
 
@@ -48,7 +48,7 @@ describe('applyWeightOverrides', () => {
     expect(RECOMMENDATION_WEIGHTS.likes).toBeCloseTo(0.05, 10);
     expect(RECOMMENDATION_WEIGHTS.skips).toBe(DEFAULT_RECOMMENDATION_WEIGHTS.skips);
     expect('nonsense' in RECOMMENDATION_WEIGHTS).toBe(false);
-    expect(activeWeightsVersion()).toBe('1.2.0+rc7');
+    expect(activeWeightsVersion()).toBe('1.3.0+rc7');
     expect(activeWeightOverride()).toMatchObject({ version: 7, variant: null });
   });
 
@@ -57,21 +57,21 @@ describe('applyWeightOverrides', () => {
     applyWeightOverrides({ tempo: 0.1 }, { version: 2, variant: 'treatment' });
     expect(RECOMMENDATION_WEIGHTS.mood).toBe(DEFAULT_RECOMMENDATION_WEIGHTS.mood);
     expect(RECOMMENDATION_WEIGHTS.tempo).toBe(0.1);
-    expect(activeWeightsVersion()).toBe('1.2.0+rc2');
+    expect(activeWeightsVersion()).toBe('1.3.0+rc2');
   });
 
   it('an empty override or a bad version leaves the defaults and the plain version', () => {
     expect(applyWeightOverrides({}, { version: 3, variant: null })).toEqual([]);
     expect(applyWeightOverrides({ mood: 0.2 }, { version: 0, variant: null })).toEqual([]);
     expect(RECOMMENDATION_WEIGHTS.mood).toBe(DEFAULT_RECOMMENDATION_WEIGHTS.mood);
-    expect(activeWeightsVersion()).toBe('1.2.0');
+    expect(activeWeightsVersion()).toBe('1.3.0');
   });
 
   it('reset restores the exact defaults', () => {
     applyWeightOverrides({ mood: 0.3, novelty: 0.2 }, { version: 4, variant: null });
     resetWeightOverrides();
     expect({ ...RECOMMENDATION_WEIGHTS }).toEqual({ ...DEFAULT_RECOMMENDATION_WEIGHTS });
-    expect(activeWeightsVersion()).toBe('1.2.0');
+    expect(activeWeightsVersion()).toBe('1.3.0');
   });
 
   it('the scorer reads the effective weights (popularity doubled → its term doubles)', () => {
@@ -102,12 +102,12 @@ describe('rollout targeting on the device', () => {
     expect(decideRecRollout(staged('treatment'), inTreatment)).toMatchObject({ apply: true, variant: 'treatment' });
     await syncRecConfig(staged('treatment'), inTreatment);
     expect(RECOMMENDATION_WEIGHTS.mood).toBe(0.2);
-    expect(activeWeightsVersion()).toBe('1.2.0+rc9');
+    expect(activeWeightsVersion()).toBe('1.3.0+rc9');
     expect(activeWeightOverride()).toMatchObject({ version: 9, variant: 'treatment' });
     expect(decideRecRollout(staged('treatment'), inControl)).toEqual({ apply: false, reason: 'not-targeted' });
     await syncRecConfig(staged('treatment'), inControl);
     expect(RECOMMENDATION_WEIGHTS.mood).toBe(DEFAULT_RECOMMENDATION_WEIGHTS.mood);
-    expect(activeWeightsVersion()).toBe('1.2.0');
+    expect(activeWeightsVersion()).toBe('1.3.0');
   });
 
   it('treats a missing, malformed or off config as "defaults"', async () => {
@@ -128,13 +128,13 @@ describe('rollout targeting on the device', () => {
 describe('syncRecConfig (the useClientConfig hook-up)', () => {
   it('loads nothing while nothing is published, applies a published config, clears it when withdrawn', async () => {
     await syncRecConfig(null);
-    expect(activeWeightsVersion()).toBe('1.2.0');
+    expect(activeWeightsVersion()).toBe('1.3.0');
     await syncRecConfig({ version: 3, overrides: { mood: 0.24 }, rollout: { mode: 'all' } });
     expect(RECOMMENDATION_WEIGHTS.mood).toBe(0.24);
-    expect(activeWeightsVersion()).toBe('1.2.0+rc3');
+    expect(activeWeightsVersion()).toBe('1.3.0+rc3');
     await syncRecConfig(null);
     expect(RECOMMENDATION_WEIGHTS.mood).toBe(DEFAULT_RECOMMENDATION_WEIGHTS.mood);
-    expect(activeWeightsVersion()).toBe('1.2.0');
+    expect(activeWeightsVersion()).toBe('1.3.0');
   });
 
   it('the newest sync wins: a decision arriving after a later withdrawal is dropped', async () => {
@@ -142,6 +142,6 @@ describe('syncRecConfig (the useClientConfig hook-up)', () => {
     await syncRecConfig(null);
     await pending;
     expect(RECOMMENDATION_WEIGHTS.mood).toBe(DEFAULT_RECOMMENDATION_WEIGHTS.mood);
-    expect(activeWeightsVersion()).toBe('1.2.0');
+    expect(activeWeightsVersion()).toBe('1.3.0');
   });
 });

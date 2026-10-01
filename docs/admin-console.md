@@ -199,7 +199,7 @@ Dist = { n, p50, p50Low, p50High, p95 }   (median with a distribution-free inter
 | Diversity | Mean distinct lead artists per continuation, from an optional `distinctArtists` field. The current telemetry contract does not send it, so the panel says "Not reported by this app version" |
 | Latency | `latencyMs` p50 / p95 |
 
-Breakdowns are by `meta.alg` (the weights version, for example `1.2.0` or `1.2.0+rc7`), by `meta.picker` (`local` or `ai`) and by each `experiment: variant` pair in `meta.exp`; at most 20 keys each, the rest folded into "(other)".
+Breakdowns are by `meta.alg` (the weights version, for example `1.3.0` or `1.3.0+rc7`), by `meta.picker` (`local` or `ai`) and by each `experiment: variant` pair in `meta.exp`; at most 20 keys each, the rest folded into "(other)".
 
 Privacy and honesty rules:
 
@@ -247,7 +247,7 @@ The controls editor publishes the `ai-controls` key through `POST /api/admin/app
 
 ## Recommendation Tuning
 
-A versioned, bounded override of the on-device scorer's weights (`frontend/src/services/recommendation/weights.ts`, `SCORING_WEIGHTS_VERSION` 1.2.0), staged to nobody, to one variant of an A/B experiment, or to every device.
+A versioned, bounded override of the on-device scorer's weights (`frontend/src/services/recommendation/weights.ts`, `SCORING_WEIGHTS_VERSION` 1.3.0), staged to nobody, to one variant of an A/B experiment, or to every device.
 
 `vinax_config` key `rec-config` holds the current record; `rec-config-history` holds the last 20 records, newest first. Neither key is in the appconfig allow-list, so only the validated route below can write them.
 
@@ -305,14 +305,14 @@ Validation ranges: every override is clamped to half … double its default. The
 | `intentEnergy` | 0.3 | 0.15 | 0.6 |
 | `intentSkippedSong` | 0.4 | 0.2 | 0.8 |
 
-`artistAffinity` and `session` are declared but not read by the scorer; an override of either changes nothing, and the panel says so.
+Since 9.0 (weights version `1.3.0`) every key moves the terms the panel lists for it. Before 9.0 `artistAffinity` and `session` were declared but not read by the scorer, so an override of either changed nothing; a version published then that overrides either of them takes effect on devices running 9.0. `frontend/src/services/recommendation/weightEffects.test.ts` checks every key against its terms.
 
 How a published version reaches a device:
 
 1. The public `client` bundle (`GET /api/appconfig?key=client`) carries `recConfig: { version, overrides, rollout }` while a record targets someone: rollout `all`, or `experiment` with the experiment active and the variant present. Overrides are sanitised again on the way out (known keys, clamped); notes, evaluations and names never leave the console. For an experiment rollout the bundle also carries the experiment's live split (`rollout.variants`).
 2. `useClientConfig()` (`features/home/useAppConfig.ts`) hands `recConfig` to `syncRecConfig()`. With no `recConfig` it restores the defaults and loads nothing; otherwise it lazily loads `services/recommendation/remoteWeights.ts` (not part of first load). A failed fetch changes nothing, and when two answers race the newer one wins.
 3. `decideRecRollout()` targets the device: `all` applies everywhere; `experiment` applies only when `pickVariant(installId, experimentKey, variants)` — the same pure hash as `useExperiment()` and the Worker's experiment metrics — equals the configured variant. Anything else means the defaults.
-4. `weights.ts` applies it: `applyWeightOverrides(overrides, { version, variant })` rewrites the live `RECOMMENDATION_WEIGHTS` object in place from the defaults (never stacking), clamping again; `resetWeightOverrides()` restores the defaults; `activeWeightsVersion()` returns `1.2.0` on the defaults and `1.2.0+rc<version>` while a version is applied, and `activeWeightOverride()` returns `{ version, variant, keys }` or null. The scorer and re-ranker read `RECOMMENDATION_WEIGHTS` on every call, so the next ranking pass uses the new weights.
+4. `weights.ts` applies it: `applyWeightOverrides(overrides, { version, variant })` rewrites the live `RECOMMENDATION_WEIGHTS` object in place from the defaults (never stacking), clamping again; `resetWeightOverrides()` restores the defaults; `activeWeightsVersion()` returns `1.3.0` on the defaults and `1.3.0+rc<version>` while a version is applied, and `activeWeightOverride()` returns `{ version, variant, keys }` or null. The scorer and re-ranker read `RECOMMENDATION_WEIGHTS` on every call, so the next ranking pass uses the new weights.
 
 The console never presents a weight change as proven. A version without an evaluation is labelled "unvalidated — no evaluation attached" wherever it appears; an evaluated one is described as evidence, not proof. **Preview scenario** shows, before publishing, a before / after table of every changed weight with its change, any clamp and the reason terms it moves, plus the offline evaluation to run first: `node frontend/scripts/eval-recs.mjs` with the proposed overrides. Target a treatment variant, not `control`: devices outside the experiment's traffic are reported as `control` by `useExperiment()` but are not in any variant.
 

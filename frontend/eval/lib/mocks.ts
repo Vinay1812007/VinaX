@@ -44,6 +44,20 @@ export interface CatalogueScript {
    * from `search`, as before.
    */
   styleSearch: { pattern: RegExp; songs: Song[] } | null;
+  /**
+   * 9.0.0 — album pages: `getAlbum(id)` answers with these songs (absent =
+   * null, as before, so the album source adds nothing).
+   */
+  albums: Record<string, Song[]>;
+  /** 9.0.0 — an artist page's "similar artists" list, by artist id. */
+  similarArtists: Record<string, Array<{ id: string; name: string }>>;
+  /**
+   * 9.0.0 — songs only an artist page lists (an artist's catalogue that no
+   * search or suggestion returns): what the related-artist source can add.
+   */
+  artistSongs: Song[];
+  /** 9.0.0 — learned vectors the device already holds, by song id. */
+  embeddings: Record<string, number[]>;
 }
 
 export const catalogue: CatalogueScript = {
@@ -55,6 +69,10 @@ export const catalogue: CatalogueScript = {
   searchNeverAfter: null,
   slow: false,
   styleSearch: null,
+  albums: {},
+  similarArtists: {},
+  artistSongs: [],
+  embeddings: {},
 };
 
 /** A fixed ladder of delays, taken in call order: a slow source is slow in a reproducible way. */
@@ -63,7 +81,7 @@ let calls = 0;
 let searchCalls = 0;
 
 export function resetCatalogue(script: Partial<CatalogueScript> = {}): void {
-  Object.assign(catalogue, { seedId: '', related: [], search: [], suggestions: 'ok', searchBehaviour: 'ok', searchNeverAfter: null, slow: false, styleSearch: null }, script);
+  Object.assign(catalogue, { seedId: '', related: [], search: [], suggestions: 'ok', searchBehaviour: 'ok', searchNeverAfter: null, slow: false, styleSearch: null, albums: {}, similarArtists: {}, artistSongs: [], embeddings: {} }, script);
   calls = 0;
   searchCalls = 0;
 }
@@ -83,7 +101,24 @@ function answer<T>(behaviour: Behaviour, value: T, slow: boolean): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), delay));
 }
 
+/** 9.0.0 — the fixture's artists by display name (lower-case), for artist-name searches. */
+function artistByName(query: string): string | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  for (const s of [...catalogue.related, ...catalogue.search, ...catalogue.artistSongs]) {
+    const a = s.artists?.[0];
+    if (a && a.name.trim().toLowerCase() === q) return a.id;
+  }
+  return null;
+}
+
 function searchAnswer(query = '', page = 1): Promise<Song[]> {
+  // 9.0.0 — a search for an artist's name answers with that artist's songs, as
+  // the catalogue does. Until 9.0 it answered with the generic pool, so the
+  // favourite-artist source appeared to supply other artists' songs (with its
+  // boost) and crowded out the related-artist source.
+  const artist = page === 1 || page === 2 || page === 3 ? artistByName(query) : null;
+  if (artist) return answer(catalogue.searchBehaviour, artistCatalogue(artist), catalogue.slow);
   const style = catalogue.styleSearch;
   if (style && style.pattern.test(query)) {
     // A page of the style catalogue: page 2 starts where page 1 ended (wrapping).
@@ -101,17 +136,28 @@ export const apiMock = {
     answer(catalogue.suggestions, id === catalogue.seedId ? catalogue.related : [], catalogue.slow),
   searchSongsPage: (q: string, page?: number, _n?: number): Promise<Song[]> => searchAnswer(q, page),
   searchSongs: (q: string, _n?: number): Promise<Song[]> => searchAnswer(q, 1),
-  getAlbum: (): Promise<null> => Promise.resolve(null),
+  // 9.0 — an album page answers with the fixture's album, like the catalogue's
+  // album route; an unknown album (every fixture before 9.0) is null.
+  getAlbum: (id: string): Promise<{ id: string; songs: Song[] } | null> =>
+    answer(catalogue.searchBehaviour, catalogue.albums[id] ? { id, songs: catalogue.albums[id] } : null, catalogue.slow),
+  // 9.0 — an artist page: its similar artists (when the fixture lists them)
+  // and its top songs. Before 9.0 the mock had no artist page at all, so the
+  // related-artist source fell through to top songs and found nobody.
+  getArtist: (id: string): Promise<{ id: string; similarArtists: Array<{ id: string; name: string }>; topSongs: Song[] } | null> =>
+    answer(catalogue.searchBehaviour, { id, similarArtists: catalogue.similarArtists[id] ?? [], topSongs: artistCatalogue(id) }, catalogue.slow),
   // 8.2 — an artist's catalogue is the songs of the fixture pool that credit
-  // that artist, answering like a search does (the same outage behaviour).
-  // Fixture songs credit one artist each, so the related-artist source finds
-  // no collaborators here: it costs a call and adds nothing.
-  getArtistTopSongs: (id: string, _page?: number): Promise<Song[]> =>
-    answer(catalogue.searchBehaviour, [...catalogue.related, ...catalogue.search].filter((s) => s.artists.some((a) => a.id === id)), catalogue.slow),
+  // that artist (9.0: plus the songs only an artist page lists), answering like
+  // a search does (the same outage behaviour).
+  getArtistTopSongs: (id: string, _page?: number): Promise<Song[]> => answer(catalogue.searchBehaviour, artistCatalogue(id), catalogue.slow),
 };
 
+function artistCatalogue(id: string): Song[] {
+  return [...catalogue.related, ...catalogue.search, ...catalogue.artistSongs].filter((s) => s.artists.some((a) => a.id === id));
+}
+
 export const embeddingsMock = {
-  getCachedEmbedding: (): null => null,
+  // 9.0 — the vectors a fixture says the device holds (none, unless it says so).
+  getCachedEmbedding: (id: string): Float32Array | null => (catalogue.embeddings[id] ? Float32Array.from(catalogue.embeddings[id]) : null),
   embedSongs: async (): Promise<void> => undefined,
   embedQuery: async (): Promise<null> => null,
   cosine: (): number => 0,

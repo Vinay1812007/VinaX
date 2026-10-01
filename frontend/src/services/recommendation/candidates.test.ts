@@ -337,5 +337,8 @@ describe('8.2 — sources around the seed', () => {
     expect(merged[0].song.audio).toHaveLength(1);
     expect(merged[0].unplayable).toBeUndefined();
     expect(mergeCandidates([{ song: bare, source: 'trending', unplayable: true }, { song: bare, source: 'related', unplayable: true }])[0].unplayable).toBe(true);
+    // 9.0.0 — a copy from a response with no stream URLs at all (a catalogue that resolves audio at play time) says nothing: the mark holds.
+    expect(mergeCandidates([{ song: bare, source: 'related', unplayable: true }, { song: bare, source: 'favorite-artist' }])[0].unplayable).toBe(true);
+    expect(mergeCandidates([{ song: bare, source: 'favorite-artist' }, { song: bare, source: 'related', unplayable: true }])[0].unplayable).toBe(true);
   });
 });

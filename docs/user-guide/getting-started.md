@@ -40,7 +40,11 @@ Discover and Library each open with a grid of shortcuts to their other pages:
 - Or tap any song anywhere. The song starts, and the DJ builds the next five songs from it, led by that song's language and starting with familiar songs. See [The player and the queue](player-and-queue.md).
 - Tap the heart to save a song to your favourites. Likes, skips and finished songs shape your taste profile, which stays on this device.
 
-Home also has **Jump back in** (recently played), **Your playlists** (the ones you made, then the ones you saved), **Popular picks for you** (popular songs in the order your taste suggests), **Your top genres** once you have liked or played enough of one genre, and quick chips such as **Trending**, **Charts** and **Lyrics** (Lyrics appears while a song is loaded in the player).
+Home opens with the **Aura Mix** and its big play button, **AI Radio** and **Surprise me** beside it, and **Jump back in** (recently played). Below come the sections that are yours: **Made for you** (your mixes, one card each), **Continue listening**, **Because you liked …**, **Your playlists**, **For you this week**, your favourite artists and **Similar artists**. **More from your listening** opens On this day, On repeat, Most listened and the rewinds. **Fresh discoveries** shows what is popular near you and in your languages (**Popular picks for you** is popular songs in the order your taste suggests); **More trending** opens the rest.
+
+Under **Explore more** are chips for your languages, Charts, Trending, Moods, Regions and Lyrics (while a song is loaded), **Refresh Home**, and **Show more for you**, which opens the wider catalogue: charts, moods, **Your top genres** once you have liked or played enough of one genre, trending artists and albums, picks for the time of day, recently liked and an endless feed. VinaX remembers what you opened until you close the app.
+
+Home keeps its shelves while you come and go: it builds them again when you pull down or tap **Refresh Home**, and on its own when you come back after half an hour. A song you hide, a language you mute or Kid mode leaves every shelf at once.
 
 Until you arrange Home yourself, it arranges itself: the sections you use most, the time of day, whether you finish or skip new discoveries, and the genres you like decide the order. It is worked out when you open the app and never moves while you are looking at it. **Customise Home**, near the end of the page, reorders or hides sections; an order you set there is kept exactly.
 

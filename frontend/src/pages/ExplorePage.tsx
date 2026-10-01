@@ -11,7 +11,6 @@ import { useHistoryStore } from '@/store/historyStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { searchSongs } from '@/services/api';
 import { toast } from '@/store/toastStore';
-import { cn } from '@/utils/cn';
 import { loadProfile } from '@/services/personalization/storage';
 import { topLanguages } from '@/services/personalization/profile';
 import {
@@ -27,19 +26,21 @@ import {
 } from '@/components/Icons';
 import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
+import { BrowseTile, DestTile, TileGlyph } from '@/features/discover/BrowseTile';
+import { HUB_TONE } from '@/features/discover/HubMoodTiles';
 import { moodTone } from '@/features/discover/tones';
 import '@/styles/pages/browse.css';
 
-const tiles: Array<{ to: string; label: string; tone: number; icon: typeof CompassIcon }> = [
-  { to: '/discover', label: 'Discover', tone: 1, icon: CompassIcon },
-  { to: '/charts', label: 'Charts', tone: 8, icon: WaveIcon },
-  { to: '/videos', label: 'Videos', tone: 6, icon: VideoIcon },
-  { to: '/movies', label: 'Movies', tone: 5, icon: FilmIcon },
-  { to: '/moods', label: 'Moods', tone: 3, icon: SparkleIcon },
-  { to: '/languages', label: 'Languages', tone: 2, icon: MusicIcon },
-  { to: '/regions', label: 'Regions', tone: 4, icon: GlobeIcon },
-  { to: '/made-for-you', label: 'Made for you', tone: 7, icon: HeartIcon },
-  { to: '/quiz', label: 'Music quiz', tone: 11, icon: PlayIcon },
+const tiles: Array<{ to: string; label: string; meta: string; tone: number; icon: typeof CompassIcon }> = [
+  { to: '/discover', label: 'Discover', meta: 'Everything to browse', tone: 1, icon: CompassIcon },
+  { to: '/charts', label: 'Charts', meta: 'Popular right now', tone: 8, icon: WaveIcon },
+  { to: '/videos', label: 'Videos', meta: 'Music videos', tone: 6, icon: VideoIcon },
+  { to: '/movies', label: 'Movies', meta: 'Film soundtracks', tone: 5, icon: FilmIcon },
+  { to: '/moods', label: 'Moods', meta: 'For how you feel', tone: 3, icon: SparkleIcon },
+  { to: '/languages', label: 'Languages', meta: 'In your own script', tone: 2, icon: MusicIcon },
+  { to: '/regions', label: 'Regions', meta: 'Local favourites', tone: 4, icon: GlobeIcon },
+  { to: '/made-for-you', label: 'Made for you', meta: 'Mixes from your listening', tone: 7, icon: HeartIcon },
+  { to: '/quiz', label: 'Music quiz', meta: 'Guess the song', tone: 11, icon: PlayIcon },
 ];
 
 /** Package D3 — the mood × language matrix. Pick a language, tap a mood cell,
@@ -55,25 +56,25 @@ function MoodLanguageGrid() {
   const [lang, setLang] = useState(langs[0]);
   return (
     <section className="vx-section">
-      <SectionHeader title="Any mood, your language" />
-      <div className="vx-chip-rail">
+      <SectionHeader title="Any mood, your language" explanation="Pick a language, then a mood" />
+      <div className="vx-chip-rail" role="group" aria-label="Language">
         {langs.map((l) => (
           <Chip key={l} active={lang === l} onClick={() => setLang(l)}>
             {languageLabel(l)}
           </Chip>
         ))}
       </div>
-      <div className="vx-browse-tiles vx-explore-moods !mb-0">
+      <div className="bx-tile-grid is-quad">
         {MOODS.map((m) => (
-          <Link
+          <BrowseTile
             key={m.id}
             to={`/search/${encodeURIComponent(moodSeed(m.id, lang))}`}
-            className={cn('vx-browse-tile', moodTone(m.id))}
-          >
-            <span className="vx-browse-tile-title">{m.label}</span>
-            <span className="vx-browse-tile-meta">{languageLabel(lang)}</span>
-            <span className="vx-browse-tile-art is-glyph" aria-hidden>{m.emoji}</span>
-          </Link>
+            shape="mood"
+            tone={moodTone(m.id)}
+            title={m.label}
+            meta={languageLabel(lang)}
+            visual={<TileGlyph emoji>{m.emoji}</TileGlyph>}
+          />
         ))}
       </div>
     </section>
@@ -87,13 +88,13 @@ function usePrimaryLanguage(): string {
 }
 
 const DECADES = [
-  { id: '60s', query: '60s' },
-  { id: '70s', query: '70s' },
-  { id: '80s', query: '80s' },
-  { id: '90s', query: '90s' },
-  { id: '2000s', query: '2000s' },
-  { id: '2010s', query: '2010s' },
-  { id: '2020s', query: '2020s' },
+  { id: '60s', query: '60s', tone: 10 },
+  { id: '70s', query: '70s', tone: 11 },
+  { id: '80s', query: '80s', tone: 9 },
+  { id: '90s', query: '90s', tone: 3 },
+  { id: '2000s', query: '2000s', tone: 4 },
+  { id: '2010s', query: '2010s', tone: 2 },
+  { id: '2020s', query: '2020s', tone: 1 },
 ] as const;
 
 /** v5.17.0 — Decade radio: one tap searches "<decade> <language> hits" and plays. */
@@ -120,8 +121,8 @@ function DecadeRadio() {
   };
   return (
     <section className="vx-section" aria-label="Decade radio">
-      <SectionHeader title="Decade radio" />
-      <div className="vx-chip-rail !mb-0">
+      <SectionHeader title="Decade radio" explanation={`One tap plays the hits of a decade in ${languageLabel(lang)}`} />
+      <div className="bx-tile-rail is-decades !mb-0">
         {DECADES.map((d) => (
           <button
             key={d.id}
@@ -130,12 +131,10 @@ function DecadeRadio() {
             aria-pressed={busy === d.query}
             aria-busy={busy === d.query}
             disabled={busy !== null && busy !== d.query}
-            className={cn(
-              'px-3.5 py-1.5 rounded-full text-sm font-semibold border whitespace-nowrap transition-[color,background-color,border-color,opacity,transform] active:scale-95 disabled:opacity-50',
-              busy === d.query ? 'bg-ink-100 border-ink-100 text-ink-950' : 'bg-ink-800 border-transparent text-ink-100 hover:bg-ink-700',
-            )}
+            className={`bx-decade vx-tone-${d.tone}`}
           >
-            {busy === d.query ? `${d.id} · loading…` : d.id}
+            <strong>{d.id}</strong>
+            <span>{busy === d.query ? 'Loading…' : `${languageLabel(lang)} hits`}</span>
           </button>
         ))}
       </div>
@@ -174,27 +173,16 @@ function YearPicker() {
   };
   return (
     <section className="vx-section" aria-label="Pick a year">
-      <SectionHeader title="Pick a year" />
-      <div className="flex items-center gap-2">
+      <SectionHeader title="Pick a year" explanation={`${languageLabel(lang)} songs from any year since 1970`} />
+      <div className="bx-year">
         <label className="sr-only" htmlFor="explore-year">Year</label>
-        <select
-          id="explore-year"
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          className="h-11 rounded-full bg-ink-850 border border-transparent focus:border-ink-600 px-4 text-sm font-semibold text-ink-100 outline-none"
-        >
+        <select id="explore-year" value={year} onChange={(e) => setYear(Number(e.target.value))} className="bx-select">
           {years.map((y) => (
             <option key={y} value={y}>{y}</option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={() => void play()}
-          disabled={busy}
-          aria-busy={busy}
-          className="flex items-center gap-1.5 px-5 h-11 rounded-full btn-primary text-sm font-bold active:scale-95 transition-transform disabled:opacity-60"
-        >
-          <PlayIcon className="w-3.5 h-3.5" /> {busy ? 'Loading…' : `Play ${year}`}
+        <button type="button" onClick={() => void play()} disabled={busy} aria-busy={busy} className="btn-primary">
+          <PlayIcon /> {busy ? 'Loading…' : `Play ${year}`}
         </button>
       </div>
     </section>
@@ -217,21 +205,29 @@ function HubGrid() {
   const shown = showAll ? tiles : tiles.slice(0, 12);
   return (
     <section className="vx-section" aria-label="Language and mood hubs">
-      <SectionHeader title="Language × mood" />
+      <SectionHeader title="Language × mood" explanation="A page for every pairing, your languages first" />
       <div className="vx-hub-grid">
-        {shown.map((t) => (
-          <Link key={t.to} to={t.to} className="vx-hub-cell">
-            <span className="block text-[14px] font-semibold text-ink-100 truncate">{languageLabel(t.lang)}</span>
-            <span className="block text-[13px] text-ink-400 truncate">{t.mood.label}</span>
-          </Link>
-        ))}
+        {shown.map((t) => {
+          const [tone, Icon] = HUB_TONE[t.mood.slug] ?? [1, MusicIcon];
+          return (
+            <Link key={t.to} to={t.to} className={`vx-hub-cell vx-tone-${tone}`}>
+              <TileGlyph>
+                <Icon />
+              </TileGlyph>
+              <span>
+                <b>{languageLabel(t.lang)}</b>
+                <small>{t.mood.label}</small>
+              </span>
+            </Link>
+          );
+        })}
       </div>
       {tiles.length > 12 && (
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
           aria-expanded={showAll}
-          className="vx-text-action mt-2"
+          className="bx-text-btn mt-3 -ml-3"
         >
           {showAll ? 'Show fewer' : `Show all ${tiles.length} combinations`}
         </button>
@@ -263,7 +259,7 @@ function SurpriseAlbumButton() {
     <button
       type="button"
       onClick={surprise}
-      className="vx-pill-btn min-h-[44px]"
+      className="bx-pill min-h-touch"
       aria-label="Open a surprise album from your listening"
     >
       <SparkleIcon className="w-4 h-4" /> Surprise album
@@ -275,15 +271,14 @@ export default function ExplorePage() {
   usePageTitle('Explore');
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <PageHeader title="Explore" actions={<SurpriseAlbumButton />} />
-      <div className="vx-browse-tiles">
-        {tiles.map(({ to, label, tone, icon: Icon }) => (
-          <Link key={to} to={to} className={cn('vx-browse-tile', `vx-tone-${tone}`)}>
-            <span className="vx-browse-tile-title">{label}</span>
-            <span className="vx-browse-tile-art" aria-hidden><Icon /></span>
-          </Link>
-        ))}
-      </div>
+      <PageHeader title="Explore" subtitle="Radio by decade, a year to play, and every mood in every language." actions={<SurpriseAlbumButton />} />
+      <nav className="bx-dests-wrap" aria-label="Explore destinations">
+        <div className="bx-dests is-thirds">
+          {tiles.map(({ to, label, meta, tone, icon: Icon }) => (
+            <DestTile key={to} to={to} title={label} meta={meta} tone={`vx-tone-${tone}`} icon={<Icon />} />
+          ))}
+        </div>
+      </nav>
       <DecadeRadio />
       <YearPicker />
       <MoodLanguageGrid />

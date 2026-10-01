@@ -45,7 +45,7 @@ export default function WeeklyMixPage() {
         actions={
           songs.length > 0 ? (
             <>
-              <PlayFab label="Play" onClick={() => play(false)} />
+              <PlayFab size="lg" label="Play" onClick={() => play(false)} />
               <EntityAction label="Shuffle" onClick={() => play(true)}><ShuffleIcon /></EntityAction>
               <EntityAction label="Save as playlist" onClick={save}><PlusIcon /></EntityAction>
             </>

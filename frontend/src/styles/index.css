@@ -52,7 +52,7 @@
   --vx-danger: #fda4af;
   --vx-success: #86efac;
   --vx-art-accent: rgb(var(--art));
-  --vx-radius-control: 8px;
+  --vx-radius-control: 10px;
   /* v7.0.1 — one medium control scale: what a control LOOKS like. Touch targets stay
      >= 44px through an invisible hit-area pad where the visual box is smaller. */
   --vx-control-h: 40px;
@@ -60,14 +60,14 @@
   --vx-tile-h: 48px;
   /* Height of the sticky top bar; everything that sticks beneath it reads this. */
   --vx-topbar-h: 64px;
-  --vx-radius-card: 12px;
-  --vx-radius-panel: 16px;
-  --vx-shadow-overlay: 0 16px 48px #0004;
+  --vx-radius-card: 14px;
+  --vx-radius-panel: 20px;
+  --vx-shadow-overlay: 0 24px 64px -12px rgb(0 0 0 / 0.6);
   --vx-motion-fast: 140ms;
   --vx-motion-normal: 200ms;
-  --vx-type-display: clamp(2rem, 3vw, 3rem);
-  --vx-type-page: clamp(1.75rem, 2.5vw, 2.25rem);
-  --vx-type-section: 1.25rem;
+  --vx-type-display: clamp(2.25rem, 4vw, 3.75rem);
+  --vx-type-page: clamp(1.875rem, 3vw, 2.625rem);
+  --vx-type-section: 1.375rem;
   --vx-type-card: .9375rem;
   --vx-type-body: .9375rem;
   --vx-type-meta: .8125rem;
@@ -83,38 +83,41 @@
   --vx-space-12: 48px;
   --vx-space-16: 64px;
 
-  /* Surface scale — v5.9.0 flat black look: pure-black chrome (sidebar,
-     player, nav) over a #121212 canvas, #181818 / #282828 card tiers,
-     #b3b3b3 secondary text, white primary. AAA on --ink-900 with --ink-100. */
-  --ink-950: 11 11 12;
-  --ink-900: 18 18 20;
-  --ink-850: 24 24 27;
-  --ink-800: 34 34 38;
-  --ink-700: 51 51 51;
-  --ink-600: 83 83 83;
+  /* Surface scale — 9.0 "Encore": deep charcoal with a cool undertone.
+     ink-950 is the chrome (sidebar, player deck, tab bar), ink-900 the
+     workspace, ink-850 / ink-800 the raised tiers (cards, panels, hover).
+     AAA on --ink-900 with --ink-100. */
+  --ink-950: 10 11 14;
+  --ink-900: 16 17 21;
+  --ink-850: 23 24 30;
+  --ink-800: 31 32 40;
+  --ink-700: 46 47 58;
+  --ink-600: 86 88 102;
   /* ink-500 is used as TEXT (captions, counts, hints), so it must clear AA:
-     144 144 150 measures 5.9:1 on ink-900 and 5.0:1 on ink-800 (4.5 needed).
-     The previous 114 114 114 measured 3.9 / 3.3. Asserted in contrast.test.ts. */
-  --ink-500: 144 144 150;
-  --ink-400: 167 167 167;
-  --ink-300: 179 179 179;
-  --ink-200: 222 222 222;
-  --ink-100: 255 255 255;
+     146 148 162 measures 6.3:1 on ink-900 and 5.4:1 on ink-800 (4.5 needed).
+     Asserted in contrast.test.ts. */
+  --ink-500: 146 148 162;
+  --ink-400: 168 170 184;
+  --ink-300: 188 190 202;
+  --ink-200: 226 227 234;
+  --ink-100: 250 250 252;
 
-  /* Brand ramps. ember = primary CTAs, focus rings, active state.
-     tide = supporting affordances (chips, subtle links, secondary gradients).
-     Accent-theme selectors below override these at runtime. */
-  --ember-600: 139 92 246;
-  --ember-500: 167 139 250;
-  --ember-400: 196 181 253;
-  --ember-300: 221 214 254;
-  --tide-500: 167 139 250;
-  --tide-400: 196 181 253;
+  /* Brand ramps, taken from the VinaX mark. ember = "Iris", the violet of the
+     mark's stroke: play buttons, focus rings, active state, progress.
+     tide = "Lagoon", the mark's cyan: live and AI accents, secondary links,
+     the one restrained gradient (Iris → Lagoon). Accent-theme selectors
+     below override these at runtime. */
+  --ember-600: 112 86 246;
+  --ember-500: 140 120 255;
+  --ember-400: 178 166 255;
+  --ember-300: 210 203 255;
+  --tide-500: 34 211 238;
+  --tide-400: 103 232 249;
 
   /* --art: living accent extracted from the currently playing artwork.
      Set at runtime by src/layouts/AppLayout.tsx; defaults to the accent so
      the very first page load doesn't leak a stale hue. */
-  --art: 167 139 250;
+  --art: 140 120 255;
 
   /* Art-tint alphas — used by light-mode glass surfaces to wash the frost
      with the current artwork's dominant color. Kept as tokens so future
@@ -126,9 +129,9 @@
 
   /* Aura palette — used by the home-page hero wash + settings glow. Kept
      as a small named subset so component code stays readable. */
-  --aura-violet: 167 139 250;
-  --aura-cyan: 196 181 253;
-  --aura-lime: 167 139 250;
+  --aura-violet: 140 120 255;
+  --aura-cyan: 34 211 238;
+  --aura-lime: 163 230 53;
 
   /* Glass material — iOS-style ADJUSTABLE translucency (Settings → Glass
      effect). --glass-alpha is the single dial: 1 = the classic solid look,
@@ -146,11 +149,11 @@
   --glass-blur: calc(6px + var(--glass-blur-boost) * 34px);
   --glass-blur-strong: calc(12px + var(--glass-blur-boost) * 34px);
   --glass-saturate: calc(100% + (1 - var(--glass-alpha)) * 90%);
-  --glass-bg: rgb(24 24 24 / var(--glass-alpha));
-  --glass-bg-strong: rgb(40 40 40 / var(--glass-alpha));
-  --glass-bg-muted: rgb(18 18 18 / var(--glass-alpha));
-  --glass-bg-hover: rgb(40 40 40 / max(var(--glass-alpha), 0.85));
-  --glass-bg-active: rgb(51 51 51 / max(var(--glass-alpha), 0.9));
+  --glass-bg: rgb(23 24 30 / var(--glass-alpha));
+  --glass-bg-strong: rgb(36 37 46 / var(--glass-alpha));
+  --glass-bg-muted: rgb(16 17 21 / var(--glass-alpha));
+  --glass-bg-hover: rgb(36 37 46 / max(var(--glass-alpha), 0.85));
+  --glass-bg-active: rgb(48 49 60 / max(var(--glass-alpha), 0.9));
   --glass-border: rgba(255, 255, 255, 0.06);
   --glass-border-strong: rgba(255, 255, 255, 0.12);
   --glass-highlight: rgba(255, 255, 255, 0.02);
@@ -161,9 +164,9 @@
   /* Solid-surface tokens — chrome and modals read these directly, and the
      translucency fallbacks (prefers-reduced-transparency, @supports not
      backdrop-filter) fall back to --surface-solid. */
-  --surface-solid: rgb(18 18 18);
+  --surface-solid: rgb(16 17 21);
   --surface-input: var(--vx-surface-raised);
-  --surface-navbar: rgb(0 0 0);
+  --surface-navbar: rgb(var(--ink-950));
   --surface-sidebar: rgb(var(--ink-950));
   --surface-modal: var(--vx-surface-raised);
   --surface-player: rgb(var(--ink-950));
@@ -171,16 +174,16 @@
   /* Gradients — single-hue, no rainbow stops (the hero + text-gradient
      carry the only real spectrum in the app). */
   --gradient-primary: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)));
-  --gradient-secondary: linear-gradient(180deg, rgb(51 51 51), rgb(40 40 40));
+  --gradient-secondary: linear-gradient(180deg, rgb(46 47 58), rgb(36 37 46));
   --gradient-premium: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)));
-  --gradient-aurora: linear-gradient(120deg, rgb(var(--ember-500)), rgb(var(--ember-400)));
+  --gradient-aurora: linear-gradient(120deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
 
   /* Radii — three real values only, plus pill. v5.8.1 formal pass: tightened
      (8/12/16/20 → 6/8/12/14) so surfaces read crisp and professional. */
   --radius-sm: 8px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
   --radius-pill: 9999px;
 
   /* Elevation. --shadow-soft is for card contact, --shadow-glow is the
@@ -226,34 +229,33 @@ html.light {
   --vx-danger: #be123c;
   --vx-success: #166534;
 
+  /* 9.0 — a warm paper canvas under white chrome. */
   --ink-950: 255 255 255;
-  --ink-900: 247 247 247;
-  --ink-850: 240 240 240;
-  --ink-800: 229 229 229;
-  --ink-700: 212 212 212;
-  --ink-600: 148 154 168;
-  /* 5.4:1 on ink-900, 4.6:1 on ink-800 (was 132 138 152 — 3.2 / 2.8). Stays
-     one step lighter than ink-400 so the ramp remains monotonic. */
-  --ink-500: 96 102 118;
-  /* 92 98 114 (not a straight inversion): the muted-text tier must clear
-     WCAG AA on BOTH the page canvas (ink-900, 5.44:1) and card surfaces
-     (ink-800, 4.61:1). The previous 116 122 138 measured 3.83:1. */
-  --ink-400: 92 98 114;
-  --ink-300: 84 90 104;
-  --ink-200: 40 44 54;
-  --ink-100: 12 14 20;
+  --ink-900: 246 246 243;
+  --ink-850: 238 238 234;
+  --ink-800: 228 228 223;
+  --ink-700: 210 210 204;
+  --ink-600: 150 152 160;
+  /* 5.7:1 on ink-900, 4.8:1 on ink-800. Stays one step lighter than ink-400
+     so the ramp remains monotonic. */
+  --ink-500: 94 97 110;
+  /* The muted-text tier clears AA on the canvas (6.2:1) and on cards (5.3:1). */
+  --ink-400: 88 91 104;
+  --ink-300: 70 73 86;
+  --ink-200: 36 38 48;
+  --ink-100: 14 15 20;
 
   /* Accent ramps re-pitched for the light canvas. The dark ramps (indigo
      500/400) measure 2.66–4.35:1 on light surfaces — illegible. Each tier
      shifts ~2 shades darker; ember-400 (the text tier, 87 call sites) and
      tide-400 clear 4.5:1 on ink-900 AND ink-800. Asserted in
      src/__tests__/contrast.test.ts. */
-  --ember-600: 76 29 149;
-  --ember-500: 91 33 182;
-  --ember-400: 109 40 217;
-  --ember-300: 124 58 237;
-  --tide-500: 91 33 182;
-  --tide-400: 109 40 217;
+  --ember-600: 70 44 190;
+  --ember-500: 86 60 215;
+  --ember-400: 98 70 228;
+  --ember-300: 120 96 240;
+  --tide-500: 14 116 144;
+  --tide-400: 21 94 117;
 
   --glass-bg: rgb(255 255 255 / var(--glass-alpha));
   --glass-bg-strong: rgb(248 250 253 / var(--glass-alpha));
@@ -302,9 +304,9 @@ html.light {
    overrides. */
 html.amoled {
   --ink-950: 0 0 0;
-  --ink-900: 3 3 5;
-  --ink-850: 8 8 11;
-  --ink-800: 16 17 22;
+  --ink-900: 2 2 3;
+  --ink-850: 9 9 12;
+  --ink-800: 17 18 23;
   --glass-bg: rgb(8 8 11);
   --glass-bg-muted: rgb(3 3 5);
   --surface-solid: rgb(0 0 0);
@@ -429,7 +431,7 @@ body {
   transition: background-color 0.4s ease, color 0.4s ease;
 }
 html.light body {
-  background-color: rgb(247 247 247);
+  background-color: rgb(246 246 243);
 }
 
 main {
@@ -660,10 +662,12 @@ button:active:not(:disabled) { filter: brightness(.96); }
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
   min-height: var(--vx-control-h);
-  font-weight: 700;
-  letter-spacing: 0;
+  padding-inline: max(20px, 1.25em);
+  font-weight: 750;
+  letter-spacing: -0.005em;
   border: 1px solid rgb(var(--ember-500));
-  border-radius: var(--radius-md);
+  /* 9.0 — every action is a pill. */
+  border-radius: 999px;
   white-space: nowrap;
   transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm),
     border-color 140ms var(--ease-calm);
@@ -687,19 +691,21 @@ button:active:not(:disabled) { filter: brightness(.96); }
 .btn-secondary {
   position: relative;
   overflow: hidden;
-  background: var(--glass-bg-muted);
-  border: 1px solid var(--glass-border);
-  color: rgb(var(--ink-200));
-  font-weight: 500;
+  min-height: var(--vx-control-h);
+  padding-inline: max(18px, 1.1em);
+  background: transparent;
+  border: 1px solid rgb(var(--ink-100) / 0.22);
+  color: rgb(var(--ink-100));
+  font-weight: 650;
   letter-spacing: -0.005em;
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   white-space: nowrap;
   transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm),
     border-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
 }
 .btn-secondary:hover {
-  background: var(--glass-bg-hover);
-  border-color: rgb(var(--ink-100) / 0.14);
+  background: var(--vx-hover, rgb(var(--ink-100) / 0.06));
+  border-color: rgb(var(--ink-100) / 0.5);
   color: rgb(var(--ink-100));
 }
 .btn-secondary:active { transform: scale(0.98); }
@@ -836,86 +842,8 @@ html.light .skeleton::after {
 }
 
 /* ============================================================================
-   Nav pills + dock — sidebar active state + bottom-nav living-color pill.
+   Mini-player effects (the shell itself is styled in shell.css).
    ========================================================================= */
-.nav-pill-active {
-  background: rgb(var(--ember-500) / 0.14);
-  color: rgb(var(--ember-400));
-  border: 1px solid rgb(var(--ember-500) / 0.24);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18), inset 0 1px 0 var(--glass-highlight);
-}
-html.light .nav-pill-active {
-  background: rgb(var(--art) / 0.14);
-  color: rgb(var(--ember-600));
-  border-color: rgb(var(--art) / 0.28);
-  box-shadow: 0 2px 10px rgba(31, 38, 135, 0.1), inset 0 1px 0 var(--glass-highlight);
-}
-
-.vx-dock-item {
-  transition: color 160ms var(--ease-calm),
-    background-color 200ms var(--ease-calm),
-    transform 160ms var(--ease-calm);
-}
-.vx-dock-item:active { transform: scale(0.94); }
-.vx-dock-active {
-  color: #fff;
-  background: linear-gradient(120deg, rgb(var(--art) / 0.95), rgb(var(--art) / 0.6));
-  box-shadow: 0 6px 22px -8px rgb(var(--art) / 0.6);
-  animation: dock-bloom 260ms var(--ease-calm);
-}
-.vx-dock-active svg { animation: vxDockPop 0.45s var(--ease-calm); }
-
-/* The dock's outer nav — a 1px inset top highlight to lift the frosted
-   pill off the canvas without touching the underlying .glass-navbar recipe. */
-.vx-dock { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05); }
-html.light .vx-dock { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6); }
-
-/* VinaX AI icon — a barely-there always-on bloom so the AI tab feels alive.
-   Reuses the orb-breathe keyframe at a very reduced amplitude. */
-.vx-ai-pulse {
-  position: relative;
-  border-radius: 9999px;
-  animation: orb-breathe 4.8s ease-in-out infinite;
-  filter: drop-shadow(0 0 4px rgb(var(--ember-500) / 0.35));
-}
-.vx-ai-pulse::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: inherit;
-  background: radial-gradient(circle, rgb(var(--ember-500) / 0.35), transparent 65%);
-  filter: blur(4px);
-  opacity: 0.7;
-  pointer-events: none;
-  z-index: -1;
-}
-.vx-dock-active .vx-ai-pulse { filter: none; }
-.vx-dock-active .vx-ai-pulse::before { display: none; }
-
-/* Sidebar polish — tighter uppercase eyebrows + a footer strip with the
-   version + private-by-design tag. Reads current tokens so both themes match. */
-.vx-sidebar-eyebrow { letter-spacing: 0.14em; }
-html.light .vx-sidebar-divider { background: rgba(15, 20, 30, 0.06); }
-html.light .vx-sidebar-footer {
-  border-color: rgba(15, 20, 30, 0.06);
-  background: rgba(15, 20, 30, 0.02);
-}
-
-/* ============================================================================
-   Mini-player + swipe transitions.
-   ========================================================================= */
-.np-mini {
-  border-radius: 20px;
-  border: 1px solid rgb(var(--art) / 0.28);
-  box-shadow:
-    0 10px 34px -12px rgb(var(--art) / 0.45),
-    0 4px 16px rgba(0, 0, 0, 0.4);
-}
-html.light .np-mini {
-  background: var(--glass-bg-strong);
-  border-color: rgba(0, 0, 0, 0.08);
-}
-
 /* Song-change bloom on the mini-player — toggled by PlayerBar on song.id
    flip; the class is removed after ~420ms so subsequent flips retrigger. */
 .np-mini.np-changed { animation: npMiniPulse 400ms var(--ease-calm); }
@@ -938,50 +866,15 @@ html.light .np-mini {
   mix-blend-mode: overlay;
 }
 
-/* Mini-player play chip: soft accent ring on press for extra weight. */
-.np-mini-play:active {
-  box-shadow: 0 0 0 4px rgb(var(--art) / 0.28);
-}
-
-/* Desktop player: living-color halo across the top edge (depth cue) plus
-   an art-tinted glow under the primary play button. */
-.glass-bottom-player { position: relative; }
-.glass-bottom-player::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 44px;
-  background: linear-gradient(180deg, rgb(var(--art) / 0.08), transparent);
-  pointer-events: none;
-  z-index: 0;
-}
-.glass-bottom-player > * { position: relative; z-index: 1; }
-.np-play-desktop {
-  box-shadow:
-    0 6px 20px -8px rgb(var(--art) / 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transition: transform 0.14s var(--ease-calm), box-shadow 0.25s var(--ease-calm);
-}
-@media (hover: hover) and (pointer: fine) {
-  .np-play-desktop:hover {
-    box-shadow:
-      0 12px 30px -10px rgb(var(--art) / 0.72),
-      inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  }
-}
-
-/* Slightly thicker seek + volume track inside the desktop player, with a
-   soft accent ring on the scrubber. Only scoped to the player chrome so
-   other range inputs (settings, EQ, etc.) keep their compact geometry. */
-.glass-bottom-player input[type='range']::-webkit-slider-runnable-track {
-  height: 4px;
-}
-.glass-bottom-player input[type='range']::-webkit-slider-thumb {
+/* A slightly thicker seek + volume track inside the desktop deck. Scoped to
+   the deck so other range inputs (settings, EQ…) keep their compact geometry. */
+.vx-deck input[type='range']::-webkit-slider-runnable-track { height: 4px; }
+.vx-deck input[type='range']::-webkit-slider-thumb {
   margin-top: -6px;
   box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.18), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
-.glass-bottom-player input[type='range']::-moz-range-track { height: 4px; }
-.glass-bottom-player input[type='range']::-moz-range-progress { height: 4px; }
+.vx-deck input[type='range']::-moz-range-track { height: 4px; }
+.vx-deck input[type='range']::-moz-range-progress { height: 4px; }
 
 /* ============================================================================
    Theme toggle (sun ⇄ moon crossfade + rotate).
@@ -1355,7 +1248,6 @@ html.light body::before {
 /* Non-card glass surfaces: one linear wash from the top-left corner. */
 html.light .glass-panel,
 html.light .glass-navbar,
-html.light .glass-bottom-player,
 html.light .glass-sidebar,
 html.light .glass-modal,
 html.light .glass-sheet {
@@ -1391,7 +1283,6 @@ html.light .glass-modal {
 }
 html.light .glass-navbar { border-bottom-color: rgb(var(--art) / var(--art-tint-border-alpha)); }
 html.light .glass-sidebar { border-right-color: rgb(var(--art) / var(--art-tint-border-alpha)); }
-html.light .glass-bottom-player,
 html.light .glass-sheet { border-top-color: rgb(var(--art) / var(--art-tint-border-alpha)); }
 
 /* Sidebar top bloom — a soft flow of the artwork color pouring in from the
@@ -1410,22 +1301,6 @@ html.light .glass-sidebar::before {
   z-index: 0;
 }
 
-/* Bottom-player: the existing ::before halo is 44px @ 0.08 for dark; light
-   mode wants a stronger, taller bloom so the color flows visibly upward. */
-html.light .glass-bottom-player::before {
-  height: 120px;
-  background: linear-gradient(180deg, rgb(var(--art) / 0.14), transparent 60%);
-}
-
-/* Mini-player in light mode: warmer art border + a proper halo. Light has
-   less contrast to fight than dark, so we can be more expressive here. */
-html.light .np-mini {
-  background: var(--glass-bg-strong);
-  border-color: rgb(var(--art) / 0.40);
-  box-shadow:
-    0 14px 34px -12px rgb(var(--art) / 0.38),
-    0 4px 12px rgba(15, 20, 30, 0.06);
-}
 
 /* ============================================================================
    Keyframes — every animation the app uses. Reduced-motion cascade below
@@ -1581,7 +1456,7 @@ html.reduce-motion *::after {
 @media (prefers-reduced-motion: reduce) {
   .reveal, .hero-animated, .animate-marquee, .animate-fade-up, .skeleton,
   .animate-pulse-bar, .vx-stagger > *, .vx-blob-a, .vx-blob-b, .vx-blob-c,
-  .vx-blob-d, .vx-eq i, .karaoke-fill, .vx-dock-active svg, .lvo-core,
+  .vx-blob-d, .vx-eq i, .karaoke-fill, .lvo-core,
   .lvo-ring, .lvo-dots i, .skeleton::after,
   .np-mini.np-changed, .np-mini[data-buffering='true'] .np-mini-thumb::after,
   .vx-ai-pulse, .vx-dock-active {
@@ -1868,14 +1743,11 @@ html.light .btn-secondary { border-color: rgb(var(--ink-600)); }
 html.light .btn-secondary:hover { border-color: rgb(var(--ink-100)); }
 /* Shell panels get a hairline instead of black: white on white needs an edge. */
 html.light .glass-sidebar { border-right: 1px solid rgb(var(--ink-800)); }
-html.light .glass-bottom-player { border-top: 1px solid rgb(var(--ink-800)); }
 html.light .vx-dock { border-top: 1px solid rgb(var(--ink-800)); }
 /* Focus ring: a dark halo, the white one vanished on the light canvas. */
 html.light :focus-visible { box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.16); outline-color: rgb(var(--ink-100)); }
 html.light .btn-primary:focus-visible,
 html.light .card-play:focus-visible { outline-color: rgb(var(--ember-500)); }
-/* Menus and toasts stay solid, never translucent, on light. */
-html.light .np-mini { box-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.35); }
 
 /* v5.17.0 — high contrast: brighter secondary text, visible borders, no glass fog. */
 html.hc { --ink-300: 230 230 230; --ink-400: 205 205 205; --ink-500: 170 170 170; --glass-alpha: 0.98; }

@@ -2,8 +2,9 @@ import type { ReactNode } from 'react';
 import { WaveIcon } from './Icons';
 
 /**
- * 8.0 — the empty / error pattern: an icon in a quiet circle, a title, one
+ * 8.0 — the empty / error pattern: an icon in a quiet badge, a title, one
  * muted line and at most one action. Centred in the workspace, no card.
+ * 9.0 — the badge is an Iris-washed squircle.
  */
 function StateShell({ children }: { children: ReactNode }) {
   return (
@@ -17,7 +18,8 @@ function StateShell({ children }: { children: ReactNode }) {
 function StateBadge({ icon }: { icon?: ReactNode }) {
   return (
     <span
-      className="flex items-center justify-center w-14 h-14 rounded-full bg-ink-850 text-ink-200 [&>svg]:w-7 [&>svg]:h-7"
+      // 9.0.0 — Encore: a squircle with a quiet Iris wash.
+      className="flex items-center justify-center w-16 h-16 rounded-sheet bg-ember-500/[0.12] text-ember-400 [&>svg]:w-7 [&>svg]:h-7"
       aria-hidden
     >
       {icon ?? <WaveIcon className="w-7 h-7" />}
@@ -40,7 +42,7 @@ export function EmptyState({
   return (
     <StateShell>
       <StateBadge icon={icon} />
-      <p className="mt-4 text-[18px] font-bold tracking-[-0.01em] text-ink-100">{title}</p>
+      <p className="mt-5 text-[19px] font-extrabold tracking-[-0.015em] text-ink-100">{title}</p>
       <p className="mt-1.5 text-[14px] leading-relaxed text-ink-400">{message}</p>
       {action && <div className="mt-5">{action}</div>}
     </StateShell>
@@ -62,7 +64,7 @@ export function ErrorState({
   return (
     <StateShell>
       <StateBadge icon={icon} />
-      <p className="mt-4 text-[18px] font-bold tracking-[-0.01em] text-ink-100">{title ?? 'Couldn’t reach the music servers'}</p>
+      <p className="mt-5 text-[19px] font-extrabold tracking-[-0.015em] text-ink-100">{title ?? 'Couldn’t reach the music servers'}</p>
       <p className="mt-1.5 text-[14px] leading-relaxed text-ink-400">
         {message ?? 'Check your connection and try again.'}
       </p>

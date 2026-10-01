@@ -62,8 +62,9 @@ export function MessageList({ chatId, messages, busy, speakingId, agent, handler
             <PinIcon className="w-3.5 h-3.5" /> Pinned
           </p>
           {pinned.map(({ m, i }) => (
+            // Truncated by CSS, never by slicing: a cut can split an Indic syllable.
             <button key={i} type="button" onClick={() => goTo(i)} className="block w-full text-left truncate py-1 ai-t2 hover:ai-t1">
-              {m.content.replace(/[#*`>_]/g, '').slice(0, 110)}
+              {m.content.replace(/[#*`>_]/g, '').replace(/\s+/g, ' ')}
             </button>
           ))}
         </div>

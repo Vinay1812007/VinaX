@@ -48,3 +48,18 @@ describe('versionKind and dedupeByIdentity', () => {
     expect(songKey(remix)).toBe(songKey(original));
   });
 });
+
+describe('the served memory (9.0.0)', () => {
+  it('a removed key is an empty memory: a reset does not come back from memory', async () => {
+    const { recordServed, servedKeySet } = await import('./songIdentity');
+    localStorage.clear();
+    recordServed(['a|x', 'b|y']);
+    expect([...servedKeySet()].sort()).toEqual(['a|x', 'b|y']);
+    // "Erase everything" and "Clear personalization profile" remove the key.
+    localStorage.removeItem('vinax.flow.served.v1');
+    localStorage.clear();
+    expect(servedKeySet().size).toBe(0);
+    recordServed(['c|z']);
+    expect([...servedKeySet()]).toEqual(['c|z']);
+  });
+});

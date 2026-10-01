@@ -1,32 +1,49 @@
-# Design system — "Stage" (8.0) on the "Flow" tokens
+# Design system — "Encore" (9.0)
 
-This document covers how the listener app looks and behaves at the component level: where the tokens live, the colour, type and radius scales, the medium control scale and the 44px hit-area rule, how overlays are built and why they carry `data-vx-overlay`, the motion rules, and the top bar's actions slot. The token sections below describe the Flow tokens, which 8.0 kept unchanged; the next section describes the 8.0 "Stage" layer built on them. The owner console has its own standalone stylesheet and is covered in [admin-console.md](admin-console.md).
+This document covers how the listener app looks and behaves at the component level: where the tokens live, the colour, type and radius scales, the medium control scale and the 44px hit-area rule, how overlays are built and why they carry `data-vx-overlay`, the motion rules, and the top bar's actions slot. 9.0 "Encore" evolved the token values themselves (8.0's "Stage" kept them and stacked a layer on top) and folded the two shell stylesheets into one. The owner console has its own standalone stylesheet and is covered in [admin-console.md](admin-console.md).
 
-## 8.0 "Stage"
+## 9.0 "Encore"
 
-8.0 redesigned every screen without changing a token value or a behaviour. The rules:
+Encore is VinaX's own identity, taken from the VinaX mark: its violet stroke and its cyan, over deep charcoal.
 
-- Artwork leads and copy follows. A section has a title and at most a "Show all" link; taglines, arrows and letter-spaced eyebrows were removed.
-- Hierarchy comes from size and weight, not boxes. Surfaces are flat tiers: `ink-950` chrome, `ink-900` workspace, `ink-850` raised, `--vx-hover` / `--vx-pressed` (6% / 10% of the text colour) for hover and selected rows. Hairlines appear only between rows and around inputs.
-- The accent is for play buttons, active states, progress, switches and focus.
-- Spacing is on an 8px grid: `--vx-gutter` (32px desktop / 16px phone), `--vx-shelf-gap` (40 / 32), `--vx-card-gap` (16 / 12). Motion is 140–200ms on `--ease-calm`.
-- Sentence case everywhere. Buttons are pills (`.btn-primary`, outline `.btn-secondary`); `.vx-play-fab` is the 56px circular accent play button.
+- **Colour.** Surfaces are charcoal tiers with a cool undertone: `ink-950` chrome (sidebar, player deck, tab bar), `ink-900` workspace, `ink-850` / `ink-800` raised. **Iris** (`--ember-*`, default `140 120 255`) is for play buttons, progress, the active destination, chosen filters and focus. **Lagoon** (`--tide-*`, default `34 211 238`) marks live and AI moments and secondary links. The one gradient is Iris → Lagoon (`--vx-glow`, `--gradient-aurora`), used sparingly: the avatar, Liked songs, AI accents. The playing artwork tints the top of the workspace and the left edge of the player deck through `--art`, at low alpha.
+- **Shape.** Pills for actions and filters (`.btn-primary`, outline `.btn-secondary`, `Chip`), squircles for play buttons and artwork (`.vx-play-fab` 56px / radius 18, `.vx-play-fab.is-lg` 64px, the card play button 46px / radius 15, artwork radius 16 on cards and 10–12 in rows), circles for people. Radii: `--vx-radius-control` 10px, `--vx-radius-card` 14px, `--vx-radius-panel` 20px; sheets 24px at the top, dialogs 22px.
+- **Type.** Manrope only. Display `clamp(2.25rem, 4vw, 3.75rem)` at 800, page titles `clamp(1.875rem, 3vw, 2.625rem)`, section titles 1.375rem at 780, cards 14px at 650, meta 13px at 500. Sentence case. No letter-spaced uppercase eyebrows.
+- **Hierarchy.** Artwork leads and copy follows; size and weight make the hierarchy, not boxes. A section has a title, at most one line of explanation, and at most a "Show all" pill link. Hairlines only between rows and around inputs.
+- **Space.** 8px grid. `--vx-gutter` 32 / 16px, `--vx-shelf-gap` 44 / 36px, `--vx-card-gap` 18 / 12px (desktop / phone).
+- **Motion.** 140–220ms on `--ease-calm`; cards lift 3px on hover and their play button rises in. Every transition and animation stops under `prefers-reduced-motion` and the in-app "Reduce motion" setting (`html.reduce-motion`); scripted scrolls ask `utils/motion.ts`.
+- **States.** Hover `--vx-hover` (6% of the text colour), pressed `--vx-pressed` (10%), selected `--vx-accent-wash` (14% Iris). The playing track row has an Iris bar on its leading edge and an Iris title. Focus is a 2px `--vx-focus` outline, 3px offset.
+
+### The frame
+
+| Width | Frame |
+| --- | --- |
+| Phone (< 768px) | Top bar (mark, page name once scrolled, page actions, avatar); the page; the compact player floating above the five-tab bar (the active tab's icon sits in an Iris pill). Safe-area insets are applied once, on the fixed bottom wrapper |
+| Tablet (768–1099px) | The sidebar is always the 80px rail; the compact player floats at the bottom |
+| Desktop (≥ 1100px) | Sidebar (264px, or the 80px rail when the listener collapses it): destinations, then the library in its own rounded panel ("Your collections", "Playlists & saved"). The workspace is a rounded sheet inside the chrome. From 1024px the player is the floating three-zone deck; from 1280px the Now Playing panel sits beside the workspace while something plays |
+
+### Where the styles live
 
 | File | What it owns |
 | --- | --- |
-| `styles/stage.css` | The shell and shared primitives: sidebar and its library list (`.vx-lib-*`), the top bar that is transparent until the workspace scrolls (`.is-scrolled`), the phone tab bar, the three-zone player bar (`.vx-pb-*`), page and section headers, rails and grids, media cards, track rows, pill buttons, chips (`.vx-chip-idle`), `.vx-display`. Loaded after `flow.css`, so it wins where both style a class |
+| `styles/index.css` | Every token (`:root`), the light / black / accent overrides, the glass and button primitives, the reduced-motion kill switch |
+| `styles/shell.css` | The frame and the shared primitives: workspace canvas, sidebar and library list (`.vx-lib-*`), top bar, phone tab bar (`.vx-dock`, `.vx-dock-pill`), the player deck (`.vx-deck`, `.vx-pb-*`) and compact player (`.np-mini`), page and section headers, rails and grids, `.vx-play-fab`, chips, `.vx-tap`, focus and motion switches. Replaces 8.0's `stage.css` and the shell half of `flow.css` |
+| `styles/features.css` | Global feature surfaces without a page stylesheet of their own (Home Studio, the listening guide, the destination grid). A feature that gets its own page stylesheet takes its rules with it (the entity heroes went to `pages/library.css`, the AI pieces to `ai.css` and `pages/radio.css`, the player's surfaces and the queue's ownership marker to `pages/player.css`, the language grid to `pages/browse.css`) |
+| `styles/pages/tracklist.css` | Track rows, the track-list header and media cards — the only place they are styled. Imported by `SongRow` and `MediaCard` |
 | `styles/overlays.css` | Sheets, dialogs, menus and the welcome sheet. Imported by `Sheet`, `TrackMenu` and `OnboardingSheet`, not by `main.tsx` |
-| `styles/pages/*.css` | One stylesheet per area (`home`, `browse`, `library`, `tracklist`, `player`, `settings`, `secondary`), each imported by its page or component, so it ships in that lazy chunk and never in the first load |
+| `styles/pages/*.css` | One stylesheet per area (`home`, `browse`, `library`, `player`, `radio`, `settings`, `secondary`), each imported by its page or component, so it ships in that lazy chunk and never in the first load |
+
+Page stylesheets scope their rules under the page's root class (`.vx-home`, `.vx-browse`, …) so two lazy chunks loaded in one session cannot restyle each other; `browse.css`'s shared pieces are the `bx-*` family (the browse tiles — chart covers fanned, language scripts, mood emoji — the hub covers and the pinned search field).
 | `styles/ai.css` | VinaX AI, which renders outside the main shell |
 
-Shell components: `Sidebar` (destinations, then Your library: Liked songs, Listen later, Downloads, Recently played, the listener's collections with their first song's artwork, saved albums, playlists and artists; collapses to a 76px rail), `TopBar` (back / forward, page name once scrolled, the page's actions slot, the command key, the avatar that opens Settings), `BottomNav` (solid icon for the active tab), `PlayerBar`, and `EntityHeader` (artwork-coloured header with type label, display title, meta line and the action row, shared by album, playlist, collection and library-list pages). Icons have a 1.8 stroke; `HomeIcon`, `CompassIcon`, `SearchIcon`, `LibraryIcon` and `SparkleIcon` take `filled` for the active destination.
+Shell components: `Sidebar`, `TopBar`, `BottomNav`, `PlayerBar` (compact player on phones and tablets, the deck from 1024px), `NowPlayingRail`, and `EntityHeader` (artwork-coloured header with type label, display title, meta line and the action row, shared by album, playlist, collection and library-list pages). Icons have a 1.8 stroke; `HomeIcon`, `CompassIcon`, `SearchIcon`, `LibraryIcon` and `SparkleIcon` take `filled` for the active destination.
 
 ## Where things live
 
 | File | What it owns |
 | --- | --- |
 | `frontend/src/styles/index.css` | Every token (`:root`), the light / black / accent overrides, the glass and button primitives, the reduced-motion kill switch |
-| `frontend/src/styles/flow.css` | Component layout only: shell, top bar, sidebar, dock, shelves, track rows, heroes, Home Studio, VinaX AI layout. It defines no theme tokens, with one exception: it re-computes `--vx-topbar-h` for phones |
+| `frontend/src/styles/shell.css` | The frame and shared primitives (see the table above). It defines no theme tokens, with one exception: it re-computes `--vx-topbar-h` for phones |
 | `frontend/src/styles/festivals.css` | The festival themes. (8.0 removed `discovery.css`; Search and Discover styles live in `styles/pages/browse.css`) |
 | `frontend/tailwind.config.ts` | Maps the tokens to utility classes (`bg-ink-900`, `text-ember-400`, `text-page-title`, `rounded-card`, `min-h-touch`) |
 | `frontend/src/components/*` | The primitives: `Button`, `IconButton`, `Chip`, `Sheet`, `TopBar`, `PageHeader`, `SectionHeader`, `Shelf`, `MediaCard`, `SongRow`, `TrackMenu`, `Skeletons`, `States`, `Toasts` |
@@ -63,8 +80,8 @@ Raw ramps are stored as space-separated RGB triplets so Tailwind can apply alpha
 | | 600, 500 | Dividers, disabled, decorative icons |
 | | 400, 300 | Muted and secondary text. 400 is the floor for meaningful copy |
 | | 200, 100 | Body and primary text |
-| `--ember-*` | 600, 500, 400, 300 | The accent: calls to action, focus, active states. 400 is the accent text tier. Default is violet |
-| `--tide-*` | 500, 400 | Support colour for secondary links and reasons |
+| `--ember-*` | 600, 500, 400, 300 | The accent, "Iris": play, progress, focus, active states, chosen filters. 400 is the accent text tier. Default `140 120 255` |
+| `--tide-*` | 500, 400 | "Lagoon", the support colour: live and AI moments, secondary links, the Iris → Lagoon gradient. Default `34 211 238` |
 
 In the light theme the ink ramp inverts and every accent ramp re-pitches darker so accent text stays readable on a light canvas.
 
@@ -92,9 +109,9 @@ One family: Manrope variable, self-hosted at `/fonts/manrope-var.woff2`, weights
 
 | Token | Value | Tailwind class | Used for |
 | --- | --- | --- | --- |
-| `--vx-type-display` | `clamp(2rem, 3vw, 3rem)` | `text-display` | Entity heroes, the Home hero title |
-| `--vx-type-page` | `clamp(1.75rem, 2.5vw, 2.25rem)` | `text-page-title` | Page `h1` — the same token `PageHeader` renders |
-| `--vx-type-section` | `1.25rem` | `text-title` | Section and shelf headings |
+| `--vx-type-display` | `clamp(2.25rem, 4vw, 3.75rem)` | `text-display` | Entity heroes, the Home hero title |
+| `--vx-type-page` | `clamp(1.875rem, 3vw, 2.625rem)` | `text-page-title` | Page `h1` — the same token `PageHeader` renders |
+| `--vx-type-section` | `1.375rem` | `text-title` | Section and shelf headings |
 | `--vx-type-card` | `.9375rem` | `text-card-title` | Card titles |
 | `--vx-type-body` | `.9375rem` | `text-body` | Body copy |
 | `--vx-type-meta` | `.8125rem` | `text-meta` | Metadata, secondary rows, the top bar context label |
@@ -105,8 +122,8 @@ Headings track tight (`-0.035em` for display and page, `-0.025em` for sections) 
 ## Spacing, radii, elevation
 
 - Spacing: `--vx-space-1` to `--vx-space-16` on a 4px grid (4, 8, 12, 16, 20, 24, 32, 40, 48, 64). Tailwind's default spacing scale matches it.
-- Radii: `--vx-radius-control` 8px (buttons, inputs, nav links, tiles, track rows), `--vx-radius-card` 12px (artwork, cards), `--vx-radius-panel` 16px (heroes, panels). Tailwind adds `rounded-card` (0.75rem), `rounded-sheet` (1.25rem), `rounded-2xl` (0.875rem), `rounded-3xl` (1rem) and `rounded-pill`. Artist artwork is a circle.
-- Elevation is flat. `flow.css` removes shadows from glass cards, panels, the dock and the player bar; separation comes from surface tiers and hairlines. Overlays use `--vx-shadow-overlay`. Tailwind's `shadow-card`, `shadow-float` and `shadow-lift` are contact shadows only.
+- Radii: `--vx-radius-control` 10px (inputs, tiles), `--vx-radius-card` 14px (cards), `--vx-radius-panel` 20px (heroes, panels, the workspace sheet); actions and filters are pills, play buttons and artwork squircles (see 9.0 Encore above). Tailwind adds `rounded-card` (0.75rem), `rounded-sheet` (1.25rem), `rounded-2xl` (0.875rem), `rounded-3xl` (1rem) and `rounded-pill`. Artist artwork is a circle.
+- Elevation is mostly flat: `shell.css` removes shadows from glass cards and panels; separation comes from surface tiers and hairlines. The floating player deck and artwork carry a soft shadow (`--vx-deck-shadow`, `--vx-art-shadow`). Overlays use `--vx-shadow-overlay`. Tailwind's `shadow-card`, `shadow-float` and `shadow-lift` are contact shadows only.
 
 ## The medium control scale
 
@@ -173,8 +190,8 @@ It also skips events an overlay already handled (`defaultPrevented`). The rule f
 ## Motion
 
 - One easing, `--ease-calm` (`cubic-bezier(0.32, 0.72, 0, 1)`), and three durations: 140ms (`--vx-motion-fast`), 200ms (`--vx-motion-normal`), 320ms (`--transition-slow`).
-- Flow is quiet by design: `flow.css` switches off the dock bounce and the VinaX AI pulse, and removes glow shadows.
-- Two switches silence motion: the OS `prefers-reduced-motion` setting and the in-app "Reduce motion" setting, which sets `html.reduce-motion`. `index.css` collapses every animation and transition under that class; `flow.css` does the same for `.vx-shell` and `.ai-root` under either switch. Marquee text falls back to an ellipsis.
+- Encore is quiet by design: no bounce, no pulsing glow; cards lift 3px on hover and their play button rises in.
+- Two switches silence motion: the OS `prefers-reduced-motion` setting and the in-app "Reduce motion" setting, which sets `html.reduce-motion`. `index.css` collapses every animation and transition under that class; `shell.css` does the same for `.vx-shell` and `.ai-root` under either switch. Marquee text falls back to an ellipsis.
 - CSS cannot stop a scripted scroll. Every scripted scroll asks `frontend/src/utils/motion.ts` first: `reducedMotion()` is true for either switch, and `scrollBehavior()` returns `'auto'` or `'smooth'` accordingly. Pass `behavior: scrollBehavior()` to `scrollIntoView`, `scrollTo` and `scrollBy`; never hard-code `'smooth'`. The shelf arrows, synced lyrics, the tutorial runner and the VinaX AI thread already do.
 - `prefers-reduced-transparency` replaces glass surfaces with solid ones.
 

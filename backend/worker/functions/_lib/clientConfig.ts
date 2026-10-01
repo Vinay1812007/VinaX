@@ -29,7 +29,8 @@ export const CLIENT_READ_KEYS = [...CLIENT_KEYS, REC_CONFIG_KEY] as const;
 /**
  * The scorer's default weights — a mirror of
  * frontend/src/services/recommendation/weights.ts (SCORING_WEIGHTS_VERSION
- * 1.2.0), pinned by __tests__/recConfig.test.ts, which reads that file.
+ * 1.3.0: same values as 1.2.0, and since 9.0 every key is read by the
+ * scorer), pinned by __tests__/recConfig.test.ts, which reads that file.
  */
 export const REC_WEIGHT_DEFAULTS = {
   mood: 0.16, vibe: 0.1, language: 0.12, dialect: 0.08, genre: 0.1, energy: 0.1, tempo: 0.08,

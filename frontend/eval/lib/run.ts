@@ -21,6 +21,8 @@ export const SAFETY_CAP_MS = 20_000;
 
 export interface PlanLike {
   songs: Song[];
+  /** 7.2: publish the plan's side effects (reasons, seed memory) for the songs accepted. */
+  commit?: (accepted: Song[]) => void;
   picker: string;
   fallback: string | null;
   latencyMs: number;
@@ -72,6 +74,15 @@ export interface BatchRecord {
   inStyle: number | null;
   /** 8.3.0 — songs in the style still eligible when this batch was planned (the most it could have held). */
   styleAvailable: number | null;
+  /** 9.0.0 — shipped songs only an album page or an artist page could supply (no search or suggestion returns them). */
+  deepShipped: number;
+  /** 9.0.0 — shipped songs in the fixture's declared taste (null when it declares none). */
+  tasteHits: number | null;
+  /** 9.0.0 — shipped songs by an artist this sitting pushed away (two skips or more), and whether another lead was eligible. */
+  avoidedShipped: number;
+  avoidedAvoidable: boolean;
+  /** 9.0.0 — shipped songs another surface showed in the last week (null when the fixture records none). */
+  servedShipped: number | null;
 }
 
 export interface SessionRecord {
@@ -99,6 +110,12 @@ export interface RunEnv {
   applyFixture: (fixture: EvalFixture) => void;
   /** Build the recommendation context the player would build. */
   buildContext: (fixture: EvalFixture, salt: number, played: Song[]) => unknown;
+  /** 9.0.0 — the tree's served-songs memory (absent in trees that have none). */
+  recordServed?: (keys: string[]) => void;
+  /** 9.0.0 — the tree's memory of automatic picks' outcomes (absent in trees that have none). */
+  recordOutcome?: (song: Song, outcome: 'success' | 'miss') => void;
+  /** 9.0.0 — forget the recommendation memories (at the start of a sitting). */
+  resetMemory?: () => void;
 }
 
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
@@ -114,6 +131,8 @@ async function withCap<T>(p: Promise<T>, ms: number): Promise<{ value: T | null;
 }
 
 export interface BatchOutcome {
+  /** Publish the side effects of the order that shipped (null for the baseline's one-call entry point). */
+  commit: ((accepted: Song[]) => void) | null;
   queueReady: Song[];
   final: Song[];
   /** What the pipeline itself counted as a discovery (7.2 plans only). */
@@ -138,9 +157,10 @@ export async function planOnce(engine: EngineLike, seed: Song, ctx: unknown, opt
     const plan = planned.value;
     if (!plan) {
       controller.abort();
-      return { queueReady: [], final: [], discoveryIds: null, picker: 'none', fallback: 'timeout', refinement: 'none', queueReadyMs, finalMs: queueReadyMs, engineLatencyMs: null, relaxed: [], timedOut: true };
+      return { commit: null, queueReady: [], final: [], discoveryIds: null, picker: 'none', fallback: 'timeout', refinement: 'none', queueReadyMs, finalMs: queueReadyMs, engineLatencyMs: null, relaxed: [], timedOut: true };
     }
     let final = plan.songs;
+    let commit = plan.commit ?? null;
     let picker = plan.picker;
     let refinement = 'none';
     let finalMs = queueReadyMs;
@@ -153,12 +173,13 @@ export async function planOnce(engine: EngineLike, seed: Song, ctx: unknown, opt
       } else if ('songs' in refined.value) {
         refinement = 'applied';
         final = refined.value.songs;
+        commit = refined.value.commit ?? commit;
         picker = 'ai';
       } else {
         refinement = refined.value.rejected;
       }
     }
-    return { queueReady: plan.songs, final, discoveryIds: plan.discoveryIds, picker, fallback: plan.fallback, refinement, queueReadyMs, finalMs, engineLatencyMs: plan.latencyMs, relaxed: [...plan.relaxed], timedOut: false };
+    return { commit, queueReady: plan.songs, final, discoveryIds: plan.discoveryIds, picker, fallback: plan.fallback, refinement, queueReadyMs, finalMs, engineLatencyMs: plan.latencyMs, relaxed: [...plan.relaxed], timedOut: false };
   }
   // The baseline: one call that returns the whole continuation, AI included.
   const out = await withCap(engine.recommendNextSongs(seed, ctx, options), capMs);
@@ -166,6 +187,7 @@ export async function planOnce(engine: EngineLike, seed: Song, ctx: unknown, opt
   const songs = out.value ?? [];
   const aiShipped = songs.filter((s) => ai.proposed.has(s.id)).length;
   return {
+    commit: null,
     queueReady: songs,
     final: songs,
     discoveryIds: null,
@@ -191,6 +213,10 @@ export function armFixture(fixture: EvalFixture, seedId: string, over: { suggest
     searchNeverAfter: over.searchNeverAfter ?? null,
     slow: over.slow ?? false,
     styleSearch: fixture.style ? { pattern: fixture.style.pattern, songs: fixture.style.search } : null,
+    albums: fixture.albums ?? {},
+    similarArtists: fixture.similarArtists ?? {},
+    artistSongs: fixture.artistSongs ?? [],
+    embeddings: fixture.embeddings ?? {},
   });
   resetAi(over.ai ?? fixture.ai);
 }
@@ -209,6 +235,8 @@ function ruleContext(fixture: EvalFixture, queue: Song[], played: Song[], seed: 
     softMuted: new Set(Object.keys(fixture.profile.softMuted).map((n) => leadName({ artists: [{ id: '', name: n }], subtitle: n } as Song))),
     recentIds,
     recentKeys,
+    sittingSkippedIds: new Set(fixture.sessionIntent?.skippedSongIds ?? []),
+    unplayableIds: new Set(fixture.unplayableIds ?? []),
     queuedIds: new Set(queue.map((s) => s.id)),
     queuedKeys: new Set(queue.map((s) => workKey(s))),
     lock: fixture.queueLanguages === 'mix' ? null : fixture.seed.language && fixture.seed.language !== 'unknown' ? fixture.seed.language : null,
@@ -232,10 +260,18 @@ function knownArtists(fixture: EvalFixture, played: Song[]): Set<string> {
 /** One sitting of `fixture.batches` continuations. */
 export async function runSession(engine: EngineLike, fixture: EvalFixture, salt: number, env: RunEnv, options: Record<string, unknown> = {}): Promise<SessionRecord> {
   env.applyFixture(fixture);
+  env.resetMemory?.();
   const queue: Song[] = [fixture.seed];
   const played: Song[] = [];
   const batches: BatchRecord[] = [];
-  const poolAll = [...fixture.related, ...fixture.search];
+  const albumSongs = Object.values(fixture.albums ?? {}).flat();
+  const poolAll = [...fixture.related, ...fixture.search, ...albumSongs, ...(fixture.artistSongs ?? [])];
+  const shallow = new Set([...fixture.related, ...fixture.search].map((s) => s.id));
+  const deep = new Set(poolAll.filter((s) => !shallow.has(s.id)).map((s) => s.id));
+  const targets = fixture.tasteTargets ? new Set(fixture.tasteTargets) : null;
+  const servedIds = fixture.served ? new Set(fixture.served.map((s) => s.id)) : null;
+  // The leads this sitting pushed away: two skips or more (an artist pull of −0.6 or below).
+  const avoided = new Set(Object.entries(fixture.sessionIntent?.artistPull ?? {}).filter(([, pull]) => pull <= -0.6).map(([name]) => leadName({ artists: [{ id: '', name }], subtitle: name } as Song)));
   const appetite = fixture.sessionIntent?.discoveryAppetite ?? 0;
   const share = clamp(DISCOVERY_SHARE[fixture.discoveryMode] + appetite * 0.15, 0, 0.5);
 
@@ -243,7 +279,9 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
     // The player asks when one song is left after the current one. Each
     // continuation starts from clean stores and an empty provider cache: in a
     // real sitting these are minutes apart, well past the cache's own life.
-    env.applyFixture(fixture);
+    // 9.0.0 — a fixture with `memory` keeps the recommendation memories for the whole sitting.
+    if (!fixture.memory || b === 0) env.applyFixture(fixture);
+    if (fixture.served && env.recordServed) env.recordServed(fixture.served.map((s) => env.songKey(s)));
     const seed = queue.length >= 2 ? queue[queue.length - 2] : queue[0];
     armFixture(fixture, seed.id);
     const ctx = env.buildContext(fixture, salt, played);
@@ -298,8 +336,19 @@ export async function runSession(engine: EngineLike, fixture: EvalFixture, salt:
       timedOut: outcome.timedOut,
       inStyle: style ? outcome.final.filter((s) => inEvalStyle(s, style)).length : null,
       styleAvailable: style ? new Set(stylePool.map(workKey)).size : null,
+      deepShipped: outcome.final.filter((s) => deep.has(s.id)).length,
+      tasteHits: targets ? outcome.final.filter((s) => targets.has(s.id)).length : null,
+      avoidedShipped: outcome.final.filter((s) => avoided.has(leadName(s))).length,
+      avoidedAvoidable: avoided.size > 0 && pool.some((s) => !avoided.has(leadName(s))),
+      servedShipped: servedIds ? outcome.final.filter((s) => servedIds.has(s.id)).length : null,
     });
     if (!outcome.final.length) break;
+    // 9.0.0 — what the player does with an accepted continuation: commit it, and
+    // (for a memory sitting) the listener finishes the first three and skips the fourth.
+    if (fixture.memory) {
+      outcome.commit?.(outcome.final);
+      outcome.final.forEach((s, i) => { if (i < 4) env.recordOutcome?.(s, i < 3 ? 'success' : 'miss'); });
+    }
     queue.push(...outcome.final);
     // By the time the next stretch is asked for, everything before that stretch's seed has played.
     played.length = 0;

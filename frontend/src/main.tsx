@@ -4,8 +4,8 @@ import ReactDOM from 'react-dom/client';
 import { Capacitor } from '@capacitor/core';
 import App from './App';
 import './styles/index.css';
-import './styles/flow.css';
-import './styles/stage.css';
+import './styles/shell.css';
+import './styles/features.css';
 import './styles/festivals.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

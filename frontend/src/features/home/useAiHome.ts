@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Song } from '@/types';
 import { searchSongs, searchSongsPage } from '@/services/api';
@@ -14,18 +13,23 @@ import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { designHomeShelves, loadShownSongIds, recordShownShelves, recordShownSongs, type AiShelfDefinition } from '@/services/ai/home';
 import { biasUnseenFirst, rotatePage } from './homeVariety';
 import { useShelfSafety } from './useShelfSafety';
+import { HOME_TTL_MS, useHomeGeneration } from './homeRefresh';
 
 /**
  * v6.2.0 / v6.4.0 / v6.5.0 — "Designed for you": the AI designs titled
  * shelves (services/ai/home.ts) and each one is resolved against the real
- * catalogue here. Since 6.5 (the 3.9 behaviour) Home is REBUILT ON EVERY
- * OPEN: a per-mount visit nonce keys the build, each shelf's query reads a
- * rotated catalogue page for that visit, and songs this listener was shown
- * recently sink below unseen ones — so two consecutive opens differ while
- * staying personal. It also steers the model away from the last 30 shelf
- * titles and the last 200 songs it showed. Empty (the block renders nothing)
- * when the AI is off, unconfigured or slow — the ordinary shelves are
- * unaffected.
+ * catalogue here. Each shelf's query reads a rotated catalogue page, and
+ * songs this listener was shown recently sink below unseen ones; the model is
+ * steered away from the last 30 shelf titles and the last 200 songs it
+ * showed. Empty (the block renders nothing) when the AI is off, unconfigured
+ * or slow — the ordinary shelves are unaffected.
+ *
+ * 9.0.0 — built once per Home GENERATION (./homeRefresh.ts), not once per
+ * visit: 6.5 rebuilt on every open (a random nonce per mount, no stale time),
+ * so returning to Home a minute later paid for another AI design and swapped
+ * every shelf. The generation moves on an explicit refresh or when Home opens
+ * after half an hour; the rotated pages follow it, so a new generation still
+ * reads new pages.
  */
 export interface AiShelf extends AiShelfDefinition {
   songs: Song[];
@@ -35,7 +39,8 @@ const MIN_SONGS = 4;
 const PAGE_SIZE = 18;
 const ROTATE_PAGES = 3;
 
-const newVisitNonce = (): number => Math.floor(Math.random() * 1_000_000);
+/** A generation's rotation salt: deterministic, so the same generation reads the same pages. */
+const generationNonce = (gen: number): number => (gen * 7919) % 1_000_000;
 
 /** One shelf's catalogue read for this visit: a rotated page, with page 1 as the floor when it runs thin. */
 async function fetchShelfSongs(query: string, page: number, signal?: AbortSignal): Promise<Song[]> {
@@ -69,7 +74,7 @@ export function belongsOnShelf(song: Song, shelf: Pick<AiShelfDefinition, 'langu
   return true;
 }
 
-export async function designAndResolve(signal?: AbortSignal, visitNonce = newVisitNonce()): Promise<AiShelf[]> {
+export async function designAndResolve(signal?: AbortSignal, visitNonce = generationNonce(1)): Promise<AiShelf[]> {
   const sections = await designHomeShelves(signal, visitNonce);
   if (!sections.length) return [];
   const settings = useSettingsStore.getState();
@@ -113,25 +118,24 @@ export function useAiHome(enabled: boolean): AiHomeResult {
   const round = useDiscoveryStore((s) => s.round);
   const hasTaste = useHistoryStore((s) => s.entries.length > 0);
   const allowed = useShelfSafety();
-  // A new nonce per mount: every Home open designs afresh (never reuses the
-  // last build), while the same open keeps its shelves through re-renders.
-  const [visitNonce] = useState(newVisitNonce);
+  const gen = useHomeGeneration();
   const query = useQuery<AiShelf[]>({
     // v7.0.0 — the profile stamp is NOT in the key: it changes on every play,
     // skip and like, and each change used to throw the shelves away and spend
-    // another design call while Home was simply open. One design per Home
-    // open (the nonce), plus the settings that change what should be designed.
+    // another design call while Home was simply open.
     // 7.2.0 — safety settings (Kid mode, muted languages, hidden songs and
     // artists, soft mutes) are NOT in the key either: they are applied below,
     // on every render, to cached and placeholder shelves alike, so a newly
     // forbidden song disappears at once without another design call.
-    queryKey: ['ai-home-shelves', visitNonce, pinned, round],
+    // 9.0.0 — one design per Home generation (refresh or half an hour), plus
+    // the settings that change what should be designed.
+    queryKey: ['ai-home-shelves', gen, pinned, round],
     enabled: enabled && on && (hasTaste || pinned.length > 0),
-    staleTime: 0,
-    gcTime: 5 * 60_000,
+    staleTime: HOME_TTL_MS,
+    gcTime: 2 * HOME_TTL_MS,
     placeholderData: keepPreviousData,
     retry: false,
-    queryFn: ({ signal }) => designAndResolve(signal, visitNonce),
+    queryFn: ({ signal }) => designAndResolve(signal, generationNonce(gen)),
   });
   // Every render, not memoised: the server blocklist is not a store, so the
   // next render after it loads must see it (a few dozen songs at most).

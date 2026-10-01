@@ -1,6 +1,6 @@
 # VinaX documentation
 
-This is the index of the current documentation. Everything here describes the product and the code as they are now (8.2). Dated records — release write-ups, audits, phase plans — are in [history/](history/README.md) and are not kept up to date. Start with the [project README](../README.md) if you have not run the app yet.
+This is the index of the current documentation. Everything here describes the product and the code as they are now (9.0). Dated records — release write-ups, audits, phase plans — are in [history/](history/README.md) and are not kept up to date. Start with the [project README](../README.md) if you have not run the app yet.
 
 ## For people working on the code
 

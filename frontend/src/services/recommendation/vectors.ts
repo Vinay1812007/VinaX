@@ -49,6 +49,19 @@ const MAX_HISTORY = 200;
 const PLAY_WEIGHT = { completed: 1, skipped: -0.5, other: 0.25 } as const;
 /** The learned-embedding taste needs at least this many taste songs with a cached vector. */
 export const MIN_EMBEDDED_TASTE_SONGS = 3;
+/**
+ * 9.0.0 — plays younger than this are the listener's RECENT taste; older plays
+ * and favourites are the LONG-TERM taste. Recent listening may hold at most
+ * RECENT_SHARE of the taste's weight once the long-term taste weighs at least
+ * MIN_LONG_TERM_MASS (three favourites, say), so one unusual week (a party, a
+ * binge on one new artist) cannot take the taste over, however many plays it
+ * holds. Below the cap the taste is the same weighted sum as in 8.x, where
+ * fifty plays of one night outweighed a few dozen favourites. A thin or very
+ * old long-term taste is not protected: then recent listening IS the taste.
+ */
+export const RECENT_WINDOW_MS = 7 * 86_400_000;
+export const RECENT_SHARE = 0.4;
+export const MIN_LONG_TERM_MASS = 3;
 
 /** FNV-1a, 32-bit. */
 function hash(text: string): number {
@@ -111,35 +124,64 @@ export function songVector(song: Song, classified: readonly SongFeature[] = [], 
   return unit(vec);
 }
 
+export interface TasteSong {
+  song: Song;
+  weight: number;
+  /** 9.0.0 — 'recent' for a play inside RECENT_WINDOW_MS; favourites and older plays are 'long'. */
+  part: 'long' | 'recent';
+}
+
 /**
  * The songs that make up the listener's taste, with their weights:
- * favourites at 1, then recent plays decayed by age (half-life
- * TASTE_HALF_LIFE_MS) — a finished play adds, a skip subtracts, anything
- * else adds a little. `now` defaults to the clock.
+ * favourites at 1, then plays decayed by age (half-life TASTE_HALF_LIFE_MS)
+ * — a finished play adds, a skip subtracts, anything else adds a little.
+ * `now` defaults to the clock.
  */
-export function tasteSongs(favorites: readonly Song[], history: readonly HistoryEntry[], now = Date.now()): Array<{ song: Song; weight: number }> {
-  const out: Array<{ song: Song; weight: number }> = [];
-  for (const song of favorites.slice(0, MAX_FAVORITES)) if (song?.id) out.push({ song, weight: 1 });
+export function tasteSongs(favorites: readonly Song[], history: readonly HistoryEntry[], now = Date.now()): TasteSong[] {
+  const out: TasteSong[] = [];
+  for (const song of favorites.slice(0, MAX_FAVORITES)) if (song?.id) out.push({ song, weight: 1, part: 'long' });
   for (const e of history.slice(0, MAX_HISTORY)) {
     if (!e?.song?.id) continue;
     const base = e.completed ? PLAY_WEIGHT.completed : isSkippedPlay(e) ? PLAY_WEIGHT.skipped : PLAY_WEIGHT.other;
     const age = Math.max(0, now - (Number.isFinite(e.ts) ? e.ts : now));
-    out.push({ song: e.song, weight: base * Math.pow(0.5, age / TASTE_HALF_LIFE_MS) });
+    out.push({ song: e.song, weight: base * Math.pow(0.5, age / TASTE_HALF_LIFE_MS), part: age < RECENT_WINDOW_MS ? 'recent' : 'long' });
   }
   return out;
 }
 
+/**
+ * 9.0.0 — the weighted sum of the taste songs' vectors, with the recent part
+ * scaled down when it would hold more than RECENT_SHARE of the weight of a
+ * long-term taste of at least MIN_LONG_TERM_MASS. Unit length; null with
+ * nothing to go on.
+ */
+function blendParts(songs: readonly TasteSong[], vectorOf: (song: Song) => Float32Array | null, dims: number): Float32Array | null {
+  const long = new Float32Array(dims);
+  const recent = new Float32Array(dims);
+  let longMass = 0;
+  let recentMass = 0;
+  for (const { song, weight, part } of songs) {
+    const v = vectorOf(song);
+    if (!v || v.length !== dims) continue;
+    const sum = part === 'recent' ? recent : long;
+    for (let i = 0; i < dims; i++) sum[i] += v[i] * weight;
+    if (part === 'recent') recentMass += Math.abs(weight);
+    else longMass += Math.abs(weight);
+  }
+  const capped = longMass >= MIN_LONG_TERM_MASS && recentMass > 0 && recentMass / (longMass + recentMass) > RECENT_SHARE;
+  const scale = capped ? (RECENT_SHARE / (1 - RECENT_SHARE)) * (longMass / recentMass) : 1;
+  for (let i = 0; i < dims; i++) long[i] += recent[i] * scale;
+  return unit(long);
+}
+
 /** The listener's taste in the on-device space: a unit vector, or null with nothing to go on. */
 export function tasteVector(favorites: readonly Song[], history: readonly HistoryEntry[], now = Date.now()): Float32Array | null {
-  const sum = new Float32Array(VECTOR_DIM);
   const vectors = new Map<string, Float32Array | null>();
-  for (const { song, weight } of tasteSongs(favorites, history, now)) {
+  const vectorOf = (song: Song): Float32Array | null => {
     if (!vectors.has(song.id)) vectors.set(song.id, songVector(song));
-    const v = vectors.get(song.id);
-    if (!v) continue;
-    for (let i = 0; i < VECTOR_DIM; i++) sum[i] += v[i] * weight;
-  }
-  return unit(sum);
+    return vectors.get(song.id) ?? null;
+  };
+  return blendParts(tasteSongs(favorites, history, now), vectorOf, VECTOR_DIM);
 }
 
 /**
@@ -154,20 +196,27 @@ export function embeddingTasteVector(
   lookup: (id: string) => Float32Array | null,
   now = Date.now(),
 ): Float32Array | null {
-  let sum: Float32Array | null = null;
+  let dims = 0;
   const seen = new Set<string>();
-  for (const { song, weight } of tasteSongs(favorites, history, now)) {
+  const cached = new Map<string, Float32Array | null>();
+  const vectorOf = (song: Song): Float32Array | null => {
+    if (cached.has(song.id)) return cached.get(song.id) ?? null;
     let v: Float32Array | null;
     try {
       v = lookup(song.id);
     } catch {
       v = null;
     }
-    if (!v || !v.length) continue;
-    if (!sum) sum = new Float32Array(v.length);
-    if (v.length !== sum.length) return null;
+    cached.set(song.id, v && v.length ? v : null);
+    return v && v.length ? v : null;
+  };
+  const songs = tasteSongs(favorites, history, now);
+  for (const { song } of songs) {
+    const v = vectorOf(song);
+    if (!v) continue;
+    if (!dims) dims = v.length;
+    if (v.length !== dims) return null;
     seen.add(song.id);
-    for (let i = 0; i < v.length; i++) sum[i] += v[i] * weight;
   }
-  return sum && seen.size >= MIN_EMBEDDED_TASTE_SONGS ? unit(sum) : null;
+  return dims && seen.size >= MIN_EMBEDDED_TASTE_SONGS ? blendParts(songs, vectorOf, dims) : null;
 }

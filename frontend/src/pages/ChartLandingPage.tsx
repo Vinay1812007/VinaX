@@ -12,7 +12,10 @@ import { ListSkeleton } from '@/components/Skeletons';
 import { ErrorState } from '@/components/States';
 import { HUB_LANGUAGES, languageLabel } from '@/constants/languages';
 import { SectionHeader } from '@/components/SectionHeader';
-import { PlayIcon } from '@/components/Icons';
+import { ChevronRightIcon, ShuffleIcon, WaveformIcon } from '@/components/Icons';
+import { EntityAction, EntityHeader, EntityMeta, PlayFab, songsLabel } from '@/components/EntityHeader';
+import { HubCover } from '@/features/discover/HubCover';
+import { shuffledSongs } from '@/features/search/workspace';
 import '@/styles/pages/browse.css';
 
 export type ChartVariant = 'top' | 'trending' | 'most-searched';
@@ -32,7 +35,7 @@ interface VariantConfig {
 const CONFIG: Record<ChartVariant, VariantConfig> = {
   top: {
     path: '/top-songs',
-    h1: 'Top Songs',
+    h1: 'Top songs',
     title: 'Top Songs — Most Popular Right Now',
     desc: `The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, no login, updated continuously.`,
     seed: `top hit songs india ${YEAR}`,
@@ -40,7 +43,7 @@ const CONFIG: Record<ChartVariant, VariantConfig> = {
   },
   trending: {
     path: '/trending',
-    h1: 'Trending Songs',
+    h1: 'Trending songs',
     title: 'Trending Songs This Week',
     desc: `Popular Telugu, Hindi, Tamil, Punjabi and more on VinaX, from the catalogue. Free streaming, no login, refreshed continuously.`,
     seed: `trending songs india this week ${YEAR}`,
@@ -48,7 +51,7 @@ const CONFIG: Record<ChartVariant, VariantConfig> = {
   },
   'most-searched': {
     path: '/most-searched',
-    h1: 'Most Searched Songs',
+    h1: 'Most searched songs',
     title: 'Most Searched Songs & Queries',
     desc: `The songs and searches people look for most on VinaX — across Telugu, Hindi, Tamil and more. Discover what everyone is hunting for. Free, no login.`,
     seed: `most searched popular songs india ${YEAR}`,
@@ -114,19 +117,29 @@ export default function ChartLandingPage({ variant }: { variant: ChartVariant })
 
   return (
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
-      <header className="vx-page-header !mb-4">
-        <div className="min-w-0">
-          <Link to="/charts" className="vx-hub-crumb">Charts</Link>
-          <h1>{cfg.h1}</h1>
-        </div>
-      </header>
-      {songs.length > 0 && (
-        <div className="vx-action-row !mt-0">
-          <button type="button" onClick={() => playQueue(songs, 0)} className="vx-play-fab" aria-label="Play all">
-            <PlayIcon />
-          </button>
-        </div>
-      )}
+      <Link to="/charts" className="bx-crumb">
+        <ChevronRightIcon /> Charts
+      </Link>
+      <div className="vx-tone-1">
+        <EntityHeader
+          kind="Chart"
+          title={cfg.h1}
+          titleText={cfg.h1}
+          tone="var(--tone)"
+          art={<HubCover songs={songs} icon={<WaveformIcon />} />}
+          meta={<EntityMeta items={['From the catalogue', songs.length > 0 && songsLabel(songs.length)]} />}
+          actions={
+            songs.length > 0 && (
+              <>
+                <PlayFab label="Play all" onClick={() => playQueue(songs, 0)} />
+                <EntityAction label="Shuffle" onClick={() => playQueue(shuffledSongs(songs), 0)}>
+                  <ShuffleIcon />
+                </EntityAction>
+              </>
+            )
+          }
+        />
+      </div>
 
       {cfg.showSearches && <SearchChips />}
 
@@ -152,7 +165,7 @@ export default function ChartLandingPage({ variant }: { variant: ChartVariant })
       </section>
 
       <section className="vx-section" aria-label="Top songs by language">
-        <SectionHeader title="Top songs by language" />
+        <SectionHeader title="Top songs by language" explanation="Every language hub, and the other lists" />
         <div className="vx-chip-row">
           {HUB_LANGUAGES.map((l) => (
             <Link key={l} to={`/${l}-songs`} className="vx-link-chip">

@@ -69,7 +69,7 @@ export default function AlbumPage() {
         }
         actions={
           <>
-            {album.songs.length > 0 && <PlayFab label="Play all" onClick={() => playQueue(album.songs, 0)} />}
+            {album.songs.length > 0 && <PlayFab size="lg" label="Play all" onClick={() => playQueue(album.songs, 0)} />}
             {album.songs.length > 0 && (
               <EntityAction label="Shuffle play" onClick={shufflePlay}><ShuffleIcon /></EntityAction>
             )}

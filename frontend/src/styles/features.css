@@ -1,0 +1,145 @@
+/* ============================================================================
+   VinaX 9 — global feature styles.
+
+   What is left of 7.0's flow.css once 9.0 moved the shell and the shared
+   primitives into shell.css: a few feature surfaces that several screens
+   (or the first paint) use and that have no page stylesheet of their own —
+   Home Studio, the listening guide, the queue's ownership marker. A
+   feature that gets its own page stylesheet takes its rules with it (9.0:
+   the VinaX AI pieces moved to styles/ai.css, the AI playlist studio to
+   styles/pages/radio.css, the entity hero's loading skeleton to
+   pages/library.css with the entity pages).
+   ========================================================================= */
+/* VinaX Flow: component layout. Theme tokens live only in index.css. */
+/* Home Studio: an optional, quiet editing surface that keeps the listening
+   page useful even when the AI is offline. */
+.home-studio {
+  margin: 0 0 24px;
+  border: 1px solid rgb(var(--ink-100) / 0.12);
+  border-radius: var(--vx-radius-control);
+  background: var(--vx-surface);
+  overflow: hidden;
+}
+.home-studio > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  min-height: 54px;
+  padding: 0 18px;
+  cursor: pointer;
+  color: rgb(var(--ink-200));
+  font-size: 13px;
+  list-style: none;
+}
+.home-studio > summary::-webkit-details-marker { display: none; }
+.home-studio > summary > span { display: flex; align-items: center; gap: 9px; }
+.home-studio > summary strong { color: rgb(var(--ink-100)); }
+.home-studio > summary > span:last-child { color: rgb(var(--ink-400)); font-size: 12px; }
+.home-studio[open] > summary { border-bottom: 1px solid rgb(var(--ink-100) / 0.1); }
+.home-studio-body { display: grid; grid-template-columns: minmax(230px, .7fr) minmax(0, 1.3fr); gap: 28px; padding: 26px; }
+.home-studio-intro h2 { margin: 8px 0 12px; font-size: clamp(25px, 3vw, 36px); line-height: .98; letter-spacing: -.06em; }
+.home-studio-intro > p:last-child { max-width: 300px; color: rgb(var(--ink-300)); font-size: 13px; line-height: 1.7; }
+.home-studio-editor { min-width: 0; }
+.home-studio-editor > label { display: block; margin: 0 0 7px; color: rgb(var(--ink-300)); font-size: 12px; font-weight: 700; }
+.home-studio-editor textarea, .home-studio-editor input:not([type="checkbox"]) { width: 100%; border: 1px solid rgb(var(--ink-100) / 0.14); border-radius: 12px; background: rgb(var(--ink-950) / .38); color: rgb(var(--ink-100)); padding: 11px 12px; outline: none; resize: vertical; font: inherit; font-size: 13px; }
+.home-studio-editor textarea:focus, .home-studio-editor input:not([type="checkbox"]):focus { border-color: rgb(var(--ember-400) / .7); box-shadow: 0 0 0 3px rgb(var(--ember-500) / .12); }
+.home-studio-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.home-studio-actions button { min-height: 44px; padding: 0 15px; }
+.home-studio-notice { min-height: 18px; margin: 7px 0 18px; color: rgb(var(--ink-400)); font-size: 12px; }
+.home-studio-shelves { margin: 10px 0 18px; padding: 0; list-style: none; border: 1px solid rgb(var(--ink-100) / .1); border-radius: 12px; overflow: hidden; }
+.home-studio-shelves li { display: grid; grid-template-columns: 24px minmax(0, 1fr) 44px 44px; align-items: center; gap: 7px; min-height: 40px; padding: 0 8px; border-bottom: 1px solid rgb(var(--ink-100) / .07); }
+.home-studio-shelves li:last-child { border-bottom: 0; }
+.home-studio-shelves label { display: flex; align-items: center; gap: 9px; min-width: 0; color: rgb(var(--ink-200)); font-size: 12px; }
+.home-studio-shelves label input { accent-color: rgb(var(--ember-400)); }
+.home-studio-number { color: rgb(var(--ink-500)); font: 10px ui-monospace, monospace; }
+.home-studio-shelves button { min-height: 44px; border-radius: 8px; border: 1px solid rgb(var(--ink-100) / .1); background: transparent; color: rgb(var(--ink-300)); cursor: pointer; }
+.home-studio-shelves button:hover:not(:disabled) { background: rgb(var(--ink-100) / .08); color: rgb(var(--ink-100)); }
+.home-studio-shelves button:disabled { opacity: .25; cursor: default; }
+@media (max-width: 700px) { .home-studio-body { grid-template-columns: 1fr; gap: 14px; padding: 20px 16px; } .home-studio-intro > p:last-child { max-width: 100%; } }
+/* Home Studio — shelves the owner turned off for everyone: visible, greyed, not toggleable. */
+.home-studio-shelves label.home-studio-locked { color: rgb(var(--ink-500)); }
+.home-studio-shelves label.home-studio-locked input { cursor: not-allowed; }
+.home-studio-lock-note { color: rgb(var(--ink-500)); font-size: 11px; white-space: nowrap; }
+.vx-listening-guide h2 {
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+.vx-text-action {
+  margin-top: 18px;
+  min-height: 40px;
+  color: rgb(var(--ember-400));
+  font-size: 12px;
+  font-weight: 700;
+}
+.vx-listening-guide {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 24px 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--glass-border-strong);
+}
+.vx-listening-guide p:not(.vx-eyebrow) {
+  font-size: 12px;
+  color: rgb(var(--ink-400));
+  margin-top: 8px;
+  line-height: 1.7;
+}
+.vx-guide-actions {
+  display: flex;
+  flex-direction: column;
+}
+.vx-guide-actions a,
+.vx-guide-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  gap: 10px;
+  min-height: 42px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.vx-guide-actions span {
+  color: rgb(var(--ember-400));
+}
+.vx-destinations { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 32px; }
+.vx-destinations a { display: flex; align-items: center; gap: 10px; padding: 10px 14px; min-height: var(--vx-tile-h); background: var(--vx-surface-raised); border-radius: var(--vx-radius-control); font-size: var(--vx-type-meta); font-weight: 650; }
+.vx-destinations a:hover { background: var(--vx-bg-hover); }
+.vx-destinations svg { color: var(--vx-accent-hover); flex-shrink: 0; }
+.vx-home .vx-hero { display: flex; align-items: center; gap: 24px; min-height: 216px; padding: 24px; margin: 0 0 24px; border-radius: var(--vx-radius-panel); background: var(--vx-surface-raised); border: 1px solid var(--vx-border); }
+.vx-hero-cover { width: 176px; height: 176px; object-fit: cover; border-radius: var(--vx-radius-card); }
+.vx-hero-copy { min-width: 0; flex: 1; }
+.vx-hero-title { font-size: var(--vx-type-display); line-height: 1.15; letter-spacing: -.035em; font-weight: 750; }
+.vx-home-opening { margin-bottom: 24px; }
+.vx-quick-pick { display: flex; align-items: center; gap: 12px; min-width: 0; overflow: hidden; padding-right: 12px; text-align: left; background: var(--vx-surface-raised); border-radius: var(--vx-radius-control); }
+.vx-quick-pick:hover { background: var(--vx-bg-hover); }
+.vx-quick-pick img { width: 56px; height: 56px; object-fit: cover; }
+.vx-quick-pick span { min-width: 0; }
+.vx-journeys { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+.vx-journeys a { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 0; flex: 1; }
+.vx-journeys svg { width: 20px; color: var(--vx-accent); }
+.vx-journeys strong { font-size: var(--vx-type-meta); }
+.vx-journeys span { display: block; font-size: var(--vx-type-caption); color: var(--vx-text-muted); }
+.vx-fresh-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--vx-type-meta); color: var(--vx-text-secondary); }
+.vx-wave-loader { display: flex; align-items: center; gap: 3px; height: 24px; }
+.vx-wave-loader i { width: 3px; height: 14px; background: var(--vx-accent); border-radius: 4px; }
+@media (max-width: 767px) {
+  .vx-home .vx-hero { gap: 16px; padding: 16px; min-height: 0; align-items: start; }
+  .vx-hero-cover { width: 88px; height: 88px; }
+  .vx-hero-title { font-size: 1.5rem; }
+  .vx-hero-copy > p { font-size: var(--vx-type-meta); }
+  .vx-destinations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vx-destinations a { padding: 10px 12px; }
+}
+
+/* 9.0 — the player's surfaces (.vx-now-playing, the panel, the queue's
+   ownership marker, the Up next card's step-aside) live with the player:
+   styles/pages/player.css and the components themselves. The language grid
+   moved to pages/browse.css with the browse pages. */
+
+.home-studio:not([open]) { border-color: transparent; background: transparent; margin-bottom: 12px; }
+.home-studio:not([open]) > summary { min-height: 44px; padding: 0; }
+.home-studio-intro h2 { font-size: var(--vx-type-section); line-height: 1.3; letter-spacing: -.025em; }

@@ -30,7 +30,7 @@ The browser suite serves `dist/`, so build first. It needs its test browser (`np
 
 | To change | Edit |
 | --- | --- |
-| Design tokens and the Flow look | `src/styles/index.css`, `src/styles/flow.css` — see [../docs/design-system.md](../docs/design-system.md) |
+| Design tokens and the Encore look | `src/styles/index.css` (tokens), `src/styles/shell.css` (the frame and shared primitives), `src/styles/pages/*.css` — see [../docs/design-system.md](../docs/design-system.md) |
 | The shell (sidebar, top bar, dock, overlays) | `src/layouts/AppLayout.tsx`, `src/components/TopBar.tsx`, `src/components/BottomNav.tsx`, `src/components/Sidebar.tsx` |
 | Routes | `src/router/index.tsx` |
 | Home shelves | `src/pages/HomePage.tsx`, `src/features/home/` |

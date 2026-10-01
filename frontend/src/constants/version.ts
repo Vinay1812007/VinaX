@@ -3,11 +3,11 @@
  * onboarding) never drags the full changelog history into the first-load
  * bundle. Bumped every release alongside package.json and the changelog.
  */
-export const LATEST_VERSION = '8.6.0';
+export const LATEST_VERSION = '9.0.0';
 
 /**
  * Marketing display name for the release — what listeners see everywhere a
  * version shows in the UI (Settings, About, What's New). Internal semver
  * (LATEST_VERSION) keeps driving update checks and release hygiene.
  */
-export const DISPLAY_VERSION = 'VinaX 8.6';
+export const DISPLAY_VERSION = 'VinaX 9.0';

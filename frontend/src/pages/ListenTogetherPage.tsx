@@ -2,6 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
+import { StepList } from '@/features/settings/StepList';
+import { ArtistAvatar } from '@/features/stats/artwork';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { createRoom, updateRoom, heartbeat, leaveRoom, endRoom, getRoom, requestSong, sendReaction, REACTION_EMOJI, type RoomReaction, type RoomTrack } from '@/services/together';
 import { searchSongs } from '@/services/api';
@@ -29,20 +32,23 @@ function AddSong({ label, onPick }: { label: string; onPick: (s: Song) => void }
     return () => window.clearTimeout(t);
   }, [q]);
   return (
-    <section className="vx-sec-block">
+    <section className="vx-sec-block" aria-label={label}>
       <h2 className="vx-sec-title">{label}</h2>
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search songs to add"
         aria-label={label}
-        className="vx-field"
+        type="search"
+        className="vx-sec-field"
       />
       {results.length > 0 && (
         <ul className="vx-group mt-3">
           {results.map((s) => (
             <li key={s.id}>
               <button
+                type="button"
+                aria-label={`Add ${s.title}`}
                 onClick={() => {
                   onPick(s);
                   setQ('');
@@ -52,10 +58,10 @@ function AddSong({ label, onPick }: { label: string; onPick: (s: Song) => void }
               >
                 <img src={bestImage(s.images, 100)} alt="" className="vx-row-art" loading="lazy" />
                 <span className="vx-row-main">
-                  <span className="vx-row-label truncate">{s.title}</span>
-                  <span className="vx-row-hint truncate">{s.subtitle}</span>
+                  <span className="vx-row-label truncate-1">{s.title}</span>
+                  <span className="vx-row-hint truncate-1">{s.subtitle}</span>
                 </span>
-                <PlusIcon className="w-5 h-5 text-ink-300 shrink-0" />
+                <PlusIcon className="w-5 h-5 text-ink-300 shrink-0" aria-hidden />
               </button>
             </li>
           ))}
@@ -342,109 +348,112 @@ export default function ListenTogetherPage() {
 
   if (mode === 'idle') {
     return (
-      <div className="vx-sec is-narrow">
-        <PageHeader title="Listen Together" subtitle="Play the same music in sync with friends." />
+      <div className="vx-sec">
+        <PageHeader title="Listen Together" subtitle="Play the same music in sync with friends — a room code is all it takes." />
 
-        <section className="vx-sec-block" aria-labelledby="vx-lt-start">
-          <h2 id="vx-lt-start" className="vx-sec-title">Start a session</h2>
-          <div className="vx-group">
-            <div className="vx-row">
-              <span className="vx-row-lead" aria-hidden><UsersIcon className="w-5 h-5" /></span>
-              <span className="vx-row-main">
-                <span className="vx-row-label">You host</span>
-                <span className="vx-row-hint">Whatever you play, everyone hears.</span>
-              </span>
-              <button onClick={() => void host()} disabled={busy} className="px-5 py-2.5 rounded-full btn-primary text-sm shrink-0">
-                {busy ? 'Starting…' : 'Start session'}
+        <div className="vx-two">
+          <section className="vx-panel" aria-labelledby="vx-lt-start">
+            <span className="vx-row-lead mb-4" aria-hidden><UsersIcon className="w-5 h-5" /></span>
+            <h2 id="vx-lt-start" className="vx-sec-title !mb-1">Host a session</h2>
+            <p className="text-[14px] text-ink-400 mb-5">Whatever you play, everyone hears.</p>
+            <StepList
+              label="How hosting works"
+              steps={[
+                { title: 'Start a session', note: 'You get a room code and a QR.', state: busy ? 'current' : 'upcoming' },
+                { title: 'Share the code or the invite link', note: 'Friends join from any browser or the app.', state: 'upcoming' },
+                { title: 'Play as usual', note: 'Everyone’s player follows yours.', state: 'upcoming' },
+              ]}
+            />
+            <button type="button" onClick={() => void host()} disabled={busy} className="mt-6 w-full !min-h-[48px] rounded-full btn-primary">
+              {busy ? 'Starting…' : 'Start session'}
+            </button>
+          </section>
+
+          <section className="vx-panel" aria-labelledby="vx-lt-join">
+            <span className="vx-row-lead mb-4" aria-hidden><PlusIcon className="w-5 h-5" /></span>
+            <h2 id="vx-lt-join" className="vx-sec-title !mb-1">Join a session</h2>
+            <p className="text-[14px] text-ink-400 mb-5">Type the code the host shared. An invite link joins by itself.</p>
+            <label className="vx-label" htmlFor="vx-lt-code">Room code</label>
+            <div className="flex gap-2">
+              <input
+                id="vx-lt-code"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void join();
+                }}
+                placeholder="ABCDEF"
+                aria-label="Room code"
+                maxLength={8}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                className="vx-sec-field flex-1 min-w-0 tracking-[0.2em] font-bold tabular-nums"
+              />
+              <button type="button" onClick={() => void join()} disabled={busy} className="vx-sec-pill !min-h-[48px] px-6 shrink-0">
+                Join
               </button>
             </div>
-          </div>
-        </section>
-
-        <section className="vx-sec-block" aria-labelledby="vx-lt-join">
-          <h2 id="vx-lt-join" className="vx-sec-title">Join a session</h2>
-          <div className="flex gap-2">
-            <input
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              placeholder="Room code"
-              aria-label="Room code"
-              maxLength={8}
-              className="vx-field flex-1 min-w-0 tracking-[0.2em] font-bold"
-            />
-            <button onClick={() => void join()} disabled={busy} className="vx-pill-btn min-h-[48px] px-6 shrink-0">
-              Join
-            </button>
-          </div>
-        </section>
+            <p className="vx-sec-foot">Your player follows the host. Songs you add join the shared queue.</p>
+          </section>
+        </div>
       </div>
     );
   }
 
+  const people = members.length ? members : ['You'];
   return (
     <div className="vx-sec is-narrow">
       <PageHeader title="Listen Together" />
 
-      <section className="vx-sec-block vx-feature text-center" aria-label="Room">
+      <section className="vx-sec-block vx-panel text-center overflow-hidden" aria-label="Room">
         {/* D11 — floating reactions from everyone in the room. */}
         <div aria-hidden className="pointer-events-none absolute inset-0 z-10">
           {floats.map((f) => (
             <span key={f.id} className="vx-react" style={{ left: `${f.left}%` }}>{f.e}</span>
           ))}
         </div>
-        <p className="text-[13px] font-semibold text-ink-300 mb-2 inline-flex items-center gap-2">
+        <p className="vx-live-label mb-3" role="status">
           <span className="vx-status-dot" aria-hidden />
-          {mode === 'host' ? 'Live · you’re hosting' : `Following ${hostName ?? 'the host'}`}
+          {mode === 'host' ? 'Live · you’re hosting' : `Live · following ${hostName ?? 'the host'}`}
         </p>
-        <p className="vx-code">{code}</p>
-        {/* D11 — react to what's playing; everyone in the room sees it rise. */}
-        <div className="flex items-center justify-center gap-2 mt-5" role="group" aria-label="React to the music">
-          {REACTION_EMOJI.map((e) => (
-            <button
-              key={e}
-              onClick={() => react(e)}
-              aria-label={`React ${e}`}
-              className="w-11 h-11 rounded-full bg-ink-100/[0.08] text-lg hover:bg-ink-100/[0.14] active:scale-95 transition"
-            >
-              {e}
-            </button>
-          ))}
-        </div>
+        <p className="text-[13px] font-semibold text-ink-400">Room code</p>
+        <p className="vx-code mt-1">{code}</p>
         {mode === 'host' && (
           <>
-            {qr && (
-              <img
-                src={qr}
-                alt={`QR code to join room ${code}`}
-                className="mx-auto mt-5 w-36 h-36 rounded-xl bg-white p-1.5"
-              />
-            )}
-            <div className="flex items-center justify-center gap-2 mt-5">
+            {qr && <img src={qr} alt={`QR code to join room ${code}`} className="vx-qr is-small mt-6" />}
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
               <button
+                type="button"
                 onClick={() => void shareLink(inviteLink, 'Listen with me on VinaX').then((r) => toast(r === 'copied' ? 'Invite copied' : 'Invite shared'))}
-                className="px-5 py-2.5 rounded-full btn-primary text-sm"
+                className="px-5 rounded-full btn-primary text-sm"
               >
                 Share invite
               </button>
-              <button onClick={() => void navigator.clipboard?.writeText(code).then(() => toast('Code copied'))} className="vx-pill-btn">
+              <button type="button" onClick={() => void navigator.clipboard?.writeText(code).then(() => toast('Code copied'))} className="vx-sec-pill">
                 Copy code
               </button>
             </div>
           </>
         )}
+        {/* D11 — react to what's playing; everyone in the room sees it rise. */}
+        <div className="flex items-center justify-center gap-2 mt-6" role="group" aria-label="React to the music">
+          {REACTION_EMOJI.map((e) => (
+            <button key={e} type="button" onClick={() => react(e)} aria-label={`React ${e}`} className="vx-react-btn">
+              {e}
+            </button>
+          ))}
+        </div>
       </section>
 
       {current && (
-        <section className="vx-sec-block" aria-labelledby="vx-lt-now">
-          <h2 id="vx-lt-now" className="vx-sec-title">Now playing</h2>
-          <div className="vx-group">
-            <div className="vx-row">
-              <img src={bestImage(current.images, 200)} alt="" className="w-14 h-14 rounded-md object-cover shrink-0" />
-              <span className="vx-row-main">
-                <span className="vx-row-label truncate">{current.title}</span>
-                <span className="vx-row-hint truncate">{current.subtitle}</span>
-              </span>
-            </div>
+        <section className="vx-sec-block" aria-label="Now playing">
+          <SectionHeader title="Now playing" explanation={mode === 'host' ? 'Everyone hears this.' : 'Playing in sync with the host.'} />
+          <div className="flex items-center gap-4">
+            <img src={bestImage(current.images, 300)} alt="" className="w-20 h-20 rounded-[var(--vx-radius-card)] object-cover shrink-0 shadow-[var(--vx-art-shadow)]" />
+            <span className="min-w-0">
+              <span className="block text-[17px] font-bold text-ink-100 truncate-1">{current.title}</span>
+              <span className="block mt-1 text-[14px] text-ink-400 truncate-1">{current.subtitle}</span>
+            </span>
           </div>
         </section>
       )}
@@ -463,15 +472,15 @@ export default function ListenTogetherPage() {
       />
 
       {queue.length > 0 && (
-        <section className="vx-sec-block" aria-labelledby="vx-lt-next">
-          <h2 id="vx-lt-next" className="vx-sec-title">Up next</h2>
+        <section className="vx-sec-block" aria-label="Up next">
+          <SectionHeader title="Up next" />
           <ul className="vx-group">
             {queue.map((t, i) => (
               <li key={`${t.song.id}-${i}`} className="vx-row">
                 <img src={bestImage(t.song.images, 100)} alt="" className="vx-row-art" loading="lazy" />
                 <span className="vx-row-main">
-                  <span className="vx-row-label truncate">{t.song.title}</span>
-                  <span className="vx-row-hint truncate">{t.by ? `Added by ${t.by}` : t.song.subtitle}</span>
+                  <span className="vx-row-label truncate-1">{t.song.title}</span>
+                  <span className="vx-row-hint truncate-1">{t.by ? `Added by ${t.by}` : t.song.subtitle}</span>
                 </span>
               </li>
             ))}
@@ -480,16 +489,17 @@ export default function ListenTogetherPage() {
       )}
 
       <section className="vx-sec-block" aria-labelledby="vx-lt-people">
-        <h2 id="vx-lt-people" className="vx-sec-title flex items-center gap-2">
-          <UsersIcon className="w-5 h-5 text-ink-300" /> {Math.max(listenerCount, members.length, 1)} listening
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {/* Names render only when the server shared them (the host's view);
-              guests see the honest count above — never each other's names. */}
-          {(members.length ? members : ['You']).map((m, i) => (
-            <span key={`${m}-${i}`} className="vx-chip-idle rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-ink-100">{m}</span>
+        <h2 id="vx-lt-people" className="vx-sec-title tabular-nums">{Math.max(listenerCount, members.length, 1)} listening</h2>
+        {/* Names render only when the server shared them (the host's view);
+            guests see the honest count above — never each other's names. */}
+        <ul className="vx-people">
+          {people.map((m, i) => (
+            <li key={`${m}-${i}`} className="vx-person">
+              <ArtistAvatar name={m} size={36} />
+              {m}
+            </li>
           ))}
-        </div>
+        </ul>
         <p className="vx-sec-foot">
           {mode === 'host'
             ? 'Play, pause, and skip as usual — everyone in the room follows you.'
@@ -497,7 +507,7 @@ export default function ListenTogetherPage() {
         </p>
       </section>
 
-      <button onClick={leave} className="vx-pill-btn is-danger">
+      <button type="button" onClick={leave} className="vx-sec-pill is-danger">
         {mode === 'host' ? 'End for all' : 'Leave session'}
       </button>
     </div>

@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { searchSongs, searchSongsPage } from '@/services/api';
 import { trendingSeed, timeOfDaySeed, newReleasesSeed, popularSeed } from '@/constants/seeds';
 import { rankSongs, useRankSettingsKey } from '@/features/search/useSearch';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useHistoryStore } from '@/store/historyStore';
 import type { Song } from '@/types';
+import { HOME_TTL_MS, homeGeneration, useHomeGeneration } from './homeRefresh';
 
 // Shelves cache the list AS RANKED, and the ranking reads the muted / pinned
 // languages and kid mode — so `rankKey` is part of every key below.
@@ -26,10 +27,6 @@ export function useNewForLanguage(language: string) {
   });
 }
 
-/** Refreshing bucket (~every 4h) so home feeds rotate through the day. */
-function rotateBucket(): number {
-  return Math.floor(Date.now() / (4 * 60 * 60_000));
-}
 
 /** Build a pool across several languages, pulling a rotated page for variety. */
 async function multiLangPool(
@@ -64,11 +61,18 @@ async function multiLangPool(
   return rankSongs(onLang.length >= 4 ? onLang : [...onLang, ...spill]);
 }
 
-/** Bucketed visit stamp: same value for 15 minutes so a Home revisit within
- *  the window is a cache HIT (no refetch), but the shelf still rotates through
- *  the day. The old per-mount random nonce refetched on every navigation. */
-function visitBucket(): number {
-  return Math.floor(Date.now() / (15 * 60_000));
+/**
+ * 9.0.0 — the rotation of the multi-language shelves follows the Home
+ * generation (./homeRefresh.ts): the same generation reads the same pages, a
+ * refresh or a visit after half an hour reads new ones. 8.x keyed them on a
+ * 15-minute clock bucket computed at every render, so a shelf could change
+ * under a listener who happened to be scrolling Home at a quarter past.
+ */
+function useRotation(): { gen: number; salt: number } {
+  const gen = useHomeGeneration();
+  // The 4-hour day-part the generation started in, plus the generation itself.
+  const salt = Math.floor(homeGeneration().startedAt / (4 * 60 * 60_000)) + gen;
+  return { gen, salt };
 }
 
 /** "Trending Now" — across ALL the user's pinned languages, rotating daily. */
@@ -76,14 +80,14 @@ export function useTrendingNow() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const langs = (pinned.length ? pinned : ['hindi']).slice(0, 3);
   const muted = useSettingsStore((s) => s.mutedLanguages);
-  const bucket = visitBucket();
-  const salt = rotateBucket() + bucket;
+  const { gen, salt } = useRotation();
   const rankKey = useRankSettingsKey();
   return useQuery({
-    queryKey: ['trending-now', langs, muted, bucket, rankKey],
+    queryKey: ['trending-now', langs, muted, gen, rankKey],
     queryFn: () => multiLangPool(langs, trendingSeed, salt, muted),
-    staleTime: 15 * 60_000,
-    gcTime: 30 * 60_000,
+    staleTime: HOME_TTL_MS,
+    gcTime: 2 * HOME_TTL_MS,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -92,14 +96,14 @@ export function useNewReleases() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const langs = (pinned.length ? pinned : ['hindi']).slice(0, 3);
   const muted = useSettingsStore((s) => s.mutedLanguages);
-  const bucket = visitBucket();
-  const salt = rotateBucket() + bucket;
+  const { gen, salt } = useRotation();
   const rankKey = useRankSettingsKey();
   return useQuery({
-    queryKey: ['new-releases', langs, muted, bucket, rankKey],
+    queryKey: ['new-releases', langs, muted, gen, rankKey],
     queryFn: () => multiLangPool(langs, newReleasesSeed, salt, muted),
-    staleTime: 15 * 60_000,
-    gcTime: 30 * 60_000,
+    staleTime: HOME_TTL_MS,
+    gcTime: 2 * HOME_TTL_MS,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -108,21 +112,22 @@ export function usePopular() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const langs = (pinned.length ? pinned : ['hindi']).slice(0, 3);
   const muted = useSettingsStore((s) => s.mutedLanguages);
-  const bucket = visitBucket();
-  const salt = rotateBucket() + bucket;
+  const { gen, salt } = useRotation();
   const rankKey = useRankSettingsKey();
   return useQuery({
-    queryKey: ['popular', langs, muted, bucket, rankKey],
+    queryKey: ['popular', langs, muted, gen, rankKey],
     queryFn: () => multiLangPool(langs, popularSeed, salt, muted),
-    staleTime: 15 * 60_000,
-    gcTime: 30 * 60_000,
+    staleTime: HOME_TTL_MS,
+    gcTime: 2 * HOME_TTL_MS,
+    placeholderData: keepPreviousData,
   });
 }
 
 export function useTimeOfDayShelf() {
   const pinned = useSettingsStore((s) => s.pinnedLanguages);
   const lang = pinned[0] ?? 'hindi';
-  const hour = new Date().getHours();
+  // 9.0.0 — the hour the generation started, not the hour of this render: the shelf never changes under a scrolling listener.
+  const hour = new Date(homeGeneration().startedAt).getHours();
   const seed = timeOfDaySeed(hour, lang);
   const rankKey = useRankSettingsKey();
   const query = useQuery({

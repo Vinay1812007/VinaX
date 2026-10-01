@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Sheet } from '@/components/Sheet';
+import { Sheet, SheetHeader } from '@/components/Sheet';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -87,13 +87,23 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
     onClose();
   };
 
-  const chip = (on: boolean) => cn('px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors min-h-[36px]', on ? 'border-ember-500 bg-ember-500/15 text-ember-300' : 'border-ink-600 text-ink-300 hover:border-ink-400');
+  // 9.0 — the Encore chip: a quiet fill at rest, solid Iris when chosen (shell.css); 36px to see, 44px to hit.
+  const chip = (on: boolean) =>
+    cn(
+      "relative min-h-[36px] px-3.5 py-1.5 rounded-full border text-[13px] font-semibold transition-colors after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']",
+      on ? 'vx-chip-on' : 'vx-chip-idle border-transparent text-ink-100',
+    );
   const langOptions = [...new Set([...(current?.language && current.language !== 'unknown' ? [current.language] : []), ...pinned])];
 
   return (
     <Sheet onClose={onClose} labelledBy="queue-builder-title" size="2xl">
-        <h2 id="queue-builder-title" className="text-lg font-bold">Build a queue</h2>
-        <p className="text-xs text-ink-400 mt-0.5 mb-4">Say how long, what mood and how the energy should move. VinaX plans it from real songs your taste already reaches, shows you the arc, and only then touches the queue.</p>
+        <SheetHeader
+          id="queue-builder-title"
+          title="Build a queue"
+          subtitle="Say how long, what mood and how the energy should move. VinaX plans it from real songs your taste already reaches, shows you the arc, and only then touches the queue."
+          onClose={onClose}
+          className="mb-4"
+        />
 
         <fieldset className="mb-3">
           <legend className="text-xs font-semibold text-ink-300 mb-1.5">Start from</legend>
@@ -163,7 +173,7 @@ export function QueueBuilderSheet({ onClose }: { onClose(): void }) {
             </div>
             <ol className="space-y-1 max-h-64 overflow-y-auto">
               {plan.songs.map((s, i) => (
-                <li key={`${s.song.id}-${i}`} className="flex items-center gap-2.5 glass-card rounded-xl p-2">
+                <li key={`${s.song.id}-${i}`} className="flex items-center gap-2.5 rounded-2xl bg-ink-100/[0.05] p-2">
                   <span className="w-5 text-center text-xs text-ink-500 shrink-0">{i + 1}</span>
                   <img src={bestImage(s.song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" className="w-9 h-9 rounded-lg object-cover shrink-0" />
                   <span className="min-w-0 flex-1">

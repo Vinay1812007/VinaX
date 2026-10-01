@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { PageHeader } from '@/components/PageHeader';
+import { SectionHeader } from '@/components/SectionHeader';
 import { Chip } from '@/components/Chip';
 import { toast } from '@/store/toastStore';
 import { sendFeedback } from '@/services/feedback';
@@ -14,7 +15,7 @@ import { DISPLAY_VERSION, LATEST_VERSION } from '@/constants/version';
 import { isNativePlatform } from '@/services/native';
 import { cn } from '@/utils/cn';
 import { IconButton } from '@/components/IconButton';
-import { ChevronDownIcon, ChevronRightIcon, SearchIcon, XIcon } from '@/components/Icons';
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, SearchIcon, XIcon } from '@/components/Icons';
 import { FAQ, GUIDES, SHORTCUTS } from '@/features/help/helpContent';
 import '@/styles/pages/secondary.css';
 
@@ -24,6 +25,9 @@ import '@/styles/pages/secondary.css';
  * live tutorials that run inside the real app, searchable guides and FAQ,
  * the latest update card, shortcuts, legal, and the feedback form with
  * optional diagnostics. Every claim here must be true today.
+ *
+ * 9.0 — sections are SectionHeader titles over hairline lists; the tutorial
+ * tiles stay cards because each one starts something.
  */
 
 function match(q: string, ...texts: string[]): boolean {
@@ -31,6 +35,13 @@ function match(q: string, ...texts: string[]): boolean {
   const hay = texts.join(' ').toLowerCase();
   return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
 }
+
+const LEGAL: Array<{ to: string; label: string }> = [
+  { to: '/terms', label: 'Terms of use' },
+  { to: '/privacy', label: 'Privacy' },
+  { to: '/dmca', label: 'Copyright and takedowns' },
+  { to: '/contact', label: 'Contact' },
+];
 
 export default function HelpPage() {
   const clientCfg = useClientConfig();
@@ -74,7 +85,7 @@ export default function HelpPage() {
 
   return (
     <div className="vx-sec">
-      <PageHeader title="Help & feedback" />
+      <PageHeader title="Help & feedback" subtitle="Guides for every feature, answers, and a line to the VinaX team." />
 
       <div className="vx-search-field">
         <SearchIcon />
@@ -83,7 +94,9 @@ export default function HelpPage() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search help"
           aria-label="Search help"
-          className="vx-field"
+          type="search"
+          enterKeyHint="search"
+          className="vx-sec-field"
         />
         {query && (
           <IconButton label="Clear search" size="sm" onClick={() => setQuery('')}>
@@ -91,53 +104,56 @@ export default function HelpPage() {
           </IconButton>
         )}
       </div>
-      {nothing && <p className="vx-sec-lede mt-0">Nothing matches “{q}”. Try another word, or ask the team below.</p>}
+      {nothing && (
+        <p role="status" className="vx-sec-lede !mt-0">
+          Nothing matches “{q}”. Try another word, or ask the team below.
+        </p>
+      )}
 
       {!q && (
-        <section className="vx-sec-block" aria-labelledby="vx-help-tutorials">
-          <div className="vx-sec-title-row">
-            <h2 id="vx-help-tutorials" className="vx-sec-title">Live tutorials</h2>
-            <span className="vx-sec-meta tabular-nums">{done.length} of {TUTORIALS.length} done</span>
-          </div>
+        <section className="vx-sec-block" aria-label="Live tutorials">
+          <SectionHeader
+            title="Live tutorials"
+            explanation="Each one runs inside the real app and points at the real buttons."
+            action={<span className="vx-sec-meta">{done.length} of {TUTORIALS.length} done</span>}
+          />
           <div className="grid sm:grid-cols-2 gap-3">
             {TUTORIALS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => startTutorial(t.id)}
-                className="vx-help-tile text-left"
-              >
+              <button key={t.id} type="button" onClick={() => startTutorial(t.id)} className="vx-help-tile">
                 <span className="vx-row-lead" aria-hidden>{t.emoji}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="vx-row-label truncate flex-1">{t.title}</span>
-                    {done.includes(t.id) && <span className="text-[12px] font-semibold text-ink-400">Done</span>}
+                  <span className="flex items-start gap-2">
+                    <span className="vx-row-label flex-1">{t.title}</span>
+                    {done.includes(t.id) && (
+                      <span className="vx-done">
+                        <CheckIcon className="w-3.5 h-3.5" />
+                        Done
+                      </span>
+                    )}
                   </span>
                   <span className="vx-row-hint">{t.blurb}</span>
-                  <span className="mt-2 block text-[12px] font-medium text-ink-400">
+                  <span className="mt-2 block text-[12.5px] font-semibold text-ink-400 tabular-nums">
                     {t.minutes} min{t.playsMusic ? ' · plays music' : ''} · {t.steps.length} steps
                   </span>
                 </span>
               </button>
             ))}
           </div>
-          <div className="vx-sec-actions mt-4">
-            <button onClick={openTour} className="vx-pill-btn">Replay the welcome tour</button>
-            <Link to="/settings" className="vx-pill-btn">Open Settings</Link>
+          <div className="vx-sec-actions mt-5">
+            <button type="button" onClick={openTour} className="vx-sec-pill">Replay the welcome tour</button>
+            <Link to="/settings" className="vx-sec-pill">Open Settings</Link>
           </div>
         </section>
       )}
 
       {!q && latest && (
-        <section className="vx-sec-block" aria-labelledby="vx-help-new">
-          <div className="vx-sec-title-row">
-            <h2 id="vx-help-new" className="vx-sec-title">What’s new in {DISPLAY_VERSION}</h2>
-            {latest.title && <span className="vx-sec-meta truncate">{latest.title}</span>}
-          </div>
+        <section className="vx-sec-block" aria-label={`What’s new in ${DISPLAY_VERSION}`}>
+          <SectionHeader title={`What’s new in ${DISPLAY_VERSION}`} explanation={latest.title || undefined} />
           <ul className="vx-group">
             {latest.changes.slice(0, 4).map((c) => (
-              <li key={c.text} className="vx-row text-[14px] text-ink-200 leading-relaxed" style={{ alignItems: 'flex-start', paddingTop: 14, paddingBottom: 14 }}>
-                <span className={cn('mt-[9px] w-1.5 h-1.5 rounded-full shrink-0', c.type === 'new' ? 'bg-ember-500' : 'bg-ink-400')} aria-hidden />
-                <span>{c.text}</span>
+              <li key={c.text} className="vx-row !items-start !py-3.5 text-[14.5px] text-ink-200 leading-relaxed">
+                <span className={cn('vx-new-dot', c.type === 'new' && 'is-new')} aria-hidden />
+                <span className="max-w-[68ch]">{c.text}</span>
               </li>
             ))}
           </ul>
@@ -145,12 +161,12 @@ export default function HelpPage() {
       )}
 
       {guides.length > 0 && (
-        <section className="vx-sec-block" aria-labelledby="vx-help-guides">
-          <h2 id="vx-help-guides" className="vx-sec-title">How to use VinaX</h2>
-          <div className="space-y-6">
+        <section className="vx-sec-block" aria-label="How to use VinaX">
+          <SectionHeader title="How to use VinaX" explanation={q ? undefined : 'Short, step-by-step guides. Open one to read it.'} />
+          <div className="grid gap-8">
             {groups.map((group) => (
               <div key={group}>
-                <p className="vx-sec-caption">{group}</p>
+                <h3 className="vx-sec-sub">{group}</h3>
                 <div className="vx-group">
                   {guides.filter((g) => g.group === group).map((g) => (
                     <details key={g.title} open={!!q}>
@@ -173,8 +189,8 @@ export default function HelpPage() {
       )}
 
       {faq.length > 0 && (
-        <section className="vx-sec-block" aria-labelledby="vx-help-faq">
-          <h2 id="vx-help-faq" className="vx-sec-title">Questions</h2>
+        <section className="vx-sec-block" aria-label="Questions">
+          <SectionHeader title="Questions" />
           <div className="vx-group">
             {faq.map((f) => (
               <details key={f.q} open={!!q}>
@@ -190,13 +206,13 @@ export default function HelpPage() {
       )}
 
       {shortcuts.length > 0 && (
-        <section className="vx-sec-block" aria-labelledby="vx-help-keys">
-          <h2 id="vx-help-keys" className="vx-sec-title">Keyboard and gestures</h2>
+        <section className="vx-sec-block" aria-label="Keyboard and gestures">
+          <SectionHeader title="Keyboard and gestures" />
           <div className="vx-group">
             {shortcuts.map(([k, v]) => (
-              <div key={k} className="vx-row">
-                <span className="vx-row-main text-[14px] text-ink-200">{v}</span>
-                <kbd className="shrink-0 rounded-md bg-ink-100/[0.08] px-2 py-1 font-sans text-[12px] font-semibold text-ink-100 text-right">{k}</kbd>
+              <div key={k} className="vx-row !min-h-[52px]">
+                <span className="vx-row-main text-[14.5px] text-ink-200">{v}</span>
+                <kbd className="vx-kbd">{k}</kbd>
               </div>
             ))}
           </div>
@@ -204,19 +220,23 @@ export default function HelpPage() {
       )}
 
       {!q && (
-        <section className="vx-sec-block" aria-labelledby="vx-help-legal">
-          <h2 id="vx-help-legal" className="vx-sec-title">Copyright and legal</h2>
-          <p className="vx-sec-lede">
-            VinaX hosts no media files and sells nothing. Songs, recordings, artwork and lyrics belong to their artists,
-            labels and rights holders, who can request removal at any time.
-          </p>
+        <section className="vx-sec-block" aria-label="Copyright and legal">
+          <SectionHeader
+            title="Copyright and legal"
+            explanation="VinaX hosts no media files and sells nothing. Songs, recordings, artwork and lyrics belong to their artists, labels and rights holders, who can request removal at any time."
+          />
           <nav aria-label="Legal" className="vx-group">
-            <Link to="/terms" className="vx-row is-link"><span className="vx-row-main vx-row-label">Terms of use</span><ChevronRightIcon className="vx-row-chev" /></Link>
-            <Link to="/privacy" className="vx-row is-link"><span className="vx-row-main vx-row-label">Privacy</span><ChevronRightIcon className="vx-row-chev" /></Link>
-            <Link to="/dmca" className="vx-row is-link"><span className="vx-row-main vx-row-label">Copyright and takedowns</span><ChevronRightIcon className="vx-row-chev" /></Link>
-            <Link to="/contact" className="vx-row is-link"><span className="vx-row-main vx-row-label">Contact</span><ChevronRightIcon className="vx-row-chev" /></Link>
+            {LEGAL.map((l) => (
+              <Link key={l.to} to={l.to} className="vx-row is-link">
+                <span className="vx-row-main vx-row-label">{l.label}</span>
+                <ChevronRightIcon className="vx-row-chev" />
+              </Link>
+            ))}
             <a href="https://status.sirimillavinay.online" target="_blank" rel="noreferrer" className="vx-row is-link">
-              <span className="vx-row-main vx-row-label">Service status</span>
+              <span className="vx-row-main">
+                <span className="vx-row-label">Service status</span>
+                <span className="vx-row-hint">Opens in a new tab</span>
+              </span>
               <ChevronRightIcon className="vx-row-chev" />
             </a>
           </nav>
@@ -225,30 +245,32 @@ export default function HelpPage() {
 
       <section className="vx-sec-block" aria-labelledby="vx-help-feedback">
         <h2 id="vx-help-feedback" className="vx-sec-title">Report a bug or share an idea</h2>
-        <p className="vx-sec-lede">Goes straight to the VinaX team, with a city-level location to help reproduce issues.</p>
-        <div className="flex gap-2 mb-3">
-          {(['bug', 'idea', 'other'] as const).map((t) => (
-            <Chip key={t} active={type === t} onClick={() => setType(t)}>
-              {t === 'bug' ? 'Bug' : t === 'idea' ? 'Idea' : 'Other'}
-            </Chip>
-          ))}
+        <p className="vx-sec-lede !mt-0">Goes straight to the VinaX team, with a city-level location to help reproduce issues.</p>
+        <div className="vx-panel">
+          <div className="flex gap-2 mb-4" role="group" aria-label="What kind of message">
+            {(['bug', 'idea', 'other'] as const).map((t) => (
+              <Chip key={t} active={type === t} onClick={() => setType(t)}>
+                {t === 'bug' ? 'Bug' : t === 'idea' ? 'Idea' : 'Other'}
+              </Chip>
+            ))}
+          </div>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder={type === 'bug' ? 'What happened, what you expected, and the song or page if it matters…' : 'Tell us what you’d love to see…'}
+            rows={4}
+            maxLength={2000}
+            aria-label="Your message"
+            className="vx-sec-field"
+          />
+          <label className="vx-check mt-3">
+            <input type="checkbox" checked={diagnostics} onChange={(e) => setDiagnostics(e.target.checked)} />
+            Include app version, platform, screen size, language and theme
+          </label>
+          <button type="button" onClick={() => void submit()} disabled={sending} className="mt-3 px-6 rounded-full btn-primary">
+            {sending ? 'Sending…' : 'Send feedback'}
+          </button>
         </div>
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder={type === 'bug' ? 'What happened, what you expected, and the song or page if it matters…' : 'Tell us what you’d love to see…'}
-          rows={4}
-          maxLength={2000}
-          aria-label="Your message"
-          className="vx-field"
-        />
-        <label className="mt-3 flex items-center gap-2.5 min-h-[44px] text-[14px] text-ink-300">
-          <input type="checkbox" checked={diagnostics} onChange={(e) => setDiagnostics(e.target.checked)} className="w-4 h-4 accent-[rgb(var(--ember-500))]" />
-          Include app version, platform, screen size, language and theme
-        </label>
-        <button onClick={() => void submit()} disabled={sending} className="mt-2 px-6 py-3 rounded-full btn-primary">
-          {sending ? 'Sending…' : 'Send feedback'}
-        </button>
       </section>
     </div>
   );

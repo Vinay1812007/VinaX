@@ -144,6 +144,7 @@ function metricRows(base, now) {
     ['Off-language songs under a relaxed lock', base?.offLanguageExcused ?? 0, now.offLanguageExcused, true],
     ['Same lead artist back to back', base?.repetition.sameLeadBackToBack ?? 0, now.repetition.sameLeadBackToBack, true],
     ['…of those, at a batch boundary', base?.repetition.sameLeadAtBatchBoundary ?? 0, now.repetition.sameLeadAtBatchBoundary, true],
+    ['…of those, avoidable (another lead artist was eligible)', base?.repetition.sameLeadBackToBackAvoidable ?? 0, now.repetition.sameLeadBackToBackAvoidable ?? 0, true],
     ['Same lead artist within three songs', base?.repetition.sameLeadWithinThree ?? 0, now.repetition.sameLeadWithinThree, true],
     ['Same song identity back to back', base?.repetition.sameIdentityBackToBack ?? 0, now.repetition.sameIdentityBackToBack, true],
     ['A song identity heard twice in a sitting', base?.repetition.repeatedIdentity ?? 0, now.repetition.repeatedIdentity, true],
@@ -156,6 +157,11 @@ function metricRows(base, now) {
     // 8.3.0 — style continuity, over the DJ-remix and folk sittings only.
     ['Style continuity: share of a DJ / folk stretch in its style', base?.style?.share ?? 0, now.style?.share ?? 0, false],
     ['…share of stretches holding four of five in style (when the pool could)', base?.style?.held ?? 0, now.style?.held ?? 0, false],
+    // 9.0.0 — retrieval, declared taste, session adaptation, served songs.
+    ['Songs only an album or artist page could supply (share of songs queued)', base?.retrieval?.deepShare ?? 0, now.retrieval?.deepShare ?? 0, null],
+    ['Declared-taste agreement (share; fixtures that declare a taste)', base?.taste?.agreement ?? 0, now.taste?.agreement ?? 0, false],
+    ['Songs by an artist this sitting pushed away (another lead was eligible)', base?.sittingAvoided?.shipped ?? 0, now.sittingAvoided?.shipped ?? 0, true],
+    ['Songs Home showed this week, queued anyway (share)', base?.served?.share ?? 0, now.served?.share ?? 0, true],
     ['Queue-ready latency p50', base?.latency.p50 ?? 0, now.latency.p50, true],
     ['Queue-ready latency p95', base?.latency.p95 ?? 0, now.latency.p95, true],
   ];
@@ -178,13 +184,19 @@ function markdown(now, base) {
   lines.push('## Baseline versus current', '');
   lines.push('| Metric | Baseline | Current | |', '| --- | ---: | ---: | --- |');
   lines.push(...metricRows(base?.quality.overall, now.quality.overall));
+  if (now.memoryReplay) {
+    const r = (x) => (x ? `${x.openingOverlapWithoutMemory} / ${x.openingOverlapWithMemory}` : '—');
+    lines.push(`| Asked again from the same song: opening songs repeated, of 3 (no memory / committed memory, \`${now.memoryReplay.fixture}\`) | ${r(base?.memoryReplay)} | ${r(now.memoryReplay)} | — |`);
+  }
   lines.push('');
+  lines.push('"Declared-taste agreement" is agreement with what a synthetic fixture says its listener likes. It shows whether a taste signal is used at all; it is not evidence that a real listener would enjoy the songs.', '');
   lines.push('## Per fixture (current pipeline)', '');
-  lines.push('| Fixture | Continuations | Songs | Empty | Hard violations | Discovery share | Slot-1 misses | In style (baseline) |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
+  lines.push('| Fixture | Continuations | Songs | Empty | Hard violations | Discovery share | Slot-1 misses | In style (baseline) | Declared taste (baseline) |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const [id, f] of Object.entries(now.quality.perFixture)) {
     const b = base?.quality?.perFixture?.[id];
     const style = f.style ? `${pct(f.style.share)}${b?.style ? ` (${pct(b.style.share)})` : ''}` : '—';
-    lines.push(`| ${f.title} (\`${id}\`) | ${f.batches} | ${f.songs} | ${f.emptyBatches} | ${f.hardViolations} | ${pct(f.discovery.share)} | ${f.familiarFirst.slot1Misses}/${f.familiarFirst.opportunities} | ${style} |`);
+    const taste = f.taste ? `${pct(f.taste.agreement)}${b?.taste ? ` (${pct(b.taste.agreement)})` : ''}` : '—';
+    lines.push(`| ${f.title} (\`${id}\`) | ${f.batches} | ${f.songs} | ${f.emptyBatches} | ${f.hardViolations} | ${pct(f.discovery.share)} | ${f.familiarFirst.slot1Misses}/${f.familiarFirst.opportunities} | ${style} | ${taste} |`);
   }
   lines.push('');
   lines.push('## Latency', '');
@@ -246,6 +258,8 @@ console.log(`same lead back to back ${o.repetition.sameLeadBackToBack} (batch bo
 console.log(`distinct artists per continuation ${o.coverage.distinctArtistsPerBatch} · discovery ${pct(o.discovery.share)} against an allocation of ${pct(o.discovery.allocation)}`);
 console.log(`familiar-first compliance ${pct(o.familiarFirst.compliance)} · pickers ${JSON.stringify(o.pickers)} · fallbacks ${JSON.stringify(o.fallbacks)}`);
 console.log(`queue-ready latency p50 ${ms(o.latency.p50)} · p95 ${ms(o.latency.p95)} (instant sources, ${o.latency.samples} samples)`);
+if (o.taste) console.log(`declared-taste agreement ${pct(o.taste.agreement)} (synthetic) · album/artist-page songs ${pct(o.retrieval.deepShare)} · pushed-away artists queued ${o.sittingAvoided.shipped} · served songs queued ${o.served ? pct(o.served.share) : 'n-a'}`);
+if (current.memoryReplay) console.log(`asked again from one song: ${current.memoryReplay.openingOverlapWithoutMemory} of 3 opening songs repeat without memory, ${current.memoryReplay.openingOverlapWithMemory} with it`);
 if (o.style) console.log(`style continuity ${pct(o.style.share)} of a DJ / folk stretch in its style · ${o.style.heldBatches}/${o.style.heldOpportunities} stretches held four of five`);
 if (baseline) {
   const b = baseline.quality.overall;
