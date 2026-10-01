@@ -659,6 +659,204 @@
       #nav button[data-sec][data-local]::after { content: 'this browser only'; display: block; margin-top: 1px; font-size: 11px; font-weight: 600; letter-spacing: 0; color: var(--text-3); }
       #app:has(#nav button[data-local].active) #view::before { content: 'Kept in this browser only \2014  not published to listeners and not shared with other operators or browsers.'; display: block; margin: 0 0 24px; padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); border-radius: var(--radius-md); background: var(--warn-soft); color: var(--text); font-size: 13px; line-height: 1.5; }
       #app:has(#nav button[data-local="prefs"].active) #view::before { content: 'The layout and preferences of this panel are kept in this browser only; its data comes from the server.'; }
+
+      /* =====================================================================
+         8.6.0 — Aurora layer. A full visual re-skin of the console: an ambient
+         aurora canvas, glass chrome, a two-stop violet→iris accent gradient,
+         elevated cards and refined states. It is a pure override layer at the
+         end of the cascade — every selector app.js paints with keeps its name
+         and box model, so panels render unchanged structurally. Both themes,
+         reduced motion and print are handled; @supports guards the glass.
+         ===================================================================== */
+      :root {
+        --bg: #0d0d12;            /* deepened canvas under the aurora */
+        --chrome: #0a0a0e;
+        --surface: #16161b;
+        --surface-2: #202026;
+        --surface-3: #2e2e36;
+        --aurora-1: #7c5cf0;      /* violet — same family as the accent ramp */
+        --aurora-2: #4350e8;      /* iris */
+        --aurora-3: #b44fd8;      /* orchid */
+        --grad-a: #a78bfa;
+        --grad-b: #818cf8;
+        --grad-a-strong: #c4b5fd;
+        --grad-b-strong: #a5b4fc;
+        --card-bg: linear-gradient(180deg, #1a1a20, #16161b 46%);
+        --card-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+        --glass: rgba(10, 10, 14, 0.72);
+        --glass-soft: rgba(10, 10, 14, 0.55);
+        --glass-panel: rgba(22, 22, 27, 0.78);
+        --glow: 0 8px 28px -8px rgba(124, 92, 240, 0.45);
+        --radius-md: 14px; --radius-lg: 18px; --radius-xl: 22px;
+        --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.3), 0 12px 32px -12px rgba(0, 0, 0, 0.5);
+      }
+      :root.light {
+        --bg: #f4f3f9;            /* faint lavender canvas */
+        --chrome: #fbfaff;
+        --aurora-1: #8b6cf4;
+        --aurora-2: #6372f0;
+        --aurora-3: #c06ae0;
+        --grad-a: #6d28d9;
+        --grad-b: #4f46e5;
+        --grad-a-strong: #5b21b6;
+        --grad-b-strong: #4338ca;
+        --card-bg: linear-gradient(180deg, #ffffff, #fdfcff 60%);
+        --card-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        --glass: rgba(251, 250, 255, 0.78);
+        --glass-soft: rgba(251, 250, 255, 0.6);
+        --glass-panel: rgba(255, 255, 255, 0.82);
+        --glow: 0 8px 28px -10px rgba(109, 40, 217, 0.35);
+        --shadow-md: 0 2px 6px rgba(15, 20, 30, 0.05), 0 12px 32px -14px rgba(15, 20, 30, 0.14);
+      }
+
+      /* Ambient canvas: two soft gradient fields behind everything. The main
+         pane and footer go transparent so the glow reads through; the aurora
+         is fixed, so scrolling costs nothing. */
+      body::before {
+        content: ''; position: fixed; inset: -12%; z-index: -1; pointer-events: none;
+        background:
+          radial-gradient(44% 38% at 10% -4%, color-mix(in srgb, var(--aurora-1) 17%, transparent), transparent 70%),
+          radial-gradient(38% 34% at 92% 4%, color-mix(in srgb, var(--aurora-2) 12%, transparent), transparent 70%),
+          radial-gradient(52% 46% at 56% 110%, color-mix(in srgb, var(--aurora-3) 9%, transparent), transparent 72%);
+        filter: blur(44px) saturate(1.1);
+      }
+      :root.light body::before { opacity: .55; }
+      main, footer { background: transparent; }
+      /* Sign-in gets the full aurora (the app shell is hidden then). */
+      body:has(#app[hidden])::before { filter: blur(52px) saturate(1.25); inset: -16%; }
+      .login { background: transparent; }
+
+      /* ---------- Glass chrome: sidebar, drawer, floating menu ---------- */
+      @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .sidebar { background: var(--glass); -webkit-backdrop-filter: blur(26px) saturate(1.3); backdrop-filter: blur(26px) saturate(1.3); }
+        .sb-head, .sb-foot { background: var(--glass-soft); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+        button.menu-fab { background: var(--glass-panel); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); }
+        .modal, .vxd-overlay { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+        .modal .box, .vxd { background: var(--glass-panel); -webkit-backdrop-filter: blur(28px) saturate(1.25); backdrop-filter: blur(28px) saturate(1.25); }
+        thead th { background: color-mix(in srgb, var(--surface) 86%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+        .card table thead th { background: color-mix(in srgb, var(--surface) 92%, transparent); }
+      }
+      .sidebar { border-right-color: var(--border); box-shadow: 1px 0 0 rgba(0, 0, 0, 0.12); }
+      :root.light .sidebar { box-shadow: 1px 0 0 rgba(15, 20, 30, 0.02); }
+
+      /* ---------- Accent gradient: primary actions carry the brand ramp ----------
+         :where() keeps specificity at a bare `button`, so every chrome variant
+         (.ghost, .sb-btn, .seg, …) still wins with its own styling. */
+      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) {
+        background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.25);
+      }
+      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):hover {
+        background: linear-gradient(135deg, var(--grad-a-strong), var(--grad-b-strong));
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), var(--glow);
+        transform: translateY(-1px);
+      }
+      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):active { transform: translateY(0) scale(0.98); }
+      :root.light button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(15, 20, 30, 0.15); }
+      .seg button.active, .subtabs button.active,
+      .seg button.active:not(:disabled):hover, .subtabs button.active:not(:disabled):hover { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); }
+      .switch .track.on { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); border-color: transparent; }
+      .bfill { background: linear-gradient(90deg, var(--grad-a), var(--grad-b)); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent); }
+      .day .col { background: linear-gradient(180deg, var(--grad-a), var(--grad-b)); border-radius: 5px 5px 0 0; }
+
+      /* ---------- Page header: gradient display title, eyebrow crumb,
+         freshness as a quiet chip ---------- */
+      .toolbar h2 {
+        font-size: 34px; letter-spacing: -0.03em;
+        background: linear-gradient(94deg, var(--text) 55%, var(--accent-text) 115%);
+        -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: var(--text);
+      }
+      .toolbar .crumb { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-text); }
+      .toolbar .updated { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 70%, transparent); }
+      @media (max-width: 900px) { .toolbar h2 { font-size: 27px; } }
+
+      /* ---------- Cards: raised, sheened, and KPI tiles that respond ---------- */
+      .card { background: var(--card-bg); border-radius: var(--radius-lg); box-shadow: var(--card-sheen), var(--shadow); }
+      .cards { gap: 14px; }
+      .cards > .card, .kpi-grid .card {
+        transition: transform var(--t) var(--ease), box-shadow var(--t) var(--ease), border-color var(--t) var(--ease);
+      }
+      .cards > .card:hover, .kpi-grid .card:hover {
+        transform: translateY(-2px);
+        border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+        box-shadow: var(--card-sheen), var(--shadow-md);
+      }
+      .card .n { font-size: 30px; }
+      .card.kpi .ki { background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--grad-b) 14%, transparent)); color: var(--accent-text); border-radius: 10px; }
+      .card.kpi .kt.up { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 25%, transparent); }
+      .card.kpi .kt.dn { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 25%, transparent); }
+      .health-strip { background: var(--card-bg); border-radius: var(--radius-lg); box-shadow: var(--card-sheen), var(--shadow); padding: 14px 20px; }
+      table { background: var(--card-bg); border-radius: var(--radius-lg); box-shadow: var(--card-sheen), var(--shadow); }
+      thead th:first-child { border-top-left-radius: calc(var(--radius-lg) - 1px); }
+      thead th:last-child { border-top-right-radius: calc(var(--radius-lg) - 1px); }
+      tbody tr:last-child td:first-child { border-bottom-left-radius: calc(var(--radius-lg) - 1px); }
+      tbody tr:last-child td:last-child { border-bottom-right-radius: calc(var(--radius-lg) - 1px); }
+      tbody tr:hover td { background: var(--row-hover); }
+      .card table, .modal table, .zoomed table { background: transparent; box-shadow: none; }
+      .ops-metric, .ops-panel { background: var(--card-bg); border-radius: var(--radius-lg); box-shadow: var(--card-sheen), var(--shadow); }
+
+      /* ---------- Sidebar detail: live pulse tile, gradient nav marker ---------- */
+      #kpis { background: color-mix(in srgb, var(--surface) 55%, transparent); border-radius: var(--radius-md); }
+      body.live #kpis { border-color: color-mix(in srgb, var(--accent) 24%, var(--border)); box-shadow: 0 0 18px -6px color-mix(in srgb, var(--accent) 35%, transparent); }
+      #nav button[data-sec] { border-radius: 10px; }
+      #nav button[data-sec].active { background: linear-gradient(90deg, var(--accent-soft), color-mix(in srgb, var(--grad-b) 9%, transparent)); }
+      #nav button[data-sec].active::before {
+        width: 3px; height: 16px; margin-top: -8px; border-radius: var(--radius-pill);
+        background: linear-gradient(180deg, var(--grad-a), var(--grad-b));
+        box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent);
+        transform: none;
+      }
+      input.nav-search { background-color: color-mix(in srgb, var(--surface) 60%, transparent); }
+      button.sb-btn[aria-pressed="true"] { background: linear-gradient(90deg, var(--accent-soft), color-mix(in srgb, var(--grad-b) 9%, transparent)); }
+
+      /* ---------- Sign-in: glass panel over the full aurora ---------- */
+      .login .panel {
+        position: relative; max-width: 408px; border-radius: var(--radius-xl); padding: 40px 36px 34px;
+        background: var(--glass-panel); box-shadow: var(--card-sheen), var(--shadow-lg);
+      }
+      @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .login .panel { -webkit-backdrop-filter: blur(30px) saturate(1.3); backdrop-filter: blur(30px) saturate(1.3); }
+      }
+      .login .panel::before { content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--grad-a) 65%, transparent), transparent); }
+      .login h2 {
+        background: linear-gradient(94deg, var(--text) 45%, var(--accent-text) 110%);
+        -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: var(--text);
+      }
+      .login .lg-brand .mark { width: 56px; height: 56px; border-radius: 14px; box-shadow: var(--glow); }
+      .login input { height: 48px; border-radius: var(--radius-md); }
+      .login .row button { min-height: 48px; border-radius: var(--radius-pill); }
+
+      /* ---------- Overlays: glass boxes, springier pop ---------- */
+      .modal .box { border-radius: var(--radius-xl); box-shadow: var(--card-sheen), var(--shadow-lg); }
+      .vxd { border-radius: var(--radius-xl); box-shadow: var(--card-sheen), var(--shadow-lg); }
+      .zoomed { border-radius: var(--radius-xl); }
+      .pal-item { transition: background var(--t-fast) var(--ease); }
+
+      /* ---------- Texture: scrollbars, selection, stale banner, footer ---------- */
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-3) 35%, transparent); border-radius: var(--radius-pill); border: 3px solid transparent; background-clip: padding-box; }
+      ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text-3) 55%, transparent); border: 3px solid transparent; background-clip: padding-box; }
+      ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+      .stale { background: color-mix(in srgb, var(--warn) 12%, var(--bg)); }
+      footer { border-top-color: var(--border); }
+      .codebox { border-radius: var(--radius-md); }
+      div.empty, .empty-state { border-radius: var(--radius-lg); }
+
+      /* ---------- Motion: staggered entrance, still brief. The global
+         reduced-motion rules above zero all of this out. ---------- */
+      #view.enter > * { animation: aurora-rise .32s var(--ease) both; }
+      #view.enter > :nth-child(2) { animation-delay: 30ms; }
+      #view.enter > :nth-child(3) { animation-delay: 60ms; }
+      #view.enter > :nth-child(4) { animation-delay: 90ms; }
+      #view.enter > :nth-child(5) { animation-delay: 120ms; }
+      #view.enter > :nth-child(n + 6) { animation-delay: 150ms; }
+      @keyframes aurora-rise { from { transform: translateY(8px) scale(0.995); opacity: 0; } to { transform: none; opacity: 1; } }
+
+      @media print {
+        body::before { display: none; }
+        main { background: #fff; }
+        .card, table, .health-strip { box-shadow: none; background: #fff; }
+      }
     </style>
     <link rel="stylesheet" href="/admin/studio.css" />
     <link rel="stylesheet" href="/admin/workspace.css" />

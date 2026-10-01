@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '8.6.0': {
+    title: 'A new face for the control room',
+    changes: [
+      { type: 'improved', text: 'Owner console — a complete visual redesign: a soft aurora canvas, a glass sidebar and dialogs, gradient accents on primary actions and the active section, raised cards that respond to the pointer, and a staggered panel entrance. Every tool keeps its place; light and dark themes and reduced-motion are honoured throughout.' },
+      { type: 'improved', text: 'Owner console — sharper page headers with an eyebrow category and a freshness chip, refined tables with translucent sticky headers, and a sign-in screen that matches the new look.' },
+    ],
+  },
   '8.5.3': {
     title: 'The right version name, and a quieter start',
     changes: [
