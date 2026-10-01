@@ -19,7 +19,7 @@ function Row({ label, note, children, stack }: { label: string; note?: string; c
   return (
     <div
       className={cn(
-        'py-3.5 border-b border-[color:var(--glass-border)] last:border-0',
+        'py-3.5 border-b border-glass last:border-0',
         stack ? 'flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4' : 'flex items-start justify-between gap-4',
       )}
     >
@@ -77,7 +77,7 @@ export function SoundSettings() {
         <span className="w-7 h-7 rounded-lg bg-ember-500/15 text-ember-500 flex items-center justify-center shrink-0">
           <WaveIcon className="w-4 h-4" />
         </span>
-        <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-ink-300">Sound</h2>
+        <h2 className="text-[13px] font-bold text-ink-300">Sound</h2>
       </div>
       <div className="rounded-2xl glass-card px-5">
         <Row label="Sound effects" note="Equalizer, balance, mono and loudness. Processed on this device — nothing is uploaded — and uses a little more battery while playing.">

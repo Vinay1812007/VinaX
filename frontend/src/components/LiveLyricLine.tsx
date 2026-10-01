@@ -14,6 +14,7 @@ import { cn } from '@/utils/cn';
  * never grows or shrinks between lines and whatever sits under it stays put.
  *
  * 8.0 — the card takes the artwork's tint (`.vx-rail-lyrics-card`, player.css).
+ * The clock subscription lives here, in this leaf, and nowhere above it.
  */
 export function LiveLyricLine({ lines, onOpen, className }: { lines: LrcLine[]; onOpen: () => void; className?: string }) {
   const currentTime = usePlayerStore((s) => s.currentTime);
@@ -31,8 +32,8 @@ export function LiveLyricLine({ lines, onOpen, className }: { lines: LrcLine[]; 
   if (!lines.length) return null;
 
   return (
-    <button onClick={onOpen} className={cn('vx-rail-lyrics-card', className)} aria-label="Open lyrics">
-      <span className="block mb-2 text-[13px] font-bold text-ink-100">Lyrics</span>
+    <button type="button" onClick={onOpen} className={cn('vx-rail-lyrics-card', className)} aria-label="Open lyrics">
+      <span className="vx-rail-lyrics-label">Lyrics</span>
       <p className="h-5 leading-5 truncate" aria-hidden={!previous}>
         {previous ?? ' '}
       </p>

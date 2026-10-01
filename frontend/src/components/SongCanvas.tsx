@@ -140,14 +140,16 @@ export function SongCanvas({
   // 8.0 — the artwork fills its column (player.css sizes it); it settles back
   // a little while paused.
   const baseClasses = cn('vx-np-art-img', !isPlaying && 'is-paused');
+  // Over the artwork or the clip, so it keeps its own dark chip in every theme (player.css).
   const toggle = canvas.hasVideo && !hideToggle && (
     <button
+      type="button"
       aria-label={canvas.off ? 'Turn the video canvas on' : 'Turn the video canvas off'}
       title={canvas.off ? 'Show video' : 'Show artwork'}
       onClick={canvas.toggle}
-      className="absolute top-3 right-3 z-10 min-h-[28px] px-3 rounded-full bg-black/55 backdrop-blur text-white text-[11px] font-bold"
+      className="vx-np-canvas-toggle"
     >
-      {canvas.off ? '▶ Video' : 'Artwork'}
+      {canvas.off ? 'Video' : 'Artwork'}
     </button>
   );
   return (

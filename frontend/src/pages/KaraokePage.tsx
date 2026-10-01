@@ -13,18 +13,20 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { ChevronDownIcon, WaveformIcon } from '@/components/Icons';
 import { Seekbar } from '@/components/Seekbar';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import '@/styles/pages/player.css';
 
 /**
  * Bottom progress + seek. A leaf on purpose: the playback clock ticks ~4×/s
  * and used to be subscribed at page level, re-rendering the whole lyric list
  * with it. The shared Seekbar owns the clock subscription here, and brings a
  * real slider (arrow keys, Home/End, spoken position) in place of the old
- * click-only strip that keyboard users could not operate.
+ * click-only strip that keyboard users could not operate. Iris, as on the
+ * full-screen player (.vx-np-seek).
  */
 function KaraokeProgress() {
   return (
-    <div className="flex items-center h-7">
-      <Seekbar compact />
+    <div className="vx-np-seek">
+      <Seekbar timesBelow remaining />
     </div>
   );
 }
@@ -55,33 +57,30 @@ export default function KaraokePage() {
           icon={<WaveformIcon className="w-8 h-8" />}
           title="Nothing playing"
           message="Play a song to start karaoke."
-          action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
+          action={<Link to="/" className="vx-tap px-5 py-2.5 rounded-full btn-primary">Browse Home</Link>}
         />
         {recent.length > 0 && (
-          <section className="mt-8">
-            <h2 className="text-sm font-bold text-ink-200 mb-2.5 px-1">Sing again</h2>
-            <div className="space-y-1.5">
+          <section className="mt-8" aria-labelledby="vx-karaoke-again">
+            <h2 id="vx-karaoke-again" className="text-[17px] font-bold text-ink-100 mb-2 px-1">Sing again</h2>
+            <ul className="vx-upnext">
               {recent.map(({ song: s }) => (
-                <button
-                  key={s.id}
-                  onClick={() => playSong(s)}
-                  className="w-full flex items-center gap-3 glass-card rounded-xl p-2.5 text-left hover:bg-ink-800/40 transition"
-                >
-                  <img
-                    src={bestImage(s.images, 96)}
-                    onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                    alt=""
-                    loading="lazy"
-                    className="w-10 h-10 rounded-lg object-cover shrink-0"
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold truncate">{s.title}</span>
-                    <span className="block text-xs text-ink-400 truncate">{s.subtitle}</span>
-                  </span>
-                  <PlayIcon className="w-4 h-4 text-ember-400 ml-auto shrink-0" />
-                </button>
+                <li key={s.id}>
+                  <button type="button" onClick={() => playSong(s)} className="vx-upnext-row">
+                    <img
+                      src={bestImage(s.images, 96)}
+                      onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
+                      alt=""
+                      loading="lazy"
+                    />
+                    <span className="vx-upnext-text">
+                      <span className="vx-upnext-title">{s.title}</span>
+                      <span className="vx-upnext-meta">{s.subtitle}</span>
+                    </span>
+                    <PlayIcon className="w-4 h-4 text-ember-400 shrink-0" />
+                  </button>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         )}
       </div>
@@ -91,73 +90,56 @@ export default function KaraokePage() {
   const art = bestImage(song.images, 500);
 
   return createPortal(
-    <div
-      ref={dialogRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Karaoke — ${song.title}`}
-      className="fixed inset-0 z-[65] flex flex-col bg-ink-950"
-    >
-      <div className="absolute inset-0 -z-10 overflow-hidden" aria-hidden>
-        <img
-          src={art}
-          onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-          alt=""
-          className="w-full h-full object-cover scale-125 blur-3xl opacity-40"
-        />
-        <div className="absolute inset-0 bg-ink-950/82" />
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Karaoke — ${song.title}`} className="vx-np vx-karaoke">
+      <div className="vx-np-bg" aria-hidden>
+        <img src={art} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="vx-np-bg-art" />
+        <div className="vx-np-bg-wash" />
+        <div className="vx-karaoke-scrim" />
       </div>
 
-      <div className="flex items-center gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
-        <button type="button" onClick={() => navigate(-1)} aria-label="Close karaoke" className="w-11 h-11 rounded-full flex items-center justify-center text-ink-100 hover:bg-white/10">
+      <div className="vx-karaoke-top">
+        <button type="button" onClick={() => navigate(-1)} aria-label="Close karaoke" className="vx-karaoke-close w-11 h-11">
           <ChevronDownIcon className="w-6 h-6" />
         </button>
-        <div className="min-w-0 flex-1 text-center">
-          <p className="text-sm font-bold truncate">{song.title}</p>
-          <p className="text-xs text-ink-300 truncate">{song.subtitle} · Karaoke</p>
+        <div className="vx-karaoke-heading">
+          <p>{song.title}</p>
+          <p>{song.subtitle} · Karaoke</p>
         </div>
-        <span className="w-11 shrink-0" aria-hidden />
+        <span className="w-11" aria-hidden />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 no-scrollbar">
-        <div className="max-w-xl mx-auto py-[34vh]">
+      <div className="vx-karaoke-lyrics">
+        <div>
           {lyrics.isLoading ? (
-            <p className="text-center text-ink-300">Loading lyrics…</p>
+            <p className="vx-karaoke-state">Loading lyrics…</p>
           ) : lyrics.data?.synced ? (
             <SyncedLyrics lines={lyrics.data.synced} live size={karaokeSize} />
           ) : lyrics.data?.plain ? (
-            <pre className="whitespace-pre-wrap font-sans text-2xl leading-10 text-ink-100/90">{lyrics.data.plain}</pre>
+            <pre className="vx-karaoke-plain">{lyrics.data.plain}</pre>
           ) : (
-            <p className="text-center text-ink-300">No lyrics available for this song.</p>
+            <p className="vx-karaoke-state">No lyrics available for this song.</p>
           )}
         </div>
       </div>
       {/* canvas 4b — bottom progress + controls + Meaning */}
-      <div className="px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 space-y-4">
+      <div className="vx-karaoke-bottom">
         <KaraokeProgress />
-        <div className="flex items-center justify-between">
-          <Link
-            to={`/lyrics/${song.id}`}
-            className="h-9 px-4 rounded-full bg-white/[0.08] border border-glass-strong text-xs font-extrabold text-ink-200 inline-flex items-center hover:bg-white/15 transition"
-          >
+        <div className="vx-karaoke-bar">
+          <Link to={`/lyrics/${song.id}`} className="vx-np-pill">
             Meaning
           </Link>
-          <div className="flex items-center gap-5">
-            <button type="button" onClick={() => prevSong()} aria-label="Previous song" className="p-2 min-w-touch min-h-touch inline-flex items-center justify-center text-ink-200 hover:text-ink-100 transition">
-              <PrevIcon className="w-5 h-5" />
+          <div className="vx-karaoke-transport">
+            <button type="button" onClick={() => prevSong()} aria-label="Previous song" className="vx-karaoke-skip">
+              <PrevIcon />
             </button>
-            <button
-              onClick={togglePlay}
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-              className="w-[60px] h-[60px] rounded-full bg-ink-100 text-ink-950 flex items-center justify-center hover:scale-105 active:scale-95 transition"
-            >
-              {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+            <button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="vx-np-play is-compact">
+              {isPlaying ? <PauseIcon /> : <PlayIcon className="vx-np-play-glyph" />}
             </button>
-            <button type="button" onClick={() => nextSong(true)} aria-label="Next song" className="p-2 min-w-touch min-h-touch inline-flex items-center justify-center text-ink-200 hover:text-ink-100 transition">
-              <NextIcon className="w-5 h-5" />
+            <button type="button" onClick={() => nextSong(true)} aria-label="Next song" className="vx-karaoke-skip">
+              <NextIcon />
             </button>
           </div>
-          <span className="w-[76px]" aria-hidden />
+          <span aria-hidden />
         </div>
       </div>
     </div>,

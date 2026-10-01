@@ -6,7 +6,7 @@
  * search over a geometry snapshot rather than a rect read per row per
  * pointermove. 7.2 adds the manual / automatic marker, the row menu's
  * keyboard moves, "Keep this song", remove with Undo and the deliberate
- * rebuild of the DJ picks.
+ * rebuild of the automatic picks ("VinaX pick").
  */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -73,7 +73,7 @@ describe('QueuePage reordering', () => {
     grip.focus();
     fireEvent.keyDown(grip, { key: 'ArrowDown' });
 
-    expect(order().map((t) => t.split(/DJ pick|Added by you/)[0])).toEqual(['Twice', 'Alpha', 'Beta', 'Twice']);
+    expect(order().map((t) => t.split(/VinaX pick|Added by you/)[0])).toEqual(['Twice', 'Alpha', 'Beta', 'Twice']);
     const after = handle('Alpha')[0];
     expect(after).toBe(grip); // not remounted
     expect(after.closest('li')).toBe(row);
@@ -113,7 +113,7 @@ describe('QueuePage reordering', () => {
     mount();
     const beta = handle('Beta')[0];
     fireEvent.click(removeButton('Alpha'));
-    expect(order().map((t) => t.split(/DJ pick|Added by you/)[0])).toEqual(['Twice', 'Beta', 'Twice']);
+    expect(order().map((t) => t.split(/VinaX pick|Added by you/)[0])).toEqual(['Twice', 'Beta', 'Twice']);
     expect(handle('Beta')[0]).toBe(beta);
     expect(status()).toBe('Removed Alpha');
     // Focus moved to the row that took its place, not to nowhere.
@@ -123,7 +123,7 @@ describe('QueuePage reordering', () => {
     const undo = toasts[toasts.length - 1]?.action;
     expect(undo?.label).toBe('Undo');
     act(() => undo!.onClick());
-    expect(order().map((t) => t.split(/DJ pick|Added by you/)[0])).toEqual(['Alpha', 'Twice', 'Beta', 'Twice']);
+    expect(order().map((t) => t.split(/VinaX pick|Added by you/)[0])).toEqual(['Alpha', 'Twice', 'Beta', 'Twice']);
     expect(status()).toBe('Alpha is back in the queue');
   });
 
@@ -151,12 +151,12 @@ describe('QueuePage ownership', () => {
     const handRow = rows().find((li) => li.textContent?.includes('Mine'))!;
     expect(within(handRow).getByText('Added by you')).toBeTruthy();
     const autoRow = rows().find((li) => li.textContent?.includes('Pick one'))!;
-    expect(within(autoRow).getByText('DJ pick')).toBeTruthy();
+    expect(within(autoRow).getByText('VinaX pick')).toBeTruthy();
     // A song from the list the listener started carries no marker.
     const listRow = rows().find((li) => li.textContent?.includes('Alpha'))!;
-    expect(within(listRow).queryByText('DJ pick')).toBeNull();
+    expect(within(listRow).queryByText('VinaX pick')).toBeNull();
     expect(within(listRow).queryByText('Added by you')).toBeNull();
-    expect(screen.getByText(/2 DJ picks · 1 added by you/)).toBeTruthy();
+    expect(screen.getByText(/2 VinaX picks · 1 added by you/)).toBeTruthy();
   });
 
   it('offers "Keep this song" on an automatic entry only, and keeping it turns the marker into the listener’s own', () => {
@@ -165,12 +165,12 @@ describe('QueuePage ownership', () => {
     // Not on a song from the listener's own list…
     expect(within(openMenu('Alpha')).queryByRole('menuitem', { name: 'Keep this song' })).toBeNull();
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
-    // …only on a DJ pick.
+    // …only on a VinaX pick.
     expect(within(openMenu('Pick one')).getByRole('menuitem', { name: 'Keep this song' })).toBeTruthy();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Keep this song' }));
     const kept = rows().find((li) => li.textContent?.includes('Pick one'))!;
     expect(within(kept).getByText('Added by you')).toBeTruthy();
-    expect(status()).toMatch(/stays when the DJ picks change/);
+    expect(status()).toMatch(/stays when VinaX picks change/);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'More options for Pick one' }));
     // Now that it is the listener's own, the menu no longer offers to keep it.
     expect(within(openMenu('Pick one')).queryByRole('menuitem', { name: 'Keep this song' })).toBeNull();
@@ -185,7 +185,7 @@ describe('QueuePage ownership', () => {
     const button = screen.getByRole('button', { name: 'Refresh up next' });
     // Three songs came from the list that was tapped, so the note says so.
     // 7.2.0 — a rebuild replaces the DJ's picks only; the list the listener started stays.
-    expect(screen.getByText(/Replaces the 2 DJ picks after this song\. Songs you added, and the list you started, stay\./)).toBeTruthy();
+    expect(screen.getByText(/Replaces the 2 VinaX picks after this song\. Songs you added, and the list you started, stay\./)).toBeTruthy();
     expect(button.getAttribute('aria-describedby')).toBe('vx-rebuild-note');
     fireEvent.click(button);
     expect(regenerateAutoTail).toHaveBeenCalled();
