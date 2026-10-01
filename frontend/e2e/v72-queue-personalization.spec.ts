@@ -4,12 +4,12 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
 /**
  * 7.2 from the built bundle, in a real browser, with Telugu, Hindi and Tamil
  * titles and a phone and a desktop width:
- *  - upcoming entries say whether the DJ picked them or the listener added
+ *  - upcoming entries say whether VinaX picked them ("VinaX pick") or the listener added
  *    them, in words;
  *  - the queue can be reordered from the keyboard, with the result announced
  *    and focus kept on the row that moved;
  *  - removing a song offers an Undo that puts it back;
- *  - "Keep this song" turns a DJ pick into the listener's own;
+ *  - "Keep this song" turns a VinaX pick into the listener's own;
  *  - "Less like this" asks for how long, and Settings lists the mute and
  *    takes it back.
  *
@@ -142,13 +142,13 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
     await seed(page, baseURL!);
     await playAndOpenQueue(page);
 
-    // Every upcoming entry the DJ chose is marked in words, not by colour.
+    // Every upcoming entry VinaX chose is marked in words, not by colour.
     const rows = page.locator('ul li[data-row-key]');
     await expect(rows.first()).toBeVisible();
-    await expect(page.getByText('DJ pick').first()).toBeVisible();
-    await expect(page.locator('#vx-rebuild-note')).toContainText(/DJ picks?\./);
+    await expect(page.getByText('VinaX pick').first()).toBeVisible();
+    await expect(page.locator('#vx-rebuild-note')).toContainText(/VinaX picks?\./);
 
-    // Hand-queue a song in another script: it goes ahead of the DJ's picks and says so.
+    // Hand-queue a song in another script: it goes ahead of VinaX's picks and says so.
     await gotoInApp(page, '/search/telugu');
     // The overview lists only the first few songs; the Songs tab has them all.
     await page.getByRole('button', { name: /Show all songs/ }).click();
@@ -190,19 +190,19 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
   });
 }
 
-test('Keep this song holds a DJ pick through a rebuild', async ({ page, baseURL }) => {
+test('Keep this song holds a VinaX pick through a rebuild', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page, baseURL!);
   await playAndOpenQueue(page);
 
-  const pick = page.locator('li[data-row-key]', { has: page.getByText('DJ pick') }).first();
+  const pick = page.locator('li[data-row-key]', { has: page.getByText('VinaX pick') }).first();
   const keptTitle = await pick.locator('span.font-bold').first().innerText();
   await pick.getByRole('button', { name: /^More options for / }).click();
   await page.getByRole('menuitem', { name: 'Keep this song' }).click();
   const kept = page.locator('li[data-row-key]', { hasText: keptTitle }).first();
   await expect(kept.getByText('Added by you')).toBeVisible();
 
-  // A deliberate rebuild replaces the other DJ picks and leaves this one alone.
+  // A deliberate rebuild replaces the other VinaX picks and leaves this one alone.
   await page.getByRole('button', { name: 'Refresh up next' }).click();
   await expect.poll(() => page.locator('li[data-row-key]', { hasText: keptTitle }).count(), { timeout: 25_000 }).toBe(1);
   await expect(page.locator('li[data-row-key]', { hasText: keptTitle }).first().getByText('Added by you')).toBeVisible();

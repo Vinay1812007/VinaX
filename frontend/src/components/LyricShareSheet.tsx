@@ -3,35 +3,72 @@ import type { Song } from '@/types';
 import { cn } from '@/utils/cn';
 import { toast } from '@/store/toastStore';
 import { shareOrSaveImage } from '@/utils/shareImage';
-import { Sheet } from './Sheet';
+import { Sheet, SheetHeader } from './Sheet';
 
 const MAX = 6;
-const trunc = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+const FONT = 'Manrope, system-ui, sans-serif';
 
+/** Whole characters as the reader sees them — an Indic conjunct or a vowel sign is never split. */
+function graphemes(s: string): string[] {
+  const Seg = (Intl as unknown as { Segmenter?: new (l?: string, o?: { granularity: 'grapheme' }) => { segment(t: string): Iterable<{ segment: string }> } }).Segmenter;
+  if (Seg) return Array.from(new Seg(undefined, { granularity: 'grapheme' }).segment(s), (x) => x.segment);
+  return Array.from(s);
+}
+
+/**
+ * The longest start of `text` that fits `maxW` on this canvas, with an
+ * ellipsis when it had to be cut. Measured, and cut between whole
+ * characters — slicing code units broke Telugu and Hindi titles mid-letter.
+ */
+function fitText(x: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (x.measureText(text).width <= maxW) return text;
+  const g = graphemes(text);
+  let lo = 0;
+  let hi = g.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (x.measureText(g.slice(0, mid).join('') + '…').width <= maxW) lo = mid;
+    else hi = mid - 1;
+  }
+  return g.slice(0, lo).join('').trimEnd() + '…';
+}
+
+/** The share card. Canvas art is the standing exception to "no raw colours": these are Encore's charcoal, Iris and Lagoon. */
 async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {
   const c = document.createElement('canvas');
   c.width = 1080;
   c.height = 1080;
   const x = c.getContext('2d');
   if (!x) throw new Error('no canvas');
+  // The brand face, if the page has it; the card falls back to the system face otherwise.
+  try {
+    await document.fonts?.load(`700 64px ${FONT}`);
+  } catch {
+    /* system font it is */
+  }
 
   const bg = x.createLinearGradient(0, 0, 0, 1080);
-  bg.addColorStop(0, '#15101c');
-  bg.addColorStop(1, '#08080c');
+  bg.addColorStop(0, '#17181e');
+  bg.addColorStop(1, '#0a0b0e');
   x.fillStyle = bg;
   x.fillRect(0, 0, 1080, 1080);
   const glow = x.createRadialGradient(220, 200, 0, 220, 200, 680);
-  glow.addColorStop(0, 'rgba(99,102,241,0.32)');
-  glow.addColorStop(1, 'rgba(99,102,241,0)');
+  glow.addColorStop(0, 'rgba(140,120,255,0.34)');
+  glow.addColorStop(1, 'rgba(140,120,255,0)');
   x.fillStyle = glow;
   x.fillRect(0, 0, 1080, 1080);
+  const glow2 = x.createRadialGradient(940, 980, 0, 940, 980, 520);
+  glow2.addColorStop(0, 'rgba(34,211,238,0.16)');
+  glow2.addColorStop(1, 'rgba(34,211,238,0)');
+  x.fillStyle = glow2;
+  x.fillRect(0, 0, 1080, 1080);
 
-  x.fillStyle = 'rgba(255,138,76,0.55)';
-  x.font = '800 200px Georgia, serif';
+  x.fillStyle = 'rgba(178,166,255,0.6)';
+  x.font = `800 200px ${FONT}`;
   x.fillText('“', 80, 290);
 
   const fontSize = lines.length <= 2 ? 76 : lines.length <= 4 ? 62 : 50;
-  x.font = `700 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  x.font = `700 ${fontSize}px ${FONT}`;
   const maxW = 900;
   const lineH = fontSize * 1.34;
   const wrapped: string[] = [];
@@ -57,15 +94,15 @@ async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {
     y += lineH;
   }
 
-  x.fillStyle = '#cfcfda';
-  x.font = '700 40px -apple-system, BlinkMacSystemFont, sans-serif';
-  x.fillText(trunc(song.title, 28), 90, 952);
-  x.fillStyle = '#8a8a99';
-  x.font = '500 34px -apple-system, BlinkMacSystemFont, sans-serif';
-  x.fillText(trunc(song.subtitle, 38), 90, 1000);
-  x.fillStyle = '#6f6f7e';
-  x.font = '600 30px -apple-system, BlinkMacSystemFont, sans-serif';
-  x.fillText('VinaX', 930, 1000);
+  x.fillStyle = '#e2e3ea';
+  x.font = `700 40px ${FONT}`;
+  x.fillText(fitText(x, song.title, 760), 90, 952);
+  x.fillStyle = '#a8aab8';
+  x.font = `500 34px ${FONT}`;
+  x.fillText(fitText(x, song.subtitle, 760), 90, 1000);
+  x.fillStyle = '#b2a6ff';
+  x.font = `800 30px ${FONT}`;
+  x.fillText('VinaX', 920, 1000);
 
   return await new Promise<Blob>((res, rej) =>
     c.toBlob((b) => (b ? res(b) : rej(new Error('toBlob failed'))), 'image/png'),
@@ -95,34 +132,34 @@ export function LyricShareSheet({ lines, song, onClose }: { lines: string[]; son
 
   return (
     <Sheet onClose={onClose} labelledBy="lyric-share-title" layout="column" maxHeight="medium" backdropClassName="bg-ink-950/80 backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-1">
-          <h2 id="lyric-share-title" className="text-lg font-bold">Share lyrics</h2>
-          <button type="button" onClick={onClose} className="text-ink-400 text-sm hover:text-ink-100">Close</button>
-        </div>
-        <p className="text-xs text-ink-400 mb-3">Tap up to {MAX} lines, then create your card.</p>
-        <div className="overflow-y-auto flex-1 -mx-1 px-1 space-y-1">
-          {lines.map((line, i) => (
+      <SheetHeader id="lyric-share-title" title="Share lyrics" subtitle={`Tap up to ${MAX} lines, then create your card.`} onClose={onClose} />
+      <div className="overflow-y-auto flex-1 -mx-1 px-1 mt-3 space-y-1" role="group" aria-label="Lines to share">
+        {lines.map((line, i) => {
+          const on = sel.includes(i);
+          return (
             <button
               key={`${i}-${line}`}
+              type="button"
               onClick={() => toggle(i)}
+              aria-pressed={on}
               className={cn(
-                'block w-full text-left rounded-xl px-3 py-2 text-sm transition-colors',
-                sel.includes(i)
-                  ? 'bg-ember-500/20 text-ember-200 ring-1 ring-ember-500/40'
-                  : 'text-ink-200 hover:bg-ink-800/50',
+                'block w-full min-h-[44px] text-left rounded-2xl px-3 py-2 text-[15px] transition-colors',
+                on ? 'bg-ember-500/15 text-ink-100 font-semibold ring-1 ring-inset ring-ember-500/50' : 'text-ink-200 hover:bg-ink-100/[0.06]',
               )}
             >
               {line || '♪'}
             </button>
-          ))}
-        </div>
-        <button
-          onClick={() => void create()}
-          disabled={busy || !sel.length}
-          className="mt-4 w-full py-3 rounded-full btn-primary disabled:opacity-50"
-        >
-          {busy ? 'Creating…' : sel.length ? `Create card (${sel.length})` : 'Select lines'}
-        </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={() => void create()}
+        disabled={busy || !sel.length}
+        className="mt-4 w-full py-3 rounded-full btn-primary disabled:opacity-50"
+      >
+        {busy ? 'Creating…' : sel.length ? `Create card (${sel.length})` : 'Select lines'}
+      </button>
     </Sheet>
   );
 }

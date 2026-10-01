@@ -8,8 +8,13 @@ import { NextIcon, PauseIcon, PlayIcon, PrevIcon, ChevronDownIcon } from '@/comp
 import { EmptyState } from '@/components/States';
 import { Link } from 'react-router-dom';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import '@/styles/pages/player.css';
 
-/** Big-target, low-distraction player for driving / hands-busy use. */
+/**
+ * Big-target, low-distraction player for driving / hands-busy use: the
+ * artwork, the song, and three squircles — previous, play (Iris), next —
+ * each far larger than a fingertip. Styled in styles/pages/player.css.
+ */
 export default function DriveModePage() {
   usePageTitle('Drive Mode');
   const song = useCurrentSong();
@@ -21,33 +26,27 @@ export default function DriveModePage() {
   useFocusTrap(dialogRef, !!song, () => navigate(-1));
 
   if (!song) {
-    return <EmptyState title="Nothing playing" message="Start a song, then switch to Drive Mode." action={<Link to="/" className="px-5 py-2.5 rounded-full btn-primary">Browse</Link>} />;
+    return <EmptyState title="Nothing playing" message="Start a song, then switch to Drive Mode." action={<Link to="/" className="vx-tap px-5 py-2.5 rounded-full btn-primary">Browse</Link>} />;
   }
 
   return createPortal(
-    <div
-      ref={dialogRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Drive Mode"
-      className="fixed inset-0 z-50 bg-ink-950 flex flex-col items-center justify-center px-6 text-center"
-    >
-      <button onClick={() => navigate(-1)} aria-label="Exit Drive Mode" className="absolute top-[max(1rem,env(safe-area-inset-top))] left-4 p-3 text-ink-300">
-        <ChevronDownIcon className="w-8 h-8" />
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Drive Mode" className="vx-drive">
+      <button type="button" onClick={() => navigate(-1)} aria-label="Exit Drive Mode" className="vx-drive-close">
+        <ChevronDownIcon />
       </button>
-      <img src={bestImage(song.images, 300)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="w-48 h-48 rounded-xl object-cover shadow-[var(--vx-art-shadow)] mb-8" />
-      <h1 className="text-page-title font-extrabold leading-tight line-clamp-2">{song.title}</h1>
-      <p className="text-lg text-ink-300 mt-2 truncate max-w-full">{song.subtitle}</p>
+      <img src={bestImage(song.images, 300)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" className="vx-drive-art" />
+      <h1 className="vx-drive-title line-clamp-2">{song.title}</h1>
+      <p className="vx-drive-artist">{song.subtitle}</p>
 
-      <div className="flex items-center justify-center gap-6 mt-12 w-full">
-        <button onClick={prev} aria-label="Previous" className="w-24 h-24 rounded-full bg-ink-800 active:bg-ink-700 flex items-center justify-center">
-          <PrevIcon className="w-12 h-12 text-ink-100" />
+      <div className="vx-drive-transport">
+        <button type="button" onClick={prev} aria-label="Previous" className="vx-drive-skip">
+          <PrevIcon />
         </button>
-        <button onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="w-32 h-32 rounded-full btn-primary flex items-center justify-center active:scale-95 transition-transform">
-          {isPlaying ? <PauseIcon className="w-16 h-16" /> : <PlayIcon className="w-16 h-16 ml-2" />}
+        <button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="vx-drive-play">
+          {isPlaying ? <PauseIcon /> : <PlayIcon className="ml-1.5" />}
         </button>
-        <button onClick={() => next(true)} aria-label="Next" className="w-24 h-24 rounded-full bg-ink-800 active:bg-ink-700 flex items-center justify-center">
-          <NextIcon className="w-12 h-12 text-ink-100" />
+        <button type="button" onClick={() => next(true)} aria-label="Next" className="vx-drive-skip">
+          <NextIcon />
         </button>
       </div>
     </div>,

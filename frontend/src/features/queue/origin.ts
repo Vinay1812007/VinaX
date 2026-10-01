@@ -5,7 +5,7 @@ import { usePlayerStore } from '@/store/playerStore';
  *
  *  - `manual`: the listener ("Add to queue", "Play next", "Keep this song").
  *    It keeps its place through every rebuild and AI refinement.
- *  - `auto`: the DJ appended it. A rebuild ("Refresh up next", a tune, a pinned
+ *  - `auto`: VinaX appended it (the DJ's continuation). A rebuild ("Refresh up next", a tune, a pinned
  *    mood) replaces it; "Keep this song" turns it into the listener's own.
  *  - `list`: neither — the album or playlist the listener started. A rebuild
  *    leaves these alone too (7.2); only the DJ's picks are replaced.
@@ -24,9 +24,15 @@ export function originOf(id: string): QueueOrigin {
   return 'list';
 }
 
-/** The marker's words. `list` entries carry no marker. */
+/**
+ * The marker's words. `list` entries carry no marker.
+ *
+ * 9.0 — an automatic entry reads "VinaX pick": the app chose it to follow
+ * what's playing (the DJ is how it chooses). The words are the meaning; the
+ * marker's tint only repeats them.
+ */
 export const ORIGIN_LABEL: Record<QueueOrigin, string | null> = {
-  auto: 'DJ pick',
+  auto: 'VinaX pick',
   manual: 'Added by you',
   list: null,
 };
