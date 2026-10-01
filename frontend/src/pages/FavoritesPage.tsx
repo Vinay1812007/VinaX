@@ -7,18 +7,24 @@ import { EntityAction, EntityHeader, EntityMeta, GlyphCover, PlayFab, songsLabel
 import { VirtualChunks } from '@/components/VirtualChunks';
 import { EmptyState } from '@/components/States';
 import { Chip } from '@/components/Chip';
-import { ShuffleIcon, DownloadIcon, HeartIcon } from '@/components/Icons';
+import { ShuffleIcon, DownloadIcon, HeartIcon, SearchIcon, XIcon } from '@/components/Icons';
 import { Link } from 'react-router-dom';
 import type { Song } from '@/types';
 import { isNativePlatform } from '@/services/native';
 import { downloadMany, downloadFailureMessage } from '@/services/downloads';
 import { toast } from '@/store/toastStore';
 import { useSessionState } from '@/hooks/useSessionState';
+import { filterSongs, songCount } from '@/features/library/collectionEdit';
 
 type SortMode = 'recent' | 'title' | 'artist';
+const SORTS: Array<{ id: SortMode; label: string }> = [
+  { id: 'recent', label: 'Recently added' },
+  { id: 'title', label: 'Title' },
+  { id: 'artist', label: 'Artist' },
+];
 
 /** .vx-track-row min-height — the off-screen size estimate for list chunks. */
-const SONG_ROW_HEIGHT = 56;
+const SONG_ROW_HEIGHT = 60;
 const songKey = (song: Song): string => song.id;
 
 function sortSongs(songs: Song[], mode: SortMode): Song[] {
@@ -28,6 +34,11 @@ function sortSongs(songs: Song[], mode: SortMode): Song[] {
   );
 }
 
+/**
+ * Liked songs. 9.0 "Encore": the Iris → Lagoon cover, play / shuffle /
+ * download in the header, and a search over title, artist and album that
+ * narrows the list (Play then plays what you see).
+ */
 export default function FavoritesPage() {
   usePageTitle('Liked songs');
   const favorites = useLibraryStore((s) => s.favorites);
@@ -35,7 +46,9 @@ export default function FavoritesPage() {
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const shuffle = usePlayerStore((s) => s.shuffle);
   const [sort, setSort] = useSessionState<SortMode>('vinax.favorites.sort.v1', 'recent');
-  const sorted = useMemo(() => sortSongs(favorites, sort), [favorites, sort]);
+  const [query, setQuery] = useState('');
+  const sorted = useMemo(() => sortSongs(filterSongs(favorites, query), sort), [favorites, sort, query]);
+  const filtering = query.trim() !== '';
   // Stable per `sorted`, so list chunks (and the memoised rows) skip re-rendering on unrelated page state.
   const renderRow = useCallback((song: Song, i: number) => <SongRow song={song} songs={sorted} index={i} />, [sorted]);
   const [dlBusy, setDlBusy] = useState(false);
@@ -53,6 +66,7 @@ export default function FavoritesPage() {
   };
 
   const shufflePlay = () => {
+    if (!sorted.length) return;
     if (!shuffle) toggleShuffle();
     playQueue(sorted, Math.floor(Math.random() * sorted.length));
   };
@@ -67,11 +81,11 @@ export default function FavoritesPage() {
         meta={<EntityMeta items={[songsLabel(favorites.length), totalDuration(favorites), 'Stored on this device']} />}
         actions={favorites.length > 0 ? (
           <>
-            <PlayFab label="Play all" onClick={() => playQueue(sorted, 0)} />
-            <EntityAction label="Shuffle" onClick={shufflePlay}><ShuffleIcon /></EntityAction>
+            <PlayFab size="lg" label={filtering ? `Play these ${sorted.length}` : 'Play all'} onClick={() => sorted.length && playQueue(sorted, 0)} disabled={!sorted.length} />
+            <EntityAction label="Shuffle" onClick={shufflePlay} disabled={!sorted.length}><ShuffleIcon /></EntityAction>
             {isNativePlatform() && (
               <>
-                <EntityAction label={dlBusy ? `Downloading ${dlDone} of ${sorted.length}` : 'Download'} onClick={() => void downloadAll()} disabled={dlBusy}>
+                <EntityAction label={dlBusy ? `Downloading ${dlDone} of ${sorted.length}` : 'Download'} onClick={() => void downloadAll()} disabled={dlBusy || !sorted.length}>
                   <DownloadIcon />
                 </EntityAction>
                 {dlBusy && <span className="vx-etools-note tabular-nums" aria-hidden>{dlDone}/{sorted.length}</span>}
@@ -82,12 +96,34 @@ export default function FavoritesPage() {
       />
 
       {favorites.length > 0 && (
-        <div className="vx-etools" role="group" aria-label="Sort liked songs">
-          {(['recent', 'title', 'artist'] as SortMode[]).map((m) => (
-            <Chip key={m} active={sort === m} onClick={() => setSort(m)}>
-              {m === 'recent' ? 'Recently added' : m === 'title' ? 'Title' : 'Artist'}
-            </Chip>
-          ))}
+        <div className="vx-etools">
+          <label htmlFor="liked-search" className="sr-only">Search in liked songs</label>
+          <span className="vx-lfield">
+            <SearchIcon />
+            <input
+              id="liked-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search in liked songs"
+              autoComplete="off"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="vx-lfield-clear">
+                <XIcon className="w-4 h-4" />
+              </button>
+            )}
+          </span>
+          <span className="vx-etools-group" role="group" aria-label="Sort liked songs">
+            {SORTS.map((m) => (
+              <Chip key={m.id} active={sort === m.id} onClick={() => setSort(m.id)}>{m.label}</Chip>
+            ))}
+          </span>
+          {filtering && (
+            <span className="vx-etools-note" role="status">
+              {sorted.length ? `${songCount(sorted.length)} match` : 'No songs match'} “{query.trim()}”
+            </span>
+          )}
         </div>
       )}
 
@@ -97,6 +133,13 @@ export default function FavoritesPage() {
           title="No liked songs yet"
           message="Tap the heart on any song. Favorites power your “Similar to Favorites” recommendations."
           action={<Link to="/discover" className="px-5 py-2.5 rounded-full btn-primary">Discover music</Link>}
+        />
+      ) : sorted.length === 0 ? (
+        <EmptyState
+          icon={<SearchIcon className="w-8 h-8" />}
+          title="No matches"
+          message={`None of your liked songs matches “${query.trim()}”.`}
+          action={<button type="button" onClick={() => setQuery('')} className="px-5 min-h-[44px] rounded-full btn-primary">Clear search</button>}
         />
       ) : (
         <div className="vx-tracklist">

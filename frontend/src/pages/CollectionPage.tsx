@@ -31,6 +31,8 @@ import type { Song } from '@/types';
  * v6.1.0 — in-collection text search, multi-select with copy / move /
  * remove, and Undo for every destructive edit. Edits act on the STORED list
  * (ids), so a sorted or filtered view never changes the playback order.
+ * 9.0 "Encore": the artwork header, a clear search, a selection bar that stays
+ * under the top bar while you pick, and a Reorder mode on phones.
  */
 export default function CollectionPage() {
   const { id } = useParams();
@@ -53,6 +55,8 @@ export default function CollectionPage() {
   // v6.1.0 — search + multi-select state.
   const [query, setQuery] = useState('');
   const [selecting, setSelecting] = useState(false);
+  // 9.0 — phones show the move buttons only while reordering; wider screens reveal them on hover.
+  const [reordering, setReordering] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [targetId, setTargetId] = useState('');
   const [editing, setEditing] = useState(false);
@@ -130,8 +134,12 @@ export default function CollectionPage() {
   };
   const remove = () => {
     const label = collection.name;
-    deleteCollection(collection.id);
-    toast(`Deleted “${label}” — restore it from Recently deleted in your Library`);
+    const cid = collection.id;
+    deleteCollection(cid);
+    toast(`Deleted “${label}” — it waits in Recently deleted for 7 days`, {
+      action: { label: 'Undo', onClick: () => useLibraryStore.getState().restoreCollection(cid) },
+      duration: 7000,
+    });
     navigate('/library');
   };
   const dedupe = () => {
@@ -233,7 +241,7 @@ export default function CollectionPage() {
         }
         actions={
           <>
-            <PlayFab label="Play" onClick={playAll} disabled={!visible.length} />
+            <PlayFab size="lg" label="Play" onClick={playAll} disabled={!visible.length} />
             <EntityAction label="Shuffle play" onClick={shufflePlay} disabled={!visible.length}><ShuffleIcon /></EntityAction>
             {isNativePlatform() && (
               <>
@@ -304,14 +312,14 @@ export default function CollectionPage() {
             <b>{duplicates} duplicate{duplicates === 1 ? '' : 's'}</b>
             <span> — the same song appears more than once.</span>
           </span>
-          <button onClick={dedupe} className="vx-quiet-btn">Remove duplicates</button>
+          <button type="button" onClick={dedupe} className="vx-quiet-btn">Remove duplicates</button>
         </div>
       )}
 
       {songs.length > 0 && (
         <div className="vx-etools">
           <label htmlFor="collection-search" className="sr-only">Search in this playlist</label>
-          <span className="vx-field">
+          <span className="vx-lfield">
             <SearchIcon />
             <input
               id="collection-search"
@@ -319,31 +327,44 @@ export default function CollectionPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search in this playlist"
+              autoComplete="off"
             />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="vx-lfield-clear">
+                <XIcon className="w-4 h-4" />
+              </button>
+            )}
           </span>
-          <button
-            type="button"
-            onClick={() => (selecting ? exitSelect() : setSelecting(true))}
-            aria-pressed={selecting}
-            className="vx-quiet-btn"
-          >
-            {selecting ? 'Done' : 'Select'}
-          </button>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as CollectionSort)}
-            aria-label="Sort songs"
-            className="vx-select"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          {hasDownloads && (
-            <button onClick={() => setDownloadedOnly((v) => !v)} aria-pressed={downloadedOnly} className="vx-quiet-btn">
-              <DownloadIcon className="w-4 h-4" /> Downloaded only{downloadedOnly ? ` (${downloadedCount})` : ''}
+          <span className="vx-etools-group">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as CollectionSort)}
+              aria-label="Sort songs"
+              className="vx-lselect"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => (selecting ? exitSelect() : setSelecting(true))}
+              aria-pressed={selecting}
+              className="vx-quiet-btn"
+            >
+              {selecting ? 'Done' : 'Select'}
             </button>
-          )}
+            {reorderable && !selecting && (
+              <button type="button" onClick={() => setReordering((v) => !v)} aria-pressed={reordering} className="vx-quiet-btn vx-phone-only">
+                {reordering ? 'Done reordering' : 'Reorder'}
+              </button>
+            )}
+            {hasDownloads && (
+              <button type="button" onClick={() => setDownloadedOnly((v) => !v)} aria-pressed={downloadedOnly} className="vx-quiet-btn">
+                <DownloadIcon className="w-4 h-4" /> Downloaded only{downloadedOnly ? ` (${downloadedCount})` : ''}
+              </button>
+            )}
+          </span>
           {!reorderable && <span className="vx-etools-note">View only — the stored order is unchanged.</span>}
           {filtering && (
             <span className="vx-etools-note" role="status">
@@ -354,8 +375,8 @@ export default function CollectionPage() {
       )}
 
       {selecting && (
-        <div role="region" aria-label="Selected songs" className="vx-strip">
-          <span className="text-sm font-bold mr-1" aria-live="polite">{selectedIds.length} selected</span>
+        <div role="region" aria-label="Selected songs" className="vx-strip vx-select-bar">
+          <span className="vx-select-count" aria-live="polite">{selectedIds.length} selected</span>
           <button type="button" onClick={selectAllVisible} className="vx-quiet-btn">
             Select all shown
           </button>
@@ -364,7 +385,7 @@ export default function CollectionPage() {
             id="collection-target"
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
-            className="vx-select"
+            className="vx-lselect"
           >
             <option value="">Choose a playlist…</option>
             {otherCollections.map((c) => (
@@ -393,7 +414,7 @@ export default function CollectionPage() {
           <EmptyState icon={<DownloadIcon className="w-8 h-8" />} title="Nothing downloaded here yet" message="Turn off the Downloaded only filter, or download this collection." />
         )
       ) : (
-        <div className="vx-tracklist">
+        <div className={cn('vx-tracklist vx-ctracks', reordering && 'is-reordering')}>
           <TrackListHead lead={selecting ? 38 : 0} trail={(hasDownloads ? 26 : 0) + (reorderable ? 76 : 0) + (selecting ? 0 : 38)} />
           {/* Long playlists: rows render in content-visibility chunks so off-screen
               ones cost no layout or paint. Keys are index-free, so Move up / down
@@ -401,9 +422,9 @@ export default function CollectionPage() {
           <VirtualChunks
             items={visible}
             keyOf={(_song: Song, i: number) => rowKeys[i]}
-            rowHeight={56}
+            rowHeight={60}
             renderItem={(song: Song, i: number) => (
-            <div className={cn('vx-row-with vx-crow glass-card', selecting && selected.has(song.id) && 'is-picked')}>
+            <div className={cn('vx-row-with vx-crow', selecting && selected.has(song.id) && 'is-picked')}>
               {selecting && (
                 <span className="vx-crow-check">
                   <input
@@ -425,16 +446,16 @@ export default function CollectionPage() {
               )}
               {reorderable && (
                 <>
-                  <button aria-label="Move up" disabled={i === 0} onClick={() => moveInCollection(collection.id, i, i - 1)} className="vx-row-x vx-crow-move">
+                  <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => moveInCollection(collection.id, i, i - 1)} className="vx-row-x vx-crow-move">
                     <ChevronDownIcon className="w-4 h-4 rotate-180" />
                   </button>
-                  <button aria-label="Move down" disabled={i === visible.length - 1} onClick={() => moveInCollection(collection.id, i, i + 1)} className="vx-row-x vx-crow-move">
+                  <button type="button" aria-label="Move down" disabled={i === visible.length - 1} onClick={() => moveInCollection(collection.id, i, i + 1)} className="vx-row-x vx-crow-move">
                     <ChevronDownIcon className="w-4 h-4" />
                   </button>
                 </>
               )}
               {!selecting && (
-                <button aria-label={`Remove ${song.title} from playlist`} onClick={() => removeOne(song)} className="vx-row-x is-danger">
+                <button type="button" aria-label={`Remove ${song.title} from playlist`} onClick={() => removeOne(song)} className="vx-row-x is-danger vx-crow-remove">
                   <XIcon className="w-4 h-4" />
                 </button>
               )}

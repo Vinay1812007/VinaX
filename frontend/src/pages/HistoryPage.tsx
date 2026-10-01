@@ -122,58 +122,65 @@ export default function HistoryPage() {
         actions={entries.length > 0 ? (
           <>
             <PlayFab
+              size="lg"
               label={filtering ? `Play these ${shownSongs.length}` : 'Play all'}
               onClick={() => shownSongs.length && playQueue(shownSongs, 0)}
               disabled={shownSongs.length === 0}
             />
-            <EntityMenu items={[{ label: 'Clear all history', onSelect: clearHistoryWithUndo, danger: true }]} />
+            {/* v5.17.0 scoped clears live with the whole-history clear (9.0: in the ⋯ menu, away from the filters). */}
+            <EntityMenu
+              items={[
+                { label: 'Clear last hour', onSelect: () => clearWindow('the last hour', Date.now() - 3_600_000), danger: true },
+                { label: 'Clear today', onSelect: () => clearWindow('today', startOfToday()), danger: true },
+                { label: 'Clear all history', onSelect: clearHistoryWithUndo, danger: true },
+              ]}
+            />
           </>
         ) : undefined}
       />
 
       {entries.length > 0 && (
-        <div className="mb-6 space-y-3">
-          {/* v5.17.0 — search within history + scoped clears */}
-          <div className="vx-etools !mb-0">
-            <label className="vx-field">
-              <span className="sr-only">Search your history</span>
-              <SearchIcon />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search title or artist"
-                autoComplete="off"
-              />
-              {query && (
-                <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="vx-field-clear">
-                  <XIcon className="w-4 h-4" />
-                </button>
-              )}
-            </label>
-            <button type="button" onClick={() => clearWindow('the last hour', Date.now() - 3_600_000)} className="vx-quiet-btn is-danger">
-              Clear last hour
-            </button>
-            <button type="button" onClick={() => clearWindow('today', startOfToday())} className="vx-quiet-btn is-danger">
-              Clear today
-            </button>
-          </div>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-            {RANGES.map((r) => (
-              <Chip key={r.id} active={range === r.id} onClick={() => setRange(r.id)}>
-                {r.label}
-              </Chip>
-            ))}
-          </div>
-          {langs.length >= 2 && (
-            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-              <Chip active={lang == null} onClick={() => setLang(null)}>All languages</Chip>
-              {langs.map((l) => (
-                <Chip key={l} active={lang === l} onClick={() => setLang(lang === l ? null : l)}>
-                  {languageLabel(l)}
+        <div className="vx-hist-tools">
+          {/* v5.17.0 — search within history */}
+          <label className="vx-lfield">
+            <span className="sr-only">Search your history</span>
+            <SearchIcon />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search title or artist"
+              autoComplete="off"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="vx-lfield-clear">
+                <XIcon className="w-4 h-4" />
+              </button>
+            )}
+          </label>
+          <div className="vx-chip-scroll">
+            <div className="vx-chip-set" role="group" aria-label="When">
+              {RANGES.map((r) => (
+                <Chip key={r.id} active={range === r.id} onClick={() => setRange(r.id)}>
+                  {r.label}
                 </Chip>
               ))}
             </div>
+            {langs.length >= 2 && (
+              <div className="vx-chip-set" role="group" aria-label="Language">
+                <Chip active={lang == null} onClick={() => setLang(null)}>All languages</Chip>
+                {langs.map((l) => (
+                  <Chip key={l} active={lang === l} onClick={() => setLang(lang === l ? null : l)}>
+                    {languageLabel(l)}
+                  </Chip>
+                ))}
+              </div>
+            )}
+          </div>
+          {filtering && (
+            <p className="vx-etools-note" role="status">
+              {filtered.length ? `${filtered.length} play${filtered.length === 1 ? '' : 's'} in this view` : 'Nothing in this view'}
+            </p>
           )}
         </div>
       )}
@@ -201,7 +208,7 @@ export default function HistoryPage() {
           <TrackListHead trail={108} />
           {groups.map((g) => (
             <section key={g.label} aria-label={g.label}>
-              <h2 className="vx-day-label px-2">{g.label}</h2>
+              <h2 className="vx-day-label">{g.label}</h2>
               {g.items.map(({ entry, index }) => (
                 <div key={`${entry.song.id}-${entry.ts}`} className="vx-row-with">
                   <div className="vx-row-main">

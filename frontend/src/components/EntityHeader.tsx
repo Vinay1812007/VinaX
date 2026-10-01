@@ -1,4 +1,4 @@
-import { Children, Fragment, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Children, Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Song } from '@/types';
 import { extractVibrantColor } from '@/utils/color';
 import { cn } from '@/utils/cn';
@@ -7,12 +7,15 @@ import { DotsIcon, PlayIcon } from './Icons';
 import '@/styles/pages/library.css';
 
 /**
- * VinaX 8 entity header — album, playlist, collection, liked songs, history…
+ * VinaX 9 "Encore" entity header — album, playlist, artist, song, collection,
+ * liked songs, history, downloads, mixes.
  *
- * A wash of the artwork's own colour fades into the page behind a large
- * cover, a small type label, a display-size title and one meta line. The
- * action row underneath leads with the accent play button. Pages keep their
- * data, handlers and labels; this only arranges them.
+ * The artwork leads: a squircle cover (a circle for people) over a wash of
+ * the artwork's own colour that fades into the workspace. Copy follows — a
+ * small type label, a display-size title that steps down for long names, an
+ * optional description and one meta line. The action row underneath has one
+ * obvious play action (the Iris squircle), then quiet round actions and the
+ * ⋯ menu. Pages keep their data, handlers and labels; this only arranges them.
  */
 
 /** "R G B" of the artwork's most vibrant tone, or null while unknown / unreadable. */
@@ -55,6 +58,7 @@ interface EntityHeaderProps {
   artUrl?: string;
   /** Explicit header colour as an "R G B" triplet or `var(--token)`; wins over artUrl. */
   tone?: string;
+  /** A person: the cover is a circle instead of a squircle. */
   round?: boolean;
   description?: ReactNode;
   /** The meta line — pass <EntityMeta items={…} />. */
@@ -66,18 +70,25 @@ interface EntityHeaderProps {
   className?: string;
 }
 
+/** Title length (in UTF-16 units, close enough for a size step) → size class. */
+function titleSize(text: string | undefined): string | undefined {
+  const len = text?.length ?? 0;
+  if (len > 44) return 'is-xlong';
+  if (len > 22) return 'is-long';
+  return undefined;
+}
+
 export function EntityHeader({ kind, title, titleText, art, artUrl, tone, round, description, meta, children, actions, className }: EntityHeaderProps) {
   const sampled = useArtTone(tone ? undefined : artUrl);
   const hero = tone ?? sampled ?? 'var(--art)';
-  const len = titleText?.length ?? 0;
   return (
-    <section className={cn('vx-ehead', className)} style={{ '--hero': hero } as CSSProperties}>
+    <section className={cn('vx-ehead', round && 'is-person', className)} style={{ '--hero': hero } as CSSProperties}>
       <div className="vx-ehead-wash" aria-hidden />
       <header className="vx-ehead-main">
         <div className={cn('vx-ehead-art', round && 'is-round')}>{art}</div>
         <div className="vx-ehead-body">
           <p className="vx-ehead-kind">{kind}</p>
-          <h1 className={cn('vx-display vx-ehead-title', len > 40 ? 'is-xlong' : len > 22 && 'is-long')}>{title}</h1>
+          <h1 className={cn('vx-display vx-ehead-title', titleSize(titleText))}>{title}</h1>
           {description && <p className="vx-ehead-desc">{description}</p>}
           {meta}
           {children}
@@ -104,16 +115,19 @@ export function EntityMeta({ items }: { items: ReactNode[] }) {
   );
 }
 
-/** The 56px accent play button that leads every entity action row. */
-export function PlayFab({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+/**
+ * The Iris squircle that leads every entity action row. `lg` (64px, 56px on
+ * phones) is the entity-page size; `md` (56px) suits smaller result headers.
+ */
+export function PlayFab({ label, onClick, disabled, size = 'md' }: { label: string; onClick: () => void; disabled?: boolean; size?: 'md' | 'lg' }) {
   return (
-    <button type="button" className="vx-play-fab vx-ehead-fab" aria-label={label} title={label} onClick={onClick} disabled={disabled}>
+    <button type="button" className={cn('vx-play-fab vx-ehead-fab', size === 'lg' && 'is-lg')} aria-label={label} title={label} onClick={onClick} disabled={disabled}>
       <PlayIcon />
     </button>
   );
 }
 
-/** A secondary action in the row (shuffle, share, download…): a 48px glyph button. */
+/** A secondary action in the row (shuffle, share, download…): a quiet 48px round button. */
 export function EntityAction({ label, onClick, children, active, disabled, 'aria-pressed': pressed }: {
   label: string;
   onClick: () => void;
@@ -136,17 +150,47 @@ export interface EntityMenuItem {
   disabled?: boolean;
 }
 
+/** Room the player deck / tab bar takes at the bottom of the viewport. */
+const BOTTOM_CHROME = 160;
+
 /**
- * The row's ⋯ menu for the less frequent actions. Deliberately NOT labelled
+ * The ⋯ menu for the less frequent actions. Deliberately NOT labelled
  * "More options" — that name belongs to each song row's own menu.
+ *
+ * `size="md"` gives the 40px trigger used inside list rows; `align="end"`
+ * anchors the panel to the trigger's right edge (rows, cards). The panel
+ * opens upward when there is no room below it above the player.
  */
-export function EntityMenu({ items, label = 'More actions' }: { items: (EntityMenuItem | null | false)[]; label?: string }) {
+export function EntityMenu({
+  items,
+  label = 'More actions',
+  size = 'lg',
+  align = 'start',
+  className,
+}: {
+  items: (EntityMenuItem | null | false)[];
+  label?: string;
+  size?: 'md' | 'lg';
+  align?: 'start' | 'end';
+  /** Extra classes for the trigger button. */
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
+  const [up, setUp] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const id = useId();
   const list = items.filter((x): x is EntityMenuItem => !!x);
   const trigger = () => wrap.current?.querySelector('button');
+
+  // Measure before paint, so the panel never flashes on the wrong side.
+  useLayoutEffect(() => {
+    if (!open || !wrap.current) return;
+    const rect = wrap.current.getBoundingClientRect();
+    const need = list.length * 44 + 24;
+    const below = window.innerHeight - rect.bottom - BOTTOM_CHROME;
+    setUp(below < need && rect.top > need + 64);
+  }, [open, list.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -178,12 +222,26 @@ export function EntityMenu({ items, label = 'More actions' }: { items: (EntityMe
     els[next].focus();
   };
   return (
-    <span ref={wrap} className="vx-emenu">
-      <IconButton size="lg" label={label} onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls={open ? id : undefined} className="vx-ehead-icon">
-        <DotsIcon className="w-6 h-6" />
+    <span ref={wrap} className={cn('vx-emenu', open && 'is-open')}>
+      <IconButton
+        size={size}
+        label={label}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={open ? id : undefined}
+        className={className ?? 'vx-ehead-icon'}
+      >
+        <DotsIcon className={size === 'lg' ? 'w-6 h-6' : 'w-5 h-5'} />
       </IconButton>
       {open && (
-        <div ref={menu} id={id} role="menu" aria-label={label} className="vx-emenu-panel" onKeyDown={move}>
+        <div
+          ref={menu}
+          id={id}
+          role="menu"
+          aria-label={label}
+          className={cn('vx-emenu-panel', align === 'end' && 'is-end', up && 'is-up')}
+          onKeyDown={move}
+        >
           {list.map((item) => (
             <button
               key={item.label}
@@ -206,7 +264,9 @@ export function EntityMenu({ items, label = 'More actions' }: { items: (EntityMe
   );
 }
 
+export type GlyphTone = 'liked' | 'later' | 'history' | 'downloads' | 'smart';
+
 /** Square glyph cover for lists without artwork of their own (liked songs, history…). */
-export function GlyphCover({ icon, tone }: { icon: ReactNode; tone: 'liked' | 'later' | 'history' | 'downloads' }) {
+export function GlyphCover({ icon, tone }: { icon: ReactNode; tone: GlyphTone }) {
   return <div className={cn('vx-glyph-cover', `is-${tone}`)} aria-hidden>{icon}</div>;
 }
