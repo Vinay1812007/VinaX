@@ -3,12 +3,22 @@ import { dayPartLabel } from '@/utils/time';
 import type { ReasonComponent, RecommendationContext } from './types';
 import { MUSIC_STYLES, offStyleWhy, styleWhy, type MusicStyle } from './style';
 
-/** Honest, human one-liners for shelves and suggestions. */
+/**
+ * 9.0.0 — the smallest contribution that counts as a reason for "Why this
+ * song?". Smaller terms moved the score too little to be the answer.
+ */
+export const MIN_REASON_WEIGHT = 0.02;
+/** 9.0.0 — said when no term is a real reason (instead of claiming the song is popular). */
+export const GENERIC_REASON = 'Picked on this device from your listening';
+
+/** Honest, human one-liners for shelves and suggestions. '' when the term makes no claim worth saying. */
 export function explainReasons(reasons: ReasonComponent[]): string {
   const top = reasons[0];
-  if (!top) return 'Popular right now';
+  if (!top) return GENERIC_REASON;
   switch (top.kind) {
     case 'language':
+      // 9.0.0 — the seed-language match is about the song playing, not the listener's habits.
+      if (top.detail?.startsWith('same:')) return 'In the same language as the song playing';
       return `Because you listen to ${languageLabel(top.detail ?? null)} music`;
     case 'artist':
       return top.detail ? `Because you play ${top.detail}` : 'From artists you favor';
@@ -66,7 +76,8 @@ export function explainReasons(reasons: ReasonComponent[]): string {
     case 'dial':
       return top.weight < 0 ? 'Held back by your taste dials' : 'Nudged up by your taste dials';
     case 'popularity':
-      return 'Popular right now';
+      // An unknown play count earns a neutral placeholder value: no claim.
+      return top.detail === 'unknown' ? '' : 'Popular right now';
     // 8.2.0
     case 'taste':
       return 'Close to the songs you love';
@@ -94,17 +105,25 @@ export function explainReasons(reasons: ReasonComponent[]): string {
  * Package C4 — the fuller "why am I seeing this?" line: up to `max` distinct
  * top reasons joined into one honest sentence ("Because you play Sid Sriram ·
  * trending in your languages"). Plain words, no jargon, computed on-device.
+ *
+ * 9.0.0 — only terms that actually ADDED at least MIN_REASON_WEIGHT to the
+ * score are reasons. 8.x took the top three kinds whatever their sign, so a
+ * song could be "explained" by a penalty ("Recently played", "Held back a
+ * little…"), and an unknown play count read as "Popular right now". With no
+ * real reason the line says so plainly (GENERIC_REASON).
  */
 export function explainTopReasons(reasons: ReasonComponent[], max = 3): string {
   const seen = new Set<string>();
   const parts: string[] = [];
-  for (const r of reasons) {
+  for (const r of [...reasons].sort((a, b) => b.weight - a.weight)) {
     if (parts.length >= max) break;
-    if (seen.has(r.kind)) continue;
+    if (!(r.weight >= MIN_REASON_WEIGHT) || seen.has(r.kind)) continue;
+    const line = explainReasons([r]);
+    if (!line) continue;
     seen.add(r.kind);
-    parts.push(explainReasons([r]));
+    parts.push(line);
   }
-  return parts.length ? parts.join(' · ') : 'Popular right now';
+  return parts.length ? parts.join(' · ') : GENERIC_REASON;
 }
 
 export function explainMix(kind: string, ctx: RecommendationContext, detail?: string): string {

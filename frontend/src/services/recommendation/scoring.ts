@@ -267,7 +267,8 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
     add('mood', moodMatchScore(cp.mood, seedProfile.mood) * W.mood * Math.min(conf.mood, sc.mood), seedProfile.mood);
     add('vibe', overlap(cp.vibes, seedProfile.vibes) * W.vibe * Math.min(conf.vibes, sc.vibes));
     add('genre', overlap(cp.genres, seedProfile.genres) * W.genre * Math.min(conf.genres, sc.genres));
-    if (cp.language && cp.language === seedProfile.language) add('language', W.language, cp.language);
+    // 9.0.0 — "same:" tells "Why this song?" this is the playing song's language, not the listener's habit.
+    if (cp.language && cp.language === seedProfile.language) add('language', W.language, `same:${cp.language}`);
     if (cp.dialect && cp.dialect === seedProfile.dialect) add('dialect', W.dialect, cp.dialect);
     if (cp.subLanguage && cp.subLanguage === seedProfile.subLanguage) add('dialect', W.dialect * 0.65, cp.subLanguage);
     add('energy', (1 - Math.abs(cp.energy - seedProfile.energy)) * W.energy * Math.min(conf.energy, sc.energy));
@@ -305,7 +306,8 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   const lastSeen = artistLastSeen(profile, artistIds, artistNames);
   if (lastSeen && Date.now() - lastSeen < 7 * 86_400_000) add('artist', ARTIST_RECENT_BASE * artistGain * blend, leadName);
 
-  add('popularity', song.playCount ? Math.min(Math.log10(song.playCount + 1) / 8, 1) * W.popularity * 3 : 0.04);
+  // An unknown play count gets a small neutral value; "unknown" keeps "Why this song?" from calling the song popular.
+  add('popularity', song.playCount ? Math.min(Math.log10(song.playCount + 1) / 8, 1) * W.popularity * 3 : 0.04, song.playCount ? null : 'unknown');
 
   // 8.2.0 — taste fit: the whole-song resemblance to what the listener loves
   // and plays lately (artists, album, language, genres, mood, vibes, decade

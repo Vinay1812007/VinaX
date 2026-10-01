@@ -28,7 +28,7 @@ describe('explainTopReasons (C4)', () => {
   });
 
   it('falls back honestly when there are no reasons', () => {
-    expect(explainTopReasons([])).toBe('Popular right now');
+    expect(explainTopReasons([])).toBe('Picked on this device from your listening');
   });
 });
 
@@ -50,5 +50,37 @@ describe('8.3.0 — the style line', () => {
     expect(explainReasons([r('style', 0.4, 'devotional')])).toBe('More devotional songs, like the one playing');
     expect(explainReasons([r('style', -0.3, 'off-dj')])).toBe('Held back — not a DJ remix song');
     expect(explainReasons([r('style', 0.1)])).toBe('Keeps the style that is playing');
+  });
+});
+
+describe('9.0.0 — "Why this song?" quotes only what added to the score', () => {
+  it('never explains a song by a penalty', () => {
+    const line = explainTopReasons([r('history', -0.5), r('served', -0.04, 'shown recently'), r('fatigue', -0.08), r('related', 0.18, 'Neeli Megham')]);
+    expect(line).toBe('Similar to “Neeli Megham”');
+  });
+
+  it('an unknown play count is not "Popular right now"', () => {
+    expect(explainTopReasons([r('popularity', 0.04, 'unknown')])).toBe('Picked on this device from your listening');
+    expect(explainTopReasons([r('popularity', 0.12)])).toBe('Popular right now');
+  });
+
+  it('tells the playing song’s language apart from the listener’s habit', () => {
+    expect(explainReasons([r('language', 0.12, 'same:telugu')])).toBe('In the same language as the song playing');
+    expect(explainReasons([r('language', 0.2, 'telugu')])).toBe('Because you listen to Telugu music');
+  });
+
+  it('a term too small to matter is not a reason', () => {
+    expect(explainTopReasons([r('time', 0.005), r('dial', 0.01)])).toBe('Picked on this device from your listening');
+  });
+
+  it('a real scored candidate gets reasons from its real terms', async () => {
+    const { scoreCandidate } = await import('./scoring');
+    const { createEmptyProfile } = await import('../personalization/profile');
+    const song = { kind: 'song', id: 'x', title: 'X', subtitle: 'A', artists: [{ id: 'a', name: 'A' }], album: null, images: [], audio: [], duration: 200, language: 'telugu', year: null, explicit: false, hasLyrics: false, playCount: null } as const;
+    const scored = scoreCandidate({ song: { ...song }, source: 'related', seedTitle: 'Seed' }, { profile: createEmptyProfile(0), hour: 12, region: null, pinnedLanguages: [], mutedLanguages: [], intensity: 0.6, favorites: [], history: [], salt: 1, seedSong: { ...song, id: 'seed' } });
+    const line = explainTopReasons(scored.reasons);
+    expect(line).toContain('Similar to “Seed”');
+    expect(line).toContain('In the same language as the song playing');
+    expect(line).not.toMatch(/Popular right now/);
   });
 });

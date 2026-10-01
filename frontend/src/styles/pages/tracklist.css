@@ -210,6 +210,9 @@ html.reduce-motion .vx-eq i { animation: none; transform: scaleY(0.7); }
   .vx-track-play { gap: 12px; }
   .vx-track-number { display: none; }
   .vx-track-row.is-numbered .vx-track-art-over { display: grid; }
+  /* A row without artwork (album lists) keeps its number, or it would have nothing on its leading edge. */
+  .vx-track-row.no-art .vx-track-number { display: grid; }
+  .vx-track-row.no-art .vx-track-play { padding-left: 2px; }
 }
 html[data-density='compact'] .vx-track-row,
 html[data-density='compact'] .vx-track-play { min-height: 50px; }

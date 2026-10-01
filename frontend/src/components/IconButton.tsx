@@ -15,6 +15,8 @@ interface Props {
   /** Disclosure buttons (menus, panels). */
   'aria-expanded'?: boolean;
   'aria-controls'?: string;
+  /** 9.0.0 — the guided tour's anchor (features/tutorials). */
+  'data-tour'?: string;
   children: ReactNode;
 }
 
@@ -30,6 +32,7 @@ export function IconButton({
   'aria-pressed': ariaPressed,
   'aria-expanded': ariaExpanded,
   'aria-controls': ariaControls,
+  'data-tour': dataTour,
   children,
 }: Props) {
   return (
@@ -39,6 +42,7 @@ export function IconButton({
       aria-pressed={ariaPressed}
       aria-expanded={ariaExpanded}
       aria-controls={ariaControls}
+      data-tour={dataTour}
       title={label}
       onClick={onClick}
       disabled={disabled}
