@@ -69,7 +69,7 @@ frontend/                       the app (web and Android share this bundle)
   src/services/audio/           the audio engine and effects
   src/services/media-session/   lock-screen and headset controls, native plugin bridge
   src/services/storage/         guarded localStorage, IndexedDB event log, migrations
-  src/styles/                   design tokens (index.css, flow.css)
+  src/styles/                   design tokens (index.css), the shell (shell.css), page styles (pages/)
   public/sw.js                  service worker
   public/admin/                 owner console (static page)
   native-android/               Java sources copied into the generated Android project

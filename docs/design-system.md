@@ -41,7 +41,7 @@ Shell components: `Sidebar`, `TopBar`, `BottomNav`, `PlayerBar` (compact player 
 | File | What it owns |
 | --- | --- |
 | `frontend/src/styles/index.css` | Every token (`:root`), the light / black / accent overrides, the glass and button primitives, the reduced-motion kill switch |
-| `frontend/src/styles/flow.css` | Component layout only: shell, top bar, sidebar, dock, shelves, track rows, heroes, Home Studio, VinaX AI layout. It defines no theme tokens, with one exception: it re-computes `--vx-topbar-h` for phones |
+| `frontend/src/styles/shell.css` | The frame and shared primitives (see the table above). It defines no theme tokens, with one exception: it re-computes `--vx-topbar-h` for phones |
 | `frontend/src/styles/festivals.css` | The festival themes. (8.0 removed `discovery.css`; Search and Discover styles live in `styles/pages/browse.css`) |
 | `frontend/tailwind.config.ts` | Maps the tokens to utility classes (`bg-ink-900`, `text-ember-400`, `text-page-title`, `rounded-card`, `min-h-touch`) |
 | `frontend/src/components/*` | The primitives: `Button`, `IconButton`, `Chip`, `Sheet`, `TopBar`, `PageHeader`, `SectionHeader`, `Shelf`, `MediaCard`, `SongRow`, `TrackMenu`, `Skeletons`, `States`, `Toasts` |
@@ -78,8 +78,8 @@ Raw ramps are stored as space-separated RGB triplets so Tailwind can apply alpha
 | | 600, 500 | Dividers, disabled, decorative icons |
 | | 400, 300 | Muted and secondary text. 400 is the floor for meaningful copy |
 | | 200, 100 | Body and primary text |
-| `--ember-*` | 600, 500, 400, 300 | The accent: calls to action, focus, active states. 400 is the accent text tier. Default is violet |
-| `--tide-*` | 500, 400 | Support colour for secondary links and reasons |
+| `--ember-*` | 600, 500, 400, 300 | The accent, "Iris": play, progress, focus, active states, chosen filters. 400 is the accent text tier. Default `140 120 255` |
+| `--tide-*` | 500, 400 | "Lagoon", the support colour: live and AI moments, secondary links, the Iris → Lagoon gradient. Default `34 211 238` |
 
 In the light theme the ink ramp inverts and every accent ramp re-pitches darker so accent text stays readable on a light canvas.
 
@@ -107,9 +107,9 @@ One family: Manrope variable, self-hosted at `/fonts/manrope-var.woff2`, weights
 
 | Token | Value | Tailwind class | Used for |
 | --- | --- | --- | --- |
-| `--vx-type-display` | `clamp(2rem, 3vw, 3rem)` | `text-display` | Entity heroes, the Home hero title |
-| `--vx-type-page` | `clamp(1.75rem, 2.5vw, 2.25rem)` | `text-page-title` | Page `h1` — the same token `PageHeader` renders |
-| `--vx-type-section` | `1.25rem` | `text-title` | Section and shelf headings |
+| `--vx-type-display` | `clamp(2.25rem, 4vw, 3.75rem)` | `text-display` | Entity heroes, the Home hero title |
+| `--vx-type-page` | `clamp(1.875rem, 3vw, 2.625rem)` | `text-page-title` | Page `h1` — the same token `PageHeader` renders |
+| `--vx-type-section` | `1.375rem` | `text-title` | Section and shelf headings |
 | `--vx-type-card` | `.9375rem` | `text-card-title` | Card titles |
 | `--vx-type-body` | `.9375rem` | `text-body` | Body copy |
 | `--vx-type-meta` | `.8125rem` | `text-meta` | Metadata, secondary rows, the top bar context label |
@@ -120,8 +120,8 @@ Headings track tight (`-0.035em` for display and page, `-0.025em` for sections) 
 ## Spacing, radii, elevation
 
 - Spacing: `--vx-space-1` to `--vx-space-16` on a 4px grid (4, 8, 12, 16, 20, 24, 32, 40, 48, 64). Tailwind's default spacing scale matches it.
-- Radii: `--vx-radius-control` 8px (buttons, inputs, nav links, tiles, track rows), `--vx-radius-card` 12px (artwork, cards), `--vx-radius-panel` 16px (heroes, panels). Tailwind adds `rounded-card` (0.75rem), `rounded-sheet` (1.25rem), `rounded-2xl` (0.875rem), `rounded-3xl` (1rem) and `rounded-pill`. Artist artwork is a circle.
-- Elevation is flat. `flow.css` removes shadows from glass cards, panels, the dock and the player bar; separation comes from surface tiers and hairlines. Overlays use `--vx-shadow-overlay`. Tailwind's `shadow-card`, `shadow-float` and `shadow-lift` are contact shadows only.
+- Radii: `--vx-radius-control` 10px (inputs, tiles), `--vx-radius-card` 14px (cards), `--vx-radius-panel` 20px (heroes, panels, the workspace sheet); actions and filters are pills, play buttons and artwork squircles (see 9.0 Encore above). Tailwind adds `rounded-card` (0.75rem), `rounded-sheet` (1.25rem), `rounded-2xl` (0.875rem), `rounded-3xl` (1rem) and `rounded-pill`. Artist artwork is a circle.
+- Elevation is mostly flat: `shell.css` removes shadows from glass cards and panels; separation comes from surface tiers and hairlines. The floating player deck and artwork carry a soft shadow (`--vx-deck-shadow`, `--vx-art-shadow`). Overlays use `--vx-shadow-overlay`. Tailwind's `shadow-card`, `shadow-float` and `shadow-lift` are contact shadows only.
 
 ## The medium control scale
 
@@ -188,8 +188,8 @@ It also skips events an overlay already handled (`defaultPrevented`). The rule f
 ## Motion
 
 - One easing, `--ease-calm` (`cubic-bezier(0.32, 0.72, 0, 1)`), and three durations: 140ms (`--vx-motion-fast`), 200ms (`--vx-motion-normal`), 320ms (`--transition-slow`).
-- Flow is quiet by design: `flow.css` switches off the dock bounce and the VinaX AI pulse, and removes glow shadows.
-- Two switches silence motion: the OS `prefers-reduced-motion` setting and the in-app "Reduce motion" setting, which sets `html.reduce-motion`. `index.css` collapses every animation and transition under that class; `flow.css` does the same for `.vx-shell` and `.ai-root` under either switch. Marquee text falls back to an ellipsis.
+- Encore is quiet by design: no bounce, no pulsing glow; cards lift 3px on hover and their play button rises in.
+- Two switches silence motion: the OS `prefers-reduced-motion` setting and the in-app "Reduce motion" setting, which sets `html.reduce-motion`. `index.css` collapses every animation and transition under that class; `shell.css` does the same for `.vx-shell` and `.ai-root` under either switch. Marquee text falls back to an ellipsis.
 - CSS cannot stop a scripted scroll. Every scripted scroll asks `frontend/src/utils/motion.ts` first: `reducedMotion()` is true for either switch, and `scrollBehavior()` returns `'auto'` or `'smooth'` accordingly. Pass `behavior: scrollBehavior()` to `scrollIntoView`, `scrollTo` and `scrollBy`; never hard-code `'smooth'`. The shelf arrows, synced lyrics, the tutorial runner and the VinaX AI thread already do.
 - `prefers-reduced-transparency` replaces glass surfaces with solid ones.
 
