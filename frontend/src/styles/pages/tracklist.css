@@ -276,6 +276,30 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
 .vx-media-title a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .vx-media-subtitle { margin-top: 3px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.35; }
 
+/* The card's favourite badge (MediaCard): quiet until wanted. */
+.vx-card-fav {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgb(10 11 14 / 0.55);
+  color: #fff;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: opacity 160ms var(--ease-calm), transform 160ms var(--ease-calm), background-color 140ms var(--ease-calm);
+}
+.vx-card-fav::after { content: ''; position: absolute; inset: -6px; }
+.vx-card-fav:hover { background: rgb(10 11 14 / 0.75); }
+.vx-card-fav:active { transform: scale(0.9); }
+.vx-card-fav.is-on { color: rgb(var(--ember-400)); }
+.vx-card-fav.hover-reveal { opacity: 0; }
+.group:hover .vx-card-fav.hover-reveal, .group:focus-within .vx-card-fav.hover-reveal { opacity: 1; }
+@media (hover: none), (pointer: coarse) { .vx-card-fav.hover-reveal { opacity: 0; pointer-events: none; } }
+
 /* The card's play button: an Iris squircle that rises in on hover. */
 .card-play {
   position: absolute;

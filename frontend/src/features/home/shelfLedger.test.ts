@@ -47,3 +47,16 @@ describe('shelf ledger', () => {
     expect(ids(claimShelf('discovery', 0, [v('5', 'Monica - Lofi Flip', 'Anirudh'), v('6', 'Monica', 'Someone Else')]))).toEqual(['6']);
   });
 });
+
+describe('shelf ledger floor (9.0.0)', () => {
+  it('a full shelf thinned by repeats takes earlier songs back up to six, without claiming them', () => {
+    resetShelfLedger();
+    setShelfBlockOrder(['personal', 'discovery']);
+    claimShelf('personal', 0, ['a', 'b', 'c', 'd', 'e'].map(s));
+    // Eight songs, five of them already shown: three new ones would be a sparse shelf.
+    const out = claimShelf('discovery', 0, ['a', 'x', 'b', 'y', 'c', 'z', 'd', 'e'].map(s));
+    expect(ids(out)).toEqual(['a', 'x', 'b', 'y', 'c', 'z']);
+    // The songs it took back are not its claims (the first shelf's still are): a later short shelf keeps q only.
+    expect(ids(claimShelf('discovery', 1, ['a', 'x', 'q'].map(s)))).toEqual(['q']);
+  });
+});
