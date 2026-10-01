@@ -70,7 +70,7 @@ const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
 export const HISTORY_LIMIT = 20;
-export const BASE_WEIGHTS_VERSION = '1.2.0';
+export const BASE_WEIGHTS_VERSION = '1.3.0';
 export const EVAL_COMMAND = 'node frontend/scripts/eval-recs.mjs';
 
 export type RolloutMode = 'off' | 'experiment' | 'all';
@@ -99,11 +99,11 @@ export const REC_WEIGHT_TERMS: Record<RecWeightKey, { touches: string[]; note?: 
   genre: { touches: ['reason: genre — genre overlap with the seed', 'silent: listener genre affinity (× 0.6)'] },
   energy: { touches: ['reason: energy — closeness to the seed, to the listener average (× 0.35) and to the usual energy (× 0.3)'] },
   tempo: { touches: ['reason: tempo — closeness to the seed; to the listener average (× 0.35)'] },
-  artistAffinity: { touches: [], note: 'Declared but not read by the scorer: an override changes nothing.' },
+  artistAffinity: { touches: ["reason: artist — the listener's affinity for the lead artist (× 0.3 × the personal blend at the default) and the lift for an artist played in the last week"] },
   history: { touches: ['reason: history — subtracted for a recently played song'] },
   likes: { touches: ['reason: likes — added for a liked song'] },
   skips: { touches: ['reason: low-skip — subtracted for a song skipped before'] },
-  session: { touches: [], note: 'Declared but not read by the scorer: an override changes nothing.' },
+  session: { touches: ['reason: session — energy and language momentum of this sitting (±0.07 / +0.03 at the default, ramping in over five plays)', 'reason: mood — mood continuity with the session window'] },
   discovery: { touches: ['re-rank: discovery floor for explore candidates (× 0.2)'] },
   popularity: { touches: ['reason: popularity — log-scaled play count (× 3)'] },
   freshness: { touches: ['silent: released this year or last'] },

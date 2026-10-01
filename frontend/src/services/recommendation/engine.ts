@@ -164,10 +164,13 @@ export interface NextRecommendationOptions {
 
 /** 7.2.0 — the pipeline's own version, recorded with every continuation (developer breakdown, opt-in telemetry).
  *  8.2.0 — new sources (related artist, album, genre, proven picks), the no-audio rule, taste fit and the served/seed memories.
- *  8.3.0 — the listener's style (DJ remixes, folk, devotional) is kept going: a style source, a style term and a style quota. */
-export const PIPELINE_VERSION = '8.3.0';
+ *  8.3.0 — the listener's style (DJ remixes, folk, devotional) is kept going: a style source, a style term and a style quota.
+ *  9.0.0 — artists the sitting pushed away come last, the album and related-artist sources follow the song a stretch
+ *          continues from, an unplayable mark survives a copy that says nothing, the recent share of the taste vector
+ *          is capped, and the artist-affinity and session weights are read (weights 1.3.0). */
+export const PIPELINE_VERSION = '9.0.0';
 export function algorithmVersion(): string {
-  // The weights part names an owner override while one is applied ("1.2.0+rc7").
+  // The weights part names an owner override while one is applied ("1.3.0+rc7").
   return `${PIPELINE_VERSION}/${activeWeightsVersion()}`;
 }
 
@@ -209,6 +212,8 @@ const AI_BUDGET_MS = 24_000;
 const RANK_RESERVE_MS = 700;
 /** Songs kept in the validated reserve behind a continuation. */
 const RESERVE_SIZE = 12;
+/** 9.0.0 — a sitting artist pull at or below this (two skips, a "Not interested") holds the artist back in validation. */
+export const SITTING_AVOID_PULL = -0.6;
 /** 8.3.1 — a sitting ends after this much silence (as in services/personalization/sessionIntent). */
 const SITTING_GAP_MS = 45 * 60_000;
 
@@ -312,7 +317,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // 8.3.1 — under "Switch language" the style is searched in the language the queue switches TO
   // (the same pinned-first choice as the lock below); with no such language, not at all.
   const styleLanguage = tune === 'different-language' ? ctx.pinnedLanguages.find((l) => l !== seedLanguage) ?? null : undefined;
-  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, surface: ctx.surface ?? 'next', intentQuery, style, ...(styleLanguage !== undefined ? { styleLanguage } : {}), trendBonus: trend.bonus, trendLabel: trend.label, servedKeys: servedKeySet(), seedRepeatIds: lastSeedContinuation(seed) };
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, anchorSong: previous && previous.id !== seed.id ? previous : null, surface: ctx.surface ?? 'next', intentQuery, style, ...(styleLanguage !== undefined ? { styleLanguage } : {}), trendBonus: trend.bonus, trendLabel: trend.label, servedKeys: servedKeySet(), seedRepeatIds: lastSeedContinuation(seed) };
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
   const library = useLibraryStore.getState();
@@ -470,7 +475,9 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // 7.2.0 — the final policy, for every order that ships (local, AI, reserve top-up):
   // the discovery allocation and the familiar opening are enforced here too.
   // Under 'prefer' the sequencer already priced every detour; validation keeps the allow-list (in `rules`) and drops the lock.
-  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: languagePolicy === 'lock' ? lock : null, leadLanguage: languagePolicy === 'prefer' ? lock : null, familiarLanguages, discoveryIds, discoveryShare, previous, ...(style ? { style: { matches: isStyled, min: Math.ceil(STYLE_MIN_SHARE * limit), label: styleLabel(style) } } : {}) };
+  // 9.0.0 — artists this sitting pushed away (two skips, a "Not interested": a pull of −0.6 or below) come last.
+  const avoidLeads = new Set(Object.entries(intent?.artistPull ?? {}).filter(([, pull]) => pull <= SITTING_AVOID_PULL).map(([lead]) => lead));
+  const validateOptions: ValidateOptions = { ...rules, limit, lockLanguage: languagePolicy === 'lock' ? lock : null, leadLanguage: languagePolicy === 'prefer' ? lock : null, familiarLanguages, discoveryIds, discoveryShare, previous, avoidLeads, ...(style ? { style: { matches: isStyled, min: Math.ceil(STYLE_MIN_SHARE * limit), label: styleLabel(style) } } : {}) };
   const arcIds = new Set(arc.songs.map((s) => s.song.id));
   const local = validateSequence([...arc.songs.map((s) => s.song), ...orderedPool.filter((s) => !arcIds.has(s.id))], validateOptions);
   const songs = local.songs;

@@ -29,12 +29,15 @@ import type { RejectedCandidate, Relaxation, RelaxedRule } from './types';
  *           song);
  *        e. 8.3.0 — the style: while a style is active (DJ remixes, folk,
  *           devotional), at least `style.min` of the stretch is in it, or as
- *           many as the pool holds — off-style songs fill only the rest.
+ *           many as the pool holds — off-style songs fill only the rest;
+ *        f. 9.0.0 — a lead artist this sitting pushed away (`avoidLeads`:
+ *           two skips, a "Not interested") fills a slot only when nothing
+ *           else fits.
  *      When no remaining song satisfies all of them, they give way in the
- *      order b, c, a, e, then the language-mix rules, then d — each only for
- *      that slot; a, b, c and e are reported in `relaxed` (d never was: it is
- *      counted in `repairs`). A pool that holds fewer style songs than
- *      `style.min` is reported once as a 'style' relaxation.
+ *      order b, c, a, e, f, then the language-mix rules, then d — each only
+ *      for that slot; a, b, c, e and f are reported in `relaxed` (d never
+ *      was: it is counted in `repairs`). A pool that holds fewer style songs
+ *      than `style.min` is reported once as a 'style' relaxation.
  *
  * Order is otherwise preserved, so an accepted arc stays an arc. The local
  * order, the AI order and the reserve top-up all pass through here.
@@ -74,6 +77,17 @@ export interface ValidateOptions extends HardFilterOptions {
    * many (./style.ts, weights.ts STYLE_MIN_SHARE). Absent = no style rule.
    */
   style?: { matches: (s: Song) => boolean; min: number; label?: string } | null;
+  /**
+   * 9.0.0 — lead artists (trimmed, lower-case) this sitting pushed away: the
+   * session intent's artist pull at −0.6 or below (two skips of them, or a
+   * "Not interested"). Their songs come last: they fill a slot only once the
+   * discovery, opening, cap and style rules have given way and still nothing
+   * else fits — before the language-mix and back-to-back rules do. 8.x only
+   * scored them down a little, so after two skips a third and fourth song by
+   * the same artist still reached the next stretch whenever the discovery
+   * budget ran out.
+   */
+  avoidLeads?: ReadonlySet<string> | null;
 }
 
 export interface ValidateResult {
@@ -172,6 +186,8 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
   let offStyle = 0;
   const styleOk = (s: Song): boolean => inStyle(s) || offStyle < offStyleCap;
   if (style && styleAvailable < styleWanted) relax({ rule: 'style', detail: `${styleAvailable} ${style.label ?? 'in-style'} songs for ${styleWanted} slots; the rest may be other songs` });
+  const avoid = options.avoidLeads?.size ? options.avoidLeads : null;
+  const avoidOk = (s: Song): boolean => !avoid || !avoid.has(leadOf(s));
   const policy = (s: Song): boolean => capOk(s) && shareOk(s) && openOk(s) && mixOk(s) && styleOk(s);
   // Most rules first; each later tier gives one more rule way, in the order a
   // listener minds least: the discovery allocation (an internal budget), then
@@ -182,20 +198,32 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
   // shipped runs of one artist while other artists sat in the reserve.)
   // 8.3.0 — the style holds past the artist cap: in a DJ session a second
   // remix by one DJ is easier on the ear than a film song in the middle of it.
+  // 9.0.0 — a pushed-away artist waits through every tier that still holds the mix and spacing rules.
   const tiers: Array<(s: Song) => boolean> = [
-    (s) => policy(s) && apartOk(s),
-    (s) => capOk(s) && openOk(s) && mixOk(s) && styleOk(s) && apartOk(s),
-    (s) => capOk(s) && mixOk(s) && styleOk(s) && apartOk(s),
-    (s) => mixOk(s) && styleOk(s) && apartOk(s),
+    (s) => policy(s) && apartOk(s) && avoidOk(s),
+    (s) => capOk(s) && openOk(s) && mixOk(s) && styleOk(s) && apartOk(s) && avoidOk(s),
+    (s) => capOk(s) && mixOk(s) && styleOk(s) && apartOk(s) && avoidOk(s),
+    (s) => mixOk(s) && styleOk(s) && apartOk(s) && avoidOk(s),
+    (s) => mixOk(s) && apartOk(s) && avoidOk(s),
     (s) => mixOk(s) && apartOk(s),
     apartOk,
     () => true,
   ];
+  // The last tier that still holds the mix and spacing rules (for a pushed-away artist, see below).
+  const lastCleanTier = 5;
   while (rest.length && out.length < limit) {
     let pick = -1;
-    for (let t = 0; pick < 0; t += 1) pick = rest.findIndex(tiers[t]);
+    let tier = 0;
+    for (let t = 0; pick < 0; t += 1) {
+      pick = rest.findIndex(tiers[t]);
+      tier = t;
+    }
+    // 9.0.0 — a pushed-away artist never costs the mix or spacing rules: once
+    // the stretch has a song, it ends short instead (the player asks for more
+    // before the queue runs out, and the next plan gathers afresh).
+    if (tier > lastCleanTier && !avoidOk(rest[pick]) && out.length > 0) break;
     // A later song pulled forward past one that would repeat the previous lead artist.
-    const natural = rest.findIndex(policy);
+    const natural = rest.findIndex((s) => policy(s) && avoidOk(s));
     if (natural >= 0 && natural < pick && apartOk(rest[pick])) repairs += 1;
     const [song] = rest.splice(pick, 1);
     const at = { slot: out.length + 1, songId: song.id };
@@ -204,6 +232,7 @@ export function validateSequence(order: Song[], options: ValidateOptions): Valid
     if (!openOk(song)) relax({ rule: 'familiar-opening', ...at, detail: 'a discovery in the opening; no familiar song was left' });
     if (!mixOk(song)) relax({ rule: 'language-mix', ...at, detail: out.length < 2 ? 'an off-language song in the opening; nothing in the queue language was left' : prevOff ? 'two language changes in a row; nothing in the queue language was left' : 'more than half the stretch off-language; nothing else was left' });
     if (!styleOk(song)) relax({ rule: 'style', ...at, detail: `another song outside the ${style?.label ?? 'style'}; no song in it fit the other rules` });
+    if (!avoidOk(song)) relax({ rule: 'sitting-avoid', ...at, detail: 'an artist skipped this sitting; nothing else fit the slot' });
     if (!inStyle(song)) offStyle += 1;
     if (offLang(song)) offCount += 1;
     prevOff = offLang(song);

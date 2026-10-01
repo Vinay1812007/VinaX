@@ -143,9 +143,9 @@ const recConfig = (over: Record<string, unknown> = {}) => {
     history: [current, { version: 1, overrides: {}, rollout: { mode: 'off' }, note: 'first', evaluation: { summary: HOSTILE, url: 'javascript:alert(1)', at: '' }, updatedAt: PUBLISHED_AT, updatedBy: 'ops' }],
     weights: [
       { key: 'mood', default: 0.16, min: 0.08, max: 0.32, touches: [`reason: mood ${HOSTILE}`] },
-      { key: 'session', default: 0.12, min: 0.06, max: 0.24, touches: [], note: 'Declared but not read by the scorer: an override changes nothing.' },
+      { key: 'session', default: 0.12, min: 0.06, max: 0.24, touches: ['reason: session — energy and language momentum of this sitting'] },
     ],
-    range: { minFactor: 0.5, maxFactor: 2 }, baseVersion: '1.2.0', evalCommand: 'node frontend/scripts/eval-recs.mjs',
+    range: { minFactor: 0.5, maxFactor: 2 }, baseVersion: '1.3.0', evalCommand: 'node frontend/scripts/eval-recs.mjs',
     experiments: [{ key: 'rec-weights', name: HOSTILE, active: true, variants: [{ name: 'control', pct: 50 }, { name: HOSTILE, pct: 50 }] }],
     experimentsRead: 'ok',
     ...over,

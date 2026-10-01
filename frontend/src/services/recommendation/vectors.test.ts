@@ -56,6 +56,36 @@ describe('tasteVector', () => {
   });
 });
 
+describe('tasteVector — long-term and recent taste (9.0.0)', () => {
+  const favourites = Array.from({ length: 20 }, (_, i) => makeSong(`fav${i}`, { artist: 'Sid Sriram', album: album(`x${i % 3}`) }));
+  const longTermLike = makeSong('ltl', { artist: 'Sid Sriram', album: album('x1') });
+  const bingeLike = makeSong('bl', { artist: 'New Voice', album: album('b') });
+  // One night: forty finished plays of an artist the listener never played before.
+  const binge = Array.from({ length: 40 }, (_, i) => makePlay(makeSong(`b${i}`, { artist: 'New Voice', album: album('b') }), NOW - (i + 1) * 300_000));
+
+  it('one unusual night cannot take a long-standing taste over (recent listening holds at most 40 % of the weight)', () => {
+    const taste = tasteVector(favourites, binge, NOW);
+    expect(dot(songVector(longTermLike), taste)).toBeGreaterThan(dot(songVector(bingeLike), taste));
+    // …but it does register: the binge artist rises against no binge at all.
+    expect(dot(songVector(bingeLike), taste)).toBeGreaterThan(dot(songVector(bingeLike), tasteVector(favourites, [], NOW)) + 0.1);
+  });
+
+  it('8.x summed everything: the same night outweighed twenty favourites (kept as the reason for the cap)', () => {
+    // Recompute the 8.x sum by hand: every taste song's vector times its weight, one vector.
+    const sum = new Float32Array(VECTOR_DIM);
+    for (const s of favourites) songVector(s)!.forEach((x, i) => { sum[i] += x; });
+    for (const p of binge) songVector(p.song)!.forEach((x, i) => { sum[i] += x * Math.pow(0.5, (NOW - p.ts) / TASTE_HALF_LIFE_MS); });
+    const n = Math.sqrt(dot(sum, sum));
+    const old = Float32Array.from(sum, (x) => x / n);
+    expect(dot(songVector(bingeLike), old)).toBeGreaterThan(dot(songVector(longTermLike), old));
+  });
+
+  it('a thin long-term taste is not protected: with two favourites, a week of listening is the taste', () => {
+    const taste = tasteVector(favourites.slice(0, 2), binge, NOW);
+    expect(dot(songVector(bingeLike), taste)).toBeGreaterThan(dot(songVector(longTermLike), taste));
+  });
+});
+
 describe('embeddingTasteVector', () => {
   const unit = (...xs: number[]) => {
     const n = Math.hypot(...xs);

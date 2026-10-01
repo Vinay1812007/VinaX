@@ -14,7 +14,7 @@ import { coPlayAffinity, coPlayIndexFor } from './coplay';
 import type { Candidate, ReasonComponent, ReasonKind, RecommendationContext, ScoredCandidate } from './types';
 import { moodMatchScore } from './mood';
 import { buildSongProfile, overlap, type SongProfile } from './profiles';
-import { RECOMMENDATION_WEIGHTS, STYLE_WEIGHTS, TASTE_WEIGHTS } from './weights';
+import { DEFAULT_RECOMMENDATION_WEIGHTS, RECOMMENDATION_WEIGHTS, STYLE_WEIGHTS, TASTE_WEIGHTS, type RecommendationWeightKey } from './weights';
 import { styleEvidence, type MusicStyle } from './style';
 import { rerankCandidates } from './reranking';
 import { songKey } from './songIdentity';
@@ -63,6 +63,24 @@ const SOURCE_REASON: Record<Candidate['source'], ReasonKind> = {
   genre: 'genre',
   style: 'style',
 };
+
+/**
+ * 9.0.0 — the artist-affinity and session-window terms read their weights
+ * from the table (so an owner override reaches them). Until 9.0 they used
+ * these numbers directly and the table's `artistAffinity` and `session`
+ * entries were never read. Each term keeps exactly its 8.x strength at the
+ * default weight: term = base × (live weight ÷ default weight).
+ */
+const ARTIST_AFFINITY_BASE = 0.3; // × the profile's artist weight × the personal blend
+const ARTIST_RECENT_BASE = 0.05; // an artist played in the last week, × blend
+const SESSION_MOOD_BASE = 0.12; // × (mood match with the session window − 0.4)
+const SESSION_ENERGY_BASE = 0.14; // × (0.5 − energy distance): ±0.07 at full ramp
+const SESSION_LANGUAGE_BASE = 0.03; // the session's language run
+/** live ÷ default for one weight: exactly 1 on the defaults, so nothing moves until an override does. */
+export function weightGain(key: RecommendationWeightKey): number {
+  const d = DEFAULT_RECOMMENDATION_WEIGHTS[key];
+  return d > 0 ? RECOMMENDATION_WEIGHTS[key] / d : 1;
+}
 
 /** 7.2.0 — per extra source that found the same song, capped: agreement is evidence, not a trump card. */
 const AGREEMENT_STEP = 0.02;
@@ -233,6 +251,8 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
 
   const blend = frame.personalBlend;
   const W = RECOMMENDATION_WEIGHTS;
+  const artistGain = weightGain('artistAffinity');
+  const sessionGain = weightGain('session');
   const cp = buildSongProfile(song, c.classified);
   const conf = cp.confidence;
   const seedProfile = frame.seedProfile;
@@ -274,7 +294,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   const artistIds = song.artists.map((a) => a.id).filter(Boolean);
   const artistNames = song.artists.map((a) => a.name);
   const rawArtW = artistWeight(profile, artistIds, artistNames);
-  add('artist', rawArtW * 0.3 * blend, leadName);
+  add('artist', rawArtW * ARTIST_AFFINITY_BASE * artistGain * blend, leadName);
 
   // Roadmap O.3 — co-play similarity: candidates by artists this listener
   // plays in the same sitting as the seed's artists (catalog recommendation set
@@ -283,7 +303,7 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
 
   // Recency boost: artists you've played in the last week stay "hot".
   const lastSeen = artistLastSeen(profile, artistIds, artistNames);
-  if (lastSeen && Date.now() - lastSeen < 7 * 86_400_000) add('artist', 0.05 * blend, leadName);
+  if (lastSeen && Date.now() - lastSeen < 7 * 86_400_000) add('artist', ARTIST_RECENT_BASE * artistGain * blend, leadName);
 
   add('popularity', song.playCount ? Math.min(Math.log10(song.playCount + 1) / 8, 1) * W.popularity * 3 : 0.04);
 
@@ -317,8 +337,9 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   }
 
   // Mood continuity: nudge toward candidates whose mood matches the session's
-  // mood (session-based, so it applies even for a cold profile).
-  if (ctx.sessionMood) add('mood', (moodMatchScore(cp.mood, ctx.sessionMood) - 0.4) * 0.12 * conf.mood, ctx.sessionMood);
+  // mood (session-based, so it applies even for a cold profile). Part of the
+  // session window, so the `session` weight scales it (9.0.0).
+  if (ctx.sessionMood) add('mood', (moodMatchScore(cp.mood, ctx.sessionMood) - 0.4) * SESSION_MOOD_BASE * sessionGain * conf.mood, ctx.sessionMood);
 
   // Package A1 — session vector (energy + language momentum). Blended at a
   // gentle ~0.10 so the current-mood arc colours the ordering without
@@ -328,11 +349,11 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
     const ramp = Math.min(1, (ctx.sessionSize ?? 0) / 5); // full weight after ~5 plays
     // Closeness on the energy axis, signed around the midpoint: identical
     // energy → +, opposite → −. Max ±0.07 at full ramp and full confidence.
-    const energyNudge = (0.5 - Math.abs(cp.energy - ctx.sessionEnergy)) * 0.14 * ramp * conf.energy;
+    const energyNudge = (0.5 - Math.abs(cp.energy - ctx.sessionEnergy)) * SESSION_ENERGY_BASE * ramp * conf.energy;
     // Language momentum: you're on a run in one language right now. Small,
     // additive, distinct from the long-term pinned-language preference.
-    const langMomentum = ctx.sessionLanguage && song.language === ctx.sessionLanguage ? 0.03 * ramp : 0;
-    add('session', energyNudge + langMomentum);
+    const langMomentum = ctx.sessionLanguage && song.language === ctx.sessionLanguage ? SESSION_LANGUAGE_BASE * ramp : 0;
+    add('session', (energyNudge + langMomentum) * sessionGain);
   }
 
   // Skip aversion (signed around 0.5): reward what you finish, demote what you skip.

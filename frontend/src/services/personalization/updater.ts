@@ -43,17 +43,74 @@ function withProfile(fn: (p: TasteProfile) => void): void {
   });
 }
 
-function bumpAll(p: TasteProfile, song: Song, delta: number, kind: AffinityEventKind): void {
-  bumpLanguage(p, song.language, delta, kind);
+/** Multipliers for one event's artist and language bumps (1 = in full). */
+interface Damp {
+  artist: number;
+  language: number;
+}
+const FULL: Damp = { artist: 1, language: 1 };
+
+function bumpAll(p: TasteProfile, song: Song, delta: number, kind: AffinityEventKind, damp: Damp = FULL): void {
+  bumpLanguage(p, song.language, delta * damp.language, kind);
   for (const artist of song.artists.slice(0, 3)) {
-    bumpArtist(p, artist.id, artist.name, delta, kind);
+    bumpArtist(p, artist.id, artist.name, delta * damp.artist, kind);
   }
   bumpSong(p, song.id, delta, kind);
 }
 
+/**
+ * 9.0.0 — one sitting's share of the LONG-TERM profile. Passive listening
+ * (a play, a finished play) counts in full for the first SITTING_ARTIST_FULL
+ * plays of one lead artist in a sitting, at half up to SITTING_ARTIST_HALF,
+ * and at a quarter after that; a language has a larger allowance. A sitting
+ * ends after SITTING_GAP_MS of silence, as the session intent's does. So a
+ * party night of forty songs by one artist still teaches the profile — about
+ * as much as nineteen ordinary plays (8 + 12 × ½ + 20 × ¼) — without turning
+ * that artist into the listener's long-term favourite. Explicit signals (likes, searches, queue
+ * and playlist adds) and every negative signal always count in full, and the
+ * song's own affinity is never damped (a repeat-one run already counts once).
+ */
+export const SITTING_ARTIST_FULL = 8;
+export const SITTING_ARTIST_HALF = 20;
+export const SITTING_LANGUAGE_FULL = 12;
+export const SITTING_LANGUAGE_HALF = 30;
+const SITTING_GAP_MS = 45 * 60_000;
+const sitting = { last: 0, artists: new Map<string, number>(), languages: new Map<string, number>() };
+
+const step = (n: number, full: number, half: number): number => (n <= full ? 1 : n <= half ? 0.5 : 0.25);
+
+/** Count one play toward this sitting and return the damping for it (and for its COMPLETE). */
+function sittingDamp(song: Song, now = Date.now(), count = true): Damp {
+  if (now - sitting.last > SITTING_GAP_MS) {
+    sitting.artists.clear();
+    sitting.languages.clear();
+  }
+  sitting.last = now;
+  const artist = (song.artists?.[0]?.id || song.artists?.[0]?.name || '').trim().toLowerCase();
+  const language = song.language && song.language !== 'unknown' ? song.language : '';
+  const bump = (map: Map<string, number>, key: string): number => {
+    if (!key) return 0;
+    const n = (map.get(key) ?? 0) + (count ? 1 : 0);
+    if (count) map.set(key, n);
+    return n;
+  };
+  return {
+    artist: artist ? step(bump(sitting.artists, artist), SITTING_ARTIST_FULL, SITTING_ARTIST_HALF) : 1,
+    language: language ? step(bump(sitting.languages, language), SITTING_LANGUAGE_FULL, SITTING_LANGUAGE_HALF) : 1,
+  };
+}
+
+/** Tests: start a fresh sitting. */
+export function resetSittingDamping(): void {
+  sitting.last = 0;
+  sitting.artists.clear();
+  sitting.languages.clear();
+}
+
 export function recordPlay(song: Song): void {
+  const damp = sittingDamp(song);
   withProfile((p) => {
-    bumpAll(p, song, EVENT_WEIGHTS.PLAY, 'play');
+    bumpAll(p, song, EVENT_WEIGHTS.PLAY, 'play', damp);
     p.totals.plays += 1;
     p.hourHistogram[new Date().getHours()] += 1;
     bumpDay(p, new Date().getDay());
@@ -69,8 +126,10 @@ export function recordPlay(song: Song): void {
 }
 
 export function recordComplete(song: Song, playedSec: number): void {
+  // The same damping as the play it finishes (not another step).
+  const damp = sittingDamp(song, Date.now(), false);
   withProfile((p) => {
-    bumpAll(p, song, EVENT_WEIGHTS.COMPLETE, 'complete');
+    bumpAll(p, song, EVENT_WEIGHTS.COMPLETE, 'complete', damp);
     p.totals.completes += 1;
     bumpEnergyPref(p, energyOfSong(song));
   });

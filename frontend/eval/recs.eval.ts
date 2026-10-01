@@ -24,16 +24,17 @@ vi.mock('@/services/ai/embeddings', async () => (await import('./lib/mocks')).em
 
 import * as engineModule from '@/services/recommendation/engine';
 import * as candidatesModule from '@/services/recommendation/candidates';
-import { songKey } from '@/services/recommendation/songIdentity';
+import * as identityModule from '@/services/recommendation/songIdentity';
 import { resetTransitionMemory } from '@/services/recommendation/transitions';
 import { artistKey, useLibraryStore } from '@/store/libraryStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { buildFixtures, EVAL_FIXTURES_VERSION, largePoolFixture, latencyFixture, type EvalFixture } from './fixtures';
+import type { Song } from '../src/types';
 import { armFixture, planOnce, runSession, LIMIT, type EngineLike, type SessionRecord } from './lib/run';
 import { percentile, round, summarise } from './lib/metrics';
 
 /** Bump when the harness changes what it measures. */
-export const EVAL_HARNESS_VERSION = '1.1.0'; // 8.3.0 — style continuity (the DJ-remix and folk sittings)
+export const EVAL_HARNESS_VERSION = '1.2.0'; // 9.0.0 — songs skipped this sitting and unplayable songs count as rule breaks; retrieval depth, declared-taste agreement, sitting-avoided artists, served songs, committed memory and the seed-memory replay (1.1.0: style continuity)
 
 /** One fixed instant. Fixtures never read the clock; the harness hands them this. */
 const NOW = 1_800_000_000_000;
@@ -44,7 +45,12 @@ const OUT = process.env.EVAL_OUT ?? resolve(process.cwd(), `eval/reports/${PIPEL
 /** A never-settling source has to be cut off somewhere: the baseline has no deadline of its own. */
 const LATENCY_CAP_MS = Math.max(2_000, Number(process.env.EVAL_LATENCY_CAP_MS ?? 12_000));
 
+const { songKey } = identityModule;
 const engine = engineModule as unknown as EngineLike;
+/** 9.0.0 — the tree's recommendation memories, when it has them (8.2 and later). */
+type MemoryModule = { recordAutoOutcome?: (s: Song, o: 'success' | 'miss', now?: number) => void; resetRecMemory?: () => void };
+const memoryModule: MemoryModule = await import('@/services/recommendation/recMemory').catch(() => ({}));
+const recordServed = (identityModule as { recordServed?: (keys: string[]) => void }).recordServed;
 const ENTRY = typeof engine.planNextSongs === 'function' ? 'planNextSongs' : 'recommendNextSongs';
 
 /** 7.2 caches provider responses for three minutes; a fixture must never inherit another fixture's pool. */
@@ -100,6 +106,9 @@ const env = {
   now: NOW,
   songKey,
   applyFixture,
+  recordServed,
+  recordOutcome: memoryModule.recordAutoOutcome ? (song: Song, outcome: 'success' | 'miss') => memoryModule.recordAutoOutcome!(song, outcome, NOW) : undefined,
+  resetMemory: memoryModule.resetRecMemory,
   buildContext: (fixture: EvalFixture, salt: number, played: unknown[]) => {
     const ctx = buildContext(fixture, salt) as Record<string, unknown>;
     // The songs this sitting has already played are part of the listener's history by now.
@@ -159,6 +168,34 @@ it('evaluates next-song selection against the versioned fixtures', { timeout: 30
   const deterministic = JSON.stringify(repeat.queueIds) === JSON.stringify(first?.queueIds);
   vi.useRealTimers();
 
+  /* ---- 9.0.0: the seed memory — asking again from the same song ---- */
+  // Plan from the seed, then plan from the same seed again (nothing played in
+  // between). Without a commit the engine has no memory of the first answer;
+  // with one, the scorer holds back the opening it gave last time.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
+  const replayFixture = fixtures.find((f) => f.id === 'warm')!;
+  const overlaps = { withoutMemory: [] as number[], withMemory: [] as number[] };
+  for (let salt = 1; salt <= SALTS; salt += 1) {
+    for (const committed of [false, true]) {
+      applyFixture(replayFixture);
+      memoryModule.resetRecMemory?.();
+      const ctx = env.buildContext(replayFixture, salt, []);
+      const options = { limit: LIMIT, excludeIds: [replayFixture.seed.id], excludeKeys: [songKey(replayFixture.seed)] };
+      armFixture(replayFixture, replayFixture.seed.id);
+      const first = await planOnce(engine, replayFixture.seed, ctx, options);
+      if (committed) first.commit?.(first.final);
+      armFixture(replayFixture, replayFixture.seed.id);
+      resetCandidateCache?.();
+      const again = await planOnce(engine, replayFixture.seed, ctx, options);
+      const opening = new Set(first.final.slice(0, 3).map((s) => s.id));
+      (committed ? overlaps.withMemory : overlaps.withoutMemory).push(again.final.slice(0, 3).filter((s) => opening.has(s.id)).length);
+    }
+  }
+  const avg = (xs: number[]): number => (xs.length ? round(xs.reduce((a, b) => a + b, 0) / xs.length, 2) : 0);
+  vi.useRealTimers();
+  const memoryReplay = { runs: SALTS, fixture: replayFixture.id, openingOverlapWithoutMemory: avg(overlaps.withoutMemory), openingOverlapWithMemory: avg(overlaps.withMemory) };
+
   const quality = summarise(sessions, titles);
 
   /* ---- latency: wall time from the call to a queueable order ---- */
@@ -216,6 +253,7 @@ it('evaluates next-song selection against the versioned fixtures', { timeout: 30
     // When a repeat run differs, both orders are kept: a reproducible harness is the whole point.
     determinismDiff: deterministic ? null : { first: first?.queueIds ?? [], repeat: repeat.queueIds },
     quality,
+    memoryReplay,
     latency,
     generatedAt: new Date().toISOString(),
   };

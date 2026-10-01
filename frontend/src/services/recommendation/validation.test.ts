@@ -179,4 +179,29 @@ describe('8.3.0 — the style quota', () => {
     for (let i = 1; i < out.songs.length; i += 1) expect(out.songs[i].artists[0].name).not.toBe(out.songs[i - 1].artists[0].name);
     expect(out.relaxed).toContain('artist-cap');
   });
+
+  it('9.0: an artist this sitting pushed away comes last — after the discovery budget gives way, before back-to-back does', () => {
+    const avoidLeads = new Set(['kiran']);
+    // Kiran was skipped twice this sitting. Three of Kiran's songs rank first.
+    const order = [makeSong('k1', { artist: 'Kiran' }), makeSong('k2', { artist: 'Kiran' }), makeSong('a1', { artist: 'Asha' }), makeSong('k3', { artist: 'Kiran' }), makeSong('b1', { artist: 'Bala' }), makeSong('c1', { artist: 'Chitra' })];
+    const out = validateSequence(order, { limit: 4, avoidLeads, discoveryIds: new Set(['b1', 'c1']), discoveryShare: 0 });
+    // The two discoveries are taken (the budget gives way) before any Kiran song.
+    expect(ids(out.songs)).toEqual(['a1', 'b1', 'c1', 'k1']);
+    expect(out.relaxed).toEqual(expect.arrayContaining(['discovery-share', 'sitting-avoid']));
+    // With enough other songs, none of Kiran's ship at all.
+    const plenty = validateSequence([...order, makeSong('d1', { artist: 'Devi' })], { limit: 4, avoidLeads });
+    expect(ids(plenty.songs)).toEqual(['a1', 'b1', 'c1', 'd1']);
+    expect(plenty.relaxed).not.toContain('sitting-avoid');
+    // Without the sitting signal Kiran's first song opens (the cap of one per artist holds the others back).
+    expect(ids(validateSequence(order, { limit: 4 }).songs)).toEqual(['k1', 'a1', 'b1', 'c1']);
+  });
+
+  it('9.0: a pushed-away artist never costs spacing — the stretch ends short instead, and an empty stretch still gets one song', () => {
+    const out = validateSequence([makeSong('k1', { artist: 'Kiran' }), makeSong('a1', { artist: 'Asha' }), makeSong('k2', { artist: 'Kiran' })], { limit: 3, avoidLeads: new Set(['kiran']) });
+    // a1, then one Kiran song (spacing holds); a second Kiran song would follow the first: the stretch stops.
+    expect(ids(out.songs)).toEqual(['a1', 'k1']);
+    expect(out.relaxed).toContain('sitting-avoid');
+    // Nothing but Kiran: one song rather than none, never two in a row.
+    expect(ids(validateSequence([makeSong('k1', { artist: 'Kiran' }), makeSong('k2', { artist: 'Kiran' })], { limit: 3, avoidLeads: new Set(['kiran']) }).songs)).toEqual(['k1']);
+  });
 });

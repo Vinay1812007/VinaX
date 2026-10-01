@@ -47,7 +47,12 @@ const DEFAULT_WEIGHTS = Object.freeze({
   intentSkippedSong: 0.4,
 } as const);
 
-export const SCORING_WEIGHTS_VERSION = '1.2.0';
+/**
+ * 1.3.0 (9.0.0) — the same default values, but `artistAffinity` and `session`
+ * are now read by the scorer (they were declared and ignored before), so an
+ * override of either takes effect. Scores on the defaults are unchanged.
+ */
+export const SCORING_WEIGHTS_VERSION = '1.3.0';
 
 /**
  * 8.2.0 — the next-song engine's newer terms. Kept OUT of DEFAULT_WEIGHTS on
@@ -147,7 +152,7 @@ export function resetWeightOverrides(): void {
   active = null;
 }
 
-/** "1.2.0" on the defaults; "1.2.0+rc7" while published config version 7 is applied. */
+/** "1.3.0" on the defaults; "1.3.0+rc7" while published config version 7 is applied. */
 export function activeWeightsVersion(): string {
   return active ? `${SCORING_WEIGHTS_VERSION}+rc${active.version}` : SCORING_WEIGHTS_VERSION;
 }

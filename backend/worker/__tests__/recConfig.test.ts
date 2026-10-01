@@ -44,7 +44,7 @@ describe('the weight table is the app\'s weight table', () => {
     for (const m of src.slice(start, end).matchAll(/^\s*([A-Za-z]+):\s*([0-9.]+),?\s*$/gm)) app[m[1]] = Number(m[2]);
     expect(Object.keys(app).length).toBeGreaterThan(20);
     expect(app).toEqual({ ...REC_WEIGHT_DEFAULTS });
-    expect(src).toContain("SCORING_WEIGHTS_VERSION = '1.2.0'");
+    expect(src).toContain("SCORING_WEIGHTS_VERSION = '1.3.0'");
   });
 
   it('every weight says what it touches, and the ranges are half … double the default', () => {

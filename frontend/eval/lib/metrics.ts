@@ -72,6 +72,18 @@ export interface Summary {
    * while the pool still had that many. null when no fixture has a style.
    */
   style: { batches: number; share: number; heldBatches: number; heldOpportunities: number; held: number } | null;
+  /** 9.0.0 — songs only an album page or an artist page could supply, and their share of all songs queued. */
+  retrieval: { deepShipped: number; deepShare: number };
+  /**
+   * 9.0.0 — agreement with each fixture's DECLARED taste (the share of queued
+   * songs in it), over fixtures that declare one. A measure of whether the
+   * taste signals are used, not of anyone's enjoyment. null when none declares one.
+   */
+  taste: { batches: number; agreement: number } | null;
+  /** 9.0.0 — songs by an artist this sitting pushed away (two skips or more), in continuations where another lead was eligible. */
+  sittingAvoided: { shipped: number; batches: number };
+  /** 9.0.0 — songs another surface showed this week, queued anyway (null when no fixture records any). */
+  served: { batches: number; shipped: number; share: number } | null;
 }
 
 const MIX_KINDS = ['language-opening', 'language-run'] as const;
@@ -152,6 +164,21 @@ function summariseBatches(sessions: SessionRecord[]): Summary {
     refinements: count(batches.map((b) => b.refinement)),
     relaxed,
     aiSongsShipped: batches.reduce((n, b) => n + b.aiSongsShipped, 0),
+    retrieval: { deepShipped: batches.reduce((n, b) => n + (b.deepShipped ?? 0), 0), deepShare: songs ? round(batches.reduce((n, b) => n + (b.deepShipped ?? 0), 0) / songs) : 0 },
+    taste: (() => {
+      const t = batches.filter((b) => b.tasteHits !== null && b.tasteHits !== undefined && b.n > 0);
+      return t.length ? { batches: t.length, agreement: mean(t.map((b) => (b.tasteHits as number) / b.n)) } : null;
+    })(),
+    sittingAvoided: (() => {
+      const a = batches.filter((b) => b.avoidedAvoidable);
+      return { shipped: a.reduce((n, b) => n + b.avoidedShipped, 0), batches: a.length };
+    })(),
+    served: (() => {
+      const sv = batches.filter((b) => b.servedShipped !== null && b.servedShipped !== undefined && b.n > 0);
+      const shipped = sv.reduce((n, b) => n + (b.servedShipped as number), 0);
+      const total = sv.reduce((n, b) => n + b.n, 0);
+      return sv.length ? { batches: sv.length, shipped, share: total ? round(shipped / total) : 0 } : null;
+    })(),
     style: styled.length
       ? { batches: styled.length, share: mean(styled.map((b) => (b.inStyle ?? 0) / b.n)), heldBatches, heldOpportunities: styleChances.length, held: styleChances.length ? round(heldBatches / styleChances.length) : 1 }
       : null,

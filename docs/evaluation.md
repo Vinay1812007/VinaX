@@ -58,7 +58,7 @@ network-facing modules are replaced, and nothing else:
 | `@/services/queryClient` | No cached owner flags |
 | `@/services/ai/embeddings` (8.2) | No learned vectors on the device and no network: the taste fit runs on the on-device vectors alone, and a background warm-up can never make two runs differ |
 
-The catalogue mock answers the 8.2 sources too. `getAlbum` returns nothing, so the `album` source adds no songs. `getArtistTopSongs` returns the fixture songs that credit the artist, with the fixture's outage behaviour; fixture songs credit one artist each, so the `related-artist` source finds no collaborators and costs a call without adding songs. Fixture songs carry no stream URLs, so no candidate is marked `unplayable` and the `no-audio` rule never fires. The harness clears `localStorage` for each fixture and never calls a plan's `commit`, so the proven-pick and seed memories start empty and stay empty. Nothing in a run records served songs either (Home and AI Playlist do that), so the served-recently penalty does not fire. What the harness measures of 8.2 is therefore mainly the `genre` source (the catalogue mock answers every search with the fixture's search pool) and the taste fit on the device's vectors. The comparison numbers below are the 7.2 measurement; they do not include the 8.2 changes.
+The catalogue mock answers the 8.2 sources too, and since 9.0 (harness 1.2.0) it answers them the way the catalogue does. `getAlbum` returns the fixture's album page, when it lists one (`albums`), and nothing otherwise. `getArtist` returns an artist page with the fixture's "similar artists" for that artist (`similarArtists`) and the artist's top songs. `getArtistTopSongs` returns the songs of the pool that credit the artist, plus any songs only an artist page lists (`artistSongs`). A search for an artist's exact name answers with that artist's songs. (Until 9.0 every search answered with the generic pool, so the favourite-artist source appeared to supply other artists' songs, with its boost, and crowded out the related-artist source.) The embeddings mock returns the learned vectors a fixture says the device holds (`embeddings`), and none otherwise. A fixture can mark songs the catalogue cannot stream: they come in a response that carries stream URLs for the others. With `memory: true` the harness commits every accepted continuation and records the outcomes of its first four songs (three finished, one skipped), so the seed and proven-pick memories fill as the sitting goes; otherwise it clears `localStorage` before each continuation, and neither memory fills. A fixture can also list songs Home showed this week (`served`), which the harness records before each continuation, so the served-recently penalty fires.
 
 Mocking one level below `candidates.ts` is deliberate: the candidate stage
 carries rules of its own (soft mutes, Kid mode, blocked songs, junk titles),
@@ -95,7 +95,7 @@ played minutes ago" means the same thing on both sides.
 
 | Metric | Definition |
 | --- | --- |
-| Hard-rule violation | A queued song that is explicit under Kid mode, in a muted language, by a hidden or soft-muted artist, hidden by id, another cut of one of the last twenty plays, or a second cut of a song already in the queue |
+| Hard-rule violation | A queued song that is explicit under Kid mode, in a muted language, by a hidden or soft-muted artist, hidden by id, another cut of one of the last twenty plays, skipped in this sitting (9.0), unplayable (9.0), or a second cut of a song already in the queue |
 | Off-language under the lock | A queued song in a known language other than the seed's. Counted as a violation only when at least three in-language candidates were still available; otherwise it is the documented relaxation |
 | The mix rules (8.1) | For a fixture with `queueLanguages: 'mix'` there is no lock. A queued song in a known language outside the listener's languages (pinned, played, the seed's; muted ones removed) is `off-language`; a song in another language in slot 1 or 2 is `language-opening`; two off-lead songs back to back are `language-run`. All three count as hard violations |
 | Repetition | The same lead artist back to back (the boundary between two continuations included), the same lead within three songs, the same identity twice in a sitting |
@@ -104,10 +104,15 @@ played minutes ago" means the same thing on both sides.
 | Familiar-first | Slot 1 (and slot 2 of a stretch of four or more) is not a discovery, counted only where a familiar, eligible candidate existed |
 | Fallback | `plan.fallback` and the refinement's outcome: `deadline`, `ai_timeout`, `ai_unavailable`, `ai_rejected`, `error`, or none |
 | Queue-ready latency | Wall time from the call to a list the player could queue. For 7.2 that is the local plan; for the baseline it is the whole call, AI included |
+| Retrieval depth (9.0) | Queued songs only an album page or an artist page could supply (no search or suggestion returns them), as a share of songs queued |
+| Declared-taste agreement (9.0) | For fixtures that declare a taste (`tasteTargets`), the share of each continuation in it. Agreement with what a synthetic fixture says — not evidence of enjoyment |
+| Sitting-avoided artists (9.0) | Queued songs by an artist the sitting's intent pushed away (pull ≤ −0.6), counted in continuations where another lead artist was eligible |
+| Served (9.0) | For fixtures that record songs Home showed, the share of queued songs that were among them |
+| Seed-memory replay (9.0) | Plan from the `warm` seed, then again from the same seed: how many of the first three songs repeat, without a commit and with one |
 
-## The fixtures (version 1.1.0)
+## The fixtures (version 1.3.0)
 
-Twenty fixtures (nineteen at 7.2; 8.1 added `mixed-queue`), each a pure
+Twenty-nine fixtures (nineteen at 7.2; 8.1 added `mixed-queue`, 8.3 the DJ-remix and folk sittings, 9.0 the seven below `soft-muted`), each a pure
 function of the timestamp the harness passes in. Songs, titles and artists
 are fictional, written in Telugu, Hindi, Tamil, Punjabi, Malayalam and Latin
 scripts.
@@ -134,11 +139,79 @@ scripts.
 | `muted-languages` | Hindi and English muted, with a pool full of them |
 | `hidden-artists` | Two hidden artists (one in an Indic script, one Latin) and two hidden songs |
 | `soft-muted` | Two lead artists under "show fewer like this" |
+| `dj-session`, `folk-session` | 8.3: a DJ-remix sitting and a folk sitting (folk only in the album name); the folk DJ answers with an order of its own |
+| `deep-sources` | 9.0: thin suggestions for a film song; the album page holds the rest of the soundtrack and the lead artist's page lists two similar artists whose songs no search returns. Declares that soundtrack and those artists as its taste |
+| `embeddings` / `embeddings-off` | 9.0: the device holds learned vectors for the taste songs and a 60-song pool; only the vectors tell the fitting half apart. Declares that half as its taste. `-off` is the same listener with no vectors (the control) |
+| `served` | 9.0: eight of the strongest suggestions were shown on Home this week |
+| `memory` | 9.0: every continuation is committed and its songs end (three finished, one skipped): the seed and outcome memories fill during the sitting |
+| `unplayable` | 9.0: the suggestions response streams half its songs; the other half can never be queued (`no-audio`) |
+| `sparse-history` | 9.0: three plays, no favourites, one pinned language |
 
 Two more fixtures serve the latency conditions: the warm Telugu listener, and
 the same listener with a production-sized pool (104 songs).
 
-## Baseline versus current
+## 9.0 versus 8.6
+
+**Method.** As below, with the 8.6.0 release (`733cd77`) as the baseline:
+`node scripts/eval-recs.mjs --baseline 733cd77`, fixtures 1.3.0, harness
+1.2.0, 12 salts per fixture. Both sides run the 9.0 harness and fixtures,
+including the 9.0 measuring stick: a song skipped in this sitting and an
+unplayable song are rule breaks (`skipped-this-sitting`, `no-audio`), and a
+batch's "familiar songs were free" no longer counts songs skipped this sitting
+as free.
+
+| Metric | 8.6.0 `733cd77` | 9.0 |
+| --- | ---: | ---: |
+| Continuations planned / songs queued | 1 308 / 5 760 | 1 308 / 5 772 |
+| Empty continuations | 96 | 84 |
+| **Hard-rule violations** | **12** (`no-audio`, `unplayable`) | **0** |
+| Same lead artist back to back | 48 | 36 |
+| …avoidable (another lead artist was eligible) | 36 | 24 |
+| Same lead artist within three songs | 1 776 | 1 764 |
+| Distinct lead artists per continuation | 4.00 | 3.94 |
+| Discovery share / the modes' allocation | 35.5 % / 18.4 % | 36.1 % / 18.1 % |
+| Familiar-first compliance (slot 1) | 94.8 % | 94.8 % |
+| Style continuity (DJ / folk sittings) | 75.0 % | 75.0 % |
+| Songs only an album or artist page could supply | 0.4 % of songs | 1.5 % |
+| Declared-taste agreement (fixtures that declare one) | 40.0 % | 51.7 % |
+| …`deep-sources` (album and related artists) | 13.3 % | 55.0 % |
+| …`embeddings` / `embeddings-off` | 55.0 % / 45.0 % | 55.0 % / 45.0 % |
+| Songs by an artist this sitting pushed away, another lead eligible (`skips`) | 48 | 0 |
+| Songs Home showed this week, queued anyway (`served`) | 35.0 % | 35.0 % |
+| Asked again from one song: opening songs repeated, of 3 (no memory / committed) | 3 / 2 | 3 / 1 |
+| Reproducible (same salts, same songs) | **no** | yes |
+
+Reading it:
+
+- **The 12 hard violations were a real 8.6 defect**, one per `unplayable`
+  sitting: an unplayable song found again by a source whose response carried
+  no stream URLs lost its mark when the copies merged. See
+  [recommendations.md](recommendations.md#stage-1--candidate-sources).
+- **8.6 is not reproducible on these fixtures** because its served memory
+  outlived `localStorage.clear()` (an in-memory fallback), so the `served`
+  fixture leaked "shown recently" penalties into every later fixture and into
+  the determinism re-run. 9.0 fixed the fallback; read the 8.6 numbers of the
+  fixtures after `served` (`memory`, `unplayable`, `sparse-history`) with that
+  in mind.
+- **Pushed-away artists, 48 → 0**, is the sitting-avoid rule. Its cost is
+  visible in two rows: the repeated-skip sitting ships shorter stretches near
+  the end of its small pool (distinct artists per continuation 4.00 → 3.94
+  overall), because the rule ends a stretch rather than put a pushed-away
+  artist back to back.
+- **Declared-taste agreement** is agreement with what each synthetic fixture
+  says its listener likes. It shows that a signal is used — the album and
+  related-artist sources now follow the song each stretch continues from, so
+  `deep-sources` stops running dry after its first stretch — and nothing more.
+  The embedding refinement already worked in 8.6 (10 points over the
+  control) and is unchanged.
+- **The served penalty is small on purpose** (0.04): songs Home showed are
+  held back a little, never removed, so the share is unchanged.
+- The long-term / recent taste cap and the sitting damping of the long-term
+  profile do not move these numbers: the fixtures' long-term tastes weigh less
+  than the cap's threshold, and the harness does not run the profile updater.
+  Unit tests pin both (`vectors.test.ts`, `updater.test.ts`).
+
+## 7.2 versus 7.1
 
 **Method.** The baseline is VinaX 7.1 at commit `7c4e2f5` — the whole
 `frontend/src` of that commit, extracted with `git archive` into
