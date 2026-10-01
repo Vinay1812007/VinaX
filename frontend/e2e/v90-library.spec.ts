@@ -152,7 +152,7 @@ for (const size of SIZES) {
     await page.setViewportSize(size);
     await seed(page, baseURL!, size.theme);
     await page.goto('/library');
-    // Scoped to the workspace (the sidebar's instant one is called "New playlist").
+    // Scoped to the workspace (the sidebar's instant one is called "Start a playlist").
     await page.locator('#main-content').getByRole('button', { name: 'Create playlist' }).click();
     await page.getByLabel('New collection name').fill('Fresh one');
     await page.getByRole('button', { name: 'Create', exact: true }).click();

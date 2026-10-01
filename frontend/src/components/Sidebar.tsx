@@ -107,7 +107,7 @@ export function Sidebar() {
             )}
           </NavLink>
           {!collapsed && (
-            <IconButton size="sm" label="New playlist" onClick={createPlaylist}>
+            <IconButton size="sm" label="Start a playlist" onClick={createPlaylist}>
               <PlusIcon className="w-5 h-5" />
             </IconButton>
           )}

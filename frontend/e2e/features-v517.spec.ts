@@ -145,7 +145,10 @@ test('home, stats, history, explore, library, collection, search, settings rende
   await seed(page, baseURL);
   await mockNetwork(page);
 
-  await visit(page, '/', /streak[\s\S]*song of the day|because you liked/i);
+  // 9.0 — Home opens with the Aura Mix; the daily cards sit behind "More from your listening".
+  await visit(page, '/', /aura mix|jump back in/i);
+  await clickButton(page, /More from your listening/i);
+  await expect.poll(() => bodyText(page), { timeout: 10_000 }).toMatch(/streak[\s\S]*song of the day|because you liked/i);
   // Custom accent, large display scale and high contrast all apply on boot.
   const boot = await page.evaluate(() => ({
     ember: getComputedStyle(document.documentElement).getPropertyValue('--ember-500').trim(),

@@ -1,6 +1,6 @@
 /**
  * 4.13.0 — deeper personal mixes. Each new mix ("Late Night Yours",
- * "Welcome Back", "Artist Radio", "Sunday Slowburn", "Discover Weekly")
+ * "Welcome Back", "Artist Radio", "Sunday Slowburn", "New to you this week")
  * only appears when the moment actually justifies it — no fake always-on
  * shelves. These tests pin the appearance contract, not the ordering of
  * songs (that's the scorer's business).
@@ -94,7 +94,7 @@ describe('Artist Radio — anchors on the #1 artist once they cross 5 plays', ()
   });
 });
 
-describe('Discover Weekly — always present, refreshes Monday', () => {
+describe('the weekly discovery mix — always present, refreshes Monday', () => {
   it('id carries a week-anchored stamp, not the day', () => {
     const pool = Array.from({ length: 220 }, (_, i) => cand(song(`d${i}`)));
     vi.setSystemTime(new Date(2026, 7, 12, 10, 0)); // Wed

@@ -20,7 +20,10 @@ const mk = (base: string, id: string, title: string, artist: string): Song => ({
 
 async function seed(page: Page, baseURL: string, opts: { aiHomeFlag: boolean; aiAnswers: boolean }): Promise<{ curateTasks: string[]; queries: string[] }> {
   const songs = Array.from({ length: 12 }, (_, i) => mk(baseURL, `s${i}`, `Song ${i}`, `Artist ${i % 3}`));
-  const entries = songs.slice(0, 6).map((song, i) => ({ song, ts: Date.now() - i * 3_600_000, completed: true }));
+  // 9.0 — history is its own set of songs: a discovery shelf leaves out what was
+  // just heard (the surface rule), so a shelf seeded FROM the history would empty.
+  const heard = Array.from({ length: 6 }, (_, i) => mk(baseURL, `h${i}`, `Heard ${i}`, `Artist ${i % 3}`));
+  const entries = heard.map((song, i) => ({ song, ts: Date.now() - i * 3_600_000, completed: true }));
   await page.addInitScript(
     ({ songs, entries, fp }) => {
       localStorage.setItem('vinax.settings.v1', JSON.stringify({ state: { theme: 'dark', pinnedLanguages: ['telugu'], festivalSkins: false }, version: 3 }));

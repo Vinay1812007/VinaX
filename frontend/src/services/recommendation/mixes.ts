@@ -190,11 +190,12 @@ export function buildMixes(rankedInput: ScoredCandidate[], ctx: RecommendationCo
     if (mRadio) out.push(mRadio);
   }
 
-  // Discover Weekly-style — refreshes every Monday (via getMondayStamp), pure
+  // The weekly discovery lane — refreshes every Monday (via getMondayStamp), pure
   // discovery from candidates the listener has never played.
   const seenIds = new Set(ctx.history.map((h) => h.song.id));
   const discover = take((s) => !seenIds.has(s.candidate.song.id), 20, true);
-  const mDW = mix(`discover-weekly-${mondayStamp()}`, 'discover-weekly', 'Discover Weekly', songsOf(discover, 20), ctx);
+  // 9.0.0 — its own name (the old title echoed another product's feature name).
+  const mDW = mix(`discover-weekly-${mondayStamp()}`, 'discover-weekly', 'New to you this week', songsOf(discover, 20), ctx);
   if (mDW) out.push(mDW);
 
   return out;
