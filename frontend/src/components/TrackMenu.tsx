@@ -281,15 +281,15 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
   const moreLike = (): void => {
     const r = moreLikeThis(song);
     if (!r.retuned) toast('Got it — more like this for the rest of this session');
-    else if (r.intent) toast(`More like this — new DJ picks, ${tuneLabel(r.intent).toLowerCase()}`);
-    else toast(artist ? `More like this — new DJ picks lean toward ${artist}` : 'More like this — new DJ picks on the way');
+    else if (r.intent) toast(`More like this — new VinaX picks, ${tuneLabel(r.intent).toLowerCase()}`);
+    else toast(artist ? `More like this — new VinaX picks lean toward ${artist}` : 'More like this — new VinaX picks on the way');
   };
 
   const lessLike = (days: number): void => {
     const r = lessLikeThis(song, days);
     if (!r) return;
     const { receipt, refreshed } = r;
-    toast(`Less of ${receipt.mute.name} until ${fmtDate(receipt.mute.until)}${refreshed ? ' · DJ picks refreshed' : ''}`, {
+    toast(`Less of ${receipt.mute.name} until ${fmtDate(receipt.mute.until)}${refreshed ? ' · VinaX picks refreshed' : ''}`, {
       action: {
         label: 'Undo',
         onClick: () => {
