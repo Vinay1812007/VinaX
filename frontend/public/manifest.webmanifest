@@ -4,8 +4,8 @@
   "description": "Music tuned to you. No login, private by design.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0b0c18",
-  "theme_color": "#0b0c18",
+  "background_color": "#0a0b0e",
+  "theme_color": "#0a0b0e",
   "icons": [
     {
       "src": "/icons/icon-192.png",

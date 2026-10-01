@@ -38,11 +38,8 @@ function ProgressHairline() {
   // backdrop-blurred card four times a second; a transform stays on the
   // compositor. The track clips the scaled fill, so its rounded ends survive.
   return (
-    <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-white/15 overflow-hidden">
-      <div
-        className="h-full w-full origin-left rounded-full bg-white/90 transition-transform duration-300"
-        style={{ transform: `scaleX(${progress})` }}
-      />
+    <div className="np-mini-progress" aria-hidden>
+      <i style={{ transform: `scaleX(${progress})` }} />
     </div>
   );
 }
@@ -189,9 +186,9 @@ export function PlayerBar() {
               aria-label={isPlaying ? 'Pause' : 'Play'}
               title={isPlaying ? 'Pause' : 'Play'}
               onClick={togglePlay}
-              className="np-mini-play inline-flex items-center justify-center w-11 h-11 rounded-full text-ink-100 shrink-0 active:scale-95 transition-transform"
+              className="np-mini-play relative after:absolute after:-inset-0.5 inline-flex items-center justify-center w-10 h-10 mx-1 bg-ink-100 text-ink-950 shrink-0 active:scale-95 transition-transform"
             >
-              {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6 ml-0.5" />}
+              {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
             </button>
           </div>
           {/* progress hairline inside the card */}
@@ -199,9 +196,10 @@ export function PlayerBar() {
         </div>
       </div>
 
-      {/* ---- Desktop bar: three-zone layout ---- */}
-      {/* v5.9.0 — the bar: full width, flush with the bottom, black. */}
-      <div className="relative hidden lg:block overflow-hidden glass-bottom-player" data-tour="player">
+      {/* ---- Desktop: the player deck, three zones ---- */}
+      {/* 9.0.0 — a floating, rounded deck tinted from the artwork's left edge. */}
+      <div className="hidden lg:block vx-deck-wrap" data-tour="player">
+        <div className="vx-deck">
         <div className="vx-pb-row">
           <div className="vx-pb-track">
             <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="vx-pb-art group shrink-0">
@@ -209,13 +207,13 @@ export function PlayerBar() {
                 src={artUrl ?? FALLBACK_ART}
                 onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
                 alt=""
-                className={cn('w-14 h-14 rounded-md object-cover', isBuffering && 'opacity-50')}
+                className={cn('w-14 h-14 object-cover', isBuffering && 'opacity-50')}
               />
               <span className="vx-pb-art-hint" aria-hidden><ExpandIcon className="w-4 h-4" /></span>
             </button>
             <div className="min-w-0">
-              <Marquee text={song.title} className="text-sm font-semibold text-ink-100" />
-              <p className="text-xs text-ink-400 truncate">{song.subtitle}</p>
+              <Marquee text={song.title} className="vx-pb-title" />
+              <p className="vx-pb-sub">{song.subtitle}</p>
             </div>
             <FavButton song={song} />
           </div>
@@ -232,8 +230,8 @@ export function PlayerBar() {
                 type="button"
                 onClick={togglePlay}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
-                // 36px disc, 44px hit area (IconButton's invisible-pad pattern).
-                className="np-play-desktop relative after:absolute after:inset-0 after:-m-[2px] w-10 h-10 rounded-full flex items-center justify-center hover:scale-[1.05] active:scale-95 transition-transform"
+                // 42px squircle; its ::after pad keeps the hit area at 44px (shell.css).
+                className="np-play-desktop"
               >
                 {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
               </button>
@@ -288,6 +286,7 @@ export function PlayerBar() {
             />
             <Link to="/now-playing" aria-label="Full screen player" title="Full screen player" className="vx-pb-link"><ExpandIcon className="w-4 h-4" /></Link>
           </div>
+        </div>
         </div>
       </div>
       {devicesOpen && <Suspense fallback={null}><DeviceSheet open onClose={() => setDevicesOpen(false)} /></Suspense>}

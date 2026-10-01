@@ -21,7 +21,7 @@ function LibraryRow({ to, title, meta, art, collapsed }: { to: string; title: st
       <NavLink to={to} end className={({ isActive }) => cn('vx-lib-row', isActive && 'is-active')} title={collapsed ? title : undefined} aria-label={collapsed ? `${title}, ${meta}` : undefined}>
         {art}
         {!collapsed && (
-          <span className="min-w-0">
+          <span className="vx-lib-text">
             <span className="vx-lib-title">{title}</span>
             <span className="vx-lib-meta">{meta}</span>
           </span>
@@ -37,7 +37,10 @@ const count = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : '
  * 8.0.0 — the desktop sidebar: the main destinations, then the listener's
  * library as an artwork list (liked songs, listen later, downloads, recently
  * played, their playlists and the albums, playlists and artists they saved).
- * Collapses to a 72px rail that keeps every icon and artwork reachable.
+ * Collapses to an 80px rail that keeps every icon and artwork reachable.
+ * 9.0.0 — Encore: the library sits in its own rounded panel, grouped into
+ * "Your collections" and "Playlists & saved"; tablets always get the rail
+ * (styles/shell.css), whatever the collapse setting says.
  */
 export function Sidebar() {
   const collapsed = useSettingsStore((s) => s.sidebarCollapsed);
@@ -63,7 +66,7 @@ export function Sidebar() {
           {!collapsed && <span>VinaX</span>}
         </Link>
         {!collapsed && (
-          <IconButton size="sm" label="Collapse sidebar" onClick={toggle}>
+          <IconButton size="sm" label="Collapse sidebar" onClick={toggle} className="vx-sidebar-toggle">
             <ChevronDownIcon className="w-5 h-5 rotate-90" />
           </IconButton>
         )}
@@ -110,10 +113,12 @@ export function Sidebar() {
           )}
         </div>
         <ul className="vx-library-list no-scrollbar">
+          {!collapsed && <li className="vx-lib-label" aria-hidden>Your collections</li>}
           <LibraryRow collapsed={collapsed} to="/favorites" title="Liked songs" meta={`Playlist · ${count(favorites, 'song')}`} art={<LibraryArt glyph={<HeartIcon className="w-5 h-5" filled />} tone="is-liked" />} />
           <LibraryRow collapsed={collapsed} to="/later" title="Listen later" meta={count(later, 'song')} art={<LibraryArt glyph={<BookmarkIcon className="w-5 h-5" />} tone="is-later" />} />
           <LibraryRow collapsed={collapsed} to="/offline" title="Downloads" meta="On this device" art={<LibraryArt glyph={<DownloadIcon className="w-5 h-5" />} tone="is-downloads" />} />
           <LibraryRow collapsed={collapsed} to="/history" title="Recently played" meta="History" art={<LibraryArt glyph={<ClockIcon className="w-5 h-5" />} tone="is-history" />} />
+          {!collapsed && (ordered.length > 0 || saved.length > 0) && <li className="vx-lib-label" aria-hidden>Playlists &amp; saved</li>}
           {ordered.map((c) => {
             const cover = c.songs[0] ? bestImage(c.songs[0].images, 150) : null;
             return <LibraryRow key={c.id} collapsed={collapsed} to={`/collection/${c.id}`} title={c.name} meta={`Playlist · ${count(c.songs.length, 'song')}`} art={<LibraryArt image={cover} glyph={c.emoji || c.name.slice(0, 1).toUpperCase()} tone="is-playlist" />} />;

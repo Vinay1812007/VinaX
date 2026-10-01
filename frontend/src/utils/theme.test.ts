@@ -25,15 +25,23 @@ function lastValue(varName: string): string {
   return last;
 }
 
-describe('color tokens (VinaX Flow)', () => {
-  it('brand ramps resolve to VinaX violet', () => {
-    // The default ramp is VinaX violet over near-black chrome. Every earlier
-    // era's ramp lives above in the cascade.
-    expect(lastValue('--ember-400')).toBe('196 181 253');
-    expect(lastValue('--ember-500')).toBe('167 139 250');
-    expect(lastValue('--tide-400')).toBe('196 181 253');
-    expect(lastValue('--ink-900')).toBe('18 18 20');
+describe('color tokens (VinaX 9 "Encore")', () => {
+  it('brand ramps resolve to the VinaX mark: Iris violet + Lagoon cyan over deep charcoal', () => {
+    // 9.0 — the default ramp is taken from the VinaX mark: its violet stroke
+    // (ember, "Iris") and its cyan (tide, "Lagoon"), over charcoal chrome.
+    expect(lastValue('--ember-400')).toBe('178 166 255');
+    expect(lastValue('--ember-500')).toBe('140 120 255');
+    expect(lastValue('--tide-400')).toBe('103 232 249');
+    expect(lastValue('--tide-500')).toBe('34 211 238');
+    expect(lastValue('--ink-950')).toBe('10 11 14');
+    expect(lastValue('--ink-900')).toBe('16 17 21');
     expect(lastValue('--surface-sidebar')).toBe('rgb(var(--ink-950))');
+  });
+
+  it('one radius scale: 10px controls, 14px cards, 20px panels (9.0)', () => {
+    expect(lastValue('--vx-radius-control')).toBe('10px');
+    expect(lastValue('--vx-radius-card')).toBe('14px');
+    expect(lastValue('--vx-radius-panel')).toBe('20px');
   });
 
   it('glass recipe is ADJUSTABLE — separate alpha and blur dials (4.13)', () => {
@@ -43,7 +51,7 @@ describe('color tokens (VinaX Flow)', () => {
     // moods the single dial couldn't express. AMOLED stays solid on purpose
     // (true-black canvases don't frost), and the reduced-transparency
     // fallback still forces --surface-solid.
-    expect(css).toContain('--glass-bg: rgb(24 24 24 / var(--glass-alpha))'); // dark
+    expect(css).toContain('--glass-bg: rgb(23 24 30 / var(--glass-alpha))'); // dark (9.0 charcoal)
     expect(css).toContain('--glass-bg: rgb(255 255 255 / var(--glass-alpha))'); // light
     expect(css).toContain('--glass-blur-boost:');
     expect(css).toContain('--glass-blur: calc(6px + var(--glass-blur-boost) * 34px)');
@@ -124,34 +132,33 @@ describe('contrast (WCAG AA on the documented pairs)', () => {
     return (l1 + 0.05) / (l2 + 0.05);
   }
 
-  it('primary text on canvas ≥ 7:1 in both themes (v3.8 modern minimal)', () => {
-    // Dark canvas rgb(18 18 18) = #121212 with white text.
-    expect(contrast('#ffffff', '#121212')).toBeGreaterThanOrEqual(7);
-    // Light canvas rgb(247 247 247) = #f7f7f7 with rgb(12 14 20) = #0c0e14 text.
-    expect(contrast('#0c0e14', '#f7f7f7')).toBeGreaterThanOrEqual(7);
+  it('primary text on canvas ≥ 7:1 in both themes (9.0 Encore)', () => {
+    // Dark canvas --ink-900 rgb(16 17 21) = #101115 with --ink-100 rgb(250 250 252) = #fafafc.
+    expect(contrast('#fafafc', '#101115')).toBeGreaterThanOrEqual(7);
+    // Light canvas rgb(246 246 243) = #f6f6f3 with rgb(14 15 20) = #0e0f14 text.
+    expect(contrast('#0e0f14', '#f6f6f3')).toBeGreaterThanOrEqual(7);
   });
 
   it('secondary text stays readable (≥ 4.5:1)', () => {
-    // Dark: --ink-300 rgb(179 179 179) = #b3b3b3 on the #121212 canvas.
-    expect(contrast('#b3b3b3', '#121212')).toBeGreaterThanOrEqual(4.5);
-    // Light: --ink-300 rgb(84 90 104) = #545a68 on light canvas.
-    expect(contrast('#545a68', '#f7f7f7')).toBeGreaterThanOrEqual(4.5);
+    // Dark: --ink-300 rgb(188 190 202) = #bcbeca on the #101115 canvas.
+    expect(contrast('#bcbeca', '#101115')).toBeGreaterThanOrEqual(4.5);
+    // Light: --ink-300 rgb(70 73 86) = #464956 on the light canvas.
+    expect(contrast('#464956', '#f6f6f3')).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('white button text on the indigo primary fill ≥ 4.5:1 (WCAG AA)', () => {
-    // v3.8: primary CTA background is --ember-600 rgb(79 70 229) = #4f46e5
-    // (5.86:1 with white — AA). Hover lifts to --ember-500 (#6366f1) which
-    // the accent-heavy chips + focus rings use; that lighter shade isn't a
-    // text-on-fill surface so its 4.16:1 doesn't apply.
-    expect(contrast('#0b0b0c', '#a78bfa')).toBeGreaterThanOrEqual(4.5);
+  it('on-accent text on the Iris fill ≥ 4.5:1 in both themes (WCAG AA)', () => {
+    // Dark: near-black labels on --ember-500 rgb(140 120 255) = #8c78ff.
+    expect(contrast('#0b0b0c', '#8c78ff')).toBeGreaterThanOrEqual(4.5);
+    // Light: white labels on the light --ember-500 rgb(86 60 215) = #563cd7.
+    expect(contrast('#ffffff', '#563cd7')).toBeGreaterThanOrEqual(4.5);
   });
 
   it('lyric colors meet AA on both canvases (v3.1.1)', () => {
-    // dark canvas #121212: active white, upcoming slate
-    expect(contrast('#ffffff', '#121212')).toBeGreaterThanOrEqual(7);
-    expect(contrast('#94a3b8', '#121212')).toBeGreaterThanOrEqual(4.5);
-    // light canvas #f7f7f7: active near-black, upcoming ink
-    expect(contrast('#0a0c10', '#f7f7f7')).toBeGreaterThanOrEqual(7);
-    expect(contrast('#475569', '#f7f7f7')).toBeGreaterThanOrEqual(4.5);
+    // dark canvas #101115: active white, upcoming slate
+    expect(contrast('#ffffff', '#101115')).toBeGreaterThanOrEqual(7);
+    expect(contrast('#94a3b8', '#101115')).toBeGreaterThanOrEqual(4.5);
+    // light canvas #f6f6f3: active near-black, upcoming ink
+    expect(contrast('#0a0c10', '#f6f6f3')).toBeGreaterThanOrEqual(7);
+    expect(contrast('#475569', '#f6f6f3')).toBeGreaterThanOrEqual(4.5);
   });
 });

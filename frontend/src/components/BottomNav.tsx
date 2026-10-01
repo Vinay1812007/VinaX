@@ -19,7 +19,7 @@ const items: DockItem[] = [
 ];
 
 /** 8.0.0 — the phone tab bar: a translucent strip, each tab an icon over its
- *  label; the active tab shows the solid icon in the primary text colour. */
+ *  label. 9.0.0 — the active tab's solid icon sits in a small Iris pill. */
 export function BottomNav() {
   const t = useT();
   return (
@@ -40,7 +40,7 @@ export function BottomNav() {
             >
               {({ isActive }) => (
                 <>
-                  <Icon className="w-6 h-6 shrink-0" filled={isActive} />
+                  <span className="vx-dock-pill" aria-hidden><Icon className="w-6 h-6 shrink-0" filled={isActive} /></span>
                   <span className="whitespace-nowrap truncate max-w-full">{t(label)}</span>
                 </>
               )}

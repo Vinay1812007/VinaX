@@ -1,3 +1,13 @@
+/* ============================================================================
+   VinaX 9 — global feature styles.
+
+   What is left of 7.0's flow.css once 9.0 moved the shell and the shared
+   primitives into shell.css: a few feature surfaces that several screens
+   (or the first paint) use and that have no page stylesheet of their own —
+   Home Studio, the VinaX AI composer pieces, the playlist studio, the
+   listening guide, entity heroes, the queue's ownership marker. A feature
+   that gets its own page stylesheet takes its rules with it.
+   ========================================================================= */
 /* VinaX Flow: component layout. Theme tokens live only in index.css. */
 /* Home Studio: an optional, quiet editing surface that keeps the listening
    page useful even when the AI is offline. */
@@ -248,64 +258,7 @@
 
 .vx-playlist-studio textarea.glass-input { border-radius: 16px; }
 
-/* App shell: browsing stays central; the playback rail only appears on wide screens. */
-.vx-shell { background: var(--vx-bg-base); }
-.vx-workspace { background: var(--vx-bg-elevated); scrollbar-gutter: stable; }
-.vx-topbar { position: sticky; top: 0; z-index: 35; display: flex; align-items: center; gap: 12px; min-height: var(--vx-topbar-h); margin: 0 -32px 24px; padding: 12px 32px; background: var(--vx-bg-elevated); border-bottom: 1px solid var(--vx-border); }
-.vx-topbar-context { font-size: var(--vx-type-meta); color: var(--vx-text-muted); }
-.vx-topbar-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
-.vx-command-key { color: var(--vx-text-muted); font-size: 11px; min-height: var(--vx-control-h); padding: 0 8px; }
-.vx-profile-link { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 44px; min-height: 44px; font-size: var(--vx-type-meta); }
-.vx-sidebar { background: var(--vx-bg-base); border-right: 1px solid var(--vx-border); }
-.vx-nav-link { display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 0 12px; border-radius: var(--vx-radius-control); color: var(--vx-text-secondary); font-size: 14px; font-weight: 650; }
-.vx-nav-link:hover { background: var(--vx-bg-hover); color: var(--vx-text-primary); }
-.vx-nav-active { color: var(--vx-text-primary); background: var(--vx-surface-raised); }
-.vx-nav-active svg { color: var(--vx-accent); }
-.vx-sidebar-library { margin: 28px 12px 0; padding-top: 24px; border-top: 1px solid var(--vx-border); }
-.vx-sidebar-library a { display: flex; justify-content: space-between; align-items: center; min-height: 44px; font-size: var(--vx-type-meta); color: var(--vx-text-secondary); }
-.vx-sidebar-library a:hover { color: var(--vx-text-primary); }
-.vx-dock { border-top: 1px solid var(--vx-border); box-shadow: none; }
-.vx-dock-item { min-height: 56px; }
-.vx-dock-active { background: none; color: var(--vx-accent-hover); box-shadow: none; animation: none; }
-.vx-dock-active svg, .vx-ai-pulse { animation: none; filter: none; }
-.vx-ai-pulse::before { display: none; }
-.vx-playing-rail { background: var(--vx-bg-base); width: clamp(260px, 21vw, 320px); }
-.vx-playing-rail > button { border-radius: var(--vx-radius-card); box-shadow: none; }
-.glass-bottom-player { background: var(--vx-bg-base); border-top: 1px solid var(--vx-border); box-shadow: none; backdrop-filter: none; }
-.glass-bottom-player::before { display: none; }
-.np-play-desktop { width: 44px; height: 44px; background: var(--vx-text-primary); color: var(--vx-bg-base); box-shadow: none; }
-.np-mini { border-radius: var(--vx-radius-control); }
 
-/* Typography and shared composition. */
-.vx-eyebrow { font-size: var(--vx-type-caption); font-weight: 700; letter-spacing: .08em; color: var(--vx-text-muted); }
-.vx-page-header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
-.vx-page-header h1, .vx-home h1 { font-size: var(--vx-type-page); line-height: 1.2; letter-spacing: -.035em; font-weight: 750; }
-.vx-page-header > p { flex-basis: 100%; color: var(--vx-text-secondary); font-size: var(--vx-type-body); }
-.vx-section-header { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-.vx-section-header h2 { font-size: var(--vx-type-section); font-weight: 750; letter-spacing: -.025em; }
-.vx-section-header p { font-size: var(--vx-type-meta); color: var(--vx-text-muted); margin-top: 4px; }
-.vx-section-link { min-height: 44px; display: inline-flex; align-items: center; font-size: var(--vx-type-meta); font-weight: 650; color: var(--vx-text-secondary); }
-.vx-section-link:hover { color: var(--vx-text-primary); text-decoration: underline; }
-.vx-shelf { margin-bottom: 36px; }
-.vx-media-rail { display: flex; gap: 16px; overflow-x: auto; padding: 2px 0 8px; scroll-snap-type: x proximity; }
-.vx-media-rail > * { scroll-snap-align: start; }
-.vx-media-card { display: block; position: relative; padding: 0; border-radius: var(--vx-radius-card); transition: background-color var(--vx-motion-fast); }
-.vx-media-card:hover { background: transparent; }
-.vx-media-art { position: relative; overflow: hidden; border-radius: var(--vx-radius-card); }
-.vx-media-art.is-artist, .vx-media-art.is-artist img { border-radius: 50%; }
-.vx-media-title { display: block; margin-top: 12px; font-size: var(--vx-type-card); font-weight: 650; line-height: 1.4; }
-.vx-media-subtitle { font-size: var(--vx-type-meta); color: var(--vx-text-muted); margin-top: 4px; }
-.card-play { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--vx-accent); color: var(--vx-on-accent); opacity: 0; transition: opacity var(--vx-motion-fast); box-shadow: 0 2px 8px #0003; }
-.card-play svg { width: 20px; height: 20px; }
-.group:hover .card-play, .group:focus-within .card-play { opacity: 1; }
-.card-play:hover { background: var(--vx-accent-hover); }
-.card-scrim { display: none; }
-.vx-track-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 68px; padding: 8px; border-radius: var(--vx-radius-control); }
-.vx-track-row:hover { background: var(--vx-bg-hover); }
-.vx-track-row.is-current { background: rgb(var(--ember-500) / .08); }
-.vx-track-number { width: 24px; flex-shrink: 0; color: var(--vx-text-muted); font-size: var(--vx-type-meta); text-align: center; font-variant-numeric: tabular-nums; }
-.vx-track-play { display: flex; align-items: center; flex: 1; min-width: 0; gap: 12px; min-height: 48px; text-align: left; }
-.vx-track-album { width: 22%; color: var(--vx-text-muted); font-size: var(--vx-type-meta); }
 .vx-destinations { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 32px; }
 .vx-destinations a { display: flex; align-items: center; gap: 10px; padding: 10px 14px; min-height: var(--vx-tile-h); background: var(--vx-surface-raised); border-radius: var(--vx-radius-control); font-size: var(--vx-type-meta); font-weight: 650; }
 .vx-destinations a:hover { background: var(--vx-bg-hover); }
@@ -334,21 +287,10 @@
 .vx-load-status { display: flex; align-items: center; gap: 12px; font-size: var(--vx-type-meta); color: var(--vx-text-muted); margin-bottom: 24px; }
 .vx-wave-loader { display: flex; align-items: center; gap: 3px; height: 24px; }
 .vx-wave-loader i { width: 3px; height: 14px; background: var(--vx-accent); border-radius: 4px; }
-:focus-visible { outline: 2px solid var(--vx-focus); outline-offset: 4px; }
-html.light :focus-visible { outline-color: var(--vx-focus); box-shadow: none; }
-.glass-card, .glass-panel { box-shadow: none; }
-.bg-ai-accent { background: var(--vx-accent); box-shadow: none; }
 .vx-library-tools { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
 .vx-library-tools input { flex: 1; min-width: 160px; }
 .vx-library-tools input, .vx-library-tools select { min-height: 44px; padding: 8px 12px; background: var(--vx-surface-raised); border: 1px solid var(--vx-border); border-radius: var(--vx-radius-control); }
-@media (min-width: 1024px) {
-  .vx-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(144px, 1fr)); }
-  .vx-media-grid > * { width: 100%; min-width: 0; }
-}
 @media (max-width: 767px) {
-  :root { --vx-topbar-h: calc(max(8px, env(safe-area-inset-top)) + 48px); }
-  .vx-topbar { margin: 0 -16px 20px; padding: max(8px, env(safe-area-inset-top)) 16px 8px; min-height: var(--vx-topbar-h); gap: 10px; }
-  .vx-topbar-context { font-size: 1rem; font-weight: 700; color: var(--vx-text-primary, inherit); min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .vx-entity-hero { gap: 20px; align-items: start; flex-direction: column; }
   .vx-entity-hero > img { width: 160px; align-self: center; }
   .vx-home .vx-hero { gap: 16px; padding: 16px; min-height: 0; align-items: start; }
@@ -357,27 +299,15 @@ html.light :focus-visible { outline-color: var(--vx-focus); box-shadow: none; }
   .vx-hero-copy > p { font-size: var(--vx-type-meta); }
   .vx-destinations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vx-destinations a { padding: 10px 12px; }
-  .vx-page-header { align-items: start; }
-  .vx-section-header { align-items: start; }
-  .vx-track-number { display: none; }
 }
-@media (hover: none), (pointer: coarse) {
-  .card-play { opacity: 1; }
-  .hover-reveal { opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vx-shell *, .ai-root * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-}
-html.reduce-motion .vx-shell *, html.reduce-motion .ai-root * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 
 .vx-now-playing { isolation: isolate; }
 .vx-player-context { padding: 24px; background: rgb(var(--ink-900) / .82); border: 1px solid var(--vx-border); border-radius: var(--vx-radius-panel); }
 .vx-player-context [role='tablist'] { border-bottom: 1px solid var(--vx-border); padding-bottom: 12px; }
 .vx-player-context [role='tab'] { min-height: 44px; font-size: var(--vx-type-meta); }
 .vx-player-context [role='tab'][aria-selected='true'] { color: var(--vx-accent-hover); background: rgb(var(--ember-500) / .12); }
-html[data-density='compact'] .vx-track-row { min-height: 56px; padding-top: 4px; padding-bottom: 4px; }
-html[data-density='compact'] .vx-shelf { margin-bottom: 24px; }
 @media (max-width: 767px) { .vx-player-context { padding: 16px; margin-top: 24px; } }
+
 
 .vx-panel-switch { display: flex; gap: 8px; border-bottom: 1px solid var(--vx-border); padding-bottom: 12px; }
 .vx-panel-switch button { min-height: var(--vx-control-h); flex: 1; border-radius: var(--vx-radius-control); font-size: var(--vx-type-meta); color: var(--vx-text-secondary); }
@@ -416,19 +346,5 @@ html[data-density='compact'] .vx-shelf { margin-bottom: 24px; }
 /* The floating "Up next" card sits beside the Now Playing rail, never on top
    of it — the rail mounts from 1280px up and already lists the queue. */
 @media (min-width: 1280px) {
-  .vx-nextup-card { right: calc(clamp(260px, 21vw, 320px) + 24px); }
-}
-
-/* 7.2 — a short control (a 40px button, a 24px switch) with a 44px touch
-   target: an invisible, centred pad, the same trick IconButton uses. The
-   visual box is untouched. */
-.vx-tap { position: relative; }
-.vx-tap::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 44px;
-  transform: translateY(-50%);
+  .vx-nextup-card { right: calc(clamp(300px, 22vw, 340px) + 24px); }
 }
