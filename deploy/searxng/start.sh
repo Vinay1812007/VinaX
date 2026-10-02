@@ -41,7 +41,7 @@ export GRANIAN_HOST GRANIAN_PORT
 /usr/local/searxng/entrypoint.sh &
 engine=$!
 
-caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+/usr/local/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 proxy=$!
 
 stop() {
