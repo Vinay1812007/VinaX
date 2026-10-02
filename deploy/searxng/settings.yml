@@ -1,0 +1,64 @@
+# VinaX web search — SearXNG settings (README.md in this folder explains every
+# step). Baked into the image at /usr/local/searxng/vinax-settings.yml and
+# named by SEARXNG_SETTINGS_PATH — NOT at /etc/searxng, which the base image
+# declares as a VOLUME (see Dockerfile).
+#
+# Starts from SearXNG's own defaults and changes only what VinaX needs:
+#   - the JSON API (search.formats) the VinaX Worker reads;
+#   - short upstream timeouts, so one slow engine never stalls a reply;
+#   - the built-in limiter OFF: the proxy that fronts this process (Caddyfile,
+#     same container) refuses every request that does not carry the VinaX
+#     token, so nothing reaches SearXNG except the VinaX Worker. With the
+#     limiter on, its bot detection would block the Worker (datacenter
+#     addresses, no browser headers).
+#
+# Port 8080 is never published: start.sh pins GRANIAN_HOST to 127.0.0.1, so
+# only the proxy in this container can reach it, and only the proxy's port
+# ($PORT, which Render routes) is reachable from outside.
+
+use_default_settings: true
+
+general:
+  instance_name: "VinaX web search"
+  debug: false
+  enable_metrics: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "all"
+  # JSON only: it is what the VinaX Worker reads, and the proxy (which needs
+  # the bearer token) makes the HTML pages unusable from a browser anyway. A
+  # request for any other format is answered 403.
+  formats:
+    - json
+  # A failing engine is benched quickly and retried soon.
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 120
+
+server:
+  # No port / bind_address here: the image's server (granian) listens on
+  # GRANIAN_HOST / GRANIAN_PORT (default [::]:8080) and ignores those keys;
+  # start.sh overrides both so it binds 127.0.0.1 only.
+  # Refuses to start until SEARXNG_SECRET is set in the environment: SearXNG
+  # will not run with this placeholder outside debug mode, which is exactly
+  # the point. start.sh refuses to start without it too.
+  secret_key: "ultrasecretkey"
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+outgoing:
+  # Each upstream engine gets 2.5 s. The VinaX Worker also sends
+  # `timeout_limit` (its own leash less 0.7 s: 5.3 s for a research lookup);
+  # SearXNG waits min(timeout_limit, max_request_timeout), so
+  # a reply always leaves before the Worker gives up, with whatever the engines
+  # that answered in time found.
+  request_timeout: 2.5
+  max_request_timeout: 3.0
+  pool_connections: 100
+  enable_http2: true
+
+ui:
+  query_in_title: false
