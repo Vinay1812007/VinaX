@@ -16,23 +16,27 @@
 # only the proxy in this container can reach it, and only the proxy's port
 # ($PORT, which Render routes) is reachable from outside.
 
-# 9.0.1 — the engine set, cut down to what actually answers from a datacenter
-# address. Measured against this instance on 2026-10-02, query "telugu songs":
+# 9.0.1 — the engine set. Measured against this instance on 2026-10-02, not
+# assumed; a search had been coming back with ZERO results.
 #
-#   google      10 results    bing        7 results
-#   wikipedia   no error      wikidata    no error
-#   duckduckgo  timeout       brave       "too many requests"
-#   qwant       CAPTCHA       google cse  "too many requests" (needs an API key)
+# Two separate causes, and the second is the one that matters:
 #
-# The default set is dominated by the ones that refuse this host, so a search
-# came back with zero results and three suspended engines. duckduckgo stays in
-# because it is worth having when it recovers and a failing engine is cheap —
-# it is benched after one failure (ban_time_on_fail) and the engines run in
-# parallel under request_timeout. brave, qwant and google cse are dropped: two
-# refuse this address outright and the third needs a key that does not exist.
+#  1. Some engines refuse a datacenter address outright. brave and google cse
+#     answer "too many requests" (google cse also needs an API key nobody has)
+#     and qwant serves a CAPTCHA. They are dropped.
 #
-# If results dry up, re-measure before changing anything else — these verdicts
-# are about THIS host's address, and they will drift.
+#  2. google and bing ship `disabled: true` in SearXNG's own defaults — they
+#     run ONLY when a request names them. So the engines that work here were
+#     never running, while the ones that cannot were. `engines=google` returned
+#     10 results for the same query that returned 0 by default. They are
+#     enabled below.
+#
+# duckduckgo is kept although it was timing out: it is worth having when it
+# recovers, and a failing engine is cheap — benched after one failure
+# (ban_time_on_fail), and engines run in parallel under request_timeout.
+#
+# If results dry up, re-measure per engine (`&engines=<name>`) before changing
+# anything: these verdicts are about this host's address and will drift.
 use_default_settings:
   engines:
     keep_only:
@@ -41,6 +45,14 @@ use_default_settings:
       - duckduckgo
       - wikipedia
       - wikidata
+
+# Enable the two that are disabled upstream. Merged by name into the kept
+# defaults (searx/settings_loader.py), so everything else about them stays.
+engines:
+  - name: google
+    disabled: false
+  - name: bing
+    disabled: false
 
 general:
   instance_name: "VinaX web search"
