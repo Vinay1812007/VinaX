@@ -22,11 +22,14 @@ services:
     name: vinax-search
     runtime: docker            # older Render blueprints spell this `env: docker`
     region: singapore          # closest to the listeners; Cloudflare fronts it anyway
-    plan: starter
-    # The free plan sleeps after about 15 minutes idle and takes 30-60 s to wake.
-    # A research lookup gives up after 6 s, so on `free` the first question after
-    # a quiet spell always reports "couldn't check the live web" and only the
-    # next one works. Keep `starter` unless that is acceptable.
+    plan: free
+    # Chosen deliberately. The free plan sleeps after about 15 minutes idle and
+    # takes 30-60 s to wake, while a research lookup gives up after 6 s — so the
+    # first question after a quiet spell reports "couldn't check the live web"
+    # and the next one works. The reply stays honest either way (that is what
+    # the no-fallback design buys), but it is a real gap in the experience.
+    # `starter` removes it; a scheduled ping every ~10 minutes also keeps the
+    # service awake, at the cost of most of the free monthly instance hours.
     dockerfilePath: ./deploy/searxng/Dockerfile
     dockerContext: ./deploy/searxng
     healthCheckPath: /healthz
