@@ -31,8 +31,11 @@ FROM docker.io/searxng/searxng:2026.9.25-12f8b6515
 # it. Streaming the bytes into a new file leaves the capability behind, and
 # nothing here needs it: Caddy binds $PORT (10000), far above the privileged
 # range.
+# mkdir first: /usr/local/bin does not exist in the engine image. COPY creates
+# missing parent directories, a shell redirect does not.
 COPY --from=proxy /usr/bin/caddy /tmp/caddy.orig
-RUN cat /tmp/caddy.orig > /usr/local/bin/caddy \
+RUN mkdir -p /usr/local/bin \
+    && cat /tmp/caddy.orig > /usr/local/bin/caddy \
     && chmod 0755 /usr/local/bin/caddy \
     && rm /tmp/caddy.orig \
     && /usr/local/bin/caddy version
