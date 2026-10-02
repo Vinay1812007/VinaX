@@ -41,7 +41,7 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 | Android background push | `FCM_SERVICE_ACCOUNT` | Tokens are stored, nothing is sent ([fcm-push-setup.md](fcm-push-setup.md)) |
 | Identity signing | `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET` | Signed install ids fall back as described in `.env.example` |
 | Scheduled jobs | `CRON_SECRET` (also a repository Actions secret with the same value) | `/api/cron/*` rejects every call |
-| Optional | `SEARXNG_URL` + `SEARXNG_TOKEN` (the web search instance behind VinaX AI research — the only source; unset means a research answer honestly reports it could not check the live web), `GITHUB_REPO`, `GITHUB_TOKEN` (Android update source) | The feature is off or rate-limited |
+| Optional | `SEARXNG_URL` + `SEARXNG_TOKEN` (the web search instance behind VinaX AI research — the only source; unset means a research answer honestly reports it could not check the live web; the instance is a Render service, see `deploy/searxng/README.md`), `GITHUB_REPO`, `GITHUB_TOKEN` (Android update source) | The feature is off or rate-limited |
 
 Non-secret Worker settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext for ten minutes.
 

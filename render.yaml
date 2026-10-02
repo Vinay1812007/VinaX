@@ -1,0 +1,48 @@
+# VinaX web search — the Render service behind VinaX AI research.
+#
+# This is the only part of VinaX that Render hosts. The frontend is a
+# Cloudflare Pages project (`vinax`) and the API is a Cloudflare Worker
+# (`vinax-api`); neither reads this file.
+#
+# Render looks for render.yaml at the repository root, which is why it sits
+# here while everything it builds lives in deploy/searxng/.
+#
+# First deploy:
+#   1. Render → New → Blueprint → this repository.
+#   2. It creates the service and generates SEARXNG_SECRET by itself.
+#   3. Paste SEARXNG_TOKEN (openssl rand -hex 32) when it asks — the same
+#      value you put on the Worker as a secret.
+#   4. When it is live, check https://<service>.onrender.com/healthz → "ok",
+#      then point search.sirimillavinay.online at it with a proxied CNAME.
+#
+# See deploy/searxng/README.md for the whole sequence, including the Worker side.
+
+services:
+  - type: web
+    name: vinax-search
+    runtime: docker            # older Render blueprints spell this `env: docker`
+    region: singapore          # closest to the listeners; Cloudflare fronts it anyway
+    plan: starter
+    # The free plan sleeps after about 15 minutes idle and takes 30-60 s to wake.
+    # A research lookup gives up after 6 s, so on `free` the first question after
+    # a quiet spell always reports "couldn't check the live web" and only the
+    # next one works. Keep `starter` unless that is acceptable.
+    dockerfilePath: ./deploy/searxng/Dockerfile
+    dockerContext: ./deploy/searxng
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      # The engine's own server.secret_key. Render generates it once and keeps
+      # it; it is not the token, and the Worker never sees it.
+      - key: SEARXNG_SECRET
+        generateValue: true
+      # The bearer token the Worker sends. `sync: false` means Render asks for
+      # it instead of storing it in this file.
+      - key: SEARXNG_TOKEN
+        sync: false
+      # Only while rotating the token: set this to the OLD value so searches
+      # keep working until the Worker has the new one, then remove it.
+      # - key: SEARXNG_TOKEN_PREVIOUS
+      #   sync: false
+      - key: SEARXNG_BASE_URL
+        value: https://search.sirimillavinay.online/
