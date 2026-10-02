@@ -16,7 +16,31 @@
 # only the proxy in this container can reach it, and only the proxy's port
 # ($PORT, which Render routes) is reachable from outside.
 
-use_default_settings: true
+# 9.0.1 — the engine set, cut down to what actually answers from a datacenter
+# address. Measured against this instance on 2026-10-02, query "telugu songs":
+#
+#   google      10 results    bing        7 results
+#   wikipedia   no error      wikidata    no error
+#   duckduckgo  timeout       brave       "too many requests"
+#   qwant       CAPTCHA       google cse  "too many requests" (needs an API key)
+#
+# The default set is dominated by the ones that refuse this host, so a search
+# came back with zero results and three suspended engines. duckduckgo stays in
+# because it is worth having when it recovers and a failing engine is cheap —
+# it is benched after one failure (ban_time_on_fail) and the engines run in
+# parallel under request_timeout. brave, qwant and google cse are dropped: two
+# refuse this address outright and the third needs a key that does not exist.
+#
+# If results dry up, re-measure before changing anything else — these verdicts
+# are about THIS host's address, and they will drift.
+use_default_settings:
+  engines:
+    keep_only:
+      - google
+      - bing
+      - duckduckgo
+      - wikipedia
+      - wikidata
 
 general:
   instance_name: "VinaX web search"
