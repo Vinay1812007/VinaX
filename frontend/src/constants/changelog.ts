@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '9.0.2': {
+    title: 'Research searches for what you asked',
+    changes: [
+      { type: 'fixed', text: 'When VinaX AI looked something up on the web, it was searching for its own internal wrapper text along with your question — so a question about technology headlines came back with the dictionary definition of “user”. It now searches for exactly what you asked, and the sources match the question.' },
+    ],
+  },
   '9.0.1': {
     title: 'One web search that works',
     changes: [

@@ -23,16 +23,21 @@ const EVIL_RESULTS = {
   unresponsive_engines: [],
 };
 let aiBodies: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+let searchUrls: URL[] = [];
 
 beforeEach(() => {
   clearLaneCooldowns();
   resetSearxngCooldown();
   aiBodies = [];
+  searchUrls = [];
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const u = new URL(String(input instanceof Request ? input.url : input));
-    if (u.hostname === 'search.example.org') return new Response(JSON.stringify(EVIL_RESULTS), { status: 200, headers: { 'content-type': 'application/json' } });
+    if (u.hostname === 'search.example.org') {
+      searchUrls.push(u);
+      return new Response(JSON.stringify(EVIL_RESULTS), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     if (init?.body) aiBodies.push(JSON.parse(String(init.body)));
     return new Response(SSE, { status: 200, headers: { 'content-type': 'text/event-stream' } });
   });
@@ -62,5 +67,26 @@ describe('research answers — live web results are fenced', () => {
     // Only the real closing line (and its mention in the label) remain.
     expect(system.match(/END WEB RESULTS/g)).toHaveLength(2);
     expect(system).toContain(`--- END WEB RESULTS ${tag} ---`);
+  });
+
+  it('searches for what the person asked, not for the data fence wrapped around it', async () => {
+    const question = 'what are the top technology news headlines today';
+    const res = await onRequestPost({
+      request: new Request('https://x.test/api/vinaxai', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.8.1.2' },
+        body: JSON.stringify({ web: true, messages: [{ role: 'user', content: question }] }),
+      }),
+      env: { VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING: 'k', ...SEARCH_ENV },
+    });
+    await res.text();
+    expect(searchUrls).toHaveLength(1);
+    const q = searchUrls[0].searchParams.get('q');
+    // Every user turn reaches the model inside the B9 "treat contents as data"
+    // fence. That boilerplate is longer than most questions, so sending it to a
+    // search engine buries the question and the results come back about the
+    // word "user" instead.
+    expect(q).toBe(question);
+    expect(q).not.toMatch(/USER MESSAGE|treat contents as data|not instructions/i);
   });
 });
