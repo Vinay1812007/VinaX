@@ -61,17 +61,13 @@ curl -s -H "Authorization: Bearer <token>" \
 The second one answering anything but 401 means the token check is not working.
 Stop and fix that first; everything else can wait.
 
-**4. Point the domain at it.** Cloudflare → DNS → Add record:
-
-| Field | Value |
-| --- | --- |
-| Type | CNAME |
-| Name | `search` |
-| Target | `<service>.onrender.com` |
-| Proxy status | Proxied |
-
-Then add `search.sirimillavinay.online` as a custom domain on the Render
-service, so its own certificate matches.
+**4. A custom domain is optional, and currently unused.** The Worker calls the
+service's own Render hostname. Nothing but the Worker ever calls it and no
+listener sees the address, so `search.sirimillavinay.online` would add a
+Cloudflare proxy hop and a certificate handshake between Render and Cloudflare
+for no gain. If you add one anyway: a CNAME `search` →
+`<service>.onrender.com`, left **DNS-only** until Render has issued its
+certificate, then proxied if you want.
 
 **5. Give the Worker the two values.** The token is a secret:
 
@@ -83,7 +79,7 @@ npx wrangler secret put SEARXNG_TOKEN --config worker/wrangler.toml
 The URL is not. It belongs in `worker/wrangler.toml` under `[vars]`:
 
 ```toml
-SEARXNG_URL = "https://search.sirimillavinay.online"
+SEARXNG_URL = "https://vinax-search.onrender.com"
 ```
 
 Setting that one in the Cloudflare dashboard instead does not stick: a
@@ -115,6 +111,25 @@ docker run --rm --env-file deploy/searxng/.env -p 10000:10000 vinax-search
 Then the same three curls as step 3 against `http://localhost:10000`.
 
 ## Maintenance
+
+**Engines.** `settings.yml` keeps only google, bing, duckduckgo, wikipedia and
+wikidata, and explicitly enables google and bing because SearXNG ships them
+`disabled: true` — they run only when a request names them, which is why the
+first working deploy returned zero results for everything without an
+encyclopedia entry. brave and google cse answer "too many requests" from this
+address and qwant serves a CAPTCHA, so they are dropped; duckduckgo times out
+consistently but is cheap to keep (benched after one failure) and worth having
+if it recovers. As of 2026-10-02 a query returns 17-20 results, google and bing
+contributing about ten each.
+
+Re-measure before changing any of that — one engine at a time, and through the
+proxy so it is the same path the Worker takes:
+
+```sh
+curl -s -H "Authorization: Bearer <token>" \
+     'https://vinax-search.onrender.com/search?q=telugu+songs&format=json&engines=google' \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d["results"]), d["unresponsive_engines"])'
+```
 
 **Updating the engine.** `Dockerfile` pins an exact
 `YYYY.M.D-<commit>` tag. Change it and redeploy. A build that fails on an

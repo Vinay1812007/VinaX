@@ -21,7 +21,24 @@ FROM docker.io/searxng/searxng:2026.9.25-12f8b6515
 
 # Caddy is a single static binary; take it from the official image rather than
 # adding a package repository to this one.
-COPY --from=proxy /usr/bin/caddy /usr/bin/caddy
+#
+# It is re-written byte for byte instead of being used where COPY puts it. The
+# official image runs `setcap cap_net_bind_service=+ep` on that binary so it can
+# bind port 80 as a non-root user, and the file capability survives the COPY.
+# A host that will not grant the capability then refuses to exec the file at
+# all — on Render the first deploy died with
+# `caddy: Operation not permitted` — and `setcap` is not in this image to clear
+# it. Streaming the bytes into a new file leaves the capability behind, and
+# nothing here needs it: Caddy binds $PORT (10000), far above the privileged
+# range.
+# mkdir first: /usr/local/bin does not exist in the engine image. COPY creates
+# missing parent directories, a shell redirect does not.
+COPY --from=proxy /usr/bin/caddy /tmp/caddy.orig
+RUN mkdir -p /usr/local/bin \
+    && cat /tmp/caddy.orig > /usr/local/bin/caddy \
+    && chmod 0755 /usr/local/bin/caddy \
+    && rm /tmp/caddy.orig \
+    && /usr/local/bin/caddy version
 
 # settings.yml deliberately does NOT go to /etc/searxng. The base image
 # declares that path as a VOLUME, and content written to a volume path after

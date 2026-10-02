@@ -117,10 +117,15 @@ routes = [
 ASSETS_HOST = "vinax.pages.dev"
 GITHUB_REPO = "Vinay1812007/VinaX"
 # Web search instance behind VinaX AI research (9.0.1 — the only source; see
-# .env.example). Not a secret, so it lives here; its token is a Worker secret
-# (SEARXNG_TOKEN). Leave empty and VinaX AI answers "couldn't check the live
-# web" instead of silently answering from memory.
-SEARXNG_URL = ""
+# deploy/searxng/README.md). Not a secret, so it lives here; its token is a
+# Worker secret (SEARXNG_TOKEN). Empty would mean VinaX AI answers "couldn't
+# check the live web" instead of silently answering from memory.
+#
+# The service's own Render hostname, not search.sirimillavinay.online: a
+# custom domain would add a Cloudflare proxy hop and a certificate handshake
+# between Render and Cloudflare for no gain, since nothing but this Worker
+# ever calls it and no listener sees the address.
+SEARXNG_URL = "https://vinax-search.onrender.com"
 
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in

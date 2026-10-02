@@ -12,8 +12,11 @@
 #   2. It creates the service and generates SEARXNG_SECRET by itself.
 #   3. Paste SEARXNG_TOKEN (openssl rand -hex 32) when it asks — the same
 #      value you put on the Worker as a secret.
-#   4. When it is live, check https://<service>.onrender.com/healthz → "ok",
-#      then point search.sirimillavinay.online at it with a proxied CNAME.
+#   4. When it is live, check https://<service>.onrender.com/healthz → "ok".
+#
+# The live service was created from the dashboard rather than from this file,
+# so applying this blueprint as-is would create a SECOND one. It is kept as
+# the record of how vinax-search is configured, and to rebuild it.
 #
 # See deploy/searxng/README.md for the whole sequence, including the Worker side.
 
@@ -48,4 +51,4 @@ services:
       # - key: SEARXNG_TOKEN_PREVIOUS
       #   sync: false
       - key: SEARXNG_BASE_URL
-        value: https://search.sirimillavinay.online/
+        value: https://vinax-search.onrender.com/
