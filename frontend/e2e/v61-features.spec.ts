@@ -208,8 +208,11 @@ for (const size of SIZES) {
     await expect.poll(() => bodyText(page)).toMatch(/≈/);
     await page.screenshot({ path: `test-results/v61-stats-${tag}.png`, fullPage: true });
     await page.goto('/settings');
-    await expect.poll(() => bodyText(page)).toMatch(/@tester/);
-    await expect.poll(() => bodyText(page)).toMatch(/Confirmed by the service/);
+    // Settings rows arrive with the page's own chunk — about 0.6 s here, so
+    // vitest's 1 s default poll was a knife edge that a few hundred bytes
+    // anywhere in the graph could tip. Same explicit leash as the polls above.
+    await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/@tester/);
+    await expect.poll(() => bodyText(page), { timeout: 15_000 }).toMatch(/Confirmed by the service/);
     expect(await noHorizontalScroll(page)).toBe(true);
   });
 }

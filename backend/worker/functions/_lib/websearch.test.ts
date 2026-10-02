@@ -1,47 +1,81 @@
 /**
- * liveSearch: free, keyless sources merged into one numbered SearchHit (the
- * optional paid key is used only when configured); fenceWebContext: web text
- * reaches a model as fenced, untrusted data that a page cannot close early.
+ * liveSearch: 9.0.1 — one source, the owner's own metasearch instance, turned
+ * into one numbered SearchHit. No instance (or an unwell one) means null, and
+ * the caller must say so rather than answer as though it had checked the web.
+ * fenceWebContext: web text reaches a model as fenced, untrusted data that a
+ * page cannot close early.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetSearxngCooldown } from './searxng';
 import { fenceWebContext, liveSearch, stripFenceMarkers } from './websearch';
 
-const HTML_RESULTS = '<a class="result__a" href="https://fallback.example/page">Fallback title</a><a class="result__snippet">fallback snippet</a>';
+const ENV = { SEARXNG_URL: 'https://search.example.org', SEARXNG_TOKEN: 'tok-123' };
+
+const result = (n: number, extra: Record<string, unknown> = {}) => ({ url: `https://a.example/${n}`, title: `Title ${n}`, content: `snippet ${n}`, ...extra });
+const body = (results: unknown[]) => ({ query: 'q', results, answers: [], infoboxes: [], suggestions: [], unresponsive_engines: [] });
 
 let seen: string[] = [];
-function stubFetch(): void {
+function stubSearch(payload: unknown, status = 200): void {
   seen = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL | Request) => {
-      const url = String(input instanceof Request ? input.url : input);
-      seen.push(url);
-      if (new URL(url).hostname === 'html.duckduckgo.com') return new Response(HTML_RESULTS, { status: 200 });
-      return new Response('', { status: 404 });
+      seen.push(String(input instanceof Request ? input.url : input));
+      return new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
     }),
   );
 }
 
 beforeEach(() => {
+  resetSearxngCooldown();
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  resetSearxngCooldown();
 });
 
 describe('liveSearch', () => {
-  it('without a key: asks the keyless sources and returns one numbered hit', async () => {
-    stubFetch();
-    const hit = await liveSearch({}, 'latest telugu songs');
-    expect(seen.some((s) => s.includes('html.duckduckgo.com'))).toBe(true);
-    expect(hit).toEqual({ text: '[1] Fallback title\nfallback snippet\nhttps://fallback.example/page', sources: ['https://fallback.example/page'] });
+  it('asks the instance and numbers its results into one hit', async () => {
+    stubSearch(body([result(1), result(2)]));
+    const hit = await liveSearch(ENV, 'latest telugu songs');
+    expect(seen).toHaveLength(1);
+    const u = new URL(seen[0]);
+    expect(u.origin + u.pathname).toBe('https://search.example.org/search');
+    expect(u.searchParams.get('format')).toBe('json');
+    expect(u.searchParams.get('q')).toBe('latest telugu songs');
+    expect(hit).toEqual({
+      text: '[1] Title 1\nsnippet 1\nhttps://a.example/1\n\n[2] Title 2\nsnippet 2\nhttps://a.example/2',
+      sources: ['https://a.example/1', 'https://a.example/2'],
+    });
   });
 
-  it('is null when no source finds anything', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })));
+  it('de-duplicates the same page arriving from two engines, and keeps at most eight', async () => {
+    stubSearch(body([result(1), result(1), ...Array.from({ length: 12 }, (_, i) => result(i + 2))]));
+    const hit = await liveSearch(ENV, 'q');
+    expect(hit?.sources).toHaveLength(8);
+    expect(new Set(hit?.sources).size).toBe(8);
+  });
+
+  it('drops a result with no title or no url, and leaves no blank line when a snippet is empty', async () => {
+    stubSearch(body([{ url: 'https://a.example/1', title: '', content: 'x' }, { url: '', title: 'No url', content: 'x' }, result(3, { content: '' })]));
+    expect(await liveSearch(ENV, 'q')).toEqual({ text: '[1] Title 3\nhttps://a.example/3', sources: ['https://a.example/3'] });
+  });
+
+  it('is null when the instance is not configured — and makes no call at all', async () => {
+    stubSearch(body([result(1)]));
     expect(await liveSearch({}, 'q')).toBeNull();
+    expect(seen).toHaveLength(0);
+  });
+
+  it('is null when the instance answers an error, or answers nothing useful', async () => {
+    stubSearch(body([]), 503);
+    expect(await liveSearch(ENV, 'q')).toBeNull();
+    resetSearxngCooldown();
+    stubSearch(body([]));
+    expect(await liveSearch(ENV, 'q')).toBeNull();
   });
 });
 

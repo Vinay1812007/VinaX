@@ -41,7 +41,7 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 | Android background push | `FCM_SERVICE_ACCOUNT` | Tokens are stored, nothing is sent ([fcm-push-setup.md](fcm-push-setup.md)) |
 | Identity signing | `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET` | Signed install ids fall back as described in `.env.example` |
 | Scheduled jobs | `CRON_SECRET` (also a repository Actions secret with the same value) | `/api/cron/*` rejects every call |
-| Optional | `BRAVE_API_KEY` (web search in VinaX AI), `GITHUB_REPO`, `GITHUB_TOKEN` (Android update source) | The feature is off or rate-limited |
+| Optional | `SEARXNG_URL` + `SEARXNG_TOKEN` (the web search instance behind VinaX AI research — the only source; unset means a research answer honestly reports it could not check the live web), `GITHUB_REPO`, `GITHUB_TOKEN` (Android update source) | The feature is off or rate-limited |
 
 Non-secret Worker settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext for ten minutes.
 
@@ -210,7 +210,7 @@ Error budget burned = observed failure ÷ allowed failure, capped at 999 %. Over
 
 `backend/worker/__tests__/chaos-failover.test.ts` drives the real `/api/vinaxai` handler with sabotaged upstreams on every CI run:
 
-- healthy primary lane; primary dead at the network level; primary answering `400`; an empty `200` stream; every lane dead (the client gets an honest `engine_unreachable`, never a hang); a model-requested web search with every search provider down;
+- healthy primary lane; primary dead at the network level; primary answering `400`; an empty `200` stream; every lane dead (the client gets an honest `engine_unreachable`, never a hang); a model-requested web search with the search instance down;
 - stream handling: a body that outlives the header leash is not cut; a stream stuck past the overall budget is cut and flagged `truncated`; an upstream error after partial output is flagged `truncated`.
 
 ## Runbook: the app is newer than the API
