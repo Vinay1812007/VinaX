@@ -51,4 +51,4 @@ services:
       # - key: SEARXNG_TOKEN_PREVIOUS
       #   sync: false
       - key: SEARXNG_BASE_URL
-        value: https://vinax-search.onrender.com/
+        value: https://search.sirimillavinay.online/
