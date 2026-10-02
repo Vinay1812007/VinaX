@@ -351,7 +351,7 @@ The owner console's Health panel carries a **Web search engine** row (`pingSearc
 
 What comes back is untrusted page text. Every model prompt receives it through `fenceWebContext` (in the same module), which marks it untrusted data: 8.3.1 applies this to the "LIVE WEB RESULTS" block of research answers. The fence lines carry a random tag per call, and the page text is normalised (NFKC, invisible characters removed) and stripped of anything that spells a fence marker (`END WEB RESULTS`, `web_results`, `== WEB—RESULTS ==`, any case), so a page cannot close the fence early.
 
-The Search-page music expert, the AI DJ and AI Playlist run no web search of their own (8.3.2).
+9.0.2: the Search-page music expert is grounded again (`expertWebQuery` → `songContext`, video + music categories, a 3.5 s lookup taken out of its own 22 s header budget rather than added to it). Its results are fenced the same way, and every song it names is still resolved against the catalogue by the client, so a hallucinated title cannot become a playable card. The AI DJ and AI Playlist still run no web search of their own — `api/styleLock.test.ts` asserts it.
 
 ## When every provider is down
 

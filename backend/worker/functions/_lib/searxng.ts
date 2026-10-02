@@ -119,6 +119,11 @@ export const SEARXNG_AUTH_COOLDOWN_MS = 10 * 60_000;
 const CATEGORIES: readonly SearxngCategory[] = ['general', 'music', 'news', 'videos'];
 const TIME_RANGES: readonly SearxngTimeRange[] = ['day', 'week', 'month', 'year'];
 
+/** 8.3.1 — songContext answers, per query, per isolate. */
+const SONG_CACHE_MS = 15 * 60_000;
+const SONG_CACHE_MAX = 64;
+const songCache = new Map<string, { value: { text: string; count: number } | null; until: number }>();
+
 let coolUntil = 0;
 /** Why the instance is resting: the failure that started the rest (for health and trend run records). */
 let lastFailure: { status: SearxngStatus; httpStatus: number | null; at: number } | null = null;
@@ -167,10 +172,11 @@ export function searxngLastFailure(): { status: SearxngStatus; httpStatus: numbe
   return lastFailure;
 }
 
-/** Test hook: forgets the rest and its cause. */
+/** Test hook: forgets the rest, its cause, and the song-context cache. */
 export function resetSearxngCooldown(): void {
   coolUntil = 0;
   lastFailure = null;
+  songCache.clear();
 }
 
 function rest(ms: number, status: SearxngStatus, httpStatus: number | null): void {
@@ -360,4 +366,73 @@ export async function searxngQuery(env: SearxngEnv, q: string, opts: SearxngOpti
 /** Results only: [] on any failure (or when SEARXNG_URL is unset). */
 export async function searxngSearch(env: SearxngEnv, q: string, opts: SearxngOptions = {}): Promise<SearxngResult[]> {
   return (await searxngQuery(env, q, opts)).results;
+}
+
+// --- 9.0.2: song-shaped grounding for the Search-page music expert ---
+//
+// Restored from 8.3.1. These were left out when the client came back in 9.0.1
+// because only the chatbot used it; the Search expert now does too. The
+// fencing that used to live here stays in websearch.ts — one copy.
+
+/** Title + snippet lines for a model prompt, numbered, one result per line. Pure. */
+export function resultsToContext(results: SearxngResult[], max = 10): string {
+  return results
+    .slice(0, max)
+    .map((r, i) => `[${i + 1}] ${r.title}${r.content ? ` — ${r.content.slice(0, 200)}` : ''}${r.publishedDate ? ` (${r.publishedDate.slice(0, 10)})` : ''}`)
+    .join('\n');
+}
+
+/** Freshness words in a query → the time range to search. Pure. */
+export function freshnessRange(q: string): SearxngTimeRange | null {
+  const s = q.toLowerCase();
+  if (/\b(today|tonight|yesterday|right now|breaking)\b/.test(s)) return 'day';
+  if (/\b(this week|trending|viral|this weekend)\b/.test(s)) return 'week';
+  if (/\b(latest|newest|new|recent|recently|fresh|this month|just released|new release[sd]?)\b/.test(s)) return 'month';
+  const year = new Date().getUTCFullYear();
+  if (new RegExp(`\\b(this year|${year}|${year - 1})\\b`).test(s)) return 'year';
+  return null;
+}
+
+const MUSICAL_RE = /\b(?:songs?|lyric(?:al)?|lyrics|audio|music|remix|dj|album|ost|single|jukebox|playlist|melod(?:y|ies)|folk|janapad\w*|bhajans?|bhakti|devotional|keerthana\w*|stotram\w*|aarti|qawwali|ghazal)\b/i;
+
+/** A result title that is about music (not a talk, a product, a news story). Pure. */
+export function looksMusical(title: string): boolean {
+  return MUSICAL_RE.test(title);
+}
+
+/**
+ * Song-shaped web evidence for a music prompt: video and music results (a
+ * live probe on 2026-09-28 showed video results carry the cleanest
+ * "Title | Film | Cast | Composer" song titles, and news results mostly box
+ * office stories), ranked by SearXNG's merged score, as numbered lines ready
+ * for fenceWebContext. Null when unset, resting, failed or empty.
+ */
+export async function songContext(
+  env: SearxngEnv,
+  q: string,
+  opts: { timeRange?: SearxngTimeRange; timeoutMs?: number; limit?: number; tag: string; signal?: AbortSignal },
+): Promise<{ text: string; count: number } | null> {
+  if (!searxngConfigured(env)) return null;
+  // The DJ and the playlist ask the same few phrases over and over ("new
+  // telugu songs"): an answer is reused for a while in this isolate instead
+  // of asking the instance again. Only a real answer is kept (an empty one
+  // too); a failure is not.
+  const key = `${q.replace(/\s+/g, ' ').trim().toLowerCase()}|${opts.timeRange ?? ''}|${opts.limit ?? 10}`;
+  const now = Date.now();
+  const hit = songCache.get(key);
+  if (hit && hit.until > now) return hit.value;
+  if (hit) songCache.delete(key);
+  if (searxngCoolingDown(now)) return null;
+  const res = await searxngQuery(env, q, { categories: ['videos', 'music'], timeRange: opts.timeRange, timeoutMs: opts.timeoutMs ?? 4_000, limit: 20, tag: opts.tag, signal: opts.signal });
+  if (!res.ok) return null;
+  const musical = res.results.filter((r) => looksMusical(r.title));
+  const ranked = [...musical].sort((a, b) => b.score - a.score).slice(0, opts.limit ?? 10);
+  const value = ranked.length ? { text: resultsToContext(ranked, ranked.length), count: ranked.length } : null;
+  if (songCache.size >= SONG_CACHE_MAX) {
+    for (const [k, v] of songCache) if (v.until <= now) songCache.delete(k);
+    // Still full: drop the oldest entry (a Map keeps insertion order).
+    while (songCache.size >= SONG_CACHE_MAX) songCache.delete(songCache.keys().next().value as string);
+  }
+  songCache.set(key, { value, until: now + SONG_CACHE_MS });
+  return value;
 }

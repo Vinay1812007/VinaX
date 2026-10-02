@@ -3,15 +3,18 @@
  * throws, the token header, per-isolate rest after a failure, tag-free capped
  * results, and a log line that never carries the URL or the token.
  *
- * 9.0.1 — restored with the module. The prompt formatting, freshness and
- * music helpers it used to carry are gone, and fencing is covered in
- * websearch.test.ts.
+ * 9.0.1 — restored with the module; fencing is covered in websearch.test.ts.
+ * 9.0.2 — the prompt formatting, freshness and music helpers came back with
+ * the Search expert's grounding, and so did their tests.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  freshnessRange,
+  looksMusical,
   parseSearxngBody,
   resetSearxngCooldown,
   restForHttp,
+  resultsToContext,
   SEARXNG_AUTH_COOLDOWN_MS,
   searxngBase,
   searxngCoolingDown,
@@ -21,6 +24,7 @@ import {
   searxngReady,
   searxngSearch,
   searxngUrlSet,
+  songContext,
   timeoutLimitSeconds,
 } from './searxng';
 
@@ -266,5 +270,76 @@ describe('searxngQuery', () => {
     const line = String(log.mock.calls[0][0]);
     expect(line).toMatch(/^\[searxng\] unit q="x{60}" cat=general status=ok http=200 n=1 ms=\d+$/);
     expect(line).not.toMatch(/SECRETTAIL|search\.example\.org|tok-123/);
+  });
+});
+
+describe('helpers', () => {
+  it('freshnessRange reads the time window a question asks about', () => {
+    expect(freshnessRange('who won today')).toBe('day');
+    expect(freshnessRange('trending hindi songs this week')).toBe('week');
+    expect(freshnessRange('latest telugu songs')).toBe('month');
+    expect(freshnessRange('new tamil releases')).toBe('month');
+    expect(freshnessRange(`best songs of ${new Date().getUTCFullYear()}`)).toBe('year');
+    expect(freshnessRange('classic ilaiyaraaja melodies')).toBeNull();
+  });
+
+  it('resultsToContext numbers title + snippet lines, with the date when there is one', () => {
+    const text = resultsToContext([
+      { title: 'A', url: 'https://a', content: 'snip', engines: [], category: null, author: null, publishedDate: '2026-09-01T00:00:00.000Z', score: 1 },
+      { title: 'B', url: 'https://b', content: '', engines: [], category: null, author: null, publishedDate: null, score: 1 },
+    ]);
+    expect(text).toBe('[1] A — snip (2026-09-01)\n[2] B');
+  });
+
+  it('songContext keeps only musical results, best score first, from video + music categories', async () => {
+    stubFetch(() =>
+      jsonRes(
+        body([
+          { url: 'https://a/1', title: 'Debian Documentation in Telugu', score: 9 },
+          { url: 'https://a/2', title: 'Endhayya Saami | Ranabaali | Full Song', score: 1 },
+          { url: 'https://a/3', title: 'Narayanamma Lyric Video | Aadarsha Kutumbam', score: 3 },
+        ]),
+      ),
+    );
+    const ctx = await songContext(ENV, 'new telugu songs', { tag: 'unit', timeRange: 'month' });
+    expect(ctx?.count).toBe(2);
+    expect(ctx?.text.split('\n')).toEqual(['[1] Narayanamma Lyric Video | Aadarsha Kutumbam', '[2] Endhayya Saami | Ranabaali | Full Song']);
+    const u = new URL(calls[0].url);
+    expect(u.searchParams.get('categories')).toBe('videos,music');
+    expect(u.searchParams.get('time_range')).toBe('month');
+    expect(looksMusical('Patta new rules in Tamil')).toBe(false);
+  });
+
+  it('songContext reuses an answer for the same query for a while, per isolate', async () => {
+    stubFetch(() => jsonRes(body([{ url: 'https://a/2', title: 'Endhayya Saami | Ranabaali | Full Song', score: 1 }])));
+    const first = await songContext(ENV, 'new telugu songs', { tag: 'unit', timeRange: 'month' });
+    const again = await songContext(ENV, '  New Telugu   songs ', { tag: 'unit', timeRange: 'month' });
+    expect(again).toEqual(first);
+    expect(calls).toHaveLength(1);
+    // Another query, time range or size is another entry.
+    await songContext(ENV, 'new telugu songs', { tag: 'unit', timeRange: 'week' });
+    expect(calls).toHaveLength(2);
+    // After fifteen minutes the instance is asked again.
+    const later = Date.now() + 16 * 60_000;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
+    await songContext(ENV, 'new telugu songs', { tag: 'unit', timeRange: 'month' });
+    expect(calls).toHaveLength(3);
+  });
+
+  it('songContext does not keep a failure: the next call asks again once the rest is over', async () => {
+    stubFetch(() => new Response('', { status: 404 }));
+    expect(await songContext(ENV, 'q', { tag: 'unit' })).toBeNull();
+    stubFetch(() => jsonRes(body([{ url: 'https://a/2', title: 'Endhayya Saami | Ranabaali | Full Song', score: 1 }])));
+    expect((await songContext(ENV, 'q', { tag: 'unit' }))?.count).toBe(1);
+  });
+
+  it('songContext is null when unset or resting, without a call', async () => {
+    stubFetch(() => jsonRes(body([])));
+    expect(await songContext({}, 'x', { tag: 'unit' })).toBeNull();
+    stubFetch(() => new Response('', { status: 500 }));
+    await searxngQuery(ENV, 'x');
+    const before = calls.length;
+    expect(await songContext(ENV, 'x', { tag: 'unit' })).toBeNull();
+    expect(calls.length).toBe(before);
   });
 });

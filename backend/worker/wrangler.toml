@@ -121,11 +121,11 @@ GITHUB_REPO = "Vinay1812007/VinaX"
 # Worker secret (SEARXNG_TOKEN). Empty would mean VinaX AI answers "couldn't
 # check the live web" instead of silently answering from memory.
 #
-# The service's own Render hostname, not search.sirimillavinay.online: a
-# custom domain would add a Cloudflare proxy hop and a certificate handshake
-# between Render and Cloudflare for no gain, since nothing but this Worker
-# ever calls it and no listener sees the address.
-SEARXNG_URL = "https://vinax-search.onrender.com"
+# The custom domain, added 2026-10-02. Its DNS record is intentionally
+# DNS-only (grey cloud), not proxied: Render issues and renews the
+# certificate itself, and it cannot do that through Cloudflare's proxy. The
+# service also stays reachable at vinax-search.onrender.com.
+SEARXNG_URL = "https://search.sirimillavinay.online"
 
 # Secrets (set with `npx wrangler secret put <NAME> --config worker/wrangler.toml`
 # or the Workers dashboard, never in this file) — every name documented in
