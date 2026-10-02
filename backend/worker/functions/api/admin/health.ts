@@ -25,7 +25,7 @@ import { searxngConfigured, searxngCoolingRemainingMs, searxngLastFailure, searx
 
 type Env = AdminEnv & SupabaseEnv & AiEnv & SearxngEnv;
 
-const SEARCH_ROW = 'Web search engine · VinaX AI research';
+const SEARCH_ROW = 'Web search engine · VinaX AI research · Search expert';
 
 /** Reachability of the web search instance, in the same row shape as the AI keys. Exported for tests. */
 export async function pingSearch(env: SearxngEnv): Promise<KeyHealth> {

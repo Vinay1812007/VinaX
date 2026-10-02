@@ -61,13 +61,25 @@ curl -s -H "Authorization: Bearer <token>" \
 The second one answering anything but 401 means the token check is not working.
 Stop and fix that first; everything else can wait.
 
-**4. A custom domain is optional, and currently unused.** The Worker calls the
-service's own Render hostname. Nothing but the Worker ever calls it and no
-listener sees the address, so `search.sirimillavinay.online` would add a
-Cloudflare proxy hop and a certificate handshake between Render and Cloudflare
-for no gain. If you add one anyway: a CNAME `search` →
-`<service>.onrender.com`, left **DNS-only** until Render has issued its
-certificate, then proxied if you want.
+**4. The custom domain.** `search.sirimillavinay.online` is live. Two halves:
+add it under Custom Domains on the Render service, and add the DNS record in
+Cloudflare:
+
+| Field | Value |
+| --- | --- |
+| Type | CNAME |
+| Name | `search` |
+| Target | `vinax-search.onrender.com` |
+| Proxy status | **DNS only** (grey cloud) |
+
+Leave it DNS-only. Render issues and renews the certificate itself and cannot
+do that through Cloudflare's proxy — with the orange cloud on, Render sees
+Cloudflare's addresses and stays stuck on *Waiting for Verification*. Nothing
+is lost by not proxying: only the Worker calls this host, and it is not a
+public surface.
+
+The service stays reachable at `vinax-search.onrender.com` too, which is
+useful when you need to bypass DNS while debugging.
 
 **5. Give the Worker the two values.** The token is a secret:
 
@@ -79,7 +91,7 @@ npx wrangler secret put SEARXNG_TOKEN --config worker/wrangler.toml
 The URL is not. It belongs in `worker/wrangler.toml` under `[vars]`:
 
 ```toml
-SEARXNG_URL = "https://vinax-search.onrender.com"
+SEARXNG_URL = "https://search.sirimillavinay.online"
 ```
 
 Setting that one in the Cloudflare dashboard instead does not stick: a
