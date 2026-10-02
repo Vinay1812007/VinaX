@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '9.0.1': {
+    title: 'One web search that works',
+    changes: [
+      { type: 'improved', text: 'Web search in VinaX AI now goes to one search service of our own instead of several patchy ones, so research answers come back with real ranked results and proper source links.' },
+      { type: 'improved', text: 'When live web search is unavailable, the reply says so plainly instead of answering from memory as though it had checked.' },
+      { type: 'improved', text: 'Owner console — Health has a Web search engine row: whether the search service is reachable, how many results it returned and how long it took, and in plain words what is wrong when it is not.' },
+    ],
+  },
   '9.0.0': {
     title: 'VinaX 9: a new look, and picks that listen better',
     changes: [
@@ -2318,7 +2326,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
   '16.58': {
     title: 'Web search, no setup',
     changes: [
-      { type: 'improved', text: 'VinaX AI web search is now free and keyless — it pulls live context from DuckDuckGo and Wikipedia, so the globe toggle just works with no API key to configure.' },
+      { type: 'improved', text: 'VinaX AI web search needs no setup — it pulls live context from the open web, so the globe toggle just works with no API key to configure.' },
     ],
   },
   '16.57': {

@@ -341,7 +341,11 @@ These routes are outside the scope of this document; each keeps its key on the W
 
 ## Web search
 
-`_lib/websearch.ts` `liveSearch` is the one web search behind VinaX AI (the Web search / Research toggle and the model-requested `[[FETCH: …]]` step). It uses the optional paid key (`BRAVE_API_KEY`) when one is configured, and otherwise — or when that finds nothing — the free, keyless sources, merged, de-duplicated and numbered into one `SearchHit` (`{ text, sources }`). No key is required.
+`_lib/websearch.ts` `liveSearch` is the one web search behind VinaX AI (the Web search / Research toggle and the model-requested `[[FETCH: …]]` step). 9.0.1: it has exactly one source — the owner's own metasearch instance (`_lib/searxng.ts`, `SEARXNG_URL` + `SEARXNG_TOKEN`), whose merged ranked results are de-duplicated by URL, capped at eight and numbered into one `SearchHit` (`{ text, sources }`).
+
+There is **no fallback**, and that is the deliberate trade: the four sources this used to merge (a paid key, two keyless endpoints and a scrape of a general results page) returned a captcha page as often as a result, and four half-working paths hid which one was broken. With the instance unset, resting or unwell, `liveSearch` answers `null`, `meta.web` is `failed`, and the reply tells the listener it could not check the live web instead of answering from memory as though it had. The instance itself is bounded and fails closed: a 6 s leash per search, a result cap, a body cap read as a stream, and a per-isolate rest after a failure that says the instance is unwell (ten minutes for a refused token), so a dead instance costs nothing until it has had time to recover.
+
+The owner console's Health panel carries a **Web search engine** row (`pingSearch` in `api/admin/health.ts`): reachable / result count / latency, or the failure in plain words — a refused token, `json` missing from the instance's `search.formats`, rate limiting, a non-JSON page from a proxy in front of it. The row never carries the instance's address or token, and neither does any log line.
 
 What comes back is untrusted page text. Every model prompt receives it through `fenceWebContext` (in the same module), which marks it untrusted data: 8.3.1 applies this to the "LIVE WEB RESULTS" block of research answers. The fence lines carry a random tag per call, and the page text is normalised (NFKC, invisible characters removed) and stripped of anything that spells a fence marker (`END WEB RESULTS`, `web_results`, `== WEB—RESULTS ==`, any case), so a page cannot close the fence early.
 

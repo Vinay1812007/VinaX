@@ -7,9 +7,10 @@
  * Optional live web search and image understanding (vision model). Nothing is
  * stored server-side beyond anonymous AI telemetry.
  *
- * Web search is FREE and keyless by default (DuckDuckGo Instant Answer API +
- * DuckDuckGo). If a BRAVE_API_KEY is ever configured it is preferred, but no key
- * is required for the feature to work.
+ * Live web search goes to the owner's own metasearch instance and nowhere
+ * else (SEARXNG_URL / SEARXNG_TOKEN — see _lib/searxng.ts). With the instance
+ * unset or unwell the reply SAYS it could not check the live web; it never
+ * answers from memory as though it had.
  */
 import {
   LANE_MODEL,
@@ -41,7 +42,7 @@ import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { houseRules, readConfig } from '../_lib/clientConfig';
 import { istNowLine } from '../_lib/time';
 import { type SupabaseEnv } from '../_lib/supabase';
-import { fenceWebContext, liveSearch, stripFenceMarkers } from '../_lib/websearch';
+import { fenceWebContext, liveSearch, stripFenceMarkers, type WebSearchEnv } from '../_lib/websearch';
 import { maestroFetch } from '../_lib/maestro';
 
 // Image understanding rides its own key + lane since v5.21.0 (the owner
@@ -279,9 +280,7 @@ export function pickAutoMode(q: string): Mode {
 }
 
 
-interface Env extends AiEnv, SupabaseEnv {
-  BRAVE_API_KEY?: string;
-}
+interface Env extends AiEnv, SupabaseEnv, WebSearchEnv {}
 
 const CORS: Record<string, string> = {
   'access-control-allow-origin': '*',
@@ -486,7 +485,7 @@ interface InMsg {
   content?: unknown;
 }
 
-// Live web search (Brave when configured, else free keyless sources) lives in
+// Live web search (the owner's metasearch instance, the only source) lives in
 // _lib/websearch.ts — shared with the VinaX CLI agent endpoint so there is
 // exactly one implementation to keep working.
 
@@ -662,10 +661,11 @@ async function handleChat(
   // rescued call on another lane gets the plain answer.
   const grounded = body.web === true && keyRole === 'maestro' && images.length === 0;
   if (body.web === true && !grounded) {
-    // Tighter per-IP rate limit specifically for web=true: each request pulls
-    // three third-party HTML pages, so it's much heavier than a normal chat
-    // turn — an attacker looping web=true was previously bounded only by the
-    // shared vinaxai bucket (audit finding H-SRV-9).
+    // Tighter per-IP rate limit specifically for web=true: each request puts a
+    // search on the owner's own instance, which then fans out to its upstream
+    // engines, so it's much heavier than a normal chat turn — an attacker
+    // looping web=true was previously bounded only by the shared vinaxai
+    // bucket (audit finding H-SRV-9).
     // B8: 3 → 5/min — research answers routinely need a follow-up search or
     // two, and the burst cap still keeps scripted abuse uneconomical.
     const webRl = await rateLimitAsync(request, 'vinaxai-web', { capacity: 5, refillPerMinute: 5 }, env);
@@ -676,14 +676,15 @@ async function handleChat(
       sources = s.sources;
       webStatus = 'on';
     } else {
-      // The user explicitly asked for live results and every provider came
-      // back empty — the reply must SAY so instead of quietly guessing.
+      // The user explicitly asked for live results and the instance is unset,
+      // resting or came back empty — and there is no second source to try.
+      // The reply must SAY so instead of quietly guessing.
       webStatus = 'failed';
     }
   }
   // needsFreshInfo(...) stays exported for the client to re-use (see
   // src/pages/VinaXAIPage.tsx) — the freshness heuristic now runs there
-  // and sets body.web=true so the third-party hop is always paired with a
+  // and sets body.web=true so a live lookup is always paired with a
   // visible meta.web=on badge in the reply.
 
   const taste = tasteBlock(body.taste);
