@@ -54,6 +54,7 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
     title: 'Searches that match what you asked',
     changes: [
       { type: 'fixed', text: 'When VinaX AI looked something up on the web, it was searching for its own internal wrapper text along with your question — so a question about technology headlines came back with the dictionary definition of “user”. It now searches for exactly what you asked, and the sources match the question.' },
+      { type: 'improved', text: 'Search can find songs released after the AI last learned about music: described searches are now backed by live results, and every song it suggests is still checked against the catalogue before it can play.' },
     ],
   },
   '9.0.1': {
