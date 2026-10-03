@@ -14,6 +14,8 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { toast } from '@/store/toastStore';
 import { generatePlaylist, playlistErrorCopy, type GeneratedPlaylist, type PlaylistFailure } from '@/services/ai/playlist';
+import { songKey } from '@/services/recommendation/songIdentity';
+import type { Song } from '@/types';
 import { scrollBehavior } from '@/utils/motion';
 import '@/styles/pages/radio.css';
 
@@ -65,10 +67,26 @@ export default function AIPlaylistPage() {
   const [problem, setProblem] = useState<Problem | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
+  /**
+   * 9.1.0 — tracks the listener pinned. A rebuild keeps these, in place, and
+   * replaces only the rest. Held by canonical identity so a lock survives the
+   * same song arriving under another release id.
+   */
+  const [lockedKeys, setLockedKeys] = useState<ReadonlySet<string>>(new Set());
+  /** 9.1.0 — a refinement of the list on screen ("more upbeat", "fewer film songs"). */
+  const [refine, setRefine] = useState('');
   // Leaving the page ends the build in flight.
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  const run = async (text: string) => {
+  /**
+   * `mode` says what kind of build this is:
+   *   'new'      a fresh idea — nothing is kept.
+   *   'again'    the same idea, next round: the catalogue is read from different
+   *              phrasings and pages, and locked tracks stay.
+   *   'fewer'    the same, with the strict repetition rule (see the service).
+   *   'replace'  swap one track for something else, keeping everything else.
+   */
+  const run = async (text: string, mode: 'new' | 'again' | 'fewer' | 'replace' | 'refine' = 'new', replacing?: Song) => {
     const q = text.trim();
     if (!q || loading) return;
     const ctrl = new AbortController();
@@ -77,10 +95,29 @@ export default function AIPlaylistPage() {
     setAsked(q);
     setLoading(true);
     setProblem(null);
-    setResult(null);
+    // A rebuild of the same idea keeps the current list on screen until the new
+    // one lands; a brand-new idea starts clean.
+    if (mode === 'new') {
+      setResult(null);
+      setLockedKeys(new Set());
+    }
+    const keep =
+      mode === 'new'
+        ? []
+        : mode === 'replace'
+          ? (result?.songs ?? []).filter((x) => x.id !== replacing?.id)
+          : (result?.songs ?? []).filter((x) => lockedKeys.has(songKey(x)));
+    if (mode === 'new') setRefine('');
     let res;
     try {
-      res = await generatePlaylist(q, pinned, muted, ctrl.signal);
+      res = await generatePlaylist(q, pinned, muted, {
+        signal: ctrl.signal,
+        regenerate: mode !== 'new',
+        locked: keep,
+        ...(mode === 'replace' && replacing ? { exclude: [replacing] } : {}),
+        ...(mode === 'fewer' ? { fewerRepeats: true } : {}),
+        ...(mode === 'refine' && refine.trim() ? { refine: refine.trim() } : {}),
+      });
     } catch {
       if (!ctrl.signal.aborted) {
         setProblem({ kind: 'failed', reason: 'error', message: 'The playlist service could not be reached. Your idea is still in the box — try again.' });
@@ -96,6 +133,9 @@ export default function AIPlaylistPage() {
     }
     if (res.ok) {
       setResult(res.playlist);
+      // Drop locks for songs the new list no longer holds.
+      const present = new Set(res.playlist.songs.map(songKey));
+      setLockedKeys((prev) => new Set([...prev].filter((k) => present.has(k))));
       return;
     }
     setProblem({ kind: 'failed', reason: res.reason, message: playlistErrorCopy(res.reason) });
@@ -250,26 +290,97 @@ export default function AIPlaylistPage() {
             <IconButton size="lg" label="Add to queue" onClick={queueAll}>
               <QueueIcon className="w-6 h-6" />
             </IconButton>
-            <IconButton size="lg" label="Build it again" onClick={() => void run(asked)}>
+            <IconButton size="lg" label="Build it again" onClick={() => void run(asked, 'again')}>
               <RefreshIcon className="w-6 h-6" />
             </IconButton>
+            {/* 9.1.0 — the strict repetition rule for one build: leaves out
+                everything this listener has met lately, even at the cost of a
+                shorter list. */}
+            <button type="button" className="btn-secondary" onClick={() => void run(asked, 'fewer')}>
+              Fewer repeats
+            </button>
             <IconButton size="lg" label="Edit the idea" onClick={editPrompt}>
               <PencilIcon className="w-6 h-6" />
             </IconButton>
           </div>
+          {result.shortfall && (
+            <p className="vx-aip-shortfall" role="status">
+              {result.shortfall}
+            </p>
+          )}
+          {/* 9.1.0 — refine the list that is on screen, keeping anything kept. */}
+          <form
+            className="vx-aip-refine"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (refine.trim()) void run(asked, 'refine');
+            }}
+          >
+            <label htmlFor="playlist-refine" className="sr-only">
+              Change something about this playlist
+            </label>
+            <input
+              id="playlist-refine"
+              value={refine}
+              onChange={(e) => setRefine(e.target.value.slice(0, 200))}
+              placeholder="Change something — e.g. more upbeat, fewer film songs"
+              disabled={loading}
+            />
+            <button type="submit" className="btn-secondary" disabled={loading || !refine.trim()}>
+              Refine
+            </button>
+          </form>
+          {lockedKeys.size > 0 && (
+            <p className="vx-aip-locknote" role="status">
+              {lockedKeys.size === 1 ? '1 track kept' : `${lockedKeys.size} tracks kept`} — building again replaces only the rest.
+            </p>
+          )}
           <div className="vx-tracklist">
-            {result.songs.map((song, i) => (
-              <div key={song.id} className="vx-aip-track">
-                <SongRow song={song} songs={result.songs} index={i} />
-                {/* 8.5.0 — why the curator chose it: about fit only, never facts about the artist. */}
-                {result.reasons?.[song.id] && (
-                  <p className="vx-aip-reason">
-                    <SparkleIcon filled />
-                    <span>{result.reasons[song.id]}</span>
-                  </p>
-                )}
-              </div>
-            ))}
+            {result.songs.map((song, i) => {
+              const key = songKey(song);
+              const locked = lockedKeys.has(key);
+              return (
+                <div key={song.id} className={locked ? 'vx-aip-track is-locked' : 'vx-aip-track'}>
+                  <SongRow song={song} songs={result.songs} index={i} />
+                  <div className="vx-aip-trackacts">
+                    {/* 9.1.0 — keep this one through the next build. */}
+                    <button
+                      type="button"
+                      className="vx-aip-lock"
+                      aria-pressed={locked}
+                      aria-label={locked ? `Stop keeping ${song.title}` : `Keep ${song.title} when building again`}
+                      onClick={() =>
+                        setLockedKeys((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(key)) next.delete(key);
+                          else next.add(key);
+                          return next;
+                        })
+                      }
+                    >
+                      {locked ? 'Kept' : 'Keep'}
+                    </button>
+                    {/* 9.1.0 — swap just this track; everything else stays. */}
+                    <button
+                      type="button"
+                      className="vx-aip-swap"
+                      disabled={loading}
+                      aria-label={`Replace ${song.title} with another song`}
+                      onClick={() => void run(asked, 'replace', song)}
+                    >
+                      Replace
+                    </button>
+                  </div>
+                  {/* 8.5.0 — why the curator chose it: about fit only, never facts about the artist. */}
+                  {result.reasons?.[song.id] && (
+                    <p className="vx-aip-reason">
+                      <SparkleIcon filled />
+                      <span>{result.reasons[song.id]}</span>
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
       )}

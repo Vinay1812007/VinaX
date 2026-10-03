@@ -107,7 +107,12 @@ function ThinkingMark({ agent }: { agent: boolean }): ReactNode {
   );
 }
 
-function Sources({ sources }: { sources: string[] }): ReactNode {
+function Sources({ sources, previews }: { sources: string[]; previews?: Array<{ url: string; title: string; snippet: string }> }): ReactNode {
+  // 9.1.0 — when the server sent each source's own title and snippet, show them:
+  // a reader can tell what a citation IS without opening it. The text comes from
+  // an arbitrary page, so it is rendered as text (React escapes it) and never as
+  // markup. Without previews this falls back to the 9.0 host rows below.
+  const previewOf = new Map((previews ?? []).map((p) => [p.url, p]));
   // The ranked-source card: numbered to match the [1][2] citations in the
   // answer. The coloured chip is a local letter avatar, NOT an icon fetch —
   // pulling icons from third parties would leak what you read.
@@ -144,8 +149,26 @@ function Sources({ sources }: { sources: string[] }): ReactNode {
               >
                 {host.charAt(0).toUpperCase()}
               </span>
-              <span className="text-[11px] font-semibold ai-t2 truncate">{host}</span>
-              {path && <span className="text-[11px] ai-t3 truncate hidden sm:inline min-w-0">{path}</span>}
+              <span className="min-w-0 flex-1">
+                {(() => {
+                  const preview = previewOf.get(u);
+                  if (!preview?.title && !preview?.snippet) {
+                    return (
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] font-semibold ai-t2 truncate">{host}</span>
+                        {path && <span className="text-[11px] ai-t3 truncate hidden sm:inline min-w-0">{path}</span>}
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="block min-w-0">
+                      <span className="block text-[12px] font-semibold ai-t1 ai-src-title">{preview.title || host}</span>
+                      {preview.snippet && <span className="block text-[11px] ai-t3 ai-src-snippet">{preview.snippet}</span>}
+                      <span className="block text-[10px] ai-t3 truncate">{host}</span>
+                    </span>
+                  );
+                })()}
+              </span>
             </a>
           );
         })}
@@ -343,7 +366,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         ) : (
           <ThinkingMark agent={agent} />
         )}
-        {m.sources?.length ? <Sources sources={m.sources} /> : null}
+        {m.sources?.length ? <Sources sources={m.sources} previews={m.sourcePreviews} /> : null}
       </div>
     </div>
   );

@@ -266,6 +266,10 @@ export function AppLayout() {
       });
     });
 
+    // 9.1.0 — carry a 9.0 device's shown-song memory into the shared exposure
+    // ledger, once. Idempotent and cheap; a failure costs the old list only.
+    void import('@/services/recommendation/exposure').then((m) => m.migrateLegacyExposure()).catch(() => undefined);
+
     const settings = useSettingsStore.getState();
     void resolveRegion({
       allowInference: settings.allowRegionInference,

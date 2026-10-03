@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeSong } from '@/__fixtures__/songs';
 import { lastSeedContinuation, PROVEN_COOLDOWN_MS, provenPicks, recordAutoOutcome, rememberSeedContinuation, resetRecMemory, SEED_MEMORY_SIZE } from './recMemory';
+import { songKey } from './songKey';
 import { autoOutcomeFor } from './transitionTracker';
 
 /** 8.2.0 — the engine's memory of its own automatic picks, and of what it served after each seed. */
@@ -51,11 +52,21 @@ describe('per-seed memory', () => {
     const seed = makeSong('seed', { artist: 'S' });
     const songs = Array.from({ length: 8 }, (_, i) => makeSong(`n${i}`, { artist: `N${i}` }));
     rememberSeedContinuation(seed, songs, NOW);
-    expect([...lastSeedContinuation(seed, NOW + 1000)]).toEqual(songs.slice(0, SEED_MEMORY_SIZE).map((s) => s.id));
+    // 9.1.0 — stored as canonical keys, so an alternate release cannot sneak the same opening back.
+    expect([...lastSeedContinuation(seed, NOW + 1000)]).toEqual(songs.slice(0, SEED_MEMORY_SIZE).map((s) => songKey(s)));
     // Another cut of the same song is the same seed.
     expect(lastSeedContinuation(makeSong('seed-2', { title: 'Song seed (Remastered)', artist: 'S' }), NOW).size).toBe(SEED_MEMORY_SIZE);
     expect(lastSeedContinuation(makeSong('other', { artist: 'S' }), NOW).size).toBe(0);
     expect(lastSeedContinuation(seed, NOW + 13 * 3_600_000).size).toBe(0);
+  });
+
+  it('catches an alternate release of a remembered opening (9.1.0)', () => {
+    const seed = makeSong('seed', { artist: 'S' });
+    rememberSeedContinuation(seed, [makeSong('n0', { title: 'Monica', artist: 'Sai Kiran' })], NOW);
+    const remembered = lastSeedContinuation(seed, NOW);
+    // A different catalogue id, the same work: the id-keyed 9.0 memory missed this.
+    expect(remembered.has(songKey(makeSong('n0-remix', { title: 'Monica (2025 Remix)', artist: 'Sai Kiran' })))).toBe(true);
+    expect(remembered.has(songKey(makeSong('other', { title: 'Monica', artist: 'Someone Else' })))).toBe(false);
   });
 });
 

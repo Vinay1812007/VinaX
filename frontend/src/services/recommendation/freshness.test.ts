@@ -60,15 +60,20 @@ describe('all-path queue freshness', () => {
       }).map((s) => s.id),
     ).toEqual(['fresh']);
   });
-  it('expires old served memory without admitting corrupt timestamps', () => {
+  it('expires old served memory without admitting corrupt timestamps', async () => {
+    // 9.1.0 — the shown memory moved into the shared exposure ledger. A
+    // device's 9.0 `vinax.flow.served.v1` list is carried over once, which is
+    // where the expiry and the timestamp validation now live.
+    const { migrateLegacyExposure, LEGACY_KEYS } = await import('./exposure');
     localStorage.setItem(
-      'vinax.flow.served.v1',
+      LEGACY_KEYS.served,
       JSON.stringify([
-        { k: 'old', t: Date.now() - 8 * 86400000 },
+        { k: 'old', t: Date.now() - 100 * 86400000 },
         { k: 'recent', t: Date.now() },
         { k: 'bad', t: 'yesterday' },
       ]),
     );
+    expect(migrateLegacyExposure().imported).toBe(1);
     expect([...servedKeySet()]).toEqual(['recent']);
   });
 });

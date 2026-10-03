@@ -98,10 +98,27 @@ export interface SearchResults {
 
 export type MediaEntity = Song | Album | Playlist | Artist;
 
+/**
+ * Coarse place context. 9.1.0 adds the time zone, the approximate city and
+ * when the value was resolved.
+ *
+ * It is never an address. `country` is a two-letter code, `regionLabel` is a
+ * state or province NAME as the edge reports it, `city` is the edge's coarse
+ * city guess (often the ISP's exchange, so it is shown as approximate and is
+ * never used as a fact), and `timezone` is an IANA zone — from the edge when
+ * it has one, otherwise from the browser, which is a device setting rather
+ * than an inference about the network.
+ */
 export interface RegionInfo {
   country: string | null;
   regionLabel: string | null;
   source: 'edge' | 'browser' | 'manual' | 'unknown';
+  /** IANA zone ("Asia/Kolkata"), when known. */
+  timezone?: string | null;
+  /** The edge's approximate city. Never shown without saying it is approximate. */
+  city?: string | null;
+  /** When this value was resolved (epoch ms), for "refresh" and staleness. */
+  resolvedAt?: number;
 }
 
 export interface HistoryEntry {

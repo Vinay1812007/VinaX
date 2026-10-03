@@ -49,7 +49,21 @@ describe('liveSearch', () => {
     expect(hit).toEqual({
       text: '[1] Title 1\nsnippet 1\nhttps://a.example/1\n\n[2] Title 2\nsnippet 2\nhttps://a.example/2',
       sources: ['https://a.example/1', 'https://a.example/2'],
+      // 9.1.0 — each source's own title and snippet, so the app can preview it.
+      previews: [
+        { url: 'https://a.example/1', title: 'Title 1', snippet: 'snippet 1' },
+        { url: 'https://a.example/2', title: 'Title 2', snippet: 'snippet 2' },
+      ],
     });
+  });
+
+  it('9.1.0 — a preview is clipped and never carries markup through unchanged', async () => {
+    stubSearch(body([{ title: 'T'.repeat(400), url: 'https://a.example/1', content: `  lots\n   of   space ${'c'.repeat(500)}  `, engines: ['e'] }]));
+    const hit = await liveSearch(ENV, 'q');
+    expect(hit?.previews[0].title.length).toBeLessThanOrEqual(200);
+    expect(hit?.previews[0].snippet.length).toBeLessThanOrEqual(300);
+    // Whitespace collapsed, so a snippet is one readable line.
+    expect(hit?.previews[0].snippet.startsWith('lots of space')).toBe(true);
   });
 
   it('de-duplicates the same page arriving from two engines, and keeps at most eight', async () => {
@@ -61,7 +75,11 @@ describe('liveSearch', () => {
 
   it('drops a result with no title or no url, and leaves no blank line when a snippet is empty', async () => {
     stubSearch(body([{ url: 'https://a.example/1', title: '', content: 'x' }, { url: '', title: 'No url', content: 'x' }, result(3, { content: '' })]));
-    expect(await liveSearch(ENV, 'q')).toEqual({ text: '[1] Title 3\nhttps://a.example/3', sources: ['https://a.example/3'] });
+    expect(await liveSearch(ENV, 'q')).toEqual({
+      text: '[1] Title 3\nhttps://a.example/3',
+      sources: ['https://a.example/3'],
+      previews: [{ url: 'https://a.example/3', title: 'Title 3', snippet: '' }],
+    });
   });
 
   it('is null when the instance is not configured — and makes no call at all', async () => {

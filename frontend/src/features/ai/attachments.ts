@@ -15,13 +15,16 @@ export const ATTACHMENT_ACCEPT = [
   'image/jpeg',
   'image/webp',
   'image/gif',
+  // 9.1.0 — PDFs are read for their text layer (./pdfText.ts).
+  'application/pdf',
   ...TEXT_EXTENSIONS.map((ext) => `.${ext}`),
 ].join(',');
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const SKIP_DIRECTORIES = new Set(['node_modules', 'dist', 'build', 'coverage', '__pycache__']);
 
 export interface Attachment {
-  kind: 'image' | 'text';
+  /** 9.1.0 — `pdf` is a document whose TEXT was extracted; it travels as text. */
+  kind: 'image' | 'text' | 'pdf';
   name: string;
   path: string;
   key: string;
@@ -50,6 +53,7 @@ function ignored(path: string): boolean {
 }
 function fileKind(file: File): Attachment['kind'] | null {
   if (IMAGE_TYPES.has(file.type) || /\.(png|jpe?g|webp|gif)$/i.test(file.name)) return 'image';
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return 'pdf';
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
   return TEXT_EXTENSIONS.includes(extension) ||
     /^(readme|license|dockerfile|makefile)$/i.test(file.name)
@@ -70,10 +74,24 @@ export function attachmentText(attachment: Attachment): string {
   return `\n\n--- File: ${attachment.path}${attachment.shortened ? ' (excerpt)' : ''} ---\n${attachment.text ?? ''}`;
 }
 
+/**
+ * 9.1.0 — progress and cancellation for a batch. `prepareAttachments` reads files
+ * one at a time (they can be large, and a folder can hold hundreds), so a caller
+ * that passes these can show which file is being read and stop part-way. What has
+ * already been read is kept — cancelling is not losing.
+ */
+export interface PrepareOptions {
+  /** Called before each file is read: 1-based position, the total, and its path. */
+  onProgress?: (done: number, total: number, path: string) => void;
+  /** Checked between files; true stops the batch and keeps what is done. */
+  signal?: AbortSignal;
+}
+
 export async function prepareAttachments(
   selection: FileSelection,
   existing: Attachment[],
-): Promise<{ attachments: Attachment[]; notices: string[] }> {
+  options: PrepareOptions = {},
+): Promise<{ attachments: Attachment[]; notices: string[]; cancelled?: boolean }> {
   const attachments = [...existing];
   const notices = [...selection.notices];
   const seen = new Set(existing.map((file) => file.key));
@@ -82,7 +100,17 @@ export async function prepareAttachments(
     .filter((file) => file.kind === 'text')
     .reduce((sum, file) => sum + attachmentText(file).length, 0);
   let hidden = 0;
-  for (const { file, path: rawPath } of selection.files.slice(0, SCAN_LIMIT)) {
+  const queue = selection.files.slice(0, SCAN_LIMIT);
+  let cancelled = false;
+  let done = 0;
+  for (const { file, path: rawPath } of queue) {
+    // 9.1.0 — checked between files, so a half-read batch keeps what it got.
+    if (options.signal?.aborted) {
+      cancelled = true;
+      break;
+    }
+    done += 1;
+    options.onProgress?.(done, queue.length, rawPath);
     if (ignored(rawPath)) {
       hidden++;
       continue;
@@ -110,8 +138,31 @@ export async function prepareAttachments(
       notices.push(`${path}: unsupported format. Choose an image, text, code or CSV file.`);
       continue;
     }
-    if (file.size > (kind === 'image' ? MAX_IMAGE_BYTES : MAX_TEXT_BYTES)) {
+    // A PDF has its own, larger cap: the text inside is a fraction of the file.
+    if (kind !== 'pdf' && file.size > (kind === 'image' ? MAX_IMAGE_BYTES : MAX_TEXT_BYTES)) {
       notices.push(`${path}: exceeds the ${kind === 'image' ? '4 MB image' : '2 MB text'} limit.`);
+      continue;
+    }
+    if (kind === 'pdf') {
+      const { pdfToText } = await import('./pdfText');
+      const read = await pdfToText(file);
+      if (read.outcome !== 'ok') {
+        // Always says WHICH file and WHY — a PDF is never silently dropped.
+        notices.push(`${path}: ${read.note}`);
+        continue;
+      }
+      const attachment: Attachment = { kind: 'pdf', name: file.name, path, key, size: file.size };
+      const remaining = Math.max(0, TEXT_BUDGET - textUsed - attachmentText(attachment).length - 16);
+      if (!remaining) {
+        notices.push(`${path}: text context is full. Send the current files first.`);
+        continue;
+      }
+      attachment.text = read.text.slice(0, Math.min(6000, remaining));
+      attachment.shortened = read.shortened || attachment.text.length < read.text.length;
+      textUsed += attachmentText(attachment).length;
+      if (attachment.shortened) notices.push(`${path}: attached an excerpt of the PDF to fit the message.`);
+      seen.add(key);
+      attachments.push(attachment);
       continue;
     }
     if (
@@ -165,7 +216,8 @@ export async function prepareAttachments(
     notices.push(
       `Only the first ${SCAN_LIMIT} files were scanned. Select a smaller folder for the rest.`,
     );
-  return { attachments, notices };
+  if (cancelled) notices.push(`Stopped after ${attachments.length - existing.length} file${attachments.length - existing.length === 1 ? '' : 's'}. What was read is still attached.`);
+  return { attachments, notices, ...(cancelled ? { cancelled: true } : {}) };
 }
 
 /** Capture entries before awaiting: browser DataTransfer access ends after drop. */

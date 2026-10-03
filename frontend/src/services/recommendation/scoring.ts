@@ -15,6 +15,20 @@ import type { Candidate, ReasonComponent, ReasonKind, RecommendationContext, Sco
 import { moodMatchScore } from './mood';
 import { buildSongProfile, overlap, type SongProfile } from './profiles';
 import { DEFAULT_RECOMMENDATION_WEIGHTS, RECOMMENDATION_WEIGHTS, STYLE_WEIGHTS, TASTE_WEIGHTS, type RecommendationWeightKey } from './weights';
+import { EXPOSURE_WEIGHTS } from './exposure';
+
+/**
+ * 9.1.0 — plain words for an exposure cost, so "Why this song?" and the
+ * developer breakdown say what the ledger actually knows. Deliberately vague
+ * about WHICH event: the ledger adds several, and claiming "you skipped this"
+ * when the cost came from a shelf would be a false statement about the
+ * listener.
+ */
+function exposureWhy(penalty: number): string {
+  if (penalty >= EXPOSURE_WEIGHTS.skipped.penalty) return 'you passed on this lately';
+  if (penalty >= EXPOSURE_WEIGHTS.queued.penalty) return 'played or queued lately';
+  return 'shown recently';
+}
 import { styleEvidence, type MusicStyle } from './style';
 import { rerankCandidates } from './reranking';
 import { songKey } from './songIdentity';
@@ -45,6 +59,16 @@ const SOURCE_BOOST: Record<Candidate['source'], number> = {
   genre: 0.07,
   // 8.3.0 — the catalogue's own DJ-remix / folk / devotional search, in the seed's language.
   style: STYLE_WEIGHTS.sourceBoost,
+  // 9.1.0 — a song an outside chart actually named, matched to the catalogue
+  // by the server. Above the catalogue's own `trending` search (0.06, no
+  // evidence) and the broad genre source, below the listener's stated intent
+  // and the seed's own neighbourhood: real evidence that this song is current,
+  // but evidence about the world, not about this listener.
+  'verified-trend': 0.12,
+  // 9.1.0 — a live-web discovery that resolved to a real recording. One step
+  // below a measured chart position: a release announcement or an editorial
+  // list is weaker evidence than a chart.
+  'web-discovery': 0.09,
 };
 
 /** How each source's boost is explained (favourite-artist and -album name what they came from). */
@@ -61,6 +85,8 @@ const SOURCE_REASON: Record<Candidate['source'], ReasonKind> = {
   'related-artist': 'similar-artist',
   proven: 'proven',
   genre: 'genre',
+  'verified-trend': 'popular-now',
+  'web-discovery': 'web-evidence',
   style: 'style',
 };
 
@@ -317,8 +343,15 @@ export function scoreCandidate(c: Candidate, ctx: RecommendationContext, frame: 
   // 8.2.0 — no surface re-serves what another just showed, and asking again
   // from the same song does not hand back the same opening: small penalties,
   // never rules — a song that is clearly the best fit still wins.
-  if (ctx.servedKeys?.size && ctx.servedKeys.has(songKey(song))) add('served', -TASTE_WEIGHTS.servedRecently, 'shown recently');
-  if (ctx.seedRepeatIds?.has(song.id)) add('served', -TASTE_WEIGHTS.seedRepeat, 'same song, same opening');
+  // 9.1.0 — one exposure ledger decides the cost (./exposure.ts): shown,
+  // queued, played, completed and skipped each decay at their own rate, and a
+  // favourite or an explicit replay request is forgiven. 8.2's flat
+  // `servedKeys` penalty (0.04 — too small to change any order) is still read
+  // for callers that set only that.
+  const exposure = ctx.exposurePenaltyOf?.(songKey(song)) ?? 0;
+  if (exposure > 0) add('served', -exposure, exposureWhy(exposure));
+  else if (ctx.servedKeys?.size && ctx.servedKeys.has(songKey(song))) add('served', -TASTE_WEIGHTS.servedRecently, 'shown recently');
+  if (ctx.seedRepeatKeys?.has(songKey(song)) || ctx.seedRepeatIds?.has(song.id)) add('served', -TASTE_WEIGHTS.seedRepeat, 'same song, same opening');
 
   // Time-of-day affinity: boost languages you tend to play around this hour.
   add('time', timeOfDayWeight(profile, song.language, ctx.hour) * 0.08 * blend);

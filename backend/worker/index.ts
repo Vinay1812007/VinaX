@@ -20,6 +20,7 @@ import { onRequest as hostMiddleware } from './functions/_middleware';
 import * as m_api_status from './functions/api/status';
 import * as m_api_aimodels from './functions/api/aimodels';
 import * as m_api_curate from './functions/api/curate';
+import * as m_api_discover from './functions/api/discover';
 import * as m_api_dj from './functions/api/dj';
 import * as m_api_embed from './functions/api/embed';
 import * as m_api_voices from './functions/api/voices';
@@ -202,6 +203,7 @@ const EXACT: Record<string, Mod> = {
   '/api/admin/recconfig': m_api_admin_recconfig,
   '/api/aimodels': m_api_aimodels,
   '/api/curate': m_api_curate,
+  '/api/discover': m_api_discover,
   '/api/dj': m_api_dj,
   '/api/embed': m_api_embed,
   '/api/voices': m_api_voices,

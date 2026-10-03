@@ -62,10 +62,17 @@ export function stripImagesForPersist(chats: Conversation[]): Conversation[] {
   }));
 }
 
+/**
+ * 9.1.0 — a TEMPORARY chat is never written to the device. It lives in React
+ * state for as long as the tab shows it and leaves nothing behind: no entry in
+ * the chat list on the next load, and nothing for an export to pick up. The
+ * filter is here, at the one place that writes, so no future caller can forget.
+ */
 export function persistChats(chats: Conversation[]): void {
   if (typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(stripImagesForPersist(chats).slice(0, MAX_STORED_CHATS)));
+    const keep = chats.filter((c) => !c.temporary);
+    localStorage.setItem(STORE_KEY, JSON.stringify(stripImagesForPersist(keep).slice(0, MAX_STORED_CHATS)));
   } catch {
     /* storage full or blocked — non-fatal */
   }
@@ -160,8 +167,9 @@ export function exportChat(c: Conversation, kind: 'txt' | 'md' | 'pdf'): void {
   }, 100);
 }
 
+/** 9.1.0 — a temporary chat is not part of an export, by the same rule. */
 export const exportAllChats = (chats: Conversation[]): void =>
-  downloadFile('vinax-ai-chats.json', JSON.stringify(chats, null, 2), 'application/json');
+  downloadFile('vinax-ai-chats.json', JSON.stringify(chats.filter((c) => !c.temporary), null, 2), 'application/json');
 
 /* ---------- import ---------- */
 
@@ -176,6 +184,20 @@ function reviveMsg(raw: unknown): Msg | null {
   if (Array.isArray(r.sources)) {
     const src = r.sources.filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u)).slice(0, 12);
     if (src.length) m.sources = src;
+  }
+  // 9.1.0 — source previews, each field checked. An import is a file from anywhere.
+  if (Array.isArray(r.sourcePreviews)) {
+    const previews = r.sourcePreviews
+      .map((raw) => {
+        const p = raw as { url?: unknown; title?: unknown; snippet?: unknown } | null;
+        if (!p || typeof p !== 'object' || typeof p.url !== 'string' || !/^https:\/\//i.test(p.url)) return null;
+        const title = typeof p.title === 'string' ? p.title.slice(0, 200) : '';
+        const snippet = typeof p.snippet === 'string' ? p.snippet.slice(0, 300) : '';
+        return title || snippet ? { url: p.url, title, snippet } : null;
+      })
+      .filter((p): p is { url: string; title: string; snippet: string } => p !== null)
+      .slice(0, 12);
+    if (previews.length) m.sourcePreviews = previews;
   }
   if (Array.isArray(r.images)) {
     // Only inline pictures the chat itself produced; '' is the placeholder a

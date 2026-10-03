@@ -10,7 +10,7 @@ import { createEmptyProfile } from '@/services/personalization/profile';
  * response cache, soft and hard deadlines) and a cold start that uses what
  * the listener told us before any default.
  */
-type Call = { fn: 'suggest' | 'search' | 'album' | 'artist'; key: string; signal?: AbortSignal };
+type Call = { fn: 'suggest' | 'search' | 'album' | 'artist' | 'song'; key: string; signal?: AbortSignal };
 let calls: Call[] = [];
 let inFlight = 0;
 let maxInFlight = 0;
@@ -37,9 +37,11 @@ vi.mock('@/services/api', () => ({
   getAlbum: (id: string) => fake({ fn: 'album', key: id }).then((songs) => ({ id, title: `Album ${id}`, songs })),
   getArtistTopSongs: (id: string) => fake({ fn: 'artist', key: id }),
   getArtist: (id: string) => artistPage(id),
+  // 9.1.0 — the verified-trend source resolves a chart entry's catalogue id exactly.
+  getSong: (id: string) => fake({ fn: 'song', key: id }).then((songs) => songs[0] ?? null),
 }));
 
-import { gatherCandidates, generateNextCandidates, resetCandidateCache, CANDIDATE_FETCH_CONCURRENCY } from './candidates';
+import { gatherCandidates, generateNextCandidates, resetCandidateCache, CANDIDATE_FETCH_CONCURRENCY, TREND_RESOLVE } from './candidates';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { recordAutoOutcome, resetRecMemory } from './recMemory';
@@ -151,8 +153,12 @@ describe('bounded work', () => {
     expect(searches.length).toBeGreaterThan(0);
     expect(searches.every((c) => c.signal?.aborted)).toBe(true);
     // 8.2.0 — plus the related-artist lookup: the artist catalogue call takes no signal, so it is abandoned, not cancelled.
+    // 9.1.0 — the gather now asks for more pages than the concurrency bound runs
+    // at once, so a task can be abandoned having issued no request at all. The
+    // invariant is that every search that WAS issued got cancelled (above) and
+    // every unanswered task is reported.
     const abandoned = report.mock.calls[0][0].abandoned as string[];
-    expect(abandoned.filter((l) => !l.startsWith('related-artist')).length).toBe(searches.length);
+    expect(abandoned.filter((l) => !l.startsWith('related-artist')).length).toBeGreaterThanOrEqual(searches.length);
     expect(abandoned.filter((l) => l.startsWith('related-artist'))).toHaveLength(1);
   });
 
@@ -192,7 +198,64 @@ describe('cold start', () => {
     await gatherCandidates(makeContext({ mutedLanguages: ['hindi'] }));
     const qs = searched();
     expect(qs.some((q) => q.includes('hindi'))).toBe(false);
-    expect(qs.filter((q) => /english|tamil|telugu|punjabi/.test(q)).length).toBe(2);
+    // Two default languages (9.1.0 reads two PAGES of each, so count the
+    // languages reached, not the requests made).
+    const reached = new Set(qs.flatMap((q) => ['english', 'tamil', 'telugu', 'punjabi'].filter((l) => q.includes(l))));
+    expect(reached.size).toBe(2);
+  });
+});
+
+describe('9.1 — verified trends enter the pool', () => {
+  const trendItems = [
+    { catalogId: 'chart-1', title: 'Chart One', artist: 'A', language: 'telugu', sourceLabel: 'Public video chart', sourceRank: 1 },
+    { catalogId: 'chart-2', title: 'Chart Two', artist: 'B', language: 'telugu', sourceLabel: 'Public video chart', sourceRank: 2 },
+    { catalogId: 'chart-hi', title: 'Chart Hindi', artist: 'C', language: 'hindi', sourceLabel: 'Public video chart', sourceRank: 3 },
+  ];
+
+  it('admits a chart song the catalogue searches never returned', async () => {
+    // Every search and suggestion answers with songs that are NOT on the chart:
+    // before 9.1 a chart entry could only add a bonus to a song already in the
+    // pool, so 'chart-1' was unreachable however high it ranked.
+    respond = (c) => (c.fn === 'song' ? { songs: [makeSong(c.key, { title: `Chart ${c.key}`, artist: 'Charted' })], ms: 1 } : { songs: many('other', 4), ms: 1 });
+    const seed = makeSong('seed', { title: 'Seed', artist: 'S', language: 'telugu' });
+    const out = await generateNextCandidates(seed, makeContext({ pinnedLanguages: ['telugu'], trendItems }));
+    const trend = out.filter((c) => c.source === 'verified-trend');
+    expect(trend.length).toBeGreaterThan(0);
+    expect(out.map((c) => c.song.id)).toContain('chart-1');
+  });
+
+  it('never asks for a chart entry the stretch could not play (another language)', async () => {
+    respond = (c) => (c.fn === 'song' ? { songs: [makeSong(c.key, { artist: 'Charted' })], ms: 1 } : { songs: many('other', 4), ms: 1 });
+    const seed = makeSong('seed', { title: 'Seed', artist: 'S', language: 'telugu' });
+    await generateNextCandidates(seed, makeContext({ pinnedLanguages: ['telugu'], trendItems }));
+    const asked = calls.filter((c) => c.fn === 'song').map((c) => c.key);
+    expect(asked).not.toContain('chart-hi');
+  });
+
+  it('spends at most TREND_RESOLVE lookups, and drops an entry the catalogue will not serve', async () => {
+    const many20 = Array.from({ length: 20 }, (_, i) => ({ catalogId: `c${i}`, title: `T${i}`, artist: 'A', language: 'telugu', sourceLabel: 'Public video chart', sourceRank: i + 1 }));
+    respond = (c) => (c.fn === 'song' ? (c.key === 'c0' ? { songs: [], ms: 1 } : { songs: [makeSong(c.key, { artist: 'Charted' })], ms: 1 }) : { songs: many('other', 4), ms: 1 });
+    const seed = makeSong('seed', { title: 'Seed', artist: 'S', language: 'telugu' });
+    const out = await generateNextCandidates(seed, makeContext({ pinnedLanguages: ['telugu'], trendItems: many20 }));
+    expect(calls.filter((c) => c.fn === 'song').length).toBeLessThanOrEqual(TREND_RESOLVE);
+    expect(out.map((c) => c.song.id)).not.toContain('c0');
+  });
+
+  it('admits a live-web discovery too, as its own source', async () => {
+    respond = (c) => (c.fn === 'song' ? { songs: [makeSong(c.key, { title: `Web ${c.key}`, artist: 'Reported' })], ms: 1 } : { songs: many('other', 4), ms: 1 });
+    const seed = makeSong('seed', { title: 'Seed', artist: 'S', language: 'telugu' });
+    const out = await generateNextCandidates(seed, makeContext({
+      pinnedLanguages: ['telugu'],
+      webDiscoveries: [{ catalogId: 'web-1', title: 'Web One', artist: 'R', language: 'telugu', sourceType: 'release', rank: null }],
+    }));
+    expect(out.find((c) => c.song.id === 'web-1')?.source).toBe('web-discovery');
+  });
+
+  it('asks for nothing when there are no verified trends', async () => {
+    respond = () => ({ songs: many('other', 4), ms: 1 });
+    const seed = makeSong('seed', { title: 'Seed', artist: 'S', language: 'telugu' });
+    await generateNextCandidates(seed, makeContext({ pinnedLanguages: ['telugu'] }));
+    expect(calls.filter((c) => c.fn === 'song')).toHaveLength(0);
   });
 });
 

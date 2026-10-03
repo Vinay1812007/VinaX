@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalogQueries, intentTitle, looksLikeNaturalLanguage, parseMusicIntent, seedOf } from './musicIntent';
+import { MAX_REQUESTED_SONGS, catalogQueries, intentTitle, looksLikeNaturalLanguage, parseMusicIntent, requestedSongCount, seedOf } from './musicIntent';
 
 describe('parseMusicIntent', () => {
   it('reads language, activity and energy from a playlist request', () => {
@@ -134,5 +134,49 @@ describe('8.5.0 — seeds, tempo and instrumental', () => {
     expect(inst.instrumental).toBe(true);
     expect(catalogQueries(inst, ['telugu'], 2)[0]).toBe('telugu instrumental');
     expect(parseMusicIntent('fast hindi songs').tempo).toBe('fast');
+  });
+});
+
+// 9.1.0 — a length the request asks for.
+describe('requested length', () => {
+  const lengthOf = (text: string) => parseMusicIntent(text).length;
+
+  it('reads a count of songs', () => {
+    expect(lengthOf('15 songs for a drive')).toEqual({ songs: 15, minutes: null });
+    expect(lengthOf('give me twenty tracks')).toEqual({ songs: 20, minutes: null });
+  });
+
+  it('reads a duration', () => {
+    expect(lengthOf('a 45 minute telugu playlist')).toEqual({ songs: null, minutes: 45 });
+    expect(lengthOf('about an hour of melodies')).toEqual({ songs: null, minutes: 60 });
+    expect(lengthOf('two hours of hindi songs')).toEqual({ songs: null, minutes: 120 });
+    expect(lengthOf('half an hour of folk')).toEqual({ songs: null, minutes: 30 });
+  });
+
+  it('prefers an exact count over a duration when both are named', () => {
+    expect(lengthOf('20 songs, about an hour')).toMatchObject({ songs: 20 });
+  });
+
+  it('reads no length from a decade, a year or an unrelated number', () => {
+    expect(lengthOf('90s telugu hits')).toBeNull();
+    expect(lengthOf('best of 2024')).toBeNull();
+    expect(lengthOf('sad songs for a rainy evening')).toBeNull();
+  });
+
+  it('refuses an absurd length', () => {
+    expect(lengthOf('500 songs')).toBeNull();
+    expect(lengthOf('a 2 minute playlist')).toBeNull();
+    expect(lengthOf('a 900 minute playlist')).toBeNull();
+  });
+
+  it('turns a length into a song count, approximately for a duration', () => {
+    expect(requestedSongCount(parseMusicIntent('15 songs'))).toBe(15);
+    // An hour at roughly four minutes a song.
+    expect(requestedSongCount(parseMusicIntent('about an hour of melodies'))).toBe(15);
+    expect(requestedSongCount(parseMusicIntent('sad songs'))).toBeNull();
+  });
+
+  it('never asks for more than the cap', () => {
+    expect(requestedSongCount(parseMusicIntent('four hours of songs'))).toBeLessThanOrEqual(MAX_REQUESTED_SONGS);
   });
 });

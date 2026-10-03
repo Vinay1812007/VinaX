@@ -37,7 +37,15 @@ export function explainReasons(reasons: ReasonComponent[]): string {
     case 'rediscovery':
       return 'You loved this a while back';
     case 'trending':
-      return 'Trending in your languages';
+      // 9.1.0 — this term comes from a CATALOGUE SEARCH for popular-sounding
+      // words, with no outside evidence behind it. Saying "trending" was a
+      // claim the signal does not support; only 'chart' (verified entries from
+      // /api/trends) may say that.
+      return 'Popular in the catalogue for your languages';
+    case 'popular-now':
+      return top.detail ? `On ${top.detail}` : 'On a verified chart';
+    case 'web-evidence':
+      return top.detail ? `Reported by ${top.detail}` : 'Found in a current web source';
     case 'region':
       return 'Popular in your region';
     case 'time':

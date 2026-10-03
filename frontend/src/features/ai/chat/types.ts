@@ -69,6 +69,13 @@ export interface Msg {
   content: string;
   images?: string[];
   sources?: string[];
+  /**
+   * 9.1.0 — each source's own title and snippet, so a citation can be previewed
+   * rather than shown as a bare host. Text from an arbitrary page: rendered as
+   * TEXT, never as markup. Absent on older stored messages and on the grounded
+   * lane, which reports URLs only.
+   */
+  sourcePreviews?: Array<{ url: string; title: string; snippet: string }>;
   /** Nickname of the engine that answered (from stream meta). */
   engine?: string;
   /** Render as a live mini-player card (music commands). */
@@ -96,4 +103,15 @@ export interface Conversation {
   messages: Msg[];
   updatedAt: number;
   pinned?: boolean;
+  /**
+   * 9.1.0 — a temporary chat: never written to the device (storage.ts
+   * `persistChats` drops it), so it leaves nothing behind when the tab closes.
+   * Not part of an export, and never revived by an import.
+   */
+  temporary?: boolean;
+  /**
+   * 9.1.0 — the project this chat belongs to (../projects.ts). Its instructions
+   * and reference files ride every message in the chat. Absent = no project.
+   */
+  projectId?: string;
 }

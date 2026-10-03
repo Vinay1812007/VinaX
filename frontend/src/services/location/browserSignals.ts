@@ -46,7 +46,9 @@ export function readBrowserSignals(): BrowserSignals {
   return { country, languages: languagesFromLocales(locales), timezone };
 }
 
-export function browserRegionInfo(): RegionInfo {
+export function browserRegionInfo(now = Date.now()): RegionInfo {
   const s = readBrowserSignals();
-  return { country: s.country, regionLabel: null, source: s.country ? 'browser' : 'unknown' };
+  // 9.1.0 — the time zone rides along whether or not a country could be read:
+  // it is the device's own setting, and date/time answers need it.
+  return { country: s.country, regionLabel: null, city: null, timezone: s.timezone, source: s.country ? 'browser' : 'unknown', resolvedAt: now };
 }

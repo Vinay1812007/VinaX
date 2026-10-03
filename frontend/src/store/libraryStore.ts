@@ -183,6 +183,10 @@ export const useLibraryStore = create<LibraryState>()(
         const { favorites, saved, hiddenSongIds } = get();
         const exists = favorites.some((s) => s.id === song.id);
         recordFavorite(song, !exists);
+        // 9.1.0 — a like tells the shared exposure ledger that repetition is
+        // WANTED for this song: it stops being cooled and pays a fraction of the
+        // usual recent-exposure cost (./services/recommendation/exposure.ts).
+        if (!exists) void import('@/services/recommendation/exposure').then((m) => m.recordExposure([song], 'liked')).catch(() => undefined);
         const newFavorites = exists ? favorites.filter((s) => s.id !== song.id) : [song, ...favorites];
         // Index first, then `set`: subscribers re-render inside `set`, and one
         // that asks isFavorite() must already see the new answer.
@@ -217,7 +221,13 @@ export const useLibraryStore = create<LibraryState>()(
         const hiding = !hiddenSongIds.includes(songId);
         if (song && song.id === songId) {
           recordDislike(song, hiding);
-          if (hiding) void import('@/services/analytics/telemetry').then((m) => m.trackDislike(song));
+          if (hiding) {
+            void import('@/services/analytics/telemetry').then((m) => m.trackDislike(song));
+            // 9.1.0 — the exposure ledger holds it down everywhere too. (Hiding
+            // is already a HARD rule in every filter; this is what makes the
+            // dislike outlive an un-hide.)
+            void import('@/services/recommendation/exposure').then((m) => m.recordExposure([song], 'disliked')).catch(() => undefined);
+          }
         }
         const next = !hiding
           ? hiddenSongIds.filter((i) => i !== songId)

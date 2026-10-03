@@ -7,7 +7,7 @@ vi.mock('./client', () => ({ fetchVerifiedTrends: () => fetchVerifiedTrends() })
 
 import { resetTrendSignal, trendSignalNow, TREND_EDITORIAL_MAX, TREND_MAX } from './signal';
 
-const ctx = (country: string | null) => ({ region: country ? { country, regionLabel: null, source: 'edge' as const } : null, pinnedLanguages: ['telugu'] });
+const ctx = (country: string | null, languages: string[] = ['telugu']) => ({ region: country ? { country, regionLabel: null, source: 'edge' as const } : null, pinnedLanguages: languages });
 const item = (over: Partial<TrendsSnapshot['items'][number]>) => ({
   catalogId: 'x', title: 'T', artist: 'A', language: 'telugu', region: 'IN', source: 'chart', sourceLabel: 'Public video chart',
   sourceKind: 'public-chart' as const, sourceRank: 1, sourceUrl: null, observedAt: '', expiresAt: '', mappingConfidence: 1, momentum: null, newEntry: false, ...over,
@@ -60,5 +60,37 @@ describe('verified charts as one bounded signal', () => {
     await settle();
     expect(trendSignalNow(ctx('IN')).bonus.size).toBe(1);
     expect(trendSignalNow(ctx('US')).bonus.size).toBe(0);
+  });
+
+  // 9.1.0 — the region is unchanged but the language is not. 9.0 compared the
+  // region only: the Telugu snapshot was handed to a Hindi listener and the
+  // mismatch started no refresh of its own.
+  it('never applies another language’s chart, and refreshes for the new one', async () => {
+    fetchVerifiedTrends.mockResolvedValue({ generatedAt: '', sources: [], items: [item({ catalogId: 'te-top', language: 'telugu' })] });
+    trendSignalNow(ctx('IN', ['telugu']));
+    await settle();
+    expect(trendSignalNow(ctx('IN', ['telugu'])).bonus.size).toBe(1);
+
+    fetchVerifiedTrends.mockResolvedValue({ generatedAt: '', sources: [], items: [item({ catalogId: 'hi-top', language: 'hindi' })] });
+    // Same region, new language: nothing is applied yet…
+    expect(trendSignalNow(ctx('IN', ['hindi'])).bonus.size).toBe(0);
+    // …and the mismatch itself started the refresh for the new language.
+    await settle();
+    const hindi = trendSignalNow(ctx('IN', ['hindi']));
+    expect(hindi.bonus.get('hi-top')).toBeGreaterThan(0);
+    expect(hindi.language).toBe('hindi');
+    expect(fetchVerifiedTrends).toHaveBeenCalledTimes(2);
+  });
+
+  it('carries the verified entries themselves, best rank first, so they can enter a pool', async () => {
+    fetchVerifiedTrends.mockResolvedValue({ generatedAt: '', sources: [], items: [
+      item({ catalogId: 'five', sourceRank: 5, title: 'Five', artist: 'E' }),
+      item({ catalogId: 'one', sourceRank: 1, title: 'One', artist: 'A', sourceUrl: 'https://chart.example/one' }),
+    ] });
+    trendSignalNow(ctx('IN'));
+    await settle();
+    const s = trendSignalNow(ctx('IN'));
+    expect(s.items.map((i) => i.catalogId)).toEqual(['one', 'five']);
+    expect(s.items[0]).toMatchObject({ title: 'One', artist: 'A', sourceRank: 1, sourceKind: 'public-chart', sourceUrl: 'https://chart.example/one' });
   });
 });

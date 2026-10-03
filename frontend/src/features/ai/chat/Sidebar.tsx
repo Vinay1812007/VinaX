@@ -12,6 +12,10 @@ import type { Conversation } from './types';
 
 export type SidebarHandlers = {
   newChat: () => void;
+  /** 9.1.0 — a chat that is never written to this device. */
+  newTemporaryChat: () => void;
+  /** 9.1.0 — open the project sheet (create, edit, or assign this chat). */
+  openProjects: () => void;
   open: (id: string) => void;
   rename: (id: string, title: string) => void;
   togglePin: (id: string) => void;
@@ -155,6 +159,21 @@ export function Sidebar({ chats, activeId, collapsed, onCollapse, mobileOpen, on
         <div className="ai-side-tools">
           <button type="button" onClick={handlers.newChat} className="ai-side-new" title="New chat (Ctrl/⌘+K)">
             <PlusIcon className="w-5 h-5" /> New chat
+          </button>
+          {/* 9.1.0 — nothing from this chat is stored on the device: it is gone
+              when the tab is, and it is never part of an export. */}
+          <button
+            type="button"
+            onClick={handlers.newTemporaryChat}
+            className="ai-side-temp"
+            title="Temporary chat — never saved on this device"
+          >
+            Temporary chat
+          </button>
+          {/* 9.1.0 — projects: standing instructions and reference files that
+              every chat inside one starts with. */}
+          <button type="button" onClick={handlers.openProjects} className="ai-side-temp" title="Projects — instructions and files a group of chats shares">
+            Projects
           </button>
           <label className="ai-side-search">
             <SearchIcon className="w-4 h-4 shrink-0" />

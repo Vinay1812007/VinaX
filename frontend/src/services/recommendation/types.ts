@@ -27,14 +27,30 @@ export type CandidateSource =
   /** 8.2.0 — earlier automatic picks the listener finished or liked, and songs like them (./recMemory.ts). */
   | 'proven'
   /** 8.3.0 — the listener's style (DJ remixes, folk, devotional) in the seed's language (./style.ts). */
-  | 'style';
+  | 'style'
+  /**
+   * 9.1.0 — a CATALOGUE SONG that a public chart or an editorial pick named,
+   * matched with confidence by the server (/api/trends, see
+   * services/trends/signal.ts). Note the difference from `trending`, which is
+   * a catalogue SEARCH for popular-sounding words and carries no outside
+   * evidence at all. Before 9.1 a verified trend could only ever add a small
+   * bonus to a song some other source had already returned — a chart entry the
+   * catalogue searches missed could never be recommended.
+   */
+  | 'verified-trend'
+  /**
+   * 9.1.0 — a song found by the shared live-web discovery path (/api/discover)
+   * and then resolved to a real catalogue recording. Evidence (source URL,
+   * kind, when it was observed) rides along on the candidate.
+   */
+  | 'web-discovery';
 
 /**
  * 7.2.0 — which source a song "belongs to" when several found it: the first
  * of these it has. The listener's stated intent wins, then the seed and taste
  * sources, then the broad ones (the order of the scorer's source boosts).
  */
-export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'album', 'favorite-album', 'related-artist', 'style', 'proven', 'history', 'rediscovery', 'genre', 'explore', 'trending'];
+export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'album', 'favorite-album', 'related-artist', 'style', 'proven', 'verified-trend', 'web-discovery', 'history', 'rediscovery', 'genre', 'explore', 'trending'];
 
 const rank = (s: CandidateSource): number => SOURCE_PRIORITY.indexOf(s);
 const titlesOf = (c: Candidate): string[] => c.seedTitles ?? (c.seedTitle ? [c.seedTitle] : []);
@@ -167,7 +183,11 @@ export type ReasonKind =
   /** 8.2.0 — like (or one of) the automatic picks the listener finished or liked before. */
   | 'proven'
   /** 8.3.0 — in (or outside) the style the listener is in: DJ remixes, folk, devotional (./style.ts). */
-  | 'style';
+  | 'style'
+  /** 9.1.0 — the song IS a confidently matched entry of a public chart or editorial pick (the 'verified-trend' source). */
+  | 'popular-now'
+  /** 9.1.0 — found by the shared live-web discovery path and resolved to this catalogue recording. */
+  | 'web-evidence';
 
 export interface ReasonComponent {
   kind: ReasonKind;
@@ -269,6 +289,18 @@ export interface RecommendationContext {
   trendBonus?: ReadonlyMap<string, number>;
   trendLabel?: ReadonlyMap<string, string>;
   /**
+   * 9.1.0 — the verified chart / editorial entries themselves, so they can
+   * ENTER the candidate pool (the 'verified-trend' source) rather than only
+   * earn a bonus. Each is already matched to a catalogue id by the server.
+   */
+  trendItems?: readonly { catalogId: string; title: string; artist: string; language: string | null; sourceLabel: string; sourceRank: number }[];
+  /**
+   * 9.1.0 — live-web discoveries (services/discovery/signal.ts): songs a current
+   * web source named, already resolved to catalogue ids by the server, with
+   * their evidence. They enter the pool as the 'web-discovery' source.
+   */
+  webDiscoveries?: readonly { catalogId: string; title: string; artist: string; language: string | null; sourceType: string; rank: number | null }[];
+  /**
    * 8.2.0 — a learned song embedding the device already holds (synchronous,
    * never fetches), for the taste term's optional refinement. Absent = the
    * on-device taste vector alone.
@@ -276,7 +308,21 @@ export interface RecommendationContext {
   embeddingOf?: (songId: string) => Float32Array | null;
   /** 8.2.0 — canonical keys other surfaces showed recently (songIdentity's served memory): a small penalty, never a rule. */
   servedKeys?: ReadonlySet<string>;
-  /** 8.2.0 — ids that opened the last accepted continuation after this same seed (./recMemory.ts): held back a little. */
+  /**
+   * 9.1.0 — what this listener's own exposure ledger (./exposure.ts) says a
+   * candidate's recent history should cost it, in score units: shown on
+   * another surface, queued, played, completed or skipped, each decaying at
+   * its own rate, with favourites and explicit replays forgiven. It REPLACES
+   * the flat `servedKeys` penalty where it is set (both are read, so a caller
+   * that sets only `servedKeys` scores as it did in 9.0).
+   *
+   * Still a penalty, never a rule: a song that is clearly the best fit wins
+   * anyway, and nothing here can admit a song the hard filter rejects.
+   */
+  exposurePenaltyOf?: (key: string) => number;
+  /** 9.1.0 — canonical keys that opened the last accepted continuation after this same seed (./recMemory.ts): held back a little. */
+  seedRepeatKeys?: ReadonlySet<string>;
+  /** 8.2.0 — ids that opened the last accepted continuation after this same seed. Superseded by `seedRepeatKeys`. */
   seedRepeatIds?: ReadonlySet<string>;
   /**
    * 8.3.0 — the style the listener is in (DJ remixes, folk songs, devotional
@@ -296,7 +342,7 @@ export interface RecommendationContext {
 }
 
 /** v7.0.0 — why a candidate never reached the ranked pool (developer score breakdowns). 'soft-muted' (7.2.0): an artist under an active "show fewer like this". */
-export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'soft-muted' | 'language-lock' | 'off-language' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'discovery-share' | 'invalid' | 'no-audio';
+export type RejectReason = 'seed' | 'recently-played' | 'already-queued' | 'duplicate-version' | 'muted-language' | 'soft-muted' | 'language-lock' | 'off-language' | 'blocked' | 'explicit' | 'junk' | 'too-short' | 'skipped-this-session' | 'low-score' | 'artist-cap' | 'discovery-share' | 'invalid' | 'no-audio' | 'snoozed';
 
 /**
  * 7.2.0 — a soft rule the sequencer or the validator had to give up on

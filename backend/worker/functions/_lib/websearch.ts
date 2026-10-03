@@ -23,7 +23,18 @@ import { type SearxngEnv, searxngQuery, type SearxngResult } from './searxng';
 /** Env slice this module reads — the instance address and its token. */
 export type WebSearchEnv = SearxngEnv;
 
-export type SearchHit = { text: string; sources: string[] };
+/**
+ * 9.1.0 — `previews` carries each source's own title and snippet alongside its
+ * URL, so the app can show WHAT a source is rather than only its host. It is the
+ * search instance's own text, unmodified and untrusted: the client escapes it and
+ * never renders it as markup.
+ */
+export interface SourcePreview {
+  url: string;
+  title: string;
+  snippet: string;
+}
+export type SearchHit = { text: string; sources: string[]; previews: SourcePreview[] };
 
 /** Results kept from one search: enough evidence to cite, short enough to prompt with. */
 const MAX_RESULTS = 8;
@@ -52,7 +63,11 @@ export async function liveSearch(env: WebSearchEnv, q: string): Promise<SearchHi
   }
   if (!kept.length) return null;
   const text = kept.map((x, i) => [`[${i + 1}] ${x.title}`, x.content, x.url].filter(Boolean).join('\n')).join('\n\n');
-  return { text, sources: kept.map((x) => x.url) };
+  return {
+    text,
+    sources: kept.map((x) => x.url),
+    previews: kept.map((x) => ({ url: x.url, title: x.title.slice(0, 200), snippet: (x.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 300) })),
+  };
 }
 
 // --- Fencing (8.3.1) — how web text is handed to a model ---
