@@ -1121,6 +1121,96 @@ html.light .ai-root .ai-composer:focus-within { box-shadow: 0 14px 36px -22px rg
   padding: 8px 12px;
   font-size: 13px;
 }
+/* 9.1.0 — the file being read is often a long path: let it shrink, and keep
+   Stop reachable at the end of the row. */
+.ai-attachment-status { min-width: 0; }
+.ai-attachment-stop {
+  flex: 0 0 auto;
+  min-height: 28px;
+  margin-inline-start: auto;
+  padding: 0 10px;
+  border: 1px solid var(--ai-line);
+  border-radius: 9999px;
+  color: rgb(var(--ink-300));
+  font-size: 12px;
+  font-weight: 700;
+}
+.ai-attachment-stop:hover { color: var(--ai-text); background: var(--ai-hover); }
+
+/* ------------------------------------------- opt-in AI memory list (9.1.0) */
+.ai-mem-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.ai-mem-empty { color: rgb(var(--ink-300)); font-size: 13px; }
+.ai-mem-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.ai-mem-input {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--ai-text);
+  outline: none;
+}
+.ai-mem-remove,
+.ai-mem-add {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--ai-line);
+  border-radius: 10px;
+  color: rgb(var(--ink-300));
+  font-size: 12px;
+  font-weight: 700;
+}
+.ai-mem-remove:hover,
+.ai-mem-add:hover:not(:disabled) { color: var(--ai-text); background: var(--ai-hover); }
+.ai-mem-add:disabled { opacity: 0.5; }
+
+/* -------------------------------------------------- project sheet (9.1.0) */
+.ai-proj-lede { color: rgb(var(--ink-300)); font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+.ai-proj-list { display: flex; flex-direction: column; gap: 2px; margin: 10px 0; }
+.ai-proj-badge {
+  margin-inline-start: 6px;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: rgb(var(--tide-500) / 0.18);
+  color: rgb(var(--tide-500));
+  font-size: 10px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+.ai-proj-detail { padding-top: 10px; border-top: 1px solid var(--ai-line); }
+.ai-proj-label { display: block; margin: 12px 0 4px; font-size: 13px; font-weight: 650; color: var(--ai-text); }
+.ai-proj-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ai-text);
+  outline: none;
+  resize: vertical;
+}
+.ai-proj-file { flex: 1 1 0%; min-width: 0; font-size: 13px; color: var(--ai-text); overflow-wrap: anywhere; }
+.ai-proj-note { margin-top: 10px; color: rgb(var(--ember-400)); font-size: 12px; font-weight: 600; }
+
+/* ---------------------------------------------- source previews (9.1.0) */
+/* Two lines of the page's own words, clamped: enough to tell what a citation
+   is, never enough to push the answer off the screen. */
+.ai-src-title {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+.ai-src-snippet {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: 1.45;
+}
+.ai-sources a { align-items: flex-start; }
 .ai-root .ai-attachment-notice {
   margin: 6px 4px 10px;
   padding: 10px 12px;
@@ -1428,6 +1518,159 @@ html.light .ai-root .ai-composer:focus-within { box-shadow: 0 14px 36px -22px rg
 .ai-side-new:hover { color: var(--ai-text); background: var(--ai-hover); }
 .ai-side-tools .ai-side-new { color: var(--ai-text); background: rgb(var(--ink-100) / 0.07); }
 .ai-side-tools .ai-side-new:hover { background: rgb(var(--ink-100) / 0.12); }
+/* 9.1.0 — a chat that is never written to the device. Quieter than New chat:
+   it is the exception, not the default. */
+.ai-side-temp {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0 0.875rem;
+  border: 1px dashed rgb(var(--ink-100) / 0.35);
+  border-radius: 9999px;
+  color: rgb(var(--ink-300));
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+  transition: color 140ms var(--ease-calm), border-color 140ms var(--ease-calm);
+}
+.ai-side-temp:hover { color: var(--ai-text); border-color: rgb(var(--ink-100) / 0.6); }
+
+/* ------------------------------------------------- artifacts panel (9.1.0) */
+/* A third column beside the conversation on wide screens; a full-height sheet
+   over it on phones, where there is no room for three. */
+.ai-artifacts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 0 0 22rem;
+  min-width: 0;
+  padding: 0.75rem;
+  background: var(--ai-panel);
+  border-inline-start: 1px solid var(--ai-line);
+  overflow: hidden;
+}
+@media (min-width: 768px) {
+  .ai-artifacts {
+    margin: 8px 8px 8px 0;
+    border: 1px solid var(--ai-line);
+    border-radius: 18px;
+  }
+}
+@media (max-width: 1023px) {
+  .ai-artifacts { flex-basis: 18rem; }
+}
+@media (max-width: 767px) {
+  .ai-artifacts {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    flex-basis: auto;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    padding-top: calc(0.75rem + env(safe-area-inset-top));
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+}
+.ai-artifacts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.ai-artifacts-title { font-size: 14px; font-weight: 700; color: var(--ai-text); }
+.ai-artifacts-empty { padding: 0.5rem 0.25rem; color: rgb(var(--ink-300)); font-size: 13px; line-height: 1.5; }
+.ai-artifacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 11rem;
+  overflow-y: auto;
+}
+.ai-artifacts-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 10px;
+  text-align: left;
+  font-size: 13px;
+  color: rgb(var(--ink-300));
+  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
+}
+.ai-artifacts-item:hover { background: var(--ai-hover); color: var(--ai-text); }
+.ai-artifacts-item.is-on { background: var(--ai-pressed); color: var(--ai-text); }
+.ai-artifacts-item-name { font-weight: 650; overflow-wrap: anywhere; }
+.ai-artifacts-body {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.5rem;
+}
+.ai-artifacts-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--ai-line);
+}
+.ai-artifacts-ver select {
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--ai-line);
+  border-radius: 8px;
+  background: var(--ai-raised);
+  color: var(--ai-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ai-artifacts-tabs { display: flex; gap: 2px; }
+.ai-artifacts-tab {
+  min-height: 2rem;
+  padding: 0 0.625rem;
+  border-radius: 8px;
+  color: rgb(var(--ink-300));
+  font-size: 12px;
+  font-weight: 650;
+}
+.ai-artifacts-tab:hover { color: var(--ai-text); background: var(--ai-hover); }
+.ai-artifacts-tab.is-on { background: var(--ai-pressed); color: var(--ai-text); }
+.ai-artifacts-acts { display: flex; gap: 0.25rem; margin-inline-start: auto; }
+.ai-artifacts-act {
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 8px;
+  color: rgb(var(--ink-300));
+  font-size: 12px;
+  font-weight: 650;
+}
+.ai-artifacts-act:hover { color: var(--ai-text); background: var(--ai-hover); }
+.ai-artifacts-source { flex: 1 1 0%; min-height: 0; overflow: auto; }
+/* The count badge on the header toggle. */
+.ai-artifacts-toggle { position: relative; }
+.ai-artifacts-count {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  min-width: 1rem;
+  padding: 0 3px;
+  border-radius: 9999px;
+  background: rgb(var(--tide-500));
+  color: rgb(var(--ink-950));
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1rem;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-artifacts-item,
+  .ai-artifacts-tab,
+  .ai-artifacts-act { transition: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ai-side-temp { transition: none; } }
 .ai-side-search {
   display: flex;
   align-items: center;

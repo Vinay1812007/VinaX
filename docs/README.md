@@ -1,17 +1,19 @@
 # VinaX documentation
 
-This is the index of the current documentation. Everything here describes the product and the code as they are now (9.0). Dated records — release write-ups, audits, phase plans — are in [history/](history/README.md) and are not kept up to date. Start with the [project README](../README.md) if you have not run the app yet.
+This is the index of the current documentation. Everything here describes the product and the code as they are now (9.1). Dated records — release write-ups, audits, phase plans — are in [history/](history/README.md) and are not kept up to date. Start with the [project README](../README.md) if you have not run the app yet.
 
 ## For people working on the code
 
 | Document | Read it when you need to know |
 | --- | --- |
 | [architecture.md](architecture.md) | What the pieces are and how data flows: app shell, routes and lazy chunks, stores and persistence, the catalogue client, the audio engine, the service worker, Worker routes, the owner console |
-| [recommendations.md](recommendations.md) | How the next song is chosen: the ten-stage pipeline, the weights, session intent, event weights, Familiar / Balanced / Discover, the 7.2 playback and admission contracts, the queue rules (the next five, the 8.1 Queue languages setting, tunes and pinned moods, 8.2 AI Radio and Smart Queue), the 8.2 candidate sources and taste fit, Home shelves and Home's own order, the `?debug=recs` breakdown |
+| [recommendations.md](recommendations.md) | How the next song is chosen: the ten-stage pipeline, the weights, session intent, event weights, Familiar / Balanced / Discover, the 7.2 playback and admission contracts, the queue rules (the next five, the 8.1 Queue languages setting, tunes and pinned moods, 8.2 AI Radio and Smart Queue), the 8.2 candidate sources and taste fit, 9.1's exposure ledger, snoozes, "fewer repeats" and evidence-backed sources, Home shelves and Home's own order, the `?debug=recs` breakdown and its diagnostics summary |
 | [ai.md](ai.md) | How AI is used and bounded: lanes, failover and the 8.2 cooldown table (the flagship lane's streaming and grounding), each AI route's contract including 8.2's `/api/embed`, the minimal assistant prompt, timeouts and budgets, what happens with every provider down |
 | [ai-music.md](ai-music.md) | The 8.5 AI music experience end to end: why history stays on the device, where each part of the data model lives, the listening signals and taste profile, and the contract (schemas, auth, validation, errors, examples) of `/api/recommendations`, `/api/recommendations/similar/:songId`, `/api/ai/search`, `/api/ai/playlist` and `/api/ai/dj` |
-| [trends.md](trends.md) | Verified trend ingestion: the provider adapters and what each provider's rules allow, scheduled jobs and quota, catalogue matching and confidence, momentum, the admin review queue, and the honest labels the app shows |
+| [trends.md](trends.md) | Verified trend ingestion: the provider adapters and what each provider's rules allow, scheduled jobs and quota, catalogue matching and confidence, momentum, the admin review queue, the honest labels the app shows, and 9.1's live web discovery (`/api/discover`): its budgets, its states and what it will never claim |
+| [ai-assistant-matrix.md](ai-assistant-matrix.md) | What VinaX AI actually does, feature by feature, with each gap named: what is done, partial, missing, provider-dependent or deliberately out of scope |
 | [evaluation.md](evaluation.md) | The offline evaluation of next-song selection: fixtures (with the 8.1 mixed-language scenario), the mocks (8.2 adds embeddings and artist pages), metrics, the 7.1 comparison, and how to read an A/B result |
+| [audit-9.1.md](audit-9.1.md) | The 9.1 review: the confirmed causes of repeated recommendations, the live-discovery and location gaps, the before/after measurements, and what is still open |
 | [audit-7.2.md](audit-7.2.md) | The 7.2 review: every finding with its severity, evidence, reproduction, fix and validation |
 | [progress-7.2.md](progress-7.2.md) | What 7.2 landed, what is deferred and why, and the decisions the owner owes |
 | [design-system.md](design-system.md) | The Flow tokens, the medium control scale, the hit-area rule, overlays and `data-vx-overlay`, motion rules, the top bar actions slot |

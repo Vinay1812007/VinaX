@@ -8,6 +8,7 @@ import { useFeatureEnabled } from '../useAppConfig';
 import { useAiTrending } from '../useAiTrending';
 import { useTrendingForLanguage, useNewReleases, usePopular } from '../useHomeShelves';
 import { useFreshFinds, useHiddenGems, useTrendingNearYou } from '../useDiscoveryShelves';
+import { useCurrentNow } from '../useCurrentNow';
 import { useMoodShelf } from '../useMoodShelves';
 import { useShelfDedupe } from '../shelfLedger';
 import { MoreShelves, SongShelf, useShelfLens } from './shared';
@@ -51,8 +52,19 @@ export function DiscoveryBlock() {
   const trendingNow = useAiTrending();
   const trending = useTrendingForLanguage(primaryLang);
   const newReleases = useNewReleases();
+  // 9.1.0 — the one shelf with outside evidence behind it. Absent when the
+  // discovery service has nothing to show, which is why it is not skeletoned:
+  // a shelf that may legitimately not exist should not reserve space.
+  const current = useCurrentNow();
   return (
     <>
+      {current.songs.length > 0 && (
+        <SongShelf
+          title="Current now"
+          explanation={`Songs a current chart or web source named, checked against the catalogue.${current.note ? ` ${current.note}` : ''}`}
+          songs={dedupe(lens(current.songs, 'discovery'))}
+        />
+      )}
       {nearYou.isLoading ? <ShelfSkeleton /> : (
         <SongShelf title={region?.country ? `Trending near you · ${region.regionLabel ?? region.country}` : 'Trending near you'} songs={dedupe(lens(nearYou.data, 'discovery'))} />
       )}

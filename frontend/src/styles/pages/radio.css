@@ -327,6 +327,82 @@ html.light .vx-aip-idea:hover:not(:disabled) { background: rgb(var(--ink-850)); 
 .vx-aip-reason svg { flex-shrink: 0; width: 12px; height: 12px; margin-top: 3px; color: rgb(var(--tide-400)); }
 @media (max-width: 767px) { .vx-aip-reason { padding-inline-start: 62px; } }
 
+/* 9.1.0 — keep / replace, per track. Aligned with the reason line above, so the
+   two sit in the same column under the title. "Kept" tracks survive the next
+   build; "Replace" swaps one song and leaves the rest alone. */
+.vx-aip-locknote {
+  margin: 4px 0 10px;
+  color: rgb(var(--ink-400));
+  font-size: 13px;
+  font-weight: 600;
+}
+.vx-aip-trackacts {
+  display: flex;
+  gap: 8px;
+  margin: -4px 0 8px;
+  padding-inline: 106px 12px;
+}
+.vx-aip-lock,
+.vx-aip-swap {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid rgb(var(--ink-100));
+  border-radius: 999px;
+  background: transparent;
+  color: rgb(var(--ink-400));
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+.vx-aip-lock:hover,
+.vx-aip-swap:hover { color: rgb(var(--ink-600)); border-color: rgb(var(--ink-200)); }
+.vx-aip-lock[aria-pressed='true'] {
+  border-color: rgb(var(--tide-400));
+  background: rgb(var(--tide-400) / 0.12);
+  color: rgb(var(--tide-500));
+}
+.vx-aip-swap:disabled { opacity: 0.5; cursor: default; }
+.vx-aip-track.is-locked { border-radius: 12px; background: rgb(var(--tide-400) / 0.05); }
+@media (max-width: 767px) { .vx-aip-trackacts { padding-inline-start: 62px; } }
+
+/* 9.1.0 — refine the list on screen, and the honest note when it came out short. */
+.vx-aip-shortfall {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgb(var(--ink-100) / 0.05);
+  color: rgb(var(--ink-300));
+  font-size: 13px;
+  line-height: 1.5;
+}
+.vx-aip-refine {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.vx-aip-refine input {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgb(var(--ink-100) / 0.12);
+  border-radius: 12px;
+  background: rgb(var(--ink-100) / 0.05);
+  color: rgb(var(--ink-100));
+  font-size: 14px;
+}
+.vx-aip-refine input::placeholder { color: rgb(var(--ink-400)); }
+.vx-aip-refine input:focus { outline: none; border-color: rgb(var(--tide-400) / 0.7); }
+.vx-aip-refine input:disabled { opacity: 0.6; }
+@media (max-width: 767px) {
+  .vx-aip-refine { flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vx-aip-lock,
+  .vx-aip-swap { transition: none; }
+}
+
 /* --------------------------------------------------------------- AI Radio */
 .vx-radio {
   /* Mood tones — the same deep, theme-fixed set as Home's category tiles. */

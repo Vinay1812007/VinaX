@@ -1,12 +1,13 @@
-import { canonicalKey, songKey, servedKeySet, recordServed } from '@/services/recommendation/songIdentity';
+import { canonicalKey, songKey } from '@/services/recommendation/songIdentity';
+import { exposureLedger, recordExposure, type ExposureLedger } from '@/services/recommendation/exposure';
 import { freshSongs } from '@/services/recommendation/freshness';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import type { Song } from '@/types';
-import { searchSongs } from '@/services/api';
+import { getSong, searchSongs, searchSongsPage } from '@/services/api';
 import { isNativePlatform } from '@/services/native';
 import { buildTasteSnapshot } from '@/services/ai/taste';
 import { matchesProposal } from '@/services/ai/dj';
-import { catalogQueries, intentTitle, parseMusicIntent, type MusicIntent } from '@/services/ai/musicIntent';
+import { catalogQueries, intentTitle, parseMusicIntent, requestedSongCount, type MusicIntent } from '@/services/ai/musicIntent';
 import { embedQueryDetailed, embedSongs } from '@/services/ai/embeddings';
 import { semanticRank } from '@/services/ai/semantic';
 
@@ -23,6 +24,8 @@ export interface GeneratedPlaylist {
   source?: 'ai' | 'catalogue';
   /** 8.5.0 — song id → the curator's reason, for the AI's own picks (catalogue fill songs have none). */
   reasons?: Record<string, string>;
+  /** 9.1.0 — set when the list is shorter than asked for, saying why in plain words. */
+  shortfall?: string;
 }
 
 /**
@@ -62,6 +65,13 @@ export function playlistErrorCopy(reason: PlaylistFailure): string {
 const TARGET = 25;
 /** The smallest on-device list worth offering when the AI curator is unavailable. */
 const MIN_CATALOGUE = 8;
+/**
+ * 9.1.0 — how much recent exposure a CURATOR'S pick may carry and still ship.
+ * The pool is held to the stricter `cooling` rule; a named suggestion is not,
+ * because dropping it means padding the list with something the curator did
+ * not choose. Roughly: shown somewhere lately is fine, played or skipped is not.
+ */
+const COOLING_TOLERANCE = 0.2;
 
 /** Map a failed /api/playlist answer to a reason (the body names the refusal). */
 export async function failureReason(res: Response): Promise<PlaylistFailure> {
@@ -74,10 +84,62 @@ export async function failureReason(res: Response): Promise<PlaylistFailure> {
 }
 
 /**
- * 8.2.0 — candidates straight from the catalogue for the request's language
- * and activity ("telugu dance songs", "telugu mass songs"): the phrasings the
- * catalogue is known to answer. Muted, blocked, recently served and
- * avoid-listed songs never enter; a named language is enforced.
+ * 9.1.0 — catalogue searches per generation, and how many pages deep the
+ * rotation reaches.
+ *
+ * `catalogQueries` often yields only two phrasings for a request ("telugu dance
+ * songs", "telugu mass songs"), so WIDTH alone cannot widen the pool without
+ * inventing words the listener did not ask for. Depth can: the same phrasings,
+ * read further in, are still exactly what was requested. So a generation makes
+ * POOL_SEARCHES requests spread over the available phrasings and POOL_PAGES
+ * pages, and the round shifts the whole window.
+ */
+export const POOL_SEARCHES = 6;
+export const POOL_PAGES = 5;
+/** Results per search. */
+const POOL_LIMIT = 25;
+
+/**
+ * The (phrasing, page) pairs one generation reads. Each lap over the phrasings
+ * moves one page deeper, and `round` shifts the window by a whole round's worth
+ * of laps, so consecutive rounds for the same prompt overlap as little as the
+ * page budget allows. Deduplicated, so a single-phrasing request simply reads
+ * consecutive pages of it.
+ */
+export function poolPlan(queries: readonly string[], round: number): Array<{ query: string; page: number }> {
+  if (!queries.length) return [];
+  const lapsPerRound = Math.max(1, Math.ceil(POOL_SEARCHES / queries.length));
+  const seen = new Set<string>();
+  const out: Array<{ query: string; page: number }> = [];
+  for (let i = 0; i < POOL_SEARCHES; i += 1) {
+    const query = queries[(round + i) % queries.length];
+    const page = 1 + ((round * lapsPerRound + Math.floor(i / queries.length)) % POOL_PAGES);
+    const key = `${query}#${page}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ query, page });
+  }
+  return out;
+}
+
+/**
+ * Candidates straight from the catalogue for the request's language and
+ * activity ("telugu dance songs", "telugu mass songs"): the phrasings the
+ * catalogue is known to answer. Muted, blocked, cooling and avoid-listed songs
+ * never enter; a named language is enforced.
+ *
+ * 9.1.0 — THE POOL ROTATES. 8.2's pool was three fixed phrasings, page 1,
+ * 25 results each, with no notion of a round: the same prompt produced a
+ * byte-identical pool every time, and `semanticRank` over it is deterministic,
+ * so "Regenerate" could only ever return the same list minus whatever the
+ * avoid list had removed. That is the root cause of "the AI Playlist keeps
+ * giving me the same songs", and no amount of prompt temperature could fix it,
+ * because the fallback path never asked a model at all.
+ *
+ * Now each `round` asks SIX phrasings instead of three, starts at a different
+ * one, and reads a different page of each, so consecutive rounds for one prompt
+ * draw on largely different catalogue results. Cost: six searches instead of
+ * three, run in parallel, each still bounded by the caller's signal.
  */
 export async function gatherCataloguePool(
   intent: MusicIntent,
@@ -85,18 +147,22 @@ export async function gatherCataloguePool(
   muted: string[],
   avoid: string[] = [],
   signal?: AbortSignal,
+  options: { round?: number; ledger?: ExposureLedger; fewerRepeats?: boolean } = {},
 ): Promise<Song[]> {
-  const queries = catalogQueries(intent, languages, 3);
-  const settled = await Promise.allSettled(queries.map((q) => searchSongs(q, 25, { signal })));
+  const round = Math.max(0, Math.floor(options.round ?? 0));
+  const all = catalogQueries(intent, languages, POOL_SEARCHES);
+  const settled = await Promise.allSettled(
+    poolPlan(all, round).map((p) => searchSongsPage(p.query, p.page, POOL_LIMIT, { signal })),
+  );
   const library = useLibraryStore.getState();
-  const served = servedKeySet();
+  const ledger = options.ledger ?? exposureLedger();
   const avoidKeys = new Set(avoid.map(titleKey));
   const seen = new Set<string>();
   const seenTitles = new Set<string>();
   const out: Song[] = [];
   // Interleave the searches so one phrasing does not fill the pool.
   const lists = settled.map((r) => (r.status === 'fulfilled' ? r.value : []));
-  for (let i = 0; i < 25; i += 1) {
+  for (let i = 0; i < POOL_LIMIT; i += 1) {
     for (const list of lists) {
       const s = list[i];
       if (!s || seen.has(s.id)) continue;
@@ -104,13 +170,135 @@ export async function gatherCataloguePool(
       out.push(s);
     }
   }
-  return freshSongs(out, { excludeKeys: served, muted, blocked: (song) => isSongBlocked(song, library) }).filter((s) => {
+  return freshSongs(out, { muted, blocked: (song) => isSongBlocked(song, library) }).filter((s) => {
     if (languages.length && !(s.language && languages.includes(s.language))) return false;
     const k = titleKey(s.title);
     if (avoidKeys.has(k) || seenTitles.has(k)) return false;
+    // 9.1.0 — the shared exposure ledger, not a shown-only list: a song this
+    // listener was shown, queued, played or skipped lately is still cooling.
+    // Under "fewer repeats" ANY exposure at all is enough to leave it out.
+    if (options.fewerRepeats ? ledger.penalty(songKey(s)) > 0 : ledger.cooling(songKey(s))) return false;
     seenTitles.add(k);
     return true;
   });
+}
+
+/* ---------- live-web discoveries in the pool ---------- */
+
+/** Discoveries resolved into the pool at most. */
+const DISCOVERY_IN_POOL = 6;
+
+/**
+ * 9.1.0 — songs a current web source named, as candidates for a playlist.
+ *
+ * Only for a request that is actually asking for current music — "the latest
+ * Telugu songs", "new releases", "what is charting". A request for 90s melodies
+ * gains nothing from this and should not pay for it, so `wantsCurrent` gates it.
+ *
+ * Unlike the queue's version of this (services/discovery/signal.ts, which may
+ * never wait), here the listener IS waiting for a result, so this asks the server
+ * to run the discovery (`wait: true`) inside the caller's own signal. A failure,
+ * an unconfigured instance or an empty answer all resolve to `[]`: the catalogue
+ * pool is the answer either way, and the list is never labelled as current when
+ * it is not.
+ */
+export function wantsCurrent(intent: MusicIntent, prompt: string): boolean {
+  if (intent.era === 'fresh') return true;
+  return /\b(new|latest|current|now|recent|this (?:week|month|year)|20[2-9]\d|chart|charting|trending|just (?:out|released)|fresh)\b/i.test(prompt);
+}
+
+export async function gatherDiscoveries(
+  intent: MusicIntent,
+  languages: string[],
+  prompt: string,
+  signal?: AbortSignal,
+  options: { ledger?: ExposureLedger; fewerRepeats?: boolean } = {},
+): Promise<Song[]> {
+  if (!wantsCurrent(intent, prompt)) return [];
+  try {
+    const [{ fetchDiscoveries }, { useSettingsStore }] = await Promise.all([
+      import('@/services/discovery/client'),
+      import('@/store/settingsStore'),
+    ]);
+    const region = useSettingsStore.getState().inferredRegion?.country ?? useSettingsStore.getState().manualCountry ?? undefined;
+    const snapshot = await fetchDiscoveries({
+      ...(region ? { region } : {}),
+      ...(languages[0] ? { language: languages[0] } : {}),
+      intent: intent.era === 'fresh' ? 'new-releases' : 'trending-songs',
+      wait: true,
+      ...(signal ? { signal } : {}),
+    });
+    if (!snapshot?.items.length) return [];
+    const ledger = options.ledger ?? exposureLedger();
+    const library = useLibraryStore.getState();
+    const wanted = snapshot.items
+      .filter((d) => !languages.length || !d.language || languages.includes(d.language.toLowerCase()))
+      .slice(0, DISCOVERY_IN_POOL);
+    const songs: Song[] = [];
+    for (const d of wanted) {
+      if (signal?.aborted) break;
+      const song = await getSong(d.catalogId).then((x) => x ?? null).catch(() => null);
+      if (song) songs.push(song);
+    }
+    // The same rules the catalogue pool is held to.
+    return freshSongs(songs, { muted: [], blocked: (song) => isSongBlocked(song, library) }).filter((song) =>
+      options.fewerRepeats ? ledger.penalty(songKey(song)) === 0 : !ledger.cooling(songKey(song)),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/* ---------- per-prompt rounds ---------- */
+
+const ROUNDS_KEY = 'vinax.aiplaylist.rounds.v1';
+const ROUNDS_CAP = 40;
+
+/** The prompt, reduced to what makes two requests "the same idea". */
+export const promptRoundKey = (prompt: string): string => prompt.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().slice(0, 80);
+
+function loadRounds(): Record<string, number> {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(ROUNDS_KEY) || '{}') as unknown;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Which round this prompt is on. `bump` moves it on, and the counter is
+ * PERSISTED, so "Regenerate" reaches new catalogue pages after a reload too —
+ * a session-only counter would hand back round 0's pool on every cold start.
+ */
+export function playlistRound(prompt: string, bump = false): number {
+  const key = promptRoundKey(prompt);
+  if (!key) return 0;
+  const rounds = loadRounds();
+  const next = (rounds[key] ?? 0) + (bump ? 1 : 0);
+  if (bump) {
+    rounds[key] = next;
+    try {
+      // Keep the most recently bumped prompts only.
+      const kept = Object.entries(rounds).slice(-ROUNDS_CAP);
+      window.localStorage.setItem(ROUNDS_KEY, JSON.stringify(Object.fromEntries(kept)));
+    } catch {
+      /* the counter is a convenience; the round is still used for this call */
+    }
+  }
+  return next;
+}
+
+/** Tests: forget every round counter. */
+export function resetPlaylistRounds(): void {
+  try {
+    window.localStorage.removeItem(ROUNDS_KEY);
+  } catch {
+    /* nothing stored */
+  }
 }
 
 export interface Suggestion {
@@ -172,12 +360,14 @@ export async function resolveSuggestions(
   signal?: AbortSignal,
   /** 8.5.0 — filled with song id → the curator's reason for each resolved pick. */
   reasons?: Map<string, string>,
+  /** 9.1.0 — "fewer repeats": hold the curator's own picks to the strict rule too. */
+  options: { fewerRepeats?: boolean } = {},
 ): Promise<Song[]> {
   const out: Song[] = [];
   const seen = new Set<string>();
   const seenTitles = new Set<string>();
   const avoidKeys = new Set(avoid.map(titleKey));
-  const served = servedKeySet();
+  const ledger = exposureLedger();
   const library = useLibraryStore.getState();
   // The model's strings are untrusted input: typed, trimmed and clipped before they reach a search.
   const valid = suggestions
@@ -197,8 +387,15 @@ export async function resolveSuggestions(
       if (out.length >= limit) break;
       if (result.status !== 'fulfilled') continue;
       const results = freshSongs(result.value, {
-        excludeKeys: served, muted, blocked: (song) => isSongBlocked(song, library),
-      }).filter((song) => !languages.length || (song.language != null && languages.includes(song.language)));
+        muted, blocked: (song) => isSongBlocked(song, library),
+      })
+        .filter((song) => !languages.length || (song.language != null && languages.includes(song.language)))
+        // 9.1.0 — a curator pick the listener met very recently is held back,
+        // but a cooling song is still better than dropping the suggestion and
+        // padding from the pool, so only the strongest cooling applies here:
+        // the curator chose this song FOR this request. Under "fewer repeats"
+        // that allowance is withdrawn — the listener explicitly asked for new.
+        .filter((song) => (options.fewerRepeats ? ledger.penalty(songKey(song)) === 0 : !ledger.cooling(songKey(song)) || ledger.penalty(songKey(song)) < COOLING_TOLERANCE));
       const open = results.filter((song) => !seen.has(song.id) && !seenTitles.has(titleKey(song.title)) && !avoidKeys.has(titleKey(song.title)));
       // 8.5.0 — only the catalogue song that really IS the suggestion (title
       // and credited artist both match) is taken. When none matches, the
@@ -217,22 +414,114 @@ export async function resolveSuggestions(
   return out;
 }
 
+/**
+ * 9.1.0 — what a generation is allowed to reuse and what it must replace.
+ */
+export interface GenerateOptions {
+  signal?: AbortSignal;
+  /**
+   * This is a REGENERATION of the same idea: move the prompt's round on, so the
+   * catalogue pool is read from different phrasings and pages. Without it two
+   * "Regenerate" taps would ask the catalogue the same question twice.
+   */
+  regenerate?: boolean;
+  /**
+   * Songs the listener locked. They are kept, in place, and the rest of the
+   * list is rebuilt around them — never replaced, never counted as a repeat.
+   */
+  locked?: readonly Song[];
+  /**
+   * Songs this generation must not return (a "replace this track" request, or
+   * the tracks a refinement is dropping). Canonical keys, so an alternate
+   * release of a rejected song does not come back instead.
+   */
+  exclude?: readonly Song[];
+  /** How many songs to return. Defaults to the length the request asks for, else TARGET. */
+  limit?: number;
+  /**
+   * 9.1.0 — a refinement of the playlist already on screen ("more upbeat",
+   * "fewer film songs"). It is appended to the request the curator sees and
+   * re-parsed, so a refinement that names a mood or a tempo really changes the
+   * pool — not only the prompt. Locked tracks survive it.
+   */
+  refine?: string;
+  /**
+   * "Refresh with fewer repeats". A normal generation leaves out songs that are
+   * still COOLING; this one leaves out everything the listener has met at all
+   * inside the ledger's horizons, and holds the curator's own picks to the same
+   * rule instead of letting a named suggestion through. It can return a shorter
+   * list — which is the honest outcome when the catalogue has little else to
+   * offer, and better than quietly serving the same songs again.
+   */
+  fewerRepeats?: boolean;
+}
+
 /** Build a playlist from a natural-language description. */
 export async function generatePlaylist(
   prompt: string,
   languages: string[],
   muted: string[] = [],
-  signal?: AbortSignal,
+  signalOrOptions?: AbortSignal | GenerateOptions,
 ): Promise<PlaylistResult> {
   let res: Response;
-  const avoidTitles = loadAvoidTitles();
+  // Back-compatible: three call sites pass a bare AbortSignal.
+  const options: GenerateOptions = signalOrOptions && 'aborted' in (signalOrOptions as AbortSignal) ? { signal: signalOrOptions as AbortSignal } : ((signalOrOptions as GenerateOptions) ?? {});
+  const signal = options.signal;
+  const locked = (options.locked ?? []).filter((x) => !!x?.id);
+  const lockedKeys = new Set(locked.map(songKey));
+  const excludeKeys = new Set((options.exclude ?? []).filter((x) => !!x?.id).map(songKey));
+  // 9.1.0 — a refinement is part of the request from here on: the intent, the
+  // catalogue pool and the curator all see it.
+  const refine = (options.refine ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const ask = refine ? `${prompt} — ${refine}` : prompt;
   // 8.2.0 — a language the request names outranks the saved ones: "a Telugu
   // workout playlist" from a listener pinned to Hindi used to resolve every
   // Telugu pick and then filter all of them out.
-  const intent = parseMusicIntent(prompt);
+  const intent = parseMusicIntent(ask);
   const langs = intent.languages.length ? intent.languages : languages;
+  // 9.1.0 — a length the request asked for is honoured: "15 songs" gives 15, and
+  // "about an hour" gives roughly an hour's worth (requestedSongCount — a
+  // duration is approximate by construction, and the app says so).
+  const asked = requestedSongCount(intent);
+  const target = Math.max(1, Math.min(50, Math.floor(options.limit ?? asked ?? TARGET)));
+  /**
+   * 9.1.0 — when the list comes out short, SAY why rather than padding it with
+   * songs that do not fit the request. A duration is always approximate: song
+   * lengths are not known until a song is resolved, so "about an hour" is a
+   * count, and the copy says "about".
+   */
+  const shortfall = (got: number): string => {
+    if (got >= target) return '';
+    const wanted = asked && intent.length?.minutes ? `about ${intent.length.minutes} minutes` : `${target} songs`;
+    return `Only ${got} song${got === 1 ? '' : 's'} matched closely enough for ${wanted} — the rest would have been a stretch, so they were left out.`;
+  };
+  // How many songs this generation has to find (the locked ones are already found).
+  const need = Math.max(0, target - locked.length);
+  const round = playlistRound(prompt, options.regenerate === true);
+  const ledger = exposureLedger();
+  /** Keep the locked songs in place and drop anything the caller rejected. */
+  const assemble = (found: readonly Song[]): Song[] => {
+    const fresh = found.filter((x) => !lockedKeys.has(songKey(x)) && !excludeKeys.has(songKey(x)));
+    if (!locked.length) return fresh.slice(0, target);
+    const out = [...locked];
+    for (const x of fresh) {
+      if (out.length >= target) break;
+      out.push(x);
+    }
+    return out;
+  };
+  const avoidTitles = loadAvoidTitles();
   // The catalogue pool is gathered (and embedded) while the curator thinks.
-  const poolPromise = gatherCataloguePool(intent, langs, muted, avoidTitles, signal).catch(() => [] as Song[]);
+  // 9.1.0 — the catalogue pool and, when the request asks for current music, the
+  // live-web discoveries, gathered side by side. Discoveries LEAD the pool: they
+  // are the only part of it with outside evidence that a song is current.
+  const cataloguePromise = gatherCataloguePool(intent, langs, muted, avoidTitles, signal, { round, ledger, fewerRepeats: options.fewerRepeats === true }).catch(() => [] as Song[]);
+  const discoveryPromise = gatherDiscoveries(intent, langs, prompt, signal, { ledger, fewerRepeats: options.fewerRepeats === true }).catch(() => [] as Song[]);
+  const poolPromise = Promise.all([discoveryPromise, cataloguePromise]).then(([found, catalogue]) => {
+    const seen = new Set(found.map((s) => s.id));
+    const keys = new Set(found.map((s) => songKey(s)));
+    return [...found, ...catalogue.filter((s) => !seen.has(s.id) && !keys.has(songKey(s)))];
+  });
   void poolPromise.then((pool) => {
     if (!pool.length || signal?.aborted) return;
     void embedQueryDetailed(prompt).catch(() => null);
@@ -241,17 +530,20 @@ export async function generatePlaylist(
   const fromCatalogue = async (reason: PlaylistFailure): Promise<PlaylistResult> => {
     if (signal?.aborted) return { ok: false, reason: 'error' };
     const pool = await poolPromise;
-    if (pool.length < MIN_CATALOGUE) return { ok: false, reason };
-    const ranked = (await semanticRank(prompt, pool, { intent, leashMs: 2500, signal })).map((x) => x.song).slice(0, TARGET);
-    if (signal?.aborted || ranked.length < MIN_CATALOGUE) return { ok: false, reason };
-    recordServed(ranked.map(songKey));
-    recordAvoidTitles(ranked.map((s) => s.title));
+    if (pool.length + locked.length < MIN_CATALOGUE) return { ok: false, reason };
+    const ranked = (await semanticRank(prompt, pool, { intent, leashMs: 2500, signal })).map((x) => x.song);
+    const songs = assemble(ranked);
+    if (signal?.aborted || songs.length < Math.min(MIN_CATALOGUE, target)) return { ok: false, reason };
+    // Only the songs this generation CHOSE count as exposure; a locked song the
+    // listener pinned is not a fresh impression.
+    recordExposure(songs.filter((x) => !lockedKeys.has(songKey(x))), 'shown');
+    recordAvoidTitles(songs.map((s) => s.title));
     return {
       ok: true,
       playlist: {
         name: intentTitle(intent) || prompt.slice(0, 60),
-        description: 'Picked from the catalogue to match your idea while the AI curator takes a break.',
-        songs: ranked,
+        description: ['Picked from the catalogue to match your idea while the AI curator takes a break.', shortfall(songs.length)].filter(Boolean).join(' '),
+        songs,
         source: 'catalogue',
       },
     };
@@ -268,7 +560,20 @@ export async function generatePlaylist(
         'content-type': 'application/json',
         'x-vinax-client': isNativePlatform() ? 'app' : 'web',
       },
-      body: JSON.stringify({ prompt, languages: langs, taste: buildTasteSnapshot(), avoidTitles }),
+      body: JSON.stringify({
+        // The refinement travels as part of the request, so the curator reworks
+        // the idea rather than answering the original one again.
+        prompt: ask,
+        languages: langs,
+        taste: buildTasteSnapshot(),
+        // The curator is told what not to suggest: earlier generations, the
+        // songs the listener locked (it must not spend picks re-proposing them)
+        // and anything they rejected.
+        avoidTitles: [...new Set([...avoidTitles, ...locked.map((x) => x.title), ...(options.exclude ?? []).map((x) => x.title)])].slice(0, 140),
+        round,
+        // 9.1.0 — how many songs the listener asked for, when they said.
+        ...(asked ? { wantSongs: target } : {}),
+      }),
       signal: ctrl.signal,
     });
   } catch {
@@ -286,19 +591,20 @@ export async function generatePlaylist(
   if (!suggestions.length) return fromCatalogue('empty');
 
   const reasons = new Map<string, string>();
-  const picked = await resolveSuggestions(suggestions, TARGET, muted, avoidTitles, langs, signal, reasons);
+  const resolved = await resolveSuggestions(suggestions, need, muted, avoidTitles, langs, signal, reasons, { fewerRepeats: options.fewerRepeats === true });
   if (signal?.aborted) return { ok: false, reason: 'error' };
-  if (!picked.length) return fromCatalogue('empty');
+  const picked = resolved.filter((x) => !lockedKeys.has(songKey(x)) && !excludeKeys.has(songKey(x)));
+  if (!picked.length && !locked.length) return fromCatalogue('empty');
   // The curator's picks keep their sequence; the catalogue pool, ranked
   // against the request (by embeddings when the engine answers), fills the rest.
-  const fill = picked.length < TARGET ? await fillFromPool(prompt, intent, picked, await poolPromise, TARGET - picked.length, signal) : [];
-  const songs = [...picked, ...fill];
+  const fill = picked.length < need ? await fillFromPool(prompt, intent, [...locked, ...picked], await poolPromise, need - picked.length, signal) : [];
+  const songs = assemble([...picked, ...fill]);
 
   // Remember what this generation used — the resolved catalog titles (what
   // the listener actually saw; different model titles can collapse onto the
   // same catalog hit) AND the model's own titles — so the next run for the
   // same vibe is steered toward genuinely different picks.
-  recordServed(songs.map(songKey));
+  recordExposure(songs.filter((x) => !lockedKeys.has(songKey(x))), 'shown');
   recordAvoidTitles([
     ...picked.map((s) => s.title),
     ...suggestions.flatMap((s) => (s && typeof s.title === 'string' ? [s.title.slice(0, 120)] : [])),
@@ -310,6 +616,7 @@ export async function generatePlaylist(
     playlist: {
       name: ((typeof data?.name === 'string' && data.name.trim()) || prompt).slice(0, 60),
       description: typeof data?.description === 'string' ? data.description.trim().slice(0, 240) : '',
+      ...(shortfall(songs.length) ? { shortfall: shortfall(songs.length) } : {}),
       songs,
       source: 'ai',
       ...(reasons.size ? { reasons: Object.fromEntries(reasons) } : {}),

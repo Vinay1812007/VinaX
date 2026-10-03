@@ -118,7 +118,8 @@ Because nothing personal is held by the service, a local erase is a complete era
 | Turning notifications on (`/api/push/*`) | The Worker | The browser's push endpoint, or the Android push token |
 | Listen Together (`/api/room`) | The Worker | Room code, first name, shared queue and playback position while the room lives |
 | Move to a new device (`/api/handoff`) | The Worker | Ciphertext only |
-| Region guess (`/api/geo`) | The Worker | Nothing beyond the request itself; the answer is a coarse country and region label |
+| Region guess (`/api/geo`) | The Worker | Nothing beyond the request itself. **9.1:** the answer is a coarse country code, a region (state/province) name, the edge's **approximate** city and an IANA time zone. The visitor's IP is read by Cloudflare's edge as part of normal request handling; it is never returned to the app, never logged by the function and never stored. Answered `private, no-store`. Only asked while "Allow region inference" is on and no manual override is set, and at most once every 12 hours unless the listener taps Refresh |
+| Live web discovery (`/api/discover`) | The Worker, then the owner's search instance and an AI lane | **9.1:** a region, a language and an intent — nothing else. No install id, no song, nothing the listener typed. The search instance sees only the generated query (today's date, the region, the language) |
 | App config, flags, announcements, blocklist, version, update check | The Worker | Nothing personal |
 | **Only with usage sharing on:** usage events (`/api/events`) | The Worker | Install id and signed id, optional display name, event type (open, play, pause, heartbeat, skip, complete, favourite, search with result count, share, download, lyric miss, error, web vitals), platform, app version and the current song's id, title, artist, language and artwork URL. The request carries an explicit consent header; the Worker rejects events without it. Location is added at the edge at city level; IP addresses are not stored. Since 7.2 a `play` is sent when the playback session counts the play — at least 5 seconds heard (or 70 % of a shorter song), once per run, so a repeat-one loop sends one — the same rule the taste profile uses (`services/playback/session.ts`). Before 7.2 it was sent the moment a new song started playing, so historical `play` rows include songs flipped past in the first seconds. |
 | **Only with usage sharing on:** `rec_served` (`/api/events`) | The Worker | Once per automatic continuation (the songs the recommender appends), when it is known who picked the final order. The fields every usage event carries (install id, signed id, optional display name, platform, app version), no song, and `meta`: `alg` (pipeline and weights version), `picker` (`local`, `ai` or `reserve`), `fallback` (why the AI did not pick: `ai_timeout`, `ai_unavailable`, `ai_rejected`, `deadline`, `error`, or null), `latencyMs` (plan call to a queueable order), `n` (songs added), `discovery` (songs by artists never played), `languageViolations`, `distinctArtists`, `relaxed` (validation rules relaxed), and `exp` (experiment key → variant, only for experiments that shaped this continuation, including an applied owner tuning rollout as `rec-config`). `discovery`, `languageViolations` and `relaxed` are null when the AI's order replaced the local one. Sent by `services/analytics/recTelemetry.ts`, rate-limited on the device. |
@@ -126,6 +127,44 @@ Because nothing personal is held by the service, a local erase is a complete era
 | **Only with usage sharing on:** session insights | An analytics provider | Layout, taps and scrolls. All on-screen text is masked on the device before upload. Production builds only. |
 
 The summaries sent to AI routes contain song titles and artist names from recent listening. They contain no install id, no name and no timestamps. [ai.md](ai.md) lists each route's contract.
+
+### VinaX AI's own device state (9.1)
+
+| What | Key | Leaves the device? |
+| --- | --- | --- |
+| Chats | `vinax_ai_chats_v1` | Only as part of a request you sent. A **temporary chat** is never written here at all, and is not part of an export |
+| Projects — names, instructions, reference files | `vinax.ai.projects.v1` | A project's instructions and files travel with each message in its chats, fenced as data |
+| Memory lines you wrote | `vinax.ai.memory.v1` | Only while **Let VinaX AI remember things** is on. Switching it off deletes them |
+| Memory switch | `vinax.ai.memoryOn` | No |
+| Artifacts | — | Nothing stored: they are read out of the chat you already have |
+| A PDF you attached | — | Nothing stored. Its TEXT is extracted on the device and travels as part of that one message; the file itself is never uploaded |
+
+### Place context in an AI reply (9.1)
+
+A chat request may carry a `place` object so that the date and time in answers
+follow the listener's own zone instead of always assuming IST, and so searches can
+be worded for their region. The rules:
+
+- **It is only sent when the listener allowed it.**
+  `services/location/assistantPlace.ts` returns nothing at all when "Allow region
+  inference" is off and no manual override is set; the server then opens its
+  prompt with the IST clock, exactly as every build before 9.1 did for everyone.
+- **Four coarse fields, and no more**: country code, region name, the edge's
+  approximate city, and an IANA time zone. `_lib/place.ts` `readCoarsePlace`
+  keeps only those, so an IP, coordinates or an address cannot ride along even if
+  some future caller passed them.
+- **A manual override never carries a city** — the listener chose a country, not a
+  city.
+- **The time zone travels even with inference off.** It is a device setting every
+  web page can already read, and it is what makes "what time is it" answerable.
+- The prompt says the value is coarse, that an approximate city is often the
+  network exchange rather than the listener's town, that it is never an address or
+  where they are standing, and that the listener's **language must never be
+  inferred from it** — their language preferences are sent separately and win.
+
+Nothing about place is stored on the server. On the device, the resolved value
+lives under the `region` key with the time it was resolved, so Settings can show
+it and the app can avoid asking the edge again for 12 hours.
 
 ## Secrets
 

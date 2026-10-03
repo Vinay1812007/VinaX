@@ -46,7 +46,23 @@ export interface MusicIntent {
   tempo?: 'slow' | 'fast' | null;
   /** 8.5.0 — music without vocals ("instrumental", "no lyrics"). */
   instrumental?: boolean;
+  /**
+   * 9.1.0 — a length the request asks for: a count of songs ("15 songs"), or
+   * minutes ("a 45 minute playlist", "two hours"). Null when none is named.
+   *
+   * `songs` is what a generator can honour exactly. `minutes` is converted to a
+   * song count using AVERAGE_SONG_MINUTES, because this catalogue's durations
+   * are not known until a song is resolved — so a request in minutes is honoured
+   * APPROXIMATELY, and the app says the length is approximate rather than
+   * implying it measured it.
+   */
+  length?: { songs: number | null; minutes: number | null } | null;
 }
+
+/** Indian film and pop songs run close to four minutes; used only to turn minutes into a count. */
+export const AVERAGE_SONG_MINUTES = 4;
+/** The most songs a request may ask for. */
+export const MAX_REQUESTED_SONGS = 50;
 
 /** Pronouns are never a seed: "more like this" and "something like that" name nothing. */
 const NOT_A_SEED = new Set(['this', 'that', 'it', 'me', 'you', 'us', 'them', 'these', 'those', 'him', 'her', 'mine', 'yours']);
@@ -159,8 +175,55 @@ export function parseMusicIntent(input: string): MusicIntent {
   if (!energy && /\bmore (?:upbeat|energy|energetic)\b/.test(lower)) energy = 'high';
   const tempo = /\b(slow(?:er)?|slowed)\b/.test(lower) ? 'slow' : /\b(fast(?:er)?|up-?tempo|high[\s-]?tempo)\b/.test(lower) ? 'fast' : null;
   const instrumental = /\b(instrumental|instrumentals|no vocals|without (?:vocals|lyrics|words)|no lyrics)\b/.test(lower);
+  const length = readLength(lower);
   const cues = languages.length + moods.length + (activity ? 1 : 0) + (energy ? 1 : 0) + (era ? 1 : 0) + (style ? 1 : 0) + (seed ? 1 : 0) + (instrumental ? 1 : 0);
-  return { languages, moods, activity, energy, decade, era, style, keywords, cues, seed, tempo, instrumental };
+  return { languages, moods, activity, energy, decade, era, style, keywords, cues, seed, tempo, instrumental, length };
+}
+
+const WORD_NUMBER: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, ninety: 90,
+};
+
+const asNumber = (token: string): number | null => {
+  const digits = Number.parseInt(token, 10);
+  if (Number.isFinite(digits) && digits > 0) return digits;
+  return WORD_NUMBER[token] ?? null;
+};
+
+/**
+ * 9.1.0 — a length the text asks for. A count of songs wins over a duration when
+ * both appear ("20 songs, about an hour") because a count is exact.
+ *
+ * A decade ("90s") and a year are never read as a length, and neither is a number
+ * that belongs to something else ("top 10 artists"). Only the phrasings people
+ * actually use for a playlist's size are matched.
+ */
+export function readLength(lowerPadded: string): { songs: number | null; minutes: number | null } | null {
+  const songs = /\b(\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty)[\s-]+(?:songs?|tracks?)\b/.exec(lowerPadded);
+  const count = songs ? asNumber(songs[1]) : null;
+  const halfHour = /\b(?:half an hour|30\s*min(?:ute)?s?)\b/.test(lowerPadded);
+  const hours = /\b(\d{1,2}|one|two|three|four)[\s-]*(?:hours?|hrs?)\b/.exec(lowerPadded);
+  const mins = /\b(\d{1,3}|ten|fifteen|twenty|thirty|forty|fifty|sixty|ninety)[\s-]*(?:minutes?|mins?)\b/.exec(lowerPadded);
+  const anHour = /\b(?:an hour|1\s*hour)\b/.test(lowerPadded);
+  let minutes: number | null = null;
+  if (halfHour) minutes = 30;
+  else if (hours) minutes = (asNumber(hours[1]) ?? 0) * 60 || null;
+  else if (anHour) minutes = 60;
+  else if (mins) minutes = asNumber(mins[1]);
+  if (minutes !== null && (minutes < 5 || minutes > 600)) minutes = null;
+  const clean = count !== null && count >= 1 && count <= MAX_REQUESTED_SONGS ? count : null;
+  if (clean === null && minutes === null) return null;
+  return { songs: clean, minutes };
+}
+
+/** How many songs a requested length amounts to, or null when none was asked for. */
+export function requestedSongCount(intent: MusicIntent): number | null {
+  const length = intent.length;
+  if (!length) return null;
+  if (length.songs) return length.songs;
+  if (length.minutes) return Math.max(1, Math.min(MAX_REQUESTED_SONGS, Math.round(length.minutes / AVERAGE_SONG_MINUTES)));
+  return null;
 }
 
 /** Words that mark a description of music rather than a title. */

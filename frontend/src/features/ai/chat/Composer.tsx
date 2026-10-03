@@ -112,6 +112,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const [pending, setPending] = useState<Attachment[]>([]);
   const [notice, setNotice] = useState('');
   const [reading, setReading] = useState(false);
+  // 9.1.0 — which file is being read, and a way to stop part-way. A folder of
+  // PDFs can take real seconds, and "Reading selected files…" with no end in
+  // sight and no way out was the whole of the feedback before.
+  const [progress, setProgress] = useState<{ done: number; total: number; path: string } | null>(null);
+  const readAbort = useRef<AbortController | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -141,14 +146,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   const addFiles = useCallback(async (selection: FileSelection): Promise<void> => {
     if (!selection.files.length && !selection.notices.length) return;
+    const controller = new AbortController();
+    readAbort.current = controller;
     setReading(true);
+    setProgress(null);
     try {
-      const result = await prepareAttachments(selection, pendingRef.current);
+      const result = await prepareAttachments(selection, pendingRef.current, {
+        signal: controller.signal,
+        onProgress: (done, total, path) => setProgress({ done, total, path }),
+      });
       setPending(result.attachments);
       setNotice(result.notices.join(' '));
       window.setTimeout(() => setNotice(''), 9000);
     } finally {
+      if (readAbort.current === controller) readAbort.current = null;
       setReading(false);
+      setProgress(null);
       if (fileRef.current) fileRef.current.value = '';
       if (folderRef.current) folderRef.current.value = '';
     }
@@ -217,7 +230,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               <i />
               <i />
             </span>
-            Reading selected files…
+            {progress && progress.total > 1
+              ? `Reading ${progress.done} of ${progress.total} — ${progress.path}`
+              : progress
+                ? `Reading ${progress.path}`
+                : 'Reading selected files…'}
+            <button type="button" className="ai-attachment-stop" onClick={() => readAbort.current?.abort()}>
+              Stop
+            </button>
           </div>
         )}
         {notice && (

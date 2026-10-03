@@ -5,6 +5,10 @@ import { detectSongLinks, prefRuleMessage, songContextBlock } from '@/features/a
 import type { Song } from '@/types';
 import { catalogModelForSend } from './models';
 import type { ModelChoice, Msg } from './types';
+import { assistantPlace } from '@/services/location/assistantPlace';
+import { trimThread } from './longThread';
+import { memoryBlock } from '../memory';
+import { projectBlock, projectById } from '../projects';
 
 /** Time-sensitive questions — "who won today", "202X releases", live scores,
  *  weather — switch web search on for the turn so the reply gets fresh
@@ -37,6 +41,8 @@ export interface TurnSettings {
   profile: string;
   /** The song playing now, when the listener allowed the assistant to see it. */
   song: Song | null;
+  /** 9.1.0 — the project this chat belongs to, when it is in one. */
+  projectId?: string;
 }
 
 export interface TurnInput {
@@ -65,14 +71,28 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
     }
   }
   const user = (content: string): { role: 'user'; content: string } => ({ role: 'user', content });
+  const trimmed = trimThread(t.conversation);
+  // 9.1.0 — things the listener asked VinaX AI to remember. Empty unless they
+  // turned memory on (../memory.ts), and fenced as data like the profile text.
+  const remembered = s.voiceLive ? '' : memoryBlock();
+  // 9.1.0 — the project's standing instructions and reference files. A project
+  // is the listener's own framing of the work, so it leads the context blocks.
+  const project = s.voiceLive ? '' : projectBlock(projectById(s.projectId));
   const messages = [
     ...(prefRule ? [user(prefRule)] : []),
+    ...(project ? [user(project)] : []),
+    ...(remembered ? [user(remembered)] : []),
     ...ctxBlocks.filter(Boolean).map(user),
     ...(s.voiceLive ? [user(VOICE_RULE)] : []),
     ...(think ? [user(THINK_RULE)] : []),
     ...(research ? [user(RESEARCH_RULE)] : []),
-    // 8.2.0 — a failure line is the app talking, not the assistant: never send it back.
-    ...t.conversation.filter((m) => !m.failed),
+    // 9.1.0 — a long thread is trimmed to its recent window, with a digest of
+    // the questions that fell outside it, so the opening of a fifty-turn
+    // conversation is not silently forgotten (./longThread.ts).
+    // 8.2.0 — a failure line is the app talking, not the assistant: it is never
+    // sent back (trimThread drops it).
+    ...(trimmed.digest ? [user(trimmed.digest)] : []),
+    ...trimmed.turns,
     t.userMsg,
     ...(t.previousReply
       ? [{ role: 'assistant' as const, content: t.previousReply.slice(0, 12000) }, user(REGENERATE_RULE)]
@@ -101,5 +121,13 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
       ),
     },
     profile: s.profile || undefined,
+    // 9.1.0 — coarse place, so date/time answers and search wording suit the
+    // listener instead of always assuming IST. `assistantPlace()` returns
+    // undefined whenever "Allow region inference" is off AND no manual override
+    // is set, so a listener who declined inference sends nothing and the server
+    // falls back to the IST line. Country, region, approximate city and an IANA
+    // zone only — never an IP, never coordinates. The listener's languages are
+    // sent separately (in `taste`) and always outrank this.
+    place: assistantPlace(),
   };
 }

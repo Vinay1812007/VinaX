@@ -4,7 +4,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { scrollBehavior } from '@/utils/motion';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
-import { useRegion } from '@/features/location/useRegion';
+import { LocationRow } from '@/features/location/LocationRow';
 import {
   clearCachedMetadata,
   clearFavoritesWithUndo,
@@ -346,7 +346,6 @@ export default function SettingsPage() {
   const wide = useMediaQuery('(min-width: 1024px)');
   // Usage-sharing consent lives outside the settings store (it is never part of a backup).
   const [usageSharing, setUsageSharing] = useState<boolean>(() => getLocal<boolean>(KEYS.analyticsConsent, false) === true);
-  const region = useRegion();
   const fileRef = useRef<HTMLInputElement>(null);
   const [notifPerm, setNotifPerm] = useState<'granted' | 'denied' | 'unsupported' | 'unknown'>('unknown');
   const [eraseOpen, setEraseOpen] = useState(false);
@@ -819,13 +818,8 @@ export default function SettingsPage() {
                 }}
               />
             </Row>
-            <Row
-              label="Allow region inference"
-              note={`Coarse country only, from the network edge or your browser’s locale and time zone. Your IP is never stored. Now: ${region ? `${region.country ?? 'unknown'} (${region.source})` : 'unknown'}.`}
-              keywords="location country ip"
-            >
-              <Toggle on={s.allowRegionInference} onChange={s.setAllowRegionInference} label="Allow region inference" />
-            </Row>
+            {/* 9.1.0 — inspect, refresh, override or switch off the place context (features/location/LocationRow). */}
+            <LocationRow />
             <Row label="Country override" keywords="location">
               <select
                 aria-label="Country override"

@@ -5,7 +5,7 @@ import type { ValidateOptions } from './validation';
 import type { DebugTrace } from '@/store/recsDebugStore';
 import { topLanguages } from '@/services/personalization/profile';
 import { buildMixes } from './mixes';
-import { servedKeySet, songKey } from './songIdentity';
+import { songKey } from './songIdentity';
 import { explainTopReasons } from './explanations';
 import { useReasonStore } from '@/store/reasonStore';
 import type { Candidate, Mix, RecommendationContext, RejectedCandidate, ScoredCandidate } from './types';
@@ -24,8 +24,11 @@ import { matchesStyle, remixWorkKey, sessionStyle, styleEvidence, styleLabel, st
 import { isSkippedPlay } from '@/utils/plays';
 import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from './deadlines';
 import { trendSignalNow } from '@/services/trends/signal';
+import { discoverySignalNow } from '@/services/discovery/signal';
+import { useEvidenceStore } from '@/store/evidenceStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { lastSeedContinuation, rememberSeedContinuation } from './recMemory';
+import { exposureLedger, recordExposure, snoozedKeySet } from './exposure';
 
 type EmbeddingsModule = typeof import('@/services/ai/embeddings');
 
@@ -49,6 +52,27 @@ async function blendAi(ranked: ScoredCandidate[], ctx: RecommendationContext): P
   const order = await aiRerankSongs(window.map(item => item.candidate.song), aiContext(ctx), 30);
   const positions = new Map(order.map((song, index) => [song.id, index]));
   return rerankCandidates(ranked.map(item => ({ ...item, score: item.score + (positions.has(item.candidate.song.id) ? 0.12 * (1 - positions.get(item.candidate.song.id)! / Math.max(order.length, 1)) : 0) })), ctx);
+}
+
+/**
+ * 9.1.0 — publish the evidence behind the current snapshots, so "Why this song?"
+ * can name the source and offer a link. Only the two evidence-backed signals
+ * land here; a catalogue search never does.
+ */
+function publishEvidence(trend: { label: ReadonlyMap<string, string> }, discovery: { items: readonly { catalogId: string; evidence: Array<{ url: string; observedAt: string; period: string | null }> }[]; label: ReadonlyMap<string, string> }): void {
+  try {
+    const store = useEvidenceStore.getState();
+    store.setEvidence('chart', [...trend.label.entries()].map(([id, label]) => [id, { kind: 'chart' as const, label, url: null, observedAt: null, period: null }]));
+    store.setEvidence(
+      'web',
+      discovery.items.map((d) => {
+        const first = d.evidence[0];
+        return [d.catalogId, { kind: 'web' as const, label: discovery.label.get(d.catalogId) ?? 'Named by a current web source', url: first?.url ?? null, observedAt: first?.observedAt ?? null, period: first?.period ?? null }];
+      }),
+    );
+  } catch {
+    /* a store hiccup must never break a continuation */
+  }
 }
 
 /** Package C4 — publish plain-words "why this song" lines for every pick the
@@ -94,6 +118,15 @@ function ctxKey(ctx: RecommendationContext): string {
     ctx.region?.country ?? '',
     // Decay runs off updatedAt — bucketed so long sessions refresh shelves.
     Math.floor(ctx.profile.updatedAt / (15 * 60_000)),
+    // 9.1.0 — the memo must not outlive what it was built from. Before 9.1 the
+    // key held neither the exposure memory nor the trend snapshot, so for ten
+    // minutes Home handed back the very shelves whose songs had just been
+    // played, and a chart that arrived mid-window changed nothing.
+    exposureLedger().size,
+    ctx.trendBonus?.size ?? 0,
+    ctx.webDiscoveries?.length ?? 0,
+    ctx.region?.timezone ?? '',
+    ctx.pinnedLanguages.join(','),
   ].join('|');
 }
 
@@ -104,7 +137,12 @@ function ctxKey(ctx: RecommendationContext): string {
  */
 export async function buildRecommendations(rawCtx: RecommendationContext): Promise<Mix[]> {
   const trend = trendSignalNow(rawCtx);
-  const ctx: RecommendationContext = { ...rawCtx, trendBonus: trend.bonus, trendLabel: trend.label };
+  const homeLedger = exposureLedger();
+  // 9.1.0 — verified charts AND live-web discoveries, both read from snapshots
+  // already in memory and never waited for.
+  const discovery = discoverySignalNow(rawCtx);
+  publishEvidence(trend, discovery);
+  const ctx: RecommendationContext = { ...rawCtx, trendBonus: trend.bonus, trendLabel: trend.label, trendItems: trend.items, webDiscoveries: discovery.items, exposurePenaltyOf: (k) => homeLedger.penalty(k) };
   const key = ctxKey(ctx);
   if (memo && memo.key === key && Date.now() - memo.at < MEMO_TTL_MS) return memo.mixes;
   // 7.2.0 — bounded gathering: slow optional sources are not waited for once a useful pool exists.
@@ -122,8 +160,11 @@ export async function buildRecommendations(rawCtx: RecommendationContext): Promi
   if (ctx.surface === 'home' && ctx.profile.totals.plays >= 5 && ranked.length >= 4) {
     ranked = await blendAi(ranked, ctx);
   }
-  const served = servedKeySet();
-  const freshRanked = [...ranked.filter((s) => !served.has(songKey(s.candidate.song))), ...ranked.filter((s) => served.has(songKey(s.candidate.song)))];
+  // 9.1.0 — Home's own shelves put songs the listener has not met lately first,
+  // using the shared exposure ledger rather than the shown-only list.
+  const ledger = exposureLedger();
+  const cold = (s: ScoredCandidate): boolean => !ledger.cooling(songKey(s.candidate.song));
+  const freshRanked = [...ranked.filter(cold), ...ranked.filter((s) => !cold(s))];
   const mixes = buildMixes(freshRanked, ctx);
   // C4 — every song placed on a shelf gets its honest "why" line.
   const placed = new Set(mixes.flatMap((m) => m.songs.map((s) => s.id)));
@@ -312,12 +353,19 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const isStyled = (s: Song): boolean => !!style && matchesStyle(s, style);
   // 7.2.0 — verified charts, read from the snapshot already in memory (never waited for).
   const trend = trendSignalNow(ctx);
+  // 9.1.0 — live-web discoveries, from the snapshot in memory. Never waited for:
+  // a song transition must not depend on a web search.
+  const discovered = discoverySignalNow(ctx);
+  publishEvidence(trend, discovered);
+  // 9.1.0 — one ledger read for the whole plan, so a long stretch cannot
+  // reorder under its own feet while it is being built.
+  const planLedger = exposureLedger();
   // 8.2.0 — what other surfaces showed lately, and how the last accepted
   // continuation after this same song opened: small penalties in the scorer.
   // 8.3.1 — under "Switch language" the style is searched in the language the queue switches TO
   // (the same pinned-first choice as the lock below); with no such language, not at all.
   const styleLanguage = tune === 'different-language' ? ctx.pinnedLanguages.find((l) => l !== seedLanguage) ?? null : undefined;
-  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, anchorSong: previous && previous.id !== seed.id ? previous : null, surface: ctx.surface ?? 'next', intentQuery, style, ...(styleLanguage !== undefined ? { styleLanguage } : {}), trendBonus: trend.bonus, trendLabel: trend.label, servedKeys: servedKeySet(), seedRepeatIds: lastSeedContinuation(seed) };
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, anchorSong: previous && previous.id !== seed.id ? previous : null, surface: ctx.surface ?? 'next', intentQuery, style, ...(styleLanguage !== undefined ? { styleLanguage } : {}), trendBonus: trend.bonus, trendLabel: trend.label, trendItems: trend.items, webDiscoveries: discovered.items, exposurePenaltyOf: (k) => planLedger.penalty(k), seedRepeatKeys: lastSeedContinuation(seed) };
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
   const library = useLibraryStore.getState();
@@ -362,6 +410,8 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     hideExplicit: kidModeOn(),
     // 7.2.0 — soft mutes are a rule at every stage (the DJ's gate and validation included), not only a candidate filter.
     softMuted: ctx.profile.softMuted,
+    // 9.1.0 — and so are per-song snoozes ("not this song, for a while").
+    snoozedKeys: snoozedKeySet(),
     ...(allowedLanguages ? { allowedLanguages } : {}),
     downloaded: (id) => !!useDownloadsStore.getState().items[id],
   };
@@ -481,7 +531,11 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const arcIds = new Set(arc.songs.map((s) => s.song.id));
   const local = validateSequence([...arc.songs.map((s) => s.song), ...orderedPool.filter((s) => !arcIds.has(s.id))], validateOptions);
   const songs = local.songs;
-  const trace: DebugTrace = { mode, shape, lock, languagePolicy, discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed])], repairs: local.repairs };
+  // 9.1.0 — the diagnostics view needs the source mix, the latency and the
+  // fallback reason, not only the stage counts.
+  const sourceCounts: Record<string, number> = {};
+  for (const c of candidates) sourceCounts[c.source] = (sourceCounts[c.source] ?? 0) + 1;
+  const trace: DebugTrace = { mode, shape, lock, languagePolicy, discoveryShare, intent: intent ? { skipStreak: intent.skipStreak, completionStreak: intent.completionStreak, discoveryAppetite: intent.discoveryAppetite, energySteer: intent.energySteer } : null, stages: { candidates: candidates.length, admitted: filtered.admitted.length, ranked: ranked.length, sequenced: arc.songs.length, validated: songs.length }, relaxed: [...new Set([...(arc.relaxed ?? []), ...local.relaxed])], repairs: local.repairs, latencyMs: Date.now() - t0, fallback, sources: sourceCounts };
   publishDebug(ranked, songs, 'local', { trace, rejected: [...rejected, ...local.rejected] });
 
   const shipped = new Set(songs.map((s) => s.id));
@@ -492,8 +546,14 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
     if (!ids.size) return;
     for (const id of ids) committed.add(id);
     // 8.2.0 — the opening the listener got after this seed, so asking again gives a different one.
+    // 9.1.0 — and the shared exposure ledger learns that these songs reached a
+    // real queue, so Home, the Daily mix, the AI Playlist and the next stretch
+    // all know. Before 9.1 nothing recorded an automatic queue at all: the
+    // ledger's writers were the Home hero and the AI Playlist, and everything
+    // else only read it.
     try {
       rememberSeedContinuation(seed, accepted);
+      recordExposure(accepted, 'queued');
     } catch {
       /* the memory is optional */
     }

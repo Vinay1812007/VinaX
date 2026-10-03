@@ -133,16 +133,30 @@ function loadSeeds(now: number): Record<string, SeedEntry> {
   return out;
 }
 
-/** Remember the opening of the continuation the player accepted after `seed`. */
+/**
+ * Remember the opening of the continuation the player accepted after `seed`.
+ *
+ * 9.1.0 — stored as CANONICAL KEYS, not catalogue ids. With ids, asking again
+ * from the same song could hand back the same opening under a different
+ * release of each song (the film cut, the remaster, the lofi flip all have
+ * their own id), which is exactly the repeat this memory exists to prevent.
+ */
 export function rememberSeedContinuation(seed: Song, songs: readonly Song[], now = Date.now()): void {
   if (!seed?.id || !songs.length) return;
   const seeds = loadSeeds(now);
-  seeds[seedKeyOf(seed)] = { ids: songs.slice(0, SEED_MEMORY_SIZE).map((s) => s.id), at: now };
+  seeds[seedKeyOf(seed)] = { ids: songs.slice(0, SEED_MEMORY_SIZE).map((s) => songKey(s)).filter((k) => k && k !== '|'), at: now };
   const kept = Object.entries(seeds).sort((a, b) => b[1].at - a[1].at).slice(0, SEED_CAP);
   write(SEED_MEMORY_KEY, Object.fromEntries(kept));
 }
 
-/** The ids the last accepted continuation after `seed` opened with (empty when none is remembered). */
+/**
+ * The canonical keys the last accepted continuation after `seed` opened with
+ * (empty when none is remembered).
+ *
+ * A device written by 9.0 or earlier holds catalogue ids here. They simply
+ * never match a key, so the memory is empty for that seed until the next
+ * continuation is accepted — no migration needed, and nothing breaks.
+ */
 export function lastSeedContinuation(seed: Song, now = Date.now()): Set<string> {
   if (!seed?.id) return new Set();
   return new Set(loadSeeds(now)[seedKeyOf(seed)]?.ids ?? []);

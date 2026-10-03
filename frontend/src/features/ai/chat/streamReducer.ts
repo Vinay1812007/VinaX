@@ -25,6 +25,8 @@ export interface StreamState {
   text: string;
   /** Sources of a web search, reported by the service (latest meta wins). */
   sources: string[];
+  /** 9.1.0 — each source's title and snippet, when the server sent them. */
+  sourcePreviews: Array<{ url: string; title: string; snippet: string }>;
   /** Slug of the model that is actually answering (latest meta wins). */
   model: string;
   /** Agent activity, oldest first, capped at MAX_STEPS. */
@@ -39,6 +41,7 @@ export interface StreamState {
 export const initialStreamState = (): StreamState => ({
   text: '',
   sources: [],
+  sourcePreviews: [],
   model: '',
   steps: [],
   truncated: false,
@@ -104,7 +107,7 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     done?: unknown;
     truncated?: unknown;
     step?: unknown;
-    meta?: { sources?: unknown; model?: unknown } | null;
+    meta?: { sources?: unknown; model?: unknown; previews?: unknown } | null;
   };
   let next = state;
   const set = (patch: Partial<StreamState>): void => {
@@ -115,6 +118,27 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     const src = f.meta.sources;
     if (Array.isArray(src) && src.length) {
       set({ sources: src.filter((u): u is string => typeof u === 'string' && u.length > 0).slice(0, 12) });
+    }
+    // 9.1.0 — previews are text from arbitrary pages: every field is checked,
+    // https-only, and an entry that fails is dropped rather than repaired.
+    const previews = f.meta.previews;
+    if (Array.isArray(previews) && previews.length) {
+      const clean = previews
+        .map((raw) => {
+          const p = raw as { url?: unknown; title?: unknown; snippet?: unknown } | null;
+          if (!p || typeof p !== 'object' || typeof p.url !== 'string') return null;
+          try {
+            if (new URL(p.url).protocol !== 'https:') return null;
+          } catch {
+            return null;
+          }
+          const title = typeof p.title === 'string' ? p.title.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+          const snippet = typeof p.snippet === 'string' ? p.snippet.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
+          return title || snippet ? { url: p.url, title, snippet } : null;
+        })
+        .filter((p): p is { url: string; title: string; snippet: string } => p !== null)
+        .slice(0, 12);
+      if (clean.length) set({ sourcePreviews: clean });
     }
     if (typeof f.meta.model === 'string' && f.meta.model && f.meta.model !== next.model) set({ model: f.meta.model });
   }

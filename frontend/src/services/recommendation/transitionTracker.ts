@@ -2,6 +2,7 @@ import { isCompletion, isEarlyLeave, onPlaybackEvent, playThreshold, transitionO
 import { useLibraryStore } from '@/store/libraryStore';
 import { recordTransition, type TransitionOutcome } from './transitions';
 import { recordAutoOutcome, type AutoOutcome } from './recMemory';
+import { recordExposure } from './exposure';
 
 /**
  * v6.3.0 — feeds transition memory from real playback. When a song B ends,
@@ -17,6 +18,21 @@ import { recordAutoOutcome, type AutoOutcome } from './recMemory';
  *
  * 8.2.0 — the same subscription feeds the engine's memory of its own
  * automatic picks (see `autoOutcomeFor`).
+ *
+ * 9.1.0 — and the shared exposure ledger (./exposure.ts), which every surface
+ * reads. Three distinct events, kept distinct on purpose:
+ *
+ *   played     the run's play was COUNTED (the 'counted' event: enough of the
+ *              song heard). A song the listener opened and left after two
+ *              seconds, a cancelled request and a prefetched song nobody saw
+ *              are not plays and never land here.
+ *   completed  it ran to the end (the completion ratio).
+ *   skipped    the listener left early by hand.
+ *
+ * Automatic and hand-picked plays both count: the ledger is about what the
+ * listener has recently MET, and hearing a song is hearing it however it got
+ * there. (Whether the ENGINE chose it is the separate question ./recMemory
+ * answers.) Failed playback judges nothing.
  */
 
 /** Pure verdict for a play that just ended (heard seconds against duration). */
@@ -46,7 +62,18 @@ const judgedRuns = new Set<string>();
 export function initTransitionTracker(): () => void {
   if (stop) return stop;
   const unsubscribe = onPlaybackEvent((e) => {
+    // 9.1.0 — a counted play is the one moment a play is a play.
+    if (e.kind === 'counted') {
+      recordExposure([e.song], 'played');
+      return;
+    }
     if (e.kind !== 'end') return;
+    if (e.reason !== 'failed') {
+      if (isCompletion(e.heardSec, e.durationSec)) recordExposure([e.song], 'completed');
+      else if (e.reason === 'manual-skip' && (e.heardSec < playThreshold(e.durationSec) || isEarlyLeave(e.heardSec, e.durationSec))) {
+        recordExposure([e.song], 'skipped');
+      }
+    }
     // One verdict per run: a repeat-one loop of an automatic song counts once.
     if (e.auto && !judgedRuns.has(e.run.id)) {
       const outcome = autoOutcomeFor(e.heardSec, e.durationSec, e.reason, useLibraryStore.getState().isFavorite(e.song.id));

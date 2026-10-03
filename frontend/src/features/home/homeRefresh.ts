@@ -35,9 +35,20 @@ export const HOME_TTL_MS = 30 * 60_000;
 interface Generation {
   gen: number;
   startedAt: number;
+  /**
+   * 9.1.0 — "Refresh with fewer repeats": this generation applies the STRICT
+   * repetition rule. A discovery shelf then leaves out every song the listener
+   * has met at all inside the exposure ledger's horizons, not only the ones
+   * still cooling — so a shelf may be shorter, which is the honest outcome when
+   * the catalogue has little else to offer (./blocks/shared.tsx reads it through
+   * services/recommendation/surfacePolicy.ts).
+   *
+   * It lasts for one generation: the next ordinary refresh or visit clears it.
+   */
+  strict: boolean;
 }
 
-let current: Generation = { gen: 1, startedAt: Date.now() };
+let current: Generation = { gen: 1, startedAt: Date.now(), strict: false };
 const listeners = new Set<() => void>();
 
 const subscribe = (listener: () => void): (() => void) => {
@@ -55,10 +66,18 @@ const notify = (): void => {
 };
 
 /** Start a new generation: every generation-keyed Home query builds again. */
-export function refreshHome(now = Date.now()): number {
-  current = { gen: current.gen + 1, startedAt: now };
+export function refreshHome(options: { fewerRepeats?: boolean } | number = {}, maybeNow = Date.now()): number {
+  // Back-compatible: older callers passed `now` as the first argument.
+  const now = typeof options === 'number' ? options : maybeNow;
+  const strict = typeof options === 'number' ? false : options.fewerRepeats === true;
+  current = { gen: current.gen + 1, startedAt: now, strict };
   notify();
   return current.gen;
+}
+
+/** True while this generation is running under the strict repetition rule. */
+export function homeIsStrict(): boolean {
+  return current.strict;
 }
 
 /**
@@ -68,7 +87,8 @@ export function refreshHome(now = Date.now()): number {
  */
 export function expireHomeIfStale(now = Date.now()): number {
   if (now - current.startedAt >= HOME_TTL_MS) {
-    current = { gen: current.gen + 1, startedAt: now };
+    // An expiry is an ordinary rebuild: the strict rule does not carry over.
+    current = { gen: current.gen + 1, startedAt: now, strict: false };
     queueMicrotask(notify);
   }
   return current.gen;
@@ -76,7 +96,7 @@ export function expireHomeIfStale(now = Date.now()): number {
 
 /** Tests: back to the first generation, started at `now`. */
 export function resetHomeGeneration(now = Date.now()): void {
-  current = { gen: 1, startedAt: now };
+  current = { gen: 1, startedAt: now, strict: false };
 }
 
 /** The page: check expiry once per Home visit, then follow the generation. */

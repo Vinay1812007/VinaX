@@ -12,6 +12,38 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '9.1.0': {
+    title: 'Fewer repeats, and music that is actually current',
+    changes: [
+      { type: 'fixed', text: 'The big one: VinaX kept handing you songs you had just heard. Every part of the app — what plays next, the AI DJ, Radio, your mixes, Home and AI playlists — now shares one memory of what it has already shown you, played, finished or skipped, and each of those counts for a different amount and for a different length of time. On our test catalogue, two playlists built from the same idea used to repeat about two thirds of their songs; now they repeat about one in twenty.' },
+      { type: 'fixed', text: 'Building an AI playlist again from the same idea now really changes it. Before, the app asked the catalogue exactly the same three questions every time, so the same idea could only ever give you the same songs back.' },
+      { type: 'fixed', text: 'Asking again from the same song no longer opens with the same five songs — not even under a different release of each.' },
+      { type: 'new', text: '“Fewer repeats” on Home and on an AI playlist: one refresh that leaves out everything you have heard or been shown lately. Shelves may come out shorter, and it says so, rather than quietly padding with songs you know.' },
+      { type: 'new', text: 'Snooze a single song for 7, 14 or 30 days from its ⋮ menu, with Undo — the per-song version of “Less like this”. It covers every release of that song and ends on its own.' },
+      { type: 'new', text: 'On an AI playlist you can now Keep the tracks you like and build again — only the rest is replaced — or Replace one track without touching the others.' },
+      { type: 'new', text: 'Songs that a real chart or a current web page named can now be recommended in the first place. Before, outside evidence could only nudge a song the catalogue had already offered, so a current song it missed was unreachable.' },
+      { type: 'new', text: 'Where a current pick came from is now openable: the ⋮ menu offers the chart or the page itself, with when it was checked.' },
+      { type: 'improved', text: 'A shelf no longer says “trending” for songs that merely came out of a catalogue search for popular-sounding words. Only a verified chart may say that.' },
+      { type: 'improved', text: 'VinaX AI knows roughly where you are, if you let it: the date and time in answers follow your own time zone instead of always assuming India, and searches are worded for your region. It is coarse by design — country, state, an approximate city and a time zone — never an address, and it is never used to decide what language you want.' },
+      { type: 'improved', text: 'Settings — Allow region inference now shows exactly what VinaX worked out, where it came from and when, what it is used for, and a Refresh button for after you move or switch a VPN on or off. Turning it off clears the value straight away.' },
+      { type: 'fixed', text: 'The Android app can now read your region at all. It had been skipping the lookup entirely and falling back to a short list of time zones.' },
+      { type: 'fixed', text: 'Change your language and local charts follow at once. Before, the app kept using the previous language’s chart and never asked for the new one.' },
+      { type: 'fixed', text: 'Editing one of your messages in VinaX AI no longer throws away the answers that followed — the conversation as it was is kept as its own chat.' },
+      { type: 'new', text: 'Temporary chat in VinaX AI: nothing from it is written to this device, and it is never part of an export.' },
+      { type: 'improved', text: 'A very long chat no longer quietly forgets how it started: the earlier questions travel with it as a short list, and VinaX AI will tell you plainly when it no longer has the text of an old answer rather than making one up.' },
+      { type: 'improved', text: 'AI playlists and the DJ were being told to prefer famous songs, which worked against finding you anything new. They are now asked for songs that are real, not songs that are well known.' },
+      { type: 'improved', text: 'Owner console — the recommendation debug view opens on a diagnostics summary: how much of each batch repeats the one before, where candidates came from, which rules had to give, what the hard filters rejected, latency, the size of the repeat memory, and whether the chart and web-discovery services are actually working.' },
+      { type: 'new', text: 'Artifacts in VinaX AI: everything a chat wrote — pages, documents, code — collected in a side panel with every version kept, Copy, Download, “Show in chat”, and a live preview for a page. A preview runs sealed off from VinaX: it cannot reach your chats, your library or anything else.' },
+      { type: 'new', text: 'Projects in VinaX AI: give a group of chats its own standing instructions and reference files, so you stop explaining the same background every time. It stays on this device.' },
+      { type: 'new', text: 'VinaX AI can remember things you tell it to — lines you write yourself, which you can edit or delete, off until you switch it on. Switching it off forgets them. VinaX AI never adds a line on its own.' },
+      { type: 'new', text: 'PDFs can be attached to a chat and their text is read. When a PDF is a scan, is locked, or uses a font whose text cannot be decoded, VinaX says which file and why instead of quietly ignoring it.' },
+      { type: 'improved', text: 'Attaching files now shows which file is being read, and has a Stop button. Stopping keeps whatever was already read.' },
+      { type: 'improved', text: 'Sources under a reply now show what each one is — its title and a line from the page — not just the website’s name.' },
+      { type: 'new', text: 'Ask an AI playlist for a length and get it: “15 songs”, “about an hour”. If not enough songs really fit, VinaX gives you fewer and says why, instead of padding the list.' },
+      { type: 'new', text: 'Refine a playlist you are looking at — “more upbeat”, “fewer film songs” — and the tracks you kept stay put.' },
+      { type: 'new', text: 'Home has a Current now shelf: songs a real chart or a current web page named, each checked against the catalogue, with how recently it was checked. It is kept separate from the catalogue’s own popular lists.' },
+    ],
+  },
   '9.0.3': {
     title: 'Search knows this year’s songs',
     changes: [

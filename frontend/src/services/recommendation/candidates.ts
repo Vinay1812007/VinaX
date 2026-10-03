@@ -1,4 +1,4 @@
-import { getAlbum, getArtist, getArtistTopSongs, getSongSuggestions, searchSongsPage } from '@/services/api';
+import { getAlbum, getArtist, getArtistTopSongs, getSong, getSongSuggestions, searchSongsPage } from '@/services/api';
 import { isBlockedSong } from '@/services/content/blocklist';
 import { isJunkTrack } from './quality';
 import { topArtists, topLanguages } from '@/services/personalization/profile';
@@ -13,6 +13,15 @@ import { provenPicks } from './recMemory';
 import { styleQueries } from './style';
 
 const REDISCOVERY_AGE_MS = 14 * 86_400_000;
+
+/**
+ * 9.1.0 — how deep into a catalogue search the broad sources rotate. The salt
+ * picks the page, so consecutive gathers read different pages rather than the
+ * same first one. Raised from 3-4 to 6: the catalogue answers these phrasings
+ * well past page 4, and the measured cost of staying shallow was that every
+ * stretch drew from the same ~20 results per query.
+ */
+export const BROAD_PAGES = 6;
 
 /** 7.2.0 — at most this many catalogue requests in flight per gather. */
 export const CANDIDATE_FETCH_CONCURRENCY = 6;
@@ -29,6 +38,61 @@ const RELATED_ARTISTS = 2;
 const SONGS_PER_RELATED_ARTIST = 6;
 /** 8.2.0 — the catalogue word for a seed's mood, when its genre is unknown. */
 const MOOD_QUERY: Record<string, string> = { romantic: 'romantic', energetic: 'party', chill: 'chill', melancholy: 'sad', devotional: 'devotional' };
+
+/**
+ * 9.1.0 — verified chart / editorial entries resolved to catalogue songs, so a
+ * trending song can ENTER the pool. Each entry already carries the catalogue id
+ * the server matched it to, so one `getSong` per entry is exact — no search,
+ * no chance of resolving to a different song.
+ *
+ * Bounded on purpose: at most TREND_RESOLVE entries per gather, salt-rotated so
+ * consecutive stretches reach different parts of the chart, and cached for
+ * TREND_SONG_TTL_MS so a stretch every few minutes costs nothing. Everything
+ * runs inside the gather's own deadline and concurrency bound, and a failed
+ * lookup drops that entry only.
+ */
+export const TREND_RESOLVE = 6;
+/** 9.1.0 — live-web discoveries resolved per gather (the same exact-id lookup). */
+export const DISCOVERY_RESOLVE = 4;
+const TREND_SONG_TTL_MS = 30 * 60_000;
+const TREND_SONG_CAP = 120;
+const trendSongs = new Map<string, { at: number; song: Song | null }>();
+
+/**
+ * Resolve evidence-backed entries (verified chart entries, live-web
+ * discoveries) to catalogue songs by their catalogue id. One `getSong` per
+ * entry is EXACT — no search, so there is no chance of quietly resolving to a
+ * different song than the evidence named.
+ */
+async function resolveByCatalogId(
+  items: readonly { catalogId: string; language: string | null }[],
+  language: string | null,
+  signal: AbortSignal,
+  salt: number,
+  now: () => number,
+  take: number,
+): Promise<Song[]> {
+  // A chart entry in a language the stretch cannot use is not a candidate.
+  const eligible = items.filter((i) => !language || !i.language || i.language.toLowerCase() === language);
+  const picks = rotate([...eligible], salt, take);
+  const out: Song[] = [];
+  for (const item of picks) {
+    if (signal.aborted) break;
+    const hit = trendSongs.get(item.catalogId);
+    if (hit && now() - hit.at < TREND_SONG_TTL_MS) {
+      if (hit.song) out.push(hit.song);
+      continue;
+    }
+    // A chart entry the catalogue will not serve is simply dropped (and the
+    // miss is cached, so one run does not retry it for every stretch).
+    const song = await getSong(item.catalogId).then((x) => x ?? null).catch(() => null);
+    trendSongs.delete(item.catalogId);
+    trendSongs.set(item.catalogId, { at: now(), song });
+    if (trendSongs.size > TREND_SONG_CAP) trendSongs.delete(trendSongs.keys().next().value!);
+    if (song) out.push(song);
+  }
+  return out;
+}
 
 const effectiveMode = (ctx: RecommendationContext): 'familiar' | 'balanced' | 'discover' => ctx.discoveryMode ?? (ctx.explore ? 'discover' : 'balanced');
 
@@ -81,6 +145,7 @@ const collaborators = new Map<string, { at: number; refs: ArtistRef[] }>();
 export function resetCandidateCache(): void {
   cache.clear();
   collaborators.clear();
+  trendSongs.clear();
 }
 
 /** 8.2.0 — does the song carry a stream URL? */
@@ -310,7 +375,43 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
   // land in favourites) seed these searches.
   let artists = topArtists(ctx.profile, 8).map((a) => a.affinity.name);
   if (!artists.length) artists = [...new Set(ctx.favorites.map((f) => f.artists?.[0]?.name).filter((n): n is string => !!n))];
-  for (const name of rotate(artists, ctx.salt, 3)) add('favorite-artist', name, search(name, 1 + (salt % 3), 10), name);
+  // 9.1.0 — a wider page stride (BROAD_PAGES) so repeated stretches walk
+  // further into each artist's catalogue instead of re-reading pages 1-3.
+  for (const name of rotate(artists, ctx.salt, 3)) add('favorite-artist', name, search(name, 1 + (salt % BROAD_PAGES), 10), name);
+
+  // 3b. 9.1.0 — verified trends as a CANDIDATE SOURCE. Before 9.1 a chart entry
+  // could only add a small bonus to a song some other source happened to
+  // return, so a current song the catalogue searches missed was unreachable.
+  // The lock language keeps a chart entry out of a stretch that could not play
+  // it anyway (the hard filter would drop it, wasting the lookup).
+  // The language an evidence-backed entry has to be in to be worth a lookup:
+  // one the stretch could actually play (the hard filter would drop the rest).
+  const evidenceLanguage = ctx.seedSong?.language && ctx.seedSong.language !== 'unknown'
+    ? ctx.seedSong.language
+    : ctx.pinnedLanguages.find((l) => !ctx.mutedLanguages.includes(l)) ?? null;
+  if (ctx.trendItems?.length) {
+    const items = ctx.trendItems;
+    add('verified-trend', `n${items.length}`, {
+      key: `vt|${evidenceLanguage ?? ''}|${salt % 4}`,
+      limit: TREND_RESOLVE,
+      fetch: (_n, signal) => resolveByCatalogId(items, evidenceLanguage, signal, salt, now, TREND_RESOLVE),
+    // The per-song source name lives in the trend signal's own label map (and in
+    // the evidence store); this generic one is what the source BOOST explains.
+    }, 'a verified chart');
+  }
+  // 3c. 9.1.0 — live-web discoveries (services/discovery/*): songs a current web
+  // source named, resolved to real recordings by the server. Like the verified
+  // trends above they ENTER the pool; unlike them they come from pages rather
+  // than a measured chart, which is why their source boost is lower and their
+  // "why" line says "reported by", not "charting".
+  if (ctx.webDiscoveries?.length) {
+    const items = ctx.webDiscoveries;
+    add('web-discovery', `n${items.length}`, {
+      key: `wd|${evidenceLanguage ?? ''}|${salt % 4}`,
+      limit: DISCOVERY_RESOLVE,
+      fetch: (_n, signal) => resolveByCatalogId(items, evidenceLanguage, signal, salt, now, DISCOVERY_RESOLVE),
+    }, 'a current web source');
+  }
 
   // 4. Trending in the user's languages (also the cold-start backbone).
   // 7.2.0 — with no language signal: pinned languages, then the languages of
@@ -321,7 +422,16 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
   };
   if (!langs.size) fill(ctx.favorites.map((f) => f.language));
   if (!langs.size) fill(DEFAULT_LANGUAGES);
-  for (const lang of langs) if (!ctx.mutedLanguages.includes(lang)) add('trending', lang, search(trendingSeed(lang, ctx.salt), 1 + (salt % 4), 15));
+  // 9.1.0 — TWO pages per language, on a wider stride. One page of one phrasing
+  // is the same top-15 every time, which is how the broadest source in the
+  // gather became its most repetitive one. The second page costs one request.
+  for (const lang of langs) {
+    if (ctx.mutedLanguages.includes(lang)) continue;
+    const seedQuery = trendingSeed(lang, ctx.salt);
+    const first = 1 + (salt % BROAD_PAGES);
+    add('trending', `${lang}:p${first}`, search(seedQuery, first, 15));
+    add('trending', `${lang}:p${first + 1}`, search(seedQuery, first + 1, 15));
+  }
 
   // 4b. Package A4 — exploration budget (opt-in). Trending picks in languages
   // the listener has literally never played: not in the profile, not pinned,

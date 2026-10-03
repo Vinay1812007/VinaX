@@ -21,6 +21,10 @@ All paths below are relative to `frontend/src/`.
 | The engine's memory of its own picks (8.2): outcomes of automatic picks, and each seed's last opening | `services/recommendation/recMemory.ts` | `localStorage`; 60 songs for 60 days, 40 seeds for 12 hours |
 | Home usage signals and the session's Home order (8.2) | `features/home/homeSignals.ts`, `homeOrder.ts` | `localStorage` (decayed, 14-day half-life); the order in `sessionStorage` |
 | Surface policy (9.0): how each surface treats songs just heard, skipped or shown elsewhere | `services/recommendation/surfacePolicy.ts` | Pure; read per Home visit |
+| Exposure ledger (9.1): one memory of what was shown, queued, played, completed, skipped, liked, disliked or replayed | `services/recommendation/exposure.ts` | `localStorage`; 600 songs, 45-day TTL |
+| Song snoozes (9.1): "not this song, for a while" | `services/recommendation/exposure.ts` | `localStorage`; 7/14/30 days, expires itself |
+| Verified-trend signal (7.2) and live-web discovery signal (9.1), both read from a snapshot and never waited for | `services/trends/signal.ts`, `services/discovery/signal.ts` | In memory; refreshed in the background |
+| Evidence behind an evidence-backed pick (9.1): the chart or page, and when it was observed | `store/evidenceStore.ts` | In memory only |
 | Home refresh policy (9.0): when Home builds itself again | `features/home/homeRefresh.ts` | In memory; one generation per refresh or half hour |
 
 ## How listening becomes taste
@@ -88,7 +92,9 @@ Every automatic change to the queue — a continuation, an AI refinement, the ad
 | `related` | Catalogue suggestions for the seed (30), for up to 3 distinct recent listens (12 each) and for 3 salt-rotated favourites (10 each) |
 | `favorite-artist` | A search for the seed's lead artist (20) and for 3 of the listener's top 8 artists (10 each) |
 | `favorite-album` | The rest of up to 2 albums the listener has favourited songs from |
-| `trending` | A search for the seed's language and genre (15), plus trending seeds for the listener's top 2 and first 3 pinned languages (15 each). With no language signal at all the pool falls back to two default languages. |
+| `trending` | A search for the seed's language and genre (15), plus trending seeds for the listener's top 2 and first 3 pinned languages (**9.1: two pages each**, 15 per page, on a 6-page rotation). With no language signal at all the pool falls back to two default languages. **This is a catalogue search for popular-sounding words and carries no outside evidence** — since 9.1 its reason says "Popular in the catalogue for your languages", never "trending". |
+| `verified-trend` | **9.1:** up to 6 songs an outside chart or editorial source actually named, matched to catalogue ids by the server (`/api/trends`) and fetched by exact id — no search, so there is no chance of resolving to a different song. Salt-rotated across the chart, cached 30 minutes, skipped entirely for a language the stretch could not play. Before 9.1 a chart entry could only add a bonus to a song some other source had already returned, so a current song the catalogue missed was unreachable. |
+| `web-discovery` | **9.1:** up to 4 songs a current web page named, resolved to real recordings by the server (`/api/discover`, see [trends.md](trends.md)). Same exact-id lookup; weaker evidence than a measured chart, so a lower boost and a different reason. |
 | `intent` | Two pages of a catalogue search for the active tune or pinned mood, in the queue's language (20 each). Only present when an intent is active. |
 | `album` | 8.2: the rest of the seed's own album (the same film or record, usually the same composer), up to 12. 9.0: also the album of the song the stretch follows (the queue's last song, the *anchor*), when that is another song, up to 8 |
 | `related-artist` | 8.2: popular songs by artists related to the seed's lead artist, up to 12 (9.0: and to the anchor's lead artist, up to 8): first the artists featured on the seed, then the lead artist's related artists — the catalogue's own similar artists when its artist page lists them, then everyone co-credited on the lead artist's top songs, most often first — salt-rotated among the first four. Two artists, six songs each, fetched one after another. The related list is cached per artist for 30 minutes (50 artists). |
@@ -206,6 +212,8 @@ Each candidate also receives a source boost:
 | `history` | 0.10 |
 | `explore` | 0.08 |
 | `trending` | 0.06 |
+
+9.1 adds two evidence-backed sources: `verified-trend` 0.12 (above the catalogue's own `trending` search, which has no evidence; below the listener's stated intent and the seed's own neighbourhood — real evidence that a song is current is evidence about the world, not about this listener) and `web-discovery` 0.09. Their reasons are `popular-now` ("On a verified chart") and `web-evidence` ("Reported by …"); `store/evidenceStore.ts` carries the specific source and, for a web discovery, the page itself, which the track menu offers as "Open the source".
 
 8.2 adds four sources and their boosts: `proven` 0.12, `album` 0.10, `related-artist` 0.10, `genre` 0.07. Their reasons are `proven`, `album`, `similar-artist` and `genre`; the first three name what they came from (the earlier pick, the seed's title, the seed's lead artist). When one of them, `taste` or `served` is a song's top reason, "Why this song?" (`explanations.ts`) reads: “Like “…”, which you enjoyed before”, “From the same album as “…””, “By an artist close to …”, “Close to the songs you love”, or “Held back a little — you were shown this recently”.
 
@@ -364,18 +372,78 @@ The player tracks two id sets in memory: songs the recommender appended and song
 
 Two consecutive skips of automatic songs re-sequence the remaining automatic tail (three songs or more) with the `lift` shape, bringing in up to four favourites in the playing song's language; the re-plan sequences under the lock on that language whatever the Queue languages setting says. The favourites and the final order pass the admission gate, so a favourite is not exempt from Kid mode, hidden artists, muted languages, soft mutes or recent plays; if fewer than three songs survive, nothing changes. A completed song or a skip of a hand-queued song resets the streak. A re-plan cannot run again for 90 seconds.
 
+## The exposure ledger (9.1)
+
+`services/recommendation/exposure.ts` is the ONE memory of what the listener has
+already met, shared by every surface. It replaced five memories that did not know
+about each other — see [audit-9.1.md](audit-9.1.md) for what each of them was and
+why the arrangement could not work.
+
+One row per canonical identity, with a separate timestamp per KIND of event,
+because the events mean different things:
+
+| Event | Recorded by | Penalty at its freshest | Decays over | Cools a discovery surface for |
+| --- | --- | --- | --- | --- |
+| `shown` | a Home shelf when it renders (`features/home/blocks/shared.tsx`), the AI Playlist | 0.14 | 3 d | 12 h |
+| `queued` | the queue engine's `commit`, the DJ's `commitDjSet` | 0.24 | 7 d | 2 d |
+| `played` | the playback bus's `counted` event | 0.30 | 10 d | 3 d |
+| `completed` | the playback bus's `end`, at the completion ratio | 0.22 | 14 d | 3 d |
+| `skipped` | an early manual skip | 0.30 **per skip**, 3 max | 21 d | 14 d |
+| `disliked` | hiding a song | 0.80 | 60 d | 45 d |
+| `liked` | favouriting | — (pays ¼ of everything else, and is never cooled) | — | — |
+| `replayed` | an explicit "play this again" | — (pays nothing for 7 d) | — | — |
+
+Sizes are against the rest of the score: a candidate's total is typically
+0.4–1.2 and the strongest source boost is 0.24. 8.2's single
+`servedRecently: 0.04` was too small to change any order at all, which is why a
+shared memory that *was* consulted still produced repeats.
+
+What is deliberately NOT recorded: a cancelled request, a model suggestion that
+was rejected, and a prefetched song nobody saw. A surface records `shown` when it
+renders; the queue records `queued` when the player accepts the songs.
+
+The penalty reaches the scorer as `ctx.exposurePenaltyOf` and is a penalty, never
+a rule — nothing here can admit a song the hard filter rejects, and a song that
+is clearly the best fit still wins. A plan takes ONE ledger snapshot so a long
+stretch cannot reorder under its own feet.
+
+Bounded: 600 rows, a 45-day row TTL, `localStorage` with an in-memory mirror used
+only while storage refuses writes. "Clear personalization profile" and "Erase
+everything" clear it (`resetExposure`). A 9.0 device's `vinax.flow.served.v1` is
+imported once by `migrateLegacyExposure()`.
+
+### Snooze (9.1)
+
+`snoozeSong(song, days)` is the per-SONG counterpart to the per-artist soft mute
+in `services/personalization/softMutes.ts`: 7, 14 or 30 days, keyed by canonical
+identity so every release of the song goes quiet, with an exact `undo()`. It is a
+HARD rule while it lasts (`filters.ts` returns `snoozed`), not a penalty — the
+listener asked for the song to go away, and a nudge would keep handing it back.
+It expires on its own.
+
+### Refresh with fewer repeats (9.1)
+
+One generation under a stricter rule, on Home (`homeRefresh.ts` `strict`, read by
+`surfacePolicy.ts`) and on an AI playlist (`GenerateOptions.fewerRepeats`). A
+discovery surface then REMOVES everything with any live exposure instead of
+moving it to the back, and the AI Playlist's pool and the curator's own picks are
+held to the same rule. A shelf or a list can come out shorter, and the app says
+so: that is the honest outcome when the catalogue has little else to offer.
+`personal` and `resume` surfaces are untouched — Made For You is meant to hold
+your own music, and Recently Played *is* the repeats.
+
 ## The engine's memory of its own picks (8.2)
 
 `recMemory.ts` keeps two small device-local memories, never uploaded:
 
 - **Outcomes.** When a playback instance of an automatically queued song ends, `autoOutcomeFor` (`transitionTracker.ts`) judges it once per run: liked, or a natural end with the song completed, is a success; a manual skip before the play counted or inside its first 30 % is a miss; anything else, failed playback included, says nothing. One entry per canonical identity, 60 at most, forgotten after 60 days. `provenPicks` returns those with more successes than misses, strongest and most recent first; they feed the `proven` source.
-- **Seed memory.** When the player accepts a continuation (`commit`), the first five songs are remembered against the seed's identity for 12 hours (40 seeds at most). The next plan from the same seed passes them to the scorer as `seedRepeatIds`. The evaluation measures it: asked again from the same song, the opening repeats 3 of 3 songs without the memory and 1 of 3 with it (`warm` fixture).
+- **Seed memory.** When the player accepts a continuation (`commit`), the first five songs are remembered against the seed's identity for 12 hours (40 seeds at most). The next plan from the same seed passes them to the scorer as `seedRepeatKeys`. The evaluation measures it: asked again from the same song, the opening repeats 3 of 3 songs without the memory and 1 of 3 with it (`warm` fixture). **9.1** stores CANONICAL KEYS rather than catalogue ids — with ids, the same opening could come back under a different release of each song, which is exactly the repeat this memory exists to prevent. A device written by 9.0 holds ids here; they never match a key, so that seed starts empty and refills on the next accepted continuation.
 
 "Clear personalization profile" and "Erase everything" both clear these memories, and since 9.0 the served memory too (`resetServedMemory`). Before 9.0 a reset removed the served key but `servedKeySet` fell back to its in-memory copy whenever the key was missing, so the "shown recently" penalties survived a reset until the next reload; the copy is now used only while storage refuses writes.
 
 ## Home shelves
 
-`buildRecommendations(ctx)` gathers the same candidate sources without a seed, enriches, ranks, moves identities served in the last seven days behind fresh ones, and assembles shelves in `mixes.ts`. On a profile with at least five plays the optional AI re-rank may reorder the top 30. The result is memoised for ten minutes per profile state. Every song placed on a shelf gets a plain-language reason for the track menu's "Why this song?".
+`buildRecommendations(ctx)` gathers the same candidate sources without a seed, enriches, ranks, moves identities the exposure ledger says are still cooling behind the rest, and assembles shelves in `mixes.ts`. **9.1** also puts the ledger's size and the trend/discovery snapshot sizes in the memo key: before, the ten-minute memo could hand back the very shelves whose songs had just been played, and a chart that arrived mid-window changed nothing. On a profile with at least five plays the optional AI re-rank may reorder the top 30. The result is memoised for ten minutes per profile state. Every song placed on a shelf gets a plain-language reason for the track menu's "Why this song?".
 
 ### When Home builds itself again (9.0)
 

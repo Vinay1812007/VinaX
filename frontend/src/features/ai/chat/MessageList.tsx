@@ -19,6 +19,13 @@ export interface MessageListProps {
   /** Agent mode is on for the turn in flight. */
   agent: boolean;
   handlers: MessageHandlers;
+  /**
+   * 9.1.0 — called once with the list's own "jump to message i" function, so
+   * another part of the page (the artifact panel's "Show in chat") can reach a
+   * message that is OUTSIDE the rendered window: `goTo` widens the window first
+   * and scrolls after the render, which a bare `getElementById` cannot do.
+   */
+  onReady?: (goTo: (index: number) => void) => void;
 }
 
 /**
@@ -28,7 +35,7 @@ export interface MessageListProps {
  * away and are never mounted until asked for. Mount with `key={chatId}` so
  * the window resets per chat.
  */
-export function MessageList({ chatId, messages, busy, speakingId, agent, handlers }: MessageListProps): ReactNode {
+export function MessageList({ chatId, messages, busy, speakingId, agent, handlers, onReady }: MessageListProps): ReactNode {
   // Fixed when the chat opens: the window never slides forward under the
   // reader, it only grows — backwards on request, forwards as replies arrive.
   const [start, setStart] = useState(() => windowStart(messages.length));
@@ -50,6 +57,15 @@ export function MessageList({ chatId, messages, busy, speakingId, agent, handler
     }
     document.getElementById(`ai-msg-${i}`)?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
   };
+
+  // Hand `goTo` up once; the identity changes per render, so a ref keeps the
+  // published function current without re-running the effect.
+  const goToRef = useRef(goTo);
+  goToRef.current = goTo;
+  useEffect(() => {
+    onReady?.((i) => goToRef.current(i));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- published once per mount
+  }, []);
 
   const pinned = messages.map((m, i) => ({ m, i })).filter((x) => x.m.pinned);
   const lastIndex = messages.length - 1;

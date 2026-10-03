@@ -10,6 +10,7 @@ import { TrashIcon, UploadIcon } from './icons';
 import { choiceLabel, type CatalogState } from './models';
 import { formatBytes, storageUsedBytes } from './storage';
 import type { CatalogGroup, ModelChoice } from './types';
+import { MemorySection } from './MemorySection';
 
 export const DEVICE_VOICE = 'device';
 export interface VoiceCatalog {
@@ -307,6 +308,9 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                   {p.profile.length} / 1500
                 </p>
               </div>
+              {/* 9.1.0 — opt-in memory: lines the listener writes, which they can
+                  edit or remove here, and which are sent with every chat. */}
+              <MemorySection id={`${uid}-mem`} />
             </>
           )}
 

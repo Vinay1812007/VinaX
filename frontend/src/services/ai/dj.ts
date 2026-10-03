@@ -12,6 +12,7 @@ import { inferMood } from '@/services/recommendation/mood';
 import type { MusicStyle } from '@/services/recommendation/style';
 import { useReasonStore } from '@/store/reasonStore';
 import { useDjStore } from '@/store/djStore';
+import { recordExposure } from '@/services/recommendation/exposure';
 import { useSettingsStore } from '@/store/settingsStore';
 import { isSkippedPlay } from '@/utils/plays';
 
@@ -363,6 +364,10 @@ export function commitDjSet(set: DjSet, accepted: Song[]): void {
   useReasonStore.getState().setReasons(picks.filter((p) => p.reason).map((p) => [p.song.id, p.reason]));
   useDjStore.getState().setSet(set.intro, picks.map((p) => [p.song.id, p.segue]));
   recordSurfaced(picks.map((p) => p.song));
+  // 9.1.0 — and the shared exposure ledger, which every surface reads. The DJ's
+  // own list above stays: it feeds the model's avoid list by DESCRIPTION, which
+  // the ledger's canonical keys cannot do.
+  recordExposure(picks.map((p) => p.song), 'queued');
 }
 
 /**

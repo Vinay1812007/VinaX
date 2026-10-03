@@ -185,23 +185,29 @@ export default function HomePage() {
   // round, and a refetch of the shelves that rotate by day. PullToRefresh
   // waits for all of it before it lets go.
   const [refreshing, setRefreshing] = useState(false);
-  const handleRefresh = () => {
+  const handleRefresh = (fewerRepeats = false) => {
     recordServed(heroSongs.map(songKey));
     useDiscoveryStore.getState().refresh();
     invalidateRecommendationCache();
     resetShelfDeduper();
     resetShelfLedger();
-    refreshHome();
+    // 9.1.0 — `fewerRepeats` runs this one generation under the strict
+    // repetition rule (features/home/homeRefresh.ts).
+    refreshHome({ fewerRepeats });
     return Promise.all(
       ['trending', 'new-releases-lang', 'time-of-day', 'vinax-daily', 'weekly-mix', 'unlimited-feed', 'recently-played-albums', 'because-you-listened-to', 'because-liked', 'fresh-finds', 'hidden-gems', 'trending-near-you', 'trending-albums', 'trending-artists-src', 'seasonal', 'mood-shelf', 'genre-shelf']
         .map((key) => qc.invalidateQueries({ queryKey: [key] })),
     );
   };
-  const refreshNow = async () => {
+  const refreshNow = async (fewerRepeats = false) => {
     setRefreshing(true);
     try {
-      await handleRefresh();
-      toast('Home refreshed with new picks');
+      await handleRefresh(fewerRepeats);
+      toast(
+        fewerRepeats
+          ? 'Home refreshed, leaving out everything you have heard lately — some shelves may be shorter.'
+          : 'Home refreshed with new picks',
+      );
     } catch {
       toast('Could not refresh right now. Try again shortly.');
     } finally {
@@ -310,6 +316,8 @@ export default function HomePage() {
               <h2 id={`${exploreRegion}-title`}>Explore more</h2>
               <div className="vxh-explore-actions">
                 <button type="button" className="vxh-pill is-quiet" disabled={refreshing} onClick={() => void refreshNow()}>{refreshing ? 'Refreshing…' : 'Refresh Home'}</button>
+                {/* 9.1.0 — the strict rule for one refresh: nothing the listener has met lately. */}
+                <button type="button" className="vxh-pill is-quiet" disabled={refreshing} onClick={() => void refreshNow(true)} title="Leave out everything you have heard or been shown lately">Fewer repeats</button>
                 {exploreOpen && explore.length > 0 && (
                   <button type="button" className="vxh-pill is-quiet" aria-expanded aria-controls={exploreRegion} onClick={() => setExploreOpen(false)}>Show less</button>
                 )}

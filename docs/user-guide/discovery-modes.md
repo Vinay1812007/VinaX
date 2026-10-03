@@ -57,7 +57,9 @@ The taste profile is computed and stored on this device. **Taste Profile** (Libr
 |---|---|---|
 | More like this | A nudge for this sitting, and the DJ picks are rebuilt at once — towards the song's mood when it has one, otherwise towards its artist | This sitting |
 | Less like this… | Asks for 7, 14 or 30 days, then plays that artist less everywhere. If DJ picks by them were already queued, the picks are rebuilt without them | Until the day you chose |
+| Snooze this song… | Asks for 7, 14 or 30 days, then keeps **that song** out of everything — every release of it, so the remaster and the remix go quiet too. The artist is untouched | Until the day you chose |
 | Why this song? | Shows why a recommended song was picked (appears on recommended songs) | — |
+| Open the source | On a song a real chart or a current web page named: opens that page, or says which chart it is and when VinaX last checked | — |
 | Not interested | Hides that song | Until you undo it |
 | Never play *artist* | Blocks that artist everywhere | Until you allow them again |
 
@@ -68,6 +70,35 @@ The first two steer; the last two block, and they sit in a separate group in the
 **Settings → Recommendations → Playing less of** lists every artist under a “Less like this”, with the date each one comes back and how many days are left. **Unmute** ends one (with Undo), **Unmute all** ends them all. The same list is on the Taste Profile page.
 
 The permanent block is a different list: **Settings → Appearance & Playback → Never play**.
+
+## Fewer repeats
+
+If what you are being shown feels too familiar, **Fewer repeats** asks for one
+build that leaves out everything you have heard or been shown lately — not just
+the songs still cooling off, but everything VinaX remembers putting in front of
+you. It sits next to **Refresh Home** on Home, and next to **Build it again** on
+an AI playlist.
+
+Shelves and lists can come out **shorter** as a result, and VinaX says so. That
+is the point: if the catalogue has little else to offer for what you asked, a
+short honest list beats a long one padded with songs you already know.
+
+### What VinaX remembers putting in front of you
+
+One memory, shared by everything — what plays next, the AI DJ, Radio, your mixes,
+Home and AI playlists. It keeps these apart, because they do not mean the same
+thing:
+
+- a song **shown** on a shelf, which is cheap to show again in a few days;
+- a song the queue **took**, which was about to play;
+- a song **played**, and separately one you **finished**;
+- a song you **skipped** — and three skips count for more than one;
+- a song you **liked**, which is allowed to come back: repeating a favourite is
+  the point of a favourite;
+- a song you asked to **play again**, which clears its cooling-off entirely.
+
+It holds 600 songs, forgets anything untouched for 45 days, never leaves your
+device, and **Reset taste profile** and **Erase everything** both clear it.
 
 ## Starting over
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import '@/styles/ai.css';
 import { ChevronDownIcon, DownloadIcon, PlusIcon, SettingsIcon } from '@/components/Icons';
 import { Toasts } from '@/components/Toasts';
@@ -18,7 +18,8 @@ import { Sidebar, type SidebarHandlers } from '@/features/ai/chat/Sidebar';
 import { Toast, type ToastState } from '@/features/ai/chat/Toast';
 import { buildChatRequest } from '@/features/ai/chat/buildChatRequest';
 import { CHAT_ENDPOINT, IMAGE_ENDPOINT, VOICES_ENDPOINT, clientHeaders } from '@/features/ai/chat/endpoints';
-import { MenuIcon, PanelIcon } from '@/features/ai/chat/icons';
+import { FileIcon, MenuIcon, PanelIcon } from '@/features/ai/chat/icons';
+import { collectArtifacts } from '@/features/ai/artifacts/collect';
 import {
   agentChoices,
   bestAgentChoice,
@@ -63,6 +64,8 @@ import { useClientConfig } from '@/features/home/useAppConfig';
 import { probeSttSupport, sttSupported } from '@/features/voice/stt';
 import { usePageMeta } from '@/hooks/usePageMeta';
 import { generatePlaylist } from '@/services/ai/playlist';
+const ArtifactPanel = lazy(() => import('@/features/ai/artifacts/ArtifactPanel').then((m) => ({ default: m.ArtifactPanel })));
+const ProjectSheet = lazy(() => import('@/features/ai/chat/ProjectSheet').then((m) => ({ default: m.ProjectSheet })));
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
@@ -95,6 +98,12 @@ export default function VinaXAIPage(): ReactNode {
   const [activeId, setActiveId] = useState<string>(() => '');
   const active = useMemo(() => chats.find((c) => c.id === activeId) ?? chats[0], [chats, activeId]);
   const messages = active?.messages ?? [];
+  // 9.1.0 — how many artifacts this chat holds, for the header toggle. Keyed on a
+  // cheap fingerprint (message count + the last message's length) so a streamed
+  // reply re-scans the thread once per chunk rather than per character.
+  const threadStamp = `${messages.length}:${messages[messages.length - 1]?.content.length ?? 0}`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the stamp IS the dependency
+  const artifactCount = useMemo(() => collectArtifacts(messages).length, [threadStamp]);
   const isEmpty = messages.length === 0;
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -146,6 +155,11 @@ export default function VinaXAIPage(): ReactNode {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readFlag(PREF.sidebarCollapsed, false));
   const [toast, setToast] = useState<ToastState | null>(null);
+  // 9.1.0 — the artifact panel (documents, pages and code this chat produced).
+  const [artifactsOpen, setArtifactsOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  /** The message list's own "jump to message i", published on mount. */
+  const jumpToMessage = useRef<((index: number) => void) | null>(null);
   const [dropActive, setDropActive] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
 
@@ -446,6 +460,20 @@ export default function VinaXAIPage(): ReactNode {
     setSidebarOpen(false);
   };
 
+  /**
+   * 9.1.0 — a temporary chat: held in state only, never written to the device
+   * (features/ai/chat/storage.ts drops it in `persistChats`), and never part of
+   * an export. Closing the tab is all it takes to be rid of it.
+   */
+  const newTemporaryChat = (): void => {
+    const c: Conversation = { ...freshChat(), title: 'Temporary chat', temporary: true };
+    setChats((prev) => [c, ...prev]);
+    setActiveId(c.id);
+    composerRef.current?.setText('');
+    setSidebarOpen(false);
+    showToast('Temporary chat — nothing from it is saved on this device');
+  };
+
   const stop = (): void => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -678,6 +706,8 @@ export default function VinaXAIPage(): ReactNode {
           replyStyle: now.replyStyle,
           profile: now.profile,
           song: now.songCtx ? (player.queue[player.index] ?? null) : null,
+          // 9.1.0 — the project's instructions and files ride every message in it.
+          ...(active?.projectId ? { projectId: active.projectId } : {}),
         },
         { conversation, userMsg, query: q, images: imgs, previousReply: retry?.previousReply },
       );
@@ -723,6 +753,7 @@ export default function VinaXAIPage(): ReactNode {
       unavailable: unavailable || undefined,
       content: finalText || '…',
       sources: state.sources.length ? state.sources : undefined,
+      sourcePreviews: state.sourcePreviews.length ? state.sourcePreviews : undefined,
       engine: engine || undefined,
       followups: split.followups.length ? split.followups : undefined,
       steps: state.steps.length ? state.steps : undefined,
@@ -772,8 +803,24 @@ export default function VinaXAIPage(): ReactNode {
   };
 
   const messageHandlers = useStableHandlers<MessageHandlers>({
+    /**
+     * Edit and resend. 9.1.0 — the version being replaced is PRESERVED: the
+     * conversation as it stands is kept as a branch chat before this one is
+     * truncated, so an edit can never destroy an answer the listener may want
+     * back. (9.0 called `slice(0, idx)` and the old turns were simply gone.)
+     * A temporary chat is the exception — keeping a branch of it on the device
+     * would defeat the point, so it is edited in place.
+     */
     edit: (idx: number, content: string) => {
-      if (busy) return;
+      if (busy || !active) return;
+      if (!active.temporary && active.messages.length > idx) {
+        const kept: Conversation = {
+          ...freshChat(),
+          title: `${active.title} · before edit`,
+          messages: active.messages.map((m) => ({ ...m, pinned: undefined })),
+        };
+        setChats((prev) => [kept, ...prev]);
+      }
       setActiveMessages((prev) => prev.slice(0, idx));
       composerRef.current?.setText(content);
     },
@@ -791,6 +838,11 @@ export default function VinaXAIPage(): ReactNode {
 
   const sidebarHandlers = useStableHandlers<SidebarHandlers>({
     newChat,
+    newTemporaryChat,
+    openProjects: () => {
+      setProjectsOpen(true);
+      setSidebarOpen(false);
+    },
     open: (id: string) => {
       setActiveId(id);
       setSidebarOpen(false);
@@ -984,6 +1036,20 @@ export default function VinaXAIPage(): ReactNode {
               {voiceMode ? ' · Voice' : ''}
             </p>
           </div>
+          {/* 9.1.0 — artifacts: everything this chat wrote, with its versions. */}
+          {artifactCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setArtifactsOpen((v) => !v)}
+              aria-label={artifactsOpen ? 'Hide artifacts' : `Show artifacts (${artifactCount})`}
+              title="Documents, pages and code from this chat"
+              aria-expanded={artifactsOpen}
+              className={cn('ai-icon-btn ai-artifacts-toggle', artifactsOpen && 'ai-icon-btn-on')}
+            >
+              <FileIcon className="w-5 h-5" />
+              <span className="ai-artifacts-count">{artifactCount}</span>
+            </button>
+          )}
           <div className="relative">
             <button
               type="button"
@@ -1062,6 +1128,9 @@ export default function VinaXAIPage(): ReactNode {
             {!isEmpty && (
               <MessageList
                 key={active?.id ?? ''}
+                onReady={(goTo) => {
+                  jumpToMessage.current = goTo;
+                }}
                 chatId={active?.id ?? ''}
                 messages={messages}
                 busy={busy}
@@ -1143,6 +1212,33 @@ export default function VinaXAIPage(): ReactNode {
           )}
         </div>
       </div>
+
+      {/* 9.1.0 — the artifact panel, beside the chat on wide screens and over it
+          on phones. Lazy: the chat page never pays for it until it is opened. */}
+      {artifactsOpen && (
+        <Suspense fallback={<aside className="ai-artifacts" aria-label="Artifacts"><p className="ai-artifacts-empty">Collecting…</p></aside>}>
+          <ArtifactPanel
+            messages={messages}
+            onClose={() => setArtifactsOpen(false)}
+            onJump={(index) => jumpToMessage.current?.(index)}
+          />
+        </Suspense>
+      )}
+
+      {projectsOpen && (
+        <Suspense fallback={null}>
+          <ProjectSheet
+            currentChatProjectId={active?.projectId}
+            onAssign={(projectId) => {
+              const id = active?.id;
+              if (!id) return;
+              setChats((prev) => prev.map((c) => (c.id === id ? { ...c, projectId, updatedAt: Date.now() } : c)));
+              showToast(projectId ? 'This chat is in that project now' : 'This chat is no longer in a project');
+            }}
+            onClose={() => setProjectsOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {toast && <Toast toast={toast} onDone={clearToast} />}
       {/* The app's own toasts (Queued …, Saved …): this route renders outside

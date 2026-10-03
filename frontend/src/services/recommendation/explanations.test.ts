@@ -25,7 +25,7 @@ describe('explainTopReasons (C4)', () => {
       r('trending', 0.1),
       r('time', 0.05),
     ]);
-    expect(line).toBe('Because you play Sid Sriram · Because you listen to Telugu music · Trending in your languages');
+    expect(line).toBe('Because you play Sid Sriram · Because you listen to Telugu music · Popular in the catalogue for your languages');
   });
 
   it('falls back honestly when there are no reasons', () => {

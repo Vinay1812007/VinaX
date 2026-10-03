@@ -6,10 +6,12 @@ import { usePlayerStore } from '@/store/playerStore';
 import { useHistoryStore } from '@/store/historyStore';
 import { getSessionIntent } from '@/services/personalization/sessionIntent';
 import { servedKeySet } from '@/services/recommendation/songIdentity';
+import { recordExposure } from '@/services/recommendation/exposure';
 import { NO_SIGNALS, surfaceOrder, surfaceSignals, type SurfaceKind, type SurfaceSignals } from '@/services/recommendation/surfacePolicy';
 import { songPath } from '@/utils/slug';
 import { bestImage } from '@/utils/images';
 import { useShelfSafety } from '../useShelfSafety';
+import { homeIsStrict } from '../homeRefresh';
 import type { Song } from '@/types';
 
 /**
@@ -32,7 +34,7 @@ const HomeSignals = createContext<SurfaceSignals>(NO_SIGNALS);
  */
 export function HomeSignalsProvider({ generation, children }: { generation: number; children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- read the stores once per generation, on purpose
-  const signals = useMemo(() => surfaceSignals(useHistoryStore.getState().entries, getSessionIntent().skippedSongIds, servedKeySet()), [generation]);
+  const signals = useMemo(() => surfaceSignals(useHistoryStore.getState().entries, getSessionIntent().skippedSongIds, servedKeySet(), homeIsStrict()), [generation]);
   return <HomeSignals.Provider value={signals}>{children}</HomeSignals.Provider>;
 }
 
@@ -75,9 +77,34 @@ export function DeferredBlock({ render }: { render?: () => ReactNode }) {
   return <div ref={ref} className="h-56" aria-hidden />;
 }
 
+/**
+ * 9.1.0 — a shelf records the songs it PUT ON SCREEN in the shared exposure
+ * ledger, so the next Home generation (and the queue, the Daily mix and the AI
+ * Playlist) know they have been seen.
+ *
+ * Why here, and not where the songs are fetched: a fetched-but-never-rendered
+ * list is not an impression. Home's blocks are visibility-mounted, so a shelf
+ * the listener never scrolled to never mounts, never renders and therefore
+ * never records — which is the behaviour we want. The write happens in an
+ * effect (never during render), once per set of songs.
+ *
+ * It does not reorder anything the listener is looking at: Home reads the
+ * ledger once per generation (HomeSignalsProvider above), so what is recorded
+ * now takes effect at the next Home visit or refresh.
+ */
+function useRecordShown(songs: readonly Song[]): void {
+  const fingerprint = songs.map((s) => s.id).join(',');
+  useEffect(() => {
+    if (!songs.length) return;
+    recordExposure(songs, 'shown');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one write per distinct list of songs
+  }, [fingerprint]);
+}
+
 /** A shelf of songs: tap a card to open the song, its play button plays the shelf from that song. */
 export function SongShelf({ title, explanation, songs, seeAllTo, action }: { title: string; explanation?: string; songs: Song[]; seeAllTo?: string; action?: ReactNode }) {
   const playQueue = usePlayerStore((s) => s.playQueue);
+  useRecordShown(songs);
   if (!songs.length) return null;
   return (
     <Shelf title={title} explanation={explanation} seeAllTo={seeAllTo} action={action} layout={songs.length <= 8 ? 'grid' : 'rail'}>

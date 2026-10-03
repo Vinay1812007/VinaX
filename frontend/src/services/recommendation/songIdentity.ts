@@ -1,26 +1,19 @@
 /** Shared song identity and recently displayed music for catalog shelves and playlists. */
 import type { Song } from '@/types';
-import { canonicalKey, versionKind, versionTag, type VersionKind } from './identityCore';
-
-/** Recently displayed songs shared by catalog shelves and playlists. */
-const SERVED_KEY = 'vinax.flow.served.v1';
-const SERVED_CAP = 300;
-const SERVED_TTL = 7 * 24 * 60 * 60_000;
-let servedMemory: ServedEntry[] = [];
+import { versionKind, versionTag, type VersionKind } from './identityCore';
+import { exposureLedger, recordExposureKeys, resetExposure } from './exposure';
+import { songKey } from './songKey';
 
 /** Titles that are never songs — they poison queues when a search returns them. */
 const JUNK_TITLE = /\b(dialogue|dialogues|bgm|jukebox|trailer|teaser|promo|ringtone|commentary)\b/i;
 
-/** Primary credited artist for a song — the identity half of the canonical key. */
-export function primaryArtist(s: Song): string {
-  return s.artists?.[0]?.name ?? s.subtitle?.split(',')[0] ?? '';
-}
-
 // The normalisation itself is the shared contract in ./identityCore (kept
 // byte-identical with the Worker's copy): NFKC, invisible characters dropped,
 // Latin accents folded, Indic vowel signs kept, version decorations and
-// featured credits stripped, primary artist only.
+// featured credits stripped, primary artist only. The Song-level key is
+// ./songKey (its own module so ./exposure can use it without a cycle).
 export { canonicalKey, recordingKey, versionKind, versionTag, type VersionKind } from './identityCore';
+export { primaryArtist, songKey } from './songKey';
 
 const VERSION_RANK: Record<VersionKind, number> = { original: 0, remaster: 1, alternate: 2 };
 
@@ -60,73 +53,28 @@ export function dedupeByIdentity<T>(items: T[], songOf: (item: T) => Song, optio
   return out;
 }
 
-/** Canonical key straight from a Song. */
-export function songKey(s: Song): string {
-  return canonicalKey(s.title, primaryArtist(s));
-}
+/**
+ * 9.1.0 — the "shown on another surface" memory is now one slice of the
+ * shared exposure ledger (./exposure.ts), which also knows what was queued,
+ * played, completed and skipped, and how long ago. These three functions are
+ * kept as the names every Home hook and the AI Playlist already call; they
+ * read and write that ledger instead of the old `vinax.flow.served.v1` list.
+ * A device's old list is imported once by `migrateLegacyExposure`.
+ */
 
-interface ServedEntry {
-  k: string;
-  t: number;
-}
-
-/** 9.0.0 — the in-memory copy is the source of truth only while storage refuses writes. */
-let servedStorageFailed = false;
-
-function loadServed(): ServedEntry[] {
-  let raw: unknown = servedStorageFailed ? servedMemory : [];
-  try {
-    const stored = window.localStorage.getItem(SERVED_KEY);
-    // A missing key is an empty memory (it was never written, or a reset removed it).
-    // 8.x fell back to the in-memory copy here, so "Erase everything" left the
-    // served list alive in memory until the next reload.
-    if (stored != null) raw = JSON.parse(stored);
-  } catch {
-    raw = servedMemory; /* retain session memory when storage is unavailable */
-  }
-  const cutoff = Date.now() - SERVED_TTL;
-  return Array.isArray(raw)
-    ? raw.filter((e): e is ServedEntry => e && typeof e.k === 'string' && Number.isFinite(e.t) && e.t > cutoff).slice(0, SERVED_CAP)
-    : [];
-}
-
-/** The shared served-identity set — consult it before surfacing anything. */
+/** The shared shown-identity set — consult it before surfacing anything. */
 export function servedKeySet(): Set<string> {
-  return new Set(loadServed().map((e) => e.k));
+  return new Set(exposureLedger().shownKeys);
 }
 
-/** Remember served identities so no surface re-serves what another just played. */
+/** Remember shown identities so no surface re-serves what another just showed. */
 export function recordServed(keys: string[]): void {
-  if (!keys.length) return;
-  try {
-    const now = Date.now();
-    const merged: ServedEntry[] = [...keys.map((k) => ({ k, t: now })), ...loadServed()];
-    const seen = new Set<string>();
-    const dedup: ServedEntry[] = [];
-    for (const e of merged) {
-      if (!seen.has(e.k)) {
-        seen.add(e.k);
-        dedup.push(e);
-      }
-    }
-    servedMemory = dedup.slice(0, SERVED_CAP);
-    window.localStorage.setItem(SERVED_KEY, JSON.stringify(servedMemory));
-    servedStorageFailed = false;
-  } catch {
-    /* storage unavailable — this session keeps the memory; rounds still work */
-    servedStorageFailed = true;
-  }
+  recordExposureKeys(keys, 'shown');
 }
 
-/** 9.0.0 — forget every served identity (taste reset, tests). */
+/** 9.0.0 — forget every exposure (taste reset, tests). */
 export function resetServedMemory(): void {
-  servedMemory = [];
-  servedStorageFailed = false;
-  try {
-    window.localStorage.removeItem(SERVED_KEY);
-  } catch {
-    /* nothing stored */
-  }
+  resetExposure();
 }
 
 /** True when a title is a non-song artifact (dialogue strip, BGM cut, …). */

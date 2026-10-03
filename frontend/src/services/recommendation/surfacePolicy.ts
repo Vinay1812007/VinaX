@@ -44,6 +44,15 @@ export interface SurfaceSignals {
   sittingSkippedIds: ReadonlySet<string>;
   /** Identities another surface showed in the last week. */
   servedKeys: ReadonlySet<string>;
+  /**
+   * 9.1.0 — "Refresh with fewer repeats": under this flag a DISCOVERY surface
+   * removes everything in `servedKeys` as well, instead of moving it to the
+   * back. The shelf can come out shorter; that is the point — the listener asked
+   * for things they have not met, and a shelf padded with repeats is not an
+   * answer. `personal` and `resume` surfaces are untouched: Made For You is
+   * meant to hold your own music, and Recently Played IS the repeats.
+   */
+  strict?: boolean;
 }
 
 /** The queue's recently-played window, in plays (./engine.ts uses the same 20). */
@@ -52,10 +61,10 @@ export const RECENT_WINDOW = 20;
 export const NO_SIGNALS: SurfaceSignals = { recentKeys: new Set(), sittingSkippedIds: new Set(), servedKeys: new Set() };
 
 /** Build the signals from the listener's state (pure; callers pass the stores' values). */
-export function surfaceSignals(history: readonly HistoryEntry[], sittingSkippedIds: Iterable<string>, servedKeys: Iterable<string>): SurfaceSignals {
+export function surfaceSignals(history: readonly HistoryEntry[], sittingSkippedIds: Iterable<string>, servedKeys: Iterable<string>, strict = false): SurfaceSignals {
   const recentKeys = new Set<string>();
   for (const e of history.slice(0, RECENT_WINDOW)) if (e?.song) recentKeys.add(songKey(e.song));
-  return { recentKeys, sittingSkippedIds: new Set(sittingSkippedIds), servedKeys: new Set(servedKeys) };
+  return { recentKeys, sittingSkippedIds: new Set(sittingSkippedIds), servedKeys: new Set(servedKeys), strict };
 }
 
 /**
@@ -71,8 +80,9 @@ export function surfaceOrder<T extends Song>(songs: readonly T[], kind: SurfaceK
     if (!song?.id) continue;
     const key = songKey(song);
     const heard = signals.recentKeys.has(key) || signals.sittingSkippedIds.has(song.id);
-    if (heard && kind === 'discovery') continue;
-    if (heard || signals.servedKeys.has(key)) back.push(song);
+    const shown = signals.servedKeys.has(key);
+    if (kind === 'discovery' && (heard || (signals.strict && shown))) continue;
+    if (heard || shown) back.push(song);
     else fresh.push(song);
   }
   return [...fresh, ...back];

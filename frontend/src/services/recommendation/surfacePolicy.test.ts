@@ -41,4 +41,29 @@ describe('surfaceOrder', () => {
   it('with no signals every surface keeps the list as it is', () => {
     for (const kind of ['resume', 'personal', 'discovery'] as const) expect(ids(surfaceOrder([a, b, c, d], kind, NO_SIGNALS))).toEqual(['a', 'b', 'c', 'd']);
   });
+
+  // 9.1.0 — "Refresh with fewer repeats".
+  describe('the strict rule', () => {
+    const shown = { ...NO_SIGNALS, servedKeys: new Set([songKey(a), songKey(b)]) };
+
+    it('ordinarily moves a shown song to the back of a discovery shelf', () => {
+      expect(ids(surfaceOrder([a, b, c, d], 'discovery', shown))).toEqual(['c', 'd', 'a', 'b']);
+    });
+
+    it('under the strict rule it removes it, even if that leaves a shorter shelf', () => {
+      expect(ids(surfaceOrder([a, b, c, d], 'discovery', { ...shown, strict: true }))).toEqual(['c', 'd']);
+      // All shown: an empty discovery shelf is the honest answer.
+      expect(ids(surfaceOrder([a, b], 'discovery', { ...shown, strict: true }))).toEqual([]);
+    });
+
+    it('leaves personal and resume surfaces alone — your own music is the point there', () => {
+      expect(ids(surfaceOrder([a, b, c, d], 'personal', { ...shown, strict: true }))).toEqual(['c', 'd', 'a', 'b']);
+      expect(ids(surfaceOrder([a, b, c, d], 'resume', { ...shown, strict: true }))).toEqual(['a', 'b', 'c', 'd']);
+    });
+
+    it('is off unless asked for', () => {
+      expect(surfaceSignals([], [], []).strict).toBe(false);
+      expect(surfaceSignals([], [], [], true).strict).toBe(true);
+    });
+  });
 });

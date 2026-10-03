@@ -105,4 +105,35 @@ describe('agent steps', () => {
     expect(summariseSteps([{ tool: 'visit', label: 'a' }])).toBe('Read pages · 1 step');
     expect(summariseSteps([])).toBe('');
   });
+
+  // 9.1.0 — source previews: a citation's own title and snippet.
+  describe('source previews', () => {
+    const frame = (previews: unknown) => ({ meta: { sources: ['https://a.example/1'], previews } });
+
+    it('keeps a well-formed preview', () => {
+      const out = reduceFrame(initialStreamState(), frame([{ url: 'https://a.example/1', title: 'A page', snippet: 'Some words' }]));
+      expect(out.sourcePreviews).toEqual([{ url: 'https://a.example/1', title: 'A page', snippet: 'Some words' }]);
+    });
+
+    it('drops anything but https, and anything with neither title nor snippet', () => {
+      expect(reduceFrame(initialStreamState(), frame([{ url: 'http://a.example/1', title: 'T', snippet: 's' }])).sourcePreviews).toEqual([]);
+      expect(reduceFrame(initialStreamState(), frame([{ url: 'javascript:alert(1)', title: 'T', snippet: 's' }])).sourcePreviews).toEqual([]);
+      expect(reduceFrame(initialStreamState(), frame([{ url: 'https://a.example/1', title: '', snippet: '' }])).sourcePreviews).toEqual([]);
+      expect(reduceFrame(initialStreamState(), frame([{ url: 'not a url', title: 'T', snippet: 's' }])).sourcePreviews).toEqual([]);
+    });
+
+    it('collapses whitespace and clips long text', () => {
+      const out = reduceFrame(initialStreamState(), frame([{ url: 'https://a.example/1', title: `  a\n  b  `, snippet: 'x'.repeat(500) }]));
+      expect(out.sourcePreviews[0].title).toBe('a b');
+      expect(out.sourcePreviews[0].snippet).toHaveLength(300);
+    });
+
+    it('survives junk in place of previews, keeping the plain sources', () => {
+      for (const junk of [null, 'none', 42, [null, 7], [{}]]) {
+        const out = reduceFrame(initialStreamState(), frame(junk));
+        expect(out.sourcePreviews).toEqual([]);
+        expect(out.sources).toEqual(['https://a.example/1']);
+      }
+    });
+  });
 });

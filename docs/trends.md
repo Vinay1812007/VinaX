@@ -254,6 +254,92 @@ Behind `isAdmin` like every admin route (401 before any database work). Panel: *
 
 CSV header (any order): `title,artist,catalog_id,region,language,position,evidence_url,starts_at,expires_at,note`; JSON is an array of objects with the same fields. Rules: a title; an artist or a catalogue id; an `https://` evidence link with a real host and no embedded credentials; `expires_at` required, after the start, in the future and at most 90 days after the start; dates as `YYYY-MM-DD` (00:00 UTC) or ISO date-times; region a two-letter code (default `IN`); position 1–100; at most 200 rows. One invalid row and nothing is imported.
 
+## Live web discovery — `GET /api/discover` (9.1)
+
+The charts above are *ingested* on a schedule. Live web discovery is the other
+half: a bounded path that asks the owner's metasearch instance what is current
+right now, and turns the answer into playable catalogue songs. Before 9.1 the
+instance was used only by the chat (`/api/vinaxai`) and the admin health probe —
+**no music path used it at all**.
+
+`backend/worker/functions/_lib/discovery.ts`, one run:
+
+1. **Search.** `discoveryQueries` builds up to `MAX_SEARCHES` (3) queries from
+   today's date, the region, the language and the intent (`charting`,
+   `new-releases`, `trending-songs`), in the words these pages use.
+2. **Read.** The merged results go to an AI lane **inside `fenceWebContext`** —
+   untrusted data, never instructions — which lists the songs the pages name,
+   each citing the `[n]` of the result it came from.
+3. **Validate.** `readExtractions` drops a row with no title or artist, an
+   out-of-range rank, or a citation to a result we never supplied. That last
+   check is what stops a model smuggling in an invented song behind a
+   plausible-looking citation.
+4. **Resolve.** Every surviving extraction goes through `playlistResolve`, which
+   only accepts a catalogue result that IS the suggestion. An unresolved
+   extraction is **dropped** — a title nobody can play is not a recommendation.
+5. **Attach evidence.** Each item carries the source URL, the kind of source, the
+   time we observed it, the publication date **only when the search engine
+   reported one**, and a chart period **only when the page's own text stated
+   one**.
+
+### What it will never claim
+
+- A `rank` survives only from a **chart-shaped** source that stated a position.
+  An editorial list's ordering is not a chart position, and the model's offer of
+  one is discarded (`classifySource`, then `sourceType === 'chart'`).
+- `classifySource` is deliberately conservative: anything it cannot place is a
+  plain `search-result`, the weakest kind, so a misread can only ever
+  *understate* the evidence.
+- Chart movement, streaming counts, release dates and artist facts are never
+  derived or invented. If the evidence does not state it, the field is null.
+- The client (`frontend/src/services/discovery/client.ts`) re-validates every
+  field and drops a rank on any non-chart source whatever the server sent, so no
+  surface can print a position no chart stated.
+
+### Budgets
+
+| Limit | Value |
+| --- | --- |
+| Searches per run | 3 |
+| Catalogue resolutions per run | 14 |
+| Whole-run wall clock | 14 s |
+| Runs per isolate per hour | 12 |
+| Breaker | 3 consecutive failures → 15 minutes' rest |
+| Cache window | one UTC day, per (region, language, intent) |
+| Evidence freshness | 6 h, after which an answer is labelled `stale` |
+
+**Playback never waits on a web search.** `GET /api/discover` answers from the
+cache by default and starts a refresh behind the caller (`waitUntil`), returning
+`state: "cold"` with no items. Only a caller the listener is already waiting for
+passes `wait=1`. In the app, `services/discovery/signal.ts` answers synchronously
+from a snapshot in memory and refreshes in the background, exactly like the trend
+signal.
+
+### States, and what the app says for each
+
+| `state` | Meaning | Shown as |
+| --- | --- | --- |
+| `ok` | fresh evidence, resolved items | nothing extra |
+| `stale` | items, evidence older than 6 h | "This evidence is a few hours old." |
+| `cold` | nothing cached yet; a refresh has started | "Looking for what is current…" |
+| `not_configured` | no search instance on this deployment | "Live web discovery is not set up on this server." |
+| `resting` | breaker open, or the hourly quota spent | "Live discovery is resting — showing catalogue picks." |
+| `no_reader` | no AI lane configured, so results cannot be read | "No AI engine is configured, so web results cannot be read." |
+| `empty` | searched, but nothing resolved to a real recording | "Nothing current could be matched to the catalogue right now." |
+| `failed` | the search or the read failed | "Live discovery is unavailable — showing catalogue picks." |
+
+### Environment
+
+`SEARXNG_URL` (and `SEARXNG_TOKEN` if the instance requires one) plus at least
+one AI lane key. With no instance the endpoint answers `not_configured` and every
+music surface falls back to catalogue lists **labelled as catalogue lists**.
+
+**Not verified live.** As of 9.1 nothing in this path has been run against a real
+instance or a real AI lane; it is tested against mocked ones
+(`_lib/discovery.test.ts`, `api/discover.test.ts`). Setting the two secrets and
+calling `/api/discover?wait=1&region=IN&language=telugu` is the check that
+remains.
+
 ## In the app
 
 - `frontend/src/services/trends/client.ts` exports `fetchVerifiedTrends({ region, language, limit, signal }): Promise<TrendsSnapshot | null>`. It never throws; `null` means unavailable (offline, timeout, HTTP error, malformed answer). It validates every field it passes on and drops items that fail. It is loaded lazily and is not in the first-load bundle.

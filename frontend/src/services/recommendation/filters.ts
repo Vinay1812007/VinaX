@@ -28,6 +28,14 @@ export interface SafetyRules {
   hideExplicit?: boolean;
   /** "Show fewer like this" (the taste profile's `softMuted`); an entry holds until its `until`. */
   softMuted?: TasteProfile['softMuted'];
+  /**
+   * 9.1.0 — canonical identities the listener SNOOZED ("not this song, for a
+   * while"; see ./exposure.ts). A hard rule while it lasts, like a soft mute and
+   * for the same reason: the listener asked for the song to go away, so a
+   * penalty that keeps handing it back is not an answer. Absent = nothing is
+   * snoozed, so every existing caller behaves exactly as before.
+   */
+  snoozedKeys?: ReadonlySet<string>;
   /** Clock for the soft-mute expiry. Default `Date.now()`. */
   now?: number;
 }
@@ -69,6 +77,7 @@ export function safetyReasonFor(song: Song, o: SafetyRules): RejectReason | null
   if (o.blocked?.(song)) return 'blocked';
   if (song.language && o.mutedLanguages?.includes(song.language)) return 'muted-language';
   if (softMutedArtist(song, o.softMuted, o.now)) return 'soft-muted';
+  if (o.snoozedKeys?.size && o.snoozedKeys.has(songKey(song))) return 'snoozed';
   return null;
 }
 

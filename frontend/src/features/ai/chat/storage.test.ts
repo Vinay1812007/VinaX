@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { STORE_KEY, firstName, formatBytes, groupChats, importChats, loadInitialChats, persistChats, storageUsedBytes, timeOfDay } from './storage';
+import { STORE_KEY, exportAllChats, firstName, formatBytes, groupChats, importChats, loadInitialChats, persistChats, storageUsedBytes, timeOfDay } from './storage';
 import type { Conversation } from './types';
 
 const chat = (id: string, updatedAt: number, extra: Partial<Conversation> = {}): Conversation => ({
@@ -97,5 +97,57 @@ describe('greeting helpers', () => {
     expect(timeOfDay(new Date(2026, 0, 1, 9))).toBe('morning');
     expect(timeOfDay(new Date(2026, 0, 1, 13))).toBe('afternoon');
     expect(timeOfDay(new Date(2026, 0, 1, 21))).toBe('evening');
+  });
+});
+
+describe('9.1 — temporary chats are never written to the device', () => {
+  it('is left out of what persists, while ordinary chats are kept', () => {
+    persistChats([chat('temp', 2, { temporary: true }), chat('kept', 1)]);
+    const stored = JSON.parse(localStorage.getItem(STORE_KEY) ?? '[]') as Conversation[];
+    expect(stored.map((c) => c.id)).toEqual(['kept']);
+  });
+
+  it('does not come back after a reload', () => {
+    persistChats([chat('temp', 2, { temporary: true })]);
+    // Nothing stored at all, so a fresh load starts with one blank chat.
+    const loaded = loadInitialChats();
+    expect(loaded.every((c) => c.id !== 'temp')).toBe(true);
+  });
+
+  it('is left out of an export', () => {
+    // Capture the bytes exportAllChats hands the browser, without downloading.
+    let body = '';
+    const realBlob = globalThis.Blob;
+    const realCreateObjectURL = URL.createObjectURL;
+    const realRevoke = URL.revokeObjectURL;
+    const realCreate = document.createElement.bind(document);
+    globalThis.Blob = class extends realBlob {
+      constructor(parts: BlobPart[], options?: BlobPropertyBag) {
+        super(parts, options);
+        body = parts.map(String).join('');
+      }
+    } as unknown as typeof Blob;
+    URL.createObjectURL = (() => 'blob:stub') as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => undefined) as typeof URL.revokeObjectURL;
+    document.createElement = ((tag: string) => {
+      const el = realCreate(tag) as HTMLAnchorElement;
+      if (tag === 'a') el.click = () => undefined;
+      return el;
+    }) as typeof document.createElement;
+    try {
+      exportAllChats([chat('temp', 2, { temporary: true }), chat('kept', 1)]);
+    } finally {
+      globalThis.Blob = realBlob;
+      URL.createObjectURL = realCreateObjectURL;
+      URL.revokeObjectURL = realRevoke;
+      document.createElement = realCreate;
+    }
+    expect(body).toContain('"kept"');
+    expect(body).not.toContain('"temp"');
+  });
+
+  it('an import never revives one (the flag is not part of the wire format)', () => {
+    const result = importChats(JSON.stringify([{ id: 'x', title: 'X', messages: [{ role: 'user', content: 'hi' }], updatedAt: 1, temporary: true }]), []);
+    expect(result?.chats[0].temporary).toBeUndefined();
   });
 });

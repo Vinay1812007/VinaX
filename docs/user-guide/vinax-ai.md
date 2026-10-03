@@ -22,6 +22,74 @@ Open **VinaX AI** from the dock or sidebar. The composer takes any question: wri
 
 Chats are kept on this device. The chat list lets you search, rename, pin and delete chats; the header exports the current chat. `Ctrl/⌘ + K` starts a new chat and `Ctrl/⌘ + B` shows or hides the chat list.
 
+### Artifacts
+
+When a reply writes something whole — a page, a document, a block of code — it
+also lands in the **Artifacts** panel, from the button in the header. Each one is
+listed once with **every version kept**, so "make that shorter" three times leaves
+you four versions you can go back to. Copy it, download it, jump to where it was
+written, and for a page or a drawing, see it running.
+
+A preview runs **sealed off from VinaX**: it cannot read your chats, your library,
+your settings or anything else on the device.
+
+### Projects
+
+A **project** is a group of chats that share standing instructions and reference
+files. Set it up once — "you are helping me write liner notes; here is the track
+list" — and every chat in the project starts there instead of you explaining it
+again. Open **Projects** in the sidebar to make one, write its instructions,
+attach files, and put the current chat in it. It all stays on this device.
+
+### Things VinaX AI remembers
+
+In **Settings → Replies** you can switch on **Let VinaX AI remember things** and
+write lines you would otherwise repeat — "I play the veena, keep examples
+practical". They travel with every chat. You can edit any line, delete any line,
+and switching the feature off **forgets all of them**. VinaX AI never adds a line
+by itself.
+
+### Temporary chat
+
+**Temporary chat** in the sidebar starts a chat that is never written to this
+device: it is gone when you close the tab, it never appears in your chat list
+again, and it is not part of an export.
+
+### Editing what you asked
+
+Editing one of your own messages puts it back in the box so you can change it.
+The conversation as it was — including the answers that followed — is kept as its
+own chat named “… · before edit”, so nothing you may want back is thrown away.
+
+### Very long chats
+
+A long conversation eventually outgrows what any engine can read at once. VinaX AI
+keeps the recent part word for word and carries the earlier **questions** along as
+a short list. It will tell you plainly that it no longer has the text of an older
+answer rather than inventing one, so if you need an old answer, paste the part
+that matters.
+
+### Where you are
+
+If you allow it (**Settings → Privacy → Allow region inference**), VinaX AI knows
+roughly where you are: your country, your state, an approximate city and your time
+zone. That is what makes “what is on this evening” and “this week's releases”
+answer for *your* clock instead of India's, and it shapes how searches are worded.
+
+It is coarse on purpose and never an address. It is never used to guess what
+language you want — your language settings decide that. Switch the setting off and
+nothing about your location is sent at all.
+
+### Attaching files
+
+Images, text and code files, and **PDFs** — VinaX reads a PDF's text and attaches
+that. Where a PDF cannot be read — it is a scan, it is password-protected, or its
+text is stored in a way that cannot be decoded — VinaX tells you which file and
+why, rather than quietly leaving it out. While files are being read you can see
+which one is in progress and press **Stop**; anything already read stays attached.
+
+Long files are trimmed to fit the message, and VinaX says when it trimmed one.
+
 ## The model menu
 
 The model button in the composer opens one menu with a search field over every model VinaX can reach. Recently used models come first, then the recommended ones (Auto, VinaX Maestro, Balanced, Fast, Deep, Creative, Translate), then the other VinaX engines, then one section for each live catalogue with every model in it. Arrow keys move, Enter picks, Esc closes.
@@ -81,6 +149,27 @@ Two answers are not worth retrying, so they have no Retry: “VinaX AI is switch
 
 **AI Playlist** (Discover's shortcuts, or `/playlist` in the chat) turns a description into a playlist of songs from the catalogue. A language you name in the description wins over your saved languages, so “a Telugu workout playlist with high-energy songs” gives Telugu songs even if you listen mostly in Hindi. The list is filled out to 25 songs where enough fit. When the AI curator cannot answer, VinaX still builds a playlist from catalogue searches that match your idea, if it finds at least eight songs, and says so in the playlist's description.
 
+### Keeping the tracks you like
+
+Once a playlist is built, each track has **Keep** and **Replace**:
+
+- **Keep** pins it. **Build it again** then keeps every kept track exactly where it
+  is and replaces only the rest.
+- **Replace** swaps that one track for something else and leaves the others alone.
+  The song you rejected will not come back — not under a different release of it
+  either.
+- **Build it again** on the same idea really does change the list: VinaX asks the
+  catalogue different questions and reads further into it each time.
+- **Fewer repeats** builds it leaving out everything you have heard or been shown
+  lately. It can give you a shorter list, and says so.
+- **Refine** changes the list you are looking at — "more upbeat", "fewer film
+  songs" — without starting over. Kept tracks stay put.
+
+You can also ask for a **length**: "15 songs", "about an hour". A count is exact; a
+duration is approximate, because VinaX does not know how long each song is until it
+finds it — so it says "about". If not enough songs really fit your idea, you get
+fewer and a line saying why, rather than a full list padded with near-misses.
+
 ## What is sent
 
-To answer, the AI service receives the messages in the chat, anything you attached, and, when relevant, a short taste summary or the song that is playing. Your library, history and playlists are not uploaded. If the AI service cannot answer, the chat says so (see [When a reply does not arrive](#when-a-reply-does-not-arrive)); music playback and on-device recommendations keep working. See [data and privacy](../data-and-privacy.md).
+To answer, the AI service receives the messages in the chat, anything you attached, and, when relevant, a short taste summary, your coarse region if you allow it, or the song that is playing. Your library, history and playlists are not uploaded. If the AI service cannot answer, the chat says so (see [When a reply does not arrive](#when-a-reply-does-not-arrive)); music playback and on-device recommendations keep working. See [data and privacy](../data-and-privacy.md).

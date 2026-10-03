@@ -32,6 +32,12 @@ export interface DebugTrace {
   stages: { candidates: number; admitted: number; ranked: number; sequenced: number; validated: number };
   relaxed: string[];
   repairs: number;
+  /** 9.1.0 — how long the on-device plan took, end to end. */
+  latencyMs?: number;
+  /** 9.1.0 — why the AI did not choose this order (null when it did, or was not asked). */
+  fallback?: string | null;
+  /** 9.1.0 — how many candidates each source contributed to the gathered pool. */
+  sources?: Record<string, number>;
 }
 
 /** v7.0.0 — a song that scored but was not chosen for this stretch. */

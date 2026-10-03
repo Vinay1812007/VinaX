@@ -14,6 +14,9 @@ import { useReasonStore } from '@/store/reasonStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { downloadFailureMessage, downloadSong, lastDownloadFailure, removeDownload } from '@/services/downloads';
 import { SOFT_MUTE_DAYS } from '@/services/personalization/softMutes';
+import { SNOOZE_DAYS, snoozeSong } from '@/services/recommendation/exposure';
+import { notifyShelfSafetyChanged } from '@/features/home/useShelfSafety';
+import { evidenceLine, useEvidenceStore } from '@/store/evidenceStore';
 import { lessLikeThis, moreLikeThis, tuneLabel } from '@/features/queue/steer';
 import { DotsIcon } from './Icons';
 import { MENU_GLYPHS, type MenuGlyph } from './MenuIcons';
@@ -136,13 +139,17 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
   const downloading = useDownloadsStore((s) => !!s.downloading[song.id]);
   // Package C4 — the honest "why am I seeing this?" line from catalog recommendations.
   const whyLine = useReasonStore((s) => s.reasons[song.id]);
+  // 9.1.0 — the source behind an evidence-backed pick (a verified chart, or a
+  // current web page). Absent for every other song, and never guessed.
+  const evidence = useEvidenceStore((st) => st.bySong[song.id]);
 
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<PanelPos | null>(null);
   // 8.0.0 — on phones the same menu opens as a bottom sheet with the song on top.
   const asSheet = useMediaQuery('(max-width: 767px)');
   // 7.2 — "Less like this" asks for how long in a second view of the same menu.
-  const [view, setView] = useState<'main' | 'less'>('main');
+  // 9.1.0 — "Snooze this song" asks the same way, in its own view.
+  const [view, setView] = useState<'main' | 'less' | 'snooze'>('main');
   const returnTo = useRef<string | null>(null);
 
   // Position before first paint, then follow the trigger on scroll / resize.
@@ -241,6 +248,11 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     returnTo.current = 'less';
     setView('main');
   };
+  const openSnooze = (): void => setView('snooze');
+  const leaveSnooze = (): void => {
+    returnTo.current = 'snooze';
+    setView('main');
+  };
 
   const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     // Portals bubble React events to the React parent — a song row that plays on Enter.
@@ -248,8 +260,9 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     if (e.key === 'Escape') {
       // Stopping the React event above also keeps it from the document listener.
       e.nativeEvent.stopPropagation();
-      // In the "how long?" view, Escape steps back to the full menu first.
+      // In a "how long?" view, Escape steps back to the full menu first.
       if (view === 'less') leaveLess();
+      else if (view === 'snooze') leaveSnooze();
       else onClose();
       return;
     }
@@ -300,6 +313,27 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     });
   };
 
+  /**
+   * 9.1.0 — "Snooze this song": the per-SONG counterpart to "Less like this"
+   * (which is per ARTIST). Keyed by canonical identity, so the remaster and the
+   * lofi flip go quiet too, and it ends on its own. Undo lifts exactly this one.
+   */
+  const snooze = (days: number): void => {
+    const receipt = snoozeSong(song, days);
+    if (!receipt) return;
+    notifyShelfSafetyChanged();
+    toast(`“${receipt.snooze.title}” paused until ${fmtDate(receipt.snooze.until)}`, {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          receipt.undo();
+          notifyShelfSafetyChanged();
+          toast(`“${receipt.snooze.title}” is back`);
+        },
+      },
+    });
+  };
+
   const entries: MenuEntry[] = [
     ...(leadItems?.length ? [...leadItems, 'divider' as const] : []),
     // 8.2.0 — AI Radio: this song starts, and the DJ keeps adding songs that follow from it.
@@ -311,9 +345,23 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     // while (a soft mute that ends on its own).
     { label: 'More like this', icon: 'moreLike', action: moreLike },
     artist ? { id: 'less', label: 'Less like this…', icon: 'lessLike', action: openLess, submenu: true } : null,
+    // 9.1.0 — this song, not the artist: quiet for a while, then back on its own.
+    { id: 'snooze', label: 'Snooze this song…', icon: 'clock', action: openSnooze, submenu: true },
     // C4 — only offered when this song was actually recommended (an entry
     // exists); library/search results aren't automatic picks, so no item.
     whyLine ? { label: 'Why this song?', icon: 'why', action: () => toast(whyLine) } : null,
+    // 9.1.0 — freshness and source, with the page itself when there is one.
+    // Only ever offered for a song that really carries evidence.
+    evidence
+      ? {
+          label: evidence.url ? 'Open the source' : 'Where this came from',
+          icon: 'why' as const,
+          action: () => {
+            if (evidence.url) window.open(evidence.url, '_blank', 'noopener,noreferrer');
+            else toast(evidenceLine(evidence));
+          },
+        }
+      : null,
     'divider',
     // v5.12.0 — Listen Later: the one-tap "come back to this" list.
     {
@@ -444,8 +492,14 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
     { id: 'back', label: 'Back', icon: 'back', action: leaveLess, submenu: true },
   ];
 
+  const snoozeEntries: MenuEntry[] = [
+    ...SNOOZE_DAYS.map((d) => ({ label: `${d} days`, icon: 'clock' as const, action: () => snooze(d) })),
+    'divider',
+    { id: 'back', label: 'Back', icon: 'back', action: leaveSnooze, submenu: true },
+  ];
+
   // Dividers only between real items: none leading, trailing or doubled.
-  const shown = (view === 'less' ? lessEntries : entries).filter((e): e is Exclude<MenuEntry, null> => e !== null);
+  const shown = (view === 'less' ? lessEntries : view === 'snooze' ? snoozeEntries : entries).filter((e): e is Exclude<MenuEntry, null> => e !== null);
   const visible = shown.filter((e, i) => e !== 'divider' || (i > 0 && i < shown.length - 1 && shown[i - 1] !== 'divider'));
 
   const stop = (e: React.SyntheticEvent): void => e.stopPropagation();

@@ -5,6 +5,7 @@ import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import { isBlockedSong } from '@/services/content/blocklist';
 import { loadProfile } from '@/services/personalization/storage';
 import { safetyReasonFor } from '@/services/recommendation/filters';
+import { snoozedKeySet } from '@/services/recommendation/exposure';
 
 /**
  * 7.2.0 — the listener's CURRENT safety settings as one predicate, for Home
@@ -43,14 +44,21 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-/** Active soft-mute keys, one per line: a string, so React re-renders only when the set changes. */
+/**
+ * Active soft-mute keys and snoozed song identities, one per line: a string, so
+ * React re-renders only when the set actually changes.
+ *
+ * 9.1.0 — snoozes ride the same snapshot. Both are a listener decision with an
+ * end date, both are hard rules while they last, and both live outside a store,
+ * so both need the same "re-read after a gesture" treatment.
+ */
 function softMuteSnapshot(): string {
   const now = Date.now();
-  return Object.entries(loadProfile().softMuted ?? {})
+  const mutes = Object.entries(loadProfile().softMuted ?? {})
     .filter(([, e]) => e.until > now)
-    .map(([k]) => k)
-    .sort()
-    .join('\n');
+    .map(([k]) => `m:${k}`);
+  const snoozed = [...snoozedKeySet(now)].map((k) => `s:${k}`);
+  return [...mutes, ...snoozed].sort().join('\n');
 }
 
 export function notifyShelfSafetyChanged(): void {
@@ -65,10 +73,12 @@ export function useShelfSafety(): (song: Song) => boolean {
   const hiddenArtists = useLibraryStore((s) => s.hiddenArtists);
   const soft = useSyncExternalStore(subscribe, softMuteSnapshot, softMuteSnapshot);
   return useMemo(() => {
-    // The snapshot holds only active entries, so each counts as muted until the next re-read.
-    const softMuted = Object.fromEntries(soft ? soft.split('\n').map((k) => [k, { until: Infinity }]) : []);
+    // The snapshot holds only active entries, so each counts until the next re-read.
+    const lines = soft ? soft.split('\n') : [];
+    const softMuted = Object.fromEntries(lines.filter((k) => k.startsWith('m:')).map((k) => [k.slice(2), { until: Infinity }]));
+    const snoozedKeys = new Set(lines.filter((k) => k.startsWith('s:')).map((k) => k.slice(2)));
     const library = { hiddenSongIds, hiddenArtists };
-    const rules = { hideExplicit, mutedLanguages, softMuted, blocked: (s: Song) => isSongBlocked(s, library) || isBlockedSong(s) };
+    const rules = { hideExplicit, mutedLanguages, softMuted, snoozedKeys, blocked: (s: Song) => isSongBlocked(s, library) || isBlockedSong(s) };
     return (song: Song) => safetyReasonFor(song, rules) === null;
   }, [hideExplicit, mutedLanguages, hiddenSongIds, hiddenArtists, soft]);
 }

@@ -40,9 +40,9 @@ import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { probeFetchMarker } from '../_lib/fetchMarker';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { houseRules, readConfig } from '../_lib/clientConfig';
-import { istNowLine } from '../_lib/time';
+import { placeContextLines, readCoarsePlace } from '../_lib/place';
 import { type SupabaseEnv } from '../_lib/supabase';
-import { fenceWebContext, liveSearch, stripFenceMarkers, type WebSearchEnv } from '../_lib/websearch';
+import { fenceWebContext, liveSearch, stripFenceMarkers, type SourcePreview, type WebSearchEnv } from '../_lib/websearch';
 import { freshnessRange, searxngConfigured, songContext } from '../_lib/searxng';
 import { maestroFetch } from '../_lib/maestro';
 
@@ -567,7 +567,7 @@ async function handleChat(
 
   // Capped read. Sized for the 6 MB inline-image budget enforced below plus a
   // long thread of pasted documents (the client sends the whole conversation).
-  const read = await readJsonCapped<{ messages?: InMsg[]; mode?: string; model?: unknown; web?: boolean; images?: unknown; taste?: unknown; profile?: unknown } | null>(request, MAX_BODY_BYTES);
+  const read = await readJsonCapped<{ messages?: InMsg[]; mode?: string; model?: unknown; web?: boolean; images?: unknown; taste?: unknown; profile?: unknown; place?: unknown } | null>(request, MAX_BODY_BYTES);
   if (!read.ok) return read.reason === 'too_large' ? jsonErr({ error: 'too_large' }, 413) : jsonErr({ error: 'bad_request' }, 400);
   if (!read.value || typeof read.value !== 'object') return jsonErr({ error: 'bad_request' }, 400);
   const body = read.value;
@@ -591,6 +591,12 @@ async function handleChat(
     typeof body.profile === 'string'
       ? [...body.profile].filter((ch) => ch === '\n' || ch === '\t' || ch.charCodeAt(0) >= 32).join('').trim().slice(0, 1500)
       : '';
+  // 9.1.0 — coarse place context, when the client chose to send it. The client
+  // sends nothing while the listener's region-inference setting is off, and this
+  // route never infers a place of its own: with no `place`, the prompt opens with
+  // the IST clock exactly as 9.0 did for everyone. Validated hard — only country,
+  // region, approximate city and an IANA zone survive readCoarsePlace.
+  const place = readCoarsePlace(body.place);
 
   const turns = (Array.isArray(body.messages) ? body.messages : [])
     .filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string')
@@ -682,6 +688,9 @@ async function handleChat(
   let webStatus: 'off' | 'on' | 'failed' = 'off';
   let searchBlock: string | null = null;
   let sources: string[] = [];
+  // 9.1.0 — each source's own title and snippet, so the app can show a preview
+  // rather than a bare host. The grounded lane reports URLs only, so it stays [].
+  let previews: SourcePreview[] = [];
   // The search query is the person's OWN words (lastUserRaw, captured above
   // before the B9 data fence is wrapped around the turn) — never
   // history[].content, which carries that fence. The boilerplate ("USER
@@ -709,6 +718,7 @@ async function handleChat(
     if (s) {
       searchBlock = s.text;
       sources = s.sources;
+      previews = s.previews;
       webStatus = 'on';
     } else {
       // The user explicitly asked for live results and the instance is unset,
@@ -738,7 +748,7 @@ async function handleChat(
       ? EXPERT_SYSTEM_PROMPT
       : mode === 'translator'
         ? 'You are VinaX TRANSLATE, a translation engine. The user turn arrives wrapped in a USER MESSAGE fence — translate ONLY the content inside the fence, into the target language it names (no target named: translate into English). Reply with ONLY the translation — no notes, no commentary, no source text, no fence markers.'
-        : `${istNowLine()}\n\n${SYSTEM_PROMPT}${flavor ? `\n\n${flavor}` : ''}`;
+        : `${placeContextLines(place)}\n\n${SYSTEM_PROMPT}${flavor ? `\n\n${flavor}` : ''}`;
   let sys = taste ? `${basePrompt}\n\n${MUSIC_CONDUCT}\n\n${taste}` : basePrompt;
   // v5.11.0 — personal profile: what the user told the assistant about
   // themselves (name, work, tone, languages). Data, never instructions.
@@ -1110,7 +1120,7 @@ async function handleChat(
                   if (urls.length) {
                     sources = urls;
                     webStatus = 'on';
-                    send({ meta: { model: usedModel, mode, web: webStatus, sources } });
+                    send({ meta: { model: usedModel, mode, web: webStatus, sources, ...(previews.length ? { previews } : {}) } });
                   }
                 }
                 const delta = j.choices?.[0]?.delta?.content;
@@ -1154,7 +1164,7 @@ async function handleChat(
         return full;
       };
 
-      send({ meta: { model: usedModel, mode, web: webStatus, sources } });
+      send({ meta: { model: usedModel, mode, web: webStatus, sources, ...(previews.length ? { previews } : {}) } });
       let full = await drain(upBody, canFetch ? 'arm' : 'strip');
 
       // B3 — the model opened with [[FETCH: …]]: it wants live results before
@@ -1179,7 +1189,7 @@ async function handleChat(
           sys2 = `${sys}\n\nLIVE WEB SEARCH FAILED for the search you requested — open the reply by saying you couldn't check the live web this time, answer from memory, note it may be dated, and never invent citations. Do NOT output another FETCH marker.`;
         }
         liveMsgs = [{ role: 'system', content: sys2 }, ...msgs.slice(1)];
-        send({ meta: { model: usedModel, mode, web: webStatus, sources } });
+        send({ meta: { model: usedModel, mode, web: webStatus, sources, ...(previews.length ? { previews } : {}) } });
         try {
           const up2 = await callStream(served.model, served.key, served.endpoint, liveMsgs, 20_000);
           if (up2.ok && up2.body) full = await drain(up2.body, 'strip');
@@ -1234,7 +1244,7 @@ async function handleChat(
             if (upFb.ok && upFb.body) {
               usedModel = a.model;
               usedRole = a.role;
-              send({ meta: { model: usedModel, mode, web: webStatus, sources } });
+              send({ meta: { model: usedModel, mode, web: webStatus, sources, ...(previews.length ? { previews } : {}) } });
               full = await drain(upFb.body, 'strip');
             } else {
               failed.add(a);
