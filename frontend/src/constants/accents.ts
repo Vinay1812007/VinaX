@@ -22,7 +22,7 @@ export interface AccentOption {
 
 export const ACCENT_OPTIONS: AccentOption[] = [
   { id: 'crimson', label: 'Marigold', dot: 'rgb(255 164 46)' },
-  { id: 'ember', label: 'Copper', dot: 'rgb(240 146 46)' },
+  { id: 'ember', label: 'Copper', dot: 'rgb(214 120 78)' },
   { id: 'sunset', label: 'Sunset', dot: 'rgb(251 146 60)' },
   { id: 'gold', label: 'Gold', dot: 'rgb(234 179 8)' },
   { id: 'emerald', label: 'Emerald', dot: 'rgb(52 211 153)' },

@@ -61,7 +61,7 @@ html.light .ai-scope {
   --ai-composer: rgb(var(--ink-950));
   --ai-user: color-mix(in srgb, rgb(var(--ink-850)) 86%, rgb(var(--ember-300)));
   --ai-composer-shadow: 0 1px 2px rgb(48 22 34 / 0.06), 0 16px 36px -22px rgb(48 22 34 / 0.28);
-  --ai-menu-shadow: 0 16px 36px -12px rgb(20 20 40 / 0.22), 0 2px 6px rgb(20 20 40 / 0.08);
+  --ai-menu-shadow: 0 16px 36px -12px rgb(48 22 34 / 0.22), 0 2px 6px rgb(48 22 34 / 0.08);
 }
 .ai-shell.ai-root {
   background: var(--ai-chrome);

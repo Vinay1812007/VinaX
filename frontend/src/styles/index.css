@@ -344,7 +344,8 @@ html.amoled body {
    Tailwind palettes and GATED in src/__tests__/contrast.test.ts.
    --------------------------------------------------------------------------- */
 html[data-accent='ember'] {
-  --ember-600: 217 122 31; --ember-500: 240 146 46; --ember-400: 247 169 79; --ember-300: 255 201 126;
+  /* 10.0 — "Copper": re-pitched redder and deeper so it no longer reads as the Marigold default. */
+  --ember-600: 176 90 52; --ember-500: 214 120 78; --ember-400: 230 152 116; --ember-300: 242 192 166;
   --tide-500: 45 212 191; --tide-400: 94 234 212;
 }
 html[data-accent='ocean'] {
@@ -390,7 +391,7 @@ html[data-accent='azure'] {
    progressively darker. Values are Tailwind palette shades chosen by an AA
    solver; contrast.test.ts re-derives the math and fails on any regression. */
 html.light[data-accent='ember'] {
-  --ember-600: 67 20 7; --ember-500: 124 45 18; --ember-400: 154 52 18; --ember-300: 194 65 12;
+  --ember-600: 84 32 14; --ember-500: 128 48 22; --ember-400: 140 52 24; --ember-300: 158 62 30;
   --tide-500: 15 118 110; --tide-400: 17 94 89;
 }
 html.light[data-accent='ocean'] {
@@ -1531,14 +1532,14 @@ html.reduce-motion *::after {
   :root {
     --glass-border: rgba(255, 255, 255, 0.22);
     --glass-border-strong: rgba(255, 255, 255, 0.34);
-    --ink-400: 168 177 192;
-    --ink-500: 156 160 170;
+    --ink-400: 204 194 204;
+    --ink-500: 188 177 189;
   }
   html.light {
-    --glass-border: rgba(15, 20, 30, 0.28);
-    --glass-border-strong: rgba(15, 20, 30, 0.4);
-    --ink-400: 66 72 88;
-    --ink-500: 84 90 106;
+    --glass-border: rgba(48, 22, 34, 0.28);
+    --glass-border-strong: rgba(48, 22, 34, 0.4);
+    --ink-400: 68 54 64;
+    --ink-500: 82 68 78;
   }
 }
 
