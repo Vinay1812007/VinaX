@@ -199,20 +199,25 @@ html.light .vx-menu {
 .vx-menu.is-sheet .vx-menu-item { min-height: 48px; padding: 0 12px; font-size: 15px; }
 .vx-menu.is-sheet .vx-menu-sep { margin: 4px 12px; }
 
-/* ------------------------------------------------------ welcome (first run) */
+/* ------------------------------------------------------ welcome (first run)
+   10.0 Marigold: a plum header lit by a Marigold → Rose mesh, the language
+   names in their own scripts drifting behind the mark, a "Free forever" tag,
+   and the promise as the title in the display face. */
 .vx-welcome { padding: 0; }
 .vx-welcome-body { padding: 28px 24px max(24px, var(--safe-bottom)); }
 @media (min-width: 640px) { .vx-welcome-body { padding: 28px 28px 28px; } }
 .vx-welcome-art + .vx-welcome-body { padding-top: 20px; }
 .vx-welcome-art {
   position: relative;
-  height: 156px;
+  height: 148px;
   overflow: hidden;
   border-radius: 24px 24px 0 0;
   background:
-    linear-gradient(200deg, rgb(0 0 0 / 0.05) 10%, rgb(0 0 0 / 0.6) 100%),
-    radial-gradient(120% 140% at 0% 0%, rgb(var(--ember-500)), rgb(var(--ember-600)) 55%);
+    radial-gradient(90% 140% at 0% 0%, rgb(255 164 46 / 0.85), transparent 62%),
+    radial-gradient(80% 140% at 100% 100%, rgb(255 99 132 / 0.7), transparent 60%),
+    #1d1421;
 }
+@media (min-width: 640px) { .vx-welcome-art { border-radius: 22px 22px 0 0; } }
 .vx-welcome-scripts {
   position: absolute;
   inset: -12px -40px;
@@ -226,13 +231,13 @@ html.light .vx-menu {
   display: flex;
   gap: 18px;
   white-space: nowrap;
-  color: rgb(255 255 255 / 0.2);
+  color: rgb(255 245 236 / 0.16);
   font-size: 34px;
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: -0.02em;
 }
-.vx-welcome-scripts p:nth-child(2) { margin-left: -80px; color: rgb(255 255 255 / 0.32); }
+.vx-welcome-scripts p:nth-child(2) { margin-left: -80px; color: rgb(255 245 236 / 0.26); }
 .vx-welcome-scripts p:nth-child(3) { margin-left: -24px; }
 .vx-welcome-logo {
   position: absolute;
@@ -240,12 +245,32 @@ html.light .vx-menu {
   bottom: 18px;
   width: 52px;
   height: 52px;
-  padding: 8px;
+  padding: 0;
   border-radius: 14px;
-  background: rgb(0 0 0 / 0.82);
   box-shadow: 0 10px 24px -8px rgb(0 0 0 / 0.6);
 }
 @media (min-width: 640px) { .vx-welcome-logo { left: 28px; } }
+.vx-welcome-badge {
+  position: absolute;
+  right: 20px;
+  bottom: 30px;
+  padding: 6px 12px 7px;
+  border-radius: 999px;
+  background: #1a0e06;
+  color: #ffc066;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 8px 20px -10px rgb(0 0 0 / 0.7);
+}
+.vx-welcome-title {
+  font-family: var(--vx-font-display);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+.vx-welcome-title.is-sm { font-size: 24px; line-height: 1.15; letter-spacing: -0.03em; }
 .vx-welcome-label {
   display: block;
   margin-bottom: 8px;
@@ -325,9 +350,9 @@ html.light .vx-welcome-cta { background: rgb(var(--ink-950)); box-shadow: 0 -12p
   place-items: center;
   width: 72px;
   height: 72px;
-  border-radius: 16px;
-  color: #fff;
-  background: linear-gradient(140deg, rgb(var(--ember-600)), rgb(var(--ember-500)));
+  border-radius: 20px;
+  color: var(--vx-on-accent);
+  background: var(--vx-glow);
   box-shadow: 0 12px 28px -12px rgb(var(--ember-600) / 0.8);
 }
 

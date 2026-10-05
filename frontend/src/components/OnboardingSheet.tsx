@@ -423,7 +423,7 @@ export function OnboardingSheet() {
         {seedOpen ? (
           <div className="vx-welcome-body">
             <div className="flex items-start justify-between gap-3 mb-1">
-              <h2 id="vx-onboarding-title" className="text-[22px] leading-tight font-extrabold tracking-[-0.02em]">Tap a few you love</h2>
+              <h2 id="vx-onboarding-title" className="vx-welcome-title is-sm">Tap a few you love</h2>
               <button onClick={() => finishSeed(false)} className="vx-welcome-skip">
                 Skip
               </button>
@@ -483,10 +483,16 @@ export function OnboardingSheet() {
                 ))}
               </div>
               <img src="/icons/icon.svg" alt="" className="vx-welcome-logo" />
+              <span className="vx-welcome-badge">Free forever</span>
             </div>
             <div className="vx-welcome-body">
-              <h2 id="vx-onboarding-title" className="text-[26px] leading-[1.15] font-extrabold tracking-[-0.025em]">Music tuned to you</h2>
-              <p className="mt-1.5 text-[14px] text-ink-400">No account, no login. Everything stays on this device.</p>
+              {/* 10.0.0 — the first thing a new listener reads is the promise. */}
+              <h2 id="vx-onboarding-title" className="vx-welcome-title">Free. No sign-up.</h2>
+              <p className="mt-2 text-[14.5px] leading-snug text-ink-300">
+                {handleOnly
+                  ? 'One quick thing: pick a username. Still no email, no password, nothing to pay.'
+                  : 'No email, no password, nothing to pay. Pick a name and your languages, and you’re in. Your listening stays on this device.'}
+              </p>
 
               <label className="vx-welcome-label mt-6" htmlFor="vx-name">
                 What should we call you?
@@ -619,7 +625,7 @@ export function OnboardingSheet() {
               </button>
             </div>
             <div className="vx-tour-art" aria-hidden>{slide.icon}</div>
-            <h2 id="vx-onboarding-title" className="mt-5 text-[22px] leading-tight font-extrabold tracking-[-0.02em]">{slide.title}</h2>
+            <h2 id="vx-onboarding-title" className="vx-welcome-title is-sm mt-5">{slide.title}</h2>
             <div className="mt-2 space-y-1.5">
               {slide.lines.map((line) => (
                 <p key={line} className="text-[15px] leading-relaxed text-ink-300">{line}</p>
@@ -638,7 +644,7 @@ export function OnboardingSheet() {
             )}
             <div className="flex items-center gap-1.5 mt-7 mb-5" aria-hidden>
               {TOUR.map((_, i) => (
-                <span key={i} className={cn('h-1.5 rounded-full transition-all', i === step ? 'w-5 bg-ink-100' : 'w-1.5 bg-ink-100/25')} />
+                <span key={i} className={cn('h-1.5 rounded-full transition-all', i === step ? 'w-5 bg-ember-500' : 'w-1.5 bg-ink-100/25')} />
               ))}
             </div>
             <div className="flex gap-2">

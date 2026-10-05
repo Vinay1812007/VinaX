@@ -7,7 +7,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 vi.mock('@/services/audio/engine', () => ({
   audioEngine: { load: vi.fn(), preloadNext: vi.fn(), pause: vi.fn(), play: vi.fn(), seek: vi.fn(), setVolume: vi.fn(), setMuted: vi.fn() },
@@ -185,5 +185,39 @@ describe('HomePage 9.0', () => {
     expect(screen.getAllByText('Recent y').length).toBeGreaterThan(0);
     act(() => useLibraryStore.getState().toggleHidden('hy'));
     expect(screen.queryAllByText('Recent y')).toHaveLength(0);
+  });
+});
+
+describe('HomePage 10.0 — the first visit', () => {
+  it('a listener with nothing played sees the free welcome, and "Start listening" plays the opening mix', async () => {
+    const realPlayQueue = usePlayerStore.getState().playQueue;
+    const playQueue = vi.fn();
+    usePlayerStore.setState({ playQueue });
+    onTestFinished(() => usePlayerStore.setState({ playQueue: realPlayQueue }));
+    renderHome();
+    expect(await screen.findByRole('heading', { level: 1, name: /All the music you love\. Free\./ })).toBeTruthy();
+    expect(screen.getByText(/No sign-up\. No account\./)).toBeTruthy();
+    // The six feature tiles link to real destinations.
+    const tiles = within(screen.getByRole('region', { name: 'Everything included, all free' })).getAllByRole('link');
+    expect(tiles.map((a) => a.getAttribute('href'))).toEqual(['/VinaXAI', '/radio', '/together', '/karaoke', '/download', '/languages']);
+    // The Aura Mix stays (the guided tour points at its play button).
+    const auraPlay = screen.getByRole('button', { name: 'Play your Aura Mix' }) as HTMLButtonElement;
+    // Wait for the opening mix, then start it from the welcome.
+    await vi.waitFor(() => expect(auraPlay.disabled).toBe(false), { timeout: 5000 });
+    fireEvent.click(screen.getByRole('button', { name: /Start listening/ }));
+    expect(playQueue).toHaveBeenCalledTimes(1);
+    const [queue, index] = playQueue.mock.calls[0] as [unknown[], number];
+    expect(queue.length).toBeGreaterThan(0);
+    expect(index).toBe(0);
+  });
+
+  it('a returning listener gets the short greeting and no welcome', async () => {
+    const recent = ['p', 'q'].map((id) => makeSong(`r${id}`));
+    useHistoryStore.setState({ entries: recent.map((song, i) => ({ song, ts: Date.now() - i * 60_000, completed: true })) });
+    renderHome();
+    await screen.findByRole('group', { name: 'Shortcuts' });
+    expect(screen.queryByRole('heading', { name: /All the music you love/ })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Everything included, all free' })).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).not.toMatch(/Free/);
   });
 });

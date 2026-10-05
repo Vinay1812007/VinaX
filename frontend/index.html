@@ -141,15 +141,15 @@
          until React replaces #root. Paint cost is unchanged: everything here
          is inline CSS, so FCP/LCP still land at HTML-parse time. */
       html, body { background: #130e16; margin: 0; }
-      html.light, html.light body { background: #f6f6f3; }
+      html.light, html.light body { background: #faf5ed; }
       html.amoled, html.amoled body { background: #000; }
       #root { min-height: 100dvh; color: #eff2f8; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; }
       #boot { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #130e16; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
-      html.light #boot { background: #f6f6f3; }
+      html.light #boot { background: #faf5ed; }
       html.amoled #boot { background: #000; }
-      #boot svg { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 18px 48px -18px rgba(34, 211, 238, 0.45); }
+      #boot svg { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 18px 48px -18px rgba(255, 164, 46, 0.5); }
       #boot .bt { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; margin-top: 20px; }
-      #boot .bs { font-size: 13px; color: #7c879e; margin-top: 8px; }
+      #boot .bs { font-size: 13px; color: #b6abb8; margin-top: 8px; }
       #boot .bw { display: flex; align-items: flex-end; gap: 5px; height: 26px; margin-top: 26px; }
       #boot .bw i { width: 4px; height: 100%; border-radius: 3px; transform-origin: bottom; background: linear-gradient(to top, #ff6384, #ffa42e); animation: bw 1s ease-in-out infinite; }
       #boot .bw i:nth-child(2) { animation-delay: 0.15s; }
@@ -161,21 +161,23 @@
       /* The prerendered / edge-rendered content block, styled as the hero. */
       #seo-content { padding: 14px 20px 32px; max-width: 720px; }
       #seo-content h1 { font-size: clamp(28px, 7vw, 40px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.12; margin: 14px 0 10px; }
-      #seo-content p { font-size: 16px; line-height: 1.55; color: #aab3c5; max-width: 60ch; margin: 0 0 10px; }
+      #seo-content p { font-size: 16px; line-height: 1.55; color: #cbc2cb; max-width: 60ch; margin: 0 0 10px; }
+      #seo-content p strong { color: #ffc066; }
       #seo-content img { width: 148px; height: 148px; border-radius: 14px; object-fit: cover; margin: 8px 0; }
-      #seo-content ol { padding-left: 20px; color: #aab3c5; font-size: 14px; line-height: 1.7; }
+      #seo-content ol { padding-left: 20px; color: #cbc2cb; font-size: 14px; line-height: 1.7; }
       #seo-content h2 { font-size: 20px; font-weight: 700; line-height: 1.3; margin: 26px 0 8px; }
       #seo-content h3 { font-size: 16px; font-weight: 700; line-height: 1.35; margin: 18px 0 6px; }
-      #seo-content ul, #seo-content dl { padding-left: 20px; color: #aab3c5; font-size: 14px; line-height: 1.7; }
-      #seo-content dt { font-weight: 700; color: #cbd3de; }
+      #seo-content ul, #seo-content dl { padding-left: 20px; color: #cbc2cb; font-size: 14px; line-height: 1.7; }
+      #seo-content dt { font-weight: 700; color: #eae3e2; }
       #seo-content dd { margin: 0 0 6px; }
       #seo-content button, #seo-content input, #seo-content textarea { display: none; }
-      #seo-content a { color: #cbd3de; }
+      #seo-content a { color: #eae3e2; }
       #seo-content nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-      #seo-content nav a { font-size: 12px; font-weight: 700; color: #cbd3de; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.09); padding: 8px 14px; border-radius: 999px; text-decoration: none; }
+      #seo-content nav a { font-size: 12px; font-weight: 700; color: #eae3e2; background: rgba(255,245,236,0.06); border: 1px solid rgba(255,245,236,0.1); padding: 8px 14px; border-radius: 999px; text-decoration: none; }
       html.light #root { color: #0c0e14; }
-      html.light #seo-content p, html.light #seo-content ol, html.light #seo-content ul, html.light #seo-content dl { color: #4c5566; }
-      html.light #seo-content a { color: #333c4d; }
+      html.light #seo-content p, html.light #seo-content ol, html.light #seo-content ul, html.light #seo-content dl { color: #5e4f58; }
+      html.light #seo-content p strong { color: #9c4404; }
+      html.light #seo-content a { color: #4a3c46; }
       html.light #seo-content nav a { background: rgba(10,15,25,0.05); border-color: rgba(10,15,25,0.1); }
       html.light #boot .bs { color: #545a68; }
       html.fest-ind #boot .bt::after { content: '80 \1F1EE\1F1F3'; font-size: 11px; font-weight: 900; padding: 3px 8px; border-radius: 999px; margin-left: 8px; vertical-align: 4px; color: #ffd9ad; background: linear-gradient(90deg, rgba(255,153,51,.22), rgba(19,136,8,.22)); border: 1px solid rgba(255,153,51,.5); white-space: nowrap; }
@@ -222,7 +224,7 @@
       <link rel="preload" href="/fonts/manrope-var.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
-    <div id="root"><div id="boot"><svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" aria-label="VinaX"><defs><linearGradient id="vxa" x1="98" y1="26" x2="64" y2="102" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff6384"/><stop offset="1" stop-color="#ffc066"/></linearGradient></defs><rect width="128" height="128" rx="28" fill="#130e16"/><line x1="30" y1="26" x2="64" y2="102" stroke="#ffa42e" stroke-width="16" stroke-linecap="round"/><polyline points="98,26 78,52 90,70 64,102" fill="none" stroke="url(#vxa)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">VinaX</div><div class="bs">Music tuned to you</div><div class="bw"><i></i><i></i><i></i><i></i><i></i></div></div><div id="seo-slot"></div></div>
+    <div id="root"><div id="boot"><svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" aria-label="VinaX"><defs><linearGradient id="vxa" x1="98" y1="26" x2="64" y2="102" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff6384"/><stop offset="1" stop-color="#ffc066"/></linearGradient></defs><rect width="128" height="128" rx="28" fill="#130e16"/><line x1="30" y1="26" x2="64" y2="102" stroke="#ffa42e" stroke-width="16" stroke-linecap="round"/><polyline points="98,26 78,52 90,70 64,102" fill="none" stroke="url(#vxa)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">VinaX</div><div class="bs">Free music. No sign-up.</div><div class="bw"><i></i><i></i><i></i><i></i><i></i></div></div><div id="seo-slot"></div></div>
     <script>
       // Boot self-healing (v4.13.2): if the entry chunk fails to load (mid-
       // deploy edge skew, flaky network, or \u2014 the outage this now recovers

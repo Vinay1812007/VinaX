@@ -8,10 +8,36 @@ import '@/styles/pages/secondary.css';
  * build prerenders exactly this markup into the home page HTML
  * (scripts/prerender.mjs) — crawlers and listeners read the same text.
  * Every claim here must be true today.
+ *
+ * 10.0.0 — "Free, and how it stays free" leads, as a card of four plain
+ * facts, because it is the first thing a new listener wants to know; the
+ * article follows.
  */
 export function HomeAbout() {
   return (
     <section className="vx-section vxh-about" aria-labelledby="vx-home-about">
+      <div className="vxh-free">
+        <h2 id="vx-home-free" className="vxh-free-title">Free, and how it stays free</h2>
+        <ul className="vxh-free-facts">
+          <li>
+            <strong>₹0, always</strong>
+            <span>No subscriptions, no premium tier and no in-app purchases.</span>
+          </li>
+          <li>
+            <strong>No sign-up</strong>
+            <span>No email, no password and no login. Open VinaX and press play.</span>
+          </li>
+          <li>
+            <strong>One labelled ad, on the website only</strong>
+            <span>At the end of song, artist, album, language and mood pages. Never in the player, the queue, VinaX AI, your library, the Android app or Kid mode.</span>
+          </li>
+          <li>
+            <strong>Your taste stays yours</strong>
+            <span>Listening history, favourites and taste profile stay on your device and are never shared with advertisers.</span>
+          </li>
+        </ul>
+      </div>
+
       <div className="vx-article">
         <h2 id="vx-home-about">About VinaX</h2>
         <p>
@@ -52,14 +78,7 @@ export function HomeAbout() {
           playlist you can play straight away.
         </p>
 
-        <h2>Free, and how it stays free</h2>
-        <p>
-          There are no subscriptions, no premium tiers and no in-app purchases. The website shows one clearly
-          labelled advertisement at the end of song, artist, album, language and mood pages; there are never ads in
-          the player, the queue, VinaX AI, your library, the Android app or Kid mode. Your listening history,
-          favourites and taste profile stay on your device and are never shared with advertisers.
-        </p>
-        <p>
+        <p className="vxh-about-links">
           <Link to="/about">About</Link> · <Link to="/help">Help and FAQ</Link> · <Link to="/privacy">Privacy</Link> ·{' '}
           <Link to="/terms">Terms</Link> · <Link to="/dmca">Copyright and takedowns</Link> ·{' '}
           <Link to="/contact">Contact</Link>
