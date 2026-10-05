@@ -150,22 +150,3 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
   if (f.done === true && !next.done) set({ done: true });
   return next;
 }
-
-const SUMMARY_PHRASE: Record<AgentTool, string> = {
-  search: 'searched the web',
-  code: 'ran code',
-  visit: 'read pages',
-  other: 'used tools',
-};
-
-/** The one-line summary a finished activity list collapses to:
- *  "Searched the web · ran code · 4 steps". */
-export function summariseSteps(steps: AgentStep[]): string {
-  if (!steps.length) return '';
-  const kinds: AgentTool[] = [];
-  for (const s of steps) if (!kinds.includes(s.tool)) kinds.push(s.tool);
-  const phrases = kinds.map((k) => SUMMARY_PHRASE[k]);
-  const head = phrases.join(' · ');
-  const line = `${head} · ${steps.length} step${steps.length === 1 ? '' : 's'}`;
-  return line.charAt(0).toUpperCase() + line.slice(1);
-}
