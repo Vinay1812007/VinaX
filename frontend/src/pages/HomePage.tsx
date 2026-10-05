@@ -33,6 +33,7 @@ import { useExperiment } from '@/features/experiments/useExperiment';
 import { EXP_HOME_SHELF_ORDER, homeShelfOrder } from '@/features/experiments/homeShelfOrder';
 import { useRecommendations } from '@/features/recommendations/useRecommendations';
 import { HomeHero } from '@/features/home/HomeHero';
+import { HomeFeatures, HomeWelcome } from '@/features/home/HomeWelcome';
 import { ListeningGuide } from '@/features/home/ListeningGuide';
 import { HomeStudio } from '@/features/home/HomeStudio';
 import { HomeAbout } from '@/features/home/HomeAbout';
@@ -179,6 +180,10 @@ export default function HomePage() {
   }, [userName, historyEntries.length]);
   const streakDays = getStreak();
   const [notifOpen, setNotifOpen] = useState(false);
+  // 10.0.0 — nothing played on this device yet: Home opens with the free-music
+  // welcome (HomeWelcome) instead of the greeting. Decided once per visit so
+  // the first song does not reshuffle the page under the listener's finger.
+  const [firstVisit] = useState(() => historyEntries.length === 0);
 
   // An explicit refresh: a new Home generation (every generation-keyed query
   // builds again, the old shelves stay on screen meanwhile), a new discovery
@@ -213,6 +218,11 @@ export default function HomePage() {
     } finally {
       setRefreshing(false);
     }
+  };
+  // "Start listening": the opening mix the page already holds; no extra call.
+  const startListening = () => {
+    if (!heroSongs.length) return toast('Still loading — try again in a second');
+    playQueue(heroSongs, 0);
   };
   const surprise = () => {
     // Songs the page already holds — no extra catalogue call for a surprise.
@@ -289,24 +299,30 @@ export default function HomePage() {
           </TopBarActions>
           <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
-          <header className="vxh-greet">
-            <h1>{hello.title}</h1>
-            <p className="vxh-greet-sub">
-              {hello.subtitle}
-              {streakDays > 1 && <span className="vxh-streak">{streakDays}-day streak</span>}
-            </p>
-            {clientCfg?.greeting?.text && <p className="vxh-greet-note">{clientCfg.greeting.text}</p>}
-          </header>
+          {firstVisit ? (
+            clientCfg?.greeting?.text && <p className="vxh-greet-note">{clientCfg.greeting.text}</p>
+          ) : (
+            <header className="vxh-greet">
+              <h1>{hello.title}</h1>
+              <p className="vxh-greet-sub">
+                {hello.subtitle}
+                {streakDays > 1 && <span className="vxh-streak">{streakDays}-day streak</span>}
+              </p>
+              {clientCfg?.greeting?.text && <p className="vxh-greet-note">{clientCfg.greeting.text}</p>}
+            </header>
+          )}
 
           <HomeHero
             design={design}
             songs={heroSongs}
             recent={continueListening}
+            lead={firstVisit ? <HomeWelcome name={userName} onStart={startListening} ready={heroSongs.length > 0} /> : undefined}
             onPlay={() => heroSongs.length && playQueue(heroSongs, 0)}
             onResume={(index) => playQueue(continueListening, index)}
             onRadio={() => navigate('/radio')}
             onSurprise={surprise}
           />
+          {firstVisit && <HomeFeatures />}
           <ListeningGuide />
 
           {primary.map(renderBlock)}

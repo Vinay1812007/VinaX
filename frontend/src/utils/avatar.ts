@@ -1,6 +1,9 @@
-/** Original letter-avatar artwork for artists without images. */
-// 10.0 Marigold: marigold, rose, coral, plum, turmeric.
-const PALETTE = ['#ffa42e', '#ff6384', '#ff886a', '#c58ad2', '#e2b23a'];
+/**
+ * Original letter-avatar artwork for artists without images.
+ * 10.0 Marigold: the letter in a warm brand hue (marigold, rose, gold, coral,
+ * orchid) over the plum chrome. Every hue clears 4.5:1 on the plum tile.
+ */
+const PALETTE = ['#ffa42e', '#ff6384', '#ffc066', '#ff8a5c', '#e58ce0'];
 
 export function letterAvatar(name: string): string {
   const letter = (name.trim()[0] ?? '♪').toUpperCase();

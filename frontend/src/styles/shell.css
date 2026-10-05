@@ -1,21 +1,26 @@
 /* ============================================================================
-   VinaX 9 — "Encore": the app shell and the shared primitives.
+   VinaX 10 — "Marigold": the app shell and the shared primitives.
 
-   One file for the frame every listener screen sits in (it replaces 8.0's
-   stage.css and the shell half of flow.css, which used to fight over the
-   same classes). Tokens live only in index.css; this file reads them.
-   Page styles live in styles/pages/<area>.css, imported by that page so they
-   ship in its lazy chunk. Track rows and media cards: styles/pages/tracklist.css.
+   One file for the frame every listener screen sits in (9.0 folded 8.0's
+   stage.css and the shell half of flow.css into it). Tokens live only in
+   index.css; this file reads them. Page styles live in
+   styles/pages/<area>.css, imported by that page so they ship in its lazy
+   chunk. Track rows and media cards: styles/pages/tracklist.css.
 
    The language:
    - artwork leads; copy follows; hierarchy from size and weight, not boxes;
-   - deep charcoal tiers: ink-950 chrome, ink-900 workspace, ink-850 / ink-800
-     raised; hairlines only between rows and around inputs;
-   - Iris (ember) is for play, progress, the active destination and focus;
-     Lagoon (tide) marks live and AI moments; the one gradient is Iris → Lagoon;
-   - shapes: pills for actions and filters, squircles for play buttons and
-     artwork, circles for people;
-   - an 8-pt rhythm; motion 140–220 ms on the calm curve, and none at all
+   - plum-black tiers: ink-950 chrome, ink-900 workspace, ink-850 / ink-800
+     raised, cream text; light mode is warm cream paper; hairlines only
+     between rows and around inputs;
+   - Marigold (ember) is for play, progress, the active destination, primary
+     calls to action and focus, with deep-brown labels (--vx-on-accent);
+     Rose (tide) marks live and AI moments; the one gradient is
+     Marigold → Rose (--vx-glow);
+   - the display face (--vx-font-display) for page titles, section titles,
+     the wordmark and the brand moments; Manrope for everything else;
+   - shapes: pills for actions, filters and the active destination,
+     squircles for play buttons and artwork, circles for people;
+   - an 8-pt rhythm; motion 140–240 ms on the calm curve, and none at all
      under either reduced-motion switch.
    ========================================================================= */
 
@@ -35,6 +40,13 @@
   --vx-deck-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.75);
   --vx-glow: linear-gradient(120deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
   --vx-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* 10.0 — a warm hover for the chrome (nav, library rows): a breath of
+     Marigold instead of a grey wash. */
+  --vx-hover-warm: rgb(var(--ember-500) / 0.1);
+  /* The workspace's top mesh: Marigold from the left, Rose from the right,
+     the playing artwork underneath. Painted once, scrolls away with the page. */
+  --vx-mesh-ember: 0.13;
+  --vx-mesh-tide: 0.09;
 }
 html.light {
   --vx-art-shadow: 0 10px 24px -14px rgb(20 20 40 / 0.35);
@@ -42,6 +54,9 @@ html.light {
   --vx-hover: rgb(var(--ink-100) / 0.05);
   --vx-pressed: rgb(var(--ink-100) / 0.09);
   --vx-accent-wash: rgb(var(--ember-500) / 0.1);
+  --vx-hover-warm: rgb(var(--ember-500) / 0.08);
+  --vx-mesh-ember: 0.12;
+  --vx-mesh-tide: 0.07;
 }
 @media (max-width: 767px) {
   :root {
@@ -56,11 +71,16 @@ html.light {
 body { letter-spacing: -0.006em; }
 .vx-shell { background: rgb(var(--ink-950)); }
 .vx-workspace {
-  /* A quiet glow from the playing artwork at the top of every page: it
-     scrolls away with the content (attachment: local) and never sits
-     behind text the listener is reading lower down. */
+  /* 10.0 — a warm gradient mesh at the top of every page: Marigold rising
+     from the top left, Rose from the top right, and the playing artwork's
+     glow between them. Three gradients painted with the content
+     (attachment: local), so it scrolls away and never sits behind text the
+     listener is reading lower down — no blur, no fixed layer, no cost on
+     scroll. */
   background:
-    radial-gradient(1100px 380px at 22% -140px, rgb(var(--art) / 0.16), transparent 72%) local,
+    radial-gradient(760px 300px at 8% -120px, rgb(var(--ember-500) / var(--vx-mesh-ember)), transparent 70%) local,
+    radial-gradient(680px 280px at 92% -140px, rgb(var(--tide-500) / var(--vx-mesh-tide)), transparent 70%) local,
+    radial-gradient(1100px 380px at 40% -160px, rgb(var(--art) / 0.12), transparent 72%) local,
     rgb(var(--ink-900));
   scrollbar-gutter: stable;
 }
@@ -68,7 +88,12 @@ body { letter-spacing: -0.006em; }
   /* The workspace is a rounded sheet inside the chrome. */
   .vx-workspace { margin: 8px 8px 0 0; border-radius: var(--vx-radius-panel) var(--vx-radius-panel) 0 0; }
 }
-html.amoled .vx-workspace { background: radial-gradient(1100px 380px at 22% -140px, rgb(var(--art) / 0.12), transparent 72%) local, #000; }
+html.amoled .vx-workspace {
+  background:
+    radial-gradient(760px 300px at 8% -120px, rgb(var(--ember-500) / 0.1), transparent 70%) local,
+    radial-gradient(1100px 380px at 40% -160px, rgb(var(--art) / 0.1), transparent 72%) local,
+    #000;
+}
 
 /* --------------------------------------------------------------- sidebar */
 .vx-sidebar {
@@ -102,11 +127,27 @@ html.amoled .vx-workspace { background: radial-gradient(1100px 380px at 22% -140
   min-width: 0;
   min-height: 44px;
   color: rgb(var(--ink-100));
-  font-size: 21px;
+  font-family: var(--vx-font-display);
+  font-size: 23px;
   font-weight: 800;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
 }
-.vx-brand img { border-radius: 9px; flex-shrink: 0; }
+.vx-brand img { border-radius: 9px; flex-shrink: 0; transition: transform 200ms var(--ease-calm); }
+.vx-brand:hover img { transform: rotate(-6deg) scale(1.04); }
+/* "Free" beside the wordmark: the promise, always in view on desktop. */
+.vx-brand .vx-brand-free {
+  align-self: center;
+  margin-left: 2px;
+  padding: 3px 8px 4px;
+  border-radius: 999px;
+  background: rgb(var(--ember-500) / 0.14);
+  color: rgb(var(--ember-400));
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
 .vx-sidebar-nav ul { display: grid; gap: 2px; padding: 6px 12px; }
 .vx-nav-link {
   position: relative;
@@ -121,9 +162,15 @@ html.amoled .vx-workspace { background: radial-gradient(1100px 380px at 22% -140
   font-weight: 650;
   transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
 }
-.vx-nav-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
-.vx-nav-active, .vx-nav-active:hover { color: rgb(var(--ink-100)); background: var(--vx-accent-wash); }
-.vx-nav-active svg { color: rgb(var(--ember-400)); }
+.vx-nav-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover-warm); }
+/* The active destination is a solid Marigold pill with a deep-brown label. */
+.vx-nav-active, .vx-nav-active:hover {
+  color: var(--vx-on-accent);
+  background: rgb(var(--ember-500));
+  font-weight: 750;
+  box-shadow: 0 8px 20px -12px rgb(var(--ember-600) / 0.9);
+}
+.vx-nav-active svg { color: inherit; }
 .vx-sidebar.is-collapsed .vx-nav-link,
 .vx-sidebar.is-collapsed .vx-library-title { justify-content: center; padding: 0; }
 @media (min-width: 768px) and (max-width: 1099px) {
@@ -167,7 +214,7 @@ html.light .vx-library { background: rgb(var(--ink-900)); }
   padding: 10px 12px 4px;
   color: rgb(var(--ink-500));
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 750;
   letter-spacing: 0.02em;
 }
 .vx-library-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 10px; }
@@ -180,8 +227,8 @@ html.light .vx-library { background: rgb(var(--ink-900)); }
   border-radius: 14px;
   transition: background-color 140ms var(--ease-calm);
 }
-.vx-lib-row:hover { background: var(--vx-hover); }
-.vx-lib-row.is-active { background: var(--vx-pressed); }
+.vx-lib-row:hover { background: var(--vx-hover-warm); }
+.vx-lib-row.is-active { background: var(--vx-accent-wash); }
 .vx-lib-row.is-active .vx-lib-title { color: rgb(var(--ember-400)); }
 .vx-sidebar.is-collapsed .vx-lib-row { justify-content: center; padding: 6px 0; }
 .vx-lib-art { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; object-fit: cover; }
@@ -194,7 +241,7 @@ html.light .vx-library { background: rgb(var(--ink-900)); }
   font-size: 17px;
   font-weight: 800;
 }
-.vx-lib-glyph.is-liked { color: #fff; background: var(--vx-glow); }
+.vx-lib-glyph.is-liked { color: var(--vx-on-accent); background: var(--vx-glow); }
 .vx-lib-glyph.is-later { color: rgb(var(--ink-950)); background: rgb(var(--tide-400)); }
 html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)); }
 .vx-lib-glyph.is-downloads, .vx-lib-glyph.is-history { color: rgb(var(--ink-200)); background: rgb(var(--ink-800)); }
@@ -218,20 +265,22 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   transition: background-color 200ms var(--ease-calm), border-color 200ms var(--ease-calm);
 }
 .vx-topbar.is-scrolled {
-  background: rgb(var(--ink-900) / 0.86);
+  /* Nearly opaque, so a light blur is enough: cheap to composite on scroll. */
+  background: rgb(var(--ink-900) / 0.93);
   border-bottom-color: var(--vx-border);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
 }
 .vx-topbar-nav { background: rgb(var(--ink-950) / 0.55); color: rgb(var(--ink-100)); }
-.vx-topbar-nav:hover { background: rgb(var(--ink-950) / 0.85); }
+.vx-topbar-nav:hover { background: rgb(var(--ink-950) / 0.85); color: rgb(var(--ember-400)); }
 .vx-topbar-context {
   min-width: 0;
   overflow: hidden;
   color: rgb(var(--ink-100));
-  font-size: 16px;
+  font-family: var(--vx-font-display);
+  font-size: 17px;
   font-weight: 750;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.025em;
   white-space: nowrap;
   text-overflow: ellipsis;
   opacity: 0;
@@ -268,7 +317,7 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   margin-left: 4px;
   border-radius: 50%;
   background: var(--vx-glow);
-  color: #fff;
+  color: var(--vx-on-accent);
   font-size: 14px;
   font-weight: 800;
   box-shadow: 0 0 0 3px rgb(var(--ink-950) / 0.55);
@@ -283,10 +332,10 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
 
 /* ------------------------------------------------------- phone tab bar */
 .vx-dock {
-  background: rgb(var(--ink-950) / 0.92);
+  background: rgb(var(--ink-950) / 0.95);
   border-top: 1px solid var(--vx-border);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
 }
 .vx-dock-item {
   display: flex;
@@ -300,18 +349,18 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   font-size: 11px;
   font-weight: 650;
 }
-/* The active tab's icon sits in a small Iris pill. */
+/* The active tab's icon sits in a solid Marigold pill, its label in cream. */
 .vx-dock-pill {
   display: grid;
   place-items: center;
   width: 56px;
   height: 30px;
   border-radius: 999px;
-  transition: background-color 180ms var(--ease-calm), color 180ms var(--ease-calm);
+  transition: background-color 180ms var(--ease-calm), color 180ms var(--ease-calm), transform 140ms var(--ease-calm);
 }
 .vx-dock-item:active .vx-dock-pill { transform: scale(0.94); }
-.vx-dock-active, .vx-dock-active:hover { color: rgb(var(--ink-100)); }
-.vx-dock-active .vx-dock-pill { background: var(--vx-accent-wash); color: rgb(var(--ember-400)); }
+.vx-dock-active, .vx-dock-active:hover { color: rgb(var(--ink-100)); font-weight: 800; }
+.vx-dock-active .vx-dock-pill { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 
 /* ---------------------------------------------------------- player deck */
 .vx-deck-wrap { padding: 0 var(--vx-deck-gap) var(--vx-deck-gap); }
@@ -319,13 +368,24 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   position: relative;
   overflow: hidden;
   border: 1px solid var(--vx-border);
-  border-radius: 20px;
-  background: rgb(var(--ink-950) / 0.94);
+  border-radius: 22px;
+  background: rgb(var(--ink-950) / 0.96);
   box-shadow: var(--vx-deck-shadow);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(16px) saturate(1.2);
 }
-html.light .vx-deck { background: rgb(var(--ink-950) / 0.96); }
+html.light .vx-deck { background: rgb(var(--ink-950) / 0.97); }
+/* A hairline of the brand gradient along the deck's top edge. */
+.vx-deck::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18%;
+  right: 18%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(var(--ember-500) / 0.55), rgb(var(--tide-500) / 0.4), transparent);
+  pointer-events: none;
+}
 /* The artwork's colour bleeds in from the left edge, very quietly. */
 .vx-deck::before {
   content: '';
@@ -374,23 +434,24 @@ html.light .vx-deck { background: rgb(var(--ink-950) / 0.96); }
   transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
 }
 .vx-pb-link::after { content: ''; position: absolute; inset: -4px; }
-.vx-pb-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
+.vx-pb-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover-warm); }
 .vx-pb-link[aria-current='page'] { color: rgb(var(--ember-400)); }
 .vx-volume { width: 96px; }
-/* The play button is a squircle: VinaX's shape for "play". */
+/* The play button is a Marigold squircle: VinaX's shape and colour for "play". */
 .np-play-desktop {
   position: relative;
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background: rgb(var(--ink-100));
-  color: rgb(var(--ink-950));
+  width: 44px;
+  height: 44px;
+  border-radius: 15px;
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
+  box-shadow: 0 10px 22px -12px rgb(var(--ember-600) / 0.9);
   transition: transform 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
 }
 .np-play-desktop::after { content: ''; position: absolute; inset: -1px; }
-.np-play-desktop:hover { transform: scale(1.05); }
+.np-play-desktop:hover { transform: scale(1.05); background: rgb(var(--ember-400)); }
 .np-play-desktop:active { transform: scale(0.95); }
 
 /* Phone: the compact player floats above the tab bar. */
@@ -401,6 +462,8 @@ html.light .vx-deck { background: rgb(var(--ink-950) / 0.96); }
 }
 .np-mini-thumb { border-radius: 10px; }
 .np-mini-play { border-radius: 12px; }
+/* Play is Marigold on the phone too (beats the utility fill on the button). */
+.np-mini .np-mini-play { background: rgb(var(--ember-500)); color: var(--vx-on-accent); }
 .np-mini-progress { position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; overflow: hidden; border-radius: 2px; background: rgb(var(--ink-100) / 0.14); }
 .np-mini-progress > i { display: block; width: 100%; height: 100%; border-radius: 2px; background: rgb(var(--ember-400)); transform-origin: left; transition: transform 300ms linear; }
 
@@ -430,7 +493,7 @@ html.light .vx-deck { background: rgb(var(--ink-950) / 0.96); }
   letter-spacing: -0.04em;
 }
 .vx-section-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.vx-section-header h2 { font-size: var(--vx-type-section); font-weight: 780; line-height: 1.2; letter-spacing: -0.025em; }
+.vx-section-header h2 { font-family: var(--vx-font-display); font-size: var(--vx-type-section); font-weight: 750; line-height: 1.2; letter-spacing: -0.03em; }
 .vx-section-header p { margin-top: 3px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
 .vx-section-link {
   display: inline-flex;
@@ -446,7 +509,7 @@ html.light .vx-deck { background: rgb(var(--ink-950) / 0.96); }
   transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
 }
 .vx-section-link::after { content: ''; position: absolute; inset: -5px 0; }
-.vx-section-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
+.vx-section-link:hover { color: rgb(var(--ember-400)); background: var(--vx-hover-warm); }
 @media (max-width: 767px) {
   .vx-page-header { align-items: flex-start; margin-bottom: 20px; }
   .vx-section-header { align-items: flex-start; }
@@ -501,7 +564,7 @@ html.light .vx-deck { background: rgb(var(--ink-950) / 0.96); }
 .vx-play-fab.is-lg { width: 64px; height: 64px; border-radius: 20px; }
 .vx-play-fab.is-lg svg { width: 30px; height: 30px; }
 
-/* Chips (components/Chip.tsx): a quiet fill at rest, solid Iris when chosen. */
+/* Chips (components/Chip.tsx): a quiet fill at rest, solid Marigold when chosen. */
 .vx-chip-idle { background: rgb(var(--ink-100) / 0.07); }
 .vx-chip-idle:hover { background: rgb(var(--ink-100) / 0.13); }
 .vx-chip-on { background: rgb(var(--ember-500)); border-color: rgb(var(--ember-500)); color: var(--vx-on-accent); }

@@ -38,9 +38,11 @@ const count = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : '
  * library as an artwork list (liked songs, listen later, downloads, recently
  * played, their playlists and the albums, playlists and artists they saved).
  * Collapses to an 80px rail that keeps every icon and artwork reachable.
- * 9.0.0 — Encore: the library sits in its own rounded panel, grouped into
+ * 9.0.0 — the library sits in its own rounded panel, grouped into
  * "Your collections" and "Playlists & saved"; tablets always get the rail
  * (styles/shell.css), whatever the collapse setting says.
+ * 10.0.0 — Marigold: the wordmark in the display face with a "Free" tag, and
+ * the active destination a solid Marigold pill.
  */
 export function Sidebar() {
   const collapsed = useSettingsStore((s) => s.sidebarCollapsed);
@@ -62,8 +64,10 @@ export function Sidebar() {
     <aside className={cn('vx-sidebar hidden md:flex', collapsed && 'is-collapsed')} aria-label="Sidebar">
       <div className="vx-sidebar-head">
         <Link to="/" className="vx-brand" aria-label="VinaX home">
-          <img src="/icons/icon.svg" alt="" width={28} height={28} />
+          <img src="/icons/icon.svg" alt="" width={30} height={30} />
           {!collapsed && <span>VinaX</span>}
+          {/* 10.0 — the promise, always in view: VinaX is free. */}
+          {!collapsed && <span className="vx-brand-free" aria-hidden>Free</span>}
         </Link>
         {!collapsed && (
           <IconButton size="sm" label="Collapse sidebar" onClick={toggle} className="vx-sidebar-toggle">

@@ -19,7 +19,7 @@ const items: DockItem[] = [
 ];
 
 /** 8.0.0 — the phone tab bar: a translucent strip, each tab an icon over its
- *  label. 9.0.0 — the active tab's solid icon sits in a small Iris pill. */
+ *  label. 10.0.0 — the active tab's solid icon sits in a Marigold pill. */
 export function BottomNav() {
   const t = useT();
   return (
