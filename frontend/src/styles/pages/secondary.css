@@ -321,7 +321,7 @@ html.light .vx-sec-feature {
 html.light .vx-empty-icon {
   background: radial-gradient(80% 80% at 30% 20%, rgb(var(--ember-500) / 0.14), transparent 70%), rgb(var(--ink-950));
 }
-.vx-empty-page h1, .vx-empty-page h2 { color: rgb(var(--ink-100)); font-size: var(--vx-type-page); font-weight: 800; line-height: 1.1; letter-spacing: -0.035em; }
+.vx-empty-page h1, .vx-empty-page h2 { color: rgb(var(--ink-100)); font-family: var(--vx-font-display); font-size: var(--vx-type-page); font-weight: 800; line-height: 1.1; letter-spacing: -0.035em; }
 .vx-empty-page p { max-width: 40ch; margin-top: 10px; color: rgb(var(--ink-400)); font-size: 15px; line-height: 1.55; }
 .vx-empty-page .btn-primary { margin-top: 28px; }
 .vx-empty-page .vx-empty-code { margin: 0 0 10px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 700; }
@@ -461,7 +461,7 @@ html.light .vx-panel .vx-sec-field { background: rgb(var(--ink-900)); }
 .vx-help-tile:hover { background: var(--sec-fill-hover); transform: translateY(-2px); }
 .vx-help-tile:active { transform: scale(0.99); }
 html.light .vx-help-tile { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--sec-line); }
-html.light .vx-help-tile:hover { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--sec-line), 0 8px 20px -14px rgb(20 20 40 / 0.35); }
+html.light .vx-help-tile:hover { background: rgb(var(--ink-950)); box-shadow: inset 0 0 0 1px var(--sec-line), 0 8px 20px -14px rgb(48 22 34 / 0.35); }
 .vx-done { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; color: var(--vx-success); font-size: 12.5px; font-weight: 700; }
 .vx-new-dot { flex-shrink: 0; width: 7px; height: 7px; margin-top: 8px; border-radius: 50%; background: rgb(var(--ink-400)); }
 .vx-new-dot.is-new { background: rgb(var(--ember-500)); }

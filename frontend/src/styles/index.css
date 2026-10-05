@@ -337,7 +337,8 @@ html.amoled body {
 
    The picker returned in Settings (roadmap O.4). accent='crimson' (the
    default every device migrated to in settings v2) intentionally has no
-   block: it rides the :root indigo ramp. Every named accent below has a
+   block: it rides the :root Marigold ramp and the picker calls it
+   "Marigold" ('ember' below is shown as "Copper"). Every named accent below has a
    matching `html.light[data-accent='…']` ramp further down — light surfaces
    need much darker accents to stay AA; those ramps are generated from the
    Tailwind palettes and GATED in src/__tests__/contrast.test.ts.
@@ -851,7 +852,7 @@ html.pointer-coarse .overflow-x-auto::-webkit-scrollbar { display: none; }
   animation: vxShimmer 1.6s infinite;
 }
 html.light .skeleton::after {
-  background: linear-gradient(90deg, transparent, rgba(31, 38, 135, 0.08), transparent);
+  background: linear-gradient(90deg, transparent, rgba(48, 22, 34, 0.06), transparent);
 }
 
 /* ============================================================================
@@ -946,7 +947,7 @@ html.light .theme-ico-sun { transform: translateY(0) rotate(0deg); opacity: 1; }
   background:
     radial-gradient(60% 46% at 50% -4%, rgb(var(--art) / 0.16), transparent 62%),
     radial-gradient(46% 38% at 82% 104%, rgb(var(--tide-500) / 0.12), transparent 60%),
-    rgba(6, 6, 9, 0.97);
+    rgba(13, 9, 15, 0.97);
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
 }

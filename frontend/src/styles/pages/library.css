@@ -51,7 +51,7 @@ html.amoled .vx-ehead { --wash-a: 0.42; }
   background: rgb(var(--ink-850));
   box-shadow: 0 24px 48px -20px rgb(0 0 0 / 0.7);
 }
-html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(20 20 40 / 0.4); }
+html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(48 22 34 / 0.4); }
 .vx-ehead-art > img,
 .vx-ehead-art > div { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .vx-ehead-art.is-round { border-radius: 50%; }
@@ -91,7 +91,7 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(20 20 40 / 0.4); }
 .vx-ehead-meta a:hover { text-decoration: underline; }
 .vx-ehead-dot { color: rgb(var(--ink-400)); }
 
-/* Actions: one Iris squircle, then quiet round buttons and the ⋯ menu. */
+/* Actions: one Marigold squircle, then quiet round buttons and the ⋯ menu. */
 .vx-ehead-actions {
   display: flex;
   flex-wrap: wrap;
@@ -132,7 +132,7 @@ html.light .vx-ehead-art { box-shadow: 0 18px 40px -20px rgb(20 20 40 / 0.4); }
 .vx-ehead-pill:active { transform: scale(0.97); }
 .vx-ehead-pill[aria-pressed='true'] { border-color: rgb(var(--ember-500)); color: rgb(var(--ember-400)); }
 
-/* Save (components/SaveButton icon variant): a plus ring → a filled Iris check. */
+/* Save (components/SaveButton icon variant): a plus ring → a filled Marigold check. */
 .vx-save-icon {
   position: relative;
   display: inline-grid;
@@ -211,8 +211,9 @@ html.amoled .vx-emenu-panel { background: rgb(var(--ink-800)); }
 .vx-emenu-panel.is-up { animation-name: vx-emenu-in-up; }
 @keyframes vx-emenu-in-up { from { opacity: 0; transform: translateY(4px); } }
 
-/* Covers without artwork of their own. The one gradient (Iris → Lagoon) is
-   Liked songs'; Listen later is Lagoon; history and downloads stay neutral. */
+/* Covers without artwork of their own. The one gradient (Marigold → Rose) is
+   Liked songs' (its glyph takes the on-accent ink, legible on both ends);
+   Listen later is Rose; history and downloads stay neutral. */
 .vx-glyph-cover {
   display: grid;
   place-items: center;
@@ -221,7 +222,7 @@ html.amoled .vx-emenu-panel { background: rgb(var(--ink-800)); }
   color: #fff;
 }
 .vx-glyph-cover svg { width: 36%; height: 36%; }
-.vx-glyph-cover.is-liked { background: var(--vx-glow); }
+.vx-glyph-cover.is-liked { background: var(--vx-glow); color: var(--vx-on-accent); }
 .vx-glyph-cover.is-later { background: linear-gradient(150deg, rgb(var(--tide-500) / 0.92), rgb(var(--tide-500) / 0.34)), rgb(var(--ink-850)); }
 html.light .vx-glyph-cover.is-later { background: linear-gradient(150deg, rgb(var(--tide-400)), rgb(var(--tide-500) / 0.7)), rgb(var(--ink-850)); }
 .vx-glyph-cover.is-smart { background: linear-gradient(150deg, rgb(var(--tide-500) / 0.85), rgb(var(--ink-800))); }
@@ -292,7 +293,7 @@ html.amoled .vx-lfield input { background: rgb(var(--ink-800)); }
   padding: 0 38px 0 16px;
   border: 1px solid var(--vx-border);
   border-radius: 999px;
-  background: rgb(var(--ink-850)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 15px center;
+  background: rgb(var(--ink-850)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a094a2' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 15px center;
   color: rgb(var(--ink-100));
   font-size: 13.5px;
   font-weight: 650;
@@ -306,7 +307,7 @@ html.amoled .vx-lfield input { background: rgb(var(--ink-800)); }
 .vx-lselect option { background: rgb(var(--ink-850)); color: rgb(var(--ink-100)); }
 html.amoled .vx-lselect { background-color: rgb(var(--ink-800)); }
 
-/* A quiet pill: a translucent fill at rest, solid Iris when pressed. */
+/* A quiet pill: a translucent fill at rest, solid Marigold when pressed. */
 .vx-quiet-btn {
   position: relative;
   display: inline-flex;
@@ -520,7 +521,7 @@ html.amoled .vx-lp-tile:hover { background: rgb(var(--ink-700)); }
 .vx-lp-tile-glyph svg { width: 22px; height: 22px; }
 .vx-lp-tile:hover .vx-lp-tile-glyph.is-plain { background: rgb(var(--ink-700)); }
 html.amoled .vx-lp-tile-glyph.is-plain { background: rgb(var(--ink-700)); }
-.vx-lp-tile-glyph.is-liked { background: var(--vx-glow); color: #fff; }
+.vx-lp-tile-glyph.is-liked { background: var(--vx-glow); color: var(--vx-on-accent); }
 .vx-lp-tile-glyph.is-later { background: rgb(var(--tide-400)); color: rgb(var(--ink-950)); }
 html.light .vx-lp-tile-glyph.is-later { background: rgb(var(--tide-500)); color: #fff; }
 .vx-lp-tile-text { display: block; min-width: 0; }
@@ -558,7 +559,18 @@ html.amoled .vx-lp-view { background: rgb(var(--ink-800)); }
 .vx-lp-note { color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; }
 
 .vx-lp-section { margin-bottom: 44px; }
-.vx-lp-empty { max-width: 60ch; color: rgb(var(--ink-400)); font-size: 14px; line-height: 1.55; }
+/* An empty list: a warm dashed card that says what goes here, not a stray line. */
+.vx-lp-empty {
+  max-width: 72ch;
+  padding: 16px 18px;
+  border: 1px dashed rgb(var(--ember-500) / 0.38);
+  border-radius: var(--vx-radius-card);
+  background: rgb(var(--ember-500) / 0.05);
+  color: rgb(var(--ink-300));
+  font-size: 14px;
+  line-height: 1.55;
+}
+html.light .vx-lp-empty { border-color: rgb(var(--ember-500) / 0.32); background: rgb(var(--ember-500) / 0.04); }
 
 /* List view: 56px artwork, title, one meta line, ⋯. */
 /* minmax(0, 1fr): a long title must ellipsize, never widen the column (and the page). */
@@ -621,7 +633,7 @@ html.amoled .vx-lp-view { background: rgb(var(--ink-800)); }
 .vx-lp-card-meta { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 3px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.35; }
 .vx-lp-card .vx-lp-more { margin: -6px -8px 0 0; }
 
-/* Smart collections: a Lagoon glyph, since they update themselves live. */
+/* Smart collections: a Rose glyph, since they update themselves live. */
 .vx-lp-smart { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 10px; }
 .vx-lp-smart-card {
   display: flex;

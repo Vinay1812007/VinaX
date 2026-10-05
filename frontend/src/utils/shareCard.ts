@@ -18,12 +18,12 @@ export async function shareNowPlayingCard(song: Song): Promise<'shared' | 'downl
     if (!ctx) return 'failed';
 
     const artUrl = bestImage(song.images, 500);
-    const accent = (await extractAverageColor(artUrl)) ?? 'rgb(30,22,53)';
+    const accent = (await extractAverageColor(artUrl)) ?? 'rgb(56,34,44)';
 
     // Background gradient from album accent.
     const grad = ctx.createLinearGradient(0, 0, 0, size);
     grad.addColorStop(0, accent);
-    grad.addColorStop(1, '#0a0714');
+    grad.addColorStop(1, '#0d090f');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
 

@@ -8,9 +8,10 @@
 
    - `--np-wash` is the playing artwork's own colour as an "R G B" triplet
      (the page extracts it; it falls back to the living colour, --art).
-   - The family: the deck's squircle play button (here at stage size, in
-     Iris), Iris progress, an artwork-tinted canvas, Lagoon for live and for
-     what VinaX picked.
+   - The family (10.0 "Marigold"): the deck's squircle play button (here at
+     stage size, in Marigold with a warm glow), a Marigold progress line, an
+     artwork-tinted canvas warmed towards Marigold, Rose for live and for
+     what VinaX picked, and the title in the display face.
    - Motion 140–220 ms on --ease-calm; none under either reduced-motion
      switch (the portalled layers carry their own rules at the end).
    ========================================================================= */
@@ -18,6 +19,9 @@
 /* ------------------------------------------------------------ the stage */
 .vx-np {
   --np-wash-rgb: var(--np-wash, var(--art));
+  /* The artwork's own colour, warmed a quarter of the way to Marigold, so a
+     cold cover still sits on a warm stage. */
+  --np-warm: color-mix(in srgb, rgb(var(--np-wash-rgb)) 75%, rgb(var(--ember-500)));
   color: rgb(var(--ink-100));
 }
 
@@ -54,8 +58,9 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(120% 60% at 50% 0%, rgb(var(--np-wash-rgb) / 0.42), transparent 72%),
-    linear-gradient(180deg, rgb(var(--np-wash-rgb) / 0.24) 0%, rgb(var(--ink-950) / 0.5) 52%, rgb(var(--ink-950) / 0.9) 100%);
+    radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--np-warm) 44%, transparent), transparent 72%),
+    radial-gradient(70% 42% at 0% 100%, rgb(var(--ember-500) / 0.1), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--np-warm) 24%, transparent) 0%, rgb(var(--ink-950) / 0.5) 52%, rgb(var(--ink-950) / 0.9) 100%);
   transition: opacity 200ms var(--ease-calm);
 }
 .vx-np.has-canvas .vx-np-bg-wash { opacity: 0.35; }
@@ -69,8 +74,9 @@
 html.light .vx-np-bg-art { opacity: 0.38; filter: blur(90px) saturate(1.15); }
 html.light .vx-np-bg-wash {
   background:
-    radial-gradient(120% 60% at 50% 0%, rgb(var(--np-wash-rgb) / 0.3), transparent 72%),
-    linear-gradient(180deg, rgb(var(--np-wash-rgb) / 0.16) 0%, rgb(var(--ink-950) / 0.62) 52%, rgb(var(--ink-950) / 0.94) 100%);
+    radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--np-warm) 30%, transparent), transparent 72%),
+    radial-gradient(70% 42% at 0% 100%, rgb(var(--ember-300) / 0.12), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--np-warm) 16%, transparent) 0%, rgb(var(--ink-950) / 0.62) 52%, rgb(var(--ink-950) / 0.94) 100%);
 }
 html.light .vx-np-bg-scrim { background: rgb(var(--ink-950) / 0.4); }
 html.amoled .vx-np-bg-art { opacity: 0.42; }
@@ -157,7 +163,7 @@ button.vx-np-context:hover { background: var(--vx-hover); }
   transition: transform 220ms var(--ease-calm), box-shadow 220ms var(--ease-calm);
 }
 .vx-np-art-img.is-paused { transform: scale(0.95); box-shadow: 0 20px 44px -22px rgb(0 0 0 / 0.55); }
-html.light .vx-np-art-img { box-shadow: 0 28px 60px -26px rgb(20 20 40 / 0.42), 0 10px 22px -14px rgb(20 20 40 / 0.26); }
+html.light .vx-np-art-img { box-shadow: 0 28px 60px -26px rgb(48 22 34 / 0.42), 0 10px 22px -14px rgb(48 22 34 / 0.26); }
 .vx-np-art-pane { position: relative; user-select: none; transition: transform 220ms var(--vx-ease-out); }
 .vx-np-art.is-canvas .vx-np-art-pane { position: absolute; inset: 0; }
 /* 8.1 — swipe the artwork sideways to change the song: it leaves the way the
@@ -203,10 +209,11 @@ html.light .vx-np-art-img { box-shadow: 0 28px 60px -26px rgb(20 20 40 / 0.42), 
 .vx-np-title-row { display: flex; align-items: center; gap: 12px; }
 .vx-np-title-block { min-width: 0; flex: 1; }
 .vx-np-title {
-  font-size: clamp(1.5rem, 5.6vw, 1.875rem);
-  font-weight: 800;
+  font-family: var(--vx-font-display);
+  font-size: clamp(1.625rem, 6vw, 2.125rem);
+  font-weight: 750;
   line-height: 1.3;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
 }
 /* Room above and below for tall Indic vowel signs inside the clipping marquee. */
 .vx-np-title > span { padding-block: 0.08em; }
@@ -232,26 +239,26 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
 .vx-np-like > button[aria-pressed='false'] { color: rgb(var(--ink-200)); }
 .vx-np-like > button[aria-pressed='true'] { color: rgb(var(--ember-400)); }
 
-/* ------------------------------------------------------- seek: Iris */
+/* --------------------------------------------------- seek: Marigold */
 .vx-np-seek { margin-top: 20px; }
 .vx-np-seek input[type='range'] { display: block; height: 24px; }
 .vx-np-seek input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(to right, rgb(var(--ember-400)) var(--fill), rgb(var(--ink-100) / 0.2) var(--fill));
+  background: linear-gradient(to right, rgb(var(--ember-500)) var(--fill), rgb(var(--ink-100) / 0.2) var(--fill));
 }
 .vx-np-seek input[type='range']::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   margin-top: -5px;
-  background: rgb(var(--ember-400));
+  background: rgb(var(--ember-500));
   box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.22), 0 2px 6px rgb(0 0 0 / 0.35);
 }
 .vx-np-seek input[type='range']:hover::-webkit-slider-thumb { transform: scale(1.15); box-shadow: 0 0 0 6px rgb(var(--ember-500) / 0.22), 0 2px 6px rgb(0 0 0 / 0.35); }
 .vx-np-seek input[type='range']:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px var(--vx-focus); }
 .vx-np-seek input[type='range']::-moz-range-track { height: 4px; border-radius: 999px; background: rgb(var(--ink-100) / 0.2); }
-.vx-np-seek input[type='range']::-moz-range-progress { height: 4px; border-radius: 999px; background: rgb(var(--ember-400)); }
-.vx-np-seek input[type='range']::-moz-range-thumb { width: 14px; height: 14px; border: 0; background: rgb(var(--ember-400)); box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.22); }
+.vx-np-seek input[type='range']::-moz-range-progress { height: 4px; border-radius: 999px; background: rgb(var(--ember-500)); }
+.vx-np-seek input[type='range']::-moz-range-thumb { width: 14px; height: 14px; border: 0; background: rgb(var(--ember-500)); box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.22); }
 .vx-np-seek input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px rgb(var(--ink-950)), 0 0 0 4px var(--vx-focus); }
 .vx-np-seek .vx-seek-times { margin-top: 2px; }
 .vx-np-seek .vx-seek-times span { color: rgb(var(--ink-300)); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -262,7 +269,7 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
 .vx-np .vx-np-skip:hover, .vx-np .vx-np-mode:hover { background: var(--vx-hover); }
 .vx-np .vx-np-mode[aria-pressed='false'] { color: rgb(var(--ink-200)); }
 .vx-np .vx-np-mode[aria-pressed='true'] { color: rgb(var(--ember-400)); }
-/* "On" is said three ways: aria-pressed, the Iris tint and this dot. */
+/* "On" is said three ways: aria-pressed, the Marigold tint and this dot. */
 .vx-np-dot {
   position: absolute;
   bottom: 3px;
@@ -290,7 +297,8 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
   font-weight: 800;
   line-height: 1;
 }
-/* The squircle play button: the deck's shape at stage size, in Iris. */
+/* The squircle play button: the deck's shape at stage size, in Marigold,
+   lit from above and glowing into the stage. */
 .vx-np-play {
   position: relative;
   display: grid;
@@ -299,18 +307,19 @@ a.vx-np-artist:hover { color: rgb(var(--ink-100)); text-decoration: underline; t
   height: 72px;
   flex-shrink: 0;
   border-radius: 24px;
-  background: rgb(var(--ember-500));
+  background: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)) 62%);
   color: var(--vx-on-accent);
-  box-shadow: 0 16px 36px -14px rgb(var(--ember-600) / 0.85);
-  transition: transform 160ms var(--ease-calm), background-color 160ms var(--ease-calm);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 16px 36px -14px rgb(var(--ember-600) / 0.85), 0 0 44px -10px rgb(var(--ember-500) / 0.55);
+  transition: transform 160ms var(--ease-calm), filter 160ms var(--ease-calm);
 }
-.vx-np-play:hover { background: rgb(var(--ember-400)); transform: scale(1.04); }
+.vx-np-play:hover { filter: brightness(1.06); transform: scale(1.04); }
 .vx-np-play:active { transform: scale(0.96); }
 .vx-np-play svg { width: 32px; height: 32px; }
 .vx-np-play .vx-np-play-glyph { margin-left: 3px; }
 .vx-np-play.is-compact { width: 64px; height: 64px; border-radius: 21px; }
 .vx-np-play.is-compact svg { width: 28px; height: 28px; }
-html.light .vx-np-play { box-shadow: 0 14px 30px -14px rgb(var(--ember-600) / 0.55); }
+/* Light: the deep Marigold ramp keeps the white glyph legible; no glow on paper. */
+html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 30px -14px rgb(var(--ember-600) / 0.55); }
 .vx-np-spinner {
   width: 26px;
   height: 26px;
@@ -453,7 +462,7 @@ html.light .vx-np-play { box-shadow: 0 14px 30px -14px rgb(var(--ember-600) / 0.
 /* The queue's ownership marker (7.2; 9.0 words "VinaX pick" / "Added by
    you"): who put this song in the list. Words carry the meaning — a screen
    reader reads them with the row — and the tint and glyph only repeat it:
-   Lagoon for what VinaX picked, Iris for the listener's own. */
+   Rose for what VinaX picked, Marigold for the listener's own. */
 .vx-queue-origin {
   display: inline-flex;
   flex: none;
@@ -753,7 +762,7 @@ html.amoled .vx-queue-head { background: rgb(var(--ink-900) / 0.94); }
   }
 }
 @keyframes vx-queue-head-fill { to { background-color: rgb(var(--ink-900) / 0.92); } }
-.vx-queue-head h1 { font-size: var(--vx-type-page); font-weight: 800; line-height: 1.08; letter-spacing: -0.035em; }
+.vx-queue-head h1 { font-family: var(--vx-font-display); font-size: var(--vx-type-page); font-weight: 800; line-height: 1.08; letter-spacing: -0.035em; }
 .vx-queue-head p { margin-top: 6px; color: rgb(var(--ink-400)); font-size: 14px; font-weight: 500; }
 .vx-queue-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .vx-queue-btn {
@@ -867,7 +876,7 @@ html.light .vx-queue-now { background: linear-gradient(110deg, rgb(var(--art) / 
 }
 .vx-queue-row:hover, .vx-queue-row:focus-within { background: var(--vx-hover); }
 .vx-queue-row.is-dragging { z-index: 10; background: rgb(var(--ink-800)); box-shadow: 0 14px 32px -14px rgb(0 0 0 / 0.6); }
-html.light .vx-queue-row.is-dragging { box-shadow: 0 14px 30px -14px rgb(20 20 40 / 0.3); }
+html.light .vx-queue-row.is-dragging { box-shadow: 0 14px 30px -14px rgb(48 22 34 / 0.3); }
 .vx-queue-row.drop-above { box-shadow: inset 0 2px 0 0 rgb(var(--ember-500)); }
 .vx-queue-row.drop-below { box-shadow: inset 0 -2px 0 0 rgb(var(--ember-500)); }
 .vx-queue-row-main { display: flex; align-items: center; gap: 4px; min-width: 0; }
@@ -959,7 +968,7 @@ html.light .vx-queue-row.is-dragging { box-shadow: 0 14px 30px -14px rgb(20 20 4
   border-radius: 18px;
   box-shadow: 0 18px 40px -20px rgb(0 0 0 / 0.7);
 }
-html.light .vx-rail-art { box-shadow: 0 16px 32px -20px rgb(20 20 40 / 0.4); }
+html.light .vx-rail-art { box-shadow: 0 16px 32px -20px rgb(48 22 34 / 0.4); }
 .vx-rail-art img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; transition: transform 220ms var(--ease-calm); }
 .vx-rail-art:hover img { transform: scale(1.02); }
 .vx-rail-now { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; }
@@ -998,7 +1007,7 @@ html.light .vx-rail-lyrics-card:hover { background: rgb(var(--art) / 0.22); }
 .vx-lyrics-hero img { width: 96px; height: 96px; flex-shrink: 0; border-radius: 18px; object-fit: cover; box-shadow: var(--vx-art-shadow); }
 .vx-lyrics-hero-text { min-width: 0; flex: 1; }
 .vx-lyrics-hero-label { color: rgb(var(--ink-400)); font-size: 13px; font-weight: 650; }
-.vx-lyrics-hero-title { display: block; overflow: hidden; margin-top: 2px; color: rgb(var(--ink-100)); font-size: var(--vx-type-page); font-weight: 800; line-height: 1.2; letter-spacing: -0.035em; white-space: nowrap; text-overflow: ellipsis; }
+.vx-lyrics-hero-title { display: block; overflow: hidden; margin-top: 2px; color: rgb(var(--ink-100)); font-family: var(--vx-font-display); font-size: var(--vx-type-page); font-weight: 800; line-height: 1.2; letter-spacing: -0.035em; white-space: nowrap; text-overflow: ellipsis; }
 a.vx-lyrics-hero-title:hover { text-decoration: underline; text-underline-offset: 4px; }
 .vx-lyrics-hero-artist { overflow: hidden; margin-top: 4px; color: rgb(var(--ink-300)); font-size: 15px; font-weight: 550; white-space: nowrap; text-overflow: ellipsis; }
 .vx-lyrics-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
@@ -1093,8 +1102,8 @@ a.vx-lyrics-hero-title:hover { text-decoration: underline; text-underline-offset
 .vx-drive-close { position: absolute; top: max(12px, var(--safe-top)); left: max(12px, var(--safe-left)); width: 56px; height: 56px; color: rgb(var(--ink-300)); }
 .vx-drive-close svg { width: 32px; height: 32px; }
 .vx-drive-art { width: min(220px, 34vh); height: min(220px, 34vh); margin-bottom: 32px; border-radius: 28px; object-fit: cover; box-shadow: 0 28px 60px -24px rgb(0 0 0 / 0.75); }
-html.light .vx-drive-art { box-shadow: 0 24px 50px -26px rgb(20 20 40 / 0.4); }
-.vx-drive-title { max-width: 100%; font-size: var(--vx-type-page); font-weight: 800; line-height: 1.25; letter-spacing: -0.03em; }
+html.light .vx-drive-art { box-shadow: 0 24px 50px -26px rgb(48 22 34 / 0.4); }
+.vx-drive-title { max-width: 100%; font-family: var(--vx-font-display); font-size: var(--vx-type-page); font-weight: 800; line-height: 1.25; letter-spacing: -0.03em; }
 .vx-drive-artist { max-width: 100%; overflow: hidden; margin-top: 8px; color: rgb(var(--ink-300)); font-size: 18px; font-weight: 550; white-space: nowrap; text-overflow: ellipsis; }
 .vx-drive-transport { display: flex; align-items: center; justify-content: center; gap: 24px; width: 100%; margin-top: 48px; }
 .vx-drive-skip {

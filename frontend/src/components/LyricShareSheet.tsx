@@ -48,7 +48,7 @@ async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {
   }
 
   const bg = x.createLinearGradient(0, 0, 0, 1080);
-  bg.addColorStop(0, '#17181e');
+  bg.addColorStop(0, '#1b141f');
   bg.addColorStop(1, '#0d090f');
   x.fillStyle = bg;
   x.fillRect(0, 0, 1080, 1080);
@@ -58,12 +58,12 @@ async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {
   x.fillStyle = glow;
   x.fillRect(0, 0, 1080, 1080);
   const glow2 = x.createRadialGradient(940, 980, 0, 940, 980, 520);
-  glow2.addColorStop(0, 'rgba(34,211,238,0.16)');
-  glow2.addColorStop(1, 'rgba(34,211,238,0)');
+  glow2.addColorStop(0, 'rgba(255,99,132,0.16)');
+  glow2.addColorStop(1, 'rgba(255,99,132,0)');
   x.fillStyle = glow2;
   x.fillRect(0, 0, 1080, 1080);
 
-  x.fillStyle = 'rgba(178,166,255,0.6)';
+  x.fillStyle = 'rgba(255,192,102,0.6)';
   x.font = `800 200px ${FONT}`;
   x.fillText('“', 80, 290);
 
@@ -94,13 +94,13 @@ async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {
     y += lineH;
   }
 
-  x.fillStyle = '#e2e3ea';
+  x.fillStyle = '#eae3e2';
   x.font = `700 40px ${FONT}`;
   x.fillText(fitText(x, song.title, 760), 90, 952);
-  x.fillStyle = '#a8aab8';
+  x.fillStyle = '#b6abb8';
   x.font = `500 34px ${FONT}`;
   x.fillText(fitText(x, song.subtitle, 760), 90, 1000);
-  x.fillStyle = '#b2a6ff';
+  x.fillStyle = '#ffc066';
   x.font = `800 30px ${FONT}`;
   x.fillText('VinaX', 920, 1000);
 

@@ -2,7 +2,7 @@
    VinaX 8 — overlays: the sheet / dialog shell, its header, and the song menu.
 
    Imported by Sheet.tsx and TrackMenu.tsx, so it ships with those chunks and
-   never with first load. Surfaces are flat (ink-850 in dark, white in light),
+   never with first load. Surfaces are flat (ink-850 in dark, cream in light),
    one hairline, one soft shadow. Phones get a bottom sheet with a grab handle
    and a 24px top radius; from 640px it is a centred 22px-radius dialog (9.0).
    ========================================================================= */
@@ -29,10 +29,10 @@
 }
 html.light .vx-sheet {
   background: rgb(var(--ink-950));
-  box-shadow: 0 -12px 40px -16px rgb(15 20 30 / 0.28);
+  box-shadow: 0 -12px 40px -16px rgb(48 22 34 / 0.28);
 }
 @media (min-width: 640px) {
-  html.light .vx-sheet { box-shadow: 0 24px 64px -20px rgb(15 20 30 / 0.3); }
+  html.light .vx-sheet { box-shadow: 0 24px 64px -20px rgb(48 22 34 / 0.3); }
 }
 
 .vx-sheet-grab {
@@ -111,7 +111,7 @@ html.light .vx-sheet {
 }
 html.light .vx-menu {
   background: rgb(var(--ink-950));
-  box-shadow: 0 16px 40px -16px rgb(15 20 30 / 0.3), 0 2px 8px -2px rgb(15 20 30 / 0.12);
+  box-shadow: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2px 8px -2px rgb(48 22 34 / 0.12);
 }
 .vx-menu-item {
   display: flex;
@@ -297,7 +297,7 @@ html.light .vx-welcome-langs { background: rgb(var(--ink-900)); }
   background: rgb(var(--ink-850));
   box-shadow: 0 -12px 16px -12px rgb(0 0 0 / 0.5);
 }
-html.light .vx-welcome-cta { background: rgb(var(--ink-950)); box-shadow: 0 -12px 16px -14px rgb(15 20 30 / 0.2); }
+html.light .vx-welcome-cta { background: rgb(var(--ink-950)); box-shadow: 0 -12px 16px -14px rgb(48 22 34 / 0.2); }
 @media (min-width: 640px) { .vx-welcome-cta { margin: 20px -28px 0; padding: 12px 28px; } }
 .vx-welcome-consent {
   display: flex;
@@ -326,7 +326,7 @@ html.light .vx-welcome-cta { background: rgb(var(--ink-950)); box-shadow: 0 -12p
   width: 72px;
   height: 72px;
   border-radius: 16px;
-  color: #fff;
+  color: var(--vx-on-accent);
   background: linear-gradient(140deg, rgb(var(--ember-600)), rgb(var(--ember-500)));
   box-shadow: 0 12px 28px -12px rgb(var(--ember-600) / 0.8);
 }

@@ -439,13 +439,13 @@ export default function SettingsPage() {
             </Row>
             <FestivalRow />
             <Group title="Colour">
-              <Block label="Accent color" note="Play buttons, progress, focus and everything you have chosen." keywords="colour highlight buttons links player">
+              <Block label="Accent color" note="Play buttons, progress, focus and everything you have chosen." keywords="colour highlight buttons links player marigold copper">
                 <AccentSwatches value={s.accent} onChange={s.setAccent} />
               </Block>
               <Row stack label="Custom accent" note="Any colour. VinaX builds a readable palette from it." keywords="colour color palette hex">
                 <div className="flex items-center gap-2">
-                  <input type="color" aria-label="Custom accent colour" value={s.accentCustom ?? '#a78bfa'} onChange={(e) => s.setAccentCustom(e.target.value)} className="vx-set-color" />
-                  <input value={s.accentCustom ?? ''} onChange={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-fA-F]{6}$/.test(v)) s.setAccentCustom(v); }} placeholder="#a78bfa" maxLength={7} className="vx-set-input w-28 font-mono" aria-label="Custom accent hex" />
+                  <input type="color" aria-label="Custom accent colour" value={s.accentCustom ?? '#ffa42e'} onChange={(e) => s.setAccentCustom(e.target.value)} className="vx-set-color" />
+                  <input value={s.accentCustom ?? ''} onChange={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-fA-F]{6}$/.test(v)) s.setAccentCustom(v); }} placeholder="#ffa42e" maxLength={7} className="vx-set-input w-28 font-mono" aria-label="Custom accent hex" />
                   {s.accent === 'custom' && <RowButton onClick={() => s.setAccentCustom(null)}>Use a preset</RowButton>}
                 </div>
               </Row>
@@ -976,7 +976,7 @@ export default function SettingsPage() {
   );
 }
 
-/** Ten preset accents as one radio group (arrow keys move the choice). */
+/** Ten preset accents as one radio group (arrow keys move the choice), with the chosen one's name under it. */
 function AccentSwatches({ value, onChange }: { value: string; onChange: (id: (typeof ACCENT_OPTIONS)[number]['id']) => void }) {
   const ids = ACCENT_OPTIONS.map((a) => a.id);
   const at = ids.indexOf(value as (typeof ids)[number]);
@@ -990,25 +990,30 @@ function AccentSwatches({ value, onChange }: { value: string; onChange: (id: (ty
     refs.current[next]?.focus();
   };
   return (
-    <div className="vx-set-swatches" role="radiogroup" aria-label="Accent color">
-      {ACCENT_OPTIONS.map((a, i) => (
-        <button
-          key={a.id}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          type="button"
-          role="radio"
-          aria-checked={value === a.id}
-          aria-label={`${a.label} accent`}
-          title={a.label}
-          tabIndex={i === (at < 0 ? 0 : at) ? 0 : -1}
-          onKeyDown={(e) => move(e, i)}
-          onClick={() => onChange(a.id)}
-          className="vx-set-swatch"
-          style={{ backgroundColor: a.dot }}
-        />
-      ))}
-    </div>
+    <>
+      <div className="vx-set-swatches" role="radiogroup" aria-label="Accent color">
+        {ACCENT_OPTIONS.map((a, i) => (
+          <button
+            key={a.id}
+            ref={(el) => {
+              refs.current[i] = el;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={value === a.id}
+            aria-label={`${a.label} accent`}
+            title={a.label}
+            tabIndex={i === (at < 0 ? 0 : at) ? 0 : -1}
+            onKeyDown={(e) => move(e, i)}
+            onClick={() => onChange(a.id)}
+            className="vx-set-swatch"
+            style={{ backgroundColor: a.dot }}
+          />
+        ))}
+      </div>
+      <p className="vx-set-swatch-name">
+        {value === 'custom' ? 'Custom colour' : <b>{ACCENT_OPTIONS[at < 0 ? 0 : at].label}</b>}
+      </p>
+    </>
   );
 }

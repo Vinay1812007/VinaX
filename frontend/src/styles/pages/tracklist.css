@@ -10,8 +10,8 @@
      [ play button: # | art | title + artist ]  [ album ]  [ ♥ ]  [ 3:45 ]  [ ⋯ ]
    The number sits INSIDE the play button, so the whole left block is one
    target and the number turns into a play glyph on hover. The playing row
-   carries an Iris bar on its leading edge and an Iris title; its number
-   becomes a small equaliser. The header row (.vx-tracklist-head) uses the
+   carries a Marigold bar on its leading edge, a warm Marigold wash and a
+   Marigold title; its number becomes a small Marigold equaliser. The header row (.vx-tracklist-head) uses the
    same column widths.
    ========================================================================= */
 
@@ -29,7 +29,11 @@
   transition: background-color 140ms var(--ease-calm);
 }
 .vx-track-row:hover { background: rgb(var(--ink-100) / 0.06); }
-.vx-track-row.is-current { background: rgb(var(--ember-500) / 0.08); }
+.vx-track-row.is-current {
+  /* 10.0 Marigold: the wash warms from the leading bar and fades across the row. */
+  background: linear-gradient(90deg, rgb(var(--ember-500) / 0.16), rgb(var(--ember-500) / 0.06) 55%, rgb(var(--ember-500) / 0.03));
+}
+html.light .vx-track-row.is-current { background: linear-gradient(90deg, rgb(var(--ember-500) / 0.12), rgb(var(--ember-500) / 0.04) 55%, rgb(var(--ember-500) / 0.02)); }
 .vx-track-row.is-current::before {
   content: '';
   position: absolute;
@@ -39,8 +43,11 @@
   width: 3px;
   border-radius: 3px;
   background: rgb(var(--ember-500));
+  box-shadow: 0 0 10px rgb(var(--ember-500) / 0.55);
 }
-.vx-track-row.is-current:hover { background: rgb(var(--ember-500) / 0.12); }
+html.light .vx-track-row.is-current::before { box-shadow: none; }
+.vx-track-row.is-current:hover { background: linear-gradient(90deg, rgb(var(--ember-500) / 0.2), rgb(var(--ember-500) / 0.09) 55%, rgb(var(--ember-500) / 0.05)); }
+html.light .vx-track-row.is-current:hover { background: linear-gradient(90deg, rgb(var(--ember-500) / 0.16), rgb(var(--ember-500) / 0.07) 55%, rgb(var(--ember-500) / 0.04)); }
 
 .vx-track-play {
   display: flex;
@@ -193,7 +200,7 @@
   width: 3px;
   height: 100%;
   border-radius: 2px;
-  background: rgb(var(--ember-400));
+  background: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)));
   transform-origin: bottom;
   animation: vx-eq 900ms var(--ease-calm) infinite alternate;
 }
@@ -289,21 +296,22 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgb(10 11 14 / 0.55);
+  /* Always dark (it sits on artwork): the plum-black of the dark canvas. */
+  background: rgb(13 9 15 / 0.55);
   color: #fff;
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   transition: opacity 160ms var(--ease-calm), transform 160ms var(--ease-calm), background-color 140ms var(--ease-calm);
 }
 .vx-card-fav::after { content: ''; position: absolute; inset: -6px; }
-.vx-card-fav:hover { background: rgb(10 11 14 / 0.75); }
+.vx-card-fav:hover { background: rgb(13 9 15 / 0.75); }
 .vx-card-fav:active { transform: scale(0.9); }
 .vx-card-fav.is-on { color: rgb(var(--ember-400)); }
 .vx-card-fav.hover-reveal { opacity: 0; }
 .group:hover .vx-card-fav.hover-reveal, .group:focus-within .vx-card-fav.hover-reveal { opacity: 1; }
 @media (hover: none), (pointer: coarse) { .vx-card-fav.hover-reveal { opacity: 0; pointer-events: none; } }
 
-/* The card's play button: an Iris squircle that rises in on hover. */
+/* The card's play button: a Marigold squircle that rises in on hover. */
 .card-play {
   position: absolute;
   right: 10px;
@@ -315,7 +323,7 @@ html[data-density='compact'] .vx-track-art { width: 38px; height: 38px; }
   border-radius: 15px;
   background: rgb(var(--ember-500));
   color: var(--vx-on-accent);
-  box-shadow: 0 10px 22px -8px rgb(0 0 0 / 0.65);
+  box-shadow: 0 10px 22px -8px rgb(0 0 0 / 0.65), 0 6px 18px -6px rgb(var(--ember-500) / 0.45);
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 180ms var(--ease-calm), transform 180ms var(--ease-calm), background-color 140ms var(--ease-calm);
