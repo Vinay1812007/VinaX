@@ -4,7 +4,8 @@ import { WaveIcon } from './Icons';
 /**
  * 8.0 — the empty / error pattern: an icon in a quiet badge, a title, one
  * muted line and at most one action. Centred in the workspace, no card.
- * 9.0 — the badge is an Iris-washed squircle.
+ * 9.0 — the badge is an accent-washed squircle.
+ * 10.0 — a warm Marigold → Rose wash with a hairline, and the title in the display face.
  */
 function StateShell({ children }: { children: ReactNode }) {
   return (
@@ -18,8 +19,8 @@ function StateShell({ children }: { children: ReactNode }) {
 function StateBadge({ icon }: { icon?: ReactNode }) {
   return (
     <span
-      // 9.0.0 — Encore: a squircle with a quiet Iris wash.
-      className="flex items-center justify-center w-16 h-16 rounded-sheet bg-ember-500/[0.12] text-ember-400 [&>svg]:w-7 [&>svg]:h-7"
+      // 10.0 — Marigold: a squircle with a quiet Marigold → Rose wash.
+      className="flex items-center justify-center w-16 h-16 rounded-sheet bg-[linear-gradient(140deg,rgb(var(--ember-500)/0.2),rgb(var(--tide-500)/0.1))] shadow-[inset_0_0_0_1px_rgb(var(--ember-500)/0.2)] text-ember-400 [&>svg]:w-7 [&>svg]:h-7"
       aria-hidden
     >
       {icon ?? <WaveIcon className="w-7 h-7" />}
@@ -42,7 +43,7 @@ export function EmptyState({
   return (
     <StateShell>
       <StateBadge icon={icon} />
-      <p className="mt-5 text-[19px] font-extrabold tracking-[-0.015em] text-ink-100">{title}</p>
+      <p className="mt-5 font-display text-[21px] font-extrabold tracking-[-0.02em] text-ink-100">{title}</p>
       <p className="mt-1.5 text-[14px] leading-relaxed text-ink-400">{message}</p>
       {action && <div className="mt-5">{action}</div>}
     </StateShell>
@@ -64,7 +65,7 @@ export function ErrorState({
   return (
     <StateShell>
       <StateBadge icon={icon} />
-      <p className="mt-5 text-[19px] font-extrabold tracking-[-0.015em] text-ink-100">{title ?? 'Couldn’t reach the music servers'}</p>
+      <p className="mt-5 font-display text-[21px] font-extrabold tracking-[-0.02em] text-ink-100">{title ?? 'Couldn’t reach the music servers'}</p>
       <p className="mt-1.5 text-[14px] leading-relaxed text-ink-400">
         {message ?? 'Check your connection and try again.'}
       </p>

@@ -12,32 +12,38 @@
      feature card) are not used here: their stand-ins carry the `bx-`
      prefix, so those sheets cannot reach in either.
 
-   The language (docs/design-system.md, "9.0 Encore"): artwork leads and copy
-   follows; charcoal tiers, hairlines only around inputs and between rows;
-   Iris for play / active / focus, Lagoon for live and AI moments; squircles
+   The language (docs/design-system.md, "9.0 Encore", recoloured for 10.0
+   "Marigold"): artwork leads and copy follows; plum-black tiers (warm cream
+   paper in light), hairlines only around inputs and between rows;
+   Marigold for play / active / focus, Rose for live and AI moments; squircles
    for artwork and play, pills for actions and filters, circles for people;
    140–220 ms on the calm curve, and nothing moves under reduced motion.
    ========================================================================= */
 
 /* ------------------------------------------------------ category tones
-   Twelve hues that tell categories apart. They never carry text: a tone is
+   Twelve tones that tell categories apart. They never carry text: a tone is
    a glow in a tile's corner or the fill of a small icon squircle, always
-   under ink-100 copy on a charcoal (or, in light, white) surface. */
-.vx-tone-1 { --tone: 139 92 246; }   /* violet */
-.vx-tone-2 { --tone: 20 184 166; }   /* teal */
-.vx-tone-3 { --tone: 236 72 153; }   /* raspberry */
-.vx-tone-4 { --tone: 59 130 246; }   /* cobalt */
-.vx-tone-5 { --tone: 249 115 22; }   /* ember orange */
-.vx-tone-6 { --tone: 168 85 247; }   /* plum */
-.vx-tone-7 { --tone: 16 185 129; }   /* emerald */
-.vx-tone-8 { --tone: 99 102 241; }   /* indigo */
-.vx-tone-9 { --tone: 217 70 239; }   /* orchid */
-.vx-tone-10 { --tone: 100 116 139; } /* slate */
-.vx-tone-11 { --tone: 245 158 11; }  /* amber */
-.vx-tone-12 { --tone: 14 165 233; }  /* ocean */
+   under ink-100 copy on a plum-black (or, in light, cream) surface.
+   10.0 "Marigold": one warm family instead of a rainbow — marigold,
+   saffron, rose, terracotta, plum — so a wall of tiles reads as one
+   palette. Neighbouring numbers sit far apart on the wheel, and the cool
+   end stops at dusk plum. (features/discover/tones.ts maps moods to them.) */
+.vx-tone-1 { --tone: 255 164 46; }   /* marigold */
+.vx-tone-2 { --tone: 226 178 58; }   /* turmeric (travel) */
+.vx-tone-3 { --tone: 255 99 132; }   /* rose (romance) */
+.vx-tone-4 { --tone: 206 102 70; }   /* terracotta */
+.vx-tone-5 { --tone: 255 118 38; }   /* saffron (workout) */
+.vx-tone-6 { --tone: 168 92 186; }   /* plum */
+.vx-tone-7 { --tone: 255 136 106; }  /* coral */
+.vx-tone-8 { --tone: 146 116 178; }  /* dusk mauve (chill) */
+.vx-tone-9 { --tone: 222 70 140; }   /* mulberry (party) */
+.vx-tone-10 { --tone: 176 138 120; } /* clay (focus) */
+.vx-tone-11 { --tone: 245 150 20; }  /* amber (devotional) */
+.vx-tone-12 { --tone: 118 96 172; }  /* dusk plum (sad) */
 
 .vx-browse {
   --bx-wash: 0.42;
+  --bx-sheen: 0.07;
   --bx-chip-wash: 0.26;
   --bx-surface: rgb(var(--ink-850));
   --bx-surface-hover: rgb(var(--ink-800));
@@ -45,6 +51,7 @@
 }
 html.light .vx-browse {
   --bx-wash: 0.2;
+  --bx-sheen: 0.06;
   --bx-chip-wash: 0.16;
   --bx-surface: rgb(var(--ink-950));
   --bx-surface-hover: rgb(var(--ink-850));
@@ -187,8 +194,8 @@ html.light .vx-browse {
 .vx-browse .vx-link-chip:hover { background: rgb(var(--ink-100) / 0.13); }
 
 /* ------------------------------------------------------------- fields
-   The rounded field of Search, Movies and Videos. A hairline at rest, an
-   Iris ring while typing. */
+   The rounded field of Search, Movies and Videos. A hairline at rest, a
+   Marigold ring and a warm glow while typing. */
 .vx-browse .bx-field { position: relative; display: flex; align-items: center; min-width: 0; }
 .vx-browse .bx-field > svg:first-child {
   position: absolute;
@@ -221,8 +228,10 @@ html.light .vx-browse .bx-field input { background: rgb(var(--ink-950)); }
 }
 .vx-browse .bx-field input:focus {
   border-color: rgb(var(--ember-500));
-  box-shadow: 0 0 0 1px rgb(var(--ember-500)), 0 0 0 5px rgb(var(--ember-500) / 0.16);
+  box-shadow: 0 0 0 1px rgb(var(--ember-500)), 0 0 0 5px rgb(var(--ember-500) / 0.16), 0 12px 32px -18px rgb(var(--ember-500) / 0.6);
 }
+/* The focused field's glass icon takes the accent too. */
+.vx-browse .bx-field:focus-within > svg:first-child { color: rgb(var(--ember-400)); }
 .vx-browse .bx-field input:focus-visible { outline: none; }
 .vx-browse .bx-field-actions { position: absolute; right: 6px; display: flex; align-items: center; gap: 2px; }
 @media (max-width: 767px) {
@@ -236,7 +245,7 @@ html.light .vx-browse .bx-field input { background: rgb(var(--ink-950)); }
   padding: 0 36px 0 16px;
   border: 1px solid var(--vx-border);
   border-radius: 9999px;
-  background: rgb(var(--ink-850)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239294a2' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center / 16px;
+  background: rgb(var(--ink-850)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a094a2' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center / 16px;
   color: rgb(var(--ink-100));
   font-size: 14px;
   font-weight: 650;
@@ -276,7 +285,12 @@ html.light .vx-browse .bx-select { background-color: rgb(var(--ink-950)); }
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: radial-gradient(130% 120% at 100% 100%, rgb(var(--tone, var(--ink-600)) / var(--bx-wash)), rgb(var(--tone, var(--ink-600)) / 0) 62%);
+  /* A warm two-stop light: the tone glows from the visual's corner and a
+     faint Marigold sheen falls from the opposite one, so every tile shares
+     the same warm key light whatever its tone. */
+  background:
+    radial-gradient(130% 120% at 100% 100%, rgb(var(--tone, var(--ink-600)) / var(--bx-wash)), rgb(var(--tone, var(--ink-600)) / 0) 62%),
+    linear-gradient(160deg, rgb(var(--ember-500) / var(--bx-sheen)), rgb(var(--ember-500) / 0) 46%);
   transition: opacity 180ms var(--ease-calm);
 }
 @media (hover: hover) and (pointer: fine) {
@@ -425,7 +439,7 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
 .vx-browse .bx-dest:active { transform: scale(0.98); }
 .vx-browse .bx-dest .bx-glyph { width: 44px; height: 44px; border-radius: 13px; }
 .vx-browse .bx-dest .bx-glyph svg { width: 22px; height: 22px; }
-.vx-browse .bx-dest .bx-glyph.is-ai { background: var(--vx-glow); color: #fff; }
+.vx-browse .bx-dest .bx-glyph.is-ai { background: var(--vx-glow); color: var(--vx-on-accent); }
 .vx-browse .bx-dest-text { display: block; min-width: 0; }
 .vx-browse .bx-dest-title { display: block; overflow: hidden; font-size: 15px; font-weight: 700; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
 .vx-browse .bx-dest-meta { display: block; margin-top: 2px; overflow: hidden; color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 550; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
@@ -492,7 +506,8 @@ html.light .vx-browse .bx-tile[aria-pressed='true'] { --bx-wash: 0.32; }
   .vx-browse .bx-tile-rail.is-moods { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
   .vx-browse .bx-tile-rail.is-decades { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
   .vx-browse .bx-tile-rail.is-decades .bx-decade { min-height: 88px; padding: 12px; }
-  .vx-browse .bx-tile-rail.is-decades .bx-decade strong { font-size: clamp(20px, 2vw, 28px); }
+  /* The display face runs wider than the text face: a size that keeps "2010s" inside seven columns. */
+  .vx-browse .bx-tile-rail.is-decades .bx-decade strong { font-size: clamp(17px, 1.7vw, 26px); }
 }
 @media (max-width: 767px) {
   .vx-browse .bx-tile { min-height: 100px; padding: 14px 14px; }
@@ -651,6 +666,7 @@ html.light .vx-browse .bx-feature-bg { opacity: 0.35; }
   display: -webkit-box;
   overflow: hidden;
   color: rgb(var(--ink-100));
+  font-family: var(--vx-font-display);
   font-size: clamp(24px, 2.8vw, 38px);
   font-weight: 800;
   line-height: 1.12;
@@ -700,7 +716,7 @@ html.light .vx-browse .bx-feature-bg { opacity: 0.35; }
 .vx-browse .search-field-btn { color: rgb(var(--ink-400)); }
 .vx-browse .search-field-btn:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
 .vx-browse .search-field-btn svg { width: 19px; height: 19px; }
-/* Listening is a live moment: Lagoon, with one soft ring. */
+/* Listening is a live moment: Rose, with one soft ring. */
 .vx-browse .search-field-btn.is-live { color: rgb(var(--tide-400)); background: rgb(var(--tide-500) / 0.14); }
 .vx-browse .search-field-btn.is-live::before {
   content: '';
@@ -945,7 +961,7 @@ html.light .vx-browse .search-panel { background: rgb(var(--ink-950)); }
 .vx-browse .search-vibe { width: 100%; }
 .vx-browse .search-moods { margin-top: 16px; margin-bottom: 0; }
 
-/* Ask for songs and the AI chat: Lagoon is the AI accent. */
+/* Ask for songs and the AI chat: Rose is the AI accent. */
 .vx-browse .search-assist { display: grid; gap: 10px; max-width: 760px; }
 .vx-browse .search-assist-row {
   display: flex;
@@ -972,7 +988,7 @@ html.light .vx-browse .search-panel { background: rgb(var(--ink-950)); }
   background: rgb(var(--tide-500) / 0.14);
   color: rgb(var(--tide-400));
 }
-.vx-browse .search-assist-icon.is-accent { background: var(--vx-glow); color: #fff; }
+.vx-browse .search-assist-icon.is-accent { background: var(--vx-glow); color: var(--vx-on-accent); }
 .vx-browse .search-assist-icon svg { width: 22px; height: 22px; }
 .vx-browse .search-assist-title { display: block; color: rgb(var(--ink-100)); font-size: 15px; font-weight: 700; line-height: 1.35; }
 .vx-browse .search-assist-meta { display: block; overflow: hidden; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
@@ -1349,7 +1365,7 @@ html.light .vx-browse .search-top-bg { opacity: 0.18; }
 .vx-browse .bx-decade:active { transform: scale(0.97); }
 .vx-browse .bx-decade:disabled { opacity: 0.5; }
 .vx-browse .bx-decade[aria-pressed='true'] { box-shadow: inset 0 0 0 2px rgb(var(--ember-500)); }
-.vx-browse .bx-decade strong { font-size: 30px; font-weight: 800; line-height: 1.1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.vx-browse .bx-decade strong { font-family: var(--vx-font-display); font-size: 30px; font-weight: 800; line-height: 1.1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
 .vx-browse .bx-decade span { color: rgb(var(--ink-300)); font-size: 12.5px; font-weight: 600; }
 .vx-browse .bx-year { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .vx-browse .bx-year .btn-primary { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 20px; border-radius: 9999px; font-size: 14px; font-weight: 700; }
