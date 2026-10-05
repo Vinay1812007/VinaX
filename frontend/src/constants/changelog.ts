@@ -12,6 +12,22 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '10.0.0': {
+    title: 'Marigold — a new look, and Listen Together that really stays together',
+    changes: [
+      { type: 'new', text: 'A whole new look. Warm plum backgrounds, a marigold accent and a bolder headline typeface across every page — Home, Search, Library, the player, Settings and VinaX AI. The light theme is now warm cream paper. Everything still passes our readability checks in both themes.' },
+      { type: 'new', text: 'First time here? Home now says it plainly: all the music you love, free. No subscription, no email, no password. One tap on “Start listening” plays a mix, and the tiles below show everything that is included — VinaX AI, Radio, Listen Together, synced lyrics, offline downloads on Android and 12 languages.' },
+      { type: 'fixed', text: 'Listen Together kept working only while you stayed on its page. Open Search to find the next song and the session quietly stopped for everyone. Now a session runs across the whole app — and survives a reload — with a small “Live” pill on every page that takes you back to the room.' },
+      { type: 'fixed', text: 'Guests in Listen Together drifted a second or two behind and kept jumping to catch up. Every phone now times the host from the same server clock, so the room plays the same moment and corrections are rare and smooth.' },
+      { type: 'fixed', text: 'A song a guest added to Listen Together reached the host without its audio and could not play. The host’s app now fetches the full song first, and tells you plainly if a song is not available.' },
+      { type: 'fixed', text: 'Several friends on the same Wi-Fi could be cut off from a Listen Together room. The room now has room for everyone on one network.' },
+      { type: 'improved', text: 'If your browser holds back sound when you open an invite link, Listen Together now shows “Tap to start listening” instead of staying silent. Reactions show reliably whatever your phone’s clock says, and a guest is told when the host ends the session.' },
+      { type: 'new', text: 'VinaX AI shows its work: each search, page read and step appears as it happens with a live spinner, then folds into one line — “Searched the web · 5 sources” — that opens again on demand.' },
+      { type: 'new', text: 'Connectors in VinaX AI: one place in the + menu to switch Web search, Research, Think, Now playing, Memory and Place on or off, with what each one shares. What is on shows as chips above the message box.' },
+      { type: 'improved', text: 'VinaX AI feels calmer: the mark breathes while it thinks, new text fades in as it arrives, and a small marigold spark marks where the reply is being written. All motion stops when reduced motion is on.' },
+      { type: 'improved', text: 'The accent called “Ember” is now “Copper”, re-coloured so it no longer looks like the new Marigold default. Your saved choice is kept.' },
+    ],
+  },
   '9.1.0': {
     title: 'Fewer repeats, and music that is actually current',
     changes: [

@@ -49,8 +49,8 @@
   --vx-mesh-tide: 0.09;
 }
 html.light {
-  --vx-art-shadow: 0 10px 24px -14px rgb(20 20 40 / 0.35);
-  --vx-deck-shadow: 0 16px 36px -18px rgb(20 20 40 / 0.35);
+  --vx-art-shadow: 0 10px 24px -14px rgb(48 22 34 / 0.35);
+  --vx-deck-shadow: 0 16px 36px -18px rgb(48 22 34 / 0.35);
   --vx-hover: rgb(var(--ink-100) / 0.05);
   --vx-pressed: rgb(var(--ink-100) / 0.09);
   --vx-accent-wash: rgb(var(--ember-500) / 0.1);
