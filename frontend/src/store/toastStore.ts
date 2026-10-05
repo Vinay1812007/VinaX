@@ -12,6 +12,7 @@ export interface Toast {
   action?: ToastAction;
   /** 10.1.0 — optional artwork thumbnail shown at the start of the snackbar. */
   image?: string;
+  key?: string;
 }
 
 export interface ToastOptions {
@@ -20,6 +21,13 @@ export interface ToastOptions {
   image?: string;
   /** Milliseconds on screen; actions get longer by default. */
   duration?: number;
+  /**
+   * 10.1.0 — one snackbar per key: a newer toast with the same key replaces
+   * the older one and inherits its artwork and action when it has none. Liking
+   * the playing song confirmed the like AND announced the re-plan; now the
+   * second message updates the first instead of stacking beside it.
+   */
+  key?: string;
 }
 
 interface ToastState {
@@ -65,8 +73,11 @@ export const useToastStore = create<ToastState>()((set, get) => ({
     const id = nextId++;
     // The same words twice (two code paths confirming one tap) show once:
     // the older copy makes way for the new one.
-    const others = get().toasts.filter((t) => t.message !== message);
-    const toasts = [...others.slice(-(MAX_TOASTS - 1)), { id, message, action: opts?.action, image: opts?.image }];
+    const keyed = opts?.key ? get().toasts.find((t) => t.key === opts.key) : undefined;
+    const others = get().toasts.filter((t) => t.message !== message && !(opts?.key && t.key === opts.key));
+    const action = opts?.action ?? keyed?.action;
+    const image = opts?.image ?? keyed?.image;
+    const toasts = [...others.slice(-(MAX_TOASTS - 1)), { id, message, action, image, key: opts?.key }];
     // Toasts squeezed out by the cap take their timers with them.
     for (const [tid, t] of timers) {
       if (!toasts.some((x) => x.id === tid)) {
@@ -75,7 +86,7 @@ export const useToastStore = create<ToastState>()((set, get) => ({
       }
     }
     set({ toasts });
-    const timer: Timer = { handle: null, remaining: opts?.duration ?? (opts?.action ? TOAST_ACTION_MS : TOAST_MS), startedAt: Date.now() };
+    const timer: Timer = { handle: null, remaining: opts?.duration ?? (action ? TOAST_ACTION_MS : TOAST_MS), startedAt: Date.now() };
     timers.set(id, timer);
     if (!paused) start(id, timer, get().dismiss);
   },

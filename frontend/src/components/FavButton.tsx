@@ -17,9 +17,9 @@ export function toggleLike(song: Song): void {
   lib.toggleFavorite(song);
   const image = bestImage(song.images, 50);
   if (wasLiked) {
-    toast('Removed from Liked songs', { image, action: { label: 'Undo', onClick: () => useLibraryStore.getState().toggleFavorite(song) } });
+    toast('Removed from Liked songs', { key: 'like', image, action: { label: 'Undo', onClick: () => useLibraryStore.getState().toggleFavorite(song) } });
   } else {
-    toast('Added to Liked songs', { image, action: { label: 'View', onClick: () => toastNavigate('/favorites') } });
+    toast('Added to Liked songs', { key: 'like', image, action: { label: 'View', onClick: () => toastNavigate('/favorites') } });
   }
 }
 
