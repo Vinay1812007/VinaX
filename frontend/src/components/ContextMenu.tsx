@@ -11,6 +11,7 @@ import { toast } from '@/store/toastStore';
 import { recallCtxSong } from '@/utils/ctxSongs';
 import { cn } from '@/utils/cn';
 import { bestImage } from '@/utils/images';
+import { toggleLike } from './FavButton';
 import {
   ChevronRightIcon,
   HeartIcon,
@@ -91,24 +92,21 @@ export function ContextMenu() {
           label: 'Play next',
           icon: NextIcon,
           action: () => {
-            usePlayerStore.getState().enqueueNext(song);
-            toast('Playing next');
+            usePlayerStore.getState().enqueueNext(song); // the store confirms with a snackbar
           },
         },
         {
           label: 'Add to queue',
           icon: QueueIcon,
           action: () => {
-            usePlayerStore.getState().enqueue(song);
-            toast('Added to queue');
+            usePlayerStore.getState().enqueue(song); // the store confirms with a snackbar
           },
         },
         {
           label: isFav ? 'Remove from favorites' : 'Favorite',
           icon: HeartIcon,
           action: () => {
-            useLibraryStore.getState().toggleFavorite(song);
-            toast(isFav ? 'Removed from favorites' : 'Added to favorites');
+            toggleLike(song);
           },
         },
         {
@@ -208,7 +206,8 @@ export function ContextMenu() {
         role="menu"
         aria-label={menu.song ? `Actions for ${menu.song.title}` : 'App actions'}
         style={{ left: x, top: y, width: MENU_W }}
-        className="fixed p-1 rounded-lg border border-[color:var(--vx-border)] bg-ink-850 [html.light_&]:bg-ink-950 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.55),0_4px_12px_-4px_rgba(0,0,0,0.3)] animate-fade-up"
+        // 10.1 — a frosted popover (the thick material, shell.css `.vx-popover`).
+        className="vx-popover vx-mat-thick fixed p-1 rounded-[14px] animate-fade-up"
         onClick={(e) => e.stopPropagation()}
       >
         {menu.song && (

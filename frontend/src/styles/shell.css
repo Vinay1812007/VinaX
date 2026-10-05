@@ -21,7 +21,12 @@
    - shapes: pills for actions, filters and the active destination,
      squircles for play buttons and artwork, circles for people;
    - an 8-pt rhythm; motion 140–240 ms on the calm curve, and none at all
-     under either reduced-motion switch.
+     under either reduced-motion switch;
+   - 10.1 "frosted glass": the chrome is made of the .vx-mat-* materials
+     (index.css) — the sidebar a thin pane over an artwork-tinted canvas, the
+     top bar, tab bar, mini player and player deck the chrome tier, each
+     carrying the playing artwork's colour faintly. Blur lives only on fixed
+     or sticky chrome and overlays, never on a row in a scrolling list.
    ========================================================================= */
 
 :root {
@@ -69,7 +74,22 @@ html.light {
 
 /* ---------------------------------------------------------------- canvas */
 body { letter-spacing: -0.006em; }
-.vx-shell { background: rgb(var(--ink-950)); }
+/* The canvas behind the panes: plum-black lit by the playing artwork from the
+   top left and a little Marigold from the bottom left. Static (no motion, no
+   blur of its own), so the sidebar's frost over it costs one paint. */
+.vx-shell {
+  background:
+    radial-gradient(70% 55% at 0% 0%, rgb(var(--art) / 0.2), transparent 72%),
+    radial-gradient(60% 45% at 0% 100%, rgb(var(--ember-500) / 0.08), transparent 70%),
+    rgb(var(--ink-950));
+}
+html.light .vx-shell {
+  background:
+    radial-gradient(70% 55% at 0% 0%, rgb(var(--art) / 0.22), transparent 72%),
+    radial-gradient(60% 45% at 0% 100%, rgb(var(--ember-500) / 0.1), transparent 70%),
+    rgb(var(--ink-800));
+}
+html.amoled .vx-shell { background: #000; }
 .vx-workspace {
   /* 10.0 — a warm gradient mesh at the top of every page: Marigold rising
      from the top left, Rose from the top right, and the playing artwork's
@@ -104,9 +124,17 @@ html.amoled .vx-workspace {
   width: var(--vx-sidebar-w);
   max-height: 100dvh;
   padding-bottom: calc(var(--vx-player-h) + var(--vx-deck-gap) * 2);
-  background: rgb(var(--ink-950));
   overflow: hidden;
   transition: width 200ms var(--ease-calm);
+}
+/* 10.1 — the sidebar is a thin frosted pane on the tinted canvas, its top
+   corners rounded to match the workspace sheet beside it. */
+@media (min-width: 768px) {
+  .vx-sidebar {
+    margin: 8px 8px 0;
+    max-height: calc(100dvh - 8px);
+    border-radius: var(--vx-radius-panel) var(--vx-radius-panel) 0 0;
+  }
 }
 .vx-sidebar.is-collapsed { width: var(--vx-sidebar-rail); }
 /* Tablets get the rail whatever the setting says: the workspace needs the room. */
@@ -189,9 +217,9 @@ html.amoled .vx-workspace {
   margin: 14px 12px 0;
   padding: 10px 0 0;
   border-radius: var(--vx-radius-panel);
-  background: rgb(var(--ink-900) / 0.55);
+  background: rgb(var(--ink-900) / 0.6);
 }
-html.light .vx-library { background: rgb(var(--ink-900)); }
+html.light .vx-library { background: rgb(var(--ink-950) / 0.7); }
 .vx-sidebar.is-collapsed .vx-library { margin-inline: 10px; }
 .vx-library-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 8px 4px; }
 .vx-sidebar.is-collapsed .vx-library-head { justify-content: center; }
@@ -261,16 +289,19 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
   margin: 0 calc(-1 * var(--vx-gutter)) 4px;
   padding: 12px var(--vx-gutter);
   background: transparent;
-  border-bottom: 1px solid transparent;
-  transition: background-color 200ms var(--ease-calm), border-color 200ms var(--ease-calm);
+  transition: background-color 200ms var(--ease-calm), box-shadow 200ms var(--ease-calm);
 }
+/* Clear at the top of the page, so artwork headers run up behind it; the
+   chrome material once content scrolls under it (TopBar watches a sentinel
+   with an IntersectionObserver and adds .vx-mat-chrome). A bar across the
+   whole width wants one hairline, along the bottom only. */
 .vx-topbar.is-scrolled {
-  /* Nearly opaque, so a light blur is enough: cheap to composite on scroll. */
-  background: rgb(var(--ink-900) / 0.93);
-  border-bottom-color: var(--vx-border);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
-  backdrop-filter: blur(12px) saturate(1.2);
+  --mat-tint: linear-gradient(90deg, rgb(var(--art) / var(--vx-mat-art)), transparent 60%);
+  box-shadow: inset 0 -1px 0 var(--vx-mat-hairline);
 }
+/* A zero-height marker 8px into the page: once it leaves the scroller, the
+   page is scrolled. */
+.vx-topbar-sentinel { height: 8px; margin-bottom: -8px; pointer-events: none; }
 .vx-topbar-nav { background: rgb(var(--ink-950) / 0.55); color: rgb(var(--ink-100)); }
 .vx-topbar-nav:hover { background: rgb(var(--ink-950) / 0.85); color: rgb(var(--ember-400)); }
 .vx-topbar-context {
@@ -331,11 +362,12 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
 }
 
 /* ------------------------------------------------------- phone tab bar */
+/* 10.1 — the chrome material: content scrolls under it and shows through,
+   blurred, with the playing artwork's colour rising faintly from the bottom.
+   The specular line runs along its top edge, the hairline above it. */
 .vx-dock {
-  background: rgb(var(--ink-950) / 0.95);
-  border-top: 1px solid var(--vx-border);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  backdrop-filter: blur(14px) saturate(1.2);
+  --mat-tint: linear-gradient(0deg, rgb(var(--art) / var(--vx-mat-art)), transparent 80%);
+  box-shadow: inset 0 1px 0 var(--vx-mat-specular), 0 -1px 0 var(--vx-mat-hairline);
 }
 .vx-dock-item {
   display: flex;
@@ -365,16 +397,11 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
 /* ---------------------------------------------------------- player deck */
 .vx-deck-wrap { padding: 0 var(--vx-deck-gap) var(--vx-deck-gap); }
 .vx-deck {
+  --mat-lift: var(--vx-deck-shadow);
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--vx-border);
   border-radius: 22px;
-  background: rgb(var(--ink-950) / 0.96);
-  box-shadow: var(--vx-deck-shadow);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
-  backdrop-filter: blur(16px) saturate(1.2);
 }
-html.light .vx-deck { background: rgb(var(--ink-950) / 0.97); }
 /* A hairline of the brand gradient along the deck's top edge. */
 .vx-deck::after {
   content: '';
@@ -454,12 +481,15 @@ html.light .vx-deck { background: rgb(var(--ink-950) / 0.97); }
 .np-play-desktop:hover { transform: scale(1.05); background: rgb(var(--ember-400)); }
 .np-play-desktop:active { transform: scale(0.95); }
 
-/* Phone: the compact player floats above the tab bar. */
+/* Phone: the compact player floats above the tab bar — a chrome pane tinted
+   with the cover's living colour (--art), strongest behind the artwork. */
 .np-mini {
-  border: 1px solid var(--vx-border);
+  --mat-lift: var(--vx-deck-shadow);
+  --mat-tint: linear-gradient(90deg, rgb(var(--art) / 0.2), rgb(var(--art) / 0.06));
   border-radius: 16px;
-  box-shadow: var(--vx-deck-shadow);
 }
+html.light .np-mini { --mat-tint: linear-gradient(90deg, rgb(var(--art) / 0.14), rgb(var(--art) / 0.04)); }
+html.amoled .np-mini { --mat-tint: none; }
 .np-mini-thumb { border-radius: 10px; }
 .np-mini-play { border-radius: 12px; }
 /* Play is Marigold on the phone too (beats the utility fill on the button). */
@@ -599,8 +629,109 @@ html[data-density='compact'] .vx-shelf { margin-bottom: 28px; }
   .hover-reveal { opacity: 1; }
 }
 
+/* ------------------------------------------------- popovers, snackbars */
+/* The right-click menu: the thick material with one soft lift. */
+.vx-popover {
+  --mat-lift: 0 16px 40px -12px rgb(0 0 0 / 0.55), 0 4px 12px -4px rgb(0 0 0 / 0.3);
+  color: rgb(var(--ink-100));
+}
+html.light .vx-popover { --mat-lift: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2px 8px -2px rgb(48 22 34 / 0.12); }
+
+/* 10.1 — snackbars (components/Toasts.tsx) rise above the tab bar and the
+   mini player on phones, the player deck on computers. */
+.vx-snackbar-region {
+  position: fixed;
+  right: 0;
+  bottom: calc(var(--player-safe-offset) + 10px);
+  left: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .vx-snackbar-region { bottom: calc(var(--mini-player-height) + var(--safe-bottom) + 14px); }
+}
+@media (min-width: 1024px) {
+  .vx-snackbar-region { bottom: calc(var(--vx-player-h) + var(--vx-deck-gap) * 2 + 12px); }
+}
+/* A compact pill of glass: one step lighter than the chrome in dark (so it
+   lifts off the page), white glass in light. The fill is floored high
+   enough that its text keeps AA over any cover (glass.test.ts). */
+.vx-snack {
+  --mat-fill: rgb(var(--ink-800) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98));
+  --mat-lift: 0 14px 32px -12px rgb(0 0 0 / 0.65), 0 2px 8px -2px rgb(0 0 0 / 0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: min(480px, 100%);
+  min-height: 48px;
+  padding: 6px 6px 6px 18px;
+  border-radius: 20px;
+  color: rgb(var(--ink-100));
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  animation: vx-snack-in 220ms var(--vx-ease-out) backwards;
+}
+html.light .vx-snack {
+  --mat-fill: rgb(255 253 250 / clamp(0.92, calc(var(--glass-alpha) + 0.16), 0.98));
+  --mat-lift: 0 14px 32px -14px rgb(48 22 34 / 0.35), 0 2px 8px -2px rgb(48 22 34 / 0.12);
+}
+html.amoled .vx-snack { --mat-fill: rgb(var(--ink-800)); }
+.vx-snack:has(.vx-snack-art) { padding-left: 6px; }
+.vx-snack:not(:has(.vx-snack-action)) { padding-right: 18px; }
+.vx-snack.is-leaving { pointer-events: none; animation: vx-snack-out 180ms var(--ease-calm) forwards; }
+.vx-snack-art {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: rgb(var(--ink-700));
+}
+.vx-snack-text {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+/* The one action: Marigold text on the glass, 44px to hit. */
+.vx-snack-action {
+  position: relative;
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 14px;
+  color: rgb(var(--ember-400));
+  font-size: 14px;
+  font-weight: 800;
+  transition: background-color 160ms var(--ease-calm);
+}
+.vx-snack-action::after { content: ''; position: absolute; inset: -4px 0; }
+.vx-snack-action:hover { background: var(--vx-hover-warm); }
+.vx-snack-action:active { background: rgb(var(--ember-500) / 0.18); }
+@keyframes vx-snack-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes vx-snack-out {
+  to { opacity: 0; transform: translateY(10px) scale(0.97); }
+}
+
 /* ---------------------------------------------------------------- motion */
 @media (prefers-reduced-motion: reduce) {
   .vx-shell *, .ai-root * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 html.reduce-motion .vx-shell *, html.reduce-motion .ai-root * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+/* The snackbar host also mounts outside the shell (the VinaX AI route). */
+@media (prefers-reduced-motion: reduce) { .vx-snack { animation: none !important; transition: none !important; } }
+html.reduce-motion .vx-snack { animation: none !important; transition: none !important; }

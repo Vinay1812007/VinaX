@@ -1,8 +1,27 @@
 import type { Song } from '@/types';
 import { useLibraryStore } from '@/store/libraryStore';
+import { toast, toastNavigate } from '@/store/toastStore';
 import { cn } from '@/utils/cn';
 import { isFavoriteIn } from '@/utils/favIndex';
+import { bestImage } from '@/utils/images';
 import { HeartIcon } from './Icons';
+
+/**
+ * 10.1.0 — like or unlike a song and confirm it with a snackbar carrying the
+ * cover: "Added to Liked songs · View", or "Removed from Liked songs · Undo"
+ * (the toggle is its own undo).
+ */
+export function toggleLike(song: Song): void {
+  const lib = useLibraryStore.getState();
+  const wasLiked = lib.isFavorite(song.id);
+  lib.toggleFavorite(song);
+  const image = bestImage(song.images, 50);
+  if (wasLiked) {
+    toast('Removed from Liked songs', { image, action: { label: 'Undo', onClick: () => useLibraryStore.getState().toggleFavorite(song) } });
+  } else {
+    toast('Added to Liked songs', { image, action: { label: 'View', onClick: () => toastNavigate('/favorites') } });
+  }
+}
 
 export function FavButton({ song, className }: { song: Song; className?: string }) {
   const isFav = useLibraryStore((s) => isFavoriteIn(s.favorites, song.id));
@@ -13,7 +32,7 @@ export function FavButton({ song, className }: { song: Song; className?: string 
       aria-pressed={isFav}
       onClick={(e) => {
         e.stopPropagation();
-        useLibraryStore.getState().toggleFavorite(song);
+        toggleLike(song);
       }}
       className={cn(
         'p-2.5 rounded-full hover:bg-ink-700 transition-colors active:scale-90',

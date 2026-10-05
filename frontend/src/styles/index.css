@@ -145,7 +145,7 @@
   --aura-cyan: 255 99 132;
   --aura-lime: 163 230 53;
 
-  /* Glass material — iOS-style ADJUSTABLE translucency (Settings → Glass
+  /* Glass material — ADJUSTABLE frosted translucency (Settings → Glass
      effect). --glass-alpha is the single dial: 1 = the classic solid look,
      lower = more see-through, with blur and saturation rising to compensate
      so text still sits on a readable frost. The pre-paint script in
@@ -172,6 +172,34 @@
   --glass-shadow: 0 2px 10px -6px rgba(0, 0, 0, 0.45);
   --glass-shadow-strong: 0 -4px 16px -10px rgba(0, 0, 0, 0.4);
   --glass-accent-glow: 0 0 0 1px rgb(var(--ember-500) / 0.35);
+
+  /* 10.1 — the frosted material scale. Four tiers, each a translucent plum
+     fill + a backdrop blur + a saturation lift + a 1px specular line on the
+     top edge + a hairline (the .vx-mat-* utilities below put them together):
+       thin    — large quiet panels over a calm canvas (the sidebar);
+       regular — floating controls over moving content (Now Playing buttons);
+       chrome  — fixed / sticky bars content scrolls under (top bar, tab bar,
+                 mini player, player deck);
+       thick   — anything carrying a block of text (menus, sheets, dialogs,
+                 popovers, snackbars).
+     Both Settings dials still drive them: the fill follows --glass-alpha
+     (floored so text on a chrome or thick tier keeps AA even over a white
+     cover — asserted in glass.test.ts), the blur follows --glass-blur-boost.
+     Never put a material on a row inside a scrolling list: fixed or sticky
+     chrome and overlays only. */
+  --vx-mat-thin: rgb(var(--ink-950) / calc(var(--glass-alpha) * 0.62));
+  --vx-mat-regular: rgb(var(--ink-850) / clamp(0.5, calc(var(--glass-alpha) - 0.1), 0.92));
+  --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97));
+  --vx-mat-thick: rgb(var(--ink-850) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98));
+  --vx-mat-thin-blur: calc(12px + var(--glass-blur-boost) * 30px);
+  --vx-mat-regular-blur: calc(16px + var(--glass-blur-boost) * 34px);
+  --vx-mat-chrome-blur: calc(18px + var(--glass-blur-boost) * 36px);
+  --vx-mat-thick-blur: calc(24px + var(--glass-blur-boost) * 40px);
+  --vx-mat-sat: calc(125% + (1 - var(--glass-alpha)) * 70%);
+  --vx-mat-specular: rgb(255 255 255 / 0.09);
+  --vx-mat-hairline: rgb(255 255 255 / 0.08);
+  /* How strongly the playing artwork's colour (--art) tints the chrome. */
+  --vx-mat-art: 0.1;
 
   /* Solid-surface tokens — chrome and modals read these directly, and the
      translucency fallbacks (prefers-reduced-transparency, @supports not
@@ -280,6 +308,16 @@ html.light {
   --glass-shadow: 0 4px 12px -6px rgba(48, 22, 34, 0.12);
   --glass-shadow-strong: 0 -8px 20px -8px rgba(48, 22, 34, 0.12);
 
+  /* White frosted glass on the cream canvas. */
+  --vx-mat-thin: rgb(255 255 255 / calc(var(--glass-alpha) * 0.6));
+  --vx-mat-regular: rgb(255 255 255 / clamp(0.5, calc(var(--glass-alpha) - 0.1), 0.92));
+  --vx-mat-chrome: rgb(255 253 250 / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97));
+  --vx-mat-thick: rgb(255 253 250 / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98));
+  --vx-mat-sat: calc(140% + (1 - var(--glass-alpha)) * 50%);
+  --vx-mat-specular: rgb(255 255 255 / 0.95);
+  --vx-mat-hairline: rgb(48 22 34 / 0.1);
+  --vx-mat-art: 0.08;
+
   --surface-solid: rgb(255 252 247);
   --surface-input: rgb(248 242 233);
   --surface-navbar: rgb(255 252 247);
@@ -326,6 +364,13 @@ html.amoled {
   --surface-sidebar: rgb(var(--ink-950));
   --surface-player: rgb(3 3 5);
   --surface-modal: rgb(6 6 9);
+  /* AMOLED stays solid: true black does not frost. */
+  --vx-mat-thin: rgb(0 0 0);
+  --vx-mat-regular: rgb(9 9 12);
+  --vx-mat-chrome: rgb(0 0 0);
+  --vx-mat-thick: rgb(9 9 12);
+  --vx-mat-specular: rgb(255 255 255 / 0.05);
+  --vx-mat-art: 0;
 }
 html.amoled body {
   background-color: #000;
@@ -606,6 +651,27 @@ textarea:focus-visible {
   box-shadow: 0 0 0 4px rgb(var(--ember-500) / 0.18);
 }
 
+/* 10.1 — the frosted materials (tokens in :root). A component either takes
+   the class, or sets --mat-fill / --mat-blur itself and reads the same
+   recipe. --mat-lift is the element's own drop shadow, if it has one;
+   --mat-tint an optional colour wash layered over the fill (the chrome uses
+   it to carry the playing artwork's colour). */
+.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick {
+  background-color: var(--mat-fill);
+  background-image: var(--mat-tint, none);
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--vx-mat-sat));
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--vx-mat-sat));
+  box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline), var(--mat-lift, 0 0 #0000);
+}
+.vx-mat-thin { --mat-fill: var(--vx-mat-thin); --mat-blur: var(--vx-mat-thin-blur); }
+.vx-mat-regular { --mat-fill: var(--vx-mat-regular); --mat-blur: var(--vx-mat-regular-blur); }
+.vx-mat-chrome { --mat-fill: var(--vx-mat-chrome); --mat-blur: var(--vx-mat-chrome-blur); }
+.vx-mat-thick { --mat-fill: var(--vx-mat-thick); --mat-blur: var(--vx-mat-thick-blur); }
+html.amoled :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* Explicit utility so components can compose an accent halo on demand. */
 .glass-accent-glow { box-shadow: var(--glass-accent-glow); }
 
@@ -643,14 +709,16 @@ button.glass-card,
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass, .glass-strong, .glass-card, .glass-panel, .glass-navbar,
   .glass-bottom-player, .glass-sidebar, .glass-modal, .glass-sheet,
-  .glass-search, .glass-input {
+  .glass-search, .glass-input,
+  .vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick {
     background: var(--surface-solid) !important;
   }
 }
 @media (prefers-reduced-transparency: reduce) {
   .glass, .glass-strong, .glass-card, .glass-panel, .glass-navbar,
   .glass-bottom-player, .glass-sidebar, .glass-modal, .glass-sheet,
-  .glass-search, .glass-input, .glass-button {
+  .glass-search, .glass-input, .glass-button,
+  .vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     background: var(--surface-solid) !important;
@@ -1223,6 +1291,15 @@ html.device-tv :focus-visible {
   html.light {
     --glass-blur: max(0px, 4px + var(--glass-blur-boost) * 26px);
     --glass-blur-strong: max(0px, 8px + var(--glass-blur-boost) * 30px);
+  }
+  /* The materials get the same phone cap: a lighter blur that still follows
+     the Blur dial (default ≈ 16–22px), so the tab bar, mini player and top
+     bar stay cheap to composite while a list scrolls under them. */
+  :root {
+    --vx-mat-thin-blur: calc(8px + var(--glass-blur-boost) * 20px);
+    --vx-mat-regular-blur: calc(10px + var(--glass-blur-boost) * 22px);
+    --vx-mat-chrome-blur: calc(10px + var(--glass-blur-boost) * 22px);
+    --vx-mat-thick-blur: calc(14px + var(--glass-blur-boost) * 22px);
   }
 }
 

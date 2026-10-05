@@ -1,5 +1,5 @@
 /**
- * Adjustable iOS glass (4.12.0). Pins the alpha mapping's contract: level 0
+ * Adjustable frosted glass (4.12.0). Pins the alpha mapping's contract: level 0
  * is EXACTLY the classic solid look (alpha 1 — long-time users see zero
  * change until they touch the slider... except the new default), level 100
  * never goes fully transparent (text always keeps a frost to sit on), and
@@ -65,5 +65,78 @@ describe('blurBoost — the independent 4.13 blur dial', () => {
   it('shipped default is a moderate haze', () => {
     expect(BLUR_DEFAULT).toBe(40);
     expect(blurBoost(BLUR_DEFAULT)).toBeCloseTo(0.4, 2);
+  });
+});
+
+/**
+ * 10.1 — the frosted material scale. Text sits on the chrome (tab bar
+ * labels, the top bar title), on the thick tier (menus, sheets) and on the
+ * snackbar. Each fill is FLOORED, so whatever the Glass dial says and
+ * whatever scrolls underneath — a white cover in the dark theme, a black one
+ * in the light theme — the text keeps WCAG AA (4.5:1).
+ */
+describe('frosted materials keep text legible over any backdrop', () => {
+  const index = readFileSync(resolve(__dirname, '../styles/index.css'), 'utf8');
+  const shell = readFileSync(resolve(__dirname, '../styles/shell.css'), 'utf8');
+
+  const lin = (v: number): number => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  const lum = ([r, g, b]: number[]): number => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const ratio = (a: number[], b: number[]): number => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  /** The fill composited over a backdrop at the fill's floor alpha. */
+  const over = (fill: number[], alpha: number, backdrop: number[]): number[] => fill.map((c, i) => c * alpha + backdrop[i] * (1 - alpha));
+  const WHITE = [255, 255, 255];
+  const BLACK = [0, 0, 0];
+
+  it('the four tiers exist, follow both dials and are floored where text sits', () => {
+    for (const t of ['thin', 'regular', 'chrome', 'thick']) {
+      expect(index).toContain(`--vx-mat-${t}:`);
+      expect(index).toMatch(new RegExp(`--vx-mat-${t}-blur: calc\\(\\d+px \\+ var\\(--glass-blur-boost\\)`));
+      expect(index).toContain(`.vx-mat-${t}`);
+    }
+    expect(index).toContain('--vx-mat-thin: rgb(var(--ink-950) / calc(var(--glass-alpha)');
+    expect(index).toContain('--vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97))');
+    expect(index).toContain('--vx-mat-thick: rgb(var(--ink-850) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98))');
+    expect(index).toContain('--vx-mat-chrome: rgb(255 253 250 / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97))');
+    expect(index).toContain('--vx-mat-thick: rgb(255 253 250 / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98))');
+    expect(shell).toContain('--mat-fill: rgb(var(--ink-800) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98))');
+    expect(shell).toContain('--mat-fill: rgb(255 253 250 / clamp(0.92, calc(var(--glass-alpha) + 0.16), 0.98))');
+  });
+
+  it('dark: muted text on the chrome, body text on menus and snackbars clear AA over a white cover', () => {
+    const ink950 = [13, 9, 15];
+    const ink850 = [27, 20, 31];
+    const ink800 = [37, 28, 42];
+    const ink400 = [182, 171, 184];
+    const ink100 = [251, 245, 236];
+    const ember400 = [255, 192, 102];
+    expect(ratio(ink400, over(ink950, 0.8, WHITE))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(ink400, over(ink850, 0.86, WHITE))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(ink100, over(ink800, 0.86, WHITE))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(ember400, over(ink800, 0.86, WHITE))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('light: the same text tiers clear AA on white glass over a black cover', () => {
+    const glass = [255, 253, 250];
+    const ink400 = [94, 79, 88];
+    const ink100 = [24, 14, 22];
+    const ember400 = [156, 68, 4];
+    expect(ratio(ink400, over(glass, 0.8, BLACK))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(ink400, over(glass, 0.86, BLACK))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(ink100, over(glass, 0.92, BLACK))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(ember400, over(glass, 0.92, BLACK))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('AMOLED stays solid, and both translucency fallbacks cover the materials', () => {
+    expect(index).toMatch(/html\.amoled\s*\{[^}]*--vx-mat-chrome:\s*rgb\(0 0 0\)/);
+    const supportsNot = index.slice(index.indexOf('@supports not ((backdrop-filter'));
+    expect(supportsNot.slice(0, supportsNot.indexOf('}\n}'))).toContain('.vx-mat-chrome');
+    const reduced = index.slice(index.indexOf('@media (prefers-reduced-transparency: reduce)'));
+    expect(reduced.slice(0, reduced.indexOf('}\n}'))).toContain('.vx-mat-thick');
   });
 });
