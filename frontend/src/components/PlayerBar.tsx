@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { usePlayerStore, useCurrentSong } from '@/store/playerStore';
 import { useCastStore } from '@/services/cast';
 import { bestImage, FALLBACK_ART } from '@/utils/images';
-import { applyArtColor, extractAverageColor, extractVibrantColor } from '@/utils/color';
+import { applyArtColor, extractVibrantColor } from '@/utils/color';
 import { cn } from '@/utils/cn';
 import { Seekbar } from './Seekbar';
 import { FavButton } from './FavButton';
@@ -85,7 +85,6 @@ export function PlayerBar() {
     setSleepSongs(0);
   };
   const navigate = useNavigate();
-  const [accent, setAccent] = useState<string | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const castAvailable = useCastStore((s) => s.available);
 
@@ -111,11 +110,9 @@ export function PlayerBar() {
   useEffect(() => {
     let alive = true;
     if (artUrl) {
-      void extractAverageColor(artUrl).then((c) => alive && setAccent(c));
       // Living color: the artwork's vibrant tone drives the whole skin (--art).
       void extractVibrantColor(artUrl).then((c) => alive && applyArtColor(c));
     } else {
-      setAccent(null);
       applyArtColor(null);
     }
     return () => {
@@ -141,12 +138,9 @@ export function PlayerBar() {
       {/* ---- Mobile: floating mini-player card (artwork-tinted) ---- */}
       <div className="lg:hidden px-2 pb-1.5" data-tour="player">
         <div
-          className={cn(
-            'np-mini relative rounded-xl overflow-hidden shadow-lg border border-glass',
-            changed && 'np-changed',
-          )}
+          className={cn('np-mini vx-mat-chrome relative overflow-hidden', changed && 'np-changed')}
           data-buffering={isBuffering ? 'true' : undefined}
-          style={{ background: accent ? `color-mix(in srgb, ${accent} 16%, var(--vx-surface-raised))` : 'var(--vx-surface-raised)' }}
+          // 10.1 — frosted chrome tinted with the cover's living colour (--art, shell.css).
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
@@ -199,7 +193,7 @@ export function PlayerBar() {
       {/* ---- Desktop: the player deck, three zones ---- */}
       {/* 9.0.0 — a floating, rounded deck tinted from the artwork's left edge. */}
       <div className="hidden lg:block vx-deck-wrap" data-tour="player">
-        <div className="vx-deck">
+        <div className="vx-deck vx-mat-chrome">
         <div className="vx-pb-row">
           <div className="vx-pb-track">
             <button onClick={() => navigate('/now-playing')} aria-label="Open full screen player" className="vx-pb-art group shrink-0">

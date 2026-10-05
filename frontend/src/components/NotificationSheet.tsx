@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { isNativePlatform } from '@/services/native';
 import { alertsSnoozedUntil, snoozeAlerts } from '@/services/announcements';
 import { toast } from '@/store/toastStore';
-import { MegaphoneIcon, SparkleIcon } from '@/components/Icons';
+import { MegaphoneIcon, MusicIcon } from '@/components/Icons';
 import { Sheet, SheetHeader } from './Sheet';
 
 interface Announcement {
@@ -11,6 +11,8 @@ interface Announcement {
   body?: string;
   link?: string;
   ts?: number;
+  /** Optional cover for the row (a song pick, a release); a glyph otherwise. */
+  image?: string;
 }
 interface NoteRow {
   version: string;
@@ -25,7 +27,32 @@ function ago(ts?: number): string {
   return `${Math.round(h / 24)}d ago`;
 }
 
-/** Canvas 3c — notification center: today's pick + recent release notes. */
+/** "Today", "Yesterday", then the date ("Monday, 29 Sept"); undated → "Earlier". */
+export function dayLabel(ts: number | undefined, now = Date.now()): string {
+  if (!ts) return 'Earlier';
+  const startOf = (t: number): number => new Date(t).setHours(0, 0, 0, 0);
+  const days = Math.round((startOf(now) - startOf(ts)) / 86_400_000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return new Date(ts).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+/** Newest first, grouped under one heading per day. */
+export function groupByDay<T extends { ts?: number }>(items: T[], now = Date.now()): { label: string; items: T[] }[] {
+  const groups: { label: string; items: T[] }[] = [];
+  for (const item of [...items].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))) {
+    const label = dayLabel(item.ts, now);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(item);
+    else groups.push({ label, items: [item] });
+  }
+  return groups;
+}
+
+/**
+ * Canvas 3c — notification center: today's pick + recent release notes.
+ * 10.1.0 — the inbox: a frosted sheet, artwork-led rows, grouped by day.
+ */
 export function NotificationSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const [anns, setAnns] = useState<Announcement[]>([]);
@@ -45,47 +72,65 @@ export function NotificationSheet({ open, onClose }: { open: boolean; onClose: (
       setNotes(rows);
     });
   }, [open]);
+  const groups = groupByDay(anns);
   return (
     <Sheet open={open} onClose={onClose} labelledBy="notification-sheet-title" backdropClassName="bg-black/60">
         <SheetHeader id="notification-sheet-title" title="Notifications" onClose={onClose} />
-        <ul className="-mx-2">
-          {anns.length > 0 ? (
-            anns.map((ann, i) => (
-              <li key={ann.ts ?? i}>
-                <button
-                  onClick={() => {
-                    onClose();
-                    if (typeof ann.link === 'string' && ann.link.startsWith('/')) navigate(ann.link);
-                  }}
-                  className="w-full min-h-[60px] text-left rounded-lg px-2 py-2 flex items-center gap-3 hover:bg-[var(--vx-hover)] transition-colors"
-                >
-                  <span className="w-10 h-10 rounded-full bg-ink-100/[0.07] text-ink-200 flex items-center justify-center shrink-0" aria-hidden>
-                    <MegaphoneIcon className="w-5 h-5" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[14px] font-semibold text-ink-100 truncate">{ann.title}</span>
-                    <span className="block text-[13px] text-ink-400 truncate">
-                      {ann.body} {ann.ts ? `· ${ago(ann.ts)}` : ''}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))
-          ) : (
-            <li className="px-2 py-3 text-[14px] text-ink-400">Nothing new right now.</li>
-          )}
-          {notes.map((n) => (
-            <li key={n.version} className="min-h-[60px] px-2 py-2 flex items-center gap-3">
-              <span className="w-10 h-10 rounded-full bg-ink-100/[0.07] text-ink-200 flex items-center justify-center shrink-0" aria-hidden>
-                <SparkleIcon className="w-5 h-5" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[14px] font-semibold text-ink-100 truncate">VinaX {n.version} is here</span>
-                <span className="block text-[13px] text-ink-400 truncate">{n.title}</span>
-              </span>
-            </li>
+        <div className="vx-inbox">
+          {groups.length === 0 && <p className="vx-inbox-empty">Nothing new right now.</p>}
+          {groups.map((g) => (
+            <section key={g.label} aria-label={g.label}>
+              <h3 className="vx-inbox-day">{g.label}</h3>
+              <ul>
+                {g.items.map((ann, i) => (
+                  <li key={ann.ts ?? i}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        if (typeof ann.link === 'string' && ann.link.startsWith('/')) navigate(ann.link);
+                      }}
+                      className="vx-inbox-row"
+                    >
+                      <span className="vx-inbox-art" aria-hidden>
+                        {ann.image ? (
+                          <img src={ann.image} alt="" loading="lazy" decoding="async" />
+                        ) : ann.link?.startsWith('/song/') ? (
+                          <MusicIcon className="w-5 h-5" />
+                        ) : (
+                          <MegaphoneIcon className="w-5 h-5" />
+                        )}
+                      </span>
+                      <span className="vx-inbox-text">
+                        <span className="vx-inbox-title">{ann.title}</span>
+                        {ann.body && <span className="vx-inbox-body">{ann.body}</span>}
+                      </span>
+                      {ann.ts ? <span className="vx-inbox-time">{ago(ann.ts)}</span> : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+          {notes.length > 0 && (
+            <section aria-label="From VinaX">
+              <h3 className="vx-inbox-day">From VinaX</h3>
+              <ul>
+                {notes.map((n) => (
+                  <li key={n.version} className="vx-inbox-row is-static">
+                    <span className="vx-inbox-art is-app" aria-hidden>
+                      <img src="/icons/icon.svg" alt="" width={44} height={44} />
+                    </span>
+                    <span className="vx-inbox-text">
+                      <span className="vx-inbox-title">VinaX {n.version} is here</span>
+                      <span className="vx-inbox-body">{n.title}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
         {/* D7 — a week of quiet, without touching the permanent toggle. */}
         {isNativePlatform() && (
           <button

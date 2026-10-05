@@ -154,11 +154,14 @@ function SlidersIcon({ className }: { className?: string }) {
   );
 }
 
-/** The stage backdrop: blurred artwork under the artwork's own colour. */
+/** The stage backdrop: the artwork, heavily blurred, under its own colour.
+ *  10.1 — two blurred copies drift slowly against each other (still under
+ *  either reduced-motion switch; styles/pages/player.css). */
 function StageBackdrop({ artUrl, children }: { artUrl: string | null; children?: React.ReactNode }) {
   return (
     <div className="vx-np-bg" aria-hidden>
       {artUrl && <img src={artUrl} alt="" loading="eager" decoding="async" className="vx-np-bg-art" />}
+      {artUrl && <img src={artUrl} alt="" loading="eager" decoding="async" className="vx-np-bg-art is-echo" />}
       {children}
     </div>
   );

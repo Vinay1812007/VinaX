@@ -12,7 +12,7 @@ import {
 } from '@/services/media-session';
 import { recordComplete, recordPlay, recordQueueAdd, recordSkip } from '@/services/personalization/updater';
 import { checkNotificationOnFirstPlay, haptic, isNativePlatform } from '@/services/native';
-import { toast } from './toastStore';
+import { toast, toastNavigate } from './toastStore';
 import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
 import { useCastStore, castInterceptPlayPause, castInterceptSeek, castInterceptVolume, castMime } from '@/services/cast';
@@ -926,7 +926,8 @@ export const usePlayerStore = create<PlayerState>()(
           saveOwnership();
           set({ queue: [...queue.slice(0, at), song, ...queue.slice(at)] });
           if (firstAuto >= 0) preloadUpcoming();
-          toast('Added to queue');
+          // 10.1 — the snackbar shows which song went in, and opens the queue.
+          toast('Added to queue', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
           if (queue.length === 0) get().playQueue([song]);
         },
 
@@ -977,7 +978,7 @@ export const usePlayerStore = create<PlayerState>()(
             queue: [...filtered.slice(0, insertAt), song, ...filtered.slice(insertAt)],
             index: newIndex,
           });
-          toast('Playing next');
+          toast('Playing next', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
         },
 
         removeAt: (i) => {

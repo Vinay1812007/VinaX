@@ -61,7 +61,7 @@ export function Sidebar() {
   const ordered = [...collections].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
 
   return (
-    <aside className={cn('vx-sidebar hidden md:flex', collapsed && 'is-collapsed')} aria-label="Sidebar">
+    <aside className={cn('vx-sidebar vx-mat-thin hidden md:flex', collapsed && 'is-collapsed')} aria-label="Sidebar">
       <div className="vx-sidebar-head">
         <Link to="/" className="vx-brand" aria-label="VinaX home">
           <img src="/icons/icon.svg" alt="" width={30} height={30} />

@@ -72,6 +72,21 @@ describe('manual actions outrank automation', () => {
     expect(usePlayerStore.getState().autoTail().map((s) => s.id)).toEqual(['auto1', 'auto2', 'auto3']);
   });
 
+  it('10.1 — "Added to queue" / "Playing next" snackbars carry the cover and a View action', async () => {
+    const { useToastStore } = await import('./toastStore');
+    const withArt = { ...song('art'), images: [{ quality: '50x50', url: 'https://img.example/art.jpg' }] };
+    usePlayerStore.getState().playQueue([song('a')], 0);
+    usePlayerStore.getState().enqueue(withArt);
+    let last = useToastStore.getState().toasts.slice(-1)[0];
+    expect(last?.message).toBe('Added to queue');
+    expect(last?.image).toBe('https://img.example/art.jpg');
+    expect(last?.action?.label).toBe('View');
+    usePlayerStore.getState().enqueueNext({ ...withArt, id: 'art2' });
+    last = useToastStore.getState().toasts.slice(-1)[0];
+    expect(last?.message).toBe('Playing next');
+    expect(last?.action?.label).toBe('View');
+  });
+
   it('keeps an album in order and appends hand-added songs after it', () => {
     useSettingsStore.setState({ djTakeover: false });
     usePlayerStore.getState().playQueue([song('a'), song('b'), song('c')], 0);

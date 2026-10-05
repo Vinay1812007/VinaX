@@ -515,7 +515,7 @@ function TrackMenuPanel({ song, anchorRef, onClose, onShowMemories, leadItems }:
         role="menu"
         aria-label={view === 'less' ? `Less like this: play less of ${artist} for how long?` : `More options for ${song.title}`}
         onKeyDown={onMenuKeyDown}
-        className={cn('vx-menu fixed z-[71] overflow-y-auto overscroll-contain', asSheet && 'is-sheet')}
+        className={cn('vx-menu vx-mat-thick fixed z-[71] overflow-y-auto overscroll-contain', asSheet && 'is-sheet')}
         style={pos ? (asSheet ? undefined : { top: pos.top, left: pos.left }) : { top: 0, left: 0, visibility: 'hidden' }}
       >
         {/* The song this menu acts on — shown on the phone sheet only (CSS). */}

@@ -42,7 +42,11 @@
 }
 
 /* Backdrop: blurred artwork under the artwork's colour, settling into the
-   canvas towards the bottom so the controls always read. */
+   canvas towards the bottom so the controls always read.
+   10.1 — two heavily blurred copies of the cover, oversized, drifting slowly
+   against each other (26 s and 31 s, eased, back and forth), so the stage
+   breathes like light through frosted glass. Transform-only motion on two
+   promoted layers; nothing moves under either reduced-motion switch. */
 .vx-np-bg { position: absolute; inset: 0; z-index: -1; overflow: hidden; background: rgb(var(--ink-950)); }
 .vx-np-bg-art {
   position: absolute;
@@ -53,6 +57,26 @@
   opacity: 0.55;
   filter: blur(80px) saturate(1.35);
   transform: translateZ(0);
+  will-change: transform;
+  animation: vx-np-drift-a 26s ease-in-out infinite alternate;
+}
+.vx-np-bg-art.is-echo {
+  opacity: 0.4;
+  filter: blur(96px) saturate(1.5);
+  animation: vx-np-drift-b 31s ease-in-out infinite alternate;
+}
+@keyframes vx-np-drift-a {
+  from { transform: translate3d(-5%, -4%, 0) scale(1.08) rotate(0deg); }
+  to { transform: translate3d(5%, 3%, 0) scale(1.2) rotate(10deg); }
+}
+@keyframes vx-np-drift-b {
+  from { transform: translate3d(6%, 5%, 0) scale(1.4) rotate(180deg); }
+  to { transform: translate3d(-6%, -3%, 0) scale(1.25) rotate(162deg); }
+}
+@media (max-width: 767px) {
+  /* Phones: the same look from a lighter blur. */
+  .vx-np-bg-art { filter: blur(64px) saturate(1.35); }
+  .vx-np-bg-art.is-echo { filter: blur(72px) saturate(1.5); }
 }
 .vx-np-bg-wash {
   position: absolute;
@@ -79,7 +103,33 @@ html.light .vx-np-bg-wash {
     linear-gradient(180deg, color-mix(in srgb, var(--np-warm) 16%, transparent) 0%, rgb(var(--ink-950) / 0.62) 52%, rgb(var(--ink-950) / 0.94) 100%);
 }
 html.light .vx-np-bg-scrim { background: rgb(var(--ink-950) / 0.4); }
+html.light .vx-np-bg-art.is-echo { opacity: 0.3; filter: blur(100px) saturate(1.25); }
 html.amoled .vx-np-bg-art { opacity: 0.42; }
+html.amoled .vx-np-bg-art.is-echo { opacity: 0.28; }
+
+/* 10.1 — glass controls on the stage: the round top-bar buttons and the
+   tool row are frosted panes (a translucent fill, the specular top line and
+   a hairline). No backdrop-filter of their own — they already sit on a
+   blurred stage, and the stage scrolls. */
+.vx-np-top .vx-np-icon,
+.vx-np-top .vx-np-menu button[aria-haspopup='menu'] {
+  background: rgb(var(--ink-100) / 0.08);
+  box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline);
+}
+.vx-np-tools {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgb(var(--ink-100) / 0.07);
+  box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline);
+}
+html.light .vx-np-top .vx-np-icon,
+html.light .vx-np-top .vx-np-menu button[aria-haspopup='menu'],
+html.light .vx-np-tools { background: rgb(255 255 255 / 0.55); }
+html.amoled .vx-np-tools { background: rgb(var(--ink-850)); }
+.vx-np-top .vx-np-icon:hover,
+.vx-np-top .vx-np-menu button[aria-haspopup='menu']:hover { background: rgb(var(--ink-100) / 0.14); }
+html.light .vx-np-top .vx-np-icon:hover,
+html.light .vx-np-top .vx-np-menu button[aria-haspopup='menu']:hover { background: rgb(255 255 255 / 0.8); }
 
 .vx-np-inner { display: flex; flex-direction: column; width: 100%; max-width: 1280px; margin: 0 auto; }
 .vx-np .is-hidden { opacity: 0; pointer-events: none; }
@@ -1151,4 +1201,7 @@ html.light .vx-drive-art { box-shadow: 0 24px 50px -26px rgb(48 22 34 / 0.4); }
   }
 }
 html.reduce-motion .vx-np-art-img.is-paused { transform: none; }
+/* The drifting backdrop holds still under either switch. */
+@media (prefers-reduced-motion: reduce) { .vx-np-bg-art { animation: none !important; } }
+html.reduce-motion .vx-np-bg-art { animation: none !important; }
 html.reduce-motion .vx-np-immersive, html.reduce-motion .vx-np-canvas-layer { animation: none !important; }
