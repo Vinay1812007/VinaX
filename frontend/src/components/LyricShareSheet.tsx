@@ -49,12 +49,12 @@ async function renderLyricCard(lines: string[], song: Song): Promise<Blob> {
 
   const bg = x.createLinearGradient(0, 0, 0, 1080);
   bg.addColorStop(0, '#17181e');
-  bg.addColorStop(1, '#0a0b0e');
+  bg.addColorStop(1, '#0d090f');
   x.fillStyle = bg;
   x.fillRect(0, 0, 1080, 1080);
   const glow = x.createRadialGradient(220, 200, 0, 220, 200, 680);
-  glow.addColorStop(0, 'rgba(140,120,255,0.34)');
-  glow.addColorStop(1, 'rgba(140,120,255,0)');
+  glow.addColorStop(0, 'rgba(255,164,46,0.34)');
+  glow.addColorStop(1, 'rgba(255,164,46,0)');
   x.fillStyle = glow;
   x.fillRect(0, 0, 1080, 1080);
   const glow2 = x.createRadialGradient(940, 980, 0, 940, 980, 520);

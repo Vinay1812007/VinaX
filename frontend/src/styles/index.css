@@ -23,6 +23,17 @@
   initial-value: 0%;
 }
 
+/* 10.0 "Marigold" — the display face for headlines, page titles and the
+   brand moments (Bricolage Grotesque, SIL OFL 1.1, self-hosted). Body copy
+   stays Manrope. Only fetched when a display-styled heading renders. */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/fonts/bricolage-var.woff2') format('woff2-variations');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'Manrope';
   src: url('/fonts/manrope-var.woff2') format('woff2-variations');
@@ -47,7 +58,7 @@
   --vx-text-muted: rgb(var(--ink-400));
   --vx-accent: rgb(var(--ember-500));
   --vx-accent-hover: rgb(var(--ember-400));
-  --vx-on-accent: #0b0b0c;
+  --vx-on-accent: #1a0e06;
   --vx-focus: rgb(var(--ember-400));
   --vx-danger: #fda4af;
   --vx-success: #86efac;
@@ -65,6 +76,7 @@
   --vx-shadow-overlay: 0 24px 64px -12px rgb(0 0 0 / 0.6);
   --vx-motion-fast: 140ms;
   --vx-motion-normal: 200ms;
+  --vx-font-display: 'Bricolage Grotesque', 'Manrope', system-ui, sans-serif;
   --vx-type-display: clamp(2.25rem, 4vw, 3.75rem);
   --vx-type-page: clamp(1.875rem, 3vw, 2.625rem);
   --vx-type-section: 1.375rem;
@@ -87,37 +99,37 @@
      ink-950 is the chrome (sidebar, player deck, tab bar), ink-900 the
      workspace, ink-850 / ink-800 the raised tiers (cards, panels, hover).
      AAA on --ink-900 with --ink-100. */
-  --ink-950: 10 11 14;
-  --ink-900: 16 17 21;
-  --ink-850: 23 24 30;
-  --ink-800: 31 32 40;
-  --ink-700: 46 47 58;
-  --ink-600: 86 88 102;
+  --ink-950: 13 9 15;
+  --ink-900: 19 14 22;
+  --ink-850: 27 20 31;
+  --ink-800: 37 28 42;
+  --ink-700: 56 44 62;
+  --ink-600: 98 86 104;
   /* ink-500 is used as TEXT (captions, counts, hints), so it must clear AA:
      146 148 162 measures 6.3:1 on ink-900 and 5.4:1 on ink-800 (4.5 needed).
      Asserted in contrast.test.ts. */
-  --ink-500: 146 148 162;
-  --ink-400: 168 170 184;
-  --ink-300: 188 190 202;
-  --ink-200: 226 227 234;
-  --ink-100: 250 250 252;
+  --ink-500: 160 148 162;
+  --ink-400: 182 171 184;
+  --ink-300: 203 194 203;
+  --ink-200: 234 227 226;
+  --ink-100: 251 245 236;
 
   /* Brand ramps, taken from the VinaX mark. ember = "Iris", the violet of the
      mark's stroke: play buttons, focus rings, active state, progress.
      tide = "Lagoon", the mark's cyan: live and AI accents, secondary links,
      the one restrained gradient (Iris → Lagoon). Accent-theme selectors
      below override these at runtime. */
-  --ember-600: 112 86 246;
-  --ember-500: 140 120 255;
-  --ember-400: 178 166 255;
-  --ember-300: 210 203 255;
-  --tide-500: 34 211 238;
-  --tide-400: 103 232 249;
+  --ember-600: 236 132 20;
+  --ember-500: 255 164 46;
+  --ember-400: 255 192 102;
+  --ember-300: 255 218 158;
+  --tide-500: 255 99 132;
+  --tide-400: 255 145 168;
 
   /* --art: living accent extracted from the currently playing artwork.
      Set at runtime by src/layouts/AppLayout.tsx; defaults to the accent so
      the very first page load doesn't leak a stale hue. */
-  --art: 140 120 255;
+  --art: 255 164 46;
 
   /* Art-tint alphas — used by light-mode glass surfaces to wash the frost
      with the current artwork's dominant color. Kept as tokens so future
@@ -129,8 +141,8 @@
 
   /* Aura palette — used by the home-page hero wash + settings glow. Kept
      as a small named subset so component code stays readable. */
-  --aura-violet: 140 120 255;
-  --aura-cyan: 34 211 238;
+  --aura-violet: 255 164 46;
+  --aura-cyan: 255 99 132;
   --aura-lime: 163 230 53;
 
   /* Glass material — iOS-style ADJUSTABLE translucency (Settings → Glass
@@ -149,11 +161,11 @@
   --glass-blur: calc(6px + var(--glass-blur-boost) * 34px);
   --glass-blur-strong: calc(12px + var(--glass-blur-boost) * 34px);
   --glass-saturate: calc(100% + (1 - var(--glass-alpha)) * 90%);
-  --glass-bg: rgb(23 24 30 / var(--glass-alpha));
-  --glass-bg-strong: rgb(36 37 46 / var(--glass-alpha));
-  --glass-bg-muted: rgb(16 17 21 / var(--glass-alpha));
-  --glass-bg-hover: rgb(36 37 46 / max(var(--glass-alpha), 0.85));
-  --glass-bg-active: rgb(48 49 60 / max(var(--glass-alpha), 0.9));
+  --glass-bg: rgb(27 20 31 / var(--glass-alpha));
+  --glass-bg-strong: rgb(44 34 50 / var(--glass-alpha));
+  --glass-bg-muted: rgb(19 14 22 / var(--glass-alpha));
+  --glass-bg-hover: rgb(44 34 50 / max(var(--glass-alpha), 0.85));
+  --glass-bg-active: rgb(56 44 62 / max(var(--glass-alpha), 0.9));
   --glass-border: rgba(255, 255, 255, 0.06);
   --glass-border-strong: rgba(255, 255, 255, 0.12);
   --glass-highlight: rgba(255, 255, 255, 0.02);
@@ -164,7 +176,7 @@
   /* Solid-surface tokens — chrome and modals read these directly, and the
      translucency fallbacks (prefers-reduced-transparency, @supports not
      backdrop-filter) fall back to --surface-solid. */
-  --surface-solid: rgb(16 17 21);
+  --surface-solid: rgb(19 14 22);
   --surface-input: var(--vx-surface-raised);
   --surface-navbar: rgb(var(--ink-950));
   --surface-sidebar: rgb(var(--ink-950));
@@ -174,7 +186,7 @@
   /* Gradients — single-hue, no rainbow stops (the hero + text-gradient
      carry the only real spectrum in the app). */
   --gradient-primary: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)));
-  --gradient-secondary: linear-gradient(180deg, rgb(46 47 58), rgb(36 37 46));
+  --gradient-secondary: linear-gradient(180deg, rgb(56 44 62), rgb(44 34 50));
   --gradient-premium: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--ember-500)));
   --gradient-aurora: linear-gradient(120deg, rgb(var(--ember-500)), rgb(var(--tide-500)));
 
@@ -230,50 +242,50 @@ html.light {
   --vx-success: #166534;
 
   /* 9.0 — a warm paper canvas under white chrome. */
-  --ink-950: 255 255 255;
-  --ink-900: 246 246 243;
-  --ink-850: 238 238 234;
-  --ink-800: 228 228 223;
-  --ink-700: 210 210 204;
-  --ink-600: 150 152 160;
+  --ink-950: 255 252 247;
+  --ink-900: 250 245 237;
+  --ink-850: 244 237 227;
+  --ink-800: 236 227 214;
+  --ink-700: 216 205 192;
+  --ink-600: 156 142 138;
   /* 5.7:1 on ink-900, 4.8:1 on ink-800. Stays one step lighter than ink-400
      so the ramp remains monotonic. */
-  --ink-500: 94 97 110;
+  --ink-500: 104 88 96;
   /* The muted-text tier clears AA on the canvas (6.2:1) and on cards (5.3:1). */
-  --ink-400: 88 91 104;
-  --ink-300: 70 73 86;
-  --ink-200: 36 38 48;
-  --ink-100: 14 15 20;
+  --ink-400: 94 79 88;
+  --ink-300: 74 60 70;
+  --ink-200: 42 30 40;
+  --ink-100: 24 14 22;
 
   /* Accent ramps re-pitched for the light canvas. The dark ramps (indigo
      500/400) measure 2.66–4.35:1 on light surfaces — illegible. Each tier
      shifts ~2 shades darker; ember-400 (the text tier, 87 call sites) and
      tide-400 clear 4.5:1 on ink-900 AND ink-800. Asserted in
      src/__tests__/contrast.test.ts. */
-  --ember-600: 70 44 190;
-  --ember-500: 86 60 215;
-  --ember-400: 98 70 228;
-  --ember-300: 120 96 240;
-  --tide-500: 14 116 144;
-  --tide-400: 21 94 117;
+  --ember-600: 128 54 2;
+  --ember-500: 168 74 4;
+  --ember-400: 156 68 4;
+  --ember-300: 180 84 8;
+  --tide-500: 196 32 96;
+  --tide-400: 176 24 80;
 
   --glass-bg: rgb(255 255 255 / var(--glass-alpha));
-  --glass-bg-strong: rgb(248 250 253 / var(--glass-alpha));
-  --glass-bg-muted: rgb(244 246 251 / var(--glass-alpha));
-  --glass-bg-hover: rgb(240 240 240 / max(var(--glass-alpha), 0.85));
-  --glass-bg-active: rgb(232 234 240 / max(var(--glass-alpha), 0.9));
-  --glass-border: rgba(15, 20, 30, 0.08);
-  --glass-border-strong: rgba(15, 20, 30, 0.14);
+  --glass-bg-strong: rgb(255 251 245 / var(--glass-alpha));
+  --glass-bg-muted: rgb(248 242 233 / var(--glass-alpha));
+  --glass-bg-hover: rgb(243 236 226 / max(var(--glass-alpha), 0.85));
+  --glass-bg-active: rgb(236 227 214 / max(var(--glass-alpha), 0.9));
+  --glass-border: rgba(48, 22, 34, 0.09);
+  --glass-border-strong: rgba(48, 22, 34, 0.16);
   --glass-highlight: rgba(255, 255, 255, 0.75);
-  --glass-shadow: 0 4px 12px -6px rgba(15, 20, 30, 0.12);
-  --glass-shadow-strong: 0 -8px 20px -8px rgba(15, 20, 30, 0.12);
+  --glass-shadow: 0 4px 12px -6px rgba(48, 22, 34, 0.12);
+  --glass-shadow-strong: 0 -8px 20px -8px rgba(48, 22, 34, 0.12);
 
-  --surface-solid: rgb(255 255 255);
-  --surface-input: rgb(244 246 251);
-  --surface-navbar: rgb(255 255 255);
-  --surface-sidebar: rgb(255 255 255);
-  --surface-modal: rgb(255 255 255);
-  --surface-player: rgb(255 255 255);
+  --surface-solid: rgb(255 252 247);
+  --surface-input: rgb(248 242 233);
+  --surface-navbar: rgb(255 252 247);
+  --surface-sidebar: rgb(255 252 247);
+  --surface-modal: rgb(255 252 247);
+  --surface-player: rgb(255 252 247);
 
   --lyric-active: 10 12 16;
   --lyric-dim: 71 85 105;
@@ -296,7 +308,7 @@ html.light {
      for a "resting" wash, so light mode overrides the resting hue to a soft
      neutral slate. The moment applyArtColor() sets an inline style on <html>
      this override is superseded. */
-  --art: 156 163 175;
+  --art: 176 150 132;
 }
 
 /* AMOLED — true-black canvas for OLED displays. Rides the dark theme; only
@@ -431,7 +443,7 @@ body {
   transition: background-color 0.4s ease, color 0.4s ease;
 }
 html.light body {
-  background-color: rgb(246 246 243);
+  background-color: rgb(250 245 237);
 }
 
 main {
@@ -725,6 +737,7 @@ button:disabled,
    Display type + gradient text.
    ========================================================================= */
 .text-display {
+  font-family: var(--vx-font-display);
   font-size: clamp(2rem, 1.4rem + 2.6vw, 3.25rem);
   font-weight: 800;
   letter-spacing: -0.035em;

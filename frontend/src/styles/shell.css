@@ -415,6 +415,7 @@ html.light .vx-deck { background: rgb(var(--ink-950) / 0.96); }
   margin-bottom: 28px;
 }
 .vx-page-header h1, .vx-page-title {
+  font-family: var(--vx-font-display);
   font-size: var(--vx-type-page);
   font-weight: 800;
   line-height: 1.08;
@@ -422,6 +423,7 @@ html.light .vx-deck { background: rgb(var(--ink-950) / 0.96); }
 }
 .vx-page-header > div > p { margin-top: 6px; color: rgb(var(--ink-400)); font-size: 14px; }
 .vx-display {
+  font-family: var(--vx-font-display);
   font-size: var(--vx-type-display);
   font-weight: 800;
   line-height: 1.02;

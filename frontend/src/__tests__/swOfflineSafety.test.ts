@@ -24,7 +24,7 @@ describe('sw.js activate', () => {
       clients: { claim: () => Promise.resolve() },
     };
     const fakeCaches = {
-      keys: () => Promise.resolve(['vinax-shell-v12', AUDIO, 'vinax-shell-v14', 'something-else']),
+      keys: () => Promise.resolve(['vinax-shell-v12', AUDIO, 'vinax-shell-v15', 'something-else']),
       delete: (k: string) => {
         deleted.push(k);
         return Promise.resolve(true);
