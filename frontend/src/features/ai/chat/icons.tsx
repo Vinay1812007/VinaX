@@ -102,3 +102,17 @@ export const UploadIcon = ({ className }: P): ReactNode => (
     <path d="M12 16V4.5M7.5 9 12 4.5 16.5 9M4.5 15.5V18A1.5 1.5 0 0 0 6 19.5h12a1.5 1.5 0 0 0 1.5-1.5v-2.5" />
   </svg>
 );
+/** 10.0 — the Place connector: a map pin. */
+export const PlaceIcon = ({ className }: P): ReactNode => (
+  <svg {...line(className)}>
+    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
+    <circle cx="12" cy="10" r="2.4" />
+  </svg>
+);
+/** 10.0 — the Memory connector: a note with a kept corner. */
+export const MemoryIcon = ({ className }: P): ReactNode => (
+  <svg {...line(className)}>
+    <path d="M6 3.5h12A1.5 1.5 0 0 1 19.5 5v14l-4-2.5-3.5 2.5-3.5-2.5-4 2.5V5A1.5 1.5 0 0 1 6 3.5z" />
+    <path d="M8.5 8.5h7M8.5 12h4.5" />
+  </svg>
+);

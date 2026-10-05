@@ -27,8 +27,9 @@ const esc = (s) =>
 
 const ROUTES = [
   // Home description must sit in Bing's 25–160 char window (BWT flagged the
-  // old 205-char version, 2026-08-17). This one is ~152.
-  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is a free, no-login music streaming app for India — Telugu, Hindi, Tamil and 9 more languages with smart mixes, live charts, playlists and synced lyrics.', h1: 'VinaX — Free Music Streaming for India' },
+  // old 205-char version, 2026-08-17). This one is 152. 10.0 — it leads with
+  // the free promise, as the app's first-visit welcome does.
+  { p: '/', t: 'VinaX — Free Music Streaming for India', d: 'VinaX is free music streaming for India, with no sign-up and no account: Telugu, Hindi, Tamil and 9 more languages, smart mixes, live charts and lyrics.', h1: 'VinaX — Free Music Streaming for India' },
   { p: '/discover', t: 'Discover', d: 'Fresh picks, trending songs and ready-made mixes across languages and moods.', h1: 'Discover new music' },
   { p: '/charts', t: 'Top Charts', d: 'The most popular songs right now, by language — updated daily.', h1: 'Top Charts', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/charts#page', name: 'Top Charts', url: 'https://www.sirimillavinay.online/charts', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
   { p: '/top-songs', t: 'Top Songs — Most Popular Right Now', d: 'The most popular songs on VinaX right now — Telugu, Hindi, Tamil and nine more languages. Stream the top hits free, no login, updated continuously.', h1: 'Top Songs', ld: { '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': 'https://www.sirimillavinay.online/top-songs#page', name: 'Top Songs on VinaX', url: 'https://www.sirimillavinay.online/top-songs', isPartOf: { '@id': 'https://www.sirimillavinay.online/#website' } } },
@@ -192,11 +193,18 @@ let bodies;
   }
 }
 
+/** Home's hero line: the free promise, as the first-visit welcome states it (features/home/HomeWelcome.tsx). */
+const HOME_PROMISE =
+  '<p><strong>All the music you love. Free.</strong> Free forever, with no sign-up, no account and no subscription: ' +
+  'open VinaX and press play. Hindi, Telugu, Tamil, Punjabi and 8 more languages, with synced lyrics, AI Radio, ' +
+  'Listen Together rooms, VinaX AI and offline downloads in the Android app.</p>';
+
 /** The crawlable body for one route: the real page text, then the nav. */
 function bodyFor(r) {
   if (bodies.pages[r.p]) return bodies.pages[r.p];
   const intro = `<h1>${esc(r.h1)}</h1><p>${esc(r.d)}</p>`;
-  if (r.p === '/') return intro + bodies.home;
+  // 10.0 — the hero states the promise the app's welcome makes, in the same words.
+  if (r.p === '/') return intro + HOME_PROMISE + bodies.home;
   if (r.p === '/help') return intro + bodies.help;
   const hub = /^\/([a-z]+)-songs$/.exec(r.p);
   if (hub) return intro + bodies.hub(hub[1], cap(hub[1]));

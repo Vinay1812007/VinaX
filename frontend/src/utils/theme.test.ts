@@ -25,16 +25,16 @@ function lastValue(varName: string): string {
   return last;
 }
 
-describe('color tokens (VinaX 9 "Encore")', () => {
-  it('brand ramps resolve to the VinaX mark: Iris violet + Lagoon cyan over deep charcoal', () => {
-    // 9.0 — the default ramp is taken from the VinaX mark: its violet stroke
-    // (ember, "Iris") and its cyan (tide, "Lagoon"), over charcoal chrome.
-    expect(lastValue('--ember-400')).toBe('178 166 255');
-    expect(lastValue('--ember-500')).toBe('140 120 255');
-    expect(lastValue('--tide-400')).toBe('103 232 249');
-    expect(lastValue('--tide-500')).toBe('34 211 238');
-    expect(lastValue('--ink-950')).toBe('10 11 14');
-    expect(lastValue('--ink-900')).toBe('16 17 21');
+describe('color tokens (VinaX 10 "Marigold")', () => {
+  it('brand ramps resolve to the recoloured mark: Marigold + Rose over plum-black', () => {
+    // 10.0 — ember is "Marigold" (the mark's stroke: play, focus, progress),
+    // tide is "Rose" (live and AI moments), over a deep plum-black chrome.
+    expect(lastValue('--ember-400')).toBe('255 192 102');
+    expect(lastValue('--ember-500')).toBe('255 164 46');
+    expect(lastValue('--tide-400')).toBe('255 145 168');
+    expect(lastValue('--tide-500')).toBe('255 99 132');
+    expect(lastValue('--ink-950')).toBe('13 9 15');
+    expect(lastValue('--ink-900')).toBe('19 14 22');
     expect(lastValue('--surface-sidebar')).toBe('rgb(var(--ink-950))');
   });
 
@@ -51,7 +51,7 @@ describe('color tokens (VinaX 9 "Encore")', () => {
     // moods the single dial couldn't express. AMOLED stays solid on purpose
     // (true-black canvases don't frost), and the reduced-transparency
     // fallback still forces --surface-solid.
-    expect(css).toContain('--glass-bg: rgb(23 24 30 / var(--glass-alpha))'); // dark (9.0 charcoal)
+    expect(css).toContain('--glass-bg: rgb(27 20 31 / var(--glass-alpha))'); // dark (10.0 plum)
     expect(css).toContain('--glass-bg: rgb(255 255 255 / var(--glass-alpha))'); // light
     expect(css).toContain('--glass-blur-boost:');
     expect(css).toContain('--glass-blur: calc(6px + var(--glass-blur-boost) * 34px)');
@@ -68,7 +68,7 @@ describe('color tokens (VinaX 9 "Encore")', () => {
     // v3.8 borders are dialled way down (was 0.12 / 0.65). Fewer visual
     // lines is the "modern minimal" ask.
     expect(css).toContain('--glass-border: rgba(255, 255, 255, 0.06)');
-    expect(css).toContain('--glass-border: rgba(15, 20, 30, 0.08)');
+    expect(css).toContain('--glass-border: rgba(48, 22, 34, 0.09)');
   });
 
   it('lyric tokens (v3.1.1): both themes define active / dim / passed', () => {
@@ -132,33 +132,33 @@ describe('contrast (WCAG AA on the documented pairs)', () => {
     return (l1 + 0.05) / (l2 + 0.05);
   }
 
-  it('primary text on canvas ≥ 7:1 in both themes (9.0 Encore)', () => {
-    // Dark canvas --ink-900 rgb(16 17 21) = #101115 with --ink-100 rgb(250 250 252) = #fafafc.
-    expect(contrast('#fafafc', '#101115')).toBeGreaterThanOrEqual(7);
-    // Light canvas rgb(246 246 243) = #f6f6f3 with rgb(14 15 20) = #0e0f14 text.
-    expect(contrast('#0e0f14', '#f6f6f3')).toBeGreaterThanOrEqual(7);
+  it('primary text on canvas ≥ 7:1 in both themes (10.0 Marigold)', () => {
+    // Dark canvas --ink-900 rgb(19 14 22) = #130e16 with --ink-100 rgb(251 245 236) = #fbf5ec.
+    expect(contrast('#fbf5ec', '#130e16')).toBeGreaterThanOrEqual(7);
+    // Light canvas rgb(250 245 237) = #faf5ed with rgb(24 14 22) = #180e16 text.
+    expect(contrast('#180e16', '#faf5ed')).toBeGreaterThanOrEqual(7);
   });
 
   it('secondary text stays readable (≥ 4.5:1)', () => {
-    // Dark: --ink-300 rgb(188 190 202) = #bcbeca on the #101115 canvas.
-    expect(contrast('#bcbeca', '#101115')).toBeGreaterThanOrEqual(4.5);
-    // Light: --ink-300 rgb(70 73 86) = #464956 on the light canvas.
-    expect(contrast('#464956', '#f6f6f3')).toBeGreaterThanOrEqual(4.5);
+    // Dark: --ink-300 rgb(203 194 203) = #cbc2cb on the #130e16 canvas.
+    expect(contrast('#cbc2cb', '#130e16')).toBeGreaterThanOrEqual(4.5);
+    // Light: --ink-300 rgb(74 60 70) = #4a3c46 on the light canvas.
+    expect(contrast('#4a3c46', '#faf5ed')).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('on-accent text on the Iris fill ≥ 4.5:1 in both themes (WCAG AA)', () => {
-    // Dark: near-black labels on --ember-500 rgb(140 120 255) = #8c78ff.
-    expect(contrast('#0b0b0c', '#8c78ff')).toBeGreaterThanOrEqual(4.5);
-    // Light: white labels on the light --ember-500 rgb(86 60 215) = #563cd7.
-    expect(contrast('#ffffff', '#563cd7')).toBeGreaterThanOrEqual(4.5);
+  it('on-accent text on the Marigold fill ≥ 4.5:1 in both themes (WCAG AA)', () => {
+    // Dark: deep-brown labels (--vx-on-accent #1a0e06) on --ember-500 rgb(255 164 46) = #ffa42e.
+    expect(contrast('#1a0e06', '#ffa42e')).toBeGreaterThanOrEqual(4.5);
+    // Light: white labels on the light --ember-500 rgb(168 74 4) = #a84a04.
+    expect(contrast('#ffffff', '#a84a04')).toBeGreaterThanOrEqual(4.5);
   });
 
   it('lyric colors meet AA on both canvases (v3.1.1)', () => {
-    // dark canvas #101115: active white, upcoming slate
-    expect(contrast('#ffffff', '#101115')).toBeGreaterThanOrEqual(7);
-    expect(contrast('#94a3b8', '#101115')).toBeGreaterThanOrEqual(4.5);
-    // light canvas #f6f6f3: active near-black, upcoming ink
-    expect(contrast('#0a0c10', '#f6f6f3')).toBeGreaterThanOrEqual(7);
-    expect(contrast('#475569', '#f6f6f3')).toBeGreaterThanOrEqual(4.5);
+    // dark canvas #130e16: active white, upcoming slate
+    expect(contrast('#ffffff', '#130e16')).toBeGreaterThanOrEqual(7);
+    expect(contrast('#94a3b8', '#130e16')).toBeGreaterThanOrEqual(4.5);
+    // light canvas #faf5ed: active near-black, upcoming ink
+    expect(contrast('#0a0c10', '#faf5ed')).toBeGreaterThanOrEqual(7);
+    expect(contrast('#475569', '#faf5ed')).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -4,7 +4,7 @@ import type { ImageVariant } from '@/types';
 export const FALLBACK_ART =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" fill="#10131f"/><path d="M16 80 Q32 56 48 80 T80 80 T112 80" fill="none" stroke="#a3e635" stroke-width="7" stroke-linecap="round"/><path d="M16 96 Q32 78 48 96 T80 96 T112 96" fill="none" stroke="#a78bfa" stroke-width="5" stroke-linecap="round" opacity="0.8"/></svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" fill="#130e16"/><path d="M16 80 Q32 56 48 80 T80 80 T112 80" fill="none" stroke="#ffa42e" stroke-width="7" stroke-linecap="round"/><path d="M16 96 Q32 78 48 96 T80 96 T112 96" fill="none" stroke="#ff6384" stroke-width="5" stroke-linecap="round" opacity="0.8"/></svg>`,
   );
 
 function qualityPx(q: unknown): number {

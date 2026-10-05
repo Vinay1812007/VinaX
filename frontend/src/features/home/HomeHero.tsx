@@ -1,5 +1,5 @@
 import type { Song } from '@/types';
-import type { SyntheticEvent } from 'react';
+import type { ReactNode, SyntheticEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { PlayIcon, SparkleIcon } from '@/components/Icons';
 import { RadioGlyph } from '@/features/radio/RadioGlyph';
@@ -40,13 +40,17 @@ function mixLine(songs: Song[]): string | null {
  * then quieter ways in — AI Radio, Surprise me, more mixes — and "Jump back
  * in", the songs played last, one tap to resume.
  *
+ * 10.0.0 — a first visit passes `lead` (the free-music welcome, HomeWelcome):
+ * it takes the opening's first column and the Aura Mix sits beside it.
+ *
  * `.vx-hero` and the "Play your Aura Mix" label are load-bearing for the
  * browser tests and the guided tour.
  */
-export function HomeHero({ design, songs, recent, onPlay, onResume, onRadio, onSurprise }: {
+export function HomeHero({ design, songs, recent, lead, onPlay, onResume, onRadio, onSurprise }: {
   design: HomeDesign;
   songs: Song[];
   recent: Song[];
+  lead?: ReactNode;
   onPlay: () => void;
   onResume: (index: number) => void;
   onRadio: () => void;
@@ -56,7 +60,8 @@ export function HomeHero({ design, songs, recent, onPlay, onResume, onRadio, onS
   const collage = collageArt(songs);
   const line = mixLine(songs);
   return (
-    <div className="vxh-opening">
+    <div className={lead ? 'vxh-opening is-welcome' : 'vxh-opening'}>
+      {lead}
       <section className="vx-hero vxh-hero" aria-label="Your Aura Mix">
         <img className="vxh-hero-wash" src={cover} alt="" aria-hidden decoding="async" onError={onArtError} />
         <div className={collage.length === 4 ? 'vxh-hero-art is-collage' : 'vxh-hero-art'} aria-hidden>

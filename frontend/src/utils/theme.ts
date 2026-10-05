@@ -15,7 +15,7 @@ export function applyThemeClasses(resolved: ResolvedTheme, root: HTMLElement = d
   root.classList.toggle('light', resolved === 'light');
   root.classList.toggle('dark', resolved === 'dark' || resolved === 'amoled');
   root.classList.toggle('amoled', resolved === 'amoled');
-  const bg = resolved === 'light' ? '#f6f6f3' : resolved === 'amoled' ? '#000000' : '#101115';
+  const bg = resolved === 'light' ? '#faf5ed' : resolved === 'amoled' ? '#000000' : '#130e16';
   // Also clear/replace the inline background the pre-paint script stamped on
   // <html>, so runtime theme switches don't leave a stale overscroll color.
   root.style.background = bg;

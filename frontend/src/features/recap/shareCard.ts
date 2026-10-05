@@ -17,8 +17,8 @@ export function renderRecapCard(r: RecapData, name: string): Promise<Blob> {
 
   // Canvas — deep ink gradient with two soft accent glows.
   const bg = x.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#0b0c18');
-  bg.addColorStop(1, '#141230');
+  bg.addColorStop(0, '#130e16');
+  bg.addColorStop(1, '#261624');
   x.fillStyle = bg;
   x.fillRect(0, 0, W, H);
   const glow = (cx: number, cy: number, rad: number, color: string): void => {
@@ -28,17 +28,17 @@ export function renderRecapCard(r: RecapData, name: string): Promise<Blob> {
     x.fillStyle = g;
     x.fillRect(0, 0, W, H);
   };
-  glow(W * 0.85, H * 0.12, 620, 'rgba(99,102,241,0.32)');
-  glow(W * 0.1, H * 0.85, 700, 'rgba(45,212,191,0.16)');
+  glow(W * 0.85, H * 0.12, 620, 'rgba(255,164,46,0.3)');
+  glow(W * 0.1, H * 0.85, 700, 'rgba(255,99,132,0.16)');
 
   const F = (weight: number, px: number): string => `${weight} ${px}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
-  const ink = (a: number): string => `rgba(240,242,248,${a})`;
+  const ink = (a: number): string => `rgba(251,245,236,${a})`;
 
   // Header
   x.fillStyle = ink(1);
   x.font = F(800, 64);
   x.fillText('VinaX', 84, 150);
-  x.fillStyle = '#818cf8';
+  x.fillStyle = '#ffc066';
   x.font = F(800, 44);
   x.fillText(`${r.year} · Year in Music`, 84, 224);
   if (name) {
@@ -51,7 +51,7 @@ export function renderRecapCard(r: RecapData, name: string): Promise<Blob> {
   x.fillStyle = ink(0.55);
   x.font = F(700, 34);
   x.fillText('YOUR LISTENING PERSONA', 84, 420);
-  x.fillStyle = '#5eead4';
+  x.fillStyle = '#ff91a8';
   x.font = F(800, 76);
   x.fillText(r.persona, 84, 512);
 
@@ -76,7 +76,7 @@ export function renderRecapCard(r: RecapData, name: string): Promise<Blob> {
   x.font = F(800, 52);
   const shown = r.topArtists.slice(0, 5);
   shown.forEach((a, i) => {
-    x.fillStyle = i === 0 ? '#f7a94f' : ink(0.92);
+    x.fillStyle = i === 0 ? '#ffa42e' : ink(0.92);
     x.fillText(`${i + 1}. ${a.name.slice(0, 26)}`, 84, 1330 + i * 78);
   });
   const artistsBottom = 1330 + Math.max(shown.length - 1, 0) * 78;

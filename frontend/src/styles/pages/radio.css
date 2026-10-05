@@ -8,8 +8,8 @@
 
    One language with the VinaX AI chat (styles/ai.css): the prompt is the
    chat's composer — an ink-850 card with a hairline that turns into the one
-   Iris → Lagoon ring on focus — the VinaX sparkle marks AI moments, work in
-   progress is a Lagoon shimmer with a Stop, and a failure is a quiet notice
+   Marigold → Rose ring on focus — the VinaX sparkle marks AI moments, work in
+   progress is a Rose shimmer with a Stop, and a failure is a quiet notice
    with the next useful step. Pills for actions, squircles for artwork,
    sentence case, motion off under either reduced-motion switch.
    ========================================================================= */
@@ -47,7 +47,7 @@ html.light .vx-aistudio {
   height: 32px;
   border-radius: 10px;
   background: var(--vx-glow);
-  color: #fff;
+  color: var(--vx-on-accent);
 }
 .vx-ai-mark svg { width: 16px; height: 16px; }
 .vx-ai-mark.is-working { animation: vxs-breathe 1.6s ease-in-out infinite; }
@@ -64,7 +64,7 @@ html.light .vx-aistudio {
   background: var(--vxs-field);
   transition: box-shadow 200ms var(--ease-calm);
 }
-html.light .vx-aiprompt { box-shadow: 0 1px 2px rgb(20 20 40 / 0.04); }
+html.light .vx-aiprompt { box-shadow: 0 1px 2px rgb(48 22 34 / 0.04); }
 .vx-aiprompt:focus-within {
   border-color: transparent;
   background: linear-gradient(var(--vxs-field), var(--vxs-field)) padding-box, var(--vx-glow) border-box;
@@ -189,7 +189,7 @@ html.light .vx-aistate { background: rgb(var(--ink-850)); }
 .vx-aistate-sub { margin-top: 2px; color: rgb(var(--ink-400)); font-size: 13px; font-weight: 500; line-height: 1.45; }
 .vx-aistate .btn-secondary { flex-shrink: 0; min-height: 40px; padding-inline: 16px; font-size: 13px; }
 .vx-aistate .btn-secondary::after { content: ''; position: absolute; inset: -2px 0; }
-/* The working line: a slow Lagoon shimmer across the words. */
+/* The working line: a slow Rose shimmer across the words. */
 .vx-ai-shimmer {
   background: linear-gradient(90deg, rgb(var(--ink-100)) 0%, rgb(var(--ink-100)) 38%, rgb(var(--tide-400)) 50%, rgb(var(--ink-100)) 62%, rgb(var(--ink-100)) 100%);
   background-size: 260% 100%;
@@ -405,15 +405,17 @@ html.light .vx-aip-idea:hover:not(:disabled) { background: rgb(var(--ink-850)); 
 
 /* --------------------------------------------------------------- AI Radio */
 .vx-radio {
-  /* Mood tones — the same deep, theme-fixed set as Home's category tiles. */
-  --vxr-t1: 91 33 182;
-  --vxr-t2: 15 118 110;
-  --vxr-t3: 190 24 93;
-  --vxr-t4: 180 83 9;
-  --vxr-t5: 30 64 175;
-  --vxr-t6: 4 120 87;
-  --vxr-t7: 14 116 144;
-  --vxr-t8: 159 18 57;
+  /* Mood tones — deep and theme-fixed. 10.0 "Marigold": one warm family
+     (marigold, rose, terracotta, plum, chili, mulberry, henna, dusk mauve)
+     instead of a rainbow. Each clears 4.5:1 as a glyph on the light canvas. */
+  --vxr-t1: 176 92 6;
+  --vxr-t2: 196 32 96;
+  --vxr-t3: 172 66 38;
+  --vxr-t4: 124 50 128;
+  --vxr-t5: 186 58 22;
+  --vxr-t6: 158 28 92;
+  --vxr-t7: 140 72 36;
+  --vxr-t8: 104 72 140;
 }
 
 /* The live line: what is starting, or what is on air. */
@@ -436,7 +438,7 @@ html.light .vx-radio-live[data-state='on'] { background: rgb(var(--ink-850)); }
 .vx-radio-status a { color: rgb(var(--tide-400)); font-weight: 700; text-decoration: underline; text-decoration-color: rgb(var(--tide-400) / 0.4); text-underline-offset: 3px; }
 .vx-radio-live .btn-secondary { flex-shrink: 0; min-height: 40px; padding-inline: 16px; font-size: 13px; }
 .vx-radio-live .btn-secondary::after { content: ''; position: absolute; inset: -2px 0; }
-/* On air: a Lagoon dot (live is Lagoon's job). */
+/* On air: a Rose dot (live is Rose's job). */
 .vx-radio-onair {
   position: relative;
   flex-shrink: 0;
@@ -527,7 +529,7 @@ html.light .vx-radio-mood-glyph { background: rgb(var(--tone) / 0.12); color: rg
   transition: transform 220ms var(--vx-ease-out, var(--ease-calm));
 }
 .vx-radio-seed-art img { width: 100%; height: 100%; object-fit: cover; }
-/* The radio badge: a Lagoon squircle that rises in on hover (always on touch). */
+/* The radio badge: a Rose squircle that rises in on hover (always on touch). */
 .vx-radio-seed-badge {
   position: absolute;
   right: 8px;

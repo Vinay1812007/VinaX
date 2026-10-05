@@ -24,8 +24,8 @@ import { hideFollowupLine } from '@/features/ai/followups';
 import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { cn } from '@/utils/cn';
 import { reducedMotion } from '@/utils/motion';
-import { AgentActivity } from './AgentActivity';
 import { CheckIcon } from './icons';
+import { ToolActivity } from './ToolActivity';
 import type { Msg } from './types';
 
 /** Everything a message can ask the page to do. The object is stable (see
@@ -86,10 +86,11 @@ export const UserMessage = memo(function UserMessage({
 const WAITING = ['Thinking…', 'Reading your question…', 'Gathering ideas…', 'Putting it together…'];
 const WAITING_AGENT = ['Working…', 'Planning the steps…', 'Looking things up…', 'Checking the details…'];
 
-/** The pause before the first token: the VinaX mark breathing (it takes the
- *  Iris → Lagoon gradient while it waits) beside a short status in a Lagoon
- *  shimmer that changes every couple of seconds. The accessible name stays
- *  "Thinking" — a screen reader hears it once, not every rotation. */
+/** The pause before the first token: beside it the VinaX mark turns slowly
+ *  and breathes in the Marigold → Rose glow (.ai-msg-mark.is-waiting), and this
+ *  short status runs a soft shimmer, changing every couple of seconds. The
+ *  accessible name stays "Thinking" — a screen reader hears it once, not every
+ *  rotation. */
 function ThinkingMark({ agent }: { agent: boolean }): ReactNode {
   const lines = agent ? WAITING_AGENT : WAITING;
   const [i, setI] = useState(0);
@@ -268,17 +269,22 @@ export const AssistantMessage = memo(function AssistantMessage({
       ]
     : [];
   const waiting = streaming && !m.content;
+  // 10.0 — the mark has three states: turning in the glow while it waits for
+  // the first word, glowing while the words arrive, and settled once they stop.
+  const markState = waiting ? 'is-waiting' : streaming ? 'is-streaming' : undefined;
   // 8.2.0 / 9.0 — no reply arrived: a notice with one next step instead of the
   // reply toolbar (Copy / Good response make no sense on a failure line).
   const noReply = !streaming && !!m.content && (m.failed || m.unavailable);
   return (
     <div id={`ai-msg-${index}`} className="ai-msg ai-msg-assistant ai-enter">
-      <span className={cn('ai-msg-mark', waiting && 'is-waiting')} aria-hidden>
+      <span className={cn('ai-msg-mark', markState)} aria-hidden>
         <SparkleIcon filled />
       </span>
       <div className="min-w-0 flex-1">
         <Images images={m.images} />
-        {m.steps?.length ? <AgentActivity steps={m.steps} working={streaming} /> : null}
+        {m.steps?.length || m.sources?.length ? (
+          <ToolActivity steps={m.steps} sources={m.sources} working={streaming} answering={!!m.content} />
+        ) : null}
         {m.player ? (
           <ChatPlayerCard fallback={m.content} />
         ) : noReply ? (
@@ -290,7 +296,12 @@ export const AssistantMessage = memo(function AssistantMessage({
                 either way: swapping the wrapper at the same child index made
                 React remount the whole subtree the instant a reply finished,
                 which re-ran every live preview from scratch. */}
-            <div>
+            {/* 10.0 — while it streams, each new block fades in (opacity only,
+                once, as it mounts; text already on screen never re-animates)
+                and a small Marigold mark pulses where the words end: drawn
+                after the last paragraph or list item by CSS, or by the span
+                below when the reply ends in a block such as code. */}
+            <div className={cn('ai-reply', streaming && 'is-streaming')}>
               <RichContent text={streaming ? hideFollowupLine(m.content) : m.content} streaming={streaming} />
               {streaming && <span className="ai-caret" aria-hidden />}
             </div>
@@ -366,7 +377,9 @@ export const AssistantMessage = memo(function AssistantMessage({
         ) : (
           <ThinkingMark agent={agent} />
         )}
-        {m.sources?.length ? <Sources sources={m.sources} previews={m.sourcePreviews} /> : null}
+        {/* The full, numbered source list once the reply is complete; while it
+            streams the tool timeline above names the hosts. */}
+        {!streaming && m.sources?.length ? <Sources sources={m.sources} previews={m.sourcePreviews} /> : null}
       </div>
     </div>
   );

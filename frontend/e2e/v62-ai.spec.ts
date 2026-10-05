@@ -81,8 +81,13 @@ test('Designed for you renders the AI shelves from the catalogue when the flag a
   }
   // The block label is rendered upper-case by CSS, so innerText reads "DESIGNED FOR YOU".
   await expect.poll(() => bodyText(page), { timeout: 20_000, message: `curate=${JSON.stringify(seen.curateTasks)}` }).toMatch(/designed for you/i);
-  await expect.poll(() => bodyText(page)).toMatch(/Late-night Telugu melodies/);
-  await expect.poll(() => bodyText(page)).toMatch(/Artist 1 on repeat/);
+  // Shelves sit in `content-visibility: auto` sections, and innerText leaves out
+  // a shelf that is off screen (10.0: Home ends with a taller "Free, and how it
+  // stays free" card, so scrolled to the bottom the first shelf is off screen).
+  // Read the block's DOM text for the shelf titles.
+  const aiText = () => page.evaluate(() => document.querySelector('section[aria-label="Designed for you"]')?.textContent ?? '');
+  await expect.poll(aiText).toMatch(/Late-night Telugu melodies/);
+  await expect.poll(aiText).toMatch(/Artist 1 on repeat/);
   expect(seen.curateTasks).toContain('shelves');
   expect(seen.queries.some((q) => q.includes('late night'))).toBe(true);
   await page.screenshot({ path: 'test-results/v62-ai-home-1280.png', fullPage: true });

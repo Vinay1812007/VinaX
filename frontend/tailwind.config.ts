@@ -58,6 +58,8 @@ export default {
       },
       fontFamily: {
         sans: ['Manrope', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Noto Sans', 'sans-serif'],
+        // 10.0 Marigold — headlines and brand moments (self-hosted, OFL).
+        display: ['var(--vx-font-display)'],
       },
       fontSize: {
         // VinaX type scale — expressive display sizes, compact metadata.

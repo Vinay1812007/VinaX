@@ -278,10 +278,30 @@ test('one model menu lists the live catalogue; a pick goes on the wire; Agent mo
   await expect.poll(() => posted.length, { timeout: 10_000 }).toBe(2);
   expect(posted[1].mode).toBe('scholar');
   expect(posted[1].model).toBe('vendor/agentic');
-  const summary = page.getByRole('button', { name: /Searched the web · ran code · 2 steps/ });
+  // 10.0 — the tool timeline folds to "Used 2 tools" and opens on demand.
+  const summary = page.getByRole('button', { name: /Used 2 tools/ });
   await expect(summary).toBeVisible({ timeout: 10_000 });
+  await expect(summary).toHaveAttribute('aria-expanded', 'false');
   await summary.click();
-  await expect(page.locator('ol[aria-label="Agent activity"] li')).toHaveCount(2);
+  await expect(summary).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('ol[aria-label="Tool activity"] li')).toHaveCount(2);
+  await expect(page.locator('ol[aria-label="Tool activity"] li[data-status="done"]')).toHaveCount(2);
+
+  // 10.0 — Connectors: switches in the + menu, active ones as chips above the box.
+  await page.locator('button[aria-label="Attach and tools"]').click();
+  const web = page.getByRole('switch', { name: 'Web search' });
+  await expect(web).toHaveAttribute('aria-checked', 'false');
+  await web.click();
+  await expect(web).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
+  const chip = page.locator('[role="group"][aria-label="Active connectors"] button[aria-label="Turn off Web search"]');
+  await expect(chip).toBeVisible();
+  await box.fill('anything new?');
+  await box.press('Enter');
+  await expect.poll(() => posted.length, { timeout: 10_000 }).toBe(3);
+  expect((posted[2] as ChatRequest & { web?: boolean }).web).toBe(true);
+  await chip.click();
+  await expect(chip).toHaveCount(0);
 
   expect(pageErrors).toEqual([]);
 });

@@ -40,8 +40,8 @@ export async function shareSongCard(song: Song): Promise<boolean> {
   if (!x) return false;
 
   const grad = x.createLinearGradient(0, 0, 0, 1080);
-  grad.addColorStop(0, '#15101c');
-  grad.addColorStop(1, '#08080c');
+  grad.addColorStop(0, '#1b141f');
+  grad.addColorStop(1, '#0d090f');
   x.fillStyle = grad;
   x.fillRect(0, 0, 1080, 1080);
 
@@ -64,7 +64,7 @@ export async function shareSongCard(song: Song): Promise<boolean> {
     x.globalAlpha = 0.55;
     x.drawImage(art, -120, -120, 1320, 1320);
     x.restore();
-    x.fillStyle = 'rgba(8,8,12,0.55)';
+    x.fillStyle = 'rgba(13,9,15,0.55)';
     x.fillRect(0, 0, 1080, 1080);
 
     // Sharp rounded cover.
@@ -88,10 +88,10 @@ export async function shareSongCard(song: Song): Promise<boolean> {
   x.fillStyle = '#ffffff';
   x.font = '800 60px -apple-system, BlinkMacSystemFont, sans-serif';
   x.fillText(trunc(song.title, 22), 540, 900);
-  x.fillStyle = '#cfcfda';
+  x.fillStyle = '#eae3e2';
   x.font = '500 38px -apple-system, BlinkMacSystemFont, sans-serif';
   x.fillText(trunc(song.subtitle, 32), 540, 956);
-  x.fillStyle = '#818cf8';
+  x.fillStyle = '#ffa42e';
   x.font = '700 30px -apple-system, BlinkMacSystemFont, sans-serif';
   x.fillText('♫  Playing on VinaX', 540, 1024);
 
@@ -113,8 +113,8 @@ export async function shareSongStoryCard(song: Song): Promise<boolean> {
   if (!x) return false;
 
   const grad = x.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#15101c');
-  grad.addColorStop(1, '#08080c');
+  grad.addColorStop(0, '#1b141f');
+  grad.addColorStop(1, '#0d090f');
   x.fillStyle = grad;
   x.fillRect(0, 0, W, H);
 
@@ -136,7 +136,7 @@ export async function shareSongStoryCard(song: Song): Promise<boolean> {
     // Cover-fit the square art over the tall frame for the backdrop.
     x.drawImage(art, -480, -60, 2040, 2040);
     x.restore();
-    x.fillStyle = 'rgba(8,8,12,0.6)';
+    x.fillStyle = 'rgba(13,9,15,0.6)';
     x.fillRect(0, 0, W, H);
 
     const size = 780;
@@ -163,7 +163,7 @@ export async function shareSongStoryCard(song: Song): Promise<boolean> {
   x.fillStyle = '#ffffff';
   x.font = '800 72px -apple-system, BlinkMacSystemFont, sans-serif';
   x.fillText(trunc(song.title, 20), W / 2, 1360);
-  x.fillStyle = '#cfcfda';
+  x.fillStyle = '#eae3e2';
   x.font = '500 44px -apple-system, BlinkMacSystemFont, sans-serif';
   x.fillText(trunc(song.subtitle, 30), W / 2, 1432);
 
@@ -174,11 +174,11 @@ export async function shareSongStoryCard(song: Song): Promise<boolean> {
   x.fillStyle = 'rgba(255,255,255,0.18)';
   roundRect(x, bx, by, bw, 8, 4);
   x.fill();
-  x.fillStyle = '#818cf8';
+  x.fillStyle = '#ffa42e';
   roundRect(x, bx, by, bw * 0.38, 8, 4);
   x.fill();
 
-  x.fillStyle = '#818cf8';
+  x.fillStyle = '#ffa42e';
   x.font = '700 36px -apple-system, BlinkMacSystemFont, sans-serif';
   x.fillText('♫  Playing free on VinaX', W / 2, 1700);
   x.fillStyle = 'rgba(255,255,255,0.45)';

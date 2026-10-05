@@ -96,14 +96,19 @@ function useClientConfigEffects(): void {
 const BROADCAST_SEEN_KEY = `${STORAGE_PREFIX}.broadcast-seen`;
 
 import { recsDebugEnabled } from '@/store/recsDebugStore';
+import { useTogether } from '@/services/together/session';
 
 const RecsDebugPanel = lazy(() => import('@/features/recommendation/RecsDebugPanel').then((m) => ({ default: m.RecsDebugPanel })));
+// 10.0 — Listen Together runs app-wide while a session is live (see
+// services/together/session.ts); the engine and its pill load only then.
+const TogetherController = lazy(() => import('@/features/together/TogetherController'));
 // Read once: the debug view is opt-in (?debug=recs / localStorage flag) or a dev build.
 const recsDebugWanted = recsDebugEnabled();
 
 export function AppLayout() {
   const wideWorkspace = useMediaQuery('(min-width: 1280px)');
   const hasTrack = usePlayerStore(s => s.queue.length > 0);
+  const inSession = useTogether((s) => s.mode !== 'idle');
   const coldBoot = !hasBooted;
   useClientConfigEffects();
   useLastRoute();
@@ -447,6 +452,7 @@ export function AppLayout() {
         <NowPlayingAnnouncer />
         {hasTrack && <Suspense fallback={null}><NextUpCard /></Suspense>}
       {recsDebugWanted && <Suspense fallback={null}><RecsDebugPanel /></Suspense>}
+      {inSession && <Suspense fallback={null}><TogetherController /></Suspense>}
       </PlayerErrorBoundary>
       <Suspense fallback={null}><OnboardingSheet /></Suspense>
       <AnnouncementBridge />

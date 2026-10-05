@@ -1,14 +1,16 @@
 /* ============================================================================
    VinaX 9 "Encore" — Settings.
 
-   Sections read as type, not boxes: a section title (1.375rem / 780), one
-   line of explanation, then rows separated by hairlines. A row is a label
+   10.0 "Marigold": each section is a title (1.375rem / 780) and one line
+   of explanation above a card — a raised plum (cream in light) panel with
+   a faint Marigold key light — holding its rows, separated by hairlines;
+   a group inside the card opens under a hairline of its own. A row is a label
    and a one-line note on the left, the control on the right; wide controls
    drop under the label on phones. The search sticks under the top bar and
    only paints its backdrop once it is stuck. Desktop keeps a section index
    beside the list; smaller screens get a row of jump pills.
 
-   Iris (ember) is for the switches, the chosen option and focus. Lazy:
+   Marigold (ember) is for the switches, the chosen option and focus. Lazy:
    imported by SettingsPage only.
    ========================================================================= */
 
@@ -17,6 +19,10 @@
   --set-fill: rgb(var(--ink-100) / 0.06);
   --set-fill-hover: rgb(var(--ink-100) / 0.1);
   --set-raised: rgb(var(--ink-850));
+  /* The section card and what sits recessed inside it. */
+  --set-card: rgb(var(--ink-850));
+  --set-card-edge: inset 0 1px 0 rgb(255 255 255 / 0.03);
+  --set-inset: rgb(var(--ink-900));
   max-width: 720px;
   margin: 0 auto;
   padding-bottom: 48px;
@@ -25,7 +31,11 @@ html.light .vx-settings {
   --set-fill: rgb(var(--ink-100) / 0.05);
   --set-fill-hover: rgb(var(--ink-100) / 0.085);
   --set-raised: rgb(var(--ink-950));
+  --set-card: rgb(var(--ink-950));
+  --set-card-edge: inset 0 0 0 1px var(--set-line), 0 10px 28px -22px rgb(48 22 34 / 0.35);
+  --set-inset: rgb(var(--ink-900));
 }
+html.amoled .vx-settings { --set-card: rgb(var(--ink-850)); --set-inset: rgb(var(--ink-950)); }
 @media (min-width: 1024px) {
   .vx-settings {
     display: grid;
@@ -141,7 +151,7 @@ html.light .vx-settings {
 
 /* ------------------------------------------------------ sections & groups */
 .vx-set-section { margin-bottom: 56px; scroll-margin-top: calc(var(--vx-topbar-h) + 80px); }
-.vx-set-head { margin-bottom: 8px; }
+.vx-set-head { margin-bottom: 14px; }
 .vx-set-title {
   color: rgb(var(--ink-100));
   font-size: var(--vx-type-section);
@@ -151,6 +161,26 @@ html.light .vx-settings {
 }
 .vx-set-lede { margin-top: 4px; color: rgb(var(--ink-400)); font-size: 14px; font-weight: 500; line-height: 1.45; }
 .vx-set-group { margin-top: 32px; }
+
+/* The section card. */
+.vx-set-section > .vx-set-rows {
+  padding: 4px 20px;
+  border-radius: 20px;
+  background:
+    radial-gradient(90% 70% at 0% 0%, rgb(var(--ember-500) / 0.06), rgb(var(--ember-500) / 0) 60%),
+    var(--set-card);
+  box-shadow: var(--set-card-edge);
+}
+/* A group inside the card: a hairline, then its subhead. */
+.vx-set-section > .vx-set-rows > .vx-set-group { margin-top: 0; padding: 20px 0 2px; }
+.vx-set-section > .vx-set-rows > * + .vx-set-group { border-top: 1px solid var(--set-line); }
+.vx-set-section > .vx-set-rows > .vx-set-group:first-child { padding-top: 16px; }
+/* Fields inside a card sit recessed into it. */
+.vx-set-section .vx-set-input,
+.vx-set-section .vx-set-select { background: var(--set-inset); }
+@media (max-width: 767px) {
+  .vx-set-section > .vx-set-rows { padding: 2px 16px; border-radius: 18px; }
+}
 .vx-set-sub {
   display: flex;
   align-items: center;
@@ -183,6 +213,7 @@ html.light .vx-settings {
 }
 /* Hairlines between rows, never around them. */
 .vx-set-rows > [data-settings-row] ~ [data-settings-row]::before,
+.vx-set-rows > .vx-set-group + [data-settings-row]::before,
 .vx-set-rows > .vx-set-banner::before,
 .vx-set-rows > .vx-set-banner + [data-settings-row]::before {
   content: '';
@@ -400,7 +431,10 @@ html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--emb
 .vx-set-swatch::after { content: ''; position: absolute; inset: -6px; }
 .vx-set-swatch:hover { transform: scale(1.06); }
 .vx-set-swatch:active { transform: scale(0.94); }
-.vx-set-swatch[aria-checked='true'] { box-shadow: 0 0 0 3px rgb(var(--ink-900)), 0 0 0 5px rgb(var(--ink-100)); }
+.vx-set-swatch[aria-checked='true'] { box-shadow: 0 0 0 3px var(--set-card), 0 0 0 5px rgb(var(--ink-100)); }
+/* The chosen accent's name, under the swatches. */
+.vx-set-swatch-name { margin-top: 10px; color: rgb(var(--ink-300)); font-size: 13px; font-weight: 650; }
+.vx-set-swatch-name b { color: rgb(var(--ink-100)); font-weight: 750; }
 
 /* Sliders with words at both ends. */
 .vx-set-range { display: flex; align-items: center; gap: 12px; width: 100%; max-width: 360px; }
@@ -423,13 +457,18 @@ html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--emb
 .vx-settings .vx-set-sound section { margin: 0; }
 .vx-settings .vx-set-sound section > div:first-child { display: none; }
 .vx-settings .vx-set-sound section > div:nth-child(2) {
-  padding: 0;
+  padding: 4px 20px;
   border: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
+  border-radius: 20px;
+  background:
+    radial-gradient(90% 70% at 0% 0%, rgb(var(--ember-500) / 0.06), rgb(var(--ember-500) / 0) 60%),
+    var(--set-card);
+  box-shadow: var(--set-card-edge);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+@media (max-width: 767px) {
+  .vx-settings .vx-set-sound section > div:nth-child(2) { padding: 2px 16px; border-radius: 18px; }
 }
 .vx-settings .vx-set-sound section > div:nth-child(2) > div {
   position: relative;

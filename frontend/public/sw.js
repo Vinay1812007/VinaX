@@ -18,8 +18,8 @@
  * and downloaded songs could not even reach the player. Now the whole app
  * works offline once it has been online for a few seconds after a deploy.
  */
-const CACHE = 'vinax-shell-v14';
-const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg', '/fonts/manrope-var.woff2'];
+const CACHE = 'vinax-shell-v15';
+const SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg', '/fonts/manrope-var.woff2', '/fonts/bricolage-var.woff2'];
 // Downloaded songs (written by services/downloads at download time). NEVER
 // cleared on activate — losing it silently un-downloads every saved song.
 const AUDIO_CACHE = 'vinax-audio-v1';
