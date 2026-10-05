@@ -29,16 +29,23 @@ function json(body: unknown, status = 200): Response {
 }
 
 /** Rate-limit bucket lookup for each room action. Different verbs get very
- *  different budgets (heartbeats fire every ~5s, creates should not). */
+ *  different budgets (heartbeats fire every ~5s, creates should not).
+ *
+ *  10.0 — sized for a ROOM, not a device. Buckets are keyed by client IP, and
+ *  Listen Together is mostly used by people in the same place: the host and
+ *  three guests on one home Wi-Fi share one address. The old 60/min GET budget
+ *  was spent by one guest polling every 2 s plus the host, so the next guest
+ *  on that network got 429s and silently stopped following. Budgets now cover
+ *  about six devices behind one address. */
 const ROOM_RL: Record<string, { capacity: number; refillPerMinute: number }> = {
   create: { capacity: 3, refillPerMinute: 3 },
-  heartbeat: { capacity: 60, refillPerMinute: 60 },
-  request: { capacity: 20, refillPerMinute: 20 },
-  react: { capacity: 20, refillPerMinute: 15 },
+  heartbeat: { capacity: 90, refillPerMinute: 90 },
+  request: { capacity: 30, refillPerMinute: 30 },
+  react: { capacity: 30, refillPerMinute: 30 },
   leave: { capacity: 20, refillPerMinute: 20 },
-  update: { capacity: 20, refillPerMinute: 20 },
+  update: { capacity: 60, refillPerMinute: 60 },
   end: { capacity: 20, refillPerMinute: 20 },
-  GET: { capacity: 60, refillPerMinute: 60 },
+  GET: { capacity: 200, refillPerMinute: 200 },
 };
 
 /** Package D11 — the only emojis a reaction may carry (server-enforced). */
@@ -195,6 +202,12 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     : null;
   const responseBody: Record<string, unknown> = {
     room: roomOut,
+    // 10.0 — the server's clock at answer time. `updated_at` is stamped by
+    // this same clock, so a follower computes how far the host has played
+    // since the last push as (now − updated_at) without ever comparing two
+    // devices' clocks. Before this, guests anchored on when THEY first saw a
+    // new updated_at — up to a poll interval late — and kept seeking.
+    now: Date.now(),
     memberCount: members.length,
     // D11 — everyone sees the room's recent reactions (emoji + stamp only).
     reactions: reactionRows
@@ -327,11 +340,23 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     // `room_not_found` raise, so translate that to a 404 client-side by
     // probing existence when the RPC signals a failure.
     if (ok === null) {
-      const existing = await sbSelect<{ code: string }>(
-        env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=code`,
+      const existing = await sbSelect<{ song: unknown }>(
+        env, 'vinax_rooms', `code=eq.${encodeURIComponent(code)}&limit=1&select=song`,
       );
       if (!existing.length) return json({ error: 'not_found' }, 404);
-      return json({ error: 'append_failed' }, 500);
+      // 10.0 — a database that never got the vinax_room_append_request
+      // function failed EVERY guest request while the guest was told "Sent".
+      // Fall back to a read-modify-write: it can lose a request that races
+      // another within the same few milliseconds, which beats losing them all.
+      const prev = unpackSong(existing[0].song);
+      const by = (body ? clip(body.by, 40) : null) ?? '';
+      const dupe = [...prev.queue, ...prev.requests].some((t) => songIdOf(t) === cleanSong.id);
+      if (dupe) return json({ ok: true });
+      const written = await sbUpsert(env, 'vinax_rooms', {
+        code,
+        song: { v: 2, current: prev.song, queue: prev.queue, requests: [...prev.requests, { song: cleanSong, by }].slice(-20) },
+      }, 'code');
+      return written ? json({ ok: true, fallback: true }) : json({ error: 'append_failed' }, 500);
     }
     return json({ ok: true });
   }

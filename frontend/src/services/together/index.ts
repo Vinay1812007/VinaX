@@ -119,6 +119,11 @@ export async function createRoom(song: Song | null): Promise<CreateRoomResult> {
   }
 }
 
+/** 10.0 — what a host push achieved. `gone` (the room no longer exists) and
+ *  `forbidden` (this device no longer holds the host token) used to be
+ *  swallowed, so a host kept "broadcasting" to nobody. */
+export type UpdateResult = 'ok' | 'gone' | 'forbidden' | 'error';
+
 export async function updateRoom(
   code: string,
   song: Song | null,
@@ -126,13 +131,32 @@ export async function updateRoom(
   playing: boolean,
   queue: RoomTrack[] = [],
   consumedIds: string[] = [],
-): Promise<void> {
-  await post({ action: 'update', code, hostToken: getHostToken(code), song, position, playing, queue, consumedIds });
+): Promise<UpdateResult> {
+  try {
+    const res = await fetch(BASE, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'update', code, hostToken: getHostToken(code), song, position, playing, queue, consumedIds }),
+    });
+    if (res.ok) return 'ok';
+    if (res.status === 404) return 'gone';
+    if (res.status === 403) return 'forbidden';
+    return 'error';
+  } catch {
+    return 'error';
+  }
 }
 
-/** Guest: ask the host to add a song to the shared queue. */
-export async function requestSong(code: string, song: Song): Promise<void> {
-  await post({ action: 'request', code, song, by: me().name });
+/** True when this device holds the host token for `code` (survives a reload). */
+export function isHostOf(code: string): boolean {
+  return !!getHostToken(code);
+}
+
+/** Guest: ask the host to add a song to the shared queue. Resolves true only
+ *  when the server stored it — the UI used to say "Sent" either way. */
+export async function requestSong(code: string, song: Song): Promise<boolean> {
+  const r = await post({ action: 'request', code, song, by: me().name });
+  return r?.ok === true;
 }
 
 /** D11 — the emojis a room reaction may carry (must match the server list). */
@@ -161,6 +185,17 @@ export async function leaveRoom(code: string): Promise<void> {
   await post({ action: 'leave', code, deviceId: me().deviceId });
 }
 
+/** Leave while the page is closing: a beacon survives the unload where a
+ *  fetch would be cancelled. The server parses the body as JSON regardless
+ *  of the text/plain type a beacon carries. */
+export function leaveRoomBeacon(code: string): void {
+  try {
+    navigator.sendBeacon?.(BASE, JSON.stringify({ action: 'leave', code, deviceId: me().deviceId }));
+  } catch {
+    /* best effort */
+  }
+}
+
 /** Host only: closes the room for everyone. Guests are told on their next poll. */
 export async function endRoom(code: string): Promise<void> {
   await post({ action: 'end', code, hostToken: getHostToken(code) });
@@ -175,6 +210,12 @@ export interface RoomPoll {
   /** Always present: how many devices are in the room. */
   memberCount?: number;
   reactions?: RoomReaction[];
+  /** 10.0 — the server's clock (ms) when it answered; absent on older Workers. */
+  now?: number;
+  /** 10.0 — client-measured round trip of this poll, and when it landed
+   *  (performance.now()), so a follower can project the host's position. */
+  rttMs?: number;
+  receivedAt?: number;
 }
 
 export async function getRoom(code: string): Promise<RoomPoll | null> {
@@ -186,9 +227,12 @@ export async function getRoom(code: string): Promise<RoomPoll | null> {
     // the first poll — for every invite-link guest, and for hosts 5s in.
     const hostToken = getHostToken(code);
     const auth = hostToken ? `&hostToken=${encodeURIComponent(hostToken)}` : '';
+    const sent = performance.now();
     const res = await fetch(`${BASE}?code=${encodeURIComponent(code)}${auth}`, { cache: 'no-store' });
     if (!res.ok) return null;
-    return (await res.json()) as RoomPoll;
+    const body = (await res.json()) as RoomPoll;
+    const receivedAt = performance.now();
+    return { ...body, rttMs: receivedAt - sent, receivedAt };
   } catch {
     return null;
   }
