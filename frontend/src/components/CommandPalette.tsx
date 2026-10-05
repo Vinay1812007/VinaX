@@ -86,7 +86,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       return undefined;
     }
     const controller = new AbortController();
-    searchSongs(q, 8, { signal: controller.signal })
+    searchSongs(q, 8, { signal: controller.signal, priority: 'interactive' })
       .then((r) => {
         if (controller.signal.aborted) return;
         setSongs(rankSongs(r, { query: q, searchMode: true }).slice(0, 5));

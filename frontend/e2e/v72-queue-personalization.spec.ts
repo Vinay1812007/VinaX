@@ -151,7 +151,7 @@ for (const size of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) 
     // Hand-queue a song in another script: it goes ahead of VinaX's picks and says so.
     await gotoInApp(page, '/search/telugu');
     // The overview lists only the first few songs; the Songs tab has them all.
-    await page.getByRole('button', { name: /Show all songs/ }).click();
+    await page.getByRole('button', { name: /See all songs/ }).click();
     const hindiRow = page.locator('[data-song-id]', { hasText: 'तुम ही हो' }).first();
     await hindiRow.scrollIntoViewIfNeeded();
     await hindiRow.getByRole('button', { name: /More options/ }).click();

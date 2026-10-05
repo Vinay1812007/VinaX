@@ -1,22 +1,22 @@
 /**
- * v5.19.0 — search-as-you-type hook: 250 ms after the (normalised) query
- * settles, fetch a six-song preview with an AbortController that cancels the
- * previous keystroke's request. Results for a query the listener has already
- * moved past are dropped, never shown.
+ * Search-as-you-type hook: 150 ms after the (normalised) query settles, fetch
+ * the quick hits with an AbortController that cancels the previous
+ * keystroke's request. Results for a query the listener has already moved
+ * past are dropped, never shown.
  */
 import { useEffect, useState } from 'react';
-import type { Song } from '@/types';
-import { fetchQuickResults, getCachedQuick } from './quickResults';
+import { fetchQuickResults, getCachedQuick, NO_HITS, type QuickHits } from './quickResults';
 
-export const QUICK_DEBOUNCE_MS = 250;
+/** 10.1 — the typeahead answers within ~150 ms of a pause (was 250). */
+export const QUICK_DEBOUNCE_MS = 150;
 
 export interface QuickResults {
-  /** The key the songs belong to ('' when nothing is shown). */
+  /** The key the hits belong to ('' when nothing is shown). */
   key: string;
-  songs: Song[];
+  hits: QuickHits;
   /** A request for the CURRENT key is still in flight. */
   loading: boolean;
-  /** `songs` belong to a previous key (kept on screen, dimmed, while loading). */
+  /** `hits` belong to a previous key (kept on screen, dimmed, while loading). */
   stale: boolean;
 }
 
@@ -24,7 +24,7 @@ export interface QuickResults {
  *  inputs differing only by trailing whitespace share one key and never
  *  refetch. Pass '' to switch previews off. */
 export function useQuickResults(key: string): QuickResults {
-  const [state, setState] = useState<{ key: string; songs: Song[] }>({ key: '', songs: [] });
+  const [state, setState] = useState<{ key: string; hits: QuickHits }>({ key: '', hits: NO_HITS });
   const [loadingKey, setLoadingKey] = useState('');
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export function useQuickResults(key: string): QuickResults {
     }
     const cached = getCachedQuick(key);
     if (cached) {
-      setState({ key, songs: cached });
+      setState({ key, hits: cached });
       setLoadingKey('');
       return undefined;
     }
@@ -42,15 +42,15 @@ export function useQuickResults(key: string): QuickResults {
     setLoadingKey(key);
     const timer = window.setTimeout(() => {
       fetchQuickResults(key, controller.signal)
-        .then((songs) => {
+        .then((hits) => {
           if (controller.signal.aborted) return;
-          setState({ key, songs });
+          setState({ key, hits });
         })
         .catch(() => {
           // Aborted: a newer keystroke owns the panel. Failed (offline, upstream
-          // down): clear it — otherwise the previous query's songs stay on
+          // down): clear it — otherwise the previous query's hits stay on
           // screen, undimmed, under text they were never results for.
-          if (!controller.signal.aborted) setState({ key, songs: [] });
+          if (!controller.signal.aborted) setState({ key, hits: NO_HITS });
         })
         .finally(() => {
           if (!controller.signal.aborted) setLoadingKey('');
@@ -65,7 +65,7 @@ export function useQuickResults(key: string): QuickResults {
   const active = key.length >= 2;
   return {
     key: active ? state.key : '',
-    songs: active ? state.songs : [],
+    hits: active ? state.hits : NO_HITS,
     loading: active && loadingKey === key,
     stale: active && state.key !== key,
   };

@@ -183,3 +183,63 @@ export function suggestTitles(
   }
   return out;
 }
+
+/**
+ * 10.1 — the same language preference for albums and playlists: those in
+ * the listener's pinned languages lead, in pin order, everything else keeps
+ * its incoming order (stable). Songs get it inside `rerankSongs`, where a
+ * literal title match still outranks language.
+ */
+export function pinnedFirst<T extends { language?: string | null }>(
+  items: readonly T[],
+  pinnedLanguages: readonly string[],
+): T[] {
+  if (!pinnedLanguages.length || items.length < 2) return [...items];
+  const rank = (x: T) => {
+    const i = x.language ? pinnedLanguages.indexOf(x.language) : -1;
+    return i < 0 ? pinnedLanguages.length : i;
+  };
+  return items
+    .map((item, i) => ({ item, i, r: rank(item) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.item);
+}
+
+/** One completion row in the typeahead, and where it came from. */
+export interface Completion {
+  text: string;
+  source: 'recent' | 'trending' | 'title';
+}
+
+/**
+ * 10.1 — query completions for the typeahead: recent searches first, then
+ * trending terms, then titles the catalogue already returned. Only entries
+ * that contain what was typed (case-, accent- and spacing-insensitive),
+ * never the typed text itself, each text once, at most `limit`.
+ */
+export function completions(
+  typed: string,
+  sources: { recent: readonly string[]; trending: readonly string[]; titles: readonly string[] },
+  limit = 6,
+): Completion[] {
+  const t = fold(typed);
+  if (!t) return [];
+  const seen = new Set<string>([t]);
+  const out: Completion[] = [];
+  const take = (list: readonly string[], source: Completion['source'], cap: number) => {
+    let n = 0;
+    for (const raw of list) {
+      if (out.length >= limit || n >= cap) return;
+      const text = raw.trim();
+      const key = fold(text);
+      if (!text || seen.has(key) || !key.includes(t)) continue;
+      seen.add(key);
+      out.push({ text, source });
+      n += 1;
+    }
+  };
+  take(sources.recent, 'recent', 3);
+  take(sources.trending, 'trending', 3);
+  take(sources.titles, 'title', limit);
+  return out;
+}

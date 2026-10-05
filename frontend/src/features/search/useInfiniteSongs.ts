@@ -6,11 +6,22 @@ import {
   searchPlaylistsPage,
   searchSongsPage,
 } from '@/services/api';
+import type { RequestPriority } from '@/services/api/client';
 import { useSettingsStore } from '@/store/settingsStore';
 import { normalizeQuery, rankSongs, relaxedQuery, SEARCH_GC_MS, SEARCH_STALE_MS } from './useSearch';
 import { rerankSongs } from './rerank';
 
-type SongPageFetch = (q: string, page: number, limit: number, opts?: { signal?: AbortSignal }) => Promise<Song[]>;
+type SongPageFetch = (
+  q: string,
+  page: number,
+  limit: number,
+  opts?: { signal?: AbortSignal; priority?: RequestPriority },
+) => Promise<Song[]>;
+
+/** 10.1 — the first page of a typed search is what the listener waits on
+ *  (hedged); later pages load ahead of the scroll and walk best-first. */
+const pagePriority = (search: boolean, page: number): RequestPriority =>
+  search && page === 1 ? 'interactive' : 'standard';
 
 // Queries whose first page only answered in relaxed form → the form that
 // worked, so pages 2+ keep asking the same question. Small and bounded.
@@ -34,16 +45,17 @@ export async function fetchSongsPage(
   signal?: AbortSignal,
   fetchPage: SongPageFetch = searchSongsPage,
 ): Promise<Song[]> {
-  if (!search) return fetchPage(q, page, 25, { signal });
-  if (page > 1) return fetchPage(rescued.get(q) ?? q, page, 25, { signal });
-  const raw = await fetchPage(q, page, 25, { signal });
+  const opts = { signal, priority: pagePriority(search, page) };
+  if (!search) return fetchPage(q, page, 25, opts);
+  if (page > 1) return fetchPage(rescued.get(q) ?? q, page, 25, opts);
+  const raw = await fetchPage(q, page, 25, opts);
   if (raw.length > 0) {
     rescued.delete(q);
     return raw;
   }
   const relaxed = relaxedQuery(q);
   if (!relaxed) return raw;
-  const retry = await fetchPage(relaxed, page, 25, { signal });
+  const retry = await fetchPage(relaxed, page, 25, opts);
   if (retry.length > 0) {
     rescued.delete(q);
     rescued.set(q, relaxed);
@@ -93,13 +105,15 @@ export function useInfiniteSongs(query: string, enabled = true, opts?: { search?
   });
 }
 
-export function useInfiniteAlbums(query: string, enabled = true) {
+export function useInfiniteAlbums(query: string, enabled = true, opts?: { search?: boolean }) {
   const q = normalizeQuery(query);
+  const search = opts?.search === true;
   return useInfiniteQuery({
     queryKey: ['inf-albums', q],
     enabled: enabled && q.length > 1,
     initialPageParam: 1,
-    queryFn: ({ pageParam, signal }) => searchAlbumsPage(q, pageParam, 20, { signal }),
+    queryFn: ({ pageParam, signal }) =>
+      searchAlbumsPage(q, pageParam, 20, { signal, priority: pagePriority(search, pageParam) }),
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length >= 10 && allPages.length < 12 && !pageAddedNothing(lastPage, allPages)
         ? allPages.length + 1
@@ -132,7 +146,8 @@ export function useInfiniteArtists(query: string, enabled = true) {
     queryKey: ['inf-artists', q],
     enabled: enabled && q.length > 1,
     initialPageParam: 1,
-    queryFn: ({ pageParam, signal }) => searchArtistsPage(q, pageParam, 20, { signal }),
+    queryFn: ({ pageParam, signal }) =>
+      searchArtistsPage(q, pageParam, 20, { signal, priority: pagePriority(true, pageParam) }),
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length >= 10 && allPages.length < 12 && !pageAddedNothing(lastPage, allPages)
         ? allPages.length + 1
@@ -149,7 +164,8 @@ export function useInfinitePlaylists(query: string, enabled = true) {
     queryKey: ['inf-playlists', q],
     enabled: enabled && q.length > 1,
     initialPageParam: 1,
-    queryFn: ({ pageParam, signal }) => searchPlaylistsPage(q, pageParam, 20, { signal }),
+    queryFn: ({ pageParam, signal }) =>
+      searchPlaylistsPage(q, pageParam, 20, { signal, priority: pagePriority(true, pageParam) }),
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length >= 10 && allPages.length < 12 && !pageAddedNothing(lastPage, allPages)
         ? allPages.length + 1
