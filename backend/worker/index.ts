@@ -87,6 +87,7 @@ import * as m_api_events from './functions/api/events';
 import * as m_api_experiments from './functions/api/experiments';
 import * as m_api_feedback from './functions/api/feedback';
 import * as m_api_geo from './functions/api/geo';
+import * as m_api_warm_search from './functions/api/warm-search';
 import * as m_api_handoff from './functions/api/handoff';
 import * as m_api_image from './functions/api/image';
 import * as m_api_lyrics_tools from './functions/api/lyrics-tools';
@@ -221,6 +222,7 @@ const EXACT: Record<string, Mod> = {
   '/api/experiments': m_api_experiments,
   '/api/feedback': m_api_feedback,
   '/api/geo': m_api_geo,
+  '/api/warm-search': m_api_warm_search,
   '/api/handoff': m_api_handoff,
   '/api/image': m_api_image,
   '/api/lyrics-tools': m_api_lyrics_tools,
