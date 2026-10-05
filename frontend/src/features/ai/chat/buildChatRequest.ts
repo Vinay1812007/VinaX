@@ -8,6 +8,7 @@ import type { ModelChoice, Msg } from './types';
 import { assistantPlace } from '@/services/location/assistantPlace';
 import { trimThread } from './longThread';
 import { memoryBlock } from '../memory';
+import { placeConnectorOn } from '../connectors';
 import { projectBlock, projectById } from '../projects';
 
 /** Time-sensitive questions — "who won today", "202X releases", live scores,
@@ -128,6 +129,8 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
     // falls back to the IST line. Country, region, approximate city and an IANA
     // zone only — never an IP, never coordinates. The listener's languages are
     // sent separately (in `taste`) and always outrank this.
-    place: assistantPlace(),
+    // 10.0 — the Place connector (composer + menu) can hold it back for the
+    // chat as well; it is on unless the listener switched it off there.
+    place: placeConnectorOn() ? assistantPlace() : undefined,
   };
 }

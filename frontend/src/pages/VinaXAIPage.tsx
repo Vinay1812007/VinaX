@@ -717,8 +717,15 @@ export default function VinaXAIPage(): ReactNode {
         body,
         signal: controller.signal,
         onDelta: (delta) => voiceEngineRef.current?.feed(delta),
+        // 10.0 — the search sources ride along mid-stream too, so the tool
+        // timeline can say "Searched the web · 5 sources" while the reply is written.
         onUpdate: (st) =>
-          replaceLastAssistant(chatId, (m) => ({ ...m, content: st.text, steps: st.steps.length ? st.steps : m.steps })),
+          replaceLastAssistant(chatId, (m) => ({
+            ...m,
+            content: st.text,
+            steps: st.steps.length ? st.steps : m.steps,
+            sources: st.sources.length ? st.sources : m.sources,
+          })),
       });
     } catch {
       result = { state: initialStreamState(), failure: 'unavailable', aborted: controller.signal.aborted };
@@ -1188,6 +1195,8 @@ export default function VinaXAIPage(): ReactNode {
               if (on) setWeb(true);
               setResearch(on);
             }}
+            songCtx={songCtx}
+            onSongCtx={setSongCtx}
             imageMode={imageMode}
             onImageMode={setImageMode}
             canSpeech={canSpeech}

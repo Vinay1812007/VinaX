@@ -18,6 +18,8 @@
  * sent only as part of a chat request the listener made, fenced as data.
  */
 
+import { notifyConnectors } from './connectors';
+
 export const MEMORY_KEY = 'vinax.ai.memory.v1';
 export const MEMORY_ENABLED_KEY = 'vinax.ai.memoryOn';
 /** Entries kept. Beyond this the oldest is dropped when a new one is added. */
@@ -76,6 +78,8 @@ export function setMemoryEnabled(on: boolean): void {
   } catch {
     /* private mode: the setting simply does not persist */
   }
+  // 10.0 — the composer's Memory connector and chip follow this switch.
+  notifyConnectors();
 }
 
 /** Every entry, newest first. Empty while memory is off. */
@@ -101,6 +105,7 @@ function save(entries: MemoryEntry[]): void {
   } catch {
     /* nothing to do: the entry does not persist */
   }
+  notifyConnectors();
 }
 
 /** Add an entry. Returns it, or null when memory is off or the text is empty. */
@@ -136,6 +141,7 @@ export function clearMemories(): void {
   } catch {
     /* nothing stored */
   }
+  notifyConnectors();
 }
 
 /**

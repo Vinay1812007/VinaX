@@ -116,7 +116,7 @@ describe('VinaX AI chat', () => {
     expect(catalogCalls).toBe(0);
   });
 
-  it('streams a reply: plain text, follow-ups, reply actions, and the agent activity folded to one line', async () => {
+  it('streams a reply: plain text, follow-ups, reply actions, and the tool timeline folded to one line', async () => {
     mount();
     await sendText('Give me two songs');
     await waitFor(() => expect(document.body.textContent).toContain('short'));
@@ -129,10 +129,13 @@ describe('VinaX AI chat', () => {
     for (const name of ['Copy', 'Regenerate', 'Good response', 'Bad response', 'Branch', 'Pin', 'More actions']) {
       expect(within(actions).getByRole('button', { name })).toBeTruthy();
     }
-    const summary = screen.getByRole('button', { name: /Searched the web · ran code · 2 steps/ });
+    // 10.0 — the tool timeline folds to "Used N tools" and opens on demand.
+    const summary = screen.getByRole('button', { name: /Used 2 tools/ });
     expect(summary.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(summary);
-    expect(within(screen.getByRole('list', { name: 'Agent activity' })).getAllByRole('listitem')).toHaveLength(2);
+    expect(summary.getAttribute('aria-expanded')).toBe('true');
+    const steps = within(screen.getByRole('list', { name: 'Tool activity' })).getAllByRole('listitem');
+    expect(steps.map((li) => li.getAttribute('data-status'))).toEqual(['done', 'done']);
     // The composer is the same element, now docked under the thread.
     expect(box().value).toBe('');
   });

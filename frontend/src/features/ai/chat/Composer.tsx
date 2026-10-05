@@ -10,7 +10,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { ChevronDownIcon, GlobeIcon, PlusIcon, WaveformIcon, XIcon } from '@/components/Icons';
+import { ChevronDownIcon, PlusIcon, WaveformIcon, XIcon } from '@/components/Icons';
 import { SlashMenu } from '@/components/ai/AiExtras';
 import {
   ATTACHMENT_ACCEPT,
@@ -22,7 +22,8 @@ import {
 import { matchSlash, type SlashCommand } from '@/features/ai/slashCommands';
 import { cn } from '@/utils/cn';
 import { IMAGES_ENABLED } from './endpoints';
-import { AgentIcon, BookIcon, BulbIcon, CheckIcon, FolderIcon, MicIcon, SendIcon, StopIcon, UploadIcon } from './icons';
+import { ConnectorChips, ConnectorList, useConnectors } from './Connectors';
+import { AgentIcon, BookIcon, CheckIcon, FolderIcon, MicIcon, SendIcon, StopIcon, UploadIcon } from './icons';
 import { useDictation } from './useDictation';
 
 /** What the page can do to the composer from outside (edit & resend, quick
@@ -57,6 +58,9 @@ export interface ComposerProps {
   onWeb: (on: boolean) => void;
   onThink: (on: boolean) => void;
   onResearch: (on: boolean) => void;
+  /** 10.0 — the song playing now rides with the message (the Now playing connector). */
+  songCtx: boolean;
+  onSongCtx: (on: boolean) => void;
   imageMode: boolean;
   onImageMode: (on: boolean) => void;
   canSpeech: boolean;
@@ -97,6 +101,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     onWeb,
     onThink,
     onResearch,
+    songCtx,
+    onSongCtx,
     imageMode,
     onImageMode,
     canSpeech,
@@ -127,6 +133,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const agentHintId = useId();
 
   const dictation = useDictation(setText);
+  const connectors = useConnectors({
+    web,
+    research,
+    think,
+    nowPlaying: songCtx,
+    onWeb,
+    onResearch,
+    onThink,
+    onNowPlaying: onSongCtx,
+  });
 
   // Auto-grow, 1–8 rows. A layout effect (not the change handler) because the
   // text is also set from outside: dictation, edit & resend, saved prompts.
@@ -194,9 +210,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     setToolsOpen(false);
     toolsBtnRef.current?.focus();
   };
-  // A real menu: focus moves in when it opens, arrows walk it, Escape closes.
+  // 10.0 — a small non-modal dialog (it holds switches, which a menu may not):
+  // focus moves in when it opens, arrows walk its buttons, Escape closes.
+  const toolsItems = (): HTMLElement[] => [...(toolsMenuRef.current?.querySelectorAll<HTMLElement>('button') ?? [])];
   useEffect(() => {
-    if (toolsOpen) toolsMenuRef.current?.querySelector<HTMLElement>('[role^="menuitem"]')?.focus();
+    if (toolsOpen) toolsMenuRef.current?.querySelector<HTMLElement>('button')?.focus();
   }, [toolsOpen]);
   const onToolsKey = (e: KeyboardEvent): void => {
     if (!toolsOpen) return;
@@ -206,7 +224,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       return;
     }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
-    const items = [...(toolsMenuRef.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])];
+    const items = toolsItems();
     if (!items.length) return;
     e.preventDefault();
     const at = items.indexOf(document.activeElement as HTMLElement);
@@ -245,6 +263,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             {notice}
           </div>
         )}
+        <ConnectorChips active={connectors.active} armed={connectors.armed} memoryCount={connectors.memoryCount} onToggle={connectors.toggle} />
         {pending.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2 px-1">
             {pending.map((p, i) => (
@@ -342,77 +361,51 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 type="button"
                 onClick={() => setToolsOpen((v) => !v)}
                 aria-label="Attach and tools"
-                title="Attach files and tools"
-                aria-haspopup="menu"
+                title="Attach files, connectors and tools"
+                aria-haspopup="dialog"
                 aria-expanded={toolsOpen}
                 className={cn('ai-icon-btn ai-round', toolsOpen && 'ai-icon-btn-on')}
               >
                 <PlusIcon className={cn('ai-plus w-[18px] h-[18px]', toolsOpen && 'ai-plus-open')} />
-                {activeTools.length > 0 && <span className="ai-dot ai-below-sm" aria-hidden />}
               </button>
               {toolsOpen && (
                 <>
                   <button type="button" aria-label="Close tools menu" tabIndex={-1} onClick={() => setToolsOpen(false)} className="fixed inset-0 z-40 cursor-default" />
                   <div
                     ref={toolsMenuRef}
-                    role="menu"
+                    role="dialog"
                     aria-label="Attach and tools"
                     className={cn('ai-popover ai-tools-menu ai-pop', docked ? 'ai-tools-menu-up' : 'ai-tools-menu-down')}
                   >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="ai-menu-item"
-                      onClick={() => {
-                        setToolsOpen(false);
-                        fileRef.current?.click();
-                      }}
-                    >
-                      <UploadIcon className="w-4 h-4 ai-t3" /> Upload files
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="ai-menu-item"
-                      onClick={() => {
-                        setToolsOpen(false);
-                        folderRef.current?.click();
-                      }}
-                    >
-                      <FolderIcon className="w-4 h-4 ai-t3" /> Upload folder
-                    </button>
+                    <div role="group" aria-label="Attach">
+                      <button
+                        type="button"
+                        className="ai-menu-item"
+                        onClick={() => {
+                          setToolsOpen(false);
+                          fileRef.current?.click();
+                        }}
+                      >
+                        <UploadIcon className="w-4 h-4 ai-t3" /> Upload files
+                      </button>
+                      <button
+                        type="button"
+                        className="ai-menu-item"
+                        onClick={() => {
+                          setToolsOpen(false);
+                          folderRef.current?.click();
+                        }}
+                      >
+                        <FolderIcon className="w-4 h-4 ai-t3" /> Upload folder
+                      </button>
+                    </div>
                     <div className="ai-menu-sep" />
-                    <button type="button" role="menuitemcheckbox" aria-checked={web} className="ai-menu-item" onClick={() => onWeb(!web)} title="Search the live web for this chat">
-                      <GlobeIcon className="w-4 h-4 ai-t3" /> <span className="flex-1">Web search</span>
-                      {web && <CheckIcon className="w-3.5 h-3.5 text-ember-400" />}
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitemcheckbox"
-                      aria-checked={think}
-                      className="ai-menu-item"
-                      onClick={() => onThink(!think)}
-                      title="Think — send the next message to the deep engine for careful reasoning"
-                    >
-                      <BulbIcon className="w-4 h-4 ai-t3" /> <span className="flex-1">Think</span>
-                      {think && <CheckIcon className="w-3.5 h-3.5 text-ember-400" />}
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitemcheckbox"
-                      aria-checked={research}
-                      className="ai-menu-item"
-                      onClick={() => onResearch(!research)}
-                      title="Research — search the live web and cross-check multiple sources"
-                    >
-                      <BookIcon className="w-4 h-4 ai-t3" /> <span className="flex-1">Research</span>
-                      {research && <CheckIcon className="w-3.5 h-3.5 text-ember-400" />}
-                    </button>
+                    <ConnectorList views={connectors.views} armed={connectors.armed} memoryCount={connectors.memoryCount} onToggle={connectors.toggle} />
+                    <div className="ai-menu-sep" />
                     {IMAGES_ENABLED && (
                       <button
                         type="button"
-                        role="menuitemcheckbox"
-                        aria-checked={imageMode}
+                        aria-pressed={imageMode}
                         className="ai-menu-item"
                         onClick={() => onImageMode(!imageMode)}
                         title="Create an image from your next message"
@@ -424,10 +417,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                         {imageMode && <CheckIcon className="w-3.5 h-3.5 text-ember-400" />}
                       </button>
                     )}
-                    <div className="ai-menu-sep" />
                     <button
                       type="button"
-                      role="menuitem"
                       className="ai-menu-item"
                       onClick={() => {
                         setToolsOpen(false);
@@ -466,20 +457,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 ? 'No agent model is available right now.'
                 : 'When on, the assistant uses an agent-capable model that can search the web and run code by itself.'}
             </span>
-
-            {activeTools.map((t) => (
-              <button
-                key={t}
-                type="button"
-                aria-pressed="true"
-                title={`${t} is on — tap to turn it off`}
-                onClick={() => (t === 'Think' ? onThink(false) : t === 'Research' ? onResearch(false) : onWeb(false))}
-                className="ai-chip ai-chip-solid ai-from-sm"
-              >
-                {t}
-                <XIcon className="w-3 h-3 opacity-70" />
-              </button>
-            ))}
 
             <span className="flex-1" />
 

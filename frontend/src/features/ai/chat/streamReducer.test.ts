@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_STEPS, cleanStep, initialStreamState, reduceFrame, reduceSteps, splitFrames, summariseSteps, type StreamState } from './streamReducer';
+import { MAX_STEPS, cleanStep, initialStreamState, reduceFrame, reduceSteps, splitFrames, type StreamState } from './streamReducer';
 
 const run = (frames: unknown[], from: StreamState = initialStreamState()): StreamState => frames.reduce<StreamState>(reduceFrame, from);
 
@@ -91,19 +91,6 @@ describe('agent steps', () => {
     expect(steps).toHaveLength(MAX_STEPS);
     expect(steps[0].label).toBe('a');
     expect(steps[MAX_STEPS - 1].label).toBe(`run ${MAX_STEPS - 2}`);
-  });
-
-  it('collapses to a one-line summary', () => {
-    expect(
-      summariseSteps([
-        { tool: 'search', label: 'a' },
-        { tool: 'code', label: 'b' },
-        { tool: 'search', label: 'c' },
-        { tool: 'code', label: 'd' },
-      ]),
-    ).toBe('Searched the web · ran code · 4 steps');
-    expect(summariseSteps([{ tool: 'visit', label: 'a' }])).toBe('Read pages · 1 step');
-    expect(summariseSteps([])).toBe('');
   });
 
   // 9.1.0 — source previews: a citation's own title and snippet.
