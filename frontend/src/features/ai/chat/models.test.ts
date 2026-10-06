@@ -68,7 +68,7 @@ describe('parseCatalogResponse', () => {
     ]);
     expect(providers[0].label).toBe('NVIDIA');
     // A provider the server left out reads as not configured, never invented.
-    expect(providers[1]).toEqual({ id: 'openrouter', label: 'OpenRouter', configured: false, models: [] });
+    expect(providers[1]).toEqual({ id: 'openrouter', label: 'OpenRouter', configured: false, models: [], media: [], tools: [] });
     expect(providers[2].models[0]).toMatchObject({ name: 'Small 8B', context: 8192 });
   });
 

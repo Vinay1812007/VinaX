@@ -11,6 +11,7 @@
  * still hold them; they are dropped when the chats are read, so the next save
  * writes the device clean, and an import never revives them.
  */
+import { isProviderId } from './models';
 import type { Conversation, Msg } from './types';
 
 export const STORE_KEY = 'vinax_ai_chats_v1';
@@ -76,10 +77,18 @@ export function loadInitialChats(): Conversation[] {
 // Strip base64 image data URLs from messages before persisting: they live in
 // React state only, so a chat with 3-4 attachments never bloats localStorage
 // past the ~5MB quota. Placeholders keep the message shape stable for reload.
+// 10.3 — a created picture or music clip follows the same rule: its model,
+// provider and prompt are kept, its data is not, and the thread shows a
+// placeholder line in its place after a reload.
 export function stripImagesForPersist(chats: Conversation[]): Conversation[] {
   return chats.map((c) => ({
     ...c,
-    messages: c.messages.map((m) => (m.images && m.images.length ? { ...m, images: m.images.map(() => '') } : m)),
+    messages: c.messages.map((m) => {
+      let out = m;
+      if (m.images && m.images.length) out = { ...out, images: m.images.map(() => '') };
+      if (m.media?.src) out = { ...out, media: { ...m.media, src: '' } };
+      return out;
+    }),
   }));
 }
 
@@ -211,6 +220,17 @@ function reviveMsg(raw: unknown): Msg | null {
     if (imgs.length) m.images = imgs;
   }
   if (typeof r.engine === 'string') m.engine = r.engine.slice(0, 60);
+  // 10.3 — a created picture or clip comes back as its placeholder only.
+  const media = r.media as Record<string, unknown> | null | undefined;
+  if (media && typeof media === 'object' && (media.kind === 'image' || media.kind === 'music') && typeof media.model === 'string') {
+    m.media = {
+      kind: media.kind,
+      src: '',
+      model: media.model.slice(0, 120),
+      ...(isProviderId(media.provider) ? { provider: media.provider } : {}),
+      prompt: typeof media.prompt === 'string' ? media.prompt.slice(0, 2000) : '',
+    };
+  }
   if (r.player === true) m.player = true;
   if (r.rating === 'up' || r.rating === 'down') m.rating = r.rating;
   if (r.pinned === true) m.pinned = true;

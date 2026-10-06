@@ -27,6 +27,17 @@
  * older client is ignored. For anything that changes week to week the reply
  * answers from what the engine knows and says plainly it may be out of date
  * (see NO_LIVE_WEB in the system prompt).
+ *
+ * 10.3 — free non-web TOOLS: `tools?: string[]`, of which only
+ * 'code_execution' is honoured. The code runs in the provider's own sandbox,
+ * never in the Worker: Gemini's codeExecution tool (native endpoints) and
+ * Groq's code_interpreter on the gpt-oss models. A picked model gets the tool
+ * only if it can run it (else it answers without); on Auto a code-capable
+ * model leads (the flagship when ready, else Groq's gpt-oss). The executed
+ * code and its output stream into the ordinary `delta` text as fenced
+ * Markdown (```python … ``` then an "Output" block), so older clients render
+ * them, and `meta.tools` is ['code_execution'] when the answering model ran
+ * with the tool enabled. No web tool is ever sent (10.2).
  */
 import {
   LANE_PROVIDER,
@@ -41,6 +52,7 @@ import {
   loggableModel,
   noteLaneFailure,
   providerAttempt,
+  providerKey,
   reasoningOffParams,
   sameCall,
   usageFromJson,
@@ -52,7 +64,7 @@ import {
   aiGate,
   logAiRefusal,
 } from '../_lib/ai';
-import { catalogDefaultModel, describeModel, findCatalogModel, normaliseProvider, type CatalogModel } from '../_lib/catalog';
+import { catalogDefaultModel, codeExecutionModels, describeModel, fetchCatalog, findCatalogModel, normaliseProvider, type CatalogModel } from '../_lib/catalog';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
@@ -60,7 +72,7 @@ import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { houseRules, readConfig } from '../_lib/clientConfig';
 import { placeContextLines, readCoarsePlace } from '../_lib/place';
 import { type SupabaseEnv } from '../_lib/supabase';
-import { maestroFetch, maestroModelFor } from '../_lib/maestro';
+import { codeBlock, maestroFetch, maestroModelFor, outputBlock } from '../_lib/maestro';
 
 // Image understanding rides the vision lanes (the 11B default, the 90B deep
 // pair), both on the NVIDIA key since 10.3.
@@ -264,7 +276,59 @@ const MIN_HOP_MS = 2_500;
 /** 8.2.0 — true when Auto should lead with the flagship: its key is set and
  * this isolate has not seen it fail recently (quota, key, model or upstream). */
 export function flagshipReady(env: AiEnv): boolean {
-  return !!env.VINAX_GGL_GEMINI_API_KEY && !laneCoolingDown('maestro', laneModel(env, 'maestro'));
+  return providerKey(env, 'gemini') !== null && !laneCoolingDown('maestro', laneModel(env, 'maestro'));
+}
+
+/** 10.3 — the tools a request asks for: only 'code_execution' is honoured;
+ * every other name (any web tool included) is dropped. Exported for tests. */
+export function requestTools(raw: unknown): Array<'code_execution'> {
+  return Array.isArray(raw) && raw.some((t) => t === 'code_execution') ? ['code_execution'] : [];
+}
+
+/** 10.3 — true when an attempt's model can run code in its provider's sandbox. Exported for tests. */
+export function attemptRunsCode(a: LaneAttempt): boolean {
+  const m = attemptModel(a);
+  return codeExecutionModels(m.provider, [{ id: m.id }]).length > 0;
+}
+
+/** 10.3 — one streamed (or final) `executed_tools` list from the Groq code
+ * interpreter, as fenced Markdown. `shown` remembers which code and output
+ * blocks were already sent, per tool index, so a repeated or split report is
+ * never printed twice. Exported for tests. */
+export function executedToolsText(raw: unknown, shown: Map<number, { code: boolean; output: boolean }>): string {
+  if (!Array.isArray(raw)) return '';
+  let out = '';
+  raw.forEach((t: unknown, i: number) => {
+    if (!t || typeof t !== 'object') return;
+    const e = t as { index?: unknown; type?: unknown; name?: unknown; arguments?: unknown; output?: unknown; code_results?: unknown };
+    // Only the code interpreter's reports are rendered; anything else (a web
+    // tool is never requested) is ignored.
+    const kind = `${typeof e.type === 'string' ? e.type : ''} ${typeof e.name === 'string' ? e.name : ''}`;
+    if (/search|browser|visit/i.test(kind)) return;
+    const idx = typeof e.index === 'number' ? e.index : i;
+    const seen = shown.get(idx) ?? { code: false, output: false };
+    let code = '';
+    if (typeof e.arguments === 'string' && e.arguments.trim()) {
+      try {
+        const parsed = JSON.parse(e.arguments) as { code?: unknown };
+        code = typeof parsed?.code === 'string' ? parsed.code : e.arguments;
+      } catch {
+        code = e.arguments;
+      }
+    }
+    const results = Array.isArray(e.code_results) ? (e.code_results as Array<{ text?: unknown }>).map((r) => (typeof r?.text === 'string' ? r.text : '')).filter(Boolean).join('\n') : '';
+    const output = typeof e.output === 'string' ? e.output : results;
+    if (code && !seen.code) {
+      out += codeBlock(code);
+      seen.code = true;
+    }
+    if ((output || e.output !== undefined || Array.isArray(e.code_results)) && seen.code && !seen.output) {
+      out += outputBlock(output);
+      seen.output = true;
+    }
+    shown.set(idx, seen);
+  });
+  return out;
 }
 
 /**
@@ -352,7 +416,7 @@ async function handleChat(
   // long thread of pasted documents (the client sends the whole conversation).
   // 10.2 — older clients still send `web` (the retired Research toggle); it is
   // not read, so it changes nothing.
-  const read = await readJsonCapped<{ messages?: InMsg[]; mode?: unknown; provider?: unknown; model?: unknown; images?: unknown; taste?: unknown; profile?: unknown; place?: unknown } | null>(request, MAX_BODY_BYTES);
+  const read = await readJsonCapped<{ messages?: InMsg[]; mode?: unknown; provider?: unknown; model?: unknown; images?: unknown; taste?: unknown; profile?: unknown; place?: unknown; tools?: unknown } | null>(request, MAX_BODY_BYTES);
   if (!read.ok) return read.reason === 'too_large' ? jsonErr({ error: 'too_large' }, 413) : jsonErr({ error: 'bad_request' }, 400);
   if (!read.value || typeof read.value !== 'object') return jsonErr({ error: 'bad_request' }, 400);
   const body = read.value;
@@ -448,7 +512,25 @@ async function handleChat(
   // model degrades to a healthy sibling instead of failing the chat.
   // 10.3 — a picked model runs first; the seat's ladder follows it.
   const ladder = laneAttempts(env, seatLane, seatDefault ?? undefined);
-  const allAttempts = pick ? [pick, ...ladder.filter((a) => !sameCall(a, pick))] : ladder;
+  // 10.3 — code execution, for the listener's own seats only (Auto or a pick).
+  const wantCode = (reqMode === 'auto' || reqMode === 'model') && requestTools(body.tools).length > 0;
+  // On Auto, a code-capable model leads: the flagship when it is ready (it is
+  // already first), else the best gpt-oss model Groq lists right now.
+  let codeLead: LaneAttempt | null = null;
+  if (wantCode && reqMode === 'auto' && !(ladder[0] && attemptRunsCode(ladder[0]))) {
+    const groqCode = codeExecutionModels('groq', await fetchCatalog(env, 'groq'));
+    const best = groqCode.find((m) => m.endsWith('gpt-oss-120b')) ?? groqCode[0];
+    codeLead = best ? providerAttempt(env, 'groq', best) : null;
+  }
+  const lead = pick ?? codeLead;
+  const allAttempts = lead ? [lead, ...ladder.filter((a) => !sameCall(a, lead))] : ladder;
+  // The attempts that carry the tool: every one whose model can run it. A
+  // pick that cannot answers without it.
+  const codeOn = new Set<LaneAttempt>(wantCode ? allAttempts.filter(attemptRunsCode) : []);
+  if (wantCode && pick && attemptRunsCode(pick)) codeOn.add(pick);
+  // Attempts that refused the tool (a 400) and were asked again without it.
+  const codeDropped = new Set<LaneAttempt>();
+  const runsCode = (a: LaneAttempt): boolean => codeOn.has(a) && !codeDropped.has(a);
   if (!allAttempts.length) return jsonErr({ error: 'ai_not_configured' }, 503);
   // 8.2.0 — the same cooldown table chat() obeys: a lane+model that answered
   // 429 / model-gone / key-rejected / 5xx recently is not asked again until it
@@ -531,7 +613,7 @@ async function handleChat(
   // first 400 flips this off for the rest of the request and the same pair
   // is re-asked plainly, so the stream itself never depends on it.
   let usageOptIn = true;
-  const payloadFor = (m: string, endpoint: string, messages: OutMsg[]): Record<string, unknown> => {
+  const payloadFor = (m: string, endpoint: string, messages: OutMsg[], code = false): Record<string, unknown> => {
     const p: Record<string, unknown> = {
       model: m,
       messages,
@@ -539,6 +621,10 @@ async function handleChat(
       max_tokens: MAXTOK_BY_MODE[mode],
       stream: true,
     };
+    // 10.3 — the code tool, in each provider's own shape; nothing else is
+    // ever put in `tools` (no search, no browsing, no web plugin — 10.2).
+    if (code && isMaestroEndpoint(endpoint)) p.code_execution = true;
+    if (code && isGroqEndpoint(endpoint)) p.tools = [{ type: 'code_interpreter' }];
     if (usageOptIn && !isGroqEndpoint(endpoint)) p.stream_options = { include_usage: true };
     // Default-base-only knob: the external hosts reject reasoning_effort with
     // a 400 (probed live), so it never travels off the default base.
@@ -571,14 +657,14 @@ async function handleChat(
       if (isMaestroEndpoint(a.endpoint)) {
         // 8.1.0 — its own transport (native streaming). 10.3 — an exact
         // catalogue pick is never swapped for another model.
-        const p = payloadFor(a.model, a.endpoint, messages);
+        const p = payloadFor(a.model, a.endpoint, messages, runsCode(a));
         delete p.stream_options;
         return await maestroFetch(a.key, a.model, p, controller.signal, !a.exact);
       }
       return await fetch(a.endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${a.key}` },
-        body: JSON.stringify(payloadFor(a.model, a.endpoint, messages)),
+        body: JSON.stringify(payloadFor(a.model, a.endpoint, messages, runsCode(a))),
         signal: controller.signal,
       });
     } finally {
@@ -631,6 +717,17 @@ async function handleChat(
       if (res?.status === 400 && usageOptIn && !isGroqEndpoint(a.endpoint)) {
         void res.body?.cancel().catch(() => undefined);
         usageOptIn = false;
+        try {
+          res = await callStream(a, messages, leash);
+        } catch {
+          res = null;
+        }
+      }
+      // 10.3 — a 400 while the code tool rode the request: ask the same model
+      // once more without it, so the tool can never cost the answer.
+      if (res?.status === 400 && runsCode(a)) {
+        void res.body?.cancel().catch(() => undefined);
+        codeDropped.add(a);
         try {
           res = await callStream(a, messages, leash);
         } catch {
@@ -744,6 +841,8 @@ async function handleChat(
         let pending = '';
         let gate: 'probe' | 'think' | 'pass' = 'probe';
         let cut = false;
+        // 10.3 — Groq code interpreter reports, per tool index.
+        const toolShown = new Map<number, { code: boolean; output: boolean }>();
         const budgetId = setTimeout(
           () => {
             cut = true;
@@ -800,7 +899,10 @@ async function handleChat(
               const data = line.slice(5).trim();
               if (!data || data === '[DONE]') continue;
               try {
-                const j = JSON.parse(data) as { choices?: Array<{ delta?: { content?: unknown } }> };
+                const j = JSON.parse(data) as { choices?: Array<{ delta?: { content?: unknown; executed_tools?: unknown }; message?: { executed_tools?: unknown } }> };
+                // 10.3 — executed code and its output, before the text that follows them.
+                const ran = executedToolsText(j.choices?.[0]?.delta?.executed_tools ?? j.choices?.[0]?.message?.executed_tools, toolShown);
+                if (ran) onDelta(ran);
                 const delta = j.choices?.[0]?.delta?.content;
                 if (typeof delta === 'string' && delta) onDelta(delta);
                 // The usage chunk (opt-in on the default base, unasked on the
@@ -838,7 +940,7 @@ async function handleChat(
       // slug and its provider, for whichever attempt is streaming.
       const sendMeta = (a: LaneAttempt): void => {
         const m = attemptModel(a);
-        send({ meta: { model: m.name, modelId: m.id, provider: m.provider, mode: reqMode } });
+        send({ meta: { model: m.name, modelId: m.id, provider: m.provider, mode: reqMode, ...(runsCode(a) ? { tools: ['code_execution'] } : {}) } });
       };
       sendMeta(usedAttempt);
       let full = await drain(upBody);

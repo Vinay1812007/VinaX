@@ -7,13 +7,19 @@
  *
  * 10.3 — exactly four AI key secrets, one per provider; every lane signs with
  * one of them, and no per-model secret name survives anywhere in backend/.
+ * Their primary names are NVIDIA_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY and
+ * GEMINI_API_KEY; each falls back to its previous name while unset.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  AI_KEY_FALLBACKS,
   AI_KEY_SECRETS,
   AI_PROVIDERS,
+  PROVIDER_ENV_FALLBACK,
+  providerKey,
+  providerKeySource,
   LANE_BASE,
   LANE_ENV,
   LANE_MODEL,
@@ -30,13 +36,42 @@ import { ENV_ITEMS } from '../functions/api/admin/envcheck';
 const lanes = Object.keys(LANE_ENV) as Lane[];
 const registrySlugs = new Set(Object.values(AI_MODEL_REGISTRY).map((m) => m.id));
 const registryEnv = new Set(registryEnvKeys());
-const FOUR = ['VINAX_NVIDIA_API_KEY', 'VINAX_OPENROUTER_API_KEY', 'VINAX_GROQ_API_KEY', 'VINAX_GGL_GEMINI_API_KEY'];
+const FOUR = ['NVIDIA_API_KEY', 'OPENROUTER_API_KEY', 'GROQ_API_KEY', 'GEMINI_API_KEY'];
+const PREVIOUS = ['VINAX_NVIDIA_API_KEY', 'VINAX_OPENROUTER_API_KEY', 'VINAX_GROQ_API_KEY', 'VINAX_GGL_GEMINI_API_KEY'];
 
 describe('10.3 — one key per provider', () => {
   it('reads exactly four AI key secrets, one per provider, in menu order', () => {
     expect([...AI_KEY_SECRETS]).toEqual(FOUR);
     expect([...AI_PROVIDERS]).toEqual(['nvidia', 'openrouter', 'groq', 'gemini']);
     expect(new Set(Object.values(PROVIDER_ENV)).size).toBe(4);
+    expect([...AI_KEY_FALLBACKS]).toEqual(PREVIOUS);
+  });
+
+  it('each provider reads its primary name, else its previous name — through providerKey only', () => {
+    for (const [i, p] of AI_PROVIDERS.entries()) {
+      expect(PROVIDER_ENV[p]).toBe(FOUR[i]);
+      expect(PROVIDER_ENV_FALLBACK[p]).toBe(PREVIOUS[i]);
+      expect(providerKey({}, p)).toBeNull();
+      expect(providerKey({ [PREVIOUS[i]]: ' old\n' }, p)).toBe('old');
+      expect(providerKeySource({ [PREVIOUS[i]]: 'old' }, p)).toEqual({ name: PREVIOUS[i], fallback: true });
+      expect(providerKey({ [FOUR[i]]: 'new', [PREVIOUS[i]]: 'old' }, p)).toBe('new');
+      expect(providerKeySource({ [FOUR[i]]: 'new', [PREVIOUS[i]]: 'old' }, p)).toEqual({ name: FOUR[i], fallback: false });
+      // A blank primary does not hide a set fallback.
+      expect(providerKey({ [FOUR[i]]: '  ', [PREVIOUS[i]]: 'old' }, p)).toBe('old');
+    }
+    expect(laneAttempts({ NVIDIA_API_KEY: 'new-nv' }, 'chat')[0].key).toBe('new-nv');
+    expect(laneAttempts({ VINAX_GGL_GEMINI_API_KEY: 'old-gm' }, 'maestro')[0].key).toBe('old-gm');
+  });
+
+  it('no code reads an AI key except through providerKey', () => {
+    const root = join(__dirname, '..', 'functions');
+    const offenders: string[] = [];
+    for (const f of backendFiles(root)) {
+      if (f.endsWith('.test.ts') || f.endsWith(join('_lib', 'ai.ts'))) continue;
+      const text = readFileSync(f, 'utf8');
+      if (/env\.(?:VINAX_)?(?:NVIDIA|OPENROUTER|GROQ|GGL_GEMINI|GEMINI)_API_KEY|env\[(?:PROVIDER_ENV|LANE_ENV|PROVIDER_ENV_FALLBACK)\b/.test(text)) offenders.push(f.slice(root.length + 1));
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('every lane signs with one of the four, through its provider', () => {
@@ -70,6 +105,7 @@ describe('10.3 — one key per provider', () => {
   it('the env checklist lists the four keys and no other AI key', () => {
     const ai = ENV_ITEMS.filter((i) => i.group === 'AI').map((i) => i.name);
     for (const name of FOUR) expect(ai).toContain(name);
+    expect(ENV_ITEMS.filter((i) => i.fallback).map((i) => i.fallback)).toEqual(PREVIOUS);
     expect(ai.filter((n) => /^VINAX_.*(KEY|_IT|_INT|_A3B|_B)$/.test(n) && !FOUR.includes(n))).toEqual([]);
   });
 });

@@ -9,6 +9,12 @@
  *   nowPlaying— the song playing now rides with the message (page state)
  *   memory    — the lines the listener asked it to remember  (./memory.ts)
  *   place     — coarse place + time zone (assistantPlace)    (this module)
+ *   code      — 10.3: the model may run code to work things out (this module)
+ *
+ * Run code is the one connector that is a TOOL rather than context: it asks
+ * the answering model to run short programs, and the code and its output come
+ * back inside the reply. It is listed only when the server says some model
+ * can (`features.code` from GET /api/aimodels), and it is off by default.
  *
  * Place had no switch of its own: it followed the app-wide region setting.
  * That setting still decides whether a place EXISTS to send; the connector
@@ -17,6 +23,8 @@
  */
 
 export const PLACE_ON_KEY = 'vinax.ai.placeOn';
+/** 10.3 — Run code, '1' when on. Off unless the listener switched it on. */
+export const CODE_ON_KEY = 'vinax.ai.codeOn';
 
 /** Fired on window whenever a stored connector (memory, place) changes, so a
  *  second view of the same switch (the settings dialog, the chip row) follows. */
@@ -53,7 +61,36 @@ export function setPlaceConnectorOn(on: boolean): void {
   notifyConnectors();
 }
 
-export type ConnectorId = 'think' | 'nowPlaying' | 'memory' | 'place';
+/** 10.3 — Run code: off unless the listener switched it on. */
+export function codeConnectorOn(): boolean {
+  try {
+    return window.localStorage.getItem(CODE_ON_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setCodeConnectorOn(on: boolean): void {
+  try {
+    if (on) window.localStorage.setItem(CODE_ON_KEY, '1');
+    else window.localStorage.removeItem(CODE_ON_KEY);
+  } catch {
+    /* private mode: the setting simply does not persist */
+  }
+  notifyConnectors();
+}
+
+/** 10.3 — Run code against the model in use: 'ok' (it can run code), 'auto'
+ *  (Auto picks a model that can), 'unsupported' (the pinned model cannot), or
+ *  'unknown' (the list has not been read yet — nothing is claimed). */
+export type CodeSupport = 'ok' | 'auto' | 'unsupported' | 'unknown';
+
+/** The quiet line on the Run code chip for each case (null = no line). */
+export function codeChipNote(support: CodeSupport): string | null {
+  return support === 'unsupported' ? 'not available with this model' : null;
+}
+
+export type ConnectorId = 'think' | 'nowPlaying' | 'memory' | 'place' | 'code';
 
 /** One row of the Connectors list, as the menu and the chip row draw it. */
 export interface ConnectorView {
@@ -64,6 +101,8 @@ export interface ConnectorView {
   on: boolean;
   /** Cannot be switched on from here (the reason is the description). */
   disabled?: boolean;
+  /** 10.3 — a quiet note on the chip ("not available with this model"). */
+  note?: string | null;
 }
 
 export interface ConnectorInputs {
@@ -77,6 +116,11 @@ export interface ConnectorInputs {
   /** What would be sent ("Hyderabad, IN · Asia/Kolkata"), or null when the
    *  app-wide region setting leaves nothing to send. */
   placeLabel: string | null;
+  /** 10.3 — the server can run code for some model (`features.code`). Run
+   *  code is only listed when it can. */
+  codeAvailable?: boolean;
+  codeOn?: boolean;
+  codeSupport?: CodeSupport;
 }
 
 /** The connector rows, in menu order. Pure. */
@@ -103,7 +147,20 @@ export function connectorViews(s: ConnectorInputs): ConnectorView[] {
     s.placeLabel
       ? { id: 'place', name: 'Place', description: `${s.placeLabel}, for local dates and times`, on: s.placeOn }
       : { id: 'place', name: 'Place', description: 'Off in Settings: region sharing is switched off', on: false, disabled: true },
+    ...(s.codeAvailable ? [codeView(s.codeOn === true, s.codeSupport ?? 'unknown')] : []),
   ];
+}
+
+/** 10.3 — the Run code row. Its line says what it does, or — when the model
+ *  in use cannot — what happens instead. */
+function codeView(on: boolean, support: CodeSupport): ConnectorView {
+  const description =
+    support === 'unsupported'
+      ? 'This model can’t run code — pick Auto or a model tagged Runs code'
+      : support === 'auto'
+        ? 'Runs short programs to work things out — Auto picks a model that can'
+        : 'Runs short programs to work things out; the code and its output show in the reply';
+  return { id: 'code', name: 'Run code', description, on, note: on ? codeChipNote(support) : null };
 }
 
 /** The connectors that are on, for the chip row above the composer. */

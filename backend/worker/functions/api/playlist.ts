@@ -18,7 +18,7 @@
  * "<language> devotional songs"). Every pick is still resolved against the
  * catalogue by the client.
  */
-import { aiBlockCode, aiGate, chat, gather, extractJson, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, gather, extractJson, isAiBlocked, logAiEvent, logAiRefusal, providerKey, type AiBlock, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
@@ -367,6 +367,8 @@ export async function runPlaylist(context: {
     '\n\nCANDIDATE POOL (real songs — draw from these first; add your own only where gaps remain):\n' +
     (pool.length ? JSON.stringify(pool) : '[]') +
     '\n\nBuild the playlist now and respond with JSON only.';
+  // 10.3 — the flagship's key, read through providerKey (primary or previous name).
+  const hasFlagship = providerKey(env, 'gemini') !== null;
   const r = await chat(
     env,
     [
@@ -385,7 +387,7 @@ export async function runPlaylist(context: {
     // deep reasoning lane. 14s pinned shot, then fast JSON generators with the
     // remaining budget — a full playlist always fits inside client patience.
     // 8.0.0 — the maestro lane leads: every suggestion must match a real catalogue song, and it knows the most real songs.
-    { temperature: 0.9, lane: env.VINAX_GGL_GEMINI_API_KEY ? 'maestro' : 'dj', maxTokens: 2000, json: true, reasoningEffort: 'low', timeoutMs: 14_000, firstTimeoutMs: 14_000, skipSecondary: !!env.VINAX_GGL_GEMINI_API_KEY, ladder: ['dj', 'scholar', 'fast', 'home'], deadlineAt, feature: 'playlist' },
+    { temperature: 0.9, lane: hasFlagship ? 'maestro' : 'dj', maxTokens: 2000, json: true, reasoningEffort: 'low', timeoutMs: 14_000, firstTimeoutMs: 14_000, skipSecondary: !!hasFlagship, ladder: ['dj', 'scholar', 'fast', 'home'], deadlineAt, feature: 'playlist' },
   );
   if (isAiBlocked(r.error)) return refuse(r.error);
   let parsed = parsePlaylist(r.error ? null : r.content);

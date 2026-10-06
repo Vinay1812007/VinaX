@@ -23,8 +23,18 @@
  *
  * Deliberately a small fetch of its own rather than the chat() helper: the
  * chat ladder, prompts and token accounting do not apply to embeddings.
+ *
+ * 10.3 — the engines are drawn from the providers' FREE embedding lists
+ * (NVIDIA /v1/models and the Gemini model list, via _lib/catalog.ts
+ * fetchMedia): every NVIDIA embedding model listed right now, in the
+ * preference order below, then Gemini's. The two fixed NVIDIA pins and the
+ * Gemini pin above are the same fallbacks as before, used when a list is
+ * unavailable (no answer within EMBED_LIST_WAIT_MS, or the provider listed no
+ * embedding model). The live NVIDIA list on 2026-10-06 carried neither fixed
+ * pin, so the list is what keeps this route on models the key can call.
  */
-import { LANE_ENV, PROVIDER_ENV, type AiEnv } from './ai';
+import { providerKey, type AiEnv } from './ai';
+import { fetchMedia } from './catalog';
 import { isWrongDoor } from './maestro';
 
 export type EmbedKind = 'query' | 'passage';
@@ -42,6 +52,20 @@ export const FLAGSHIP_EMBED_MODEL = 'gemini-embedding-001';
 
 /** Models trained so a prefix of the vector is itself a good embedding. */
 const TRUNCATABLE = new Set([NV_EMBED_PRIMARY, FLAGSHIP_EMBED_MODEL]);
+/** 10.3 — the Gemini embedding family is trained the same way (outputDimensionality). */
+const isTruncatable = (model: string): boolean => TRUNCATABLE.has(model) || /^gemini-embedding-/.test(model);
+
+/** 10.3 — NVIDIA embedding models from the live list, most-wanted first
+ *  (substrings, so a re-published version still sorts). Unlisted families go last. */
+const NV_EMBED_PREFERENCE = ['llama-3.2-nv-embedqa-1b', 'nemotron-3-embed', 'nv-embedqa-e5', 'nv-embedqa-mistral', 'arctic-embed', 'embed-qa-4', 'llama-nemotron-embed', 'nemoretriever'];
+/** How long a request waits for the provider lists before using the fixed engines (the lists keep loading for the next request). */
+export const EMBED_LIST_WAIT_MS = 1_500;
+
+/** 10.3 — the free embedding models each provider lists right now (empty = use the fixed engines). */
+export interface EmbedLists {
+  nvidia: string[];
+  gemini: string[];
+}
 
 const NV_DEFAULT_URL = 'https://integrate.api.nvidia.com/v1/embeddings';
 const FLAGSHIP_STANDARD_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/embeddings';
@@ -89,8 +113,7 @@ export function defaultEmbeddingsUrl(env: AiEnv): string {
 /** The NVIDIA key, as a list (empty when unset). 10.3 — there is exactly one
  * now; the list shape stays so the engine loop reads the same. */
 export function defaultProviderKeys(env: AiEnv): string[] {
-  const raw = env[PROVIDER_ENV.nvidia];
-  const key = typeof raw === 'string' ? raw.trim() : '';
+  const key = providerKey(env, 'nvidia');
   return key ? [key] : [];
 }
 
@@ -168,7 +191,7 @@ export function readVectors(text: string): number[][] | null {
 /** Unit vectors of one consistent size, or null when the answer does not fit the request. */
 function finishVectors(raw: number[][] | null, count: number, model: string): { dim: number; vectors: number[][] } | null {
   if (!raw || raw.length !== count) return null;
-  const dim = TRUNCATABLE.has(model) ? EMBED_DIM : undefined;
+  const dim = isTruncatable(model) ? EMBED_DIM : undefined;
   const vectors: number[][] = [];
   for (const v of raw) {
     const n = normalise(v, dim);
@@ -206,11 +229,9 @@ function defaultProviderEngine(env: AiEnv, model: string, sized: boolean): Engin
   };
 }
 
-function flagshipEngine(env: AiEnv): Engine | null {
-  const raw = env[LANE_ENV.maestro];
-  const key = typeof raw === 'string' ? raw.trim() : '';
+function flagshipEngine(env: AiEnv, model = FLAGSHIP_EMBED_MODEL): Engine | null {
+  const key = providerKey(env, 'gemini');
   if (!key) return null;
-  const model = FLAGSHIP_EMBED_MODEL;
   return {
     model,
     run: async (texts, kind, ms) => {
@@ -237,13 +258,26 @@ function flagshipEngine(env: AiEnv): Engine | null {
   };
 }
 
-/** The engines this deployment can reach, in ladder order (the preferred model first). */
-export function embedEngines(env: AiEnv, prefer?: string | null): Engine[] {
-  const all = [
-    defaultProviderEngine(env, NV_EMBED_PRIMARY, true),
-    defaultProviderEngine(env, NV_EMBED_SECONDARY, false),
-    flagshipEngine(env),
-  ].filter((e): e is Engine => !!e);
+/** 10.3 — listed NVIDIA embedding models in preference order. */
+export function orderNvidiaEmbeds(ids: string[]): string[] {
+  const rank = (id: string): number => {
+    const i = NV_EMBED_PREFERENCE.findIndex((w) => id.toLowerCase().includes(w));
+    return i < 0 ? NV_EMBED_PREFERENCE.length : i;
+  };
+  return [...ids].sort((a, b) => rank(a) - rank(b) || b.localeCompare(a));
+}
+
+/** The engines this deployment can reach, in ladder order (the preferred model first).
+ *  10.3 — with `lists`, the engines are the listed free models; a provider
+ *  whose list is empty keeps its fixed engines (today's fallbacks). */
+export function embedEngines(env: AiEnv, prefer?: string | null, lists?: EmbedLists | null): Engine[] {
+  const nv = lists?.nvidia.length
+    ? orderNvidiaEmbeds(lists.nvidia).map((m) => defaultProviderEngine(env, m, true))
+    : [defaultProviderEngine(env, NV_EMBED_PRIMARY, true), defaultProviderEngine(env, NV_EMBED_SECONDARY, false)];
+  const gm = lists?.gemini.length
+    ? [...lists.gemini].sort((a, b) => Number(b === FLAGSHIP_EMBED_MODEL) - Number(a === FLAGSHIP_EMBED_MODEL) || a.localeCompare(b)).map((m) => flagshipEngine(env, m))
+    : [flagshipEngine(env)];
+  const all = [...nv, ...gm].filter((e): e is Engine => !!e);
   const i = prefer ? all.findIndex((e) => e.model === prefer) : -1;
   return i > 0 ? [all[i], ...all.slice(0, i), ...all.slice(i + 1)] : all;
 }
@@ -253,7 +287,7 @@ export async function embedTexts(env: AiEnv, texts: string[], kind: EmbedKind, o
   const leash = opts.timeoutMs ?? ENGINE_TIMEOUT_MS;
   const deadlineAt = opts.deadlineAt ?? Date.now() + 3 * leash;
   const tried: string[] = [];
-  const engines = embedEngines(env, opts.prefer);
+  const engines = embedEngines(env, opts.prefer, await embedLists(env));
   for (const engine of engines) {
     // A cooling engine is skipped unless it is the only one left to try.
     if (isCooling(engine.model) && engines.some((e) => !isCooling(e.model))) continue;
@@ -272,4 +306,26 @@ export async function embedTexts(env: AiEnv, texts: string[], kind: EmbedKind, o
     console.log(`[embed] ${engine.model} failed status=${got.status ?? 'network/timeout'}`);
   }
   return { ok: false, error: 'no_engine', tried };
+}
+
+/** 10.3 — the free embedding models NVIDIA and Gemini list right now, waited
+ *  for at most EMBED_LIST_WAIT_MS (a cold isolate must not spend the whole
+ *  budget on a list read: it uses the fixed engines this once). Null = wait
+ *  ran out; empty arrays = nothing listed (or no key). Never throws. */
+export async function embedLists(env: AiEnv): Promise<EmbedLists | null> {
+  const lists = Promise.all([fetchMedia(env, 'nvidia'), fetchMedia(env, 'gemini')])
+    .then(([nv, gm]) => ({
+      nvidia: nv.filter((m) => m.kind === 'embedding').map((m) => m.id),
+      gemini: gm.filter((m) => m.kind === 'embedding').map((m) => m.id),
+    }))
+    .catch(() => null);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wait = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), EMBED_LIST_WAIT_MS);
+  });
+  try {
+    return await Promise.race([lists, wait]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

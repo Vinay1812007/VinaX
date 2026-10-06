@@ -356,7 +356,8 @@ describe('fetchCatalog', () => {
     const seen = stubProviders();
     for (const p of ['nvidia', 'openrouter', 'groq', 'gemini'] as const) expect((await fetchCatalog(ALL_KEYS, p)).length).toBeGreaterThan(0);
     expect(seen.find((s) => s.url === 'https://integrate.api.nvidia.com/v1/models')?.headers.authorization).toBe('Bearer nv');
-    expect(seen.find((s) => s.url === 'https://openrouter.ai/api/v1/models')?.headers.authorization).toBe('Bearer or');
+    // 10.3 — every output modality, so the media models are listed too.
+    expect(seen.find((s) => s.url === 'https://openrouter.ai/api/v1/models?output_modalities=all')?.headers.authorization).toBe('Bearer or');
     expect(seen.find((s) => s.url === 'https://api.groq.com/openai/v1/models')?.headers.authorization).toBe('Bearer gq');
     expect(seen.find((s) => s.url.startsWith('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000'))?.headers['x-goog-api-key']).toBe('gm');
   });

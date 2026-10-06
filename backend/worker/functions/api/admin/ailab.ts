@@ -14,12 +14,27 @@
  * Upstream failures come back as a 200 JSON envelope { error, status, head }
  * because Cloudflare masks origin 5xx bodies and the admin UI wants the real
  * story. maxTokens is capped at 1000 — this is a bench, not a workload.
+ *
+ * 10.3 — media benches: POST { provider, model, kind } runs one cheap call on
+ * a model from the provider's live free MEDIA list and answers JSON (never a
+ * stream): { ok, kind, provider, model, name, ms, status, bytes?, type?,
+ * image?, text?, error? }.
+ *   image          one picture from `prompt` (default: a small test prompt);
+ *                  `image` is the data URL so the console can show it
+ *   speech         one short sentence (`text`, default a test line) with
+ *                  `voice` or the model's first voice; `bytes` and `type`
+ *   transcription  `audio` (a data URL) → `text`; without audio:
+ *                  { error: 'audio_required' }
+ *   music, embedding  list-only here: { ok: false, listOnly: true } — a
+ *                  track is too heavy for a bench, and /api/embed exercises
+ *                  the embedding models.
  */
 import { dbFailure, isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { maestroFetch } from '../../_lib/maestro';
 import {
   LANE_ENV,
   LANE_MODEL,
+  laneKey,
   LANE_PROVIDER,
   LANE_SECONDARY,
   PROVIDER_ENV,
@@ -34,7 +49,9 @@ import {
   type AiProvider,
   type Lane,
 } from '../../_lib/ai';
-import { catalogDefaultModel, describeModel, findCatalogModel, normaliseProvider } from '../../_lib/catalog';
+import { MEDIA_KINDS, catalogDefaultModel, describeModel, findCatalogModel, findMediaModel, normaliseProvider, type MediaKind } from '../../_lib/catalog';
+import { generateImage, speak, transcribe } from '../../_lib/media';
+import { readAudio } from '../transcribe';
 import { aggregateLaneHealth, type AiEventRow } from '../../_lib/laneHealth';
 import { sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
 
@@ -103,7 +120,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
 
-  let body: { lane?: unknown; provider?: unknown; messages?: InMsg[]; maxTokens?: unknown; model?: unknown };
+  let body: { lane?: unknown; provider?: unknown; messages?: InMsg[]; maxTokens?: unknown; model?: unknown; kind?: unknown; prompt?: unknown; text?: unknown; voice?: unknown; audio?: unknown; mime?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -114,6 +131,8 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   // key (riding the provider's lane endpoint and transport); { lane } as before.
   const byProvider = body.provider !== undefined && body.provider !== null ? normaliseProvider(body.provider) : null;
   if (body.provider !== undefined && body.provider !== null && !byProvider) return json({ error: 'unknown_provider', providers: Object.keys(PROVIDER_ENV) }, 400);
+  // 10.3 — a media model bench.
+  if (byProvider && body.kind !== undefined) return benchMedia(env, byProvider, body);
   const laneRaw = byProvider ? PROVIDER_LANE[byProvider] : typeof body.lane === 'string' ? body.lane : '';
   if (!(LANES as readonly string[]).includes(laneRaw)) return json({ error: 'unknown_lane', lanes: LANES, providers: Object.keys(PROVIDER_ENV) }, 400);
   const lane = laneRaw as Lane;
@@ -151,7 +170,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
   const catalogLane = lane === 'scholar' || lane === 'router';
   const model =
     overrideModel ?? (catalogLane ? ((await catalogDefaultModel(env, provider)) ?? LANE_MODEL[lane]) : laneModel(env, lane));
-  const key = env[LANE_ENV[lane]];
+  const key = laneKey(env, lane);
   if (!key) return json({ error: 'not_configured', status: 0, head: `${LANE_ENV[lane]} is not set`, lane, provider, model });
 
 
@@ -255,3 +274,37 @@ export const onRequestPost = async (context: { request: Request; env: Env }): Pr
     },
   });
 };
+
+/** 10.3 — one cheap call on a free media model, validated against the live media list. */
+async function benchMedia(
+  env: Env,
+  provider: AiProvider,
+  body: { model?: unknown; kind?: unknown; prompt?: unknown; text?: unknown; voice?: unknown; audio?: unknown; mime?: unknown },
+): Promise<Response> {
+  const kind = typeof body.kind === 'string' && (MEDIA_KINDS as readonly string[]).includes(body.kind) ? (body.kind as MediaKind) : null;
+  if (!kind) return json({ error: 'unknown_kind', kinds: MEDIA_KINDS }, 400);
+  if (!laneKey(env, PROVIDER_LANE[provider])) return json({ error: 'not_configured', status: 0, head: `${PROVIDER_ENV[provider]} is not set`, provider, kind });
+  const m = await findMediaModel(env, provider, kind, body.model);
+  if (!m) return json({ error: 'unknown_model', provider, kind }, 400);
+  const base = { kind, provider, model: m.id, name: m.name };
+  if (kind === 'music' || kind === 'embedding') return json({ ...base, ok: false, listOnly: true });
+  const t0 = Date.now();
+  if (kind === 'image') {
+    const prompt = typeof body.prompt === 'string' && body.prompt.trim().length >= 3 ? body.prompt.trim().slice(0, 600) : 'a small red circle on a plain white background';
+    const r = await generateImage(env, provider, m.id, prompt);
+    return json(r.ok ? { ...base, ok: true, ms: Date.now() - t0, status: 200, bytes: r.value.length, image: r.value } : { ...base, ok: false, ms: Date.now() - t0, status: r.status, error: r.reason });
+  }
+  if (kind === 'speech') {
+    const text = typeof body.text === 'string' && body.text.trim() ? body.text.trim().slice(0, 200) : 'This is a VinaX AI Lab speech test.';
+    const want = typeof body.voice === 'string' ? body.voice.trim().toLowerCase() : '';
+    const voice = (m.voices ?? []).find((v) => v.toLowerCase() === want) ?? m.voices?.[0] ?? null;
+    const r = await speak(env, provider, m.id, voice, text);
+    if (!r.ok) return json({ ...base, ok: false, ms: Date.now() - t0, status: r.status, error: r.reason });
+    const bytes = r.value.body instanceof Uint8Array ? r.value.body.length : (await new Response(r.value.body).arrayBuffer()).byteLength;
+    return json({ ...base, ok: true, ms: Date.now() - t0, status: 200, bytes, type: r.value.type, voice });
+  }
+  const audio = readAudio(body.audio, body.mime);
+  if (!audio) return json({ ...base, ok: false, error: 'audio_required' }, 400);
+  const r = await transcribe(env, provider, m.id, audio.bytes, audio.mime, null);
+  return json(r.ok ? { ...base, ok: true, ms: Date.now() - t0, status: 200, text: r.value } : { ...base, ok: false, ms: Date.now() - t0, status: r.status, error: r.reason });
+}

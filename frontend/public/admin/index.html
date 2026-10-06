@@ -11,7 +11,7 @@
          (removing that would need a bigger refactor). connect-src is set to
          'self' + Supabase for direct client hits (currently unused by this
          console, kept as a hedge for future direct queries). -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org" />
     <title>VinaX · Control Room</title>
 
     <!-- Pre-paint: resolves the theme (stored choice, else the system
@@ -592,6 +592,28 @@
       .lab-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); margin-right: 6px; vertical-align: 1px; }
       .lab-dot.ok { background: var(--ok); } .lab-dot.warn { background: var(--warn); } .lab-dot.bad { background: var(--danger); }
       .lab-ping-at { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+      /* 10.3 — feature switches, media models (grouped by kind, with benches) and tools per provider.
+         Audio plays from blob: URLs, hence media-src 'self' blob: in the CSP above. */
+      .lab-feats { align-items: center; gap: 6px; margin-bottom: 12px; }
+      .lab-feats-k { font-size: 11.5px; margin-right: 2px; }
+      .lab-tag-code { font-size: 10.5px; min-height: 18px; padding: 0 7px; color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
+      .lab-media, .lab-tools { padding: 0 12px 10px; min-width: 0; }
+      .lab-sub { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); margin: 2px 0 6px; }
+      .lab-media-group { border-top: 1px solid var(--border); padding: 6px 0 4px; }
+      .lab-sub + .lab-media-group { border-top: 0; padding-top: 0; }
+      .lab-media-kind { font-size: 12px; font-weight: 650; color: var(--text-2); margin-bottom: 4px; }
+      .lab-media-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 32px; }
+      .lab-media-name { flex: 1 1 200px; min-width: 0; font-size: 12.5px; overflow-wrap: anywhere; }
+      .lab-media-name .muted { font-size: 11.5px; }
+      button.ghost.lab-bench { min-height: 28px; padding: 0 12px; font-size: 11.5px; flex: none; }
+      .lab-media-note { font-size: 11px; }
+      .lab-media-out { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 4px 0 6px; }
+      .lab-media-out:empty { display: none; }
+      .lab-media-thumb { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface-3); }
+      .lab-media-audio { width: min(100%, 300px); height: 36px; }
+      .lab-media-text { font-size: 12.5px; color: var(--text); overflow-wrap: anywhere; flex: 1 1 100%; }
+      .lab-tools .chips { margin-bottom: 0; gap: 6px; }
+      @media (max-width: 900px) { .lab-media-name { flex-basis: 100%; } }
 
       /* ---------- Seasonal skin (Aug 14–15) — restrained tricolour rule ---------- */
       html.fest-ind body::after { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 99; pointer-events: none; background: linear-gradient(90deg, #ff9933 0 33.4%, #fff 33.4% 66.7%, #138808 66.7% 100%); }

@@ -98,7 +98,7 @@ describe('AI Lab — bench by provider', () => {
 
   it('a missing key is reported honestly, by its secret name', async () => {
     const res = await ailabPost({ request: req('/api/admin/ailab', { provider: 'openrouter', messages: MSGS }), env: { ...ADMIN } });
-    expect(await res.json()).toMatchObject({ error: 'not_configured', head: 'VINAX_OPENROUTER_API_KEY is not set', provider: 'openrouter' });
+    expect(await res.json()).toMatchObject({ error: 'not_configured', head: 'OPENROUTER_API_KEY is not set', provider: 'openrouter' });
   });
 });
 
@@ -123,7 +123,7 @@ describe('engine test — one probe per provider key', () => {
     expect(await unlisted.json()).toMatchObject({ error: 'unknown_model' });
     const missing = await enginetestGet({ request: req('/api/admin/enginetest?key=GEMINI'), env: { ...ADMIN } });
     expect(missing.status).toBe(503);
-    expect(await missing.json()).toMatchObject({ env: 'VINAX_GGL_GEMINI_API_KEY' });
+    expect(await missing.json()).toMatchObject({ env: 'GEMINI_API_KEY' });
     expect(calls).toHaveLength(0);
   });
 });
@@ -133,11 +133,12 @@ describe('health — the four keys and every lane', () => {
     reply = () => new Response(JSON.stringify({ choices: [{ message: { content: 'pong' } }] }), { status: 200 });
     const res = await healthGet({ request: req('/api/admin/health'), env: { ...ADMIN, VINAX_NVIDIA_API_KEY: 'nv', VINAX_GROQ_API_KEY: 'gq' } });
     const body = (await res.json()) as { ai: Array<Record<string, unknown>>; lanes: Array<Record<string, unknown>> };
-    expect(body.ai.map((r) => [r.provider, r.env, r.configured, r.ok])).toEqual([
-      ['nvidia', 'VINAX_NVIDIA_API_KEY', true, true],
-      ['openrouter', 'VINAX_OPENROUTER_API_KEY', false, false],
-      ['groq', 'VINAX_GROQ_API_KEY', true, true],
-      ['gemini', 'VINAX_GGL_GEMINI_API_KEY', false, false],
+    // 10.3 — the primary secret name, and the name supplying the key right now.
+    expect(body.ai.map((r) => [r.provider, r.env, r.envInUse, r.configured, r.ok])).toEqual([
+      ['nvidia', 'NVIDIA_API_KEY', 'VINAX_NVIDIA_API_KEY', true, true],
+      ['openrouter', 'OPENROUTER_API_KEY', null, false, false],
+      ['groq', 'GROQ_API_KEY', 'VINAX_GROQ_API_KEY', true, true],
+      ['gemini', 'GEMINI_API_KEY', null, false, false],
     ]);
     expect(body.ai[0].lanes).toEqual(['dj', 'chat', 'deep', 'fast', 'home', 'search', 'pro', 'mini', 'vision', 'vision90']);
     expect(body.lanes.map((l) => l.lane)).toEqual(['dj', 'chat', 'deep', 'fast', 'scholar', 'home', 'search', 'pro', 'mini', 'router', 'maestro', 'vision', 'vision90']);
@@ -150,11 +151,18 @@ describe('health — the four keys and every lane', () => {
 
 describe('env checklist', () => {
   it('lists the four AI keys and none of the removed ones', async () => {
-    const res = await envcheckGet({ request: req('/api/admin/envcheck'), env: { ...ADMIN, VINAX_NVIDIA_API_KEY: 'nv' } });
-    const body = (await res.json()) as { items: Array<{ name: string; group: string; set: boolean }> };
+    const res = await envcheckGet({ request: req('/api/admin/envcheck'), env: { ...ADMIN, VINAX_NVIDIA_API_KEY: 'nv', GROQ_API_KEY: 'gq' } });
+    const body = (await res.json()) as { items: Array<{ name: string; group: string; set: boolean; fallback?: string; usingFallback?: boolean; note: string }> };
     const ai = body.items.filter((i) => i.group === 'AI');
-    expect(ai.map((i) => i.name)).toEqual(['NVIDIA_BASE_URL', 'VINAX_NVIDIA_API_KEY', 'VINAX_OPENROUTER_API_KEY', 'VINAX_GROQ_API_KEY', 'VINAX_GGL_GEMINI_API_KEY', 'VINAX_MAESTRO_MODEL']);
-    expect(ai.find((i) => i.name === 'VINAX_NVIDIA_API_KEY')?.set).toBe(true);
+    // 10.3 — the primary names, each with its previous name as the fallback.
+    expect(ai.map((i) => i.name)).toEqual(['NVIDIA_BASE_URL', 'NVIDIA_API_KEY', 'OPENROUTER_API_KEY', 'GROQ_API_KEY', 'GEMINI_API_KEY', 'VINAX_MAESTRO_MODEL']);
+    const nv = ai.find((i) => i.name === 'NVIDIA_API_KEY');
+    expect(nv).toMatchObject({ set: true, fallback: 'VINAX_NVIDIA_API_KEY', usingFallback: true });
+    expect(nv?.note).toContain('rename it to NVIDIA_API_KEY');
+    expect(ai.find((i) => i.name === 'GROQ_API_KEY')).toMatchObject({ set: true, usingFallback: false });
+    expect(ai.find((i) => i.name === 'GEMINI_API_KEY')).toMatchObject({ set: false, usingFallback: false });
+    // Names only — never a value.
+    expect(JSON.stringify(body)).not.toContain('"nv"');
   });
 });
 

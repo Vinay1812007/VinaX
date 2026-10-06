@@ -29,6 +29,9 @@ export interface TurnSettings {
   song: Song | null;
   /** 9.1.0 — the project this chat belongs to, when it is in one. */
   projectId?: string;
+  /** 10.3 — tools the answering model may use (the Run code connector:
+   *  `['code_execution']`). Never sent in a live voice chat. */
+  tools?: string[];
 }
 
 export interface TurnInput {
@@ -94,6 +97,9 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
     messages,
     mode: s.voiceLive ? 'voice' : picked ? 'model' : think ? 'sage' : 'auto',
     ...(picked ? { provider: picked.provider, model: picked.model } : {}),
+    // 10.3 — Run code. Executed code and its output come back inside the
+    // reply's text; an older server ignores the field.
+    ...(!s.voiceLive && s.tools?.length ? { tools: [...s.tools] } : {}),
     images: t.images,
     // The taste snapshot plus this thread's own memory: everything already
     // recommended in this conversation, so "give me more" reaches into fresh

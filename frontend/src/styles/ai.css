@@ -2187,3 +2187,212 @@ html.reduce-motion .ai-send {
 }
 html.reduce-motion .ai-shimmer,
 html.reduce-motion .ai-thinking-text { background: none; color: var(--ai-text-2); }
+
+/* ------------------------------------------------- 10.3 — media and tools */
+/* Phone, empty chat: the + menu opens downwards from a composer in the middle
+   of the screen; keep it on screen (it scrolls) so Run code and the Create
+   entries at its end stay reachable. */
+@media (max-width: 639px) {
+  .ai-tools-menu-down { max-height: min(50dvh, 38rem); }
+}
+/* The Runs code tag in the model menu, and Run code's quiet chip note. */
+.ai-badge-code { background: var(--vx-accent-wash); color: rgb(var(--ember-300)); }
+html.light .ai-badge-code { color: rgb(var(--ember-500)); }
+.ai-conn-chip-note { color: var(--ai-text-3); font-weight: 550; }
+.ai-ran-code { gap: 4px; color: rgb(var(--ember-300)); background: var(--vx-accent-wash); }
+html.light .ai-ran-code { color: rgb(var(--ember-500)); }
+
+/* Create image / Create music clip: what the next message makes, and by whom. */
+.ai-create-bar {
+  /* Above the composer box, so its model list can open over it. */
+  position: relative;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 0 0.25rem 0.5rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+  border-radius: 14px;
+  background: var(--vx-accent-wash);
+  animation: ai-pop 140ms var(--ease-calm) both;
+}
+.ai-create-kind {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  color: rgb(var(--ember-300));
+  font-size: 13px;
+  font-weight: 700;
+}
+html.light .ai-create-kind { color: rgb(var(--ember-500)); }
+.ai-create-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.625rem;
+  border-radius: 10px;
+  color: var(--ai-text);
+  font-size: 13px;
+  font-weight: 650;
+  transition: background-color 140ms var(--ease-calm);
+}
+.ai-create-model:hover:not(:disabled),
+.ai-create-model.is-open { background: rgb(var(--ink-100) / 0.08); }
+.ai-create-model:disabled { color: var(--ai-text-3); cursor: default; }
+.ai-create-x {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  color: var(--ai-text-2);
+  transition: background-color 140ms var(--ease-calm);
+}
+.ai-create-x:hover { background: rgb(var(--ink-100) / 0.08); color: var(--ai-text); }
+.ai-create-list {
+  position: absolute;
+  left: 0;
+  z-index: 50;
+  width: min(20rem, calc(100vw - 2rem));
+  max-height: min(50dvh, 22rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 6px 6px;
+  outline: none;
+}
+.ai-create-list.is-up { bottom: calc(100% + 0.375rem); transform-origin: bottom left; }
+.ai-create-list.is-down { top: calc(100% + 0.375rem); transform-origin: top left; }
+@media (max-width: 639px) {
+  .ai-create-bar { flex-wrap: wrap; row-gap: 0; }
+  .ai-create-kind { flex-basis: calc(100% - 3.25rem); }
+  .ai-create-bar > .relative { order: 3; flex-basis: 100%; }
+  .ai-create-x { order: 2; }
+  .ai-create-bar > .flex-1 { display: none; }
+  .ai-create-list { left: -0.75rem; }
+}
+
+/* Recording for a dictation model: a dot, the time, Cancel and Stop. */
+.ai-record {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0 0.25rem 0.5rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.875rem;
+  border-radius: 14px;
+  background: rgb(var(--ink-100) / 0.06);
+  color: var(--ai-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+.ai-record .ai-btn { min-height: 2.75rem; }
+.ai-record-time { font-variant-numeric: tabular-nums; }
+.ai-record-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: var(--vx-danger);
+  animation: ai-breathe 1.6s ease-in-out infinite;
+}
+.ai-record-dot.is-sending { background: rgb(var(--ember-400)); }
+
+/* A picture or a clip in the thread. */
+.ai-media { margin: 0 0 0.25rem; max-width: min(100%, 30rem); }
+.ai-media-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  background: rgb(var(--ink-100) / 0.06);
+}
+.ai-media-audio { display: block; width: 100%; min-height: 2.75rem; }
+.ai-media-cap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.ai-media-by {
+  display: inline-flex;
+  flex: 1 1 12rem;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  color: var(--ai-text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ai-media-dl { min-height: 2.75rem; }
+.ai-media-gone > p { color: var(--ai-text-2); font-size: 0.95em; }
+
+/* Settings → Voice: this device, then each provider's voices; dictation. */
+.ai-voice-list { display: flex; flex-direction: column; gap: 0.25rem; }
+.ai-voice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 10px;
+  text-align: left;
+  transition: background-color 140ms var(--ease-calm);
+}
+.ai-voice-row:hover { background: var(--ai-hover); }
+.ai-voice-radio {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 2px solid rgb(var(--ink-400));
+  border-radius: 9999px;
+}
+.ai-voice-row[aria-checked='true'] .ai-voice-radio { border-color: rgb(var(--ember-500)); }
+.ai-voice-row[aria-checked='true'] .ai-voice-radio::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: rgb(var(--ember-500));
+}
+.ai-voice-provider { padding-top: 0.5rem; }
+.ai-voice-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  color: var(--ai-text-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+.ai-voice-model { padding: 0.25rem 0.625rem 0.375rem; }
+.ai-voice-model-name { margin-bottom: 0.375rem; color: var(--ai-text-3); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.ai-voice-chips { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.ai-root .ai-voice-chip,
+.ai-scope .ai-voice-chip { min-height: 2.75rem; padding-inline: 0.875rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-create-bar,
+  .ai-create-model,
+  .ai-create-x,
+  .ai-record-dot,
+  .ai-voice-row {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+html.reduce-motion .ai-create-bar,
+html.reduce-motion .ai-create-model,
+html.reduce-motion .ai-create-x,
+html.reduce-motion .ai-record-dot,
+html.reduce-motion .ai-voice-row {
+  animation: none !important;
+  transition: none !important;
+}

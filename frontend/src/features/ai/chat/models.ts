@@ -9,7 +9,7 @@
  * Creative, Translate and the Advanced list) and the nickname table that
  * relabelled every answer are gone: a pick is Auto, or one exact model.
  */
-import type { ModelChoice, Provider, ProviderId, ProviderModel } from './types';
+import type { AiFeatures, MediaKind, MediaModel, ModelChoice, Provider, ProviderId, ProviderModel, ProviderTool } from './types';
 
 /** The four providers, in menu order. */
 export const PROVIDER_IDS: readonly ProviderId[] = ['nvidia', 'openrouter', 'groq', 'gemini'];
@@ -100,8 +100,75 @@ export function parseCatalogResponse(body: unknown): Provider[] {
       label: PROVIDER_LABEL[id],
       configured: raw?.configured === true,
       models,
+      media: parseMedia(raw?.media),
+      tools: parseTools(raw?.tools),
     };
   });
+}
+
+/* ---------- 10.3 — media models, tools, features ---------- */
+
+export const MEDIA_KINDS: readonly MediaKind[] = ['image', 'speech', 'transcription', 'music', 'embedding'];
+const isMediaKind = (v: unknown): v is MediaKind => typeof v === 'string' && (MEDIA_KINDS as readonly string[]).includes(v);
+/** The tool id for running code. Web search is not a tool VinaX uses (10.2). */
+export const CODE_TOOL = 'code_execution';
+
+/** A provider's non-chat models; malformed rows and unknown kinds are dropped. */
+function parseMedia(list: unknown): MediaModel[] {
+  const out: MediaModel[] = [];
+  const seen = new Set<string>();
+  for (const rm of Array.isArray(list) ? list : []) {
+    if (!rm || typeof rm !== 'object') continue;
+    const m = rm as Record<string, unknown>;
+    const slug = typeof m.id === 'string' ? m.id.trim() : '';
+    if (!validSlug(slug) || !isMediaKind(m.kind) || seen.has(`${m.kind}:${slug}`)) continue;
+    seen.add(`${m.kind}:${slug}`);
+    const voices = Array.isArray(m.voices)
+      ? [...new Set(m.voices.filter((v): v is string => typeof v === 'string' && validSlug(v.trim())).map((v) => v.trim()))].slice(0, 80)
+      : [];
+    out.push({ id: slug, name: text(m.name, 120) ?? slugLabel(slug), maker: text(m.maker, 60), kind: m.kind, voices });
+  }
+  return out;
+}
+
+/** A provider's tools. Only tools this build knows how to switch on are kept. */
+function parseTools(list: unknown): ProviderTool[] {
+  const out: ProviderTool[] = [];
+  for (const rt of Array.isArray(list) ? list : []) {
+    if (!rt || typeof rt !== 'object') continue;
+    const t = rt as Record<string, unknown>;
+    if (t.id !== CODE_TOOL || out.some((o) => o.id === t.id)) continue;
+    const models = Array.isArray(t.models) ? t.models.filter(validSlug) : [];
+    out.push({ id: CODE_TOOL, name: text(t.name, 60) ?? 'Code execution', models });
+  }
+  return out;
+}
+
+export const NO_FEATURES: AiFeatures = { image: false, speech: false, transcription: false, music: false, code: false };
+
+/** Shape-tolerant read of the top-level `features` of GET /api/aimodels. An
+ *  older server sends none: every feature reads as off and nothing new shows. */
+export function parseFeatures(body: unknown): AiFeatures {
+  const f = (body as { features?: unknown } | null)?.features;
+  if (!f || typeof f !== 'object') return NO_FEATURES;
+  const r = f as Record<string, unknown>;
+  return { image: r.image === true, speech: r.speech === true, transcription: r.transcription === true, music: r.music === true, code: r.code === true };
+}
+
+/** The chat model can run code (it is in its provider's code tool list). */
+export const canRunCode = (providers: readonly Provider[], provider: ProviderId, model: string): boolean =>
+  !!providers.find((p) => p.id === provider)?.tools?.some((t) => t.id === CODE_TOOL && t.models.includes(model));
+
+/** Every configured provider's models of one kind, in menu order — the
+ *  groups of a media picker. Providers with none are left out. */
+export function mediaGroups(providers: readonly Provider[], kind: MediaKind): Array<{ provider: ProviderId; label: string; models: MediaModel[] }> {
+  const out: Array<{ provider: ProviderId; label: string; models: MediaModel[] }> = [];
+  for (const id of PROVIDER_IDS) {
+    const p = providers.find((x) => x.id === id);
+    const models = p?.configured ? (p.media ?? []).filter((m) => m.kind === kind) : [];
+    if (models.length) out.push({ provider: id, label: PROVIDER_LABEL[id], models });
+  }
+  return out;
 }
 
 /* ---------- the menu ---------- */
@@ -117,6 +184,8 @@ export interface MenuRow {
   hint: string;
   /** The model reads images. */
   vision: boolean;
+  /** 10.3 — the model can run code (its provider lists it under the code tool). */
+  code: boolean;
   /** Logo shown on the row itself — recents only; a provider section has it in its heading. */
   provider: ProviderId | null;
 }
@@ -135,6 +204,8 @@ export interface MenuSection {
 }
 
 export const MAX_RECENTS = 5;
+/** 10.3 — the tag on a chat model that can run code. */
+export const RUNS_CODE = 'Runs code';
 export const NOT_AVAILABLE = 'Not available right now';
 
 const matches = (q: string[], ...hay: Array<string | null>): boolean => {
@@ -147,12 +218,13 @@ const modelHint = (m: ProviderModel, withProvider?: ProviderId): string => {
   const ctx = contextBadge(m.context);
   return [withProvider ? PROVIDER_LABEL[withProvider] : null, m.maker, ctx ? `${ctx} context` : null].filter(Boolean).join(' · ');
 };
-const modelRow = (section: string, provider: ProviderId, m: ProviderModel, recent = false): MenuRow => ({
+const modelRow = (section: string, provider: ProviderId, m: ProviderModel, recent = false, code = false): MenuRow => ({
   id: `${section}-${provider}-${m.id}`,
   choice: { mode: 'model', provider, model: m.id, name: m.name },
   label: m.name,
   hint: modelHint(m, recent ? provider : undefined),
   vision: m.vision,
+  code,
   provider: recent ? provider : null,
 });
 const section = (s: Omit<MenuSection, 'note' | 'retry' | 'provider'> & Partial<MenuSection>): MenuSection => ({
@@ -182,7 +254,7 @@ export function buildModelMenu(input: {
         id: 'auto',
         title: '',
         label: AUTO_LABEL,
-        rows: [{ id: 'auto', choice: AUTO, label: AUTO_LABEL, hint: AUTO_HINT, vision: false, provider: null }],
+        rows: [{ id: 'auto', choice: AUTO, label: AUTO_LABEL, hint: AUTO_HINT, vision: false, code: false, provider: null }],
       }),
     );
   }
@@ -195,7 +267,13 @@ export function buildModelMenu(input: {
       // Once the list is known, a model the provider no longer serves is dropped.
       if (state === 'ready' && !live) continue;
       rows.push(
-        modelRow('recent', r.provider, live ?? { id: r.model, name: r.name ?? slugLabel(r.model), maker: null, context: null, vision: false }, true),
+        modelRow(
+          'recent',
+          r.provider,
+          live ?? { id: r.model, name: r.name ?? slugLabel(r.model), maker: null, context: null, vision: false },
+          true,
+          canRunCode(providers, r.provider, r.model),
+        ),
       );
     }
     if (rows.length) sections.push(section({ id: 'recent', title: 'Recently used', label: 'Recently used', rows }));
@@ -213,9 +291,12 @@ export function buildModelMenu(input: {
       if (!q.length) sections.push(section({ ...base, rows: [], note: 'Couldn’t load the list — tap to retry', retry: true }));
       continue;
     }
-    const models = p?.configured ? p.models.filter((m) => matches(q, m.name, m.maker, m.id, title)) : [];
+    // 10.3 — "runs code" finds the models that can run code.
+    const models = p?.configured
+      ? p.models.filter((m) => matches(q, m.name, m.maker, m.id, title, canRunCode(providers, id, m.id) ? RUNS_CODE : null))
+      : [];
     if (models.length) {
-      sections.push(section({ ...base, rows: models.map((m) => modelRow(id, id, m)) }));
+      sections.push(section({ ...base, rows: models.map((m) => modelRow(id, id, m, false, canRunCode(providers, id, m.id))) }));
     } else if (!q.length) {
       sections.push(section({ ...base, rows: [], note: NOT_AVAILABLE }));
     }

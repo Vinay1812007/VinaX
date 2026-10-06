@@ -96,3 +96,26 @@ export const MemoryIcon = ({ className }: P): ReactNode => (
     <path d="M8.5 8.5h7M8.5 12h4.5" />
   </svg>
 );
+/** 10.3 — the Run code connector: angle brackets around a slash. */
+export const CodeIcon = ({ className }: P): ReactNode => (
+  <svg {...line(className)}>
+    <path d="M8 7.5 3.5 12 8 16.5M16 7.5l4.5 4.5-4.5 4.5M13.5 5l-3 14" />
+  </svg>
+);
+/** 10.3 — Create image: a framed picture with a hill and a sun. */
+export const ImageIcon = ({ className }: P): ReactNode => (
+  <svg {...line(className)}>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+    <circle cx="9" cy="9.5" r="1.6" />
+    <path d="m4 17.5 5-5 3.5 3.5 2.5-2.5 5 4.5" />
+  </svg>
+);
+/** 10.3 — Create music clip: a note with a spark beside it. */
+export const ClipIcon = ({ className }: P): ReactNode => (
+  <svg {...line(className)}>
+    <path d="M10 17.5V6l8-2v11" />
+    <circle cx="7.5" cy="17.5" r="2.5" />
+    <circle cx="15.5" cy="15" r="2.5" />
+    <path d="M19.5 3.5v3M18 5h3" />
+  </svg>
+);

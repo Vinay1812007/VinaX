@@ -13,17 +13,25 @@ import { LiveVoiceHost } from '@/features/ai/chat/LiveVoiceHost';
 import { MessageList } from '@/features/ai/chat/MessageList';
 import type { MessageHandlers } from '@/features/ai/chat/Message';
 import { ModelMenu } from '@/features/ai/chat/ModelMenu';
-import { DEVICE_VOICE, SettingsDialog, type VoiceCatalog } from '@/features/ai/chat/SettingsDialog';
+import { SettingsDialog } from '@/features/ai/chat/SettingsDialog';
+import { CreateBar } from '@/features/ai/chat/CreateBar';
+import { createMedia, loadMediaPick, resolveMediaPick, saveMediaPick, type CreateKind } from '@/features/ai/chat/media';
+import { EMPTY_VOICES, parseVoiceCatalog, type VoiceCatalog } from '@/features/ai/chat/voices';
+import { codeConnectorOn, type CodeSupport } from '@/features/ai/connectors';
+import { DEVICE_VOICE, migrateVoicePick, parseVoicePick } from '@/features/ai/voicePick';
 import { Sidebar, type SidebarHandlers } from '@/features/ai/chat/Sidebar';
 import { Toast, type ToastState } from '@/features/ai/chat/Toast';
 import { buildChatRequest } from '@/features/ai/chat/buildChatRequest';
-import { CHAT_ENDPOINT, IMAGE_ENDPOINT, VOICES_ENDPOINT, clientHeaders } from '@/features/ai/chat/endpoints';
+import { CHAT_ENDPOINT, VOICES_ENDPOINT, clientHeaders } from '@/features/ai/chat/endpoints';
 import { FileIcon, MenuIcon, PanelIcon } from '@/features/ai/chat/icons';
 import { collectArtifacts } from '@/features/ai/artifacts/collect';
 import {
+  CODE_TOOL,
+  canRunCode,
   choiceLabel,
   choiceProvider,
   isProviderId,
+  mediaGroups,
   loadDefaultChoice,
   loadInitialChoice,
   loadRecents,
@@ -51,7 +59,7 @@ import {
 } from '@/features/ai/chat/storage';
 import { canRetry, failureMessage, runChatStream, type ChatStreamResult } from '@/features/ai/chat/streamClient';
 import { initialStreamState } from '@/features/ai/chat/streamReducer';
-import type { Conversation, ModelChoice, Msg } from '@/features/ai/chat/types';
+import type { Conversation, MediaPick, ModelChoice, Msg } from '@/features/ai/chat/types';
 import { useModelCatalog } from '@/features/ai/chat/useModelCatalog';
 import { useLiveVoice } from '@/features/ai/chat/useLiveVoice';
 import { useStableHandlers } from '@/features/ai/chat/useStableHandlers';
@@ -116,7 +124,16 @@ export default function VinaXAIPage(): ReactNode {
   /* ---------- composer toggles ---------- */
   // Think routes the next messages to the deep lane.
   const [think, setThink] = useState(false);
-  const [imageMode, setImageMode] = useState(false);
+  // 10.3 — Create image / Create music clip: the next messages describe what
+  // to make, until the bar's × turns it off. The model for each kind is the
+  // last one used while the server still lists it, else the first listed.
+  const [createKind, setCreateKind] = useState<CreateKind | null>(null);
+  const [createPicks, setCreatePicks] = useState<Record<CreateKind, MediaPick | null>>(() => ({
+    image: loadMediaPick('image'),
+    music: loadMediaPick('music'),
+  }));
+  // 10.3 — the composer mic's engine (Settings → Voice → Dictation).
+  const [dictationPick, setDictationPick] = useState<MediaPick | null>(() => loadMediaPick('transcription'));
 
   /* ---------- preferences (each on its long-standing key) ---------- */
   const [profile, setProfile] = useState(() => readPref(PREF.profile, ''));
@@ -126,10 +143,17 @@ export default function VinaXAIPage(): ReactNode {
   const [songCtx, setSongCtx] = useState(false);
   const [sendOnEnter, setSendOnEnter] = useState(() => readFlag(PREF.sendOnEnter, true));
   const [autoRead, setAutoRead] = useState(() => readFlag(PREF.autoRead, false));
-  // Voice: `${model}|${persona}`, or DEVICE_VOICE ('device' = the browser's
-  // own speech engine — always available, works offline). One string, so a
-  // half-set preference is impossible.
-  const [voicePick, setVoicePick] = useState(() => readPref(PREF.voice, DEVICE_VOICE) || DEVICE_VOICE);
+  // Voice: `${provider}|${model}|${voice}`, or DEVICE_VOICE ('device' = the
+  // browser's own speech engine — always available, works offline). One
+  // string, so a half-set preference is impossible. 10.3 — an older build's
+  // `${model}|${persona}` is rewritten once with its provider (voicePick.ts),
+  // so a listener keeps the voice they had.
+  const [voicePick, setVoicePick] = useState(() => {
+    const raw = readPref(PREF.voice, DEVICE_VOICE) || DEVICE_VOICE;
+    const next = migrateVoicePick(raw);
+    if (next !== raw) writePref(PREF.voice, next);
+    return next;
+  });
   const [voiceCatalog, setVoiceCatalog] = useState<VoiceCatalog | null>(null);
   const userName = useMemo(() => {
     try {
@@ -307,6 +331,25 @@ export default function VinaXAIPage(): ReactNode {
   // known, else the name saved with the pick) beside its provider's logo.
   const modelLabel = choiceLabel(choice, catalog.providers);
   const modelProvider = choiceProvider(choice);
+  // 10.3 — can the model in use run code? Nothing is claimed before the list is read.
+  const codeSupport: CodeSupport =
+    catalog.state !== 'ready'
+      ? 'unknown'
+      : choice.mode === 'auto'
+        ? 'auto'
+        : canRunCode(catalog.providers, choice.provider, choice.model)
+          ? 'ok'
+          : 'unsupported';
+  const codeSupportRef = useRef(codeSupport);
+  codeSupportRef.current = codeSupport;
+  const featuresRef = useRef(catalog.features);
+  featuresRef.current = catalog.features;
+  // 10.3 — Run code left on from an earlier visit: read the list once, so the
+  // connector is shown (or not) and the request knows whether to ask for it.
+  useEffect(() => {
+    if (codeConnectorOn()) void catalog.load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
 
   /* ---------- voice ---------- */
   // The engine reads this on every spoken chunk, so changing the voice in
@@ -315,12 +358,7 @@ export default function VinaXAIPage(): ReactNode {
   voicePickRef.current = voicePick;
   /** What the voice route should use for the next chunk: null means speak on
    *  this device, which is also the answer when no speech model is served. */
-  const serverVoice = useCallback((): { model: string; voice: string } | null => {
-    const v = voicePickRef.current;
-    if (!v || v === DEVICE_VOICE) return null;
-    const [model, voice] = v.split('|');
-    return model && voice ? { model, voice } : null;
-  }, []);
+  const serverVoice = useCallback((): { provider: string; model: string; voice: string } | null => parseVoicePick(voicePickRef.current), []);
   // Read aloud speaks through the same chosen voice as live chat.
   useEffect(() => {
     setReadAloudVoice(serverVoice);
@@ -334,16 +372,12 @@ export default function VinaXAIPage(): ReactNode {
   const loadVoices = useCallback(() => {
     if (voicesAsked.current) return;
     voicesAsked.current = true;
+    // 10.3 — every speech model's voices, grouped by provider (voices.ts reads
+    // an older server's one-provider answer too).
     void fetch(VOICES_ENDPOINT)
-      .then((r) => (r.ok ? (r.json() as Promise<VoiceCatalog>) : Promise.reject(new Error('bad response'))))
-      .then((j) =>
-        setVoiceCatalog({
-          configured: Boolean(j.configured),
-          models: Array.isArray(j.models) ? j.models : [],
-          personas: Array.isArray(j.personas) ? j.personas : [],
-        }),
-      )
-      .catch(() => setVoiceCatalog({ configured: false, models: [], personas: [] }));
+      .then((r) => (r.ok ? (r.json() as Promise<unknown>) : Promise.reject(new Error('bad response'))))
+      .then((j) => setVoiceCatalog(parseVoiceCatalog(j)))
+      .catch(() => setVoiceCatalog(EMPTY_VOICES));
   }, []);
 
   // The live voice chat: engine, overlay state and waveform live in the hook;
@@ -565,34 +599,36 @@ export default function VinaXAIPage(): ReactNode {
     const conversation = retry?.history ?? messages;
     const q = raw.trim();
     if ((!q && attachments.length === 0) || busy) return;
-    const slash = !retry && attachments.length === 0 ? parseSlash(q) : null;
-    if (slash && (await runSlash(slash.cmd, slash.arg))) return;
-    if (!retry && q && attachments.length === 0 && (await musicCommand(q))) return;
 
-    // Image mode: one prompt → one picture, rendered in the chat.
-    if (imageMode && !retry) {
+    // 10.3 — Create image / Create music clip: one prompt → one picture or one
+    // clip, made by the model in the bar and shown in the thread. Before the
+    // slash and music commands, so "play a sitar loop" makes a clip.
+    if (createKind && !retry) {
       if (!q) return;
-      setImageMode(false);
+      const kind = createKind;
+      const pick = resolveMediaPick(catalog.providers, kind, createPicks[kind]);
+      const controller = new AbortController();
+      abortRef.current = controller;
       setBusy(true);
-      updateMessages(chatId, (prev) => [...prev, { role: 'user', content: q }, { role: 'assistant', content: '' }]);
-      let reply: Msg = { role: 'assistant', content: 'The image engine didn’t answer — try once more in a moment.' };
-      try {
-        const r = await fetch(IMAGE_ENDPOINT, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ prompt: q }),
-        });
-        const j = (await r.json().catch(() => null)) as { image?: string; error?: string } | null;
-        if (j?.image) reply = { role: 'assistant', content: 'Here you go', images: [j.image] };
-        else if (j?.error === 'not_enabled' || j?.error === 'model_unavailable')
-          reply = { role: 'assistant', content: 'Image creation isn’t enabled on the server yet — everything else still works.' };
-      } catch {
-        /* the honest fallback line above */
-      }
-      replaceLastAssistant(chatId, () => reply);
+      updateMessages(chatId, (prev) => [...prev, { role: 'user', content: q }, { role: 'assistant', content: '', creating: kind }]);
+      setChats((prev) =>
+        prev.map((c) => (c.id === chatId && (c.title === 'New chat' || !c.messages.length) ? { ...c, title: q.slice(0, 42) } : c)),
+      );
+      stickRef.current = true;
+      const res = await createMedia(kind, q, pick, controller.signal);
+      if (abortRef.current === controller) abortRef.current = null;
+      replaceLastAssistant(chatId, () =>
+        res.ok
+          ? { role: 'assistant', content: `${kind === 'image' ? 'Made a picture' : 'Made a music clip'} for: ${q}`, media: res.media }
+          : { role: 'assistant', content: res.line },
+      );
       setBusy(false);
       return;
     }
+
+    const slash = !retry && attachments.length === 0 ? parseSlash(q) : null;
+    if (slash && (await runSlash(slash.cmd, slash.arg))) return;
+    if (!retry && q && attachments.length === 0 && (await musicCommand(q))) return;
 
     const imgs = retry
       ? (retry.user.images ?? []).filter(Boolean)
@@ -637,6 +673,9 @@ export default function VinaXAIPage(): ReactNode {
           song: now.songCtx ? (player.queue[player.index] ?? null) : null,
           // 9.1.0 — the project's instructions and files ride every message in it.
           ...(active?.projectId ? { projectId: active.projectId } : {}),
+          // 10.3 — Run code, when it is on and the model in use can (Auto
+          // picks one that can; a pinned model that cannot is not asked).
+          ...(codeConnectorOn() && featuresRef.current.code && codeSupportRef.current !== 'unsupported' ? { tools: [CODE_TOOL] } : {}),
         },
         { conversation, userMsg, query: q, images: imgs, previousReply: retry?.previousReply },
       );
@@ -679,6 +718,7 @@ export default function VinaXAIPage(): ReactNode {
       content: finalText || '…',
       engine: engine || undefined,
       engineProvider: engine ? engineProvider : undefined,
+      tools: engine && state.tools.length ? state.tools : undefined,
       followups: split.followups.length ? split.followups : undefined,
     }));
     if (voiceEngineRef.current) {
@@ -914,6 +954,11 @@ export default function VinaXAIPage(): ReactNode {
             writePref(PREF.voice, v);
           }}
           voiceCatalog={voiceCatalog}
+          dictationPick={dictationPick}
+          onDictationPick={(pk) => {
+            setDictationPick(pk);
+            saveMediaPick('transcription', pk);
+          }}
           autoRead={autoRead}
           onAutoRead={(on) => {
             setAutoRead(on);
@@ -1095,8 +1140,28 @@ export default function VinaXAIPage(): ReactNode {
             onThink={setThink}
             songCtx={songCtx}
             onSongCtx={setSongCtx}
-            imageMode={imageMode}
-            onImageMode={setImageMode}
+            createKind={createKind}
+            onCreateKind={setCreateKind}
+            createBar={
+              createKind ? (
+                <CreateBar
+                  kind={createKind}
+                  groups={mediaGroups(catalog.providers, createKind)}
+                  state={catalog.state}
+                  pick={resolveMediaPick(catalog.providers, createKind, createPicks[createKind])}
+                  docked={!isEmpty}
+                  onPick={(pk) => {
+                    setCreatePicks((prev) => ({ ...prev, [createKind]: pk }));
+                    saveMediaPick(createKind, pk);
+                  }}
+                  onCancel={() => setCreateKind(null)}
+                />
+              ) : null
+            }
+            features={catalog.features}
+            onToolsOpen={() => void catalog.load()}
+            codeSupport={codeSupport}
+            dictationPick={dictationPick}
             canSpeech={canSpeech}
             voiceMode={voiceMode}
             onToggleVoice={voiceMode ? voice.end : voice.start}

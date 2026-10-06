@@ -2,10 +2,13 @@ import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { MusicIcon, XIcon } from '@/components/Icons';
 import {
   activeConnectors,
+  codeConnectorOn,
   connectorViews,
   onConnectorsChange,
   placeConnectorOn,
+  setCodeConnectorOn,
   setPlaceConnectorOn,
+  type CodeSupport,
   type ConnectorId,
   type ConnectorView,
 } from '@/features/ai/connectors';
@@ -14,13 +17,14 @@ import { assistantPlace, type AssistantPlace } from '@/services/location/assista
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
-import { BulbIcon, MemoryIcon, PlaceIcon } from './icons';
+import { BulbIcon, CodeIcon, MemoryIcon, PlaceIcon } from './icons';
 
 const ICON: Record<ConnectorId, (p: { className?: string }) => ReactNode> = {
   think: BulbIcon,
   nowPlaying: MusicIcon,
   memory: MemoryIcon,
   place: PlaceIcon,
+  code: CodeIcon,
 };
 
 /** "Hyderabad, Telangana, IN · Asia/Kolkata" — what the place connector would send. */
@@ -36,7 +40,18 @@ export interface TurnConnectors {
   nowPlaying: boolean;
   onThink: (on: boolean) => void;
   onNowPlaying: (on: boolean) => void;
+  /** 10.3 — Run code: listed when the server can run code for some model,
+   *  with whether the model in use can. */
+  code?: { available: boolean; support: CodeSupport };
 }
+
+/** The connectors kept on the device. */
+const readStored = (): { memoryOn: boolean; memoryCount: number; placeOn: boolean; codeOn: boolean } => ({
+  memoryOn: memoryEnabled(),
+  memoryCount: loadMemories().length,
+  placeOn: placeConnectorOn(),
+  codeOn: codeConnectorOn(),
+});
 
 /** How long "tap again to forget" waits for the second tap. */
 const ARM_MS = 5000;
@@ -59,15 +74,9 @@ export function useConnectors(turn: TurnConnectors): {
   memoryCount: number;
   toggle: (id: ConnectorId) => void;
 } {
-  const [stored, setStored] = useState(() => ({ memoryOn: memoryEnabled(), memoryCount: loadMemories().length, placeOn: placeConnectorOn() }));
+  const [stored, setStored] = useState(readStored);
   const [armed, setArmed] = useState<ConnectorId | null>(null);
-  useEffect(
-    () =>
-      onConnectorsChange(() =>
-        setStored({ memoryOn: memoryEnabled(), memoryCount: loadMemories().length, placeOn: placeConnectorOn() }),
-      ),
-    [],
-  );
+  useEffect(() => onConnectorsChange(() => setStored(readStored())), []);
   useEffect(() => {
     if (!armed) return;
     const t = window.setTimeout(() => setArmed(null), ARM_MS);
@@ -89,6 +98,9 @@ export function useConnectors(turn: TurnConnectors): {
     memoryCount: stored.memoryCount,
     placeOn: stored.placeOn,
     placeLabel: place,
+    codeAvailable: turn.code?.available === true,
+    codeOn: stored.codeOn,
+    codeSupport: turn.code?.support,
   });
 
   const toggle = useCallback(
@@ -106,6 +118,9 @@ export function useConnectors(turn: TurnConnectors): {
           return;
         case 'place':
           setPlaceConnectorOn(on);
+          return;
+        case 'code':
+          setCodeConnectorOn(on);
           return;
         case 'memory':
           if (!on && stored.memoryCount > 0 && armed !== 'memory') {
@@ -208,6 +223,8 @@ export function ConnectorChips({
           <span key={v.id} className={cn('ai-conn-chip', isArmed && 'is-armed')} data-connector={v.id}>
             <Icon className="ai-conn-chip-icon" />
             <span className="ai-conn-chip-name">{isArmed ? `Forget ${memoryCount === 1 ? '1 line' : `${memoryCount} lines`}?` : v.name}</span>
+            {/* 10.3 — Run code with a model that cannot: said quietly, on the chip. */}
+            {!isArmed && v.note && <span className="ai-conn-chip-note">{v.note}</span>}
             <button
               type="button"
               className="ai-conn-chip-x"

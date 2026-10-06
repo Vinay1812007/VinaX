@@ -11,14 +11,26 @@
  * pair (english + arabic-saudi); wav is the ONLY response_format and input
  * is hard-capped at 200 characters upstream, so this route clips overlong
  * text at a word boundary instead of failing the request.
+ *
+ * 10.3 — every FREE speech model on the four keys:
+ *   POST { text, provider?, model?, voice? }
+ *   - no `provider`: exactly today's behaviour (Groq, the listener's Groq
+ *     voice model when the key serves it, else the default; a bad persona
+ *     falls back to the default persona) — older clients keep working.
+ *   - with `provider`: the model (default: that provider's first free speech
+ *     model) and the voice (default: the model's first) are validated against
+ *     the live list of GET /api/voices — 400 unknown_model / unknown_voice
+ *     otherwise, never forwarded. Groq answers WAV, Gemini's PCM is wrapped as
+ *     WAV here, OpenRouter answers mp3 (its content type says so).
  */
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { isServedVoiceModel } from '../_lib/catalog';
-import { aiBlockCode, aiGate, logAiRefusal } from '../_lib/ai';
+import { findMediaModel, isServedVoiceModel, normaliseProvider } from '../_lib/catalog';
+import { aiBlockCode, aiGate, logAiEvent, logAiRefusal, noteProviderFailure, providerKey, type AiEnv } from '../_lib/ai';
+import { pickMedia, speak } from '../_lib/media';
+import { readJsonCapped } from '../_lib/body';
+import { type SupabaseEnv } from '../_lib/supabase';
 
-interface Env {
-  VINAX_GROQ_API_KEY?: string;
-}
+type Env = AiEnv & SupabaseEnv;
 
 const SPEECH_ENDPOINT = 'https://api.groq.com/openai/v1/audio/speech';
 /** Default speech model — used when the caller names none, or names one the
@@ -59,7 +71,14 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
   const json = (b: unknown, status = 200): Response =>
     new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS } });
 
-  const key = env.VINAX_GROQ_API_KEY;
+  // 10.3 — a capped read: one short sentence and three ids.
+  const read = await readJsonCapped<{ text?: unknown; model?: unknown; voice?: unknown; provider?: unknown } | null>(request, 16_000);
+  if (!read.ok && read.reason === 'too_large') return json({ error: 'too_large' }, 413);
+  const body = read.ok && read.value && typeof read.value === 'object' ? read.value : null;
+  // 10.3 — a named provider takes the validated path below.
+  if (body && body.provider !== undefined && body.provider !== null && body.provider !== '') return speakPicked(context, body, json);
+
+  const key = providerKey(env, 'groq');
   if (!key) return json({ error: 'not_configured' }, 503);
   // 7.2.0 — the owner's AI switches and spend caps; the client falls back to
   // the device's own speech engine on any non-2xx.
@@ -70,7 +89,6 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     return json({ error: aiBlockCode(blocked) }, 503);
   }
 
-  const body = (await request.json().catch(() => null)) as { text?: unknown; model?: unknown; voice?: unknown } | null;
   const raw = typeof body?.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';
   if (!raw) return json({ error: 'text_required' }, 400);
 
@@ -162,3 +180,45 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
     },
   });
 };
+
+/** 10.3 — speech on a named provider, validated against the live free speech list. */
+async function speakPicked(
+  context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void },
+  body: { text?: unknown; model?: unknown; voice?: unknown; provider?: unknown },
+  json: (b: unknown, status?: number) => Response,
+): Promise<Response> {
+  const { request, env } = context;
+  const client = request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web';
+  const text = typeof body.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';
+  if (!text) return json({ error: 'text_required' }, 400);
+  const provider = normaliseProvider(body.provider);
+  if (!provider) return json({ error: 'unknown_model' }, 400);
+  if (!providerKey(env, provider)) return json({ error: 'not_configured' }, 503);
+  // The owner's switches first: a refused call spends nothing, not even a list read.
+  const blocked = await aiGate(env, 'tts');
+  if (blocked) {
+    void logAiRefusal(env, 'tts', blocked, client, context.waitUntil);
+    return json({ error: aiBlockCode(blocked) }, 503);
+  }
+  const pick = typeof body.model === 'string' && body.model.trim()
+    ? await findMediaModel(env, provider, 'speech', body.model)
+    : await pickMedia(env, 'speech', provider, undefined).then((p) => (p.ok ? p.choices[0].model : null));
+  if (!pick) return json({ error: 'unknown_model' }, 400);
+  const voices = pick.voices ?? [];
+  const wantVoice = typeof body.voice === 'string' ? body.voice.trim() : '';
+  // Voice names are matched case-insensitively and sent as the list spells them.
+  const voice = wantVoice ? (voices.find((v) => v.toLowerCase() === wantVoice.toLowerCase()) ?? null) : (voices[0] ?? null);
+  if (wantVoice && !voice) return json({ error: 'unknown_voice' }, 400);
+  const t0 = Date.now();
+  const r = await speak(env, provider, pick.id, voice, text);
+  const log = logAiEvent(env, { feature: 'tts', model: `${pick.id} @${provider}`, ok: r.ok, status: r.ok ? 200 : r.status, error: r.ok ? null : r.reason, client, latency_ms: Date.now() - t0 });
+  if (context.waitUntil) context.waitUntil(log);
+  if (!r.ok) {
+    noteProviderFailure(provider, pick.id, r.status, r.body);
+    // 429 passes through so the client can tell budget from breakage — never the provider's raw body.
+    return json({ error: 'tts_failed', status: r.status }, r.status === 429 ? 429 : 502);
+  }
+  return new Response(r.value.body, {
+    headers: { 'content-type': r.value.type, 'cache-control': 'no-store', ...CORS },
+  });
+}

@@ -65,13 +65,27 @@ const MOCK: Record<string, unknown> = {
   '/api/status': { generatedAt: iso(0), windowDays: 90, overall: 'operational', components: [{ id: 'website', name: 'Website', status: 'up', latencyMs: 120, checkedAt: iso(0.2), uptime90: 99.98, days: Array.from({ length: 30 }, (_, i) => ({ day: iso(24 * i).slice(0, 10), up: i === 5 ? 40 : 48, total: 48 })) }, { id: 'api', name: 'API', status: 'down', latencyMs: null, checkedAt: iso(2), uptime90: 98.1, days: [] }] },
   '/api/trending-searches': { queries: ['Kesariya', 'Naatu Naatu', 'Srivalli'] },
   '/api/site-mode': { mode: 'live' },
-  // 10.3 — the four providers, one key each (API Monitoring reads this list).
+  // 10.3 — the four providers, one key each (API Monitoring reads this list),
+  // with their media models, tools and the Worker's feature switches.
   '/api/aimodels': {
     fetchedAt: iso(0.1),
+    features: { image: true, speech: true, transcription: true, music: false, code: true },
     providers: [
-      { id: 'nvidia', label: 'NVIDIA', configured: true, models: [{ id: 'lab/alpha-70b', name: 'Alpha 70B', maker: 'Lab One', context: 131072, vision: false }] },
+      {
+        id: 'nvidia',
+        label: 'NVIDIA',
+        configured: true,
+        models: [{ id: 'lab/alpha-70b', name: 'Alpha 70B', maker: 'Lab One', context: 131072, vision: false }],
+        media: [
+          { id: 'lab/pixel-1', name: 'Pixel One', maker: 'Lab One', kind: 'image' },
+          { id: 'lab/voice-1', name: 'Voice One', maker: 'Lab One', kind: 'speech', voices: ['aria', 'ben'] },
+          { id: 'lab/ear-1', name: 'Ear One', maker: 'Lab One', kind: 'transcription' },
+          { id: 'lab/embed-1', name: 'Embed One', maker: 'Lab One', kind: 'embedding' },
+        ],
+        tools: [{ id: 'code_execution', name: 'Code execution', models: ['lab/alpha-70b'] }],
+      },
       { id: 'openrouter', label: 'OpenRouter', configured: true, models: [{ id: 'maker/big:free', name: 'Big Model', maker: null, context: null, vision: true }] },
-      { id: 'groq', label: 'Groq', configured: true, models: [] },
+      { id: 'groq', label: 'Groq', configured: true, models: [], media: [{ id: 'tune-1', name: 'Tune One', maker: 'Lab Two', kind: 'music' }], tools: [] },
       { id: 'gemini', label: 'Gemini', configured: false, models: [] },
     ],
   },
@@ -312,6 +326,53 @@ test('operations center, audience segments and broadcast preview are actionable'
   await page.locator('#bc-link').fill('/discover');
   await expect(page.locator('#bc-preview-text')).toHaveText('Preview this update');
   await expect(page.locator('#bc-preview-link')).toHaveText('/discover');
+  expect(errors).toEqual([]);
+});
+
+test('AI Lab: runs-code tag, media groups and tools per provider; the image bench posts and renders', async ({ page }) => {
+  await login(page);
+  await mockBackend(page);
+  // Registered after mockBackend, so it answers /api/image first.
+  const imagePosts: unknown[] = [];
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+  await page.route('**/api/image', (route) => {
+    imagePosts.push(JSON.parse(route.request().postData() || 'null'));
+    return route.fulfill({ json: { image: png, model: 'Pixel One', modelId: 'lab/pixel-1', provider: 'nvidia' } });
+  });
+  const errors = collectErrors(page);
+  await openAdmin(page);
+  await openSection(page, 'ailab');
+
+  // Features line: one pill per switch the Worker reports.
+  await expect(page.locator('#lab-feats')).toBeVisible();
+  await expect(page.locator('#lab-feats')).toContainText('Image on');
+  await expect(page.locator('#lab-feats')).toContainText('Music off');
+
+  // "Runs code" only on the chat model the code-execution tool lists.
+  await expect(page.locator('.lab-prov-models[data-prov="nvidia"] .lab-tag-code')).toHaveCount(1);
+  await expect(page.locator('.lab-tag-code')).toHaveCount(1);
+  expect(await page.locator('.lab-tag-code').textContent()).toBe('Runs code');
+
+  // Media grouped by kind, per provider; tools with their model count.
+  const nv = page.locator('.lab-media[data-prov="nvidia"]');
+  await expect(nv.locator('.lab-media-group')).toHaveCount(4);
+  await expect(nv.locator('.lab-media-group[data-kind="image"]')).toContainText('Image generation');
+  await expect(nv.locator('.lab-media-group[data-kind="image"]')).toContainText('Pixel One');
+  await expect(nv.locator('.lab-media-group[data-kind="speech"]')).toContainText('2 voices');
+  await expect(nv.locator('.lab-media-group[data-kind="transcription"] button.lab-bench')).toHaveCount(1);
+  await expect(nv.locator('.lab-media-group[data-kind="embedding"]')).toContainText('Server-side only');
+  await expect(nv.locator('.lab-media-group[data-kind="embedding"] button')).toHaveCount(0);
+  await expect(page.locator('.lab-media[data-prov="groq"] .lab-media-group[data-kind="music"]')).toContainText('Tune One');
+  await expect(page.locator('.lab-tools[data-prov="nvidia"]')).toContainText('Code execution · 1 model');
+  await expect(page.locator('.lab-media[data-prov="gemini"]')).toHaveCount(0);
+
+  // Image bench: posts { prompt, provider, model } and shows the thumbnail + latency.
+  await nv.locator('button.lab-bench[data-kind="image"]').click();
+  await expect.poll(() => imagePosts.length).toBe(1);
+  expect(imagePosts[0]).toEqual({ prompt: expect.any(String), provider: 'nvidia', model: 'lab/pixel-1' });
+  const out = nv.locator('.lab-media-group[data-kind="image"] .lab-media-out');
+  await expect(out.locator('img.lab-media-thumb')).toHaveAttribute('src', png);
+  await expect(out.locator('.lab-ping.ok')).toContainText(/✓ \d+ ms/);
   expect(errors).toEqual([]);
 });
 

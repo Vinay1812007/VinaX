@@ -10,13 +10,18 @@
  * trailing 24 h of vinax_ai_events (calls, ok %, latency, failover hops), with
  * each lane's provider and whether its key is set — so a lane that degrades
  * while its key still pings fine is visible too.
+ *
+ * 10.3 — each key row also names the secret that supplies the key right now
+ * (`envInUse`: the primary name, the previous name during the switch, or
+ * null) and carries that provider's free `media` models ({ id, name, kind })
+ * and `tools` (code execution and the chat models that run it).
  */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { AI_PROVIDERS, LANE_MODEL, LANE_PROVIDER, PROVIDER_ENV, PROVIDER_LABEL, PROVIDER_LANE, isMaestroEndpoint, isRefusalCode, laneEndpoint, laneModel, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
+import { AI_PROVIDERS, LANE_MODEL, LANE_PROVIDER, PROVIDER_ENV, PROVIDER_LABEL, PROVIDER_LANE, isMaestroEndpoint, isRefusalCode, laneEndpoint, laneModel, providerKey, providerKeySource, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
 import { maestroFetch } from '../../_lib/maestro';
-import { catalogDefaultModel } from '../../_lib/catalog';
+import { catalogDefaultModel, fetchMedia, fetchTools, type MediaKind, type ToolEntry } from '../../_lib/catalog';
 import { aggregateLaneHealth, type AiEventRow, type LaneHealth } from '../../_lib/laneHealth';
 
 type Env = AdminEnv & SupabaseEnv & AiEnv;
@@ -26,7 +31,12 @@ interface KeyHealth {
   /** 10.3 — the provider this key belongs to, its secret name and the lanes it signs. */
   provider?: AiProvider;
   env?: string;
+  /** 10.3 — the secret name supplying the key right now (primary or previous), or null. */
+  envInUse?: string | null;
   lanes?: Lane[];
+  /** 10.3 — the provider's free media models and tools. */
+  media?: Array<{ id: string; name: string; kind: MediaKind }>;
+  tools?: ToolEntry[];
   configured: boolean;
   ok: boolean;
   status: number | null;
@@ -34,7 +44,7 @@ interface KeyHealth {
   note: string | null;
 }
 
-async function pingKey(name: string, key: string | undefined, model: string, base: string): Promise<KeyHealth> {
+async function pingKey(name: string, key: string | null, model: string, base: string): Promise<KeyHealth> {
   if (!key) return { key: name, configured: false, ok: false, status: null, model: null, note: 'not configured' };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 9000);
@@ -83,8 +93,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
     Promise.all(
       AI_PROVIDERS.map(async (p): Promise<KeyHealth> => {
         const lanes = lanesOf(p);
-        const row = await pingKey(`${PROVIDER_LABEL[p]} · ${lanes.join(', ')}`, env[PROVIDER_ENV[p]], await pingModel(p), laneEndpoint(env, PROVIDER_LANE[p]));
-        return { ...row, provider: p, env: PROVIDER_ENV[p], lanes };
+        const row = await pingKey(`${PROVIDER_LABEL[p]} · ${lanes.join(', ')}`, providerKey(env, p), await pingModel(p), laneEndpoint(env, PROVIDER_LANE[p]));
+        const [media, tools] = await Promise.all([fetchMedia(env, p), fetchTools(env, p)]);
+        return { ...row, provider: p, env: PROVIDER_ENV[p], envInUse: providerKeySource(env, p)?.name ?? null, lanes, media: media.map((m) => ({ id: m.id, name: m.name, kind: m.kind })), tools };
       }),
     ),
     sbSelectResult<{ created_at?: string }>(env, 'vinax_events', 'select=created_at&order=created_at.desc&limit=1'),
@@ -99,7 +110,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const lanes = (Object.keys(LANE_PROVIDER) as Lane[]).map((lane) => ({
     ...(measured.find((m) => m.lane === lane) ?? idle(lane)),
     provider: LANE_PROVIDER[lane],
-    keySet: Boolean(env[PROVIDER_ENV[LANE_PROVIDER[lane]]]),
+    keySet: providerKey(env, LANE_PROVIDER[lane]) !== null,
   }));
   // 7.2.0 — the database half of this panel names its failure instead of
   // guessing between "paused, empty or failing"; the AI pings stay useful.

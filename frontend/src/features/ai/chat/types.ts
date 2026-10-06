@@ -22,6 +22,29 @@ export interface ProviderModel {
   vision: boolean;
 }
 
+/** 10.3 — what a non-chat model makes or reads. Embeddings are listed but
+ *  only ever used on the server. */
+export type MediaKind = 'image' | 'speech' | 'transcription' | 'music' | 'embedding';
+
+/** 10.3 — one free non-chat model a provider serves, under its own name. */
+export interface MediaModel {
+  id: string;
+  name: string;
+  maker: string | null;
+  kind: MediaKind;
+  /** Speech models: the voices it speaks in (empty otherwise). */
+  voices: string[];
+}
+
+/** 10.3 — a free tool some of a provider's chat models can use. Web search is
+ *  not one of them, and never will be (10.2). */
+export interface ProviderTool {
+  id: string;
+  name: string;
+  /** Slugs of the chat models that carry the tool. */
+  models: string[];
+}
+
 export interface Provider {
   id: ProviderId;
   label: string;
@@ -29,6 +52,41 @@ export interface Provider {
   configured: boolean;
   /** Empty when the key is missing or the provider's list could not be read. */
   models: ProviderModel[];
+  /** 10.3 — non-chat models (absent from an older server's answer). */
+  media?: MediaModel[];
+  /** 10.3 — tools its chat models can use (absent from an older server's answer). */
+  tools?: ProviderTool[];
+}
+
+/** 10.3 — which kinds of model the server can reach at all right now. All
+ *  false when an older server sends no `features`. */
+export interface AiFeatures {
+  image: boolean;
+  speech: boolean;
+  transcription: boolean;
+  music: boolean;
+  code: boolean;
+}
+
+/** 10.3 — one exact non-chat model: a provider and the model's slug, with
+ *  its name at the moment it was picked. */
+export interface MediaPick {
+  provider: ProviderId;
+  model: string;
+  name?: string;
+}
+
+/** 10.3 — a picture or a music clip made in the chat. `src` is a data URL
+ *  while the tab is open; it is emptied before the chat is saved (media is
+ *  never kept on the device), and the thread then shows a placeholder line. */
+export interface MsgMedia {
+  kind: 'image' | 'music';
+  src: string;
+  mime?: string;
+  /** The model's published name, as the server reported it. */
+  model: string;
+  provider?: ProviderId;
+  prompt: string;
 }
 
 /**
@@ -50,6 +108,12 @@ export interface Msg {
   engine?: string;
   /** 10.3 — the provider of the model that answered, for its logo on the chip. */
   engineProvider?: ProviderId;
+  /** 10.3 — tools that were on for the model that answered (stream meta). */
+  tools?: string[];
+  /** 10.3 — a picture or a music clip made with Create image / Create music clip. */
+  media?: MsgMedia;
+  /** 10.3 — a picture or clip is being made for this (still empty) reply. */
+  creating?: 'image' | 'music';
   /** Render as a live mini-player card (music commands). */
   player?: boolean;
   /** Listener feedback on this reply. */

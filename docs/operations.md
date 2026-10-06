@@ -34,7 +34,7 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 
 | Group | Names | If missing |
 | --- | --- | --- |
-| AI providers (10.3) | `VINAX_NVIDIA_API_KEY`, `VINAX_OPENROUTER_API_KEY`, `VINAX_GROQ_API_KEY`, `VINAX_GGL_GEMINI_API_KEY` — one per provider | That provider's lanes and its section of the model menu are skipped. With none set, AI routes answer `503` and the app uses its on-device paths ([ai.md](ai.md#when-every-provider-is-down)) |
+| AI providers (10.3) | `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` — one per provider. Each falls back to its older name (`VINAX_NVIDIA_API_KEY`, `VINAX_OPENROUTER_API_KEY`, `VINAX_GGL_GEMINI_API_KEY`, `VINAX_GROQ_API_KEY`) while that is the one set | That provider's lanes and its section of the model menu are skipped. With none set, AI routes answer `503` and the app uses its on-device paths ([ai.md](ai.md#when-every-provider-is-down)) |
 | Database | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Events, config, rooms, push and the console have no storage |
 | Owner console | `ADMIN_LOGIN_PASSWORD` | Nobody can sign in to `/admin/` |
 | Web push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Browser notifications cannot be sent |
@@ -45,11 +45,20 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 
 ### AI keys: one per provider (10.3)
 
-10.3 signs every NVIDIA lane with one key, `VINAX_NVIDIA_API_KEY` (an NVIDIA key serves every model on the account), instead of a key per model. **Set it before the 10.3 Worker deploys**, or every NVIDIA lane is skipped:
+10.3 reads exactly four AI keys, one per provider, and every free model and tool that provider offers runs on it. `providerKey()` in `_lib/ai.ts` is the only code that reads them: it takes the new name, else the older name, so the switch can happen in any order.
 
-`npx wrangler secret put VINAX_NVIDIA_API_KEY --config backend/worker/wrangler.toml`
+| Provider | Secret | Where the owner creates the key | Older name still read |
+| --- | --- | --- | --- |
+| NVIDIA | `NVIDIA_API_KEY` | build.nvidia.com → Settings → API keys | `VINAX_NVIDIA_API_KEY` (never set before 10.3) |
+| OpenRouter | `OPENROUTER_API_KEY` | openrouter.ai → Workspace → Keys | `VINAX_OPENROUTER_API_KEY` |
+| Gemini | `GEMINI_API_KEY` | aistudio.google.com → API keys | `VINAX_GGL_GEMINI_API_KEY` |
+| Groq | `GROQ_API_KEY` | console.groq.com → Keys | `VINAX_GROQ_API_KEY` |
 
-Any of the account's existing `nvapi-` keys will do. Once the 10.3 Worker answers, nothing reads these sixteen names, and they can be deleted with `npx wrangler secret delete <NAME> --config backend/worker/wrangler.toml`: `VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B`, `VINAX_OAI_GPT_OSS_20B`, `VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B`, `VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B`, `VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING`, `VINAX_DEEPSEEK_V4_PRO_0813`, `VINAX_DEEPSEEK_V4_FLASH_0731`, `VINAX_MISTRAL_NEMOTRON`, `VINAX_KIMI_K3`, `VINAX_MTA_LMA_3_2_11B_VSN_INT`, `VINAX_MTA_LMA_3_2_90B_VSN_INT`, `VINAX_MTA_MUSE_GLIMMER_30B`, `VINAX_NVD_ISING_CALIBRATION_1_5_31B`, `VINAX_POOLSIDE_LAGUNA_XS_2_1`, `VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT`, `VINAX_GGL_GEMMA_4_31B_IT`. Remove them from `backend/worker/.dev.vars` too. The console's Engine probe now takes a provider (`?key=NVIDIA|OPENROUTER|GROQ|GEMINI`).
+Set each with `npx wrangler secret put <NAME> --config backend/worker/wrangler.toml` (the value is typed at the prompt, never pasted into a file or a chat). **`NVIDIA_API_KEY` must be set before the 10.3 Worker deploys**, or every NVIDIA lane is skipped; any of the account's existing `nvapi-` keys will do. The owner console's env checklist shows which name each provider is using and says when it is still the older one.
+
+Once the 10.3 Worker answers and the checklist shows the new names in use, delete the older names (`VINAX_OPENROUTER_API_KEY`, `VINAX_GGL_GEMINI_API_KEY`, `VINAX_GROQ_API_KEY`) and these sixteen per-model keys nothing reads any more: `VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B`, `VINAX_OAI_GPT_OSS_20B`, `VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B`, `VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B`, `VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING`, `VINAX_DEEPSEEK_V4_PRO_0813`, `VINAX_DEEPSEEK_V4_FLASH_0731`, `VINAX_MISTRAL_NEMOTRON`, `VINAX_KIMI_K3`, `VINAX_MTA_LMA_3_2_11B_VSN_INT`, `VINAX_MTA_LMA_3_2_90B_VSN_INT`, `VINAX_MTA_MUSE_GLIMMER_30B`, `VINAX_NVD_ISING_CALIBRATION_1_5_31B`, `VINAX_POOLSIDE_LAGUNA_XS_2_1`, `VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT`, `VINAX_GGL_GEMMA_4_31B_IT` — each with `npx wrangler secret delete <NAME> --config backend/worker/wrangler.toml`. Remove them from `backend/worker/.dev.vars` too. The console's Engine probe takes a provider (`?key=NVIDIA|OPENROUTER|GROQ|GEMINI`).
+
+10.3 also adds two owner switches to `ai-controls`: `transcribe` (dictation by an AI model) and `music` (music clips).
 
 ### Retired: web search (10.2)
 

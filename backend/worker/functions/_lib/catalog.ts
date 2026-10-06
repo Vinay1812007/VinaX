@@ -26,8 +26,15 @@
  * Nothing here is invented: an empty list means the provider answered with
  * nothing usable (or the key is missing), and the caller says so plainly
  * rather than falling back to a stale hard-coded menu.
+ *
+ * 10.3 — the same lists also yield every free MEDIA model (image generation,
+ * speech, transcription, music, embeddings) and the free non-web TOOLS (code
+ * execution) — see "Media and tools" below. The rules are the chat rules:
+ * free on the key's tier only, discovered live where the provider lists it,
+ * cached 15 minutes, empty when the key is missing, nothing invented, and
+ * nothing that fetches the web.
  */
-import { AI_PROVIDERS, LANE_BASE, PROVIDER_ENV, PROVIDER_LANE, laneCoolingDown, notFreeCooling, type AiEnv, type AiProvider } from './ai';
+import { AI_PROVIDERS, LANE_BASE, PROVIDER_LANE, laneCoolingDown, notFreeCooling, providerCoolingDown, providerKey, type AiEnv, type AiProvider } from './ai';
 
 export type CatalogProvider = AiProvider;
 
@@ -371,7 +378,10 @@ export function nvidiaModelsUrl(env: AiEnv): string {
 function listRequests(env: AiEnv, provider: CatalogProvider, key: string): Array<{ url: string; headers: Record<string, string> }> {
   const bearer = { authorization: `Bearer ${key}`, accept: 'application/json' };
   if (provider === 'nvidia') return [{ url: nvidiaModelsUrl(env), headers: bearer }];
-  if (provider === 'openrouter') return [{ url: `${LANE_BASE.router}/models`, headers: bearer }];
+  // 10.3 — `output_modalities=all`: the default list carries text-output
+  // models only; the media models (image, speech, transcription, embeddings,
+  // audio) are listed only when asked for every modality.
+  if (provider === 'openrouter') return [{ url: `${LANE_BASE.router}/models?output_modalities=all`, headers: bearer }];
   if (provider === 'groq') return [{ url: `${LANE_BASE.scholar}/models`, headers: bearer }];
   // Gemini: the native list carries display names and methods; the
   // OpenAI-compatible list is the fallback for a key shape it refuses.
@@ -382,39 +392,37 @@ function listRequests(env: AiEnv, provider: CatalogProvider, key: string): Array
 }
 
 const TTL_MS = 15 * 60_000;
-const cache = new Map<CatalogProvider, { at: number; models: CatalogModel[] }>();
+/** 10.3 — one list read per provider yields both the chat models and the media models. */
+const cache = new Map<CatalogProvider, { at: number; models: CatalogModel[]; media: MediaModel[] }>();
 const voiceCache = new Map<CatalogProvider, { at: number; models: VoiceModel[] }>();
 
-const keyOf = (env: AiEnv, provider: CatalogProvider): string => {
-  const raw = env[PROVIDER_ENV[provider]];
-  return typeof raw === 'string' ? raw.trim() : '';
-};
+/** 10.3 — through providerKey(), the only reader of an AI key. */
+const keyOf = (env: AiEnv, provider: CatalogProvider): string => providerKey(env, provider) ?? '';
 
 /** A model this isolate learned has no free allowance on the key is left out
  *  while that verdict lasts (10.3). */
-const stillFree = (provider: CatalogProvider, models: CatalogModel[]): CatalogModel[] => models.filter((m) => !notFreeCooling(provider, m.id));
+const stillFree = <T extends { id: string }>(provider: CatalogProvider, models: T[]): T[] => models.filter((m) => !notFreeCooling(provider, m.id));
 
-/** One provider's free chat catalogue, cached per isolate for 15 minutes.
- *  Returns [] when the key is missing or the provider is unreachable — the
- *  caller reports an empty menu honestly instead of guessing. Accepts the
- *  pre-10.3 provider ids too. */
-export async function fetchCatalog(env: AiEnv, providerRaw: CatalogProvider | string): Promise<CatalogModel[]> {
-  const provider = normaliseProvider(providerRaw);
-  if (!provider) return [];
+/** One provider's chat and media lists, from one cached list read (10.3).
+ *  Never replaces a good list with an empty answer. */
+async function providerLists(env: AiEnv, provider: CatalogProvider): Promise<{ models: CatalogModel[]; media: MediaModel[] } | null> {
   const key = keyOf(env, provider);
-  if (!key) return [];
+  if (!key) return null;
   const hit = cache.get(provider);
-  if (hit && Date.now() - hit.at < TTL_MS) return stillFree(provider, hit.models);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit;
   for (const req of listRequests(env, provider, key)) {
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 8000);
     try {
       const res = await fetch(req.url, { headers: req.headers, signal: abort.signal });
       if (!res.ok) continue;
-      const models = parseCatalog(provider, await res.json().catch(() => null));
-      if (!models.length) continue;
-      cache.set(provider, { at: Date.now(), models });
-      return stillFree(provider, models);
+      const body = await res.json().catch(() => null);
+      const models = parseCatalog(provider, body);
+      const media = parseMedia(provider, body);
+      if (!models.length && !media.length) continue;
+      const entry = { at: Date.now(), models, media };
+      cache.set(provider, entry);
+      return entry;
     } catch {
       /* the next list, or the last good one */
     } finally {
@@ -423,7 +431,18 @@ export async function fetchCatalog(env: AiEnv, providerRaw: CatalogProvider | st
   }
   // Never replace a good list with an empty answer: a blip must not blank
   // the picker for the next quarter of an hour.
-  return hit ? stillFree(provider, hit.models) : [];
+  return hit ?? null;
+}
+
+/** One provider's free chat catalogue, cached per isolate for 15 minutes.
+ *  Returns [] when the key is missing or the provider is unreachable — the
+ *  caller reports an empty menu honestly instead of guessing. Accepts the
+ *  pre-10.3 provider ids too. */
+export async function fetchCatalog(env: AiEnv, providerRaw: CatalogProvider | string): Promise<CatalogModel[]> {
+  const provider = normaliseProvider(providerRaw);
+  if (!provider) return [];
+  const lists = await providerLists(env, provider);
+  return lists ? stillFree(provider, lists.models) : [];
 }
 
 /** All four catalogues at once — what the model picker and the admin Lab read. */
@@ -489,6 +508,303 @@ export async function catalogDefaultModel(env: AiEnv, providerRaw: CatalogProvid
     if (hit) return hit.id;
   }
   return models[0].id;
+}
+
+// ---------------------------------------------------------------------------
+// Media and tools (10.3)
+// ---------------------------------------------------------------------------
+
+/** 10.3 — the media kinds VinaX can call over plain HTTPS with a provider's key. */
+export type MediaKind = 'image' | 'speech' | 'transcription' | 'music' | 'embedding';
+export const MEDIA_KINDS: readonly MediaKind[] = ['image', 'speech', 'transcription', 'music', 'embedding'];
+
+/** One free media model (the `/api/aimodels` `media` row). */
+export interface MediaModel {
+  /** Exact slug to send — never prettified. */
+  id: string;
+  /** The model's original published name. */
+  name: string;
+  maker: string | null;
+  kind: MediaKind;
+  /** Speech only: the voice names the model accepts (empty = the provider's default voice). */
+  voices?: string[];
+}
+
+/** One free non-web tool and the chat models on the provider that can run it. */
+export interface ToolEntry {
+  id: 'code_execution';
+  name: 'Code execution';
+  /** Chat model ids on this provider that run it in the provider's own sandbox. */
+  models: string[];
+}
+
+/** 10.3 — NVIDIA's hosted image models live on `https://ai.api.nvidia.com/v1/genai/<org>/<model>`,
+ *  NOT on /v1/models, so they cannot be discovered live. This is the small
+ *  fixed list whose request shape was read from NVIDIA's own API reference
+ *  (docs.api.nvidia.com/nim/reference/<org>-<model>-infer, 2026-10-06) and
+ *  whose endpoint answered (401 without a key = it exists). Every hosted
+ *  endpoint is free on the developer tier, like the chat models. Left out on
+ *  purpose: sdxl-turbo (its reference page is gone — retired), stable
+ *  diffusion 3.5 large (endpoint 404), kontext (needs an input image). */
+export const NVIDIA_IMAGE_MODELS: ReadonlyArray<{ id: string; name: string; maker: string; shape: 'flux' | 'flux2' | 'sd3' | 'sdxl' }> = [
+  { id: 'black-forest-labs/flux.1-schnell', name: 'FLUX.1 schnell', maker: 'Black Forest Labs', shape: 'flux' },
+  { id: 'black-forest-labs/flux.2-klein-4b', name: 'FLUX.2 klein 4B', maker: 'Black Forest Labs', shape: 'flux2' },
+  { id: 'black-forest-labs/flux.1-dev', name: 'FLUX.1 dev', maker: 'Black Forest Labs', shape: 'flux' },
+  { id: 'stabilityai/stable-diffusion-3-medium', name: 'Stable Diffusion 3 Medium', maker: 'Stability AI', shape: 'sd3' },
+  { id: 'stabilityai/stable-diffusion-xl', name: 'Stable Diffusion XL', maker: 'Stability AI', shape: 'sdxl' },
+];
+
+/** 10.3 — NVIDIA text-embedding families on /v1/models. `nvclip` is left out:
+ *  its vectors are for image–text matching, not for text search. */
+const NVIDIA_EMBED = /embed|arctic-embed/i;
+
+/** 10.3 — Groq's speech models with a PUBLISHED voice list (Groq's Orpheus
+ *  page, 2026-10-06; the API takes the names in lower case, and the input is
+ *  capped at 200 characters upstream). A speech model whose voices are not
+ *  published is not offered: posting at it without a valid voice answers 400. */
+const GROQ_VOICES: Array<[RegExp, string[]]> = [
+  [/orpheus.*english/i, ['autumn', 'diana', 'hannah', 'austin', 'daniel', 'troy']],
+  [/orpheus.*arabic/i, ['abdullah', 'fahad', 'sultan', 'lulwa', 'noura', 'aisha']],
+];
+
+/** 10.3 — Gemini's 30 prebuilt TTS voices (speech-generation guide, 2026-10-06). */
+export const GEMINI_VOICES: readonly string[] = [
+  'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe', 'Autonoe',
+  'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome', 'Algenib', 'Rasalgethi', 'Laomedeia', 'Achernar',
+  'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima', 'Achird', 'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat',
+];
+
+/** 10.3 — Gemini media the pricing page marks "Not available" on the free
+ *  tier (2026-10-06): the pro TTS model. Every Gemini image model, Imagen, Veo
+ *  and Lyria are "Not available" too and are never parsed as media at all;
+ *  the live/native-audio models speak over a WebSocket, not plain HTTPS. */
+const GEMINI_NOT_FREE_MEDIA = /-pro-.*tts|-pro-tts/i;
+
+/** 10.3 — OpenRouter: a media model is free only when the provider says so
+ *  without leaving a price unknown. Every listed price must be zero, AND
+ *  either the slug is OpenRouter's own free variant (`:free`) or the price
+ *  of what the model outputs is listed explicitly as zero (`image_output`
+ *  for images, `audio_output` for audio). Earned from the live list:
+ *  video models and the music models price at zero for prompt and completion
+ *  but bill per clip/song in a field the list leaves out ("30 second clips are
+ *  priced at $0.04 per clip"), so zero prompt+completion alone proves nothing. */
+export function isFreeMediaPricing(row: { id?: unknown; pricing?: unknown; description?: unknown }, kind: MediaKind): boolean {
+  const p = row.pricing;
+  if (!p || typeof p !== 'object') return false;
+  const entries = Object.entries(p as Record<string, unknown>).filter(([k]) => k !== 'discount');
+  if (!entries.length) return false;
+  for (const [, v] of entries) {
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
+    if (!Number.isFinite(n) || n !== 0) return false;
+  }
+  if (typeof row.description === 'string' && /priced at \$|\$\d/.test(row.description)) return false;
+  const id = typeof row.id === 'string' ? row.id : '';
+  if (/:free$/i.test(id)) return true;
+  const outField = kind === 'image' ? 'image_output' : kind === 'music' || kind === 'speech' ? 'audio_output' : null;
+  return !!outField && (p as Record<string, unknown>)[outField] !== undefined;
+}
+
+const voiceNames = (v: unknown): string[] =>
+  Array.isArray(v) ? (v.filter((x) => typeof x === 'string' && x.trim() && x.length <= 80) as string[]).slice(0, 120) : [];
+
+/** NVIDIA `/v1/models` → the free embedding models (the image models are the fixed list above). */
+export function parseNvidiaMedia(body: unknown): MediaModel[] {
+  const out: MediaModel[] = [];
+  const seen = new Set<string>();
+  for (const r of rowsOf(body, 'data')) {
+    const id = typeof r.id === 'string' ? r.id.trim() : '';
+    if (!id || seen.has(id) || r.active === false) continue;
+    if (!NVIDIA_EMBED.test(id) || /nvclip/i.test(id)) continue;
+    seen.add(id);
+    out.push({ id, name: humaniseSlug(id), maker: makerOf(id), kind: 'embedding' });
+  }
+  return out.sort(byMediaName);
+}
+
+/** OpenRouter `/api/v1/models?output_modalities=all` → its free media models.
+ *  Kinds from `architecture.output_modalities`: `image` alone → image (served
+ *  by the dedicated `/images` endpoint), `speech` → speech, `transcription` →
+ *  transcription, `embeddings` → embedding, text + audio from a music model →
+ *  music. Image-to-image-only models (they need a picture to start from) are
+ *  left out, as are expired rows and anything web-browsing. */
+export function parseOpenRouterMedia(body: unknown, now = Date.now()): MediaModel[] {
+  const out: MediaModel[] = [];
+  const seen = new Set<string>();
+  for (const r of rowsOf(body, 'data')) {
+    const id = typeof r.id === 'string' ? r.id.trim() : '';
+    if (!id || seen.has(id) || r.active === false) continue;
+    if (id.toLowerCase().startsWith('openrouter/') || isWebBrowsingModel('openrouter', id)) continue;
+    if (typeof r.expiration_date === 'string' && Date.parse(r.expiration_date) < now) continue;
+    const arch = (r.architecture ?? {}) as { output_modalities?: unknown };
+    const outMods = Array.isArray(arch.output_modalities) ? (arch.output_modalities as unknown[]).map(String) : [];
+    const named = typeof r.name === 'string' && r.name.trim() ? splitRouterName(r.name) : { name: humaniseSlug(id), maker: null };
+    let kind: MediaKind | null = null;
+    if (outMods.length === 1 && outMods[0] === 'image') kind = 'image';
+    else if (outMods.length === 1 && outMods[0] === 'speech') kind = 'speech';
+    else if (outMods.length === 1 && outMods[0] === 'transcription') kind = 'transcription';
+    else if (outMods.length === 1 && outMods[0] === 'embeddings') kind = 'embedding';
+    else if (outMods.includes('audio') && /lyria|music/i.test(`${id} ${named.name}`)) kind = 'music';
+    if (!kind) continue;
+    if (kind === 'image' && typeof r.description === 'string' && /image-to-image model/i.test(r.description) && !/text-to-image/i.test(r.description)) continue;
+    if (!isFreeMediaPricing(r, kind)) continue;
+    seen.add(id);
+    const row: MediaModel = { id, name: named.name || humaniseSlug(id), maker: named.maker ?? makerOf(id), kind };
+    if (kind === 'speech') row.voices = voiceNames(r.supported_voices);
+    out.push(row);
+  }
+  return out.sort(byMediaName);
+}
+
+/** Groq `/openai/v1/models` → speech models with published voices and the whisper transcription models. */
+export function parseGroqMedia(body: unknown): MediaModel[] {
+  const out: MediaModel[] = [];
+  const seen = new Set<string>();
+  for (const r of rowsOf(body, 'data')) {
+    const id = typeof r.id === 'string' ? r.id.trim() : '';
+    if (!id || seen.has(id) || r.active === false) continue;
+    if (/whisper/i.test(id)) {
+      seen.add(id);
+      out.push({ id, name: humaniseSlug(id), maker: makerOf(id, r.owned_by) ?? 'OpenAI', kind: 'transcription' });
+      continue;
+    }
+    if (!VOICE_MODEL.test(id)) continue;
+    const voices = GROQ_VOICES.find(([re]) => re.test(id))?.[1];
+    if (!voices) continue;
+    seen.add(id);
+    out.push({ id, name: humaniseSlug(id), maker: makerOf(id, r.owned_by), kind: 'speech', voices: [...voices] });
+  }
+  return out.sort(byMediaName);
+}
+
+/** The newest stable model of a Gemini flash variant ("gemini-3.8-flash", "gemini-3.5-flash-lite"). */
+function newestFlash(ids: string[], lite: boolean): string | null {
+  const re = lite ? /^gemini-(\d+(?:\.\d+)?)-flash-lite$/ : /^gemini-(\d+(?:\.\d+)?)-flash$/;
+  let best: { id: string; v: number } | null = null;
+  for (const id of ids) {
+    const m = re.exec(id);
+    if (m && (!best || Number(m[1]) > best.v)) best = { id, v: Number(m[1]) };
+  }
+  return best?.id ?? null;
+}
+
+/** Gemini `/v1beta/models` → TTS models (generateContent with an AUDIO
+ *  response), embedding models (embedContent), and transcription on the
+ *  newest stable flash and flash-lite text models (they take inline audio and
+ *  return its text through generateContent). No image or music model: none is
+ *  free on the free tier (see GEMINI_NOT_FREE_MEDIA). */
+export function parseGeminiMedia(body: unknown): MediaModel[] {
+  const native = rowsOf(body, 'models');
+  const rows = native.length ? native : rowsOf(body, 'data');
+  const out: MediaModel[] = [];
+  const seen = new Set<string>();
+  const chatIds: string[] = [];
+  const display = new Map<string, string>();
+  for (const r of rows) {
+    const raw = typeof r.name === 'string' ? r.name : typeof r.id === 'string' ? r.id : '';
+    const id = raw.trim().replace(/^models\//, '');
+    if (!id || seen.has(id) || isWebBrowsingModel('gemini', id)) continue;
+    const methods = Array.isArray(r.supportedGenerationMethods) ? (r.supportedGenerationMethods as unknown[]).map(String) : null;
+    const name = typeof r.displayName === 'string' && r.displayName.trim() ? r.displayName.replace(/\s+/g, ' ').trim() : humaniseSlug(id);
+    display.set(id, name);
+    if (/-tts\b/i.test(id) && (!methods || methods.includes('generateContent'))) {
+      if (GEMINI_NOT_FREE_MEDIA.test(id)) continue;
+      seen.add(id);
+      out.push({ id, name, maker: 'Google', kind: 'speech', voices: [...GEMINI_VOICES] });
+    } else if (methods ? methods.includes('embedContent') : /embedding/i.test(id)) {
+      seen.add(id);
+      out.push({ id, name, maker: 'Google', kind: 'embedding' });
+    } else if (!methods || methods.includes('generateContent')) {
+      chatIds.push(id);
+    }
+  }
+  for (const id of [newestFlash(chatIds, false), newestFlash(chatIds, true)]) {
+    if (id && !seen.has(id)) out.push({ id, name: display.get(id) ?? humaniseSlug(id), maker: 'Google', kind: 'transcription' });
+  }
+  return out.sort(byMediaName);
+}
+
+const byMediaName = (a: MediaModel, b: MediaModel): number => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+
+/** Any provider's model-list body into its free media models. */
+export function parseMedia(provider: CatalogProvider, body: unknown): MediaModel[] {
+  if (provider === 'nvidia') return parseNvidiaMedia(body);
+  if (provider === 'openrouter') return parseOpenRouterMedia(body);
+  if (provider === 'groq') return parseGroqMedia(body);
+  return parseGeminiMedia(body);
+}
+
+/** 10.3 — the free non-web tools a provider's chat models can run, from its
+ *  live chat list. Code execution only, and only in the provider's own sandbox:
+ *    Gemini  `tools: [{ codeExecution: {} }]` on the Gemini models (not Gemma)
+ *    Groq    `tools: [{ type: 'code_interpreter' }]` on the gpt-oss models
+ *  NVIDIA and OpenRouter offer no free built-in tool that is not a web tool.
+ *  Web tools (search, URL context, browser search, web plugins) are never
+ *  listed and never sent (10.2). */
+export function codeExecutionModels(provider: CatalogProvider, models: Array<{ id: string }>): string[] {
+  if (provider === 'gemini') return models.filter((m) => /^gemini-/i.test(m.id)).map((m) => m.id);
+  if (provider === 'groq') return models.filter((m) => /^openai\/gpt-oss-\d+b$/i.test(m.id)).map((m) => m.id);
+  return [];
+}
+
+export function toolsFor(provider: CatalogProvider, models: Array<{ id: string }>): ToolEntry[] {
+  const ids = codeExecutionModels(provider, models);
+  return ids.length ? [{ id: 'code_execution', name: 'Code execution', models: ids }] : [];
+}
+
+/** 10.3 — one provider's free media models, cached with its chat list. NVIDIA's
+ *  fixed image list rides along whenever the NVIDIA key is set (it is not on
+ *  /v1/models). Models resting with "not free on this key" are left out. */
+export async function fetchMedia(env: AiEnv, providerRaw: CatalogProvider | string): Promise<MediaModel[]> {
+  const provider = normaliseProvider(providerRaw);
+  if (!provider || !keyOf(env, provider)) return [];
+  const lists = await providerLists(env, provider);
+  const listed = lists?.media ?? [];
+  const fixed: MediaModel[] = provider === 'nvidia' ? NVIDIA_IMAGE_MODELS.map((m) => ({ id: m.id, name: m.name, maker: m.maker, kind: 'image' as const })) : [];
+  return [...fixed, ...listed].filter((m) => !notFreeCooling(provider, m.id));
+}
+
+/** All four providers' media at once. */
+export async function fullMedia(env: AiEnv): Promise<Record<CatalogProvider, MediaModel[]>> {
+  const lists = await Promise.all(AI_PROVIDERS.map((p) => fetchMedia(env, p)));
+  return Object.fromEntries(AI_PROVIDERS.map((p, i) => [p, lists[i]])) as Record<CatalogProvider, MediaModel[]>;
+}
+
+/** 10.3 — the media entry for a caller-supplied provider + model of one kind,
+ *  or null. Like chat picks, a slug that is not on the live free list is
+ *  refused rather than forwarded. */
+export async function findMediaModel(env: AiEnv, providerRaw: CatalogProvider | string, kind: MediaKind, wanted: unknown): Promise<MediaModel | null> {
+  if (typeof wanted !== 'string') return null;
+  const slug = wanted.trim();
+  if (!slug || !SLUG.test(slug)) return null;
+  return (await fetchMedia(env, providerRaw)).find((m) => m.kind === kind && m.id === slug) ?? null;
+}
+
+/** 10.3 — every free model of one kind, in provider order, models resting on a
+ *  cooldown last (an automatic pick goes to the first that is not resting). */
+export async function mediaChoices(env: AiEnv, kind: MediaKind, order: readonly CatalogProvider[] = AI_PROVIDERS): Promise<Array<{ provider: CatalogProvider; model: MediaModel }>> {
+  const all: Array<{ provider: CatalogProvider; model: MediaModel }> = [];
+  for (const provider of order) for (const model of await fetchMedia(env, provider)) if (model.kind === kind) all.push({ provider, model });
+  return [...all.filter((c) => !providerCoolingDown(c.provider, c.model.id)), ...all.filter((c) => providerCoolingDown(c.provider, c.model.id))];
+}
+
+/** 10.3 — the tools one provider offers right now, from its live chat list. */
+export async function fetchTools(env: AiEnv, providerRaw: CatalogProvider | string): Promise<ToolEntry[]> {
+  const provider = normaliseProvider(providerRaw);
+  if (!provider) return [];
+  return toolsFor(provider, await fetchCatalog(env, provider));
+}
+
+/** 10.3 — what the whole app can offer: true when at least one provider has that kind. */
+export interface AiFeatureFlags {
+  image: boolean;
+  speech: boolean;
+  transcription: boolean;
+  music: boolean;
+  code: boolean;
+}
+export function featureFlags(media: MediaModel[][], tools: ToolEntry[][]): AiFeatureFlags {
+  const has = (k: MediaKind): boolean => media.some((list) => list.some((m) => m.kind === k));
+  return { image: has('image'), speech: has('speech'), transcription: has('transcription'), music: has('music'), code: tools.some((t) => t.some((x) => x.models.length > 0)) };
 }
 
 // ---------------------------------------------------------------------------

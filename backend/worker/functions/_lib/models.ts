@@ -4,8 +4,8 @@
  * lanes pin models; this registry describes the pinned models themselves.
  *
  * 10.3 — one key per provider. Every row now names the single key of its
- * provider (VINAX_NVIDIA_API_KEY, VINAX_OPENROUTER_API_KEY,
- * VINAX_GROQ_API_KEY, VINAX_GGL_GEMINI_API_KEY), and `display_name` is the
+ * provider (NVIDIA_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY —
+ * each falls back to its previous VINAX_* name), and `display_name` is the
  * model's ORIGINAL published name — the app shows real model names now. The
  * rows that existed only for the per-model bench keys (kimi-k3, deepseek v4
  * flash, muse-glimmer, ising-calibration, laguna-xs, diffusiongemma,
@@ -113,7 +113,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'high', output_format: 'json', chat_capable: true,
     fallback_models: ['nemotron-3-super-120b-a12b', 'mistral-large'],
     verified: false, ...T,
-    notes: '10.3: the pro reserve seat, replacing deepseek-v4-pro-0813, which is not on the provider\'s public /v1/models list (2026-10-06). Listed there; not yet probed on VINAX_NVIDIA_API_KEY.',
+    notes: '10.3: the pro reserve seat, replacing deepseek-v4-pro-0813, which is not on the provider\'s public /v1/models list (2026-10-06). Listed there; not yet probed on the NVIDIA key.',
   },
   'nemotron-3.5-lightning-30b-a3b': {
     id: 'nvidia/nemotron-3.5-lightning-30b-a3b', envKey: PROVIDER_ENV.nvidia, display_name: 'Nemotron 3.5 Lightning 30B A3B', provider: 'nvidia',
@@ -167,7 +167,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     cost_class: 'medium', output_format: 'json', chat_capable: true,
     fallback_models: ['gpt-oss-20b', 'nemotron-3.5-lightning-30b-a3b'],
     verified: false, ...T,
-    notes: '10.3: the mini reserve seat and the chat lane\'s same-key secondary, replacing mistral-nemotron, which is not on the provider\'s public /v1/models list (2026-10-06). Listed there; not yet probed on VINAX_NVIDIA_API_KEY.',
+    notes: '10.3: the mini reserve seat and the chat lane\'s same-key secondary, replacing mistral-nemotron, which is not on the provider\'s public /v1/models list (2026-10-06). Listed there; not yet probed on the NVIDIA key.',
   },
   'llama-3.2-11b-vision-instruct': {
     id: 'meta/llama-3.2-11b-vision-instruct', envKey: PROVIDER_ENV.nvidia, display_name: 'Llama 3.2 11B Vision Instruct', provider: 'nvidia',

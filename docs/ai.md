@@ -17,7 +17,7 @@ Backend paths below are relative to `backend/worker/functions/`; frontend paths 
 
 ## Lanes and failover
 
-`_lib/ai.ts` defines 13 lanes over **four key secrets, one per provider** (10.3): `VINAX_NVIDIA_API_KEY` signs every lane on the default NVIDIA host (`dj`, `chat`, `deep`, `fast`, `home`, `search`, `pro`, `mini`, `vision`, `vision90`), `VINAX_GROQ_API_KEY` signs `scholar`, `VINAX_OPENROUTER_API_KEY` signs `router` and `VINAX_GGL_GEMINI_API_KEY` signs `maestro` (`PROVIDER_ENV`, `LANE_PROVIDER`). A lane is: its provider, a pinned model, an optional same-key secondary model, and that provider's base URL. Before 10.3 most NVIDIA lanes had a key of their own (18 secrets in all) plus an `agent` reserve and six bench lanes that existed only so the console could probe each key; all of that is gone, because one NVIDIA key serves every model on the account. `_lib/models.ts` holds the model registry (capabilities, latency and cost class, health notes); every entry has `training_supported: false` because VinaX only uses hosted inference.
+`_lib/ai.ts` defines 13 lanes over **four key secrets, one per provider** (10.3): `NVIDIA_API_KEY` signs every lane on the default NVIDIA host (`dj`, `chat`, `deep`, `fast`, `home`, `search`, `pro`, `mini`, `vision`, `vision90`), `GROQ_API_KEY` signs `scholar`, `OPENROUTER_API_KEY` signs `router` and `GEMINI_API_KEY` signs `maestro` (`PROVIDER_ENV`, `LANE_PROVIDER`). Each falls back to its older `VINAX_…` name, and `providerKey(env, provider)` is the only code that reads an AI key ([operations.md](operations.md#ai-keys-one-per-provider-103) has the names). A lane is: its provider, a pinned model, an optional same-key secondary model, and that provider's base URL. Before 10.3 most NVIDIA lanes had a key of their own (18 secrets in all) plus an `agent` reserve and six bench lanes that existed only so the console could probe each key; all of that is gone, because one NVIDIA key serves every model on the account. `_lib/models.ts` holds the model registry (capabilities, latency and cost class, health notes); every entry has `training_supported: false` because VinaX only uses hosted inference.
 
 | Lane | Role |
 | --- | --- |
@@ -237,6 +237,28 @@ The `metadata` results are cached on the device for 30 days (500 songs at most).
 - 10.3 replaced the earlier `{ groups: [...] }` shape (two catalogues, `grq` and `opr`).
 
 When a chat request names a model, the Worker checks it against the same live list before using it; an unlisted model is refused (`400 unknown_model`), not forwarded. With no pick, a catalogue lane's default is resolved from the live list, and the lane's pin is used only if the provider reported nothing.
+
+## Free media models and tools (10.3)
+
+Beyond chat, each provider's object in `/api/aimodels` carries `media: [{ id, name, maker, kind, voices? }]` (`kind` is `image`, `speech`, `transcription`, `music` or `embedding`) and `tools: [{ id: 'code_execution', name, models }]`, and the response carries `features: { image, speech, transcription, music, code }` (true when any provider offers that kind). `_lib/catalog.ts` builds both from each provider's own lists with the same rules as chat: free on the key's tier only, 15-minute cache, empty when the key is missing, and a Gemini model whose free-tier limit is 0 rests for 24 hours and is hidden. `_lib/media.ts` makes the calls. A kind is offered only where the provider serves it over plain HTTPS on that key.
+
+| Provider | Offered | Left out |
+| --- | --- | --- |
+| NVIDIA | Hosted image models (a fixed list: they live on the `genai` host and are not on `/v1/models`); embedding models from `/v1/models` | Speech and transcription (gRPC only) |
+| OpenRouter | Image, speech and embedding models from `/models?output_modalities=all` whose every price field is zero and that are a `:free` variant or list their output price as zero | Video; music models (the list prices them at zero but their description bills per clip); web plugins |
+| Groq | Speech models with their published voices; transcription models; code execution on the models that support the provider's code interpreter | Speech models without a published voice list; compound systems and browser search (web) |
+| Gemini | Speech models with their prebuilt voices; embedding models; transcription on flash models; code execution | Image, Imagen, music and pro speech models (no free tier on the pricing page); live-audio models (WebSocket only); search grounding and URL context (web) |
+
+Routes, each behind its owner switch, a rate limit and a body cap, and each validating a pick against the live list (`400 unknown_model`; `503 not_configured` with `reason: 'no_key' | 'no_free_model'`):
+
+- `POST /api/image` `{ prompt, provider?, model? }` → `{ image, model, modelId, provider }` (`image` is a `data:image/` URL). Switch `image`.
+- `GET /api/voices` keeps its earlier fields and adds `providers: [{ id, label, models: [{ id, name, voices }] }]`; `POST /api/tts` `{ text, provider?, model?, voice? }` → audio (`audio/wav`, or `audio/mpeg` from OpenRouter); a voice the model does not list is `400 unknown_voice`. Switch `tts`.
+- `POST /api/transcribe` `{ audio, mime?, provider?, model?, language? }` → `{ text, model, modelId, provider }`; 8 MB cap, 30 a minute. Switch `transcribe`.
+- `POST /api/music` `{ prompt, provider?, model? }` → `{ audio, mime, model, modelId, provider }`; 3 a minute. Switch `music`. On 2026-10-06 no provider listed a free music model, so `features.music` is false and the + menu hides the entry until one appears.
+- `/api/embed` draws its engines from the live NVIDIA and Gemini embedding lists, and falls back to its fixed engines when the lists do not answer within 1.5 s.
+- `POST /api/vinaxai` accepts `tools: ['code_execution']`, the only tool honoured. A picked model uses it only when its provider lists it as code-capable; Auto prefers a code-capable model first. Code runs in the provider's sandbox, never in the Worker. The executed code and its output arrive in the normal `delta` text as fenced blocks, so any client renders them, and `meta.tools` is `['code_execution']` when the answering model actually ran with it. A model that rejects the tool with a 400 is asked again without it. No web tool is ever sent.
+
+In the app: **Create image** and **Create music clip** in the + menu (shown when the kind is on; a bar above the composer picks the model, grouped by provider with logos; results carry "Made with <model> · <provider>" and Download; a clip never autoplays and pauses the main player; picture and clip data are not saved with the chat), the **Run code** connector (`vinax.ai.codeOn`) with a "Runs code" tag in the model menu and "Ran code" on replies, every speech voice in Settings → Voice (`vinax.aiVoice` is now `provider|model|voice`; older values are read as Groq's), and **Dictation** in Settings (`vinax.aiDictation`: the device by default, or a transcription model — the mic records up to 60 s and falls back to the device on any failure). New storage keys: `vinax.ai.codeOn`, `vinax.aiImageModel`, `vinax.aiMusicModel`, `vinax.aiDictation`.
 
 ## `POST /api/vinaxai` — the VinaX AI chat
 

@@ -121,7 +121,7 @@ export interface LiveVoiceOptions {
    *  next session. Returning null means "use the device voice only" — the
    *  server route is skipped entirely, which is also what happens when the
    *  key serves no speech model. */
-  getServerVoice?: () => { model: string; voice: string } | null;
+  getServerVoice?: () => { provider?: string; model: string; voice: string } | null;
 }
 
 /**
@@ -753,7 +753,7 @@ export class LiveVoiceEngine {
     // (undefined = no chooser wired at all, which keeps the old behaviour.)
     const chosen = this.opts.getServerVoice ? this.opts.getServerVoice() : undefined;
     if (chosen === null) return Promise.resolve(null);
-    const picked = chosen ?? { model: '', voice: '' };
+    const picked: { provider?: string; model: string; voice: string } = chosen ?? { model: '', voice: '' };
     const ctrl = new AbortController();
     this.ttsFetches.add(ctrl);
     const timer = window.setTimeout(() => ctrl.abort(), SERVER_TTS_LEASH_MS);
@@ -762,7 +762,12 @@ export class LiveVoiceEngine {
       req = fetch(SERVER_TTS_PATH, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(picked.model || picked.voice ? { text, model: picked.model, voice: picked.voice } : { text }),
+        // 10.3 — the chosen voice names its provider too.
+        body: JSON.stringify(
+          picked.model || picked.voice
+            ? { text, ...(picked.provider ? { provider: picked.provider } : {}), model: picked.model, voice: picked.voice }
+            : { text },
+        ),
         signal: ctrl.signal,
       });
     } catch {

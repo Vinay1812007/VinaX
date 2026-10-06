@@ -4,8 +4,9 @@
  * The service answers with server-sent events, one JSON object per frame:
  *
  *   { meta: { model, modelId,      who is answering: the model's original
- *             provider, mode } }   name, its slug and its provider (10.3);
- *                                  sent again if a failover changes engine
+ *             provider, mode,      name, its slug and its provider (10.3);
+ *             tools? } }           sent again if a failover changes engine.
+ *                                  `tools` (10.3): tools that were on for it
  *   { delta: "text" }              the next piece of the reply
  *   { done: true, truncated? }     the end; `truncated` = cut short mid-reply
  *
@@ -26,6 +27,8 @@ export interface StreamState {
   /** 10.3 — its slug and provider id ('' when the server did not say). */
   modelId: string;
   provider: string;
+  /** 10.3 — tools that were on for the answering model (`['code_execution']`). */
+  tools: string[];
   /** The service said the reply was cut short. */
   truncated: boolean;
   done: boolean;
@@ -38,6 +41,7 @@ export const initialStreamState = (): StreamState => ({
   model: '',
   modelId: '',
   provider: '',
+  tools: [],
   truncated: false,
   done: false,
   malformed: 0,
@@ -78,7 +82,7 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     delta?: unknown;
     done?: unknown;
     truncated?: unknown;
-    meta?: { model?: unknown; modelId?: unknown; provider?: unknown } | null;
+    meta?: { model?: unknown; modelId?: unknown; provider?: unknown; tools?: unknown } | null;
   };
   let next = state;
   const set = (patch: Partial<StreamState>): void => {
@@ -93,6 +97,9 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
       const modelId = typeof f.meta.modelId === 'string' ? f.meta.modelId : '';
       const provider = typeof f.meta.provider === 'string' ? f.meta.provider : '';
       if (modelId !== next.modelId || provider !== next.provider) set({ modelId, provider });
+      // 10.3 — the tools follow the engine as well.
+      const tools = Array.isArray(f.meta.tools) ? f.meta.tools.filter((t): t is string => typeof t === 'string' && !!t).slice(0, 8) : [];
+      if (tools.join(',') !== next.tools.join(',')) set({ tools });
     }
   }
   if (typeof f.delta === 'string' && f.delta) set({ text: next.text + f.delta });

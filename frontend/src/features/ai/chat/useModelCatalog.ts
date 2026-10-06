@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MODELS_ENDPOINT } from './endpoints';
-import { parseCatalogResponse, type CatalogState } from './models';
-import type { Provider } from './types';
+import { NO_FEATURES, parseCatalogResponse, parseFeatures, type CatalogState } from './models';
+import type { AiFeatures, Provider } from './types';
 
 /** How long a fetched catalogue is trusted before the next open re-asks. */
 export const CATALOG_TTL_MS = 5 * 60_000;
@@ -9,7 +9,7 @@ export const CATALOG_TTL_MS = 5 * 60_000;
 // One cache for the page's lifetime in the tab: the composer menu and the
 // "default model" menu in Settings share it, and reopening a menu inside the
 // window costs nothing.
-let cached: { at: number; providers: Provider[] } | null = null;
+let cached: { at: number; providers: Provider[]; features: AiFeatures } | null = null;
 let inflight: Promise<Provider[]> | null = null;
 
 /** Tests only. */
@@ -26,7 +26,8 @@ function fetchCatalog(): Promise<Provider[]> {
       // 10.3 — a body without the providers list (an older server) is a
       // failed read, not four empty providers.
       if (!providers.length) throw new Error('unrecognised list');
-      cached = { at: Date.now(), providers };
+      // 10.3 — which kinds of model (image, speech, …) and tools exist at all.
+      cached = { at: Date.now(), providers, features: parseFeatures(j) };
       return providers;
     })
     .finally(() => {
@@ -42,9 +43,16 @@ function fetchCatalog(): Promise<Provider[]> {
  * the menu says the list is unavailable rather than showing an invented one,
  * and Auto keeps working.
  */
-export function useModelCatalog(): { state: CatalogState; providers: Provider[]; load: () => Promise<Provider[]> } {
+export function useModelCatalog(): {
+  state: CatalogState;
+  providers: Provider[];
+  /** 10.3 — all off until the list is read (and on an older server). */
+  features: AiFeatures;
+  load: () => Promise<Provider[]>;
+} {
   const [state, setState] = useState<CatalogState>(() => (cached ? 'ready' : 'idle'));
   const [providers, setProviders] = useState<Provider[]>(() => cached?.providers ?? []);
+  const [features, setFeatures] = useState<AiFeatures>(() => cached?.features ?? NO_FEATURES);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -56,6 +64,7 @@ export function useModelCatalog(): { state: CatalogState; providers: Provider[];
   const load = useCallback((): Promise<Provider[]> => {
     if (cached && Date.now() - cached.at < CATALOG_TTL_MS) {
       setProviders(cached.providers);
+      setFeatures(cached.features);
       setState('ready');
       return Promise.resolve(cached.providers);
     }
@@ -65,6 +74,7 @@ export function useModelCatalog(): { state: CatalogState; providers: Provider[];
       (g) => {
         if (alive.current) {
           setProviders(g);
+          setFeatures(cached?.features ?? NO_FEATURES);
           setState('ready');
         }
         return g;
@@ -76,5 +86,5 @@ export function useModelCatalog(): { state: CatalogState; providers: Provider[];
     );
   }, []);
 
-  return { state, providers, load };
+  return { state, providers, features, load };
 }

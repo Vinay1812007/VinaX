@@ -13,6 +13,19 @@
  *                    configured: boolean,
  *                    models: [ { id, name, maker, context, vision } ] } ] }
  *
+ * 10.3 — additive: each provider also carries its free MEDIA models and its
+ * free non-web TOOLS, and the top level says which features any provider
+ * offers at all:
+ *
+ *     media: [ { id, name, maker, kind: 'image' | 'speech' | 'transcription'
+ *                | 'music' | 'embedding', voices?: string[] } ],
+ *     tools: [ { id: 'code_execution', name: 'Code execution',
+ *                models: string[] } ]          // chat ids that can run it
+ *   features: { image, speech, transcription, music, code }   // booleans
+ *
+ * Same rules as the chat list (see _lib/catalog.ts "Media and tools"). No
+ * web tool is ever listed (10.2).
+ *
  * Always the four providers, in that order. `name` is the model's original
  * published name and `maker` who made it; `id` is the exact slug to send back
  * as `{ mode: 'model', provider, model }` to /api/vinaxai.
@@ -24,8 +37,8 @@
  * unreachable provider never turns into an invented menu.
  */
 import { rateLimitAsync, methodNotAllowed } from '../_lib/ratelimit';
-import { fullCatalog } from '../_lib/catalog';
-import { AI_PROVIDERS, PROVIDER_ENV, PROVIDER_LABEL, type AiEnv } from '../_lib/ai';
+import { featureFlags, fullCatalog, fullMedia, toolsFor } from '../_lib/catalog';
+import { AI_PROVIDERS, PROVIDER_LABEL, providerKey, type AiEnv } from '../_lib/ai';
 
 type Env = AiEnv;
 
@@ -37,16 +50,20 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const limited = await rateLimitAsync(request, 'aimodels', { capacity: 12, refillPerMinute: 12 }, env);
   if (limited) return limited;
 
-  const lists = await fullCatalog(env);
+  const [lists, media] = await Promise.all([fullCatalog(env), fullMedia(env)]);
+  const tools = AI_PROVIDERS.map((id) => toolsFor(id, lists[id]));
   return new Response(
     JSON.stringify({
       fetchedAt: new Date().toISOString(),
-      providers: AI_PROVIDERS.map((id) => ({
+      providers: AI_PROVIDERS.map((id, i) => ({
         id,
         label: PROVIDER_LABEL[id],
-        configured: Boolean(env[PROVIDER_ENV[id]]),
+        configured: providerKey(env, id) !== null,
         models: lists[id].map((m) => ({ id: m.id, name: m.name, maker: m.maker, context: m.context, vision: m.vision })),
+        media: media[id].map((m) => ({ id: m.id, name: m.name, maker: m.maker, kind: m.kind, ...(m.voices ? { voices: m.voices } : {}) })),
+        tools: tools[i],
       })),
+      features: featureFlags(AI_PROVIDERS.map((id) => media[id]), tools),
     }),
     {
       headers: {

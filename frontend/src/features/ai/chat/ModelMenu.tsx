@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type K
 import { SearchIcon } from '@/components/Icons';
 import { cn } from '@/utils/cn';
 import { CheckIcon } from './icons';
-import { buildModelMenu, choiceKey, type CatalogState, type MenuRow } from './models';
+import { buildModelMenu, choiceKey, RUNS_CODE, type CatalogState, type MenuRow } from './models';
 import { ProviderLogo } from './ProviderLogo';
 import type { ModelChoice, Provider } from './types';
 
@@ -173,6 +173,8 @@ export function ModelMenu({ state, providers, current, recents, onPick, onClose,
                     {row.hint && <span className="ai-model-hint">{row.hint}</span>}
                   </span>
                   {row.vision && <span className="ai-badge">Vision</span>}
+                  {/* 10.3 — the model can run code (the Run code connector). */}
+                  {row.code && <span className="ai-badge ai-badge-code">{RUNS_CODE}</span>}
                   <span className="ai-model-check" aria-hidden>
                     {selected && <CheckIcon className="w-3.5 h-3.5" />}
                   </span>

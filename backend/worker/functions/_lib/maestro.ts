@@ -54,6 +54,37 @@ interface ChatPayload {
   response_format?: { type?: unknown } | null;
   reasoning_effort?: unknown;
   stream?: unknown;
+  /** 10.3 — run Gemini's code execution tool (the provider's own sandbox,
+   * never the Worker). Native endpoints only; never a web tool. */
+  code_execution?: unknown;
+}
+
+/** 10.3 — executed code and its output as fenced Markdown, so every client
+ * that renders a reply renders them too. Exported for tests and for the Groq
+ * code interpreter, which reports the same two things in its own fields. */
+export function codeBlock(code: string, language = 'python'): string {
+  const lang = language.toLowerCase().replace(/[^a-z0-9+#-]/g, '') || 'python';
+  return `\n\n\`\`\`${lang}\n${code.replace(/\s+$/, '')}\n\`\`\`\n\n`;
+}
+export function outputBlock(output: string): string {
+  return `**Output**\n\n\`\`\`\n${output.replace(/\s+$/, '') || '(no output)'}\n\`\`\`\n\n`;
+}
+
+interface NativePart {
+  text?: unknown;
+  thought?: unknown;
+  executableCode?: { language?: unknown; code?: unknown };
+  codeExecutionResult?: { outcome?: unknown; output?: unknown };
+}
+
+/** The reply text of one native part: text as is, executed code and its
+ * result as fenced blocks (10.3), thought parts dropped. */
+export function partText(p: NativePart): string {
+  if (p.thought === true) return '';
+  if (typeof p.text === 'string') return p.text;
+  if (p.executableCode && typeof p.executableCode.code === 'string') return codeBlock(p.executableCode.code, typeof p.executableCode.language === 'string' ? p.executableCode.language : 'python');
+  if (p.codeExecutionResult) return outputBlock(typeof p.codeExecutionResult.output === 'string' ? p.codeExecutionResult.output : '');
+  return '';
 }
 
 const textOf = (content: unknown): string => {
@@ -103,18 +134,21 @@ export function toNativeRequest(payload: ChatPayload, withThinking = true): Reco
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     contents: contents.length ? contents : [{ role: 'user', parts: [{ text: ' ' }] }],
     generationConfig,
+    // 10.3 — the code execution tool, when asked. Nothing else is ever put in
+    // `tools`: no search, no URL context (10.2).
+    ...(payload.code_execution === true ? { tools: [{ codeExecution: {} }] } : {}),
   };
 }
 
 interface NativeAnswer {
-  candidates?: Array<{ content?: { parts?: Array<{ text?: unknown; thought?: unknown }> }; finishReason?: unknown }>;
+  candidates?: Array<{ content?: { parts?: NativePart[] }; finishReason?: unknown }>;
   usageMetadata?: { promptTokenCount?: unknown; candidatesTokenCount?: unknown; thoughtsTokenCount?: unknown };
 }
 
 /** A native answer as a chat-completions body (thought parts dropped). */
 export function fromNativeAnswer(answer: NativeAnswer, model: string): Record<string, unknown> {
   const cand = answer.candidates?.[0];
-  const content = (cand?.content?.parts ?? []).filter((p) => p.thought !== true).map((p) => (typeof p.text === 'string' ? p.text : '')).join('');
+  const content = (cand?.content?.parts ?? []).map(partText).join('');
   const u = answer.usageMetadata;
   const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   const finish = typeof cand?.finishReason === 'string' ? cand.finishReason.toLowerCase() : 'stop';
@@ -163,7 +197,7 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
       return;
     }
     const parts = j.candidates?.[0]?.content?.parts ?? [];
-    const text = parts.filter((p) => p.thought !== true).map((p) => (typeof p.text === 'string' ? p.text : '')).join('');
+    const text = parts.map(partText).join('');
     if (text) controller.enqueue(frame({ choices: [{ delta: { content: text } }] }));
     const u = j.usageMetadata;
     if (u && typeof u.promptTokenCount === 'number') {
@@ -195,10 +229,12 @@ async function tryMode(mode: MaestroMode, key: string, model: string, payload: C
   const stream = payload.stream === true;
   if (mode === 'openai') {
     // The OpenAI-compatible endpoint streams OpenAI-shaped SSE itself.
+    const { code_execution: _code, ...plain } = payload;
+    void _code;
     return fetch(OPENAI_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({ ...payload, model, stream }),
+      body: JSON.stringify({ ...plain, model, stream }),
       signal,
     });
   }
@@ -321,7 +357,8 @@ export async function maestroFetch(rawKey: string, requested: string, payload: C
   // A pasted secret often carries a trailing newline or spaces.
   const key = rawKey.trim();
   const model = swap ? maestroModelFor(requested) : requested;
-  const modes = maestroModes(key);
+  // 10.3 — code execution is a native-API tool: the OpenAI-compatible door is skipped for it.
+  const modes = payload.code_execution === true ? maestroModes(key).filter((m) => m !== 'openai') : maestroModes(key);
   let last: Response | null = null;
   for (let i = 0; i < modes.length; i += 1) {
     const mode = modes[i];
@@ -349,4 +386,22 @@ export async function maestroFetch(rawKey: string, requested: string, payload: C
     if (!isWrongDoor(res.status, body)) return res;
   }
   return last ?? json({ error: 'no_mode' }, 502);
+}
+
+/**
+ * 10.3 — one native generateContent call for the media routes (speech,
+ * transcription): the public host with the key in a header, then the cloud
+ * host when the answer says the key belongs there (the same wrong-door rule
+ * as maestroFetch). The body is a native request, sent as given; the answer
+ * is the provider's own JSON. Network errors reject, as fetch() does.
+ */
+export async function geminiGenerate(rawKey: string, model: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  const key = rawKey.trim();
+  const init = (headers: Record<string, string>): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal });
+  const res = await fetch(nativeUrl(model, false), init({ 'x-goog-api-key': key }));
+  if (res.ok) return res;
+  const text = await res.clone().text().catch(() => '');
+  if (!isWrongDoor(res.status, text) || isModelGone(res.status, text)) return res;
+  void res.body?.cancel().catch(() => undefined);
+  return fetch(cloudUrl(model, key, false), init({}));
 }

@@ -37,7 +37,7 @@
  *   → 200 { intro, songs: [{ songId, title, artist, reason, segue, confidence, fromPool }], model }
  *   → 400 bad_request | 503 ai_not_configured | 500 { error }
  */
-import { aiBlockCode, aiGate, chat, extractJson, gather, isAiBlocked, logAiEvent, logAiRefusal, type AiBlock, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, chat, extractJson, gather, isAiBlocked, logAiEvent, logAiRefusal, providerKey, type AiBlock, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { type SupabaseEnv } from '../_lib/supabase';
@@ -370,6 +370,8 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
   // Structural anti-repeat for proposals: whatever the model claims, a title
   // the listener just heard or was already offered never comes back.
   const avoidBlob = maxDiscover > 0 ? (JSON.stringify(ctx.avoidSongs ?? '') + JSON.stringify(ctx.recentlyPlayed ?? '') + JSON.stringify(ctx.skippedSongs ?? '')).toLowerCase() : '';
+  // 10.3 — the flagship's key, read through providerKey (primary or previous name).
+  const hasFlagship = providerKey(env, 'gemini') !== null;
   const r = await chat(
     env,
     [
@@ -384,7 +386,7 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
     // 8.0.0 — the maestro lane leads when its key is set (a stronger musical
     // ear for transitions, eras and composers); scholar is its first failover.
     // Its same-key lighter sibling is skipped: scholar is faster than a retry.
-    { temperature: 0.75, lane: env.VINAX_GGL_GEMINI_API_KEY ? 'maestro' : 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: env.VINAX_GGL_GEMINI_API_KEY ? 12_000 : 9_000, skipSecondary: true, ladder: env.VINAX_GGL_GEMINI_API_KEY ? ['scholar', 'dj', 'fast', 'chat', 'home'] : ['dj', 'fast', 'chat', 'home'], deadlineAt, feature: 'dj',
+    { temperature: 0.75, lane: hasFlagship ? 'maestro' : 'scholar', json: true, maxTokens: wantSegues ? 2200 : 1800, reasoningEffort: 'low', timeoutMs: 10_000, firstTimeoutMs: hasFlagship ? 12_000 : 9_000, skipSecondary: true, ladder: hasFlagship ? ['scholar', 'dj', 'fast', 'chat', 'home'] : ['dj', 'fast', 'chat', 'home'], deadlineAt, feature: 'dj',
       // 8.2.0 — a 200 with no usable pick (unparseable JSON, ids outside the
       // pool) asks the next engine instead of failing the set.
       accept: (content) => parsePicks(content, pool, count, maxDiscover, avoidBlob).songs.length > 0 },

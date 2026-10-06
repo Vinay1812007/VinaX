@@ -5,12 +5,17 @@
  * keys remain, and each one opens its provider's whole free catalogue (listed
  * live by ./catalog.ts, selectable model by model in VinaX AI):
  *
- *   VINAX_NVIDIA_API_KEY      NVIDIA      account-scoped: one key signs every
- *                                         hosted model, so every NVIDIA lane
- *                                         below shares it
- *   VINAX_OPENROUTER_API_KEY  OpenRouter  the router lane (zero-priced models only)
- *   VINAX_GROQ_API_KEY        Groq        the scholar lane, live voice, TTS
- *   VINAX_GGL_GEMINI_API_KEY  Gemini      the maestro lane (transport: ./maestro.ts)
+ *   NVIDIA_API_KEY      NVIDIA      account-scoped: one key signs every hosted
+ *                                   model, so every NVIDIA lane below shares it
+ *   OPENROUTER_API_KEY  OpenRouter  the router lane (zero-priced models only)
+ *   GROQ_API_KEY        Groq        the scholar lane, live voice, TTS, transcription
+ *   GEMINI_API_KEY      Gemini      the maestro lane (transport: ./maestro.ts)
+ *
+ * 10.3 — those four are the PRIMARY names. Each falls back to the name it had
+ * before (VINAX_NVIDIA_API_KEY, VINAX_OPENROUTER_API_KEY, VINAX_GROQ_API_KEY,
+ * VINAX_GGL_GEMINI_API_KEY) while the primary is unset, so the live Worker
+ * keeps answering during the switch. providerKey() is the ONLY way any code
+ * reads an AI key.
  *
  * Features still talk to LANES, and lanes still pin models; only the key a
  * lane signs with changed. Lanes by provider:
@@ -35,7 +40,13 @@ import { isModelGone, maestroFetch } from './maestro';
 import { dbErrorCode, sbInsert, sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 export interface AiEnv {
-  /** 10.3 — the four AI keys, one per provider (see the header). */
+  /** 10.3 — the four AI keys, one per provider (see the header). Read them
+   * only through providerKey(). */
+  NVIDIA_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
+  GROQ_API_KEY?: string;
+  GEMINI_API_KEY?: string;
+  /** 10.3 — the previous names, read only while the primary is unset. */
   VINAX_NVIDIA_API_KEY?: string;
   VINAX_OPENROUTER_API_KEY?: string;
   VINAX_GROQ_API_KEY?: string;
@@ -53,16 +64,54 @@ export type AiProvider = 'nvidia' | 'openrouter' | 'groq' | 'gemini';
 export const AI_PROVIDERS: readonly AiProvider[] = ['nvidia', 'openrouter', 'groq', 'gemini'];
 export const PROVIDER_LABEL: Record<AiProvider, string> = { nvidia: 'NVIDIA', openrouter: 'OpenRouter', groq: 'Groq', gemini: 'Gemini' };
 
-/** The secret that holds each provider's single key. */
-export type AiKeySecret = 'VINAX_NVIDIA_API_KEY' | 'VINAX_OPENROUTER_API_KEY' | 'VINAX_GROQ_API_KEY' | 'VINAX_GGL_GEMINI_API_KEY';
+/** The secret that holds each provider's single key (10.3 — the primary names). */
+export type AiKeySecret = 'NVIDIA_API_KEY' | 'OPENROUTER_API_KEY' | 'GROQ_API_KEY' | 'GEMINI_API_KEY';
+/** 10.3 — the name each key had before; read only while the primary is unset. */
+export type AiKeyFallback = 'VINAX_NVIDIA_API_KEY' | 'VINAX_OPENROUTER_API_KEY' | 'VINAX_GROQ_API_KEY' | 'VINAX_GGL_GEMINI_API_KEY';
 export const PROVIDER_ENV: Record<AiProvider, AiKeySecret> = {
+  nvidia: 'NVIDIA_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+  groq: 'GROQ_API_KEY',
+  gemini: 'GEMINI_API_KEY',
+};
+export const PROVIDER_ENV_FALLBACK: Record<AiProvider, AiKeyFallback> = {
   nvidia: 'VINAX_NVIDIA_API_KEY',
   openrouter: 'VINAX_OPENROUTER_API_KEY',
   groq: 'VINAX_GROQ_API_KEY',
   gemini: 'VINAX_GGL_GEMINI_API_KEY',
 };
-/** Every AI key secret VinaX reads — exactly four (laneRegistry.test.ts locks it). */
+/** Every AI key secret VinaX reads by its primary name — exactly four (laneRegistry.test.ts locks it). */
 export const AI_KEY_SECRETS: readonly AiKeySecret[] = AI_PROVIDERS.map((p) => PROVIDER_ENV[p]);
+/** 10.3 — the four fallback names, in the same order. */
+export const AI_KEY_FALLBACKS: readonly AiKeyFallback[] = AI_PROVIDERS.map((p) => PROVIDER_ENV_FALLBACK[p]);
+
+const secretValue = (env: object, name: string): string => {
+  const raw = (env as Record<string, unknown>)[name];
+  return typeof raw === 'string' ? raw.trim() : '';
+};
+
+/** 10.3 — THE way to read an AI key: the provider's primary secret, else its
+ * previous name, trimmed (a pasted secret often carries a newline); null when
+ * neither is set. Every call site — lanes, catalogue, maestro, embeddings,
+ * speech, voices, images, transcription, music and the owner console — goes
+ * through this, so the switch to the new names is one place. */
+export function providerKey(env: object, provider: AiProvider): string | null {
+  return secretValue(env, PROVIDER_ENV[provider]) || secretValue(env, PROVIDER_ENV_FALLBACK[provider]) || null;
+}
+
+/** 10.3 — which secret name supplies a provider's key right now (names only,
+ * never the value), for the env checklist and health: the primary, the
+ * fallback, or none. */
+export function providerKeySource(env: object, provider: AiProvider): { name: AiKeySecret | AiKeyFallback; fallback: boolean } | null {
+  if (secretValue(env, PROVIDER_ENV[provider])) return { name: PROVIDER_ENV[provider], fallback: false };
+  if (secretValue(env, PROVIDER_ENV_FALLBACK[provider])) return { name: PROVIDER_ENV_FALLBACK[provider], fallback: true };
+  return null;
+}
+
+/** 10.3 — the key a lane signs with (its provider's), or null. */
+export function laneKey(env: object, lane: Lane): string | null {
+  return providerKey(env, LANE_PROVIDER[lane]);
+}
 
 const ENDPOINT = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
@@ -328,7 +377,7 @@ export function loggableModel(model: string): string {
 /** 10.3 — the single attempt for a listener's exact catalogue pick on its
  * provider's key, or null when that key is not set. */
 export function providerAttempt(env: AiEnv, provider: AiProvider, model: string): LaneAttempt | null {
-  const key = env[PROVIDER_ENV[provider]];
+  const key = providerKey(env, provider);
   if (!key) return null;
   const role = PROVIDER_LANE[provider];
   return { key, model, role, endpoint: laneEndpoint(env, role), exact: true };
@@ -353,7 +402,7 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
     if (!out.some((b) => sameCall(a, b))) out.push(a);
   };
   const add = (l: Lane, model?: string): void => {
-    const key = env[LANE_ENV[l]];
+    const key = laneKey(env, l);
     if (key && !out.some((a) => a.role === l)) {
       push({ key, model: model ?? laneModel(env, l), role: l, endpoint: laneEndpoint(env, l) });
     }
@@ -362,7 +411,7 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
   // Same-lane secondary: keeps the lane's character when the pinned primary
   // is degraded — consulted before any cross-lane ladder hop.
   const secondary = skipSecondary ? undefined : LANE_SECONDARY[lane];
-  const ownKey = env[LANE_ENV[lane]];
+  const ownKey = laneKey(env, lane);
   if (secondary && ownKey) push({ key: ownKey, model: secondary, role: lane, endpoint: laneEndpoint(env, lane) });
   for (const l of ladder ?? LADDER) add(l);
   return out;
@@ -485,7 +534,10 @@ export function notFreeCooling(provider: AiProvider, model: string, now = Date.n
 /** Set a model (scope `model`) or the lane's whole provider key (scope
  * `lane`) aside for `ms`. Never shortens a longer cooldown already in force. */
 export function markCooldown(role: Lane, model: string, ms: number, scope: 'model' | 'lane' = 'model', now = Date.now()): void {
-  const provider = LANE_PROVIDER[role];
+  markProviderCooldown(LANE_PROVIDER[role], model, ms, scope, now);
+}
+/** 10.3 — the provider-shaped form of markCooldown (media routes have no lane). */
+export function markProviderCooldown(provider: AiProvider, model: string, ms: number, scope: 'model' | 'lane' = 'model', now = Date.now()): void {
   const key = scope === 'lane' ? keyCoolKey(provider) : coolKey(provider, model);
   const until = now + ms;
   if ((cooldowns.get(key) ?? 0) < until) cooldowns.set(key, until);
@@ -493,11 +545,20 @@ export function markCooldown(role: Lane, model: string, ms: number, scope: 'mode
 /** Record a failed attempt: applies the cooldown its status earns (if any)
  * and returns it, so a caller can log why a lane went quiet. */
 export function noteLaneFailure(role: Lane, model: string, status: number, body = ''): Cooldown | null {
+  return noteFailure(LANE_PROVIDER[role], model, status, body, `lane=${role} `);
+}
+/** 10.3 — the same verdict for a media call (image, speech, transcription,
+ * music) that has a provider and a model but no lane: a 429 with a free-tier
+ * limit of 0 rests the model for a day and hides it from the media lists too. */
+export function noteProviderFailure(provider: AiProvider, model: string, status: number, body = ''): Cooldown | null {
+  return noteFailure(provider, model, status, body, '');
+}
+function noteFailure(provider: AiProvider, model: string, status: number, body: string, prefix: string): Cooldown | null {
   const c = cooldownForFailure(status, body);
   if (!c) return null;
-  markCooldown(role, model, c.ms, c.scope);
-  if (c.reason === 'not_free') notFree.set(coolKey(LANE_PROVIDER[role], model), Date.now() + c.ms);
-  console.log(`[ai] cooldown lane=${role} provider=${LANE_PROVIDER[role]}${c.scope === 'model' ? ` model=${loggableModel(model)}` : ' (whole key)'} reason=${c.reason} s=${Math.round(c.ms / 1000)}`);
+  markProviderCooldown(provider, model, c.ms, c.scope);
+  if (c.reason === 'not_free') notFree.set(coolKey(provider, model), Date.now() + c.ms);
+  console.log(`[ai] cooldown ${prefix}provider=${provider}${c.scope === 'model' ? ` model=${loggableModel(model)}` : ' (whole key)'} reason=${c.reason} s=${Math.round(c.ms / 1000)}`);
   return c;
 }
 /** Test hook. */
@@ -862,7 +923,9 @@ export async function gatherDetailed(
 // open. Caps are soft by up to one cache period plus in-flight calls.
 // ============================================================================
 
-export const AI_FEATURES = ['dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed', 'search'] as const;
+// 10.3 — `transcribe` (speech to text) and `music` (music generation) join
+// the list; like every switch they are on unless set to exactly false.
+export const AI_FEATURES = ['dj', 'curate-metadata', 'curate-ranking', 'curate-home', 'curate-shelves', 'playlist', 'vinaxai', 'assistant', 'tts', 'lyrics', 'image', 'embed', 'search', 'transcribe', 'music'] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
 
 export interface AiControls {

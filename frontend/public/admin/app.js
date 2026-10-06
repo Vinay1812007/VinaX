@@ -1543,6 +1543,12 @@
   var labHealth = {};          // provider -> 'ok' | 'warn' | 'bad' — row health dots (grey when unknown)
   var labPingedAt = '';        // 'HH:MM IST' when the last provider sweep finished
   var labAutoPinged = false;   // the first Lab open auto-pings once per page load
+  // 10.3 — media models, tools and the Worker's feature switches ride on the
+  // same list. All optional: an older Worker sends none of them and the Lab
+  // simply shows nothing extra.
+  var labFeatures = null;      // { image, speech, transcription, music, code } | null
+  var labMediaRes = {};        // 'provider|id' -> { html, url? } — last bench result (survives a repaint)
+  var labMediaBusy = {};       // 'provider|id' -> a media bench is running
 
   /** 10.3 — models are shown under their original names: the logged slug as-is. */
   function aiModelName(m) { var str = String(m || ''); return str || '—'; }
@@ -1799,6 +1805,207 @@
       })
       .then(function () { labMusicBusy = false; labMusicAt = labNow(); labPaintMusicAt(); });
   }
+  // ==========================================================================
+  //  10.3 — media models and tools per provider
+  //  Each provider card lists its media models grouped by kind and its tools.
+  //  Image, speech and music bench through the same public routes the app
+  //  uses (/api/image, /api/tts, /api/music — no admin key); transcription is
+  //  a round trip (speak a sentence with a speech model, then transcribe it).
+  //  Embeddings are server-side only, so they are listed without a bench.
+  //  Audio plays from object URLs (the console's CSP allows blob: media, not
+  //  data:) and every URL is revoked when its result is replaced.
+  // ==========================================================================
+  var LAB_MEDIA_KINDS = [
+    { id: 'image', label: 'Image generation', run: 'Generate' },
+    { id: 'speech', label: 'Speech', run: 'Speak' },
+    { id: 'transcription', label: 'Transcription', run: 'Round trip' },
+    { id: 'music', label: 'Music', run: 'Compose' },
+    { id: 'embedding', label: 'Embeddings', run: '' }
+  ];
+  var LAB_FEATURES = [['image', 'Image'], ['speech', 'Speech'], ['transcription', 'Transcription'], ['music', 'Music'], ['code', 'Code']];
+  var LAB_BENCH_IMAGE = 'A small red guitar on a wooden table, soft morning light';
+  var LAB_BENCH_SPEECH = 'Hello from the VinaX console. This is a short speech check.';
+  var LAB_BENCH_MUSIC = 'A calm ten second piano melody';
+  var LAB_BENCH_HEARD = 'VinaX console transcription check, one two three.';
+  function labMediaKind(k) { for (var i = 0; i < LAB_MEDIA_KINDS.length; i++) { if (LAB_MEDIA_KINDS[i].id === k) return LAB_MEDIA_KINDS[i]; } return null; }
+  function labMedia(id) { var p = labList[id]; return p && p.configured && Array.isArray(p.media) ? p.media : []; }
+  function labTools(id) { var p = labList[id]; return p && p.configured && Array.isArray(p.tools) ? p.tools : []; }
+  function labToolModels(t) { return Array.isArray(t.models) ? t.models.filter(function (s) { return typeof s === 'string' && s; }) : []; }
+  function labVoices(m) { return Array.isArray(m.voices) ? m.voices.filter(function (v) { return typeof v === 'string' && v; }) : []; }
+  /** True when one of the provider's tools (code execution today) lists this chat model. */
+  function labRunsCode(id, slug) {
+    return labTools(id).some(function (t) { return t.id === 'code_execution' && labToolModels(t).indexOf(slug) !== -1; });
+  }
+  function labMediaFind(id, slug) { var ms = labMedia(id); for (var i = 0; i < ms.length; i++) { if (ms[i].id === slug) return ms[i]; } return null; }
+  function labMediaId(provider, slug) { return 'lab-media-' + String(provider + '_' + slug).replace(/[^a-zA-Z0-9]/g, '_'); }
+  /** A speech model for the transcription round trip: the same provider first, else any. */
+  function labFindSpeech(provider) {
+    var order = [provider].concat(LAB_PROVIDERS.map(function (P) { return P.id; }).filter(function (x) { return x !== provider; }));
+    for (var i = 0; i < order.length; i++) {
+      var ms = labMedia(order[i]);
+      for (var k = 0; k < ms.length; k++) { if (ms[k].kind === 'speech') return { provider: order[i], model: ms[k] }; }
+    }
+    return null;
+  }
+  function labMediaPost(path, body) {
+    return fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  }
+  /** JSON reply, or throw the server's honest error ({ error }). */
+  function labMediaJson(res) {
+    return res.json().catch(function () { return null; }).then(function (j) {
+      if (!j) throw new Error(res.ok ? 'unreadable reply' : 'http ' + res.status);
+      if (!res.ok || j.error) throw new Error(labFailText(j, res.status));
+      return j;
+    });
+  }
+  /** An audio body (TTS), or throw the JSON error the route sent instead. */
+  function labMediaAudio(res) {
+    var ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (res.ok && ct.indexOf('audio/') === 0) return res.blob();
+    return labMediaJson(res).then(function () { throw new Error('reply was not audio (' + (ct || 'no type') + ')'); });
+  }
+  function labDataUrlBlob(url) {
+    var m = /^data:([^;,]*)(;base64)?,/i.exec(String(url || ''));
+    if (!m) return null;
+    var payload = String(url).slice(m[0].length);
+    try {
+      if (!m[2]) return new Blob([decodeURIComponent(payload)], { type: m[1] || 'application/octet-stream' });
+      var bin = atob(payload);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new Blob([bytes], { type: m[1] || 'application/octet-stream' });
+    } catch (e) { return null; }
+  }
+  function labBlobDataUrl(blob) {
+    return new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      fr.onload = function () { resolve(String(fr.result || '')); };
+      fr.onerror = function () { reject(new Error('could not read the audio')); };
+      fr.readAsDataURL(blob);
+    });
+  }
+  function labMsText(ms) { return '✓ ' + ms + ' ms'; }
+  function labAudioHtml(url) { return '<audio class="lab-media-audio" controls preload="metadata" src="' + esc(url) + '"></audio>'; }
+  /** Store one bench result (revoking the object URL it replaces) and paint it in place. */
+  function labMediaSet(provider, slug, html, url) {
+    var key = provider + '|' + slug;
+    var old = labMediaRes[key];
+    if (old && old.url && old.url !== url) { try { URL.revokeObjectURL(old.url); } catch (e) { /* already gone */ } }
+    labMediaRes[key] = { html: html, url: url || '' };
+    labMediaBusy[key] = false;
+    var out = $(labMediaId(provider, slug));
+    if (out) out.innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('button.lab-bench'), function (b) {
+      if (b.getAttribute('data-prov') === provider && b.getAttribute('data-media') === slug) b.disabled = false;
+    });
+  }
+  function labMediaFailHtml(e) { return '<span class="lab-ping bad">✗ ' + esc((e && e.message) || 'failed') + '</span>'; }
+  /** Bench one media model with a fixed short input; the result lands in its row. */
+  function labMediaRun(provider, slug) {
+    var m = labMediaFind(provider, slug);
+    var key = provider + '|' + slug;
+    if (!m || labMediaBusy[key]) return;
+    labMediaBusy[key] = true;
+    var out = $(labMediaId(provider, slug));
+    if (out) out.innerHTML = '<span class="lab-ping">…</span>';
+    Array.prototype.forEach.call(document.querySelectorAll('button.lab-bench'), function (b) {
+      if (b.getAttribute('data-prov') === provider && b.getAttribute('data-media') === slug) b.disabled = true;
+    });
+    var t0 = Date.now();
+    var job;
+    if (m.kind === 'image') {
+      job = labMediaPost('/api/image', { prompt: LAB_BENCH_IMAGE, provider: provider, model: slug }).then(labMediaJson).then(function (j) {
+        var src = String(j.image || '');
+        if (!/^data:image\/[a-z0-9.+-]+;base64,/i.test(src)) throw new Error('reply had no image');
+        labMediaSet(provider, slug, '<img class="lab-media-thumb" src="' + esc(src) + '" alt="Bench image from ' + esc(m.name || slug) + '">' +
+          '<span class="lab-ping ok">' + labMsText(Date.now() - t0) + '</span>');
+      });
+    } else if (m.kind === 'speech') {
+      var voice = labVoices(m)[0];
+      job = labMediaPost('/api/tts', { text: LAB_BENCH_SPEECH, provider: provider, model: slug, voice: voice }).then(labMediaAudio).then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        labMediaSet(provider, slug, labAudioHtml(url) + '<span class="lab-ping ok">' + labMsText(Date.now() - t0) + '</span>' +
+          (voice ? '<span class="muted lab-media-note">voice ' + esc(voice) + '</span>' : ''), url);
+      });
+    } else if (m.kind === 'music') {
+      job = labMediaPost('/api/music', { prompt: LAB_BENCH_MUSIC, provider: provider, model: slug }).then(labMediaJson).then(function (j) {
+        var blob = labDataUrlBlob(j.audio);
+        if (!blob || !/^audio\//i.test(blob.type || String(j.mime || ''))) throw new Error('reply had no audio');
+        var url = URL.createObjectURL(blob);
+        labMediaSet(provider, slug, labAudioHtml(url) + '<span class="lab-ping ok">' + labMsText(Date.now() - t0) + '</span>', url);
+      });
+    } else if (m.kind === 'transcription') {
+      var sp = labFindSpeech(provider);
+      if (!sp) { labMediaSet(provider, slug, '<span class="muted lab-media-note">Needs a speech model to bench</span>'); return; }
+      var sv = labVoices(sp.model)[0];
+      var mime = 'audio/wav';
+      job = labMediaPost('/api/tts', { text: LAB_BENCH_HEARD, provider: sp.provider, model: sp.model.id, voice: sv })
+        .then(labMediaAudio)
+        .catch(function (e) { throw new Error('speech step: ' + ((e && e.message) || 'failed')); })
+        .then(function (blob) { mime = blob.type || mime; return labBlobDataUrl(blob); })
+        .then(function (audio) {
+          return labMediaPost('/api/transcribe', { audio: audio, mime: mime, provider: provider, model: slug, language: 'en' }).then(labMediaJson);
+        })
+        .then(function (j) {
+          var text = typeof j.text === 'string' ? j.text.trim() : '';
+          labMediaSet(provider, slug, '<span class="lab-media-text">' + (text ? '“' + esc(text) + '”' : '(empty transcript)') + '</span>' +
+            '<span class="lab-ping ok">' + labMsText(Date.now() - t0) + '</span>' +
+            '<span class="muted lab-media-note">spoken by ' + esc(sp.model.name || sp.model.id) + ' on ' + esc(labProviderLabel(sp.provider)) + '</span>');
+        });
+    } else {
+      labMediaBusy[key] = false;
+      return;
+    }
+    job.catch(function (e) {
+      labMediaSet(provider, slug, labMediaFailHtml(e && e.message ? e : new Error('network error')));
+    });
+  }
+  /** The Media and Tools blocks of one provider card ('' when the list has neither). */
+  function labMediaHtml(pid) {
+    var media = labMedia(pid);
+    var tools = labTools(pid);
+    var html = '';
+    if (media.length) {
+      html += '<div class="lab-media" data-prov="' + esc(pid) + '"><div class="lab-sub">Media</div>' +
+        LAB_MEDIA_KINDS.map(function (K) {
+          var ms = media.filter(function (m) { return m.kind === K.id; });
+          if (!ms.length) return '';
+          return '<div class="lab-media-group" data-kind="' + esc(K.id) + '"><div class="lab-media-kind">' + esc(K.label) + '</div>' +
+            ms.map(function (m) {
+              var key = pid + '|' + m.id;
+              var voices = labVoices(m);
+              var meta = [m.maker || '', K.id === 'speech' && voices.length ? voices.length + ' voice' + (voices.length === 1 ? '' : 's') : ''].filter(Boolean).join(' · ');
+              var act;
+              if (K.id === 'embedding') act = '<span class="muted lab-media-note">Server-side only</span>';
+              else if (K.id === 'transcription' && !labFindSpeech(pid)) act = '<span class="muted lab-media-note">Needs a speech model to bench</span>';
+              else act = '<button type="button" class="ghost lab-bench" data-prov="' + esc(pid) + '" data-media="' + esc(m.id) + '" data-kind="' + esc(K.id) + '"' + (labMediaBusy[key] ? ' disabled' : '') + '>' + esc(K.run) + '</button>';
+              var res = labMediaBusy[key] ? '<span class="lab-ping">…</span>' : labMediaRes[key] ? labMediaRes[key].html : '';
+              return '<div class="lab-media-row"><div class="lab-media-name"><b>' + esc(m.name || m.id) + '</b>' + (meta ? ' <span class="muted">' + esc(meta) + '</span>' : '') + '</div>' + act + '</div>' +
+                '<div class="lab-media-out" id="' + labMediaId(pid, m.id) + '">' + res + '</div>';
+            }).join('') + '</div>';
+        }).join('') + '</div>';
+    }
+    if (tools.length) {
+      html += '<div class="lab-tools" data-prov="' + esc(pid) + '"><div class="lab-sub">Tools</div><div class="chips">' +
+        tools.map(function (t) {
+          var n = labToolModels(t).length;
+          return '<span class="pill">' + esc(t.name || t.id) + ' · ' + n + ' model' + (n === 1 ? '' : 's') + '</span>';
+        }).join('') + '</div></div>';
+    }
+    return html;
+  }
+  /** One line at the top of the Lab: which media features the Worker has on. Hidden on an older Worker. */
+  function labPaintFeatures() {
+    var host = $('lab-feats');
+    if (!host) return;
+    var f = labFeatures;
+    var known = f ? LAB_FEATURES.filter(function (x) { return typeof f[x[0]] === 'boolean'; }) : [];
+    if (!known.length) { host.innerHTML = ''; host.hidden = true; return; }
+    host.hidden = false;
+    host.innerHTML = '<span class="muted lab-feats-k">Features</span>' + known.map(function (x) {
+      return okPill(f[x[0]], x[1] + (f[x[0]] ? ' on' : ' off'));
+    }).join('');
+  }
   /** Fetch the four providers' model lists once per Lab session (Reload list
    *  asks again). An unreachable list is reported as such — the console never
    *  shows an invented one. */
@@ -1817,10 +2024,14 @@
           if (!p || !labProviderInfo(p.id)) return;
           next[p.id] = {
             configured: p.configured === true,
-            models: (Array.isArray(p.models) ? p.models : []).filter(function (m) { return m && typeof m.id === 'string' && m.id; })
+            models: (Array.isArray(p.models) ? p.models : []).filter(function (m) { return m && typeof m.id === 'string' && m.id; }),
+            // 10.3 — optional on an older Worker: missing = an empty list.
+            media: (Array.isArray(p.media) ? p.media : []).filter(function (m) { return m && typeof m.id === 'string' && m.id && labMediaKind(m.kind); }),
+            tools: (Array.isArray(p.tools) ? p.tools : []).filter(function (t) { return t && typeof t.id === 'string' && t.id; })
           };
         });
         labList = next;
+        labFeatures = j.features && typeof j.features === 'object' ? j.features : null;
         labListAt = typeof j.fetchedAt === 'string' ? j.fetchedAt : '';
         labListState = 'ready';
       })
@@ -1852,14 +2063,15 @@
         body = '<details class="lab-prov-models" data-prov="' + esc(P.id) + '"' + (labOpen[P.id] ? ' open' : '') + '><summary>Models (' + models.length + ')</summary>' +
           '<table><thead><tr><th>Model</th><th>Maker</th><th>Context</th><th>Slug</th><th>Ping</th></tr></thead><tbody>' +
           models.map(function (m) {
-            return '<tr><td><b>' + esc(m.name || m.id) + '</b>' + (m.vision === true ? ' <span class="pill">vision</span>' : '') + '</td>' +
+            return '<tr><td><b>' + esc(m.name || m.id) + '</b>' + (m.vision === true ? ' <span class="pill">vision</span>' : '') +
+              (labRunsCode(P.id, m.id) ? ' <span class="pill lab-tag-code">Runs code</span>' : '') + '</td>' +
               '<td class="muted">' + esc(m.maker || '—') + '</td>' +
               '<td class="muted">' + esc(labCtx(m.context) || '—') + '</td>' +
               '<td><code>' + esc(m.id) + '</code></td>' +
               '<td><span class="lab-ping" id="' + labCatId(P.id, m.id) + '">' + esc(labCatText[P.id + '|' + m.id] || '') + '</span></td></tr>';
           }).join('') + '</tbody></table></details>';
       } else if (p) {
-        body = '<div class="muted lab-prov-empty">Not available right now — ' + (p.configured ? 'the key answered with no free models.' : 'set this provider’s key on the server.') + '</div>';
+        body = '<div class="muted lab-prov-empty">Not available right now — ' + (p.configured ? 'the key answered with no free chat models.' : 'set this provider’s key on the server.') + '</div>';
       } else {
         body = '';
       }
@@ -1868,7 +2080,7 @@
         providerLogo(P.id, 22) + '<span class="lab-prov-name">' + esc(P.label) + '</span>' +
         '<span class="lab-dot' + (labHealth[P.id] ? ' ' + labHealth[P.id] : '') + '" id="lab-dot-' + esc(P.id) + '"></span>' +
         '<span class="spacer"></span>' + keyPill + '<span class="muted lab-prov-count">' + esc(count) + '</span></button>' +
-        body + '</div>';
+        body + labMediaHtml(P.id) + '</div>';
     }).join('') +
       (labListAt ? '<p class="muted" style="font-size:11px;margin:4px 0 0">List fetched ' + esc(ago(labListAt)) + '</p>' : '');
     Array.prototype.forEach.call(host.querySelectorAll('.lab-prov-head'), function (b) {
@@ -1882,6 +2094,11 @@
     Array.prototype.forEach.call(host.querySelectorAll('details.lab-prov-models'), function (d) {
       d.addEventListener('toggle', function () { labOpen[d.getAttribute('data-prov')] = d.open; });
     });
+    // 10.3 — media benches (one fixed short input each; result in the row).
+    Array.prototype.forEach.call(host.querySelectorAll('button.lab-bench'), function (b) {
+      b.addEventListener('click', function () { labMediaRun(b.getAttribute('data-prov'), b.getAttribute('data-media')); });
+    });
+    labPaintFeatures();
   }
   /** The bench's model control for the CURRENT provider: every model it
    *  serves, by original name. */
@@ -1902,7 +2119,7 @@
     } else {
       host.innerHTML = head + '<label class="muted" style="font-size:11px" for="lab-model-sel">Model</label>' +
         '<select id="lab-model-sel" style="min-width:260px;max-width:100%">' + models.map(function (m) {
-          var label = (m.name || m.id) + (m.maker ? ' · ' + m.maker : '') + (labCtx(m.context) ? ' · ' + labCtx(m.context) : '') + (m.vision === true ? ' · vision' : '');
+          var label = (m.name || m.id) + (m.maker ? ' · ' + m.maker : '') + (labCtx(m.context) ? ' · ' + labCtx(m.context) : '') + (m.vision === true ? ' · vision' : '') + (labRunsCode(labProv, m.id) ? ' · runs code' : '');
           return '<option value="' + esc(m.id) + '"' + (m.id === cur ? ' selected' : '') + '>' + esc(label) + '</option>';
         }).join('') + '</select>' +
         '<span class="muted" style="font-size:11px">' + models.length + ' free model' + (models.length === 1 ? '' : 's') + '</span>' + reload;
@@ -1962,6 +2179,7 @@
     $('view').innerHTML =
       '<div class="card" id="lab-root" style="max-width:860px">' +
       '<h3 style="margin-top:0">API Monitoring <span class="muted">· one key per provider, every free model it serves, and the music sources — no failover, failures show honestly</span></h3>' +
+      '<div class="chips lab-feats" id="lab-feats" hidden></div>' +
       '<div class="lab-provs" id="lab-provs"></div>' +
       '<div class="row" id="lab-model-row" style="margin:12px 0 10px;flex-wrap:wrap;align-items:center;gap:8px"></div>' +
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-ping">Ping providers</button><span id="lab-ping-at" class="lab-ping-at"></span><span id="lab-pings" class="chips" style="margin:0"></span></div>' +

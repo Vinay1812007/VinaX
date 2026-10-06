@@ -15,6 +15,7 @@ import {
   readVectors,
   resetEmbedCooldowns,
 } from '../_lib/embed';
+import { resetCatalogCache } from '../_lib/catalog';
 
 const NV_ENV = { VINAX_NVIDIA_API_KEY: 'nv-key-1' };
 const FLAG_ENV = { VINAX_GGL_GEMINI_API_KEY: 'flag-key' };
@@ -30,6 +31,9 @@ const vec = (n: number, seed = 1): number[] => Array.from({ length: n }, (_, i) 
 function stub(handler: (call: Call) => Response | Promise<Response>): Call[] {
   const calls: Call[] = [];
   vi.stubGlobal('fetch', async (url: unknown, init?: { body?: string; headers?: Record<string, string> }) => {
+    // 10.3 — the free-list reads (model lists) answer nothing here, so the
+    // fixed engines — today's fallbacks — are what these tests exercise.
+    if (/\/models(\?|$)/.test(String(url))) return new Response('{}', { status: 404 });
     const call = { url: String(url), body: JSON.parse(init?.body ?? '{}') as Record<string, unknown>, headers: init?.headers ?? {} };
     calls.push(call);
     return handler(call);
@@ -52,7 +56,10 @@ const post = (body: unknown, env: Record<string, string>): Promise<Response> =>
     env,
   });
 
-beforeEach(() => resetEmbedCooldowns());
+beforeEach(() => {
+  resetEmbedCooldowns();
+  resetCatalogCache();
+});
 afterEach(() => vi.unstubAllGlobals());
 
 describe('normalise', () => {

@@ -71,3 +71,13 @@ describe('reduceFrame', () => {
     expect(reduceFrame(before, { delta: '' })).toBe(before);
   });
 });
+
+describe('10.3 — tools in meta', () => {
+  it('records the tools that were on for the answering model, and a failover hop replaces them', () => {
+    const s = run([{ meta: { model: 'Alpha 70B', modelId: 'lab/alpha-70b', provider: 'nvidia', tools: ['code_execution', 7] } }, { delta: 'x' }]);
+    expect(s.tools).toEqual(['code_execution']);
+    const hop = run([{ meta: { model: 'Alpha 70B', provider: 'nvidia', tools: ['code_execution'] } }, { meta: { model: 'Small 8B', provider: 'groq' } }]);
+    expect(hop.tools).toEqual([]);
+    expect(run([{ meta: { model: 'Small 8B', tools: 'nope' } }]).tools).toEqual([]);
+  });
+});

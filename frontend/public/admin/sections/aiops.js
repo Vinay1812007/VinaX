@@ -30,6 +30,9 @@
     ['image', 'Image generation'],
     ['embed', 'Song and search embeddings (natural-language search, taste fit)'],
     ['search', 'Reading a described search into filters (AI search)'],
+    // 10.3 — speech to text for dictation, and music clips in VinaX AI.
+    ['transcribe', 'Dictation by an AI model (speech to text)'],
+    ['music', 'Music clip generation in VinaX AI'],
   ];
   var days = null;
   var last = null;      // last aiops payload

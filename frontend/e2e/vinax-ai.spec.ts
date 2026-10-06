@@ -318,3 +318,108 @@ test('saved prompts persist from the sheet', async ({ page }) => {
     .toBe(1);
   expect(pageErrors).toEqual([]);
 });
+
+/** 10.3 — a server with media models and the code tool. */
+const FULL_CATALOG = {
+  ...CATALOG,
+  features: { image: true, speech: false, transcription: false, music: true, code: true },
+  providers: CATALOG.providers.map((p) =>
+    p.id === 'nvidia'
+      ? {
+          ...p,
+          media: [{ id: 'lab/pixel-1', name: 'Pixel One', maker: 'Lab One', kind: 'image' }],
+          tools: [{ id: 'code_execution', name: 'Code execution', models: ['lab/alpha-70b'] }],
+        }
+      : p.id === 'groq'
+        ? { ...p, media: [{ id: 'tune-1', name: 'Tune One', maker: null, kind: 'music' }] }
+        : p,
+  ),
+};
+/** A 1×1 PNG and a tiny silent WAV, as the routes return them. */
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg==';
+const WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+const SSE_CODE =
+  'data: {"meta":{"model":"Alpha 70B","modelId":"lab/alpha-70b","provider":"nvidia","mode":"auto","tools":["code_execution"]}}\n\n' +
+  'data: {"delta":"Worked it out:\\n\\n```python\\nprint(6*7)\\n```\\n\\n```\\n42\\n```"}\n\n' +
+  'data: {"done":true}\n\n';
+
+test('10.3 — Run code, Create image and Create music clip, each shown only when the server has it', async ({ page }) => {
+  const chat: Array<Record<string, unknown>> = [];
+  const media: Array<{ path: string; body: Record<string, unknown> }> = [];
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await seed(page);
+  await page.route('**/*', (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (!url.origin.startsWith('http://localhost')) return route.abort();
+    if (url.pathname === '/api/vinaxai' && req.method() === 'POST') {
+      chat.push(JSON.parse(req.postData() || '{}') as Record<string, unknown>);
+      return route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: SSE_CODE });
+    }
+    if (url.pathname === '/api/aimodels') return route.fulfill({ json: FULL_CATALOG });
+    if (url.pathname === '/api/image' && req.method() === 'POST') {
+      media.push({ path: url.pathname, body: JSON.parse(req.postData() || '{}') as Record<string, unknown> });
+      return route.fulfill({ json: { image: PNG, model: 'Pixel One', modelId: 'lab/pixel-1', provider: 'nvidia' } });
+    }
+    if (url.pathname === '/api/music' && req.method() === 'POST') {
+      media.push({ path: url.pathname, body: JSON.parse(req.postData() || '{}') as Record<string, unknown> });
+      return route.fulfill({ json: { audio: WAV, mime: 'audio/wav', model: 'Tune One', modelId: 'tune-1', provider: 'groq' } });
+    }
+    if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
+    return route.continue();
+  });
+
+  await page.goto('/VinaXAI', { waitUntil: 'domcontentloaded' });
+  const box = page.locator('textarea[aria-label="Message VinaX AI"]');
+  await expect(box).toBeVisible({ timeout: 15_000 });
+
+  // Run code: a fifth connector, because the server says some model can run code.
+  await page.locator('button[aria-label="Attach and tools"]').click();
+  const runCode = page.getByRole('switch', { name: 'Run code' });
+  await expect(runCode).toBeVisible();
+  await runCode.click();
+  await expect(runCode).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[role="group"][aria-label="Active connectors"] [data-connector="code"]')).toBeVisible();
+  await box.fill('what is six times seven');
+  await box.press('Enter');
+  await expect.poll(() => chat.length, { timeout: 10_000 }).toBe(1);
+  expect(chat[0]).toMatchObject({ mode: 'auto', tools: ['code_execution'] });
+  await expect(page.locator('.ai-ran-code')).toHaveCount(1, { timeout: 10_000 });
+
+  // The model menu tags the model that can run code.
+  await page.locator('button[aria-label^="Model:"]').click();
+  const alpha = page.locator('[role="listbox"][aria-label="Choose model"] [role="option"]').filter({ hasText: 'Alpha 70B' });
+  await expect(alpha).toContainText('Runs code');
+  await page.keyboard.press('Escape');
+
+  // Create image: the bar names the model (logo + name), the picture comes back with who made it.
+  await page.locator('button[aria-label="Attach and tools"]').click();
+  await page.getByRole('button', { name: /Create image/ }).click();
+  const picker = page.locator('button[aria-label="Image model: Pixel One"]');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('svg[data-provider="nvidia"]')).toHaveCount(1);
+  await box.fill('a red kite over paddy fields');
+  await box.press('Enter');
+  await expect(page.locator('img.ai-media-img')).toBeVisible({ timeout: 10_000 });
+  expect(media[0]).toEqual({ path: '/api/image', body: { prompt: 'a red kite over paddy fields', provider: 'nvidia', model: 'lab/pixel-1' } });
+  await expect(page.locator('figure.ai-media').last()).toContainText(/Made with Pixel One · NVIDIA/i);
+  await expect(page.locator('figure.ai-media a[download]').last()).toHaveAttribute('download', 'vinax-a-red-kite-over-paddy-fields.png');
+  await page.locator('button[aria-label="Stop: Create image"]').click();
+
+  // Create music clip: a player that does not start by itself.
+  await page.locator('button[aria-label="Attach and tools"]').click();
+  await page.getByRole('button', { name: /Create music clip/ }).click();
+  await expect(page.locator('button[aria-label="Music model: Tune One"]')).toBeVisible();
+  await box.fill('a calm sitar loop');
+  await box.press('Enter');
+  const audio = page.locator('audio.ai-media-audio');
+  await expect(audio).toHaveCount(1, { timeout: 10_000 });
+  expect(media[1]).toEqual({ path: '/api/music', body: { prompt: 'a calm sitar loop', provider: 'groq', model: 'tune-1' } });
+  expect(await audio.evaluate((el) => (el as HTMLAudioElement).paused && !(el as HTMLAudioElement).autoplay)).toBe(true);
+  await expect(audio).toHaveAttribute('src', /^blob:/);
+  // Nothing scrolls the page sideways.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(pageErrors).toEqual([]);
+});

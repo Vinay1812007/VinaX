@@ -4,20 +4,13 @@ import { useDjStore } from '@/store/djStore';
 import { audioEngine } from '@/services/audio/engine';
 import { useCastStore } from '@/services/cast';
 import { onSpeakingChange, readAloud, setReadAloudVoiceFallback, stopReadAloud } from '@/features/ai/readAloud';
+import { readVoicePick, type VoicePick } from '@/features/ai/voicePick';
 
-/** Same key and shape VinaX AI stores the Settings → Voice choice under: `model|persona`, or 'device'. */
-const VOICE_PICK_KEY = 'vinax.aiVoice';
-
-/** The persisted studio-voice choice, or null for the device voice. */
-export function persistedVoicePick(): { model: string; voice: string } | null {
-  try {
-    const v = window.localStorage.getItem(VOICE_PICK_KEY);
-    if (!v || v === 'device') return null;
-    const [model, voice] = v.split('|');
-    return model && voice ? { model, voice } : null;
-  } catch {
-    return null;
-  }
+/** The persisted studio-voice choice (VinaX AI's Settings → Voice), or null
+ *  for the device voice. 10.3 — `provider|model|voice`; an older build's
+ *  `model|persona` is read as its provider's and migrated (voicePick.ts). */
+export function persistedVoicePick(): VoicePick | null {
+  return readVoicePick();
 }
 
 /**

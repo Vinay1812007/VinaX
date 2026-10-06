@@ -64,3 +64,17 @@ describe('buildChatRequest — the model pick on the wire (10.3)', () => {
     expect(body).not.toHaveProperty('provider');
   });
 });
+
+describe('buildChatRequest — Run code (10.3)', () => {
+  it('asks for the code tool only when given, and never in a live voice chat', async () => {
+    expect(await buildChatRequest(SETTINGS, turn)).not.toHaveProperty('tools');
+    const on = await buildChatRequest({ ...SETTINGS, tools: ['code_execution'] }, turn);
+    expect(on.tools).toEqual(['code_execution']);
+    expect(on.mode).toBe('auto');
+    const pinned = await buildChatRequest({ ...SETTINGS, tools: ['code_execution'], choice: { mode: 'model', provider: 'nvidia', model: 'lab/alpha-70b' } }, turn);
+    expect(pinned).toMatchObject({ mode: 'model', provider: 'nvidia', model: 'lab/alpha-70b', tools: ['code_execution'] });
+    const voice = await buildChatRequest({ ...SETTINGS, voiceLive: true, tools: ['code_execution'] }, turn);
+    expect(voice).not.toHaveProperty('tools');
+    expect(on).not.toHaveProperty('web');
+  });
+});

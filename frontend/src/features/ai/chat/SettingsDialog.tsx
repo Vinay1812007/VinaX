@@ -7,17 +7,32 @@ import { useCurrentSong } from '@/store/playerStore';
 import { cn } from '@/utils/cn';
 import { ModelMenu } from './ModelMenu';
 import { TrashIcon, UploadIcon } from './icons';
-import { choiceLabel, choiceProvider, type CatalogState } from './models';
+import { choiceLabel, choiceProvider, mediaGroups, type CatalogState } from './models';
 import { ProviderLogo } from './ProviderLogo';
 import { formatBytes, storageUsedBytes } from './storage';
-import type { ModelChoice, Provider } from './types';
+import type { MediaPick, ModelChoice, Provider } from './types';
 import { MemorySection } from './MemorySection';
+import { recorderSupported } from './useServerDictation';
+import { voiceLabel, type VoiceCatalog } from './voices';
+import { DEVICE_VOICE, formatVoicePick, parseVoicePick } from '../voicePick';
 
-export const DEVICE_VOICE = 'device';
-export interface VoiceCatalog {
-  configured: boolean;
-  models: Array<{ id: string; label: string }>;
-  personas: Array<{ id: string; label: string; tone: string }>;
+export { DEVICE_VOICE };
+export type { VoiceCatalog };
+
+/**
+ * 10.3 — a list of choices as one radio group: arrow keys move and choose,
+ * like a native radio set; each option is a 44px row or chip.
+ */
+function onRadioKeys(e: KeyboardEvent<HTMLElement>): void {
+  if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const radios = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')];
+  const at = radios.indexOf(document.activeElement as HTMLElement);
+  if (at < 0 || !radios.length) return;
+  e.preventDefault();
+  const fwd = e.key === 'ArrowDown' || e.key === 'ArrowRight';
+  const next = e.key === 'Home' ? 0 : e.key === 'End' ? radios.length - 1 : (at + (fwd ? 1 : -1) + radios.length) % radios.length;
+  radios[next].focus();
+  radios[next].click();
 }
 
 export type SettingsTab = 'general' | 'replies' | 'voice' | 'data' | 'shortcuts';
@@ -61,6 +76,10 @@ export interface SettingsDialogProps {
   voiceCatalog: VoiceCatalog | null;
   autoRead: boolean;
   onAutoRead: (on: boolean) => void;
+  /** 10.3 — the composer mic's engine: a server transcription model, or null
+   *  for this device's dictation (the default). */
+  dictationPick: MediaPick | null;
+  onDictationPick: (pick: MediaPick | null) => void;
   // Data
   chatCount: number;
   onExportAll: () => void;
@@ -137,6 +156,11 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
   useEffect(() => {
     if (tab === 'data') setUsed(storageUsedBytes());
   }, [tab, p.chatCount]);
+  // 10.3 — the Voice tab lists the dictation models from the model list.
+  const { onLoadCatalog } = p;
+  useEffect(() => {
+    if (tab === 'voice') onLoadCatalog();
+  }, [tab, onLoadCatalog]);
 
   const vertical = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 640px)').matches;
 
@@ -154,14 +178,35 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
     tabRefs.current[id]?.focus();
   };
 
+  // 10.3 — the saved voice, in the provider|model|voice shape (an older
+  // build's model|voice was migrated when the page read it).
+  const picked = parseVoicePick(p.voicePick);
+  const pickedKey = picked ? formatVoicePick(picked) : DEVICE_VOICE;
+  const voiceProviders = p.voiceCatalog?.providers ?? [];
+  const pickListed =
+    !picked || voiceProviders.some((vp) => vp.id === picked.provider && vp.models.some((m) => m.id === picked.model && m.voices.includes(picked.voice)));
   const voiceNote =
     p.voiceCatalog === null
       ? 'Checking which voices are available…'
-      : p.voiceCatalog.models.length
-        ? 'Used for live voice chat and for Read aloud on a reply. Falls back to this device if a voice is briefly unavailable.'
-        : p.voiceCatalog.configured
-          ? 'No studio voice is available right now — replies are spoken by this device.'
-          : 'Studio voices aren’t configured — replies are spoken by this device.';
+      : !pickListed
+        ? 'The voice you chose isn’t available right now — replies are spoken by this device until it is back.'
+        : voiceProviders.length
+          ? 'Used for live voice chat and for Read aloud on a reply. Falls back to this device if a voice is briefly unavailable.'
+          : p.voiceCatalog.configured
+            ? 'No studio voice is available right now — replies are spoken by this device.'
+            : 'Studio voices aren’t configured — replies are spoken by this device.';
+  const dictationGroups = mediaGroups(p.catalogProviders, 'transcription');
+  const dictationKey = p.dictationPick ? `${p.dictationPick.provider}|${p.dictationPick.model}` : DEVICE_VOICE;
+  const canRecord = recorderSupported();
+  const dictationListed = canRecord && dictationGroups.some((g) => g.models.some((m) => `${g.provider}|${m.id}` === dictationKey));
+  const dictationNote =
+    p.catalogState === 'idle' || p.catalogState === 'loading'
+      ? 'Checking which dictation models are available…'
+      : !canRecord
+        ? 'This browser can’t record for a dictation model — the mic uses this device.'
+        : dictationGroups.length
+          ? 'The mic records up to a minute, then turns it into text. If that fails, this device’s dictation takes over.'
+          : 'No dictation model is available right now — the mic uses this device.';
 
   return (
     <Sheet
@@ -313,31 +358,61 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
           {tab === 'voice' && (
             <>
               <div className="ai-set-block">
-                <label htmlFor={`${uid}-voice`} className="block text-[14px] font-semibold ai-t1 mb-1.5">
+                <p id={`${uid}-voice`} className="block text-[14px] font-semibold ai-t1 mb-1.5">
                   Spoken reply voice
-                </label>
-                <div className="flex items-center gap-2">
-                  <select
-                    id={`${uid}-voice`}
-                    value={p.voicePick}
-                    onChange={(e) => p.onVoicePick(e.target.value)}
-                    aria-label="Spoken reply voice"
-                    className="ai-field flex-1 min-w-0 px-2.5 py-2 text-[13px] font-semibold outline-none ai-t1"
+                </p>
+                {/* 10.3 — this device's voice, then every voice of every speech
+                    model, grouped by provider. Nothing is listed unless the
+                    server serves it. */}
+                <div role="radiogroup" aria-labelledby={`${uid}-voice`} className="ai-voice-list" onKeyDown={onRadioKeys}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={pickedKey === DEVICE_VOICE}
+                    tabIndex={pickedKey === DEVICE_VOICE || !pickListed || !voiceProviders.length ? 0 : -1}
+                    className="ai-voice-row"
+                    onClick={() => p.onVoicePick(DEVICE_VOICE)}
                   >
-                    <option value={DEVICE_VOICE}>This device’s voice</option>
-                    {/* One option per served speech model × persona. Nothing is
-                        listed unless the key actually serves it, so a choice
-                        here can never point at a model that is not there. */}
-                    {(p.voiceCatalog?.models ?? []).map((m) => (
-                      <optgroup key={m.id} label={m.label}>
-                        {(p.voiceCatalog?.personas ?? []).map((pv) => (
-                          <option key={`${m.id}|${pv.id}`} value={`${m.id}|${pv.id}`}>
-                            {pv.label} · {pv.tone}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+                    <span className="ai-voice-radio" aria-hidden />
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-semibold ai-t1">Device voice</span>
+                      <span className="block text-[12px] ai-t3">Default · works offline</span>
+                    </span>
+                  </button>
+                  {voiceProviders.map((vp) => (
+                    <div key={vp.id} role="group" aria-labelledby={`${uid}-vp-${vp.id}`} className="ai-voice-provider">
+                      <p className="ai-voice-heading">
+                        <ProviderLogo provider={vp.id} size={16} />
+                        <span id={`${uid}-vp-${vp.id}`}>{vp.label}</span>
+                      </p>
+                      {vp.models.map((m) => (
+                        <div key={m.id} role="group" aria-label={`${m.name} voices`} className="ai-voice-model">
+                          <p className="ai-voice-model-name">{m.name}</p>
+                          <div className="ai-voice-chips">
+                            {m.voices.map((v) => {
+                              const key = formatVoicePick({ provider: vp.id, model: m.id, voice: v });
+                              return (
+                                <button
+                                  key={v}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={pickedKey === key}
+                                  aria-label={`${voiceLabel(v)} · ${m.name} · ${vp.label}`}
+                                  tabIndex={pickedKey === key ? 0 : -1}
+                                  className={cn('ai-chip ai-voice-chip', pickedKey === key && 'ai-chip-solid')}
+                                  onClick={() => p.onVoicePick(key)}
+                                >
+                                  {voiceLabel(v)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 mt-2">
                   <button
                     type="button"
                     disabled={!readAloudSupported()}
@@ -355,6 +430,59 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                 label="Read replies aloud automatically"
                 hint="Each finished reply is spoken in the voice above. Tap the speaker on a reply to stop."
               />
+              {/* 10.3 — what the composer's mic uses. Live voice chat always
+                  listens on this device. */}
+              <div className="ai-set-block">
+                <p id={`${uid}-dict`} className="block text-[14px] font-semibold ai-t1 mb-1.5">
+                  Dictation
+                </p>
+                <div role="radiogroup" aria-labelledby={`${uid}-dict`} className="ai-voice-list" onKeyDown={onRadioKeys}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={dictationKey === DEVICE_VOICE}
+                    tabIndex={dictationKey === DEVICE_VOICE || !dictationListed ? 0 : -1}
+                    className="ai-voice-row"
+                    onClick={() => p.onDictationPick(null)}
+                  >
+                    <span className="ai-voice-radio" aria-hidden />
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-semibold ai-t1">Device</span>
+                      <span className="block text-[12px] ai-t3">Default · words appear as you speak</span>
+                    </span>
+                  </button>
+                  {canRecord &&
+                    dictationGroups.map((g) => (
+                      <div key={g.provider} role="group" aria-labelledby={`${uid}-dp-${g.provider}`} className="ai-voice-provider">
+                        <p className="ai-voice-heading">
+                          <ProviderLogo provider={g.provider} size={16} />
+                          <span id={`${uid}-dp-${g.provider}`}>{g.label}</span>
+                        </p>
+                        {g.models.map((m) => {
+                          const key = `${g.provider}|${m.id}`;
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={dictationKey === key}
+                              tabIndex={dictationKey === key ? 0 : -1}
+                              className="ai-voice-row"
+                              onClick={() => p.onDictationPick({ provider: g.provider, model: m.id, name: m.name })}
+                            >
+                              <span className="ai-voice-radio" aria-hidden />
+                              <span className="min-w-0">
+                                <span className="block text-[14px] font-semibold ai-t1 truncate">{m.name}</span>
+                                {m.maker && <span className="block text-[12px] ai-t3 truncate">{m.maker}</span>}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                </div>
+                <p className="mt-1.5 text-[13px] ai-t3 leading-snug">{dictationNote}</p>
+              </div>
             </>
           )}
 

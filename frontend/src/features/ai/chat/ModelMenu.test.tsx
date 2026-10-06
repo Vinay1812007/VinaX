@@ -126,3 +126,12 @@ describe('ModelMenu', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 });
+
+describe('ModelMenu — Runs code (10.3)', () => {
+  it('tags the chat models their provider lists under the code tool, and no others', () => {
+    const withTools: Provider[] = PROVIDERS.map((p) => (p.id === 'nvidia' ? { ...p, tools: [{ id: 'code_execution', name: 'Code execution', models: ['lab/alpha-70b'] }] } : p));
+    mount({ providers: withTools });
+    const tagged = screen.getAllByRole('option').filter((o) => within(o).queryByText('Runs code'));
+    expect(tagged.map((o) => within(o).getByText(/Alpha|Big|Small/).textContent)).toEqual(['Alpha 70B']);
+  });
+});
