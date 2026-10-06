@@ -4,7 +4,7 @@ import { fetchLrclibLyrics } from '@/services/lyrics/lrclib';
 /**
  * v5.16.0 — per-chat reply preferences (language, style) and the song
  * context block. Each becomes a leading "SYSTEM RULE" turn, the same path
- * Think/Research already use, so no server contract changes.
+ * Think already uses, so no server contract changes.
  */
 export const REPLY_LANGS: Array<{ id: string; label: string }> = [
   { id: 'auto', label: 'Auto' },

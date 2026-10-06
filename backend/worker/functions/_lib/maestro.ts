@@ -54,36 +54,6 @@ interface ChatPayload {
   response_format?: { type?: unknown } | null;
   reasoning_effort?: unknown;
   stream?: unknown;
-  /** 8.1.0 — ask the provider to ground the answer in its own live web search (native modes only). */
-  grounded?: unknown;
-}
-
-/** 8.1.0 — a page the provider grounded the answer on (title + url), as its native answer lists them. */
-export interface GroundingSource {
-  title: string;
-  url: string;
-}
-
-/** The provider's ` ```json ` fences and citation markers, removed from a grounded answer. */
-export function cleanGroundedText(text: string): string {
-  return text.replace(/\[\d+(?:,\s*\d+)*\]/g, '').replace(/[ \t]+\n/g, '\n');
-}
-
-/** Grounding sources out of a native answer (or streamed chunk). */
-export function groundingSources(answer: NativeAnswer): GroundingSource[] {
-  const chunks = answer.candidates?.[0]?.groundingMetadata?.groundingChunks;
-  if (!Array.isArray(chunks)) return [];
-  const out: GroundingSource[] = [];
-  const seen = new Set<string>();
-  for (const c of chunks) {
-    const web = c && typeof c === 'object' ? (c as { web?: { uri?: unknown; title?: unknown } }).web : undefined;
-    const url = typeof web?.uri === 'string' ? web.uri : '';
-    if (!/^https?:\/\//.test(url) || seen.has(url)) continue;
-    seen.add(url);
-    out.push({ title: typeof web?.title === 'string' ? web.title.slice(0, 120) : '', url });
-    if (out.length >= 8) break;
-  }
-  return out;
 }
 
 const textOf = (content: unknown): string => {
@@ -102,11 +72,9 @@ export function toNativeRequest(payload: ChatPayload, withThinking = true): Reco
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: textOf(m.content) || ' ' }] }));
   const generationConfig: Record<string, unknown> = {};
-  const grounded = payload.grounded === true;
   if (typeof payload.temperature === 'number') generationConfig.temperature = payload.temperature;
   if (typeof payload.max_tokens === 'number') generationConfig.maxOutputTokens = payload.max_tokens;
-  // The provider refuses JSON mode together with its search tool; a grounded caller parses the text itself (extractJson).
-  if (!grounded && payload.response_format && payload.response_format.type === 'json_object') generationConfig.responseMimeType = 'application/json';
+  if (payload.response_format && payload.response_format.type === 'json_object') generationConfig.responseMimeType = 'application/json';
   const effort = typeof payload.reasoning_effort === 'string' ? payload.reasoning_effort : 'low';
   if (withThinking) {
     // A tiny answer (a health ping) must not spend its whole ceiling thinking: no budget then.
@@ -118,12 +86,11 @@ export function toNativeRequest(payload: ChatPayload, withThinking = true): Reco
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     contents: contents.length ? contents : [{ role: 'user', parts: [{ text: ' ' }] }],
     generationConfig,
-    ...(grounded ? { tools: [{ google_search: {} }] } : {}),
   };
 }
 
 interface NativeAnswer {
-  candidates?: Array<{ content?: { parts?: Array<{ text?: unknown; thought?: unknown }> }; finishReason?: unknown; groundingMetadata?: { groundingChunks?: unknown } }>;
+  candidates?: Array<{ content?: { parts?: Array<{ text?: unknown; thought?: unknown }> }; finishReason?: unknown }>;
   usageMetadata?: { promptTokenCount?: unknown; candidatesTokenCount?: unknown; thoughtsTokenCount?: unknown };
 }
 
@@ -134,13 +101,10 @@ export function fromNativeAnswer(answer: NativeAnswer, model: string): Record<st
   const u = answer.usageMetadata;
   const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   const finish = typeof cand?.finishReason === 'string' ? cand.finishReason.toLowerCase() : 'stop';
-  const sources = groundingSources(answer);
   return {
     model,
     choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: finish === 'max_tokens' ? 'length' : finish }],
     ...(u ? { usage: { prompt_tokens: num(u.promptTokenCount), completion_tokens: num(u.candidatesTokenCount) + num(u.thoughtsTokenCount) } } : {}),
-    // Additive: OpenAI-shaped readers ignore it; the chat route lifts it into its meta frame.
-    ...(sources.length ? { vinax_sources: sources } : {}),
   };
 }
 
@@ -155,16 +119,14 @@ const json = (body: unknown, status = 200): Response => new Response(JSON.string
 function asSse(body: Record<string, unknown>): Response {
   const choices = body.choices as Array<{ message?: { content?: string } }> | undefined;
   const text = choices?.[0]?.message?.content ?? '';
-  const tail = body.vinax_sources ? `data: ${JSON.stringify({ choices: [], vinax_sources: body.vinax_sources })}\n\n` : '';
-  const chunks = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n${body.usage ? `data: ${JSON.stringify({ choices: [], usage: body.usage })}\n\n` : ''}${tail}data: [DONE]\n\n`;
+  const chunks = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n${body.usage ? `data: ${JSON.stringify({ choices: [], usage: body.usage })}\n\n` : ''}data: [DONE]\n\n`;
   return new Response(chunks, { status: 200, headers: { 'content-type': 'text/event-stream' } });
 }
 
 /**
  * 8.1.0 — the native streaming call (`streamGenerateContent?alt=sse`),
  * rewritten on the fly into OpenAI-shaped SSE (`choices[0].delta.content`),
- * with thought parts dropped, usage on the last chunk and the grounding
- * sources as one trailing `vinax_sources` frame. So the chat route streams
+ * with thought parts dropped and usage on the last chunk. So the chat route streams
  * this lane exactly like every other, token by token.
  */
 function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
@@ -172,7 +134,6 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
   const encoder = new TextEncoder();
   let buf = '';
   let usage: Record<string, unknown> | null = null;
-  const sources = new Map<string, GroundingSource>();
   const frame = (obj: unknown): Uint8Array => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
   const handle = (line: string, controller: TransformStreamDefaultController<Uint8Array>): void => {
     if (!line.startsWith('data:')) return;
@@ -187,7 +148,6 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
     const parts = j.candidates?.[0]?.content?.parts ?? [];
     const text = parts.filter((p) => p.thought !== true).map((p) => (typeof p.text === 'string' ? p.text : '')).join('');
     if (text) controller.enqueue(frame({ choices: [{ delta: { content: text } }] }));
-    for (const s of groundingSources(j)) sources.set(s.url, s);
     const u = j.usageMetadata;
     if (u && typeof u.promptTokenCount === 'number') {
       const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -208,7 +168,6 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
       flush(controller) {
         if (buf.trim()) handle(buf.trim(), controller);
         if (usage) controller.enqueue(frame({ choices: [], usage }));
-        if (sources.size) controller.enqueue(frame({ choices: [], vinax_sources: [...sources.values()] }));
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       },
     }),
@@ -218,13 +177,11 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
 async function tryMode(mode: MaestroMode, key: string, model: string, payload: ChatPayload, signal?: AbortSignal): Promise<Response> {
   const stream = payload.stream === true;
   if (mode === 'openai') {
-    // The OpenAI-compatible endpoint streams OpenAI-shaped SSE itself; grounding is a native-only tool.
-    const { grounded: _g, ...rest } = payload;
-    void _g;
+    // The OpenAI-compatible endpoint streams OpenAI-shaped SSE itself.
     return fetch(OPENAI_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({ ...rest, model, stream }),
+      body: JSON.stringify({ ...payload, model, stream }),
       signal,
     });
   }

@@ -58,15 +58,6 @@ export default function PrivacyPage() {
           Voice chat and mic dictation use your device&rsquo;s speech engine — in supporting browsers and in the
           Android app, speech is recognised on your device — and VinaX never stores audio.
         </p>
-        <p>
-          When VinaX AI searches the web (Web search or Research is on, or the AI decides it needs current
-          information), VinaX&rsquo;s server sends the search words — your question, or words the AI chose — to the
-          sources it asks: VinaX&rsquo;s own web search service (which passes them on to public search engines), a keyed
-          web search service when one is configured, and a public online encyclopedia&rsquo;s search. Those requests come from our server, not from your device, and
-          carry nothing else about you. When VinaX Maestro answers, it uses its own provider&rsquo;s live search
-          instead. Switching Web search on also wakes VinaX&rsquo;s search service in advance; that wake-up call carries
-          no search words and nothing about you.
-        </p>
         <H>Listen Together</H>
         <p>
           Rooms are ephemeral: a room code, first names, and the shared queue exist while the session lives and are

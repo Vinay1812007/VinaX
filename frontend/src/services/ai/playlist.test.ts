@@ -16,7 +16,7 @@ vi.mock('@/services/ai/embeddings', async (importActual) => {
   return { cosine: actual.cosine, activeEmbeddingModel: () => null, embedQueryDetailed: async () => null, embedSongs: async () => undefined, getCachedEmbedding: () => null };
 });
 
-import { failureReason, gatherCataloguePool, generatePlaylist, loadAvoidTitles, playlistErrorCopy, gatherDiscoveries, playlistRound, POOL_PAGES, POOL_SEARCHES, recordAvoidTitles, resetPlaylistRounds, resolveSuggestions, wantsCurrent } from './playlist';
+import { failureReason, gatherCataloguePool, generatePlaylist, loadAvoidTitles, playlistErrorCopy, playlistRound, POOL_PAGES, POOL_SEARCHES, recordAvoidTitles, resetPlaylistRounds, resolveSuggestions } from './playlist';
 import { exposureLedger, recordExposure, resetExposure } from '@/services/recommendation/exposure';
 import { songKey } from '@/services/recommendation/songIdentity';
 import { catalogQueries, parseMusicIntent } from './musicIntent';
@@ -400,68 +400,6 @@ describe('9.1 — locked tracks, single-track replacement and "fewer repeats"', 
     recordExposure(all.slice(0, 8), 'shown', Date.now() - 20 * 3_600_000);
     const strict = await gatherCataloguePool(parseMusicIntent('telugu party'), ['telugu'], [], [], undefined, { fewerRepeats: true });
     expect(strict).toHaveLength(2);
-  });
-});
-
-describe('9.1 — live-web discoveries in the playlist pool', () => {
-  const lang = (id: string, language: string, title = id): Song => ({ ...song(id, title), language, artists: [] }) as unknown as Song;
-
-  it('asks for discoveries only when the request is about current music', () => {
-    for (const p of ['latest telugu songs', 'new releases this month', 'what is charting now', 'trending hindi 2026', 'songs just released']) {
-      expect(wantsCurrent(parseMusicIntent(p), p)).toBe(true);
-    }
-    for (const p of ['90s telugu melodies', 'sad songs for a rainy evening', 'arijit singh romantic', 'workout playlist']) {
-      expect(wantsCurrent(parseMusicIntent(p), p)).toBe(false);
-    }
-  });
-
-  it('puts a discovery in the pool ahead of catalogue results', async () => {
-    const discovered = lang('web-1', 'telugu', 'Brand New Song');
-    vi.mocked(getSong).mockResolvedValue(discovered);
-    vi.mocked(searchSongsPage).mockResolvedValue([lang('cat-1', 'telugu', 'Catalogue One')]);
-    vi.stubGlobal('fetch', async () => ({
-      ok: true,
-      json: async () => ({
-        state: 'ok', stale: false, evidenceAt: new Date().toISOString(), region: 'IN', language: 'telugu', intent: 'new-releases', note: 'ok',
-        items: [{ catalogId: 'web-1', title: 'Brand New Song', artist: 'A', language: 'telugu', matchConfidence: 1, sourceType: 'release', rank: null,
-          evidence: [{ url: 'https://label.example/x', title: 'Out now', sourceType: 'release', observedAt: new Date().toISOString(), publishedAt: null, period: null }] }],
-      }),
-    }) as unknown as Response);
-    const out = await gatherDiscoveries(parseMusicIntent('latest telugu songs'), ['telugu'], 'latest telugu songs');
-    vi.unstubAllGlobals();
-    expect(out.map((s) => s.id)).toEqual(['web-1']);
-  });
-
-  it('asks for nothing, and costs nothing, for a request that is not about current music', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    const out = await gatherDiscoveries(parseMusicIntent('90s telugu melodies'), ['telugu'], '90s telugu melodies');
-    vi.unstubAllGlobals();
-    expect(out).toEqual([]);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('falls back to nothing when discovery is unavailable — never a false "current" claim', async () => {
-    vi.stubGlobal('fetch', async () => ({ ok: false, json: async () => ({}) }) as unknown as Response);
-    expect(await gatherDiscoveries(parseMusicIntent('latest telugu songs'), ['telugu'], 'latest telugu songs')).toEqual([]);
-    vi.unstubAllGlobals();
-    vi.stubGlobal('fetch', async () => { throw new Error('offline'); });
-    expect(await gatherDiscoveries(parseMusicIntent('latest telugu songs'), ['telugu'], 'latest telugu songs')).toEqual([]);
-    vi.unstubAllGlobals();
-  });
-
-  it('leaves out a discovery in the wrong language, or one the catalogue will not serve', async () => {
-    vi.mocked(getSong).mockResolvedValue(null as unknown as Song);
-    vi.stubGlobal('fetch', async () => ({
-      ok: true,
-      json: async () => ({
-        state: 'ok', stale: false, evidenceAt: new Date().toISOString(), region: 'IN', language: 'telugu', intent: 'new-releases', note: 'ok',
-        items: [{ catalogId: 'gone', title: 'Vanished', artist: 'A', language: 'telugu', matchConfidence: 1, sourceType: 'release', rank: null,
-          evidence: [{ url: 'https://label.example/x', title: 'Out now', sourceType: 'release', observedAt: new Date().toISOString(), publishedAt: null, period: null }] }],
-      }),
-    }) as unknown as Response);
-    expect(await gatherDiscoveries(parseMusicIntent('latest telugu songs'), ['telugu'], 'latest telugu songs')).toEqual([]);
-    vi.unstubAllGlobals();
   });
 });
 

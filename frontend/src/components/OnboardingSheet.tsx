@@ -110,7 +110,7 @@ const TOUR: TourSlide[] = [
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Ask VinaX AI',
     lines: [
-      'Chat, search the web, play songs from a reply.',
+      'Chat, ask anything, play songs from a reply.',
       'Messages go to the AI service; your library stays here.',
     ],
   },

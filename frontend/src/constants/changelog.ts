@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '10.2.0': {
+    title: 'VinaX AI, without web search',
+    changes: [
+      { type: 'improved', text: 'Web search is gone from VinaX AI. The Web search and Research switches, the source links under answers and the automatic look-ups for news and new releases have all been removed, so nothing you ask is sent off to search the web. VinaX AI answers from what it knows and says plainly when something may have changed since.' },
+      { type: 'improved', text: 'Agent mode and its step-by-step activity list are gone too. They only existed to show the web searches some engines ran by themselves, and those engines are no longer offered in the model menu.' },
+      { type: 'improved', text: 'Suggestions on Search, the AI DJ, AI Playlist, Radio and Home no longer search the web for new releases. They come from the VinaX catalogue, the public charts and your own listening, so the “Current now” shelf on Home has been retired.' },
+    ],
+  },
   '10.1.0': {
     title: 'Glass, Flow, and search that answers as you type',
     changes: [

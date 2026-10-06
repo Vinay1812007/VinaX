@@ -23,8 +23,8 @@ All paths below are relative to `frontend/src/`.
 | Surface policy (9.0): how each surface treats songs just heard, skipped or shown elsewhere | `services/recommendation/surfacePolicy.ts` | Pure; read per Home visit |
 | Exposure ledger (9.1): one memory of what was shown, queued, played, completed, skipped, liked, disliked or replayed | `services/recommendation/exposure.ts` | `localStorage`; 600 songs, 45-day TTL |
 | Song snoozes (9.1): "not this song, for a while" | `services/recommendation/exposure.ts` | `localStorage`; 7/14/30 days, expires itself |
-| Verified-trend signal (7.2) and live-web discovery signal (9.1), both read from a snapshot and never waited for | `services/trends/signal.ts`, `services/discovery/signal.ts` | In memory; refreshed in the background |
-| Evidence behind an evidence-backed pick (9.1): the chart or page, and when it was observed | `store/evidenceStore.ts` | In memory only |
+| Verified-trend signal (7.2), read from a snapshot and never waited for. (9.1's live-web discovery signal was removed in 10.2) | `services/trends/signal.ts` | In memory; refreshed in the background |
+| Evidence behind an evidence-backed pick (9.1): the chart, and when it was observed | `store/evidenceStore.ts` | In memory only |
 | Home refresh policy (9.0): when Home builds itself again | `features/home/homeRefresh.ts` | In memory; one generation per refresh or half hour |
 
 ## How listening becomes taste
@@ -94,7 +94,6 @@ Every automatic change to the queue — a continuation, an AI refinement, the ad
 | `favorite-album` | The rest of up to 2 albums the listener has favourited songs from |
 | `trending` | A search for the seed's language and genre (15), plus trending seeds for the listener's top 2 and first 3 pinned languages (**9.1: two pages each**, 15 per page, on a 6-page rotation). With no language signal at all the pool falls back to two default languages. **This is a catalogue search for popular-sounding words and carries no outside evidence** — since 9.1 its reason says "Popular in the catalogue for your languages", never "trending". |
 | `verified-trend` | **9.1:** up to 6 songs an outside chart or editorial source actually named, matched to catalogue ids by the server (`/api/trends`) and fetched by exact id — no search, so there is no chance of resolving to a different song. Salt-rotated across the chart, cached 30 minutes, skipped entirely for a language the stretch could not play. Before 9.1 a chart entry could only add a bonus to a song some other source had already returned, so a current song the catalogue missed was unreachable. |
-| `web-discovery` | **9.1:** up to 4 songs a current web page named, resolved to real recordings by the server (`/api/discover`, see [trends.md](trends.md)). Same exact-id lookup; weaker evidence than a measured chart, so a lower boost and a different reason. |
 | `intent` | Two pages of a catalogue search for the active tune or pinned mood, in the queue's language (20 each). Only present when an intent is active. |
 | `album` | 8.2: the rest of the seed's own album (the same film or record, usually the same composer), up to 12. 9.0: also the album of the song the stretch follows (the queue's last song, the *anchor*), when that is another song, up to 8 |
 | `related-artist` | 8.2: popular songs by artists related to the seed's lead artist, up to 12 (9.0: and to the anchor's lead artist, up to 8): first the artists featured on the seed, then the lead artist's related artists — the catalogue's own similar artists when its artist page lists them, then everyone co-credited on the lead artist's top songs, most often first — salt-rotated among the first four. Two artists, six songs each, fetched one after another. The related list is cached per artist for 30 minutes (50 artists). |
@@ -213,7 +212,7 @@ Each candidate also receives a source boost:
 | `explore` | 0.08 |
 | `trending` | 0.06 |
 
-9.1 adds two evidence-backed sources: `verified-trend` 0.12 (above the catalogue's own `trending` search, which has no evidence; below the listener's stated intent and the seed's own neighbourhood — real evidence that a song is current is evidence about the world, not about this listener) and `web-discovery` 0.09. Their reasons are `popular-now` ("On a verified chart") and `web-evidence` ("Reported by …"); `store/evidenceStore.ts` carries the specific source and, for a web discovery, the page itself, which the track menu offers as "Open the source".
+9.1 adds an evidence-backed source, `verified-trend` 0.12 (above the catalogue's own `trending` search, which has no evidence; below the listener's stated intent and the seed's own neighbourhood — real evidence that a song is current is evidence about the world, not about this listener). Its reason is `popular-now` ("On a verified chart"); `store/evidenceStore.ts` carries the specific chart. 9.1 also added `web-discovery` (0.09, songs a current web page named, reason `web-evidence`); 10.2 removed it with the rest of web search.
 
 8.2 adds four sources and their boosts: `proven` 0.12, `album` 0.10, `related-artist` 0.10, `genre` 0.07. Their reasons are `proven`, `album`, `similar-artist` and `genre`; the first three name what they came from (the earlier pick, the seed's title, the seed's lead artist). When one of them, `taste` or `served` is a song's top reason, "Why this song?" (`explanations.ts`) reads: “Like “…”, which you enjoyed before”, “From the same album as “…””, “By an artist close to …”, “Close to the songs you love”, or “Held back a little — you were shown this recently”.
 
@@ -443,7 +442,7 @@ your own music, and Recently Played *is* the repeats.
 
 ## Home shelves
 
-`buildRecommendations(ctx)` gathers the same candidate sources without a seed, enriches, ranks, moves identities the exposure ledger says are still cooling behind the rest, and assembles shelves in `mixes.ts`. **9.1** also puts the ledger's size and the trend/discovery snapshot sizes in the memo key: before, the ten-minute memo could hand back the very shelves whose songs had just been played, and a chart that arrived mid-window changed nothing. On a profile with at least five plays the optional AI re-rank may reorder the top 30. The result is memoised for ten minutes per profile state. Every song placed on a shelf gets a plain-language reason for the track menu's "Why this song?".
+`buildRecommendations(ctx)` gathers the same candidate sources without a seed, enriches, ranks, moves identities the exposure ledger says are still cooling behind the rest, and assembles shelves in `mixes.ts`. **9.1** also puts the ledger's size and the trend snapshot's size in the memo key: before, the ten-minute memo could hand back the very shelves whose songs had just been played, and a chart that arrived mid-window changed nothing. On a profile with at least five plays the optional AI re-rank may reorder the top 30. The result is memoised for ten minutes per profile state. Every song placed on a shelf gets a plain-language reason for the track menu's "Why this song?".
 
 ### When Home builds itself again (9.0)
 

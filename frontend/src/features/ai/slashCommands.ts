@@ -17,7 +17,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: 'mood', arg: 'mood', hint: 'Play songs for a mood — "/mood chill"' },
   { cmd: 'summary', hint: 'Summarise this conversation' },
   { cmd: 'think', hint: 'Toggle Think (deeper reasoning)' },
-  { cmd: 'web', hint: 'Toggle live web search' },
   { cmd: 'prompts', hint: 'Open your saved prompts' },
   { cmd: 'export', hint: 'Export this chat' },
   { cmd: 'clear', hint: 'Start a new chat' },

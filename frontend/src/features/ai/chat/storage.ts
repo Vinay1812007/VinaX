@@ -4,11 +4,14 @@
  * string preferences the chat keeps. No React.
  *
  * Persisted keys are unchanged from earlier builds (`vinax_ai_chats_v1` and
- * the `vinax.ai*` preferences); a message may now also carry `steps`, which is
- * optional and ignored by anything that does not know it.
+ * the `vinax.ai*` preferences).
+ *
+ * 10.2 — VinaX AI no longer searches the web, so a message no longer carries
+ * `sources`, `sourcePreviews` or agent `steps`. Chats saved by an older build
+ * still hold them; they are dropped when the chats are read, so the next save
+ * writes the device clean, and an import never revives them.
  */
-import { cleanStep } from './streamReducer';
-import type { AgentStep, Conversation, Msg } from './types';
+import type { Conversation, Msg } from './types';
 
 export const STORE_KEY = 'vinax_ai_chats_v1';
 export const MAX_STORED_CHATS = 50;
@@ -25,12 +28,30 @@ export const freshChat = (): Conversation => ({
   updatedAt: Date.now(),
 });
 
+/** Message fields earlier builds stored and 10.2 retired (see the module note). */
+const RETIRED_MSG_FIELDS = ['sources', 'sourcePreviews', 'steps'] as const;
+
+/** 10.2 — a stored chat without the retired fields (see the module note). */
+function dropRetiredFields(c: Conversation): Conversation {
+  if (!c || !Array.isArray(c.messages)) return c;
+  if (!c.messages.some((m) => m && RETIRED_MSG_FIELDS.some((k) => k in m))) return c;
+  return {
+    ...c,
+    messages: c.messages.map((m) => {
+      if (!m || !RETIRED_MSG_FIELDS.some((k) => k in m)) return m;
+      const copy: Record<string, unknown> = { ...m };
+      for (const k of RETIRED_MSG_FIELDS) delete copy[k];
+      return copy as unknown as Msg;
+    }),
+  };
+}
+
 export function loadChats(): Conversation[] {
   if (typeof localStorage === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORE_KEY);
     const arr = raw ? (JSON.parse(raw) as Conversation[]) : [];
-    return Array.isArray(arr) ? arr : [];
+    return Array.isArray(arr) ? arr.map(dropRetiredFields) : [];
   } catch {
     return [];
   }
@@ -181,24 +202,6 @@ function reviveMsg(raw: unknown): Msg | null {
   const r = raw as Record<string, unknown>;
   if ((r.role !== 'user' && r.role !== 'assistant') || typeof r.content !== 'string') return null;
   const m: Msg = { role: r.role, content: r.content.slice(0, MAX_IMPORT_TEXT) };
-  if (Array.isArray(r.sources)) {
-    const src = r.sources.filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u)).slice(0, 12);
-    if (src.length) m.sources = src;
-  }
-  // 9.1.0 — source previews, each field checked. An import is a file from anywhere.
-  if (Array.isArray(r.sourcePreviews)) {
-    const previews = r.sourcePreviews
-      .map((raw) => {
-        const p = raw as { url?: unknown; title?: unknown; snippet?: unknown } | null;
-        if (!p || typeof p !== 'object' || typeof p.url !== 'string' || !/^https:\/\//i.test(p.url)) return null;
-        const title = typeof p.title === 'string' ? p.title.slice(0, 200) : '';
-        const snippet = typeof p.snippet === 'string' ? p.snippet.slice(0, 300) : '';
-        return title || snippet ? { url: p.url, title, snippet } : null;
-      })
-      .filter((p): p is { url: string; title: string; snippet: string } => p !== null)
-      .slice(0, 12);
-    if (previews.length) m.sourcePreviews = previews;
-  }
   if (Array.isArray(r.images)) {
     // Only inline pictures the chat itself produced; '' is the placeholder a
     // stored chat keeps where an image used to be.
@@ -216,10 +219,6 @@ function reviveMsg(raw: unknown): Msg | null {
   if (Array.isArray(r.followups)) {
     const f = r.followups.filter((t): t is string => typeof t === 'string').map((t) => t.slice(0, 200)).slice(0, 3);
     if (f.length) m.followups = f;
-  }
-  if (Array.isArray(r.steps)) {
-    const steps = r.steps.map(cleanStep).filter((s): s is AgentStep => s !== null).slice(0, 12);
-    if (steps.length) m.steps = steps;
   }
   return m;
 }
@@ -303,6 +302,21 @@ export function writePref(key: string, value: string): void {
 export const readFlag = (key: string, fallback: boolean): boolean => readPref(key, fallback ? '1' : '0') === '1';
 export const writeFlag = (key: string, on: boolean): void => writePref(key, on ? '1' : '0');
 
+/** 10.2 — preference keys no build reads any more: "Start in Agent mode"
+ *  went with Agent mode (its only engines browsed the web). Removed from the
+ *  device when the chat opens, so a stale stored "on" can never come back. */
+export const RETIRED_PREF_KEYS = ['vinax.aiAgentStart'] as const;
+
+export function dropRetiredPrefs(): void {
+  for (const key of RETIRED_PREF_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* private mode */
+    }
+  }
+}
+
 /** Preference keys. The first six predate v7.1 and keep their exact names. */
 export const PREF = {
   profile: 'vinax.aiProfile',
@@ -313,7 +327,6 @@ export const PREF = {
   userName: 'vinax.user-name',
   // v7.1
   sendOnEnter: 'vinax.aiSendOnEnter',
-  agentStart: 'vinax.aiAgentStart',
   autoRead: 'vinax.aiAutoRead',
   sidebarCollapsed: 'vinax.aiSidebarCollapsed',
 } as const;

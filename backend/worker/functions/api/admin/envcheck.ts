@@ -24,9 +24,6 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'FCM_SERVICE_ACCOUNT', group: 'Push', required: false, note: 'Android push (FCM v1)' },
   { name: 'GITHUB_TOKEN', group: 'Releases', required: false, note: 'APK release proxy + Releases & CI panel' },
   { name: 'GITHUB_REPO', group: 'Releases', required: false, note: 'owner/repo for releases' },
-  { name: 'SEARXNG_URL', group: 'AI', required: false, note: 'live web search instance — unset means VinaX AI cannot check the web at all' },
-  { name: 'SEARXNG_TOKEN', group: 'AI', required: false, note: 'bearer token the instance requires' },
-  { name: 'BRAVE_API_KEY', group: 'AI', required: false, note: 'keyed web search API (10.1) — the most reliable research source; without it research uses the instance + the encyclopedia' },
   { name: 'NVIDIA_BASE_URL', group: 'AI', required: false, note: 'provider base override' },
   // The owner's 18 AI secrets (2026-09-09 rotation) — one row each, so a key
   // that was never pasted into Cloudflare shows up here instead of silently

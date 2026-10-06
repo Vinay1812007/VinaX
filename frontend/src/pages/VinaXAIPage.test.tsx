@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The chat surface end to end in a DOM, with the network mocked: the empty
- * state, a streamed reply with agent steps, the single model menu wired to
- * what goes on the wire, Agent mode, the settings dialog and delete-with-undo.
+ * state, a streamed reply, the single model menu wired to what goes on the
+ * wire, the settings dialog and delete-with-undo.
  * Deterministic — every request is answered by a canned body.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -39,16 +39,17 @@ const CATALOG = {
       hint: 'Instant answers',
       configured: true,
       models: [
-        { id: 'vendor/agentic', label: 'agentic', provider: 'grq', context: 131072, agent: true },
-        { id: 'vendor/plain-8b', label: 'plain-8b', provider: 'grq', context: 8192, agent: false },
+        { id: 'vendor/agentic', label: 'agentic', provider: 'grq', context: 131072 },
+        { id: 'vendor/plain-8b', label: 'plain-8b', provider: 'grq', context: 8192 },
       ],
     },
-    { id: 'opr', label: 'VinaX OPR ALL', hint: 'Marketplace', configured: true, models: [{ id: 'lab/big:free', label: 'big', provider: 'opr', context: 1000000, agent: false }] },
+    { id: 'opr', label: 'VinaX OPR ALL', hint: 'Marketplace', configured: true, models: [{ id: 'lab/big:free', label: 'big', provider: 'opr', context: 1000000 }] },
   ],
 };
+// 10.2 — an older server may still send sources and step frames: the chat
+// must ignore them (no timeline, no source list).
 const SSE =
-  'data: {"meta":{"model":"vendor/agentic","sources":[]}}\n\n' +
-  'data: {"step":{"tool":"search","label":"Searched the web for “songs”"}}\n\n' +
+  'data: {"meta":{"model":"vendor/agentic","sources":["https://a.example/x"]}}\n\n' +
   'data: {"step":{"tool":"code","label":"Ran code"}}\n\n' +
   'data: {"delta":"Here is a **short** answer."}\n\n' +
   'data: {"delta":"\\n>>> Show an example | Why?"}\n\n' +
@@ -116,26 +117,23 @@ describe('VinaX AI chat', () => {
     expect(catalogCalls).toBe(0);
   });
 
-  it('streams a reply: plain text, follow-ups, reply actions, and the tool timeline folded to one line', async () => {
+  it('streams a reply: plain text, follow-ups and reply actions, with nothing from retired stream fields', async () => {
     mount();
     await sendText('Give me two songs');
     await waitFor(() => expect(document.body.textContent).toContain('short'));
     await waitFor(() => expect(screen.queryByRole('status', { name: 'Thinking' })).toBeNull());
     expect(posted).toHaveLength(1);
-    expect(posted[0]).toMatchObject({ mode: 'auto', web: false });
+    expect(posted[0]).toMatchObject({ mode: 'auto' });
+    expect(posted[0]).not.toHaveProperty('web');
     expect(document.body.textContent).not.toContain('>>>');
     expect(screen.getByRole('button', { name: 'Show an example' })).toBeTruthy();
     const actions = screen.getByRole('group', { name: 'Reply actions' });
     for (const name of ['Copy', 'Regenerate', 'Good response', 'Bad response', 'Branch', 'Pin', 'More actions']) {
       expect(within(actions).getByRole('button', { name })).toBeTruthy();
     }
-    // 10.0 — the tool timeline folds to "Used N tools" and opens on demand.
-    const summary = screen.getByRole('button', { name: /Used 2 tools/ });
-    expect(summary.getAttribute('aria-expanded')).toBe('false');
-    fireEvent.click(summary);
-    expect(summary.getAttribute('aria-expanded')).toBe('true');
-    const steps = within(screen.getByRole('list', { name: 'Tool activity' })).getAllByRole('listitem');
-    expect(steps.map((li) => li.getAttribute('data-status'))).toEqual(['done', 'done']);
+    expect(screen.queryByRole('list', { name: 'Tool activity' })).toBeNull();
+    expect(document.body.textContent).not.toContain('Ran code');
+    expect(document.body.textContent).not.toContain('a.example');
     // The composer is the same element, now docked under the thread.
     expect(box().value).toBe('');
   });
@@ -161,36 +159,12 @@ describe('VinaX AI chat', () => {
     expect(JSON.parse(localStorage.getItem('vinax.aiLastModel') ?? '{}')).toEqual({ mode: 'router', model: 'lab/big:free' });
   });
 
-  it('Agent mode switches to the best agent model, filters the menu, and restores the old model when switched off', async () => {
+  it('has no Agent mode, and clears a stale "Start in Agent mode" left by an older build', async () => {
+    localStorage.setItem('vinax.aiAgentStart', '1');
     mount();
-    const agent = screen.getByRole('button', { name: 'Agent mode' });
-    expect(agent.getAttribute('aria-pressed')).toBe('false');
-    await act(async () => {
-      fireEvent.click(agent);
-    });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Agent mode' }).getAttribute('aria-pressed')).toBe('true'));
-    expect(screen.getByRole('button', { name: 'Model: agentic' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Model: agentic' }));
-    const options = within(await screen.findByRole('listbox', { name: 'Choose agent model' })).getAllByRole('option');
-    expect(options.every((o) => o.textContent?.includes('Agent'))).toBe(true);
-    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Search models' }), { key: 'Escape' });
-    await sendText('find todays news');
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]).toMatchObject({ mode: 'scholar', model: 'vendor/agentic' });
-    fireEvent.click(screen.getByRole('button', { name: 'Agent mode' }));
-    expect(screen.getByRole('button', { name: 'Model: Auto' })).toBeTruthy();
-  });
-
-  it('disables the Agent toggle, with the reason, when no agent model is being served', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ groups: [CATALOG.groups[1]] }), { status: 200 }))));
-    mount();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Agent mode' }));
-    });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Agent mode' }).getAttribute('aria-disabled')).toBe('true'));
-    const btn = screen.getByRole('button', { name: 'Agent mode' });
-    expect(btn.getAttribute('aria-pressed')).toBe('false');
-    expect(btn.getAttribute('title')).toBe('No agent model is available right now');
+    expect(screen.queryByRole('button', { name: 'Agent mode' })).toBeNull();
+    await waitFor(() => expect(localStorage.getItem('vinax.aiAgentStart')).toBeNull());
+    expect(catalogCalls).toBe(0);
   });
 
   it('settings is a modal dialog with real tabs, arrow-key navigation, and every old setting on its old key', async () => {

@@ -54,7 +54,7 @@ Until you arrange Home yourself, it arranges itself: the sections you use most, 
 
 ## Live tutorials
 
-Help lists six guided walkthroughs that run inside the real app and highlight the actual controls: *Play your first song*, *Find any song* (suggestions as you type and the Top result), *Listen Together*, *Ask VinaX AI* (connectors and the tool timeline), *Make it yours* (accents, frosted glass, sound) and *Save and organise*. The first one starts a real song. Leave any tutorial with `Esc` or **Skip**.
+Help lists six guided walkthroughs that run inside the real app and highlight the actual controls: *Play your first song*, *Find any song* (suggestions as you type and the Top result), *Listen Together*, *Ask VinaX AI* (connectors and the model menu), *Make it yours* (accents, frosted glass, sound) and *Save and organise*. The first one starts a real song. Leave any tutorial with `Esc` or **Skip**.
 
 ## How VinaX looks
 

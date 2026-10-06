@@ -34,7 +34,7 @@ function fetchCatalog(): Promise<CatalogGroup[]> {
 
 /**
  * The live model catalogue, on demand. Nothing is fetched until `load()` is
- * first called (the model menu opening, or Agent mode being switched on), and
+ * first called (the model menu opening, or the default-model setting), and
  * a result is reused for five minutes. A failure is reported as a failure —
  * the menu says the list is unavailable rather than showing an invented one,
  * and the pinned engines keep working.

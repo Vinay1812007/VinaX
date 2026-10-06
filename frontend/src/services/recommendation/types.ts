@@ -37,20 +37,14 @@ export type CandidateSource =
    * bonus to a song some other source had already returned — a chart entry the
    * catalogue searches missed could never be recommended.
    */
-  | 'verified-trend'
-  /**
-   * 9.1.0 — a song found by the shared live-web discovery path (/api/discover)
-   * and then resolved to a real catalogue recording. Evidence (source URL,
-   * kind, when it was observed) rides along on the candidate.
-   */
-  | 'web-discovery';
+  | 'verified-trend';
 
 /**
  * 7.2.0 — which source a song "belongs to" when several found it: the first
  * of these it has. The listener's stated intent wins, then the seed and taste
  * sources, then the broad ones (the order of the scorer's source boosts).
  */
-export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'album', 'favorite-album', 'related-artist', 'style', 'proven', 'verified-trend', 'web-discovery', 'history', 'rediscovery', 'genre', 'explore', 'trending'];
+export const SOURCE_PRIORITY: readonly CandidateSource[] = ['intent', 'related', 'favorite-artist', 'album', 'favorite-album', 'related-artist', 'style', 'proven', 'verified-trend', 'history', 'rediscovery', 'genre', 'explore', 'trending'];
 
 const rank = (s: CandidateSource): number => SOURCE_PRIORITY.indexOf(s);
 const titlesOf = (c: Candidate): string[] => c.seedTitles ?? (c.seedTitle ? [c.seedTitle] : []);
@@ -185,9 +179,7 @@ export type ReasonKind =
   /** 8.3.0 — in (or outside) the style the listener is in: DJ remixes, folk, devotional (./style.ts). */
   | 'style'
   /** 9.1.0 — the song IS a confidently matched entry of a public chart or editorial pick (the 'verified-trend' source). */
-  | 'popular-now'
-  /** 9.1.0 — found by the shared live-web discovery path and resolved to this catalogue recording. */
-  | 'web-evidence';
+  | 'popular-now';
 
 export interface ReasonComponent {
   kind: ReasonKind;
@@ -294,12 +286,6 @@ export interface RecommendationContext {
    * earn a bonus. Each is already matched to a catalogue id by the server.
    */
   trendItems?: readonly { catalogId: string; title: string; artist: string; language: string | null; sourceLabel: string; sourceRank: number }[];
-  /**
-   * 9.1.0 — live-web discoveries (services/discovery/signal.ts): songs a current
-   * web source named, already resolved to catalogue ids by the server, with
-   * their evidence. They enter the pool as the 'web-discovery' source.
-   */
-  webDiscoveries?: readonly { catalogId: string; title: string; artist: string; language: string | null; sourceType: string; rank: number | null }[];
   /**
    * 8.2.0 — a learned song embedding the device already holds (synchronous,
    * never fetches), for the taste term's optional refinement. Absent = the

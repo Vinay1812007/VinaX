@@ -1,6 +1,6 @@
 # Operations
 
-This is the runbook for keeping VinaX running: where secrets live, which scheduled jobs exist, how the service is monitored, the service-level objectives and how they are computed, the failover tests, what to do when the Worker is older than the app, how to roll back, and the owner's search-indexing checklist. Deploying is covered step by step in [../DEPLOYMENT.md](../DEPLOYMENT.md). This is one of the two documents where operational host names and secret names appear, because a maintainer has to type them.
+This is the runbook for keeping VinaX running: where secrets live, which scheduled jobs exist, how the service is monitored, the service-level objectives and how they are computed, the failover tests, what to do when the Worker is older than the app, how to roll back, the owner's search-indexing checklist, and the clean-up left over from retiring web search in 10.2. Deploying is covered step by step in [../DEPLOYMENT.md](../DEPLOYMENT.md). This is one of the two documents where operational host names and secret names appear, because a maintainer has to type them.
 
 ## Production at a glance
 
@@ -41,28 +41,23 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 | Android background push | `FCM_SERVICE_ACCOUNT` | Tokens are stored, nothing is sent ([fcm-push-setup.md](fcm-push-setup.md)) |
 | Identity signing | `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET` | Signed install ids fall back as described in `.env.example` |
 | Scheduled jobs | `CRON_SECRET` (also a repository Actions secret with the same value) | `/api/cron/*` rejects every call |
-| Optional | `SEARXNG_URL` + `SEARXNG_TOKEN` (the owner's web search instance, a Render service — see `deploy/searxng/README.md`), `BRAVE_API_KEY` (10.1: a keyed web search API, the most reliable research source). Research asks these and a keyless encyclopedia search in parallel and keeps only results about the question; with all of them down or off-topic, a research answer honestly reports it could not check the live web. `GITHUB_REPO`, `GITHUB_TOKEN` (Android update source) | The feature is off or rate-limited |
+| Optional | `GITHUB_REPO`, `GITHUB_TOKEN` (Android update source) | The feature is off or rate-limited |
 
-### Web search for VinaX AI (10.1)
+### Retired: web search (10.2)
 
-A research answer (Web search or Research on, or the model asking for a search mid-answer) asks up to three sources at once from the Worker. Only the first two are configured here:
+10.2 removed web search from VinaX: VinaX AI's Web search and Research, the Search-page expert's lookup, live discovery (`/api/discover`), `POST /api/warm-search`, the console's **Web search engine** health row, and the `SEARXNG_URL`, `SEARXNG_TOKEN` and `BRAVE_API_KEY` entries in envcheck and `wrangler.toml` ([ai.md](ai.md#no-live-web-access-102) has the full list). Nothing in the code reads those names any more. The search instance's build files (`deploy/searxng/` and the root `render.yaml`) are gone from the repository; git history has them as of `573e617` (10.1.0) if the instance ever has to be rebuilt.
 
-| Source | Configured by | If unset or down |
-| --- | --- | --- |
-| The owner's search instance | Its address and bearer token, the two names in the **Optional** row above (https; the address may be a `[vars]` entry or a secret; the token is also set on the instance's proxy). The instance must return JSON (`json` in its `search.formats`) | The other sources answer alone |
-| A keyed web search API | `BRAVE_API_KEY` (optional secret: a keyed web search API, free tier about 2,000 queries a month). The most reliable source when set | The instance and the encyclopedia answer |
-| An online encyclopedia's search API | Nothing: keyless, always asked | The other sources answer |
+What only the owner can do, once 10.2's Worker is live:
 
-Only results about the question are kept; if no source returns one, the reply says it could not check the live web. `GET /api/admin/envcheck` lists the instance's two names and `BRAVE_API_KEY` under AI, so a key that was never pasted shows up there.
+1. Delete the Render web service `vinax-search`. It no longer receives any traffic from the Worker.
+2. Remove the DNS record `search.sirimillavinay.online` from the domain's DNS in the hosting dashboard.
+3. Delete the Worker secret that held the instance's token:
+   `npx wrangler secret delete SEARXNG_TOKEN --config backend/worker/wrangler.toml`
+   (if `SEARXNG_URL` was ever set as a secret rather than a `[vars]` entry, delete it the same way).
+4. If `BRAVE_API_KEY` was ever set, delete it too: `npx wrangler secret delete BRAVE_API_KEY --config backend/worker/wrangler.toml`. Cancel the keyed search account behind it if nothing else uses it.
+5. Remove the same names from `backend/worker/.dev.vars` on any machine that has them.
 
-**The instance sleeps.** It runs on a free plan that sleeps after about 15 minutes idle and takes 30–60 s to wake, longer than a search waits (6 s). Two things keep that from costing answers:
-
-- `POST /api/warm-search` (`functions/api/warm-search.ts`). The app calls it, fire and forget, the moment someone switches on Web search or Research in VinaX AI (at most once every two minutes per tab). It answers `204` at once and, in the background, requests the instance's token-free `/healthz` with a 55 s leash. It carries no search words and reveals nothing about the caller or the instance. Rate-limited to 6 a minute per address (per isolate).
-- After a Web search or Research turn on which the instance timed out or could not be reached, or no source returned anything relevant, the chat handler sends the same wake-up in the background.
-
-The first question after a long quiet spell can still miss the instance; with the keyed API or the encyclopedia answering meanwhile, the reply is usually still grounded. To remove the gap entirely, move the instance to a paid plan or ping `/healthz` on a schedule (the instance's README, linked in the Optional row above, weighs both).
-
-**Reading the logs.** Each search logs one line: `[websearch] q_terms=… keyed=off|<n> instance=<status>:<n> encyclopedia=<n> kept=<n> via=<sources>` — counts and statuses, never the search words. `keyed=off` means no key is set; `kept=0` with results from the sources means the relevance gate dropped them all. The keyed API and the encyclopedia also log their own `status=` line on a timeout or an HTTP error. The console's Health panel has a row for the instance only.
+`npx wrangler secret list --config backend/worker/wrangler.toml` shows what is still set.
 
 Non-secret Worker settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext for ten minutes.
 
@@ -231,7 +226,7 @@ Error budget burned = observed failure ÷ allowed failure, capped at 999 %. Over
 
 `backend/worker/__tests__/chaos-failover.test.ts` drives the real `/api/vinaxai` handler with sabotaged upstreams on every CI run:
 
-- healthy primary lane; primary dead at the network level; primary answering `400`; an empty `200` stream; every lane dead (the client gets an honest `engine_unreachable`, never a hang); a model-requested web search with the search instance down;
+- healthy primary lane; primary dead at the network level; primary answering `400`; an empty `200` stream; every lane dead (the client gets an honest `engine_unreachable`, never a hang);
 - stream handling: a body that outlives the header leash is not cut; a stream stuck past the overall budget is cut and flagged `truncated`; an upstream error after partial output is flagged `truncated`.
 
 ## Runbook: the app is newer than the API

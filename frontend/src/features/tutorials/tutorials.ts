@@ -134,15 +134,13 @@ export const TUTORIALS: Tutorial[] = [
   {
     id: 'meet-ai',
     title: 'Ask VinaX AI',
-    blurb: 'The composer, Connectors in the + menu, the model menu, Agent mode, the tool timeline and chat settings.',
+    blurb: 'The composer, Connectors in the + menu, the model menu and chat settings.',
     minutes: 2,
     emoji: '✨',
     steps: [
       { route: '/VinaXAI', target: 'textarea[aria-label="Message VinaX AI"]', title: 'The composer', body: 'Ask anything: writing, code, maths, translation or music. Type / for commands such as /playlist, /now, /lyrics and /summary.', placement: 'top' },
-      { route: '/VinaXAI', target: 'button[aria-label="Attach and tools"]', title: 'Files and connectors', body: 'The + button uploads files and holds Connectors: Web search, Research, Think, Now playing, Memory and Place.', tip: 'The connectors that are on show as chips above the message box.', placement: 'top' },
+      { route: '/VinaXAI', target: 'button[aria-label="Attach and tools"]', title: 'Files and connectors', body: 'The + button uploads files and holds Connectors: Think, Now playing, Memory and Place.', tip: 'The connectors that are on show as chips above the message box.', placement: 'top' },
       { route: '/VinaXAI', target: 'button[aria-label^="Model:"]', title: 'The model menu', body: 'Search every model VinaX can reach. Recent ones come first. Auto, the default, uses VinaX Maestro when available.', placement: 'top' },
-      { route: '/VinaXAI', target: 'button[aria-label="Agent mode"]', title: 'Agent mode', body: 'When on, an agent-capable model can search the web and run code by itself. It is greyed out when none is available.', placement: 'top' },
-      { route: '/VinaXAI', title: 'Watch it work', body: 'Searches, pages read and code runs appear as a timeline while a reply is written, then fold into one line you can reopen.' },
       { route: '/VinaXAI', title: 'Songs you can play', body: 'A “Title — Artist” line in a reply becomes a playable card, with Play all and Save as playlist.' },
       { route: '/VinaXAI', target: 'button[aria-label="Chat settings"]', title: 'Chat settings', body: 'Tabs for General, Replies, Voice, Data and Shortcuts: default model, reply language and style, spoken voice, and your chat storage.', placement: 'bottom' },
     ],

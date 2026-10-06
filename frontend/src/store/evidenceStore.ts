@@ -4,12 +4,10 @@ import { create } from 'zustand';
  * 9.1.0 — where an evidence-backed recommendation came from, per song, so the
  * app can SHOW it and let the listener open it.
  *
- * Two kinds of thing land here, and they are deliberately kept apart:
+ * One kind of thing lands here (10.2 retired the second, page-sourced kind):
  *
  *   chart   a confidently matched entry of a public chart or an editorial pick
  *           (/api/trends). `label` is the owner-configured source name.
- *   web     a song a current web page named, resolved to this recording
- *           (/api/discover). `url` is the page itself.
  *
  * Nothing else may be put here. A catalogue search for popular-sounding words is
  * not evidence, and a song with no row here is simply shown without a source
@@ -18,7 +16,7 @@ import { create } from 'zustand';
  * In memory only: it is a view of the current snapshot, re-filled whenever the
  * signal refreshes, and there is nothing to migrate or persist.
  */
-export type EvidenceKind = 'chart' | 'web';
+export type EvidenceKind = 'chart';
 
 export interface SongEvidence {
   kind: EvidenceKind;

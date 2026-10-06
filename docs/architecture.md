@@ -1,6 +1,6 @@
 # Architecture
 
-This document names the pieces of VinaX and shows how data moves between them: the app shell and its routes, the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, the service worker, the Worker's routes and the owner console. It describes the code as of 10.1: the shell and Home sections were updated for 9.0 and 10.0, the catalogue client for 10.1's allotment, and two sections are new — the Listen Together engine (10.0) and the web search pipeline behind VinaX AI (10.1); the rest has held since 7.2. Deep dives live in [recommendations.md](recommendations.md), [ai.md](ai.md), [data-and-privacy.md](data-and-privacy.md), [design-system.md](design-system.md), [android.md](android.md) and [admin-console.md](admin-console.md).
+This document names the pieces of VinaX and shows how data moves between them: the app shell and its routes, the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, the service worker, the Worker's routes and the owner console. It describes the code as of 10.2: the shell and Home sections were updated for 9.0 and 10.0, the catalogue client for 10.1's allotment, the Listen Together engine is new in 10.0, and 10.2 removed the web search pipeline and the host behind it; the rest has held since 7.2. Deep dives live in [recommendations.md](recommendations.md), [ai.md](ai.md), [data-and-privacy.md](data-and-privacy.md), [design-system.md](design-system.md), [android.md](android.md) and [admin-console.md](admin-console.md).
 
 ## The pieces
 
@@ -34,7 +34,7 @@ This document names the pieces of VinaX and shows how data moves between them: t
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-The frontend is a static build. The Worker owns every dynamic URL on the same domain, so the app calls same-origin paths and needs no cross-origin setup on the web. The Android app runs the same bundle from a local origin, so its clients call the production origin by absolute URL (see `isNativePlatform()` checks in `src/services/ai/*.ts` and `src/services/analytics/telemetry.ts`).
+VinaX deploys as two services: the static site and the Worker. (Until 10.2 there was a third, the owner's web search instance; it is retired, see [operations.md](operations.md#retired-web-search-102).) The frontend is a static build. The Worker owns every dynamic URL on the same domain, so the app calls same-origin paths and needs no cross-origin setup on the web. The Android app runs the same bundle from a local origin, so its clients call the production origin by absolute URL (see `isNativePlatform()` checks in `src/services/ai/*.ts` and `src/services/analytics/telemetry.ts`).
 
 | Layer | Packages (from `frontend/package.json` and `backend/package.json`) |
 | --- | --- |
@@ -186,33 +186,11 @@ A matched module with no handler for the request method answers `405`.
 | Route family | Purpose |
 | --- | --- |
 | `/api/dj`, `/api/curate`, `/api/playlist`, `/api/vinaxai`, `/api/aimodels`, `/api/assistant`, `/api/tts`, `/api/voices`, `/api/lyrics-tools`, `/api/image`, `/api/embed` (8.2) | AI features — see [ai.md](ai.md) |
-| `/api/warm-search` (10.1) | Wakes the owner's web search instance before a research question; see [Web search pipeline](#web-search-pipeline-101) |
 | `/api/cat/*`, `/api/preview`, `/api/trending-searches`, `/api/blocklist` | Catalogue and content |
 | `/api/events`, `/api/feedback`, `/api/geo`, `/api/username`, `/api/handoff`, `/api/room` | Consent-gated telemetry, feedback, coarse region, username claims, device transfer relay, Listen Together rooms |
 | `/api/appconfig`, `/api/experiments`, `/api/announcements`, `/api/site-mode`, `/api/version`, `/api/status`, `/api/apk` | Published client configuration, flags, announcements, maintenance mode, version, status probes, Android update source |
 | `/api/push/*`, `/api/cron/*` | Push subscription and the scheduled jobs the workflows call with `x-cron-secret` |
 | `/api/admin/*` | Owner console data and actions, all behind server-side admin auth — see [admin-console.md](admin-console.md). A failed database read answers `502` with its kind (unavailable, unauthorized, schema missing, bad request), never an empty `200`; every database request has a deadline (`_lib/supabase.ts`). |
-
-## Web search pipeline (10.1)
-
-VinaX AI's live web search is `liveSearch()` in `backend/worker/functions/_lib/websearch.ts`. It runs on the Worker for a chat turn with Web search or Research on (unless the flagship engine answers with its provider's own search), and for a mid-answer `[[FETCH: …]]` step the model asks for. The model-facing side (fencing, citations) is in [ai.md](ai.md#web-search); what leaves the service is in [data-and-privacy.md](data-and-privacy.md#where-a-research-question-goes-101).
-
-```text
-question (+ previous question) ─► searchQueryFor ─► query
-   ├─ keyed web search API     (only with its key; 4.5 s leash)   ┐
-   ├─ the owner's instance     (when configured; 6 s leash)        ├─ in parallel ─► combineResults ─► SearchHit | null
-   └─ encyclopedia search API  (keyless, always; 3.5 s leash)      ┘
-instance timed out or unreachable ─► wake-up in waitUntil ─► the instance's /healthz
-```
-
-1. **The query.** `searchQueryFor(question, previous)` searches the question as asked, unless it is a follow-up: a question with two topic words or fewer, or one that leans on a pronoun or a phrase such as "what about", gets up to six topic words of the previous question put in front of it. Topic words are lower-cased letters and digits of any script (combining marks kept, so Indian-script words stay whole) minus stopwords; Latin words under three letters are dropped. `wantsRecent()` ("latest", "today", "this week", a year from 2020 on…) asks the keyed API for the past month and the instance for its news category too.
-2. **Three sources at once,** each on its own leash, so a lookup costs the slowest leash and never the sum. A source that fails or times out simply contributes nothing.
-3. **The relevance gate.** `combineResults` drops any result whose title, snippet and address share too little with the query's topic words: with one or two topic words at least one must appear; with three or four, half; with five or more, 40 %. A question whose topic words are in a non-Latin script skips the gate (its honest answers are often written in Latin letters), and the engines' ranking is trusted. Results are de-duplicated by address.
-4. **The mix.** Open-web results first; the encyclopedia adds at most two articles beside them, or carries the whole answer (up to eight) when the open web brought nothing relevant. Eight results at most.
-5. **The answer.** Numbered `[n] title / snippet / address` text for the prompt, the addresses for the reply's Sources, a title and snippet preview per source, which sources contributed (`via`) and the instance's status. `null` when nothing relevant survived: the reply must then say it could not check the live web.
-6. **Waking the instance.** The owner's instance sleeps when idle and takes 30–60 s to wake. When, on a Web search or Research turn, it timed out or could not be reached — or no source returned anything relevant — the chat handler wakes it in the background (inside `waitUntil`: a request to its token-free `/healthz` with a 55 s leash), so the next question finds it up. The app also calls `POST /api/warm-search` (fire and forget, at most once every two minutes, `features/ai/chat/endpoints.ts` `warmWebSearch`) the moment Web search or Research is switched on; the route is rate-limited (6 a minute per address), answers `204` at once and does the same ping in the background.
-
-The Search-page music expert's grounding (`songContext`) and live discovery (`/api/discover`) still use only the owner's instance.
 
 ## Owner console
 

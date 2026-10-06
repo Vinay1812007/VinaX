@@ -16,8 +16,6 @@ export interface MessageListProps {
   messages: Msg[];
   busy: boolean;
   speakingId: string | null;
-  /** Agent mode is on for the turn in flight. */
-  agent: boolean;
   handlers: MessageHandlers;
   /**
    * 9.1.0 — called once with the list's own "jump to message i" function, so
@@ -35,7 +33,7 @@ export interface MessageListProps {
  * away and are never mounted until asked for. Mount with `key={chatId}` so
  * the window resets per chat.
  */
-export function MessageList({ chatId, messages, busy, speakingId, agent, handlers, onReady }: MessageListProps): ReactNode {
+export function MessageList({ chatId, messages, busy, speakingId, handlers, onReady }: MessageListProps): ReactNode {
   // Fixed when the chat opens: the window never slides forward under the
   // reader, it only grows — backwards on request, forwards as replies arrive.
   const [start, setStart] = useState(() => windowStart(messages.length));
@@ -107,7 +105,6 @@ export function MessageList({ chatId, messages, busy, speakingId, agent, handler
             busy={busy}
             speaking={speakingId === speakKey}
             speakKey={speakKey}
-            agent={agent && busy && last}
             handlers={handlers}
           />
         );

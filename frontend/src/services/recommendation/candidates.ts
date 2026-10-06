@@ -52,15 +52,13 @@ const MOOD_QUERY: Record<string, string> = { romantic: 'romantic', energetic: 'p
  * lookup drops that entry only.
  */
 export const TREND_RESOLVE = 6;
-/** 9.1.0 — live-web discoveries resolved per gather (the same exact-id lookup). */
-export const DISCOVERY_RESOLVE = 4;
 const TREND_SONG_TTL_MS = 30 * 60_000;
 const TREND_SONG_CAP = 120;
 const trendSongs = new Map<string, { at: number; song: Song | null }>();
 
 /**
- * Resolve evidence-backed entries (verified chart entries, live-web
- * discoveries) to catalogue songs by their catalogue id. One `getSong` per
+ * Resolve evidence-backed entries (verified chart entries) to catalogue songs
+ * by their catalogue id. One `getSong` per
  * entry is EXACT — no search, so there is no chance of quietly resolving to a
  * different song than the evidence named.
  */
@@ -398,19 +396,6 @@ export async function gatherCandidates(ctx: RecommendationContext, opts: GatherO
     // The per-song source name lives in the trend signal's own label map (and in
     // the evidence store); this generic one is what the source BOOST explains.
     }, 'a verified chart');
-  }
-  // 3c. 9.1.0 — live-web discoveries (services/discovery/*): songs a current web
-  // source named, resolved to real recordings by the server. Like the verified
-  // trends above they ENTER the pool; unlike them they come from pages rather
-  // than a measured chart, which is why their source boost is lower and their
-  // "why" line says "reported by", not "charting".
-  if (ctx.webDiscoveries?.length) {
-    const items = ctx.webDiscoveries;
-    add('web-discovery', `n${items.length}`, {
-      key: `wd|${evidenceLanguage ?? ''}|${salt % 4}`,
-      limit: DISCOVERY_RESOLVE,
-      fetch: (_n, signal) => resolveByCatalogId(items, evidenceLanguage, signal, salt, now, DISCOVERY_RESOLVE),
-    }, 'a current web source');
   }
 
   // 4. Trending in the user's languages (also the cold-start backbone).

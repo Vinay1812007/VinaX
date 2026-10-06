@@ -11,20 +11,10 @@ import { memoryBlock } from '../memory';
 import { placeConnectorOn } from '../connectors';
 import { projectBlock, projectById } from '../projects';
 
-/** Time-sensitive questions — "who won today", "202X releases", live scores,
- *  weather — switch web search on for the turn so the reply gets fresh
- *  sources instead of the model's training-time snapshot. The heuristic lives
- *  on the client (not the server) so the listener always sees that a live-web
- *  hop happened. */
-export const FRESH_TRIGGER =
-  /\b(today|tonight|yesterday|this (?:week|month|year|weekend|season)|right now|as of (?:now|today)|breaking(?: news)?|who won|live scores?|box office|standings|weather|price of|stock price|202[6-9]|latest|recently released)\b/i;
-
 const VOICE_RULE =
   'SYSTEM RULE for this voice conversation: every reply is spoken aloud — 1-3 short conversational sentences of plain text, no markdown, no lists, no emojis.';
 const THINK_RULE =
   'SYSTEM RULE for this reply: reason it through privately first, then present a short structured summary of the key steps followed by a clear final answer. Raw chain-of-thought never appears in the reply.';
-const RESEARCH_RULE =
-  'SYSTEM RULE for this reply: research mode. Work from the web results, cross-check at least two independent sources, flag where they disagree, and tie each key fact to the source that backs it.';
 const REGENERATE_RULE =
   'Regenerate your answer to my last question. Take a meaningfully different approach, preserve correct facts, and avoid the songs you just recommended. Deliver the new answer directly.';
 
@@ -32,11 +22,7 @@ export interface TurnSettings {
   /** A live voice chat is running: replies are spoken, other rules step aside. */
   voiceLive: boolean;
   choice: ModelChoice;
-  /** Agent mode is on AND the chosen model is agent-capable. */
-  agent: boolean;
-  web: boolean;
   think: boolean;
-  research: boolean;
   replyLang: string;
   replyStyle: string;
   profile: string;
@@ -50,7 +36,7 @@ export interface TurnInput {
   /** The thread before this turn. */
   conversation: Msg[];
   userMsg: Msg;
-  /** The listener's typed text (link detection, freshness). */
+  /** The listener's typed text (link detection). */
   query: string;
   images: string[];
   /** Regenerate: the reply being replaced. */
@@ -61,7 +47,6 @@ export interface TurnInput {
  *  earlier builds: rule and context messages first, then the thread. */
 export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<Record<string, unknown>> {
   const think = !s.voiceLive && s.think;
-  const research = !s.voiceLive && s.research;
   const prefRule = s.voiceLive ? '' : prefRuleMessage(s.replyLang, s.replyStyle);
   const ctxBlocks: string[] = [];
   if (!s.voiceLive) {
@@ -86,7 +71,6 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
     ...ctxBlocks.filter(Boolean).map(user),
     ...(s.voiceLive ? [user(VOICE_RULE)] : []),
     ...(think ? [user(THINK_RULE)] : []),
-    ...(research ? [user(RESEARCH_RULE)] : []),
     // 9.1.0 — a long thread is trimmed to its recent window, with a digest of
     // the questions that fell outside it, so the opening of a fifty-turn
     // conversation is not silently forgotten (./longThread.ts).
@@ -102,14 +86,11 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
 
   return {
     messages,
-    // Think sends this message to the deep engine — unless an agent model is
-    // doing the work, which must stay on the model the listener chose.
-    mode: s.voiceLive ? 'voice' : think && !s.agent ? 'sage' : s.choice.mode,
+    // Think sends this message to the deep engine.
+    mode: s.voiceLive ? 'voice' : think ? 'sage' : s.choice.mode,
     // Catalogue seats only: the exact model the listener picked. The server
     // re-checks it against the live catalogue; other seats ignore it.
     model: catalogModelForSend(s.choice),
-    // Research always searches, and its multi-source rule is prepended above.
-    web: s.web || research || FRESH_TRIGGER.test(t.query),
     images: t.images,
     // The taste snapshot plus this thread's own memory: everything already
     // recommended in this conversation, so "give me more" reaches into fresh
@@ -122,7 +103,7 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
       ),
     },
     profile: s.profile || undefined,
-    // 9.1.0 — coarse place, so date/time answers and search wording suit the
+    // 9.1.0 — coarse place, so date/time answers suit the
     // listener instead of always assuming IST. `assistantPlace()` returns
     // undefined whenever "Allow region inference" is off AND no manual override
     // is set, so a listener who declined inference sends nothing and the server

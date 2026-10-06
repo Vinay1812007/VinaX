@@ -44,8 +44,6 @@ export function explainReasons(reasons: ReasonComponent[]): string {
       return 'Popular in the catalogue for your languages';
     case 'popular-now':
       return top.detail ? `On ${top.detail}` : 'On a verified chart';
-    case 'web-evidence':
-      return top.detail ? `Reported by ${top.detail}` : 'Found in a current web source';
     case 'region':
       return 'Popular in your region';
     case 'time':
