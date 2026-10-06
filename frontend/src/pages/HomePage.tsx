@@ -35,6 +35,7 @@ import { useRecommendations } from '@/features/recommendations/useRecommendation
 import { HomeHero } from '@/features/home/HomeHero';
 import { HomeFeatures, HomeWelcome } from '@/features/home/HomeWelcome';
 import { ListeningGuide } from '@/features/home/ListeningGuide';
+import { FlowEntryCard } from '@/features/flow/FlowEntryCard';
 import { HomeStudio } from '@/features/home/HomeStudio';
 import { HomeAbout } from '@/features/home/HomeAbout';
 import { composeHomeLayout } from '@/features/home/homeLayout';
@@ -324,6 +325,7 @@ export default function HomePage() {
           />
           {firstVisit && <HomeFeatures />}
           <ListeningGuide />
+          <FlowEntryCard />
 
           {primary.map(renderBlock)}
 
