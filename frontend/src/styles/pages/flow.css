@@ -1,0 +1,400 @@
+/* ============================================================================
+   VinaX 10.1 — Flow: the full-screen, swipeable feed of song previews.
+
+   Imported only by pages/FlowPage.tsx, so it ships in Flow's lazy chunk.
+
+   One card per screen. The song's artwork fills the card twice: blurred and
+   art-tinted as the backdrop, sharp in the middle. Marigold marks the moments
+   that matter (play, a like, the progress line runs Marigold → Rose); every
+   other control is a quiet glass disc. Text sits on an ink scrim in both
+   themes, so the artwork never decides whether it can be read. Motion is off
+   under either reduced-motion switch (the OS setting or html.reduce-motion).
+   ========================================================================= */
+
+.vx-flow {
+  --vxf-scrim: rgb(var(--ink-950) / 0.5);
+  --vxf-disc: rgb(var(--ink-950) / 0.42);
+  --vxf-disc-hover: rgb(var(--ink-950) / 0.62);
+  --vxf-line: rgb(var(--ink-100) / 0.16);
+  position: fixed;
+  inset: 0;
+  /* Above the player bar (40), under toasts (50) and menus/sheets (60+). */
+  z-index: 45;
+  background: rgb(var(--ink-950));
+  color: rgb(var(--ink-100));
+}
+/* Phones keep the tab bar: Flow ends where the dock begins (and covers the mini player). */
+@media (max-width: 767px) {
+  .vx-flow { bottom: calc(var(--bottom-nav-height) + var(--safe-bottom)); }
+}
+
+/* ------------------------------------------------------------- the header */
+.vx-flow-top {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(var(--safe-top) + 10px) 14px 24px;
+  background: linear-gradient(180deg, rgb(var(--ink-950) / 0.55), transparent);
+  pointer-events: none;
+}
+.vx-flow-top > * { pointer-events: auto; }
+.vx-flow-name {
+  flex: 1;
+  margin: 0;
+  font-family: var(--vx-font-display);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+.vx-flow-step { display: flex; gap: 8px; }
+.vx-flow-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--vxf-disc);
+  color: rgb(var(--ink-100));
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: background var(--transition-fast), opacity var(--transition-fast);
+}
+.vx-flow-icon:hover { background: var(--vxf-disc-hover); }
+.vx-flow-icon:disabled { opacity: 0.35; cursor: default; }
+
+.vx-flow-notice {
+  position: absolute;
+  top: calc(var(--safe-top) + 64px);
+  left: 50%;
+  z-index: 3;
+  width: min(calc(100% - 32px), 520px);
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--vxf-line);
+  border-radius: var(--vx-radius-card);
+  background: rgb(var(--ink-850) / 0.94);
+  font-size: 14px;
+  line-height: 1.45;
+  transform: translateX(-50%);
+}
+.vx-flow-notice a { color: rgb(var(--ember-500)); font-weight: 700; text-decoration: underline; }
+
+/* --------------------------------------------------------------- the feed */
+.vx-flow-feed {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.vx-flow-feed::-webkit-scrollbar { display: none; }
+
+.vx-flow-card {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  overflow: hidden;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The artwork, blurred: the card takes the song's colours. */
+.vx-flow-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: rgb(var(--ink-900));
+}
+.vx-flow-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(48px) saturate(1.5) brightness(0.62);
+  transform: scale(1.3);
+}
+.vx-flow-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(var(--ink-950) / 0.3) 0%, rgb(var(--ink-950) / 0.08) 38%, rgb(var(--ink-950) / 0.86) 100%);
+}
+html.light .vx-flow-bg img { filter: blur(48px) saturate(1.35) brightness(1.08); }
+html.light .vx-flow-bg::after {
+  background: linear-gradient(180deg, rgb(var(--ink-950) / 0.45) 0%, rgb(var(--ink-950) / 0.2) 38%, rgb(var(--ink-950) / 0.9) 100%);
+}
+
+.vx-flow-col {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 18px;
+  width: min(100%, 520px);
+  height: 100%;
+  padding: calc(var(--safe-top) + 70px) 20px 30px;
+}
+.vx-flow-stage {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  /* The cover is as big as the space left over, square, in either direction. */
+  container-type: size;
+}
+.vx-flow-art {
+  width: min(100cqw, 100cqh, 400px);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 22px;
+  background: rgb(var(--ink-850));
+  box-shadow: 0 28px 64px -18px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.07);
+  -webkit-user-drag: none;
+}
+.vx-flow-art.is-empty { box-shadow: none; }
+
+/* ------------------------------------------------- title, lyrics, controls */
+/* Title block and action rail side by side: on a phone the artwork shrinks
+   to make room, so the rail never sits on the cover. */
+.vx-flow-bottom {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.vx-flow-meta {
+  flex: 1;
+  min-width: 0;
+}
+.vx-flow-title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--vx-font-display);
+  font-size: clamp(1.55rem, 6vw, 2.15rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  text-wrap: balance;
+}
+.vx-flow-artists {
+  margin: 6px 0 0;
+  overflow: hidden;
+  color: rgb(var(--ink-200));
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vx-flow-artists a:hover { text-decoration: underline; }
+.vx-flow-album { color: rgb(var(--ink-300)); font-weight: 500; }
+
+.vx-flow-lyrics {
+  display: grid;
+  grid-template-rows: 18px 46px 18px;
+  gap: 4px;
+  margin-top: 14px;
+  padding-left: 12px;
+  border-left: 2px solid rgb(var(--ember-500));
+}
+.vx-flow-lyrics p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vx-flow-lyrics .is-past,
+.vx-flow-lyrics .is-next { color: rgb(var(--ink-300)); font-size: 13px; line-height: 18px; }
+.vx-flow-lyrics .is-now {
+  display: -webkit-box;
+  color: rgb(var(--ink-100));
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 23px;
+  white-space: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.vx-flow-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+.vx-flow-play {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: rgb(var(--ember-500));
+  color: var(--vx-on-accent);
+  box-shadow: 0 10px 28px -8px rgb(var(--ember-500) / 0.65);
+  transition: transform var(--transition-fast), filter var(--transition-fast);
+}
+.vx-flow-play:hover { filter: brightness(1.08); }
+.vx-flow-play:active { transform: scale(0.94); }
+.vx-flow-full {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--vxf-line);
+  border-radius: 999px;
+  background: var(--vxf-disc);
+  color: rgb(var(--ink-100));
+  font-size: 14px;
+  font-weight: 700;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: background var(--transition-fast);
+}
+.vx-flow-full:hover { background: var(--vxf-disc-hover); }
+.vx-flow-note { margin: 16px 0 0; color: rgb(var(--ink-200)); font-size: 14px; }
+
+/* --------------------------------------------------------- the action rail */
+.vx-flow-rail {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-right: -8px;
+}
+.vx-flow-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 52px;
+  color: rgb(var(--ink-100));
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.1;
+  text-align: center;
+}
+.vx-flow-action > svg {
+  box-sizing: content-box;
+  padding: 11px;
+  border-radius: 999px;
+  background: var(--vxf-disc);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.vx-flow-action:hover > svg { background: var(--vxf-disc-hover); }
+.vx-flow-action:active > svg { transform: scale(0.92); }
+.vx-flow-action > span { white-space: nowrap; text-shadow: 0 1px 6px rgb(var(--ink-950) / 0.7); }
+@media (max-width: 899px) {
+  /* A tighter rail on a phone: 44px discs, still 44px targets. */
+  .vx-flow-action > svg { padding: 10px; }
+  .vx-flow-menu > button { width: 44px; height: 44px; }
+}
+.vx-flow-action.is-liked > svg { color: rgb(var(--ember-500)); }
+/* The song menu's own trigger, dressed as a rail disc (46px). */
+.vx-flow-menu > button {
+  width: 46px;
+  height: 46px;
+  background: var(--vxf-disc);
+  color: rgb(var(--ink-100));
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.vx-flow-menu > button svg { width: 22px; height: 22px; }
+
+/* ----------------------------------------------------------- the progress */
+.vx-flow-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--vxf-line);
+}
+.vx-flow-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--vx-glow, rgb(var(--ember-500)));
+  transform-origin: left center;
+  transition: transform 0.28s linear;
+}
+
+/* ------------------------------------------------------ hint and heart burst */
+.vx-flow-hint {
+  position: absolute;
+  top: calc(var(--safe-top) + 66px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 14px 8px 12px;
+  border-radius: 999px;
+  background: rgb(var(--ink-950) / 0.66);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+.vx-flow-hint-chev {
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border-top: 2px solid rgb(var(--ember-500));
+  border-left: 2px solid rgb(var(--ember-500));
+  transform: rotate(45deg);
+  animation: vxf-nudge 1.4s var(--ease-calm) infinite;
+}
+@keyframes vxf-nudge {
+  0%, 100% { translate: 0 2px; }
+  50% { translate: 0 -3px; }
+}
+
+.vx-flow-burst {
+  position: absolute;
+  z-index: 4;
+  color: rgb(var(--ember-500));
+  filter: drop-shadow(0 6px 22px rgb(var(--ember-500) / 0.55));
+  pointer-events: none;
+  animation: vxf-burst 0.9s var(--ease-calm) forwards;
+}
+@keyframes vxf-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.35) rotate(-14deg); }
+  22% { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(-8deg); }
+  42% { transform: translate(-50%, -50%) scale(0.96) rotate(-8deg); }
+  70% { opacity: 1; transform: translate(-50%, -62%) scale(1.02) rotate(-6deg); }
+  100% { opacity: 0; transform: translate(-50%, -96%) scale(1.22) rotate(-4deg); }
+}
+
+.vx-flow-empty { padding: 24px; color: rgb(var(--ink-300)); text-align: center; }
+.vx-flow-empty a { color: rgb(var(--ember-500)); font-weight: 700; }
+
+/* ---------------------------------------------------------------- desktop */
+@media (min-width: 900px) {
+  .vx-flow-col { width: 460px; padding-bottom: 40px; }
+  /* Beside the column, not over it. */
+  .vx-flow-rail { position: absolute; right: -78px; bottom: 40px; margin-right: 0; }
+  .vx-flow-top { padding-inline: 24px; }
+}
+
+/* ---------------------------------------------------------- reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .vx-flow-burst { display: none; }
+  .vx-flow-hint-chev { animation: none; }
+  .vx-flow-progress > span { transition: none; }
+}
+html.reduce-motion .vx-flow-burst { display: none; }
+html.reduce-motion .vx-flow-hint-chev { animation: none; }

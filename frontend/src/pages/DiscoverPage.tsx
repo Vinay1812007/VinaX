@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
 import { BrowseTile, TileGlyph } from '@/features/discover/BrowseTile';
 import { moodTone } from '@/features/discover/tones';
+import { FlowEntryCard } from '@/features/flow/FlowEntryCard';
 import type { Song } from '@/types';
 import '@/styles/pages/browse.css';
 
@@ -63,6 +64,7 @@ export default function DiscoverPage() {
     <div className="vx-browse vx-browse-page max-w-screen-2xl mx-auto">
       <PageHeader title="Discover" subtitle="Charts, moods, languages and new music, all in one place." />
       <DestinationGrid area="discover" chartSongs={trending.data} />
+      <FlowEntryCard />
       <LanguageGrid />
 
       <SectionHeader title="Pick a language" explanation="Every shelf below follows it." />

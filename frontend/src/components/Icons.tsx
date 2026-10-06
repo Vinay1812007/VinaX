@@ -296,6 +296,15 @@ export function GripIcon({ className }: { className?: string }) {
   );
 }
 
+/** 10.1 — Flow: a song card with a play mark (the swipeable feed). */
+export const FlowIcon = ({ className, filled }: IconProps) => (
+  <svg {...base(className)}>
+    <rect x="6" y="2.5" width="12" height="17" rx="3" fill={filled ? 'currentColor' : 'none'} />
+    <path d="M8.5 21.5h7" />
+    <path d="m10.5 8 4 3-4 3z" fill={filled ? 'rgb(var(--ink-950))' : 'currentColor'} stroke="none" />
+  </svg>
+);
+
 /** v5.12.0 — Listen Later bookmark. */
 export const BookmarkIcon = ({ className }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
