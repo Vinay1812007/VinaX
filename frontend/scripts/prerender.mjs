@@ -43,7 +43,7 @@ const ROUTES = [
   { p: '/made-for-you', t: 'Made For You', d: 'Personal mixes built from your listening — private and on-device.', h1: 'Made for you' },
   { p: '/about', t: 'About', d: 'VinaX is a free, no-login music player. Private by design, tuned to you.', h1: 'About VinaX', ld: { '@context': 'https://schema.org', '@type': 'AboutPage', '@id': 'https://www.sirimillavinay.online/about#page', name: 'About VinaX', url: 'https://www.sirimillavinay.online/about', mainEntity: { '@id': 'https://www.sirimillavinay.online/#org' } } },
   { p: '/help', t: 'Help & Feedback', d: 'FAQs, how-tos, and how to report a problem.', h1: 'Help & Feedback' },
-  { p: '/VinaXAI', t: 'VinaX AI — ask anything', d: 'Chat with VinaX AI — ask anything, search the live web, and get clean answers with code, tables and images. Free, private, no login.', h1: 'VinaX AI' },
+  { p: '/VinaXAI', t: 'VinaX AI — ask anything', d: 'Chat with VinaX AI — ask anything and get clean answers with code, tables and images. Free, private, no login.', h1: 'VinaX AI' },
   { p: '/download', t: 'Get the App', d: 'Install VinaX on Android for background playback and offline downloads.', h1: 'Get VinaX for Android' },
   { p: '/privacy', t: 'Privacy', d: 'No accounts. Your data stays on your device. Private by design.', h1: 'Privacy' },
   { p: '/terms', t: 'Terms of Use', d: 'Content is sourced from third parties; no DRM circumvention. Plain-language terms.', h1: 'Terms of Use' },

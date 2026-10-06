@@ -1,4 +1,4 @@
-# VinaX AI — feature matrix (9.1.0, updated for 10.1)
+# VinaX AI — feature matrix (9.1.0, updated for 10.2)
 
 What the assistant surface actually does, checked against the code rather than
 against intent. VinaX AI is VinaX's own assistant: it is not another product and
@@ -13,7 +13,9 @@ message editing, conversation branching. Its documented upload set is PDF, DOCX,
 CSV, TXT, HTML, ODT, RTF, EPUB, JSON, XLSX and JPEG/PNG/GIF/WebP, at 500 MB per
 file and 20 files per chat, with PDFs to 1 000 pages.
 
-As of 9.1 VinaX AI has an analogue of **every one of those eleven features**. The
+As of 9.1 VinaX AI had an analogue of **every one of those eleven features**.
+10.2 removed two of them on purpose — web search and research mode — so the
+assistant has no live web access (see [Tools](#tools)). For the other nine, the
 differences that remain are in DEPTH, and each is named in the tables below: the
 upload set is narrower (no DOCX/XLSX/EPUB/ODT/RTF), the limits are far smaller
 (they suit a music app on a phone, not a document workspace), memory is written by
@@ -101,26 +103,14 @@ Status words:
 | **Per-file progress and cancellation** | done (9.1) | `prepareAttachments` reports `(done, total, path)` before each file and checks an `AbortSignal` between them; the composer shows which file is being read and a Stop button. Cancelling keeps what was already read |
 | Upload limits | partial, by design | 4 MB per image (6 images), 2 MB per text file, 8 MB per PDF, 24 files per message. Far smaller than a document workspace's, deliberately: this is a music app, the context budget is 18 000 characters, and the clip is always stated |
 
-## Tools, search and research
+## Tools
 
 | Feature | Status | Where / note |
 | --- | --- | --- |
-| Web search toggle | done | `web` on the request; the reply shows a badge only when a search really ran. 10.0: a **Web search** connector in the + menu |
-| **Connectors** — one list of what a reply may draw on | done (10.0) | `features/ai/connectors.ts`, `chat/Connectors.tsx`: Web search, Research, Think, Now playing, Memory and Place, each with one line on what it does or shares, and chips above the composer for those that are on. Each maps to something the chat already did; Place adds a chat-only "do not send" (`vinax.ai.placeOn`) on top of the app-wide region setting |
-| Automatic search for time-sensitive questions | done | `FRESH_TRIGGER` on the client, so the listener always sees that a hop happened |
-| Model-requested search mid-answer | done | `[[FETCH: …]]`, one restart per request; the reply's timeline and Sources show it like any other search, with previews since 10.1 |
-| **Research mode** — a real workflow, not a simulation | done | forces a live search and adds a cross-checking rule; `RESEARCH_RULE` |
-| **More than one search source** | done (10.1) | `_lib/websearch.ts` `liveSearch` asks a keyed web search API (when its key is set), the owner's instance and a keyless encyclopedia search in parallel; 9.0.1's single source with no fallback is gone |
-| **Results must be about the question** | done (10.1) | a lexical relevance gate (`relevance`, `relevanceBar`) drops off-topic results, pinned in `websearch.test.ts` with real junk the instance returned; Indian-script questions keep the engines' ranking |
-| Follow-up questions searched in context | done (10.1) | `searchQueryFor`: a short or pronoun-led follow-up borrows the previous question's topic words. Lexical, not a model rewrite |
-| A sleeping search instance is woken | done (10.1) | `POST /api/warm-search` when Web search is switched on, and a background wake-up after a timeout. The first question after a long quiet spell can still miss the instance; the other sources answer meanwhile |
-| Real citations with source links | done | `Msg.sources`, https-only |
-| Honest failure when search is unavailable | done | `meta.web = 'failed'` → the reply opens by saying it could not check the live web, now only when **no** source returned anything relevant |
-| Agent mode for agent-capable engines | provider-dependent | `isAgentChoice`; the tool timeline shows only steps the engine reported |
-| **Tool timeline** | done (10.0) | `chat/toolTimeline.ts`, `ToolActivity.tsx`: one row per reported step plus one for the service's own web search, a spinner on the step in progress, folded to "Used N tools" or "Searched the web · N sources" once the answer arrives. Counts are only ever the length of a real list |
-| Tool activity is never simulated | done | `streamReducer.ts` `cleanStep` only admits steps the stream carried |
-| Retrieved web text is treated as untrusted data | done | `fenceWebContext` with a per-request nonce; markers stripped from the body |
-| **Source previews** | done (9.1) | each source carries its own title and snippet from whichever search source returned it (`_lib/websearch.ts` `SourcePreview` → the stream's `meta.previews` → `Msg.sourcePreviews`). Rendered as TEXT, never as markup, https-only, and every field re-validated on the way in and again on import |
+| Web search, research mode, citations | out of scope (10.2) | removed on purpose, with the Web search and Research connectors, live results, source links and previews, the model-requested search step and the flagship engine's own search. See [ai.md](ai.md#no-live-web-access-102) |
+| **Connectors** — one list of what a reply may draw on | done (10.0) | `features/ai/connectors.ts`, `chat/Connectors.tsx`: Think, Now playing, Memory and Place, each with one line on what it does or shares, and chips above the composer for those that are on. Each maps to something the chat already did; Place adds a chat-only "do not send" (`vinax.ai.placeOn`) on top of the app-wide region setting |
+| Honest about time-sensitive questions | provider-dependent (10.2) | the prompt says the assistant has no live web access and that a time-sensitive answer must say it may be out of date; whether a given engine follows it is up to the engine |
+| Agent mode, tool timeline | out of scope (10.2) | removed with the catalogue engines that searched the web on their own; the Worker leaves them out of the catalogue (`WEB_BROWSING_SLUGS`) and the stream no longer carries `step` frames |
 | Code execution | out of scope | nothing in this deployment can run untrusted code safely |
 
 ## Model handling
@@ -131,7 +121,7 @@ Status words:
 | Auto seat that routes by question shape | done | `pickAutoMode`, with the flagship lane preferred when its key is set |
 | Lane failover with cooldowns | done | `_lib/ai.ts` |
 | Graceful handling of an unavailable provider | done | `Msg.unavailable` says asking again cannot help; `Msg.failed` offers Retry |
-| Capabilities shown per seat | partial | the catalogue reports context length and whether a model is agentic; there is no per-seat capability sheet in the UI |
+| Capabilities shown per seat | partial | the catalogue reports context length; there is no per-seat capability sheet in the UI |
 | Per-engine context limits respected exactly | partial | the long-thread trim, the attachment budget, the memory budget and the project budget are each bounded, but they are global rather than per-model; a very long single turn could still overrun a small-context engine |
 
 ## Place and personalisation
@@ -156,5 +146,5 @@ Status words:
 | Chats live on the device | done | `localStorage`; images are stripped before persisting |
 | Temporary chat leaves nothing behind | done (9.1) | tested |
 | Model output is validated before it can act | done | every music suggestion is resolved against the catalogue; an unmatched title is dropped, never substituted |
-| Untrusted content is fenced, never followed | done | web results and the user profile both |
+| Untrusted content is fenced, never followed | done | the user profile, project files and memory lines |
 | No vendor or competitor names in output | done | `BANNED` in `services/ai/home.ts`, and the house prompt |

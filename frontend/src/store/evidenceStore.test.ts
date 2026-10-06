@@ -3,7 +3,7 @@ import { evidenceFor, evidenceLine, useEvidenceStore, type SongEvidence } from '
 
 const NOW = Date.UTC(2026, 9, 3, 12, 0, 0);
 const row = (over: Partial<SongEvidence> = {}): SongEvidence => ({
-  kind: 'web',
+  kind: 'chart',
   label: 'A new release',
   url: 'https://label.example/release',
   observedAt: new Date(NOW - 1_800_000).toISOString(),
@@ -15,21 +15,9 @@ beforeEach(() => useEvidenceStore.getState().clear());
 
 describe('evidenceStore', () => {
   it('stores evidence per song and reads it back', () => {
-    useEvidenceStore.getState().setEvidence('web', [['s1', row()]]);
-    expect(evidenceFor('s1')).toMatchObject({ kind: 'web', label: 'A new release' });
+    useEvidenceStore.getState().setEvidence('chart', [['s1', row()]]);
+    expect(evidenceFor('s1')).toMatchObject({ kind: 'chart', label: 'A new release' });
     expect(evidenceFor('nobody')).toBeNull();
-  });
-
-  it('replacing one kind leaves the other kind alone', () => {
-    useEvidenceStore.getState().setEvidence('chart', [['c1', row({ kind: 'chart', label: 'Public video chart', url: null })]]);
-    useEvidenceStore.getState().setEvidence('web', [['w1', row()]]);
-    expect(evidenceFor('c1')).toBeTruthy();
-    expect(evidenceFor('w1')).toBeTruthy();
-    // A new web snapshot drops the old web rows but keeps the chart row.
-    useEvidenceStore.getState().setEvidence('web', [['w2', row()]]);
-    expect(evidenceFor('w1')).toBeNull();
-    expect(evidenceFor('w2')).toBeTruthy();
-    expect(evidenceFor('c1')).toBeTruthy();
   });
 
   it('a song that has left the chart stops claiming it is on one', () => {
@@ -39,7 +27,7 @@ describe('evidenceStore', () => {
   });
 
   it('refuses a row with no label — a source line must say something', () => {
-    useEvidenceStore.getState().setEvidence('web', [['s1', row({ label: '' })]]);
+    useEvidenceStore.getState().setEvidence('chart', [['s1', row({ label: '' })]]);
     expect(evidenceFor('s1')).toBeNull();
   });
 });

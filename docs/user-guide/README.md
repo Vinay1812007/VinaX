@@ -11,7 +11,7 @@ This folder is the guide for people who listen with VinaX. It covers setting up,
 | [Library and backup](library-and-backup.md) | Favourites, playlists, Listen Later, backups, restore with Undo, moving devices |
 | [Flow](flow.md) | The swipeable song feed: opening it, gestures and keys, keeping a song, how your queue is kept safe |
 | [Listen Together](listen-together.md) | Hosting and joining a session, the Live pill, Tap to start listening, adding songs, reactions, ending |
-| [VinaX AI](vinax-ai.md) | The chat: connectors, the tool timeline, models, web search and where it looks, slash commands, playable songs, what it sends |
+| [VinaX AI](vinax-ai.md) | The chat: connectors, what it can and cannot know (no web search), models, slash commands, playable songs, what it sends |
 | [Keyboard shortcuts](keyboard-shortcuts.md) | Every key the web app listens for, and the touch gestures |
 | [Android](android.md) | What the Android app adds: background playback, downloads and why one can fail, updates |
 

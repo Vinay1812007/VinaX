@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_STEPS, cleanStep, initialStreamState, reduceFrame, reduceSteps, splitFrames, type StreamState } from './streamReducer';
+import { initialStreamState, reduceFrame, splitFrames, type StreamState } from './streamReducer';
 
 const run = (frames: unknown[], from: StreamState = initialStreamState()): StreamState => frames.reduce<StreamState>(reduceFrame, from);
 
@@ -28,19 +28,18 @@ describe('reduceFrame', () => {
     expect(run([{ delta: 'Hello' }, { delta: ', ' }, { delta: 'world' }]).text).toBe('Hello, world');
   });
 
-  it('takes sources and the answering model from meta, latest wins', () => {
-    const s = run([
-      { meta: { model: 'first-model', sources: [] } },
-      { delta: 'x' },
-      { meta: { model: 'rescue-model', sources: ['https://a.example', 7, '', 'https://b.example'] } },
-    ]);
+  it('takes the answering model from meta, latest wins', () => {
+    const s = run([{ meta: { model: 'first-model' } }, { delta: 'x' }, { meta: { model: 'rescue-model' } }]);
     expect(s.model).toBe('rescue-model');
-    expect(s.sources).toEqual(['https://a.example', 'https://b.example']);
   });
 
-  it('keeps earlier sources when a later meta reports none', () => {
-    const s = run([{ meta: { model: 'm', sources: ['https://a.example'] } }, { meta: { model: 'm', sources: [] } }]);
-    expect(s.sources).toEqual(['https://a.example']);
+  it('ignores the retired fields an older server still sends (sources, previews, step frames)', () => {
+    const s = run([
+      { meta: { model: 'm', web: 'on', sources: ['https://a.example'], previews: [{ url: 'https://a.example', title: 'T', snippet: 's' }] } },
+      { step: { tool: 'search', label: 'x' } },
+      { delta: 'Answer' },
+    ]);
+    expect(s).toEqual({ ...initialStreamState(), model: 'm', text: 'Answer' });
   });
 
   it('records the cut-short notice and the end of the stream', () => {
@@ -49,78 +48,15 @@ describe('reduceFrame', () => {
     expect(run([{ done: true }]).truncated).toBe(false);
   });
 
-  it('collects agent steps beside the text', () => {
-    const s = run([
-      { step: { tool: 'search', label: 'Searched the web for “x”' } },
-      { delta: 'Answer' },
-      { step: { tool: 'code', label: 'Ran code' } },
-    ]);
-    expect(s.steps.map((x) => x.tool)).toEqual(['search', 'code']);
-    expect(s.text).toBe('Answer');
-  });
-
   it('skips malformed frames without losing the reply', () => {
     const s = run([{ delta: 'a' }, undefined, null, 'text', 42, ['x'], { delta: 5 }, { meta: 'nope' }, { step: 'nope' }, { delta: 'b' }]);
     expect(s.text).toBe('ab');
     expect(s.malformed).toBe(5);
-    expect(s.steps).toEqual([]);
   });
 
   it('ignores fields it does not know, and returns the same object for a no-op', () => {
     const before = run([{ delta: 'a' }]);
     expect(reduceFrame(before, { somethingNew: true })).toBe(before);
     expect(reduceFrame(before, { delta: '' })).toBe(before);
-  });
-});
-
-describe('agent steps', () => {
-  it('normalises a step: known tool or "other", single line, clipped', () => {
-    expect(cleanStep({ tool: 'visit', label: '  Read\n example.com ' })).toEqual({ tool: 'visit', label: 'Read example.com' });
-    expect(cleanStep({ tool: 'rm -rf', label: 'x' })).toEqual({ tool: 'other', label: 'x' });
-    expect(cleanStep({ tool: 'search', label: 'q'.repeat(400) })?.label).toHaveLength(120);
-    expect(cleanStep({ tool: 'search' })).toBeNull();
-    expect(cleanStep({ tool: 'search', label: '   ' })).toBeNull();
-    expect(cleanStep(null)).toBeNull();
-  });
-
-  it('appends newest last, drops an immediate repeat, and stops at the cap', () => {
-    let steps = reduceSteps([], { tool: 'search', label: 'a' });
-    steps = reduceSteps(steps, { tool: 'search', label: 'a' });
-    expect(steps).toHaveLength(1);
-    for (let i = 0; i < 40; i += 1) steps = reduceSteps(steps, { tool: 'code', label: `run ${i}` });
-    expect(steps).toHaveLength(MAX_STEPS);
-    expect(steps[0].label).toBe('a');
-    expect(steps[MAX_STEPS - 1].label).toBe(`run ${MAX_STEPS - 2}`);
-  });
-
-  // 9.1.0 — source previews: a citation's own title and snippet.
-  describe('source previews', () => {
-    const frame = (previews: unknown) => ({ meta: { sources: ['https://a.example/1'], previews } });
-
-    it('keeps a well-formed preview', () => {
-      const out = reduceFrame(initialStreamState(), frame([{ url: 'https://a.example/1', title: 'A page', snippet: 'Some words' }]));
-      expect(out.sourcePreviews).toEqual([{ url: 'https://a.example/1', title: 'A page', snippet: 'Some words' }]);
-    });
-
-    it('drops anything but https, and anything with neither title nor snippet', () => {
-      expect(reduceFrame(initialStreamState(), frame([{ url: 'http://a.example/1', title: 'T', snippet: 's' }])).sourcePreviews).toEqual([]);
-      expect(reduceFrame(initialStreamState(), frame([{ url: 'javascript:alert(1)', title: 'T', snippet: 's' }])).sourcePreviews).toEqual([]);
-      expect(reduceFrame(initialStreamState(), frame([{ url: 'https://a.example/1', title: '', snippet: '' }])).sourcePreviews).toEqual([]);
-      expect(reduceFrame(initialStreamState(), frame([{ url: 'not a url', title: 'T', snippet: 's' }])).sourcePreviews).toEqual([]);
-    });
-
-    it('collapses whitespace and clips long text', () => {
-      const out = reduceFrame(initialStreamState(), frame([{ url: 'https://a.example/1', title: `  a\n  b  `, snippet: 'x'.repeat(500) }]));
-      expect(out.sourcePreviews[0].title).toBe('a b');
-      expect(out.sourcePreviews[0].snippet).toHaveLength(300);
-    });
-
-    it('survives junk in place of previews, keeping the plain sources', () => {
-      for (const junk of [null, 'none', 42, [null, 7], [{}]]) {
-        const out = reduceFrame(initialStreamState(), frame(junk));
-        expect(out.sourcePreviews).toEqual([]);
-        expect(out.sources).toEqual(['https://a.example/1']);
-      }
-    });
   });
 });

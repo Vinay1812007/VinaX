@@ -73,7 +73,7 @@ interface Frame {
   delta?: string;
   done?: boolean;
   truncated?: boolean;
-  meta?: { model?: string; web?: string };
+  meta?: { model?: string; mode?: string };
   error?: string;
 }
 
@@ -88,7 +88,7 @@ async function drive(request: Request): Promise<{ status: number; frames: Frame[
   return { status: res.status, frames, text };
 }
 
-/** URLs of LLM chat-completion calls only (excludes search providers). */
+/** URLs of LLM chat-completion calls only. */
 const llmCalls = (): typeof calls => calls.filter((c) => c.url.includes('/chat/completions'));
 
 beforeEach(() => {
@@ -153,23 +153,15 @@ describe('AI lane failover — chaos scenarios', () => {
     expect(body.error).toBe('engine_unreachable');
   });
 
-  it('B3 under chaos: a FETCH marker with dead search providers still ends in an answer', async () => {
-    installFetch((url) => {
-      if (!url.includes('/chat/completions')) return new Response('', { status: 500 }); // search providers down
-      if (llmCalls().length === 1) return healthy(['[[FETCH: latest cricket scores]]']);
-      return healthy(['Answering from memory — may be dated.']);
+  it('10.2 — no search step under chaos: every outbound call is an engine call, and a failover still answers', async () => {
+    installFetch(() => {
+      if (llmCalls().length === 1) return new Response('', { status: 500 });
+      return healthy(['Answering from what I know — it may be out of date.']);
     });
-    const { status, frames, text } = await drive(chatRequest('who won the match today?'));
+    const { status, text } = await drive(chatRequest('who won the match today?'));
     expect(status).toBe(200);
-    expect(text).toBe('Answering from memory — may be dated.');
-    // The marker itself must never reach the client.
-    expect(text).not.toContain('FETCH');
-    // The restart prompt must carry the honest search-failure instruction.
-    const second = llmCalls()[1];
-    const sys = (second?.body?.messages as Array<{ content: string }> | undefined)?.[0]?.content ?? '';
-    expect(sys).toContain('LIVE WEB SEARCH FAILED');
-    // And the client saw the web status flip to failed in a meta update.
-    expect(frames.filter((f) => f.meta).length).toBeGreaterThanOrEqual(2);
+    expect(text).toBe('Answering from what I know — it may be out of date.');
+    expect(calls.every((c) => c.url.includes('/chat/completions'))).toBe(true);
   });
 });
 

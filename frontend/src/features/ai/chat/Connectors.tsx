@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
-import { GlobeIcon, MusicIcon, XIcon } from '@/components/Icons';
+import { MusicIcon, XIcon } from '@/components/Icons';
 import {
   activeConnectors,
   connectorViews,
@@ -14,11 +14,9 @@ import { assistantPlace, type AssistantPlace } from '@/services/location/assista
 import { usePlayerStore } from '@/store/playerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
-import { BookIcon, BulbIcon, MemoryIcon, PlaceIcon } from './icons';
+import { BulbIcon, MemoryIcon, PlaceIcon } from './icons';
 
 const ICON: Record<ConnectorId, (p: { className?: string }) => ReactNode> = {
-  web: GlobeIcon,
-  research: BookIcon,
   think: BulbIcon,
   nowPlaying: MusicIcon,
   memory: MemoryIcon,
@@ -34,12 +32,8 @@ export function placeLabel(p: AssistantPlace | undefined): string | null {
 
 /** The page-owned switches the composer passes through. */
 export interface TurnConnectors {
-  web: boolean;
-  research: boolean;
   think: boolean;
   nowPlaying: boolean;
-  onWeb: (on: boolean) => void;
-  onResearch: (on: boolean) => void;
   onThink: (on: boolean) => void;
   onNowPlaying: (on: boolean) => void;
 }
@@ -88,8 +82,6 @@ export function useConnectors(turn: TurnConnectors): {
   const song = st.queue[st.index]?.title ?? null;
 
   const views = connectorViews({
-    web: turn.web,
-    research: turn.research,
     think: turn.think,
     nowPlaying: turn.nowPlaying,
     song,
@@ -106,14 +98,6 @@ export function useConnectors(turn: TurnConnectors): {
       const on = !view.on;
       if (id !== 'memory' && armed) setArmed(null);
       switch (id) {
-        case 'web':
-          turn.onWeb(on);
-          // Research always searches: switching the web off ends it too.
-          if (!on) turn.onResearch(false);
-          return;
-        case 'research':
-          turn.onResearch(on);
-          return;
         case 'think':
           turn.onThink(on);
           return;

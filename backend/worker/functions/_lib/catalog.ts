@@ -38,33 +38,21 @@ export interface CatalogModel {
   provider: CatalogProvider;
   /** Provider-reported context window, when it reports one. */
   context: number | null;
-  /** True for an agentic system — one that searches the web and runs code by
-   *  itself while it answers. Set from AGENT_MODEL_SLUGS only; the client
-   *  never guesses this from a name. Additive: older clients ignore it. */
-  agent: boolean;
 }
 
-/** The agentic systems VinaX knows about, per catalog key, by EXACT model
- *  name — the slug with its vendor prefix and routing suffix removed (what
- *  catalogLabel() returns), so a provider re-publishing the same system under
- *  a prefixed id keeps its badge.
- *
- *  Deliberately an explicit allow-list rather than a pattern: "agent" is a
- *  promise to the listener (this engine will go and look things up, and the
- *  chat shows its working), so a model earns the badge only after it has been
- *  seen to report its tool runs on the stream. A slug that is not listed here
- *  is a plain chat model, whatever its name suggests. Add a row when a new
- *  agentic system has been verified; remove it when the provider retires it
- *  (a retired slug simply stops appearing in the live catalog, so a stale row
- *  here is harmless — the flag only decorates models that are actually served). */
-export const AGENT_MODEL_SLUGS: Record<CatalogProvider, readonly string[]> = {
+/** 10.2 — catalogue systems that browse the live web on their own while they
+ *  answer, by EXACT model name (the slug with its vendor prefix and routing
+ *  suffix removed — what catalogLabel() returns). VinaX AI has no live web
+ *  access, so these are never offered, never selectable and never the
+ *  automatic pick, whatever id the provider publishes them under. */
+export const WEB_BROWSING_SLUGS: Record<CatalogProvider, readonly string[]> = {
   grq: ['compound', 'compound-mini'],
   opr: [],
 };
 
-/** Whether a served slug is one of the known agentic systems. */
-export function isAgentModel(provider: CatalogProvider, id: string): boolean {
-  return AGENT_MODEL_SLUGS[provider].includes(catalogLabel(id.trim()).toLowerCase());
+/** Whether a served slug is one of the excluded web-browsing systems. */
+export function isWebBrowsingModel(provider: CatalogProvider, id: string): boolean {
+  return WEB_BROWSING_SLUGS[provider].includes(catalogLabel(id.trim()).toLowerCase());
 }
 
 export type CatalogProvider = 'grq' | 'opr';
@@ -90,7 +78,7 @@ const NON_CHAT =
  *  put a dead pin on both catalog lanes in the first place. Anything not
  *  listed still works — it just isn't the automatic pick. */
 const PREFERRED: Record<CatalogProvider, string[]> = {
-  grq: ['gpt-oss-20b', 'gpt-oss-120b', 'qwen3.8', 'qwen3.6', 'compound-mini', 'compound'],
+  grq: ['gpt-oss-20b', 'gpt-oss-120b', 'qwen3.8', 'qwen3.6'],
   opr: ['nemotron-3-super', 'nemotron-3-ultra', 'gemma-4-31b', 'nemotron-3.5-lightning', 'nemotron-3-nano-omni', 'gemma-4'],
 };
 
@@ -134,6 +122,7 @@ export function parseCatalog(provider: CatalogProvider, body: unknown): CatalogM
     // Retired / disabled rows are still returned by some catalogs.
     if (r.active === false) continue;
     if (NON_CHAT.test(id)) continue;
+    if (isWebBrowsingModel(provider, id)) continue;
     // The marketplace host reports modalities and prices; keep text-out
     // models the provider charges nothing for.
     if (provider === 'opr') {
@@ -145,7 +134,7 @@ export function parseCatalog(provider: CatalogProvider, body: unknown): CatalogM
     const ctxRaw = r.context_length ?? r.context_window;
     const context = typeof ctxRaw === 'number' && Number.isFinite(ctxRaw) ? Math.round(ctxRaw) : null;
     seen.add(id);
-    out.push({ id, label: catalogLabel(id), provider, context, agent: isAgentModel(provider, id) });
+    out.push({ id, label: catalogLabel(id), provider, context });
   }
   return out.sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -212,7 +201,7 @@ export async function fetchVoiceCatalog(env: AiEnv, provider: CatalogProvider): 
       if (!id || seen.has(id) || r.active === false) continue;
       if (!VOICE_MODEL.test(id)) continue;
       seen.add(id);
-      out.push({ id, label: catalogLabel(id), provider, context: null, agent: false });
+      out.push({ id, label: catalogLabel(id), provider, context: null });
     }
     out.sort((a, b) => a.label.localeCompare(b.label));
     if (!out.length && hit) return hit.models;

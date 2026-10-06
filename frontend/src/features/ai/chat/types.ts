@@ -24,7 +24,7 @@ export type Mode =
   | 'laguna'
   | 'gemma4'
   | 'router'
-  /** 8.1.0 — the flagship engine on the owner's newest key: live web grounding, the DJ's own brain. */
+  /** 8.1.0 — the flagship engine on the owner's newest key, the DJ's own brain. */
   | 'maestro';
 
 /** Which live catalogue a seat opens. */
@@ -35,8 +35,6 @@ export interface CatalogModel {
   id: string;
   label: string;
   context: number | null;
-  /** Server-side flag: an agentic system that searches and runs code itself. */
-  agent: boolean;
 }
 
 export interface CatalogGroup {
@@ -57,25 +55,10 @@ export interface ModelChoice {
   model?: string;
 }
 
-export type AgentTool = 'search' | 'code' | 'visit' | 'other';
-/** One thing an agentic engine did while answering. */
-export interface AgentStep {
-  tool: AgentTool;
-  label: string;
-}
-
 export interface Msg {
   role: 'user' | 'assistant';
   content: string;
   images?: string[];
-  sources?: string[];
-  /**
-   * 9.1.0 — each source's own title and snippet, so a citation can be previewed
-   * rather than shown as a bare host. Text from an arbitrary page: rendered as
-   * TEXT, never as markup. Absent on older stored messages and on the grounded
-   * lane, which reports URLs only.
-   */
-  sourcePreviews?: Array<{ url: string; title: string; snippet: string }>;
   /** Nickname of the engine that answered (from stream meta). */
   engine?: string;
   /** Render as a live mini-player card (music commands). */
@@ -86,8 +69,6 @@ export interface Msg {
   pinned?: boolean;
   /** Follow-up questions the engine suggested. */
   followups?: string[];
-  /** v7.1 — what an agentic engine did on the way to this reply. */
-  steps?: AgentStep[];
   /** 8.2.0 — no reply arrived (the text is the failure line); the thread
    *  offers Retry, and the line is never sent back to the assistant. */
   failed?: boolean;

@@ -15,20 +15,11 @@ const EDGE = { country: 'IN', regionLabel: 'Telangana', city: 'Hyderabad', timez
 /** The composer's wiring, without the composer: page-owned switches in state,
  *  the menu's list and the chip row side by side. */
 function Harness(): ReactNode {
-  const [web, setWeb] = useState(false);
-  const [research, setResearch] = useState(false);
   const [think, setThink] = useState(false);
   const [nowPlaying, setNowPlaying] = useState(false);
   const c = useConnectors({
-    web,
-    research,
     think,
     nowPlaying,
-    onWeb: setWeb,
-    onResearch: (on) => {
-      if (on) setWeb(true);
-      setResearch(on);
-    },
     onThink: setThink,
     onNowPlaying: setNowPlaying,
   });
@@ -59,11 +50,11 @@ describe('Connectors', () => {
     const names = within(list)
       .getAllByRole('switch')
       .map((el) => el.getAttribute('aria-labelledby') && document.getElementById(el.getAttribute('aria-labelledby')!)?.textContent);
-    expect(names).toEqual(['Web search', 'Research', 'Think', 'Now playing', 'Memory', 'Place']);
+    expect(names).toEqual(['Think', 'Now playing', 'Memory', 'Place']);
     // Each one has a one-line description, and Place says what it would send.
     expect(document.getElementById(sw('Place').getAttribute('aria-describedby')!)?.textContent).toContain('Hyderabad, Telangana, IN');
     // Defaults: everything off except Place, which has always been sent.
-    expect(within(list).getAllByRole('switch').map((el) => el.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'false', 'false', 'true']);
+    expect(within(list).getAllByRole('switch').map((el) => el.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'true']);
     expect(chips()).toEqual(['place']);
   });
 
@@ -76,16 +67,6 @@ describe('Connectors', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Turn off Think' }));
     expect(sw('Think').getAttribute('aria-checked')).toBe('false');
     expect(chips()).toEqual(['nowPlaying', 'place']);
-  });
-
-  it('Research turns the web on; its chip stands for both; the web off ends research too', () => {
-    render(<Harness />);
-    fireEvent.click(sw('Research'));
-    expect(sw('Web search').getAttribute('aria-checked')).toBe('true');
-    expect(chips()).toEqual(['research', 'place']);
-    fireEvent.click(sw('Web search'));
-    expect(sw('Web search').getAttribute('aria-checked')).toBe('false');
-    expect(sw('Research').getAttribute('aria-checked')).toBe('false');
   });
 
   it('Place is a chat-only switch that sticks, and is disabled when the region setting leaves nothing to send', () => {
@@ -151,7 +132,7 @@ describe('Connectors', () => {
 });
 
 describe('connectorViews / activeConnectors', () => {
-  const base = { web: false, research: false, think: false, nowPlaying: false, song: null, memoryOn: false, memoryCount: 0, placeOn: true, placeLabel: 'IN' };
+  const base = { think: false, nowPlaying: false, song: null, memoryOn: false, memoryCount: 0, placeOn: true, placeLabel: 'IN' };
   it('names the song that would be shared', () => {
     const v = connectorViews({ ...base, nowPlaying: true, song: 'Srivalli' }).find((x) => x.id === 'nowPlaying')!;
     expect(v.description).toBe('Share “Srivalli” with your message');

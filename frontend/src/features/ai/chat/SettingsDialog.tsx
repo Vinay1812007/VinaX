@@ -43,8 +43,6 @@ export interface SettingsDialogProps {
   recents: ModelChoice[];
   sendOnEnter: boolean;
   onSendOnEnter: (on: boolean) => void;
-  agentStart: boolean;
-  onAgentStart: (on: boolean) => void;
   // Replies
   replyLang: string;
   replyStyle: string;
@@ -250,7 +248,6 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                     groups={p.catalogGroups}
                     current={p.defaultChoice ?? { mode: 'muse' }}
                     recents={p.recents}
-                    agentOnly={false}
                     onPick={(c) => {
                       p.onDefaultChoice(c);
                       setModelMenuOpen(false);
@@ -270,12 +267,6 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                 onChange={p.onSendOnEnter}
                 label="Send with Enter"
                 hint="Off: Enter starts a new line and Ctrl/⌘+Enter sends."
-              />
-              <Switch
-                checked={p.agentStart}
-                onChange={p.onAgentStart}
-                label="Start in Agent mode"
-                hint="Open the chat with Agent on, when an agent model is available."
               />
             </>
           )}

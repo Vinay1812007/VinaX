@@ -241,16 +241,6 @@ describe('9.1 — verified trends enter the pool', () => {
     expect(out.map((c) => c.song.id)).not.toContain('c0');
   });
 
-  it('admits a live-web discovery too, as its own source', async () => {
-    respond = (c) => (c.fn === 'song' ? { songs: [makeSong(c.key, { title: `Web ${c.key}`, artist: 'Reported' })], ms: 1 } : { songs: many('other', 4), ms: 1 });
-    const seed = makeSong('seed', { title: 'Seed', artist: 'S', language: 'telugu' });
-    const out = await generateNextCandidates(seed, makeContext({
-      pinnedLanguages: ['telugu'],
-      webDiscoveries: [{ catalogId: 'web-1', title: 'Web One', artist: 'R', language: 'telugu', sourceType: 'release', rank: null }],
-    }));
-    expect(out.find((c) => c.song.id === 'web-1')?.source).toBe('web-discovery');
-  });
-
   it('asks for nothing when there are no verified trends', async () => {
     respond = () => ({ songs: many('other', 4), ms: 1 });
     const seed = makeSong('seed', { title: 'Seed', artist: 'S', language: 'telugu' });

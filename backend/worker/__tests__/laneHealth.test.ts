@@ -28,18 +28,16 @@ describe('aggregateLaneHealth (B11)', () => {
       row({ ok: false, error: 'engine_timeout', latency_ms: 18000 }),
       row({ ok: false, error: 'engine_fallback_400', latency_ms: 300 }),
       row({ ok: false, error: 'empty_stream_fallback', latency_ms: 2000 }),
-      row({ ok: true, error: 'model_fetch', latency_ms: 5000 }),
       row({ ok: false, status: 429, error: 'http_429', latency_ms: 100 }),
       row({ model: 'llama @scholar', latency_ms: 150 }),
     ];
     const out = aggregateLaneHealth(rows);
     expect(out[0].lane).toBe('chat'); // most calls first
-    expect(out[0].calls).toBe(7);
-    expect(out[0].okPct).toBe(43);
+    expect(out[0].calls).toBe(6);
+    expect(out[0].okPct).toBe(33);
     expect(out[0].hops).toBe(2);
     expect(out[0].authErrors).toBe(1); // E5 — the 429 row
     expect(out[0].emptyStreams).toBe(1);
-    expect(out[0].selfSearches).toBe(1);
     expect(out[1]).toMatchObject({ lane: 'scholar', calls: 1, okPct: 100, p50: 150 });
   });
 

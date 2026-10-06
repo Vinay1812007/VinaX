@@ -16,12 +16,12 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('runChatStream', () => {
   it('folds a stream whose frames are split across network chunks', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(sse(['data: {"meta":{"model":"m","sources":[]}}\n\ndata: {"del', 'ta":"Hi"}\n\ndata: {"step":{"tool":"code","label":"Ran code"}}\n\n', 'data: {"delta":" there"}\n\ndata: {"done":true,"truncated":true}\n\n']))));
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(sse(['data: {"meta":{"model":"m"}}\n\ndata: {"del', 'ta":"Hi"}\n\n', 'data: {"delta":" there"}\n\ndata: {"done":true,"truncated":true}\n\n']))));
     const deltas: string[] = [];
     const updates: string[] = [];
     const out = await runChatStream({ endpoint: '/x', body: {}, signal: new AbortController().signal, onDelta: (d) => deltas.push(d), onUpdate: (s) => updates.push(s.text) });
     expect(out.failure).toBeNull();
-    expect(out.state).toMatchObject({ text: 'Hi there', model: 'm', truncated: true, done: true, steps: [{ tool: 'code', label: 'Ran code' }] });
+    expect(out.state).toMatchObject({ text: 'Hi there', model: 'm', truncated: true, done: true });
     expect(deltas).toEqual(['Hi', ' there']);
     expect(updates[updates.length - 1]).toBe('Hi there');
   });

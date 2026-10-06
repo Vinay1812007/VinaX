@@ -3,7 +3,7 @@ import { exposureLedger, recordExposure, type ExposureLedger } from '@/services/
 import { freshSongs } from '@/services/recommendation/freshness';
 import { isSongBlocked, useLibraryStore } from '@/store/libraryStore';
 import type { Song } from '@/types';
-import { getSong, searchSongs, searchSongsPage } from '@/services/api';
+import { searchSongs, searchSongsPage } from '@/services/api';
 import { isNativePlatform } from '@/services/native';
 import { buildTasteSnapshot } from '@/services/ai/taste';
 import { matchesProposal } from '@/services/ai/dj';
@@ -181,72 +181,6 @@ export async function gatherCataloguePool(
     seenTitles.add(k);
     return true;
   });
-}
-
-/* ---------- live-web discoveries in the pool ---------- */
-
-/** Discoveries resolved into the pool at most. */
-const DISCOVERY_IN_POOL = 6;
-
-/**
- * 9.1.0 — songs a current web source named, as candidates for a playlist.
- *
- * Only for a request that is actually asking for current music — "the latest
- * Telugu songs", "new releases", "what is charting". A request for 90s melodies
- * gains nothing from this and should not pay for it, so `wantsCurrent` gates it.
- *
- * Unlike the queue's version of this (services/discovery/signal.ts, which may
- * never wait), here the listener IS waiting for a result, so this asks the server
- * to run the discovery (`wait: true`) inside the caller's own signal. A failure,
- * an unconfigured instance or an empty answer all resolve to `[]`: the catalogue
- * pool is the answer either way, and the list is never labelled as current when
- * it is not.
- */
-export function wantsCurrent(intent: MusicIntent, prompt: string): boolean {
-  if (intent.era === 'fresh') return true;
-  return /\b(new|latest|current|now|recent|this (?:week|month|year)|20[2-9]\d|chart|charting|trending|just (?:out|released)|fresh)\b/i.test(prompt);
-}
-
-export async function gatherDiscoveries(
-  intent: MusicIntent,
-  languages: string[],
-  prompt: string,
-  signal?: AbortSignal,
-  options: { ledger?: ExposureLedger; fewerRepeats?: boolean } = {},
-): Promise<Song[]> {
-  if (!wantsCurrent(intent, prompt)) return [];
-  try {
-    const [{ fetchDiscoveries }, { useSettingsStore }] = await Promise.all([
-      import('@/services/discovery/client'),
-      import('@/store/settingsStore'),
-    ]);
-    const region = useSettingsStore.getState().inferredRegion?.country ?? useSettingsStore.getState().manualCountry ?? undefined;
-    const snapshot = await fetchDiscoveries({
-      ...(region ? { region } : {}),
-      ...(languages[0] ? { language: languages[0] } : {}),
-      intent: intent.era === 'fresh' ? 'new-releases' : 'trending-songs',
-      wait: true,
-      ...(signal ? { signal } : {}),
-    });
-    if (!snapshot?.items.length) return [];
-    const ledger = options.ledger ?? exposureLedger();
-    const library = useLibraryStore.getState();
-    const wanted = snapshot.items
-      .filter((d) => !languages.length || !d.language || languages.includes(d.language.toLowerCase()))
-      .slice(0, DISCOVERY_IN_POOL);
-    const songs: Song[] = [];
-    for (const d of wanted) {
-      if (signal?.aborted) break;
-      const song = await getSong(d.catalogId).then((x) => x ?? null).catch(() => null);
-      if (song) songs.push(song);
-    }
-    // The same rules the catalogue pool is held to.
-    return freshSongs(songs, { muted: [], blocked: (song) => isSongBlocked(song, library) }).filter((song) =>
-      options.fewerRepeats ? ledger.penalty(songKey(song)) === 0 : !ledger.cooling(songKey(song)),
-    );
-  } catch {
-    return [];
-  }
 }
 
 /* ---------- per-prompt rounds ---------- */
@@ -512,16 +446,7 @@ export async function generatePlaylist(
   };
   const avoidTitles = loadAvoidTitles();
   // The catalogue pool is gathered (and embedded) while the curator thinks.
-  // 9.1.0 — the catalogue pool and, when the request asks for current music, the
-  // live-web discoveries, gathered side by side. Discoveries LEAD the pool: they
-  // are the only part of it with outside evidence that a song is current.
-  const cataloguePromise = gatherCataloguePool(intent, langs, muted, avoidTitles, signal, { round, ledger, fewerRepeats: options.fewerRepeats === true }).catch(() => [] as Song[]);
-  const discoveryPromise = gatherDiscoveries(intent, langs, prompt, signal, { ledger, fewerRepeats: options.fewerRepeats === true }).catch(() => [] as Song[]);
-  const poolPromise = Promise.all([discoveryPromise, cataloguePromise]).then(([found, catalogue]) => {
-    const seen = new Set(found.map((s) => s.id));
-    const keys = new Set(found.map((s) => songKey(s)));
-    return [...found, ...catalogue.filter((s) => !seen.has(s.id) && !keys.has(songKey(s)))];
-  });
+  const poolPromise = gatherCataloguePool(intent, langs, muted, avoidTitles, signal, { round, ledger, fewerRepeats: options.fewerRepeats === true }).catch(() => [] as Song[]);
   void poolPromise.then((pool) => {
     if (!pool.length || signal?.aborted) return;
     void embedQueryDetailed(prompt).catch(() => null);

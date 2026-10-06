@@ -84,12 +84,12 @@ describe('summarise — where the candidates came from and what gave way', () =>
   it('sums candidate counts per source, strongest first', () => {
     const d = summarise([
       batch(['a'], { trace: trace({ sources: { related: 10, 'verified-trend': 4 } }) }),
-      batch(['b'], { trace: trace({ sources: { related: 5, 'web-discovery': 2 } }) }),
+      batch(['b'], { trace: trace({ sources: { related: 5, genre: 2 } }) }),
     ]);
     expect(d.sources).toEqual([
       { source: 'related', count: 15 },
       { source: 'verified-trend', count: 4 },
-      { source: 'web-discovery', count: 2 },
+      { source: 'genre', count: 2 },
     ]);
   });
 

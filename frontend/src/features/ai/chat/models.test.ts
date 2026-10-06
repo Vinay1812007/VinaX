@@ -6,13 +6,11 @@ import {
   MAX_RECENTS,
   MODES,
   NOT_AVAILABLE,
-  bestAgentChoice,
   buildModelMenu,
   catalogModelForSend,
   choiceKey,
   choiceLabel,
   contextBadge,
-  isAgentChoice,
   loadInitialChoice,
   loadRecents,
   parseCatalogResponse,
@@ -31,18 +29,18 @@ const GROUPS: CatalogGroup[] = [
     hint: 'Instant answers',
     configured: true,
     models: [
-      { id: 'vendor/agentic', label: 'agentic', context: 131072, agent: true },
-      { id: 'vendor/agentic-mini', label: 'agentic-mini', context: 131072, agent: true },
-      { id: 'vendor/plain-8b', label: 'plain-8b', context: 8192, agent: false },
+      { id: 'vendor/agentic', label: 'agentic', context: 131072 },
+      { id: 'vendor/agentic-mini', label: 'agentic-mini', context: 131072 },
+      { id: 'vendor/plain-8b', label: 'plain-8b', context: 8192 },
     ],
   },
-  { id: 'opr', label: 'VinaX OPR ALL', hint: 'Marketplace', configured: true, models: [{ id: 'lab/big:free', label: 'big', context: 1_000_000, agent: false }] },
+  { id: 'opr', label: 'VinaX OPR ALL', hint: 'Marketplace', configured: true, models: [{ id: 'lab/big:free', label: 'big', context: 1_000_000 }] },
 ];
 
 beforeEach(() => localStorage.clear());
 
 describe('parseCatalogResponse', () => {
-  it('reads groups and models, trusting only an explicit agent flag', () => {
+  it('reads groups and models, ignoring fields it does not know (an older server\'s agent flag)', () => {
     const groups = parseCatalogResponse({
       groups: [
         { id: 'grq', label: 'G', hint: 'h', configured: true, models: [{ id: 'a', label: 'A', context: 1024, agent: true }, { id: 'b', label: 'B', agent: 'yes' }, { id: 'a' }, null, { label: 'no id' }] },
@@ -52,8 +50,8 @@ describe('parseCatalogResponse', () => {
     });
     expect(groups.map((g) => g.id)).toEqual(['grq', 'opr']);
     expect(groups[0].models).toEqual([
-      { id: 'a', label: 'A', context: 1024, agent: true },
-      { id: 'b', label: 'B', context: null, agent: false },
+      { id: 'a', label: 'A', context: 1024 },
+      { id: 'b', label: 'B', context: null },
     ]);
     expect(groups[1]).toMatchObject({ configured: false, models: [] });
   });
@@ -78,7 +76,7 @@ describe('contextBadge', () => {
 });
 
 describe('buildModelMenu', () => {
-  const base = { groups: GROUPS, state: 'ready' as const, query: '', agentOnly: false, recents: [] };
+  const base = { groups: GROUPS, state: 'ready' as const, query: '', recents: [] };
 
   it('lists every pinned engine and EVERY catalogue model, in sections', () => {
     const menu = buildModelMenu(base);
@@ -87,10 +85,10 @@ describe('buildModelMenu', () => {
     const total = menu.reduce((n, s) => n + s.rows.length, 0);
     expect(total).toBe(MODES.length + 4);
     const grq = menu[2].rows;
-    expect(grq.map((r) => [r.label, r.badge, r.agent])).toEqual([
-      ['agentic', '128K', true],
-      ['agentic-mini', '128K', true],
-      ['plain-8b', '8K', false],
+    expect(grq.map((r) => [r.label, r.badge])).toEqual([
+      ['agentic', '128K'],
+      ['agentic-mini', '128K'],
+      ['plain-8b', '8K'],
     ]);
     expect(grq[0].choice).toEqual({ mode: 'scholar', model: 'vendor/agentic' });
     expect(menu[3].rows[0].choice).toEqual({ mode: 'router', model: 'lab/big:free' });
@@ -135,24 +133,6 @@ describe('buildModelMenu', () => {
     expect(early[0].rows.map((r) => r.label)).toEqual(['big', 'Deep', 'retired']);
     // Recents step aside while searching.
     expect(buildModelMenu({ ...base, recents, query: 'deep' })[0].title).toBe('Recommended');
-  });
-
-  it('agent mode filters the menu to agent-capable models only', () => {
-    const menu = buildModelMenu({ ...base, agentOnly: true, recents: [{ mode: 'sage' }, { mode: 'scholar', model: 'vendor/agentic' }] });
-    expect(menu.map((s) => s.id)).toEqual(['recent', 'grq']);
-    expect(menu.flatMap((s) => s.rows).every((r) => r.agent)).toBe(true);
-    const none = buildModelMenu({ ...base, agentOnly: true, groups: [GROUPS[1]] });
-    expect(none).toEqual([{ id: 'no-agent', title: 'Agent models', rows: [], note: 'No agent model is available right now', retry: false }]);
-  });
-});
-
-describe('agent choice', () => {
-  it('picks the full-size agent model first, deterministically', () => {
-    expect(bestAgentChoice(GROUPS)).toEqual({ mode: 'scholar', model: 'vendor/agentic' });
-    expect(bestAgentChoice([GROUPS[1]])).toBeNull();
-    expect(isAgentChoice({ mode: 'scholar', model: 'vendor/agentic-mini' }, GROUPS)).toBe(true);
-    expect(isAgentChoice({ mode: 'scholar', model: 'vendor/plain-8b' }, GROUPS)).toBe(false);
-    expect(isAgentChoice({ mode: 'muse' }, GROUPS)).toBe(false);
   });
 });
 

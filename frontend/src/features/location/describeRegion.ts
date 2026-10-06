@@ -73,4 +73,4 @@ export function describeRegionSource(region: RegionInfo | null, now = Date.now()
 
 /** What this place context is actually used for — the listener should be able to see it. */
 export const REGION_USES =
-  'Used for local charts, the date and time in answers, festival timing and the wording of web searches. Never used to decide your music language, and your IP address is never stored or sent on.';
+  'Used for local charts, the date and time in answers and festival timing. Never used to decide your music language, and your IP address is never stored or sent on.';

@@ -59,7 +59,7 @@ export default function AboutPage() {
           can switch off — see what VinaX knows on your <Link to="/taste-profile">taste profile</Link>.
         </p>
         <p>
-          Inside: VinaX AI with Think, Research and voice chat, synced karaoke lyrics, Listen Together rooms, offline
+          Inside: VinaX AI with Think and voice chat, synced karaoke lyrics, Listen Together rooms, offline
           downloads in the Android app, Drive mode, weekly mixes and a Ctrl+K command palette. Music streams from
           independent public catalogs with automatic failover.
         </p>

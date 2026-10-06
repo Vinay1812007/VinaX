@@ -1,8 +1,8 @@
 /**
  * v7.1 — everything the chat knows about engines and models, with no React in
  * it: the pinned seats, the nickname table for the "who answered" chip, and
- * the pure builder behind the single model menu (search, sections, recents,
- * the agent filter). Pure so it can be unit-tested without a DOM.
+ * the pure builder behind the single model menu (search, sections,
+ * recents). Pure so it can be unit-tested without a DOM.
  */
 import type { CatalogGroup, CatalogGroupId, CatalogModel, CatalogPicks, Mode, ModelChoice } from './types';
 
@@ -21,7 +21,7 @@ export const MODES: Array<{
   catalog?: CatalogGroupId;
 }> = [
   { id: 'auto', label: 'Auto', hint: 'Picks the best engine for each question', tier: 'core' },
-  { id: 'maestro', label: 'VinaX Maestro', hint: 'Flagship · live web answers · recommended', tier: 'core' },
+  { id: 'maestro', label: 'VinaX Maestro', hint: 'Flagship · recommended', tier: 'core' },
   { id: 'muse', label: 'Balanced', hint: 'Everyday chat', tier: 'core' },
   { id: 'swift', label: 'Fast', hint: 'Quickest answers · VinaX OAI OSS 20B', tier: 'core' },
   { id: 'sage', label: 'Deep', hint: 'Careful reasoning · VinaX NVD NMTRN SUP', tier: 'core' },
@@ -208,7 +208,7 @@ export function contextBadge(context: number | null): string | null {
 /* ---------- catalogue response ---------- */
 
 /** Shape-tolerant read of GET /api/aimodels. Unknown groups and malformed rows
- *  are dropped; `agent` is true only when the server says exactly `true`. */
+ *  are dropped. */
 export function parseCatalogResponse(body: unknown): CatalogGroup[] {
   const groups = (body as { groups?: unknown } | null)?.groups;
   if (!Array.isArray(groups)) return [];
@@ -231,7 +231,6 @@ export function parseCatalogResponse(body: unknown): CatalogGroup[] {
         // Catalogue models are displayed as the server labels them.
         label: typeof m.label === 'string' && m.label.trim() ? m.label.trim() : slugLabel(id),
         context: typeof m.context === 'number' && Number.isFinite(m.context) ? m.context : null,
-        agent: m.agent === true,
       });
     }
     out.push({
@@ -245,34 +244,6 @@ export function parseCatalogResponse(body: unknown): CatalogGroup[] {
   return out;
 }
 
-/* ---------- agent mode ---------- */
-
-/** Every agent-capable model the catalogue serves right now. */
-export function agentChoices(groups: CatalogGroup[]): Array<{ choice: ModelChoice; model: CatalogModel }> {
-  const out: Array<{ choice: ModelChoice; model: CatalogModel }> = [];
-  for (const g of groups)
-    for (const m of g.models) if (m.agent) out.push({ choice: { mode: GROUP_SEAT[g.id], model: m.id }, model: m });
-  return out;
-}
-
-/** The agent model to switch to when Agent mode is turned on while a plain
- *  model is selected: the largest context window first, then the shorter
- *  (un-suffixed, full-size) name, then alphabetical — deterministic. */
-export function bestAgentChoice(groups: CatalogGroup[]): ModelChoice | null {
-  const all = agentChoices(groups);
-  if (!all.length) return null;
-  all.sort(
-    (a, b) =>
-      (b.model.context ?? 0) - (a.model.context ?? 0) ||
-      a.model.label.length - b.model.label.length ||
-      a.model.label.localeCompare(b.model.label),
-  );
-  return all[0].choice;
-}
-
-export const isAgentChoice = (c: ModelChoice, groups: CatalogGroup[]): boolean =>
-  agentChoices(groups).some((a) => choiceKey(a.choice) === choiceKey(c));
-
 /* ---------- the menu ---------- */
 
 export type CatalogState = 'idle' | 'loading' | 'ready' | 'failed';
@@ -285,7 +256,6 @@ export interface MenuRow {
   hint: string;
   /** Context size, e.g. "128K". */
   badge: string | null;
-  agent: boolean;
   /** Owner-named engines and raw model names read better in mono. */
   mono: boolean;
 }
@@ -314,7 +284,6 @@ const seatRow = (section: string, m: (typeof MODES)[number]): MenuRow => ({
   label: m.label,
   hint: m.hint,
   badge: null,
-  agent: false,
   mono: m.tier === 'advanced',
 });
 const modelRow = (section: string, group: CatalogGroupId, m: CatalogModel): MenuRow => ({
@@ -323,7 +292,6 @@ const modelRow = (section: string, group: CatalogGroupId, m: CatalogModel): Menu
   label: m.label,
   hint: '',
   badge: contextBadge(m.context),
-  agent: m.agent,
   mono: true,
 });
 
@@ -334,10 +302,9 @@ export function buildModelMenu(input: {
   groups: CatalogGroup[];
   state: CatalogState;
   query: string;
-  agentOnly: boolean;
   recents: ModelChoice[];
 }): MenuSection[] {
-  const { groups, state, agentOnly, recents } = input;
+  const { groups, state, recents } = input;
   const q = input.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const sections: MenuSection[] = [];
   const byId = (id: CatalogGroupId): CatalogGroup | undefined => groups.find((g) => g.id === id);
@@ -350,13 +317,12 @@ export function buildModelMenu(input: {
         const live = byId(group)?.models.find((m) => m.id === r.model);
         // Once the catalogue is known, a model it no longer serves is dropped.
         if (state === 'ready' && !live) continue;
-        if (agentOnly && !live?.agent) continue;
         rows.push(
           live
             ? modelRow('recent', group, live)
-            : { ...modelRow('recent', group, { id: r.model, label: slugLabel(r.model), context: null, agent: false }) },
+            : { ...modelRow('recent', group, { id: r.model, label: slugLabel(r.model), context: null }) },
         );
-      } else if (!agentOnly) {
+      } else {
         const seat = MODES.find((m) => m.id === r.mode);
         if (seat) rows.push(seatRow('recent', seat));
       }
@@ -364,14 +330,11 @@ export function buildModelMenu(input: {
     if (rows.length) sections.push({ id: 'recent', title: 'Recently used', rows, note: null, retry: false });
   }
 
-  if (!agentOnly) {
-    const core = CORE_MODES.filter((m) => matches(q, m.label, m.hint)).map((m) => seatRow('recommended', m));
-    if (core.length) sections.push({ id: 'recommended', title: 'Recommended', rows: core, note: null, retry: false });
-    const adv = ADVANCED_MODES.filter((m) => matches(q, m.label, m.hint)).map((m) => seatRow('engines', m));
-    if (adv.length) sections.push({ id: 'engines', title: 'VinaX engines', rows: adv, note: null, retry: false });
-  }
+  const core = CORE_MODES.filter((m) => matches(q, m.label, m.hint)).map((m) => seatRow('recommended', m));
+  if (core.length) sections.push({ id: 'recommended', title: 'Recommended', rows: core, note: null, retry: false });
+  const adv = ADVANCED_MODES.filter((m) => matches(q, m.label, m.hint)).map((m) => seatRow('engines', m));
+  if (adv.length) sections.push({ id: 'engines', title: 'VinaX engines', rows: adv, note: null, retry: false });
 
-  let anyAgent = false;
   for (const id of GROUP_IDS) {
     const g = byId(id);
     const title = g?.label ?? MODES.find((m) => m.catalog === id)?.label ?? id;
@@ -383,18 +346,14 @@ export function buildModelMenu(input: {
       if (!q.length) sections.push({ id, title, rows: [], note: 'Couldn’t load the list — tap to retry', retry: true });
       continue;
     }
-    const models = (g?.models ?? []).filter((m) => (!agentOnly || m.agent) && matches(q, m.label, m.id, title));
-    if (models.some((m) => m.agent)) anyAgent = true;
+    const models = (g?.models ?? []).filter((m) => matches(q, m.label, m.id, title));
     if (models.length) {
       sections.push({ id, title, rows: models.map((m) => modelRow(id, id, m)), note: null, retry: false });
-    } else if (!q.length && !agentOnly) {
+    } else if (!q.length) {
       sections.push({ id, title, rows: [], note: NOT_AVAILABLE, retry: false });
     }
   }
 
-  if (agentOnly && !anyAgent && (state === 'ready' || state === 'failed') && !q.length) {
-    sections.push({ id: 'no-agent', title: 'Agent models', rows: [], note: 'No agent model is available right now', retry: state === 'failed' });
-  }
   if (q.length && !sections.some((s) => s.rows.length)) {
     return [{ id: 'none', title: 'No matches', rows: [], note: `No model matches “${input.query.trim()}”`, retry: false }];
   }

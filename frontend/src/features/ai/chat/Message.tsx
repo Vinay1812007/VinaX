@@ -1,7 +1,7 @@
 import { memo, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChatPlayerCard } from '@/components/ChatPlayerCard';
-import { GlobeIcon, SparkleIcon, WaveIcon } from '@/components/Icons';
+import { SparkleIcon, WaveIcon } from '@/components/Icons';
 import { RichContent } from '@/components/ai/RichContent';
 import {
   BranchIcon,
@@ -25,7 +25,6 @@ import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { cn } from '@/utils/cn';
 import { reducedMotion } from '@/utils/motion';
 import { CheckIcon } from './icons';
-import { ToolActivity } from './ToolActivity';
 import type { Msg } from './types';
 
 /** Everything a message can ask the page to do. The object is stable (see
@@ -84,15 +83,14 @@ export const UserMessage = memo(function UserMessage({
 });
 
 const WAITING = ['Thinking…', 'Reading your question…', 'Gathering ideas…', 'Putting it together…'];
-const WAITING_AGENT = ['Working…', 'Planning the steps…', 'Looking things up…', 'Checking the details…'];
 
 /** The pause before the first token: beside it the VinaX mark turns slowly
  *  and breathes in the Marigold → Rose glow (.ai-msg-mark.is-waiting), and this
  *  short status runs a soft shimmer, changing every couple of seconds. The
  *  accessible name stays "Thinking" — a screen reader hears it once, not every
  *  rotation. */
-function ThinkingMark({ agent }: { agent: boolean }): ReactNode {
-  const lines = agent ? WAITING_AGENT : WAITING;
+function ThinkingMark(): ReactNode {
+  const lines = WAITING;
   const [i, setI] = useState(0);
   useEffect(() => {
     if (reducedMotion()) return;
@@ -105,76 +103,6 @@ function ThinkingMark({ agent }: { agent: boolean }): ReactNode {
         {lines[i]}
       </span>
     </span>
-  );
-}
-
-function Sources({ sources, previews }: { sources: string[]; previews?: Array<{ url: string; title: string; snippet: string }> }): ReactNode {
-  // 9.1.0 — when the server sent each source's own title and snippet, show them:
-  // a reader can tell what a citation IS without opening it. The text comes from
-  // an arbitrary page, so it is rendered as text (React escapes it) and never as
-  // markup. Without previews this falls back to the 9.0 host rows below.
-  const previewOf = new Map((previews ?? []).map((p) => [p.url, p]));
-  // The ranked-source card: numbered to match the [1][2] citations in the
-  // answer. The coloured chip is a local letter avatar, NOT an icon fetch —
-  // pulling icons from third parties would leak what you read.
-  return (
-    <div className="ai-card ai-sources">
-      <p className="ai-card-heading">
-        <GlobeIcon className="w-3.5 h-3.5" /> Sources
-      </p>
-      <div className="space-y-0.5">
-        {sources.map((u, k) => {
-          let host = u;
-          let path = '';
-          try {
-            const parsed = new URL(u);
-            host = parsed.hostname.replace(/^www\./, '');
-            path = parsed.pathname.length > 1 ? parsed.pathname : '';
-          } catch {
-            /* show the raw string */
-          }
-          const hue = (host.charCodeAt(0) * 47 + host.length * 13) % 360;
-          return (
-            <a
-              key={k}
-              href={u}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-card px-1.5 py-1 hover:bg-[var(--ai-hover)] transition-colors min-w-0"
-            >
-              <span className="text-[10px] font-bold ai-t3 w-6 shrink-0">[{k + 1}]</span>
-              <span
-                aria-hidden
-                className="w-[18px] h-[18px] rounded-md flex items-center justify-center text-[10px] font-extrabold text-white shrink-0"
-                style={{ background: `hsl(${hue} 55% 42%)` }}
-              >
-                {host.charAt(0).toUpperCase()}
-              </span>
-              <span className="min-w-0 flex-1">
-                {(() => {
-                  const preview = previewOf.get(u);
-                  if (!preview?.title && !preview?.snippet) {
-                    return (
-                      <span className="flex items-center gap-2 min-w-0">
-                        <span className="text-[11px] font-semibold ai-t2 truncate">{host}</span>
-                        {path && <span className="text-[11px] ai-t3 truncate hidden sm:inline min-w-0">{path}</span>}
-                      </span>
-                    );
-                  }
-                  return (
-                    <span className="block min-w-0">
-                      <span className="block text-[12px] font-semibold ai-t1 ai-src-title">{preview.title || host}</span>
-                      {preview.snippet && <span className="block text-[11px] ai-t3 ai-src-snippet">{preview.snippet}</span>}
-                      <span className="block text-[10px] ai-t3 truncate">{host}</span>
-                    </span>
-                  );
-                })()}
-              </span>
-            </a>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 
@@ -245,7 +173,6 @@ export const AssistantMessage = memo(function AssistantMessage({
   busy,
   speaking,
   speakKey,
-  agent,
   handlers,
 }: {
   m: Msg;
@@ -256,8 +183,6 @@ export const AssistantMessage = memo(function AssistantMessage({
   busy: boolean;
   speaking: boolean;
   speakKey: string;
-  /** Agent mode is on for the turn in flight (waiting copy only). */
-  agent: boolean;
   handlers: MessageHandlers;
 }): ReactNode {
   const more: MoreAction[] = last
@@ -282,9 +207,6 @@ export const AssistantMessage = memo(function AssistantMessage({
       </span>
       <div className="min-w-0 flex-1">
         <Images images={m.images} />
-        {m.steps?.length || m.sources?.length ? (
-          <ToolActivity steps={m.steps} sources={m.sources} working={streaming} answering={!!m.content} />
-        ) : null}
         {m.player ? (
           <ChatPlayerCard fallback={m.content} />
         ) : noReply ? (
@@ -375,11 +297,8 @@ export const AssistantMessage = memo(function AssistantMessage({
             {!busy && last && m.followups?.length ? <FollowupChips items={m.followups} disabled={busy} onPick={handlers.send} /> : null}
           </>
         ) : (
-          <ThinkingMark agent={agent} />
+          <ThinkingMark />
         )}
-        {/* The full, numbered source list once the reply is complete; while it
-            streams the tool timeline above names the hosts. */}
-        {!streaming && m.sources?.length ? <Sources sources={m.sources} previews={m.sourcePreviews} /> : null}
       </div>
     </div>
   );

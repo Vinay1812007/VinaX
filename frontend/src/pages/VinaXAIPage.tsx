@@ -7,7 +7,7 @@ import { droppedFiles, attachmentText, type Attachment } from '@/features/ai/att
 import { splitFollowups } from '@/features/ai/followups';
 import { onSpeakingChange, readAloud, readAloudSupported, setReadAloudVoice } from '@/features/ai/readAloud';
 import { parseSlash } from '@/features/ai/slashCommands';
-import { Composer, type AgentAvailability, type ComposerHandle } from '@/features/ai/chat/Composer';
+import { Composer, type ComposerHandle } from '@/features/ai/chat/Composer';
 import { Greeting, Suggestions, type QuickAction } from '@/features/ai/chat/EmptyState';
 import { LiveVoiceHost } from '@/features/ai/chat/LiveVoiceHost';
 import { MessageList } from '@/features/ai/chat/MessageList';
@@ -17,14 +17,11 @@ import { DEVICE_VOICE, SettingsDialog, type VoiceCatalog } from '@/features/ai/c
 import { Sidebar, type SidebarHandlers } from '@/features/ai/chat/Sidebar';
 import { Toast, type ToastState } from '@/features/ai/chat/Toast';
 import { buildChatRequest } from '@/features/ai/chat/buildChatRequest';
-import { CHAT_ENDPOINT, IMAGE_ENDPOINT, VOICES_ENDPOINT, clientHeaders, warmWebSearch } from '@/features/ai/chat/endpoints';
+import { CHAT_ENDPOINT, IMAGE_ENDPOINT, VOICES_ENDPOINT, clientHeaders } from '@/features/ai/chat/endpoints';
 import { FileIcon, MenuIcon, PanelIcon } from '@/features/ai/chat/icons';
 import { collectArtifacts } from '@/features/ai/artifacts/collect';
 import {
-  agentChoices,
-  bestAgentChoice,
   choiceLabel,
-  isAgentChoice,
   isMode,
   loadDefaultChoice,
   loadInitialChoice,
@@ -43,6 +40,7 @@ import { QUICK_ACTIONS, drawStarters } from '@/features/ai/chat/starters';
 import { placeMenu, type MenuPlacement } from '@/features/ai/chat/placeMenu';
 import {
   PREF,
+  dropRetiredPrefs,
   exportAllChats,
   exportChat,
   freshChat,
@@ -108,27 +106,19 @@ export default function VinaXAIPage(): ReactNode {
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  /* ---------- model + agent ---------- */
+  /* ---------- model ---------- */
   const [choice, setChoice] = useState<ModelChoice>(loadInitialChoice);
   const [defaultChoice, setDefaultChoice] = useState<ModelChoice | null>(loadDefaultChoice);
   const [recents, setRecents] = useState<ModelChoice[]>(loadRecents);
   const [menuOpen, setMenuOpen] = useState(false);
   const catalog = useModelCatalog();
-  const [agentOn, setAgentOn] = useState(false);
-  const [agentStart, setAgentStart] = useState(() => readFlag(PREF.agentStart, false));
-  /** The model to go back to when Agent mode is switched off again. */
-  const beforeAgentRef = useRef<ModelChoice | null>(null);
+
+  // 10.2 — clear preference keys no build reads any more ("Start in Agent mode").
+  useEffect(dropRetiredPrefs, []);
 
   /* ---------- composer toggles ---------- */
-  const [web, setWeb] = useState(false);
-  // 10.1 — Web search (and Research, which turns it on) wakes the search engine.
-  useEffect(() => {
-    if (web) warmWebSearch();
-  }, [web]);
-  // Think routes the next messages to the deep lane; Research forces
-  // multi-source web answers.
+  // Think routes the next messages to the deep lane.
   const [think, setThink] = useState(false);
-  const [research, setResearch] = useState(false);
   const [imageMode, setImageMode] = useState(false);
 
   /* ---------- preferences (each on its long-standing key) ---------- */
@@ -262,7 +252,7 @@ export default function VinaXAIPage(): ReactNode {
   usePageMeta({
     title: chatTitle ?? 'VinaX AI — ask anything',
     description:
-      'Chat with VinaX AI — ask anything, search the live web, and get clean answers with code, tables and images. Free, private, no login.',
+      'Chat with VinaX AI — ask anything and get clean answers with code, tables and images. Free, private, no login.',
     canonicalPath: '/VinaXAI',
   });
 
@@ -278,8 +268,8 @@ export default function VinaXAIPage(): ReactNode {
   );
 
   /* ---------- latest values for callbacks that outlive a render ---------- */
-  const stateRef = useRef({ choice, agentOn, web, think, research, profile, replyLang, replyStyle, songCtx, autoRead, groups: catalog.groups });
-  stateRef.current = { choice, agentOn, web, think, research, profile, replyLang, replyStyle, songCtx, autoRead, groups: catalog.groups };
+  const stateRef = useRef({ choice, think, profile, replyLang, replyStyle, songCtx, autoRead });
+  stateRef.current = { choice, think, profile, replyLang, replyStyle, songCtx, autoRead };
 
   /* ---------- model selection ---------- */
   const applyChoice = useCallback((next: ModelChoice): void => {
@@ -320,60 +310,6 @@ export default function VinaXAIPage(): ReactNode {
     return () => window.removeEventListener('resize', close);
   }, [menuOpen]);
 
-  const agentAvailability: AgentAvailability =
-    catalog.state === 'loading'
-      ? 'loading'
-      : catalog.state === 'ready'
-        ? agentChoices(catalog.groups).length
-          ? 'available'
-          : 'none'
-        : 'unknown';
-
-  const loadCatalog = catalog.load;
-  const turnAgentOn = useCallback(
-    async (quiet: boolean): Promise<void> => {
-      const groups = await loadCatalog();
-      const best = bestAgentChoice(groups);
-      if (!best) {
-        if (!quiet) showToast('No agent model is available right now.');
-        return;
-      }
-      setAgentOn(true);
-      const current = stateRef.current.choice;
-      if (!isAgentChoice(current, groups)) {
-        beforeAgentRef.current = current;
-        applyChoice(best);
-      }
-    },
-    [applyChoice, loadCatalog, showToast],
-  );
-  const toggleAgent = (): void => {
-    if (!agentOn) {
-      void turnAgentOn(false);
-      return;
-    }
-    setAgentOn(false);
-    const back = beforeAgentRef.current;
-    beforeAgentRef.current = null;
-    if (back) applyChoice(back);
-  };
-  // "Start in Agent mode" — the one case where the catalogue is asked for
-  // before the menu opens, because the listener asked for exactly that.
-  useEffect(() => {
-    if (readFlag(PREF.agentStart, false)) void turnAgentOn(true);
-  }, [turnAgentOn]);
-  // An agent model that stops being served takes Agent mode with it.
-  useEffect(() => {
-    if (agentOn && catalog.state === 'ready' && !agentChoices(catalog.groups).length) setAgentOn(false);
-  }, [agentOn, catalog.state, catalog.groups]);
-
-  // Agent mode means "an agent model is answering": moving to a plain model
-  // by any route (a quick action, the default-model setting) switches it off.
-  useEffect(() => {
-    if (agentOn && catalog.state === 'ready' && !isAgentChoice(choice, catalog.groups)) setAgentOn(false);
-  }, [agentOn, choice, catalog.state, catalog.groups]);
-
-  const agentActive = agentOn && isAgentChoice(choice, catalog.groups);
   const modelLabel = choiceLabel(choice);
 
   /* ---------- voice ---------- */
@@ -565,9 +501,6 @@ export default function VinaXAIPage(): ReactNode {
       case 'think':
         setThink((v) => !v);
         return true;
-      case 'web':
-        setWeb((v) => !v);
-        return true;
       case 'now':
         pushExchange(
           '/now',
@@ -688,7 +621,6 @@ export default function VinaXAIPage(): ReactNode {
 
     const now = stateRef.current;
     const voiceLive = Boolean(voiceEngineRef.current);
-    const agent = !voiceLive && now.agentOn && isAgentChoice(now.choice, now.groups);
     const player = usePlayerStore.getState();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -702,10 +634,7 @@ export default function VinaXAIPage(): ReactNode {
         {
           voiceLive,
           choice: now.choice,
-          agent,
-          web: now.web,
           think: now.think,
-          research: now.research,
           replyLang: now.replyLang,
           replyStyle: now.replyStyle,
           profile: now.profile,
@@ -721,15 +650,7 @@ export default function VinaXAIPage(): ReactNode {
         body,
         signal: controller.signal,
         onDelta: (delta) => voiceEngineRef.current?.feed(delta),
-        // 10.0 — the search sources ride along mid-stream too, so the tool
-        // timeline can say "Searched the web · 5 sources" while the reply is written.
-        onUpdate: (st) =>
-          replaceLastAssistant(chatId, (m) => ({
-            ...m,
-            content: st.text,
-            steps: st.steps.length ? st.steps : m.steps,
-            sources: st.sources.length ? st.sources : m.sources,
-          })),
+        onUpdate: (st) => replaceLastAssistant(chatId, (m) => ({ ...m, content: st.text })),
       });
     } catch {
       result = { state: initialStreamState(), failure: 'unavailable', aborted: controller.signal.aborted };
@@ -763,11 +684,8 @@ export default function VinaXAIPage(): ReactNode {
       failed: failed || undefined,
       unavailable: unavailable || undefined,
       content: finalText || '…',
-      sources: state.sources.length ? state.sources : undefined,
-      sourcePreviews: state.sourcePreviews.length ? state.sourcePreviews : undefined,
       engine: engine || undefined,
       followups: split.followups.length ? split.followups : undefined,
-      steps: state.steps.length ? state.steps : undefined,
     }));
     if (voiceEngineRef.current) {
       if (split.body) voiceEngineRef.current.finish(finalText);
@@ -919,7 +837,6 @@ export default function VinaXAIPage(): ReactNode {
         groups={catalog.groups}
         current={choice}
         recents={recents}
-        agentOnly={agentOn}
         onPick={pickModel}
         onClose={() => {
           setMenuOpen(false);
@@ -980,11 +897,6 @@ export default function VinaXAIPage(): ReactNode {
             setSendOnEnter(on);
             writeFlag(PREF.sendOnEnter, on);
           }}
-          agentStart={agentStart}
-          onAgentStart={(on) => {
-            setAgentStart(on);
-            writeFlag(PREF.agentStart, on);
-          }}
           replyLang={replyLang}
           replyStyle={replyStyle}
           songCtx={songCtx}
@@ -1042,7 +954,6 @@ export default function VinaXAIPage(): ReactNode {
             <h1 className="ai-header-title">{active?.title ?? 'VinaX AI'}</h1>
             <p className="ai-header-sub md:hidden">
               {modelLabel}
-              {agentOn ? ' · Agent' : ''}
               {think ? ' · Think' : ''}
               {voiceMode ? ' · Voice' : ''}
             </p>
@@ -1146,7 +1057,6 @@ export default function VinaXAIPage(): ReactNode {
                 messages={messages}
                 busy={busy}
                 speakingId={speakingId}
-                agent={agentActive}
                 handlers={messageHandlers}
               />
             )}
@@ -1186,19 +1096,8 @@ export default function VinaXAIPage(): ReactNode {
             menuOpen={menuOpen}
             onToggleMenu={toggleMenu}
             menu={modelMenu}
-            agentOn={agentOn}
-            agentAvailability={agentAvailability}
-            onToggleAgent={toggleAgent}
-            web={web}
             think={think}
-            research={research}
-            onWeb={setWeb}
             onThink={setThink}
-            onResearch={(on) => {
-              // Research always searches the live web.
-              if (on) setWeb(true);
-              setResearch(on);
-            }}
             songCtx={songCtx}
             onSongCtx={setSongCtx}
             imageMode={imageMode}

@@ -6,8 +6,8 @@ import { latestNotesFingerprint } from '../src/constants/changelog';
  * the slash-command menu and the local `/now` command, reply preferences
  * (now in the settings dialog) travelling in the request body, the streamed
  * reply with follow-up chips and per-reply actions (pin, branch), the single
- * model menu fed by the live catalogue, Agent mode with its activity list,
- * and saved prompts. No model, no network: `POST /api/vinaxai` is answered by
+ * model menu fed by the live catalogue, the Connectors in the + menu, and
+ * saved prompts. No model, no network: `POST /api/vinaxai` is answered by
  * a canned event stream and `GET /api/aimodels` by a canned catalogue.
  */
 
@@ -22,20 +22,12 @@ interface ChatRequest {
 }
 
 const SSE_REPLY =
-  'data: {"meta":{"model":"x","mode":"muse","web":"off","sources":[]}}\n\n' +
+  'data: {"meta":{"model":"x","mode":"muse"}}\n\n' +
   'data: {"delta":"Here is a **short** answer.\\n\\n1. Kesariya — Arijit Singh\\n2. Srivalli — Sid Sriram\\n"}\n\n' +
   'data: {"delta":">>> Show an example | Make it shorter | Why?"}\n\n' +
   'data: {"done":true}\n\n';
 
-/** An agentic reply: two tool runs reported as additive `step` frames. */
-const SSE_AGENT_REPLY =
-  'data: {"meta":{"model":"vendor/agentic","mode":"scholar","web":"off","sources":[]}}\n\n' +
-  'data: {"step":{"tool":"search","label":"Searched the web for \u201cnews\u201d"}}\n\n' +
-  'data: {"step":{"tool":"code","label":"Ran code"}}\n\n' +
-  'data: {"delta":"Here is what I found."}\n\n' +
-  'data: {"done":true}\n\n';
-
-/** The live catalogue as GET /api/aimodels returns it (v7.1 adds `agent`). */
+/** The live catalogue as GET /api/aimodels returns it. */
 const CATALOG = {
   groups: [
     {
@@ -44,8 +36,8 @@ const CATALOG = {
       hint: 'Instant answers',
       configured: true,
       models: [
-        { id: 'vendor/agentic', label: 'agentic', provider: 'grq', context: 131072, agent: true },
-        { id: 'vendor/plain-8b', label: 'plain-8b', provider: 'grq', context: 8192, agent: false },
+        { id: 'vendor/large-70b', label: 'large-70b', provider: 'grq', context: 131072 },
+        { id: 'vendor/plain-8b', label: 'plain-8b', provider: 'grq', context: 8192 },
       ],
     },
     {
@@ -53,7 +45,7 @@ const CATALOG = {
       label: 'VinaX OPR ALL',
       hint: 'Marketplace',
       configured: true,
-      models: [{ id: 'lab/big:free', label: 'big', provider: 'opr', context: 1000000, agent: false }],
+      models: [{ id: 'lab/big:free', label: 'big', provider: 'opr', context: 1000000 }],
     },
   ],
 };
@@ -83,7 +75,7 @@ async function mockNetwork(page: Page, posted: ChatRequest[]): Promise<void> {
       return route.fulfill({
         status: 200,
         headers: { 'content-type': 'text/event-stream' },
-        body: body.model === 'vendor/agentic' ? SSE_AGENT_REPLY : SSE_REPLY,
+        body: SSE_REPLY,
       });
     }
     if (url.pathname === '/api/aimodels') return route.fulfill({ json: CATALOG });
@@ -225,7 +217,7 @@ test('welcome brief, slash commands, prefs in the request, reply actions, pin an
   expect(pageErrors).toEqual([]);
 });
 
-test('one model menu lists the live catalogue; a pick goes on the wire; Agent mode shows its working', async ({ page }) => {
+test('one model menu lists the live catalogue; a pick goes on the wire; connectors switch on and off', async ({ page }) => {
   const posted: ChatRequest[] = [];
   const pageErrors: string[] = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
@@ -247,9 +239,8 @@ test('one model menu lists the live catalogue; a pick goes on the wire; Agent mo
   for (const heading of [/recommended/i, /vinax engines/i, /vinax grq all/i, /vinax opr all/i]) {
     await expect(list).toContainText(heading);
   }
-  const agentic = list.locator('[role="option"]').filter({ hasText: 'agentic' });
-  await expect(agentic).toContainText(/agent/i);
-  await expect(agentic).toContainText(/128k/i);
+  const large = list.locator('[role="option"]').filter({ hasText: 'large-70b' });
+  await expect(large).toContainText(/128k/i);
   await expect(list.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
 
   // Type to filter, Enter to choose: the chip names the catalogue model.
@@ -267,39 +258,28 @@ test('one model menu lists the live catalogue; a pick goes on the wire; Agent mo
   expect(posted[0].model).toBe('lab/big:free');
   await expect(page.locator('[role="status"][aria-label="Thinking"]')).toHaveCount(0, { timeout: 10_000 });
 
-  // Agent mode moves to the agent-capable model and the reply shows its steps,
-  // folded to one line once the answer is complete.
-  const agent = page.locator('button[aria-label="Agent mode"]');
-  await agent.click();
-  await expect(agent).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('button[aria-label="Model: agentic"]')).toBeVisible();
-  await box.fill('find the news');
-  await box.press('Enter');
-  await expect.poll(() => posted.length, { timeout: 10_000 }).toBe(2);
-  expect(posted[1].mode).toBe('scholar');
-  expect(posted[1].model).toBe('vendor/agentic');
-  // 10.0 — the tool timeline folds to "Used 2 tools" and opens on demand.
-  const summary = page.getByRole('button', { name: /Used 2 tools/ });
-  await expect(summary).toBeVisible({ timeout: 10_000 });
-  await expect(summary).toHaveAttribute('aria-expanded', 'false');
-  await summary.click();
-  await expect(summary).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('ol[aria-label="Tool activity"] li')).toHaveCount(2);
-  await expect(page.locator('ol[aria-label="Tool activity"] li[data-status="done"]')).toHaveCount(2);
+  // 10.2 — no Agent mode.
+  await expect(page.locator('button[aria-label="Agent mode"]')).toHaveCount(0);
 
   // 10.0 — Connectors: switches in the + menu, active ones as chips above the box.
   await page.locator('button[aria-label="Attach and tools"]').click();
-  const web = page.getByRole('switch', { name: 'Web search' });
-  await expect(web).toHaveAttribute('aria-checked', 'false');
-  await web.click();
-  await expect(web).toHaveAttribute('aria-checked', 'true');
+  // The group is named by its heading (aria-labelledby), so find it by role + name.
+  const group = page.getByRole('group', { name: 'Connectors', exact: true });
+  await expect(group.getByRole('switch')).toHaveCount(4);
+  expect((await group.locator('.ai-conn-name').allTextContents()).map((t) => t.trim())).toEqual(['Think', 'Now playing', 'Memory', 'Place']);
+  const think = page.getByRole('switch', { name: 'Think' });
+  await expect(think).toHaveAttribute('aria-checked', 'false');
+  await think.click();
+  await expect(think).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('Escape');
-  const chip = page.locator('[role="group"][aria-label="Active connectors"] button[aria-label="Turn off Web search"]');
+  const chip = page.locator('[role="group"][aria-label="Active connectors"] button[aria-label="Turn off Think"]');
   await expect(chip).toBeVisible();
-  await box.fill('anything new?');
+  await box.fill('explain this carefully');
   await box.press('Enter');
-  await expect.poll(() => posted.length, { timeout: 10_000 }).toBe(3);
-  expect((posted[2] as ChatRequest & { web?: boolean }).web).toBe(true);
+  await expect.poll(() => posted.length, { timeout: 10_000 }).toBe(2);
+  // Think sends the message to the deep engine, and the body carries no retired fields.
+  expect(posted[1].mode).toBe('sage');
+  expect(posted[1]).not.toHaveProperty('web');
   await chip.click();
   await expect(chip).toHaveCount(0);
 

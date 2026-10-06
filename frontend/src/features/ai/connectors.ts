@@ -5,8 +5,6 @@
  * Every connector is something the chat ALREADY does; this module only gives
  * them one list and one vocabulary. Nothing here talks to the server.
  *
- *   web       — search the live web for the reply            (page state)
- *   research  — cross-check several web sources             (page state)
  *   think     — the deep engine reasons it through first     (page state)
  *   nowPlaying— the song playing now rides with the message (page state)
  *   memory    — the lines the listener asked it to remember  (./memory.ts)
@@ -55,7 +53,7 @@ export function setPlaceConnectorOn(on: boolean): void {
   notifyConnectors();
 }
 
-export type ConnectorId = 'web' | 'research' | 'think' | 'nowPlaying' | 'memory' | 'place';
+export type ConnectorId = 'think' | 'nowPlaying' | 'memory' | 'place';
 
 /** One row of the Connectors list, as the menu and the chip row draw it. */
 export interface ConnectorView {
@@ -69,8 +67,6 @@ export interface ConnectorView {
 }
 
 export interface ConnectorInputs {
-  web: boolean;
-  research: boolean;
   think: boolean;
   nowPlaying: boolean;
   /** Title of the song playing now, if any. */
@@ -87,8 +83,6 @@ export interface ConnectorInputs {
 export function connectorViews(s: ConnectorInputs): ConnectorView[] {
   const lines = (n: number): string => `${n} saved line${n === 1 ? '' : 's'}`;
   return [
-    { id: 'web', name: 'Web search', description: 'Search the live web for fresh answers', on: s.web || s.research },
-    { id: 'research', name: 'Research', description: 'Cross-check several sources and cite them', on: s.research },
     { id: 'think', name: 'Think', description: 'Reason it through carefully before answering', on: s.think },
     {
       id: 'nowPlaying',
@@ -112,9 +106,7 @@ export function connectorViews(s: ConnectorInputs): ConnectorView[] {
   ];
 }
 
-/** The connectors that are on, for the chip row above the composer. Web search
- *  is folded into Research when both are on (Research always searches). */
+/** The connectors that are on, for the chip row above the composer. */
 export function activeConnectors(views: ConnectorView[]): ConnectorView[] {
-  const research = views.some((v) => v.id === 'research' && v.on);
-  return views.filter((v) => v.on && !v.disabled && !(research && v.id === 'web'));
+  return views.filter((v) => v.on && !v.disabled);
 }

@@ -65,10 +65,6 @@ const SOURCE_BOOST: Record<Candidate['source'], number> = {
   // and the seed's own neighbourhood: real evidence that this song is current,
   // but evidence about the world, not about this listener.
   'verified-trend': 0.12,
-  // 9.1.0 — a live-web discovery that resolved to a real recording. One step
-  // below a measured chart position: a release announcement or an editorial
-  // list is weaker evidence than a chart.
-  'web-discovery': 0.09,
 };
 
 /** How each source's boost is explained (favourite-artist and -album name what they came from). */
@@ -86,7 +82,6 @@ const SOURCE_REASON: Record<Candidate['source'], ReasonKind> = {
   proven: 'proven',
   genre: 'genre',
   'verified-trend': 'popular-now',
-  'web-discovery': 'web-evidence',
   style: 'style',
 };
 

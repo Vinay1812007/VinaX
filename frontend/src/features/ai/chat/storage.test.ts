@@ -78,9 +78,30 @@ describe('importChats', () => {
     expect(out?.chats.map((c) => c.id)).toEqual(['n', 'a']);
     const n = out?.chats[0];
     expect(n).toMatchObject({ title: 'Trip', pinned: true });
+    // 10.2 — the retired source and step fields are never revived.
     expect(n?.messages).toEqual([
-      { role: 'user', content: 'hi', sources: ['https://ok.example'] },
-      { role: 'assistant', content: 'yo', steps: [{ tool: 'search', label: 'Searched' }] },
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'yo' },
+    ]);
+  });
+  it('drops the retired source and step fields from chats an older build saved', () => {
+    localStorage.setItem(
+      STORE_KEY,
+      JSON.stringify([
+        {
+          id: 'old',
+          title: 'Old',
+          updatedAt: 1,
+          messages: [
+            { role: 'user', content: 'q' },
+            { role: 'assistant', content: 'a', engine: 'Balanced', sources: ['https://a.example'], sourcePreviews: [{ url: 'https://a.example', title: 'T', snippet: 's' }], steps: [{ tool: 'search', label: 'x' }] },
+          ],
+        },
+      ]),
+    );
+    expect(loadInitialChats()[0].messages).toEqual([
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'a', engine: 'Balanced' },
     ]);
   });
   it('refuses a file that is not a chats export', () => {

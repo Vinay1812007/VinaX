@@ -577,9 +577,6 @@ export async function chat(
     /** 7.2.0 — the product feature this call serves, for the owner's per-feature
      * switch. Without it only the emergency stop and the spend caps apply. */
     feature?: AiFeature;
-    /** 8.1.0 — ground the answer in the provider's live web search. Only the
-     * maestro lane can; every other attempt ignores it. */
-    grounded?: boolean;
     /** 8.2.0 — the caller's check on a 200 answer (JSON that parses, at least
      * one valid pick…). An answer it refuses counts as a failed attempt and
      * the next lane/model is asked, inside the same deadline; a throw counts
@@ -639,7 +636,6 @@ export async function chat(
       if (isMaestroEndpoint(endpoint)) {
         payload.reasoning_effort = opts.reasoningEffort ?? 'low';
         payload.max_tokens = (opts.maxTokens ?? 6000) + 1024;
-        if (opts.grounded) payload.grounded = true;
       }
       // nemotron a3b-family models leak BARE chain-of-thought unless reasoning
       // is switched off at the chat-template level (probed live — see

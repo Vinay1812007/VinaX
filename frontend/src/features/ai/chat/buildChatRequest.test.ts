@@ -13,10 +13,7 @@ import { buildChatRequest, type TurnSettings } from './buildChatRequest';
 const SETTINGS: TurnSettings = {
   voiceLive: false,
   choice: { mode: 'muse' },
-  agent: false,
-  web: false,
   think: false,
-  research: false,
   replyLang: 'auto',
   replyStyle: 'auto',
   profile: '',

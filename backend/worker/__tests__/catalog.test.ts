@@ -6,8 +6,8 @@
  */
 import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import {
-  AGENT_MODEL_SLUGS,
-  isAgentModel,
+  WEB_BROWSING_SLUGS,
+  isWebBrowsingModel,
   catalogDefaultModel,
   fetchVoiceCatalog,
   isServedVoiceModel,
@@ -102,8 +102,6 @@ describe('parseCatalog — the real catalogs', () => {
     });
     expect(grq.map((m) => m.id)).toEqual([
       'allam-2-7b',
-      'groq/compound',
-      'groq/compound-mini',
       'openai/gpt-oss-120b',
       'openai/gpt-oss-20b',
       'qwen/qwen3.6-27b',
@@ -288,38 +286,23 @@ describe('isServedVoiceModel', () => {
 });
 
 /**
- * v7.1 — agent flag. "Agent" is a promise to the listener (this engine looks
- * things up and shows its working), so it comes from an explicit allow-list on
- * the server and is never inferred from a name by the client.
+ * 10.2 — VinaX AI has no live web access, so catalogue systems that browse the
+ * web on their own are never offered, prefixed or bare, on either key.
  */
-describe('agent flag', () => {
-  it('is true only for the allow-listed agentic systems, prefixed or bare', () => {
+describe('web-browsing systems are excluded', () => {
+  it('drops the listed systems, prefixed or bare, and keeps look-alike names', () => {
     const models = parseCatalog('grq', {
       data: [{ id: 'vendor/compound' }, { id: 'compound-mini' }, { id: 'vendor/plain-20b' }, { id: 'vendor/compound-pro' }],
     });
-    const flags = Object.fromEntries(models.map((m) => [m.id, m.agent]));
-    expect(flags).toEqual({
-      'vendor/compound': true,
-      'compound-mini': true,
-      'vendor/plain-20b': false,
-      'vendor/compound-pro': false,
-    });
+    expect(models.map((m) => m.id)).toEqual(['vendor/compound-pro', 'vendor/plain-20b']);
+    expect(isWebBrowsingModel('grq', 'COMPOUND')).toBe(true);
+    expect(isWebBrowsingModel('opr', 'compound')).toBe(false);
+    expect(WEB_BROWSING_SLUGS.grq.length).toBeGreaterThan(0);
   });
 
-  it('every row carries a boolean, and the list is scoped per catalog key', () => {
-    const free = { prompt: '0', completion: '0' };
-    const opr = parseCatalog('opr', { data: [{ id: 'vendor/compound:free', pricing: free }, { id: 'vendor/chat:free', pricing: free }] });
-    expect(opr.map((m) => m.agent)).toEqual([false, false]);
-    expect(isAgentModel('grq', 'COMPOUND')).toBe(true);
-    expect(isAgentModel('opr', 'compound')).toBe(false);
-    expect(AGENT_MODEL_SLUGS.grq.length).toBeGreaterThan(0);
-  });
-
-  it('GET /api/aimodels returns the flag on every model', async () => {
+  it('GET /api/aimodels never lists them and carries no agent flag', async () => {
     vi.stubGlobal(
       'fetch',
-      // One body for both keys: the marketplace filter keeps only the priced-
-      // at-zero row, the account catalog keeps all three.
       vi.fn(() =>
         Promise.resolve(
           new Response(
@@ -339,10 +322,10 @@ describe('agent flag', () => {
       request: new Request('https://x.test/api/aimodels', { headers: { 'cf-connecting-ip': '10.9.0.1' } }),
       env: { VINAX_GROQ_API_KEY: 'k', VINAX_OPENROUTER_API_KEY: 'k' },
     });
-    const body = (await res.json()) as { groups: Array<{ id: string; models: Array<{ id: string; agent: boolean; context: number | null }> }> };
+    const body = (await res.json()) as { groups: Array<{ id: string; models: Array<Record<string, unknown>> }> };
     const all = body.groups.flatMap((g) => g.models);
-    expect(all.length).toBe(4);
-    for (const m of all) expect(typeof m.agent).toBe('boolean');
-    expect(all.filter((m) => m.agent).map((m) => m.id)).toEqual(['vendor/compound']);
+    expect(all.map((m) => m.id)).not.toContain('vendor/compound');
+    expect(all.length).toBe(3);
+    for (const m of all) expect(m).not.toHaveProperty('agent');
   });
 });

@@ -2,7 +2,6 @@ import {
   forwardRef,
   useCallback,
   useEffect,
-  useId,
   useImperativeHandle,
   useLayoutEffect,
   useRef,
@@ -23,7 +22,7 @@ import { matchSlash, type SlashCommand } from '@/features/ai/slashCommands';
 import { cn } from '@/utils/cn';
 import { IMAGES_ENABLED } from './endpoints';
 import { ConnectorChips, ConnectorList, useConnectors } from './Connectors';
-import { AgentIcon, BookIcon, CheckIcon, FolderIcon, MicIcon, SendIcon, StopIcon, UploadIcon } from './icons';
+import { BookIcon, CheckIcon, FolderIcon, MicIcon, SendIcon, StopIcon, UploadIcon } from './icons';
 import { useDictation } from './useDictation';
 
 /** What the page can do to the composer from outside (edit & resend, quick
@@ -35,10 +34,6 @@ export interface ComposerHandle {
   addFiles: (selection: FileSelection) => void;
 }
 
-/** unknown: the catalogue has not been asked yet · none: it has, and no
- *  agent-capable model is being served right now. */
-export type AgentAvailability = 'unknown' | 'loading' | 'available' | 'none';
-
 export interface ComposerProps {
   busy: boolean;
   /** Pinned to the bottom of a conversation (false: centred on an empty chat). */
@@ -49,15 +44,8 @@ export interface ComposerProps {
   onToggleMenu: (anchor: DOMRect) => void;
   /** The model menu, rendered by the page so Settings can share it. */
   menu: ReactNode;
-  agentOn: boolean;
-  agentAvailability: AgentAvailability;
-  onToggleAgent: () => void;
-  web: boolean;
   think: boolean;
-  research: boolean;
-  onWeb: (on: boolean) => void;
   onThink: (on: boolean) => void;
-  onResearch: (on: boolean) => void;
   /** 10.0 — the song playing now rides with the message (the Now playing connector). */
   songCtx: boolean;
   onSongCtx: (on: boolean) => void;
@@ -77,8 +65,8 @@ const MAX_ROWS = 8;
 
 /**
  * v7.1 — the composer: one rounded container holding an auto-growing text
- * box (1–8 rows) over a single control row. Left: attach / tools (+) and the
- * Agent toggle. Right: the model chip, live voice, the mic, and send — which
+ * box (1–8 rows) over a single control row. Left: attach / tools (+).
+ * Right: the model chip, live voice, the mic, and send — which
  * becomes stop while a reply streams.
  *
  * It owns its own text and attachments. Typing used to set state on the page,
@@ -92,15 +80,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     menuOpen,
     onToggleMenu,
     menu,
-    agentOn,
-    agentAvailability,
-    onToggleAgent,
-    web,
     think,
-    research,
-    onWeb,
     onThink,
-    onResearch,
     songCtx,
     onSongCtx,
     imageMode,
@@ -130,16 +111,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const toolsBtnRef = useRef<HTMLButtonElement>(null);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
-  const agentHintId = useId();
 
   const dictation = useDictation(setText);
   const connectors = useConnectors({
-    web,
-    research,
     think,
     nowPlaying: songCtx,
-    onWeb,
-    onResearch,
     onThink,
     onNowPlaying: onSongCtx,
   });
@@ -233,10 +209,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   };
 
   const slashItems = matchSlash(text);
-  const activeTools = [web && (research ? null : 'Web search'), think && 'Think', research && 'Research'].filter(
-    (t): t is string => typeof t === 'string',
-  );
-  const agentBlocked = agentAvailability === 'none';
 
   return (
     <div className={cn('ai-composer-wrap', docked && 'ai-composer-docked')}>
@@ -345,16 +317,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 ? 'Describe the image to create…'
                 : dictation.listening
                   ? 'Listening…'
-                  : agentOn
-                    ? 'Give the agent a task…'
-                    : 'Message VinaX AI…'
+                  : 'Message VinaX AI…'
             }
             aria-label="Message VinaX AI"
             className="ai-composer-input ai-t1"
           />
 
           <div className="ai-composer-row">
-            {/* ---- left cluster: attach / tools, Agent ---- */}
+            {/* ---- left cluster: attach / tools ---- */}
             <div className="relative" onKeyDown={onToolsKey}>
               <button
                 ref={toolsBtnRef}
@@ -432,32 +402,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (!agentBlocked) onToggleAgent();
-              }}
-              aria-pressed={agentOn}
-              aria-disabled={agentBlocked || undefined}
-              aria-busy={agentAvailability === 'loading' || undefined}
-              aria-label="Agent mode"
-              aria-describedby={agentHintId}
-              title={
-                agentBlocked
-                  ? 'No agent model is available right now'
-                  : 'Agent mode — the assistant can search the web and run code by itself'
-              }
-              className={cn('ai-chip ai-agent-toggle', agentOn && 'ai-chip-on', agentBlocked && 'ai-chip-blocked')}
-            >
-              <AgentIcon className={cn('w-4 h-4', agentAvailability === 'loading' && 'ai-pulse')} />
-              <span className="hidden sm:inline">Agent</span>
-            </button>
-            <span id={agentHintId} className="sr-only">
-              {agentBlocked
-                ? 'No agent model is available right now.'
-                : 'When on, the assistant uses an agent-capable model that can search the web and run code by itself.'}
-            </span>
-
             <span className="flex-1" />
 
             {/* ---- right cluster: model, live voice, mic, send ---- */}
@@ -517,8 +461,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             <span className="is-note">{dictation.note}</span>
           ) : busy && think ? (
             <span className="is-thinking ai-shimmer">Thinking it through…</span>
-          ) : activeTools.length || agentOn ? (
-            <span className="is-on">{[agentOn && 'Agent', ...activeTools].filter(Boolean).join(' · ')} on</span>
+          ) : think ? (
+            <span className="is-on">Think on</span>
           ) : (
             <span className="hidden sm:inline">
               {sendOnEnter ? 'Enter to send · Shift+Enter for a new line' : 'Ctrl/⌘+Enter to send · Enter for a new line'} · / for commands

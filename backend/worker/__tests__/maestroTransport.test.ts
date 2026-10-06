@@ -133,21 +133,21 @@ describe('maestro transport', () => {
   });
 });
 
-describe('maestro transport — streaming and grounding (8.1.0)', () => {
+describe('maestro transport — streaming (8.1.0)', () => {
   const sse = (frames: unknown[]): Response => new Response(frames.map((f) => `data: ${JSON.stringify(f)}\n\n`).join(''), { status: 200, headers: { 'content-type': 'text/event-stream' } });
-  const chunk = (text: string, extra: Record<string, unknown> = {}) => ({ candidates: [{ content: { parts: [{ text }] }, ...extra }] });
+  const chunk = (text: string) => ({ candidates: [{ content: { parts: [{ text }] } }] });
 
-  it('streams the native endpoint token by token as OpenAI-shaped deltas, then usage and sources', async () => {
+  it('streams the native endpoint token by token as OpenAI-shaped deltas, then usage', async () => {
     install((url) => {
       expect(url).toContain(':streamGenerateContent?alt=sse');
       return sse([
         { candidates: [{ content: { parts: [{ text: 'hmm', thought: true }] } }] },
         chunk('Hello'),
-        chunk(' world', { groundingMetadata: { groundingChunks: [{ web: { uri: 'https://example.org/a', title: 'A' } }, { web: { uri: 'https://example.org/a', title: 'dup' } }, { web: { uri: 'ftp://x', title: 'no' } }] } }),
+        chunk(' world'),
         { candidates: [{ content: { parts: [] } }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, thoughtsTokenCount: 1 } },
       ]);
     });
-    const res = await maestroFetch('AQ.k', 'gemini-3.8-flash', { ...payload, stream: true, grounded: true });
+    const res = await maestroFetch('AQ.k', 'gemini-3.8-flash', { ...payload, stream: true });
     expect(res.headers.get('content-type')).toContain('text/event-stream');
     const text = await res.text();
     const frames = text.split('\n\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6));
@@ -156,32 +156,27 @@ describe('maestro transport — streaming and grounding (8.1.0)', () => {
     const deltas = parsed.map((p) => (p.choices as Array<{ delta?: { content?: string } }>)[0]?.delta?.content).filter(Boolean);
     expect(deltas).toEqual(['Hello', ' world']);
     expect(parsed.find((p) => p.usage)?.usage).toEqual({ prompt_tokens: 5, completion_tokens: 3 });
-    expect(parsed.find((p) => p.vinax_sources)?.vinax_sources).toEqual([{ title: 'A', url: 'https://example.org/a' }]);
-    // The request carried the search tool and no JSON mode (the provider refuses both together).
-    expect(calls[0].body.tools).toEqual([{ google_search: {} }]);
-    expect((calls[0].body.generationConfig as Record<string, unknown>).responseMimeType).toBeUndefined();
   });
 
-  it('a non-streaming grounded answer carries its sources beside the OpenAI shape', async () => {
-    install(() => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Grounded [1]' }] }, groundingMetadata: { groundingChunks: [{ web: { uri: 'https://news.example/x', title: 'X' } }] } }] }), { status: 200 }));
-    const res = await maestroFetch('AQ.k', 'm', { ...payload, grounded: true });
-    const j = (await res.json()) as { choices: Array<{ message: { content: string } }>; vinax_sources: unknown };
-    expect(j.choices[0].message.content).toBe('Grounded [1]');
-    expect(j.vinax_sources).toEqual([{ title: 'X', url: 'https://news.example/x' }]);
-  });
-
-  it('ungrounded native requests keep JSON mode and carry no tool', async () => {
+  it('10.2 — native requests never carry a tool, and keep JSON mode', async () => {
     install(() => nativeOk('{}'));
     await maestroFetch('AQ.k', 'm', payload);
     expect(calls[0].body.tools).toBeUndefined();
     expect((calls[0].body.generationConfig as Record<string, unknown>).responseMimeType).toBe('application/json');
   });
 
-  it('the OpenAI-compatible endpoint streams as served and never sees the grounded flag', async () => {
+  it('10.2 — an answer that lists outside pages never passes them on', async () => {
+    install(() => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Plain' }] }, groundingMetadata: { groundingChunks: [{ web: { uri: 'https://news.example/x', title: 'X' } }] } }] }), { status: 200 }));
+    const res = await maestroFetch('AQ.k', 'm', payload);
+    const j = (await res.json()) as Record<string, unknown>;
+    expect((j.choices as Array<{ message: { content: string } }>)[0].message.content).toBe('Plain');
+    expect(JSON.stringify(j)).not.toContain('news.example');
+  });
+
+  it('the OpenAI-compatible endpoint streams as served', async () => {
     install(() => new Response('data: {"choices":[{"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } }));
-    const res = await maestroFetch('AIzaKey', 'm', { ...payload, stream: true, grounded: true });
+    const res = await maestroFetch('AIzaKey', 'm', { ...payload, stream: true });
     expect(await res.text()).toContain('"content":"hi"');
     expect(calls[0].body.stream).toBe(true);
-    expect(calls[0].body.grounded).toBeUndefined();
   });
 });

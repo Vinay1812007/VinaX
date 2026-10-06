@@ -10,8 +10,6 @@ export interface ModelMenuProps {
   groups: CatalogGroup[];
   current: ModelChoice;
   recents: ModelChoice[];
-  /** Agent mode: only agent-capable models are offered. */
-  agentOnly: boolean;
   onPick: (choice: ModelChoice) => void;
   onClose: () => void;
   onRetry: () => void;
@@ -30,14 +28,14 @@ export interface ModelMenuProps {
  * Escape closes, and typing anywhere filters. `aria-selected` marks the model
  * that is currently in use — the checked row — not the keyboard cursor.
  */
-export function ModelMenu({ state, groups, current, recents, agentOnly, onPick, onClose, onRetry, className, style }: ModelMenuProps): ReactNode {
+export function ModelMenu({ state, groups, current, recents, onPick, onClose, onRetry, className, style }: ModelMenuProps): ReactNode {
   const [query, setQuery] = useState('');
   const uid = useId();
   const listId = `${uid}-list`;
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const sections = useMemo(() => buildModelMenu({ groups, state, query, agentOnly, recents }), [groups, state, query, agentOnly, recents]);
+  const sections = useMemo(() => buildModelMenu({ groups, state, query, recents }), [groups, state, query, recents]);
   const rows = useMemo(() => sections.flatMap((s) => s.rows), [sections]);
   const currentKey = choiceKey(current);
 
@@ -49,7 +47,7 @@ export function ModelMenu({ state, groups, current, recents, agentOnly, onPick, 
     setActive(at < 0 ? 0 : at);
     // Re-anchor only when the result set changes shape, not on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, rows.length, agentOnly]);
+  }, [query, rows.length]);
 
   // Focus: the search field on a keyboard device. On touch, focusing a text
   // field would throw the on-screen keyboard over the list being opened, so
@@ -119,19 +117,18 @@ export function ModelMenu({ state, groups, current, recents, agentOnly, onPick, 
           aria-autocomplete="list"
           aria-activedescendant={activeRow ? optionDomId(activeRow) : undefined}
           aria-label="Search models"
-          placeholder={agentOnly ? 'Search agent models' : 'Search models'}
+          placeholder="Search models"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
           enterKeyHint="done"
         />
-        {agentOnly && <span className="ai-badge ai-badge-accent shrink-0">Agent</span>}
       </label>
       <div
         ref={listRef}
         id={listId}
         role="listbox"
-        aria-label={agentOnly ? 'Choose agent model' : 'Choose model'}
+        aria-label="Choose model"
         tabIndex={-1}
         className="ai-model-list"
       >
@@ -160,7 +157,6 @@ export function ModelMenu({ state, groups, current, recents, agentOnly, onPick, 
                     <span className={cn('ai-model-label', row.mono && 'ai-model-label-mono')}>{row.label}</span>
                     {row.hint && <span className="ai-model-hint">{row.hint}</span>}
                   </span>
-                  {row.agent && <span className="ai-badge ai-badge-accent">Agent</span>}
                   {row.badge && <span className="ai-badge">{row.badge}</span>}
                   <span className="ai-model-check" aria-hidden>
                     {selected && <CheckIcon className="w-3.5 h-3.5" />}

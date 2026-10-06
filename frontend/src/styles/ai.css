@@ -260,8 +260,6 @@ html.light .ai-scope .ai-chip-on:hover:not(:disabled) { color: rgb(var(--ember-5
   font-size: 12px;
   font-weight: 700;
 }
-.ai-sources { margin-top: 1rem; padding: 0.75rem 0.75rem 0.5rem; }
-.ai-sources a { min-height: 2.75rem; }
 .ai-pinned { padding: 0.75rem 1rem; font-size: 13px; }
 .ai-pinned button { min-height: 2.75rem; }
 
@@ -966,139 +964,6 @@ button.ai-track-main:focus-visible .ai-track-over { opacity: 1; }
 .ai-root .ai-player-card img { border-radius: 10px; }
 .ai-root .ai-player-card .bg-ember-500 { border-radius: 12px; }
 
-/* ------------------------------------------------------- tool timeline */
-/* The tools a reply used (ToolActivity.tsx): a header that folds, over a
-   raised card of rows — icon, what it did, and a spinner or a check. */
-.ai-tools { margin-bottom: 1rem; max-width: var(--ai-measure); }
-.ai-tools-head {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  max-width: 100%;
-  min-height: 2.25rem;
-  margin-left: -0.625rem;
-  padding: 0.25rem 0.75rem 0.25rem 0.5rem;
-  border-radius: 9999px;
-  color: var(--ai-text-2);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.3;
-  transition: background-color 140ms var(--ease-calm), color 140ms var(--ease-calm);
-}
-.ai-tools-head::after { content: ''; position: absolute; inset: -4px 0; }
-.ai-tools-head:hover { background: var(--ai-hover); color: var(--ai-text); }
-.ai-tools-glyph {
-  display: inline-grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  color: var(--ai-rose);
-}
-.ai-tools-title { min-width: 0; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-.ai-tools-chevron {
-  color: var(--ai-text-3);
-  transition: transform 160ms var(--ease-calm);
-}
-/* The fold: grid rows 0fr → 1fr animates the real height of the content. */
-.ai-tools-body {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 200ms var(--ease-calm);
-}
-.ai-tools-body[data-open='true'] { grid-template-rows: 1fr; }
-.ai-tools-clip { min-height: 0; overflow: hidden; }
-.ai-tools-list {
-  margin: 0.5rem 0 0.125rem;
-  padding: 0.375rem;
-  border-radius: var(--vx-radius-card);
-  background: var(--ai-raised);
-  list-style: none;
-}
-.ai-tool-row {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.375rem 0.375rem;
-  color: var(--ai-text-2);
-  font-size: 13px;
-  line-height: 1.45;
-  animation: ai-fade 180ms var(--ease-calm) both;
-}
-/* The rail that joins one step to the next. */
-.ai-tool-row:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: calc(0.375rem + 0.875rem - 0.5px);
-  top: calc(0.375rem + 1.875rem);
-  bottom: calc(-0.375rem + 2px);
-  width: 1px;
-  background: var(--ai-line-strong);
-}
-.ai-tool-icon {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 9px;
-  background: rgb(var(--ink-100) / 0.07);
-  color: var(--ai-text-2);
-}
-.ai-tool-row[data-status='running'] .ai-tool-icon { background: rgb(var(--tide-500) / 0.14); color: var(--ai-rose); }
-.ai-tool-main { flex: 1 1 0%; min-width: 0; padding-top: 0.25rem; }
-.ai-tool-label { display: block; color: var(--ai-text); font-weight: 600; overflow-wrap: anywhere; }
-.ai-tool-count { color: var(--ai-text-3); font-weight: 600; }
-.ai-tool-hosts { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.5rem; }
-.ai-host-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  max-width: 13rem;
-  min-height: 1.625rem;
-  padding: 0 0.625rem 0 0.25rem;
-  border-radius: 9999px;
-  background: rgb(var(--ink-100) / 0.07);
-  color: var(--ai-text-2);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.ai-host-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ai-host-letter {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 1.125rem;
-  height: 1.125rem;
-  border-radius: 9999px;
-  background: var(--vx-glow);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 800;
-}
-.ai-host-more { padding-left: 0.625rem; color: var(--ai-text-3); }
-.ai-tool-status {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  color: rgb(var(--ember-400));
-}
-/* A tool at work: a small Rose ring that turns. */
-.ai-spinner {
-  display: inline-block;
-  width: 0.875rem;
-  height: 0.875rem;
-  border: 2px solid rgb(var(--tide-500) / 0.25);
-  border-top-color: rgb(var(--tide-400));
-  border-radius: 50%;
-  animation: ai-turn 0.8s linear infinite;
-}
-
 /* ---------------------------------------------------------------- composer */
 .ai-composer-wrap {
   position: relative;
@@ -1166,28 +1031,6 @@ button.ai-track-main:focus-visible .ai-track-over { opacity: 1; }
 .ai-round { border-radius: 9999px; position: relative; }
 .ai-plus { transition: transform 160ms var(--ease-calm); }
 .ai-plus-open { transform: rotate(45deg); }
-.ai-root .ai-agent-toggle {
-  min-height: 2.25rem;
-  padding: 0 0.75rem;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--ai-line-strong);
-  color: rgb(var(--ink-200));
-}
-.ai-root .ai-agent-toggle:hover:not(:disabled) { background: var(--ai-hover); }
-.ai-root .ai-agent-toggle.ai-chip-on { box-shadow: none; }
-@media (max-width: 639px) {
-  /* Phone: icon only, like its neighbours; the tint still says when it is on. */
-  .ai-root .ai-agent-toggle { width: 2.25rem; padding: 0; justify-content: center; box-shadow: none; color: rgb(var(--ink-300)); }
-  .ai-root .ai-agent-toggle.ai-chip-on { color: rgb(var(--ember-300)); }
-  html.light .ai-root .ai-agent-toggle.ai-chip-on { color: rgb(var(--ember-500)); }
-}
-.ai-root .ai-chip-blocked,
-.ai-root .ai-chip-blocked:hover:not(:disabled) {
-  opacity: 0.45;
-  cursor: not-allowed;
-  background: transparent;
-  color: var(--ai-text-3);
-}
 .ai-root .ai-model-chip {
   max-width: min(12rem, 36vw);
   min-height: 2.25rem;
@@ -1321,25 +1164,6 @@ button.ai-track-main:focus-visible .ai-track-over { opacity: 1; }
 .ai-proj-file { flex: 1 1 0%; min-width: 0; font-size: 13px; color: var(--ai-text); overflow-wrap: anywhere; }
 .ai-proj-note { margin-top: 10px; color: rgb(var(--ember-400)); font-size: 12px; font-weight: 600; }
 
-/* ---------------------------------------------- source previews (9.1.0) */
-/* Two lines of the page's own words, clamped: enough to tell what a citation
-   is, never enough to push the answer off the screen. */
-.ai-src-title {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-}
-.ai-src-snippet {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  line-height: 1.45;
-}
-.ai-sources a { align-items: flex-start; }
 .ai-root .ai-attachment-notice {
   margin: 6px 4px 10px;
   padding: 10px 12px;
@@ -1648,11 +1472,6 @@ html.light .ai-conn-chip { color: rgb(var(--ember-500)); }
   font-weight: 700;
   line-height: 1.5;
   white-space: nowrap;
-}
-/* "Agent" is an AI capability: Rose. */
-.ai-badge-accent {
-  background: rgb(var(--tide-500) / 0.14);
-  color: rgb(var(--tide-400));
 }
 
 /* ---------------------------------------------------------- the chat list */
@@ -2309,10 +2128,6 @@ html.light .ai-settings { --ai-sheet: rgb(var(--ink-950)); }
   .ai-reply .ai-rich > *,
   .ai-reply .ai-rich > *::after,
   .ai-reply .ai-rich > * > li::after,
-  .ai-spinner,
-  .ai-tools-body,
-  .ai-tool-row,
-  .ai-tools-chevron,
   .ai-conn-row,
   .ai-conn-icon,
   .ai-conn-chip,
@@ -2346,10 +2161,6 @@ html.reduce-motion .ai-msg-mark svg,
 html.reduce-motion .ai-reply .ai-rich > *,
 html.reduce-motion .ai-reply .ai-rich > *::after,
 html.reduce-motion .ai-reply .ai-rich > * > li::after,
-html.reduce-motion .ai-spinner,
-html.reduce-motion .ai-tools-body,
-html.reduce-motion .ai-tool-row,
-html.reduce-motion .ai-tools-chevron,
 html.reduce-motion .ai-conn-row,
 html.reduce-motion .ai-conn-icon,
 html.reduce-motion .ai-conn-chip,

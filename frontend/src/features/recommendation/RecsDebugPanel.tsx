@@ -28,23 +28,11 @@ interface ServiceHealth {
 }
 
 /**
- * The two evidence services, asked only when the panel is opened. Both are
- * public, read-only and cheap; `wait=0` means /api/discover answers from its
- * cache and never starts a search for this request.
+ * The evidence service (verified charts), asked only when the panel is opened.
+ * Public, read-only and cheap.
  */
 async function readServiceHealth(): Promise<ServiceHealth[]> {
   const out: ServiceHealth[] = [];
-  try {
-    const res = await fetch('/api/discover?wait=0', { headers: { accept: 'application/json' } });
-    const body = (await res.json()) as { state?: string; note?: string; health?: Record<string, unknown> } | null;
-    out.push({
-      label: 'live web discovery',
-      state: String(body?.state ?? 'unknown'),
-      note: `${body?.note ?? ''} ${body?.health ? `· quota ${String(body.health.quotaUsed)}/${String(body.health.quotaPerHour)}${body.health.breakerOpen ? ' · breaker OPEN' : ''}` : ''}`.trim(),
-    });
-  } catch {
-    out.push({ label: 'live web discovery', state: 'unreachable', note: 'the endpoint could not be read' });
-  }
   try {
     const res = await fetch('/api/trends?limit=1', { headers: { accept: 'application/json' } });
     const body = (await res.json()) as { sources?: Array<{ label?: string; status?: string; lastSuccessAt?: string | null }> } | null;

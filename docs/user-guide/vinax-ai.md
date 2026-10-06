@@ -1,6 +1,6 @@
 # VinaX AI
 
-This page covers the VinaX AI destination: what the chat can do, the connectors in the + menu, the tool timeline, web search and where it looks, the model menu, Agent mode, slash commands, songs you can play from a reply, controlling the player by message, chat settings, when a reply does not arrive, AI Playlist, and what is sent to the AI service. The engineering description is in [ai](../ai.md).
+This page covers the VinaX AI destination: what the chat can do, the connectors in the + menu, what it can and cannot know, the model menu, slash commands, songs you can play from a reply, controlling the player by message, chat settings, when a reply does not arrive, AI Playlist, and what is sent to the AI service. The engineering description is in [ai](../ai.md).
 
 ## The chat
 
@@ -9,7 +9,6 @@ Open **VinaX AI** from the tab bar or sidebar. The composer takes any question: 
 | Control | What it does |
 |---|---|
 | **+** (Attach and tools) | Upload files or a folder, and switch the **connectors** on or off (below). Saved prompts open from the same menu. Files stay on your device until you send. |
-| Agent | Turns Agent mode on or off (see below) |
 | Model button | Opens the model menu |
 | Live voice chat / Voice input | Talk hands-free, or dictate a message, when the device supports speech |
 | Send / Stop | Send the message, or stop a reply that is being written (`Esc` also stops) |
@@ -20,30 +19,18 @@ The + menu lists the **connectors**: what a reply may draw on. Each row says in 
 
 | Connector | What it does |
 |---|---|
-| Web search | Lets the reply use current web results (see [Where web search looks](#where-web-search-looks)). The reply lists the pages it used under **Sources**. |
-| Research | Searches the web and cross-checks more than one source. Turns Web search on too. |
 | Think | Sends the message to a slower, more careful engine |
 | Now playing | Sends the song playing now — its title, artist, album, year, language and its first lyric lines — with your message, so you can ask about it |
 | Memory | The lines you asked VinaX AI to remember (see below). Switching it off forgets them, so with lines saved it asks for a second tap |
 | Place | Your coarse place and time zone, for local dates and times. It is greyed out when region sharing is off in Settings, and switching it off here keeps it out of your chats only |
 
-### Watching it work
-
-When a reply searches the web, reads a page or runs code, each step appears as it happens — "Searching the web for …", "Reading example.com" — with a spinner, then a check. Once the answer starts, the steps fold into one line such as **Searched the web · 5 sources** or **Used 3 tools**; tap it to open them again. Nothing in the list is made up: a step shows only when the engine really took it.
+### While it answers
 
 While VinaX AI is thinking, its mark breathes gently and new text fades in, with a small spark where the reply is being written. All of it holds still when reduced motion is on.
 
-### Where web search looks
+### What it can and cannot know
 
-When **VinaX Maestro** answers with Web search on, it uses its own engine's live search. Otherwise VinaX searches several sources at the same time and keeps only results that are actually about your question:
-
-- the open web, through VinaX's own search service, which passes your search words on to public search engines;
-- a keyed web search service, when the owner has set one up;
-- a public online encyclopedia, which knows who an artist is or what a film is even when the open web is slow.
-
-The searching is done by VinaX's server, so these sources see only the search words — never your name, your device or your library. The search words are your question; a short follow-up such as "what about his new movie?" also carries the topic of your previous question, so it is searched in context. VinaX AI can also decide by itself that a question needs current information and search; the steps and the **Sources** then show it. If no source finds anything relevant, the reply says it could not check the live web instead of guessing.
-
-Switching on Web search or Research also wakes VinaX's search service in advance, so your first question is answered faster.
+VinaX AI does not search the web. It answers from what its engine already knows, so anything that changes week to week — news, new releases, scores, prices, schedules — may be out of date. It is instructed to say so plainly, never to claim it checked and never to invent sources. Songs it names are still looked up in the VinaX catalogue before they become playable.
 
 Chats are kept on this device. The chat list lets you search, rename, pin and delete chats; the header exports the current chat. `Ctrl/⌘ + K` starts a new chat and `Ctrl/⌘ + B` shows or hides the chat list.
 
@@ -98,8 +85,8 @@ that matters.
 
 If you allow it (**Settings → Region & privacy → Allow region inference**), VinaX AI knows
 roughly where you are: your country, your state, an approximate city and your time
-zone. That is what makes “what is on this evening” and “this week's releases”
-answer for *your* clock instead of India's, and it shapes how searches are worded.
+zone. That is what makes dates and times in a reply (“what is on this evening”)
+use *your* clock instead of India's.
 
 It is coarse on purpose and never an address. It is never used to guess what
 language you want — your language settings decide that. Switch the setting off and
@@ -119,13 +106,9 @@ Long files are trimmed to fit the message, and VinaX says when it trimmed one.
 
 The model button in the composer opens one menu with a search field over every model VinaX can reach. Recently used models come first, then the recommended ones (Auto, VinaX Maestro, Balanced, Fast, Deep, Creative, Translate), then the other VinaX engines, then one section for each live catalogue with every model in it. Arrow keys move, Enter picks, Esc closes.
 
-**Auto** answers with VinaX Maestro whenever that engine is available and not resting after a recent failure, and otherwise picks an engine from the shape of the question. **VinaX Maestro** is the flagship engine: its replies stream as they are written, and with Web search on it uses its own live search and lists its sources. The chip under a reply names the engine that actually answered.
+**Auto** answers with VinaX Maestro whenever that engine is available and not resting after a recent failure, and otherwise picks an engine from the shape of the question. **VinaX Maestro** is the flagship engine: its replies stream as they are written. The chip under a reply names the engine that actually answered.
 
 A chat opens on your default model, else the model you used last, else Auto. **Chat settings → General → Default model** sets the default.
-
-## Agent mode
-
-With Agent mode on, VinaX uses an agent-capable model that can search the web and run code by itself, and the chat shows what the agent is doing. While it is on, the model menu lists agent-capable models only. The Agent button is greyed out when no agent model is available. **Chat settings → General → Start in Agent mode** opens the chat with it on.
 
 ## Slash commands
 
@@ -139,7 +122,6 @@ Type `/` in the composer to open the menu. Tab completes a command.
 | `/mood <mood>` | Plays songs for a mood |
 | `/summary` | Summarises the conversation |
 | `/think` | Toggles Think |
-| `/web` | Toggles web search |
 | `/prompts` | Opens your saved prompts |
 | `/export` | Exports the chat |
 | `/clear` | Starts a new chat |
@@ -156,7 +138,7 @@ The gear in the chat header opens a dialog with five tabs.
 
 | Tab | What is there |
 |---|---|
-| General | Text size, default model, Send with Enter, Start in Agent mode |
+| General | Text size, default model, Send with Enter |
 | Replies | Reply language, reply style, and an optional “About you” note. The note stays on this device and is sent with each message so replies fit you. |
 | Voice | The voice for spoken replies, a preview, and reading replies aloud automatically |
 | Data | Storage used, export all chats, import chats, clear all chats (with a short Undo) |
@@ -197,4 +179,4 @@ fewer and a line saying why, rather than a full list padded with near-misses.
 
 ## What is sent
 
-To answer, the AI service receives the messages in the chat, anything you attached, and, when relevant, a short taste summary, your coarse region if you allow it and the Place connector is on, your memory lines if Memory is on, or the song that is playing if Now playing is on. A web search sends only the search words, from VinaX's server, to the sources listed in [Where web search looks](#where-web-search-looks). Your library, history and playlists are not uploaded. If the AI service cannot answer, the chat says so (see [When a reply does not arrive](#when-a-reply-does-not-arrive)); music playback and on-device recommendations keep working. See [data and privacy](../data-and-privacy.md).
+To answer, the AI service receives the messages in the chat, anything you attached, and, when relevant, a short taste summary, your coarse region if you allow it and the Place connector is on, your memory lines if Memory is on, or the song that is playing if Now playing is on. Nothing is sent to a search service. Your library, history and playlists are not uploaded. If the AI service cannot answer, the chat says so (see [When a reply does not arrive](#when-a-reply-does-not-arrive)); music playback and on-device recommendations keep working. See [data and privacy](../data-and-privacy.md).

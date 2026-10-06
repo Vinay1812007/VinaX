@@ -24,7 +24,6 @@ import { matchesStyle, remixWorkKey, sessionStyle, styleEvidence, styleLabel, st
 import { isSkippedPlay } from '@/utils/plays';
 import { NEXT_DEADLINE_MS, NEXT_URGENT_DEADLINE_MS } from './deadlines';
 import { trendSignalNow } from '@/services/trends/signal';
-import { discoverySignalNow } from '@/services/discovery/signal';
 import { useEvidenceStore } from '@/store/evidenceStore';
 import { useDownloadsStore } from '@/store/downloadsStore';
 import { lastSeedContinuation, rememberSeedContinuation } from './recMemory';
@@ -55,21 +54,14 @@ async function blendAi(ranked: ScoredCandidate[], ctx: RecommendationContext): P
 }
 
 /**
- * 9.1.0 — publish the evidence behind the current snapshots, so "Why this song?"
- * can name the source and offer a link. Only the two evidence-backed signals
- * land here; a catalogue search never does.
+ * 9.1.0 — publish the evidence behind the current snapshot, so "Why this song?"
+ * can name the source. Only the evidence-backed chart signal lands here; a
+ * catalogue search never does.
  */
-function publishEvidence(trend: { label: ReadonlyMap<string, string> }, discovery: { items: readonly { catalogId: string; evidence: Array<{ url: string; observedAt: string; period: string | null }> }[]; label: ReadonlyMap<string, string> }): void {
+function publishEvidence(trend: { label: ReadonlyMap<string, string> }): void {
   try {
     const store = useEvidenceStore.getState();
     store.setEvidence('chart', [...trend.label.entries()].map(([id, label]) => [id, { kind: 'chart' as const, label, url: null, observedAt: null, period: null }]));
-    store.setEvidence(
-      'web',
-      discovery.items.map((d) => {
-        const first = d.evidence[0];
-        return [d.catalogId, { kind: 'web' as const, label: discovery.label.get(d.catalogId) ?? 'Named by a current web source', url: first?.url ?? null, observedAt: first?.observedAt ?? null, period: first?.period ?? null }];
-      }),
-    );
   } catch {
     /* a store hiccup must never break a continuation */
   }
@@ -124,7 +116,6 @@ function ctxKey(ctx: RecommendationContext): string {
     // played, and a chart that arrived mid-window changed nothing.
     exposureLedger().size,
     ctx.trendBonus?.size ?? 0,
-    ctx.webDiscoveries?.length ?? 0,
     ctx.region?.timezone ?? '',
     ctx.pinnedLanguages.join(','),
   ].join('|');
@@ -138,11 +129,10 @@ function ctxKey(ctx: RecommendationContext): string {
 export async function buildRecommendations(rawCtx: RecommendationContext): Promise<Mix[]> {
   const trend = trendSignalNow(rawCtx);
   const homeLedger = exposureLedger();
-  // 9.1.0 — verified charts AND live-web discoveries, both read from snapshots
-  // already in memory and never waited for.
-  const discovery = discoverySignalNow(rawCtx);
-  publishEvidence(trend, discovery);
-  const ctx: RecommendationContext = { ...rawCtx, trendBonus: trend.bonus, trendLabel: trend.label, trendItems: trend.items, webDiscoveries: discovery.items, exposurePenaltyOf: (k) => homeLedger.penalty(k) };
+  // 9.1.0 — verified charts, read from the snapshot already in memory and
+  // never waited for.
+  publishEvidence(trend);
+  const ctx: RecommendationContext = { ...rawCtx, trendBonus: trend.bonus, trendLabel: trend.label, trendItems: trend.items, exposurePenaltyOf: (k) => homeLedger.penalty(k) };
   const key = ctxKey(ctx);
   if (memo && memo.key === key && Date.now() - memo.at < MEMO_TTL_MS) return memo.mixes;
   // 7.2.0 — bounded gathering: slow optional sources are not waited for once a useful pool exists.
@@ -353,10 +343,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   const isStyled = (s: Song): boolean => !!style && matchesStyle(s, style);
   // 7.2.0 — verified charts, read from the snapshot already in memory (never waited for).
   const trend = trendSignalNow(ctx);
-  // 9.1.0 — live-web discoveries, from the snapshot in memory. Never waited for:
-  // a song transition must not depend on a web search.
-  const discovered = discoverySignalNow(ctx);
-  publishEvidence(trend, discovered);
+  publishEvidence(trend);
   // 9.1.0 — one ledger read for the whole plan, so a long stretch cannot
   // reorder under its own feet while it is being built.
   const planLedger = exposureLedger();
@@ -365,7 +352,7 @@ export async function planNextSongs(seed: Song, ctx: RecommendationContext, opti
   // 8.3.1 — under "Switch language" the style is searched in the language the queue switches TO
   // (the same pinned-first choice as the lock below); with no such language, not at all.
   const styleLanguage = tune === 'different-language' ? ctx.pinnedLanguages.find((l) => l !== seedLanguage) ?? null : undefined;
-  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, anchorSong: previous && previous.id !== seed.id ? previous : null, surface: ctx.surface ?? 'next', intentQuery, style, ...(styleLanguage !== undefined ? { styleLanguage } : {}), trendBonus: trend.bonus, trendLabel: trend.label, trendItems: trend.items, webDiscoveries: discovered.items, exposurePenaltyOf: (k) => planLedger.penalty(k), seedRepeatKeys: lastSeedContinuation(seed) };
+  const nextCtx: RecommendationContext = { ...ctx, seedSong: seed, anchorSong: previous && previous.id !== seed.id ? previous : null, surface: ctx.surface ?? 'next', intentQuery, style, ...(styleLanguage !== undefined ? { styleLanguage } : {}), trendBonus: trend.bonus, trendLabel: trend.label, trendItems: trend.items, exposurePenaltyOf: (k) => planLedger.penalty(k), seedRepeatKeys: lastSeedContinuation(seed) };
   const mode = effectiveDiscoveryMode(nextCtx);
   const intent = nextCtx.sessionIntent ?? null;
   const library = useLibraryStore.getState();

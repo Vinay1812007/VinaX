@@ -59,7 +59,7 @@ The taste profile is computed and stored on this device. **Taste Profile** (Libr
 | Less like this… | Asks for 7, 14 or 30 days, then plays that artist less everywhere. If DJ picks by them were already queued, the picks are rebuilt without them | Until the day you chose |
 | Snooze this song… | Asks for 7, 14 or 30 days, then keeps **that song** out of everything — every release of it, so the remaster and the remix go quiet too. The artist is untouched | Until the day you chose |
 | Why this song? | Shows why a recommended song was picked (appears on recommended songs) | — |
-| Open the source | On a song a real chart or a current web page named: opens that page, or says which chart it is and when VinaX last checked | — |
+| Open the source | On a song a real chart named: says which chart it is and when VinaX last checked | — |
 | Not interested | Hides that song | Until you undo it |
 | Never play *artist* | Blocks that artist everywhere | Until you allow them again |
 

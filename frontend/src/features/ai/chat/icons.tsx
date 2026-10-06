@@ -54,30 +54,10 @@ export const CheckIcon = ({ className }: P): ReactNode => (
     <path d="M5 12.5l4.5 4.5L19 7.5" />
   </svg>
 );
-/** Agent mode: a hub reaching out to three tools. */
-export const AgentIcon = ({ className }: P): ReactNode => (
-  <svg {...line(className)}>
-    <circle cx="12" cy="12" r="2.6" />
-    <path d="M12 9.4V5M9.8 13.4 6 16.2M14.2 13.4l3.8 2.8" />
-    <circle cx="12" cy="3.8" r="1.3" />
-    <circle cx="4.9" cy="17" r="1.3" />
-    <circle cx="19.1" cy="17" r="1.3" />
-  </svg>
-);
-export const CodeIcon = ({ className }: P): ReactNode => (
-  <svg {...line(className)}>
-    <path d="M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5M13.5 5l-3 14" />
-  </svg>
-);
 export const PageIcon = ({ className }: P): ReactNode => (
   <svg {...line(className)}>
     <path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5z" />
     <path d="M13.5 3.5V8H18M8.5 12.5h7M8.5 16h5" />
-  </svg>
-);
-export const ToolIcon = ({ className }: P): ReactNode => (
-  <svg {...line(className)}>
-    <path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17v3h3l5.2-5.2a4 4 0 0 0 5.3-5.3l-2.7 2.7-2.3-.7-.7-2.3z" />
   </svg>
 );
 export const FileIcon = PageIcon;
