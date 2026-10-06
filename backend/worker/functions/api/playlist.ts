@@ -412,6 +412,8 @@ export async function runPlaylist(context: {
   if (r.error === 'not_configured') return { ok: false, response: json({ error: 'ai_not_configured' }, 503), aiUnavailable: true, prompt, languages };
   // 500, not 502: Cloudflare swallows origin 502 bodies (serves its own error
   // page) — 500 keeps the honest JSON envelope visible to clients (DQA-02).
-  if (!parsed.songs.length) return { ok: false, response: json({ error: r.error ?? 'empty', status: r.status }, 500), aiUnavailable: true, prompt, languages };
+  // An upstream rate limit (or every lane cooling down) stays a 429, so the
+  // client can say "busy" instead of "something went wrong".
+  if (!parsed.songs.length) return { ok: false, response: json({ error: r.error ?? 'empty', status: r.status }, r.error && r.status === 429 ? 429 : 500), aiUnavailable: true, prompt, languages };
   return { ok: true, parsed, reading, model: r.model, prompt, languages };
 }

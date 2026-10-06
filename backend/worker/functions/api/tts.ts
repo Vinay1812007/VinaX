@@ -79,7 +79,15 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
   if (body && body.provider !== undefined && body.provider !== null && body.provider !== '') return speakPicked(context, body, json);
 
   const key = providerKey(env, 'groq');
-  if (!key) return json({ error: 'not_configured' }, 503);
+  if (!key) {
+    // 11.0 — no Groq key is not "no speech": /api/aimodels reports speech as
+    // available whenever ANY provider can speak, so the default request falls
+    // through to the generic media pick instead of answering 503. The Groq
+    // persona and model ids in the body mean nothing elsewhere and are dropped.
+    const other = await pickMedia(env, 'speech', undefined, undefined);
+    if (!other.ok) return json({ error: 'not_configured' }, 503);
+    return speakPicked(context, { text: body?.text, provider: other.choices[0].provider, model: other.choices[0].model.id }, json);
+  }
   // 7.2.0 — the owner's AI switches and spend caps; the client falls back to
   // the device's own speech engine on any non-2xx.
   const blocked = await aiGate(env, 'tts');
