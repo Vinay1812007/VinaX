@@ -59,7 +59,7 @@ On a **DJ pick**, the ⋯ menu has **Keep this song**. It stays exactly where it
 
 ## Tune this queue
 
-Tune this queue is a row of one-tap chips. It is on the **Queue** page, under **More options** in the full-screen player, and in the command palette.
+Tune this queue is a row of one-tap chips. It is on the **Queue** page, under **Player tools** (the sliders button) in the full-screen player, and in the command palette.
 
 | Chips |
 |---|
@@ -100,7 +100,7 @@ If the DJ cannot reach the catalogue, the page says so and offers **Try again**;
 | Double-tap the artwork's edges | Seek back / forward |
 | Double-tap the centre | Like the song |
 | Up Next / Lyrics tabs | The coming songs with Pin a mood, or synced lyrics |
-| More options | Playback speed, sleep timer, A-B repeat, bookmarks, Tune this queue, Share this moment, ambient mode |
+| Player tools (sliders) | Playback speed, sleep timer, A-B repeat, bookmarks, Tune this queue, Share this moment, ambient mode |
 | Drive mode | Large controls and fewer distractions |
 
 **Sleep timer**: 15, 30 or 60 minutes, end of the current song, or after 3, 5 or 10 songs. The last 30 seconds fade out.

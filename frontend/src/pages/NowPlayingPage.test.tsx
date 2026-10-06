@@ -68,12 +68,14 @@ describe('NowPlayingPage', { timeout: 20_000 }, () => {
     expect(screen.getByRole('button', { name: 'Play' }).className).toContain('vx-np-play');
   });
 
-  it('keeps the song menu first and the playback options last among the "More options" buttons', () => {
+  it('names its two menus apart: "More options" is the song menu, "Player tools" opens playback (10.1)', () => {
     mount();
-    const exact = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-label="More options"]'));
-    expect(exact.length).toBe(2);
-    expect(exact[0].getAttribute('aria-haspopup')).toBe('menu');
-    fireEvent.click(exact[exact.length - 1]);
+    const more = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-label="More options"]'));
+    expect(more.length).toBe(1);
+    expect(more[0].getAttribute('aria-haspopup')).toBe('menu');
+    const tools = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-label="Player tools"]'));
+    expect(tools.length).toBe(1);
+    fireEvent.click(tools[0]);
     const sheet = screen.getByRole('dialog', { name: 'Playback' });
     expect(within(sheet).getByText('Share this moment')).toBeTruthy();
     expect(within(sheet).getByRole('group', { name: 'Sleep timer' })).toBeTruthy();

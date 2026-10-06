@@ -177,7 +177,9 @@
      fill + a backdrop blur + a saturation lift + a 1px specular line on the
      top edge + a hairline (the .vx-mat-* utilities below put them together):
        thin    — large quiet panels over a calm canvas (the sidebar);
-       regular — floating controls over moving content (Now Playing buttons);
+       regular — floating controls over moving content (defined for that
+                 use; nothing applies it yet — Now Playing's buttons sit on the
+                 already-blurred backdrop with a plain translucent fill);
        chrome  — fixed / sticky bars content scrolls under (top bar, tab bar,
                  mini player, player deck);
        thick   — anything carrying a block of text (menus, sheets, dialogs,

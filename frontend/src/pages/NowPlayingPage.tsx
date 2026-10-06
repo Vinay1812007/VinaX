@@ -743,7 +743,8 @@ export default function NowPlayingPage() {
                 <Link to="/queue" aria-label="Queue" title="Queue" className="vx-np-tool">
                   <QueueIcon />
                 </Link>
-                <IconButton label="More options" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className="vx-np-tool">
+                {/* 10.1 — "Player tools", not "More options": the song's own ⋮ menu already carries that name, and two controls with one name confused screen readers and the guided tour. */}
+                <IconButton label="Player tools" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className="vx-np-tool">
                   <SlidersIcon />
                 </IconButton>
               </div>
@@ -973,7 +974,7 @@ export default function NowPlayingPage() {
         {/* v5.17.0 — share this exact moment, ambient mode */}
         <div className="vx-np-opt">
           <span className="vx-np-opt-label">More</span>
-          <div className="vx-np-opt-controls" role="group" aria-label="More options">
+          <div className="vx-np-opt-controls" role="group" aria-label="Player tools">
             <button
               type="button"
               onClick={() => {

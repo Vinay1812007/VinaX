@@ -50,8 +50,10 @@ export default function PrivacyPage() {
         </p>
         <H>AI features</H>
         <p>
-          When the AI picks songs or builds your home screen, it receives a short, capped, anonymous summary of your
-          taste (languages and liked styles) — never your history, never your identity. VinaX AI chats are stored only
+          When the AI picks songs or builds your home screen, it receives a short, capped summary of your taste: your
+          languages and liked styles, and short lists of songs you recently played, finished, skipped or liked (titles
+          and artists only, at most a few dozen) so it can avoid repeats and follow your mood. It never receives your
+          name, your username or anything else that identifies you. VinaX AI chats are stored only
           in your browser; the messages you send are processed to generate a reply and are not used to identify you.
           Voice chat and mic dictation use your device&rsquo;s speech engine — in supporting browsers and in the
           Android app, speech is recognised on your device — and VinaX never stores audio.
@@ -68,7 +70,8 @@ export default function PrivacyPage() {
         <H>Listen Together</H>
         <p>
           Rooms are ephemeral: a room code, first names, and the shared queue exist while the session lives and are
-          cleaned up afterwards.
+          cleaned up afterwards. To count who is in a room, your device sends a random device ID that VinaX stores on
+          this device; it is not linked to your name or account.
         </p>
         <H>Trackers and ads — the honest version</H>
         <p>

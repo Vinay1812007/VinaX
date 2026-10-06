@@ -427,7 +427,7 @@ export function OnboardingSheet() {
       aria-modal="true"
       aria-labelledby="vx-onboarding-title"
     >
-      <div ref={dialogRef} className="vx-sheet vx-welcome w-full sm:max-w-[440px] max-h-[94dvh] overflow-y-auto overscroll-contain">
+      <div ref={dialogRef} className="vx-sheet vx-mat-thick vx-welcome w-full sm:max-w-[440px] max-h-[94dvh] overflow-y-auto overscroll-contain">
         <span aria-hidden className="vx-sheet-grab" />
         {seedOpen ? (
           <div className="vx-welcome-body">
