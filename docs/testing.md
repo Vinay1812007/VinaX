@@ -52,6 +52,17 @@ Some tests lock rules rather than behaviour: `cspHashes.test.ts` (inline-script 
 - One browser instance per spec file, a fresh context per test. Specs abort every request that is not to localhost and answer `/api/**` themselves with `page.route`. A red run means the app broke, not the network.
 - Three files are excluded from the run: `smoke.spec.ts` (replaced by the smoke script), `a11y.spec.ts` (needs a package that is not installed) and `qa-sweep.spec.ts` (an on-demand harness).
 
+### The 10.0 and 10.1 specs
+
+| Spec | What it proves | How |
+| --- | --- | --- |
+| `e2e/v100-together.spec.ts` | Listen Together across the app: a guest follows the host while both move to other pages, stays within the sync threshold, and a guest's request reaches the host as a **playable** song; a host who reloads the tab is still hosting | Two browser contexts (host and guest) talk through an in-memory stand-in for `/api/room` that keeps the server's contract (a `now` clock in every poll, guest requests as id/title stubs). The audio is a generated four-minute silent WAV served with byte ranges, so the guest can really seek. A spec clicks **Tap to start listening** when the browser asks for a gesture |
+| `e2e/v101-search.spec.ts` | The typeahead opens as you type with completions (typed part in bold) and song, artist and album hits, and is a real combobox (↑/↓ move the active option, Enter picks, Escape closes); the results lead with the **Top result** card and its play button plays; **allotment**: when the first catalogue endpoint stalls, an interactive search is hedged to the next and answers long before the stall ends | Two catalogue hosts are mocked with route handlers (the primary remote catalogue and the same-origin one); everything else off localhost is aborted |
+
+Unit tests that pin the same features: `services/api/allotment.test.ts` (ranking, hedge and abort, Retry-After, weighted spreading, the concurrency cap, de-duplication), `features/together/sync.test.ts` and `engine.test.ts`, `services/together/session.test.ts`, `features/ai/chat/toolTimeline.test.ts`, `ToolActivity.test.tsx` and `Connectors.test.tsx`, `store/toastStore.test.ts` and `components/Toasts.test.tsx` (snackbars, keyed replacement), `__tests__/glass.test.ts` (the materials keep AA over any cover), and in the backend `_lib/websearch.test.ts` (sources, the relevance gate with real junk results, follow-up queries), `__tests__/warmSearch.test.ts` and `__tests__/roomSync.test.ts`.
+
+The guided tours (`features/tutorials/tutorials.ts`) have no spec of their own. After changing a tour, build, serve `dist/` (`npx vite preview`) and walk each tour in a real browser at a phone and a desktop size: every step with a `target` must spotlight a visible element, and its card must sit fully on screen. A target near the top of the screen needs `placement: 'bottom'`; a target further down a long page needs the step's `reveal` action, because the runner only accepts a match that is already in view.
+
 The test browser comes from `npx playwright-core install chromium`. To use an installed binary, set `E2E_CHROMIUM_PATH`. `E2E_PRINT_REQUESTS=1` makes `e2e/home-requests.spec.ts` print how many requests each endpoint received while Home loads:
 
 ```sh

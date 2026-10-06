@@ -153,12 +153,15 @@ Worker with `wrangler secret put`. Remove `SEARXNG_TOKEN_PREVIOUS` once the
 Worker has it. Searches keep working throughout.
 
 **The free plan, which this runs on.** It sleeps after about 15 minutes idle
-and takes 30-60 s to wake. A research lookup gives up after 6 s, so the first
-question after a quiet spell reports that it could not check the live web, and
-only the next one works. The reply stays honest — that is what having no
-fallback buys — but it is a real gap.
+and takes 30-60 s to wake. A research lookup gives up on it after 6 s. Since
+10.1 that no longer leaves research empty-handed: the Worker asks a keyed web
+search API (when `BRAVE_API_KEY` is set) and a keyless encyclopedia search at
+the same time, and wakes the instance — from `POST /api/warm-search`, which the
+app calls when Web search is switched on, and in the background after a
+timed-out lookup. See `docs/operations.md` (Web search for VinaX AI). The
+first question after a quiet spell can still miss this instance's results.
 
-Two ways to close it: move to `starter` in `render.yaml`, or ping `/healthz`
+Two ways to close that gap: move to `starter` in `render.yaml`, or ping `/healthz`
 every ~10 minutes from a scheduled job so the service never sleeps. The ping
 keeps it awake around the clock, which uses roughly 730 of the 750 free
 instance hours a month, so it only works while this is the one free service on

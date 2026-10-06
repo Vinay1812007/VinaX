@@ -27,6 +27,7 @@ import {
   CompassIcon,
   QueueIcon,
   SearchIcon,
+  UsersIcon,
 } from './Icons';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
@@ -101,16 +102,24 @@ const TOUR: TourSlide[] = [
     icon: <SearchIcon className="w-7 h-7" />,
     title: 'Find something new',
     lines: [
-      'Discover has shortcuts to charts, languages, moods, films, videos and mixes.',
-      'Search takes songs, artists, films or a lyric line.',
+      'Search suggests as you type and puts the top result first.',
+      'Discover has charts, languages, moods, films and mixes.',
     ],
   },
   {
     icon: <SparkleIcon className="w-7 h-7" />,
     title: 'Ask VinaX AI',
     lines: [
-      'Chat about anything, choose a model, play songs from a reply.',
+      'Chat, search the web, play songs from a reply.',
       'Messages go to the AI service; your library stays here.',
+    ],
+  },
+  {
+    icon: <UsersIcon className="w-7 h-7" />,
+    title: 'Listen with friends',
+    lines: [
+      'Listen Together plays the same song on every phone, in step.',
+      'A Live pill keeps you in the room on every page.',
     ],
   },
   {

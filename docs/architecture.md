@@ -1,6 +1,6 @@
 # Architecture
 
-This document names the pieces of VinaX and shows how data moves between them: the app shell and its routes, the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, the service worker, the Worker's routes and the owner console. It describes the code as of 9.0 (the shell and Home sections were updated for 9.0; the rest has held since 7.2). Deep dives live in [recommendations.md](recommendations.md), [ai.md](ai.md), [data-and-privacy.md](data-and-privacy.md), [design-system.md](design-system.md), [android.md](android.md) and [admin-console.md](admin-console.md).
+This document names the pieces of VinaX and shows how data moves between them: the app shell and its routes, the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, the service worker, the Worker's routes and the owner console. It describes the code as of 10.1: the shell and Home sections were updated for 9.0 and 10.0, the catalogue client for 10.1's allotment, and two sections are new — the Listen Together engine (10.0) and the web search pipeline behind VinaX AI (10.1); the rest has held since 7.2. Deep dives live in [recommendations.md](recommendations.md), [ai.md](ai.md), [data-and-privacy.md](data-and-privacy.md), [design-system.md](design-system.md), [android.md](android.md) and [admin-console.md](admin-console.md).
 
 ## The pieces
 
@@ -55,7 +55,7 @@ The frontend is a static build. The Worker owns every dynamic URL on the same do
 5. Sets `device-phone|tablet|desktop|tv` and `pointer-coarse|pointer-fine` classes on `<html>`, so styles can key on capability instead of width alone.
 6. Registers `/sw.js` in production builds on the web, and asks it to precache the full asset graph on every boot and whenever the network returns.
 
-`src/layouts/AppLayout.tsx` is the frame for every route except VinaX AI. It renders the sidebar (from 768px; always the 80px rail below 1100px), the top bar, the routed page inside an error boundary (the workspace is a rounded sheet inside the chrome), the player (a compact card above the five-destination tab bar on phones and tablets, the floating deck from 1024px), the Now Playing panel on wide workspaces, toasts, the welcome sheet and the command palette. It also runs the one-time bootstrap: storage migrations, `initEngine()` on the player store, downloads, telemetry (consent-gated), lock-screen lyrics, TV spatial navigation, the alarm, the output watcher, the DJ voice and cast. A module-level flag keeps that bootstrap from running again when the layout remounts after a visit to `/VinaXAI`.
+`src/layouts/AppLayout.tsx` is the frame for every route except VinaX AI. It renders the sidebar (from 768px; always the 80px rail below 1100px), the top bar, the routed page inside an error boundary (the workspace is a rounded sheet inside the chrome), the player (a compact card above the five-destination tab bar on phones and tablets, the floating deck from 1024px), the Now Playing panel on wide workspaces, snackbars (`components/Toasts.tsx`, 10.1), the welcome sheet, the command palette and — only while a Listen Together session is live — the lazily loaded `TogetherController` (see [Listen Together](#listen-together-100)). It also runs the one-time bootstrap: storage migrations, `initEngine()` on the player store, downloads, telemetry (consent-gated), lock-screen lyrics, TV spatial navigation, the alarm, the output watcher, the DJ voice and cast. A module-level flag keeps that bootstrap from running again when the layout remounts after a visit to `/VinaXAI`.
 
 The layout also owns scroll memory per history entry, hardware-back handling for overlays, and the wheel rescue described in [design-system.md](design-system.md#overlays).
 
@@ -105,11 +105,17 @@ Catalogue reads go through `orchestratedRequest()` in `src/services/api/client.t
 
 **The fallback ladder.** `constants/endpoints.ts` lists the catalogue bases: a dedicated catalogue API host, the same-origin Worker catalogue at `/api/cat` (web only), and the production origin's `/api/cat`. `VITE_API_BASES` replaces the list at build time, and the owner console can switch individual bases off (`setDisabledSources`). For each request the client:
 
-1. Ranks the bases with the in-memory health registry (`services/api/health.ts`): a smoothed success rate, minus a latency penalty, minus a penalty per consecutive failure. Three failures in a row put a base in a 60-second cooldown; cooling bases go to the back, and are still tried when every base is cooling.
-2. Walks each base, trying each path dialect the caller listed.
-3. Runs the caller's validator on the payload. A payload the validator rejects is a soft miss: the next dialect is tried and the base takes no health strike. An HTTP 404 is treated the same way — the route is missing there, the base is not down.
-4. On any other failure records a health strike and moves to the next base.
-5. Makes up to two full passes, pausing 600 ms before the second.
+1. **Allots** the request across the bases with the in-memory health registry (`services/api/health.ts`, rewritten in 10.1). Each base is ranked by its **expected time to success**: its latency average (an exponentially weighted mean of answer times), plus the odds of failing — a recency-weighted success rate, smoothed so a fresh base counts as 50/50 — times what a failure costs (at least 2 s, or the base's own latency), stretched by half again for each consecutive failure. A fast base that fails half the time therefore ranks behind a slower one that always answers. Bases with a free slot come first, full ones next, cooling ones last. Three failures in a row cool a base for 60 seconds; all bases are still tried when every one is cooling.
+2. Picks the order by **priority** (`RequestPriority`, set by the caller):
+   - `interactive` — the Search page, the typeahead and song lookups (`getSong`): best base first, **hedged**. If that base has not answered within its own p75 answer time (the latency average plus 0.675 of its deviation, bounded to 350–900 ms), the same request starts on the next base; the first valid answer wins and the other is aborted. An aborted loser counts as slow, never as failed. One hedge per pass.
+   - `background` — shelves, recommendations and prefetch (the default for catalogue searches): the first base is **drawn at random, weighted by health** (1 / expected time) among the ready ones, so prefetch traffic spreads instead of queueing on the top base; the rest follow in rank order. Never hedged.
+   - `standard` — everything else: best base first, no hedge.
+3. Honours **back-off**. A 429 or 503 cools that base for its `Retry-After` (seconds or an HTTP date; 30 s when missing, clamped to 1 s–10 min), counts as a failure, and moves the call on; a base that asked to back off gets no new calls until then, unless it is the only one left.
+4. Caps **concurrency**: at most six requests in flight per base. When a base is full a caller waits for a slot, and interactive callers are queued ahead of background ones; a cancelled caller leaves the queue.
+5. Walks each allotted base, trying each path dialect the caller listed, and runs the caller's validator on the payload. A payload the validator rejects is a soft miss: the next dialect is tried and the base takes no health strike. An HTTP 404 is treated the same way — the route is missing there, the base is not down. Any other failure records a health strike and moves to the next base.
+6. Makes up to two full passes, pausing 600 ms before the second.
+
+**Sharing identical calls (10.1).** A caller can pass `cacheMs`. Catalogue searches and song lookups use 5 seconds (`SEARCH_MEMO_MS`): identical requests in flight at the same time share one network call (each caller can still cancel its own share; the call is aborted only when every sharer has left), and an answer is reused for 5 seconds (at most 40 kept). This is what lets the Search page's typeahead and its All tab ask the same combined search once.
 
 **Deadlines.** Each attempt has an 8-second timeout (`REQUEST_TIMEOUT_MS`). The whole ladder has a 20-second budget (`REQUEST_DEADLINE_MS`, overridable per request). The last attempt before the deadline only gets the time that is left, and an attempt cut short by the deadline does not count against the base's health.
 
@@ -130,6 +136,26 @@ Payloads are normalised in `services/api/normalize.ts`. The catalogue API descri
 `src/services/media-session/index.ts` publishes metadata, playback state and position, and receives play, pause, next, previous and seek actions. On the web it uses the browser's media session. On Android it talks to the app's own plugin, registered as `VinaxMedia` and implemented in `frontend/native-android/VinaxMediaPlugin.java`, which drives a foreground media service (`VinaxMediaService.java`) for the notification, lock screen, headset buttons and car browsing. It keeps a 12-entry call log for the diagnostics screen. `lockscreenLyrics.ts` can put the current lyric line into the metadata.
 
 `src/services/native/index.ts` is the small bridge for everything else native: platform checks, notification permission, and helpers used by downloads and updates. [android.md](android.md) covers the native side.
+
+## Listen Together (10.0)
+
+Before 10.0 a session lived in the Listen Together page's component state: a host who opened Search to pick the next song, or a guest who opened the lyrics, unmounted the page, and the host stopped broadcasting or the guest stopped following, with nothing on screen saying so. A reload lost the room. 10.0 moves the session to the app.
+
+| Piece | File | Role |
+| --- | --- | --- |
+| Session store | `services/together/session.ts` (`useTogether`) | Tiny and first-load: mode (`idle`, `host`, `guest`), room code, status (`connecting`, `live`, `reconnecting`, `host-away`), host name, member names (host only), listener count, the shared queue, the host's song, the guest's measured drift, `needsTap` and floating reactions. Mode and code are kept in `sessionStorage` (`vinax.together.session.v1`), so a reload of the tab rejoins; closing the tab forgets the session on that device (a guest's tab sends a leave beacon; a host's closed tab does not end the room, and guests are told the host went quiet after 90 seconds) |
+| Controller | `features/together/TogetherController.tsx` | Mounted lazily by `AppLayout` whenever the mode is not `idle`. Starts the engine for the whole app and, on every page except `/together`, shows the **Live pill**: "Hosting · N listening", "Listening with <host>", "<host> went quiet" or "Reconnecting…", with the room code, linking back to the room. When `needsTap` is set it becomes a **Tap to start listening** button |
+| Engine | `features/together/engine.ts` | `runSession(mode, code)` returns a stop function. `startHosting`, `joinSession`, `leaveSession`, `addSong`, `react`, `tapToListen` are what the page calls |
+| Sync arithmetic | `features/together/sync.ts` | Pure and unit-tested: `HostClock`, `decideCorrection`, `hostIsAway`, `ReactionFeed` |
+| Room API | `services/together/index.ts` → `GET`/`POST /api/room` | Create, update, request, heartbeat, react, leave (also as a `sendBeacon` on tab close), end. `updateRoom` now reports `gone` (404) and `forbidden` (403) instead of swallowing them, and `requestSong` resolves true only when the server stored the request |
+
+**Host.** The engine subscribes to the player store and pushes the playing song, its position, play state and the next eight songs (`updateRoom`) whenever the song, play state, queue length or index changes, or the position jumps by more than two seconds against natural progress (a seek). One push is in flight at a time; a change during it schedules exactly one more. Every four seconds it polls the room (members, reactions, guest requests) and pushes again as a keep-alive. A guest's request arrives as an id, title and picture only; the host looks the full song up (`getSong`, cached) before queueing it, so the request is playable, and says so in a snackbar when a song is not available. A `gone` or `forbidden` push ends the session on that device with a message.
+
+**Guest.** The engine turns on the player's follow mode (no automatic queue building), polls every two seconds and heartbeats on every third poll. `GET /api/room` returns the server's clock as `now`; the host's `updated_at` is stamped by the same clock, so `HostClock` projects the host's playhead as `position + (now − updated_at) + half the measured round trip`, without comparing two devices' clocks (a Worker older than 10.0 sends no `now`, and the old anchor is used). `decideCorrection` then loads the host's song if it differs, matches play or pause, and seeks only when the drift exceeds 1.0 s while playing (2.0 s while paused), never while buffering, never within 3 s of the last correction or 1.5 s of a track start, and never past the end of the song. If the host is playing and two play attempts have not started audio (the browser wants a gesture, typically after an invite link), `needsTap` is raised and the pill and the room show **Tap to start listening**; `tapToListen()` runs inside that tap. No host push for 90 seconds by the server's clock marks the host as away; it is a note, not a disconnect. A room that no longer exists ends the session with "The host ended the session".
+
+**Reactions.** Each poll returns the last few seconds of reactions; `ReactionFeed` identifies them by stamp and emoji instead of comparing server time with the device clock, primes on the first poll so nothing from before you arrived floats, and skips the echo of your own tap.
+
+**Server.** `functions/api/room.ts` keeps rooms and members in the database. 10.0 sizes its per-address rate limits for a room on one Wi-Fi (about six devices behind one address: 200 GETs, 90 heartbeats, 60 updates, 30 requests and 30 reactions a minute), and when the database lacks the atomic request-append function it falls back to a read-modify-write instead of failing every guest request.
 
 ## Service worker
 
@@ -160,11 +186,33 @@ A matched module with no handler for the request method answers `405`.
 | Route family | Purpose |
 | --- | --- |
 | `/api/dj`, `/api/curate`, `/api/playlist`, `/api/vinaxai`, `/api/aimodels`, `/api/assistant`, `/api/tts`, `/api/voices`, `/api/lyrics-tools`, `/api/image`, `/api/embed` (8.2) | AI features — see [ai.md](ai.md) |
+| `/api/warm-search` (10.1) | Wakes the owner's web search instance before a research question; see [Web search pipeline](#web-search-pipeline-101) |
 | `/api/cat/*`, `/api/preview`, `/api/trending-searches`, `/api/blocklist` | Catalogue and content |
 | `/api/events`, `/api/feedback`, `/api/geo`, `/api/username`, `/api/handoff`, `/api/room` | Consent-gated telemetry, feedback, coarse region, username claims, device transfer relay, Listen Together rooms |
 | `/api/appconfig`, `/api/experiments`, `/api/announcements`, `/api/site-mode`, `/api/version`, `/api/status`, `/api/apk` | Published client configuration, flags, announcements, maintenance mode, version, status probes, Android update source |
 | `/api/push/*`, `/api/cron/*` | Push subscription and the scheduled jobs the workflows call with `x-cron-secret` |
 | `/api/admin/*` | Owner console data and actions, all behind server-side admin auth — see [admin-console.md](admin-console.md). A failed database read answers `502` with its kind (unavailable, unauthorized, schema missing, bad request), never an empty `200`; every database request has a deadline (`_lib/supabase.ts`). |
+
+## Web search pipeline (10.1)
+
+VinaX AI's live web search is `liveSearch()` in `backend/worker/functions/_lib/websearch.ts`. It runs on the Worker for a chat turn with Web search or Research on (unless the flagship engine answers with its provider's own search), and for a mid-answer `[[FETCH: …]]` step the model asks for. The model-facing side (fencing, citations) is in [ai.md](ai.md#web-search); what leaves the service is in [data-and-privacy.md](data-and-privacy.md#where-a-research-question-goes-101).
+
+```text
+question (+ previous question) ─► searchQueryFor ─► query
+   ├─ keyed web search API     (only with its key; 4.5 s leash)   ┐
+   ├─ the owner's instance     (when configured; 6 s leash)        ├─ in parallel ─► combineResults ─► SearchHit | null
+   └─ encyclopedia search API  (keyless, always; 3.5 s leash)      ┘
+instance timed out or unreachable ─► wake-up in waitUntil ─► the instance's /healthz
+```
+
+1. **The query.** `searchQueryFor(question, previous)` searches the question as asked, unless it is a follow-up: a question with two topic words or fewer, or one that leans on a pronoun or a phrase such as "what about", gets up to six topic words of the previous question put in front of it. Topic words are lower-cased letters and digits of any script (combining marks kept, so Indian-script words stay whole) minus stopwords; Latin words under three letters are dropped. `wantsRecent()` ("latest", "today", "this week", a year from 2020 on…) asks the keyed API for the past month and the instance for its news category too.
+2. **Three sources at once,** each on its own leash, so a lookup costs the slowest leash and never the sum. A source that fails or times out simply contributes nothing.
+3. **The relevance gate.** `combineResults` drops any result whose title, snippet and address share too little with the query's topic words: with one or two topic words at least one must appear; with three or four, half; with five or more, 40 %. A question whose topic words are in a non-Latin script skips the gate (its honest answers are often written in Latin letters), and the engines' ranking is trusted. Results are de-duplicated by address.
+4. **The mix.** Open-web results first; the encyclopedia adds at most two articles beside them, or carries the whole answer (up to eight) when the open web brought nothing relevant. Eight results at most.
+5. **The answer.** Numbered `[n] title / snippet / address` text for the prompt, the addresses for the reply's Sources, a title and snippet preview per source, which sources contributed (`via`) and the instance's status. `null` when nothing relevant survived: the reply must then say it could not check the live web.
+6. **Waking the instance.** The owner's instance sleeps when idle and takes 30–60 s to wake. When, on a Web search or Research turn, it timed out or could not be reached — or no source returned anything relevant — the chat handler wakes it in the background (inside `waitUntil`: a request to its token-free `/healthz` with a 55 s leash), so the next question finds it up. The app also calls `POST /api/warm-search` (fire and forget, at most once every two minutes, `features/ai/chat/endpoints.ts` `warmWebSearch`) the moment Web search or Research is switched on; the route is rate-limited (6 a minute per address), answers `204` at once and does the same ping in the background.
+
+The Search-page music expert's grounding (`songContext`) and live discovery (`/api/discover`) still use only the owner's instance.
 
 ## Owner console
 

@@ -43,6 +43,27 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 | Scheduled jobs | `CRON_SECRET` (also a repository Actions secret with the same value) | `/api/cron/*` rejects every call |
 | Optional | `SEARXNG_URL` + `SEARXNG_TOKEN` (the owner's web search instance, a Render service — see `deploy/searxng/README.md`), `BRAVE_API_KEY` (10.1: a keyed web search API, the most reliable research source). Research asks these and a keyless encyclopedia search in parallel and keeps only results about the question; with all of them down or off-topic, a research answer honestly reports it could not check the live web. `GITHUB_REPO`, `GITHUB_TOKEN` (Android update source) | The feature is off or rate-limited |
 
+### Web search for VinaX AI (10.1)
+
+A research answer (Web search or Research on, or the model asking for a search mid-answer) asks up to three sources at once from the Worker. Only the first two are configured here:
+
+| Source | Configured by | If unset or down |
+| --- | --- | --- |
+| The owner's search instance | Its address and bearer token, the two names in the **Optional** row above (https; the address may be a `[vars]` entry or a secret; the token is also set on the instance's proxy). The instance must return JSON (`json` in its `search.formats`) | The other sources answer alone |
+| A keyed web search API | `BRAVE_API_KEY` (optional secret: a keyed web search API, free tier about 2,000 queries a month). The most reliable source when set | The instance and the encyclopedia answer |
+| An online encyclopedia's search API | Nothing: keyless, always asked | The other sources answer |
+
+Only results about the question are kept; if no source returns one, the reply says it could not check the live web. `GET /api/admin/envcheck` lists the instance's two names and `BRAVE_API_KEY` under AI, so a key that was never pasted shows up there.
+
+**The instance sleeps.** It runs on a free plan that sleeps after about 15 minutes idle and takes 30–60 s to wake, longer than a search waits (6 s). Two things keep that from costing answers:
+
+- `POST /api/warm-search` (`functions/api/warm-search.ts`). The app calls it, fire and forget, the moment someone switches on Web search or Research in VinaX AI (at most once every two minutes per tab). It answers `204` at once and, in the background, requests the instance's token-free `/healthz` with a 55 s leash. It carries no search words and reveals nothing about the caller or the instance. Rate-limited to 6 a minute per address (per isolate).
+- After a Web search or Research turn on which the instance timed out or could not be reached, or no source returned anything relevant, the chat handler sends the same wake-up in the background.
+
+The first question after a long quiet spell can still miss the instance; with the keyed API or the encyclopedia answering meanwhile, the reply is usually still grounded. To remove the gap entirely, move the instance to a paid plan or ping `/healthz` on a schedule (the instance's README, linked in the Optional row above, weighs both).
+
+**Reading the logs.** Each search logs one line: `[websearch] q_terms=… keyed=off|<n> instance=<status>:<n> encyclopedia=<n> kept=<n> via=<sources>` — counts and statuses, never the search words. `keyed=off` means no key is set; `kept=0` with results from the sources means the relevance gate dropped them all. The keyed API and the encyclopedia also log their own `status=` line on a timeout or an HTTP error. The console's Health panel has a row for the instance only.
+
 Non-secret Worker settings are in `[vars]` in `wrangler.toml`: `ASSETS_HOST` (the static site's host, used for fall-through and for the shell of edge-rendered pages) and `GITHUB_REPO`. The `HANDOFF` key-value binding holds device-transfer ciphertext for ten minutes.
 
 Repository Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (Worker deploy fallback), `CRON_SECRET`, and the four `ANDROID_KEYSTORE_*` / `ANDROID_KEY_*` signing secrets.
