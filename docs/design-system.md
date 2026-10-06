@@ -1,19 +1,56 @@
-# Design system — "Marigold" (10.0)
+# Design system — "Marigold" (10.0) and frosted glass (10.1)
 
-This document covers how the listener app looks and behaves at the component level: where the tokens live, the colour, type and radius scales, the medium control scale and the 44px hit-area rule, how overlays are built and why they carry `data-vx-overlay`, the motion rules, and the top bar's actions slot. 10.0 "Marigold" is a new identity on the frame 9.0 "Encore" built: new token values, a display face, a recoloured mark, and a first visit that says plainly what VinaX costs (nothing). The owner console has its own standalone stylesheet and is covered in [admin-console.md](admin-console.md).
+This document covers how the listener app looks and behaves at the component level: where the tokens live, the colour, type and radius scales, the medium control scale and the 44px hit-area rule, how overlays are built and why they carry `data-vx-overlay`, the motion rules, and the top bar's actions slot. 10.0 "Marigold" is a new identity on the frame 9.0 "Encore" built: new token values, a display face, a recoloured mark, and a first visit that says plainly what VinaX costs (nothing). 10.1 adds a frosted material scale for the chrome and overlays, a drifting artwork backdrop on Now Playing, snackbars and the notifications inbox. The owner console has its own standalone stylesheet and is covered in [admin-console.md](admin-console.md).
 
 ## 10.0 "Marigold"
 
 Marigold is warm where Encore was cool: the colour of marigold garlands and of a lamp at dusk, over a plum-black night. It exists to make one thing obvious at a glance — VinaX is free, with no sign-up — and to feel like music from home.
 
 - **Colour.** The ink ramp is plum-black with cream text: `ink-950` `13 9 15` is the chrome (sidebar, player deck, tab bar), `ink-900` `19 14 22` the workspace, `ink-850` / `ink-800` the raised tiers, `ink-100` `251 245 236` the text. The light theme is warm cream paper (`ink-950` `255 252 247`, `ink-900` `250 245 237`) with plum text. **Marigold** (`--ember-*`, default `255 164 46`) is for play, the active destination, progress, focus and primary calls to action; labels on it use `--vx-on-accent` (`#1a0e06`, a deep brown, in dark; white on the darker light-theme ramp). **Rose** (`--tide-*`, default `255 99 132`) marks live and AI moments. The one brand gradient is Marigold → Rose (`--vx-glow`): the avatar, Liked songs, the AI shortcut glyph, the word "Free." in the welcome, the deck's top hairline. Token values live in `index.css` and are asserted by `theme.test.ts` and `contrast.test.ts`.
-- **Type.** Two families. **Bricolage Grotesque** (`--vx-font-display`, Tailwind `font-display`; SIL OFL, self-hosted at `/fonts/bricolage-var.woff2`, fetched only when a display-styled element renders) for page titles (`.vx-page-header h1`, `.vx-page-title`), display type (`.vx-display`, `.text-display`), section titles (`.vx-section-header h2`, Home's `.vxh-head h2`), the sidebar wordmark, the top bar's page name, the Home greeting and welcome headline, and the onboarding sheet's titles. **Manrope** for everything else: body copy, labels, buttons, metadata. Display sizes run at 750–800 with tight tracking (−0.03em to −0.045em).
+- **Type.** Two families. **Bricolage Grotesque** (`--vx-font-display`, Tailwind `font-display`; SIL OFL, self-hosted at `/fonts/bricolage-var.woff2`, fetched only when a display-styled element renders) for page titles (`.vx-page-header h1`, `.vx-page-title`), display type (`.vx-display`, `.text-display`), section titles (`.vx-section-header h2`, Home's `.vxh-head h2`), the sidebar wordmark, the top bar's page name, the Home greeting and welcome headline, and the onboarding sheet's titles. The same face also sets Home's feature tiles, listening guide and "Free, and how it stays free" title, the Queue and Drive mode titles, the lyrics hero, the Listen Together title and song name, the browse lanes' headings, and VinaX AI's empty-state greeting. **Manrope** for everything else: body copy, labels, buttons, metadata. Display sizes run at 750–800 with tight tracking (−0.03em to −0.045em).
 - **Shape.** Unchanged from Encore: pills for actions, filters and now the active destination; squircles for play buttons (`.vx-play-fab` 56px / radius 18, the deck's play button 44px / radius 15) and artwork; circles for people. The Home welcome panel is radius 28 (24 on phones), feature tiles 18, the free card 24.
-- **The frame.** The sidebar's wordmark is set in the display face beside a small "Free" tag (hidden on the rail). The active destination is a solid Marigold pill with a deep-brown label and a soft Marigold shadow; hovers in the chrome are a breath of Marigold (`--vx-hover-warm`, 10% / 8% in light) rather than grey. The phone tab bar's active icon sits in a solid Marigold pill under a cream label. The floating deck is plum chrome with a Marigold → Rose hairline on its top edge and a Marigold play squircle; the compact phone player's play button is Marigold too. The workspace carries a gradient mesh at its top: Marigold from the top left, Rose from the top right, the playing artwork's glow between them, painted with the content (`background-attachment: local`), so it scrolls away and costs nothing on scroll. Blur is kept light (12–16px) and only on surfaces that are already nearly opaque (the scrolled top bar, the tab bar, the deck).
+- **The frame.** The sidebar's wordmark is set in the display face beside a small "Free" tag (hidden on the rail). The active destination is a solid Marigold pill with a deep-brown label and a soft Marigold shadow; hovers in the chrome are a breath of Marigold (`--vx-hover-warm`, 10% / 8% in light) rather than grey. The phone tab bar's active icon sits in a solid Marigold pill under a cream label. The floating deck is plum chrome with a Marigold → Rose hairline on its top edge and a Marigold play squircle; the compact phone player's play button is Marigold too. The workspace carries a gradient mesh at its top: Marigold from the top left, Rose from the top right, the playing artwork's glow between them, painted with the content (`background-attachment: local`), so it scrolls away and costs nothing on scroll. 10.0 kept blur light (12–16px) and only on surfaces that were already nearly opaque; 10.1 replaced that with the frosted material scale ([below](#101-frosted-glass-materials-and-snackbars)), still only on fixed or sticky chrome and overlays.
 - **First visit.** Before anything has been played on a device, Home opens with the welcome (`features/home/HomeWelcome.tsx`): a "Free forever" tag, the headline "All the music you love. Free." in the display face (preceded, inside the same heading, by "Welcome, <first name>." when the listener gave a name), one line on languages and what is not asked for (no subscription, no email, no password), "Start listening" (plays the opening mix the page already holds; no extra request) and "Pick your languages". The Aura Mix sits beside it, and "Everything included, all free" follows: six tiles to VinaX AI, AI Radio, Listen Together, synced lyrics (Karaoke), offline downloads on Android and the language pages. Returning listeners get the short greeting and their shelves. Home ends with "Free, and how it stays free": four plain facts, each true today (no subscription or in-app purchase; no sign-up; one labelled ad on the website's content pages only; listening data stays on the device).
-- **Onboarding.** The welcome sheet leads with "Free. No sign-up." over a plum header lit by the Marigold → Rose mesh, the language names drifting behind the mark in their own scripts, and a "Free forever" tag.
-- **Motion.** 140–240ms on `--ease-calm`. Feature tiles and the welcome's call to action rise 1–2px on hover; the sidebar mark tilts a few degrees. No bounce, no pulse, no animated gradients. Nothing moves under either reduced-motion switch.
+- **Onboarding.** The welcome sheet leads with "Free. No sign-up." over a plum header lit by the Marigold → Rose mesh, the language names set in staggered rows behind the mark in their own scripts (static, decorative), and a "Free forever" tag. Its tour slides use the display face, and the step dots are Marigold.
+- **Motion.** 140–240ms on `--ease-calm`. Feature tiles and the welcome's call to action rise 1–2px on hover; the sidebar mark tilts a few degrees. No bounce and no animated gradients. A few deliberate slow loops exist, each opacity and transform only: VinaX AI's thinking motion (10.0: the reply mark breathes over 2.4 s, the "Thinking" label shimmers, a caret blinks where text arrives — see [ai.md](ai.md#the-chat-page)), and Now Playing's drifting artwork backdrop (10.1, below). Nothing moves under either reduced-motion switch.
+- **Accents.** The picker's default is **Marigold** (stored id `crimson`, which has no CSS block and rides the `:root` ramp). The older orange ramp (`ember`) is labelled **Copper** and re-coloured (`214 120 78`) so it no longer reads as a second Marigold; a saved choice is kept because ids never change (`constants/accents.ts`).
 - **Contrast.** Every pairing above clears WCAG AA: deep brown on Marigold is 9.6:1, cream on the plum workspace is AAA, and the letter-avatar hues (marigold, rose, gold, coral, orchid) each clear 5.7:1 on their plum tile.
+
+## 10.1 frosted glass: materials and snackbars
+
+10.1 makes the chrome and the overlays frosted glass, in a fixed scale of four materials, so that a translucent surface always means the same thing and always stays readable.
+
+### The material scale
+
+Tokens in `:root` of `index.css`; the utilities `.vx-mat-thin`, `.vx-mat-regular`, `.vx-mat-chrome` and `.vx-mat-thick` put each recipe together: a translucent fill, a backdrop blur, a saturation lift, a 1px specular line on the top edge and a hairline.
+
+| Material | Fill (dark) | Blur (desktop; phones lighter) | Used for |
+| --- | --- | --- | --- |
+| `thin` | `ink-950` at 62% of the glass level | 12px + up to 30px | Large quiet panes over a calm canvas: the sidebar, over a canvas tinted by the playing artwork |
+| `regular` | `ink-850`, 50–92% | 16px + up to 34px | Floating controls over moving content. Defined, but no component takes the class yet: Now Playing's buttons borrow only its specular line and hairline (below) |
+| `chrome` | `ink-950`, 80–97% | 18px + up to 36px | Fixed and sticky bars content scrolls under: the top bar (once something is under it), the phone tab bar, the compact player and the player deck. Each carries the playing artwork's colour faintly (`--mat-tint`, 10% of `--art`, 8% in light) |
+| `thick` | `ink-850`, 86–98% | 24px + up to 40px | Anything that carries a block of text: sheets and dialogs (`<Sheet>`), the song menu, the right-click popover, snackbars |
+
+- **Both Settings dials drive them.** Glass effect sets `--glass-alpha`, which the fills follow; Background blur sets `--glass-blur-boost`, which the blur follows. The fills are **floored** (`clamp`) on the tiers that carry text, so muted text on the chrome and body text on menus and snackbars keep WCAG AA even over a white cover in dark and a black cover in light (`src/__tests__/glass.test.ts`).
+- **Light theme.** The fills are white glass (`255 253 250`) with a plum hairline and a strong specular line.
+- **Fallbacks.** The Black theme keeps every material solid with no backdrop filter. Where `backdrop-filter` is unsupported, and under `prefers-reduced-transparency`, each material falls back to `--surface-solid`. Phones (`max-width: 767px`) get a lower blur cap so bars stay cheap to composite while a list scrolls under them.
+- **The rule.** Never put a material on a row inside a scrolling list: fixed or sticky chrome and overlays only.
+- **The top bar** turns to chrome glass only once content is under it. `TopBar` watches a sentinel with an `IntersectionObserver` rooted on the workspace (no scroll listener) and adds `is-scrolled vx-mat-chrome`.
+- **Now Playing.** Two heavily blurred copies of the artwork drift slowly behind the stage (26 s and 31 s, alternating, transform only; lighter blur on phones) under a warm wash and a scrim. The round top buttons and the tool row are frosted panes — a translucent fill, the specular line and a hairline — with no backdrop filter of their own, since they already sit on a blurred stage. The drift stops under either reduced-motion switch.
+
+### Snackbars
+
+`components/Toasts.tsx` with `store/toastStore.ts`. `toast(text)` is unchanged; `toast(text, { image, action, duration, key })` adds the rest.
+
+- **Shape.** A compact pill of `thick` glass (one step lighter than the chrome in dark, white glass in light, solid in Black), radius 20, at least 48px tall, at most 480px wide, rising above the tab bar and the compact player on phones and above the deck on computers. An optional 36px artwork thumbnail leads, one line of text follows, and at most **one action** (View, Undo…) sits at the end.
+- **Timing.** About 4 s on screen (5 s with an action, or the caller's `duration`). At most **two** at once; a third pushes the oldest out. The same words twice show once.
+- **Keyed replacement.** A toast with a `key` replaces the older one with the same key and inherits its artwork and action when it has none. Liking the playing song used to show "Added to Liked songs" and the DJ's "Liked — more like this is coming up next" side by side; both now use the key `like`, so the second updates the first and keeps its cover and View.
+- **Interaction.** Hovering or focusing the stack pauses every timer; leaving resumes each with what it had left (at least 1 s). Swipe a snackbar down (36px) or press Esc to dismiss the newest — Esc is left to an open sheet or menu unless focus is in the snackbar. The live region is always in the DOM (`role="status"`, polite) so the first message is announced. Entry and exit motion (220 / 180 ms) stops under either reduced-motion switch.
+- **Where they carry artwork and an action.** Liked songs (View, or Undo on removal), Added to queue and Playing next (View → the Queue page). The right-click menu's duplicate queue toasts were removed.
+
+### The notifications inbox
+
+The bell in Home's top bar opens `NotificationSheet`: a `thick` glass sheet whose rows lead with artwork (an announcement's own image, else a music or megaphone glyph), grouped under day headings — Today, Yesterday, then the date — and then a "From VinaX" group with the three newest release notes. On Android it also offers "Mute alerts for 7 days".
 
 ## 9.0 "Encore" (the frame Marigold builds on)
 
@@ -44,7 +81,7 @@ Encore was the 9.0 identity: violet and cyan over deep charcoal. Its token value
 | `styles/features.css` | Global feature surfaces without a page stylesheet of their own (Home Studio, the listening guide, the destination grid). A feature that gets its own page stylesheet takes its rules with it (the entity heroes went to `pages/library.css`, the AI pieces to `ai.css` and `pages/radio.css`, the player's surfaces and the queue's ownership marker to `pages/player.css`, the language grid to `pages/browse.css`) |
 | `styles/pages/tracklist.css` | Track rows, the track-list header and media cards — the only place they are styled. Imported by `SongRow` and `MediaCard` |
 | `styles/overlays.css` | Sheets, dialogs, menus and the welcome sheet. Imported by `Sheet`, `TrackMenu` and `OnboardingSheet`, not by `main.tsx` |
-| `styles/pages/*.css` | One stylesheet per area (`home`, `browse`, `library`, `player`, `radio`, `settings`, `secondary`), each imported by its page or component, so it ships in that lazy chunk and never in the first load |
+| `styles/pages/*.css` | One stylesheet per area (`home`, `browse`, `library`, `player`, `radio`, `settings`, `secondary`, and 10.0's `together`, which the Listen Together page and the Live pill share), each imported by its page or component, so it ships in that lazy chunk and never in the first load |
 
 Page stylesheets scope their rules under the page's root class (`.vx-home`, `.vx-browse`, …) so two lazy chunks loaded in one session cannot restyle each other; `browse.css`'s shared pieces are the `bx-*` family (the browse tiles — chart covers fanned, language scripts, mood emoji — the hub covers and the pinned search field).
 | `styles/ai.css` | VinaX AI, which renders outside the main shell |
@@ -81,7 +118,7 @@ Rules of the cascade:
 
 An inline pre-paint script in `frontend/index.html` applies the same classes before first paint; it mirrors `applyThemeClasses()` and the two must stay in sync. The black theme overrides only the deepest surface tiers.
 
-Two more attributes are set on `<html>` by `AppLayout`: `data-accent` (one of `ember`, `ocean`, `violet`, `rose`, `emerald`, `sunset`, `aurora`, `mono`, `gold`, `azure`) and `data-density` (`compact` tightens track rows and shelf spacing). Every accent has a dark block and a light twin; the contrast test fails if one is missing.
+Two more attributes are set on `<html>` by `AppLayout`: `data-accent` (one of `ember` — labelled Copper since 10.0 — `ocean`, `violet`, `rose`, `emerald`, `sunset`, `aurora`, `mono`, `gold`, `azure`; the default, `crimson`, labelled Marigold, has no block and uses the `:root` ramp) and `data-density` (`compact` tightens track rows and shelf spacing). Every accent has a dark block and a light twin; the contrast test fails if one is missing.
 
 ## Colour
 
@@ -170,7 +207,7 @@ The rule: the visual box may be 36 or 40px, but the touch target is at least 44p
 
 ## Overlays
 
-`<Sheet>` (`frontend/src/components/Sheet.tsx`) is the one overlay shell: a bottom sheet on phones, a centred dialog from the `sm` breakpoint up.
+`<Sheet>` (`frontend/src/components/Sheet.tsx`) is the one overlay shell: a bottom sheet on phones, a centred dialog from the `sm` breakpoint up. Since 10.1 its panel is the `thick` frosted material (see above).
 
 | It owns | Detail |
 | --- | --- |
@@ -206,7 +243,8 @@ It also skips events an overlay already handled (`defaultPrevented`). The rule f
 - Marigold, like Encore before it, is quiet by design: no bounce, no pulsing glow; cards lift 3px on hover and their play button rises in. Shell and Home transitions run 140–240ms.
 - Two switches silence motion: the OS `prefers-reduced-motion` setting and the in-app "Reduce motion" setting, which sets `html.reduce-motion`. `index.css` collapses every animation and transition under that class; `shell.css` does the same for `.vx-shell` and `.ai-root` under either switch. Marquee text falls back to an ellipsis.
 - CSS cannot stop a scripted scroll. Every scripted scroll asks `frontend/src/utils/motion.ts` first: `reducedMotion()` is true for either switch, and `scrollBehavior()` returns `'auto'` or `'smooth'` accordingly. Pass `behavior: scrollBehavior()` to `scrollIntoView`, `scrollTo` and `scrollBy`; never hard-code `'smooth'`. The shelf arrows, synced lyrics, the tutorial runner and the VinaX AI thread already do.
-- `prefers-reduced-transparency` replaces glass surfaces with solid ones.
+- `prefers-reduced-transparency` replaces glass surfaces, the 10.1 materials included, with solid ones.
+- 10.1's moving parts follow the same switches: Now Playing's drifting backdrop and the snackbars' entry and exit stop under either one.
 
 ## Top bar and the actions slot
 

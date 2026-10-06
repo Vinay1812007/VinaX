@@ -1,4 +1,4 @@
-# VinaX AI — feature matrix (9.1.0)
+# VinaX AI — feature matrix (9.1.0, updated for 10.1)
 
 What the assistant surface actually does, checked against the code rather than
 against intent. VinaX AI is VinaX's own assistant: it is not another product and
@@ -105,15 +105,22 @@ Status words:
 
 | Feature | Status | Where / note |
 | --- | --- | --- |
-| Web search toggle | done | `web` on the request; the reply shows a badge only when a search really ran |
+| Web search toggle | done | `web` on the request; the reply shows a badge only when a search really ran. 10.0: a **Web search** connector in the + menu |
+| **Connectors** — one list of what a reply may draw on | done (10.0) | `features/ai/connectors.ts`, `chat/Connectors.tsx`: Web search, Research, Think, Now playing, Memory and Place, each with one line on what it does or shares, and chips above the composer for those that are on. Each maps to something the chat already did; Place adds a chat-only "do not send" (`vinax.ai.placeOn`) on top of the app-wide region setting |
 | Automatic search for time-sensitive questions | done | `FRESH_TRIGGER` on the client, so the listener always sees that a hop happened |
+| Model-requested search mid-answer | done | `[[FETCH: …]]`, one restart per request; the reply's timeline and Sources show it like any other search, with previews since 10.1 |
 | **Research mode** — a real workflow, not a simulation | done | forces a live search and adds a cross-checking rule; `RESEARCH_RULE` |
+| **More than one search source** | done (10.1) | `_lib/websearch.ts` `liveSearch` asks a keyed web search API (when its key is set), the owner's instance and a keyless encyclopedia search in parallel; 9.0.1's single source with no fallback is gone |
+| **Results must be about the question** | done (10.1) | a lexical relevance gate (`relevance`, `relevanceBar`) drops off-topic results, pinned in `websearch.test.ts` with real junk the instance returned; Indian-script questions keep the engines' ranking |
+| Follow-up questions searched in context | done (10.1) | `searchQueryFor`: a short or pronoun-led follow-up borrows the previous question's topic words. Lexical, not a model rewrite |
+| A sleeping search instance is woken | done (10.1) | `POST /api/warm-search` when Web search is switched on, and a background wake-up after a timeout. The first question after a long quiet spell can still miss the instance; the other sources answer meanwhile |
 | Real citations with source links | done | `Msg.sources`, https-only |
-| Honest failure when search is unavailable | done | `meta.web = 'failed'` → the reply opens by saying it could not check the live web. `_lib/websearch.ts` has **no** fallback by design |
-| Agent mode for agent-capable engines | provider-dependent | `isAgentChoice`; `AgentActivity.tsx` shows only steps the engine reported |
+| Honest failure when search is unavailable | done | `meta.web = 'failed'` → the reply opens by saying it could not check the live web, now only when **no** source returned anything relevant |
+| Agent mode for agent-capable engines | provider-dependent | `isAgentChoice`; the tool timeline shows only steps the engine reported |
+| **Tool timeline** | done (10.0) | `chat/toolTimeline.ts`, `ToolActivity.tsx`: one row per reported step plus one for the service's own web search, a spinner on the step in progress, folded to "Used N tools" or "Searched the web · N sources" once the answer arrives. Counts are only ever the length of a real list |
 | Tool activity is never simulated | done | `streamReducer.ts` `cleanStep` only admits steps the stream carried |
 | Retrieved web text is treated as untrusted data | done | `fenceWebContext` with a per-request nonce; markers stripped from the body |
-| **Source previews** | done (9.1) | each source carries its own title and snippet from the search instance (`_lib/websearch.ts` `SourcePreview` → the stream's `meta.previews` → `Msg.sourcePreviews`). Rendered as TEXT, never as markup, https-only, and every field re-validated on the way in and again on import |
+| **Source previews** | done (9.1) | each source carries its own title and snippet from whichever search source returned it (`_lib/websearch.ts` `SourcePreview` → the stream's `meta.previews` → `Msg.sourcePreviews`). Rendered as TEXT, never as markup, https-only, and every field re-validated on the way in and again on import |
 | Code execution | out of scope | nothing in this deployment can run untrusted code safely |
 
 ## Model handling
@@ -132,7 +139,8 @@ Status words:
 | Feature | Status | Where / note |
 | --- | --- | --- |
 | Local date and time in answers | done (9.1) | the listener's own zone when known, IST otherwise — `_lib/place.ts` |
-| Coarse place context (country, region, approximate city, zone) | done (9.1) | sent only when the inference setting allows it (`assistantPlace`) |
+| Coarse place context (country, region, approximate city, zone) | done (9.1) | sent only when the inference setting allows it (`assistantPlace`), and (10.0) only while the Place connector is on |
+| The playing song as context, by choice | done (10.0) | the Now playing connector; off by default, page state only |
 | Place never decides the reply language | done (9.1) | stated in the prompt; the listener's languages travel separately and win |
 | Taste snapshot for music questions | done | `buildTasteSnapshot`, titles and artists only — never ids, names or location |
 | This thread's own "already recommended" memory | done | `threadMemory.ts`, so "give me more" reaches new ground |
