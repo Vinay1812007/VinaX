@@ -161,7 +161,7 @@ footer { padding: var(--s-4) var(--s-5); color: var(--text-3); font-size: 12px; 
 }
 
 /* ───────── 5. Buttons ───────── */
-.btn, .ghost, .lab-bench { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); min-height: var(--ctl-h); padding: 0 var(--s-4); background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--r-sm); font-size: 13.5px; font-weight: 600; line-height: 1.2; text-decoration: none; white-space: nowrap; transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease); }
+.btn, .ghost, .lab-bench { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); min-width: var(--ctl-h); min-height: var(--ctl-h); padding: 0 var(--s-4); background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--r-sm); font-size: 13.5px; font-weight: 600; line-height: 1.2; text-decoration: none; white-space: nowrap; transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease); }
 .btn:hover, .lab-bench:hover { background: var(--surface-2); color: var(--text); }
 .ghost { background: transparent; border-color: var(--border); color: var(--text-2); }
 .ghost:hover { background: var(--surface-2); color: var(--text); }
@@ -178,13 +178,26 @@ footer { padding: var(--s-4) var(--s-5); color: var(--text-3); font-size: 12px; 
 label { color: var(--text-2); font-size: 12.5px; font-weight: 600; }
 .inp, .nav-search, #main :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), select, textarea), .modal :is(input, select, textarea), .vxd-input, #token, #hdr-interval { width: 100%; min-height: var(--ctl-h); padding: 0 var(--s-3); background: var(--bg); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--r-sm); font: 500 14px/1.4 var(--font-ui); transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease); }
 #main textarea, .modal textarea, textarea.inp { padding: var(--s-2) var(--s-3); min-height: 88px; resize: vertical; }
-#main select, .modal select, #hdr-interval { width: auto; max-width: 100%; }
+#main select:not([size]), .modal select:not([size]), select#hdr-interval { width: auto; max-width: 100%; padding-right: var(--s-6); appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%); background-position: right 17px center, right 12px center; background-size: 5px 5px; background-repeat: no-repeat; }
 :is(.inp, .nav-search, #main input, #main select, #main textarea, .vxd-input, #token, #hdr-interval):focus-visible { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px var(--accent-soft); }
 :is(input, select, textarea)::placeholder { color: var(--text-3); opacity: 1; }
 :is(input, select, textarea):disabled { opacity: .55; cursor: not-allowed; }
 :is(input, select, textarea)[aria-invalid="true"] { border-color: var(--bad); }
-input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color: var(--accent); }
-input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; margin: 0 var(--s-2) 0 0; vertical-align: -3px; }
+input[type="range"] { accent-color: var(--accent); }
+/* Check boxes and radios are drawn here, not by the browser: an 18px box whose transparent border (0 on desktop, 10px on phone — §16) is the touch area. */
+input[type="checkbox"], input[type="radio"] { appearance: none; -webkit-appearance: none; display: inline-grid; place-content: center; flex: none; box-sizing: border-box; width: 18px; height: 18px; min-height: 0; margin: 0 var(--s-2) 0 0; padding: 0; vertical-align: -3px; background: var(--bg) padding-box; border: 0 solid transparent; border-radius: 6px; box-shadow: inset 0 0 0 1.5px var(--border-strong); cursor: pointer; transition: background-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease); }
+input[type="radio"] { border-radius: 50%; }
+input:is([type="checkbox"], [type="radio"])::before { content: ''; width: 10px; height: 10px; background: var(--on-accent); clip-path: polygon(12% 46%, 0 62%, 40% 100%, 100% 20%, 86% 6%, 38% 68%); transform: scale(0); transition: transform var(--dur-1) var(--ease); }
+input[type="radio"]::before { clip-path: circle(36%); }
+input:is([type="checkbox"], [type="radio"]):checked { background-color: var(--accent); box-shadow: none; }
+input:is([type="checkbox"], [type="radio"]):checked::before { transform: scale(1); }
+input:is([type="checkbox"], [type="radio"]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* File picker: the browser's own button takes the secondary-button look (§5). */
+input[type="color"] { flex: none; min-width: var(--ctl-h); min-height: var(--ctl-h); padding: 2px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-sm); cursor: pointer; }
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 6px; }
+input[type="file"] { min-height: var(--ctl-h); max-width: 100%; color: var(--text-2); font-size: 13px; }
+input[type="file"]::file-selector-button { min-height: var(--ctl-h); margin-right: var(--s-3); padding: 0 var(--s-4); background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--r-sm); font: inherit; font-weight: 600; cursor: pointer; }
 .hint { color: var(--text-3); font-size: 12.5px; }
 .field-error, .err { color: var(--bad); font-size: 12.5px; font-weight: 600; }
 .field-error:empty, .err:empty { display: none; }
@@ -208,6 +221,9 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; margin:
 .switch .knob { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-2); transition: transform var(--dur-1) var(--ease), background var(--dur-1) var(--ease); }
 .switch .track.on { background: var(--accent); box-shadow: none; }
 .switch .track.on .knob { transform: translateX(16px); background: var(--on-accent); }
+.switch { position: relative; min-width: var(--ctl-h); cursor: pointer; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; }
+.switch input:focus-visible + .track { outline: 2px solid var(--focus); outline-offset: 2px; }
 .sw { display: inline-flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-3); }
 .sw button { width: 32px; height: 32px; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--r-sm); }
 .sw button:is(.active, .on, [aria-pressed="true"]) { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -258,6 +274,7 @@ tr.table-empty > td, tr.table-empty:hover > td { padding: var(--s-5); background
 .state { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: var(--s-7) var(--s-5); text-align: center; }
 .state-title { font-size: 15px; font-weight: 700; }
 .state-hint { max-width: 56ch; color: var(--text-2); }
+.state > svg { flex: none; width: 40px; height: 40px; margin: 0 auto var(--s-1); color: var(--text-3); }
 .state-error .state-title { color: var(--bad); }
 .state-loading { align-items: stretch; }
 .skeleton { display: block; border-radius: var(--r-sm); background: var(--surface-2); animation: vx-pulse 1.2s var(--ease) infinite alternate; }
@@ -288,7 +305,7 @@ div.empty.is-error::before { content: '!'; flex: none; display: grid; place-item
 .srow .sname, .brow .blabel, .nowcell span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .srow .sname { font-weight: 600; }
 .nowcell { display: inline-flex; align-items: center; gap: var(--s-2); min-width: 0; }
-.brow { display: grid; grid-template-columns: 200px 1fr 64px; gap: var(--s-4); align-items: center; min-height: 32px; margin-bottom: var(--s-1); font-size: 13px; }
+.brow { display: grid; grid-template-columns: 200px 1fr minmax(64px, max-content); gap: var(--s-4); align-items: center; min-height: 32px; margin-bottom: var(--s-1); font-size: 13px; }
 .btrack { height: 8px; overflow: hidden; border-radius: 999px; background: var(--surface-2); }
 .bfill { height: 100%; border-radius: 999px; background: var(--accent); }
 .bval { text-align: right; font-weight: 700; }
@@ -388,9 +405,16 @@ html.reduce-motion :is(*, *::before, *::after) { animation-duration: 0s !importa
   #secTitle { font-size: 18px; }
   #main { padding: var(--s-4); }
   #nav button, .seg button, .chips button, .pn-kind, .btn-sm, .modal .x { min-height: 44px; }
+  .seg button, .chips button, .pn-kind { min-width: 44px; }
   .modal .x, .sw button { width: 44px; height: 44px; }
   .updated { display: none; }
-  input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px; vertical-align: -6px; }
+  input[type="checkbox"], input[type="radio"] { width: 44px; height: 44px; margin: 0; border-width: 10px; border-radius: 16px; vertical-align: middle; }
+  input[type="radio"] { border-radius: 50%; }
+  input:is([type="checkbox"], [type="radio"])::before { width: 14px; height: 14px; }
+  .table-wrap td a[href] { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; }
+  .table-wrap table { width: max-content; min-width: 100%; }
+  .table-wrap td { max-width: 280px; }
+  :is(.cards, .kpi-grid, .segment-cards) > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   label:has(> input[type="checkbox"], > input[type="radio"]) { display: inline-flex; align-items: center; min-height: 44px; }
   .toast-region { right: var(--s-3); left: var(--s-3); bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px)); width: auto; }
   .card { padding: var(--s-4); }
@@ -398,7 +422,7 @@ html.reduce-motion :is(*, *::before, *::after) { animation-duration: 0s !importa
   .card.kpi .ki { display: none; }
   .cards, .kpi-grid, .segment-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
   .hz-status { flex-basis: 100%; padding-right: 0; border-right: 0; }
-  .brow { grid-template-columns: 108px 1fr 48px; gap: var(--s-2); }
+  .brow { grid-template-columns: 108px 1fr minmax(48px, max-content); gap: var(--s-2); }
   .srow { grid-template-columns: 36px minmax(0, 1.3fr) 1fr 44px; gap: var(--s-2); }
   .modal, .vxd-overlay { padding: 6vh var(--s-3) var(--s-4); }
   .zoomed { inset: 2vh 2vw; }

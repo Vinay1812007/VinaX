@@ -590,7 +590,7 @@
       var ll = cityLL(r.city, r.country);
       if (!ll) return;
       var icon = L.divIcon({ className: 'live-dot' + (r.playing ? ' playing' : ''), iconSize: [14, 14] });
-      var m = L.marker([ll[0], ll[1]], { icon: icon, zIndexOffset: 500 }).addTo(leafMap);
+      var m = L.marker([ll[0], ll[1]], { icon: icon, zIndexOffset: 500, title: (r.name || 'Listener') + ', ' + ([r.city, r.country].filter(Boolean).join(', ') || 'Unknown') }).addTo(leafMap);
       var song = r.song ? esc(r.song) + (r.artist ? ' \u00b7 ' + esc(r.artist) : '') : (r.playing ? 'Playing' : 'Online');
       m.bindPopup('<b>' + esc(r.name || 'Listener') + (r.username ? ' @' + esc(r.username) : '') + '</b><br>' + song + '<br>' + esc([r.city, r.country].filter(Boolean).join(', ') || 'Unknown'));
     });
