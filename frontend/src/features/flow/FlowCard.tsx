@@ -167,7 +167,8 @@ export const FlowCard = memo(function FlowCard(props: FlowCardProps) {
       {hint && (
         <p className="vx-flow-hint" aria-hidden>
           <span className="vx-flow-hint-chev" />
-          Swipe up for the next song
+          <span className="vx-flow-hint-touch">Swipe up for the next song</span>
+          <span className="vx-flow-hint-keys">Scroll or press ↓ for the next song</span>
         </p>
       )}
       {bursts.map((b) => (

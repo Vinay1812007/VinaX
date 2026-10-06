@@ -398,3 +398,11 @@ html.light .vx-flow-bg::after {
 }
 html.reduce-motion .vx-flow-burst { display: none; }
 html.reduce-motion .vx-flow-hint-chev { animation: none; }
+
+/* The first-card hint speaks the input the listener has: a swipe on touch,
+   the wheel or arrow keys with a mouse. */
+.vx-flow-hint-keys { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .vx-flow-hint-touch { display: none; }
+  .vx-flow-hint-keys { display: inline; }
+}
