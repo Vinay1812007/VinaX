@@ -3,12 +3,14 @@ import { SearchIcon } from '@/components/Icons';
 import { cn } from '@/utils/cn';
 import { CheckIcon } from './icons';
 import { buildModelMenu, choiceKey, type CatalogState, type MenuRow } from './models';
-import type { CatalogGroup, ModelChoice } from './types';
+import { ProviderLogo } from './ProviderLogo';
+import type { ModelChoice, Provider } from './types';
 
 export interface ModelMenuProps {
   state: CatalogState;
-  groups: CatalogGroup[];
-  current: ModelChoice;
+  providers: Provider[];
+  /** The choice in use (checked), or null when none is (Settings: "Last used"). */
+  current: ModelChoice | null;
   recents: ModelChoice[];
   onPick: (choice: ModelChoice) => void;
   onClose: () => void;
@@ -19,25 +21,26 @@ export interface ModelMenuProps {
 }
 
 /**
- * v7.1 — the one model menu: a search field over every engine VinaX can
- * reach. Recently used first, then the recommended seats, the pinned VinaX
- * engines, and one section per live catalogue listing every model in it.
+ * v7.1 — the one model menu: a search field over every model VinaX can
+ * reach. 10.3 — Auto first, then recently used models, then one section per
+ * provider (its logo, name and count) listing every model it serves under
+ * the model's original name.
  *
  * It is a combobox driving a listbox: focus stays in the search field, the
  * arrow keys move an "active" option (aria-activedescendant), Enter picks it,
  * Escape closes, and typing anywhere filters. `aria-selected` marks the model
  * that is currently in use — the checked row — not the keyboard cursor.
  */
-export function ModelMenu({ state, groups, current, recents, onPick, onClose, onRetry, className, style }: ModelMenuProps): ReactNode {
+export function ModelMenu({ state, providers, current, recents, onPick, onClose, onRetry, className, style }: ModelMenuProps): ReactNode {
   const [query, setQuery] = useState('');
   const uid = useId();
   const listId = `${uid}-list`;
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const sections = useMemo(() => buildModelMenu({ groups, state, query, recents }), [groups, state, query, recents]);
+  const sections = useMemo(() => buildModelMenu({ providers, state, query, recents }), [providers, state, query, recents]);
   const rows = useMemo(() => sections.flatMap((s) => s.rows), [sections]);
-  const currentKey = choiceKey(current);
+  const currentKey = current ? choiceKey(current) : null;
 
   // The keyboard cursor. Starts on the model in use; a new search starts at
   // the top of the results.
@@ -133,11 +136,22 @@ export function ModelMenu({ state, groups, current, recents, onPick, onClose, on
         className="ai-model-list"
       >
         {sections.map((s) => (
-          <div key={s.id} role="group" aria-labelledby={`${uid}-h-${s.id}`}>
-            <p id={`${uid}-h-${s.id}`} className="ai-model-heading">
-              <span>{s.title}</span>
-              {s.rows.length > 0 && <span className="ai-model-count">{s.rows.length}</span>}
-            </p>
+          <div
+            key={s.id}
+            role="group"
+            aria-labelledby={s.title ? `${uid}-h-${s.id}` : undefined}
+            aria-label={s.title ? undefined : s.label}
+          >
+            {s.title && (
+              <p className="ai-model-heading">
+                <span className="ai-model-heading-name">
+                  {s.provider && <ProviderLogo provider={s.provider} size={16} />}
+                  {/* The group is named by the title alone; the count is read with the rows. */}
+                  <span id={`${uid}-h-${s.id}`}>{s.title}</span>
+                </span>
+                {s.rows.length > 0 && <span className="ai-model-count">{s.rows.length}</span>}
+              </p>
+            )}
             {s.rows.map((row) => {
               const selected = choiceKey(row.choice) === currentKey;
               return (
@@ -153,11 +167,12 @@ export function ModelMenu({ state, groups, current, recents, onPick, onClose, on
                     if (i !== active) setActive(i);
                   }}
                 >
+                  {row.provider && <ProviderLogo provider={row.provider} size={18} />}
                   <span className="min-w-0 flex-1">
-                    <span className={cn('ai-model-label', row.mono && 'ai-model-label-mono')}>{row.label}</span>
+                    <span className="ai-model-label">{row.label}</span>
                     {row.hint && <span className="ai-model-hint">{row.hint}</span>}
                   </span>
-                  {row.badge && <span className="ai-badge">{row.badge}</span>}
+                  {row.vision && <span className="ai-badge">Vision</span>}
                   <span className="ai-model-check" aria-hidden>
                     {selected && <CheckIcon className="w-3.5 h-3.5" />}
                   </span>

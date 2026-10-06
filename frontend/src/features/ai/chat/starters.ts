@@ -1,13 +1,15 @@
 import type { QuickAction } from './EmptyState';
 
-// Feature buttons on the empty chat: one tap sets up the prompt (and the
-// right seat). The console can replace them (Admin → AI Quick Actions).
+// Feature buttons on the empty chat: one tap sets up the prompt. The console
+// can replace them (Admin → AI Quick Actions). 10.3 — they no longer switch
+// the model: the seats they pointed at are gone, and Auto (or the listener's
+// own pick) handles writing, code and translation alike.
 export const QUICK_ACTIONS: QuickAction[] = [
-  { label: 'Write', prompt: 'Write a ', mode: 'win' },
-  { label: 'Code', prompt: 'Write code that ', mode: 'sage' },
+  { label: 'Write', prompt: 'Write a ' },
+  { label: 'Code', prompt: 'Write code that ' },
   { label: 'Chart', prompt: 'Make a chart of ' },
   { label: 'Diagram', prompt: 'Draw a diagram of ' },
-  { label: 'Translate', prompt: 'Translate to Telugu: ', mode: 'translator' },
+  { label: 'Translate', prompt: 'Translate to Telugu: ' },
   { label: 'Summarise', prompt: 'Summarise this: ' },
   { label: 'Songs', prompt: 'Recommend songs for ' },
   { label: 'Explain', prompt: 'Explain simply: ' },

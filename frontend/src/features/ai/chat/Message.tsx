@@ -25,6 +25,8 @@ import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { cn } from '@/utils/cn';
 import { reducedMotion } from '@/utils/motion';
 import { CheckIcon } from './icons';
+import { isProviderId } from './models';
+import { ProviderLogo } from './ProviderLogo';
 import type { Msg } from './types';
 
 /** Everything a message can ask the page to do. The object is stable (see
@@ -287,9 +289,14 @@ export const AssistantMessage = memo(function AssistantMessage({
                   <PinIcon />
                 </button>
                 <MoreMenu actions={more} />
+                {/* 10.3 — who answered: the provider's logo and the model's
+                    original name, straight from the stream (a failover hop
+                    names the engine that really replied). A reply stored by an
+                    older build keeps its label, without a logo. */}
                 {m.engine ? (
-                  <span className="ai-engine-chip" title="Engine that answered">
-                    {m.engine}
+                  <span className="ai-engine-chip" title={`Answered by ${m.engine}`}>
+                    {isProviderId(m.engineProvider) && <ProviderLogo provider={m.engineProvider} size={14} />}
+                    <span className="truncate">{m.engine}</span>
                   </span>
                 ) : null}
               </div>

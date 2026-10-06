@@ -34,7 +34,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const limited = rateLimit(request, 'voices', { capacity: 12, refillPerMinute: 12 });
   if (limited) return limited;
 
-  const models = await fetchVoiceCatalog(env, 'grq');
+  const models = await fetchVoiceCatalog(env, 'groq');
   return new Response(
     JSON.stringify({
       fetchedAt: new Date().toISOString(),

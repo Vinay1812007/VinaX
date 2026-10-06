@@ -82,7 +82,7 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
   // spoken reply.
   const wantModel = typeof body?.model === 'string' ? body.model.trim() : '';
   const wantVoice = typeof body?.voice === 'string' ? body.voice.trim().toLowerCase() : '';
-  const model = wantModel && (await isServedVoiceModel(env, 'grq', wantModel)) ? wantModel : TTS_MODEL;
+  const model = wantModel && (await isServedVoiceModel(env, 'groq', wantModel)) ? wantModel : TTS_MODEL;
   const voice = VOICES.has(wantVoice) ? wantVoice : TTS_VOICE;
   let text = raw;
   if (text.length > INPUT_MAX) {

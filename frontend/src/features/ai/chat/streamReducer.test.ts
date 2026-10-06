@@ -33,6 +33,17 @@ describe('reduceFrame', () => {
     expect(s.model).toBe('rescue-model');
   });
 
+  it('10.3 — takes the original name, slug and provider from meta, and a failover hop replaces all three', () => {
+    const s = run([
+      { meta: { model: 'Alpha 70B', modelId: 'lab/alpha-70b', provider: 'nvidia', mode: 'model' } },
+      { delta: 'x' },
+      { meta: { model: 'Small 8B', modelId: 'small-8b', provider: 'groq', mode: 'model' } },
+    ]);
+    expect(s).toMatchObject({ model: 'Small 8B', modelId: 'small-8b', provider: 'groq' });
+    // An older server's meta (an opaque label, nothing else) clears what it cannot vouch for.
+    expect(run([{ meta: { model: 'A', modelId: 'a', provider: 'nvidia' } }, { meta: { model: 'VinaX AI' } }])).toMatchObject({ model: 'VinaX AI', modelId: '', provider: '' });
+  });
+
   it('ignores the retired fields an older server still sends (sources, previews, step frames)', () => {
     const s = run([
       { meta: { model: 'm', web: 'on', sources: ['https://a.example'], previews: [{ url: 'https://a.example', title: 'T', snippet: 's' }] } },

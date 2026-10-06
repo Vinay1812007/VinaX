@@ -18,35 +18,32 @@ interface ChatMessage {
 interface ChatRequest {
   messages: ChatMessage[];
   mode?: string;
+  provider?: string;
   model?: string;
 }
 
 const SSE_REPLY =
-  'data: {"meta":{"model":"x","mode":"muse"}}\n\n' +
+  'data: {"meta":{"model":"Alpha 70B","modelId":"lab/alpha-70b","provider":"nvidia","mode":"auto"}}\n\n' +
   'data: {"delta":"Here is a **short** answer.\\n\\n1. Kesariya — Arijit Singh\\n2. Srivalli — Sid Sriram\\n"}\n\n' +
   'data: {"delta":">>> Show an example | Make it shorter | Why?"}\n\n' +
   'data: {"done":true}\n\n';
 
-/** The live catalogue as GET /api/aimodels returns it. */
+/** The live list as GET /api/aimodels returns it (10.3): four providers, in order. */
 const CATALOG = {
-  groups: [
+  fetchedAt: '2026-10-06T00:00:00.000Z',
+  providers: [
     {
-      id: 'grq',
-      label: 'VinaX GRQ ALL',
-      hint: 'Instant answers',
+      id: 'nvidia',
+      label: 'NVIDIA',
       configured: true,
       models: [
-        { id: 'vendor/large-70b', label: 'large-70b', provider: 'grq', context: 131072 },
-        { id: 'vendor/plain-8b', label: 'plain-8b', provider: 'grq', context: 8192 },
+        { id: 'lab/alpha-70b', name: 'Alpha 70B', maker: 'Lab One', context: 131072, vision: false },
+        { id: 'lab/alpha-11b-vision', name: 'Alpha 11B Vision', maker: 'Lab One', context: 8192, vision: true },
       ],
     },
-    {
-      id: 'opr',
-      label: 'VinaX OPR ALL',
-      hint: 'Marketplace',
-      configured: true,
-      models: [{ id: 'lab/big:free', label: 'big', provider: 'opr', context: 1000000 }],
-    },
+    { id: 'openrouter', label: 'OpenRouter', configured: true, models: [{ id: 'maker/big:free', name: 'Big Model', maker: 'Maker Two', context: 1000000, vision: false }] },
+    { id: 'groq', label: 'Groq', configured: true, models: [{ id: 'small-8b', name: 'Small 8B', maker: null, context: 8192, vision: false }] },
+    { id: 'gemini', label: 'Gemini', configured: false, models: [] },
   ],
 };
 
@@ -231,31 +228,44 @@ test('one model menu lists the live catalogue; a pick goes on the wire; connecto
   // The greeting uses the listener's first name; the composer sits under it.
   await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Tester$/ })).toBeVisible();
 
-  // Every pinned engine and every catalogue model, in one searchable listbox.
+  // 10.3 — Auto, then one section per provider (logo + name), every model
+  // under its original name, in one searchable listbox.
   await page.locator('button[aria-label^="Model:"]').click();
   const list = page.locator('[role="listbox"][aria-label="Choose model"]');
   await expect(list).toBeVisible();
-  // Section headings are upper-cased by CSS and this harness reads RENDERED text, so match case-insensitively.
-  for (const heading of [/recommended/i, /vinax engines/i, /vinax grq all/i, /vinax opr all/i]) {
+  // This harness reads RENDERED text, so match headings case-insensitively.
+  for (const heading of [/nvidia/i, /openrouter/i, /groq/i, /gemini/i]) {
     await expect(list).toContainText(heading);
   }
-  const large = list.locator('[role="option"]').filter({ hasText: 'large-70b' });
-  await expect(large).toContainText(/128k/i);
+  await expect(list.locator('.ai-model-heading svg[data-provider]')).toHaveCount(4);
+  await expect(list).toContainText(/not available right now/i);
+  const alpha = list.locator('[role="option"]').filter({ hasText: 'Alpha 70B' });
+  await expect(alpha).toContainText(/128k context/i);
   await expect(list.locator('[role="option"][aria-selected="true"]')).toHaveCount(1);
+  await expect(list.locator('[role="option"][aria-selected="true"]')).toContainText('Auto');
+  // Phone width: the menu never scrolls the page sideways.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-  // Type to filter, Enter to choose: the chip names the catalogue model.
+  // Type to filter, Enter to choose: the chip shows the provider's logo and the model's name.
   const search = page.locator('input[aria-label="Search models"]');
-  await search.fill('big');
+  await search.fill('maker two');
   await expect(list.locator('[role="option"]')).toHaveCount(1);
   await search.press('Enter');
   await expect(list).toHaveCount(0);
-  await expect(page.locator('button[aria-label="Model: big"]')).toBeVisible();
+  const trigger = page.locator('button[aria-label="Model: Big Model"]');
+  await expect(trigger).toBeVisible();
+  await expect(trigger.locator('svg[data-provider="openrouter"]')).toHaveCount(1);
 
   await box.fill('hello there');
   await box.press('Enter');
   await expect.poll(() => posted.length, { timeout: 10_000 }).toBe(1);
-  expect(posted[0].mode).toBe('router');
-  expect(posted[0].model).toBe('lab/big:free');
+  expect(posted[0].mode).toBe('model');
+  expect(posted[0].provider).toBe('openrouter');
+  expect(posted[0].model).toBe('maker/big:free');
+  // Who answered: the provider's logo and the model's original name, from meta.
+  const answered = page.locator('.ai-engine-chip').last();
+  await expect(answered).toHaveText('Alpha 70B');
+  await expect(answered.locator('svg[data-provider="nvidia"]')).toHaveCount(1);
   await expect(page.locator('[role="status"][aria-label="Thinking"]')).toHaveCount(0, { timeout: 10_000 });
 
   // 10.2 — no Agent mode.
@@ -277,8 +287,8 @@ test('one model menu lists the live catalogue; a pick goes on the wire; connecto
   await box.fill('explain this carefully');
   await box.press('Enter');
   await expect.poll(() => posted.length, { timeout: 10_000 }).toBe(2);
-  // Think sends the message to the deep engine, and the body carries no retired fields.
-  expect(posted[1].mode).toBe('sage');
+  // 10.3 — Think never overrides an exact pick, and the body carries no retired fields.
+  expect(posted[1]).toMatchObject({ mode: 'model', provider: 'openrouter', model: 'maker/big:free' });
   expect(posted[1]).not.toHaveProperty('web');
   await chip.click();
   await expect(chip).toHaveCount(0);

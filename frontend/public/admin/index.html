@@ -560,6 +560,22 @@
       .lab-chip .lm { display: block; font-size: 10.5px; color: var(--text-3); margin-top: 2px; font-weight: 500; }
       .lab-chip.active, .lab-chip.active:not(:disabled):hover { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
       .lab-chip.active .lm { color: var(--accent-text); }
+      /* 10.3 — one row per provider: logo, name, health dot, key state, model count, its models. */
+      .lab-provs { display: flex; flex-direction: column; gap: 8px; }
+      .lab-prov { border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); min-width: 0; }
+      .lab-prov.active { border-color: var(--accent); background: var(--accent-soft); }
+      .lab-prov-head { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px; background: transparent; border: 0; color: var(--text); text-align: left; font-weight: 650; }
+      .lab-prov-head:not(:disabled):hover { background: var(--surface-2); color: var(--text); }
+      .lab-prov.active .lab-prov-head:not(:disabled):hover { background: transparent; }
+      .lab-prov-name { font-size: 13.5px; }
+      .lab-prov-count { font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+      .lab-prov-models { padding: 0 12px 10px; }
+      .lab-prov-models summary { cursor: pointer; font-size: 12px; color: var(--text-2); min-height: 32px; display: flex; align-items: center; }
+      .lab-prov-models table { margin-top: 6px; }
+      .lab-prov-models td code { font-size: 11px; word-break: break-all; }
+      .lab-prov-empty { padding: 0 12px 10px; font-size: 12px; }
+      .prov-logo { flex: none; display: inline-block; vertical-align: middle; }
+      .prov-cell { display: inline-flex; align-items: center; gap: 6px; }
       .lab-msgs { display: flex; flex-direction: column; gap: 4px; max-height: 52vh; min-height: 120px; overflow-y: auto; padding: 4px 2px; margin-bottom: 12px; }
       .lab-msg { max-width: 84%; border-radius: var(--radius-md); padding: 9px 13px; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; margin-top: 6px; }
       .lab-msg.user { align-self: flex-end; background: var(--accent-soft); border: 1px solid var(--accent); }
@@ -742,17 +758,17 @@
       /* ---------- Accent gradient: primary actions carry the brand ramp ----------
          :where() keeps specificity at a bare `button`, so every chrome variant
          (.ghost, .sb-btn, .seg, …) still wins with its own styling. */
-      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) {
+      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.lab-prov-head):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) {
         background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.25);
       }
-      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):hover {
+      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.lab-prov-head):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):hover {
         background: linear-gradient(135deg, var(--grad-a-strong), var(--grad-b-strong));
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), var(--glow);
         transform: translateY(-1px);
       }
-      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):active { transform: translateY(0) scale(0.98); }
-      :root.light button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(15, 20, 30, 0.15); }
+      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.lab-prov-head):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):active { transform: translateY(0) scale(0.98); }
+      :root.light button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.lab-prov-head):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(15, 20, 30, 0.15); }
       .seg button.active, .subtabs button.active,
       .seg button.active:not(:disabled):hover, .subtabs button.active:not(:disabled):hover { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); }
       .switch .track.on { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); border-color: transparent; }

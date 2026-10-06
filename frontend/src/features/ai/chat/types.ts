@@ -3,64 +3,53 @@
  * 3k-line module; these are the contracts its pieces now agree on.
  */
 
-/** Engine seat ids — stable for the API and for stored preferences. */
-export type Mode =
-  | 'muse'
-  | 'swift'
-  | 'sage'
-  | 'scholar'
-  | 'win'
-  | 'nova'
-  | 'nano'
-  | 'auto'
-  | 'pro'
-  | 'mini'
-  | 'k3'
-  | 'translator'
-  | 'glimmer'
-  | 'flash'
-  | 'musegl'
-  | 'ising15'
-  | 'laguna'
-  | 'gemma4'
-  | 'router'
-  /** 8.1.0 — the flagship engine on the owner's newest key, the DJ's own brain. */
-  | 'maestro';
+/**
+ * 10.3 — the four providers VinaX AI reaches, one key each. The order is the
+ * order the menu lists them in (and the order GET /api/aimodels sends them).
+ */
+export type ProviderId = 'nvidia' | 'openrouter' | 'groq' | 'gemini';
 
-/** Which live catalogue a seat opens. */
-export type CatalogGroupId = 'grq' | 'opr';
-
-/** One selectable row of a live catalogue, as the server labels it. */
-export interface CatalogModel {
+/** One model a provider serves right now, under its own original name. */
+export interface ProviderModel {
+  /** The exact slug sent back on the wire. */
   id: string;
-  label: string;
+  /** The model's original name, as the provider publishes it. */
+  name: string;
+  /** Who made the model, when the provider says. */
+  maker: string | null;
   context: number | null;
+  /** Reads images. */
+  vision: boolean;
 }
 
-export interface CatalogGroup {
-  id: CatalogGroupId;
+export interface Provider {
+  id: ProviderId;
   label: string;
-  hint: string;
+  /** The provider's key is set on the server. */
   configured: boolean;
-  models: CatalogModel[];
+  /** Empty when the key is missing or the provider's list could not be read. */
+  models: ProviderModel[];
 }
 
-/** The listener's model pick inside each catalogue (persisted shape). */
-export type CatalogPicks = Partial<Record<CatalogGroupId, string>>;
-
-/** What the composer is set to: a seat, plus an exact catalogue model when
- *  the seat opens a catalogue and the listener chose a row in it. */
-export interface ModelChoice {
-  mode: Mode;
-  model?: string;
-}
+/**
+ * What the composer is set to: Auto (the service picks the best model for each
+ * question), or one exact model from one provider. `name` is the model's
+ * original name at the moment it was picked, so a saved pick labels itself
+ * before the list has ever been fetched.
+ */
+export type ModelChoice =
+  | { mode: 'auto' }
+  | { mode: 'model'; provider: ProviderId; model: string; name?: string };
 
 export interface Msg {
   role: 'user' | 'assistant';
   content: string;
   images?: string[];
-  /** Nickname of the engine that answered (from stream meta). */
+  /** The model that answered, by its original name (from stream meta). Older
+   *  builds stored a VinaX nickname here; those still show as they were. */
   engine?: string;
+  /** 10.3 — the provider of the model that answered, for its logo on the chip. */
+  engineProvider?: ProviderId;
   /** Render as a live mini-player card (music commands). */
   player?: boolean;
   /** Listener feedback on this reply. */

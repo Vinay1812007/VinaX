@@ -22,18 +22,15 @@ import { FileIcon, MenuIcon, PanelIcon } from '@/features/ai/chat/icons';
 import { collectArtifacts } from '@/features/ai/artifacts/collect';
 import {
   choiceLabel,
-  isMode,
+  choiceProvider,
+  isProviderId,
   loadDefaultChoice,
   loadInitialChoice,
   loadRecents,
-  nickForModel,
-  normaliseChoice,
   pushRecent,
-  saveCatalogPick,
   saveDefaultChoice,
   saveLastChoice,
   saveRecents,
-  slugLabel,
 } from '@/features/ai/chat/models';
 import { tryMusicCommand } from '@/features/ai/chat/musicCommands';
 import { QUICK_ACTIONS, drawStarters } from '@/features/ai/chat/starters';
@@ -272,13 +269,9 @@ export default function VinaXAIPage(): ReactNode {
   stateRef.current = { choice, think, profile, replyLang, replyStyle, songCtx, autoRead };
 
   /* ---------- model selection ---------- */
-  const applyChoice = useCallback((next: ModelChoice): void => {
-    const c = normaliseChoice(next);
+  const applyChoice = useCallback((c: ModelChoice): void => {
     setChoice(c);
     saveLastChoice(c);
-    // The per-catalogue pick keeps its long-standing key, so an older build
-    // (or the default-model setting) reads the same choice.
-    saveCatalogPick(c);
     setRecents((prev) => {
       const list = pushRecent(prev, c);
       saveRecents(list);
@@ -297,7 +290,7 @@ export default function VinaXAIPage(): ReactNode {
     setMenuPlace(placeMenu(anchor, { width: window.innerWidth, height: window.innerHeight }));
     setMenuOpen((v) => !v);
     // The catalogue is fetched when the menu is first opened, never on page
-    // load — a listener who stays on a pinned engine pays nothing for it.
+    // load — a listener who stays on Auto pays nothing for it.
     void catalog.load();
   };
 
@@ -310,7 +303,10 @@ export default function VinaXAIPage(): ReactNode {
     return () => window.removeEventListener('resize', close);
   }, [menuOpen]);
 
-  const modelLabel = choiceLabel(choice);
+  // 10.3 — the chip reads the model's original name (live once the list is
+  // known, else the name saved with the pick) beside its provider's logo.
+  const modelLabel = choiceLabel(choice, catalog.providers);
+  const modelProvider = choiceProvider(choice);
 
   /* ---------- voice ---------- */
   // The engine reads this on every spoken chunk, so changing the voice in
@@ -666,13 +662,10 @@ export default function VinaXAIPage(): ReactNode {
     // The service says when a reply was cut short mid-stream.
     const finalText = state.truncated && split.body ? `${split.body}\n\n_This answer was cut short — ask me to continue._` : text;
     // The chip names the engine that actually answered — so a reply rescued
-    // by a sibling never wears the chosen model's name. A catalogue model the
-    // listener picked keeps its own name, exactly as the server labels it.
-    const engine = !state.model
-      ? ''
-      : now.choice.model && state.model === now.choice.model
-        ? slugLabel(state.model)
-        : nickForModel(state.model);
+    // by a sibling never wears the chosen model's name. 10.3 — no nickname
+    // table: the server sends the model's original name and its provider.
+    const engine = state.model;
+    const engineProvider = isProviderId(state.provider) ? state.provider : undefined;
     // 8.2.0 — nothing arrived (the stream client already asked once more):
     // the line says why and the reply offers Retry, unless waiting cannot help.
     const failed = !result.aborted && !state.text && canRetry(result.failure);
@@ -685,6 +678,7 @@ export default function VinaXAIPage(): ReactNode {
       unavailable: unavailable || undefined,
       content: finalText || '…',
       engine: engine || undefined,
+      engineProvider: engine ? engineProvider : undefined,
       followups: split.followups.length ? split.followups : undefined,
     }));
     if (voiceEngineRef.current) {
@@ -834,7 +828,7 @@ export default function VinaXAIPage(): ReactNode {
         className={cn('ai-model-menu-pop ai-pop', menuPlace?.top === undefined ? 'ai-model-menu-up' : 'ai-model-menu-down')}
         style={menuPlace ?? undefined}
         state={catalog.state}
-        groups={catalog.groups}
+        providers={catalog.providers}
         current={choice}
         recents={recents}
         onPick={pickModel}
@@ -889,7 +883,7 @@ export default function VinaXAIPage(): ReactNode {
             if (c) applyChoice(c);
           }}
           catalogState={catalog.state}
-          catalogGroups={catalog.groups}
+          catalogProviders={catalog.providers}
           onLoadCatalog={() => void catalog.load()}
           recents={recents}
           sendOnEnter={sendOnEnter}
@@ -1093,6 +1087,7 @@ export default function VinaXAIPage(): ReactNode {
             busy={busy}
             docked={!isEmpty}
             modelLabel={modelLabel}
+            modelProvider={modelProvider}
             menuOpen={menuOpen}
             onToggleMenu={toggleMenu}
             menu={modelMenu}
@@ -1115,10 +1110,7 @@ export default function VinaXAIPage(): ReactNode {
               starters={starters}
               quickActions={quickActions}
               onSend={messageHandlers.send}
-              onQuick={(qa) => {
-                if (isMode(qa.mode)) applyChoice({ mode: qa.mode });
-                composerRef.current?.setText(qa.prompt);
-              }}
+              onQuick={(qa) => composerRef.current?.setText(qa.prompt)}
               onOpenPrompts={() => setPromptsDraft(composerRef.current?.getText() ?? '')}
             />
           )}

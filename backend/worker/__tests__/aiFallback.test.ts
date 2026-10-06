@@ -3,9 +3,9 @@
  * through to the next one and the failure teaches a per-isolate cooldown, so
  * later calls skip a resting lane without a round trip:
  *
- *   - chat(): 404/410 model gone (1 h), 401/402 key rejected (whole lane; 403 lane+model,
- *     10 min), 5xx (30 s), 429 (as the provider says); `accept` turns an
- *     unusable 200 into a failed attempt.
+ *   - chat(): 404/410 model gone (1 h), 401/402 key rejected (the whole
+ *     provider key — 10.3; 403 one model, 10 min), 5xx (30 s), 429 (as the
+ *     provider says); `accept` turns an unusable 200 into a failed attempt.
  *   - /api/vinaxai (streaming) obeys the same table, walks the ladder by time
  *     instead of four hops, Auto skips a resting flagship, and images get a
  *     vision ladder instead of one attempt.
@@ -84,10 +84,21 @@ describe('cooldownForFailure', () => {
     expect(laneCoolingDown('deep', 'something-else', now + 5_000)).toBe(true);
     expect(laneCoolingDown('deep', 'something-else', now + 11_000)).toBe(false);
   });
+
+  it('10.3 — cooldowns are key-aware: one NVIDIA key, so a rejected key rests every NVIDIA lane and a resting model rests wherever it is pinned', () => {
+    const now = Date.now();
+    markCooldown('deep', 'x', 10_000, 'lane', now);
+    for (const lane of ['chat', 'fast', 'dj', 'home', 'search', 'pro', 'mini', 'vision', 'vision90'] as const) expect(laneCoolingDown(lane, 'anything', now + 1_000), lane).toBe(true);
+    for (const lane of ['scholar', 'router', 'maestro'] as const) expect(laneCoolingDown(lane, 'anything', now + 1_000), lane).toBe(false);
+    clearLaneCooldowns();
+    markCooldown('fast', 'openai/gpt-oss-20b', 10_000, 'model', now);
+    expect(laneCoolingDown('dj', 'openai/gpt-oss-20b', now + 1_000)).toBe(true); // dj's secondary, same key
+    expect(laneCoolingDown('scholar', 'openai/gpt-oss-20b', now + 1_000)).toBe(false); // same slug, Groq's key
+  });
 });
 
 describe('chat() — failure classes cool down and the ladder walks on', () => {
-  const env: AiEnv = { VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B: 'deep-key', VINAX_OAI_GPT_OSS_20B: 'fast-key' };
+  const env: AiEnv = { VINAX_NVIDIA_API_KEY: 'nv-key', VINAX_GROQ_API_KEY: 'groq-key' };
   const msgs = [{ role: 'user' as const, content: 'x' }];
 
   it('404 → the model rests for an hour; the next call goes straight past it', async () => {
@@ -100,13 +111,16 @@ describe('chat() — failure classes cool down and the ladder walks on', () => {
     expect(calls.map((c) => c.body.model)).toEqual(['openai/gpt-oss-20b']);
   });
 
-  it('401 → the whole lane rests: its same-key secondary is not tried either', async () => {
+  it('401 → the whole KEY rests: the same-key secondary and every other NVIDIA lane are skipped', async () => {
     install((_u, _b, n) => (n === 1 ? new Response('unauthorized', { status: 401 }) : ok('rescued')));
-    const r = await chat(env, msgs, { lane: 'deep', ladder: ['fast'] });
-    expect(r.keyRole).toBe('fast');
-    // deep primary (401) → deep's same-key secondary is skipped → fast answers.
+    const r = await chat(env, msgs, { lane: 'deep', ladder: ['fast', 'scholar'] });
+    expect(r.keyRole).toBe('scholar');
+    // deep primary (401) → deep's secondary and the fast lane share the
+    // rejected NVIDIA key and are skipped → the Groq lane answers.
     expect(calls.map((c) => c.body.model)).toEqual(['nvidia/nemotron-3-super-120b-a12b', 'openai/gpt-oss-20b']);
+    expect(calls[1].url).toContain('api.groq.com');
     expect(laneCoolingDown('deep', 'nvidia/nemotron-3-ultra-550b-a55b')).toBe(true);
+    expect(laneCoolingDown('fast', 'openai/gpt-oss-20b')).toBe(true);
   });
 
   it('5xx → a short rest, then the engine is asked again', async () => {
@@ -150,11 +164,12 @@ describe('pinned seats reach the flagship lane late', () => {
     expect(ladder.slice(-2)).toEqual(['maestro', 'home']);
   });
   it('the assistant (chat) and lyrics (scholar) seats include it only when its key is set', () => {
-    const base: AiEnv = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'c', VINAX_GROQ_API_KEY: 'q' };
+    const base: AiEnv = { VINAX_NVIDIA_API_KEY: 'c', VINAX_GROQ_API_KEY: 'q' };
     expect(laneAttempts(base, 'chat').some((a) => a.role === 'maestro')).toBe(false);
     const withKey = { ...base, VINAX_GGL_GEMINI_API_KEY: 'g' };
     const chatRoles = laneAttempts(withKey, 'chat').map((a) => a.role);
-    expect(chatRoles[chatRoles.length - 1]).toBe('maestro');
+    // 10.3 — the NVIDIA key opens the slow 550B home lane too, which stays last.
+    expect(chatRoles.slice(-2)).toEqual(['maestro', 'home']);
     expect(laneAttempts(withKey, 'scholar').map((a) => a.role)).toContain('maestro');
   });
   it('route accept checks: assistant blank/echo replies and lyrics count mismatches are refused', () => {
@@ -181,7 +196,7 @@ function chatRequest(mode: string, content = 'hello there', extra: Record<string
     body: JSON.stringify({ messages: [{ role: 'user', content }], mode, ...extra }),
   });
 }
-interface Frame { delta?: string; done?: boolean; meta?: { model?: string; mode?: string } }
+interface Frame { delta?: string; done?: boolean; meta?: { model?: string; modelId?: string; provider?: string; mode?: string } }
 async function drive(env: AiEnv, request: Request): Promise<{ status: number; frames: Frame[]; text: string }> {
   const res = await onRequestPost({ request, env });
   const raw = await res.text();
@@ -190,17 +205,9 @@ async function drive(env: AiEnv, request: Request): Promise<{ status: number; fr
 }
 
 describe('/api/vinaxai — the streaming walk obeys cooldowns and runs the whole ladder', () => {
-  // Every general-ladder lane has a key, so the ladder is long.
-  const FULL: AiEnv = {
-    VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k-chat',
-    VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING: 'k-search',
-    VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B: 'k-deep',
-    VINAX_OAI_GPT_OSS_20B: 'k-fast',
-    VINAX_GROQ_API_KEY: 'k-scholar',
-    VINAX_MISTRAL_NEMOTRON: 'k-mini',
-    VINAX_DEEPSEEK_V4_PRO_0813: 'k-pro',
-    VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B: 'k-home',
-  };
+  // 10.3 — the NVIDIA key opens every NVIDIA lane, so with Groq the general
+  // ladder is long (every lane but the flagship).
+  const FULL: AiEnv = { VINAX_NVIDIA_API_KEY: 'k-nv', VINAX_GROQ_API_KEY: 'k-scholar' };
 
   it('keeps hopping past the fourth failure while the budget lasts', async () => {
     install((_u, _b, n) => (n <= 6 ? new Response('bad', { status: 400 }) : sse('seventh engine')));
@@ -211,20 +218,21 @@ describe('/api/vinaxai — the streaming walk obeys cooldowns and runs the whole
   });
 
   it('a 429 on the seat engine sets it aside: the next turn skips it without a round trip', async () => {
-    install((_u, body, n) => (n === 1 && body.model === 'nvidia/nemotron-3.5-lightning-30b-a3b' ? new Response('{"error":"rate"}', { status: 429 }) : sse('ok')));
-    await drive(FULL, chatRequest('muse'));
-    expect(laneCoolingDown('chat', 'nvidia/nemotron-3.5-lightning-30b-a3b')).toBe(true);
+    // Auto, short question, no flagship key → the quick seat (fast lane, gpt-oss-20b on NVIDIA).
+    install((url, body, n) => (n === 1 && body.model === 'openai/gpt-oss-20b' && url.includes('nvidia') ? new Response('{"error":"rate"}', { status: 429 }) : sse('ok')));
+    await drive(FULL, chatRequest('auto'));
+    expect(laneCoolingDown('fast', 'openai/gpt-oss-20b')).toBe(true);
     install(() => sse('second turn'));
-    const { text, frames } = await drive(FULL, chatRequest('muse'));
+    const { text, frames } = await drive(FULL, chatRequest('auto'));
     expect(text).toBe('second turn');
     expect(llm()).toHaveLength(1);
-    expect(llm()[0].body.model).not.toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
-    // The chip credits the engine that actually answered.
-    expect(frames.find((f) => f.meta)?.meta?.model).toBe(llm()[0].body.model);
+    expect(llm()[0].body.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
+    // The meta frame credits the engine that actually answered, by its real name.
+    expect(frames.find((f) => f.meta)?.meta).toEqual({ model: 'Nemotron 3.5 Lightning 30B A3B', modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b', provider: 'nvidia', mode: 'auto' });
   });
 
   it('when every pair is resting they are all tried anyway — one more round trip beats a certain error', async () => {
-    const env: AiEnv = { VINAX_OAI_GPT_OSS_20B: 'k-fast' };
+    const env: AiEnv = { VINAX_NVIDIA_API_KEY: 'k-nv' };
     for (const a of laneAttempts(env, 'fast')) markCooldown(a.role, a.model, 60_000);
     install(() => sse('still answered'));
     const { text } = await drive(env, chatRequest('swift'));
@@ -233,7 +241,7 @@ describe('/api/vinaxai — the streaming walk obeys cooldowns and runs the whole
 });
 
 describe('/api/vinaxai — Auto and the flagship', () => {
-  const env: AiEnv = { VINAX_GGL_GEMINI_API_KEY: 'AIza-test', VINAX_OAI_GPT_OSS_20B: 'k-fast', VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k-chat' };
+  const env: AiEnv = { VINAX_GGL_GEMINI_API_KEY: 'AIza-test', VINAX_NVIDIA_API_KEY: 'k-nv' };
 
   it('Auto leads with the flagship while it is healthy', async () => {
     expect(flagshipReady(env)).toBe(true);
@@ -241,7 +249,7 @@ describe('/api/vinaxai — Auto and the flagship', () => {
     const { text, frames } = await drive(env, chatRequest('auto', 'hi'));
     expect(text).toBe('flagship answer');
     expect(llm()[0].url).toContain('generativelanguage');
-    expect(frames.find((f) => f.meta)?.meta?.mode).toBe('maestro');
+    expect(frames.find((f) => f.meta)?.meta).toEqual({ model: 'Gemini 3.8 Flash', modelId: 'gemini-3.8-flash', provider: 'gemini', mode: 'auto' });
   });
 
   it('a resting flagship: Auto picks the next seat at once, no round trip to it', async () => {
@@ -252,11 +260,11 @@ describe('/api/vinaxai — Auto and the flagship', () => {
     const { text, frames } = await drive(env, chatRequest('auto', 'hi'));
     expect(text).toBe('next seat');
     expect(llm().some((c) => c.url.includes('generativelanguage'))).toBe(false);
-    // Short question → the quick seat, named in meta.
-    expect(frames.find((f) => f.meta)?.meta?.mode).toBe('swift');
+    // Short question → the quick seat, named in meta by its real model.
+    expect(frames.find((f) => f.meta)?.meta).toMatchObject({ modelId: 'openai/gpt-oss-20b', provider: 'nvidia', mode: 'auto' });
   });
 
-  it('the flagship seat picked by name falls through to the ladder when it is resting', async () => {
+  it('the retired "maestro" engine id is Auto: a resting flagship is skipped for the ladder', async () => {
     markCooldown('maestro', 'gemini-3.8-flash', 60_000, 'lane');
     install(() => sse('ladder'));
     const { text } = await drive(env, chatRequest('maestro'));
@@ -266,17 +274,15 @@ describe('/api/vinaxai — Auto and the flagship', () => {
 });
 
 describe('/api/vinaxai — images get a vision ladder', () => {
-  const env: AiEnv = { VINAX_MTA_LMA_3_2_11B_VSN_INT: 'k-v11', VINAX_MTA_LMA_3_2_90B_VSN_INT: 'k-v90', VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k-chat' };
+  const env: AiEnv = { VINAX_NVIDIA_API_KEY: 'k-nv' };
   const image = `data:image/png;base64,${'A'.repeat(200)}`;
 
-  it('orders 11B, the same-key 90B, the 90B key, then a borrowed default-base key', () => {
-    const plan = visionLadder(env, laneAttempts(env, 'chat'));
-    expect(plan.map((a) => [a.role, a.key, a.model])).toEqual([
-      ['vision', 'k-v11', 'meta/llama-3.2-11b-vision-instruct'],
-      ['vision', 'k-v11', 'meta/llama-3.2-90b-vision-instruct'],
-      ['vision90', 'k-v90', 'meta/llama-3.2-90b-vision-instruct'],
-      ['chat', 'k-chat', 'meta/llama-3.2-11b-vision-instruct'],
+  it('10.3 — orders 11B then 90B on the one NVIDIA key (the 90B lane is the same request, walked once)', () => {
+    expect(visionLadder(env).map((a) => [a.role, a.key, a.model])).toEqual([
+      ['vision', 'k-nv', 'meta/llama-3.2-11b-vision-instruct'],
+      ['vision', 'k-nv', 'meta/llama-3.2-90b-vision-instruct'],
     ]);
+    expect(visionLadder({ VINAX_GROQ_API_KEY: 'q' })).toEqual([]);
   });
 
   it('a failed first vision engine is rescued by the next one, image still attached', async () => {

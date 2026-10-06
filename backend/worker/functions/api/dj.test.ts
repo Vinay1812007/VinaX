@@ -19,7 +19,7 @@ const pool = [
   { id: 'p3', title: 'Inkem Inkem Inkem Kaavaale', artist: 'Sid Sriram', language: 'telugu' },
   { id: 'p4', title: 'Ramuloo Ramulaa', artist: 'Anurag Kulkarni', language: 'telugu' },
 ];
-const env = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k' };
+const env = { VINAX_NVIDIA_API_KEY: 'k' };
 let ip = 0;
 const post = async (body: unknown, extraEnv: Record<string, string> = {}) => {
   ip += 1;

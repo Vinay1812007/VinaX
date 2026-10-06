@@ -42,20 +42,9 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
 
 const handleImage = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
-  // The image endpoint lives on the default (NVIDIA) base, so only a key that
-  // belongs to that account can sign the call — the two aggregator keys
-  // (scholar / router) are excluded on purpose. Any of the rest will do:
-  // those keys are account-scoped, not model-scoped. Order = the busiest
-  // keys first, so a cold account is rarely the one woken for a picture.
-  const key =
-    env.VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B ??
-    env.VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B ??
-    env.VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B ??
-    env.VINAX_OAI_GPT_OSS_20B ??
-    env.VINAX_MISTRAL_NEMOTRON ??
-    env.VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING ??
-    env.VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT ??
-    null;
+  // The image endpoint lives on the NVIDIA account, so only the NVIDIA key
+  // can sign the call (10.3 — one account-scoped key serves every model).
+  const key = env.VINAX_NVIDIA_API_KEY ?? null;
   // No image key means the feature is unavailable, not that the client sent
   // a bad request — surface as 503 (audit finding M13).
   if (!key) return json({ error: 'not_configured' }, 503);

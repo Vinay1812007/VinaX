@@ -7,9 +7,10 @@ import { useCurrentSong } from '@/store/playerStore';
 import { cn } from '@/utils/cn';
 import { ModelMenu } from './ModelMenu';
 import { TrashIcon, UploadIcon } from './icons';
-import { choiceLabel, type CatalogState } from './models';
+import { choiceLabel, choiceProvider, type CatalogState } from './models';
+import { ProviderLogo } from './ProviderLogo';
 import { formatBytes, storageUsedBytes } from './storage';
-import type { CatalogGroup, ModelChoice } from './types';
+import type { ModelChoice, Provider } from './types';
 import { MemorySection } from './MemorySection';
 
 export const DEVICE_VOICE = 'device';
@@ -34,11 +35,13 @@ export interface SettingsDialogProps {
   // General
   fontSize: 's' | 'm' | 'l';
   onFontSize: (f: 's' | 'm' | 'l') => void;
-  /** The explicit default model, or null = start on the last model used. */
+  /** The explicit default (Auto or one exact model), or null = start on the
+   *  last model used. 10.3 — the same Auto / provider / model choice as the
+   *  composer's menu. */
   defaultChoice: ModelChoice | null;
   onDefaultChoice: (c: ModelChoice | null) => void;
   catalogState: CatalogState;
-  catalogGroups: CatalogGroup[];
+  catalogProviders: Provider[];
   onLoadCatalog: () => void;
   recents: ModelChoice[];
   sendOnEnter: boolean;
@@ -121,6 +124,7 @@ const SHORTCUTS: Array<{ keys: string[]; what: string }> = [
 export function SettingsDialog(p: SettingsDialogProps): ReactNode {
   const [tab, setTab] = useState<SettingsTab>(p.initialTab ?? 'general');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const defaultProvider = choiceProvider(p.defaultChoice);
   const [confirmClear, setConfirmClear] = useState(false);
   const [importNote, setImportNote] = useState('');
   const [used, setUsed] = useState(0);
@@ -231,22 +235,23 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
                     type="button"
                     aria-haspopup="listbox"
                     aria-expanded={modelMenuOpen}
-                    aria-label={`Default model: ${p.defaultChoice ? choiceLabel(p.defaultChoice) : 'Last used'}`}
+                    aria-label={`Default model: ${p.defaultChoice ? choiceLabel(p.defaultChoice, p.catalogProviders) : 'Last used'}`}
                     onClick={() => {
                       setModelMenuOpen((v) => !v);
                       p.onLoadCatalog();
                     }}
-                    className={cn('ai-chip max-w-[12rem]', modelMenuOpen && 'ai-chip-on')}
+                    className={cn('ai-chip ai-model-pick max-w-[12rem]', modelMenuOpen && 'ai-chip-on')}
                   >
-                    <span className="truncate">{p.defaultChoice ? choiceLabel(p.defaultChoice) : 'Last used'}</span>
+                    {defaultProvider && <ProviderLogo provider={defaultProvider} size={16} />}
+                    <span className="truncate">{p.defaultChoice ? choiceLabel(p.defaultChoice, p.catalogProviders) : 'Last used'}</span>
                   </button>
                 </div>
                 {modelMenuOpen && (
                   <ModelMenu
                     className="ai-model-menu-inline"
                     state={p.catalogState}
-                    groups={p.catalogGroups}
-                    current={p.defaultChoice ?? { mode: 'muse' }}
+                    providers={p.catalogProviders}
+                    current={p.defaultChoice}
                     recents={p.recents}
                     onPick={(c) => {
                       p.onDefaultChoice(c);

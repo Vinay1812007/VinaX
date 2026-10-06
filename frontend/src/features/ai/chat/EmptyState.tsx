@@ -30,7 +30,6 @@ export const Greeting = memo(function Greeting({ userName }: { userName: string 
 export interface QuickAction {
   label: string;
   prompt: string;
-  mode?: string;
 }
 
 /**

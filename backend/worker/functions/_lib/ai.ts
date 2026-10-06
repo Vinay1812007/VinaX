@@ -1,89 +1,44 @@
 /**
  * Shared AI chat helper — OpenAI-compatible chat endpoints, one per lane.
- * The default base is the NVIDIA NIM catalog; a lane can pin its own provider
- * base in LANE_BASE (the scholar lane and the new router lane each ride their
- * own OpenAI-compatible host).
  *
- * Keys live ONLY here, as Cloudflare secrets. Configure under
- * Cloudflare -> Pages -> Settings -> Environment variables (Production).
- * The full model inventory (capabilities, health notes, env mapping) lives in
- * ./models.ts (AI_MODEL_REGISTRY) — this file wires those models into lanes.
+ * 10.3 — ONE KEY PER PROVIDER. The owner deleted every per-model secret; four
+ * keys remain, and each one opens its provider's whole free catalogue (listed
+ * live by ./catalog.ts, selectable model by model in VinaX AI):
  *
- * v5.21.0 — the owner rotated EVERY secret on 2026-09-09. Old names are gone
- * (nothing reads them any more), four models were retired and four arrived:
- *   RETIRED  minimax-m3, gpt-oss-120b, nemotron-3-nano-30b-a3b,
- *            ising-calibration-1-35b-a3b, llama-3.3-nemotron-super-49b
- *   ARRIVED  mistralai/mistral-nemotron (general reserve),
- *            meta/llama-3.2-11b-vision-instruct + -90b- (vision, own keys),
- *            the OpenRouter aggregator key
- *   MOVED    muse-glimmer and laguna-xs re-published under new vendor
- *            prefixes; the search seat inherited by the nano-omni model
- * Because every key is new, no probe result carries over: lane pins follow
- * the owner's key -> model table, the cross-lane ladder covers anything that
- * answers slowly, and the admin AI Lab re-verifies each row after deploy.
+ *   VINAX_NVIDIA_API_KEY      NVIDIA      account-scoped: one key signs every
+ *                                         hosted model, so every NVIDIA lane
+ *                                         below shares it
+ *   VINAX_OPENROUTER_API_KEY  OpenRouter  the router lane (zero-priced models only)
+ *   VINAX_GROQ_API_KEY        Groq        the scholar lane, live voice, TTS
+ *   VINAX_GGL_GEMINI_API_KEY  Gemini      the maestro lane (transport: ./maestro.ts)
  *
- * Lanes and their keys (18 secrets, 19 lanes — dj and chat share the
- * lightning key, which is the one engine proven at realtime JSON):
+ * Features still talk to LANES, and lanes still pin models; only the key a
+ * lane signs with changed. Lanes by provider:
  *
- * VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B
- *                                dj      creative chat and playlist generation
- *                                        (legacy lane identifier)
- * VINAX_OAI_GPT_OSS_20B          fast    fast chat, quick tasks, instant
- *                                        answers
- * VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B
- *                                deep    deep thinking, the Think button
- * VINAX_GROQ_API_KEY             scholar music knowledge, lyrics tools, LIVE
- *                                        voice — and its whole free catalog
- * VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B
- *                                home    premium reasoning backstop; slow —
- *                                        always LAST in latency-sensitive
- *                                        ladders
- * VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING
- *                                search  search-page music expert, discovery
- * VINAX_DEEPSEEK_V4_PRO_0813     pro     deep-reasoning ladder reserve
- * VINAX_MISTRAL_NEMOTRON         mini    general ladder reserve
- * VINAX_KIMI_K3                  agent   premium agent reserve (kept out of
- *                                        the default ladder)
- * VINAX_OPENROUTER_API_KEY       router  the free-model marketplace: every
- *                                        zero-cost chat model, selectable
- * VINAX_MTA_LMA_3_2_11B_VSN_INT  vision  image understanding (default)
- * VINAX_MTA_LMA_3_2_90B_VSN_INT  vision90 deep image understanding
- * VINAX_DEEPSEEK_V4_FLASH_0731   dsflash bench lane
- * VINAX_MTA_MUSE_GLIMMER_30B     muse    bench lane
- * VINAX_NVD_ISING_CALIBRATION_1_5_31B
- *                                rank    bench lane
- * VINAX_POOLSIDE_LAGUNA_XS_2_1   laguna  bench lane
- * VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT
- *                                diffusion bench lane (text side only)
- * VINAX_GGL_GEMMA_4_31B_IT       gemma4  bench lane
+ *   NVIDIA      dj, chat, deep, fast, home, search, pro, mini, vision, vision90
+ *   Groq        scholar
+ *   OpenRouter  router
+ *   Gemini      maestro
  *
- * NVIDIA_BASE_URL optional DEFAULT endpoint override — applies only
- * to lanes without their own LANE_BASE pin
+ * 10.3 also removed the agent lane and the six bench lanes (dsflash, muse,
+ * rank, laguna, diffusion, gemma4): each existed only to give one per-model
+ * key a probe-able row, and the AI Lab now probes any catalogue model by
+ * provider instead.
+ *
+ * Keys live ONLY here, as Cloudflare Worker secrets. The pinned-model
+ * inventory (capabilities, health notes) lives in ./models.ts.
+ *
+ * NVIDIA_BASE_URL optional override for the NVIDIA endpoint — applies only to
+ * lanes without their own LANE_BASE pin.
  */
 import { isModelGone, maestroFetch } from './maestro';
 import { dbErrorCode, sbInsert, sbRpcResult, sbSelectResult, supabaseConfigured, type SupabaseEnv } from './supabase';
 
 export interface AiEnv {
-  // The owner's 18 live keys (2026-09-09 rotation). Every secret from the
-  // previous naming scheme was deleted upstream, so no legacy field remains.
-  VINAX_KIMI_K3?: string;
-  VINAX_DEEPSEEK_V4_PRO_0813?: string;
-  VINAX_DEEPSEEK_V4_FLASH_0731?: string;
-  VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B?: string;
-  VINAX_MTA_MUSE_GLIMMER_30B?: string;
-  VINAX_NVD_ISING_CALIBRATION_1_5_31B?: string;
-  VINAX_POOLSIDE_LAGUNA_XS_2_1?: string;
-  VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT?: string;
-  VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B?: string;
-  VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING?: string;
-  VINAX_GGL_GEMMA_4_31B_IT?: string;
-  VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B?: string;
-  VINAX_OAI_GPT_OSS_20B?: string;
-  VINAX_MISTRAL_NEMOTRON?: string;
-  VINAX_MTA_LMA_3_2_11B_VSN_INT?: string;
-  VINAX_MTA_LMA_3_2_90B_VSN_INT?: string;
-  VINAX_GROQ_API_KEY?: string;
+  /** 10.3 — the four AI keys, one per provider (see the header). */
+  VINAX_NVIDIA_API_KEY?: string;
   VINAX_OPENROUTER_API_KEY?: string;
+  VINAX_GROQ_API_KEY?: string;
   /** 8.0.0 — the maestro lane's key (the flagship engine behind the DJ, the
    * Queue Builder, ranking and the Home builder). */
   VINAX_GGL_GEMINI_API_KEY?: string;
@@ -92,6 +47,22 @@ export interface AiEnv {
   VINAX_MAESTRO_MODEL?: string;
   NVIDIA_BASE_URL?: string;
 }
+
+/** 10.3 — the four providers, in the order every menu and report lists them. */
+export type AiProvider = 'nvidia' | 'openrouter' | 'groq' | 'gemini';
+export const AI_PROVIDERS: readonly AiProvider[] = ['nvidia', 'openrouter', 'groq', 'gemini'];
+export const PROVIDER_LABEL: Record<AiProvider, string> = { nvidia: 'NVIDIA', openrouter: 'OpenRouter', groq: 'Groq', gemini: 'Gemini' };
+
+/** The secret that holds each provider's single key. */
+export type AiKeySecret = 'VINAX_NVIDIA_API_KEY' | 'VINAX_OPENROUTER_API_KEY' | 'VINAX_GROQ_API_KEY' | 'VINAX_GGL_GEMINI_API_KEY';
+export const PROVIDER_ENV: Record<AiProvider, AiKeySecret> = {
+  nvidia: 'VINAX_NVIDIA_API_KEY',
+  openrouter: 'VINAX_OPENROUTER_API_KEY',
+  groq: 'VINAX_GROQ_API_KEY',
+  gemini: 'VINAX_GGL_GEMINI_API_KEY',
+};
+/** Every AI key secret VinaX reads — exactly four (laneRegistry.test.ts locks it). */
+export const AI_KEY_SECRETS: readonly AiKeySecret[] = AI_PROVIDERS.map((p) => PROVIDER_ENV[p]);
 
 const ENDPOINT = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
@@ -106,23 +77,35 @@ export type Lane =
   | 'search'
   | 'pro'
   | 'mini'
-  | 'agent'
   // The free-model marketplace (v5.21.0): one lane, many selectable models.
   | 'router'
   // 8.0.0 — the flagship lane: strongest music knowledge, leads the DJ,
   // the Queue Builder, ranking, playlists and the Home builder.
   | 'maestro'
-  // Vision lanes — image understanding, on their own keys since v5.21.0.
+  // Vision lanes — image understanding.
   | 'vision'
-  | 'vision90'
-  // Inventory lanes — one per remaining owner key so the admin AI Lab can
-  // probe every secret. They drive no feature.
-  | 'dsflash'
-  | 'muse'
-  | 'rank'
-  | 'laguna'
-  | 'diffusion'
-  | 'gemma4';
+  | 'vision90';
+
+/** 10.3 — which provider (and so which key) serves each lane. */
+export const LANE_PROVIDER: Record<Lane, AiProvider> = {
+  dj: 'nvidia',
+  chat: 'nvidia',
+  deep: 'nvidia',
+  fast: 'nvidia',
+  scholar: 'groq',
+  home: 'nvidia',
+  search: 'nvidia',
+  pro: 'nvidia',
+  mini: 'nvidia',
+  router: 'openrouter',
+  maestro: 'gemini',
+  vision: 'nvidia',
+  vision90: 'nvidia',
+};
+
+/** 10.3 — the lane a listener-picked catalogue model rides: its endpoint, its
+ * transport and its `@lane` label in the AI event log. */
+export const PROVIDER_LANE: Record<AiProvider, Lane> = { nvidia: 'chat', openrouter: 'router', groq: 'scholar', gemini: 'maestro' };
 
 /** Default (NVIDIA) chat-completions endpoint, honoring the env override. */
 export function defaultEndpoint(env: AiEnv): string {
@@ -130,8 +113,8 @@ export function defaultEndpoint(env: AiEnv): string {
 }
 
 /** Per-lane provider base URL (OpenAI-compatible /v1 root). Lanes not listed
- * ride the default base. scholar rides the low-latency external host (~120 ms
- * to first token); router rides the free-model marketplace host. */
+ * ride the default (NVIDIA) base. scholar rides the low-latency Groq host
+ * (~120 ms to first token); router rides the OpenRouter marketplace host. */
 export const LANE_BASE: Partial<Record<Lane, string>> = {
   scholar: 'https://api.groq.com/openai/v1',
   router: 'https://openrouter.ai/api/v1',
@@ -193,24 +176,22 @@ export function reasoningOffParams(model: string): Record<string, unknown> {
   return {};
 }
 
-/** Pinned model per lane — the owner's 2026-09-09 key -> model table.
+/** Pinned model per lane.
  *
- * Seat changes in v5.21.0, and why:
- * - fast: nemotron-3-nano-30b-a3b was retired with its key, so the seat moves
- *   to gpt-oss-20b on the key named for it. The lightning engine is the
- *   same-key secondary, because gpt-oss-20b hung on the RETIRED key and the
- *   new one is unprobed.
- * - search: the nano model is gone; its omni-reasoning sibling inherits the
- *   seat on its own key. Same template family, so reasoning still switches
- *   off through reasoningOffParams.
- * - mini: the MiniMax key was retired; mistral-nemotron takes the general
- *   reserve seat.
- * - vision / vision90: image understanding finally has its own keys instead
- *   of borrowing a text lane's.
+ * 10.3 — the same NVIDIA models as before the key change: only the key moved
+ * (every NVIDIA lane now signs with VINAX_NVIDIA_API_KEY). A listener can pick
+ * any other free model from the live catalogues; these pins are what Auto and
+ * every feature lane use.
+ *
+ * Seat history worth keeping:
+ * - fast: gpt-oss-20b, with the lightning engine as same-key secondary.
+ * - search: the nano-omni reasoning model; reasoning switched off through
+ *   reasoningOffParams.
+ * - pro / mini: kimi-k3 and mistral-large since 10.3 — the earlier pins
+ *   (deepseek-v4-pro-0813, mistral-nemotron) are not on the provider's public
+ *   model list.
  * - router: the marketplace default. Any zero-cost model in the live catalog
- *   can override it per call (see _lib/catalog.ts).
- * - chat stays on the lightning pair — the deepseek Flash engine hung on the
- *   retired key, so it keeps a bench lane until it is probed serving. */
+ *   can override it per call (see _lib/catalog.ts). */
 export const LANE_MODEL: Record<Lane, string> = {
   dj: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   chat: 'nvidia/nemotron-3.5-lightning-30b-a3b',
@@ -225,27 +206,19 @@ export const LANE_MODEL: Record<Lane, string> = {
   scholar: 'openai/gpt-oss-20b',
   home: 'nvidia/nemotron-3-ultra-550b-a55b',
   search: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
-  pro: 'deepseek-ai/deepseek-v4-pro-0813',
-  mini: 'mistralai/mistral-nemotron',
-  agent: 'moonshotai/kimi-k3',
+  pro: 'moonshotai/kimi-k3',
+  mini: 'mistralai/mistral-large',
   // Resolved live per request — see the scholar note. The marketplace
   // re-publishes slugs constantly, so this value is deliberately never
   // trusted on its own: every call site resolves the catalog first.
   router: 'nvidia/nemotron-3-super:free',
-  // 8.0.0 — the owner's new key. VINAX_MAESTRO_MODEL overrides the pin.
+  // 8.0.0 — VINAX_MAESTRO_MODEL overrides the pin.
   // 8.0.2 — the provider retired 2.5 flash for new accounts and names this
   // successor; if it is retired too, _lib/maestro.ts follows the provider's
   // own suggestion or its live model list.
   maestro: 'gemini-3.8-flash',
   vision: 'meta/llama-3.2-11b-vision-instruct',
   vision90: 'meta/llama-3.2-90b-vision-instruct',
-  // Inventory bench lanes — one per remaining key, no feature depends on them.
-  dsflash: 'deepseek-ai/deepseek-v4-flash-0731',
-  muse: 'meta/muse-glimmer-30b',
-  rank: 'nvidia/ising-calibration-1.5-31b',
-  laguna: 'poolside/laguna-xs-2.1',
-  diffusion: 'google/diffusiongemma-26b-a4b-it',
-  gemma4: 'google/gemma-4-31b-it',
 };
 
 /** Per-lane SECONDARY model pin — a healthy same-key variant tried on the
@@ -253,12 +226,12 @@ export const LANE_MODEL: Record<Lane, string> = {
  * ladder hop. The primary always goes first, so the moment it heals upstream
  * it reclaims the lane; the secondary keeps the lane's character while the
  * primary is degraded or hanging. NVIDIA keys are account-scoped, so any
- * served model works on any of those keys. */
+ * served model works on the one NVIDIA key. */
 export const LANE_SECONDARY: Partial<Record<Lane, string>> = {
   dj: 'openai/gpt-oss-20b',
   fast: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   deep: 'nvidia/nemotron-3-ultra-550b-a55b',
-  chat: 'mistralai/mistral-nemotron',
+  chat: 'mistralai/mistral-large',
   home: 'nvidia/nemotron-3-super-120b-a12b',
   search: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   mini: 'openai/gpt-oss-20b',
@@ -269,46 +242,28 @@ export const LANE_SECONDARY: Partial<Record<Lane, string>> = {
   // retired too, and _lib/maestro.ts already resolves a live replacement.
 };
 
-/** Env var that holds each lane's key — exported for the admin AI Lab bench. */
-export const LANE_ENV: Record<Lane, keyof AiEnv> = {
-  dj: 'VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B',
-  chat: 'VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B',
-  deep: 'VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B',
-  fast: 'VINAX_OAI_GPT_OSS_20B',
-  scholar: 'VINAX_GROQ_API_KEY',
-  home: 'VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B',
-  search: 'VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING',
-  pro: 'VINAX_DEEPSEEK_V4_PRO_0813',
-  mini: 'VINAX_MISTRAL_NEMOTRON',
-  agent: 'VINAX_KIMI_K3',
-  router: 'VINAX_OPENROUTER_API_KEY',
-  maestro: 'VINAX_GGL_GEMINI_API_KEY',
-  vision: 'VINAX_MTA_LMA_3_2_11B_VSN_INT',
-  vision90: 'VINAX_MTA_LMA_3_2_90B_VSN_INT',
-  dsflash: 'VINAX_DEEPSEEK_V4_FLASH_0731',
-  muse: 'VINAX_MTA_MUSE_GLIMMER_30B',
-  rank: 'VINAX_NVD_ISING_CALIBRATION_1_5_31B',
-  laguna: 'VINAX_POOLSIDE_LAGUNA_XS_2_1',
-  diffusion: 'VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT',
-  gemma4: 'VINAX_GGL_GEMMA_4_31B_IT',
-};
+/** Env var that holds each lane's key — derived from LANE_PROVIDER, so a lane
+ * can never point at a secret outside the four (10.3). */
+export const LANE_ENV: Record<Lane, AiKeySecret> = Object.fromEntries(
+  (Object.keys(LANE_PROVIDER) as Lane[]).map((l) => [l, PROVIDER_ENV[LANE_PROVIDER[l]]]),
+) as Record<Lane, AiKeySecret>;
 
-/** Cross-lane failover ladder: when a lane's own key/model pair is missing or
- * dead, the next live pair takes the call — one dead key never takes a
- * feature down, it just degrades to a healthy sibling lane.
+/** Cross-lane failover ladder: when a lane's own model is missing or dead,
+ * the next live pair takes the call — one dead model never takes a feature
+ * down, it just degrades to a healthy sibling lane.
  *
- * v5.23.0 order, set from the 2026-09-09 post-rotation probe rather than from
- * intent: the lanes that actually answered go first (chat 625ms, search
- * 688ms, deep 801ms, fast 1.2s, dj 3.9s), the two reserves that came back
- * unreachable on the new keys sink below them, and the 550B home lane stays
- * last because it answered in 25s. A dead reserve high in the ladder costs
- * every rescued call a wasted hop, which is what the old order was doing.
+ * v5.23.0 order, set from the 2026-09-09 probe rather than from intent: the
+ * lanes that actually answered go first (chat 625ms, search 688ms, deep
+ * 801ms, fast 1.2s, dj 3.9s), the two reserves that came back unreachable
+ * sink below them, and the 550B home lane stays last because it answered in
+ * 25s. A dead reserve high in the ladder costs every rescued call a wasted
+ * hop.
  *
- * The vision lanes, the agent reserve and the bench-only inventory lanes are
- * NEVER in the general ladder — an image model must not answer a DJ JSON
- * call. `router` is out too: chat() is synchronous about model choice and a
- * catalog lane has no trustworthy fixed slug, so it is only used where the
- * catalog can be resolved first (the assistant, the bench, health). */
+ * The vision lanes are NEVER in the general ladder — an image model must not
+ * answer a DJ JSON call. `router` is out too: chat() is synchronous about
+ * model choice and a catalog lane has no trustworthy fixed slug, so it is
+ * only used where the catalog can be resolved first (the assistant, the
+ * bench, health). */
 const LADDER: Lane[] = ['chat', 'search', 'deep', 'fast', 'dj', 'scholar', 'mini', 'pro', 'maestro', 'home'];
 // 8.2.0 — the flagship lane is a LATE fallback in the general ladder: a pinned
 // seat (the assistant, the lyrics tools, every chat engine) can now reach it
@@ -328,12 +283,12 @@ export interface LaneAttempt {
   /** Full chat-completions URL for THIS attempt's lane — providers are mixed
    * now, so every ladder hop must carry its own base alongside key+model. */
   endpoint: string;
+  /** 10.3 — a listener's exact catalogue pick: this model or nothing. The
+   * maestro transport must not swap a "gone" pick for another model, or the
+   * reply would name an engine that never answered. */
+  exact?: boolean;
 }
 
-/** Ordered key+model+endpoint attempts for a lane: its own pair first, then
- * its same-key secondary pin (when one exists), then the cross-lane ladder.
- * Each attempt carries its lane's endpoint so mixed-provider failover signs
- * every hop against the right base. */
 /**
  * A value that is a credential, not a model name. Live on 2026-09-26 the
  * owner stored the API key itself in VINAX_MAESTRO_MODEL, so every call
@@ -370,12 +325,37 @@ export function loggableModel(model: string): string {
   return looksLikeSecret(model) ? '[masked]' : model;
 }
 
+/** 10.3 — the single attempt for a listener's exact catalogue pick on its
+ * provider's key, or null when that key is not set. */
+export function providerAttempt(env: AiEnv, provider: AiProvider, model: string): LaneAttempt | null {
+  const key = env[PROVIDER_ENV[provider]];
+  if (!key) return null;
+  const role = PROVIDER_LANE[provider];
+  return { key, model, role, endpoint: laneEndpoint(env, role), exact: true };
+}
+
+/** Two attempts that would send the same request to the same place. */
+export function sameCall(a: LaneAttempt, b: LaneAttempt): boolean {
+  return a.endpoint === b.endpoint && a.key === b.key && a.model === b.model;
+}
+
+/** Ordered key+model+endpoint attempts for a lane: its own pair first, then
+ * its same-key secondary pin (when one exists), then the cross-lane ladder.
+ * Each attempt carries its lane's endpoint so mixed-provider failover signs
+ * every hop against the right base.
+ *
+ * 10.3 — every NVIDIA lane shares one key now, so two lanes pinning the same
+ * model would be the very same request twice (dj and chat both pin the
+ * lightning engine); such a repeat is left out of the walk. */
 export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, ladder?: Lane[], skipSecondary = false): LaneAttempt[] {
   const out: LaneAttempt[] = [];
+  const push = (a: LaneAttempt): void => {
+    if (!out.some((b) => sameCall(a, b))) out.push(a);
+  };
   const add = (l: Lane, model?: string): void => {
     const key = env[LANE_ENV[l]];
     if (key && !out.some((a) => a.role === l)) {
-      out.push({ key, model: model ?? laneModel(env, l), role: l, endpoint: laneEndpoint(env, l) });
+      push({ key, model: model ?? laneModel(env, l), role: l, endpoint: laneEndpoint(env, l) });
     }
   };
   add(lane, modelOverride);
@@ -383,9 +363,7 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
   // is degraded — consulted before any cross-lane ladder hop.
   const secondary = skipSecondary ? undefined : LANE_SECONDARY[lane];
   const ownKey = env[LANE_ENV[lane]];
-  if (secondary && ownKey && !out.some((a) => a.model === secondary)) {
-    out.push({ key: ownKey, model: secondary, role: lane, endpoint: laneEndpoint(env, lane) });
-  }
+  if (secondary && ownKey) push({ key: ownKey, model: secondary, role: lane, endpoint: laneEndpoint(env, lane) });
   for (const l of ladder ?? LADDER) add(l);
   return out;
 }
@@ -395,21 +373,29 @@ export function laneAttempts(env: AiEnv, lane: Lane, modelOverride?: string, lad
  *
  * 8.0.0 — a key that answered 429 is skipped for a while instead of costing
  * every call in that window a wasted round trip (the maestro key may sit on a
- * small free quota). Keyed by lane and model, so a same-key secondary on a
- * different quota is still tried.
+ * small free quota).
  *
  * 8.2.0 — more failure classes cool down, and the streaming chat route obeys
  * the same table as chat() (it used to walk its own ladder and hit a
  * quota-dead lane first on every turn):
- *   429                    rate limit    lane+model, as long as the provider says (cooldownFor)
+ *   429                    rate limit    model, as long as the provider says (cooldownFor)
+ *   429 with a free-tier limit of 0 (10.3)
+ *                          not free      model, 24 h — and it leaves the catalogue
  *   404 / 410, or a 400 that says the model is gone
- *                          model gone    lane+model, 1 h
- *   401 / 402              key rejected  the whole lane (every model on it), 10 min
- *   403                    not entitled  lane+model, 10 min (some providers answer 403
+ *                          model gone    model, 1 h
+ *   401 / 402              key rejected  the whole KEY (every model on it), 10 min
+ *   403                    not entitled  model, 10 min (some providers answer 403
  *                          for one model the key may not use; its secondary may work)
- *   5xx                    upstream      lane+model, 30 s
+ *   5xx                    upstream      model, 30 s
  * Timeouts and plain 400s do not cool down: a slow answer or a bad request
  * says nothing lasting about the engine.
+ *
+ * 10.3 — KEY-AWARE. One key per provider means a cooldown belongs to the
+ * provider, not to the lane that happened to see it: a 401 on the deep lane
+ * is a rejected NVIDIA key, so every NVIDIA lane rests with it, and a 429 on
+ * gpt-oss-20b rests that model wherever it is pinned (fast, the dj and mini
+ * secondaries). The functions keep their lane-shaped signatures; the lane is
+ * mapped to its provider through LANE_PROVIDER.
  *
  * The state lives in module memory, so each Worker isolate learns on its own
  * and forgets on restart. That is deliberate: no storage round trip on the
@@ -422,14 +408,15 @@ const MAX_COOLDOWN_MS = 6 * 60 * 60_000;
 export const MODEL_GONE_COOLDOWN_MS = 60 * 60_000;
 export const KEY_REJECTED_COOLDOWN_MS = 10 * 60_000;
 export const UPSTREAM_COOLDOWN_MS = 30_000;
+export const NOT_FREE_COOLDOWN_MS = 24 * 60 * 60_000;
 
 /**
- * 8.0.4 — how long a 429 should keep a lane+model aside. The maestro
- * provider says so itself: a `retryDelay` ("37s") for a per-minute limit, a
- * per-day quota id, or "exceeded your current quota … billing" when the
- * key's allowance is used up. Live on 2026-09-26 the owner's key answered
- * the billing form on every call; retrying each minute only spent a round
- * trip per call. Other providers get the plain 60 s.
+ * 8.0.4 — how long a 429 should keep a model aside. The maestro provider
+ * says so itself: a `retryDelay` ("37s") for a per-minute limit, a per-day
+ * quota id, or "exceeded your current quota … billing" when the key's
+ * allowance is used up. Live on 2026-09-26 the owner's key answered the
+ * billing form on every call; retrying each minute only spent a round trip
+ * per call. Other providers get the plain 60 s.
  */
 export function cooldownFor(body: string): number {
   const delay = body.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/i);
@@ -439,16 +426,28 @@ export function cooldownFor(body: string): number {
   return COOLDOWN_MS;
 }
 
-export type CooldownReason = 'rate_limited' | 'model_gone' | 'key_rejected' | 'upstream_error';
+/**
+ * 10.3 — a 429 whose free-tier allowance for this model is ZERO: the model is
+ * listed for the key but not free on it (the Gemini API answers
+ * "Quota exceeded for metric: …free_tier_requests, limit: 0" and a
+ * QuotaFailure with quotaValue "0"). Waiting does not help, so the model rests
+ * for a day and the catalogue leaves it out meanwhile.
+ */
+export function isZeroFreeQuota(body: string): boolean {
+  return /\blimit:\s*0\b/i.test(body) || /"quotaValue"\s*:\s*"0"/.test(body);
+}
+
+export type CooldownReason = 'rate_limited' | 'not_free' | 'model_gone' | 'key_rejected' | 'upstream_error';
 export interface Cooldown {
   ms: number;
-  /** `model` = this lane+model only; `lane` = every model on the lane's key. */
+  /** `model` = this provider+model only; `lane` = every model on the provider's key. */
   scope: 'model' | 'lane';
   reason: CooldownReason;
 }
 
 /** 8.2.0 — the cooldown an error answer earns, or null when it earns none. Pure. */
 export function cooldownForFailure(status: number, body: string): Cooldown | null {
+  if (status === 429 && isZeroFreeQuota(body)) return { ms: NOT_FREE_COOLDOWN_MS, scope: 'model', reason: 'not_free' };
   if (status === 429) return { ms: cooldownFor(body), scope: 'model', reason: 'rate_limited' };
   if (status === 404 || status === 410 || (status === 400 && isModelGone(400, body))) return { ms: MODEL_GONE_COOLDOWN_MS, scope: 'model', reason: 'model_gone' };
   if (status === 401 || status === 402) return { ms: KEY_REJECTED_COOLDOWN_MS, scope: 'lane', reason: 'key_rejected' };
@@ -458,25 +457,36 @@ export function cooldownForFailure(status: number, body: string): Cooldown | nul
 }
 
 const cooldowns = new Map<string, number>();
-const coolKey = (role: Lane, model: string): string => `${role}|${model}`;
-const laneCoolKey = (role: Lane): string => `${role}|*`;
-const coolingUntil = (key: string, now: number): boolean => {
-  const until = cooldowns.get(key);
+/** 10.3 — models a key lists but may not use for free, until when. */
+const notFree = new Map<string, number>();
+const coolKey = (provider: AiProvider, model: string): string => `${provider}|${model}`;
+const keyCoolKey = (provider: AiProvider): string => `${provider}|*`;
+const coolingUntil = (map: Map<string, number>, key: string, now: number): boolean => {
+  const until = map.get(key);
   if (until === undefined) return false;
   if (until <= now) {
-    cooldowns.delete(key);
+    map.delete(key);
     return false;
   }
   return true;
 };
-/** True while this lane+model (or the whole lane) is set aside. */
-export function laneCoolingDown(role: Lane, model: string, now = Date.now()): boolean {
-  return coolingUntil(laneCoolKey(role), now) || coolingUntil(coolKey(role, model), now);
+/** True while this provider+model (or the provider's whole key) is set aside. */
+export function providerCoolingDown(provider: AiProvider, model: string, now = Date.now()): boolean {
+  return coolingUntil(cooldowns, keyCoolKey(provider), now) || coolingUntil(cooldowns, coolKey(provider, model), now);
 }
-/** Set a lane+model (scope `model`) or a whole lane (scope `lane`) aside for
- * `ms`. Never shortens a longer cooldown already in force. */
+/** True while this lane's model (or its provider's whole key) is set aside. */
+export function laneCoolingDown(role: Lane, model: string, now = Date.now()): boolean {
+  return providerCoolingDown(LANE_PROVIDER[role], model, now);
+}
+/** 10.3 — true while a model is known to have no free allowance on its key. */
+export function notFreeCooling(provider: AiProvider, model: string, now = Date.now()): boolean {
+  return coolingUntil(notFree, coolKey(provider, model), now);
+}
+/** Set a model (scope `model`) or the lane's whole provider key (scope
+ * `lane`) aside for `ms`. Never shortens a longer cooldown already in force. */
 export function markCooldown(role: Lane, model: string, ms: number, scope: 'model' | 'lane' = 'model', now = Date.now()): void {
-  const key = scope === 'lane' ? laneCoolKey(role) : coolKey(role, model);
+  const provider = LANE_PROVIDER[role];
+  const key = scope === 'lane' ? keyCoolKey(provider) : coolKey(provider, model);
   const until = now + ms;
   if ((cooldowns.get(key) ?? 0) < until) cooldowns.set(key, until);
 }
@@ -486,12 +496,14 @@ export function noteLaneFailure(role: Lane, model: string, status: number, body 
   const c = cooldownForFailure(status, body);
   if (!c) return null;
   markCooldown(role, model, c.ms, c.scope);
-  console.log(`[ai] cooldown lane=${role}${c.scope === 'model' ? ` model=${loggableModel(model)}` : ' (whole lane)'} reason=${c.reason} s=${Math.round(c.ms / 1000)}`);
+  if (c.reason === 'not_free') notFree.set(coolKey(LANE_PROVIDER[role], model), Date.now() + c.ms);
+  console.log(`[ai] cooldown lane=${role} provider=${LANE_PROVIDER[role]}${c.scope === 'model' ? ` model=${loggableModel(model)}` : ' (whole key)'} reason=${c.reason} s=${Math.round(c.ms / 1000)}`);
   return c;
 }
 /** Test hook. */
 export function clearLaneCooldowns(): void {
   cooldowns.clear();
+  notFree.clear();
 }
 
 /** `disabled` / `over_budget` (7.2.0): refused by the owner's AI controls before any provider was called. */

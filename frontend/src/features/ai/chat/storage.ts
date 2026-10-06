@@ -304,8 +304,10 @@ export const writeFlag = (key: string, on: boolean): void => writePref(key, on ?
 
 /** 10.2 — preference keys no build reads any more: "Start in Agent mode"
  *  went with Agent mode (its only engines browsed the web). Removed from the
- *  device when the chat opens, so a stale stored "on" can never come back. */
-export const RETIRED_PREF_KEYS = ['vinax.aiAgentStart'] as const;
+ *  device when the chat opens, so a stale stored "on" can never come back.
+ *  10.3 — the per-catalogue model pick went with the catalogue seats (a pick
+ *  is now one provider + model, stored with the last-used choice). */
+export const RETIRED_PREF_KEYS = ['vinax.aiAgentStart', 'vinax.aiCatalogModels'] as const;
 
 export function dropRetiredPrefs(): void {
   for (const key of RETIRED_PREF_KEYS) {

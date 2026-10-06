@@ -11,12 +11,15 @@ import { gatherDetailed } from '../functions/_lib/ai';
 
 afterEach(() => vi.unstubAllGlobals());
 
-/** Answer only for the listed keys; every other key hangs up. */
+/** Answer only for the listed `model@key` pairs; every other call hangs up.
+ *  10.3 — one NVIDIA key signs several lanes, so a panellist is told apart by
+ *  the model it sends as well as the key it signs with. */
 function stubKeys(live: Record<string, string>): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
     const auth = String((init?.headers as Record<string, string>)?.authorization ?? '');
     const key = auth.replace('Bearer ', '');
-    const model = live[key];
+    const sent = (JSON.parse(String(init?.body ?? '{}')) as { model?: string }).model ?? '';
+    const model = live[`${sent}@${key}`];
     if (!model) return Promise.reject(new Error('unreachable'));
     return Promise.resolve(
       new Response(JSON.stringify({ choices: [{ message: { content: `from ${model}` } }] }), { status: 200 }),
@@ -27,15 +30,18 @@ function stubKeys(live: Record<string, string>): ReturnType<typeof vi.fn> {
 }
 
 const ENV = {
-  VINAX_OAI_GPT_OSS_20B: 'k-fast',
-  VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING: 'k-search',
+  VINAX_NVIDIA_API_KEY: 'k-nv',
   VINAX_GROQ_API_KEY: 'k-scholar',
 };
+// Each panellist's own pinned engine (the fast and search lanes share the NVIDIA key).
+const FAST = 'openai/gpt-oss-20b@k-nv';
+const SEARCH = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning@k-nv';
+const SCHOLAR = 'openai/gpt-oss-20b@k-scholar';
 const MSG = [{ role: 'user' as const, content: 'propose' }];
 
 describe('gatherDetailed', () => {
   it('reports which lane produced each contribution', async () => {
-    stubKeys({ 'k-fast': 'fast-engine', 'k-search': 'search-engine', 'k-scholar': 'scholar-engine' });
+    stubKeys({ [FAST]: 'fast-engine', [SEARCH]: 'search-engine', [SCHOLAR]: 'scholar-engine' });
     const out = await gatherDetailed(ENV, MSG, ['fast', 'search', 'scholar'], { soloLadder: true });
     expect(out.map((r) => r.lane).sort()).toEqual(['fast', 'scholar', 'search']);
     for (const r of out) {
@@ -48,14 +54,14 @@ describe('gatherDetailed', () => {
   it('soloLadder: a dead panellist ABSTAINS instead of echoing a healthy sibling', async () => {
     // Only the fast key answers. Without soloLadder the other two lanes would
     // ladder onto it and hand back the same content three times.
-    stubKeys({ 'k-fast': 'fast-engine' });
+    stubKeys({ [FAST]: 'fast-engine' });
     const out = await gatherDetailed(ENV, MSG, ['fast', 'search', 'scholar'], { soloLadder: true });
     expect(out).toHaveLength(1);
     expect(out[0].lane).toBe('fast');
   });
 
   it('without soloLadder the same round collapses onto one engine — the bug this guards', async () => {
-    stubKeys({ 'k-fast': 'fast-engine' });
+    stubKeys({ [FAST]: 'fast-engine' });
     const out = await gatherDetailed(ENV, MSG, ['fast', 'search', 'scholar']);
     // All three "participants" answered, but every one of them is the SAME
     // engine wearing a different lane label.
@@ -72,7 +78,7 @@ describe('gatherDetailed', () => {
   });
 
   it('one slow panellist does not serialise the round', async () => {
-    stubKeys({ 'k-fast': 'a', 'k-search': 'b', 'k-scholar': 'c' });
+    stubKeys({ [FAST]: 'a', [SEARCH]: 'b', [SCHOLAR]: 'c' });
     const started = Date.now();
     const out = await gatherDetailed(ENV, MSG, ['fast', 'search', 'scholar'], { soloLadder: true });
     expect(out).toHaveLength(3);

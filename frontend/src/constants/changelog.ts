@@ -12,6 +12,14 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '10.3.0': {
+    title: 'Every free model, under its own name',
+    changes: [
+      { type: 'new', text: 'The model menu in VinaX AI now lists every free model our four AI providers offer, each under its real name and with its provider’s logo. Pick one, or leave it on Auto and VinaX AI chooses for each question. Search the menu by model name, maker or provider.' },
+      { type: 'improved', text: 'The model you picked shows in the message box, and each reply says which model actually answered it. If that model is busy, another one steps in and the reply says so.' },
+      { type: 'improved', text: 'The old house names in the menu are gone, along with the separate Translate seat. The Translate quick action still works with whatever model you have picked. A model you chose in an older version is switched back to Auto once.' },
+    ],
+  },
   '10.2.0': {
     title: 'VinaX AI, without web search',
     changes: [

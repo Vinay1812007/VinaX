@@ -23,6 +23,8 @@ import { cn } from '@/utils/cn';
 import { IMAGES_ENABLED } from './endpoints';
 import { ConnectorChips, ConnectorList, useConnectors } from './Connectors';
 import { BookIcon, CheckIcon, FolderIcon, MicIcon, SendIcon, StopIcon, UploadIcon } from './icons';
+import { ProviderLogo } from './ProviderLogo';
+import type { ProviderId } from './types';
 import { useDictation } from './useDictation';
 
 /** What the page can do to the composer from outside (edit & resend, quick
@@ -39,6 +41,8 @@ export interface ComposerProps {
   /** Pinned to the bottom of a conversation (false: centred on an empty chat). */
   docked: boolean;
   modelLabel: string;
+  /** 10.3 — the chosen model's provider, for its logo on the chip (null = Auto). */
+  modelProvider: ProviderId | null;
   menuOpen: boolean;
   /** `anchor` is the chip's box, so the page can place the menu on screen. */
   onToggleMenu: (anchor: DOMRect) => void;
@@ -77,6 +81,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     busy,
     docked,
     modelLabel,
+    modelProvider,
     menuOpen,
     onToggleMenu,
     menu,
@@ -415,6 +420,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 title="Choose model"
                 className={cn('ai-chip ai-model-chip', menuOpen && 'ai-chip-on')}
               >
+                {modelProvider && <ProviderLogo provider={modelProvider} size={16} />}
                 <span className="truncate">{modelLabel}</span>
                 <ChevronDownIcon className={cn('ai-model-chevron w-3 h-3 shrink-0', menuOpen && 'rotate-180')} />
               </button>

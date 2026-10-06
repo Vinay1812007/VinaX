@@ -4,8 +4,8 @@
  * One call turns up to 64 short texts into unit-length vectors. Engines are
  * tried in order and the first that answers wins:
  *
- *   1. the default lane provider's standard `/v1/embeddings` endpoint, on any
- *      of its account-scoped keys: `nvidia/llama-3.2-nv-embedqa-1b-v2`
+ *   1. the NVIDIA standard `/v1/embeddings` endpoint, on VINAX_NVIDIA_API_KEY
+ *      (10.3 — the one account-scoped key): `nvidia/llama-3.2-nv-embedqa-1b-v2`
  *      (asked for 384 dimensions), then `nvidia/nv-embedqa-e5-v5` (1024);
  *   2. the flagship lane's provider (the maestro key): `gemini-embedding-001`,
  *      native batch endpoint first (it carries the query/passage task type),
@@ -24,7 +24,7 @@
  * Deliberately a small fetch of its own rather than the chat() helper: the
  * chat ladder, prompts and token accounting do not apply to embeddings.
  */
-import { LANE_BASE, LANE_ENV, type AiEnv, type Lane } from './ai';
+import { LANE_ENV, PROVIDER_ENV, type AiEnv } from './ai';
 import { isWrongDoor } from './maestro';
 
 export type EmbedKind = 'query' | 'passage';
@@ -47,9 +47,6 @@ const NV_DEFAULT_URL = 'https://integrate.api.nvidia.com/v1/embeddings';
 const FLAGSHIP_STANDARD_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/embeddings';
 const flagshipNativeUrl = (model: string): string =>
   `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:batchEmbedContents`;
-
-/** Lanes whose keys belong to the default provider, in the order to try them. */
-const DEFAULT_PROVIDER_LANES: Lane[] = ['search', 'chat', 'deep', 'fast', 'home', 'mini', 'pro'];
 
 export type EmbedResult =
   | { ok: true; model: string; dim: number; vectors: number[][] }
@@ -89,17 +86,12 @@ export function defaultEmbeddingsUrl(env: AiEnv): string {
   return `${base.replace(/\/+$/, '')}/embeddings`;
 }
 
-/** Distinct default-provider keys (at most two: a dead account is rarely rescued by a third). */
+/** The NVIDIA key, as a list (empty when unset). 10.3 — there is exactly one
+ * now; the list shape stays so the engine loop reads the same. */
 export function defaultProviderKeys(env: AiEnv): string[] {
-  const out: string[] = [];
-  for (const lane of DEFAULT_PROVIDER_LANES) {
-    if (LANE_BASE[lane]) continue;
-    const raw = env[LANE_ENV[lane]];
-    const key = typeof raw === 'string' ? raw.trim() : '';
-    if (key && !out.includes(key)) out.push(key);
-    if (out.length >= 2) break;
-  }
-  return out;
+  const raw = env[PROVIDER_ENV.nvidia];
+  const key = typeof raw === 'string' ? raw.trim() : '';
+  return key ? [key] : [];
 }
 
 /**

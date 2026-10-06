@@ -65,6 +65,16 @@ const MOCK: Record<string, unknown> = {
   '/api/status': { generatedAt: iso(0), windowDays: 90, overall: 'operational', components: [{ id: 'website', name: 'Website', status: 'up', latencyMs: 120, checkedAt: iso(0.2), uptime90: 99.98, days: Array.from({ length: 30 }, (_, i) => ({ day: iso(24 * i).slice(0, 10), up: i === 5 ? 40 : 48, total: 48 })) }, { id: 'api', name: 'API', status: 'down', latencyMs: null, checkedAt: iso(2), uptime90: 98.1, days: [] }] },
   '/api/trending-searches': { queries: ['Kesariya', 'Naatu Naatu', 'Srivalli'] },
   '/api/site-mode': { mode: 'live' },
+  // 10.3 — the four providers, one key each (API Monitoring reads this list).
+  '/api/aimodels': {
+    fetchedAt: iso(0.1),
+    providers: [
+      { id: 'nvidia', label: 'NVIDIA', configured: true, models: [{ id: 'lab/alpha-70b', name: 'Alpha 70B', maker: 'Lab One', context: 131072, vision: false }] },
+      { id: 'openrouter', label: 'OpenRouter', configured: true, models: [{ id: 'maker/big:free', name: 'Big Model', maker: null, context: null, vision: true }] },
+      { id: 'groq', label: 'Groq', configured: true, models: [] },
+      { id: 'gemini', label: 'Gemini', configured: false, models: [] },
+    ],
+  },
 };
 
 /**
@@ -77,6 +87,7 @@ const PROBES: Record<string, RegExp> = {
   dataquality: /signals[\s\S]*ai success/i,
   catalog: /catalog|search/i,
   engineprobe: /probe|engine/i,
+  ailab: /nvidia[\s\S]*1 model[\s\S]*alpha 70b[\s\S]*openrouter[\s\S]*groq[\s\S]*gemini[\s\S]*no key/i,
   seo: /urls in corpus[\s\S]*srivalli/i,
   edge: /edge is healthy[\s\S]*preview cors/i,
   releases: /v5\.12\.0[\s\S]*workflow runs[\s\S]*recent commits/i,

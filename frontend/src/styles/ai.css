@@ -668,6 +668,9 @@ html.light .ai-root .ai-code { background: rgb(var(--ink-950)); }
 .ai-engine-chip {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: min(16rem, 52vw);
   min-height: 1.5rem;
   margin-left: 0.375rem;
   padding: 0 8px;
@@ -1377,6 +1380,14 @@ html.light .ai-conn-chip { color: rgb(var(--ember-500)); }
   font-weight: 700;
 }
 .ai-scope .ai-model-menu-inline .ai-model-heading { background: var(--ai-sheet, var(--surface-modal)); }
+/* 10.3 — a provider section's heading: its logo, then its name. */
+.ai-model-heading-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  color: var(--ai-text-2);
+}
 .ai-model-count {
   font-weight: 600;
   font-variant-numeric: tabular-nums;

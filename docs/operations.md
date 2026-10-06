@@ -34,7 +34,7 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 
 | Group | Names | If missing |
 | --- | --- | --- |
-| AI lanes | One key per lane; names are listed in `backend/.env.example` | That lane is skipped. With none set, AI routes answer `503` and the app uses its on-device paths ([ai.md](ai.md#when-every-provider-is-down)) |
+| AI providers (10.3) | `VINAX_NVIDIA_API_KEY`, `VINAX_OPENROUTER_API_KEY`, `VINAX_GROQ_API_KEY`, `VINAX_GGL_GEMINI_API_KEY` — one per provider | That provider's lanes and its section of the model menu are skipped. With none set, AI routes answer `503` and the app uses its on-device paths ([ai.md](ai.md#when-every-provider-is-down)) |
 | Database | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Events, config, rooms, push and the console have no storage |
 | Owner console | `ADMIN_LOGIN_PASSWORD` | Nobody can sign in to `/admin/` |
 | Web push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Browser notifications cannot be sent |
@@ -42,6 +42,14 @@ For local development put `NAME=value` lines in `backend/worker/.dev.vars` (igno
 | Identity signing | `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET` | Signed install ids fall back as described in `.env.example` |
 | Scheduled jobs | `CRON_SECRET` (also a repository Actions secret with the same value) | `/api/cron/*` rejects every call |
 | Optional | `GITHUB_REPO`, `GITHUB_TOKEN` (Android update source) | The feature is off or rate-limited |
+
+### AI keys: one per provider (10.3)
+
+10.3 signs every NVIDIA lane with one key, `VINAX_NVIDIA_API_KEY` (an NVIDIA key serves every model on the account), instead of a key per model. **Set it before the 10.3 Worker deploys**, or every NVIDIA lane is skipped:
+
+`npx wrangler secret put VINAX_NVIDIA_API_KEY --config backend/worker/wrangler.toml`
+
+Any of the account's existing `nvapi-` keys will do. Once the 10.3 Worker answers, nothing reads these sixteen names, and they can be deleted with `npx wrangler secret delete <NAME> --config backend/worker/wrangler.toml`: `VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B`, `VINAX_OAI_GPT_OSS_20B`, `VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B`, `VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B`, `VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING`, `VINAX_DEEPSEEK_V4_PRO_0813`, `VINAX_DEEPSEEK_V4_FLASH_0731`, `VINAX_MISTRAL_NEMOTRON`, `VINAX_KIMI_K3`, `VINAX_MTA_LMA_3_2_11B_VSN_INT`, `VINAX_MTA_LMA_3_2_90B_VSN_INT`, `VINAX_MTA_MUSE_GLIMMER_30B`, `VINAX_NVD_ISING_CALIBRATION_1_5_31B`, `VINAX_POOLSIDE_LAGUNA_XS_2_1`, `VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT`, `VINAX_GGL_GEMMA_4_31B_IT`. Remove them from `backend/worker/.dev.vars` too. The console's Engine probe now takes a provider (`?key=NVIDIA|OPENROUTER|GROQ|GEMINI`).
 
 ### Retired: web search (10.2)
 

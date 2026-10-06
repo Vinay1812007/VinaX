@@ -3,7 +3,9 @@
  *
  * The service answers with server-sent events, one JSON object per frame:
  *
- *   { meta: { model } }            who is answering
+ *   { meta: { model, modelId,      who is answering: the model's original
+ *             provider, mode } }   name, its slug and its provider (10.3);
+ *                                  sent again if a failover changes engine
  *   { delta: "text" }              the next piece of the reply
  *   { done: true, truncated? }     the end; `truncated` = cut short mid-reply
  *
@@ -18,8 +20,12 @@
 export interface StreamState {
   /** The reply so far. */
   text: string;
-  /** Slug of the model that is actually answering (latest meta wins). */
+  /** The model that is actually answering (latest meta wins). 10.3: its
+   *  original name; an older server sent an opaque label or a slug. */
   model: string;
+  /** 10.3 — its slug and provider id ('' when the server did not say). */
+  modelId: string;
+  provider: string;
   /** The service said the reply was cut short. */
   truncated: boolean;
   done: boolean;
@@ -30,6 +36,8 @@ export interface StreamState {
 export const initialStreamState = (): StreamState => ({
   text: '',
   model: '',
+  modelId: '',
+  provider: '',
   truncated: false,
   done: false,
   malformed: 0,
@@ -70,7 +78,7 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     delta?: unknown;
     done?: unknown;
     truncated?: unknown;
-    meta?: { model?: unknown } | null;
+    meta?: { model?: unknown; modelId?: unknown; provider?: unknown } | null;
   };
   let next = state;
   const set = (patch: Partial<StreamState>): void => {
@@ -79,6 +87,13 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
   if (f.truncated === true && !next.truncated) set({ truncated: true });
   if (f.meta && typeof f.meta === 'object') {
     if (typeof f.meta.model === 'string' && f.meta.model && f.meta.model !== next.model) set({ model: f.meta.model });
+    // A failover hop re-sends meta: the provider and slug follow the engine,
+    // and a hop that leaves them out clears them rather than keeping stale ones.
+    if (typeof f.meta.model === 'string' && f.meta.model) {
+      const modelId = typeof f.meta.modelId === 'string' ? f.meta.modelId : '';
+      const provider = typeof f.meta.provider === 'string' ? f.meta.provider : '';
+      if (modelId !== next.modelId || provider !== next.provider) set({ modelId, provider });
+    }
   }
   if (typeof f.delta === 'string' && f.delta) set({ text: next.text + f.delta });
   if (f.done === true && !next.done) set({ done: true });

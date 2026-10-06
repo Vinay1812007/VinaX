@@ -64,13 +64,30 @@ const textOf = (content: unknown): string => {
 
 const THINKING_BUDGET: Record<string, number> = { low: 1024, medium: 4096, high: 12288 };
 
+/** 10.3 — the native parts for one chat message. Text stays text; an attached
+ * image (`image_url` with a base64 data URL, the only kind VinaX AI sends)
+ * becomes inline data, so a Gemini model picked from the catalogue sees the
+ * picture on the native endpoints too instead of silently answering blind. */
+export function nativeParts(content: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(content)) return [{ text: textOf(content) || ' ' }];
+  const parts: Array<Record<string, unknown>> = [];
+  for (const p of content as Array<{ type?: unknown; text?: unknown; image_url?: { url?: unknown } }>) {
+    if (!p || typeof p !== 'object') continue;
+    if (typeof p.text === 'string' && p.text) parts.push({ text: p.text });
+    const url = typeof p.image_url?.url === 'string' ? p.image_url.url : '';
+    const m = /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(url);
+    if (m) parts.push({ inlineData: { mimeType: m[1], data: m[2] } });
+  }
+  return parts.length ? parts : [{ text: ' ' }];
+}
+
 /** The native generateContent body for a chat-completions payload. */
 export function toNativeRequest(payload: ChatPayload, withThinking = true): Record<string, unknown> {
   const messages = Array.isArray(payload.messages) ? payload.messages : [];
   const system = messages.filter((m) => m.role === 'system').map((m) => textOf(m.content)).filter(Boolean).join('\n\n');
   const contents = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
-    .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: textOf(m.content) || ' ' }] }));
+    .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: nativeParts(m.content) }));
   const generationConfig: Record<string, unknown> = {};
   if (typeof payload.temperature === 'number') generationConfig.temperature = payload.temperature;
   if (typeof payload.max_tokens === 'number') generationConfig.maxOutputTokens = payload.max_tokens;
@@ -295,11 +312,15 @@ function finish(res: Response, payload: ChatPayload, mode: MaestroMode): Promise
  * key's shape. Resolves with a Response in chat-completions form (or its SSE
  * form when `payload.stream` is true). Network errors and aborts reject, as
  * fetch() does, so callers' timeout handling is unchanged.
+ *
+ * 10.3 — `swap: false` for a listener's exact catalogue pick: a gone model
+ * answers with its own error (and the caller's ladder takes over) instead of
+ * being replaced by another model the reply would then misname.
  */
-export async function maestroFetch(rawKey: string, requested: string, payload: ChatPayload, signal?: AbortSignal): Promise<Response> {
+export async function maestroFetch(rawKey: string, requested: string, payload: ChatPayload, signal?: AbortSignal, swap = true): Promise<Response> {
   // A pasted secret often carries a trailing newline or spaces.
   const key = rawKey.trim();
-  const model = maestroModelFor(requested);
+  const model = swap ? maestroModelFor(requested) : requested;
   const modes = maestroModes(key);
   let last: Response | null = null;
   for (let i = 0; i < modes.length; i += 1) {
@@ -309,6 +330,7 @@ export async function maestroFetch(rawKey: string, requested: string, payload: C
     const body = await res.clone().text().catch(() => '');
     last = res;
     if (isModelGone(res.status, body)) {
+      if (!swap) return res;
       // The door is right, the name is old: find the current model and ask again on this mode.
       const replacement = suggestedModel(body) ?? pickModel(await listMaestroModels(key, signal));
       console.log(`[ai] maestro mode=${mode} model=${model} gone → ${replacement ?? 'no replacement found'}`);

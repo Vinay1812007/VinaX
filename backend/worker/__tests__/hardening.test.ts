@@ -71,7 +71,7 @@ describe('readCapped / readJsonCapped', () => {
 });
 
 describe('route body caps — a chunked oversized body answers 413 without buffering it', () => {
-  const env = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k' };
+  const env = { VINAX_NVIDIA_API_KEY: 'k' };
   const routes: Array<[string, number, (ctx: { request: Request; env: typeof env }) => Promise<Response>]> = [
     ['/api/assistant', 64_000, assistantPost],
     ['/api/playlist', 32_000, playlistPost],
@@ -175,7 +175,7 @@ describe('chat() — a response body that stalls after headers', () => {
       });
       return Promise.resolve(new Response(body, { status: 200 }));
     });
-    const env = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k1', VINAX_OAI_GPT_OSS_20B: 'k2' };
+    const env = { VINAX_NVIDIA_API_KEY: 'k1' };
     const pending = chat(env, [{ role: 'user', content: 'hi' }], { lane: 'chat', timeoutMs: 4_000, deadlineAt: Date.now() + 30_000 });
     await vi.advanceTimersByTimeAsync(4_100);
     const r = await pending;
