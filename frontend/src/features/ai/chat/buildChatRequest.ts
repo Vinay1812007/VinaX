@@ -3,7 +3,6 @@ import { extractRecommendedFromThread } from '@/services/ai/threadMemory';
 import { getSong } from '@/services/api';
 import { detectSongLinks, prefRuleMessage, songContextBlock } from '@/features/ai/replyPrefs';
 import type { Song } from '@/types';
-import { catalogModelForSend } from './models';
 import type { ModelChoice, Msg } from './types';
 import { assistantPlace } from '@/services/location/assistantPlace';
 import { trimThread } from './longThread';
@@ -30,6 +29,9 @@ export interface TurnSettings {
   song: Song | null;
   /** 9.1.0 — the project this chat belongs to, when it is in one. */
   projectId?: string;
+  /** 10.3 — tools the answering model may use (the Run code connector:
+   *  `['code_execution']`). Never sent in a live voice chat. */
+  tools?: string[];
 }
 
 export interface TurnInput {
@@ -84,13 +86,20 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
       : []),
   ].map((m) => ({ role: m.role, content: m.content }));
 
+  // 10.3 — a listener pick is `{ mode: 'auto' }` or `{ mode: 'model',
+  // provider, model }`; the server re-checks the slug against that provider's
+  // live list. Live voice keeps its own internal seat, and Think on Auto keeps
+  // the deep seat it has always sent (the server reads it as Auto) — Think on
+  // an exact model never overrides the listener's pick, the Think rule above
+  // does the work.
+  const picked = !s.voiceLive && s.choice.mode === 'model' ? s.choice : null;
   return {
     messages,
-    // Think sends this message to the deep engine.
-    mode: s.voiceLive ? 'voice' : think ? 'sage' : s.choice.mode,
-    // Catalogue seats only: the exact model the listener picked. The server
-    // re-checks it against the live catalogue; other seats ignore it.
-    model: catalogModelForSend(s.choice),
+    mode: s.voiceLive ? 'voice' : picked ? 'model' : think ? 'sage' : 'auto',
+    ...(picked ? { provider: picked.provider, model: picked.model } : {}),
+    // 10.3 — Run code. Executed code and its output come back inside the
+    // reply's text; an older server ignores the field.
+    ...(!s.voiceLive && s.tools?.length ? { tools: [...s.tools] } : {}),
     images: t.images,
     // The taste snapshot plus this thread's own memory: everything already
     // recommended in this conversation, so "give me more" reaches into fresh

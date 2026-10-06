@@ -31,25 +31,28 @@ vi.mock('@/hooks/usePageMeta', () => ({ usePageMeta: () => undefined }));
 import { resetModelCatalogCache } from '@/features/ai/chat/useModelCatalog';
 import VinaXAIPage from './VinaXAIPage';
 
+// 10.3 — GET /api/aimodels: always the four providers, in menu order.
 const CATALOG = {
-  groups: [
+  fetchedAt: '2026-10-06T00:00:00.000Z',
+  providers: [
     {
-      id: 'grq',
-      label: 'VinaX GRQ ALL',
-      hint: 'Instant answers',
+      id: 'nvidia',
+      label: 'NVIDIA',
       configured: true,
       models: [
-        { id: 'vendor/agentic', label: 'agentic', provider: 'grq', context: 131072 },
-        { id: 'vendor/plain-8b', label: 'plain-8b', provider: 'grq', context: 8192 },
+        { id: 'lab/alpha-70b', name: 'Alpha 70B', maker: 'Lab One', context: 131072, vision: false },
+        { id: 'lab/alpha-11b-vision', name: 'Alpha 11B Vision', maker: 'Lab One', context: 8192, vision: true },
       ],
     },
-    { id: 'opr', label: 'VinaX OPR ALL', hint: 'Marketplace', configured: true, models: [{ id: 'lab/big:free', label: 'big', provider: 'opr', context: 1000000 }] },
+    { id: 'openrouter', label: 'OpenRouter', configured: true, models: [{ id: 'maker/big:free', name: 'Big Model', maker: 'Maker Two', context: 1000000, vision: false }] },
+    { id: 'groq', label: 'Groq', configured: true, models: [{ id: 'small-8b', name: 'Small 8B', maker: null, context: 8192, vision: false }] },
+    { id: 'gemini', label: 'Gemini', configured: false, models: [] },
   ],
 };
 // 10.2 — an older server may still send sources and step frames: the chat
 // must ignore them (no timeline, no source list).
 const SSE =
-  'data: {"meta":{"model":"vendor/agentic","sources":["https://a.example/x"]}}\n\n' +
+  'data: {"meta":{"model":"Alpha 70B","modelId":"lab/alpha-70b","provider":"nvidia","mode":"auto","sources":["https://a.example/x"]}}\n\n' +
   'data: {"step":{"tool":"code","label":"Ran code"}}\n\n' +
   'data: {"delta":"Here is a **short** answer."}\n\n' +
   'data: {"delta":"\\n>>> Show an example | Why?"}\n\n' +
@@ -124,7 +127,12 @@ describe('VinaX AI chat', () => {
     await waitFor(() => expect(screen.queryByRole('status', { name: 'Thinking' })).toBeNull());
     expect(posted).toHaveLength(1);
     expect(posted[0]).toMatchObject({ mode: 'auto' });
+    expect(posted[0]).not.toHaveProperty('provider');
     expect(posted[0]).not.toHaveProperty('web');
+    // 10.3 — who answered: the provider's logo and the model's original name from meta.
+    const chip = document.querySelector('.ai-engine-chip');
+    expect(chip?.textContent).toBe('Alpha 70B');
+    expect(chip?.querySelector('svg')?.getAttribute('data-provider')).toBe('nvidia');
     expect(document.body.textContent).not.toContain('>>>');
     expect(screen.getByRole('button', { name: 'Show an example' })).toBeTruthy();
     const actions = screen.getByRole('group', { name: 'Reply actions' });
@@ -138,25 +146,54 @@ describe('VinaX AI chat', () => {
     expect(box().value).toBe('');
   });
 
-  it('one model menu: opening it fetches the catalogue once, and a catalogue pick goes on the wire as mode + model', async () => {
+  it('one model menu: opening it fetches the list once, and a pick goes on the wire as mode + provider + model', async () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
     const list = await screen.findByRole('listbox', { name: 'Choose model' });
-    await waitFor(() => expect(within(list).getByText('plain-8b')).toBeTruthy());
+    await waitFor(() => expect(within(list).getByText('Small 8B')).toBeTruthy());
     expect(catalogCalls).toBe(1);
-    fireEvent.click(within(list).getByText('big'));
+    expect(within(list).getByRole('group', { name: 'Gemini' }).textContent).toContain('Not available right now');
+    fireEvent.click(within(list).getByText('Big Model'));
     expect(screen.queryByRole('listbox', { name: 'Choose model' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Model: big' })).toBeTruthy();
+    // The trigger: the provider's logo and the model's original name.
+    const trigger = screen.getByRole('button', { name: 'Model: Big Model' });
+    expect(trigger.querySelector('svg[data-provider]')?.getAttribute('data-provider')).toBe('openrouter');
     // Reopening inside five minutes costs nothing, and the pick is now a recent.
-    fireEvent.click(screen.getByRole('button', { name: 'Model: big' }));
+    fireEvent.click(trigger);
     expect(await screen.findByText('Recently used')).toBeTruthy();
     expect(catalogCalls).toBe(1);
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Search models' }), { key: 'Escape' });
     await sendText('hello');
     await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]).toMatchObject({ mode: 'router', model: 'lab/big:free' });
-    expect(JSON.parse(localStorage.getItem('vinax.aiCatalogModels') ?? '{}')).toEqual({ opr: 'lab/big:free' });
-    expect(JSON.parse(localStorage.getItem('vinax.aiLastModel') ?? '{}')).toEqual({ mode: 'router', model: 'lab/big:free' });
+    expect(posted[0]).toMatchObject({ mode: 'model', provider: 'openrouter', model: 'maker/big:free' });
+    expect(JSON.parse(localStorage.getItem('vinax.aiLastModel') ?? '{}')).toEqual({ mode: 'model', provider: 'openrouter', model: 'maker/big:free', name: 'Big Model' });
+
+    // Back to Auto: the wire says so, with no provider or model.
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Big Model' }));
+    fireEvent.click(within(await screen.findByRole('listbox', { name: 'Choose model' })).getByText('Auto'));
+    expect(screen.getByRole('button', { name: 'Model: Auto' }).querySelector('svg[data-provider]')).toBeNull();
+    await sendText('and again');
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[1].mode).toBe('auto');
+    expect(posted[1]).not.toHaveProperty('provider');
+    expect(posted[1]).not.toHaveProperty('model');
+  });
+
+  it('a pick stored by an older build (a seat, or a catalogue pick) starts the visit on Auto, quietly', async () => {
+    localStorage.setItem('vinax.aiLastModel', JSON.stringify({ mode: 'router', model: 'lab/big:free' }));
+    localStorage.setItem('vinax.aiDefaultMode', 'maestro');
+    localStorage.setItem('vinax.aiCatalogModels', JSON.stringify({ opr: 'lab/big:free' }));
+    localStorage.setItem('vinax.aiRecentModels', JSON.stringify([{ mode: 'sage' }, { mode: 'scholar', model: 'vendor/agentic' }]));
+    mount();
+    expect(screen.getByRole('button', { name: 'Model: Auto' })).toBeTruthy();
+    await waitFor(() => expect(localStorage.getItem('vinax.aiCatalogModels')).toBeNull());
+    expect(localStorage.getItem('vinax.aiLastModel')).toBeNull();
+    expect(localStorage.getItem('vinax.aiDefaultMode')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('vinax.aiRecentModels') ?? 'null')).toEqual([]);
+    await sendText('hi');
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0].mode).toBe('auto');
+    expect(catalogCalls).toBe(0);
   });
 
   it('has no Agent mode, and clears a stale "Start in Agent mode" left by an older build', async () => {

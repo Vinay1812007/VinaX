@@ -11,7 +11,7 @@
          (removing that would need a bigger refactor). connect-src is set to
          'self' + Supabase for direct client hits (currently unused by this
          console, kept as a hedge for future direct queries). -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co https://nominatim.openstreetmap.org" />
     <title>VinaX · Control Room</title>
 
     <!-- Pre-paint: resolves the theme (stored choice, else the system
@@ -560,6 +560,22 @@
       .lab-chip .lm { display: block; font-size: 10.5px; color: var(--text-3); margin-top: 2px; font-weight: 500; }
       .lab-chip.active, .lab-chip.active:not(:disabled):hover { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
       .lab-chip.active .lm { color: var(--accent-text); }
+      /* 10.3 — one row per provider: logo, name, health dot, key state, model count, its models. */
+      .lab-provs { display: flex; flex-direction: column; gap: 8px; }
+      .lab-prov { border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); min-width: 0; }
+      .lab-prov.active { border-color: var(--accent); background: var(--accent-soft); }
+      .lab-prov-head { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px; background: transparent; border: 0; color: var(--text); text-align: left; font-weight: 650; }
+      .lab-prov-head:not(:disabled):hover { background: var(--surface-2); color: var(--text); }
+      .lab-prov.active .lab-prov-head:not(:disabled):hover { background: transparent; }
+      .lab-prov-name { font-size: 13.5px; }
+      .lab-prov-count { font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+      .lab-prov-models { padding: 0 12px 10px; }
+      .lab-prov-models summary { cursor: pointer; font-size: 12px; color: var(--text-2); min-height: 32px; display: flex; align-items: center; }
+      .lab-prov-models table { margin-top: 6px; }
+      .lab-prov-models td code { font-size: 11px; word-break: break-all; }
+      .lab-prov-empty { padding: 0 12px 10px; font-size: 12px; }
+      .prov-logo { flex: none; display: inline-block; vertical-align: middle; }
+      .prov-cell { display: inline-flex; align-items: center; gap: 6px; }
       .lab-msgs { display: flex; flex-direction: column; gap: 4px; max-height: 52vh; min-height: 120px; overflow-y: auto; padding: 4px 2px; margin-bottom: 12px; }
       .lab-msg { max-width: 84%; border-radius: var(--radius-md); padding: 9px 13px; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; margin-top: 6px; }
       .lab-msg.user { align-self: flex-end; background: var(--accent-soft); border: 1px solid var(--accent); }
@@ -576,6 +592,28 @@
       .lab-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); margin-right: 6px; vertical-align: 1px; }
       .lab-dot.ok { background: var(--ok); } .lab-dot.warn { background: var(--warn); } .lab-dot.bad { background: var(--danger); }
       .lab-ping-at { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+      /* 10.3 — feature switches, media models (grouped by kind, with benches) and tools per provider.
+         Audio plays from blob: URLs, hence media-src 'self' blob: in the CSP above. */
+      .lab-feats { align-items: center; gap: 6px; margin-bottom: 12px; }
+      .lab-feats-k { font-size: 11.5px; margin-right: 2px; }
+      .lab-tag-code { font-size: 10.5px; min-height: 18px; padding: 0 7px; color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
+      .lab-media, .lab-tools { padding: 0 12px 10px; min-width: 0; }
+      .lab-sub { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); margin: 2px 0 6px; }
+      .lab-media-group { border-top: 1px solid var(--border); padding: 6px 0 4px; }
+      .lab-sub + .lab-media-group { border-top: 0; padding-top: 0; }
+      .lab-media-kind { font-size: 12px; font-weight: 650; color: var(--text-2); margin-bottom: 4px; }
+      .lab-media-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 32px; }
+      .lab-media-name { flex: 1 1 200px; min-width: 0; font-size: 12.5px; overflow-wrap: anywhere; }
+      .lab-media-name .muted { font-size: 11.5px; }
+      button.ghost.lab-bench { min-height: 28px; padding: 0 12px; font-size: 11.5px; flex: none; }
+      .lab-media-note { font-size: 11px; }
+      .lab-media-out { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 4px 0 6px; }
+      .lab-media-out:empty { display: none; }
+      .lab-media-thumb { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface-3); }
+      .lab-media-audio { width: min(100%, 300px); height: 36px; }
+      .lab-media-text { font-size: 12.5px; color: var(--text); overflow-wrap: anywhere; flex: 1 1 100%; }
+      .lab-tools .chips { margin-bottom: 0; gap: 6px; }
+      @media (max-width: 900px) { .lab-media-name { flex-basis: 100%; } }
 
       /* ---------- Seasonal skin (Aug 14–15) — restrained tricolour rule ---------- */
       html.fest-ind body::after { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 99; pointer-events: none; background: linear-gradient(90deg, #ff9933 0 33.4%, #fff 33.4% 66.7%, #138808 66.7% 100%); }
@@ -742,17 +780,17 @@
       /* ---------- Accent gradient: primary actions carry the brand ramp ----------
          :where() keeps specificity at a bare `button`, so every chrome variant
          (.ghost, .sb-btn, .seg, …) still wins with its own styling. */
-      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) {
+      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.lab-prov-head):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) {
         background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.25);
       }
-      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):hover {
+      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.lab-prov-head):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):hover {
         background: linear-gradient(135deg, var(--grad-a-strong), var(--grad-b-strong));
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), var(--glow);
         transform: translateY(-1px);
       }
-      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):active { transform: translateY(0) scale(0.98); }
-      :root.light button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(15, 20, 30, 0.15); }
+      button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.lab-prov-head):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)):not(:disabled):active { transform: translateY(0) scale(0.98); }
+      :root.light button:where(:not(.ghost):not(.sb-icon):not(.sb-btn):not(.icon-btn):not(.menu-fab):not(.nav-group-label):not(.lab-chip):not(.lab-prov-head):not(.switch):not(.danger):not(.x):not(.pn-kind):not([data-sec]):not(.seg *):not(.subtabs *):not(.ops-tabs *):not(.sw *)) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(15, 20, 30, 0.15); }
       .seg button.active, .subtabs button.active,
       .seg button.active:not(:disabled):hover, .subtabs button.active:not(:disabled):hover { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); }
       .switch .track.on { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); border-color: transparent; }

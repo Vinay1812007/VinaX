@@ -14,7 +14,7 @@ vi.mock('./ai', async (importOriginal) => {
 
 import { buildShelfQuery, decadeWord, designShelves, fallbackShelves, filterAvoided, parseShelves } from './homeShelves';
 
-const env = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k' };
+const env = { VINAX_NVIDIA_API_KEY: 'k' };
 const taste = { preferredLanguages: ['telugu', 'hindi'], topArtists: ['Sid Sriram', 'Anirudh'], timeOfDay: 'evening' };
 
 beforeEach(() => { chatMock.mockReset(); gatherMock.mockReset(); gatherMock.mockResolvedValue([]); });

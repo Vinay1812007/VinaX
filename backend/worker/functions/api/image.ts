@@ -1,11 +1,30 @@
-/** Text-to-image for VinaX AI — NVIDIA-hosted image models on the existing
- *  server keys. Returns a data URL; the client renders it in the chat.
- *  Fully gated: if the key lacks image access, the client gets an honest
- *  error instead of a hang. */
+/** Text-to-image for VinaX AI. Returns a data URL; the client renders it in
+ *  the chat. Fully gated: if the key lacks image access, the client gets an
+ *  honest error instead of a hang.
+ *
+ *  10.3 — every FREE image model on the four keys, not one hard-coded one:
+ *    POST { prompt, provider?, model? }
+ *    200  { image: <data URL>, model: <published name>, modelId, provider }
+ *    400  { error: 'bad_request' | 'unknown_model' }   (a pick that is not on
+ *         the live free list is refused, never forwarded)
+ *    503  { error: 'not_configured', reason } | { error: 'ai_disabled' | 'ai_over_budget' }
+ *    502  { error: <upstream reason>, status }
+ *  No pick → the first free image model available (NVIDIA's hosted models,
+ *  then OpenRouter's free ones), and on failure the next one. An exact pick
+ *  runs alone. The model list lives in _lib/catalog.ts, the provider calls in
+ *  _lib/media.ts. */
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
-import { aiBlockCode, aiGate, logAiRefusal, type AiEnv } from '../_lib/ai';
+import { aiBlockCode, aiGate, logAiEvent, logAiRefusal, noteProviderFailure, type AiEnv } from '../_lib/ai';
+import { readJsonCapped } from '../_lib/body';
+import { generateImage, pickMedia } from '../_lib/media';
+import { type SupabaseEnv } from '../_lib/supabase';
 
-type Env = AiEnv;
+type Env = AiEnv & SupabaseEnv;
+
+/** A prompt plus the two ids — nothing large belongs in this body. */
+const MAX_BODY_BYTES = 8_000;
+/** How long an automatic pick keeps trying the next model. */
+const AUTO_BUDGET_MS = 50_000;
 
 function json(o: unknown, status = 200): Response {
   return new Response(JSON.stringify(o), {
@@ -42,79 +61,50 @@ export const onRequestPost = async (context: { request: Request; env: Env; waitU
 
 const handleImage = async (context: { request: Request; env: Env; waitUntil?: (p: Promise<unknown>) => void }): Promise<Response> => {
   const { request, env } = context;
-  // The image endpoint lives on the default (NVIDIA) base, so only a key that
-  // belongs to that account can sign the call — the two aggregator keys
-  // (scholar / router) are excluded on purpose. Any of the rest will do:
-  // those keys are account-scoped, not model-scoped. Order = the busiest
-  // keys first, so a cold account is rarely the one woken for a picture.
-  const key =
-    env.VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B ??
-    env.VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B ??
-    env.VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B ??
-    env.VINAX_OAI_GPT_OSS_20B ??
-    env.VINAX_MISTRAL_NEMOTRON ??
-    env.VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING ??
-    env.VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT ??
-    null;
-  // No image key means the feature is unavailable, not that the client sent
-  // a bad request — surface as 503 (audit finding M13).
-  if (!key) return json({ error: 'not_configured' }, 503);
+  const client = request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web';
+  const read = await readJsonCapped<{ prompt?: unknown; provider?: unknown; model?: unknown } | null>(request, MAX_BODY_BYTES);
+  if (!read.ok) return read.reason === 'too_large' ? json({ error: 'too_large' }, 413) : json({ error: 'bad_request' }, 400);
+  const body = read.value && typeof read.value === 'object' ? read.value : null;
+  const prompt = (typeof body?.prompt === 'string' ? body.prompt : '').trim().slice(0, 600);
+  if (prompt.length < 3) return json({ error: 'bad_request' }, 400);
   // 7.2.0 — the owner's AI switches and spend caps.
   const blocked = await aiGate(env, 'image');
   if (blocked) {
     // Logged (error ai_disabled / ai_over_budget) for the console.
-    void logAiRefusal(env, 'image', blocked, request.headers.get('x-vinax-client') === 'app' ? 'app' : 'web', context.waitUntil);
+    void logAiRefusal(env, 'image', blocked, client, context.waitUntil);
     return json({ error: aiBlockCode(blocked) }, 503);
   }
-  const body = (await request.json().catch(() => null)) as { prompt?: string } | null;
-  const prompt = (body?.prompt ?? '').toString().trim().slice(0, 600);
-  if (prompt.length < 3) return json({ error: 'bad_request' }, 400);
-  const model = 'stabilityai/sdxl-turbo';
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25_000);
-  try {
-    const up = await fetch(`https://ai.api.nvidia.com/v1/genai/${model}`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify(
-        model.includes('sdxl-turbo')
-          ? {
-              text_prompts: [{ text: prompt }],
-              seed: Math.floor(Math.random() * 4_294_967_295),
-              sampler: 'K_EULER_ANCESTRAL',
-              steps: 4,
-            }
-          : {
-              prompt,
-              negative_prompt: '',
-              mode: 'text-to-image',
-              aspect_ratio: '1:1',
-              seed: Math.floor(Math.random() * 4_294_967_295),
-              steps: 28,
-              cfg_scale: 5,
-            },
-      ),
-      // Clear the timer once the fetch resolves (see finally) so it doesn't
-      // hold the isolate awake past the response (audit finding L7).
-      signal: controller.signal,
+  // 10.3 — validated against the live free image list before any key is used.
+  // No image model at all means the feature is unavailable, not that the
+  // client sent a bad request — surface as 503 (audit finding M13).
+  const pick = await pickMedia(env, 'image', body?.provider, body?.model);
+  if (!pick.ok) return json({ error: pick.error, ...(pick.reason ? { reason: pick.reason } : {}) }, pick.status);
+  const t0 = Date.now();
+  let last: { status: number; reason: string } = { status: 0, reason: 'engine_unreachable' };
+  for (const { provider, model } of pick.choices) {
+    if (Date.now() - t0 > AUTO_BUDGET_MS) break;
+    const r = await generateImage(env, provider, model.id, prompt);
+    const log = logAiEvent(env, {
+      feature: 'image',
+      model: `${model.id} @${provider}`,
+      ok: r.ok,
+      status: r.ok ? 200 : r.status,
+      error: r.ok ? null : r.reason,
+      client,
+      latency_ms: Date.now() - t0,
     });
-    if (!up.ok) {
-      const status = up.status;
-      const reason = status === 401 || status === 403 ? 'not_enabled' : status === 404 ? 'model_unavailable' : 'upstream_error';
-      // Non-2xx from the upstream is a bad-gateway from the client's POV.
-      return json({ error: reason, status }, 502);
+    if (context.waitUntil) context.waitUntil(log);
+    if (r.ok) {
+      // Built by concatenation: the data URL is megabytes of base64.
+      return new Response(
+        `{"image":"${r.value}","model":${JSON.stringify(model.name)},"modelId":${JSON.stringify(model.id)},"provider":${JSON.stringify(provider)}}`,
+        { headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } },
+      );
     }
-    // The payload is a ~2 MB JSON with one huge base64 field. A full
-    // JSON.parse can blow the CPU budget at the edge — extract by regex.
-    const txt = await up.text();
-    const m = /"image"\s*:\s*"([A-Za-z0-9+/=]+)"/.exec(txt) ?? /"base64"\s*:\s*"([A-Za-z0-9+/=]+)"/.exec(txt);
-    if (!m) return json({ error: 'empty_image' }, 502);
-    return new Response('{"image":"data:image/jpeg;base64,' + m[1] + '"}', {
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' },
-    });
-  } catch {
-    return json({ error: 'engine_unreachable' }, 502);
-  } finally {
-    clearTimeout(timeoutId);
+    noteProviderFailure(provider, model.id, r.status, r.body);
+    last = { status: r.status, reason: r.reason };
+    // An exact pick runs alone; a filtered prompt is the prompt, not the model.
+    if (pick.exact || r.reason === 'content_filtered') break;
   }
+  return json({ error: last.reason, status: last.status }, last.reason === 'content_filtered' ? 422 : 502);
 };

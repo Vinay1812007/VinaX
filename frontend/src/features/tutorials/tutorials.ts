@@ -139,10 +139,10 @@ export const TUTORIALS: Tutorial[] = [
     emoji: '✨',
     steps: [
       { route: '/VinaXAI', target: 'textarea[aria-label="Message VinaX AI"]', title: 'The composer', body: 'Ask anything: writing, code, maths, translation or music. Type / for commands such as /playlist, /now, /lyrics and /summary.', placement: 'top' },
-      { route: '/VinaXAI', target: 'button[aria-label="Attach and tools"]', title: 'Files and connectors', body: 'The + button uploads files and holds Connectors: Think, Now playing, Memory and Place.', tip: 'The connectors that are on show as chips above the message box.', placement: 'top' },
-      { route: '/VinaXAI', target: 'button[aria-label^="Model:"]', title: 'The model menu', body: 'Search every model VinaX can reach. Recent ones come first. Auto, the default, uses VinaX Maestro when available.', placement: 'top' },
+      { route: '/VinaXAI', target: 'button[aria-label="Attach and tools"]', title: 'Files and connectors', body: 'The + button uploads files and holds Connectors: Think, Now playing, Memory, Place and, when available, Run code. Create image and Create music clip live here too.', tip: 'The connectors that are on show as chips above the message box. A picture or clip shows which model made it, with Download.', placement: 'top' },
+      { route: '/VinaXAI', target: 'button[aria-label^="Model:"]', title: 'The model menu', body: 'Auto, the default, picks the best model for each question. Below it, search every free model VinaX can reach, under its own name.', placement: 'top' },
       { route: '/VinaXAI', title: 'Songs you can play', body: 'A “Title — Artist” line in a reply becomes a playable card, with Play all and Save as playlist.' },
-      { route: '/VinaXAI', target: 'button[aria-label="Chat settings"]', title: 'Chat settings', body: 'Tabs for General, Replies, Voice, Data and Shortcuts: default model, reply language and style, spoken voice, and your chat storage.', placement: 'bottom' },
+      { route: '/VinaXAI', target: 'button[aria-label="Chat settings"]', title: 'Chat settings', body: 'Tabs for General, Replies, Voice, Data and Shortcuts: default model, reply language and style, the spoken voice and dictation, and your chat storage.', placement: 'bottom' },
     ],
   },
   {

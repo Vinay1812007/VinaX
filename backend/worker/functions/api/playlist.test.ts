@@ -89,7 +89,7 @@ describe('onRequestPost — variety plumbing end to end', () => {
         body: JSON.stringify(body),
       }),
       // v5.4.0: the dj lane rides its own lightning key now.
-      env: { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key' },
+      env: { VINAX_NVIDIA_API_KEY: 'test-key' },
     });
 
   it('pins the dj engine at temp 0.9 and injects nonce + avoidTitles into the prompt', async () => {
@@ -167,7 +167,7 @@ describe('onRequestPost — request reading (8.2.0)', () => {
     });
     const res = await onRequestPost({
       request: new Request('http://localhost/api/playlist', { method: 'POST', body: JSON.stringify({ prompt: 'Make me a Telugu workout playlist with high-energy songs.', languages: ['hindi'] }) }),
-      env: { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key' },
+      env: { VINAX_NVIDIA_API_KEY: 'test-key' },
     });
     expect(res.status).toBe(200);
     const data = (await res.json()) as { reading: unknown };

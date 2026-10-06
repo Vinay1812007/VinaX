@@ -24,7 +24,10 @@ import { hideFollowupLine } from '@/features/ai/followups';
 import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { cn } from '@/utils/cn';
 import { reducedMotion } from '@/utils/motion';
-import { CheckIcon } from './icons';
+import { CheckIcon, CodeIcon } from './icons';
+import { MediaCard } from './MediaCard';
+import { CODE_TOOL, isProviderId } from './models';
+import { ProviderLogo } from './ProviderLogo';
 import type { Msg } from './types';
 
 /** Everything a message can ask the page to do. The object is stable (see
@@ -83,14 +86,23 @@ export const UserMessage = memo(function UserMessage({
 });
 
 const WAITING = ['Thinking…', 'Reading your question…', 'Gathering ideas…', 'Putting it together…'];
+/** 10.3 — what the wait says while a picture or a clip is being made. */
+const CREATING: Record<'image' | 'music', string[]> = {
+  image: ['Creating your picture…', 'Adding the details…'],
+  music: ['Composing your clip…', 'Mixing it down…'],
+};
+
+/** 10.3 — the reply ran code: the Run code tool was on for the model that
+ *  answered AND the reply holds a code block (the code and its output). */
+export const ranCode = (m: Pick<Msg, 'tools' | 'content'>): boolean => !!m.tools?.includes(CODE_TOOL) && m.content.includes('```');
 
 /** The pause before the first token: beside it the VinaX mark turns slowly
  *  and breathes in the Marigold → Rose glow (.ai-msg-mark.is-waiting), and this
  *  short status runs a soft shimmer, changing every couple of seconds. The
  *  accessible name stays "Thinking" — a screen reader hears it once, not every
  *  rotation. */
-function ThinkingMark(): ReactNode {
-  const lines = WAITING;
+function ThinkingMark({ creating }: { creating?: 'image' | 'music' }): ReactNode {
+  const lines = creating ? CREATING[creating] : WAITING;
   const [i, setI] = useState(0);
   useEffect(() => {
     if (reducedMotion()) return;
@@ -207,7 +219,10 @@ export const AssistantMessage = memo(function AssistantMessage({
       </span>
       <div className="min-w-0 flex-1">
         <Images images={m.images} />
-        {m.player ? (
+        {m.media ? (
+          // 10.3 — a picture or a clip made with Create image / Create music clip.
+          <MediaCard media={m.media} />
+        ) : m.player ? (
           <ChatPlayerCard fallback={m.content} />
         ) : noReply ? (
           <ReplyNotice m={m} last={last} busy={busy} onRetry={handlers.regenerate} />
@@ -287,9 +302,21 @@ export const AssistantMessage = memo(function AssistantMessage({
                   <PinIcon />
                 </button>
                 <MoreMenu actions={more} />
+                {/* 10.3 — who answered: the provider's logo and the model's
+                    original name, straight from the stream (a failover hop
+                    names the engine that really replied). A reply stored by an
+                    older build keeps its label, without a logo. */}
+                {/* 10.3 — the model ran code for this reply (the Run code connector). */}
+                {ranCode(m) && (
+                  <span className="ai-engine-chip ai-ran-code" title="The model ran code for this reply">
+                    <CodeIcon className="w-3.5 h-3.5" />
+                    Ran code
+                  </span>
+                )}
                 {m.engine ? (
-                  <span className="ai-engine-chip" title="Engine that answered">
-                    {m.engine}
+                  <span className="ai-engine-chip" title={`Answered by ${m.engine}`}>
+                    {isProviderId(m.engineProvider) && <ProviderLogo provider={m.engineProvider} size={14} />}
+                    <span className="truncate">{m.engine}</span>
                   </span>
                 ) : null}
               </div>
@@ -297,7 +324,7 @@ export const AssistantMessage = memo(function AssistantMessage({
             {!busy && last && m.followups?.length ? <FollowupChips items={m.followups} disabled={busy} onPick={handlers.send} /> : null}
           </>
         ) : (
-          <ThinkingMark />
+          <ThinkingMark creating={m.creating} />
         )}
       </div>
     </div>

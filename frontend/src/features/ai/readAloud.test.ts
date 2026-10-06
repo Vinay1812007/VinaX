@@ -107,6 +107,18 @@ describe('studio voice', () => {
     expect(spoken).toEqual([]);
   });
 
+  it('10.3 — names the provider of the chosen voice in the request', async () => {
+    const f = vi.fn((_url: string, _init?: RequestInit) =>
+      Promise.resolve(new Response(audioBlob(), { status: 200, headers: { 'content-type': 'audio/wav' } })),
+    );
+    vi.stubGlobal('fetch', f);
+    stubAudio();
+    setReadAloudVoice(() => ({ provider: 'gemini', model: 'speech-1', voice: 'Kore' }));
+    readAloud('m-provider', 'Hello there.');
+    await settle();
+    expect(JSON.parse(String(f.mock.calls[0][1]?.body))).toEqual({ text: 'Hello there.', provider: 'gemini', model: 'speech-1', voice: 'Kore' });
+  });
+
   it('falls back to the device when the first chunk fails, speaking it exactly once', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('nope', { status: 502 }))));
     stubAudio();

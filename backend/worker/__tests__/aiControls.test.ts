@@ -20,9 +20,8 @@ const ENV = {
   SUPABASE_URL: 'https://sb.test',
   SUPABASE_SERVICE_ROLE_KEY: 'srk',
   ADMIN_LOGIN_PASSWORD: 'test-secret',
-  VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k-dj',
+  VINAX_NVIDIA_API_KEY: 'k-nv',
   VINAX_GROQ_API_KEY: 'k-scholar',
-  VINAX_OAI_GPT_OSS_20B: 'k-fast',
 };
 
 interface World {

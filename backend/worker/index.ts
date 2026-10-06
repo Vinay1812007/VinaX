@@ -104,6 +104,9 @@ import * as m_api_site_mode from './functions/api/site-mode';
 import * as m_api_trending_searches from './functions/api/trending-searches';
 import * as m_api_trends from './functions/api/trends';
 import * as m_api_tts from './functions/api/tts';
+// 10.3 — speech to text and music generation on the free models.
+import * as m_api_transcribe from './functions/api/transcribe';
+import * as m_api_music from './functions/api/music';
 import * as m_api_username from './functions/api/username';
 import * as m_api_version from './functions/api/version';
 import * as m_api_vinaxai from './functions/api/vinaxai';
@@ -238,6 +241,8 @@ const EXACT: Record<string, Mod> = {
   '/api/trending-searches': m_api_trending_searches,
   '/api/trends': m_api_trends,
   '/api/tts': m_api_tts,
+  '/api/transcribe': m_api_transcribe,
+  '/api/music': m_api_music,
   '/api/username': m_api_username,
   '/api/version': m_api_version,
   '/api/vinaxai': m_api_vinaxai,

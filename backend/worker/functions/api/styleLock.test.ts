@@ -23,7 +23,7 @@ const POOL = [
   { id: 'p2', title: 'Butta Bomma', artist: 'Armaan Malik', language: 'telugu' },
   { id: 'p3', title: 'Ramuloo Ramulaa', artist: 'Anurag Kulkarni', language: 'telugu' },
 ];
-const KEY = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k' };
+const KEY = { VINAX_NVIDIA_API_KEY: 'k' };
 const cat = (id: string, title: string, artist: string) => ({ id, title, primaryArtists: [artist], featuredArtists: [], credits: [], album: null, language: 'telugu', year: null, durationSec: null });
 
 let ip = 0;

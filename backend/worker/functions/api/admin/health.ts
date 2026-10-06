@@ -1,25 +1,42 @@
 /**
- * System health: live-checks the nine AI lanes that drive features (tiny
- * 4-token ping, each against its OWN lane endpoint — providers are mixed) and
- * Supabase write freshness, so an outage shows its exact cause instead of
- * guesswork. Admin-gated because each check spends a few model tokens.
+ * System health: live-checks the AI keys (tiny 4-token ping, each against its
+ * OWN provider endpoint) and Supabase write freshness, so an outage shows its
+ * exact cause instead of guesswork. Admin-gated because each check spends a
+ * few model tokens.
  *
- * v5.21.0 — re-pointed at the owner's rotated secrets, and widened to cover
- * the two seats that arrived with them: the free-model marketplace and the
- * vision key. The bench-only inventory lanes stay out; the AI Lab probes
- * those one at a time.
+ * 10.3 — one key per provider, so `ai` is four rows (NVIDIA, OpenRouter,
+ * Groq, Gemini), each pinging the model its lane would use right now and
+ * naming the lanes that sign with it. `lanes` adds per-lane success over the
+ * trailing 24 h of vinax_ai_events (calls, ok %, latency, failover hops), with
+ * each lane's provider and whether its key is set — so a lane that degrades
+ * while its key still pings fine is visible too.
+ *
+ * 10.3 — each key row also names the secret that supplies the key right now
+ * (`envInUse`: the primary name, the previous name during the switch, or
+ * null) and carries that provider's free `media` models ({ id, name, kind })
+ * and `tools` (code execution and the chat models that run it).
  */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
 import { dbErrorCode, sbSelectResult, supabaseConfigured, type SupabaseEnv } from '../../_lib/supabase';
-import { LANE_MODEL, isMaestroEndpoint, laneEndpoint, laneModel, type AiEnv } from '../../_lib/ai';
+import { AI_PROVIDERS, LANE_MODEL, LANE_PROVIDER, PROVIDER_ENV, PROVIDER_LABEL, PROVIDER_LANE, isMaestroEndpoint, isRefusalCode, laneEndpoint, laneModel, providerKey, providerKeySource, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
 import { maestroFetch } from '../../_lib/maestro';
-import { catalogDefaultModel } from '../../_lib/catalog';
+import { catalogDefaultModel, fetchMedia, fetchTools, type MediaKind, type ToolEntry } from '../../_lib/catalog';
+import { aggregateLaneHealth, type AiEventRow, type LaneHealth } from '../../_lib/laneHealth';
 
 type Env = AdminEnv & SupabaseEnv & AiEnv;
 
 interface KeyHealth {
   key: string;
+  /** 10.3 — the provider this key belongs to, its secret name and the lanes it signs. */
+  provider?: AiProvider;
+  env?: string;
+  /** 10.3 — the secret name supplying the key right now (primary or previous), or null. */
+  envInUse?: string | null;
+  lanes?: Lane[];
+  /** 10.3 — the provider's free media models and tools. */
+  media?: Array<{ id: string; name: string; kind: MediaKind }>;
+  tools?: ToolEntry[];
   configured: boolean;
   ok: boolean;
   status: number | null;
@@ -27,7 +44,7 @@ interface KeyHealth {
   note: string | null;
 }
 
-async function pingKey(name: string, key: string | undefined, model: string, base: string): Promise<KeyHealth> {
+async function pingKey(name: string, key: string | null, model: string, base: string): Promise<KeyHealth> {
   if (!key) return { key: name, configured: false, ok: false, status: null, model: null, note: 'not configured' };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 9000);
@@ -57,30 +74,44 @@ async function pingKey(name: string, key: string | undefined, model: string, bas
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
-  // 9 live model pings per call — cap the frequency so a stuck 10s auto-
+  // 4 live model pings per call — cap the frequency so a stuck 10s auto-
   // refresh loop can't burn upstream quota (audit: unthrottled).
   const limited = await rateLimitAsync(request, 'admin-health', { capacity: 4, refillPerMinute: 2 }, env);
   if (limited) return limited;
-  // The two catalog lanes serve a moving catalog, so health must ping the
-  // model they would ACTUALLY use right now — a fixed pin here reported a
-  // 404 that said nothing about whether the key works.
-  const [scholarModel, routerModel] = await Promise.all([
-    catalogDefaultModel(env, 'grq'),
-    catalogDefaultModel(env, 'opr'),
-  ]);
-  const [maestro, dj, chat, sage, swift, scholar, home, search, router, vision, lastEvents] = await Promise.all([
-    pingKey('VinaX Maestro · DJ · Queue Builder · Home builder', env.VINAX_GGL_GEMINI_API_KEY, laneModel(env, 'maestro'), laneEndpoint(env, 'maestro')),
-    pingKey('VinaX LTNG · chat · playlists', env.VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B, LANE_MODEL.dj, laneEndpoint(env, 'dj')),
-    pingKey('VinaX Balanced · chat · playlists', env.VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B, LANE_MODEL.chat, laneEndpoint(env, 'chat')),
-    pingKey('VinaX NMTRN SUP · deep reasoning', env.VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B, LANE_MODEL.deep, laneEndpoint(env, 'deep')),
-    pingKey('VinaX OSS 20B · fast answers', env.VINAX_OAI_GPT_OSS_20B, LANE_MODEL.fast, laneEndpoint(env, 'fast')),
-    pingKey('VinaX GRQ ALL · music knowledge · live voice', env.VINAX_GROQ_API_KEY, scholarModel ?? LANE_MODEL.scholar, laneEndpoint(env, 'scholar')),
-    pingKey('VinaX NMTRN ULT · premium reasoning', env.VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B, LANE_MODEL.home, laneEndpoint(env, 'home')),
-    pingKey('VinaX NMTRN NN OMNI · search music expert', env.VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING, LANE_MODEL.search, laneEndpoint(env, 'search')),
-    pingKey('VinaX OPR ALL · free model marketplace', env.VINAX_OPENROUTER_API_KEY, routerModel ?? LANE_MODEL.router, laneEndpoint(env, 'router')),
-    pingKey('VinaX VSN 11B · image understanding', env.VINAX_MTA_LMA_3_2_11B_VSN_INT, LANE_MODEL.vision, laneEndpoint(env, 'vision')),
+  // Each key is pinged with the model its lane would ACTUALLY use right now.
+  // The Groq and OpenRouter lanes serve a moving catalogue, so their model
+  // comes from the live free list — a fixed pin here reported a 404 that
+  // said nothing about whether the key works.
+  const lanesOf = (p: AiProvider): Lane[] => (Object.keys(LANE_PROVIDER) as Lane[]).filter((l) => LANE_PROVIDER[l] === p);
+  const pingModel = async (p: AiProvider): Promise<string> => {
+    const lane = PROVIDER_LANE[p];
+    if (lane === 'scholar' || lane === 'router') return (await catalogDefaultModel(env, p)) ?? LANE_MODEL[lane];
+    return laneModel(env, lane);
+  };
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const [keyRows, lastEvents, aiEvents] = await Promise.all([
+    Promise.all(
+      AI_PROVIDERS.map(async (p): Promise<KeyHealth> => {
+        const lanes = lanesOf(p);
+        const row = await pingKey(`${PROVIDER_LABEL[p]} · ${lanes.join(', ')}`, providerKey(env, p), await pingModel(p), laneEndpoint(env, PROVIDER_LANE[p]));
+        const [media, tools] = await Promise.all([fetchMedia(env, p), fetchTools(env, p)]);
+        return { ...row, provider: p, env: PROVIDER_ENV[p], envInUse: providerKeySource(env, p)?.name ?? null, lanes, media: media.map((m) => ({ id: m.id, name: m.name, kind: m.kind })), tools };
+      }),
+    ),
     sbSelectResult<{ created_at?: string }>(env, 'vinax_events', 'select=created_at&order=created_at.desc&limit=1'),
+    supabaseConfigured(env)
+      ? sbSelectResult<AiEventRow>(env, 'vinax_ai_events', `created_at=gte.${encodeURIComponent(since)}&select=model,ok,status,error,latency_ms&order=created_at.desc&limit=10000`)
+      : Promise.resolve(null),
   ]);
+  // 10.3 — per-lane success over 24 h. Refused calls (owner AI controls)
+  // reached no lane and are left out; an idle lane shows zero calls.
+  const measured = aiEvents && aiEvents.ok ? aggregateLaneHealth(aiEvents.rows.filter((r) => !isRefusalCode(r.error))) : [];
+  const idle = (lane: string): LaneHealth => ({ lane, calls: 0, okPct: 0, p50: null, p95: null, p99: null, hops: 0, emptyStreams: 0, authErrors: 0 });
+  const lanes = (Object.keys(LANE_PROVIDER) as Lane[]).map((lane) => ({
+    ...(measured.find((m) => m.lane === lane) ?? idle(lane)),
+    provider: LANE_PROVIDER[lane],
+    keySet: providerKey(env, LANE_PROVIDER[lane]) !== null,
+  }));
   // 7.2.0 — the database half of this panel names its failure instead of
   // guessing between "paused, empty or failing"; the AI pings stay useful.
   const lastEventAt = lastEvents.ok && lastEvents.rows.length ? (lastEvents.rows[0].created_at ?? null) : null;
@@ -89,7 +120,9 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   return new Response(
     JSON.stringify({
       time: new Date().toISOString(),
-      ai: [maestro, dj, chat, sage, swift, scholar, home, search, router, vision],
+      ai: keyRows,
+      lanes,
+      lanesReadable: aiEvents ? aiEvents.ok : false,
       supabase: {
         configured: supabaseConfigured(env),
         readable: dbReadable,

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/services/location/browserSignals', () => ({ readBrowserSignals: () => ({ country: 'IN', languages: [], timezone: 'Asia/Kolkata' }) }));
 
-import { PLACE_ON_KEY, activeConnectors, connectorViews, placeConnectorOn } from '@/features/ai/connectors';
+import { CODE_ON_KEY, PLACE_ON_KEY, activeConnectors, codeChipNote, codeConnectorOn, connectorViews, placeConnectorOn, type CodeSupport } from '@/features/ai/connectors';
 import { MEMORY_ENABLED_KEY, MEMORY_KEY, addMemory, loadMemories, memoryEnabled, setMemoryEnabled } from '@/features/ai/memory';
 import { useSettingsStore } from '@/store/settingsStore';
 import { ConnectorChips, ConnectorList, useConnectors } from './Connectors';
@@ -140,5 +140,57 @@ describe('connectorViews / activeConnectors', () => {
   it('never lists a disabled connector as active', () => {
     const views = connectorViews({ ...base, placeLabel: null });
     expect(activeConnectors(views).map((v) => v.id)).toEqual([]);
+  });
+});
+
+describe('Run code (10.3)', () => {
+  function CodeHarness({ available, support }: { available: boolean; support: CodeSupport }): ReactNode {
+    const c = useConnectors({ think: false, nowPlaying: false, onThink: () => undefined, onNowPlaying: () => undefined, code: { available, support } });
+    return (
+      <>
+        <ConnectorList views={c.views} armed={c.armed} memoryCount={c.memoryCount} onToggle={c.toggle} />
+        <ConnectorChips active={c.active} armed={c.armed} memoryCount={c.memoryCount} onToggle={c.toggle} />
+      </>
+    );
+  }
+
+  it('is listed only when the server can run code (features.code)', () => {
+    render(<CodeHarness available={false} support="auto" />);
+    expect(screen.queryByRole('switch', { name: 'Run code' })).toBeNull();
+    cleanup();
+    render(<CodeHarness available support="auto" />);
+    expect(sw('Run code').getAttribute('aria-checked')).toBe('false');
+    expect(document.getElementById(sw('Run code').getAttribute('aria-describedby')!)?.textContent).toMatch(/Auto picks a model that can/);
+  });
+
+  it('switches on, sticks on the device, and shows a chip; off from the chip', () => {
+    render(<CodeHarness available support="ok" />);
+    fireEvent.click(sw('Run code'));
+    expect(codeConnectorOn()).toBe(true);
+    expect(localStorage.getItem(CODE_ON_KEY)).toBe('1');
+    expect(chips()).toContain('code');
+    // A model that can run code: no note on the chip.
+    expect(document.querySelector('[data-connector="code"] .ai-conn-chip-note')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn off Run code' }));
+    expect(codeConnectorOn()).toBe(false);
+    expect(chips()).not.toContain('code');
+  });
+
+  it('says quietly when the pinned model cannot run code', () => {
+    localStorage.setItem(CODE_ON_KEY, '1');
+    render(<CodeHarness available support="unsupported" />);
+    const chip = document.querySelector('[role="group"][aria-label="Active connectors"] [data-connector="code"]');
+    expect(chip?.textContent).toContain('not available with this model');
+    expect(document.getElementById(sw('Run code').getAttribute('aria-describedby')!)?.textContent).toMatch(/can’t run code/);
+  });
+
+  it('chip notes: only a pinned model that cannot run code gets one', () => {
+    expect(codeChipNote('unsupported')).toBe('not available with this model');
+    expect(codeChipNote('auto')).toBeNull();
+    expect(codeChipNote('ok')).toBeNull();
+    expect(codeChipNote('unknown')).toBeNull();
+    const base = { think: false, nowPlaying: false, song: null, memoryOn: false, memoryCount: 0, placeOn: false, placeLabel: 'IN' };
+    expect(connectorViews(base).map((v) => v.id)).not.toContain('code');
+    expect(connectorViews({ ...base, codeAvailable: true, codeOn: true, codeSupport: 'ok' }).find((v) => v.id === 'code')).toMatchObject({ name: 'Run code', on: true, note: null });
   });
 });

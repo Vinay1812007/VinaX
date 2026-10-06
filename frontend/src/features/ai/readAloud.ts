@@ -65,8 +65,10 @@ const TTS_PATH = isNativePlatform() ? 'https://www.sirimillavinay.online/api/tts
 const CHUNK_LEASH_MS = 5000;
 
 /** How the caller supplies the listener's choice. Returning null means "speak
- *  on this device", which is also the answer when no speech model is served. */
-type VoiceGetter = () => { model: string; voice: string } | null;
+ *  on this device", which is also the answer when no speech model is served.
+ *  10.3 — the choice names its provider; it rides in the request body. */
+export type ServerVoice = { provider?: string; model: string; voice: string };
+type VoiceGetter = () => ServerVoice | null;
 let getVoice: VoiceGetter | null = null;
 /** v6.2.0 — app-wide fallback (the DJ voice registers one at boot that reads
  *  the persisted Settings → Voice choice), used whenever no page has wired
@@ -83,7 +85,7 @@ export function setReadAloudVoiceFallback(fn: VoiceGetter | null): void {
   fallbackVoice = fn;
 }
 
-function currentVoice(): { model: string; voice: string } | null {
+function currentVoice(): ServerVoice | null {
   return getVoice ? getVoice() : fallbackVoice ? fallbackVoice() : null;
 }
 
@@ -121,8 +123,14 @@ function teardownAudio(): void {
   releaseUrl();
 }
 
+/** 10.3 — POST /api/tts body: `{ text, provider, model, voice }` (no provider
+ *  from a caller that does not know one; the server then uses its default). */
+export function ttsBody(text: string, pick: ServerVoice): { text: string; provider?: string; model: string; voice: string } {
+  return pick.provider ? { text, provider: pick.provider, model: pick.model, voice: pick.voice } : { text, model: pick.model, voice: pick.voice };
+}
+
 /** One chunk's audio, or null on ANY failure — never throws. */
-function fetchChunk(text: string, pick: { model: string; voice: string }): Promise<Blob | null> {
+function fetchChunk(text: string, pick: ServerVoice): Promise<Blob | null> {
   if (typeof fetch !== 'function') return Promise.resolve(null);
   const ctrl = new AbortController();
   inflight.add(ctrl);
@@ -130,7 +138,7 @@ function fetchChunk(text: string, pick: { model: string; voice: string }): Promi
   return fetch(TTS_PATH, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text, model: pick.model, voice: pick.voice }),
+    body: JSON.stringify(ttsBody(text, pick)),
     signal: ctrl.signal,
   })
     .then((res) => {
@@ -202,7 +210,7 @@ function speakOnDevice(id: string, text: string): void {
 /** Speak the whole reply in the chosen studio voice, prefetching one chunk
  *  ahead. Returns false if the FIRST chunk fails, so the caller can hand the
  *  turn to the device voice with nothing spoken twice. */
-async function speakOnServer(text: string, pick: { model: string; voice: string }, mine: number): Promise<boolean> {
+async function speakOnServer(text: string, pick: ServerVoice, mine: number): Promise<boolean> {
   const chunks = splitForTts(text);
   let next = fetchChunk(chunks[0], pick);
   for (let i = 0; i < chunks.length; i += 1) {

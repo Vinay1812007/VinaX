@@ -15,8 +15,9 @@ import {
   readVectors,
   resetEmbedCooldowns,
 } from '../_lib/embed';
+import { resetCatalogCache } from '../_lib/catalog';
 
-const NV_ENV = { VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING: 'nv-key-1', VINAX_OAI_GPT_OSS_20B: 'nv-key-2' };
+const NV_ENV = { VINAX_NVIDIA_API_KEY: 'nv-key-1' };
 const FLAG_ENV = { VINAX_GGL_GEMINI_API_KEY: 'flag-key' };
 
 interface Call {
@@ -30,6 +31,9 @@ const vec = (n: number, seed = 1): number[] => Array.from({ length: n }, (_, i) 
 function stub(handler: (call: Call) => Response | Promise<Response>): Call[] {
   const calls: Call[] = [];
   vi.stubGlobal('fetch', async (url: unknown, init?: { body?: string; headers?: Record<string, string> }) => {
+    // 10.3 — the free-list reads (model lists) answer nothing here, so the
+    // fixed engines — today's fallbacks — are what these tests exercise.
+    if (/\/models(\?|$)/.test(String(url))) return new Response('{}', { status: 404 });
     const call = { url: String(url), body: JSON.parse(init?.body ?? '{}') as Record<string, unknown>, headers: init?.headers ?? {} };
     calls.push(call);
     return handler(call);
@@ -52,7 +56,10 @@ const post = (body: unknown, env: Record<string, string>): Promise<Response> =>
     env,
   });
 
-beforeEach(() => resetEmbedCooldowns());
+beforeEach(() => {
+  resetEmbedCooldowns();
+  resetCatalogCache();
+});
 afterEach(() => vi.unstubAllGlobals());
 
 describe('normalise', () => {
@@ -88,9 +95,10 @@ describe('engine configuration', () => {
     expect(defaultEmbeddingsUrl({ NVIDIA_BASE_URL: 'https://proxy.example/v1/chat/completions' })).toBe('https://proxy.example/v1/embeddings');
     expect(defaultEmbeddingsUrl({ NVIDIA_BASE_URL: 'https://proxy.example/v1/' })).toBe('https://proxy.example/v1/embeddings');
   });
-  it('collects distinct default-provider keys and never the pinned-host ones', () => {
-    expect(defaultProviderKeys({ ...NV_ENV, VINAX_GROQ_API_KEY: 'other-host' })).toEqual(['nv-key-1', 'nv-key-2']);
-    expect(defaultProviderKeys({ VINAX_GROQ_API_KEY: 'other-host' })).toEqual([]);
+  it('10.3 — uses the one NVIDIA key, never another provider\'s', () => {
+    expect(defaultProviderKeys({ ...NV_ENV, VINAX_GROQ_API_KEY: 'other-host' })).toEqual(['nv-key-1']);
+    expect(defaultProviderKeys({ VINAX_NVIDIA_API_KEY: '  nv-key-1\n' })).toEqual(['nv-key-1']);
+    expect(defaultProviderKeys({ VINAX_GROQ_API_KEY: 'other-host', VINAX_OPENROUTER_API_KEY: 'x', VINAX_GGL_GEMINI_API_KEY: 'g' })).toEqual([]);
   });
   it('skips engines whose key is unset and puts the preferred model first', () => {
     expect(embedEngines({}).map((e) => e.model)).toEqual([]);
@@ -125,7 +133,7 @@ describe('embedTexts ladder', () => {
     expect(calls).toHaveLength(2);
   });
 
-  it('tries the second key on 401, then the secondary model, then the flagship engine', async () => {
+  it('a 401 on the NVIDIA key moves to the secondary model, then the flagship engine', async () => {
     const calls = stub((c) => {
       if (c.url.includes('integrate.api.nvidia.com')) return c.body.model === NV_EMBED_PRIMARY ? fail(401) : fail(500);
       return ok({ embeddings: [{ values: vec(EMBED_DIM) }] });
@@ -133,7 +141,7 @@ describe('embedTexts ladder', () => {
     const r = await embedTexts({ ...NV_ENV, ...FLAG_ENV }, ['x'], 'query');
     expect(r.ok && r.model).toBe(FLAGSHIP_EMBED_MODEL);
     const keysTried = calls.filter((c) => c.body.model === NV_EMBED_PRIMARY).map((c) => c.headers.authorization);
-    expect(keysTried).toEqual(['Bearer nv-key-1', 'Bearer nv-key-2']);
+    expect(keysTried).toEqual(['Bearer nv-key-1']);
     const native = calls.find((c) => c.url.includes(':batchEmbedContents'))!;
     expect(native.headers['x-goog-api-key']).toBe('flag-key');
     expect((native.body.requests as Array<Record<string, unknown>>)[0]).toMatchObject({ taskType: 'RETRIEVAL_QUERY', outputDimensionality: EMBED_DIM });

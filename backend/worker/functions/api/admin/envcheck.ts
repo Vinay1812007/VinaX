@@ -3,15 +3,21 @@
  *   GET /api/admin/envcheck → { items:[{name,group,set,required,note}], missingRequired }
  * Names only — values never leave the Worker. Tells the operator which
  * secrets/vars are configured so a half-set deployment is obvious.
+ *
+ * 10.3 — the four AI keys are listed by their PRIMARY names. Each item also
+ * carries `fallback` (the previous name) and `usingFallback`: true when the
+ * key is only set under the previous name, which still works during the
+ * switch (and the note says to rename it).
  */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
+import { PROVIDER_ENV, PROVIDER_ENV_FALLBACK } from '../../_lib/ai';
 
 type Env = AdminEnv & Record<string, unknown>;
 
 const json = (o: unknown, status = 200): Response =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
-export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; note: string }> = [
+export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; note: string; fallback?: string }> = [
   { name: 'ADMIN_LOGIN_PASSWORD', group: 'Admin', required: true, note: 'console login' },
   { name: 'SUPABASE_URL', group: 'Data', required: true, note: 'analytics + config store' },
   { name: 'SUPABASE_SERVICE_ROLE_KEY', group: 'Data', required: true, note: 'server-side Supabase writes' },
@@ -25,27 +31,15 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'GITHUB_TOKEN', group: 'Releases', required: false, note: 'APK release proxy + Releases & CI panel' },
   { name: 'GITHUB_REPO', group: 'Releases', required: false, note: 'owner/repo for releases' },
   { name: 'NVIDIA_BASE_URL', group: 'AI', required: false, note: 'provider base override' },
-  // The owner's 18 AI secrets (2026-09-09 rotation) — one row each, so a key
-  // that was never pasted into Cloudflare shows up here instead of silently
-  // degrading its lane through the failover ladder.
-  { name: 'VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B', group: 'AI', required: false, note: 'dj + chat lane key' },
-  { name: 'VINAX_OAI_GPT_OSS_20B', group: 'AI', required: false, note: 'fast lane key' },
-  { name: 'VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B', group: 'AI', required: false, note: 'deep lane key' },
-  { name: 'VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B', group: 'AI', required: false, note: 'home lane key' },
-  { name: 'VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING', group: 'AI', required: false, note: 'search lane key' },
-  { name: 'VINAX_DEEPSEEK_V4_PRO_0813', group: 'AI', required: false, note: 'pro reserve lane key' },
-  { name: 'VINAX_MISTRAL_NEMOTRON', group: 'AI', required: false, note: 'general reserve lane key' },
-  { name: 'VINAX_KIMI_K3', group: 'AI', required: false, note: 'agent reserve lane key' },
-  { name: 'VINAX_GROQ_API_KEY', group: 'AI', required: false, note: 'scholar lane + TTS + free catalog' },
-  { name: 'VINAX_OPENROUTER_API_KEY', group: 'AI', required: false, note: 'free-model marketplace lane' },
-  { name: 'VINAX_MTA_LMA_3_2_11B_VSN_INT', group: 'AI', required: false, note: 'vision lane key' },
-  { name: 'VINAX_MTA_LMA_3_2_90B_VSN_INT', group: 'AI', required: false, note: 'deep vision lane key' },
-  { name: 'VINAX_DEEPSEEK_V4_FLASH_0731', group: 'AI', required: false, note: 'bench lane key' },
-  { name: 'VINAX_MTA_MUSE_GLIMMER_30B', group: 'AI', required: false, note: 'bench lane key' },
-  { name: 'VINAX_NVD_ISING_CALIBRATION_1_5_31B', group: 'AI', required: false, note: 'bench lane key' },
-  { name: 'VINAX_POOLSIDE_LAGUNA_XS_2_1', group: 'AI', required: false, note: 'bench lane key' },
-  { name: 'VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT', group: 'AI', required: false, note: 'bench lane key' },
-  { name: 'VINAX_GGL_GEMMA_4_31B_IT', group: 'AI', required: false, note: 'bench lane key' },
+  // 10.3 — the four AI keys, one per provider, by their primary names; the
+  // previous name of each still works while the primary is unset. A key that
+  // was never pasted into Cloudflare shows up here instead of silently
+  // degrading every lane on it through the failover ladder.
+  { name: PROVIDER_ENV.nvidia, fallback: PROVIDER_ENV_FALLBACK.nvidia, group: 'AI', required: false, note: 'NVIDIA — dj, chat, deep, fast, home, search, pro, mini and vision lanes + its free catalogue + embeddings + images' },
+  { name: PROVIDER_ENV.openrouter, fallback: PROVIDER_ENV_FALLBACK.openrouter, group: 'AI', required: false, note: 'OpenRouter — router lane + its zero-priced catalogue and free media models' },
+  { name: PROVIDER_ENV.groq, fallback: PROVIDER_ENV_FALLBACK.groq, group: 'AI', required: false, note: 'Groq — scholar lane, live voice, TTS, transcription, code execution + its free catalogue' },
+  { name: PROVIDER_ENV.gemini, fallback: PROVIDER_ENV_FALLBACK.gemini, group: 'AI', required: false, note: 'Gemini — maestro (flagship) lane + its free catalogue + embeddings, TTS, transcription, code execution' },
+  { name: 'VINAX_MAESTRO_MODEL', group: 'AI', required: false, note: 'optional model name that replaces the maestro pin (never a key)' },
   { name: 'ASSETS_HOST', group: 'Edge', required: true, note: 'Pages origin the Worker proxies' },
   { name: 'HANDOFF', group: 'Edge', required: true, note: 'KV namespace for device handoff' },
   { name: 'NOTIFY_MIN_GAP_HOURS', group: 'Push', required: false, note: 'push frequency cap' },
@@ -54,10 +48,16 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
+  const isSet = (name: string): boolean => {
+    const v = env[name];
+    return v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '');
+  };
   const items = ENV_ITEMS.map((i) => {
-    const v = env[i.name];
-    const set = v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '');
-    return { ...i, set };
+    const primary = isSet(i.name);
+    if (!i.fallback) return { ...i, set: primary };
+    // 10.3 — names only: which of the two names supplies the key, never its value.
+    const usingFallback = !primary && isSet(i.fallback);
+    return { ...i, set: primary || usingFallback, usingFallback, ...(usingFallback ? { note: `${i.note} — set under the previous name ${i.fallback}; rename it to ${i.name}` } : {}) };
   });
   return json({ items, missingRequired: items.filter((i) => i.required && !i.set).map((i) => i.name), checkedAt: new Date().toISOString() });
 };

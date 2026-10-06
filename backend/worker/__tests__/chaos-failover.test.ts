@@ -46,13 +46,11 @@ function installFetch(plan: FetchPlan): void {
   });
 }
 
-// Two-lane env: chat (primary for 'muse') + dj (first ladder hop). Keeping the
-// key set small makes the attempt order deterministic for assertions.
+// 10.3 — one NVIDIA key signs every NVIDIA lane, so this single key opens
+// the whole NVIDIA ladder; with no flagship key, Auto picks a seat by the
+// question's shape.
 const ENV = {
-  // The chat/dj key plus the fast lane's own key (the first ladder hop after
-  // a lane's own pair) — v5.21.0 names.
-  VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'test-key-chat',
-  VINAX_OAI_GPT_OSS_20B: 'test-key-fast',
+  VINAX_NVIDIA_API_KEY: 'test-key-nv',
 };
 
 let ipSeq = 0;
@@ -65,7 +63,7 @@ function chatRequest(content = 'hello there'): Request {
       // Unique IP per call so the in-memory rate limiter never trips a test.
       'cf-connecting-ip': `10.0.${Math.floor(ipSeq / 250)}.${ipSeq % 250}`,
     },
-    body: JSON.stringify({ messages: [{ role: 'user', content }], mode: 'muse' }),
+    body: JSON.stringify({ messages: [{ role: 'user', content }], mode: 'auto' }),
   });
 }
 

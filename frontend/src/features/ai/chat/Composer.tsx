@@ -20,10 +20,14 @@ import {
 } from '@/features/ai/attachments';
 import { matchSlash, type SlashCommand } from '@/features/ai/slashCommands';
 import { cn } from '@/utils/cn';
-import { IMAGES_ENABLED } from './endpoints';
+import type { CodeSupport } from '@/features/ai/connectors';
 import { ConnectorChips, ConnectorList, useConnectors } from './Connectors';
-import { BookIcon, CheckIcon, FolderIcon, MicIcon, SendIcon, StopIcon, UploadIcon } from './icons';
+import { BookIcon, CheckIcon, ClipIcon, FolderIcon, ImageIcon, MicIcon, SendIcon, StopIcon, UploadIcon } from './icons';
+import type { CreateKind } from './media';
+import { ProviderLogo } from './ProviderLogo';
+import type { AiFeatures, MediaPick, ProviderId } from './types';
 import { useDictation } from './useDictation';
+import { formatClock, MAX_RECORD_MS, recorderSupported, useServerDictation, type ServerDictationFailure } from './useServerDictation';
 
 /** What the page can do to the composer from outside (edit & resend, quick
  *  actions, saved prompts, files dropped on the conversation). */
@@ -39,6 +43,8 @@ export interface ComposerProps {
   /** Pinned to the bottom of a conversation (false: centred on an empty chat). */
   docked: boolean;
   modelLabel: string;
+  /** 10.3 — the chosen model's provider, for its logo on the chip (null = Auto). */
+  modelProvider: ProviderId | null;
   menuOpen: boolean;
   /** `anchor` is the chip's box, so the page can place the menu on screen. */
   onToggleMenu: (anchor: DOMRect) => void;
@@ -49,8 +55,19 @@ export interface ComposerProps {
   /** 10.0 — the song playing now rides with the message (the Now playing connector). */
   songCtx: boolean;
   onSongCtx: (on: boolean) => void;
-  imageMode: boolean;
-  onImageMode: (on: boolean) => void;
+  /** 10.3 — Create image / Create music clip is on for the next message. */
+  createKind: CreateKind | null;
+  onCreateKind: (kind: CreateKind | null) => void;
+  /** 10.3 — the bar naming what will be made and by which model (page-rendered). */
+  createBar: ReactNode;
+  /** 10.3 — which kinds of model the server reaches (all off until the list is read). */
+  features: AiFeatures;
+  /** 10.3 — the + menu opened: the page reads the model list (once, cached). */
+  onToolsOpen: () => void;
+  /** 10.3 — whether the model in use can run code (the Run code connector). */
+  codeSupport: CodeSupport;
+  /** 10.3 — the server dictation model, or null for this device's dictation. */
+  dictationPick: MediaPick | null;
   canSpeech: boolean;
   voiceMode: boolean;
   onToggleVoice: () => void;
@@ -77,6 +94,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     busy,
     docked,
     modelLabel,
+    modelProvider,
     menuOpen,
     onToggleMenu,
     menu,
@@ -84,8 +102,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     onThink,
     songCtx,
     onSongCtx,
-    imageMode,
-    onImageMode,
+    createKind,
+    onCreateKind,
+    createBar,
+    features,
+    onToolsOpen,
+    codeSupport,
+    dictationPick,
     canSpeech,
     voiceMode,
     onToggleVoice,
@@ -113,11 +136,56 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   pendingRef.current = pending;
 
   const dictation = useDictation(setText);
+  // 10.3 — a server dictation model, when one is chosen: record, send, insert.
+  // Any failure falls back to this device's dictation with a quiet note.
+  const [serverNote, setServerNote] = useState('');
+  const recorder = useServerDictation({
+    pick: dictationPick,
+    onText: (t) => {
+      setServerNote('');
+      setText((prev) => (prev.trim() ? `${prev.replace(/\s+$/, '')} ${t}` : t));
+      taRef.current?.focus();
+    },
+    onFallback: (why: ServerDictationFailure) => {
+      if (canSpeech) {
+        setServerNote(
+          why === 'denied'
+            ? 'Microphone access is blocked for recording — trying this device’s dictation instead.'
+            : 'The dictation model didn’t work this time — listening on this device instead.',
+        );
+        dictation.start();
+      } else {
+        setServerNote(
+          why === 'denied'
+            ? 'Microphone access is blocked — allow the mic for VinaX, then try again.'
+            : 'The dictation model didn’t work this time — try again in a moment.',
+        );
+      }
+    },
+  });
+  useEffect(() => {
+    if (!serverNote) return;
+    const t = window.setTimeout(() => setServerNote(''), 8000);
+    return () => window.clearTimeout(t);
+  }, [serverNote]);
+  const useServerMic = !!dictationPick && recorderSupported();
+  const showMic = canSpeech || useServerMic;
+  const recording = recorder.state === 'recording';
+  const transcribing = recorder.state === 'sending';
+  const onMic = (): void => {
+    if (recording) return recorder.stop();
+    if (transcribing) return;
+    if (dictation.listening) return dictation.stop();
+    setServerNote('');
+    if (useServerMic) recorder.start();
+    else dictation.start();
+  };
   const connectors = useConnectors({
     think,
     nowPlaying: songCtx,
     onThink,
     onNowPlaying: onSongCtx,
+    code: { available: features.code, support: codeSupport },
   });
 
   // Auto-grow, 1–8 rows. A layout effect (not the change handler) because the
@@ -236,6 +304,27 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </div>
         )}
         <ConnectorChips active={connectors.active} armed={connectors.armed} memoryCount={connectors.memoryCount} onToggle={connectors.toggle} />
+        {createBar}
+        {/* 10.3 — recording for a server dictation model: a timer and Stop. */}
+        {(recording || transcribing) && (
+          <div className="ai-record" role="status">
+            <span className={cn('ai-record-dot', transcribing && 'is-sending')} aria-hidden />
+            <span className="ai-record-time">
+              {transcribing ? 'Turning your voice into text…' : `Recording ${formatClock(recorder.elapsed)} / ${formatClock(MAX_RECORD_MS)}`}
+            </span>
+            <span className="flex-1" />
+            {recording && (
+              <>
+                <button type="button" className="ai-btn ai-record-cancel" onClick={recorder.cancel}>
+                  Cancel
+                </button>
+                <button type="button" className="ai-btn ai-btn-accent" onClick={recorder.stop}>
+                  <StopIcon className="w-3.5 h-3.5" /> Stop
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {pending.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2 px-1">
             {pending.map((p, i) => (
@@ -313,9 +402,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             }}
             rows={1}
             placeholder={
-              imageMode
+              createKind === 'image'
                 ? 'Describe the image to create…'
-                : dictation.listening
+                : createKind === 'music'
+                  ? 'Describe the music clip to create…'
+                  : recording
+                    ? 'Recording…'
+                    : dictation.listening
                   ? 'Listening…'
                   : 'Message VinaX AI…'
             }
@@ -329,7 +422,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               <button
                 ref={toolsBtnRef}
                 type="button"
-                onClick={() => setToolsOpen((v) => !v)}
+                onClick={() => {
+                  if (!toolsOpen) onToolsOpen();
+                  setToolsOpen((v) => !v);
+                }}
                 aria-label="Attach and tools"
                 title="Attach files, connectors and tools"
                 aria-haspopup="dialog"
@@ -372,20 +468,45 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     <div className="ai-menu-sep" />
                     <ConnectorList views={connectors.views} armed={connectors.armed} memoryCount={connectors.memoryCount} onToggle={connectors.toggle} />
                     <div className="ai-menu-sep" />
-                    {IMAGES_ENABLED && (
-                      <button
-                        type="button"
-                        aria-pressed={imageMode}
-                        className="ai-menu-item"
-                        onClick={() => onImageMode(!imageMode)}
-                        title="Create an image from your next message"
-                      >
-                        <span className="w-4 text-center" aria-hidden>
-                          ✦
-                        </span>
-                        <span className="flex-1">Create an image</span>
-                        {imageMode && <CheckIcon className="w-3.5 h-3.5 text-ember-400" />}
-                      </button>
+                    {/* 10.3 — shown only when the server reaches a model of that kind. */}
+                    {(features.image || features.music) && (
+                      <div role="group" aria-label="Create">
+                        {features.image && (
+                          <button
+                            type="button"
+                            aria-pressed={createKind === 'image'}
+                            className="ai-menu-item"
+                            onClick={() => {
+                              onCreateKind(createKind === 'image' ? null : 'image');
+                              setToolsOpen(false);
+                              taRef.current?.focus();
+                            }}
+                            title="Your next message describes a picture to make"
+                          >
+                            <ImageIcon className="w-4 h-4 ai-t3" />
+                            <span className="flex-1">Create image</span>
+                            {createKind === 'image' && <CheckIcon className="w-3.5 h-3.5 text-ember-400" />}
+                          </button>
+                        )}
+                        {features.music && (
+                          <button
+                            type="button"
+                            aria-pressed={createKind === 'music'}
+                            className="ai-menu-item"
+                            onClick={() => {
+                              onCreateKind(createKind === 'music' ? null : 'music');
+                              setToolsOpen(false);
+                              taRef.current?.focus();
+                            }}
+                            title="Your next message describes a short music clip to make"
+                          >
+                            <ClipIcon className="w-4 h-4 ai-t3" />
+                            <span className="flex-1">Create music clip</span>
+                            {createKind === 'music' && <CheckIcon className="w-3.5 h-3.5 text-ember-400" />}
+                          </button>
+                        )}
+                        <div className="ai-menu-sep" />
+                      </div>
                     )}
                     <button
                       type="button"
@@ -415,6 +536,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 title="Choose model"
                 className={cn('ai-chip ai-model-chip', menuOpen && 'ai-chip-on')}
               >
+                {modelProvider && <ProviderLogo provider={modelProvider} size={16} />}
                 <span className="truncate">{modelLabel}</span>
                 <ChevronDownIcon className={cn('ai-model-chevron w-3 h-3 shrink-0', menuOpen && 'rotate-180')} />
               </button>
@@ -432,14 +554,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 <WaveformIcon className="w-[18px] h-[18px]" />
               </button>
             )}
-            {canSpeech && (
+            {showMic && (
               <button
                 type="button"
-                onClick={() => (dictation.listening ? dictation.stop() : dictation.start())}
-                aria-label="Voice input"
-                aria-pressed={dictation.listening}
-                title="Speak"
-                className={cn('ai-icon-btn ai-round', dictation.listening && 'ai-icon-btn-on ai-pulse')}
+                onClick={onMic}
+                aria-label={recording ? 'Stop recording' : 'Voice input'}
+                aria-pressed={dictation.listening || recording}
+                title={recording ? 'Stop and turn into text' : 'Speak'}
+                disabled={transcribing}
+                className={cn('ai-icon-btn ai-round', (dictation.listening || recording) && 'ai-icon-btn-on ai-pulse')}
               >
                 <MicIcon className="w-[18px] h-[18px]" />
               </button>
@@ -456,9 +579,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </div>
         </div>
 
-        <p className="ai-composer-status" role={dictation.note ? 'status' : undefined}>
-          {dictation.note ? (
-            <span className="is-note">{dictation.note}</span>
+        <p className="ai-composer-status" role={serverNote || dictation.note ? 'status' : undefined}>
+          {serverNote || dictation.note ? (
+            <span className="is-note">{serverNote || dictation.note}</span>
           ) : busy && think ? (
             <span className="is-thinking ai-shimmer">Thinking it through…</span>
           ) : think ? (

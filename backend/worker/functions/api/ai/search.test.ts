@@ -37,7 +37,7 @@ let ip = 0;
 const post = (body: unknown) =>
   onRequestPost({
     request: new Request('https://vinax.test/api/ai/search', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.1.0.${++ip % 250}` }, body: JSON.stringify(body) }),
-    env: { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k' } as never,
+    env: { VINAX_NVIDIA_API_KEY: 'k' } as never,
   });
 
 beforeEach(() => {

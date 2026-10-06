@@ -54,6 +54,37 @@ interface ChatPayload {
   response_format?: { type?: unknown } | null;
   reasoning_effort?: unknown;
   stream?: unknown;
+  /** 10.3 — run Gemini's code execution tool (the provider's own sandbox,
+   * never the Worker). Native endpoints only; never a web tool. */
+  code_execution?: unknown;
+}
+
+/** 10.3 — executed code and its output as fenced Markdown, so every client
+ * that renders a reply renders them too. Exported for tests and for the Groq
+ * code interpreter, which reports the same two things in its own fields. */
+export function codeBlock(code: string, language = 'python'): string {
+  const lang = language.toLowerCase().replace(/[^a-z0-9+#-]/g, '') || 'python';
+  return `\n\n\`\`\`${lang}\n${code.replace(/\s+$/, '')}\n\`\`\`\n\n`;
+}
+export function outputBlock(output: string): string {
+  return `**Output**\n\n\`\`\`\n${output.replace(/\s+$/, '') || '(no output)'}\n\`\`\`\n\n`;
+}
+
+interface NativePart {
+  text?: unknown;
+  thought?: unknown;
+  executableCode?: { language?: unknown; code?: unknown };
+  codeExecutionResult?: { outcome?: unknown; output?: unknown };
+}
+
+/** The reply text of one native part: text as is, executed code and its
+ * result as fenced blocks (10.3), thought parts dropped. */
+export function partText(p: NativePart): string {
+  if (p.thought === true) return '';
+  if (typeof p.text === 'string') return p.text;
+  if (p.executableCode && typeof p.executableCode.code === 'string') return codeBlock(p.executableCode.code, typeof p.executableCode.language === 'string' ? p.executableCode.language : 'python');
+  if (p.codeExecutionResult) return outputBlock(typeof p.codeExecutionResult.output === 'string' ? p.codeExecutionResult.output : '');
+  return '';
 }
 
 const textOf = (content: unknown): string => {
@@ -64,13 +95,30 @@ const textOf = (content: unknown): string => {
 
 const THINKING_BUDGET: Record<string, number> = { low: 1024, medium: 4096, high: 12288 };
 
+/** 10.3 — the native parts for one chat message. Text stays text; an attached
+ * image (`image_url` with a base64 data URL, the only kind VinaX AI sends)
+ * becomes inline data, so a Gemini model picked from the catalogue sees the
+ * picture on the native endpoints too instead of silently answering blind. */
+export function nativeParts(content: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(content)) return [{ text: textOf(content) || ' ' }];
+  const parts: Array<Record<string, unknown>> = [];
+  for (const p of content as Array<{ type?: unknown; text?: unknown; image_url?: { url?: unknown } }>) {
+    if (!p || typeof p !== 'object') continue;
+    if (typeof p.text === 'string' && p.text) parts.push({ text: p.text });
+    const url = typeof p.image_url?.url === 'string' ? p.image_url.url : '';
+    const m = /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(url);
+    if (m) parts.push({ inlineData: { mimeType: m[1], data: m[2] } });
+  }
+  return parts.length ? parts : [{ text: ' ' }];
+}
+
 /** The native generateContent body for a chat-completions payload. */
 export function toNativeRequest(payload: ChatPayload, withThinking = true): Record<string, unknown> {
   const messages = Array.isArray(payload.messages) ? payload.messages : [];
   const system = messages.filter((m) => m.role === 'system').map((m) => textOf(m.content)).filter(Boolean).join('\n\n');
   const contents = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
-    .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: textOf(m.content) || ' ' }] }));
+    .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: nativeParts(m.content) }));
   const generationConfig: Record<string, unknown> = {};
   if (typeof payload.temperature === 'number') generationConfig.temperature = payload.temperature;
   if (typeof payload.max_tokens === 'number') generationConfig.maxOutputTokens = payload.max_tokens;
@@ -86,18 +134,21 @@ export function toNativeRequest(payload: ChatPayload, withThinking = true): Reco
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     contents: contents.length ? contents : [{ role: 'user', parts: [{ text: ' ' }] }],
     generationConfig,
+    // 10.3 — the code execution tool, when asked. Nothing else is ever put in
+    // `tools`: no search, no URL context (10.2).
+    ...(payload.code_execution === true ? { tools: [{ codeExecution: {} }] } : {}),
   };
 }
 
 interface NativeAnswer {
-  candidates?: Array<{ content?: { parts?: Array<{ text?: unknown; thought?: unknown }> }; finishReason?: unknown }>;
+  candidates?: Array<{ content?: { parts?: NativePart[] }; finishReason?: unknown }>;
   usageMetadata?: { promptTokenCount?: unknown; candidatesTokenCount?: unknown; thoughtsTokenCount?: unknown };
 }
 
 /** A native answer as a chat-completions body (thought parts dropped). */
 export function fromNativeAnswer(answer: NativeAnswer, model: string): Record<string, unknown> {
   const cand = answer.candidates?.[0];
-  const content = (cand?.content?.parts ?? []).filter((p) => p.thought !== true).map((p) => (typeof p.text === 'string' ? p.text : '')).join('');
+  const content = (cand?.content?.parts ?? []).map(partText).join('');
   const u = answer.usageMetadata;
   const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   const finish = typeof cand?.finishReason === 'string' ? cand.finishReason.toLowerCase() : 'stop';
@@ -146,7 +197,7 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
       return;
     }
     const parts = j.candidates?.[0]?.content?.parts ?? [];
-    const text = parts.filter((p) => p.thought !== true).map((p) => (typeof p.text === 'string' ? p.text : '')).join('');
+    const text = parts.map(partText).join('');
     if (text) controller.enqueue(frame({ choices: [{ delta: { content: text } }] }));
     const u = j.usageMetadata;
     if (u && typeof u.promptTokenCount === 'number') {
@@ -178,10 +229,12 @@ async function tryMode(mode: MaestroMode, key: string, model: string, payload: C
   const stream = payload.stream === true;
   if (mode === 'openai') {
     // The OpenAI-compatible endpoint streams OpenAI-shaped SSE itself.
+    const { code_execution: _code, ...plain } = payload;
+    void _code;
     return fetch(OPENAI_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({ ...payload, model, stream }),
+      body: JSON.stringify({ ...plain, model, stream }),
       signal,
     });
   }
@@ -295,12 +348,17 @@ function finish(res: Response, payload: ChatPayload, mode: MaestroMode): Promise
  * key's shape. Resolves with a Response in chat-completions form (or its SSE
  * form when `payload.stream` is true). Network errors and aborts reject, as
  * fetch() does, so callers' timeout handling is unchanged.
+ *
+ * 10.3 — `swap: false` for a listener's exact catalogue pick: a gone model
+ * answers with its own error (and the caller's ladder takes over) instead of
+ * being replaced by another model the reply would then misname.
  */
-export async function maestroFetch(rawKey: string, requested: string, payload: ChatPayload, signal?: AbortSignal): Promise<Response> {
+export async function maestroFetch(rawKey: string, requested: string, payload: ChatPayload, signal?: AbortSignal, swap = true): Promise<Response> {
   // A pasted secret often carries a trailing newline or spaces.
   const key = rawKey.trim();
-  const model = maestroModelFor(requested);
-  const modes = maestroModes(key);
+  const model = swap ? maestroModelFor(requested) : requested;
+  // 10.3 — code execution is a native-API tool: the OpenAI-compatible door is skipped for it.
+  const modes = payload.code_execution === true ? maestroModes(key).filter((m) => m !== 'openai') : maestroModes(key);
   let last: Response | null = null;
   for (let i = 0; i < modes.length; i += 1) {
     const mode = modes[i];
@@ -309,6 +367,7 @@ export async function maestroFetch(rawKey: string, requested: string, payload: C
     const body = await res.clone().text().catch(() => '');
     last = res;
     if (isModelGone(res.status, body)) {
+      if (!swap) return res;
       // The door is right, the name is old: find the current model and ask again on this mode.
       const replacement = suggestedModel(body) ?? pickModel(await listMaestroModels(key, signal));
       console.log(`[ai] maestro mode=${mode} model=${model} gone → ${replacement ?? 'no replacement found'}`);
@@ -327,4 +386,22 @@ export async function maestroFetch(rawKey: string, requested: string, payload: C
     if (!isWrongDoor(res.status, body)) return res;
   }
   return last ?? json({ error: 'no_mode' }, 502);
+}
+
+/**
+ * 10.3 — one native generateContent call for the media routes (speech,
+ * transcription): the public host with the key in a header, then the cloud
+ * host when the answer says the key belongs there (the same wrong-door rule
+ * as maestroFetch). The body is a native request, sent as given; the answer
+ * is the provider's own JSON. Network errors reject, as fetch() does.
+ */
+export async function geminiGenerate(rawKey: string, model: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  const key = rawKey.trim();
+  const init = (headers: Record<string, string>): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal });
+  const res = await fetch(nativeUrl(model, false), init({ 'x-goog-api-key': key }));
+  if (res.ok) return res;
+  const text = await res.clone().text().catch(() => '');
+  if (!isWrongDoor(res.status, text) || isModelGone(res.status, text)) return res;
+  void res.body?.cancel().catch(() => undefined);
+  return fetch(cloudUrl(model, key, false), init({}));
 }

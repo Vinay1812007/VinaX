@@ -10,10 +10,17 @@
  * model that does not exist answers a spoken reply with a 404.
  *
  * No key leaves the Worker: only model ids, labels and persona names.
+ *
+ * 10.3 — additive `providers`: every FREE speech model on the four keys, per
+ * provider, with the voices each one accepts (send them back to POST /api/tts
+ * as { provider, model, voice }):
+ *   providers: [ { id, label, models: [ { id, name, voices: string[] } ] } ]
+ * The older fields (`configured`, `models`, `personas`) are unchanged, so an
+ * installed build keeps working.
  */
 import { methodNotAllowed, rateLimit } from '../_lib/ratelimit';
-import { fetchVoiceCatalog } from '../_lib/catalog';
-import { type AiEnv } from '../_lib/ai';
+import { fetchMedia, fetchVoiceCatalog } from '../_lib/catalog';
+import { AI_PROVIDERS, PROVIDER_LABEL, providerKey, type AiEnv } from '../_lib/ai';
 
 type Env = AiEnv;
 
@@ -34,15 +41,20 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   const limited = rateLimit(request, 'voices', { capacity: 12, refillPerMinute: 12 });
   if (limited) return limited;
 
-  const models = await fetchVoiceCatalog(env, 'grq');
+  const [models, media] = await Promise.all([fetchVoiceCatalog(env, 'groq'), Promise.all(AI_PROVIDERS.map((p) => fetchMedia(env, p)))]);
   return new Response(
     JSON.stringify({
       fetchedAt: new Date().toISOString(),
-      configured: Boolean(env.VINAX_GROQ_API_KEY),
+      configured: providerKey(env, 'groq') !== null,
       // Empty means "this key serves no speech model right now" — the client
       // shows the device voice only, and says so.
       models,
       personas: models.length ? PERSONAS : [],
+      providers: AI_PROVIDERS.map((id, i) => ({
+        id,
+        label: PROVIDER_LABEL[id],
+        models: media[i].filter((m) => m.kind === 'speech').map((m) => ({ id: m.id, name: m.name, voices: m.voices ?? [] })),
+      })),
     }),
     {
       headers: {

@@ -38,7 +38,7 @@ export interface LiveVoice {
  * for them.
  */
 export function useLiveVoice(opts: {
-  getServerVoice: () => { model: string; voice: string } | null;
+  getServerVoice: () => { provider?: string; model: string; voice: string } | null;
   onUserFinal: (text: string) => void;
   /** Stop the reply in flight (interrupt, end). */
   onStopReply: () => void;

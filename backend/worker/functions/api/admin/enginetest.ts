@@ -1,59 +1,77 @@
-/** Probe any chat model slug on a lane's endpoint (per-lane provider base —
- *  the scholar and router lanes ride their own hosts, the rest the default
- *  base) — status + latency. Admin-gated. Used to validate lanes before
- *  wiring them, and to re-verify every row after a key rotation.
- *  ?key= names which lane key signs the call — see BY_SUFFIX below for the
- *  accepted values (default LIGHTNING, the balanced/DJ key);
- *  ?model= overrides the probed slug (default: that lane's pinned model). */
+/** Probe one chat model on one provider key — status + latency. Admin-gated.
+ *  Used to validate a model before wiring it, and to re-verify every lane
+ *  after a key change.
+ *  ?key= names which provider key signs the call (10.3 — one per provider):
+ *  NVIDIA (default), OPENROUTER, GROQ or GEMINI; the provider ids in lower
+ *  case and the pre-10.3 names of the three shared keys (GROQ_API_KEY,
+ *  OPENROUTER_API_KEY, MAESTRO) are accepted too.
+ *  ?model= the slug to probe — any model the provider's live catalogue lists,
+ *  or a lane pin on that provider (default: the provider's lane model).
+ *  Response: { key, provider, model, status, ms, head, mode?, media, tools }.
+ *  10.3 — `media` ({ id, name, kind }) and `tools` list the provider's free
+ *  media models and tools; this probe itself is chat-only — a media model is
+ *  benched in the AI Lab ({ provider, model, kind }). */
 import { isAdminAsync, unauthorized, type AdminEnv } from '../../_lib/admin';
 import { rateLimitAsync } from '../../_lib/ratelimit';
-import { isMaestroEndpoint, laneEndpoint, laneModel, type AiEnv, type Lane } from '../../_lib/ai';
+import { LANE_PROVIDER, LANE_SECONDARY, PROVIDER_ENV, PROVIDER_LANE, isMaestroEndpoint, laneEndpoint, laneModel, providerKey, type AiEnv, type AiProvider, type Lane } from '../../_lib/ai';
+import { catalogDefaultModel, fetchMedia, fetchTools, findCatalogModel, normaliseProvider } from '../../_lib/catalog';
 import { maestroFetch, maestroLearnedMode } from '../../_lib/maestro';
 
 type Env = AdminEnv & AiEnv;
 
-// One row per live secret (the owner's 2026-09-09 key set), keyed by a short
-// suffix so a probe URL stays typable.
-const BY_SUFFIX: Record<string, { env: keyof AiEnv; lane: Lane }> = {
-  LIGHTNING: { env: 'VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B', lane: 'dj' },
-  GPT_OSS_20B: { env: 'VINAX_OAI_GPT_OSS_20B', lane: 'fast' },
-  NEMOTRON_SUPER: { env: 'VINAX_NVD_NEMOTRON_3_SUPER_120B_A12B', lane: 'deep' },
-  NEMOTRON_ULTRA: { env: 'VINAX_NVD_NEMOTRON_3_ULTRA_550B_A55B', lane: 'home' },
-  NEMOTRON_OMNI: { env: 'VINAX_NVD_NEMOTRON_3_NANO_OMNI_30B_A3B_REASONING', lane: 'search' },
-  DEEPSEEK_V4_PRO: { env: 'VINAX_DEEPSEEK_V4_PRO_0813', lane: 'pro' },
-  DEEPSEEK_V4_FLASH: { env: 'VINAX_DEEPSEEK_V4_FLASH_0731', lane: 'dsflash' },
-  MISTRAL_NEMOTRON: { env: 'VINAX_MISTRAL_NEMOTRON', lane: 'mini' },
-  KIMI_K3: { env: 'VINAX_KIMI_K3', lane: 'agent' },
-  GROQ_API_KEY: { env: 'VINAX_GROQ_API_KEY', lane: 'scholar' },
-  OPENROUTER_API_KEY: { env: 'VINAX_OPENROUTER_API_KEY', lane: 'router' },
-  VISION_11B: { env: 'VINAX_MTA_LMA_3_2_11B_VSN_INT', lane: 'vision' },
-  VISION_90B: { env: 'VINAX_MTA_LMA_3_2_90B_VSN_INT', lane: 'vision90' },
-  MUSE_GLIMMER: { env: 'VINAX_MTA_MUSE_GLIMMER_30B', lane: 'muse' },
-  ISING_CALIBRATION: { env: 'VINAX_NVD_ISING_CALIBRATION_1_5_31B', lane: 'rank' },
-  LAGUNA_XS: { env: 'VINAX_POOLSIDE_LAGUNA_XS_2_1', lane: 'laguna' },
-  DIFFUSIONGEMMA: { env: 'VINAX_GGL_DIFFUSIONGEMMA_26B_A4B_IT', lane: 'diffusion' },
-  GEMMA_4: { env: 'VINAX_GGL_GEMMA_4_31B_IT', lane: 'gemma4' },
-  MAESTRO: { env: 'VINAX_GGL_GEMINI_API_KEY', lane: 'maestro' },
+// One row per provider key, keyed by a short name so a probe URL stays typable.
+const BY_KEY: Record<string, AiProvider> = {
+  NVIDIA: 'nvidia',
+  OPENROUTER: 'openrouter',
+  GROQ: 'groq',
+  GEMINI: 'gemini',
+  // Pre-10.3 names of the keys that survived the change.
+  GROQ_API_KEY: 'groq',
+  OPENROUTER_API_KEY: 'openrouter',
+  MAESTRO: 'gemini',
+  // 10.3 — the primary secret names themselves.
+  NVIDIA_API_KEY: 'nvidia',
+  GEMINI_API_KEY: 'gemini',
 };
 
 function json(o: unknown, status = 200): Response {
   return new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }
 
+/** The models a lane pins on this provider (primaries and secondaries). */
+function pinsOn(env: AiEnv, provider: AiProvider): string[] {
+  return (Object.keys(LANE_PROVIDER) as Lane[])
+    .filter((l) => LANE_PROVIDER[l] === provider)
+    .flatMap((l) => [laneModel(env, l), LANE_SECONDARY[l]])
+    .filter((m): m is string => typeof m === 'string');
+}
+
 export const onRequestGet = async (context: { request: Request; env: Env }): Promise<Response> => {
   const { request, env } = context;
   if (!(await isAdminAsync(request, env))) return unauthorized();
-  // Paid upstream ping — throttle even for authed callers (audit: unthrottled).
+  // Upstream ping — throttle even for authed callers (audit: unthrottled).
   const limited = await rateLimitAsync(request, 'admin-enginetest', { capacity: 10, refillPerMinute: 10 }, env);
   if (limited) return limited;
   const url = new URL(request.url);
-  const suffix = (url.searchParams.get('key') ?? 'LIGHTNING').toUpperCase();
-  const pick = BY_SUFFIX[suffix];
-  if (!pick) return json({ error: 'unknown key', keys: Object.keys(BY_SUFFIX) }, 400);
-  const key = env[pick.env];
-  if (!key) return json({ key: suffix, error: 'env not set', env: pick.env }, 503);
-  const model = url.searchParams.get('model') ?? laneModel(env, pick.lane);
-  const base = laneEndpoint(env, pick.lane);
+  const name = (url.searchParams.get('key') ?? 'NVIDIA').trim();
+  const provider = BY_KEY[name.toUpperCase()] ?? normaliseProvider(name);
+  if (!provider) return json({ error: 'unknown key', keys: Object.keys(BY_KEY) }, 400);
+  const suffix = name.toUpperCase();
+  const key = providerKey(env, provider);
+  if (!key) return json({ key: suffix, provider, error: 'env not set', env: PROVIDER_ENV[provider] }, 503);
+  const lane = PROVIDER_LANE[provider];
+  const wanted = url.searchParams.get('model');
+  let model: string;
+  if (wanted) {
+    // 10.3 — only a model the provider lists right now, or a lane pin on it.
+    const listed = await findCatalogModel(env, provider, wanted);
+    const pinned = pinsOn(env, provider).includes(wanted.trim());
+    if (!listed && !pinned) return json({ key: suffix, provider, error: 'unknown_model' }, 400);
+    model = listed?.id ?? wanted.trim();
+  } else {
+    model = lane === 'scholar' || lane === 'router' ? ((await catalogDefaultModel(env, provider)) ?? laneModel(env, lane)) : laneModel(env, lane);
+  }
+  const base = laneEndpoint(env, lane);
   const t0 = Date.now();
   const c = new AbortController();
   // Capture the timer id and clear it in finally so it doesn't tick after
@@ -62,7 +80,7 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
   try {
     const probe = { model, messages: [{ role: 'user', content: 'Reply with exactly: OK' }], max_tokens: 8, temperature: 0 };
     const up = isMaestroEndpoint(base)
-      ? await maestroFetch(key, model, probe, c.signal)
+      ? await maestroFetch(key, model, probe, c.signal, false)
       : await fetch(base, {
           method: 'POST',
           headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
@@ -71,10 +89,12 @@ export const onRequestGet = async (context: { request: Request; env: Env }): Pro
         });
     const ms = Date.now() - t0;
     const txt = await up.text().catch(() => '');
+    const [media, tools] = await Promise.all([fetchMedia(env, provider), fetchTools(env, provider)]);
+    const lists = { media: media.map((m) => ({ id: m.id, name: m.name, kind: m.kind })), tools };
     // The maestro transport also says which of the provider's endpoints accepted this key.
-    return json({ key: suffix, model, status: up.status, ms, head: txt.slice(0, 220), ...(isMaestroEndpoint(base) ? { mode: maestroLearnedMode() } : {}) });
+    return json({ key: suffix, provider, model, status: up.status, ms, head: txt.slice(0, 220), ...(isMaestroEndpoint(base) ? { mode: maestroLearnedMode() } : {}), ...lists });
   } catch (e) {
-    return json({ key: suffix, model, status: 0, ms: Date.now() - t0, exception: e instanceof Error ? e.message : String(e) });
+    return json({ key: suffix, provider, model, status: 0, ms: Date.now() - t0, exception: e instanceof Error ? e.message : String(e) });
   } finally {
     clearTimeout(timerId);
   }

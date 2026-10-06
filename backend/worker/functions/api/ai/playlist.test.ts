@@ -32,7 +32,7 @@ import { onRequestPost as legacyPlaylistPost } from '../playlist';
 const song = (id: string, title: string, artist: string, language = 'telugu', extra: Partial<CatalogCandidate> = {}): CatalogCandidate => ({
   id, title, primaryArtists: [artist], featuredArtists: [], credits: [artist], album: `${title} (Original)`, language, year: 2019, durationSec: 240, ...extra,
 });
-const KEY = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k' };
+const KEY = { VINAX_NVIDIA_API_KEY: 'k' };
 let ip = 0;
 const req = (body: unknown) =>
   new Request('https://vinax.test/api/ai/playlist', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.2.0.${++ip % 250}` }, body: JSON.stringify(body) });

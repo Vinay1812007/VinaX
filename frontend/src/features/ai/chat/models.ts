@@ -1,197 +1,55 @@
 /**
- * v7.1 — everything the chat knows about engines and models, with no React in
- * it: the pinned seats, the nickname table for the "who answered" chip, and
- * the pure builder behind the single model menu (search, sections,
- * recents). Pure so it can be unit-tested without a DOM.
+ * v7.1 — everything the chat knows about models, with no React in it: the
+ * four providers, the pure builder behind the single model menu (search,
+ * sections, recents), and how a pick is stored. Pure so it can be
+ * unit-tested without a DOM.
+ *
+ * 10.3 — one key per provider, every free model that key serves, each under
+ * its original name. The fixed seats (Maestro, Balanced, Fast, Deep,
+ * Creative, Translate and the Advanced list) and the nickname table that
+ * relabelled every answer are gone: a pick is Auto, or one exact model.
  */
-import type { CatalogGroup, CatalogGroupId, CatalogModel, CatalogPicks, Mode, ModelChoice } from './types';
+import type { AiFeatures, MediaKind, MediaModel, ModelChoice, Provider, ProviderId, ProviderModel, ProviderTool } from './types';
 
-// Engine picker: six plain-English seats up front — the ones a listener
-// actually chooses between — and every other live engine under Advanced, each
-// still wearing its owner-chosen name. Ids stay stable for the API.
-// v5.21.0 — retuned to the rotated key set: the retired seats are gone (old
-// stored picks are remapped server-side), a general all-rounder took the
-// reserve seat, and the two seats marked `catalog` open a live list of every
-// free model that key serves (fetched from /api/aimodels).
-export const MODES: Array<{
-  id: Mode;
-  label: string;
-  hint: string;
-  tier: 'core' | 'advanced';
-  catalog?: CatalogGroupId;
-}> = [
-  { id: 'auto', label: 'Auto', hint: 'Picks the best engine for each question', tier: 'core' },
-  { id: 'maestro', label: 'VinaX Maestro', hint: 'Flagship · recommended', tier: 'core' },
-  { id: 'muse', label: 'Balanced', hint: 'Everyday chat', tier: 'core' },
-  { id: 'swift', label: 'Fast', hint: 'Quickest answers · VinaX OAI OSS 20B', tier: 'core' },
-  { id: 'sage', label: 'Deep', hint: 'Careful reasoning · VinaX NVD NMTRN SUP', tier: 'core' },
-  {
-    id: 'win',
-    label: 'Creative',
-    hint: 'Ideas, lyrics, stories · VinaX NVD NMTRN 3.5 LTNG 30B',
-    tier: 'core',
-  },
-  {
-    id: 'translator',
-    label: 'Translate',
-    hint: 'Translation specialist · 12+ languages',
-    tier: 'core',
-  },
-  // Advanced — the owner's live models under their own names.
-  {
-    id: 'nova',
-    label: 'VinaX NVD NMTRN ULT',
-    hint: 'Most powerful · complex questions',
-    tier: 'advanced',
-  },
-  {
-    id: 'nano',
-    label: 'VinaX NVD NMTRN NN OMNI 30B',
-    hint: 'Light and quick · song finder',
-    tier: 'advanced',
-  },
-  {
-    id: 'pro',
-    label: 'VinaX DP V4 PRO',
-    hint: 'Deep analysis · advanced reasoning',
-    tier: 'advanced',
-  },
-  { id: 'flash', label: 'VinaX DP V4 FLASH', hint: 'Rapid generalist', tier: 'advanced' },
-  { id: 'mini', label: 'VinaX MST NMTRN', hint: 'Dependable all-rounder', tier: 'advanced' },
-  {
-    id: 'scholar',
-    label: 'VinaX GRQ ALL',
-    hint: 'Music knowledge · instant answers',
-    tier: 'advanced',
-    catalog: 'grq',
-  },
-  {
-    id: 'router',
-    label: 'VinaX OPR ALL',
-    hint: 'Free model marketplace · pick any engine',
-    tier: 'advanced',
-    catalog: 'opr',
-  },
-  { id: 'k3', label: 'VinaX K3', hint: 'Premium agent · heavyweight generalist', tier: 'advanced' },
-  {
-    id: 'glimmer',
-    label: 'VinaX GGL DIF GEM 26B A4B IT',
-    hint: 'Visual-creative · moods and themes',
-    tier: 'advanced',
-  },
-  {
-    id: 'musegl',
-    label: 'VinaX MTA MUSE GMR 30B',
-    hint: 'Playful creative sparks',
-    tier: 'advanced',
-  },
-  { id: 'gemma4', label: 'VinaX GGL GEM 4 31B', hint: 'Open generalist', tier: 'advanced' },
-  { id: 'laguna', label: 'VinaX PSD LGNA XS 2.1', hint: 'Small and swift', tier: 'advanced' },
-  {
-    id: 'ising15',
-    label: 'VinaX NVD ING CALBTN 1.5 31B',
-    hint: 'Rankings and comparisons',
-    tier: 'advanced',
-  },
-];
-// Engine ids retired by the 2026-09-09 key rotation. A listener whose stored
-// pick names one keeps their nearest living seat instead of silently landing
-// on the default (the server maps them too — this just keeps the UI honest
-// about which chip is lit).
-export const RETIRED_MODE: Record<string, Mode> = {
-  omni: 'nano',
-  ising135: 'ising15',
-  cgt120: 'swift',
-  minimax: 'mini',
-};
-export const CORE_MODES = MODES.filter((m) => m.tier === 'core');
-export const ADVANCED_MODES = MODES.filter((m) => m.tier === 'advanced');
-// Engine chip on each reply: which engine actually answered (from stream meta) —
-// derived from the served model slug so failovers are reported honestly.
-// Order matters: specific slugs sit BEFORE the generic llama/vision row.
-const ENGINE_NICK: Array<[RegExp, string]> = [
-  // 8.1.0 — the flagship lane's models all share one nickname.
-  [/^gemini/i, 'VinaX Maestro'],
-  // v5.4.0 engines (probe-verified pins) — specific slugs sit first so the
-  // legacy rows below can never mislabel them.
-  [/nemotron-3\.5-lightning/i, 'VinaX NVD NMTRN 3.5 LTNG 30B'],
-  [/nemotron-3-super-120b/i, 'VinaX NVD NMTRN SUP'],
-  [/deepseek-v4-pro/i, 'VinaX DP V4 PRO'],
-  [/deepseek-v4-flash/i, 'VinaX DP V4 FLASH'],
-  [/mistral-nemotron/i, 'VinaX MST NMTRN'],
-  [/kimi/i, 'VinaX K3'],
-  [/diffusiongemma/i, 'VinaX GGL DIF GEM 26B A4B IT'],
-  [/muse-glimmer/i, 'VinaX MTA MUSE GMR 30B'],
-  [/gemma-4/i, 'VinaX GGL GEM 4 31B'],
-  [/laguna/i, 'VinaX PSD LGNA XS 2.1'],
-  [/ising-calibration/i, 'VinaX NVD ING CALBTN 1.5 31B'],
-  [/nano-omni/i, 'VinaX NVD NMTRN NN OMNI 30B'],
-  [/llama-3\.2-90b-vision/i, 'VinaX MTA VSN 90B'],
-  [/llama-3\.2-11b-vision/i, 'VinaX MTA VSN 11B'],
-  // A marketplace pick keeps its own name: the listener chose that engine by
-  // name, so the chip must not relabel it as something else.
-  [/:free$/i, 'VinaX OPR ALL'],
-  // Retired seats — old stored replies still label cleanly.
-  [/minimax/i, 'VinaX AI'],
-  // The chip reports the engine that actually answered, keyed off the served
-  // slug — so a reply rescued by the ladder never wears the seat's name
-  // (nickname != model). The retired rows below keep old stored replies
-  // labelling cleanly instead of falling through to the generic catch-all.
-  [/gpt-oss-120b/i, 'VinaX AI'],
-  [/gpt-oss-20b/i, 'VinaX OAI OSS 20B'],
-  // v5.6.2 — legacy catch-rows renamed to the owner nicknames too, so EVERY
-  // chip in the app speaks the same names (old stored slugs included).
-  [/nemotron-super|nemotron.super/i, 'VinaX NVD NMTRN SUP'],
-  [/nemotron-3-ultra|nemotron.ultra/i, 'VinaX NVD NMTRN ULT'],
-  [/nemotron-3-nano|diffusiongemma|gemma/i, 'VinaX NVD NMTRN NN OMNI 30B'],
-  // Retired slugs from repo history (inkling/qwen/old deepseeks) — generic label.
-  [/inkling|qwen|deepseek/i, 'VinaX AI'],
-  [/llama-3\.3-70b|llama-3\.1-8b|vision|llama/i, 'VinaX GRQ ALL'],
-];
-export const nickForModel = (model: string): string => {
-  for (const [re, nick] of ENGINE_NICK) if (re.test(model)) return nick;
-  return 'VinaX AI';
+/** The four providers, in menu order. */
+export const PROVIDER_IDS: readonly ProviderId[] = ['nvidia', 'openrouter', 'groq', 'gemini'];
+export const PROVIDER_LABEL: Record<ProviderId, string> = {
+  nvidia: 'NVIDIA',
+  openrouter: 'OpenRouter',
+  groq: 'Groq',
+  gemini: 'Gemini',
 };
 
-/** A model's own name out of its slug — vendor prefix and routing suffix are
- *  plumbing, not a name. Mirrors catalogLabel() on the server so a saved pick
- *  reads correctly on the chip before the menu has ever been fetched. */
+export const isProviderId = (v: unknown): v is ProviderId => typeof v === 'string' && (PROVIDER_IDS as readonly string[]).includes(v);
+
+export const AUTO: ModelChoice = { mode: 'auto' };
+export const AUTO_LABEL = 'Auto';
+export const AUTO_HINT = 'Picks the best model for each question';
+
+/** A model's name out of its slug — vendor prefix and routing suffix are
+ *  plumbing, not a name. Only used when no original name is known yet. */
 export const slugLabel = (id: string): string =>
   (id.includes('/') ? id.slice(id.lastIndexOf('/') + 1) : id)
     .replace(/:(free|beta|extended|nitro|floor)$/i, '')
     .trim() || id;
 
-/** The seat that carries each catalogue on the wire. */
-export const GROUP_SEAT: Record<CatalogGroupId, Mode> = { grq: 'scholar', opr: 'router' };
-const GROUP_IDS: CatalogGroupId[] = ['grq', 'opr'];
-
-export const isMode = (v: unknown): v is Mode => typeof v === 'string' && MODES.some((m) => m.id === v);
-
-/** Which catalogue (if any) a seat opens. */
-export const seatGroup = (mode: Mode): CatalogGroupId | null =>
-  MODES.find((m) => m.id === mode)?.catalog ?? null;
-
-/** The model to send with a request: only the two catalogue seats carry one,
- *  and only when the listener actually picked a row (otherwise the seat runs
- *  its own default engine). The server re-checks the slug against the live
- *  catalogue, and every other seat ignores it entirely. */
-export const catalogModelForSend = (choice: ModelChoice): string | undefined =>
-  seatGroup(choice.mode) ? choice.model || undefined : undefined;
-
 /** Stable identity of a choice — option keys, recents de-duplication. */
-export const choiceKey = (c: ModelChoice): string => (seatGroup(c.mode) && c.model ? `${c.mode}:${c.model}` : c.mode);
+export const choiceKey = (c: ModelChoice): string => (c.mode === 'model' ? `${c.provider}:${c.model}` : 'auto');
 
-/** A choice with anything meaningless stripped (a model on a pinned seat). */
-export const normaliseChoice = (c: ModelChoice): ModelChoice =>
-  seatGroup(c.mode) && c.model ? { mode: c.mode, model: c.model } : { mode: c.mode };
+/** The provider behind a choice (null for Auto). */
+export const choiceProvider = (c: ModelChoice | null | undefined): ProviderId | null => (c?.mode === 'model' ? c.provider : null);
 
-/** What the composer chip reads. Derived from the slug, not from the fetched
- *  list, so a pick saved in an earlier session labels correctly without
- *  waiting on a network round-trip. */
-export const choiceLabel = (c: ModelChoice): string =>
-  seatGroup(c.mode) && c.model ? slugLabel(c.model) : (MODES.find((m) => m.id === c.mode)?.label ?? 'Model');
+/** A live model by provider + slug, if the fetched list has it. */
+export const findModel = (providers: readonly Provider[], provider: ProviderId, id: string): ProviderModel | undefined =>
+  providers.find((p) => p.id === provider)?.models.find((m) => m.id === id);
 
-/** "128K" / "1M" — the context-size badge. Null when the provider reports none. */
+/** What the composer chip reads: the live original name when the list is
+ *  known, else the name saved with the pick, else the slug. Never waits on
+ *  the network. */
+export const choiceLabel = (c: ModelChoice, providers: readonly Provider[] = []): string =>
+  c.mode === 'model' ? (findModel(providers, c.provider, c.model)?.name ?? c.name ?? slugLabel(c.model)) : AUTO_LABEL;
+
+/** "128K" / "1M" — the context size. Null when the provider reports none. */
 export function contextBadge(context: number | null): string | null {
   if (context === null || !Number.isFinite(context) || context <= 0) return null;
   // 128000 is "128K" and so is 131072: round numbers are decimal, the rest
@@ -207,39 +65,108 @@ export function contextBadge(context: number | null): string | null {
 
 /* ---------- catalogue response ---------- */
 
-/** Shape-tolerant read of GET /api/aimodels. Unknown groups and malformed rows
- *  are dropped. */
-export function parseCatalogResponse(body: unknown): CatalogGroup[] {
-  const groups = (body as { groups?: unknown } | null)?.groups;
-  if (!Array.isArray(groups)) return [];
-  const out: CatalogGroup[] = [];
-  for (const raw of groups) {
-    if (!raw || typeof raw !== 'object') continue;
-    const g = raw as Record<string, unknown>;
-    if (g.id !== 'grq' && g.id !== 'opr') continue;
-    if (out.some((o) => o.id === g.id)) continue;
-    const models: CatalogModel[] = [];
+const SLUG_RE = /^[\w./:@+-]+$/;
+const validSlug = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 160 && SLUG_RE.test(v);
+const text = (v: unknown, max: number): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+
+/** Shape-tolerant read of GET /api/aimodels. Always the four providers in
+ *  menu order once the body is readable — a provider the server left out is
+ *  "not configured", unknown providers and malformed rows are dropped. A body
+ *  with no providers list at all (an older server's `groups`) reads as
+ *  nothing, so the menu says the list is unavailable. */
+export function parseCatalogResponse(body: unknown): Provider[] {
+  const list = (body as { providers?: unknown } | null)?.providers;
+  if (!Array.isArray(list)) return [];
+  return PROVIDER_IDS.map((id): Provider => {
+    const raw = list.find((p): p is Record<string, unknown> => !!p && typeof p === 'object' && (p as { id?: unknown }).id === id);
+    const models: ProviderModel[] = [];
     const seen = new Set<string>();
-    for (const rm of Array.isArray(g.models) ? g.models : []) {
+    for (const rm of raw && Array.isArray(raw.models) ? raw.models : []) {
       if (!rm || typeof rm !== 'object') continue;
       const m = rm as Record<string, unknown>;
-      const id = typeof m.id === 'string' ? m.id.trim() : '';
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
+      const slug = typeof m.id === 'string' ? m.id.trim() : '';
+      if (!validSlug(slug) || seen.has(slug)) continue;
+      seen.add(slug);
       models.push({
-        id,
-        // Catalogue models are displayed as the server labels them.
-        label: typeof m.label === 'string' && m.label.trim() ? m.label.trim() : slugLabel(id),
-        context: typeof m.context === 'number' && Number.isFinite(m.context) ? m.context : null,
+        id: slug,
+        name: text(m.name, 120) ?? slugLabel(slug),
+        maker: text(m.maker, 60),
+        context: typeof m.context === 'number' && Number.isFinite(m.context) && m.context > 0 ? m.context : null,
+        vision: m.vision === true,
       });
     }
-    out.push({
-      id: g.id,
-      label: typeof g.label === 'string' && g.label ? g.label : (MODES.find((mm) => mm.catalog === g.id)?.label ?? g.id),
-      hint: typeof g.hint === 'string' ? g.hint : '',
-      configured: g.configured === true,
+    return {
+      id,
+      label: PROVIDER_LABEL[id],
+      configured: raw?.configured === true,
       models,
-    });
+      media: parseMedia(raw?.media),
+      tools: parseTools(raw?.tools),
+    };
+  });
+}
+
+/* ---------- 10.3 — media models, tools, features ---------- */
+
+export const MEDIA_KINDS: readonly MediaKind[] = ['image', 'speech', 'transcription', 'music', 'embedding'];
+const isMediaKind = (v: unknown): v is MediaKind => typeof v === 'string' && (MEDIA_KINDS as readonly string[]).includes(v);
+/** The tool id for running code. Web search is not a tool VinaX uses (10.2). */
+export const CODE_TOOL = 'code_execution';
+
+/** A provider's non-chat models; malformed rows and unknown kinds are dropped. */
+function parseMedia(list: unknown): MediaModel[] {
+  const out: MediaModel[] = [];
+  const seen = new Set<string>();
+  for (const rm of Array.isArray(list) ? list : []) {
+    if (!rm || typeof rm !== 'object') continue;
+    const m = rm as Record<string, unknown>;
+    const slug = typeof m.id === 'string' ? m.id.trim() : '';
+    if (!validSlug(slug) || !isMediaKind(m.kind) || seen.has(`${m.kind}:${slug}`)) continue;
+    seen.add(`${m.kind}:${slug}`);
+    const voices = Array.isArray(m.voices)
+      ? [...new Set(m.voices.filter((v): v is string => typeof v === 'string' && validSlug(v.trim())).map((v) => v.trim()))].slice(0, 80)
+      : [];
+    out.push({ id: slug, name: text(m.name, 120) ?? slugLabel(slug), maker: text(m.maker, 60), kind: m.kind, voices });
+  }
+  return out;
+}
+
+/** A provider's tools. Only tools this build knows how to switch on are kept. */
+function parseTools(list: unknown): ProviderTool[] {
+  const out: ProviderTool[] = [];
+  for (const rt of Array.isArray(list) ? list : []) {
+    if (!rt || typeof rt !== 'object') continue;
+    const t = rt as Record<string, unknown>;
+    if (t.id !== CODE_TOOL || out.some((o) => o.id === t.id)) continue;
+    const models = Array.isArray(t.models) ? t.models.filter(validSlug) : [];
+    out.push({ id: CODE_TOOL, name: text(t.name, 60) ?? 'Code execution', models });
+  }
+  return out;
+}
+
+export const NO_FEATURES: AiFeatures = { image: false, speech: false, transcription: false, music: false, code: false };
+
+/** Shape-tolerant read of the top-level `features` of GET /api/aimodels. An
+ *  older server sends none: every feature reads as off and nothing new shows. */
+export function parseFeatures(body: unknown): AiFeatures {
+  const f = (body as { features?: unknown } | null)?.features;
+  if (!f || typeof f !== 'object') return NO_FEATURES;
+  const r = f as Record<string, unknown>;
+  return { image: r.image === true, speech: r.speech === true, transcription: r.transcription === true, music: r.music === true, code: r.code === true };
+}
+
+/** The chat model can run code (it is in its provider's code tool list). */
+export const canRunCode = (providers: readonly Provider[], provider: ProviderId, model: string): boolean =>
+  !!providers.find((p) => p.id === provider)?.tools?.some((t) => t.id === CODE_TOOL && t.models.includes(model));
+
+/** Every configured provider's models of one kind, in menu order — the
+ *  groups of a media picker. Providers with none are left out. */
+export function mediaGroups(providers: readonly Provider[], kind: MediaKind): Array<{ provider: ProviderId; label: string; models: MediaModel[] }> {
+  const out: Array<{ provider: ProviderId; label: string; models: MediaModel[] }> = [];
+  for (const id of PROVIDER_IDS) {
+    const p = providers.find((x) => x.id === id);
+    const models = p?.configured ? (p.media ?? []).filter((m) => m.kind === kind) : [];
+    if (models.length) out.push({ provider: id, label: PROVIDER_LABEL[id], models });
   }
   return out;
 }
@@ -253,15 +180,22 @@ export interface MenuRow {
   id: string;
   choice: ModelChoice;
   label: string;
+  /** Quiet secondary line: maker and context size (and provider, on a recent). */
   hint: string;
-  /** Context size, e.g. "128K". */
-  badge: string | null;
-  /** Owner-named engines and raw model names read better in mono. */
-  mono: boolean;
+  /** The model reads images. */
+  vision: boolean;
+  /** 10.3 — the model can run code (its provider lists it under the code tool). */
+  code: boolean;
+  /** Logo shown on the row itself — recents only; a provider section has it in its heading. */
+  provider: ProviderId | null;
 }
 export interface MenuSection {
   id: string;
+  /** Empty = no visible heading (Auto); the group is then named by `label`. */
   title: string;
+  label: string;
+  /** Provider sections carry the provider, for the logo in the heading. */
+  provider: ProviderId | null;
   rows: MenuRow[];
   /** A quiet line shown instead of (or under) the rows. */
   note: string | null;
@@ -270,207 +204,200 @@ export interface MenuSection {
 }
 
 export const MAX_RECENTS = 5;
+/** 10.3 — the tag on a chat model that can run code. */
+export const RUNS_CODE = 'Runs code';
 export const NOT_AVAILABLE = 'Not available right now';
 
-const matches = (q: string[], ...hay: string[]): boolean => {
+const matches = (q: string[], ...hay: Array<string | null>): boolean => {
   if (!q.length) return true;
-  const text = hay.join(' ').toLowerCase();
-  return q.every((t) => text.includes(t));
+  const all = hay.filter(Boolean).join(' ').toLowerCase();
+  return q.every((t) => all.includes(t));
 };
 
-const seatRow = (section: string, m: (typeof MODES)[number]): MenuRow => ({
-  id: `${section}-${m.id}`,
-  choice: { mode: m.id },
-  label: m.label,
-  hint: m.hint,
-  badge: null,
-  mono: m.tier === 'advanced',
+const modelHint = (m: ProviderModel, withProvider?: ProviderId): string => {
+  const ctx = contextBadge(m.context);
+  return [withProvider ? PROVIDER_LABEL[withProvider] : null, m.maker, ctx ? `${ctx} context` : null].filter(Boolean).join(' · ');
+};
+const modelRow = (section: string, provider: ProviderId, m: ProviderModel, recent = false, code = false): MenuRow => ({
+  id: `${section}-${provider}-${m.id}`,
+  choice: { mode: 'model', provider, model: m.id, name: m.name },
+  label: m.name,
+  hint: modelHint(m, recent ? provider : undefined),
+  vision: m.vision,
+  code,
+  provider: recent ? provider : null,
 });
-const modelRow = (section: string, group: CatalogGroupId, m: CatalogModel): MenuRow => ({
-  id: `${section}-${group}-${m.id}`,
-  choice: { mode: GROUP_SEAT[group], model: m.id },
-  label: m.label,
-  hint: '',
-  badge: contextBadge(m.context),
-  mono: true,
+const section = (s: Omit<MenuSection, 'note' | 'retry' | 'provider'> & Partial<MenuSection>): MenuSection => ({
+  note: null,
+  retry: false,
+  provider: null,
+  ...s,
 });
 
-/** The whole model menu as data: recents, the recommended seats, the pinned
- *  engines, then EVERY model of each live catalogue. Nothing is invented — an
- *  unconfigured or empty catalogue is one quiet "not available" line. */
+/** The whole model menu as data: Auto, recently used models, then one
+ *  section per provider listing EVERY model it serves. Nothing is invented —
+ *  a provider without a key or without a list is one quiet line. */
 export function buildModelMenu(input: {
-  groups: CatalogGroup[];
+  providers: readonly Provider[];
   state: CatalogState;
   query: string;
-  recents: ModelChoice[];
+  recents: readonly ModelChoice[];
 }): MenuSection[] {
-  const { groups, state, recents } = input;
+  const { providers, state, recents } = input;
   const q = input.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const sections: MenuSection[] = [];
-  const byId = (id: CatalogGroupId): CatalogGroup | undefined => groups.find((g) => g.id === id);
+  const byId = (id: ProviderId): Provider | undefined => providers.find((p) => p.id === id);
+
+  if (matches(q, AUTO_LABEL, AUTO_HINT)) {
+    sections.push(
+      section({
+        id: 'auto',
+        title: '',
+        label: AUTO_LABEL,
+        rows: [{ id: 'auto', choice: AUTO, label: AUTO_LABEL, hint: AUTO_HINT, vision: false, code: false, provider: null }],
+      }),
+    );
+  }
 
   if (!q.length && recents.length) {
     const rows: MenuRow[] = [];
     for (const r of recents.slice(0, MAX_RECENTS)) {
-      const group = seatGroup(r.mode);
-      if (group && r.model) {
-        const live = byId(group)?.models.find((m) => m.id === r.model);
-        // Once the catalogue is known, a model it no longer serves is dropped.
-        if (state === 'ready' && !live) continue;
-        rows.push(
-          live
-            ? modelRow('recent', group, live)
-            : { ...modelRow('recent', group, { id: r.model, label: slugLabel(r.model), context: null }) },
-        );
-      } else {
-        const seat = MODES.find((m) => m.id === r.mode);
-        if (seat) rows.push(seatRow('recent', seat));
-      }
+      if (r.mode !== 'model') continue;
+      const live = findModel(providers, r.provider, r.model);
+      // Once the list is known, a model the provider no longer serves is dropped.
+      if (state === 'ready' && !live) continue;
+      rows.push(
+        modelRow(
+          'recent',
+          r.provider,
+          live ?? { id: r.model, name: r.name ?? slugLabel(r.model), maker: null, context: null, vision: false },
+          true,
+          canRunCode(providers, r.provider, r.model),
+        ),
+      );
     }
-    if (rows.length) sections.push({ id: 'recent', title: 'Recently used', rows, note: null, retry: false });
+    if (rows.length) sections.push(section({ id: 'recent', title: 'Recently used', label: 'Recently used', rows }));
   }
 
-  const core = CORE_MODES.filter((m) => matches(q, m.label, m.hint)).map((m) => seatRow('recommended', m));
-  if (core.length) sections.push({ id: 'recommended', title: 'Recommended', rows: core, note: null, retry: false });
-  const adv = ADVANCED_MODES.filter((m) => matches(q, m.label, m.hint)).map((m) => seatRow('engines', m));
-  if (adv.length) sections.push({ id: 'engines', title: 'VinaX engines', rows: adv, note: null, retry: false });
-
-  for (const id of GROUP_IDS) {
-    const g = byId(id);
-    const title = g?.label ?? MODES.find((m) => m.catalog === id)?.label ?? id;
+  for (const id of PROVIDER_IDS) {
+    const p = byId(id);
+    const title = PROVIDER_LABEL[id];
+    const base = { id, title, label: title, provider: id };
     if (state === 'idle' || state === 'loading') {
-      if (!q.length) sections.push({ id, title, rows: [], note: 'Loading the list…', retry: false });
+      if (!q.length) sections.push(section({ ...base, rows: [], note: 'Loading the list…' }));
       continue;
     }
-    if (state === 'failed' && !g) {
-      if (!q.length) sections.push({ id, title, rows: [], note: 'Couldn’t load the list — tap to retry', retry: true });
+    if (state === 'failed' && !p) {
+      if (!q.length) sections.push(section({ ...base, rows: [], note: 'Couldn’t load the list — tap to retry', retry: true }));
       continue;
     }
-    const models = (g?.models ?? []).filter((m) => matches(q, m.label, m.id, title));
+    // 10.3 — "runs code" finds the models that can run code.
+    const models = p?.configured
+      ? p.models.filter((m) => matches(q, m.name, m.maker, m.id, title, canRunCode(providers, id, m.id) ? RUNS_CODE : null))
+      : [];
     if (models.length) {
-      sections.push({ id, title, rows: models.map((m) => modelRow(id, id, m)), note: null, retry: false });
+      sections.push(section({ ...base, rows: models.map((m) => modelRow(id, id, m, false, canRunCode(providers, id, m.id))) }));
     } else if (!q.length) {
-      sections.push({ id, title, rows: [], note: NOT_AVAILABLE, retry: false });
+      sections.push(section({ ...base, rows: [], note: NOT_AVAILABLE }));
     }
   }
 
   if (q.length && !sections.some((s) => s.rows.length)) {
-    return [{ id: 'none', title: 'No matches', rows: [], note: `No model matches “${input.query.trim()}”`, retry: false }];
+    return [section({ id: 'none', title: 'No matches', label: 'No matches', rows: [], note: `No model matches “${input.query.trim()}”` })];
   }
   return sections;
 }
 
-/** Newest first, no duplicates, capped. Pure. */
-export function pushRecent(list: ModelChoice[], choice: ModelChoice): ModelChoice[] {
-  const c = normaliseChoice(choice);
-  const key = choiceKey(c);
-  return [c, ...list.filter((r) => choiceKey(r) !== key)].slice(0, MAX_RECENTS);
+/** Newest first, no duplicates, capped. Auto is always at the top of the
+ *  menu, so it is never a "recent". Pure. */
+export function pushRecent(list: readonly ModelChoice[], choice: ModelChoice): ModelChoice[] {
+  if (choice.mode !== 'model') return list.slice(0, MAX_RECENTS);
+  const key = choiceKey(choice);
+  return [choice, ...list.filter((r) => choiceKey(r) !== key)].slice(0, MAX_RECENTS);
 }
 
 /* ---------- persistence ---------- */
 
+// The keys predate 10.3; the values are the new shape. A value an older build
+// wrote (a seat id such as "muse", or a `scholar`/`router` catalogue pick)
+// revives as nothing, is removed, and the visit starts on Auto. The old
+// per-catalogue pick key is retired in storage.ts (RETIRED_PREF_KEYS).
 export const DEFAULT_MODE_KEY = 'vinax.aiDefaultMode';
-export const CATALOG_PICK_KEY = 'vinax.aiCatalogModels';
 export const LAST_MODEL_KEY = 'vinax.aiLastModel';
 export const RECENT_MODELS_KEY = 'vinax.aiRecentModels';
 
-/** Engine ids saved by much older builds map to their closest successor. */
-const LEGACY_MODE: Record<string, Mode> = {
-  maverick: 'muse',
-  diffusion: 'muse',
-  medium: 'muse',
-  fast: 'swift',
-  deep: 'sage',
-  gemma: 'scholar',
-};
-
-/** A stored seat id → a living seat, or null when it names nothing we know. */
-export function reviveMode(saved: string | null | undefined): Mode | null {
-  if (!saved) return null;
-  if (isMode(saved)) return saved;
-  return LEGACY_MODE[saved] ?? RETIRED_MODE[saved] ?? null;
+/** A stored choice → a valid one, or null when it is an older build's shape. */
+export function reviveChoice(raw: unknown): ModelChoice | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as { mode?: unknown; provider?: unknown; model?: unknown; name?: unknown };
+  if (r.mode === 'auto') return AUTO;
+  if (r.mode !== 'model' || !isProviderId(r.provider) || !validSlug(r.model)) return null;
+  const name = text(r.name, 120);
+  return name ? { mode: 'model', provider: r.provider, model: r.model, name } : { mode: 'model', provider: r.provider, model: r.model };
 }
 
-const reviveChoice = (raw: unknown): ModelChoice | null => {
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as { mode?: unknown; model?: unknown };
-  const mode = reviveMode(typeof r.mode === 'string' ? r.mode : null);
-  if (!mode) return null;
-  const model = typeof r.model === 'string' && r.model.length <= 128 && /^[\w./:-]+$/.test(r.model) ? r.model : undefined;
-  return normaliseChoice({ mode, model });
-};
-
-const readJson = (key: string): unknown => {
+const readRaw = (key: string): string | null => {
   try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as unknown) : null;
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 };
-const writeJson = (key: string, value: unknown): void => {
+const readJson = (key: string): unknown => {
+  const raw = readRaw(key);
+  if (!raw) return null;
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+};
+const writeRaw = (key: string, value: string | null): void => {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
   } catch {
     /* private mode / quota — preferences are best-effort */
   }
 };
 
-export function loadCatalogPicks(): CatalogPicks {
-  const raw = readJson(CATALOG_PICK_KEY);
-  if (!raw || typeof raw !== 'object') return {};
-  const out: CatalogPicks = {};
-  for (const id of GROUP_IDS) {
-    const v = (raw as Record<string, unknown>)[id];
-    if (typeof v === 'string' && v) out[id] = v;
-  }
-  return out;
-}
-
-/** Remember the model chosen inside a catalogue seat, per seat (the shape the
- *  page has always stored). Choosing the seat itself clears its pick. */
-export function saveCatalogPick(choice: ModelChoice): void {
-  const group = seatGroup(choice.mode);
-  if (!group) return;
-  const next = loadCatalogPicks();
-  if (choice.model) next[group] = choice.model;
-  else delete next[group];
-  writeJson(CATALOG_PICK_KEY, next);
-}
-
-/** The explicit default (Settings → General), if the listener set one. */
+/** The explicit default (Settings → General), if the listener set one.
+ *  Stored as "auto" (the value older builds also wrote for Auto) or as the
+ *  JSON of one exact model. */
 export function loadDefaultChoice(): ModelChoice | null {
-  let saved: string | null = null;
+  const raw = readRaw(DEFAULT_MODE_KEY);
+  if (!raw) return null;
+  if (raw === 'auto') return AUTO;
+  let parsed: unknown = null;
   try {
-    saved = localStorage.getItem(DEFAULT_MODE_KEY);
+    parsed = raw.startsWith('{') ? (JSON.parse(raw) as unknown) : null;
   } catch {
-    /* private mode */
+    /* not ours */
   }
-  const mode = reviveMode(saved);
-  if (!mode) return null;
-  const group = seatGroup(mode);
-  return normaliseChoice({ mode, model: group ? loadCatalogPicks()[group] : undefined });
+  const c = reviveChoice(parsed);
+  // 10.3 — an older build's seat id ("muse", "maestro", …): dropped quietly.
+  if (!c) writeRaw(DEFAULT_MODE_KEY, null);
+  return c;
 }
 
 export function saveDefaultChoice(choice: ModelChoice | null): void {
-  try {
-    if (choice) localStorage.setItem(DEFAULT_MODE_KEY, choice.mode);
-    else localStorage.removeItem(DEFAULT_MODE_KEY);
-  } catch {
-    /* private mode */
-  }
-  if (choice) saveCatalogPick(choice);
+  writeRaw(DEFAULT_MODE_KEY, !choice ? null : choice.mode === 'auto' ? 'auto' : JSON.stringify(choice));
 }
 
 /** Where a visit starts: the explicit default, else the last model used,
- *  else the everyday seat. */
+ *  else Auto. */
 export function loadInitialChoice(): ModelChoice {
-  // 8.1.0 — a listener who never chose gets Auto, which the service resolves to the flagship engine when its key is set.
-  return loadDefaultChoice() ?? reviveChoice(readJson(LAST_MODEL_KEY)) ?? { mode: 'auto' };
+  const def = loadDefaultChoice();
+  if (def) return def;
+  const raw = readJson(LAST_MODEL_KEY);
+  const last = reviveChoice(raw);
+  // 10.3 — a stale pick (a retired seat or catalogue) migrates to Auto.
+  if (!last && raw !== null) writeRaw(LAST_MODEL_KEY, null);
+  return last ?? AUTO;
 }
 
 export function saveLastChoice(choice: ModelChoice): void {
-  writeJson(LAST_MODEL_KEY, normaliseChoice(choice));
+  writeRaw(LAST_MODEL_KEY, JSON.stringify(choice));
 }
 
 export function loadRecents(): ModelChoice[] {
@@ -479,11 +406,14 @@ export function loadRecents(): ModelChoice[] {
   const out: ModelChoice[] = [];
   for (const r of raw) {
     const c = reviveChoice(r);
-    if (c && !out.some((o) => choiceKey(o) === choiceKey(c))) out.push(c);
+    if (c && c.mode === 'model' && !out.some((o) => choiceKey(o) === choiceKey(c))) out.push(c);
   }
-  return out.slice(0, MAX_RECENTS);
+  const kept = out.slice(0, MAX_RECENTS);
+  // 10.3 — older builds' seats and catalogue picks fall out of the list.
+  if (kept.length !== raw.length) saveRecents(kept);
+  return kept;
 }
 
-export function saveRecents(list: ModelChoice[]): void {
-  writeJson(RECENT_MODELS_KEY, list.slice(0, MAX_RECENTS));
+export function saveRecents(list: readonly ModelChoice[]): void {
+  writeRaw(RECENT_MODELS_KEY, JSON.stringify(list.slice(0, MAX_RECENTS)));
 }

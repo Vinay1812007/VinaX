@@ -14,7 +14,7 @@ vi.mock('../_lib/ai', async (importOriginal) => {
 import { onRequestPost, sanitizeCurated } from './curate';
 
 const songs = [{ id: 's1', title: 'Orbit' }, { id: 's2', title: 'Starlight' }, { id: 's3', title: 'Comet' }];
-const env = { VINAX_NVD_NEMOTRON_3_5_LIGHTNING_30B_A3B: 'k' };
+const env = { VINAX_NVIDIA_API_KEY: 'k' };
 let ip = 0;
 const post = async (body: unknown) => {
   ip += 1;

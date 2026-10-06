@@ -17,8 +17,14 @@ describe('announcementFor', () => {
 
 describe('persistedVoicePick', () => {
   it('reads the Settings → Voice choice and treats the device voice as none', () => {
+    // 10.3 — an older build's `model|persona` reads as its provider's voice and
+    // is rewritten in the `provider|model|voice` shape.
     localStorage.setItem('vinax.aiVoice', 'canopylabs/orpheus-v1-english|autumn');
-    expect(persistedVoicePick()).toEqual({ model: 'canopylabs/orpheus-v1-english', voice: 'autumn' });
+    expect(persistedVoicePick()).toEqual({ provider: 'groq', model: 'canopylabs/orpheus-v1-english', voice: 'autumn' });
+    expect(localStorage.getItem('vinax.aiVoice')).toBe('groq|canopylabs/orpheus-v1-english|autumn');
+    expect(persistedVoicePick()).toEqual({ provider: 'groq', model: 'canopylabs/orpheus-v1-english', voice: 'autumn' });
+    localStorage.setItem('vinax.aiVoice', 'gemini|speech-model|Kore');
+    expect(persistedVoicePick()).toEqual({ provider: 'gemini', model: 'speech-model', voice: 'Kore' });
     localStorage.setItem('vinax.aiVoice', 'device');
     expect(persistedVoicePick()).toBeNull();
     localStorage.removeItem('vinax.aiVoice');
