@@ -9,6 +9,7 @@ This folder is the guide for people who listen with VinaX. It covers setting up,
 | [Discovery modes](discovery-modes.md) | Familiar, Balanced and Discover, and the other recommendation settings |
 | [Search](search.md) | Suggestions as you type, the Top result, searching by description, lyrics search, sorting, recent and trending searches, Discover's shortcut grid |
 | [Library and backup](library-and-backup.md) | Favourites, playlists, Listen Later, backups, restore with Undo, moving devices |
+| [Flow](flow.md) | The swipeable song feed: opening it, gestures and keys, keeping a song, how your queue is kept safe |
 | [Listen Together](listen-together.md) | Hosting and joining a session, the Live pill, Tap to start listening, adding songs, reactions, ending |
 | [VinaX AI](vinax-ai.md) | The chat: connectors, the tool timeline, models, web search and where it looks, slash commands, playable songs, what it sends |
 | [Keyboard shortcuts](keyboard-shortcuts.md) | Every key the web app listens for, and the touch gestures |
