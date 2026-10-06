@@ -17,7 +17,7 @@ import { DEVICE_VOICE, SettingsDialog, type VoiceCatalog } from '@/features/ai/c
 import { Sidebar, type SidebarHandlers } from '@/features/ai/chat/Sidebar';
 import { Toast, type ToastState } from '@/features/ai/chat/Toast';
 import { buildChatRequest } from '@/features/ai/chat/buildChatRequest';
-import { CHAT_ENDPOINT, IMAGE_ENDPOINT, VOICES_ENDPOINT, clientHeaders } from '@/features/ai/chat/endpoints';
+import { CHAT_ENDPOINT, IMAGE_ENDPOINT, VOICES_ENDPOINT, clientHeaders, warmWebSearch } from '@/features/ai/chat/endpoints';
 import { FileIcon, MenuIcon, PanelIcon } from '@/features/ai/chat/icons';
 import { collectArtifacts } from '@/features/ai/artifacts/collect';
 import {
@@ -121,6 +121,10 @@ export default function VinaXAIPage(): ReactNode {
 
   /* ---------- composer toggles ---------- */
   const [web, setWeb] = useState(false);
+  // 10.1 — Web search (and Research, which turns it on) wakes the search engine.
+  useEffect(() => {
+    if (web) warmWebSearch();
+  }, [web]);
   // Think routes the next messages to the deep lane; Research forces
   // multi-source web answers.
   const [think, setThink] = useState(false);

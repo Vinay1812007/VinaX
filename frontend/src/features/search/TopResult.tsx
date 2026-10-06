@@ -42,7 +42,7 @@ export function SongTopResult({ song, onPlay }: { song: Song; onPlay: () => void
       }}
     >
       <img className="search-top-bg" src={art.glow} alt="" aria-hidden decoding="async" />
-      <img className="search-top-art" src={art.src} srcSet={art.srcSet} sizes="(min-width: 768px) 116px, 76px" alt="" width={116} height={116} decoding="async" onError={onArtError} />
+      <img className="search-top-art" src={art.src} srcSet={art.srcSet} sizes="(min-width: 768px) 152px, 96px" alt="" width={152} height={152} decoding="async" onError={onArtError} />
       <div className="search-top-body">
         <p className="search-top-result-name">{song.title}</p>
         <p className="search-top-result-meta">
@@ -80,7 +80,7 @@ export function ArtistTopResult({ artist, onPlay }: { artist: Artist; onPlay: ()
       }}
     >
       {!missing && <img className="search-top-bg" src={art.glow} alt="" aria-hidden decoding="async" />}
-      <img className="search-top-art is-artist" src={src} srcSet={missing ? undefined : art.srcSet} sizes="(min-width: 768px) 116px, 76px" alt="" width={116} height={116} decoding="async" onError={onArtError} />
+      <img className="search-top-art is-artist" src={src} srcSet={missing ? undefined : art.srcSet} sizes="(min-width: 768px) 152px, 96px" alt="" width={152} height={152} decoding="async" onError={onArtError} />
       <div className="search-top-body">
         <p className="search-top-result-name">
           <Link to={to}>{artist.name}</Link>

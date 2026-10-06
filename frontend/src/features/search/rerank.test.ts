@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Song } from '@/types';
-import { creditScore, matchTier, rerankSongs, suggestTitles } from './rerank';
+import { completions, creditScore, matchTier, pinnedFirst, rerankSongs, suggestTitles } from './rerank';
 
 const song = (id: string, title: string, language: string | null = null): Song => ({
   kind: 'song',
@@ -171,5 +171,44 @@ describe('suggestTitles', () => {
   it('offers nothing while the songs belong to another query', () => {
     expect(suggestTitles(songs, 'pushpa', { resultsQuery: 'pushpa', typedQuery: 'pushpa', placeholder: true })).toEqual([]);
     expect(suggestTitles(songs, 'pushpa', { resultsQuery: 'kesar', typedQuery: 'pushpa', placeholder: false })).toEqual([]);
+  });
+});
+
+describe('pinnedFirst (10.1)', () => {
+  const al = (id: string, language: string | null) => ({ id, language });
+  it('puts pinned-language items first, in pin order, and keeps the rest stable', () => {
+    const list = [al('en', 'english'), al('hi', 'hindi'), al('te', 'telugu'), al('x', null), al('hi2', 'hindi')];
+    expect(pinnedFirst(list, ['telugu', 'hindi']).map((a) => a.id)).toEqual(['te', 'hi', 'hi2', 'en', 'x']);
+  });
+  it('returns a copy in the same order without pinned languages', () => {
+    const list = [al('a', 'hindi'), al('b', 'telugu')];
+    const out = pinnedFirst(list, []);
+    expect(out).toEqual(list);
+    expect(out).not.toBe(list);
+  });
+});
+
+describe('completions (10.1)', () => {
+  it('recents, then trending, then titles; contains the typed text; never the typed text itself', () => {
+    const out = completions('kes', {
+      recent: ['kesariya', 'arijit'],
+      trending: ['Kesariya', 'kesari songs', 'naatu naatu'],
+      titles: ['Kesariya (From "Brahmastra")', 'kes'],
+    });
+    expect(out).toEqual([
+      { text: 'kesariya', source: 'recent' },
+      { text: 'kesari songs', source: 'trending' },
+      { text: 'Kesariya (From "Brahmastra")', source: 'title' },
+    ]);
+  });
+  it('caps each source and the total', () => {
+    const many = Array.from({ length: 10 }, (_, i) => `tum ${i}`);
+    const out = completions('tum', { recent: many, trending: many.map((m) => `${m} hits`), titles: many.map((m) => `${m} song`) }, 6);
+    expect(out.filter((c) => c.source === 'recent')).toHaveLength(3);
+    expect(out.filter((c) => c.source === 'trending')).toHaveLength(3);
+    expect(out).toHaveLength(6);
+  });
+  it('is empty for an empty box', () => {
+    expect(completions('  ', { recent: ['a'], trending: [], titles: [] })).toEqual([]);
   });
 });

@@ -9,7 +9,7 @@ export default function PrivacyPage() {
   usePageTitle('Privacy');
   return (
     <div className="vx-sec">
-      <PageHeader title="Privacy" subtitle="Last updated September 2026" />
+      <PageHeader title="Privacy" subtitle="Last updated October 2026" />
       <div className="vx-doc">
         <H>What stays on your device</H>
         <p>
@@ -50,16 +50,28 @@ export default function PrivacyPage() {
         </p>
         <H>AI features</H>
         <p>
-          When the AI picks songs or builds your home screen, it receives a short, capped, anonymous summary of your
-          taste (languages and liked styles) — never your history, never your identity. VinaX AI chats are stored only
+          When the AI picks songs or builds your home screen, it receives a short, capped summary of your taste: your
+          languages and liked styles, and short lists of songs you recently played, finished, skipped or liked (titles
+          and artists only, at most a few dozen) so it can avoid repeats and follow your mood. It never receives your
+          name, your username or anything else that identifies you. VinaX AI chats are stored only
           in your browser; the messages you send are processed to generate a reply and are not used to identify you.
           Voice chat and mic dictation use your device&rsquo;s speech engine — in supporting browsers and in the
           Android app, speech is recognised on your device — and VinaX never stores audio.
         </p>
+        <p>
+          When VinaX AI searches the web (Web search or Research is on, or the AI decides it needs current
+          information), VinaX&rsquo;s server sends the search words — your question, or words the AI chose — to the
+          sources it asks: VinaX&rsquo;s own web search service (which passes them on to public search engines), a keyed
+          web search service when one is configured, and a public online encyclopedia&rsquo;s search. Those requests come from our server, not from your device, and
+          carry nothing else about you. When VinaX Maestro answers, it uses its own provider&rsquo;s live search
+          instead. Switching Web search on also wakes VinaX&rsquo;s search service in advance; that wake-up call carries
+          no search words and nothing about you.
+        </p>
         <H>Listen Together</H>
         <p>
           Rooms are ephemeral: a room code, first names, and the shared queue exist while the session lives and are
-          cleaned up afterwards.
+          cleaned up afterwards. To count who is in a room, your device sends a random device ID that VinaX stores on
+          this device; it is not linked to your name or account.
         </p>
         <H>Trackers and ads — the honest version</H>
         <p>

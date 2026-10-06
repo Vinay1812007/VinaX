@@ -2,37 +2,33 @@
    VinaX 8 — overlays: the sheet / dialog shell, its header, and the song menu.
 
    Imported by Sheet.tsx and TrackMenu.tsx, so it ships with those chunks and
-   never with first load. Surfaces are flat (ink-850 in dark, cream in light),
-   one hairline, one soft shadow. Phones get a bottom sheet with a grab handle
-   and a 24px top radius; from 640px it is a centred 22px-radius dialog (9.0).
+   never with first load. 10.1: sheets, dialogs and menus are the thick
+   frosted material (.vx-mat-thick, index.css) — plum glass in dark, white
+   glass in light, solid on AMOLED and under reduced transparency — with a
+   specular top edge, one hairline and one soft shadow (--mat-lift). Phones
+   get a bottom sheet with a grab handle and a 24px top radius; from 640px it
+   is a centred 22px-radius dialog (9.0).
    ========================================================================= */
 
 /* ------------------------------------------------------------ sheet shell */
 .vx-sheet {
+  --mat-lift: 0 -16px 48px -16px rgb(0 0 0 / 0.6);
   position: relative;
   color: rgb(var(--ink-100));
-  background: rgb(var(--ink-850));
-  border: 1px solid var(--vx-border);
-  border-bottom: 0;
   border-radius: 24px 24px 0 0;
-  box-shadow: 0 -16px 48px -16px rgb(0 0 0 / 0.6);
-  animation: vx-sheet-up 240ms var(--ease-calm) backwards;
+  animation: vx-sheet-up 240ms var(--vx-ease-out) backwards;
 }
 @media (min-width: 640px) {
   .vx-sheet {
-    border-bottom: 1px solid var(--vx-border);
+    --mat-lift: 0 24px 64px -16px rgb(0 0 0 / 0.65);
     border-radius: 22px;
-    box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.65);
     animation-name: vx-dialog-in;
     animation-duration: 200ms;
   }
 }
-html.light .vx-sheet {
-  background: rgb(var(--ink-950));
-  box-shadow: 0 -12px 40px -16px rgb(48 22 34 / 0.28);
-}
+html.light .vx-sheet { --mat-lift: 0 -12px 40px -16px rgb(48 22 34 / 0.28); }
 @media (min-width: 640px) {
-  html.light .vx-sheet { box-shadow: 0 24px 64px -20px rgb(48 22 34 / 0.3); }
+  html.light .vx-sheet { --mat-lift: 0 24px 64px -20px rgb(48 22 34 / 0.3); }
 }
 
 .vx-sheet-grab {
@@ -99,19 +95,16 @@ html.light .vx-sheet {
 
 /* ------------------------------------------------------------- song menu */
 .vx-menu {
+  --mat-lift: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 4px 12px -4px rgb(0 0 0 / 0.35);
   width: 256px;
   padding: 4px;
   color: rgb(var(--ink-100));
-  background: rgb(var(--ink-850));
-  border: 1px solid var(--vx-border);
   border-radius: 16px;
-  box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 4px 12px -4px rgb(0 0 0 / 0.35);
   max-height: min(420px, calc(100dvh - 16px));
-  animation: vx-dialog-in 160ms var(--ease-calm) backwards;
+  animation: vx-dialog-in 160ms var(--vx-ease-out) backwards;
 }
 html.light .vx-menu {
-  background: rgb(var(--ink-950));
-  box-shadow: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2px 8px -2px rgb(48 22 34 / 0.12);
+  --mat-lift: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2px 8px -2px rgb(48 22 34 / 0.12);
 }
 .vx-menu-item {
   display: flex;
@@ -159,9 +152,8 @@ html.light .vx-menu {
   width: auto;
   max-height: min(78dvh, calc(100dvh - var(--safe-top) - 48px));
   padding: 0 8px max(12px, var(--safe-bottom));
-  border-bottom: 0;
   border-radius: 24px 24px 0 0;
-  animation: vx-sheet-up 240ms var(--ease-calm) backwards;
+  animation: vx-sheet-up 240ms var(--vx-ease-out) backwards;
 }
 .vx-menu.is-sheet .vx-menu-head {
   position: sticky;
@@ -172,9 +164,12 @@ html.light .vx-menu {
   gap: 12px;
   margin: 0 -8px 4px;
   padding: 20px 20px 14px;
-  background: inherit;
+  /* Near-solid: the menu's rows scroll under this sticky head, and a pane
+     cannot frost what sits inside itself. */
+  background: rgb(var(--ink-850) / 0.97);
   border-bottom: 1px solid var(--vx-border);
 }
+html.light .vx-menu.is-sheet .vx-menu-head { background: rgb(255 253 250 / 0.97); }
 .vx-menu.is-sheet .vx-menu-head::before {
   content: '';
   position: absolute;
@@ -397,7 +392,66 @@ html.light .vx-welcome-cta { background: rgb(var(--ink-950)); box-shadow: 0 -12p
   text-overflow: ellipsis;
 }
 
+/* ------------------------------------------------- notifications inbox
+   10.1 (NotificationSheet.tsx): rows lead with artwork — the item's own
+   cover when it has one, a Marigold → Rose tile with a glyph otherwise, the
+   VinaX mark for release notes — grouped under a heading per day. Rows sit
+   on the sheet's frost with a quiet tile of their own: no blur per row. */
+.vx-inbox { display: grid; gap: 14px; margin: 0 -8px; }
+.vx-inbox ul { display: grid; gap: 4px; }
+.vx-inbox-day {
+  padding: 0 10px 6px;
+  color: rgb(var(--ink-300));
+  font-size: 12.5px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+}
+.vx-inbox-empty { padding: 12px 10px; color: rgb(var(--ink-400)); font-size: 14px; }
+.vx-inbox-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 10px;
+  border-radius: 16px;
+  text-align: left;
+  background: rgb(var(--ink-100) / 0.04);
+  transition: background-color 160ms var(--ease-calm);
+}
+html.light .vx-inbox-row { background: rgb(255 255 255 / 0.55); }
+button.vx-inbox-row:hover { background: var(--vx-hover-warm); }
+button.vx-inbox-row:active { background: var(--vx-pressed); }
+.vx-inbox-art {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 12px;
+  color: var(--vx-on-accent);
+  background: var(--vx-glow);
+  box-shadow: var(--vx-art-shadow);
+}
+.vx-inbox-art img { width: 100%; height: 100%; object-fit: cover; }
+.vx-inbox-art.is-app { background: rgb(var(--ink-800)); }
+.vx-inbox-text { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.vx-inbox-title { overflow: hidden; color: rgb(var(--ink-100)); font-size: 14.5px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.vx-inbox-body {
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgb(var(--ink-400));
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.vx-inbox-time { flex-shrink: 0; align-self: flex-start; padding-top: 4px; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 600; }
+
 @media (prefers-reduced-motion: reduce) {
   .vx-sheet, .vx-menu { animation: none !important; }
+  .vx-inbox-row { transition: none; }
 }
 html.reduce-motion .vx-sheet, html.reduce-motion .vx-menu { animation: none !important; }
+html.reduce-motion .vx-inbox-row { transition: none; }

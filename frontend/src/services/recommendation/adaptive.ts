@@ -88,7 +88,8 @@ export function noteLikeAndMaybeReplan(liked: Song, now = Date.now()): boolean {
   p.regenerateAutoTail();
   skipStreak = 0;
   lastReplanAt = now;
-  toast('Liked — more like this is coming up next');
+  // Same key as the heart's "Added to Liked songs": this updates that snackbar.
+  toast('Liked — more like this is coming up next', { key: 'like' });
   return true;
 }
 

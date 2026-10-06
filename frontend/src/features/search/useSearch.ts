@@ -148,7 +148,8 @@ export function useSearchAll(query: string, enabled = true) {
     staleTime: SEARCH_STALE_MS,
     gcTime: SEARCH_GC_MS,
     queryFn: async ({ signal }) => {
-      const result = await searchAll(q, { signal });
+      // 10.1 — what the listener waits on: best endpoint, hedged.
+      const result = await searchAll(q, { signal, priority: 'interactive' });
       if (
         result.songs.length ||
         result.albums.length ||
@@ -157,7 +158,7 @@ export function useSearchAll(query: string, enabled = true) {
       )
         return result;
       const relaxed = relaxedQuery(q);
-      return relaxed ? searchAll(relaxed, { signal }) : result;
+      return relaxed ? searchAll(relaxed, { signal, priority: 'interactive' }) : result;
     },
     enabled: enabled && q.length > 1,
     placeholderData: keepPreviousData,
@@ -171,12 +172,12 @@ export function useSearchSongs(query: string, enabled = true) {
     staleTime: SEARCH_STALE_MS,
     gcTime: SEARCH_GC_MS,
     queryFn: async ({ signal }) => {
-      const raw = await searchSongs(q, 30, { signal });
+      const raw = await searchSongs(q, 30, { signal, priority: 'interactive' });
       if (raw.length > 0) return rankSongs(raw, { query: q, searchMode: true });
       // Typo rescue (P1-11): one relaxed retry before showing "no results".
       const relaxed = relaxedQuery(q);
       if (!relaxed) return [];
-      return rankSongs(await searchSongs(relaxed, 30, { signal }), {
+      return rankSongs(await searchSongs(relaxed, 30, { signal, priority: 'interactive' }), {
         query: relaxed,
         searchMode: true,
       });
@@ -192,7 +193,7 @@ export function useSearchAlbums(query: string, enabled = true) {
     queryKey: ['search-albums', q],
     staleTime: SEARCH_STALE_MS,
     gcTime: SEARCH_GC_MS,
-    queryFn: ({ signal }) => searchAlbums(q, 20, { signal }),
+    queryFn: ({ signal }) => searchAlbums(q, 20, { signal, priority: 'interactive' }),
     enabled: enabled && q.length > 1,
     placeholderData: keepPreviousData,
   });

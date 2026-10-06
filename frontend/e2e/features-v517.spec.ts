@@ -114,16 +114,16 @@ async function visit(page: Page, path: string, probe: RegExp): Promise<void> {
 }
 
 /** DOM-level click on the first/last "More options" button (hover-revealed). */
-async function openMoreOptions(page: Page, which: 'first' | 'last'): Promise<void> {
+async function openMoreOptions(page: Page, which: 'first' | 'last', label = 'More options'): Promise<void> {
   // The shared rail can show the song before the lazy player page mounts.
-  await page.waitForSelector('button[aria-label="More options"]', { state: 'attached' });
-  const ok = await page.evaluate((w) => {
-    const bs = [...document.querySelectorAll<HTMLButtonElement>('button[aria-label="More options"]')];
+  await page.waitForSelector(`button[aria-label="${label}"]`, { state: 'attached' });
+  const ok = await page.evaluate(([w, l]) => {
+    const bs = [...document.querySelectorAll<HTMLButtonElement>(`button[aria-label="${l}"]`)];
     const b = w === 'first' ? bs[0] : bs[bs.length - 1];
     b?.click();
     return !!b;
-  }, which);
-  expect(ok, 'a "More options" button exists').toBe(true);
+  }, [which, label] as const);
+  expect(ok, `a "${label}" button exists`).toBe(true);
 }
 
 async function clickButton(page: Page, pattern: RegExp): Promise<void> {
@@ -173,14 +173,15 @@ test('home, stats, history, explore, library, collection, search, settings rende
   expect(pageErrors).toEqual([]);
 });
 
-test('now-playing "More options" panel: marks, share this moment, ambient mode', async ({ page, baseURL }) => {
+test('now-playing "Player tools" panel: marks, share this moment, ambient mode', async ({ page, baseURL }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await seed(page, baseURL);
   await mockNetwork(page);
 
   await visit(page, '/now-playing', /song 0/i);
-  await openMoreOptions(page, 'last');
+  // 10.1 — the sliders button is "Player tools" (the ⋮ song menu is "More options").
+  await openMoreOptions(page, 'last', 'Player tools');
   await expect.poll(() => bodyText(page)).toMatch(/marks/i);
   const panel = await bodyText(page);
   expect(panel).toMatch(/share this moment/i);

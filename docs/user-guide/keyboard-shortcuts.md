@@ -35,6 +35,8 @@ This page lists every key the VinaX web app listens for, the rules for when a ke
 | `Esc` | Close a sheet, dialog or menu; leave the full-screen player; stop an AI reply; leave a tutorial |
 | `/` | In the VinaX AI composer, open the slash-command menu |
 | `↑` `↓` `Enter` | Move and choose inside the command palette |
+| `↑` `↓` `Enter` `Esc` | In the Search field: move through the suggestions, pick one, or close them (10.1) |
+| `Esc` on a snackbar | Dismiss the newest snackbar, unless a sheet or menu is open |
 | `→` or `Enter`, `←` | Next and previous step in a live tutorial |
 
 The command palette lists pages, player actions (including retuning the queue) and songs that match what you type.
@@ -56,3 +58,4 @@ The command palette lists pages, player actions (including retuning the queue) a
 | Swipe the player artwork left / right | Next / previous song (dragging up or down scrolls) |
 | Double-tap the artwork's edges / centre | Seek / like |
 | Pull down on Home | Refresh Home |
+| Swipe a snackbar down | Dismiss it |

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDownIcon } from './Icons';
@@ -23,18 +23,24 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
   const { pathname } = useLocation();
   const title = [...PRIMARY_NAV, ...NAV_GROUPS.flatMap((g) => g.items)].find((i) => i.to === pathname)?.label ?? 'VinaX';
   const [scrolled, setScrolled] = useState(false);
+  // 10.1 — "is anything under the bar?" comes from an IntersectionObserver on
+  // a marker 8px into the page, not a scroll listener: no work per scroll
+  // frame, one callback when the answer flips.
+  const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const el = sentinel.current;
     const main = document.getElementById('main-content');
-    if (!main) return;
-    const onScroll = (): void => setScrolled(main.scrollTop > 8);
-    onScroll();
-    main.addEventListener('scroll', onScroll, { passive: true });
-    return () => main.removeEventListener('scroll', onScroll);
+    if (!el || !main || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([entry]) => setScrolled(!entry.isIntersecting), { root: main });
+    io.observe(el);
+    return () => io.disconnect();
   }, [pathname]);
   const name = getLocal<string>(KEYS.userName, '').trim();
   const initial = name ? name.slice(0, 1).toUpperCase() : '';
   return (
-    <header className={cn('vx-topbar', scrolled && 'is-scrolled')}>
+    <>
+    <div ref={sentinel} className="vx-topbar-sentinel" aria-hidden />
+    <header className={cn('vx-topbar', scrolled && 'is-scrolled vx-mat-chrome')}>
       <div className="hidden md:flex items-center gap-1">
         <IconButton size="sm" label="Go back" onClick={() => navigate(-1)} className="vx-topbar-nav"><ChevronDownIcon className="w-5 h-5 rotate-90" /></IconButton>
         <IconButton size="sm" label="Go forward" onClick={() => navigate(1)} className="vx-topbar-nav"><ChevronDownIcon className="w-5 h-5 -rotate-90" /></IconButton>
@@ -50,6 +56,7 @@ export function TopBar({ onCommands }: { onCommands: () => void }) {
         </Link>
       </div>
     </header>
+    </>
   );
 }
 

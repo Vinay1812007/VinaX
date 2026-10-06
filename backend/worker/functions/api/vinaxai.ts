@@ -42,7 +42,7 @@ import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { houseRules, readConfig } from '../_lib/clientConfig';
 import { placeContextLines, readCoarsePlace } from '../_lib/place';
 import { type SupabaseEnv } from '../_lib/supabase';
-import { fenceWebContext, liveSearch, stripFenceMarkers, type SourcePreview, type WebSearchEnv } from '../_lib/websearch';
+import { fenceWebContext, liveSearch, stripFenceMarkers, warmSearxng, type SourcePreview, type WebSearchEnv } from '../_lib/websearch';
 import { freshnessRange, searxngConfigured, songContext } from '../_lib/searxng';
 import { maestroFetch } from '../_lib/maestro';
 
@@ -577,11 +577,13 @@ async function handleChat(
   // v5.4.0 — AUTO seat: choose the engine from the question itself before any
   // routing, so every later mode-keyed lookup (lane, flavor, budgets) sees a
   // concrete seat. Uses the raw last user text (pre data-fence wrapping).
-  const lastUserRaw =
-    (Array.isArray(body.messages) ? body.messages : [])
-      .filter((m) => m?.role === 'user' && typeof m?.content === 'string')
-      .map((m) => String(m.content))
-      .pop() ?? '';
+  const userTurnsRaw = (Array.isArray(body.messages) ? body.messages : [])
+    .filter((m) => m?.role === 'user' && typeof m?.content === 'string')
+    .map((m) => String(m.content));
+  const lastUserRaw = userTurnsRaw[userTurnsRaw.length - 1] ?? '';
+  // 10.1 — the question before it, so a web search for a short follow-up
+  // ("what about his new movie?") knows what it is following up on.
+  const prevUserRaw = userTurnsRaw.length > 1 ? userTurnsRaw[userTurnsRaw.length - 2].slice(0, 300) : undefined;
   // 8.1.0 — Auto is the flagship engine whenever its key is set; the question-shape router is the fallback.
   // 8.2.0 — …and whenever the flagship lane is cooling down (quota spent, key
   // rejected, model gone), Auto goes straight to the question-shape pick: no
@@ -714,18 +716,21 @@ async function handleChat(
     // two, and the burst cap still keeps scripted abuse uneconomical.
     const webRl = await rateLimitAsync(request, 'vinaxai-web', { capacity: 5, refillPerMinute: 5 }, env);
     if (webRl) return webRl;
-    const s = await liveSearch(env, lastQ.slice(0, 300));
+    const s = await liveSearch(env, lastQ.slice(0, 300), prevUserRaw);
     if (s) {
       searchBlock = s.text;
       sources = s.sources;
       previews = s.previews;
       webStatus = 'on';
     } else {
-      // The user explicitly asked for live results and the instance is unset,
-      // resting or came back empty — and there is no second source to try.
-      // The reply must SAY so instead of quietly guessing.
+      // 10.1 — every source (keyed API, the instance, the encyclopedia) came
+      // back empty or with nothing relevant to the question. The reply must
+      // SAY so instead of quietly guessing.
       webStatus = 'failed';
     }
+    // 10.1 — a sleeping instance timed out: wake it now, so the next
+    // question finds it up instead of failing the same way.
+    if (waitUntil && (!s || s.searxng === 'timeout' || s.searxng === 'network')) waitUntil(warmSearxng(env).catch(() => undefined));
   }
   // needsFreshInfo(...) stays exported for the client to re-use (see
   // src/pages/VinaXAIPage.tsx) — the freshness heuristic now runs there
@@ -1178,11 +1183,13 @@ async function handleChat(
       const fetchQ = fetchBox.q;
       if (fetchQ && !full && canFetch) {
         const rl2 = await rateLimitAsync(request, 'vinaxai-web', { capacity: 5, refillPerMinute: 5 }, env);
-        const hit = rl2 ? null : await liveSearch(env, fetchQ.slice(0, 300));
+        const hit = rl2 ? null : await liveSearch(env, fetchQ.slice(0, 300), lastUserRaw.slice(0, 300));
         let sys2: string;
         if (hit) {
           webStatus = 'on';
           sources = hit.sources;
+          // 10.1 — the previews too: a mid-answer search used to ship bare links.
+          previews = hit.previews;
           sys2 = `${sys}\n\n${fenceWebContext(`LIVE WEB RESULTS for your search "${stripFenceMarkers(fetchQ.slice(0, 120)).replace(/"/g, "'")}"`, hit.text, { purpose: LIVE_WEB_PURPOSE })}\n\nAnswer the user now, citing [1] [2] where a fact comes from a result. Do NOT output another FETCH marker.`;
         } else {
           if (webStatus === 'off') webStatus = 'failed';

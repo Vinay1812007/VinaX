@@ -19,7 +19,8 @@ const items: DockItem[] = [
 ];
 
 /** 8.0.0 — the phone tab bar: a translucent strip, each tab an icon over its
- *  label. 10.0.0 — the active tab's solid icon sits in a Marigold pill. */
+ *  label. 10.0.0 — the active tab's solid icon sits in a Marigold pill.
+ *  10.1.0 — the chrome material: the page scrolls under it, frosted. */
 export function BottomNav() {
   const t = useT();
   return (
@@ -27,7 +28,7 @@ export function BottomNav() {
       aria-label="Main navigation"
       // No bottom safe-area padding here: the fixed wrapper in AppLayout applies
       // the inset ONCE for the player bar + dock.
-      className="vx-dock md:hidden"
+      className="vx-dock vx-mat-chrome md:hidden"
     >
       <ul className="flex items-stretch justify-around px-1">
         {items.map(({ to, label, icon: Icon }) => (

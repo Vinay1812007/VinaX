@@ -101,6 +101,8 @@ const VideosPage = lazy(() => import('@/pages/VideosPage'));
 const VideoPage = lazy(() => import('@/pages/VideoPage'));
 // 8.2.0 — AI Radio: endless radio from a song, an artist, a mood or a few words.
 const AiRadioPage = lazy(() => import('@/pages/AiRadioPage'));
+// 10.1 — Flow: a full-screen, swipeable feed of song previews.
+const FlowPage = lazy(() => import('@/pages/FlowPage'));
 
 export const router = createBrowserRouter([
   {
@@ -147,6 +149,7 @@ export const router = createBrowserRouter([
       { path: 'history', element: <HistoryPage /> },
       { path: 'queue', element: <QueuePage /> },
       { path: 'radio', element: <AiRadioPage /> },
+      { path: 'flow', element: <FlowPage /> },
       { path: 'now-playing', element: <NowPlayingPage /> },
       { path: 'languages', element: <LanguagesPage /> },
       ...HUB_LANGUAGES.map((l) => ({ path: `${l}-songs`, element: <LanguageHubPage language={l} /> })),

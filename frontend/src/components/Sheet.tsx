@@ -120,7 +120,7 @@ export function Sheet({
         aria-labelledby={labelledBy}
         aria-label={labelledBy ? undefined : label}
         className={cn(
-          'vx-sheet w-full overscroll-contain',
+          'vx-sheet vx-mat-thick w-full overscroll-contain',
           SIZE[size],
           PADDING[padding],
           MAX_HEIGHT[maxHeight],

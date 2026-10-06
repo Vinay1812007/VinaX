@@ -1,14 +1,16 @@
 # Search
 
-This page covers the Search destination: searching as you type, the results tabs, sorting, searching by description, lyrics search, voice search, recent and trending searches, and the shortcut grid on Discover for when you would rather browse.
+This page covers the Search destination: suggestions as you type, the Top result and the results filters, sorting, searching by description, lyrics search, voice search, recent and trending searches, and the shortcut grid on Discover for when you would rather browse.
 
 ## Searching
 
 Search is one of the five destinations. The top bar has no search box; the field is on the Search page, and `Ctrl/⌘ + K` opens the command palette from anywhere.
 
-1. Type a song, an artist, a film or a mood, in any script. Quick results appear as you type.
-2. Press Enter (or tap a suggestion) to open the full results.
-3. Use the tabs: **All**, **Songs**, **Albums**, **Artists**, **Playlists**.
+1. Type a song, an artist, a film or a mood, in any script. After a short pause, suggestions open under the field: first **completions** — your recent searches, trending searches and titles, with the part you typed in bold — then **songs**, **artists** and **albums**. Tap a song to play it straight away. On a keyboard, `↑` and `↓` move through every row, `Enter` picks the highlighted one, and `Esc` closes the list.
+2. Press Enter (or tap a completion) to open the full results. They lead with a large **Top result** card — the best song or artist, with its own play button — then **Songs** (five), **Artists**, **Albums** and **Playlists**, each with **See all**.
+3. Use the filters under the field to see one kind only: **All**, **Songs**, **Albums**, **Artists**, **Playlists**.
+
+Search answers fast because VinaX asks the quickest of its catalogue sources first and, if that one is slow, asks the next as well and takes whichever answers first.
 
 On the **Songs** tab you can sort by relevance, popularity, newest, longest, shortest or A to Z, then **Play all** or **Queue all**.
 
@@ -33,12 +35,12 @@ When the browser or device supports speech recognition, a microphone button appe
 ## Recent and trending searches
 
 - **Recent searches** sit under the field. Hover or long-press one to pin it; up to five pinned searches stay at the front.
-- **Trending searches** show what listeners are searching for now.
+- **Trending searches** are chips of what listeners are searching for now. Tap one to search it.
 - Before you type, the page also shows example searches in your pinned languages and a **Trending now** list you can play.
 
 ## Browse instead: Discover
 
-Discover opens with a shortcut grid.
+Discover opens with a shortcut grid: three large tiles — Charts, Languages and Moods — then the others.
 
 | Shortcut | What it opens |
 |---|---|
@@ -48,9 +50,8 @@ Discover opens with a shortcut grid.
 | Regions | Music by region |
 | Movies | Film soundtracks |
 | Videos | Music videos |
-| Made For You | Your mixes |
-| Your Week | The weekly mix |
-| AI Playlist | Describe a moment and get a playlist to play or save |
-| Ads | Sponsored placements. This is the only page that shows them. |
+| Made for you | Your mixes |
+| Your week | The weekly mix |
+| AI playlist | Describe a moment and get a playlist to play or save |
 
 Below the grid, choose a language and a mood to change Discover's shelves: trending, mood picks, playlists, new releases, film soundtracks, and a corner for a language you have not tried.

@@ -12,7 +12,7 @@ import {
 } from '@/services/media-session';
 import { recordComplete, recordPlay, recordQueueAdd, recordSkip } from '@/services/personalization/updater';
 import { checkNotificationOnFirstPlay, haptic, isNativePlatform } from '@/services/native';
-import { toast } from './toastStore';
+import { toast, toastNavigate } from './toastStore';
 import { useHistoryStore } from './historyStore';
 import { useSettingsStore } from './settingsStore';
 import { useCastStore, castInterceptPlayPause, castInterceptSeek, castInterceptVolume, castMime } from '@/services/cast';
@@ -67,6 +67,10 @@ export interface PlayerState {
   followMode: boolean;
   /** v6.5.0 — the active "Tune this queue" intent (cleared by a fresh play). */
   tuneIntent: TuneIntent | null;
+  /** 10.1 — Flow is previewing songs; the listener's own queue waits in a snapshot. */
+  previewMode: boolean;
+  /** 10.1 — the preview song that could not play (Flow moves past it). */
+  previewError: string | null;
 
   initEngine(): void;
   setSleepSongs(n: number): void;
@@ -133,7 +137,32 @@ export interface PlayerState {
   setSleepAfterTrack(v: boolean): void;
   setCurrentAccent(c: string | null): void;
   setFollowMode(v: boolean): void;
+  /**
+   * 10.1 Flow — set the listener's queue aside (paused) and take the player
+   * for previews. Nothing is extended or learned while previewing. False
+   * while following a Listen Together host.
+   */
+  enterPreview(): boolean;
+  /** Preview one song from `startAt` seconds. */
+  previewSong(song: Song, startAt?: number): void;
+  /** Hand a previewed song to the real queue: it plays next to what was queued, from the top. */
+  commitPreview(song: Song): void;
+  /** Leave preview: the queue that was there comes back, paused where it was. */
+  exitPreview(): void;
 }
+
+/** 10.1 — the listener's queue while Flow previews (persisted in its place). */
+interface PreviewSnapshot {
+  queue: Song[];
+  index: number;
+  time: number;
+  tune: TuneIntent | null;
+  radio: boolean;
+  auto: string[];
+  manual: string[];
+  meta: Array<[string, AutoEntryMeta]>;
+}
+let preview: PreviewSnapshot | null = null;
 
 /** 8.2.0 — AI Radio: the most songs a radio starts with before the DJ takes over. */
 export const RADIO_SEED_MAX = 5;
@@ -229,7 +258,9 @@ export const usePlayerStore = create<PlayerState>()(
       function clearSleepTimeout(): void {
         if (sleepTimer != null) { window.clearTimeout(sleepTimer); sleepTimer = null; }
       }
-      const canExtend = () => (radio || useSettingsStore.getState().autoplay) && !get().followMode && get().repeat === 'off';
+      const canExtend = () => !preview && (radio || useSettingsStore.getState().autoplay) && !get().followMode && get().repeat === 'off';
+      /** 10.1 — playback instances of Flow previews: silent (no history, no taste, no events). */
+      const previewRuns = new WeakSet<PlaybackInstance>();
       function invalidateQueue(): void {
         queueVersion += 1;
         transition += 1;
@@ -243,6 +274,7 @@ export const usePlayerStore = create<PlayerState>()(
         const inst = playback;
         if (!inst || inst.finalized) return;
         inst.finalized = true;
+        if (previewRuns.has(inst)) return;
         inst.endReason = inst.failed ? 'failed' : inst.endReason ?? reason;
         emitPlaybackEvent({ kind: 'end', instanceId: inst.id, song: inst.song, from: inst.from, heardSec: inst.heardSec, durationSec: inst.durationSec, reason: inst.endReason, run: inst.run, auto: autoMetaById.get(inst.song.id) ?? null });
       }
@@ -438,7 +470,7 @@ export const usePlayerStore = create<PlayerState>()(
         audioEngine.preloadNext(url);
       }
 
-      function startTrack(song: Song, autoplay: boolean, opts: { from?: Song | null } = {}): void {
+      function startTrack(song: Song, autoplay: boolean, opts: { from?: Song | null; startAt?: number } = {}): void {
         transition += 1;
         // 7.2.0 — one playback instance per start. The previous one ends here
         // (once) and any async work tied to it is cancelled.
@@ -447,15 +479,17 @@ export const usePlayerStore = create<PlayerState>()(
         refetchAbort = null;
         const instance = newPlaybackInstance(song, { from: opts.from ?? null });
         playback = instance;
+        if (preview) previewRuns.add(instance);
         playbackInHistory = false;
         // Reset the resume-write throttle so the first timeupdate on the NEW
         // song can save immediately — without this the previous song's 5s
         // bucket suppresses the initial write on a same-second boundary.
         _lastResumedSec = -1;
         const quality = useSettingsStore.getState().audioQuality;
-        audioEngine.load(song, quality, autoplay);
+        if (opts.startAt) audioEngine.load(song, quality, autoplay, opts.startAt);
+        else audioEngine.load(song, quality, autoplay);
         crossfadeArmed = false;
-        if (autoplay && useSettingsStore.getState().resumePlayback) {
+        if (autoplay && !preview && useSettingsStore.getState().resumePlayback) {
           const at = loadResume()[song.id];
           if (at && at > 20) {
             window.setTimeout(() => {
@@ -492,7 +526,7 @@ export const usePlayerStore = create<PlayerState>()(
           }
         }
         
-        if (autoplay) {
+        if (autoplay && !preview) {
           sessionPlayed.add(song.id);
           // v7.0.0 — history gets the play at once (the listen clock needs the
           // entry); taste learns from it only once the playback instance has
@@ -548,6 +582,11 @@ export const usePlayerStore = create<PlayerState>()(
       }
 
       function skipUnavailable(): void {
+        if (preview) {
+          // Flow moves past it; the feed is not a queue to skip through.
+          set({ isPlaying: false, isBuffering: false, previewError: get().queue[get().index]?.id ?? null });
+          return;
+        }
         const now = Date.now();
         if (noteUnavailable()) {
           toast('Sources are struggling right now — pick another song or try again in a moment');
@@ -564,6 +603,11 @@ export const usePlayerStore = create<PlayerState>()(
 
       function handleEnded(): void {
         resetSkipGuard(); // a track finished — sources are alive
+        if (preview) {
+          // A preview that reaches the song's end stops; Flow decides what comes next.
+          set({ isPlaying: false });
+          return;
+        }
         const { queue, index, duration, repeat, sleepAt, sleepAfterTrack, sleepSongsLeft } = get();
         const song = queue[index];
         const inst = song && playback && playback.song.id === song.id && !playback.finalized ? playback : null;
@@ -639,6 +683,51 @@ export const usePlayerStore = create<PlayerState>()(
         audioEngine.play();
       }
 
+      /** A real play while previewing: the snapshot is let go (the listener chose what plays now). */
+      function dropPreview(): void {
+        if (!preview) return;
+        preview = null;
+        set({ previewMode: false, previewError: null });
+      }
+
+      /** Put the snapshot's ownership and radio back; the preview's playback ends silently. */
+      function restoreSnapshot(snap: PreviewSnapshot): void {
+        preview = null;
+        finalizePlayback('replaced');
+        playback = null;
+        refetchAbort?.abort();
+        refetchAbort = null;
+        invalidateQueue();
+        autoIds.clear();
+        manualIds.clear();
+        autoMetaById.clear();
+        for (const id of snap.auto) autoIds.add(id);
+        for (const id of snap.manual) manualIds.add(id);
+        for (const [id, meta] of snap.meta) autoMetaById.set(id, meta);
+        radio = snap.radio;
+        set({ previewMode: false, previewError: null, tuneIntent: snap.tune });
+      }
+
+      /** "Add to queue" while previewing goes to the listener's queue, not the preview. */
+      function queueIntoSnapshot(songs: Song[], next: boolean): number {
+        const snap = preview;
+        if (!snap) return 0;
+        const have = new Set(snap.queue.map((s) => s.id));
+        const fresh = songs.filter((s) => isValidSong(s) && !have.has(s.id));
+        if (!fresh.length) {
+          toast('Already in queue');
+          return 0;
+        }
+        const auto = new Set(snap.auto);
+        const firstAuto = snap.queue.findIndex((s, i) => i > snap.index && auto.has(s.id));
+        const at = !snap.queue.length ? 0 : next ? snap.index + 1 : firstAuto < 0 ? snap.queue.length : firstAuto;
+        snap.queue = [...snap.queue.slice(0, at), ...fresh, ...snap.queue.slice(at)];
+        snap.manual = [...snap.manual, ...fresh.map((s) => s.id)];
+        set({}); // persist the listener's queue with the new songs
+        toast(fresh.length === 1 ? (next ? 'Playing next' : 'Added to queue') : `Added ${fresh.length} songs to queue`);
+        return fresh.length;
+      }
+
       function pauseCurrent(): void {
         transition += 1;
         if (!get().isPlaying) {
@@ -676,6 +765,8 @@ export const usePlayerStore = create<PlayerState>()(
         streamKbps: null,
         followMode: false,
         tuneIntent: null,
+        previewMode: false,
+        previewError: null,
 
         initEngine: () => {
           if (engineInitialized) return;
@@ -687,7 +778,7 @@ export const usePlayerStore = create<PlayerState>()(
               // 7.2.0 — the playback instance credits only what was heard: no
               // seeks, no pauses, no buffering, no undeclared jumps.
               const inst = playback;
-              if (inst && !inst.finalized && get().queue[get().index]?.id === inst.song.id) {
+              if (inst && !inst.finalized && !previewRuns.has(inst) && get().queue[get().index]?.id === inst.song.id) {
                 const heard = creditTick(inst, currentTime, duration, { rate: get().rate, buffering: get().isBuffering });
                 if (heard > 0) {
                   if (!playbackInHistory) {
@@ -729,7 +820,7 @@ export const usePlayerStore = create<PlayerState>()(
               }
               updatePositionState(duration, currentTime, get().rate);
               const playing = get().queue[get().index];
-              const _sec5 = Math.floor(currentTime / 5); if (playing && _sec5 !== _lastResumedSec && Math.floor(currentTime) % 5 === 0) { _lastResumedSec = _sec5; saveResume(playing.id, currentTime, duration); }
+              const _sec5 = Math.floor(currentTime / 5); if (playing && !preview && _sec5 !== _lastResumedSec && Math.floor(currentTime) % 5 === 0) { _lastResumedSec = _sec5; saveResume(playing.id, currentTime, duration); }
               // Crossfade tail: ramp the last seconds toward silence; the next
               // track fades in on start, giving a smooth overlap-style blend.
               const { repeat, queue, index } = get();
@@ -832,6 +923,7 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
           resetSkipGuard(); // manual play — the user vouches for the sources
+          dropPreview();
           finalizePlayback('replaced');
           invalidateQueue();
           autoIds.clear();
@@ -910,6 +1002,10 @@ export const usePlayerStore = create<PlayerState>()(
             toast('Kid mode is on — that song is marked explicit');
             return;
           }
+          if (preview) {
+            if (queueIntoSnapshot([song], false)) recordQueueAdd(song);
+            return;
+          }
           const { queue } = get();
           if (queue.some((s) => s.id === song.id)) {
             toast('Already in queue');
@@ -926,11 +1022,16 @@ export const usePlayerStore = create<PlayerState>()(
           saveOwnership();
           set({ queue: [...queue.slice(0, at), song, ...queue.slice(at)] });
           if (firstAuto >= 0) preloadUpcoming();
-          toast('Added to queue');
+          // 10.1 — the snackbar shows which song went in, and opens the queue.
+          toast('Added to queue', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
           if (queue.length === 0) get().playQueue([song]);
         },
 
         enqueueAll: (songs) => {
+          if (preview) {
+            queueIntoSnapshot(stripExplicit(songs), false);
+            return;
+          }
           const existing = new Set(get().queue.map((s) => s.id));
           const fresh = stripExplicit(songs).filter((s) => !existing.has(s.id));
           if (!fresh.length) {
@@ -950,6 +1051,10 @@ export const usePlayerStore = create<PlayerState>()(
         enqueueNext: (song) => {
           if (song.explicit && kidModeOn()) {
             toast('Kid mode is on — that song is marked explicit');
+            return;
+          }
+          if (preview) {
+            if (queueIntoSnapshot([song], true)) recordQueueAdd(song);
             return;
           }
           const { queue, index } = get();
@@ -977,7 +1082,7 @@ export const usePlayerStore = create<PlayerState>()(
             queue: [...filtered.slice(0, insertAt), song, ...filtered.slice(insertAt)],
             index: newIndex,
           });
-          toast('Playing next');
+          toast('Playing next', { image: bestImage(song.images, 50), action: { label: 'View', onClick: () => toastNavigate('/queue') } });
         },
 
         removeAt: (i) => {
@@ -1076,7 +1181,7 @@ export const usePlayerStore = create<PlayerState>()(
 
         next: (manual = false) => {
           const { queue, index, shuffle, repeat } = get();
-          if (!queue.length) return;
+          if (!queue.length || preview) return; // Flow moves its own feed
           if (manual) haptic('light');
           maybeRecordSkip(manual);
           let nextIndex: number;
@@ -1208,6 +1313,7 @@ export const usePlayerStore = create<PlayerState>()(
             .slice(0, RADIO_SEED_MAX);
           if (!queue.length) return;
           const tune = opts.tune === 'surprise' ? randomTune() : opts.tune && isTuneIntent(opts.tune) ? opts.tune : null;
+          dropPreview();
           finalizePlayback('replaced');
           invalidateQueue();
           radio = true;
@@ -1314,7 +1420,75 @@ export const usePlayerStore = create<PlayerState>()(
         },
 
         setCurrentAccent: (currentAccent) => set({ currentAccent }),
-        setFollowMode: (followMode) => set({ followMode }),
+        setFollowMode: (followMode) => {
+          if (followMode && preview) get().exitPreview();
+          set({ followMode });
+        },
+
+        enterPreview: () => {
+          if (get().followMode) return false;
+          if (preview) return true;
+          const { queue, index, currentTime, tuneIntent } = get();
+          preview = { queue, index, time: currentTime, tune: tuneIntent, radio, auto: [...autoIds], manual: [...manualIds], meta: [...autoMetaById] };
+          finalizePlayback('replaced');
+          invalidateQueue();
+          audioEngine.pause();
+          autoIds.clear();
+          manualIds.clear();
+          autoMetaById.clear();
+          radio = false;
+          lastRemoval = null;
+          set({ previewMode: true, previewError: null, isPlaying: false });
+          return true;
+        },
+
+        previewSong: (song, startAt = 0) => {
+          if (!preview || !isValidSong(song)) return;
+          if (song.explicit && kidModeOn()) {
+            set({ previewError: song.id });
+            return;
+          }
+          invalidateQueue();
+          const at = Math.max(0, startAt);
+          set({ queue: [song], index: 0, currentTime: at, duration: 0, loopA: null, loopB: null, previewError: null });
+          startTrack(song, true, { startAt: at });
+        },
+
+        commitPreview: (song) => {
+          const snap = preview;
+          if (!snap) {
+            get().playQueue([song], 0, { keepList: true });
+            return;
+          }
+          restoreSnapshot(snap);
+          const current = snap.queue[snap.index];
+          let queue = snap.queue;
+          let index = snap.index;
+          if (current?.id !== song.id) {
+            // It plays next to what was queued, ahead of the rest.
+            queue = snap.queue.filter((s) => s.id !== song.id);
+            index = current ? queue.indexOf(current) + 1 : 0;
+            queue = [...queue.slice(0, index), song, ...queue.slice(index)];
+            autoIds.delete(song.id);
+            manualIds.add(song.id);
+          }
+          saveOwnership();
+          recordQueueAdd(song);
+          set({ queue, index, currentTime: 0, duration: 0, loopA: null, loopB: null });
+          startTrack(song, true);
+        },
+
+        exitPreview: () => {
+          const snap = preview;
+          if (!snap) return;
+          restoreSnapshot(snap);
+          audioEngine.pause();
+          saveOwnership();
+          const song = snap.queue[snap.index];
+          set({ queue: snap.queue, index: snap.index, isPlaying: false, currentTime: snap.time, duration: 0, loopA: null, loopB: null });
+          if (song) startTrack(song, false, { startAt: snap.time });
+          else updateMediaMetadata(null);
+        },
       };
     },
     {
@@ -1326,8 +1500,9 @@ export const usePlayerStore = create<PlayerState>()(
       // and a full device no longer throws into playback.
       storage: createDedupedStorage<PersistedPlayerState>(),
       partialize: (s): PersistedPlayerState => ({
-        queue: s.queue,
-        index: s.index,
+        // 10.1 — while Flow previews, the listener's own queue is what a reload must find.
+        queue: preview ? preview.queue : s.queue,
+        index: preview ? preview.index : s.index,
         repeat: s.repeat,
         shuffle: s.shuffle,
         volume: s.volume,

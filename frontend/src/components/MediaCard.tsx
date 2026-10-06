@@ -6,6 +6,7 @@ import { rememberCtxSong } from '@/utils/ctxSongs';
 import { isFavoriteIn } from '@/utils/favIndex';
 import type { ImageVariant, Song } from '@/types';
 import { HeartIcon, PlayIcon } from './Icons';
+import { toggleLike } from './FavButton';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useReasonStore } from '@/store/reasonStore';
 import '@/styles/pages/tracklist.css';
@@ -109,7 +110,7 @@ export function MediaCard({ to, image, images, title, subtitle, round, fluid, on
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              useLibraryStore.getState().toggleFavorite(song);
+              toggleLike(song);
             }}
             // 9.0.0 — a quiet 32px badge (44px to hit): a liked song shows an Iris heart, the rest appear on hover.
             className={cn('vx-card-fav', isFav ? 'is-on' : 'hover-reveal')}

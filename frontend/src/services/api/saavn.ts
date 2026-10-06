@@ -1,6 +1,6 @@
 import type { Album, Artist, Lyrics, Playlist, SearchResults, Song } from '@/types';
 import { rewriteQuery } from '@/services/search/synonyms';
-import { orchestratedRequest } from './client';
+import { orchestratedRequest, type RequestPriority } from './client';
 import {
   normalizeAlbum,
   normalizeArtist,
@@ -13,6 +13,23 @@ import {
 
 const enc = encodeURIComponent;
 
+/** Catalogue call options. Search defaults to `background` allotment (most
+ *  callers are shelves and recommendations); the Search page, typeahead and
+ *  song lookups pass `interactive` and are hedged. */
+export interface CatalogOpts {
+  signal?: AbortSignal;
+  priority?: RequestPriority;
+}
+
+/** Identical search GETs within this window share one call (typeahead repeats). */
+export const SEARCH_MEMO_MS = 5000;
+
+const searchReq = (opts?: CatalogOpts) => ({
+  signal: opts?.signal,
+  priority: opts?.priority ?? ('background' as const),
+  cacheMs: SEARCH_MEMO_MS,
+});
+
 function listFrom(d: unknown): unknown[] | null {
   if (Array.isArray(d)) return d;
   const obj = d as Record<string, unknown> | null;
@@ -21,10 +38,10 @@ function listFrom(d: unknown): unknown[] | null {
   return null;
 }
 
-export function searchSongs(rawQuery: string, limit = 25, opts?: { signal?: AbortSignal }): Promise<Song[]> {
+export function searchSongs(rawQuery: string, limit = 25, opts?: CatalogOpts): Promise<Song[]> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
-    signal: opts?.signal,
+    ...searchReq(opts),
     paths: [
       `/search/songs?query=${enc(query)}&limit=${limit}`,
       `/search/songs?query=${enc(query)}&page=1&limit=${limit}`,
@@ -37,10 +54,10 @@ export function searchSongs(rawQuery: string, limit = 25, opts?: { signal?: Abor
 }
 
 /** Paged song search — powers infinite scroll. Page is 1-based. */
-export function searchSongsPage(rawQuery: string, page: number, limit = 25, opts?: { signal?: AbortSignal }): Promise<Song[]> {
+export function searchSongsPage(rawQuery: string, page: number, limit = 25, opts?: CatalogOpts): Promise<Song[]> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
-    signal: opts?.signal,
+    ...searchReq(opts),
     paths: [
       `/search/songs?query=${enc(query)}&page=${page}&limit=${limit}`,
       `/search/songs?query=${enc(query)}&p=${page}&limit=${limit}`,
@@ -55,10 +72,10 @@ export function searchSongsPage(rawQuery: string, page: number, limit = 25, opts
 // Every search entry point runs the admin synonym table first, so a published
 // alias ("arr") finds the same artist on the Albums / Artists / Playlists tabs
 // and the All tab as it does on Songs.
-export function searchAlbums(rawQuery: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Album[]> {
+export function searchAlbums(rawQuery: string, limit = 20, opts?: CatalogOpts): Promise<Album[]> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
-    signal: opts?.signal,
+    ...searchReq(opts),
     paths: [`/search/albums?query=${enc(query)}&limit=${limit}`],
     validate: (json) => {
       const list = listFrom(unwrap(json));
@@ -68,10 +85,10 @@ export function searchAlbums(rawQuery: string, limit = 20, opts?: { signal?: Abo
   });
 }
 
-export function searchAlbumsPage(rawQuery: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Album[]> {
+export function searchAlbumsPage(rawQuery: string, page: number, limit = 20, opts?: CatalogOpts): Promise<Album[]> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
-    signal: opts?.signal,
+    ...searchReq(opts),
     paths: [
       `/search/albums?query=${enc(query)}&page=${page}&limit=${limit}`,
       `/search/albums?query=${enc(query)}&p=${page}&limit=${limit}`,
@@ -84,10 +101,10 @@ export function searchAlbumsPage(rawQuery: string, page: number, limit = 20, opt
   });
 }
 
-export function searchArtists(rawQuery: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Artist[]> {
+export function searchArtists(rawQuery: string, limit = 20, opts?: CatalogOpts): Promise<Artist[]> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
-    signal: opts?.signal,
+    ...searchReq(opts),
     paths: [`/search/artists?query=${enc(query)}&limit=${limit}`],
     validate: (json) => {
       const list = listFrom(unwrap(json));
@@ -97,10 +114,10 @@ export function searchArtists(rawQuery: string, limit = 20, opts?: { signal?: Ab
   });
 }
 
-export function searchPlaylists(rawQuery: string, limit = 20, opts?: { signal?: AbortSignal }): Promise<Playlist[]> {
+export function searchPlaylists(rawQuery: string, limit = 20, opts?: CatalogOpts): Promise<Playlist[]> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
-    signal: opts?.signal,
+    ...searchReq(opts),
     paths: [`/search/playlists?query=${enc(query)}&limit=${limit}`],
     validate: (json) => {
       const list = listFrom(unwrap(json));
@@ -114,10 +131,10 @@ export function searchPlaylists(rawQuery: string, limit = 20, opts?: { signal?: 
  *  page/p fallback ladder that already works for songs and albums; mirrors
  *  that ignore paging repeat page 1, which the client de-dupes by id and
  *  treats as end-of-results. Page is 1-based. */
-export function searchArtistsPage(rawQuery: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Artist[]> {
+export function searchArtistsPage(rawQuery: string, page: number, limit = 20, opts?: CatalogOpts): Promise<Artist[]> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
-    signal: opts?.signal,
+    ...searchReq(opts),
     paths: [
       `/search/artists?query=${enc(query)}&page=${page}&limit=${limit}`,
       `/search/artists?query=${enc(query)}&p=${page}&limit=${limit}`,
@@ -131,10 +148,10 @@ export function searchArtistsPage(rawQuery: string, page: number, limit = 20, op
 }
 
 /** Paged playlist search — twin of searchArtistsPage. */
-export function searchPlaylistsPage(rawQuery: string, page: number, limit = 20, opts?: { signal?: AbortSignal }): Promise<Playlist[]> {
+export function searchPlaylistsPage(rawQuery: string, page: number, limit = 20, opts?: CatalogOpts): Promise<Playlist[]> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
-    signal: opts?.signal,
+    ...searchReq(opts),
     paths: [
       `/search/playlists?query=${enc(query)}&page=${page}&limit=${limit}`,
       `/search/playlists?query=${enc(query)}&p=${page}&limit=${limit}`,
@@ -147,10 +164,10 @@ export function searchPlaylistsPage(rawQuery: string, page: number, limit = 20, 
   });
 }
 
-export function searchAll(rawQuery: string, opts?: { signal?: AbortSignal }): Promise<SearchResults> {
+export function searchAll(rawQuery: string, opts?: CatalogOpts): Promise<SearchResults> {
   const query = rewriteQuery(rawQuery);
   return orchestratedRequest({
-    signal: opts?.signal,
+    ...searchReq(opts),
     paths: [`/search?query=${enc(query)}`],
     validate: (json) => {
       const d = unwrap(json);
@@ -178,8 +195,12 @@ export function searchAll(rawQuery: string, opts?: { signal?: AbortSignal }): Pr
   });
 }
 
-export function getSong(id: string): Promise<Song> {
+export function getSong(id: string, opts?: CatalogOpts): Promise<Song> {
   return orchestratedRequest({
+    signal: opts?.signal,
+    // Song lookup is what a tap waits on: best endpoint, hedged.
+    priority: opts?.priority ?? 'interactive',
+    cacheMs: SEARCH_MEMO_MS,
     paths: [`/songs/${enc(id)}`, `/songs?id=${enc(id)}`, `/song?id=${enc(id)}`],
     validate: (json) => {
       const d = unwrap(json);
@@ -189,9 +210,10 @@ export function getSong(id: string): Promise<Song> {
   });
 }
 
-export function getSongSuggestions(id: string, limit = 15, opts?: { signal?: AbortSignal }): Promise<Song[]> {
+export function getSongSuggestions(id: string, limit = 15, opts?: CatalogOpts): Promise<Song[]> {
   return orchestratedRequest({
     signal: opts?.signal,
+    priority: opts?.priority,
     paths: [
       `/songs/${enc(id)}/suggestions?limit=${limit}`,
       `/songs/${enc(id)}/suggestions`,
@@ -205,9 +227,10 @@ export function getSongSuggestions(id: string, limit = 15, opts?: { signal?: Abo
   });
 }
 
-export function getAlbum(id: string, opts?: { signal?: AbortSignal }): Promise<Album> {
+export function getAlbum(id: string, opts?: CatalogOpts): Promise<Album> {
   return orchestratedRequest({
     signal: opts?.signal,
+    priority: opts?.priority,
     paths: [`/albums?id=${enc(id)}`, `/albums/${enc(id)}`, `/album?id=${enc(id)}`],
     validate: (json) => normalizeAlbum(unwrap(json)),
   });

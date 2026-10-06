@@ -12,12 +12,25 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '10.1.0': {
+    title: 'Glass, Flow, and search that answers as you type',
+    changes: [
+      { type: 'fixed', text: 'Web search in VinaX AI works again, properly. It used to rely on one search engine that fell asleep when idle and sometimes answered with pages that had nothing to do with your question. Now several sources are checked at once, anything off-topic is thrown away, and a follow-up like “what about his new movie?” is searched with what you were talking about. When nothing relevant turns up, VinaX AI still says so plainly instead of guessing.' },
+      { type: 'new', text: 'Flow: a full-screen feed of songs to swipe through. Each one starts at its chorus when the lyrics show one (otherwise about a third of the way in), with the lyrics on screen; double-tap to like, tap Play full song to keep it, or swipe up for the next. Your own queue is set aside while you browse and comes back when you leave.' },
+      { type: 'new', text: 'Search answers while you type: suggestions, songs with their artwork, artists and albums appear under the box in a moment, and the arrow keys and Enter work too. Results open with one big top result, then songs, artists, albums and playlists, each with See all. An empty search shows what you searched recently and what everyone is searching now.' },
+      { type: 'improved', text: 'Faster, steadier music loading. VinaX now keeps track of which music server is answering quickest, asks a second one when the first is slow, and backs off from a busy server instead of retrying it.' },
+      { type: 'new', text: 'Frosted glass: the top bar, tab bar, mini player and menus are now see-through glass that blurs what scrolls beneath it and picks up the colour of the song that is playing. Now Playing has a slow, softly blurred backdrop of the artwork. The Glass effect and Blur settings still control it, and it stays solid when reduced transparency is on.' },
+      { type: 'improved', text: 'Notifications are now small cards above the player, with the song’s cover and one action — View after a like, Undo after removing one, View after adding to the queue. They wait while your pointer is over them, and swipe down to dismiss. Liking the song that is playing shows one card, not two.' },
+      { type: 'improved', text: 'The notifications inbox is redesigned: grouped by day, with each song’s artwork.' },
+      { type: 'improved', text: 'Help, the guided tours and the user guide are updated for the new design.' },
+    ],
+  },
   '10.0.0': {
     title: 'Marigold — a new look, and Listen Together that really stays together',
     changes: [
       { type: 'new', text: 'A whole new look. Warm plum backgrounds, a marigold accent and a bolder headline typeface across every page — Home, Search, Library, the player, Settings and VinaX AI. The light theme is now warm cream paper. Everything still passes our readability checks in both themes.' },
       { type: 'new', text: 'First time here? Home now says it plainly: all the music you love, free. No subscription, no email, no password. One tap on “Start listening” plays a mix, and the tiles below show everything that is included — VinaX AI, Radio, Listen Together, synced lyrics, offline downloads on Android and 12 languages.' },
-      { type: 'fixed', text: 'Listen Together kept working only while you stayed on its page. Open Search to find the next song and the session quietly stopped for everyone. Now a session runs across the whole app — and survives a reload — with a small “Live” pill on every page that takes you back to the room.' },
+      { type: 'fixed', text: 'Listen Together kept working only while you stayed on its page. Open Search to find the next song and the session quietly stopped for everyone. Now a session runs across the whole app — and survives a reload — with a small “Live” pill on every other page that takes you back to the room.' },
       { type: 'fixed', text: 'Guests in Listen Together drifted a second or two behind and kept jumping to catch up. Every phone now times the host from the same server clock, so the room plays the same moment and corrections are rare and smooth.' },
       { type: 'fixed', text: 'A song a guest added to Listen Together reached the host without its audio and could not play. The host’s app now fetches the full song first, and tells you plainly if a song is not available.' },
       { type: 'fixed', text: 'Several friends on the same Wi-Fi could be cut off from a Listen Together room. The room now has room for everyone on one network.' },

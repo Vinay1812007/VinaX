@@ -20,7 +20,7 @@ import { Chip } from '@/components/Chip';
 import { CardGridSkeleton, ListSkeleton } from '@/components/Skeletons';
 import { EmptyState, ErrorState } from '@/components/States';
 import { InfiniteSentinel } from '@/components/InfiniteSentinel';
-import { ChevronDownIcon, ClockIcon, MusicIcon, PlayIcon, QueueIcon, SearchIcon, SparkleIcon, XIcon } from '@/components/Icons';
+import { ChevronDownIcon, MusicIcon, PlayIcon, QueueIcon, SearchIcon, SparkleIcon, XIcon } from '@/components/Icons';
 import { normalizeQuery, rankSongs, useSearchAll } from '@/features/search/useSearch';
 import {
   flattenAlbumPages,
@@ -60,10 +60,18 @@ import { looksLikeLyric, splitHighlight } from '@/features/search/lyricsSearch';
 import { useLyricsSearch } from '@/features/search/useLyricsSearch';
 import { filterSongsLocally, SONG_SORT_LABELS, sortSongs } from '@/features/search/sortSongs';
 import { exampleQueries } from '@/features/search/searchTips';
-import { rerankSongs, suggestTitles } from '@/features/search/rerank';
+import { completions, pinnedFirst, rerankSongs, suggestTitles } from '@/features/search/rerank';
 import { candidatePool, COMMON_NAMES, didYouMean } from '@/features/search/didYouMean';
 import { useQuickResults } from '@/features/search/useQuickResults';
-import { putCachedQuick, QUICK_LIMIT } from '@/features/search/quickResults';
+import { putCachedQuick } from '@/features/search/quickResults';
+import {
+  optionId,
+  SearchTypeahead,
+  stepSelection,
+  typeaheadItems,
+  TYPEAHEAD_SONGS,
+  type TypeaheadItem,
+} from '@/features/search/SearchTypeahead';
 import { PageHeader } from '@/components/PageHeader';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Button } from '@/components/Button';
@@ -89,42 +97,6 @@ function loadStickyTab(): Tab {
   } catch {
     return 'All';
   }
-}
-
-type GraphemeSegmenter = new (locale?: string, options?: { granularity: 'grapheme' }) => {
-  segment(input: string): Iterable<{ index: number; segment: string }>;
-};
-
-/** Widen [start, end) to whole character clusters, so a highlight never
- *  splits a conjunct or a vowel sign from its consonant (Indic scripts shape
- *  across those code points; a split shows broken glyphs). Without
- *  Intl.Segmenter the range is returned as it came. */
-function clusterBounds(text: string, start: number, end: number): [number, number] {
-  const Seg = (Intl as unknown as { Segmenter?: GraphemeSegmenter }).Segmenter;
-  if (!Seg) return [start, end];
-  let from = start;
-  let to = end;
-  for (const g of new Seg(undefined, { granularity: 'grapheme' }).segment(text)) {
-    const gEnd = g.index + g.segment.length;
-    if (g.index < start && gEnd > start) from = g.index;
-    if (g.index < end && gEnd > end) to = gEnd;
-    if (g.index >= end) break;
-  }
-  return [from, to];
-}
-
-/** Bold the matched substring so suggestions read as completions (P2-30). */
-function Highlight({ text, term }: { text: string; term: string }) {
-  const i = term ? text.toLowerCase().indexOf(term.toLowerCase()) : -1;
-  if (i < 0) return <>{text}</>;
-  const [from, to] = clusterBounds(text, i, i + term.length);
-  return (
-    <>
-      {text.slice(0, from)}
-      <span className="search-hl">{text.slice(from, to)}</span>
-      {text.slice(to)}
-    </>
-  );
 }
 
 /** True once the sticky search header has reached the top bar: it then takes
@@ -155,44 +127,6 @@ function useStuck(ref: RefObject<HTMLElement | null>): boolean {
     };
   }, [ref]);
   return stuck;
-}
-
-/** v5.19.0 — one compact, playable "Quick results" row under the suggestions. */
-function QuickRow({ song, onPlay, dim }: { song: Song; onPlay: () => void; dim: boolean }) {
-  const pointer = useRef<{ x: number; y: number } | null>(null);
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        if (e.detail === 0 && !dim) onPlay();
-      }}
-      disabled={dim}
-      onPointerDown={(e) => {
-        e.preventDefault(); // keep the box focused so the panel stays open
-        pointer.current = { x: e.clientX, y: e.clientY };
-      }}
-      onPointerUp={(e) => {
-        const p = pointer.current;
-        pointer.current = null;
-        if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12) onPlay();
-      }}
-      className={cn('search-quick-row', dim && 'is-stale')}
-    >
-      <img
-        src={bestImage(song.images, 150)}
-        onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-        alt=""
-        width={40}
-        height={40}
-        decoding="async"
-      />
-      <span className="search-quick-text">
-        <span className="search-quick-title">{song.title}</span>
-        <span className="search-quick-sub">{song.subtitle}</span>
-      </span>
-      <PlayIcon />
-    </button>
-  );
 }
 
 /**
@@ -393,7 +327,6 @@ export default function SearchPage() {
 
   const trendingNow = useTrendingNow();
   const recRef = useRef<SttSession | null>(null);
-  const suggPointer = useRef<{ x: number; y: number } | null>(null);
 
   // Make sure the speech-recognition mic is released if we leave the page mid
   // listen — an open mic forces Bluetooth into the low-quality call profile.
@@ -480,8 +413,8 @@ export default function SearchPage() {
   // re-typing (or returning to) this query previews instantly, no request.
   useEffect(() => {
     if (allSongs && !allPlaceholder && q.length >= 2)
-      putCachedQuick(q, rankedAllSongs.slice(0, QUICK_LIMIT));
-  }, [allSongs, allPlaceholder, q, rankedAllSongs]);
+      putCachedQuick(q, { songs: rankedAllSongs, artists: all.data?.artists, albums: all.data?.albums });
+  }, [allSongs, allPlaceholder, q, rankedAllSongs, all.data]);
 
   // Search analytics: one event per settled query, with its result count.
   const lastTracked = useRef('');
@@ -499,7 +432,13 @@ export default function SearchPage() {
     [all.data, allPlaceholder, q],
   );
   const leadFrom = topArtist ? 0 : 1;
-  const leadSongs = rankedAllSongs.slice(leadFrom, leadFrom + 4);
+  const leadSongs = rankedAllSongs.slice(leadFrom, leadFrom + 5);
+  // 10.1 — pinned languages lead the album and playlist rows too.
+  const allAlbumsRow = useMemo(() => pinnedFirst(all.data?.albums ?? [], pinnedLangs), [all.data?.albums, pinnedLangs]);
+  const allPlaylistsRow = useMemo(
+    () => pinnedFirst(all.data?.playlists ?? [], pinnedLangs),
+    [all.data?.playlists, pinnedLangs],
+  );
   const songPages = infiniteSongs.data?.pages;
   const allSongList = useMemo(() => flattenSongPages(songPages), [songPages]);
   const availableLangs = [
@@ -536,15 +475,6 @@ export default function SearchPage() {
     ],
     [recent, pinned],
   );
-  const recentMatches = useMemo(
-    () =>
-      trimmed
-        ? recent
-            .filter((r) => r.toLowerCase().includes(trimmed.toLowerCase()) && r !== q)
-            .slice(0, 3)
-        : [],
-    [trimmed, recent, q],
-  );
   // Only from SETTLED results for the text in the box: placeholder data and
   // the debounce gap both mean `rankedAllSongs` belongs to another query.
   const titleSuggest = useMemo(
@@ -556,33 +486,84 @@ export default function SearchPage() {
       }),
     [rankedAllSongs, trimmed, q, typedNow, allPlaceholder],
   );
-  const showSuggest =
-    focused && trimmed.length >= 1 && (recentMatches.length > 0 || titleSuggest.length > 0);
-  // Keyboard-first autocomplete (P2-30): ↑/↓ walk the combined list, Enter
-  // picks the highlighted entry (or commits the typed text), Esc dismisses.
-  const suggList = useMemo(
-    () => [...recentMatches, ...titleSuggest],
-    [recentMatches, titleSuggest],
-  );
-  const [suggSel, setSuggSel] = useState(-1);
-  useEffect(() => setSuggSel(-1), [trimmed, focused]);
 
-  // v5.19.0 — search-as-you-type preview: six playable songs under the
-  // suggestions, 250 ms after the (normalised) text settles, previous request
-  // aborted, URL untouched. Off in lyrics mode and while the box is blurred.
+  // 10.1 — the typeahead. Quick hits (songs, artists, albums) 150 ms after
+  // the normalised text settles, the previous request aborted, URL untouched;
+  // the same combined search the All tab makes, so the two share one call.
+  // Off while the box is blurred; lyrics mode keeps completions only.
   const quick = useQuickResults(focused && !lyricsMode ? typedNow : '');
+  const quickHits = quick.hits;
   const quickSongs = useMemo(
     () =>
       rerankSongs(
-        rankSongs(quick.songs, { query: quick.key, searchMode: true }),
+        rankSongs(quickHits.songs, { query: quick.key, searchMode: true }),
         quick.key,
         pinnedLangs,
       ),
-    [quick.songs, quick.key, pinnedLangs],
+    [quickHits.songs, quick.key, pinnedLangs],
   );
-  const showQuick =
-    focused && !lyricsMode && typedNow.length >= 2 && (quickSongs.length > 0 || quick.loading);
-  const showPanel = showSuggest || showQuick;
+  const quickAlbums = useMemo(() => pinnedFirst(quickHits.albums, pinnedLangs), [quickHits.albums, pinnedLangs]);
+  const trendingList = trendingQ.data?.queries;
+  // Completions: recents, trending terms, then titles already returned —
+  // minus the songs shown as hits right below them.
+  const queryCompletions = useMemo(() => {
+    const shown = new Set(
+      quick.stale ? [] : quickSongs.slice(0, TYPEAHEAD_SONGS).map((s) => s.title.trim().toLowerCase()),
+    );
+    const titles = [...(quick.stale ? [] : quickSongs.map((s) => s.title)), ...titleSuggest].filter(
+      (t) => !shown.has(t.trim().toLowerCase()),
+    );
+    return completions(trimmed, { recent: recentOrdered, trending: trendingList ?? [], titles });
+  }, [trimmed, recentOrdered, trendingList, quickSongs, quick.stale, titleSuggest]);
+  const taItems = useMemo(
+    () =>
+      typeaheadItems(
+        queryCompletions,
+        lyricsMode || typedNow.length < 2
+          ? { songs: [], artists: [], albums: [] }
+          : { songs: quickSongs, artists: quickHits.artists, albums: quickAlbums },
+      ),
+    [queryCompletions, lyricsMode, typedNow, quickSongs, quickHits.artists, quickAlbums],
+  );
+  // Escape, Enter and a pick close the panel for the text they acted on;
+  // the next keystroke opens it again.
+  const [closedFor, setClosedFor] = useState<string | null>(null);
+  const showPanel =
+    focused &&
+    closedFor !== typedNow &&
+    trimmed.length >= 1 &&
+    (taItems.length > 0 || (quick.loading && !lyricsMode));
+  // Keyboard-first (P2-30): ↑/↓ walk every row, Enter picks the highlighted
+  // one (or commits the typed text), Esc closes.
+  const [taSel, setTaSel] = useState(-1);
+  useEffect(() => setTaSel(-1), [typedNow, focused]);
+  const activeOption = showPanel && taSel >= 0 && taSel < taItems.length ? optionId('search-suggest', taSel) : undefined;
+  useEffect(() => {
+    if (activeOption) document.getElementById(activeOption)?.scrollIntoView({ block: 'nearest' });
+  }, [activeOption]);
+
+  // 10.1 — what a typeahead row does: a completion searches, a song plays
+  // (the hits queue up behind it), an artist or album opens its page. Every
+  // pick also remembers the words as a recent search.
+  const pickItem = (item: TypeaheadItem) => {
+    setTaSel(-1);
+    if (item.kind === 'query') {
+      setClosedFor(normalizeQuery(item.text));
+      applySuggestion(item.text);
+      return;
+    }
+    setClosedFor(normalizeQuery(input));
+    if (normalizeQuery(input).length >= 2) addRecent(normalizeQuery(input));
+    if (item.kind === 'song') {
+      const queue = quickSongs.slice(0, TYPEAHEAD_SONGS);
+      playQueue(queue, item.index);
+      recordSearchPlay(item.song);
+    } else if (item.kind === 'artist') {
+      navigate(artistPath(item.artist));
+    } else {
+      navigate(albumPath(item.album));
+    }
+  };
 
   // v5.19.0 — "Did you mean …?" once a committed query settles with no songs:
   // nearest of trending queries + recents + a small built-in name list.
@@ -668,9 +649,18 @@ export default function SearchPage() {
     </Chip>
   );
 
-  const showAllTab = (t: Tab, title: string) => (
-    <button type="button" className="vx-section-link" onClick={() => setTab(t)} aria-label={`Show all ${title.toLowerCase()}`}>
-      Show all
+  // "See all" switches the filter tab — the chips above stay the one way in.
+  const seeAll = (t: Tab) => (
+    <button
+      type="button"
+      className="vx-section-link"
+      onClick={() => {
+        setTab(t);
+        document.getElementById('main-content')?.scrollTo({ top: 0 });
+      }}
+      aria-label={`See all ${t.toLowerCase()}`}
+    >
+      See all
     </button>
   );
 
@@ -723,19 +713,21 @@ export default function SearchPage() {
             maxLength={120}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (showSuggest && e.key === 'ArrowDown') {
+              if (showPanel && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
                 e.preventDefault();
-                setSuggSel((v) => (v + 1) % suggList.length);
-              } else if (showSuggest && e.key === 'ArrowUp') {
-                e.preventDefault();
-                setSuggSel((v) => (v <= 0 ? suggList.length - 1 : v - 1));
+                setTaSel((v) => stepSelection(v, e.key === 'ArrowDown' ? 1 : -1, taItems.length));
               } else if (e.key === 'Escape' && showPanel) {
-                setFocused(false);
+                e.preventDefault();
+                setClosedFor(typedNow);
+                setTaSel(-1);
               } else if (e.key === 'Enter') {
                 e.preventDefault();
-                const picked = suggSel >= 0 ? suggList[suggSel] : null;
-                if (picked) applySuggestion(picked);
-                else commitSearch(input);
+                const picked = activeOption ? taItems[taSel] : null;
+                if (picked) pickItem(picked);
+                else {
+                  setClosedFor(typedNow);
+                  commitSearch(input);
+                }
               }
             }}
             aria-label="Search music"
@@ -743,7 +735,8 @@ export default function SearchPage() {
             aria-expanded={showPanel}
             aria-controls="search-suggest"
             aria-autocomplete="list"
-            aria-activedescendant={suggSel >= 0 ? `sugg-${suggSel}` : undefined}
+            aria-haspopup="listbox"
+            aria-activedescendant={activeOption}
             onFocus={() => {
               focusedRef.current = true;
               setFocused(true);
@@ -802,68 +795,16 @@ export default function SearchPage() {
             )}
           </div>
           {showPanel && (
-            <div className="search-panel">
-              <div
-                id="search-suggest"
-                role="listbox"
-                aria-label="Search suggestions"
-                hidden={!showSuggest}
-              >
-                {suggList.map((text, i) => {
-                  const isRecent = i < recentMatches.length;
-                  const Icon = isRecent ? ClockIcon : SearchIcon;
-                  return (
-                    <button
-                      key={`${isRecent ? 'r' : 't'}-${text}`}
-                      id={`sugg-${i}`}
-                      type="button"
-                      role="option"
-                      aria-selected={suggSel === i}
-                      onClick={(e) => {
-                        if (e.detail === 0) applySuggestion(text);
-                      }}
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        suggPointer.current = { x: e.clientX, y: e.clientY };
-                      }}
-                      onPointerUp={(e) => {
-                        const p = suggPointer.current;
-                        suggPointer.current = null;
-                        if (p && Math.abs(e.clientX - p.x) < 12 && Math.abs(e.clientY - p.y) < 12)
-                          applySuggestion(text);
-                      }}
-                      className="search-option"
-                    >
-                      <Icon />
-                      <span>
-                        <Highlight text={text} term={trimmed} />
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {showQuick && (
-                <section
-                  aria-label="Quick results"
-                  aria-busy={quick.loading}
-                  className={cn(showSuggest && 'search-panel-split')}
-                >
-                  <p className="search-panel-label">Quick results</p>
-                  {quickSongs.length === 0 && quick.loading && <ListSkeleton rows={3} />}
-                  {quickSongs.map((song, i) => (
-                    <QuickRow
-                      key={song.id}
-                      song={song}
-                      dim={quick.stale}
-                      onPlay={() => {
-                        playQueue(quickSongs, i);
-                        recordSearchPlay(song);
-                      }}
-                    />
-                  ))}
-                </section>
-              )}
-            </div>
+            <SearchTypeahead
+              listId="search-suggest"
+              items={taItems}
+              term={trimmed}
+              selected={taSel}
+              loading={quick.loading}
+              stale={quick.stale}
+              onPick={pickItem}
+              onHover={setTaSel}
+            />
           )}
         </div>
         {(active || lyricsMode || !trimmed) && (
@@ -924,16 +865,23 @@ export default function SearchPage() {
                 {trendingTerms.length > 0 && (
                   <section className="search-block search-trending-queries" aria-label="Trending searches">
                     <SectionHeader title="Trending searches" explanation="What listeners look for now" />
-                    <ol>
-                      {trendingTerms.slice(0, 8).map((term, i) => (
+                    <ul className="search-trend-chips">
+                      {trendingTerms.slice(0, 10).map((term, i) => (
                         <li key={term}>
-                          <button type="button" onClick={() => applySuggestion(term)}>
-                            <span className="search-rank">{i + 1}</span>
-                            <span className="search-trend-text">{term}</span>
+                          <button
+                            type="button"
+                            className={cn('search-trend-chip', i < 3 && 'is-top')}
+                            onClick={() => applySuggestion(term)}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M3 17l6-6 4 4 8-8" />
+                              <path d="M15 7h6v6" />
+                            </svg>
+                            <span>{term}</span>
                           </button>
                         </li>
                       ))}
-                    </ol>
+                    </ul>
                   </section>
                 )}
               </div>
@@ -1162,14 +1110,7 @@ export default function SearchPage() {
                         )}
                         {leadSongs.length > 0 && (
                           <section aria-label="Songs" className="min-w-0">
-                            <SectionHeader
-                              title="Songs"
-                              action={
-                                <button type="button" className="vx-section-link" onClick={() => setTab('Songs')} aria-label="Show all songs">
-                                  Show all
-                                </button>
-                              }
-                            />
+                            <SectionHeader title="Songs" action={seeAll('Songs')} />
                             <div className="search-top-songs">
                               {leadSongs.map((song, i) => (
                                 <SearchPlay key={song.id} song={song}>
@@ -1183,7 +1124,7 @@ export default function SearchPage() {
                     </div>
                   )}
                   {all.data.artists.length > 0 && (
-                    <Shelf title="Artists" action={showAllTab('Artists', 'Artists')}>
+                    <Shelf title="Artists" action={seeAll('Artists')}>
                       {all.data.artists.map((a) => (
                         <MediaCard
                           key={a.id}
@@ -1202,9 +1143,9 @@ export default function SearchPage() {
                       ))}
                     </Shelf>
                   )}
-                  {all.data.albums.length > 0 && (
-                    <Shelf title="Albums" action={showAllTab('Albums', 'Albums')}>
-                      {all.data.albums.map((a) => (
+                  {allAlbumsRow.length > 0 && (
+                    <Shelf title="Albums" action={seeAll('Albums')}>
+                      {allAlbumsRow.map((a) => (
                         <MediaCard
                           key={a.id}
                           to={albumPath(a)}
@@ -1217,9 +1158,9 @@ export default function SearchPage() {
                       ))}
                     </Shelf>
                   )}
-                  {all.data.playlists.length > 0 && (
-                    <Shelf title="Playlists" action={showAllTab('Playlists', 'Playlists')}>
-                      {all.data.playlists.map((p) => (
+                  {allPlaylistsRow.length > 0 && (
+                    <Shelf title="Playlists" action={seeAll('Playlists')}>
+                      {allPlaylistsRow.map((p) => (
                         <MediaCard
                           key={p.id}
                           to={playlistPath(p)}

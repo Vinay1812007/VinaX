@@ -307,7 +307,8 @@ class AudioEngine {
     return true;
   }
 
-  load(song: Song, pref: AudioQualityPref, autoplay: boolean): void {
+  /** `startAt` (10.1 Flow previews, a restored queue) starts the song part-way in, once its data loads. */
+  load(song: Song, pref: AudioQualityPref, autoplay: boolean, startAt = 0): void {
     if (!this.el) return;
     this.song = song;
     this.lastInterruptionAt = 0; // a new load supersedes any pending auto-resume
@@ -322,7 +323,8 @@ class AudioEngine {
     this.lastTime = 0;
     this.srcPlayedOk = false;
     this.retriedCurrentSrc = false;
-    this.pendingSeek = 0;
+    this.pendingSeek = startAt > 0 && Number.isFinite(startAt) ? startAt : 0;
+    this.lastTime = this.pendingSeek;
     if (this.sources.length === 0) {
       this.cb?.onFatalError(song.id);
       return;
