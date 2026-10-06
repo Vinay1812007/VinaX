@@ -27,24 +27,35 @@ async function markOnboarded(page: Page): Promise<void> {
   }, latestNotesFingerprint());
 }
 
-test('first run walks onboarding: name gate → tour → app shell', async ({ page }) => {
+test('first run walks the welcome: name → languages → look → slides → app shell', async ({ page }) => {
   await goOffline(page);
   await page.goto('/');
 
-  // The welcome step demands a name before anything else.
-  await expect(page.getByText('Music tuned to you')).toBeVisible();
+  // Step 1 demands a name; Escape does not close a required step.
+  await expect(page.getByRole('heading', { name: 'Free. No sign-up.' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByText('Enter a name for your listening profile.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Enter a name of at least two letters.')).toBeVisible();
 
-  await page.getByLabel('What should we call you?').fill('Tester');
+  // The username is suggested from the name; offline, the claim is parked.
+  await page.getByLabel('Your name').fill('Tester');
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  // Catalog unreachable → the taste-seed step silently yields to the tour.
+  await expect(page.getByRole('heading', { name: 'Choose your languages' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  // The new 11.0 step: six app styles, applied live.
+  await expect(page.getByRole('heading', { name: 'Pick your look' })).toBeVisible();
+  await page.getByRole('radio', { name: /Sangam/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-template', 'sangam');
+  await page.getByRole('button', { name: 'Use this look' }).click();
+
+  // Catalogue unreachable → the songs step is left out and the slides follow.
   await expect(page.getByText('Five places to go')).toBeVisible();
-  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: 'Skip the rest' }).click();
 
   // Sheet gone, app shell alive.
-  await expect(page.getByText('Music tuned to you')).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Five places to go' })).toBeHidden();
   await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
 });
 

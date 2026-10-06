@@ -41,6 +41,9 @@
   var message = '';
 
   function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  // 11.0 — the error state component comes from app.js; a host that does not
+  // hand it over (a unit test, an older shell) still gets the message as text.
+  function errState(h, msg) { return typeof h.stateError === 'function' ? h.stateError(msg) : '<div class="state state-error empty" role="alert"><div class="state-hint">' + h.esc(msg) + '</div></div>'; }
   function n0(v) { return typeof v === 'number' && isFinite(v) ? v : 0; }
   function fmtN(v) { v = n0(v); return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'k' : String(v); }
   function when(iso) { if (typeof iso !== 'string' || !iso) return 'never'; var t = Date.parse(iso); return isNaN(t) ? iso : new Date(t).toLocaleString(); }
@@ -78,9 +81,9 @@
   }
 
   function windowBar(h) {
-    return '<div class="row" role="group" aria-label="Window" style="gap:6px;margin:0 0 14px;flex-wrap:wrap">' + WINDOWS.map(function (w) {
+    return '<div class="seg" role="group" aria-label="Window" style="margin-bottom:var(--s-4)">' + WINDOWS.map(function (w) {
       var on = w[0] === days;
-      return h.html`<button type="button" class="${on ? '' : 'ghost'}" data-ao-days="${w[0]}" aria-pressed="${on ? 'true' : 'false'}">${w[1]}</button>`;
+      return h.html`<button type="button" data-ao-days="${w[0]}" aria-pressed="${on ? 'true' : 'false'}">${w[1]}</button>`;
     }).join('') + '</div>';
   }
 
@@ -93,7 +96,7 @@
         var b = isObj(g.blocked) ? g.blocked : {};
         var t = isObj(g.tokens) ? g.tokens : {};
         return h.html`<tr><td><code>${g.key}</code></td><td>${fmtN(g.calls)}</td><td>${rateText(g.failureRate)}</td><td>${latText(g.latencyMs)}</td><td>${fmtN(g.hops)}</td><td>${n0(b.disabled) + n0(b.overBudget) ? n0(b.disabled) + ' off · ' + n0(b.overBudget) + ' over budget' : '—'}</td><td>${fmtN(t.prompt)}</td><td>${fmtN(t.completion)}</td><td>${costText(g.cost)}</td></tr>`;
-      }).join('') : '<tr><td colspan="9" class="empty">Nothing logged in this window.</td></tr>') + '</tbody></table></div>';
+      }).join('') : '<tr class="table-empty"><td colspan="9"><div class="state state-empty empty" role="status"><div class="state-title">Nothing logged in this window</div><div class="state-hint">AI requests are logged here as listeners use the assistant. Widen the window to look further back.</div></div></td></tr>') + '</tbody></table></div>';
   }
 
   function budgetCard(h, d) {
@@ -110,7 +113,7 @@
     var costNow = typeof b.costTodayUsd === 'number' ? '$' + b.costTodayUsd.toFixed(4) + (b.costComplete ? '' : ' known so far') : 'unknown';
     var cost = typeof b.costCapUsd === 'number' ? costNow + ' of $' + b.costCapUsd.toFixed(2) + (typeof b.costPct === 'number' ? ' (' + b.costPct + '%)' : '') : costNow + ' · no cap';
     var warn = b.state === 'over_tokens' || b.state === 'over_cost' || b.state === 'controls_unknown';
-    return h.html`<div class="card" style="margin-bottom:14px${warn ? ';border-color:var(--danger)' : ''}"><h3 style="margin-top:0">Budget today <span class="muted">· ${b.day || ''} (UTC)</span></h3>` +
+    return h.html`<div class="card" style="margin-bottom:14px${warn ? ';border-color:var(--bad)' : ''}"><h3 style="margin-top:0">Budget today <span class="muted">· ${b.day || ''} (UTC)</span></h3>` +
       h.html`<table><tbody><tr><td>Tokens</td><td>${tok}</td></tr><tr><td>Cost</td><td>${cost}</td></tr></tbody></table><p class="muted" style="margin-bottom:0">${states[b.state] || ''} Token counts come only from calls whose provider reported them.</p></div>`;
   }
 
@@ -120,7 +123,7 @@
     var e = editing();
     var who = pub.updatedBy ? pub.updatedBy : 'the shared admin token';
     var status = c.read === 'failed'
-      ? h.html`<p style="color:var(--danger)">The published controls could not be read (${c.error || 'database error'}). Publishing now would replace them without seeing them.</p>`
+      ? h.html`<p style="color:var(--bad)">The published controls could not be read (${c.error || 'database error'}). Publishing now would replace them without seeing them.</p>`
       : c.published
         ? h.html`<p class="muted" style="margin-top:0">Last published ${when(pub.updatedAt)} by ${who}. There is one shared admin token, so "by" is only what the publisher typed.</p>`
         : '<p class="muted" style="margin-top:0">No controls published yet: every AI feature is on and there are no caps.</p>';
@@ -130,12 +133,12 @@
       return h.html`<tr><td><code>${f[0]}</code></td><td class="muted">${f[1]}</td><td><label><input type="checkbox" data-ao-feature="${f[0]}"${on ? ' checked' : ''}> ${on ? 'on' : 'off'}</label>${changed ? ' · unpublished' : ''}</td></tr>`;
     }).join('');
     var confirm = confirming
-      ? '<div class="card" id="ao-confirm" role="alertdialog" aria-labelledby="ao-confirm-t" style="border-color:var(--danger);margin:12px 0">' +
+      ? '<div class="card" id="ao-confirm" role="alertdialog" aria-labelledby="ao-confirm-t" style="border-color:var(--bad);margin:12px 0">' +
         '<b id="ao-confirm-t">Switch AI off for every listener?</b><p class="muted">The DJ, VinaX AI, playlists, curation, lyric tools, speech and images all stop answering until AI is switched back on. Listeners keep the on-device experience.</p>' +
-        '<div class="row" style="gap:8px"><button type="button" id="ao-confirm-yes" style="background:var(--danger);border-color:var(--danger)">Yes, switch AI off</button><button type="button" class="ghost" id="ao-confirm-no">Cancel</button></div></div>'
+        '<div class="row" style="gap:8px"><button type="button" class="btn btn-danger" id="ao-confirm-yes">Yes, switch AI off</button><button type="button" class="ghost" id="ao-confirm-no">Cancel</button></div></div>'
       : '';
     return '<div class="card" id="ao-controls" style="margin-bottom:14px"><h3 style="margin-top:0">Emergency controls</h3>' + status +
-      (pub.emergencyOff ? '<p style="color:var(--danger);font-weight:700">AI is switched OFF for every listener.</p>' : '') +
+      (pub.emergencyOff ? '<p style="color:var(--bad);font-weight:700">AI is switched OFF for every listener.</p>' : '') +
       h.html`<label style="display:flex;gap:8px;align-items:center;font-weight:700;margin:10px 0"><input type="checkbox" id="ao-off"${e.emergencyOff ? ' checked' : ''}> Switch all AI off (emergency)</label>` +
       '<table><thead><tr><th>Feature</th><th>What it is</th><th>State</th></tr></thead><tbody>' + rows + '</tbody></table>' +
       '<div class="row" style="gap:12px;flex-wrap:wrap;margin-top:12px">' +
@@ -143,7 +146,7 @@
       h.html`<label>Daily cost cap (USD) <input class="inp" id="ao-costcap" type="number" min="0" step="0.01" placeholder="no cap" value="${e.dailyCostCapUsd == null ? '' : e.dailyCostCapUsd}" style="width:120px"></label>` +
       h.html`<label>Your name or initials <input class="inp" id="ao-by" maxlength="40" placeholder="optional" value="${draft ? draft.by : ''}" style="width:140px"></label>` +
       '</div>' + confirm +
-      '<div class="row" style="gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap"><button type="button" id="ao-publish">Publish controls</button>' +
+      '<div class="row" style="gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap"><button type="button" class="btn btn-primary" id="ao-publish">Publish controls</button>' +
       (draft ? '<button type="button" class="ghost" id="ao-discard">Discard changes</button>' : '') +
       h.html`<span class="muted" id="ao-out" role="status" style="font-size:12px">${message}</span></div>` +
       '<p class="muted" style="margin-bottom:0">Enforced by the Worker\'s AI router: a switched-off feature answers 503 ai_disabled and a spent cap 503 ai_over_budget. The Worker picks up a change when it next reads its config (about a minute).</p></div>';
@@ -151,14 +154,14 @@
 
   function paint(h) {
     var d = last;
-    if (!isObj(d)) { h.view('<div class="empty">Unexpected response from the server.</div>'); return; }
-    if (d.configured === false) { h.view('<div class="empty">The database is not configured on this Worker.</div>'); return; }
-    if (!isObj(d.totals)) { h.view('<div class="empty">Unexpected response from the server.</div>'); return; }
+    if (!isObj(d)) { h.view(errState(h, 'Unexpected response from the server.')); return; }
+    if (d.configured === false) { h.view('<div class="state state-empty empty" role="status"><div class="state-title">The database is not configured on this Worker</div><div class="state-hint">Bind the database to the Worker, deploy, then reload this page.</div></div>'); return; }
+    if (!isObj(d.totals)) { h.view(errState(h, 'Unexpected response from the server.')); return; }
     var t = d.totals;
     var tk = isObj(t.tokens) ? t.tokens : {};
     var pub = published();
     var banner = pub.emergencyOff
-      ? h.html`<div class="card" style="margin-bottom:14px;border-color:var(--danger)"><b style="color:var(--danger)">AI is switched off for every listener</b> <span class="muted">since ${when(pub.updatedAt)}.</span></div>`
+      ? h.html`<div class="card" style="margin-bottom:14px;border-color:var(--bad)"><b style="color:var(--bad)">AI is switched off for every listener</b> <span class="muted">since ${when(pub.updatedAt)}.</span></div>`
       : '';
     var cards = '<div class="cards">' +
       h.html`<div class="card"><div class="n">${fmtN(t.calls)}</div><div class="l">AI calls · ${n0(d.days)} d</div></div>` +

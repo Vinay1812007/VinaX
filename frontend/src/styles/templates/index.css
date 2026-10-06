@@ -1,0 +1,10 @@
+/* 11.0 — app styles. The shared layer first, then one file per style; each
+   style's rules only match its own html[data-template] value. Imported by
+   main.tsx after shell.css and before festivals.css. */
+@import './base.css';
+@import './aura.css';
+@import './pulse.css';
+@import './sangam.css';
+@import './nocturne.css';
+@import './marquee.css';
+@import './vibe.css';

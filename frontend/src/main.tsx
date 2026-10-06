@@ -6,6 +6,7 @@ import App from './App';
 import './styles/index.css';
 import './styles/shell.css';
 import './styles/features.css';
+import './styles/templates/index.css';
 import './styles/festivals.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

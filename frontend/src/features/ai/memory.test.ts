@@ -129,3 +129,17 @@ describe('memoryBlock', () => {
     expect(memoryBlock().length).toBeLessThanOrEqual(MEMORY_BUDGET + 400);
   });
 });
+
+describe('the budget is spent on the newest memories', () => {
+  beforeEach(() => setMemoryEnabled(true));
+
+  it('still sends a memory added after the budget is already full', () => {
+    for (let i = 0; i < 20; i += 1) addMemory(`${'y'.repeat(MAX_MEMORY_CHARS - 6)} ${i}`, T0 + i);
+    addMemory('I just moved to Vizag', T0 + 5000);
+    const block = memoryBlock();
+    expect(block).toContain('I just moved to Vizag');
+    expect(block.length).toBeLessThanOrEqual(MEMORY_BUDGET + 400);
+    // Still listed oldest first: the newest line is the last one.
+    expect(block.trimEnd().endsWith('- I just moved to Vizag')).toBe(true);
+  });
+});

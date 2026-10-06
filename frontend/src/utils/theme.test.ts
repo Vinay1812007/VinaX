@@ -103,6 +103,23 @@ describe('theme resolution + application', () => {
     expect(resolveTheme('auto', false, 2)).toBe('dark');
   });
 
+  it('11.0 — stamps the app style and its canvas, and keeps the style a caller did not name', () => {
+    const root = document.createElement('html');
+    applyThemeClasses('dark', root, 'pulse');
+    expect(root.dataset.template).toBe('pulse');
+    expect(root.style.background).toBe('rgb(18, 18, 18)');
+    // No style passed (an older call site): whatever is on <html> stays.
+    applyThemeClasses('light', root);
+    expect(root.dataset.template).toBe('pulse');
+    expect(root.style.background).toBe('rgb(247, 247, 245)');
+    // AMOLED is black in every style; nonsense falls back to the default.
+    applyThemeClasses('amoled', root, 'vibe');
+    expect(root.style.background).toBe('rgb(0, 0, 0)');
+    applyThemeClasses('dark', root, 'nonsense');
+    expect(root.dataset.template).toBe('aura');
+    expect(root.style.background).toBe('rgb(16, 17, 22)');
+  });
+
   it('applies the right classes to the root element', () => {
     const root = document.createElement('html');
     applyThemeClasses('light', root);

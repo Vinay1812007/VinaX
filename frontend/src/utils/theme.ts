@@ -9,13 +9,43 @@ export function resolveTheme(pref: ThemePref, systemPrefersDark: boolean, hour =
   return pref;
 }
 
-/** Apply theme classes + browser chrome color. Idempotent.
+// ---------------------------------------------------------------------------
+// 11.0 — app styles ("templates"): html[data-template] swaps palette, type,
+// shape, navigation layout and motion (styles/templates/<id>.css). Only the
+// ids and each style's page canvas live here, in first-load code; names and
+// descriptions are in constants/templates.ts, loaded with Settings.
+// ---------------------------------------------------------------------------
+
+export type TemplateId = 'aura' | 'pulse' | 'sangam' | 'nocturne' | 'marquee' | 'vibe';
+export const DEFAULT_TEMPLATE: TemplateId = 'aura';
+
+/** The page canvas (= the style's --ink-900) per theme: [dark, light]. The
+ *  pre-paint script in index.html carries the same table — keep in sync
+ *  (asserted in templates.test.ts). AMOLED is black in every style. */
+export const TEMPLATE_CANVAS: Record<TemplateId, readonly [string, string]> = {
+  aura: ['#101116', '#f6f7fa'],
+  pulse: ['#121212', '#f7f7f5'],
+  sangam: ['#130e16', '#faf5ed'],
+  nocturne: ['#0e0d22', '#f7f6fd'],
+  marquee: ['#0c0c0d', '#f9f9f9'],
+  vibe: ['#0a1619', '#f4fafa'],
+};
+
+/** Anything not in the table (an older build's id, damaged storage) → default. */
+export function normalizeTemplate(id: unknown): TemplateId {
+  return typeof id === 'string' && Object.prototype.hasOwnProperty.call(TEMPLATE_CANVAS, id) ? (id as TemplateId) : DEFAULT_TEMPLATE;
+}
+
+/** Apply theme classes, the app style and the browser chrome colour. Idempotent.
  * Mirrored by the inline pre-paint script in index.html — keep in sync. */
-export function applyThemeClasses(resolved: ResolvedTheme, root: HTMLElement = document.documentElement): void {
+export function applyThemeClasses(resolved: ResolvedTheme, root: HTMLElement = document.documentElement, template?: unknown): void {
   root.classList.toggle('light', resolved === 'light');
   root.classList.toggle('dark', resolved === 'dark' || resolved === 'amoled');
   root.classList.toggle('amoled', resolved === 'amoled');
-  const bg = resolved === 'light' ? '#faf5ed' : resolved === 'amoled' ? '#000000' : '#130e16';
+  // A caller that passes no style keeps whatever is already on <html>.
+  const tpl = normalizeTemplate(template ?? root.dataset.template);
+  root.dataset.template = tpl;
+  const bg = resolved === 'amoled' ? '#000000' : TEMPLATE_CANVAS[tpl][resolved === 'light' ? 1 : 0];
   // Also clear/replace the inline background the pre-paint script stamped on
   // <html>, so runtime theme switches don't leave a stale overscroll color.
   root.style.background = bg;

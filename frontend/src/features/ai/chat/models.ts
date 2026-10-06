@@ -396,6 +396,22 @@ export function loadInitialChoice(): ModelChoice {
   return last ?? AUTO;
 }
 
+/**
+ * 11.0 — the server said this pick is no longer on its list: forget it
+ * everywhere it is remembered (the default, the last model used, the recents),
+ * so the next visit does not start on it again. Returns the recents that remain.
+ */
+export function forgetChoice(choice: ModelChoice): ModelChoice[] {
+  const key = choiceKey(choice);
+  const def = loadDefaultChoice();
+  if (def && choiceKey(def) === key) saveDefaultChoice(null);
+  const last = reviveChoice(readJson(LAST_MODEL_KEY));
+  if (last && choiceKey(last) === key) writeRaw(LAST_MODEL_KEY, null);
+  const kept = loadRecents().filter((c) => choiceKey(c) !== key);
+  saveRecents(kept);
+  return kept;
+}
+
 export function saveLastChoice(choice: ModelChoice): void {
   writeRaw(LAST_MODEL_KEY, JSON.stringify(choice));
 }

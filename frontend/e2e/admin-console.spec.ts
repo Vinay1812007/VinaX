@@ -9,11 +9,12 @@ import { test, expect, type Page } from '@playwright/test';
  * synonyms publish, broadcast publish, pinning a tool. Zero page errors and
  * zero console errors tolerated. All non-localhost network is aborted.
  *
- * Shell (v7.1): there is no top bar. Brand (a link home), Live counters, the
- * section nav, the View group (range / interval / auto-refresh / density /
- * compact / theme), the Actions group and Sign out all live in `#sidebar`,
- * which collapses to an icon rail on desktop and is an off-canvas drawer on
- * phones — covered by the two shell tests at the bottom.
+ * Shell (v11.0): `header#topbar` holds the drawer button, the section title,
+ * the environment chip, Refresh, the theme toggle and Sign out. Brand (a link
+ * home), Live counters, the section nav, the View group (range / interval /
+ * auto-refresh / density / compact) and the Actions group live in `#sidebar`,
+ * which collapses to an icon rail on desktop and is an off-canvas drawer below
+ * 900px — covered by the two shell tests at the bottom.
  */
 
 const iso = (hoursAgo: number): string => new Date(Date.now() - hoursAgo * 3_600_000).toISOString();
@@ -376,33 +377,39 @@ test('AI Lab: runs-code tag, media groups and tools per provider; the image benc
   expect(errors).toEqual([]);
 });
 
-// ---- Shell (v7.1): no top bar — every global control lives in the sidebar ----
+// ---- Shell (v11.0): top bar (title, environment, theme, sign-out) + sidebar (nav, view, actions) ----
 
 const inSidebar = (page: Page): Promise<boolean> =>
   page.evaluate(() => !!document.activeElement && !!document.getElementById('sidebar')?.contains(document.activeElement));
 
-test('shell: no top bar; brand link returns home; range, theme and sign-out live in the sidebar', async ({ page }) => {
+test('shell: top bar holds title, environment, theme and sign-out; brand link returns home; range lives in the sidebar', async ({ page }) => {
   await login(page);
   await mockBackend(page);
   const errors = collectErrors(page);
   await openAdmin(page);
 
-  // The old sticky header (and its tool strip) is gone at every width.
-  await expect(page.locator('header')).toHaveCount(0);
+  // Top bar: section title, environment chip, theme toggle and sign-out. The old tool strip is gone.
+  const top = page.locator('header#topbar');
+  await expect(top).toBeVisible();
   await expect(page.locator('.hdr-tools')).toHaveCount(0);
+  for (const id of ['secTitle', 'envChip', 'theme', 'logout']) {
+    await expect(top.locator(`#${id}`)).toBeVisible();
+  }
+  await expect(top.locator('#theme')).toHaveAttribute('aria-label', /theme/i);
+  await expect(top.locator('#logout')).toHaveAttribute('aria-label', 'Sign out');
 
-  // Sidebar, top to bottom: brand, Live, section nav, View, Actions, Sign out.
+  // Sidebar, top to bottom: brand, Live, section nav, View, Actions.
   const sb = page.locator('#sidebar');
   await expect(sb).toBeVisible();
   await expect(sb.locator('[role="group"][aria-label="Live"] #kpis')).toBeVisible();
   await expect(sb.locator('nav#nav')).toHaveAttribute('aria-label', /sections/i);
-  for (const id of ['autoWrap', 'hdr-interval', 'rowDensity', 'density', 'theme']) {
+  for (const id of ['autoWrap', 'hdr-interval', 'rowDensity', 'density']) {
     await expect(sb.locator(`[role="group"][aria-label="View"] #${id}`)).toBeVisible();
   }
   for (const id of ['refresh', 'notify', 'report', 'json']) {
     await expect(sb.locator(`[role="group"][aria-label="Actions"] #${id}`)).toBeVisible();
   }
-  await expect(sb.locator('#logout')).toBeVisible();
+  await expect(sb.locator('#theme, #logout')).toHaveCount(0);
   await expect(sb.locator('#autoWrap')).toHaveAttribute('aria-pressed', 'true');
 
   // Range switch: reachable in the sidebar on a ranged panel, toggle semantics.
@@ -428,24 +435,24 @@ test('shell: no top bar; brand link returns home; range, theme and sign-out live
 
   // Theme: toggles the app-token theme on <html> and persists the choice.
   const wasLight = await page.evaluate(() => document.documentElement.classList.contains('light'));
-  await sb.locator('#theme').click();
+  await top.locator('#theme').click();
   expect(await page.evaluate(() => document.documentElement.classList.contains('light'))).toBe(!wasLight);
   expect(await page.evaluate(() => localStorage.getItem('vinax_admin_theme'))).toBe(wasLight ? 'dark' : 'light');
-  await expect(sb.locator('#themeVal')).toHaveText(wasLight ? 'Dark' : 'Light');
+  await expect(top.locator('#themeVal')).toHaveText(wasLight ? 'Dark' : 'Light');
 
   // Desktop icon rail: collapses, persists, keeps brand + sign-out reachable.
   await page.locator('#sbCollapse').click();
   await expect(page.locator('html')).toHaveClass(/sb-rail/);
   expect(await page.evaluate(() => localStorage.getItem('vinax_admin_sidebar'))).toBe('rail');
   await expect(brand).toBeVisible();
-  await expect(sb.locator('#logout')).toBeVisible();
+  await expect(top.locator('#logout')).toBeVisible();
   await expect(sb.locator('#navSearch')).toBeHidden();
   await page.locator('#sbCollapse').click();
   expect(await page.evaluate(() => document.documentElement.classList.contains('sb-rail'))).toBe(false);
   await expect(sb.locator('#navSearch')).toBeVisible();
 
-  // Sign out from the sidebar lands on the login card, whose brand reloads the console root.
-  await sb.locator('#logout').click();
+  // Sign out from the top bar lands on the login card, whose brand reloads the console root.
+  await top.locator('#logout').click();
   await expect(page.locator('#login')).toBeVisible();
   await expect(page.locator('#app')).toBeHidden();
   await expect(page.locator('#loginBrand')).toHaveAttribute('href', '/admin/');
@@ -460,7 +467,11 @@ test('phone: the sidebar is an off-canvas drawer — menu button opens it, Escap
   const errors = collectErrors(page);
   await openAdmin(page);
 
-  await expect(page.locator('header')).toHaveCount(0);
+  const top = page.locator('header#topbar');
+  await expect(top).toBeVisible();
+  // The top bar fits a 390px phone: no horizontal page scroll, every control inside the viewport.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await top.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   const sb = page.locator('#sidebar');
   const menu = page.locator('#menuBtn');
   await expect(menu).toBeVisible();
@@ -471,8 +482,8 @@ test('phone: the sidebar is an off-canvas drawer — menu button opens it, Escap
   await expect(menu).toHaveAttribute('aria-expanded', 'true');
   await expect(sb).toBeVisible();
   await expect(page.locator('#sbScrim')).toBeVisible();
-  await expect(sb.locator('#theme')).toBeVisible();
-  await expect(sb.locator('#logout')).toBeVisible();
+  await expect(top.locator('#theme')).toBeVisible();
+  await expect(top.locator('#logout')).toBeVisible();
 
   // Focus moves into the drawer and is trapped there (wraps in both directions).
   expect(await inSidebar(page)).toBe(true);

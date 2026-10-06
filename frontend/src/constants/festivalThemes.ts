@@ -4,7 +4,7 @@
  * The generator (`scripts/gen-festivals.mjs`) turns each entry into a full
  * `html.fest-<id>` theme: the accent ramp (dark + AA-safe light), a tinted
  * page canvas, the 3px top ribbon, an ambient glow, a CSS-drawn motif layer
- * behind content and the photo treatment. Nothing here is read at
+ * behind content and the emblem colours. Nothing here is read at
  * runtime — the app ships the generated CSS, so there is zero JS cost.
  *
  * Every festival is meant to FEEL different: pick a distinct accent hue, a
@@ -41,18 +41,18 @@ export const FESTIVAL_THEMES: Record<string, FestivalTheme> = {
   republic: { accent: '#ff9933', canvasHue: 222, canvasSat: 0.8, glow: ['#ff9933', '#138808', '#3b82f6'], glowShape: 'sides', ribbon: ['#ff9933', '#ffffff', '#138808'], motif: 'rings', badge: '🇮🇳' },
   valentine: { accent: '#f43f5e', canvasHue: 345, glow: ['#f43f5e', '#fb7185'], glowShape: 'center', ribbon: ['#f43f5e', '#fb7185', '#fda4af'], motif: 'petals', badge: '💗' },
   shivaratri: { accent: '#60a5fa', canvasHue: 225, glow: ['#60a5fa', '#1e3a8a'], glowShape: 'sky', ribbon: ['#94a3b8', '#60a5fa', '#1e3a8a'], motif: 'stars', badge: '🔱' },
-  holi: { accent: '#d946ef', canvasHue: 290, glow: ['#ec4899', '#22d3ee', '#facc15'], glowShape: 'corners', ribbon: ['#ec4899', '#a855f7', '#22d3ee', '#facc15', '#22c55e'], motif: 'confetti', badge: '🎨' },
+  holi: { accent: '#ff3d9a', canvasHue: 322, glow: ['#ec4899', '#22d3ee', '#facc15'], glowShape: 'corners', ribbon: ['#ec4899', '#a855f7', '#22d3ee', '#facc15', '#22c55e'], motif: 'confetti', badge: '🎨' },
   womensday: { accent: '#9333ea', canvasHue: 275, glow: ['#a855f7', '#f0abfc'], glowShape: 'sky', ribbon: ['#a855f7', '#c084fc', '#f0abfc'], motif: 'petals', badge: '💜' },
   ugadi: { accent: '#a3e635', canvasHue: 78, glow: ['#84cc16', '#fb923c'], glowShape: 'sunrise', ribbon: ['#65a30d', '#facc15', '#ca8a04'], motif: 'petals', badge: '🥭' },
-  eid: { accent: '#34d399', canvasHue: 160, glow: ['#fde047', '#10b981'], glowShape: 'sky', ribbon: ['#22c55e', '#fde047', '#ffffff'], motif: 'stars', badge: '🌙' },
+  eid: { accent: '#10b981', canvasHue: 164, canvasSat: 0.9, glow: ['#e2e8f0', '#10b981'], glowShape: 'sky', ribbon: ['#10b981', '#e2e8f0', '#fcd34d'], motif: 'stars', badge: '🌙' },
   ramanavami: { accent: '#f97316', canvasHue: 26, glow: ['#fb923c', '#facc15'], glowShape: 'sky', ribbon: ['#f97316', '#facc15', '#fef3c7'], motif: 'rangoli', badge: '🚩' },
   easter: { accent: '#a78bfa', canvasHue: 262, canvasSat: 0.7, glow: ['#a78bfa', '#f9a8d4'], glowShape: 'corners', ribbon: ['#a78bfa', '#f9a8d4', '#fde047'], motif: 'petals', badge: '🐣' },
   vishu: { accent: '#fbbf24', canvasHue: 46, glow: ['#fbbf24', '#65a30d'], glowShape: 'sunrise', ribbon: ['#fbbf24', '#fde68a', '#65a30d'], motif: 'dots', badge: '🌾' },
-  akshaya: { accent: '#eab308', canvasHue: 44, glow: ['#eab308', '#fde047'], glowShape: 'center', ribbon: ['#eab308', '#fde047', '#fef9c3'], motif: 'diamonds', badge: '🪙' },
-  buddha: { accent: '#d4a017', canvasHue: 42, canvasSat: 0.5, glow: ['#fde68a', '#fb923c'], glowShape: 'center', ribbon: ['#d4a017', '#fde68a', '#ffffff'], motif: 'rings', badge: '☸️' },
+  akshaya: { accent: '#eab308', canvasHue: 348, glow: ['#eab308', '#9f1239'], glowShape: 'center', ribbon: ['#eab308', '#fde047', '#fef9c3'], motif: 'diamonds', badge: '🪙' },
+  buddha: { accent: '#e3b84a', canvasHue: 228, canvasSat: 0.7, glow: ['#fde68a', '#6366f1'], glowShape: 'center', ribbon: ['#d4a017', '#fde68a', '#ffffff'], motif: 'rings', badge: '☸️' },
   mothersday: { accent: '#f472b6', canvasHue: 335, glow: ['#f472b6', '#fbcfe8'], glowShape: 'sky', ribbon: ['#f472b6', '#f9a8d4', '#fbcfe8'], motif: 'petals', badge: '💐' },
   hanuman: { accent: '#ea580c', canvasHue: 16, glow: ['#ea580c', '#dc2626'], glowShape: 'sunrise', ribbon: ['#ea580c', '#f59e0b', '#fde047'], motif: 'stripes', badge: '🌺' },
-  bakrid: { accent: '#10b981', canvasHue: 170, glow: ['#10b981', '#fde047'], glowShape: 'sides', ribbon: ['#10b981', '#6ee7b7', '#fde047'], motif: 'lanterns', badge: '🕌' },
+  bakrid: { accent: '#2dd4bf', canvasHue: 192, glow: ['#2dd4bf', '#fcd34d'], glowShape: 'sides', ribbon: ['#2dd4bf', '#fcd34d', '#f1f5f9'], motif: 'lanterns', badge: '🕌' },
   telangana: { accent: '#ec4899', canvasHue: 340, glow: ['#ec4899', '#22c55e'], glowShape: 'sides', ribbon: ['#ec4899', '#ffffff', '#22c55e'], motif: 'stripes', badge: '🏛️' },
   fathersday: { accent: '#2563eb', canvasHue: 222, glow: ['#2563eb', '#60a5fa'], glowShape: 'sky', ribbon: ['#2563eb', '#60a5fa', '#bfdbfe'], motif: 'grid', badge: '👔' },
   bonalu: { accent: '#facc15', canvasHue: 52, glow: ['#facc15', '#dc2626'], glowShape: 'corners', ribbon: ['#facc15', '#dc2626', '#22c55e'], motif: 'rangoli', badge: '🏺' },
@@ -68,7 +68,7 @@ export const FESTIVAL_THEMES: Record<string, FestivalTheme> = {
   gandhi: { accent: '#a3a3a3', canvasHue: 0, canvasSat: 0, glow: ['#f97316', '#22c55e'], glowShape: 'sides', ribbon: ['#f97316', '#ffffff', '#22c55e'], motif: 'rings', badge: '🕊️' },
   bathukamma: { accent: '#e879f9', canvasHue: 296, glow: ['#e879f9', '#f59e0b', '#22c55e'], glowShape: 'corners', ribbon: ['#e879f9', '#f59e0b', '#facc15', '#22c55e'], motif: 'rangoli', badge: '🌸' },
   navratri: { accent: '#dc2626', canvasHue: 355, glow: ['#dc2626', '#facc15', '#a855f7'], glowShape: 'corners', ribbon: ['#dc2626', '#facc15', '#22c55e', '#a855f7'], motif: 'diamonds', badge: '💃' },
-  dussehra: { accent: '#ef4444', canvasHue: 2, glow: ['#ef4444', '#facc15'], glowShape: 'sky', ribbon: ['#ef4444', '#facc15', '#fb923c'], motif: 'diamonds', badge: '🏹' },
+  dussehra: { accent: '#f5b301', canvasHue: 356, glow: ['#f5b301', '#dc2626'], glowShape: 'sky', ribbon: ['#f5b301', '#ef4444', '#fb923c'], motif: 'diamonds', badge: '🏹' },
   halloween: { accent: '#ff7a1a', canvasHue: 262, canvasSat: 0.9, glow: ['#ff7a1a', '#a855f7'], glowShape: 'sunrise', ribbon: ['#ff7a1a', '#a855f7', '#22c55e'], motif: 'waves', badge: '🎃' },
   apformation: { accent: '#16a34a', canvasHue: 134, glow: ['#16a34a', '#facc15'], glowShape: 'sides', ribbon: ['#16a34a', '#facc15', '#ffffff'], motif: 'stripes', badge: '🌾' },
   diwali: { accent: '#facc15', canvasHue: 272, canvasSat: 1, glow: ['#f59e0b', '#a855f7', '#ef4444'], glowShape: 'sunrise', ribbon: ['#facc15', '#fb923c', '#ef4444', '#a855f7'], motif: 'lamps', badge: '🪔' },
@@ -76,8 +76,8 @@ export const FESTIVAL_THEMES: Record<string, FestivalTheme> = {
   childrens: { accent: '#f43f5e', canvasHue: 200, canvasSat: 0.6, glow: ['#f43f5e', '#22d3ee', '#facc15'], glowShape: 'corners', ribbon: ['#f43f5e', '#facc15', '#22d3ee', '#22c55e'], motif: 'confetti', badge: '🎈' },
   chhath: { accent: '#fdba74', canvasHue: 212, canvasSat: 0.8, glow: ['#fb923c', '#60a5fa'], glowShape: 'sunrise', ribbon: ['#fdba74', '#fb923c', '#60a5fa'], motif: 'waves', badge: '🌅' },
   karthika: { accent: '#f59e0b', canvasHue: 22, canvasSat: 0.9, glow: ['#d97706', '#78350f'], glowShape: 'sunrise', ribbon: ['#f59e0b', '#c2410c'], motif: 'lamps', badge: '🪔' },
-  gurunanak: { accent: '#f59e0b', canvasHue: 224, canvasSat: 0.8, glow: ['#f59e0b', '#1e3a8a'], glowShape: 'sky', ribbon: ['#f59e0b', '#1e3a8a', '#ffffff'], motif: 'rings', badge: '🪯' },
+  gurunanak: { accent: '#4f8ff7', canvasHue: 224, canvasSat: 0.8, glow: ['#3b82f6', '#f59e0b'], glowShape: 'sky', ribbon: ['#f59e0b', '#1e3a8a', '#ffffff'], motif: 'rings', badge: '🪯' },
   vaikunta: { accent: '#fbbf24', canvasHue: 258, canvasSat: 0.7, glow: ['#fbbf24', '#a78bfa'], glowShape: 'sky', ribbon: ['#fbbf24', '#a78bfa', '#fef3c7'], motif: 'lanterns', badge: '🛕' },
-  christmas: { accent: '#dc2626', canvasHue: 152, canvasSat: 0.9, glow: ['#60a5fa', '#f43f5e', '#22c55e'], glowShape: 'corners', ribbon: ['#ef4444', '#22c55e', '#ffffff'], motif: 'snow', badge: '🎄' },
+  christmas: { accent: '#e11d48', canvasHue: 152, canvasSat: 0.9, glow: ['#16a34a', '#e11d48', '#fde68a'], glowShape: 'corners', ribbon: ['#e11d48', '#16a34a', '#fde68a'], motif: 'snow', badge: '🎄' },
   newyear: { accent: '#c084fc', canvasHue: 242, glow: ['#22d3ee', '#a855f7', '#fb7185'], glowShape: 'corners', ribbon: ['#22d3ee', '#a855f7', '#fb7185'], motif: 'confetti', badge: '🎆' },
 };

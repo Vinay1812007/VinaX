@@ -113,10 +113,31 @@ function TeX({ tex, block }: { tex: string; block?: boolean }): ReactNode {
 }
 
 // ---------- inline markdown ----------
+// Three deliberately conservative rules (no lookbehind — older engines reject it):
+//  - inline maths must hug its delimiters and may not close just before a digit,
+//    so "$20 and $35" stays money while "$x^2$" is still maths; nor may it open
+//    on an amount followed by plain words that run, with no maths sign, to a
+//    number just before the next dollar (11.0 — "$5 fee and a 10$ tip" is two
+//    prices, not a formula; "$5 cm$" is still maths);
+//  - emphasis must hug its asterisks and may not close just before a letter or
+//    digit, so "5*4*3" and "2 * 3 * 4" keep their asterisks;
+//  - a link address may contain one level of balanced parentheses.
+const LINK_URL = String.raw`https?:\/\/(?:[^\s()]|\([^\s()]*\))+`;
+const INLINE_RE = new RegExp(
+  '(`[^`]+`' +
+    String.raw`|\$\$[\s\S]+?\$\$` +
+    String.raw`|\$(?!\d[\d.,]*\s+[A-Za-z]{2,}[^$\\^_={}\n]*\d\$)(?=[^\s$])[^$\n]*[^\s$]\$(?!\d)` +
+    String.raw`|\*\*[^*]+\*\*` +
+    String.raw`|\*(?=[^\s*])[^*\n]*[^\s*]\*(?![A-Za-z0-9])` +
+    '|~~[^~]+~~' +
+    String.raw`|\[[^\]]+\]\(${LINK_URL}\))`,
+  'g',
+);
+const LINK_RE = new RegExp(String.raw`^\[([^\]]+)\]\((${LINK_URL})\)$`);
+
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = [];
-  const re =
-    /(`[^`]+`|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*|\*[^*\n]+\*|~~[^~]+~~|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
+  const re = new RegExp(INLINE_RE.source, 'g');
   let last = 0;
   let key = 0;
   let m = re.exec(text);
@@ -129,13 +150,15 @@ function inline(text: string): ReactNode[] {
           {tok.slice(1, -1)}
         </code>,
       );
-    else if (tok.startsWith('$$')) out.push(<TeX key={key} tex={tok.slice(2, -2)} block />);
+    // 11.0 — display maths written mid-sentence stays in the sentence: a block
+    // element may not sit inside a paragraph. It keeps its display styling.
+    else if (tok.startsWith('$$')) out.push(<TeX key={key} tex={String.raw`\displaystyle ${tok.slice(2, -2)}`} />);
     else if (tok.startsWith('$')) out.push(<TeX key={key} tex={tok.slice(1, -1)} />);
     else if (tok.startsWith('**')) out.push(<strong key={key}>{tok.slice(2, -2)}</strong>);
     else if (tok.startsWith('~~')) out.push(<del key={key} className="ai-t3">{tok.slice(2, -2)}</del>);
     else if (tok.startsWith('*')) out.push(<em key={key}>{tok.slice(1, -1)}</em>);
     else {
-      const mm = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/.exec(tok);
+      const mm = LINK_RE.exec(tok);
       if (mm)
         out.push(
           <a key={key} href={mm[2]} target="_blank" rel="noopener noreferrer" className="underline">
@@ -190,12 +213,31 @@ function TableBlock({ head, rows }: { head: string[]; rows: string[][] }): React
 
 const isTableSep = (s: string): boolean => /^\s*\|?[\s:|-]*-[-\s:|]*\|?\s*$/.test(s) && s.includes('-');
 
+// A checklist line: "- [ ] text", and also a bare "- [ ]" / "- [x]" (what a reply
+// looks like the instant the box has streamed in but its text has not).
+// "- [x]done" (no gap) is NOT a checklist line — it is an ordinary bullet.
+const TASK_RE = /^[-*]\s+\[([ xX])\](?:\s+([\s\S]*))?$/;
+
 // ---------- block markdown ----------
 function Prose({ text }: { text: string }): ReactNode {
   const lines = text.split('\n');
   const blocks: ReactNode[] = [];
   let i = 0;
+  // Progress guard: `i` only ever grows, so meeting the same line twice means no
+  // branch below consumed it. Emit it as plain text and move on — a parser that
+  // cannot advance would freeze the whole tab, mid-stream and on every reopen.
+  let stuck = -1;
   while (i < lines.length) {
+    if (i === stuck) {
+      blocks.push(
+        <p key={blocks.length} className="leading-relaxed whitespace-pre-wrap">
+          {inline(lines[i])}
+        </p>,
+      );
+      i += 1;
+      continue;
+    }
+    stuck = i;
     const t = lines[i].trim();
     if (t === '') {
       i += 1;
@@ -223,7 +265,7 @@ function Prose({ text }: { text: string }): ReactNode {
       i += 1;
       continue;
     }
-    const h = /^(#{1,6})\s+(.*)$/.exec(t);
+    const h = /^(#{1,6})\s+([\s\S]*)$/.exec(t);
     if (h) {
       const lvl = h[1].length;
       const cls = lvl <= 1 ? 'text-xl' : lvl === 2 ? 'text-lg' : lvl === 3 ? 'text-base' : 'text-sm';
@@ -259,11 +301,12 @@ function Prose({ text }: { text: string }): ReactNode {
       blocks.push(<TableBlock key={blocks.length} head={head} rows={rows} />);
       continue;
     }
-    if (/^[-*]\s+\[[ xX]\]\s+/.test(t)) {
+    if (TASK_RE.test(t)) {
       const items: { done: boolean; text: string }[] = [];
-      while (i < lines.length && /^[-*]\s+\[[ xX]\]\s+/.test(lines[i].trim())) {
-        const mm = /^[-*]\s+\[([ xX])\]\s+(.*)$/.exec(lines[i].trim());
-        if (mm) items.push({ done: mm[1].toLowerCase() === 'x', text: mm[2] });
+      while (i < lines.length) {
+        const mm = TASK_RE.exec(lines[i].trim());
+        if (!mm) break;
+        items.push({ done: mm[1].toLowerCase() === 'x', text: mm[2] ?? '' });
         i += 1;
       }
       blocks.push(
@@ -290,7 +333,7 @@ function Prose({ text }: { text: string }): ReactNode {
       while (
         i < lines.length &&
         /^[-*+]\s+/.test(lines[i].trim()) &&
-        !/^[-*]\s+\[[ xX]\]/.test(lines[i].trim())
+        !TASK_RE.test(lines[i].trim())
       ) {
         items.push(lines[i].trim().replace(/^[-*+]\s+/, ''));
         i += 1;
@@ -485,12 +528,12 @@ function JsRunner({ code, lang, onClose }: { code: string; lang: string; onClose
       />
       <pre className="p-3 max-h-64 overflow-auto text-xs leading-relaxed font-mono">
         {status === 'failed' ? (
-          <div className="text-red-300">Couldn&rsquo;t reach the preview sandbox (/api/preview) — the code didn&rsquo;t run.</div>
+          <div className="text-[color:var(--vx-danger)]">Couldn&rsquo;t reach the preview sandbox (/api/preview) — the code didn&rsquo;t run.</div>
         ) : lines.length === 0 ? (
           <span className="ai-t3">{status === 'live' ? 'Finished — no output.' : 'Running…'}</span>
         ) : null}
         {lines.map((l, i) => (
-          <div key={i} className={l.kind === 'error' ? 'text-red-300' : l.text.startsWith('✓') ? 'text-ember-400' : ''}>
+          <div key={i} className={l.kind === 'error' ? 'text-[color:var(--vx-danger)]' : l.text.startsWith('✓') ? 'text-ember-400' : ''}>
             {l.text}
           </div>
         ))}
@@ -541,7 +584,9 @@ function MermaidBlock({ code }: { code: string }): ReactNode {
     void (async () => {
       try {
         const mermaid = (await import('mermaid')).default;
-        mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'strict' });
+        // Follow the app theme: a dark diagram on the light theme's paper is unreadable.
+        const light = document.documentElement.classList.contains('light');
+        mermaid.initialize({ startOnLoad: false, theme: light ? 'default' : 'dark', securityLevel: 'strict' });
         const { svg: out } = await mermaid.render(`mmd${Math.random().toString(36).slice(2)}`, code);
         if (alive) setSvg(out);
       } catch {
@@ -663,15 +708,15 @@ function HtmlPreview({ lang, code, streaming = false }: { lang: string; code: st
             />
           )}
           {status === 'failed' && (
-            <div className="border-t ai-hairline-strong bg-ink-850 px-3 py-2 text-[11px] text-red-300">
+            <div className="border-t ai-hairline-strong bg-ink-850 px-3 py-2 text-[11px] text-[color:var(--vx-danger)]">
               ⚠ Couldn&rsquo;t reach the preview sandbox (/api/preview) — nothing was rendered.
             </div>
           )}
           {openNote && (
-            <div className="border-t ai-hairline-strong bg-ink-850 px-3 py-2 text-[11px] text-amber-300">{openNote}</div>
+            <div className="border-t ai-hairline-strong bg-ink-850 px-3 py-2 text-[11px] text-[color:var(--vx-danger)]">{openNote}</div>
           )}
           {errors.length > 0 && (
-            <div className="border-t ai-hairline-strong bg-ink-850 px-3 py-2 text-[11px] font-mono text-red-300 max-h-28 overflow-auto">
+            <div className="border-t ai-hairline-strong bg-ink-850 px-3 py-2 text-[11px] font-mono text-[color:var(--vx-danger)] max-h-28 overflow-auto">
               {errors.slice(-5).map((e, i) => (
                 <div key={i}>⚠ {e.text}</div>
               ))}

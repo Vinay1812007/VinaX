@@ -1,0 +1,112 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { attachmentText, foldAttachments, type Attachment } from '@/features/ai/attachments';
+import { AssistantMessage, UserMessage, splitAttachedText, type MessageHandlers } from './Message';
+import { followAfterScroll } from './MessageList';
+
+const handlers = (): MessageHandlers => ({
+  edit: vi.fn(),
+  rate: vi.fn(),
+  togglePin: vi.fn(),
+  branch: vi.fn(),
+  regenerate: vi.fn(),
+  reviseLast: vi.fn(),
+  continueReply: vi.fn(),
+  rewrite: vi.fn(),
+  send: vi.fn(),
+});
+const file = (name: string, text: string, over: Partial<Attachment> = {}): Attachment => ({ kind: 'text', name, path: name, key: name, size: text.length, text, ...over });
+const LONG = Array.from({ length: 300 }, (_, i) => `row ${i + 1}`).join('\n');
+
+afterEach(cleanup);
+
+describe('attached files in the listener’s bubble (11.0)', () => {
+  it('reads the typed message and each file back out of what the model was sent', () => {
+    const content = foldAttachments('Summarise these', [file('notes/a.txt', 'alpha\nbeta'), file('b.pdf', 'gamma', { kind: 'pdf', shortened: true })]);
+    expect(splitAttachedText(content)).toEqual({
+      typed: 'Summarise these',
+      files: [
+        { path: 'notes/a.txt', excerpt: false, text: 'alpha\nbeta' },
+        { path: 'b.pdf', excerpt: true, text: 'gamma' },
+      ],
+    });
+    expect(splitAttachedText('just a message')).toEqual({ typed: 'just a message', files: [] });
+  });
+
+  it('shows a compact chip, not 300 lines of text; the contents open on request', () => {
+    const h = handlers();
+    const content = foldAttachments('Summarise this', [file('data/report.txt', LONG)]);
+    const { container } = render(<UserMessage m={{ role: 'user', content }} index={0} busy={false} handlers={h} />);
+    expect(screen.getByText('Summarise this')).toBeTruthy();
+    expect(screen.getByText('report.txt')).toBeTruthy();
+    expect(screen.getByText(/TXT file · 300 lines/)).toBeTruthy();
+    expect(container.textContent).not.toContain('row 150');
+    expect(container.textContent).not.toContain('--- File:');
+    const details = container.querySelector('details') as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(screen.getByText('Hide contents')).toBeTruthy();
+    expect(container.querySelector('pre')?.textContent).toContain('row 150');
+    // Edit hands back everything that was sent — the file text goes out again.
+    fireEvent.click(screen.getByTitle('Edit and resend'));
+    expect(h.edit).toHaveBeenCalledWith(0, content);
+  });
+
+  it('a chat stored before 11.0 (file text already inside the message) and a file-only message both read cleanly', () => {
+    const stored = `What is this?${attachmentText(file('old.csv', 'a,b\n1,2'))}`;
+    const { container, unmount } = render(<UserMessage m={{ role: 'user', content: stored }} index={0} busy={false} handlers={handlers()} />);
+    expect(screen.getByText('What is this?')).toBeTruthy();
+    expect(screen.getByText(/CSV file · 2 lines/)).toBeTruthy();
+    expect(container.textContent).not.toContain('a,b');
+    unmount();
+    const only = render(<UserMessage m={{ role: 'user', content: foldAttachments('', [file('solo.md', 'one')]) }} index={0} busy={false} handlers={handlers()} />);
+    expect(only.container.querySelector('.ai-user-bubble p')).toBeNull();
+    expect(screen.getByText(/MD file · 1 line$/)).toBeTruthy();
+  });
+});
+
+describe('a failed turn offers the step that can work (11.0)', () => {
+  const reply = (over: object): void => {
+    render(
+      <MemoryRouter>
+        <AssistantMessage m={{ role: 'assistant', content: 'It failed.', failed: true, ...over }} index={1} last streaming={false} busy={false} speaking={false} speakKey="" handlers={h} />
+      </MemoryRouter>,
+    );
+  };
+  let h = handlers();
+  it('turned away as it is: Edit message, and no Retry', () => {
+    h = handlers();
+    reply({ needsEdit: true });
+    expect(screen.queryByLabelText('Retry this question')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit message' }));
+    expect(h.reviseLast).toHaveBeenCalledTimes(1);
+    expect(h.regenerate).not.toHaveBeenCalled();
+  });
+  it('any other failure keeps Retry', () => {
+    h = handlers();
+    reply({});
+    expect(screen.queryByRole('button', { name: 'Edit message' })).toBeNull();
+    fireEvent.click(screen.getByLabelText('Retry this question'));
+    expect(h.regenerate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('following the newest reply (11.0)', () => {
+  const at = (v: Partial<Parameters<typeof followAfterScroll>[0]>) => followAfterScroll({ top: 1000, lastTop: 1000, height: 1600, client: 600, pinned: true, ...v });
+  it('stays pinned, and scrolls again, when the thread grew under a reader who did not move', () => {
+    // The finished reply's action row added ~110px after the last scroll.
+    expect(at({ height: 1710 })).toEqual({ pinned: true, rescroll: true });
+  });
+  it('lets go when the reader scrolled up', () => {
+    expect(at({ top: 800 })).toEqual({ pinned: false, rescroll: false });
+  });
+  it('never pulls down a reader who had already left the bottom', () => {
+    expect(at({ top: 400, lastTop: 400, height: 1710, pinned: false })).toEqual({ pinned: false, rescroll: false });
+  });
+  it('is pinned again once the reader is back near the bottom', () => {
+    expect(at({ top: 960, lastTop: 400, pinned: false })).toEqual({ pinned: true, rescroll: false });
+  });
+});

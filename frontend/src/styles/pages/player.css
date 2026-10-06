@@ -470,6 +470,13 @@ html.light .vx-np-play { background: rgb(var(--ember-500)); box-shadow: 0 14px 3
   transition: color 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
 }
 .vx-np-link::after { content: ''; position: absolute; inset: -4px 0; }
+/* The narrowest phones: three tabs and the queue link did not fit in 328px,
+   and the link ran off the right edge. */
+@media (max-width: 379px) {
+  .vx-np-tabbar { gap: 4px; }
+  .vx-np-tabs [role='tab'] { padding-inline: 10px; }
+  .vx-np-link { padding-inline: 6px; }
+}
 .vx-np-link:hover { color: rgb(var(--ink-100)); background: var(--vx-hover); }
 .vx-np-tabpanel { margin-top: 16px; }
 .vx-np-subhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 12px; }

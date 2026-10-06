@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { canRetry, failureFromResponse, failureMessage, runChatStream } from './streamClient';
+import { canRetry, failureFromResponse, failureMessage, needsEdit, runChatStream } from './streamClient';
 
 const sse = (chunks: string[], status = 200): Response => {
   const enc = new TextEncoder();
@@ -92,5 +92,41 @@ describe('runChatStream', () => {
     const ctl = new AbortController();
     vi.stubGlobal('fetch', vi.fn(() => { ctl.abort(); return Promise.reject(new DOMException('aborted', 'AbortError')); }));
     expect(await runChatStream({ endpoint: '/x', body: {}, signal: ctl.signal })).toMatchObject({ failure: null, aborted: true });
+  });
+});
+
+describe('11.0 — refusals that asking again cannot change', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('tells a retired model, an oversized message and a refused request apart from a passing failure', () => {
+    expect(failureFromResponse(400, 'unknown_model')).toBe('bad_model');
+    expect(failureFromResponse(413, 'image_too_large')).toBe('too_large');
+    expect(failureFromResponse(413, 'too_large')).toBe('too_large');
+    expect(failureFromResponse(400, 'bad_request')).toBe('rejected');
+    // Every engine rate-limited: 429 now, 500 from an older server. Other upstream failures: 502.
+    expect(failureFromResponse(429, 'upstream')).toBe('busy');
+    expect(failureFromResponse(500, 'exception')).toBe('unavailable');
+    expect(failureFromResponse(502, 'upstream')).toBe('unavailable');
+    expect(failureMessage('bad_model')).toBe('That model is no longer available — switched to Auto.');
+    expect(failureMessage('too_large')).toContain('too large');
+    expect(canRetry('bad_model')).toBe(true);
+  });
+  it.each([
+    [400, 'unknown_model', 'bad_model'],
+    [413, 'image_too_large', 'too_large'],
+    [400, 'bad_request', 'rejected'],
+  ] as const)('never re-sends a %i %s', async (status, error, failure) => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error }), { status })));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await runChatStream({ endpoint: '/api/vinaxai', body: {}, signal: new AbortController().signal, retryDelayMs: 0 });
+    expect(res.failure).toBe(failure);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('needsEdit (11.0)', () => {
+  it('is true only when the same message would be turned away again', () => {
+    expect(needsEdit('too_large')).toBe(true);
+    expect(needsEdit('rejected')).toBe(true);
+    for (const f of ['bad_model', 'busy', 'offline', 'unavailable', 'disabled', 'over_budget', null] as const) expect(needsEdit(f)).toBe(false);
   });
 });

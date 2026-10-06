@@ -5,6 +5,7 @@ import { ReplyPrefsBar } from '@/components/ai/AiExtras';
 import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { useCurrentSong } from '@/store/playerStore';
 import { cn } from '@/utils/cn';
+import { ChatStyleMark, ChatStyleSetting } from './ChatStyleScope';
 import { ModelMenu } from './ModelMenu';
 import { TrashIcon, UploadIcon } from './icons';
 import { choiceLabel, choiceProvider, mediaGroups, type CatalogState } from './models';
@@ -222,6 +223,7 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
         <h2 id={titleId} className="ai-settings-title flex-1 ai-t1">
           Chat settings
         </h2>
+        <ChatStyleMark />
         <button type="button" onClick={p.onClose} aria-label="Close settings" className="ai-icon-btn ai-settings-close">
           <XIcon className="w-4 h-4" />
         </button>
@@ -251,6 +253,7 @@ export function SettingsDialog(p: SettingsDialogProps): ReactNode {
         <div role="tabpanel" id={`${uid}-panel-${tab}`} aria-labelledby={`${uid}-tab-${tab}`} tabIndex={0} className="ai-tabpanel">
           {tab === 'general' && (
             <>
+              <ChatStyleSetting />
               <div className="ai-set-row">
                 <span className="text-[14px] font-semibold ai-t1">Text size</span>
                 <span className="flex gap-1" role="group" aria-label="Text size">

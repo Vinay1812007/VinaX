@@ -169,7 +169,7 @@ html.light .vx-menu {
   background: rgb(var(--ink-850) / 0.97);
   border-bottom: 1px solid var(--vx-border);
 }
-html.light .vx-menu.is-sheet .vx-menu-head { background: rgb(255 253 250 / 0.97); }
+html.light .vx-menu.is-sheet .vx-menu-head { background: rgb(var(--ink-950) / 0.97); }
 .vx-menu.is-sheet .vx-menu-head::before {
   content: '';
   position: absolute;
@@ -198,8 +198,29 @@ html.light .vx-menu.is-sheet .vx-menu-head { background: rgb(255 253 250 / 0.97)
    10.0 Marigold: a plum header lit by a Marigold → Rose mesh, the language
    names in their own scripts drifting behind the mark, a "Free forever" tag,
    and the promise as the title in the display face. */
-.vx-welcome { padding: 0; }
-.vx-welcome-body { padding: 28px 24px max(24px, var(--safe-bottom)); }
+.vx-welcome { padding: 0; display: flex; flex-direction: column; max-height: min(94dvh, 100%); overflow: hidden; }
+.vx-welcome-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 24px 8px; }
+/* 11.0 — the scrim. Lighter on "Pick your look" so the app is seen changing behind the sheet. */
+.vx-welcome-scrim { background: rgb(0 0 0 / 0.7); transition: background-color 0.25s ease; }
+.vx-welcome-scrim.is-look { background: rgb(0 0 0 / 0.32); }
+/* Step indicator: "Step 2 of 8", one segment per step, Skip where the step is optional. */
+.vx-welcome-steps { flex: none; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 24px 0; }
+.vx-welcome-count { flex: none; color: rgb(var(--ink-400)); font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vx-welcome-track { flex: 1 1 auto; display: flex; gap: 4px; }
+.vx-welcome-track span { flex: 1 1 0; height: 3px; border-radius: 999px; background: rgb(var(--ink-100) / 0.16); transition: background-color 0.2s ease; }
+.vx-welcome-track span.is-done { background: rgb(var(--ember-500) / 0.5); }
+.vx-welcome-track span.is-on { background: rgb(var(--ember-500)); }
+.vx-welcome-foot { flex: none; display: flex; gap: 8px; padding: 12px 24px max(16px, var(--safe-bottom)); border-top: 1px solid var(--vx-border); }
+.vx-welcome-body > .vx-welcome-art { margin: -20px -24px 18px; }
+.vx-welcome-look { margin-top: 16px; }
+.vx-welcome-look .vx-tpl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 380px) { .vx-welcome-look .vx-tpl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Short screens and an open keyboard: the art gives its room to the fields. */
+@media (max-height: 620px) { .vx-welcome-body > .vx-welcome-art { display: none; } }
+[data-keyboard='open'] .vx-welcome-art { display: none; }
+[data-keyboard='open'] .vx-welcome { max-height: 100%; }
+html.reduce-motion .vx-welcome-scrim, html.reduce-motion .vx-welcome-track span { transition: none; }
+@media (prefers-reduced-motion: reduce) { .vx-welcome-scrim, .vx-welcome-track span { transition: none; } }
 @media (min-width: 640px) { .vx-welcome-body { padding: 28px 28px 28px; } }
 .vx-welcome-art + .vx-welcome-body { padding-top: 20px; }
 .vx-welcome-art {
@@ -455,3 +476,12 @@ button.vx-inbox-row:active { background: var(--vx-pressed); }
 }
 html.reduce-motion .vx-sheet, html.reduce-motion .vx-menu { animation: none !important; }
 html.reduce-motion .vx-inbox-row { transition: none; }
+
+/* 11.0 — guided tours (TutorialRunner). The card is frosted like every sheet;
+   the spotlight ring takes the accent of whichever app style is on. */
+.vx-tut-card { padding: 20px; border-radius: 20px; max-height: calc(100dvh - 24px); overflow-y: auto; box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.65); }
+.vx-tut-card:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 2px; }
+.vx-tut-spot { border-radius: 14px; box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.62), 0 0 0 2px rgb(var(--ember-500)); transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease; }
+html.reduce-motion .vx-tut-spot { transition: none; }
+html.reduce-motion .vx-tut-card { animation: none; }
+@media (prefers-reduced-motion: reduce) { .vx-tut-spot { transition: none; } .vx-tut-card { animation: none; } }

@@ -7,7 +7,7 @@
  * state after a failure. These tests pin both.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readAloud, setReadAloudVoice, speakableText, stopReadAloud, onSpeakingChange } from './readAloud';
+import { CHUNK_LEASH_MS, readAloud, setReadAloudVoice, speakableText, stopReadAloud, onSpeakingChange } from './readAloud';
 
 const PICK = { model: 'canopylabs/orpheus-v1-english', voice: 'autumn' };
 
@@ -150,6 +150,52 @@ describe('studio voice', () => {
     setReadAloudVoice(() => PICK);
     readAloud('m1', 'Hello there.');
     await settle();
+    expect(spoken).toEqual(['Hello there.']);
+  });
+});
+
+describe('11.0 — a server voice gets the time the server itself allows', () => {
+  /** A voice that answers after `ms`, and honours the caller's abort. */
+  const slowVoice = (ms: number | null): ReturnType<typeof vi.fn> =>
+    vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          if (ms !== null) setTimeout(() => resolve(new Response(audioBlob(), { status: 200, headers: { 'content-type': 'audio/wav' } })), ms);
+        }),
+    );
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a voice that needs eight seconds is played, not replaced by the device voice', async () => {
+    vi.useFakeTimers();
+    const f = slowVoice(8000);
+    vi.stubGlobal('fetch', f);
+    stubAudio();
+    setReadAloudVoice(() => PICK);
+    const ids: Array<string | null> = [];
+    const off = onSpeakingChange((id) => ids.push(id));
+    readAloud('m1', 'Hello there.');
+    await vi.advanceTimersByTimeAsync(8200);
+    off();
+    expect(f).toHaveBeenCalledTimes(1);
+    expect((f.mock.calls[0][1] as RequestInit).signal?.aborted).toBe(false);
+    // Spoken by the server voice to the end — the device never speaks.
+    expect(spoken).toEqual([]);
+    expect(ids.slice(-2)).toEqual(['m1', null]);
+  });
+
+  it('a voice that never answers still hands over to the device voice', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', slowVoice(null));
+    stubAudio();
+    setReadAloudVoice(() => PICK);
+    readAloud('m1', 'Hello there.');
+    await vi.advanceTimersByTimeAsync(CHUNK_LEASH_MS - 100);
+    expect(spoken).toEqual([]);
+    await vi.advanceTimersByTimeAsync(300);
     expect(spoken).toEqual(['Hello there.']);
   });
 });

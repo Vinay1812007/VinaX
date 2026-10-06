@@ -1001,7 +1001,9 @@ html.light .vx-browse .search-panel { box-shadow: 0 24px 56px -18px rgb(var(--in
 .vx-browse .search-moods { margin-top: 16px; margin-bottom: 0; }
 
 /* Ask for songs and the AI chat: Rose is the AI accent. */
-.vx-browse .search-assist { display: grid; gap: 10px; max-width: 760px; }
+/* minmax(0, 1fr): the implicit auto column grew to its longest unbroken row
+   and ran 6px past a 360px screen. */
+.vx-browse .search-assist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; max-width: 760px; }
 .vx-browse .search-assist-row {
   display: flex;
   align-items: center;

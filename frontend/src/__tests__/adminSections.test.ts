@@ -214,8 +214,11 @@ describe('console markup (index.html)', () => {
 
   it('browser-local sections are marked on the nav entry and at the top of the panel', () => {
     for (const key of ['workspace', 'config', 'pins']) expect(indexHtml).toMatch(new RegExp(`data-sec="${key}"[^>]*data-local="(all|prefs)"`));
-    expect(indexHtml).toContain("#nav button[data-sec][data-local]::after { content: 'this browser only'");
-    expect(indexHtml).toContain('#app:has(#nav button[data-local].active) #view::before');
+    // 11.0 — the console styles moved out of index.html into console.css.
+    const consoleCss = read('console.css');
+    expect(indexHtml).toContain('<link rel="stylesheet" href="/admin/console.css" />');
+    expect(consoleCss).toContain("#nav button[data-sec][data-local]::after { content: 'this browser only'");
+    expect(consoleCss).toContain('#app:has(#nav button[data-local].active) #view::before');
     // The server-backed 7.2 panels are not marked.
     for (const key of ['recquality', 'aiops', 'recconfig']) expect(indexHtml).not.toMatch(new RegExp(`data-sec="${key}"[^>]*data-local`));
   });

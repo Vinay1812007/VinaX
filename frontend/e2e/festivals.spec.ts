@@ -69,6 +69,9 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\bfest-${id}\\b`), { timeout: 15_000 });
       // The ambient backdrop mounts a beat after the splash — give it room.
       await expect(page.locator('.fest-sky').first()).toBeAttached({ timeout: 15_000 });
+      // 11.0: drawn emblem watermark in the backdrop, and the greeting card is a labelled dialog.
+      await expect(page.locator('.fest-sky .fest-wm').first()).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('.fest-card[role="dialog"][aria-labelledby="fest-title"]').first()).toBeAttached({ timeout: 15_000 });
 
       const info = await page.evaluate(() => ({
         theme: document.documentElement.classList.contains('light') ? 'light' : 'dark',

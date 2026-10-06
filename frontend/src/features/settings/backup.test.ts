@@ -81,6 +81,7 @@ function seedDevice(): void {
   set(KEYS.alarm, { state: { enabled: true, time: '06:30', action: 'favorites', collectionId: null, fadeIn: true, lastFired: '' }, version: 0 });
   set('vinax.streak.v1', { count: 4, lastDay: '2026-09-15', best: 9 });
   localStorage.setItem('vinax.aiReplyStyle', 'concise');
+  localStorage.setItem('vinax.ai.chatStyle', 'paper');
   // Things that must NOT travel:
   set(KEYS.signedDeviceId, 'abc.sig');
   set(KEYS.deviceId, 'uuid-1');
@@ -148,6 +149,7 @@ describe('round trip', () => {
     expect(get('vinax.home.design.v1')).toMatchObject({ hidden: ['charts'] });
     expect(get(KEYS.userName)).toBe('Vinay');
     expect(localStorage.getItem('vinax.aiReplyStyle')).toBe('concise');
+    expect(localStorage.getItem('vinax.ai.chatStyle')).toBe('paper');
     expect(get('vinax.streak.v1')).toEqual({ count: 4, lastDay: '2026-09-15', best: 9 });
     // Identity is a claim, not a fact: the username is re-confirmed, not written.
     expect(get(KEYS.userHandle)).toBeNull();

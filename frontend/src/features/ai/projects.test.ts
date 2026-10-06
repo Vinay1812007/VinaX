@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MAX_FILES_PER_PROJECT,
   MAX_FILE_CHARS,
@@ -117,5 +117,38 @@ describe('projectBlock', () => {
     setInstructions(p.id, 'ALWAYS reply in Telugu.');
     addProjectFile(p.id, 'huge.txt', 'y'.repeat(MAX_FILE_CHARS));
     expect(projectBlock(projectById(p.id))).toContain('ALWAYS reply in Telugu.');
+  });
+});
+
+describe('line endings', () => {
+  it('reads a carriage-return line-feed pair as one line break, not two', () => {
+    expect(cleanText('one\r\ntwo\r\n\r\nthree', 100)).toBe('one\ntwo\n\nthree');
+    expect(cleanText('old\rstyle', 100)).toBe('old\nstyle');
+    expect(cleanText('a\r\nb', 100, false)).toBe('a b');
+  });
+
+  it('does not spend the file budget on doubled line breaks', () => {
+    const p = createProject('Notes')!;
+    const body = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\r\n');
+    const f = addProjectFile(p.id, 'notes.txt', body)!;
+    expect(f.text).toBe(body.replace(/\r\n/g, '\n'));
+  });
+});
+
+describe('a refused write is never reported as saved', () => {
+  it('returns null for a file and for a project when the device refuses the write', () => {
+    const p = createProject('Notes')!;
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    try {
+      expect(addProjectFile(p.id, 'big.txt', 'some reference text')).toBeNull();
+      expect(createProject('Second')).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(loadProjects().map((x) => x.name)).toEqual(['Notes']);
+    expect(loadProjects()[0].files).toEqual([]);
+    expect(addProjectFile(p.id, 'big.txt', 'some reference text')).not.toBeNull();
   });
 });

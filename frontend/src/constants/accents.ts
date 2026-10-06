@@ -1,17 +1,17 @@
 /**
- * Accent themes for the revived Settings picker (roadmap O.4).
+ * Accent themes for the Settings picker.
  *
  * `id` maps 1:1 to the `html[data-accent='…']` CSS blocks (dark) and their
- * `html.light[data-accent='…']` twins in src/styles/index.css. 'crimson' is
- * the historical default value every device migrated to in settings v2 — it
- * deliberately has NO CSS block and rides the :root ramp, so it stays the
- * safe default forever. Since 10.0 that ramp is Marigold, so the default is
- * shown as "Marigold". `dot` is the swatch color for the picker chip (the
- * accent's dark-mode ember-500, readable on both settings canvases).
+ * `html.light[data-accent='…']` twins in src/styles/index.css. Ids are stored
+ * in settings and never change; only `label` is shown.
  *
- * Ids are stored in settings and never change; only `label` is shown.
- * 'ember' (an older orange ramp) is labelled "Copper" so it does not read as
- * a second Marigold.
+ * 'crimson' is the historical default every device migrated to in settings
+ * v2. It deliberately has NO CSS block: since 11.0 it means "the app style's
+ * own colour" (each style in styles/templates/ sets its accent only while the
+ * accent is this default), so the picker shows it as "Style colour" with the
+ * current style's swatch. 'marigold' is the 10.x default ramp under its own
+ * id, so a listener can keep it in any style. 'ember' (an older orange ramp)
+ * is labelled "Copper" so it does not read as a second Marigold.
  */
 export interface AccentOption {
   id: string;
@@ -21,7 +21,9 @@ export interface AccentOption {
 }
 
 export const ACCENT_OPTIONS: AccentOption[] = [
-  { id: 'crimson', label: 'Marigold', dot: 'rgb(255 164 46)' },
+  // The dot is replaced by the current style's accent in the picker.
+  { id: 'crimson', label: 'Style colour', dot: 'rgb(110 142 255)' },
+  { id: 'marigold', label: 'Marigold', dot: 'rgb(255 164 46)' },
   { id: 'ember', label: 'Copper', dot: 'rgb(214 120 78)' },
   { id: 'sunset', label: 'Sunset', dot: 'rgb(251 146 60)' },
   { id: 'gold', label: 'Gold', dot: 'rgb(234 179 8)' },

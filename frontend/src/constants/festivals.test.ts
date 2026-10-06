@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { FESTIVALS, activeFestival, activeFestivalTheme, nextFestival, resolveFestival, festivalClass } from './festivals';
 import { FESTIVAL_THEMES } from './festivalThemes';
+import { FESTIVAL_VISUALS } from './festivalVisuals';
+import { emblemSvg } from './festivalEmblems';
 // @ts-expect-error — plain ESM helper shared with the generator script
 import { buildCss, buildWindowJs, buildAdminJs, FW_RE, ramps, rgbToHsl, hexToRgb } from '../../scripts/festivals-gen-core.mjs';
 
@@ -79,6 +81,6 @@ describe('generated festival artefacts are in sync (run `npm run gen:festivals`)
     expect(m?.[0]).toBe(buildWindowJs(FESTIVALS));
   });
   it('public/admin/festivals.js', () => {
-    expect(read('public/admin/festivals.js')).toBe(buildAdminJs(FESTIVALS, FESTIVAL_THEMES));
+    expect(read('public/admin/festivals.js')).toBe(buildAdminJs(FESTIVALS, FESTIVAL_THEMES, FESTIVAL_VISUALS, emblemSvg));
   });
 });

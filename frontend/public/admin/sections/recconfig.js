@@ -27,6 +27,9 @@
   var rollbackAsk = null;
 
   function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  // 11.0 — the error state component comes from app.js; a host that does not
+  // hand it over (a unit test, an older shell) still gets the message as text.
+  function errState(h, msg) { return typeof h.stateError === 'function' ? h.stateError(msg) : '<div class="state state-error empty" role="alert"><div class="state-hint">' + h.esc(msg) + '</div></div>'; }
   function num(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
   function when(iso) { if (typeof iso !== 'string' || !iso) return '—'; var t = Date.parse(iso); return isNaN(t) ? iso : new Date(t).toLocaleString(); }
   function weights() { return last && Array.isArray(last.weights) ? last.weights.filter(function (w) { return isObj(w) && typeof w.key === 'string'; }) : []; }
@@ -122,7 +125,7 @@
       ? h.html`<p style="color:var(--warn)">You are editing from v${draft.base}, but v${currentVersion()} is now published. Publishing will be refused until you choose what to keep.</p>`
       : '';
     var probs = problems.length
-      ? '<ul style="color:var(--danger)">' + problems.map(function (p) { return h.html`<li><code>${p.field || ''}</code> ${p.problem || ''}</li>`; }).join('') + '</ul>'
+      ? '<ul style="color:var(--bad)">' + problems.map(function (p) { return h.html`<li><code>${p.field || ''}</code> ${p.problem || ''}</li>`; }).join('') + '</ul>'
       : '';
     return '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Edit</h3>' +
       h.html`<p class="muted" style="margin-top:0">Empty = the built-in weight. Each override must stay within half to double its default; the server clamps anything outside and says so.${draft.dirty ? ' Unpublished edits.' : ''}</p>` + stale +
@@ -134,7 +137,7 @@
       h.html`<label>Evaluation report link <input class="inp" id="rc-evalurl" placeholder="https://…" value="${draft.evalUrl}" style="width:280px"></label>` +
       h.html`<label>Your name or initials <input class="inp" id="rc-by" maxlength="40" placeholder="optional" value="${draft.by}" style="width:140px"></label></div>` +
       '<div class="row" style="gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap"><button type="button" class="ghost" id="rc-preview">Preview scenario</button>' +
-      h.html`<button type="button" id="rc-publish">Publish as v${nextV}</button>` +
+      h.html`<button type="button" class="btn btn-primary" id="rc-publish">Publish as v${nextV}</button>` +
       (draft.dirty ? '<button type="button" class="ghost" id="rc-discard">Discard edits</button>' : '') +
       h.html`<span class="muted" id="rc-out" role="status" style="font-size:12px">${message}</span></div>` + probs + '</div>';
   }
@@ -160,7 +163,7 @@
     }).join('');
     var hasEval = !!(draft.evalSummary && draft.evalSummary.trim());
     return '<div class="card" id="rc-preview-card" style="margin-bottom:14px"><h3 style="margin-top:0">Scenario preview</h3>' +
-      (p.bad.length ? h.html`<p style="color:var(--danger)">Not a number: ${p.bad.join(', ')}</p>` : '') +
+      (p.bad.length ? h.html`<p style="color:var(--bad)">Not a number: ${p.bad.join(', ')}</p>` : '') +
       (rows ? '<table><thead><tr><th>Weight</th><th>Default</th><th>Now (published)</th><th>After</th><th>Change</th><th>Reason terms it moves</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p class="muted">No weight differs from what is published.</p>') +
       h.html`<p><b>Rollout after publishing:</b> ${rolloutText({ mode: draft.mode, experimentKey: draft.experimentKey, variant: draft.variant })}.</p>` +
       (hasEval ? '<p class="muted">An evaluation summary will be attached. It is evidence about this change, not proof that listeners will prefer it.</p>' : '<p><span class="pill" style="background:var(--warn-soft);color:var(--warn)">unvalidated — no evaluation attached</span> <span class="muted">This preview only shows which terms move; it does not predict listener outcomes.</span></p>') +
@@ -171,11 +174,11 @@
   function conflictCard(h) {
     if (!conflict) return '';
     var rec = isObj(conflict.current) ? conflict.current : null;
-    return '<div class="card" id="rc-conflict" role="alert" style="margin-bottom:14px;border-color:var(--danger)"><h3 style="margin-top:0">Version conflict — nothing was written</h3>' +
+    return '<div class="card" id="rc-conflict" role="alert" style="margin-bottom:14px;border-color:var(--bad)"><h3 style="margin-top:0">Version conflict — nothing was written</h3>' +
       (rec
         ? h.html`<p>v${rec.version} was published ${when(rec.updatedAt)} by ${rec.updatedBy || 'admin'} after you started editing from v${draft ? draft.base : '?'}. Its rollout: ${rolloutText(rec.rollout)}; ${Object.keys(overridesOf(rec)).length} override(s).</p>`
         : '<p>The published version changed after you started editing.</p>') +
-      '<div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" id="rc-rebase">Keep my edits on top of the newer version</button><button type="button" class="ghost" id="rc-take-theirs">Discard my edits and load it</button></div></div>';
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="rc-rebase">Keep my edits on top of the newer version</button><button type="button" class="ghost" id="rc-take-theirs">Discard my edits and load it</button></div></div>';
   }
 
   function historyCard(h) {
@@ -184,7 +187,7 @@
     var rows = list.map(function (r) {
       var ask = rollbackAsk === r.version;
       var action = r.version === cur ? '<span class="muted">current</span>'
-        : ask ? h.html`<span>Publish v${r.version}'s weights and rollout as v${cur + 1}?</span> <button type="button" data-rc-rollback-yes="${r.version}">Roll back</button> <button type="button" class="ghost" data-rc-rollback-no="1">Cancel</button>`
+        : ask ? h.html`<span>Publish v${r.version}'s weights and rollout as v${cur + 1}?</span> <button type="button" class="btn btn-danger" data-rc-rollback-yes="${r.version}">Roll back</button> <button type="button" class="ghost" data-rc-rollback-no="1">Cancel</button>`
           : h.html`<button type="button" class="ghost" data-rc-rollback="${r.version}">Roll back to this</button>`;
       var ev = isObj(r.evaluation) ? 'evaluation attached' : 'unvalidated — no evaluation attached';
       return h.html`<tr><td>v${r.version}</td><td>${when(r.updatedAt)}</td><td>${r.updatedBy || 'admin'}</td><td>${rolloutText(r.rollout)}</td><td>${Object.keys(overridesOf(r)).length}</td><td>${ev}</td><td class="muted" style="white-space:pre-wrap">${r.note || ''}</td><td>` + action + '</td></tr>';
@@ -195,9 +198,9 @@
   }
 
   function paint(h) {
-    if (!isObj(last)) { h.view('<div class="empty">Unexpected response from the server.</div>'); return; }
-    if (last.configured === false) { h.view('<div class="empty">The database is not configured on this Worker.</div>'); return; }
-    if (!Array.isArray(last.weights)) { h.view('<div class="empty">Unexpected response from the server.</div>'); return; }
+    if (!isObj(last)) { h.view(errState(h, 'Unexpected response from the server.')); return; }
+    if (last.configured === false) { h.view('<div class="state state-empty empty" role="status"><div class="state-title">The database is not configured on this Worker</div><div class="state-hint">Bind the database to the Worker, deploy, then reload this page.</div></div>'); return; }
+    if (!Array.isArray(last.weights)) { h.view(errState(h, 'Unexpected response from the server.')); return; }
     if (!draft) draft = fromRecord(current(), currentVersion());
     h.view(headerCard(h) + conflictCard(h) + editorCard(h) + (preview ? previewCard(h) : '') + historyCard(h) +
       (last.experimentsRead === 'failed' ? '<p class="muted">Experiments could not be read; an experiment rollout cannot be chosen right now.</p>' : ''));

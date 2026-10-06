@@ -148,6 +148,9 @@ describe('VinaX AI chat', () => {
 
   it('one model menu: opening it fetches the list once, and a pick goes on the wire as mode + provider + model', async () => {
     mount();
+    // 11.0 — the chat style rides on the surface: Auto wears the house style.
+    const surface = document.querySelector('.ai-root') as HTMLElement;
+    expect(surface.getAttribute('data-chat-style')).toBe('vinax');
     fireEvent.click(screen.getByRole('button', { name: 'Model: Auto' }));
     const list = await screen.findByRole('listbox', { name: 'Choose model' });
     await waitFor(() => expect(within(list).getByText('Small 8B')).toBeTruthy());
@@ -157,6 +160,8 @@ describe('VinaX AI chat', () => {
     expect(screen.queryByRole('listbox', { name: 'Choose model' })).toBeNull();
     // The trigger: the provider's logo and the model's original name.
     const trigger = screen.getByRole('button', { name: 'Model: Big Model' });
+    // …and the style follows the pick at once (an unknown maker lands on the calm fallback).
+    expect(surface.getAttribute('data-chat-style')).toBe('deep');
     expect(trigger.querySelector('svg[data-provider]')?.getAttribute('data-provider')).toBe('openrouter');
     // Reopening inside five minutes costs nothing, and the pick is now a recent.
     fireEvent.click(trigger);
@@ -172,6 +177,7 @@ describe('VinaX AI chat', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Model: Big Model' }));
     fireEvent.click(within(await screen.findByRole('listbox', { name: 'Choose model' })).getByText('Auto'));
     expect(screen.getByRole('button', { name: 'Model: Auto' }).querySelector('svg[data-provider]')).toBeNull();
+    expect(surface.getAttribute('data-chat-style')).toBe('vinax');
     await sendText('and again');
     await waitFor(() => expect(posted).toHaveLength(2));
     expect(posted[1].mode).toBe('auto');
@@ -265,5 +271,121 @@ describe('VinaX AI chat', () => {
     expect(within(history).queryByText('Remember this chat')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(within(history).getByText('Remember this chat')).toBeTruthy();
+  });
+});
+
+describe('11.0 — turns that end badly', () => {
+  it('a reply cut off by a reload shows “No reply — try again” with Retry, and Retry asks again', async () => {
+    localStorage.setItem(
+      'vinax_ai_chats_v1',
+      JSON.stringify([{ id: 'c1', title: 'Cut off', updatedAt: Date.now(), messages: [{ role: 'user', content: 'hello' }, { role: 'assistant', content: '' }] }]),
+    );
+    mount();
+    expect(await screen.findByText('No reply — try again')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry this question' }));
+    });
+    await waitFor(() => expect(posted).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByText('No reply — try again')).toBeNull());
+  });
+
+  it('a saved model the server no longer lists: one honest line, no re-send, and the next message goes out on Auto', async () => {
+    localStorage.setItem('vinax.aiDefaultMode', JSON.stringify({ mode: 'model', provider: 'openrouter', model: 'maker/big:free', name: 'Big Model' }));
+    const base = globalThis.fetch;
+    let refused = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request, init?: RequestInit) => {
+        const body = String(init?.body ?? '');
+        if (String(input).endsWith('/api/vinaxai') && body.includes('maker/big:free')) {
+          refused += 1;
+          return Promise.resolve(new Response(JSON.stringify({ error: 'unknown_model' }), { status: 400 }));
+        }
+        return base(input, init);
+      }),
+    );
+    mount();
+    await sendText('hello');
+    expect(await screen.findByText('That model is no longer available — switched to Auto.')).toBeTruthy();
+    expect(refused).toBe(1);
+    expect(screen.getByRole('button', { name: 'Model: Auto' })).toBeTruthy();
+    expect(localStorage.getItem('vinax.aiDefaultMode')).toBeNull();
+    await sendText('again');
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toMatchObject({ mode: 'auto' });
+  });
+
+  it('Retry after a model the server no longer lists re-sends the same question on Auto (11.0)', async () => {
+    localStorage.setItem('vinax.aiDefaultMode', JSON.stringify({ mode: 'model', provider: 'openrouter', model: 'maker/big:free', name: 'Big Model' }));
+    const base = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request, init?: RequestInit) =>
+        String(input).endsWith('/api/vinaxai') && String(init?.body ?? '').includes('maker/big:free')
+          ? Promise.resolve(new Response(JSON.stringify({ error: 'unknown_model' }), { status: 400 }))
+          : base(input, init),
+      ),
+    );
+    mount();
+    await sendText('hello there');
+    await screen.findByText('That model is no longer available — switched to Auto.');
+    fireEvent.click(await screen.findByLabelText('Retry this question'));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toMatchObject({ mode: 'auto' });
+    expect(JSON.stringify(posted[0])).toContain('hello there');
+  });
+
+  it('a message that is too large offers Edit message, not Retry, and the text goes back in the box (11.0)', async () => {
+    const base = globalThis.fetch;
+    let asked = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request, init?: RequestInit) => {
+        if (!String(input).endsWith('/api/vinaxai')) return base(input, init);
+        asked += 1;
+        return Promise.resolve(new Response(JSON.stringify({ error: 'too_large' }), { status: 413 }));
+      }),
+    );
+    mount();
+    await sendText('describe this huge picture');
+    await screen.findByText('That picture or file is too large to send — try a smaller one.');
+    expect(asked).toBe(1);
+    expect(screen.queryByLabelText('Retry this question')).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit message' }));
+    await waitFor(() => expect((screen.getByLabelText('Message VinaX AI') as HTMLTextAreaElement).value).toBe('describe this huge picture'));
+    expect(screen.queryByText('That picture or file is too large to send — try a smaller one.')).toBeNull();
+    expect(asked).toBe(1);
+  });
+
+  it('a stopped /playlist that finishes late keeps to its own bubble and leaves the next reply alone', async () => {
+    const base = globalThis.fetch;
+    // The playlist request only lets go (as an aborted request does) when the test says so.
+    const held: Array<() => void> = [];
+    const release = (): void => held.splice(0).forEach((let_go) => let_go());
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input instanceof Request ? input.url : input);
+        if (url.endsWith('/api/vinaxai') || url.endsWith('/api/aimodels')) return base(input, init);
+        return new Promise<Response>((_resolve, reject) => {
+          held.push(() => reject(new DOMException('Aborted', 'AbortError')));
+        });
+      }),
+    );
+    mount();
+    await sendText('/playlist rainy evening');
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    });
+    await sendText('hello');
+    await waitFor(() => expect(document.body.textContent).toContain('answer.'));
+    await act(async () => {
+      release();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    const thread = Array.from(document.querySelectorAll('.ai-msg')).map((e) => e.textContent).join(' | ');
+    expect(thread).toContain('Stopped before the playlist was ready.');
+    expect(document.body.textContent).toContain('answer.');
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
   });
 });

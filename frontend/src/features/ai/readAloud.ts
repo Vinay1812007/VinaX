@@ -59,10 +59,13 @@ export function speakableText(md: string): string {
 /* ---------------------------------------------------------------- server voice */
 
 const TTS_PATH = isNativePlatform() ? 'https://www.sirimillavinay.online/api/tts' : '/api/tts';
-/** Per-chunk leash. Read-aloud is a deliberate tap rather than a live
- *  conversation, so it can wait a little longer than voice chat's 3.5s before
- *  giving up — but not long enough to feel broken. */
-const CHUNK_LEASH_MS = 5000;
+/** Per-chunk leash. 11.0 — the Worker gives a speech model up to 25s (6s on
+ *  its fast route) and answers with an error when that runs out, so this
+ *  sits just past it: the server's verdict arrives first, and the leash only
+ *  has to catch a dead connection. At the old 5s every slower voice was cut
+ *  off mid-answer and the reply was read by the device instead. A miss still
+ *  falls back to the device voice. */
+export const CHUNK_LEASH_MS = 27_000;
 
 /** How the caller supplies the listener's choice. Returning null means "speak
  *  on this device", which is also the answer when no speech model is served.

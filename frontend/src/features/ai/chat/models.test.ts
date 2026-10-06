@@ -224,3 +224,20 @@ describe('persistence', () => {
     expect(JSON.parse(localStorage.getItem(RECENT_MODELS_KEY) ?? '[]')).toEqual([pick('groq', 'small-8b')]);
   });
 });
+
+describe('11.0 — a pick the server no longer lists', () => {
+  it('is forgotten as the default, the last model and a recent, so the next visit starts on Auto', async () => {
+    const m = await import('./models');
+    localStorage.clear();
+    const dead: ModelChoice = { mode: 'model', provider: 'groq', model: 'gone/model', name: 'Gone' };
+    const alive: ModelChoice = { mode: 'model', provider: 'groq', model: 'here/model', name: 'Here' };
+    m.saveDefaultChoice(dead);
+    m.saveLastChoice(dead);
+    m.saveRecents([dead, alive]);
+    expect(m.loadInitialChoice()).toEqual(dead);
+    expect(m.forgetChoice(dead)).toEqual([alive]);
+    expect(m.loadDefaultChoice()).toBeNull();
+    expect(m.loadInitialChoice()).toEqual(m.AUTO);
+    expect(m.loadRecents()).toEqual([alive]);
+  });
+});

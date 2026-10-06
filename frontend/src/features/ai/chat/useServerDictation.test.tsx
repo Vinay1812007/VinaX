@@ -108,6 +108,63 @@ describe('server dictation (10.3)', () => {
     expect(onFallback).not.toHaveBeenCalled();
   });
 
+  /** A microphone that opens only when the test says so. */
+  const slowMic = (): { open: () => Promise<void>; calls: () => number } => {
+    const waiting: Array<(s: unknown) => void> = [];
+    const getUserMedia = vi.fn(() => new Promise((resolve) => waiting.push(resolve)));
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
+    return {
+      open: async () => {
+        await act(async () => {
+          waiting.splice(0).forEach((resolve) => resolve({ getTracks: () => [{ stop: stopTrack }] }));
+          await Promise.resolve();
+        });
+      },
+      calls: () => getUserMedia.mock.calls.length,
+    };
+  };
+
+  it('11.0 — Stop while the microphone is still opening ends it, and the mic is released when it arrives', async () => {
+    const mic = slowMic();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const onText = vi.fn();
+    const onFallback = vi.fn();
+    const { result } = renderHook(() => useServerDictation({ pick: PICK, onText, onFallback }));
+    act(() => result.current.start());
+    // Not "recording" yet: nothing is being captured until the mic arrives.
+    expect(result.current.state).toBe('starting');
+    act(() => result.current.stop());
+    expect(result.current.state).toBe('idle');
+    await mic.open();
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+    expect(result.current.state).toBe('idle');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(onText).not.toHaveBeenCalled();
+    expect(onFallback).not.toHaveBeenCalled();
+  });
+
+  it('11.0 — a second start while the microphone is opening is ignored, and a cancelled start never leaves a mic open', async () => {
+    const mic = slowMic();
+    vi.stubGlobal('fetch', vi.fn());
+    const { result } = renderHook(() => useServerDictation({ pick: PICK, onText: vi.fn(), onFallback: vi.fn() }));
+    act(() => result.current.start());
+    act(() => result.current.start());
+    expect(mic.calls()).toBe(1);
+    // Cancel, then start again before the first microphone has arrived: the
+    // first stream must be let go, only the second one records.
+    act(() => result.current.cancel());
+    expect(result.current.state).toBe('idle');
+    act(() => result.current.start());
+    expect(mic.calls()).toBe(2);
+    await mic.open();
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+    expect(result.current.state).toBe('recording');
+    act(() => result.current.cancel());
+    await waitFor(() => expect(result.current.state).toBe('idle'));
+    expect(stopTrack).toHaveBeenCalledTimes(2);
+  });
+
   it('shows the timer as m:ss', () => {
     expect(formatClock(7_400)).toBe('0:07');
     expect(formatClock(60_000)).toBe('1:00');

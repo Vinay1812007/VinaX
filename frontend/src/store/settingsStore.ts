@@ -4,6 +4,7 @@ import type { RegionInfo } from '@/types';
 import { KEYS } from '@/constants/storage-keys';
 import type { AudioQualityPref } from '@/services/audio/engine';
 import { guardedLocalStorage } from '@/services/storage/local';
+import { DEFAULT_TEMPLATE, normalizeTemplate, type TemplateId } from '@/utils/theme';
 
 export type DiscoveryMode = 'familiar' | 'balanced' | 'discover';
 
@@ -21,6 +22,13 @@ export function resolveDiscoveryMode(s: { discoveryMode?: unknown; exploreMode?:
 export interface SettingsState {
   theme: 'dark' | 'light' | 'system' | 'amoled' | 'auto';
   accent: string;
+  /**
+   * 11.0 — the app style: palette, type, shapes, navigation and mini-player
+   * layout, card treatment and motion (styles/templates/<id>.css). The accent
+   * picker still wins over a style's own accent, and a festival skin repaints
+   * the colours of any style while it is on.
+   */
+  template: TemplateId;
   /** v5.12.0 — daily listening goal in minutes (0 = off). */
   dailyGoalMinutes: number;
   /** v5.12.0 — radio-DJ voice: announces each song as it starts. */
@@ -124,6 +132,7 @@ export interface SettingsState {
   setStartPage(v: 'home' | 'search' | 'library' | 'last'): void;
   setHighContrast(v: boolean): void;
   setAccent(accent: string): void;
+  setTemplate(template: string): void;
   setGlassLevel(v: number): void;
   setGlassBlur(v: number): void;
   setAutoplay(v: boolean): void;
@@ -180,6 +189,7 @@ function clampEq(gains: readonly number[] | undefined): number[] {
 const defaults = {
   theme: 'dark' as const,
   accent: 'crimson',
+  template: DEFAULT_TEMPLATE as TemplateId,
   dailyGoalMinutes: 0,
   djVoice: false,
   festivalSkins: true,
@@ -232,6 +242,7 @@ export type SettingsData = typeof defaults;
 
 const SETTINGS_ENUMS: Partial<Record<keyof SettingsData, readonly string[]>> = {
   theme: ['dark', 'light', 'system', 'amoled', 'auto'],
+  template: ['aura', 'pulse', 'sangam', 'nocturne', 'marquee', 'vibe'],
   uiScale: ['sm', 'md', 'lg'],
   startPage: ['home', 'search', 'library', 'last'],
   density: ['comfortable', 'compact'],
@@ -312,6 +323,7 @@ export const useSettingsStore = create<SettingsState>()(
       setStartPage: (startPage) => set({ startPage }),
       setHighContrast: (highContrast) => set({ highContrast }),
       setAccent: (accent) => set({ accent }),
+      setTemplate: (template) => set({ template: normalizeTemplate(template) }),
       setGlassLevel: (v) => set({ glassLevel: Math.min(100, Math.max(0, Math.round(v))) }),
       setGlassBlur: (v) => set({ glassBlur: Math.min(100, Math.max(0, Math.round(v))) }),
       setAutoplay: (autoplay) => set({ autoplay }),

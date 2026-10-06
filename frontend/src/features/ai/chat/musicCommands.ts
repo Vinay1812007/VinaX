@@ -11,6 +11,7 @@
  * or when search is down, so the assistant answers instead.
  */
 import { searchSongs } from '@/services/api';
+import { UNKNOWN_LANGUAGE, normalizeLanguage } from '@/constants/languages';
 import { usePlayerStore } from '@/store/playerStore';
 
 export async function tryMusicCommand(text: string, say: (line: string) => void): Promise<boolean> {
@@ -49,7 +50,8 @@ export async function tryMusicCommand(text: string, say: (line: string) => void)
   //   play X in <language>          — filters results by language
   //   play X without <artist>       — drops any result by that artist
   const playPattern = /^(?:play|queue|start|put on|shuffle)\s+(.+)$/i;
-  const cmd = playPattern.exec(text.trim());
+  // Dictation ends a command with a full stop; it is not part of the song name.
+  const cmd = playPattern.exec(text.trim().replace(/[.!?]+$/, '').trim());
   if (cmd) {
     const verb = (
       cmd[0].match(/^(play|queue|start|put on|shuffle)/i)?.[1] ?? 'play'
@@ -60,8 +62,11 @@ export async function tryMusicCommand(text: string, say: (line: string) => void)
 
     // Extract "in <language>" filter.
     let langFilter: string | null = null;
+    // Only a real language is a filter: "Love in Tokyo" is a title, and cutting
+    // it to "Love" searched for (and played) a different song.
     const langMatch = rest.match(/\s+in\s+([a-z]+)$/i);
-    if (langMatch) {
+    const langKnown = langMatch ? normalizeLanguage(langMatch[1]) : null;
+    if (langMatch && langKnown && langKnown !== UNKNOWN_LANGUAGE) {
       langFilter = langMatch[1].toLowerCase();
       rest = rest.slice(0, langMatch.index).trim();
     }

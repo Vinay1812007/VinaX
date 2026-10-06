@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { ACCENT_OPTIONS, normalizeAccent } from './accents';
 
-describe('accent picker options (10.0 Marigold)', () => {
-  it('shows the default accent as Marigold, with a marigold swatch', () => {
+describe('accent picker options', () => {
+  it("shows the default accent as the app style's own colour, and keeps Marigold as a choice", () => {
     const def = ACCENT_OPTIONS.find((a) => a.id === normalizeAccent(undefined));
-    expect(def).toEqual({ id: 'crimson', label: 'Marigold', dot: 'rgb(255 164 46)' });
+    expect(def).toMatchObject({ id: 'crimson', label: 'Style colour' });
     expect(ACCENT_OPTIONS[0].id).toBe('crimson');
+    expect(ACCENT_OPTIONS.find((a) => a.id === 'marigold')).toEqual({ id: 'marigold', label: 'Marigold', dot: 'rgb(255 164 46)' });
   });
 
   it("labels the older orange 'ember' accent Copper so the two never read as duplicates", () => {
@@ -15,7 +16,7 @@ describe('accent picker options (10.0 Marigold)', () => {
   });
 
   it('keeps every stored id, so existing settings still resolve', () => {
-    expect(ACCENT_OPTIONS.map((a) => a.id)).toEqual(['crimson', 'ember', 'sunset', 'gold', 'emerald', 'ocean', 'azure', 'violet', 'rose', 'mono']);
+    expect(ACCENT_OPTIONS.map((a) => a.id)).toEqual(['crimson', 'marigold', 'ember', 'sunset', 'gold', 'emerald', 'ocean', 'azure', 'violet', 'rose', 'mono']);
     for (const a of ACCENT_OPTIONS) expect(normalizeAccent(a.id)).toBe(a.id);
   });
 });

@@ -524,3 +524,99 @@ html.light .vx-settings .vx-seg-item[aria-checked='true'] { color: rgb(var(--emb
   .vx-settings *, .vx-settings *::before, .vx-settings *::after { transition: none !important; }
 }
 html.reduce-motion .vx-settings *, html.reduce-motion .vx-settings *::before, html.reduce-motion .vx-settings *::after { transition: none !important; }
+
+/* 11.0 — app style picker (features/settings/TemplatePicker.tsx). Each card
+   draws a miniature of its style from four colours the card sets inline
+   (--tpl-c canvas, --tpl-s raised, --tpl-a accent, --tpl-b second), so every
+   preview reads the same whichever style is on. */
+.vx-tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 12px; width: 100%; }
+.vx-tpl-card {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 8px 8px 10px;
+  border-radius: 16px;
+  background: rgb(var(--ink-100) / 0.04);
+  box-shadow: inset 0 0 0 1px var(--vx-border);
+  text-align: left;
+  transition: transform 140ms var(--ease-calm), box-shadow 140ms var(--ease-calm), background-color 140ms var(--ease-calm);
+}
+.vx-tpl-card:hover { background: rgb(var(--ink-100) / 0.07); }
+.vx-tpl-card:active { transform: scale(0.98); }
+.vx-tpl-card[aria-checked='true'] { box-shadow: inset 0 0 0 2px rgb(var(--ember-500)); background: rgb(var(--ember-500) / 0.1); }
+.vx-tpl-name { margin-top: 8px; padding: 0 4px; color: rgb(var(--ink-100)); font-size: 14.5px; font-weight: 750; }
+.vx-tpl-tag { padding: 0 4px; color: rgb(var(--ink-400)); font-size: 12px; font-weight: 550; line-height: 1.35; }
+.vx-tpl-preview {
+  --r-art: 5px;
+  --r-play: 50%;
+  position: relative;
+  display: block;
+  height: 118px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--tpl-c);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+.vx-tpl-preview > span, .vx-tpl-preview i, .vx-tpl-preview b { position: absolute; display: block; }
+.vx-tpl-title { top: 11px; left: 10px; width: 44%; height: 9px; border-radius: 3px; background: rgb(255 255 255 / 0.92); }
+.vx-tpl-arts { top: 30px; left: 10px; right: 0; height: 34px; }
+.vx-tpl-arts i { top: 0; width: 34px; height: 34px; border-radius: var(--r-art); background: var(--tpl-s); }
+.vx-tpl-arts i:nth-child(1) { left: 0; background: linear-gradient(135deg, var(--tpl-a), var(--tpl-b)); }
+.vx-tpl-arts i:nth-child(2) { left: 41px; }
+.vx-tpl-arts i:nth-child(3) { left: 82px; }
+.vx-tpl-lines { top: 70px; left: 10px; right: 10px; height: 10px; }
+.vx-tpl-lines i { top: 0; left: 0; width: 34px; height: 3px; border-radius: 2px; background: rgb(255 255 255 / 0.5); }
+.vx-tpl-lines i:nth-child(2) { left: 41px; background: rgb(255 255 255 / 0.28); }
+.vx-tpl-mini { left: 7px; right: 7px; bottom: 26px; height: 14px; border-radius: 5px; background: var(--tpl-s); }
+.vx-tpl-mini i { top: 3px; left: 4px; width: 8px; height: 8px; border-radius: 2px; background: var(--tpl-b); }
+.vx-tpl-mini b { top: 3px; right: 5px; width: 8px; height: 8px; border-radius: var(--r-play); background: var(--tpl-a); }
+.vx-tpl-dock { left: 0; right: 0; bottom: 0; height: 21px; background: rgb(255 255 255 / 0.05); }
+.vx-tpl-dock i { top: 7px; width: 7px; height: 7px; border-radius: 2px; background: rgb(255 255 255 / 0.36); }
+.vx-tpl-dock i:nth-child(1) { left: 14%; background: var(--tpl-a); }
+.vx-tpl-dock i:nth-child(2) { left: 37%; }
+.vx-tpl-dock i:nth-child(3) { left: 60%; }
+.vx-tpl-dock i:nth-child(4) { left: 83%; }
+/* What makes each style itself, in miniature. */
+.vx-tpl-card[data-tpl='aura'] .vx-tpl-preview { --r-art: 6px; background: radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, var(--tpl-a) 30%, transparent), transparent 70%), var(--tpl-c); }
+.vx-tpl-card[data-tpl='aura'] .vx-tpl-title { width: 56%; height: 11px; }
+.vx-tpl-card[data-tpl='aura'] .vx-tpl-mini { border-radius: 7px; background: rgb(255 255 255 / 0.14); }
+.vx-tpl-card[data-tpl='pulse'] .vx-tpl-preview { --r-art: 2px; background: linear-gradient(180deg, #3a3a3a, var(--tpl-c) 46%); }
+.vx-tpl-card[data-tpl='pulse'] .vx-tpl-arts i { width: 52px; height: 15px; }
+.vx-tpl-card[data-tpl='pulse'] .vx-tpl-arts i:nth-child(2) { left: 58px; }
+.vx-tpl-card[data-tpl='pulse'] .vx-tpl-arts i:nth-child(3) { left: 0; top: 19px; }
+.vx-tpl-card[data-tpl='pulse'] .vx-tpl-mini { border-radius: 3px; }
+.vx-tpl-card[data-tpl='pulse'] .vx-tpl-mini b { background: #fff; }
+.vx-tpl-card[data-tpl='pulse'] .vx-tpl-dock { background: linear-gradient(180deg, transparent, #000); }
+.vx-tpl-card[data-tpl='pulse'] .vx-tpl-dock i:nth-child(1) { background: #fff; }
+.vx-tpl-card[data-tpl='sangam'] .vx-tpl-preview { --r-art: 10px; --r-play: 3px; background: radial-gradient(80% 60% at 0% 0%, color-mix(in srgb, var(--tpl-a) 34%, transparent), transparent 70%), radial-gradient(80% 60% at 100% 0%, color-mix(in srgb, var(--tpl-b) 22%, transparent), transparent 70%), var(--tpl-c); }
+.vx-tpl-card[data-tpl='sangam'] .vx-tpl-arts i:nth-child(2) { background: color-mix(in srgb, var(--tpl-b) 55%, var(--tpl-s)); }
+.vx-tpl-card[data-tpl='sangam'] .vx-tpl-mini { border-radius: 7px; }
+.vx-tpl-card[data-tpl='sangam'] .vx-tpl-dock { left: 6px; right: 6px; bottom: 4px; height: 19px; border-radius: 9px; background: rgb(255 255 255 / 0.1); }
+.vx-tpl-card[data-tpl='sangam'] .vx-tpl-dock i { top: 6px; }
+.vx-tpl-card[data-tpl='sangam'] .vx-tpl-dock i:nth-child(1) { width: 16px; border-radius: 4px; margin-left: -4px; }
+.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-preview { --r-art: 4px; background: linear-gradient(180deg, color-mix(in srgb, var(--tpl-a) 46%, var(--tpl-c)), var(--tpl-c) 52%); }
+.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-title { background: linear-gradient(90deg, #fff, var(--tpl-a), var(--tpl-b)); }
+.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-mini b { box-shadow: 0 0 0 2px color-mix(in srgb, var(--tpl-a) 40%, transparent), 0 0 8px var(--tpl-a); }
+.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-dock { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--tpl-a) 50%, transparent); }
+.vx-tpl-card[data-tpl='nocturne'] .vx-tpl-dock i:nth-child(1) { box-shadow: 0 0 8px var(--tpl-a), 0 9px 0 -2px var(--tpl-a); }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-preview { --r-art: 1px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-title { height: 8px; border-radius: 1px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-arts { height: 40px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-arts i { width: 44px; height: 40px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-arts i:nth-child(2) { left: 50px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-arts i:nth-child(3) { left: 100px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-lines { top: 76px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-lines i:nth-child(2) { left: 50px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-mini { left: 0; right: 0; bottom: 21px; height: 13px; border-radius: 0; background: #000; box-shadow: inset 0 2px 0 #333, inset 40px 2px 0 -0px var(--tpl-a); }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-mini b { background: #fff; top: 4px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-mini i { top: 4px; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-dock { background: #000; box-shadow: inset 0 1px 0 #2a2a2a; }
+.vx-tpl-card[data-tpl='marquee'] .vx-tpl-dock i:nth-child(1) { background: #fff; }
+.vx-tpl-card[data-tpl='vibe'] .vx-tpl-preview { --r-art: 12px; background: radial-gradient(80% 60% at 0% 100%, color-mix(in srgb, var(--tpl-a) 36%, transparent), transparent 70%), radial-gradient(70% 55% at 100% 0%, color-mix(in srgb, var(--tpl-b) 26%, transparent), transparent 70%), var(--tpl-c); }
+.vx-tpl-card[data-tpl='vibe'] .vx-tpl-title { width: 60%; height: 12px; border-radius: 6px; }
+.vx-tpl-card[data-tpl='vibe'] .vx-tpl-mini { left: 12px; right: 12px; border-radius: 999px; }
+.vx-tpl-card[data-tpl='vibe'] .vx-tpl-mini i { border-radius: 50%; }
+.vx-tpl-card[data-tpl='vibe'] .vx-tpl-mini b { background: linear-gradient(120deg, var(--tpl-a), var(--tpl-b)); }
+.vx-tpl-card[data-tpl='vibe'] .vx-tpl-dock { left: 14px; right: 14px; bottom: 4px; height: 18px; border-radius: 999px; background: rgb(255 255 255 / 0.1); }
+.vx-tpl-card[data-tpl='vibe'] .vx-tpl-dock i { top: 5px; border-radius: 50%; }
+.vx-tpl-card[data-tpl='vibe'] .vx-tpl-dock i:nth-child(1) { top: 3px; width: 12px; height: 12px; margin-left: -3px; background: linear-gradient(120deg, var(--tpl-a), var(--tpl-b)); }

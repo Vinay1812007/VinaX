@@ -75,6 +75,17 @@ export function attachmentText(attachment: Attachment): string {
 }
 
 /**
+ * 11.0 — the typed message with every attached file's text folded in: text
+ * files AND the text read out of PDFs (a PDF used to be attached, shown as a
+ * chip, and then left out of what the model was sent).
+ */
+export function foldAttachments(message: string, attachments: readonly Attachment[]): string {
+  let content = message;
+  for (const file of attachments) if (file.kind !== 'image' && file.text) content += attachmentText(file);
+  return content;
+}
+
+/**
  * 9.1.0 — progress and cancellation for a batch. `prepareAttachments` reads files
  * one at a time (they can be large, and a folder can hold hundreds), so a caller
  * that passes these can show which file is being read and stop part-way. What has
@@ -97,7 +108,7 @@ export async function prepareAttachments(
   const seen = new Set(existing.map((file) => file.key));
   let imageData = existing.reduce((sum, file) => sum + (file.dataUrl?.length ?? 0), 0);
   let textUsed = existing
-    .filter((file) => file.kind === 'text')
+    .filter((file) => file.kind !== 'image')
     .reduce((sum, file) => sum + attachmentText(file).length, 0);
   let hidden = 0;
   const queue = selection.files.slice(0, SCAN_LIMIT);

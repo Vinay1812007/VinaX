@@ -47,7 +47,8 @@
     var el = document.getElementById(id);
     if (!el) return;
     el.textContent = text;
-    el.style.color = isErr ? 'var(--danger)' : '';
+    el.style.color = isErr ? 'var(--bad)' : '';
+    el.setAttribute('role', isErr ? 'alert' : 'status');
   }
 
   function statusWord(p, f) {
@@ -71,14 +72,14 @@
           '</td><td>' +
           (f && f.latestSnapshot ? h.html`${f.latestSnapshot.item_count} items · ${ago(f.latestSnapshot.observed_at)}` : '—') +
           '</td><td>' +
-          (f && f.lastError ? h.html`<span style="color:var(--danger)">${f.lastError.error || 'error'}</span><div class="muted" style="font-size:11px">${when(f.lastError.at)} · ${f.lastError.attempts} attempt(s)</div>` : '—') +
+          (f && f.lastError ? h.html`<span style="color:var(--bad)">${f.lastError.error || 'error'}</span><div class="muted" style="font-size:11px">${when(f.lastError.at)} · ${f.lastError.attempts} attempt(s)</div>` : '—') +
           '</td><td>' +
           (quota.dailyBudget == null ? 'unmetered' : h.html`${quota.usedToday || 0} / ${quota.dailyBudget} units`) +
           h.html`</td><td>${p.derivedMetricsAllowed ? 'allowed' : 'off'}</td></tr>`;
       });
     });
     return h.html`<div class="card"><h3 style="margin-top:0">Sources <span class="muted">· stale after ${d.policy ? d.policy.staleAfterHours : 18} h without a successful run</span></h3>
-      <table><thead><tr><th>Source</th><th>Status</th><th>Region</th><th>Last success</th><th>Latest snapshot</th><th>Last error</th><th>Quota today</th><th>Rank change</th></tr></thead><tbody>` + rows + '</tbody></table></div>';
+      <table data-empty="No sources reported yet. They are listed after the first scheduled run."><thead><tr><th>Source</th><th>Status</th><th>Region</th><th>Last success</th><th>Latest snapshot</th><th>Last error</th><th>Quota today</th><th>Rank change</th></tr></thead><tbody>` + rows + '</tbody></table></div>';
   }
 
   function renderConfidence(h, d) {
@@ -90,7 +91,7 @@
     }).join('');
     var pills = Object.keys(m.byStatus || {}).map(function (k) { return h.html`<span class="pill">${k}: ${m.byStatus[k]}</span>`; }).join(' ');
     return h.html`<div class="card"><h3 style="margin-top:0">Match confidence <span class="muted">· automatic matches need ${d.policy ? d.policy.autoMatchThreshold : 0.8} or more and no close rival</span></h3>
-      <div class="chips" style="margin-bottom:8px">` + (pills || h.html`<span class="muted">No matches yet.</span>`) + '</div><table><tbody>' + bars + '</tbody></table></div>';
+      <div class="chips" style="margin-bottom:8px">` + (pills || h.html`<span class="muted">No matches yet.</span>`) + '</div><table data-empty="Nothing to chart yet. Bars appear after the first scheduled run."><tbody>' + bars + '</tbody></table></div>';
   }
 
   function renderQueue(h, d) {
@@ -107,7 +108,7 @@
           : '<span class="muted">no proposal</span>') +
         h.html`</td><td><span class="pill">${(m.reason || 'review').replace(/_/g, ' ')}</span></td><td style="max-width:280px">` +
         (cands || '<span class="muted">none</span>') +
-        h.html`</td><td style="white-space:nowrap"><button data-tr="review" data-decision="accept" data-id="${m.id}"` + (m.catalog_id ? '' : ' disabled') + h.html`>Accept</button>
+        h.html`</td><td style="white-space:nowrap"><button type="button" class="btn btn-sm" data-tr="review" data-decision="accept" data-id="${m.id}"` + (m.catalog_id ? '' : ' disabled') + h.html`>Accept</button>
           <button class="ghost" data-tr="review" data-decision="reject" data-id="${m.id}">Reject</button>
           <div class="row" style="gap:6px;margin-top:6px"><input class="inp" id="tr-cid-${m.id}" placeholder="catalogue id" style="width:120px" /><button class="ghost" data-tr="review" data-decision="correct" data-id="${m.id}">Correct</button></div>
           <div class="muted" id="tr-q-${m.id}" style="font-size:11px"></div></td></tr>`;
@@ -115,7 +116,7 @@
     return h.html`<div class="card"><h3 style="margin-top:0">Review queue <span class="muted">· ambiguous and unmatched items — never shown to listeners until accepted or corrected</span></h3>
       <div class="row" style="gap:8px;margin-bottom:8px"><label class="muted" for="tr-reviewer" style="font-size:12px">Reviewer</label><input class="inp" id="tr-reviewer" value="${ctx.reviewer}" placeholder="your name (kept in each item's history)" style="width:240px" /></div>
       <table><thead><tr><th>Source item</th><th>Proposed song</th><th>Why</th><th>Candidates</th><th>Decision</th></tr></thead><tbody>` +
-      (rows || h.html`<tr><td colspan="5" class="empty">Nothing waiting for review.</td></tr>`) + '</tbody></table></div>';
+      (rows || h.html`<tr class="table-empty"><td colspan="5"><div class="state state-empty empty" role="status"><div class="state-title">Nothing waiting for review</div><div class="state-hint">New trend candidates land here after each scheduled run.</div></div></td></tr>`) + '</tbody></table></div>';
   }
 
   function renderDecisions(h, d) {
@@ -146,26 +147,26 @@
     return h.html`<div class="card"><h3 style="margin-top:0">Editorial import <span class="muted">· labelled as editorial wherever it appears; never presented as a public chart</span></h3>
       <p class="muted" style="margin-top:0;font-size:12px">CSV header: <code>title,artist,catalog_id,region,language,position,evidence_url,starts_at,expires_at,note</code>. Required: title, an https evidence link, an expiry (at most 90 days after the start), and an artist or a catalogue id. JSON: an array of objects with the same fields. One invalid row and nothing is imported.</p>
       <div class="row" style="gap:8px;margin-bottom:8px"><select class="inp" id="tr-format" style="width:110px"><option value="csv" ${ctx.importFormat === 'csv' ? 'selected' : ''}>CSV</option><option value="json" ${ctx.importFormat === 'json' ? 'selected' : ''}>JSON</option></select>
-      <button data-tr="validate">Validate</button><button data-tr="import">Import</button><span class="muted" id="tr-import-msg" style="font-size:12px"></span></div>
+      <button type="button" class="btn" data-tr="validate">Validate</button><button type="button" class="btn btn-primary" data-tr="import">Import</button><span class="muted" id="tr-import-msg" style="font-size:12px"></span></div>
       <textarea class="inp" id="tr-import" rows="6" placeholder="Paste CSV or JSON here…">${ctx.importText}</textarea>
       <div id="tr-import-out"></div></div>
       <div class="card"><h3 style="margin-top:0">Editorial entries <span class="muted">· ${expiring} expiring within 72 h</span></h3>
       <table><thead><tr><th>State</th><th>Song</th><th>Region</th><th>Window</th><th>Evidence</th><th>Imported</th><th></th></tr></thead><tbody>` +
-      (rows || h.html`<tr><td colspan="7" class="empty">No editorial entries.</td></tr>`) + '</tbody></table></div>';
+      (rows || h.html`<tr class="table-empty"><td colspan="7"><div class="state state-empty empty" role="status"><div class="state-title">No editorial entries</div><div class="state-hint">Pin or hide a song from the review list and it is recorded here.</div></div></td></tr>`) + '</tbody></table></div>';
   }
 
   function renderRuns(h, d) {
     var rows = (d.runs || []).slice(0, 30).map(function (r) {
-      return h.html`<tr><td>${when(r.started_at)}</td><td>${r.source}</td><td>${r.region}</td><td>${r.trigger}</td><td>${r.status}${r.duplicate_snapshot ? ' (already stored)' : ''}</td><td>${r.attempts}</td><td>${r.items_fetched} / ${r.items_inserted}</td><td>${r.matched} / ${r.queued_for_review}</td><td>${r.quota_units}</td><td style="max-width:260px;color:${r.status === 'error' ? 'var(--danger)' : 'inherit'}">${r.error || ''}</td></tr>`;
+      return h.html`<tr><td>${when(r.started_at)}</td><td>${r.source}</td><td>${r.region}</td><td>${r.trigger}</td><td>${r.status}${r.duplicate_snapshot ? ' (already stored)' : ''}</td><td>${r.attempts}</td><td>${r.items_fetched} / ${r.items_inserted}</td><td>${r.matched} / ${r.queued_for_review}</td><td>${r.quota_units}</td><td style="max-width:260px;color:${r.status === 'error' ? 'var(--bad)' : 'inherit'}">${r.error || ''}</td></tr>`;
     }).join('');
     return h.html`<div class="card"><h3 style="margin-top:0">Recent runs</h3><table><thead><tr><th>Started</th><th>Source</th><th>Region</th><th>By</th><th>Status</th><th>Attempts</th><th>Fetched / new</th><th>Matched / review</th><th>Units</th><th>Error</th></tr></thead><tbody>` +
-      (rows || h.html`<tr><td colspan="10" class="empty">No runs yet — the scheduled job has not run, or the migration is missing.</td></tr>`) + '</tbody></table></div>';
+      (rows || h.html`<tr class="table-empty"><td colspan="10"><div class="state state-empty empty" role="status"><div class="state-title">No runs yet</div><div class="state-hint">The scheduled job has not run, or the migration is missing.</div></div></td></tr>`) + '</tbody></table></div>';
   }
 
   function render(h, d) {
     var intro = h.html`<div class="card"><h3 style="margin-top:0">Trend Operations</h3>
       <p class="muted" style="margin-top:0">Public charts and editorial entries, matched to catalogue songs. Listeners only ever see confident or reviewed matches, each labelled with its source and evidence link. Metadata only: no audio is fetched from any source.</p>
-      <div class="row" style="gap:8px;flex-wrap:wrap"><button data-tr="run">Run sources now</button><button class="ghost" data-tr="reload">Reload panel</button><span class="muted" id="tr-run-out" style="font-size:12px"></span></div></div>`;
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-primary" data-tr="run">Run sources now</button><button class="ghost" data-tr="reload">Reload panel</button><span class="muted" id="tr-run-out" style="font-size:12px"></span></div></div>`;
     if (d.configured === false) {
       h.view(intro + h.html`<div class="card"><p>The database is not configured, so nothing can be stored or shown. Provider status:</p></div>` + renderSources(h, d));
       return;

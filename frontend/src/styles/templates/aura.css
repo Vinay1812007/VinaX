@@ -1,0 +1,132 @@
+/* ============================================================================
+   Aura — the 11.0 default. Clean glass and large titles.
+
+   Cool graphite with an iris accent and a mint second colour. The chrome is
+   frosted glass over a calm canvas; pages open with a large left-aligned
+   title; artwork is softly rounded with a quiet shadow; the active
+   destination is a tinted wash, not a solid pill; play is a circle.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='aura']:not([class*='fest-']) {
+  --ink-950: 10 11 15;
+  --ink-900: 16 17 22;
+  --ink-850: 23 25 32;
+  --ink-800: 32 35 44;
+  --ink-700: 50 54 66;
+  --ink-600: 92 97 112;
+  --ink-500: 146 151 166;
+  --ink-400: 172 177 191;
+  --ink-300: 198 202 214;
+  --ink-200: 228 231 238;
+  --ink-100: 245 247 250;
+  --vx-mesh-ember: 0.1;
+  --vx-mesh-tide: 0.05;
+}
+html.light[data-template='aura']:not([class*='fest-']) {
+  --ink-950: 255 255 255;
+  --ink-900: 246 247 250;
+  --ink-850: 238 240 245;
+  --ink-800: 228 231 238;
+  --ink-700: 208 212 222;
+  --ink-600: 140 146 160;
+  --ink-500: 92 98 114;
+  --ink-400: 80 86 102;
+  --ink-300: 60 66 82;
+  --ink-200: 30 34 46;
+  --ink-100: 14 16 24;
+  --art: 150 158 180;
+}
+html[data-template='aura']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 72 104 232;
+  --ember-500: 110 142 255;
+  --ember-400: 150 176 255;
+  --ember-300: 196 210 255;
+  --tide-500: 64 214 190;
+  --tide-400: 122 232 212;
+  --vx-on-accent: #0b1026;
+  --art: 110 142 255;
+}
+html.light[data-template='aura']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 24 48 150;
+  --ember-500: 36 66 196;
+  --ember-400: 34 62 186;
+  --ember-300: 44 76 210;
+  --tide-500: 0 122 110;
+  --tide-400: 0 104 94;
+  --vx-on-accent: #fff;
+  --art: 150 158 180;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='aura'] {
+  --tpl-r-art: 14px;
+  --tpl-r-art-sm: 10px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 12px;
+  --tpl-r-tile: 16px;
+  --tpl-r-input: 12px;
+  --tpl-r-deck: 20px;
+  --tpl-r-mini: 18px;
+  --tpl-r-np-art: 18px;
+  --vx-font-display: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --vx-type-page: clamp(2rem, 3.4vw, 3rem);
+  --vx-type-section: 1.4rem;
+  --tpl-title-tracking: -0.04em;
+  --tpl-section-weight: 780;
+  --tpl-enter: tplRise;
+  --tpl-enter-dur: 300ms;
+  --vx-radius-panel: 18px;
+}
+
+/* ------------------------------------------------------------------ shell */
+/* One cool light from the top left, the playing artwork under it. */
+html[data-template='aura']:not([class*='fest-']) .vx-shell {
+  background:
+    radial-gradient(70% 55% at 0% 0%, rgb(var(--art) / 0.16), transparent 72%),
+    rgb(var(--ink-950));
+}
+html.light[data-template='aura']:not([class*='fest-']) .vx-shell {
+  background:
+    radial-gradient(70% 55% at 0% 0%, rgb(var(--art) / 0.2), transparent 72%),
+    rgb(var(--ink-850));
+}
+html[data-template='aura']:not([class*='fest-']) .vx-workspace {
+  background:
+    radial-gradient(820px 320px at 12% -140px, rgb(var(--ember-500) / var(--vx-mesh-ember)), transparent 70%) local,
+    radial-gradient(1100px 380px at 60% -180px, rgb(var(--art) / 0.1), transparent 72%) local,
+    rgb(var(--ink-900));
+}
+
+/* The active destination: a tinted wash and an accent label. */
+html[data-template='aura'] :is(.vx-nav-active, .vx-nav-active:hover) {
+  color: rgb(var(--ember-400));
+  background: rgb(var(--ember-500) / 0.14);
+  box-shadow: none;
+}
+html[data-template='aura'] .vx-nav-link { border-radius: 12px; min-height: 44px; }
+html[data-template='aura'] .vx-nav-link:hover,
+html[data-template='aura'] .vx-lib-row:hover { background: var(--vx-hover); }
+html[data-template='aura'] .vx-library { background: transparent; box-shadow: inset 0 1px 0 var(--vx-border); border-radius: 0; margin-top: 10px; }
+
+/* Phone tab bar: no pill — the active tab is the accent itself. */
+html[data-template='aura'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ember-400)); }
+html[data-template='aura'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ember-400)); font-weight: 750; }
+html[data-template='aura'] .vx-dock-item { gap: 2px; min-height: 56px; }
+html[data-template='aura'] .vx-dock-pill { height: 28px; }
+
+/* Player: glass, a round play button, the progress hairline in the accent. */
+html[data-template='aura'] .vx-deck::after { background: linear-gradient(90deg, transparent, rgb(var(--ember-500) / 0.5), transparent); }
+
+/* ------------------------------------------------------- pages and cards */
+html[data-template='aura'] .vx-page-header { margin-bottom: 32px; }
+html[data-template='aura'] .vx-media-art { box-shadow: 0 8px 22px -14px rgb(0 0 0 / 0.6); }
+html.light[data-template='aura'] .vx-media-art { box-shadow: 0 8px 20px -14px rgb(var(--ink-100) / 0.3); }
+html[data-template='aura'] .vx-section-link { color: rgb(var(--ember-400)); padding-inline: 10px; }
+html[data-template='aura'] .vx-section-link:hover { background: rgb(var(--ember-500) / 0.12); }
+html[data-template='aura'] .vxh-hero { border-radius: 22px; }
+html[data-template='aura'] .vx-chip-idle { background: rgb(var(--ink-100) / 0.06); }
+/* The living glow under the big play button, toned down to a soft lift. */
+html[data-template='aura'] .vx-np-play { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 14px 30px -14px rgb(var(--ember-600) / 0.8); }
+html[data-template='aura'] .vx-play-fab { box-shadow: 0 10px 24px -12px rgb(var(--ember-600) / 0.8); }

@@ -1,4 +1,5 @@
 import { memo, useEffect, useState, type ReactNode } from 'react';
+import { EngineContext } from './ChatStyleScope';
 import { Link } from 'react-router-dom';
 import { ChatPlayerCard } from '@/components/ChatPlayerCard';
 import { SparkleIcon, WaveIcon } from '@/components/Icons';
@@ -38,6 +39,8 @@ export type MessageHandlers = {
   togglePin: (index: number) => void;
   branch: (index: number) => void;
   regenerate: () => void;
+  /** 11.0 — put the last message back in the box (it was turned away). */
+  reviseLast: () => void;
   continueReply: () => void;
   rewrite: (how: 'shorter' | 'longer' | 'simpler') => void;
   send: (text: string) => void;
@@ -56,6 +59,61 @@ const Images = ({ images }: { images?: string[] }): ReactNode => {
   );
 };
 
+/** 11.0 — the text of an attached file travels INSIDE the message (the model
+ *  has to read it, and Edit / Retry must send it again), but the bubble shows
+ *  one compact chip per file instead of the raw text — a 300-line file used to
+ *  make a bubble thousands of pixels tall. Chats stored before 11.0 hold the
+ *  same folded text, so they are read the same way. */
+const FILE_MARK = /\n\n--- File: ([^\n]+?)( \(excerpt\))? ---\n/g;
+export type AttachedText = { path: string; excerpt: boolean; text: string };
+export function splitAttachedText(content: string): { typed: string; files: AttachedText[] } {
+  const marks = Array.from(content.matchAll(FILE_MARK));
+  if (!marks.length) return { typed: content, files: [] };
+  const files = marks.map((mark, k) => ({
+    path: mark[1],
+    excerpt: !!mark[2],
+    text: content.slice((mark.index ?? 0) + mark[0].length, marks[k + 1]?.index),
+  }));
+  return { typed: content.slice(0, marks[0].index), files };
+}
+
+const fileKind = (path: string): string => {
+  const ext = /\.([a-z0-9]{1,8})$/i.exec(path)?.[1]?.toUpperCase();
+  return ext === 'PDF' ? 'PDF' : ext ? `${ext} file` : 'Text file';
+};
+
+function AttachedFile({ file }: { file: AttachedText }): ReactNode {
+  const [open, setOpen] = useState(false);
+  const name = file.path.split('/').pop() || file.path;
+  const lines = file.text ? file.text.replace(/\n+$/, '').split('\n').length : 0;
+  return (
+    <details
+      className="ai-file-chip mt-2 first:mt-0 max-w-full rounded-xl border border-ink-500/30 bg-ink-950/15 text-left"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+      onDoubleClick={(e) => e.stopPropagation()}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold" title={file.path}>
+            {name}
+          </span>
+          <span className="block text-xs opacity-75">
+            {fileKind(file.path)} · {lines === 1 ? '1 line' : `${lines.toLocaleString()} lines`}
+            {file.excerpt ? ' · excerpt' : ''}
+          </span>
+        </span>
+        <span className="shrink-0 text-xs font-medium underline underline-offset-2">{open ? 'Hide contents' : 'Show contents'}</span>
+      </summary>
+      {open && (
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words border-t border-ink-500/30 px-3 py-2 font-mono text-xs" tabIndex={0}>
+          {file.text}
+        </pre>
+      )}
+    </details>
+  );
+}
+
 export const UserMessage = memo(function UserMessage({
   m,
   index,
@@ -67,11 +125,15 @@ export const UserMessage = memo(function UserMessage({
   busy: boolean;
   handlers: MessageHandlers;
 }): ReactNode {
+  const { typed, files } = splitAttachedText(m.content);
   return (
     <div id={`ai-msg-${index}`} className="ai-msg ai-msg-user ai-enter">
       <div className="ai-user-bubble" onDoubleClick={() => handlers.edit(index, m.content)} title="Double-tap to edit & resend">
         <Images images={m.images} />
-        <p className="whitespace-pre-wrap">{m.content}</p>
+        {typed.trim() ? <p className="whitespace-pre-wrap">{typed}</p> : null}
+        {files.map((f, k) => (
+          <AttachedFile key={k} file={f} />
+        ))}
       </div>
       {/* Beside the bubble, not under it: the thread keeps one rhythm. */}
       {!busy && (
@@ -146,7 +208,19 @@ function CopyButton({ text }: { text: string }): ReactNode {
 /** 9.0 — a turn with no reply: the honest line, and the next useful step.
  *  Retry when asking again can help; when VinaX AI is switched off or out
  *  for the day, the music side still works, so the notice points there. */
-function ReplyNotice({ m, last, busy, onRetry }: { m: Msg; last: boolean; busy: boolean; onRetry: () => void }): ReactNode {
+function ReplyNotice({
+  m,
+  last,
+  busy,
+  onRetry,
+  onEdit,
+}: {
+  m: Msg;
+  last: boolean;
+  busy: boolean;
+  onRetry: () => void;
+  onEdit: () => void;
+}): ReactNode {
   return (
     <div className="ai-notice">
       <span className="ai-notice-icon" aria-hidden>
@@ -156,7 +230,12 @@ function ReplyNotice({ m, last, busy, onRetry }: { m: Msg; last: boolean; busy: 
         <p>{m.content}</p>
         {!busy && last && (
           <div className="ai-notice-actions" role="group" aria-label="Reply actions">
-            {m.failed ? (
+            {m.failed && m.needsEdit ? (
+              // 11.0 — sending the same thing again would only fail again.
+              <button type="button" onClick={onEdit} className="ai-btn ai-btn-accent" title="Put this message back in the box to change it">
+                <PencilIcon /> Edit message
+              </button>
+            ) : m.failed ? (
               <button type="button" onClick={onRetry} className="ai-btn ai-btn-accent" aria-label="Retry this question" title="Ask again">
                 <RefreshIcon /> Retry
               </button>
@@ -211,7 +290,11 @@ export const AssistantMessage = memo(function AssistantMessage({
   const markState = waiting ? 'is-waiting' : streaming ? 'is-streaming' : undefined;
   // 8.2.0 / 9.0 — no reply arrived: a notice with one next step instead of the
   // reply toolbar (Copy / Good response make no sense on a failure line).
-  const noReply = !streaming && !!m.content && (m.failed || m.unavailable);
+  // 11.0 — an empty reply that nothing is writing any more (the page was
+  // reloaded or left mid-reply) is a failed turn too, never an endless
+  // thinking mark.
+  const interrupted = !streaming && !m.content && !m.media && !m.player;
+  const noReply = interrupted || (!streaming && !!m.content && (m.failed || m.unavailable));
   return (
     <div id={`ai-msg-${index}`} className="ai-msg ai-msg-assistant ai-enter">
       <span className={cn('ai-msg-mark', markState)} aria-hidden>
@@ -225,7 +308,13 @@ export const AssistantMessage = memo(function AssistantMessage({
         ) : m.player ? (
           <ChatPlayerCard fallback={m.content} />
         ) : noReply ? (
-          <ReplyNotice m={m} last={last} busy={busy} onRetry={handlers.regenerate} />
+          <ReplyNotice
+            m={interrupted ? { ...m, content: 'No reply — try again', failed: true, unavailable: undefined } : m}
+            last={last}
+            busy={busy}
+            onRetry={handlers.regenerate}
+            onEdit={handlers.reviseLast}
+          />
         ) : m.content ? (
           <>
             {/* Markdown renders LIVE while streaming (an unclosed fence shows
@@ -317,6 +406,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                   <span className="ai-engine-chip" title={`Answered by ${m.engine}`}>
                     {isProviderId(m.engineProvider) && <ProviderLogo provider={m.engineProvider} size={14} />}
                     <span className="truncate">{m.engine}</span>
+                    <EngineContext engine={m.engine} />
                   </span>
                 ) : null}
               </div>

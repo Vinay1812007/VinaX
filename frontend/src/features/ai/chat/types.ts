@@ -114,6 +114,12 @@ export interface Msg {
   media?: MsgMedia;
   /** 10.3 — a picture or clip is being made for this (still empty) reply. */
   creating?: 'image' | 'music';
+  /** 11.0 — this line answers a Create image / Create music clip request that
+   *  did not produce one, so asking again goes back to the maker, not to chat. */
+  mediaKind?: 'image' | 'music';
+  /** 11.0 — the id of the turn still writing this reply. Only that turn may
+   *  patch it; cleared when the turn ends and never kept across a reload. */
+  turn?: string;
   /** Render as a live mini-player card (music commands). */
   player?: boolean;
   /** Listener feedback on this reply. */
@@ -125,6 +131,9 @@ export interface Msg {
   /** 8.2.0 — no reply arrived (the text is the failure line); the thread
    *  offers Retry, and the line is never sent back to the assistant. */
   failed?: boolean;
+  /** 11.0 — with `failed`: asking again as it is cannot work (too large, or
+   *  turned away); the thread offers "Edit message" instead of Retry. */
+  needsEdit?: boolean;
   /** 9.0 — no reply arrived and asking again cannot help right now (VinaX AI
    *  is switched off, or has reached its limit for the day). Presentation
    *  only: the thread shows a notice that points back to the music. */

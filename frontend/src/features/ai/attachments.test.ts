@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { attachmentText, pickerFiles, prepareAttachments } from './attachments';
+import { attachmentText, foldAttachments, pickerFiles, prepareAttachments } from './attachments';
 
 function file(name: string, body: string, type = 'text/plain'): File {
   return new File([body], name, { type, lastModified: 1 });
@@ -101,5 +101,18 @@ describe('AI attachments', () => {
       expect(result.attachments).toHaveLength(0);
       expect(result.cancelled).toBe(true);
     });
+  });
+});
+
+describe('11.0 — what the model is sent', () => {
+  it('includes the text read out of a PDF, and leaves pictures out of the text', () => {
+    const pdf = { kind: 'pdf' as const, name: 'a.pdf', path: 'a.pdf', key: 'k1', size: 1, text: 'PDF BODY' };
+    const txt = { kind: 'text' as const, name: 'n.txt', path: 'n.txt', key: 'k2', size: 1, text: 'NOTE' };
+    const img = { kind: 'image' as const, name: 'p.png', path: 'p.png', key: 'k3', size: 1, dataUrl: 'data:image/png;base64,AA' };
+    const out = foldAttachments('', [pdf, img, txt]);
+    expect(out).toContain('--- File: a.pdf ---\nPDF BODY');
+    expect(out).toContain('NOTE');
+    expect(out).not.toContain('base64');
+    expect(foldAttachments('hi', [])).toBe('hi');
   });
 });

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { FestivalBannerSlot } from '@/features/home/FestivalBannerSlot';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import '@/styles/pages/home.css';
@@ -298,6 +299,7 @@ export default function HomePage() {
             <IconButton label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}</IconButton>
             <IconButton label="Notifications" onClick={() => setNotifOpen(true)}><BellIcon className="w-5 h-5" /></IconButton>
           </TopBarActions>
+          <FestivalBannerSlot />
           <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
 
           {firstVisit ? (

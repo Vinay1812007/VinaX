@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { STORE_KEY, exportAllChats, firstName, formatBytes, groupChats, importChats, loadInitialChats, persistChats, storageUsedBytes, timeOfDay } from './storage';
+import { STORE_KEY, exportAllChats, firstName, formatBytes, groupChats, importChats, loadInitialChats, persistChats, storageUsedBytes, timeOfDay, titleFromMessage } from './storage';
 import type { Conversation } from './types';
 
 const chat = (id: string, updatedAt: number, extra: Partial<Conversation> = {}): Conversation => ({
@@ -170,5 +170,45 @@ describe('9.1 — temporary chats are never written to the device', () => {
   it('an import never revives one (the flag is not part of the wire format)', () => {
     const result = importChats(JSON.stringify([{ id: 'x', title: 'X', messages: [{ role: 'user', content: 'hi' }], updatedAt: 1, temporary: true }]), []);
     expect(result?.chats[0].temporary).toBeUndefined();
+  });
+});
+
+describe('11.0 — a reply interrupted by a reload', () => {
+  it('comes back as a failed turn, not an endless thinking mark, and loses its turn tag', () => {
+    const chat = {
+      id: 'c1',
+      title: 'Cut off',
+      updatedAt: 1,
+      messages: [
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'kept', turn: 'abc-1' },
+        { role: 'user', content: 'again' },
+        { role: 'assistant', content: '', turn: 'abc-2' },
+      ],
+    };
+    localStorage.setItem(STORE_KEY, JSON.stringify([chat]));
+    const [loaded] = loadInitialChats();
+    expect(loaded.messages[1]).toEqual({ role: 'assistant', content: 'kept' });
+    expect(loaded.messages[3]).toEqual({ role: 'assistant', content: '', failed: true });
+  });
+});
+
+describe('a chat title from its first message (11.0)', () => {
+  it('keeps a short message whole, on one line', () => {
+    expect(titleFromMessage('  Plan a\n trip  ')).toBe('Plan a trip');
+  });
+  it('cuts at a word boundary and says so with an ellipsis', () => {
+    const t = titleFromMessage('Explain how the recommendation engine balances familiarity and novelty');
+    expect(t).toBe('Explain how the recommendation engine…');
+    expect(Array.from(t).length).toBeLessThanOrEqual(43);
+  });
+  it('one very long word is cut at the limit, still with an ellipsis', () => {
+    expect(titleFromMessage('x'.repeat(60))).toBe(`${'x'.repeat(42)}…`);
+  });
+  it('never splits a conjunct or an emoji', () => {
+    const family = '👨‍👩‍👧‍👦';
+    expect(titleFromMessage(family.repeat(50))).toBe(`${family.repeat(42)}…`);
+    const telugu = titleFromMessage('క్ష'.repeat(50));
+    expect(telugu).toBe(`${'క్ష'.repeat(42)}…`);
   });
 });

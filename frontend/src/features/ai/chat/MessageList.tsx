@@ -15,6 +15,9 @@ export interface MessageListProps {
   chatId: string;
   messages: Msg[];
   busy: boolean;
+  /** 11.0 — false when the turn in flight belongs to ANOTHER chat: this chat's
+   *  last reply is finished, so it keeps its toolbar and shows no thinking mark. */
+  streamingHere?: boolean;
   speakingId: string | null;
   handlers: MessageHandlers;
   /**
@@ -33,7 +36,7 @@ export interface MessageListProps {
  * away and are never mounted until asked for. Mount with `key={chatId}` so
  * the window resets per chat.
  */
-export function MessageList({ chatId, messages, busy, speakingId, handlers, onReady }: MessageListProps): ReactNode {
+export function MessageList({ chatId, messages, busy, streamingHere = true, speakingId, handlers, onReady }: MessageListProps): ReactNode {
   // Fixed when the chat opens: the window never slides forward under the
   // reader, it only grows — backwards on request, forwards as replies arrive.
   const [start, setStart] = useState(() => windowStart(messages.length));
@@ -101,7 +104,7 @@ export function MessageList({ chatId, messages, busy, speakingId, handlers, onRe
             m={m}
             index={i}
             last={last}
-            streaming={busy && last}
+            streaming={busy && last && streamingHere}
             busy={busy}
             speaking={speakingId === speakKey}
             speakKey={speakKey}
@@ -111,4 +114,22 @@ export function MessageList({ chatId, messages, busy, speakingId, handlers, onRe
       })}
     </div>
   );
+}
+
+/**
+ * 11.0 — what a scroll event means for "follow the newest reply". A scroll
+ * event is delivered a frame after the scroll that caused it; when a reply
+ * finishes, its action row, "answered by" chip and follow-ups appear in that
+ * gap, so the measurement saw a thread that had just grown ~100px, decided the
+ * reader had left the bottom, and the follow stopped with the last line under
+ * the "Jump to latest" pill. Growth is not the reader leaving: only a scroll
+ * that moved UP can unpin; a pinned reader the thread grew under is re-pinned.
+ */
+export function followAfterScroll(v: { top: number; lastTop: number; height: number; client: number; pinned: boolean }): {
+  pinned: boolean;
+  rescroll: boolean;
+} {
+  if (v.height - v.top - v.client < 80) return { pinned: true, rescroll: false };
+  if (v.pinned && v.top >= v.lastTop - 1) return { pinned: true, rescroll: true };
+  return { pinned: false, rescroll: false };
 }

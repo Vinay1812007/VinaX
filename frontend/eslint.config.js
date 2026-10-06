@@ -43,7 +43,7 @@ export default tseslint.config(
     // them — lint is their only gate. no-dupe-keys (in js recommended) is the
     // rule that catches the duplicate-theme-key class of bug that silently
     // dropped our borderRadius overrides.
-    files: ['tailwind.config.ts', 'vite.config.ts', 'playwright.config.ts'],
+    files: ['tailwind.config.ts', 'vite.config.ts', 'playwright.config.ts', 'e2e/festivals.spec.ts'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: { ecmaVersion: 2022, globals: nodeGlobals },
   },

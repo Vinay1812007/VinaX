@@ -14,6 +14,9 @@
   var refreshMs = parseInt((localStorage.getItem('vinax_admin_interval') || '30000'), 10) || 30000;
 
   function $(id) { return document.getElementById(id); }
+  // Frame controls (top bar / sidebar) may be absent in a given layout: $f
+  // hands back a detached element so a write or a listener is a no-op, never a throw.
+  function $f(id) { return document.getElementById(id) || document.createElement('div'); }
   function token() { return sessionStorage.getItem(TOKEN_KEY) || ''; }
   function noop() {}
   // Theme tokens for the few places that need a colour VALUE in JS (map
@@ -48,6 +51,72 @@
   // Export to window for use across the file / future modules.
   try { window.html = html; } catch (_e) {}
 
+  // 11.0 — shared state components (console.css: .state, .skeleton). Each
+  // returns an HTML string; every caller-supplied text is escaped here.
+  var retryFns = {}, retrySeq = 0;
+  function stateLoading(kind, label) {
+    var bars = kind === 'kpi' ? '<div class="skeleton sk-kpi"></div><div class="skeleton sk-kpi"></div><div class="skeleton sk-kpi"></div>'
+      : kind === 'table' ? '<div class="skeleton sk-row"></div><div class="skeleton sk-row"></div><div class="skeleton sk-row"></div><div class="skeleton sk-row"></div>'
+      : kind === 'panel' ? '<div class="skeleton sk-kpi"></div><div class="skeleton sk-row"></div><div class="skeleton sk-row"></div><div class="skeleton sk-line"></div>'
+      : '<div class="skeleton sk-line"></div><div class="skeleton sk-line"></div><div class="skeleton sk-line"></div>';
+    return '<div class="state state-loading" role="status" aria-busy="true">' + bars + (label ? '<div class="state-hint">' + esc(label) + '</div>' : '<span class="sr-only">Loading…</span>') + '</div>';
+  }
+  function stateEmpty(title, hint) {
+    return '<div class="state state-empty" role="status"><div class="state-title">' + esc(title || 'Nothing here yet') + '</div>' + (hint ? '<div class="state-hint">' + esc(hint) + '</div>' : '') + '</div>';
+  }
+  // onRetry runs when "Try again" is pressed (one delegated listener below);
+  // without one the button re-runs the active section's loader.
+  function stateError(message, onRetry) {
+    var id = String(++retrySeq);
+    if (typeof onRetry === 'function') retryFns[id] = onRetry;
+    return '<div class="state state-error" role="alert"><div class="state-title">Could not load this</div><div class="state-hint">' + esc(message || 'Check the connection, then try again.') + '</div><button type="button" class="btn state-retry" data-retry="' + id + '">Try again</button></div>';
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('button.state-retry') : null;
+    if (!b || b.disabled) return;
+    var fn = retryFns[b.getAttribute('data-retry')];
+    b.disabled = true; b.setAttribute('aria-busy', 'true');
+    try { if (fn) fn(); else refreshActive(); } catch (_r) { b.disabled = false; b.removeAttribute('aria-busy'); }
+  });
+  // ---------- Toasts (11.0) ----------
+  // Confirmation for actions that had none. The message leads with a status
+  // word ("Copied — …", "Failed — …") so meaning never rests on colour.
+  // kind: 'ok' | 'bad' | 'info'. At most three on screen; 4 s (6 s for 'bad'),
+  // paused while the pointer or focus is on the toast.
+  function toast(message, kind) {
+    kind = kind === 'ok' || kind === 'bad' ? kind : 'info';
+    var region = document.getElementById('toasts');
+    if (!region) {
+      region = document.createElement('div'); region.id = 'toasts'; region.className = 'toast-region';
+      region.setAttribute('role', 'status'); region.setAttribute('aria-live', 'polite');
+      document.body.appendChild(region);
+    }
+    while (region.children.length >= 3) region.removeChild(region.firstChild);
+    var el = document.createElement('div'); el.className = 'toast ' + kind;
+    if (kind === 'bad') el.setAttribute('role', 'alert');
+    var msg = document.createElement('span'); msg.className = 'toast-msg'; msg.textContent = String(message == null ? '' : message);
+    var x = document.createElement('button'); x.type = 'button'; x.className = 'icon-btn'; x.setAttribute('aria-label', 'Dismiss'); x.textContent = '\u00D7';
+    var timer = 0, ms = kind === 'bad' ? 6000 : 4000;
+    function close() { clearTimeout(timer); if (el.parentNode) el.parentNode.removeChild(el); }
+    function arm() { clearTimeout(timer); timer = setTimeout(close, ms); }
+    function hold() { clearTimeout(timer); }
+    x.addEventListener('click', close);
+    el.addEventListener('mouseenter', hold); el.addEventListener('mouseleave', arm);
+    el.addEventListener('focusin', hold); el.addEventListener('focusout', arm);
+    el.appendChild(msg); el.appendChild(x); region.appendChild(el); arm();
+    return el;
+  }
+  // Outcome of a write that has no status line beside it. A body carrying
+  // { error } or { ok: false } is a failure even on HTTP 200.
+  function writeToast(r, okMsg) {
+    if (!r) return false; // 401 — the sign-in screen is already showing
+    var ok = r.ok !== false && !r.error;
+    toast(ok ? okMsg : 'Failed — ' + (typeof r.error === 'string' && r.error ? r.error : 'the server refused this change.'), ok ? 'ok' : 'bad');
+    return ok;
+  }
+  function writeFailed() { toast('Failed — no usable answer from the server. Check the list before trying again.', 'bad'); }
+  try { window.VXA = { stateLoading: stateLoading, stateEmpty: stateEmpty, stateError: stateError, toast: toast, esc: esc, html: html }; } catch (_e2) {}
+
   // ---------- Custom dialogs (styled replacements for alert/confirm/prompt) ----------
   // Native browser popups ("admin.sirimillavinay.online says") are replaced by
   // in-page modals that match the console theme. Promise-based:
@@ -58,22 +127,40 @@
   // note }. danger paints the OK button red for destructive actions. Enter =
   // OK, Escape / overlay click = Cancel. minLength keeps OK disabled (with an
   // inline note) until the prompt input is long enough — mandatory reasons.
+  var vxdSeq = 0;
+  // Keep Tab inside an open dialog (first <-> last focusable).
+  function trapTab(e, root) {
+    if (e.key !== 'Tab' || !root) return;
+    var f = Array.prototype.filter.call(root.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'), function (el) { return el.getClientRects().length > 0; });
+    if (!f.length) { e.preventDefault(); return; }
+    var first = f[0], last = f[f.length - 1], cur = document.activeElement;
+    if (!root.contains(cur)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && cur === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && cur === last) { e.preventDefault(); first.focus(); }
+  }
+  // A clickable table row behaves as a button for keyboard and assistive tech.
+  function rowButton(el, fn) {
+    el.setAttribute('role', 'button'); el.setAttribute('tabindex', '0');
+    el.addEventListener('click', fn);
+    el.addEventListener('keydown', function (e) { if (e.target === el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); fn(); } });
+  }
   function vxDialog(o) {
     return new Promise(function (resolve) {
       var prevFocus = document.activeElement;
       var isPrompt = o.mode === 'prompt';
       var hasCancel = o.mode !== 'alert';
+      var headId = 'vxd-h' + (++vxdSeq);
       var wrap = document.createElement('div');
       wrap.className = 'vxd-overlay';
       wrap.innerHTML =
-        '<div class="vxd' + (o.danger ? ' danger' : '') + '" role="dialog" aria-modal="true">' +
-          '<div class="vxd-head"><span class="vxd-logo"></span>' + esc(o.title || 'VinaX Admin') + '</div>' +
-          '<div class="vxd-msg"></div>' +
+        '<div class="vxd' + (o.danger ? ' danger' : '') + '" role="' + (o.mode === 'alert' ? 'alertdialog' : 'dialog') + '" aria-modal="true" aria-labelledby="' + headId + '" aria-describedby="' + headId + '-msg">' +
+          '<div class="vxd-head" id="' + headId + '"><span class="vxd-logo"></span>' + esc(o.title || 'VinaX Admin') + '</div>' +
+          '<div class="vxd-msg" id="' + headId + '-msg"></div>' +
           (isPrompt ? '<input class="vxd-input" type="text">' : '') +
           (isPrompt && o.minLength ? '<div class="vxd-note"></div>' : '') +
           '<div class="vxd-actions">' +
             (hasCancel ? '<button class="ghost vxd-cancel" type="button">' + esc(o.cancelText || 'Cancel') + '</button>' : '') +
-            '<button class="vxd-ok" type="button">' + esc(o.okText || 'OK') + '</button>' +
+            '<button class="btn ' + (o.danger ? 'btn-danger' : 'btn-primary') + ' vxd-ok" type="button">' + esc(o.okText || 'OK') + '</button>' +
           '</div>' +
         '</div>';
       wrap.querySelector('.vxd-msg').textContent = o.message || '';
@@ -106,6 +193,7 @@
       function cancel() { close(o.mode === 'confirm' ? false : (isPrompt ? null : undefined)); }
       function onKey(e) {
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); return; }
+        if (e.key === 'Tab') { trapTab(e, wrap); return; }
         if (e.key === 'Enter') {
           if (e.target === cancelBtn) return; // native click on focused Cancel
           e.preventDefault(); done();
@@ -134,7 +222,7 @@
     return '🌐';
   }
   function ago(iso) { var s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000)); if (s < 60) return s + 's ago'; if (s < 3600) return Math.round(s / 60) + 'm ago'; if (s < 86400) return Math.round(s / 3600) + 'h ago'; return Math.round(s / 86400) + 'd ago'; }
-  function date(iso) { try { return new Date(iso).toLocaleDateString(); } catch (e) { return '—'; } }
+  function date(iso) { if (!iso) return '—'; try { var dt = new Date(iso); return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString(); } catch (e) { return '—'; } }
   function ist(s) {
     if (!s) return '—';
     try {
@@ -149,8 +237,8 @@
     } catch (e) { return s; }
   }
   function pct(v, max) { return max > 0 ? Math.round((v / max) * 100) : 0; }
-  function stamp() { lastStampAt = Date.now(); var st = $('stale'); if (st) st.hidden = true; $('updated').textContent = 'Updated ' + new Date().toLocaleTimeString(); }
-  function setExport(name, rows) { exportName = name; exportRows = rows && rows.length ? rows : null; $('csv').hidden = !exportRows; }
+  function stamp() { lastStampAt = Date.now(); var st = $('stale'); if (st) st.hidden = true; var up = $('updated'); if (up) up.textContent = 'Updated ' + new Date().toLocaleTimeString(); paintEnvChip(); }
+  function setExport(name, rows) { exportName = name; exportRows = rows && rows.length ? rows : null; $f('csv').hidden = !exportRows; }
 
   function api(path) {
     return fetch(path, { headers: { 'x-admin-token': token() }, cache: 'no-store' }).then(function (res) {
@@ -175,7 +263,22 @@
       return d;
     });
   }
+  var lastBtn = null, lastBtnAt = 0;
+  document.addEventListener('click', function (e) { var b = e.target && e.target.closest ? e.target.closest('button') : null; if (b) { lastBtn = b; lastBtnAt = Date.now(); } }, true);
+  function busyButton() {
+    var a = document.activeElement, b = (a && a.tagName === 'BUTTON') ? a : ((Date.now() - lastBtnAt < 400) ? lastBtn : null);
+    if (!b || b.disabled || !document.contains(b) || (b.closest && b.closest('#nav, .seg, .subtabs, .ops-tabs'))) return noop;
+    var hadFocus = document.activeElement === b;
+    b.disabled = true; b.setAttribute('aria-busy', 'true');
+    return function () { if (b.getAttribute('aria-busy') !== 'true') return; b.removeAttribute('aria-busy'); b.disabled = false; if (hadFocus && document.contains(b) && (document.activeElement === document.body || !document.activeElement)) { try { b.focus(); } catch (e) {} } };
+  }
   function postApi(path, body) {
+    var release = busyButton();
+    var req = postApiRaw(path, body);
+    req.then(release, release);
+    return req;
+  }
+  function postApiRaw(path, body) {
     return fetch(path, { method: 'POST', headers: { 'x-admin-token': token(), 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
       if (res.status === 401) { sessionStorage.removeItem(TOKEN_KEY); showLogin('Invalid token.'); return null; }
       return res.json();
@@ -190,7 +293,7 @@
     var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
-    a.href = url; a.download = exportName + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+    a.href = url; a.download = exportName + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); toast('Download started — ' + a.download, 'info');
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
@@ -198,14 +301,14 @@
   function showApp() { $('login').hidden = true; $('app').hidden = false; }
 
   function bars(items, labelFn, valFn) {
-    if (!items || !items.length) return '<div class="empty">No data yet.</div>';
+    if (!items || !items.length) return '<div class="state state-empty empty" role="status"><div class="state-title">No data yet</div><div class="state-hint">Rows appear once listeners generate activity in this range. Widen the range or check back later.</div></div>';
     var max = items.reduce(function (m, x) { return Math.max(m, valFn(x)); }, 0);
     return items.map(function (x) {
       return '<div class="brow"><div class="blabel">' + labelFn(x) + '</div><div class="btrack"><div class="bfill" style="width:' + pct(valFn(x), max) + '%"></div></div><div class="bval">' + valFn(x) + '</div></div>';
     }).join('');
   }
   function songRows(items) {
-    if (!items || !items.length) return '<div class="empty">No data yet.</div>';
+    if (!items || !items.length) return '<div class="state state-empty empty" role="status"><div class="state-title">No data yet</div><div class="state-hint">Rows appear once listeners generate activity in this range. Widen the range or check back later.</div></div>';
     var max = items.reduce(function (m, x) { return Math.max(m, x.plays); }, 0);
     return items.map(function (x) {
       var img = x.song_image ? '<img class="thumb" loading="lazy" alt="" src="' + esc(x.song_image) + '" />' : '<span class="thumb ph"></span>';
@@ -214,7 +317,7 @@
     }).join('');
   }
   function dayChart(rows, key, color) {
-    if (!rows || !rows.length) return '<div class="empty">No data yet.</div>';
+    if (!rows || !rows.length) return '<div class="state state-empty empty" role="status"><div class="state-title">No data yet</div><div class="state-hint">Rows appear once listeners generate activity in this range. Widen the range or check back later.</div></div>';
     var max = rows.reduce(function (m, x) { return Math.max(m, x[key]); }, 0);
     return '<div class="days">' + rows.map(function (x) {
       var h = max > 0 ? Math.round((x[key] / max) * 110) : 2;
@@ -222,7 +325,7 @@
     }).join('') + '</div>';
   }
 
-  function card(n, l) { return '<div class="card"><div class="n">' + (n || 0) + '</div><div class="l">' + l + '</div></div>'; }
+  function card(n, l) { var bad = n == null || n === '' || (typeof n === 'number' && !isFinite(n)); return '<div class="card"><div class="n">' + esc(bad ? 0 : n) + '</div><div class="l">' + esc(l) + '</div></div>'; }
   function hourChart(rows) {
     var map = {}; (rows || []).forEach(function (r) { map[r.hour] = r.plays; });
     var arr = []; for (var h = 0; h < 24; h++) arr.push({ h: h, plays: map[h] || 0 });
@@ -233,10 +336,10 @@
     }).join('') + '</div>';
   }
   function trendingRows(items) {
-    if (!items || !items.length) return '<tr><td colspan="3" class="empty">No data yet.</td></tr>';
+    if (!items || !items.length) return '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">No data yet</div><div class="state-hint">Rows appear once listeners generate activity in this range. Widen the range or check back later.</div></div></td></tr>';
     return items.map(function (x) {
       var delta = x.plays - (x.prev_plays || 0);
-      var trend = delta > 0 ? '<span style="color:var(--ok)">▲ ' + delta + '</span>' : (delta < 0 ? '<span style="color:var(--danger)">▼ ' + Math.abs(delta) + '</span>' : '<span class="muted">—</span>');
+      var trend = delta > 0 ? '<span style="color:var(--ok)">▲ ' + delta + '</span>' : (delta < 0 ? '<span style="color:var(--bad)">▼ ' + Math.abs(delta) + '</span>' : '<span class="muted">—</span>');
       var img = x.song_image ? '<img class="thumb-sm" loading="lazy" alt="" src="' + esc(x.song_image) + '" />' : '';
       return '<tr><td><span class="nowcell">' + img + '<span>' + esc(x.song_title || '') + (x.song_artist ? ' <span class="muted">· ' + esc(x.song_artist) + '</span>' : '') + '</span></span></td><td>' + x.plays + '</td><td>' + trend + '</td></tr>';
     }).join('');
@@ -258,9 +361,9 @@
       '<div class="cards"><div class="card"><div class="n">' + (d.count || 0) + '</div><div class="l">Active now (60s)</div></div>' +
       '<div class="card"><div class="n">' + (d.playing || 0) + '</div><div class="l">Currently playing</div></div>' +
       '<div class="card"><div class="n">' + ck.length + '</div><div class="l">Countries</div></div></div>' +
-      '<div class="chips">' + ck.map(function (k) { return '<span class="pill">' + esc(k) + ' · ' + countries[k] + '</span>'; }).join('') + '</div>' +
+      '<div class="chips">' + ck.map(function (k) { return '<span class="pill">' + esc(k) + ' · ' + esc(countries[k]) + '</span>'; }).join('') + '</div>' +
       '<table><thead><tr><th>Listener</th><th>Now playing</th><th>Location</th><th>Device</th><th>Seen</th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="5" class="empty">No one is listening right now.</td></tr>') + '</tbody></table>';
+      (rows || '<tr class="table-empty"><td colspan="5"><div class="state state-empty empty" role="status"><div class="state-title">No one is listening right now</div><div class="state-hint">This list refreshes on its own and fills within a minute of someone pressing play.</div></div></td></tr>') + '</tbody></table>';
     stamp();
   }
   function loadLive() { apiMemo('/api/admin/live').then(function (d) { if (d && active === 'live') renderLive(d); }).catch(failIf('live', 'live listening')); }
@@ -273,7 +376,7 @@
       '<h3>Listeners by country</h3>' + bars(d.countries || [], function (x) { return esc(x.country); }, function (x) { return x.listeners; }) +
       '<h3>Platforms</h3>' + bars(d.platforms || [], function (x) { return esc(x.platform); }, function (x) { return x.listeners; }) +
       '<h3>Top cities</h3><table><thead><tr><th>City</th><th>Country</th><th>Listeners</th><th>Plays</th></tr></thead><tbody>' +
-      (cities || '<tr><td colspan="4" class="empty">No data yet.</td></tr>') + '</tbody></table>';
+      (cities || '<tr class="table-empty"><td colspan="4"><div class="state state-empty empty" role="status"><div class="state-title">No data yet</div><div class="state-hint">Cities appear once plays arrive with a location.</div></div></td></tr>') + '</tbody></table>';
     stamp();
   }
   function loadLocation() { apiMemo('/api/admin/location?days=' + rangeDays).then(function (d) { if (d && active === 'location') renderLocation(d); }).catch(failIf('location', 'location analytics')); }
@@ -426,7 +529,7 @@
     }).join('');
     var list = countries.slice(0, 12).map(function (c) {
       return '<tr><td>' + esc(c.country) + '</td><td>' + c.listeners + '</td></tr>';
-    }).join('') || '<tr><td colspan="2" class="empty">No data yet.</td></tr>';
+    }).join('') || '<tr class="table-empty"><td colspan="2"><div class="state state-empty empty" role="status"><div class="state-title">No data yet</div><div class="state-hint">Rows appear once listeners generate activity in this range. Widen the range or check back later.</div></div></td></tr>';
     $('view').innerHTML =
       '<div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">' +
         '<div style="flex:2;min-width:300px">' +
@@ -436,7 +539,7 @@
         '<div style="flex:1;min-width:240px">' +
           '<h3>Listening now</h3>' +
           '<table><thead><tr><th>Listener</th><th>Track</th><th>Where</th></tr></thead><tbody>' +
-          (nowRows || '<tr><td colspan="3" class="empty">No one is listening right now.</td></tr>') + '</tbody></table>' +
+          (nowRows || '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">No one is listening right now</div><div class="state-hint">This list refreshes on its own and fills within a minute of someone pressing play.</div></div></td></tr>') + '</tbody></table>' +
           '<h3>By country (range)</h3>' +
           '<table><thead><tr><th>Country</th><th>Listeners</th></tr></thead><tbody>' + list + '</tbody></table>' +
         '</div>' +
@@ -452,7 +555,7 @@
   function startLeafletMap(cities, liveList) {
     var host = $('wmap');
     if (!host) return;
-    if (typeof L === 'undefined') { host.innerHTML = '<div class="empty">Map library failed to load.</div>'; return; }
+    if (typeof L === 'undefined') { host.innerHTML = stateError('Map library failed to load.'); return; }
     var prev = mapState && mapState.view;
     if (leafMap) { try { leafMap.remove(); } catch (e) {} leafMap = null; }
     leafMap = L.map(host, { worldCopyJump: true, zoomControl: true });
@@ -476,8 +579,8 @@
       var exact = cityExact(r.city, r.country);
       var m = L.circleMarker([ll[0], ll[1]], {
         radius: 4 + 10 * Math.sqrt(n / maxN),
-        color: themeColor('--accent', '#a78bfa'), weight: 1, opacity: 0.9,
-        fillColor: themeColor('--accent', '#a78bfa'), fillOpacity: 0.35
+        color: themeColor('--accent', 'rgb(96 132 255)'), weight: 1, opacity: 0.9,
+        fillColor: themeColor('--accent', 'rgb(96 132 255)'), fillOpacity: 0.35
       }).addTo(leafMap);
       m.bindPopup('<b>' + esc(r.city || 'Unknown') + '</b>' + (r.country ? ', ' + esc(r.country) : '') +
         '<br>' + n + ' listener' + (n === 1 ? '' : 's') + ' \u00b7 ' + (r.plays || 0) + ' plays' +
@@ -520,7 +623,7 @@
       if (x.metrics === null) {
         return '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">' + esc(x.name || x.key) + ' ' + (x.active ? '<span class="pill">active</span>' : '<span class="pill" style="opacity:.6">paused</span>') + '</h3>' +
           '<p class="muted" style="font-size:12px">key: <span style="font-family:monospace">' + esc(x.key) + '</span> · created ' + date(x.created_at) + '</p>' +
-          '<div class="empty">Metrics unavailable — the events read failed. Nothing is shown as zero.</div></div>';
+          stateError('Metrics unavailable — the events read failed. Nothing is shown as zero.') + '</div>';
       }
       var rows = (x.metrics || []).map(function (m) {
         return '<tr><td>' + esc(m.variant) + '</td><td>' + (m.pct != null ? m.pct + '%' : '—') + '</td><td>' + (m.devices || 0) + '</td><td>' + (m.playsPerDevice != null ? m.playsPerDevice : '—') + '</td><td>' + (m.skipRatePct != null ? m.skipRatePct + '%' : '—') + '</td></tr>';
@@ -528,9 +631,9 @@
       return '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">' + esc(x.name || x.key) + ' ' + (x.active ? '<span class="pill">active</span>' : '<span class="pill" style="opacity:.6">paused</span>') + '</h3>' +
         '<p class="muted" style="font-size:12px">key: <span style="font-family:monospace">' + esc(x.key) + '</span> · created ' + date(x.created_at) + ' · metrics from the last 14 days</p>' +
         '<table><thead><tr><th>Variant</th><th>Split</th><th>Devices</th><th>Plays/device</th><th>Skip rate</th></tr></thead><tbody>' +
-        (rows || '<tr><td colspan="5" class="empty">No variants.</td></tr>') + '</tbody></table></div>';
+        (rows || '<tr class="table-empty"><td colspan="5"><div class="state state-empty empty" role="status"><div class="state-title">No variants</div><div class="state-hint">Add variants to this experiment and they are listed here with their metrics.</div></div></td></tr>') + '</tbody></table></div>';
     }).join('');
-    $('view').innerHTML = cards || '<div class="empty">No experiments yet. Create one via POST /api/admin/experiments.</div>';
+    $('view').innerHTML = cards || '<div class="state state-empty empty" role="status"><div class="state-title">No experiments yet</div><div class="state-hint">Create one via POST /api/admin/experiments.</div></div>';
     stamp();
   }
   function loadExperiments() { apiMemo('/api/admin/experiments').then(function (d) { if (d && active === 'experiments') renderExperiments(d); }).catch(failIf('experiments', 'the experiments')); }
@@ -542,7 +645,7 @@
     setExport('users', U);
     var rows = U.map(function (u) {
       var loc = [u.city, u.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">—</span>';
-      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:var(--danger)">Delete</button></td></tr>';
+      return '<tr class="clickable" data-uid="' + esc(u.device_id) + '" data-uname="' + esc(u.name || 'Anonymous') + '"><td><span class="dot2 ' + (u.is_playing ? 'on' : 'off') + '"></span>' + esc(u.name || 'Anonymous') + (u.username ? ' <span class="muted">@' + esc(u.username) + '</span>' : '') + '</td><td>' + loc + '</td><td><span class="pill">' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</span> <span class="muted">' + esc(String(u.device_id || '').slice(0, 8)) + '</span></td><td class="muted">' + date(u.first_seen) + '</td><td class="muted">' + ago(u.last_seen) + '</td><td><button class="ghost udel" data-del="' + esc(u.device_id) + '" style="padding:4px 10px;font-size:11px;color:var(--bad)">Delete</button></td></tr>';
     }).join('');
     var canPrev = userOffset > 0;
     // D-22 follow-up: the server already computes hasMore (fetches limit+1);
@@ -554,9 +657,9 @@
       '<div class="card"><div class="n">' + (s.active_24h || 0) + '</div><div class="l">Active (24h)</div></div>' +
       '<div class="card"><div class="n">' + (s.new_24h || 0) + '</div><div class="l">New (24h)</div></div>' +
       '<div class="card"><div class="n">' + (s.total_plays || 0) + '</div><div class="l">Total plays</div></div></div>' +
-      '<div class="row" style="margin-bottom:12px"><input id="uq" type="search" placeholder="Search by name…" value="' + esc(userQ) + '" style="max-width:280px" /><button id="ugo">Search</button><span class="muted" style="font-size:12px">Tip: click a row for details</span></div>' +
+      '<div class="row" style="margin-bottom:12px"><input id="uq" type="search" placeholder="Search by name…" value="' + esc(userQ) + '" style="max-width:280px" /><button class="btn btn-primary" id="ugo">Search</button><span class="muted" style="font-size:12px">Tip: click a row for details</span></div>' +
       '<table><thead><tr><th>Listener</th><th>Location</th><th>Device</th><th>First seen</th><th>Last seen</th><th></th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="6" class="empty">No users found.</td></tr>') + '</tbody></table>' +
+      (rows || '<tr class="table-empty"><td colspan="6"><div class="state state-empty empty" role="status"><div class="state-title">No users found</div><div class="state-hint">Try a shorter name or part of an email, or clear the search.</div></div></td></tr>') + '</tbody></table>' +
       '<div class="row" style="margin-top:14px"><button class="ghost" id="uprev"' + (canPrev ? '' : ' disabled') + '>← Prev</button>' +
       '<span class="muted">Showing ' + (userOffset + 1) + '–' + (userOffset + U.length) + '</span>' +
       '<button class="ghost" id="unext"' + (canNext ? '' : ' disabled') + '>Next →</button></div>';
@@ -565,7 +668,7 @@
     $('uprev').addEventListener('click', function () { if (userOffset > 0) { userOffset = Math.max(0, userOffset - (d.limit || 50)); loadUsers(); } });
     $('unext').addEventListener('click', function () { userOffset += (d.limit || 50); loadUsers(); });
     Array.prototype.forEach.call(document.querySelectorAll('tr[data-uid]'), function (tr) {
-      tr.addEventListener('click', function () { openUser(tr.getAttribute('data-uid'), tr.getAttribute('data-uname')); });
+      rowButton(tr, function () { openUser(tr.getAttribute('data-uid'), tr.getAttribute('data-uname')); });
     });
     Array.prototype.forEach.call(document.querySelectorAll('button.udel'), function (b) {
       b.addEventListener('click', function (e) {
@@ -578,7 +681,7 @@
           minLength: 3, note: 'A written reason is mandatory (at least 3 characters).'
         }).then(function (reason) {
           if (reason == null) { b.disabled = false; return; }
-          postApi('/api/admin/maintenance', { action: 'delete_user', device_id: b.getAttribute('data-del'), reason: reason }).then(function (r) { if (r) loadUsers(); else b.disabled = false; }).catch(function () { b.disabled = false; });
+          postApi('/api/admin/maintenance', { action: 'delete_user', device_id: b.getAttribute('data-del'), reason: reason }).then(function (r) { if (r) { writeToast(r, 'Deleted — the listener data was removed.'); loadUsers(); } else b.disabled = false; }).catch(function () { writeFailed(); b.disabled = false; });
         });
       });
     });
@@ -586,13 +689,13 @@
   }
   function loadUsers() {
     apiMemo('/api/admin/users?limit=50&offset=' + userOffset + (userQ ? '&q=' + encodeURIComponent(userQ) : ''))
-      .then(function (d) { if (d && active === 'users') renderUsers(d); }).catch(noop);
+      .then(function (d) { if (d && active === 'users') renderUsers(d); }).catch(failIf('users', 'the listener list'));
   }
 
   // ---------- User drill-down ----------
   function openUser(deviceId, name) {
-    $('modalBody').innerHTML = '<button class="x" id="mx">✕</button><div class="empty">Loading…</div>';
-    $('modal').hidden = false;
+    $('modalBody').innerHTML = '<button type="button" class="x icon-btn" id="mx" aria-label="Close">✕</button>' + stateLoading('table') + '';
+    openModal();
     $('mx').addEventListener('click', closeModal);
     // Plain api(), NOT apiMemo: the memo resolves null for an unchanged
     // payload, which left the modal stuck on "Loading…" whenever the same
@@ -623,15 +726,46 @@
         '<div class="card"><div class="n">' + top.length + '</div><div class="l">Distinct songs</div></div>' +
         '<div class="card"><div class="n">' + esc(langs[0] ? langs[0].language : '—') + '</div><div class="l">Top language</div></div></div>' +
         '<h3>Top songs</h3>' + bars(top, function (x) { return esc(x.title) + (x.artist ? ' <span class="muted">· ' + esc(x.artist) + '</span>' : ''); }, function (x) { return x.plays; }) +
-        '<h3>Recent activity</h3><table><tbody>' + (recent || '<tr><td class="empty">No activity.</td></tr>') + '</tbody></table>';
+        '<h3>Recent activity</h3><table><tbody>' + (recent || '<tr class="table-empty"><td><div class="state state-empty empty" role="status"><div class="state-title">No activity</div><div class="state-hint">Plays, searches and favourites by this listener show up here as they happen.</div></div></td></tr>') + '</tbody></table>';
       $('mx').addEventListener('click', closeModal);
-    }).catch(noop);
+    }).catch(function () {
+      var box = $('modalBody'); if (!box || $('modal').hidden) return;
+      box.innerHTML = '<button type="button" class="x icon-btn" id="mx" aria-label="Close">✕</button>' + stateError('This listener could not be read. Check the connection, then try again.', function () { openUser(deviceId, name); });
+      $('mx').addEventListener('click', closeModal);
+    });
   }
-  function closeModal() { $('modal').hidden = true; $('modalBody').innerHTML = ''; }
+  var modalOpener = null;
+  function labelModal() {
+    var box = $('modalBody'); if (!box) return;
+    var hd = box.querySelector('h1, h2, h3, h4, .modal-title');
+    if (hd) { if (!hd.id) hd.id = 'modalTitle'; box.setAttribute('aria-labelledby', hd.id); box.removeAttribute('aria-label'); }
+    else { box.removeAttribute('aria-labelledby'); box.setAttribute('aria-label', 'Details'); }
+  }
+  function onModalKey(e) {
+    var m = $('modal'); if (!m || m.hidden || document.querySelector('.vxd-overlay')) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeModal(); return; }
+    trapTab(e, $('modalBody'));
+  }
+  function openModal() {
+    var m = $('modal'), box = $('modalBody'); if (!m || !box) return;
+    if (m.hidden) { modalOpener = document.activeElement; document.addEventListener('keydown', onModalKey, true); }
+    m.hidden = false;
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('tabindex', '-1');
+    labelModal();
+    try { (box.querySelector('#mx') || box).focus(); } catch (e) {}
+  }
+  function closeModal() {
+    var m = $('modal'), box = $('modalBody'); if (!m) return;
+    var wasOpen = !m.hidden;
+    m.hidden = true; if (box) box.innerHTML = '';
+    document.removeEventListener('keydown', onModalKey, true);
+    if (wasOpen && modalOpener && modalOpener.focus && document.contains(modalOpener)) { try { modalOpener.focus(); } catch (e) {} }
+    modalOpener = null;
+  }
 
   // ---------- Content ----------
-  function doBlock(id, title) { if (!id) return; postApi('/api/admin/content', { action: 'block', songId: id, songTitle: title || '' }).then(function (r) { if (r) loadContent(); }).catch(noop); }
-  function doUnblock(id) { postApi('/api/admin/content', { action: 'unblock', songId: id }).then(function (r) { if (r) loadContent(); }).catch(noop); }
+  function doBlock(id, title) { if (!id) return; postApi('/api/admin/content', { action: 'block', songId: id, songTitle: title || '' }).then(function (r) { if (r) { writeToast(r, 'Blocked — the song is on the blocklist.'); loadContent(); } }).catch(writeFailed); }
+  function doUnblock(id) { postApi('/api/admin/content', { action: 'unblock', songId: id }).then(function (r) { if (r) { writeToast(r, 'Unblocked — the song is off the blocklist.'); loadContent(); } }).catch(writeFailed); }
   function renderContent(d) {
     var blocked = d.blocked || [];
     setExport('blocked-songs', blocked);
@@ -641,9 +775,9 @@
       return '<tr><td>' + esc(sng.song_title || sng.song_id) + (sng.song_artist ? ' <span class="muted">· ' + esc(sng.song_artist) + '</span>' : '') + '</td><td class="muted">' + sng.plays + '</td><td><button class="ghost" data-block="' + esc(sng.song_id) + '" data-title="' + esc(t) + '">Block</button></td></tr>';
     }).join('');
     $('view').innerHTML =
-      '<div class="row" style="margin-bottom:8px"><input id="bid" type="text" placeholder="Block a song by ID…" style="max-width:320px" /><button id="bgo">Block</button></div>' +
-      '<h3>Blocked songs (' + blocked.length + ')</h3><table><thead><tr><th>Song</th><th>Reason</th><th></th></tr></thead><tbody>' + (brows || '<tr><td colspan="3" class="empty">Nothing blocked.</td></tr>') + '</tbody></table>' +
-      '<h3>Most played (30d) — block from here</h3><table><thead><tr><th>Song</th><th>Plays</th><th></th></tr></thead><tbody>' + (trows || '<tr><td colspan="3" class="empty">No data yet.</td></tr>') + '</tbody></table>';
+      '<div class="row" style="margin-bottom:8px"><input id="bid" type="text" placeholder="Block a song by ID…" style="max-width:320px" /><button class="btn btn-danger" id="bgo">Block</button></div>' +
+      '<h3>Blocked songs (' + blocked.length + ')</h3><table><thead><tr><th>Song</th><th>Reason</th><th></th></tr></thead><tbody>' + (brows || '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">Nothing blocked</div><div class="state-hint">Songs and artists you block are listed here and can be unblocked at any time.</div></div></td></tr>') + '</tbody></table>' +
+      '<h3>Most played (30d) — block from here</h3><table><thead><tr><th>Song</th><th>Plays</th><th></th></tr></thead><tbody>' + (trows || '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">No data yet</div><div class="state-hint">Rows appear once listeners generate activity in this range. Widen the range or check back later.</div></div></td></tr>') + '</tbody></table>';
     $('bgo').addEventListener('click', function () { doBlock($('bid').value.trim(), ''); });
     $('bid').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('bgo').click(); });
     Array.prototype.forEach.call(document.querySelectorAll('[data-block]'), function (b) { b.addEventListener('click', function () { doBlock(b.getAttribute('data-block'), b.getAttribute('data-title')); }); });
@@ -654,7 +788,7 @@
 
   // ---------- Technical ----------
   function healthHtml(h) {
-    if (!h) return '<div class="empty">Health check unavailable.</div>';
+    if (!h) return stateError('Health check unavailable.');
     // 10.3 — one row per provider key. Tolerant of either shape the server
     // sends (`ai` rows keyed by `key`, or by `provider`): a missing field is "—".
     var aiRows = Array.isArray(h.ai) ? h.ai : Array.isArray(h.providers) ? h.providers : [];
@@ -662,7 +796,7 @@
       if (!k || typeof k !== 'object') return '';
       var badge = k.ok
         ? '<span style="color:var(--ok)">OK ' + (k.status || '') + '</span>'
-        : '<span style="color:var(--danger)">FAIL ' + (k.status == null ? 'network' : k.status) + '</span>';
+        : '<span style="color:var(--bad)">FAIL ' + (k.status == null ? 'network' : k.status) + '</span>';
       var extra = k.configured === false ? ' <span class="muted">(not configured)</span>' : '';
       var pid = k.provider || k.id || '';
       var name = k.label || (labProviderInfo(pid) ? labProviderLabel(pid) : '') || k.key || pid || '\u2014';
@@ -671,20 +805,20 @@
     var sb = h.database || h.supabase || {};
     var sbBadge = sb.lastEventAt
       ? '<span style="color:var(--ok)">last event ' + ago(sb.lastEventAt) + '</span>'
-      : '<span style="color:var(--danger)">' + esc(sb.note || 'no readable events') + '</span>';
-    return '<table><thead><tr><th>Provider</th><th>Model</th><th>Status</th><th>Detail</th></tr></thead><tbody>' + (rows || '<tr><td colspan="4" class="empty">No provider keys reported.</td></tr>') + '</tbody></table>' +
-      '<p class="muted" style="margin-top:8px">Database (D1): ' + (sb.configured ? sbBadge : '<span style="color:var(--danger)">not configured</span>') + '</p>';
+      : '<span style="color:var(--bad)">' + esc(sb.note || 'no readable events') + '</span>';
+    return '<table><thead><tr><th>Provider</th><th>Model</th><th>Status</th><th>Detail</th></tr></thead><tbody>' + (rows || '<tr class="table-empty"><td colspan="4"><div class="state state-empty empty" role="status"><div class="state-title">No provider keys reported</div><div class="state-hint">Add provider API keys to the Worker secrets and they are checked here.</div></div></td></tr>') + '</tbody></table>' +
+      '<p class="muted" style="margin-top:8px">Database (D1): ' + (sb.configured ? sbBadge : '<span style="color:var(--bad)">not configured</span>') + '</p>';
   }
   function renderTechnical(d) {
     var s = d.summary || {};
     // 7.2.0 — a part the server could not read arrives as null: say so, never 0.
-    var NA = '<div class="empty">Unavailable — this read failed. Nothing is shown as zero.</div>';
+    var NA = stateError('Unavailable — this read failed. Nothing is shown as zero.');
     function sn(v) { return d.summary == null ? 'unavailable' : (v || 0); }
     setExport('errors', d.errors || []);
     var errRows = (d.errors || []).map(function (e) { return '<tr><td><span class="pill">' + esc(e.error_kind) + '</span></td><td>' + esc(e.message || '—') + '</td><td>' + e.hits + '</td><td class="muted">' + ago(e.last_seen) + '</td></tr>'; }).join('');
     var vitCards = (d.vitals || []).map(function (v) {
       var val = v.p75 == null ? '—' : (v.p75 + (v.unit || ''));
-      var split = v.count ? ('<span style="color:var(--ok)">' + v.good + ' good</span> · ' + v.ni + ' ni · <span style="color:var(--danger)">' + v.poor + ' poor</span>') : 'no samples yet';
+      var split = v.count ? ('<span style="color:var(--ok)">' + v.good + ' good</span> · ' + v.ni + ' ni · <span style="color:var(--bad)">' + v.poor + ' poor</span>') : 'no samples yet';
       return '<div class="card"><div class="n">' + val + '</div><div class="l">' + esc(v.metric) + ' p75 · ' + split + '</div></div>';
     }).join('');
     var lyricList = (d.lyricMisses || []).map(function (x) { return { song_title: x.song_title, song_artist: x.song_artist, plays: x.hits }; });
@@ -693,12 +827,12 @@
       '<div class="card"><div class="n">' + sn(s.plays_24h) + '</div><div class="l">Plays (24h)</div></div>' +
       '<div class="card"><div class="n">' + sn(s.active_sessions) + '</div><div class="l">Active sessions (5m)</div></div>' +
       '<div class="card"><div class="n">' + sn(s.versions) + '</div><div class="l">App versions</div></div></div>' +
-      '<h3>System health <span class="muted">· live key + database check</span> <button id="hrecheck" class="ghost" style="padding:3px 10px;font-size:11px">Re-check</button></h3><div id="healthbox"><div class="empty">Pinging every provider key + database — can take ~20s…</div></div>' +
-      '<h3>Web Vitals — field p75 (' + (d.days || 7) + 'd)</h3>' + (d.vitals === null ? NA : '<div class="cards">' + (vitCards || '<div class="empty">No data yet.</div>') + '</div>') +
+      '<h3>System health <span class="muted">· live key + database check</span> <button id="hrecheck" class="ghost" style="padding:3px 10px;font-size:11px">Re-check</button></h3><div id="healthbox">' + stateLoading('rows', 'Pinging every provider key + database — can take ~20s…') + '</div>' +
+      '<h3>Web Vitals — field p75 (' + (d.days || 7) + 'd)</h3>' + (d.vitals === null ? NA : '<div class="cards">' + (vitCards || '<div class="state state-empty empty" role="status"><div class="state-title">No data yet</div><div class="state-hint">Web vitals arrive after listeners load the app in a real browser.</div></div>') + '</div>') +
       '<h3>Lyrics not found (' + (d.days || 7) + 'd)</h3>' + (d.lyricMisses === null ? NA : songRows(lyricList)) +
       '<h3>App versions</h3>' + (d.versions === null ? NA : bars(d.versions || [], function (x) { return esc(x.app_version) + ' <span class="muted">· ' + esc(x.platform) + '</span>'; }, function (x) { return x.users; })) +
-      '<h3>Errors per day</h3>' + (d.errorsByDay === null ? NA : dayChart(d.errorsByDay, 'hits', 'var(--danger)')) +
-      '<h3>Top errors</h3>' + (d.errors === null ? NA : '<table><thead><tr><th>Kind</th><th>Message</th><th>Hits</th><th>Last</th></tr></thead><tbody>' + (errRows || '<tr><td colspan="4" class="empty">No errors logged. 🎉</td></tr>') + '</tbody></table>') +
+      '<h3>Errors per day</h3>' + (d.errorsByDay === null ? NA : dayChart(d.errorsByDay, 'hits', 'var(--bad)')) +
+      '<h3>Top errors</h3>' + (d.errors === null ? NA : '<table><thead><tr><th>Kind</th><th>Message</th><th>Hits</th><th>Last</th></tr></thead><tbody>' + (errRows || '<tr class="table-empty"><td colspan="4"><div class="state state-empty empty" role="status"><div class="state-title">No errors logged. 🎉</div><div class="state-hint">Errors reported by the app or the Worker are listed here as they happen.</div></div></td></tr>') + '</tbody></table>') +
       '<h3>Data tools <span class="muted">· database maintenance</span></h3><div class="row" style="flex-wrap:wrap;gap:8px">' +
       '<button class="ghost" id="mt-purge">Purge events &gt; 90d</button>' +
       '<button class="ghost" id="mt-errors">Clear all errors</button>' +
@@ -742,18 +876,18 @@
         api('/api/admin/health').then(function (h) {
           var el = document.getElementById('healthbox');
           if (el && active === 'technical') el.innerHTML = healthHtml(h);
-          else if (el) el.innerHTML = '<div class="empty">Switched away — open Technical again for fresh pings.</div>';
+          else if (el) el.innerHTML = '<div class="state state-empty empty" role="status"><div class="state-title">Switched away from Technical</div><div class="state-hint">Press Re-check to ping every provider again.</div></div>';
         }).catch(function () {
           var el = document.getElementById('healthbox');
-          if (el) el.innerHTML = '<div class="empty">Health check failed to load.</div>';
+          if (el) el.innerHTML = stateError('Health check failed to load.');
         });
       }
-    }).catch(noop);
+    }).catch(failIf('technical', 'engine health'));
   }
 
   // ---------- Feedback ----------
   var fbType = 'all', fbStatus = 'open', fbData = [];
-  function resolveFeedback(id) { postApi('/api/admin/feedback', { id: id, status: 'resolved' }).then(function (r) { if (r) loadFeedback(); }).catch(noop); }
+  function resolveFeedback(id) { postApi('/api/admin/feedback', { id: id, status: 'resolved' }).then(function (r) { if (r) { writeToast(r, 'Resolved — the feedback is marked as handled.'); loadFeedback(); } }).catch(writeFailed); }
   function fbSeg(attr, cur, opts) {
     return '<div class="seg">' + opts.map(function (o) { return '<button data-' + attr + '="' + o[0] + '"' + (o[0] === cur ? ' class="active"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div>';
   }
@@ -769,7 +903,7 @@
     var rows = view.map(function (f) {
       var loc = [f.city, f.country].filter(Boolean).map(esc).join(', ') || '<span class="muted">—</span>';
       var done = f.status === 'resolved';
-      var action = done ? '<span class="muted">resolved</span>' : '<button class="ghost" data-resolve="' + f.id + '">Resolve</button>';
+      var action = done ? '<span class="muted">resolved</span>' : '<button type="button" class="ghost" data-resolve="' + esc(f.id) + '">Resolve</button>';
       return '<tr style="' + (done ? 'opacity:.5' : '') + '"><td><span class="pill">' + esc(f.type || 'other') + '</span></td><td>' + esc(f.message || '') + '</td><td>' + esc(f.name || 'Anonymous') + '</td><td><span class="pill">' + esc(f.platform || 'web') + '</span>' + (f.app_version ? ' <span class="muted">v' + esc(f.app_version) + '</span>' : '') + '</td><td class="muted">' + loc + '</td><td class="muted">' + ago(f.created_at) + '</td><td>' + action + '</td></tr>';
     }).join('');
     var open = F.filter(function (f) { return f.status !== 'resolved'; }).length;
@@ -874,9 +1008,9 @@
       '<div class="cards">' + card(s.new_7d, 'New (7d)') + card(s.returning_7d, 'Returning (7d)') + card(s.inactive_30d, 'Inactive (7–30d)') + card(s.power_users, 'Power users (20+ plays)') + '</div>' +
       '<h3>Listening by hour (UTC)</h3>' + hourChart(d.playsByHour) +
       '<h3>Trending songs</h3><table><thead><tr><th>Song</th><th>Plays</th><th>Trend</th></tr></thead><tbody>' + trendingRows(d.trending) + '</tbody></table>' +
-      '<h3>Top listeners</h3><table><thead><tr><th>Listener</th><th>Plays</th></tr></thead><tbody>' + (listeners || '<tr><td colspan="2" class="empty">No data yet.</td></tr>') + '</tbody></table>' +
+      '<h3>Top listeners</h3><table><thead><tr><th>Listener</th><th>Plays</th></tr></thead><tbody>' + (listeners || '<tr class="table-empty"><td colspan="2"><div class="state state-empty empty" role="status"><div class="state-title">No data yet</div><div class="state-hint">Listeners appear here once someone plays a song in this range.</div></div></td></tr>') + '</tbody></table>' +
       '<h3>Languages</h3>' + bars(d.languages || [], function (x) { return esc(x.language); }, function (x) { return x.plays; });
-    Array.prototype.forEach.call(document.querySelectorAll('tr[data-uid]'), function (tr) { tr.addEventListener('click', function () { openUser(tr.getAttribute('data-uid'), tr.getAttribute('data-uname')); }); });
+    Array.prototype.forEach.call(document.querySelectorAll('tr[data-uid]'), function (tr) { rowButton(tr, function () { openUser(tr.getAttribute('data-uid'), tr.getAttribute('data-uname')); }); });
     stamp();
   }
 
@@ -921,10 +1055,10 @@
     var errs = m.by_error || [];
     var errTable = errs.length
       ? '<table><thead><tr><th>Error</th><th>Count</th></tr></thead><tbody>' + errs.map(function (x) { return '<tr><td>' + esc(x.error) + '</td><td>' + x.count + '</td></tr>'; }).join('') + '</tbody></table>'
-      : '<div class="empty">No errors \uD83C\uDF89</div>';
+      : '<div class="state state-empty empty" role="status"><div class="state-title">No errors \uD83C\uDF89</div><div class="state-hint">Errors reported by the app or the Worker are listed here as they happen.</div></div>';
     var recentRows = recent.length
       ? recent.map(function (x) {
-          var st = x.ok ? '<span style="color:var(--ok)">ok</span>' : '<span style="color:var(--danger)">' + esc(x.error || ('HTTP ' + (x.status || ''))) + '</span>';
+          var st = x.ok ? '<span style="color:var(--ok)">ok</span>' : '<span style="color:var(--bad)">' + esc(x.error || ('HTTP ' + (x.status || ''))) + '</span>';
           return '<tr><td class="muted">' + esc(ist(x.ts)) + '</td><td><span class="pill">' + esc(x.feature) + '</span></td><td class="muted">' + esc(aiModelName(x.model)) + '</td><td>' + st + '</td><td>' + (x.latency_ms != null ? x.latency_ms + ' ms' : '\u2014') + '</td><td><span class="pill">' + esc(x.client || '\u2014') + '</span></td></tr>';
         }).join('')
       : null;
@@ -959,9 +1093,9 @@
       card(d.aiP50 == null ? '—' : d.aiP50 + 'ms', 'AI latency p50 (15m)') + card(d.aiOkRate == null ? '—' : d.aiOkRate + '%', 'AI success (15m)') +
       card(d.activeRooms, 'Active rooms') + '</div>' +
       '<h3>Live listeners</h3><table><thead><tr><th>Listener</th><th>Location</th><th>Now playing</th></tr></thead><tbody>' +
-      (cities || '<tr><td colspan="3" class="empty">Nobody listening right now.</td></tr>') + '</tbody></table>' +
+      (cities || '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">Nobody listening right now</div><div class="state-hint">Cities fill in within a minute of someone pressing play.</div></div></td></tr>') + '</tbody></table>' +
       '<h3>Errors (last 5 minutes)</h3><table><thead><tr><th>Kind</th><th>Message</th><th>When</th></tr></thead><tbody>' +
-      (errs || '<tr><td colspan="3" class="empty">No errors. 🎉</td></tr>') + '</tbody></table>';
+      (errs || '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">No errors. 🎉</div><div class="state-hint">Errors reported by the app or the Worker are listed here as they happen.</div></div></td></tr>') + '</tbody></table>';
     stamp();
   }
   function loadRealtime() { apiMemo('/api/admin/realtime').then(function (d) { if (d && active === 'realtime') renderRealtime(d); }).catch(failIf('realtime', 'the real-time view')); }
@@ -979,7 +1113,7 @@
       (topBody
         ? '<h3>Top searches</h3><table><thead><tr><th>Query</th><th>Count</th></tr></thead><tbody>' + topBody + '</tbody></table>' +
           '<h3>Searches with no results <span class="muted">· content gaps</span></h3><table><thead><tr><th>Query</th><th>Count</th></tr></thead><tbody>' +
-          (qrows(d.zero) || '<tr><td colspan="2" class="empty">None — every search found something.</td></tr>') + '</tbody></table>' +
+          (qrows(d.zero) || '<tr class="table-empty"><td colspan="2"><div class="state state-empty empty" role="status"><div class="state-title">None — every search found something</div><div class="state-hint">Searches that return nothing are listed here so you can spot catalogue gaps.</div></div></td></tr>') + '</tbody></table>' +
           '<h3>Trending artists (plays)</h3>' + artists +
           '<h3>Trending languages</h3>' + langs
         : emptyState('empty_search', 'No searches yet', 'As listeners search the catalog, top queries and zero-result gaps will surface here — a quick read on catalog holes.'));
@@ -994,8 +1128,8 @@
     function rv(v) { return v == null ? '—' : v + '%'; }
     $('view').innerHTML =
       '<div class="cards">' +
-      card(d.plays, 'Plays (' + d.days + 'd)') + card(d.skipRate + '%', 'Skip rate') +
-      card(d.completionRate + '%', 'Completion rate') + card(d.repeatRate + '%', 'Repeat rate') +
+      card(d.plays, 'Plays (' + (d.days || rangeDays) + 'd)') + card(rv(d.skipRate), 'Skip rate') +
+      card(rv(d.completionRate), 'Completion rate') + card(rv(d.repeatRate), 'Repeat rate') +
       card(d.avgPlaysPerUser, 'Avg plays / listener') + card(d.favorites, 'Favorites added') +
       card(d.downloads, 'Downloads') + card(d.shares, 'Shares') + '</div>' +
       '<h3>Retention <span class="muted">· of users first seen N days ago, % still active</span></h3>' +
@@ -1028,7 +1162,7 @@
   }
   function pnSearch(q) {
     var out = $('pn-results');
-    out.innerHTML = '<div class="empty">Searching…</div>';
+    out.innerHTML = stateLoading('rows', 'Searching…');
     var path = '/search/' + (pnKind === 'album' ? 'albums' : 'songs') + '?query=' + encodeURIComponent(q) + '&limit=8';
     var i = 0;
     var anyOk = false; // a base responded with valid JSON (results may be empty)
@@ -1038,8 +1172,8 @@
         // from "every source is down" — the old code showed the scary
         // "sources unavailable" for BOTH, so a rare/short query looked broken.
         out.innerHTML = anyOk
-          ? '<div class="empty">No matches for “' + esc(q) + '” — try a different spelling.</div>'
-          : '<div class="empty">Catalog sources unavailable right now — try again.</div>';
+          ? '<div class="state state-empty empty" role="status"><div class="state-title">No matches for “' + esc(q) + '”</div><div class="state-hint">Try a different spelling, or search by artist instead.</div></div>'
+          : stateError('Catalog sources unavailable right now.', function () { pnSearch(q); });
         return;
       }
       var base = PN_BASES[i]; i += 1;
@@ -1106,7 +1240,7 @@
     var topRows = top.map(function (t) {
       var isB = !!bset[t.song_id];
       return '<tr><td><b>' + esc(t.song_title || t.song_id) + '</b> <span class="muted">' + esc(t.song_artist || '') + '</span></td><td>' + (t.plays || 0) + '</td>' +
-        '<td>' + (isB ? '<span class="pill">blocked</span>' : '<button class="ghost ct-block" data-id="' + esc(t.song_id) + '" data-title="' + esc(t.song_title || '') + '" style="padding:3px 10px;font-size:11px;color:var(--danger)">Block</button>') + '</td></tr>';
+        '<td>' + (isB ? '<span class="pill">blocked</span>' : '<button class="ghost ct-block" data-id="' + esc(t.song_id) + '" data-title="' + esc(t.song_title || '') + '" style="padding:3px 10px;font-size:11px;color:var(--bad)">Block</button>') + '</td></tr>';
     }).join('');
     var bRows = blocked.map(function (b) {
       return '<tr><td><b>' + esc(b.song_title || b.song_id) + '</b></td><td class="muted">' + esc(b.reason || '\u2014') + '</td><td class="muted">' + date(b.created_at) + '</td>' +
@@ -1116,11 +1250,11 @@
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Block by ID <span class="muted">\u00b7 for takedown requests \u2014 removal reaches every client within minutes</span></h3>' +
       '<div class="row"><input id="ct-id" type="text" placeholder="Song ID (from the song page URL)" style="max-width:280px" />' +
       '<input id="ct-reason" type="text" placeholder="Reason (e.g. DMCA #123)" style="max-width:280px" />' +
-      '<button id="ct-add">Block song</button><span class="muted" id="ct-out" style="font-size:12px"></span></div></div>' +
+      '<button class="btn btn-danger" id="ct-add">Block song</button><span class="muted" id="ct-out" style="font-size:12px"></span></div></div>' +
       '<h3>Most played (30d) \u2014 block candidates</h3><table><thead><tr><th>Song</th><th>Plays</th><th></th></tr></thead><tbody>' +
-      (topRows || '<tr><td colspan="3" class="empty">No play data yet.</td></tr>') + '</tbody></table>' +
+      (topRows || '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">No play data yet</div><div class="state-hint">Top songs are ranked here once plays are recorded.</div></div></td></tr>') + '</tbody></table>' +
       '<h3 style="margin-top:18px">Blocklist (' + blocked.length + ')</h3><table><thead><tr><th>Song</th><th>Reason</th><th>Since</th><th></th></tr></thead><tbody>' +
-      (bRows || '<tr><td colspan="4" class="empty">Nothing blocked \u2014 as it should be.</td></tr>') + '</tbody></table>';
+      (bRows || '<tr class="table-empty"><td colspan="4"><div class="state state-empty empty" role="status"><div class="state-title">Nothing blocked \u2014 as it should be</div><div class="state-hint">Block a song or artist from its row and it is listed here.</div></div></td></tr>') + '</tbody></table>';
     function act(action, songId, title, reason) {
       postApi('/api/admin/content', { action: action, songId: songId, songTitle: title || null, reason: reason || null }).then(function (r) {
         if (r) loadContent(); else vxAlert('Action failed', { title: 'Content Control' });
@@ -1150,7 +1284,7 @@
     setExport('blocklist', blocked);
     stamp();
   }
-  function loadContent() { apiMemo('/api/admin/content').then(function (d) { if (d && active === 'content') renderContent(d); }).catch(noop); }
+  function loadContent() { apiMemo('/api/admin/content').then(function (d) { if (d && active === 'content') renderContent(d); }).catch(failIf('content', 'content control')); }
   // ---------- Growth card (Overview) ----------
   var lastGrowth = null;
   function loadGrowth() {
@@ -1178,7 +1312,7 @@
       var delta = d.prev14 > 0 ? Math.round(((d.last14 - d.prev14) / d.prev14) * 100) : (d.last14 > 0 ? 100 : 0);
       var dTxt = (delta >= 0 ? '+' : '') + delta + '% vs previous 14 days';
       insertTop(view,
-        '<div class="card" id="growthbox" style="margin-bottom:14px;position:relative;overflow:visible"><h3 style="margin-top:0">New listeners <span class="muted">\u00b7 last 14 days \u00b7 <b>' + d.last14 + '</b> joined \u00b7 ' + esc(dTxt) + '</span></h3>' +
+        '<div class="card" id="growthbox" style="margin-bottom:14px;position:relative;overflow:visible"><h3 style="margin-top:0">New listeners <span class="muted">\u00b7 last 14 days \u00b7 <b>' + fmtN(d.last14) + '</b> joined \u00b7 ' + esc(dTxt) + '</span></h3>' +
         '<div id="spk-wrap" style="display:flex;align-items:flex-end;gap:4px;height:64px;padding:6px 0;border-bottom:1px solid var(--border)">' + bars + '</div>' +
         '<span class="spk-chip" id="spk-chip"></span></div>');
       var chipEl = document.getElementById('spk-chip');
@@ -1237,8 +1371,8 @@
       current = items.filter(function (it) { return it.label.toLowerCase().indexOf(f) !== -1; }).slice(0, 9);
       if (sel >= current.length) sel = Math.max(0, current.length - 1);
       list.innerHTML = current.map(function (it, i) {
-        return '<div class="pal-item' + (i === sel ? ' pal-sel' : '') + '" data-i="' + i + '" style="padding:9px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;' + (i === sel ? 'background:var(--accent);color:var(--on-accent)' : '') + '">' + esc(it.label) + '</div>';
-      }).join('') || '<div class="empty">No match</div>';
+        return '<div class="pal-item' + (i === sel ? ' pal-sel' : '') + '" role="option" aria-selected="' + (i === sel) + '" data-i="' + i + '" style="padding:9px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;' + (i === sel ? 'background:var(--accent);color:var(--on-accent)' : '') + '">' + esc(it.label) + '</div>';
+      }).join('') || '<div class="state state-empty empty" role="status"><div class="state-title">No match</div><div class="state-hint">Try fewer letters or a different word.</div></div>';
       Array.prototype.forEach.call(list.querySelectorAll('.pal-item'), function (el) {
         el.addEventListener('click', function () { pick(parseInt(el.getAttribute('data-i'), 10)); });
       });
@@ -1278,14 +1412,14 @@
           var t = '', b = '', canRetract = true;
           try { var j = JSON.parse(r.message || '{}'); t = j.title || ''; b = j.body || ''; } catch (e) { t = r.message || ''; }
           return '<tr><td><span class="pill">announcement</span></td><td><b>' + esc(t) + '</b> <span class="muted">' + esc(b) + '</span></td><td class="muted">' + when + '</td>' +
-            '<td>' + (canRetract ? '<button class="ghost pn-retract" data-at="' + esc(r.created_at) + '" style="padding:3px 10px;font-size:11px;color:var(--danger)">Retract</button>' : '') + '</td></tr>';
+            '<td>' + (canRetract ? '<button class="ghost pn-retract" data-at="' + esc(r.created_at) + '" style="padding:3px 10px;font-size:11px;color:var(--bad)">Retract</button>' : '') + '</td></tr>';
         }
         var parts = String(r.message || '').split('|');
         return '<tr><td><span class="pill">daily pick</span></td><td><b>' + esc(parts[1] || '') + '</b> <span class="muted">sent to ' + esc(parts[0] || '0') + ' device(s)</span></td><td class="muted">' + when + '</td><td></td></tr>';
       }).join('');
       host.innerHTML = '<h3>Sent log <span class="muted">· retracting an announcement stops app pickups; delivered web pushes can\u2019t be recalled</span></h3>' +
         '<table><thead><tr><th>Type</th><th>Content</th><th>When</th><th></th></tr></thead><tbody>' +
-        (rows || '<tr><td colspan="4" class="empty">Nothing sent yet.</td></tr>') + '</tbody></table>';
+        (rows || '<tr class="table-empty"><td colspan="4"><div class="state state-empty empty" role="status"><div class="state-title">Nothing sent yet</div><div class="state-hint">Notifications you send are logged here with their delivery counts.</div></div></td></tr>') + '</tbody></table>';
       Array.prototype.forEach.call(host.querySelectorAll('.pn-retract'), function (b) {
         b.addEventListener('click', function () {
           vxConfirm('Retract this announcement? App users will stop receiving it on open.', { title: 'Notifications', danger: true, okText: 'Retract' }).then(function (ok) {
@@ -1318,7 +1452,7 @@
         '<div class="card" id="auditlog" style="margin-bottom:14px">' +
         '<h3 style="margin-top:0">Admin audit trail <span class="muted">· every owner action, on the record</span></h3>' +
         '<table><thead><tr><th>Action</th><th>Detail</th><th>When (IST)</th></tr></thead><tbody>' +
-        (rows || '<tr><td colspan="3" class="empty">No admin actions recorded yet.</td></tr>') + '</tbody></table></div>');
+        (rows || '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">No admin actions recorded yet</div><div class="state-hint">Every change made from this console is logged here with its time.</div></div></td></tr>') + '</tbody></table></div>');
     }).catch(noop);
   }
   // ---------- Site mode (Live / Maintenance) ----------
@@ -1339,13 +1473,13 @@
       '<h3 style="margin-top:0">Site mode <span class="muted" id="sm-now">' + (smStatus || 'checking…') + '</span></h3>' +
       '<p class="muted" style="font-size:12px">Maintenance shows listeners a friendly “be right back” screen (it re-checks every minute). This console stays reachable either way.</p>' +
       '<input id="sm-note" type="text" placeholder="Optional message shown to listeners (e.g. Back in 20 minutes!)" style="margin-bottom:8px" />' +
-      '<div class="row"><button id="sm-live">● Go live</button><button id="sm-maint" class="ghost" style="color:var(--danger)">Enter maintenance</button><span class="muted" id="sm-out" style="font-size:12px"></span></div>' +
+      '<div class="row"><button class="btn btn-primary" id="sm-live">● Go live</button><button id="sm-maint" class="ghost" style="color:var(--bad)">Enter maintenance</button><span class="muted" id="sm-out" style="font-size:12px"></span></div>' +
       '</div>');
     document.getElementById('sm-note').value = smNote;
     document.getElementById('sm-out').textContent = smOut;
     function refresh() {
       fetch('/api/site-mode?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
-        smStatus = d.mode === 'maintenance' ? '· <b style="color:var(--danger)">MAINTENANCE</b>' + (d.note ? ' — ' + esc(d.note) : '') : '· <b style="color:var(--ok)">LIVE</b>';
+        smStatus = d.mode === 'maintenance' ? '· <b style="color:var(--bad)">MAINTENANCE</b>' + (d.note ? ' — ' + esc(d.note) : '') : '· <b style="color:var(--ok)">LIVE</b>';
         var el = document.getElementById('sm-now');
         if (el) el.innerHTML = smStatus;
         stamp();
@@ -1432,9 +1566,9 @@
       '<div id="pn-searchwrap" style="display:none"><input id="pn-q" type="text" placeholder="Search the catalog…" style="margin-bottom:6px" /><div id="pn-results"></div></div>' +
       '<div id="pn-customwrap" style="display:none"><input id="pn-link" type="text" placeholder="/made-for-you, /charts, /together…" style="margin-bottom:6px" /></div>' +
       '<p id="pn-chosen" style="margin:4px 0 12px">' + pnPickHtml('Home') + '</p>' +
-      '<div class="row"><button id="pn-send">Send to all</button><span class="muted" id="pn-out" style="font-size:12px"></span></div>' +
+      '<div class="row"><button class="btn btn-primary" id="pn-send">Send to all</button><span class="muted" id="pn-out" style="font-size:12px"></span></div>' +
       '</div>' +
-      '<div class="card" id="pn-logbox" style="max-width:820px;margin-top:14px"><div class="empty">Loading sent log…</div></div>';
+      '<div class="card" id="pn-logbox" style="max-width:820px;margin-top:14px">' + stateLoading('rows', 'Loading sent log…') + '</div>';
     pnKind = 'home';
     pnDest = '/';
     Array.prototype.forEach.call(document.querySelectorAll('.pn-kind'), function (b) {
@@ -1473,7 +1607,7 @@
     var rows = (d.rooms || []).map(function (r) {
       var live = r.members > 0 ? '<span class="dot2 on"></span>' : '<span class="dot2 off"></span>';
       var song = r.song_title ? esc(r.song_title) + (r.song_artist ? ' <span class="muted">· ' + esc(r.song_artist) + '</span>' : '') : '<span class="muted">—</span>';
-      return '<tr><td>' + live + '<b>' + esc(r.code) + '</b></td><td>' + esc(r.host || '—') + '</td><td>' + r.members + '</td><td>' + song + '</td><td>' + (r.playing ? '<span class="pill">Playing</span>' : '<span class="pill">Paused</span>') + '</td><td class="muted">' + ago(r.updated_at) + '</td><td><button class="ghost rend" data-code="' + esc(r.code) + '" style="padding:4px 10px;font-size:11px;color:var(--danger)">End</button></td></tr>';
+      return '<tr><td>' + live + '<b>' + esc(r.code) + '</b></td><td>' + esc(r.host || '—') + '</td><td>' + esc(r.members == null ? '—' : r.members) + '</td><td>' + song + '</td><td>' + (r.playing ? '<span class="pill">Playing</span>' : '<span class="pill">Paused</span>') + '</td><td class="muted">' + ago(r.updated_at) + '</td><td><button class="ghost rend" data-code="' + esc(r.code) + '" style="padding:4px 10px;font-size:11px;color:var(--bad)">End</button></td></tr>';
     }).join('');
     $('view').innerHTML =
       '<div class="cards">' + card(d.active, 'Rooms live now') + card(d.listeners, 'People in rooms') + card((d.rooms || []).length, 'Rooms (last 2h)') + '</div>' +
@@ -1486,7 +1620,7 @@
         b.disabled = true;
         vxConfirm('End room ' + b.getAttribute('data-code') + ' for everyone?', { title: 'Live Rooms', danger: true, okText: 'End room' }).then(function (ok) {
           if (!ok) { b.disabled = false; return; }
-          postApi('/api/admin/maintenance', { action: 'end_room', code: b.getAttribute('data-code') }).then(function (r) { if (r) loadRooms(); else b.disabled = false; }).catch(function () { b.disabled = false; });
+          postApi('/api/admin/maintenance', { action: 'end_room', code: b.getAttribute('data-code') }).then(function (r) { if (r) { writeToast(r, 'Ended — the room was closed.'); loadRooms(); } else b.disabled = false; }).catch(function () { writeFailed(); b.disabled = false; });
         });
       });
     });
@@ -1578,7 +1712,7 @@
     if (!host) return;
     var hist = labHist[labProv] || [];
     if (!hist.length) {
-      host.innerHTML = '<div class="empty">No messages for ' + esc(labProviderLabel(labProv)) + ' yet — type below. Replies come straight from this provider\'s key and the model chosen above, with no failover.</div>';
+      host.innerHTML = '<div class="state state-empty empty" role="status"><div class="state-title">No messages for ' + esc(labProviderLabel(labProv)) + ' yet</div><div class="state-hint">Type below. Replies come straight from the key and model chosen above, with no failover.</div></div>';
       return;
     }
     host.innerHTML = hist.map(function (m) {
@@ -2187,7 +2321,7 @@
       '<div class="row" style="margin-bottom:10px;flex-wrap:wrap"><button class="ghost" id="lab-music">Ping music APIs</button><span id="lab-music-at" class="lab-ping-at"></span><span id="lab-music-pings" class="chips" style="margin:0"></span></div>' +
       '<div class="lab-msgs" id="lab-msgs"></div>' +
       '<textarea id="lab-in" class="lab-input" rows="3" placeholder="Test message — Enter sends, Shift+Enter for a new line"></textarea>' +
-      '<div class="row" style="margin-top:10px"><button id="lab-send">Send</button><button class="ghost" id="lab-clear">Clear chat</button><span class="muted" style="font-size:11px">History lives per provider, in memory only — capped at 1000 tokens per reply.</span></div>' +
+      '<div class="row" style="margin-top:10px"><button class="btn btn-primary" id="lab-send">Send</button><button class="ghost" id="lab-clear">Clear chat</button><span class="muted" style="font-size:11px">History lives per provider, in memory only — capped at 1000 tokens per reply.</span></div>' +
       '</div>';
     labPaintProviders();
     labPaintMsgs();
@@ -2233,7 +2367,7 @@
     empty_music: '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M24 46V16l24-4v30" style="stroke:var(--accent)"/><circle cx="20" cy="46" r="4" stroke-opacity="0.55"/><circle cx="44" cy="42" r="4" stroke-opacity="0.55"/></svg>'
   };
   function emptyState(iconKey, title, hint) {
-    return html`<div class="empty-state">${''}` + (ICONS[iconKey] || '') + html`<div class="es-title">${title}</div><div class="es-hint">${hint}</div></div>`;
+    return html`<div class="state state-empty empty empty-state" role="status">${''}` + (ICONS[iconKey] || '') + html`<div class="state-title es-title">${title}</div><div class="state-hint es-hint">${hint}</div></div>`;
   }
   // Static catalog of the React app's home shelves (mirrors src/features/home/*).
   // Kept here to avoid a runtime import; update when new shelves land.
@@ -2302,7 +2436,7 @@
       b.addEventListener('click', function () { songsTab = b.getAttribute('data-t'); renderSongsSection(); });
     });
     $('song-preview').addEventListener('click', function () {
-      $('song-preview-out').textContent = 'Loading…';
+      $('song-preview-out').textContent = ''; $('song-preview-box').innerHTML = stateLoading('rows', 'Loading top songs…');
       api('/api/admin/overview').then(function (d) {
         var top = (d && d.topSongs || []).slice(0, 3);
         if (!top.length) { $('song-preview-box').innerHTML = emptyState('empty_music','No top songs yet','As listeners play, top tracks appear here.'); $('song-preview-out').textContent = ''; return; }
@@ -2311,7 +2445,7 @@
         }).join('');
         $('song-preview-box').innerHTML = '<table><thead><tr><th>Title</th><th>Artist</th><th>Plays</th></tr></thead><tbody>' + rows + '</tbody></table>';
         $('song-preview-out').textContent = 'Live from /api/admin/overview';
-      }).catch(function () { $('song-preview-out').textContent = 'Failed to load.'; });
+      }).catch(function () { $('song-preview-out').textContent = ''; $('song-preview-box').innerHTML = stateError('Top songs failed to load.', function () { $('song-preview').click(); }); });
     });
     stamp();
   }
@@ -2326,7 +2460,7 @@
       '<div class="subtabs" id="plTabs">' + tabs.map(function (t) {
         return '<button data-t="' + t[0] + '"' + (t[0] === plTab ? ' class="active"' : '') + '>' + t[1] + '</button>';
       }).join('') + '</div>' +
-      '<div id="pl-live-box">' + emptyState('empty_music','Loading current curation preview…','Sourced from /api/admin/music where available.') + '</div>';
+      '<div id="pl-live-box">' + stateLoading('rows', 'Loading current curation preview…') + '</div>';
     Array.prototype.forEach.call(document.querySelectorAll('#plTabs button'), function (b) {
       b.addEventListener('click', function () { plTab = b.getAttribute('data-t'); renderPlaylistsSection(); });
     });
@@ -2353,12 +2487,12 @@
         .map(function (x) {
           return html`<tr><td>${x.label}</td><td class="muted">${x.id}</td><td class="muted">${count(x)}</td><td>` +
             '<button class="ghost" disabled title="Backend endpoint required — /api/admin/categories" style="padding:3px 10px;font-size:11px">Edit</button> ' +
-            '<button class="ghost" disabled title="Backend endpoint required — /api/admin/categories" style="padding:3px 10px;font-size:11px;color:var(--danger)">Delete</button>' +
+            '<button class="ghost" disabled title="Backend endpoint required — /api/admin/categories" style="padding:3px 10px;font-size:11px;color:var(--bad)">Delete</button>' +
             '</td></tr>';
         }).join('');
       return '<h3>' + esc(title) + ' <span class="muted">· ' + items.length + '</span></h3>' +
         '<table><thead><tr><th>Name</th><th>ID</th><th>Used in</th><th></th></tr></thead><tbody>' +
-        (rows || '<tr><td colspan="4" class="empty">No matches for “' + esc(catFilter) + '”.</td></tr>') + '</tbody></table>';
+        (rows || '<tr class="table-empty"><td colspan="4"><div class="state state-empty empty" role="status"><div class="state-title">No matches for “' + esc(catFilter) + '”</div><div class="state-hint">Clear the filter or try a shorter word.</div></div></td></tr>') + '</tbody></table>';
     }
     var genres = GENRE_SHELVES_STATIC.map(function (g) { return { id: g.id, label: g.label }; });
     var languages = LANGUAGES_STATIC.map(function (id) { return { id: id, label: id.charAt(0).toUpperCase() + id.slice(1) }; });
@@ -2382,7 +2516,7 @@
   var bnSaved = null; // server copy; null = not loaded yet
   function renderBannersSection() {
     if (bnSaved === null) {
-      $('view').innerHTML = '<div class="empty">Loading published banners…</div>';
+      $('view').innerHTML = stateLoading('rows', 'Loading published banners…');
       api('/api/admin/appconfig?key=banners').then(function (d) {
         bnSaved = (d && Array.isArray(d.value)) ? d.value : [];
         if (active === 'banners') renderBannersSection();
@@ -2401,7 +2535,7 @@
     }
     var savedRows = saved.map(function (b, i) {
       return html`<tr><td>${b.title}</td><td class="muted">${b.subtitle}</td><td><span class="pill">${b.linkType}</span> ${b.linkId}</td><td class="muted">${b.start || '—'} → ${b.end || '—'}</td>` +
-        '<td><button class="ghost bn-del" data-i="' + i + '" style="padding:3px 10px;font-size:11px;color:var(--danger)">Delete</button></td></tr>';
+        '<td><button class="ghost bn-del" data-i="' + i + '" style="padding:3px 10px;font-size:11px;color:var(--bad)">Delete</button></td></tr>';
     }).join('');
     $('view').innerHTML =
       '<div class="stub-banner"><h4>Live — published to the site</h4>' +
@@ -2424,7 +2558,7 @@
       '<div class="bn-preview" id="bn-prev">' +
         (bnPreview.img ? '<img src="' + esc(bnPreview.img) + '" alt="" style="max-height:80px;border-radius:8px;margin-bottom:8px" />' : '') +
         '<h4>' + esc(bnPreview.title || 'Your banner title') + '</h4><p>' + esc(bnPreview.subtitle || 'A helpful subtitle appears here') + '</p></div>' +
-      '<div class="row" style="margin-top:12px"><button id="bn-save">Publish banner</button><span class="muted" id="bn-out" style="font-size:12px"></span></div></div>' +
+      '<div class="row" style="margin-top:12px"><button class="btn btn-primary" id="bn-save">Publish banner</button><span class="muted" id="bn-out" style="font-size:12px"></span></div></div>' +
       '<h3>Published banners (' + saved.length + ')</h3>' +
       (savedRows ? '<table><thead><tr><th>Title</th><th>Subtitle</th><th>Link</th><th>Schedule</th><th></th></tr></thead><tbody>' + savedRows + '</tbody></table>'
         : emptyState('empty_activity','No banners yet','Compose one above and click "Publish banner" to make it live.')) +
@@ -2490,7 +2624,7 @@
       '<div class="row" style="gap:10px;flex-wrap:wrap"><label style="font-size:12px;color:var(--text-3)">Theme color</label><input id="cfg-color" type="color" value="' + esc(cfg.theme) + '" style="width:44px;height:34px;padding:2px" /></div>' +
       '<p class="muted" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:14px 0 6px">Accent</p>' +
       '<div class="sw" id="cfg-sw">' + ACCENTS.map(function (a) {
-        return '<button data-acc="' + a + '"' + (cfg.accent === a ? ' class="on"' : '') + ' style="background:' + ACCENT_COLORS[a] + '" title="' + a + '"></button>';
+        return '<button type="button" data-acc="' + a + '" class="icon-btn swatch' + (cfg.accent === a ? ' on' : '') + '" aria-pressed="' + (cfg.accent === a ? 'true' : 'false') + '" aria-label="Accent colour: ' + a + '" style="background:' + ACCENT_COLORS[a] + '" title="' + a + '"></button>';
       }).join('') + '</div></div>' +
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Defaults</h3>' +
       '<label style="font-size:12px;color:var(--text-3)">Default homepage shelves</label>' +
@@ -2504,8 +2638,8 @@
       '<div class="card" id="cfg-mm-box" style="margin-bottom:14px"><h3 style="margin-top:0">Maintenance mode message</h3>' +
       '<p class="muted" style="font-size:12px">Reads / writes to <code>/api/admin/site-mode</code> via /api/admin/maintenance.</p>' +
       '<textarea id="cfg-mm" rows="3" class="inp" placeholder="Loading current…"></textarea>' +
-      '<div class="row" style="margin-top:10px;gap:8px"><button id="cfg-mm-save">Save maintenance message</button><span class="muted" id="cfg-mm-out" style="font-size:12px"></span></div></div>' +
-      '<div class="row" style="gap:8px"><button id="cfg-save">Save config (local)</button><button class="ghost" id="cfg-reset">Reset to defaults</button><span class="muted" id="cfg-out" style="font-size:12px"></span></div>';
+      '<div class="row" style="margin-top:10px;gap:8px"><button class="btn" id="cfg-mm-save">Save maintenance message</button><span class="muted" id="cfg-mm-out" style="font-size:12px"></span></div></div>' +
+      '<div class="row" style="gap:8px"><button class="btn btn-primary" id="cfg-save">Save config (local)</button><button class="ghost" id="cfg-reset">Reset to defaults</button><span class="muted" id="cfg-out" style="font-size:12px"></span></div>';
     // Load overview for name + version
     api('/api/admin/overview').then(function (d) {
       if (!d || active !== 'config') return;
@@ -2528,7 +2662,7 @@
       b.addEventListener('click', function () {
         var acc = b.getAttribute('data-acc');
         try { document.documentElement.dataset.accent = acc; } catch (e) {}
-        Array.prototype.forEach.call(document.querySelectorAll('#cfg-sw button'), function (x) { x.classList.toggle('on', x === b); });
+        Array.prototype.forEach.call(document.querySelectorAll('#cfg-sw button'), function (x) { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
       });
     });
     $('cfg-save').addEventListener('click', function () {
@@ -2570,7 +2704,7 @@
   var ftSaved; // undefined = not loaded; null/'object' = server value
   function renderFestivalsSection() {
     if (ftSaved === undefined) {
-      $('view').innerHTML = '<div class="empty">Loading festival config\u2026</div>';
+      $('view').innerHTML = stateLoading('rows', 'Loading festival config\u2026');
       api('/api/admin/appconfig?key=festival').then(function (d) {
         ftSaved = (d && d.value && typeof d.value === 'object') ? d.value : null;
         if (active === 'festivals') renderFestivalsSection();
@@ -2601,10 +2735,10 @@
       var isForced = forcedId === f.id;
       var isAuto = auto && auto.id === f.id;
       var sw = f.colors.map(function (c) {
-        return '<i style="display:inline-block;width:14px;height:14px;border-radius:4px;margin-right:3px;background:' + esc(c) + ';border:1px solid rgba(255,255,255,.18)"></i>';
+        return '<i style="display:inline-block;width:14px;height:14px;border-radius:4px;margin-right:3px;background:' + esc(c) + ';border:1px solid var(--border-strong)"></i>';
       }).join('');
       // Mini preview: the festival's own photo, canvas, ribbon and accent button.
-      var preview = '<div style="position:relative;border-radius:10px;overflow:hidden;height:64px;background:' + esc(f.canvas) + ';border:1px solid rgba(255,255,255,.08);margin:8px 0 10px">' +
+      var preview = '<div style="position:relative;border-radius:10px;overflow:hidden;height:64px;background:' + esc(f.canvas) + ';border:1px solid var(--border-strong);margin:8px 0 10px">' +
         '<div style="position:absolute;inset:0;background-image:linear-gradient(180deg,rgba(5,7,15,.05),rgba(5,7,15,.72)),url(' + JSON.stringify(f.image || '') + ');background-size:cover;background-position:' + esc(f.imagePosition || 'center') + ';opacity:.8"></div>' +
         '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:' + esc(f.ribbon) + '"></div>' +
         '<div style="position:absolute;left:10px;top:14px;font-weight:900;font-size:12px;color:#fff;letter-spacing:.2px">VinaX</div>' +
@@ -2613,7 +2747,7 @@
         '</div>';
       return '<div class="card" style="padding:14px 16px' + (isForced ? ';box-shadow:inset 0 0 0 1.5px var(--accent)' : '') + '">' +
         '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px">' +
-          '<span class="fest-card-photo" style="display:block;width:32px;height:32px;flex:0 0 32px;border-radius:8px;background-image:url(' + JSON.stringify(f.image || '') + ');background-position:' + esc(f.imagePosition || 'center') + ';background-size:cover;border:1px solid rgba(255,255,255,.16)"></span><span style="flex:1;min-width:0">' + esc(f.name) + '</span>' +
+          '<span class="fest-card-photo" style="display:block;width:32px;height:32px;flex:0 0 32px;border-radius:8px;background-image:url(' + JSON.stringify(f.image || '') + ');background-position:' + esc(f.imagePosition || 'center') + ';background-size:cover;border:1px solid var(--border-strong)"></span><span style="flex:1;min-width:0">' + esc(f.name) + '</span>' +
           (isForced ? '<span class="pill">forced</span>' : (isAuto ? '<span class="pill">active today</span>' : (f.forceOnly ? '<span class="pill">force-only</span>' : ''))) +
         '</div>' +
         '<div class="muted" style="font-size:11.5px;margin:6px 0 2px">' + esc(f.when) + '</div>' +
@@ -2633,8 +2767,8 @@
       '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Listeners currently see</h3>' +
       '<p style="font-size:15px;margin:6px 0 12px">' + statusLine + '</p>' +
       '<div class="row" style="gap:10px;flex-wrap:wrap">' +
-        '<button id="ft-mode-auto"' + (mode === 'auto' ? '' : ' class="ghost"') + '>Auto (calendar)</button>' +
-        '<button id="ft-mode-off"' + (mode === 'off' ? '' : ' class="ghost"') + '>All festivals off</button>' +
+        '<button id="ft-mode-auto"' + (mode === 'auto' ? ' class="btn btn-primary"' : ' class="ghost"') + '>Auto (calendar)</button>' +
+        '<button id="ft-mode-off"' + (mode === 'off' ? ' class="btn btn-primary"' : ' class="ghost"') + '>All festivals off</button>' +
         '<span class="muted" id="ft-out" style="font-size:12px"></span>' +
       '</div></div>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px">' + cards + '</div>';
@@ -2671,7 +2805,7 @@
   // Status pill: icon + word (.st-ok / .st-fail in index.html), never colour alone.
   function okPill(ok, text) { return '<span class="pill st ' + (ok ? 'st-ok' : 'st-fail') + '">' + esc(text) + '</span>'; }
   function ago(iso) { if (!iso) return '—'; var m = Math.round((Date.now() - Date.parse(iso)) / 60000); if (!isFinite(m)) return '—'; if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; if (m < 1440) return Math.round(m / 60) + ' h ago'; return Math.round(m / 1440) + ' d ago'; }
-  function showFail(msg) { $('view').innerHTML = '<div class="empty is-error" role="alert">' + esc(msg || 'Could not load this panel. Check the connection, then press Refresh.') + '</div>'; }
+  function showFail(msg) { var v = $('view'); if (v) v.innerHTML = stateError(msg || 'Could not load this panel. Check the connection, then try again.', refreshActive); }
   // 7.2 — a dashboard read that FAILS says so. The routes answer 502 with the
   // reason (db_unavailable, db_unauthorized, db_schema_missing, …) instead of
   // zeros, so a silent .catch() here would leave the last numbers on screen as
@@ -2694,12 +2828,12 @@
       if (!d.configured) { $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Retention cohorts</h3><p class="muted">The <code>vinax_retention</code> function is not installed in the database yet. Run the retention migration and this panel fills in on the next refresh.</p></div>'; return; }
       var cs = d.cohorts || [];
       var avg = function (k) { var xs = cs.map(function (c) { return c[k]; }).filter(function (v) { return v != null; }); if (!xs.length) return null; var s = xs.reduce(function (a, b) { return a + (b <= 1 ? b * 100 : b); }, 0); return Math.round(s / xs.length) + '%'; };
-      exportRows = cs; exportName = 'retention'; $('csv').hidden = !cs.length;
+      exportRows = cs; exportName = 'retention'; $f('csv').hidden = !cs.length;
       $('view').innerHTML =
         '<div class="cards">' + card(cs.length, 'Weekly cohorts') + card(avg('d1') || '—', 'Avg day-1 return') + card(avg('d7') || '—', 'Avg day-7 return') + card(avg('d30') || '—', 'Avg day-30 return') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Cohorts <span class="muted">· share of each week’s new listeners who came back</span></h3>' +
         '<table><thead><tr><th>Cohort week</th><th>New listeners</th><th>Day 1</th><th>Day 7</th><th>Day 30</th></tr></thead><tbody>' +
-        (cs.length ? cs.map(function (c) { return '<tr><td>' + esc(String(c.cohort_week).slice(0, 10)) + '</td><td>' + (c.cohort_size || 0) + '</td>' + pctCell(c.d1) + pctCell(c.d7) + pctCell(c.d30) + '</tr>'; }).join('') : '<tr><td colspan="5" class="empty">No cohorts yet.</td></tr>') +
+        (cs.length ? cs.map(function (c) { return '<tr><td>' + esc(String(c.cohort_week).slice(0, 10)) + '</td><td>' + (c.cohort_size || 0) + '</td>' + pctCell(c.d1) + pctCell(c.d7) + pctCell(c.d30) + '</tr>'; }).join('') : '<tr class="table-empty"><td colspan="5"><div class="state state-empty empty" role="status"><div class="state-title">No cohorts yet</div><div class="state-hint">Cohorts appear once there is enough listener history to group.</div></div></td></tr>') +
         '</tbody></table></div>';
     }).catch(function () { if (active === 'retention') showFail(); });
   }
@@ -2714,7 +2848,7 @@
       $('view').innerHTML =
         '<div class="cards">' + card(d.score == null ? '—' : d.score + '%', 'Data quality score') + card(d.sampled && d.sampled.events === null ? 'unavailable' : (d.sampled && d.sampled.events) || 0, 'Play events sampled') + card(d.sampled && d.sampled.aiEvents === null ? 'unavailable' : (d.sampled && d.sampled.aiEvents) || 0, 'AI calls sampled') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Signals</h3>' + items.map(function (x) { return '<div class="brow"><div class="blabel">' + esc(x.label) + '</div><div class="btrack"><div class="bfill" style="width:' + x.v + '%"></div></div><div class="bval">' + x.txt + '</div></div>'; }).join('') + '</div>' +
-        '<div class="card"><h3 style="margin-top:0">Service objectives <span class="muted">· error budget burned this window</span></h3><table><thead><tr><th>SLO</th><th>Target</th><th>Actual</th><th>Budget burned</th></tr></thead><tbody>' +
+        '<div class="card"><h3 style="margin-top:0">Service objectives <span class="muted">· error budget burned this window</span></h3><table data-empty="No objectives to show yet. They are worked out once requests have been logged in this window."><thead><tr><th>SLO</th><th>Target</th><th>Actual</th><th>Budget burned</th></tr></thead><tbody>' +
         (d.slos || []).map(function (s) { var burn = s.budgetBurnedPct; return '<tr><td>' + esc(s.name) + '</td><td>' + s.targetPct + '%</td><td>' + (s.actualPct == null ? '—' : s.actualPct + '%') + '</td><td>' + (burn == null ? '—' : okPill(burn <= 100, burn + '%')) + '</td></tr>'; }).join('') +
         '</tbody></table></div>';
     }).catch(function () { if (active === 'dataquality') showFail(); });
@@ -2724,20 +2858,20 @@
   function renderCatalogSection() {
     $('view').innerHTML =
       '<div class="card"><h3 style="margin-top:0">Catalog lookup</h3><p class="muted" style="margin-top:0">Searches the music catalog through the Worker (same-origin, mirror fallback). Copy an id for a push, a banner link or the blocklist.</p>' +
-      '<div class="row" style="gap:8px;flex-wrap:wrap"><input id="cat-q" class="inp" placeholder="Song or album name…" style="flex:1;min-width:200px" /><select id="cat-kind" class="inp"><option value="song">Songs</option><option value="album">Albums</option></select><button id="cat-go">Search</button></div>' +
-      '<div id="cat-out" style="margin-top:12px"><div class="empty">Type a name and press Search.</div></div></div>';
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><input id="cat-q" class="inp" placeholder="Song or album name…" style="flex:1;min-width:200px" /><select id="cat-kind" class="inp"><option value="song">Songs</option><option value="album">Albums</option></select><button class="btn btn-primary" id="cat-go">Search</button></div>' +
+      '<div id="cat-out" style="margin-top:12px"><div class="state state-empty empty" role="status"><div class="state-title">Search the catalogue</div><div class="state-hint">Type a name and press Search.</div></div></div></div>';
     var run = function () {
       var q = $('cat-q').value.trim(); if (!q) return;
-      $('cat-out').innerHTML = '<div class="empty">Searching…</div>';
+      $('cat-out').innerHTML = stateLoading('rows', 'Searching…');
       api('/api/admin/catalog-search?q=' + encodeURIComponent(q) + '&kind=' + $('cat-kind').value + '&limit=15').then(function (d) {
         if (!d || active !== 'catalog') return;
         var items = d.items || [];
-        if (!items.length) { $('cat-out').innerHTML = '<div class="empty">' + (d.error ? 'Catalog sources unavailable right now.' : 'No matches.') + '</div>'; return; }
+        if (!items.length) { $('cat-out').innerHTML = '<div class="state state-empty empty" role="status"><div class="state-title">' + (d.error ? 'Catalog sources unavailable right now.' : 'No matches.') + '</div><div class="state-hint">Try a different spelling, or press Search again in a moment.</div></div>'; return; }
         $('cat-out').innerHTML = '<table><thead><tr><th></th><th>Name</th><th>Id</th><th></th></tr></thead><tbody>' + items.map(function (it) {
           return '<tr><td>' + (it.image ? '<img class="thumb-sm" alt="" src="' + esc(it.image) + '" />' : '') + '</td><td><b>' + esc(it.name) + '</b><div class="muted">' + esc(it.subtitle) + '</div></td><td><code>' + esc(it.id) + '</code></td><td><button class="ghost" data-copy="' + esc(it.id) + '">Copy id</button></td></tr>';
         }).join('') + '</tbody></table><p class="muted" style="font-size:11px">Source: ' + esc(d.source || 'mirror') + '</p>';
-        Array.prototype.forEach.call($('cat-out').querySelectorAll('[data-copy]'), function (b) { b.addEventListener('click', function () { try { navigator.clipboard.writeText(b.getAttribute('data-copy')); b.textContent = 'Copied ✓'; } catch (e) {} }); });
-      }).catch(function () { $('cat-out').innerHTML = '<div class="empty">Search failed.</div>'; });
+        Array.prototype.forEach.call($('cat-out').querySelectorAll('[data-copy]'), function (b) { b.addEventListener('click', function () { try { navigator.clipboard.writeText(b.getAttribute('data-copy')); b.textContent = 'Copied ✓'; toast('Copied — the value is on the clipboard.', 'ok'); } catch (e) {} }); });
+      }).catch(function () { $('cat-out').innerHTML = stateError('Search failed.', run); });
     };
     $('cat-go').addEventListener('click', run);
     $('cat-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
@@ -2750,12 +2884,12 @@
   function renderEngineProbeSection() {
     $('view').innerHTML =
       '<div class="card"><h3 style="margin-top:0">Engine probe</h3><p class="muted" style="margin-top:0">Sends one tiny completion through the chosen provider\u2019s key and reports the upstream status and round-trip time. Use it to check a model slug before relying on it. Rate-limited to 10 a minute.</p>' +
-      '<div class="row" style="gap:8px;flex-wrap:wrap"><select id="probe-key" class="inp">' + LAB_PROVIDERS.map(function (P) { return '<option value="' + P.id + '">' + esc(P.label) + '</option>'; }).join('') + '</select><input id="probe-model" class="inp" placeholder="Model slug (optional — defaults to the provider’s first listed model)" style="flex:1;min-width:240px" /><button id="probe-go">Probe</button></div>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><select id="probe-key" class="inp">' + LAB_PROVIDERS.map(function (P) { return '<option value="' + P.id + '">' + esc(P.label) + '</option>'; }).join('') + '</select><input id="probe-model" class="inp" placeholder="Model slug (optional — defaults to the provider’s first listed model)" style="flex:1;min-width:240px" /><button class="btn btn-primary" id="probe-go">Probe</button></div>' +
       '<div id="probe-out" style="margin-top:12px"></div></div>';
     var hist = [];
     $('probe-go').addEventListener('click', function () {
       var key = $('probe-key').value, model = $('probe-model').value.trim();
-      $('probe-go').disabled = true; $('probe-out').innerHTML = '<div class="empty">Probing ' + esc(probeLabel(key)) + '…</div>';
+      $('probe-go').disabled = true; $('probe-out').innerHTML = stateLoading('rows', 'Probing ' + probeLabel(key) + '…');
       api('/api/admin/enginetest?key=' + encodeURIComponent(key) + (model ? '&model=' + encodeURIComponent(model) : '')).then(function (r) {
         $('probe-go').disabled = false;
         if (!r) return;
@@ -2764,7 +2898,7 @@
         $('probe-out').innerHTML = '<table><thead><tr><th>Provider</th><th>Model</th><th>Status</th><th>Latency</th><th>Reply head</th></tr></thead><tbody>' + hist.slice(0, 12).map(function (h) {
           return '<tr><td><span class="prov-cell">' + providerLogo(h.provider || h.key, 16) + esc(probeLabel(h.provider || h.key)) + '</span></td><td>' + esc(h.model || '') + '</td><td>' + okPill(h.status >= 200 && h.status < 300, h.status ? String(h.status) : (h.error || h.exception || 'no response')) + '</td><td>' + (h.ms || 0) + ' ms</td><td class="muted" style="max-width:360px;white-space:normal;word-break:break-all">' + esc((h.head || h.error || h.exception || '').slice(0, 160)) + '</td></tr>';
         }).join('') + '</tbody></table>';
-      }).catch(function (e) { $('probe-go').disabled = false; $('probe-out').innerHTML = '<div class="empty">' + esc(e && e.message === 'http 429' ? 'Rate limited — try again in a minute.' : 'Probe failed.') + '</div>'; });
+      }).catch(function (e) { $('probe-go').disabled = false; $('probe-out').innerHTML = stateError(e && e.message === 'http 429' ? 'Rate limited — try again in a minute.' : 'Probe failed.', function () { $('probe-go').click(); }); });
     });
     stamp();
   }
@@ -2774,10 +2908,10 @@
     apiMemo('/api/admin/seo').then(function (d) {
       if (!d || active !== 'seo') return;
       if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
-      exportRows = d.newest || []; exportName = 'seo-newest'; $('csv').hidden = !exportRows.length;
+      exportRows = d.newest || []; exportName = 'seo-newest'; $f('csv').hidden = !exportRows.length;
       var sm = d.sitemap || {};
       $('view').innerHTML =
-        '<div class="cards">' + card(d.total.toLocaleString(), 'URLs in corpus') + (d.counts || []).map(function (c) { return card(c.count.toLocaleString(), c.plural + ' · ' + c.pages + ' sitemap page' + (c.pages === 1 ? '' : 's')); }).join('') + '</div>' +
+        '<div class="cards">' + card(d.total.toLocaleString(), 'URLs in corpus') + (d.counts || []).map(function (c) { return card(fmtN(c.count), (c.plural || 'Pages') + ' · ' + (Number(c.pages) || 0) + ' sitemap page' + (c.pages === 1 ? '' : 's')); }).join('') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Sitemap index <span class="muted">· live fetch of /sitemap.xml</span></h3><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">' + okPill(sm.status === 200, sm.status === 200 ? 'reachable' : ('http ' + sm.status)) + '<span class="muted">' + (sm.entries || 0) + ' child sitemaps · ' + (sm.ms || 0) + ' ms · ' + (sm.bytes || 0) + ' bytes' + (sm.error ? ' · ' + esc(sm.error) : '') + '</span></div></div>' +
         '<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap"><div class="card" style="flex:1;min-width:280px"><h3 style="margin-top:0">Languages <span class="muted">· newest ' + (d.sampled || 0) + ' rows</span></h3>' + bars(d.languages || [], function (x) { return esc(x.lang); }, function (x) { return x.n; }) + '</div>' +
         '<div class="card" style="flex:1;min-width:280px"><h3 style="margin-top:0">Discovered per day</h3>' + dayChart(d.addedByDay || [], 'n') + '</div></div>' +
@@ -2792,15 +2926,15 @@
       stamp();
       var sh = d.shell || {};
       $('view').innerHTML =
-        '<div class="card" style="border-color:' + (d.healthy ? 'var(--ok)' : 'var(--danger)') + '"><div class="row" style="align-items:center;gap:12px;flex-wrap:wrap"><h3 style="margin:0">' + (d.healthy ? '✅ Edge is healthy' : '⚠️ ' + d.problems + ' problem' + (d.problems === 1 ? '' : 's') + ' found') + '</h3><span class="muted">' + esc(d.origin) + ' · checked ' + ago(d.checkedAt) + '</span><div class="spacer"></div><button id="edge-again" class="ghost">Re-check</button></div></div>' +
+        '<div class="card" style="border-color:' + (d.healthy ? 'var(--ok)' : 'var(--bad)') + '"><div class="row" style="align-items:center;gap:12px;flex-wrap:wrap"><h3 style="margin:0">' + (d.healthy ? '✅ Edge is healthy' : '⚠️ ' + (Number(d.problems) || 0) + ' problem' + (Number(d.problems) === 1 ? '' : 's') + ' found') + '</h3><span class="muted">' + esc(d.origin) + ' · checked ' + ago(d.checkedAt) + '</span><div class="spacer"></div><button id="edge-again" class="ghost">Re-check</button></div></div>' +
         '<div class="cards">' + card(sh.status || 0, 'App shell status') + card((sh.ms || 0) + ' ms', 'Shell latency') + card(sh.cacheStatus || '—', 'Edge cache status') + card(sh.build || '—', 'Live build id') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Assets the shell needs <span class="muted">· each must be real JavaScript/CSS, never HTML</span></h3><table><thead><tr><th>Asset</th><th>Kind</th><th>Status</th><th>Content-type</th><th>Latency</th><th>Note</th></tr></thead><tbody>' +
-        ((d.assets || []).length ? d.assets.map(function (a) { return '<tr><td><code>' + esc(a.path) + '</code></td><td>' + esc(a.kind) + '</td><td>' + okPill(a.ok, a.ok ? 'ok' : (a.status || 'fail')) + '</td><td class="muted">' + esc(a.contentType || '') + '</td><td>' + a.ms + ' ms</td><td class="muted">' + esc(a.note || '') + '</td></tr>'; }).join('') : '<tr><td colspan="6" class="empty">No assets found in the shell — the shell itself may be wrong.</td></tr>') +
+        ((d.assets || []).length ? d.assets.map(function (a) { return '<tr><td><code>' + esc(a.path) + '</code></td><td>' + esc(a.kind) + '</td><td>' + okPill(a.ok, a.ok ? 'ok' : (a.status || 'fail')) + '</td><td class="muted">' + esc(a.contentType || '') + '</td><td>' + a.ms + ' ms</td><td class="muted">' + esc(a.note || '') + '</td></tr>'; }).join('') : '<tr class="table-empty"><td colspan="6"><div class="state state-empty empty" role="status"><div class="state-title">No assets found in the shell</div><div class="state-hint">The shell itself may be wrong. Check the latest deploy, then run the check again.</div></div></td></tr>') +
         '</tbody></table></div>' +
-        '<div class="card"><h3 style="margin-top:0">Public endpoints</h3><table><thead><tr><th>Endpoint</th><th>Path</th><th>Status</th><th>Latency</th><th>Note</th></tr></thead><tbody>' +
+        '<div class="card"><h3 style="margin-top:0">Public endpoints</h3><table data-empty="No endpoints were checked. Press Re-check to probe them again."><thead><tr><th>Endpoint</th><th>Path</th><th>Status</th><th>Latency</th><th>Note</th></tr></thead><tbody>' +
         (d.endpoints || []).map(function (p) { return '<tr><td>' + esc(p.name) + '</td><td><code>' + esc(p.method + ' ' + p.path) + '</code></td><td>' + okPill(p.ok, String(p.status || 'fail')) + '</td><td>' + p.ms + ' ms</td><td class="muted">' + esc(p.note || '') + '</td></tr>'; }).join('') +
         '</tbody></table></div>';
-      $('edge-again').addEventListener('click', function () { $('view').innerHTML = '<div class="empty">Checking…</div>'; loadEdge(); });
+      $('edge-again').addEventListener('click', function () { $('view').innerHTML = stateLoading('rows', 'Checking…'); loadEdge(); });
     }).catch(function (e) { if (active === 'edge') showFail(e && e.message === 'http 429' ? 'Rate limited — the check fans out ~15 requests; try again in a minute.' : 'Could not run the edge check.'); });
   }
 
@@ -2816,7 +2950,7 @@
         '<div class="cards">' + card(rel ? esc(rel.tag) : '—', 'Latest release') + card(esc(String(liveVer)), 'Version the site reports') + card((d.runs || []).filter(function (r) { return r.conclusion === 'failure'; }).length, 'Failed runs (last 20)') + card((d.commits || []).length, 'Recent commits on main') + '</div>' +
         (rel ? '<div class="card"><h3 style="margin-top:0">' + esc(rel.name || rel.tag) + '</h3><div class="row" style="gap:8px;flex-wrap:wrap">' + (rel.assets || []).map(function (a) { return '<span class="pill">' + esc(a.name) + '</span>'; }).join('') + '</div>' + (rel.notes ? '<pre class="codebox" style="white-space:pre-wrap;margin-top:10px">' + esc(rel.notes) + '</pre>' : '') + '</div>' : '') +
         '<div class="card"><h3 style="margin-top:0">Workflow runs</h3><table><thead><tr><th>#</th><th>Workflow</th><th>Result</th><th>Branch</th><th>Trigger</th><th>Started</th><th></th></tr></thead><tbody>' +
-        ((d.runs || []).length ? d.runs.map(function (r) { return '<tr><td class="muted">' + r.number + '</td><td><b>' + esc(r.name) + '</b><div class="muted">' + esc(r.title) + '</div></td><td>' + runPill(r) + '</td><td><code>' + esc(r.branch) + '</code> <span class="muted">' + esc(r.sha) + '</span></td><td>' + esc(r.event) + '</td><td class="muted">' + ago(r.started) + '</td><td><a class="ghost" href="' + esc(r.url) + '" target="_blank" rel="noopener">Open</a></td></tr>'; }).join('') : '<tr><td colspan="7" class="empty">No runs.</td></tr>') +
+        ((d.runs || []).length ? d.runs.map(function (r) { return '<tr><td class="muted">' + esc(r.number == null ? '—' : r.number) + '</td><td><b>' + esc(r.name) + '</b><div class="muted">' + esc(r.title) + '</div></td><td>' + runPill(r) + '</td><td><code>' + esc(r.branch) + '</code> <span class="muted">' + esc(r.sha) + '</span></td><td>' + esc(r.event) + '</td><td class="muted">' + ago(r.started) + '</td><td><a class="ghost" href="' + esc(r.url) + '" target="_blank" rel="noopener">Open</a></td></tr>'; }).join('') : '<tr class="table-empty"><td colspan="7"><div class="state state-empty empty" role="status"><div class="state-title">No runs</div><div class="state-hint">Each scheduled job run is logged here after it finishes.</div></div></td></tr>') +
         '</tbody></table></div>' +
         '<div class="card"><h3 style="margin-top:0">Recent commits</h3><table><tbody>' + (d.commits || []).map(function (c) { return '<tr><td><code>' + esc(c.sha) + '</code></td><td>' + esc(c.message) + '</td><td class="muted">' + esc(c.author) + ' · ' + ago(c.at) + '</td></tr>'; }).join('') + '</tbody></table></div>';
     }).catch(function () { if (active === 'releases') showFail(); });
@@ -2827,7 +2961,7 @@
     apiMemo('/api/admin/tables').then(function (d) {
       if (!d || active !== 'tables') return;
       if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
-      exportRows = d.tables; exportName = 'database'; $('csv').hidden = false;
+      exportRows = d.tables; exportName = 'database'; $f('csv').hidden = false;
       var busiest = d.tables.slice().sort(function (a, b) { return (b.last24h || 0) - (a.last24h || 0); })[0];
       $('view').innerHTML =
         '<div class="cards">' + card(d.totalRows == null ? 'unavailable' : d.totalRows.toLocaleString(), 'Rows across tables') + card(d.tables.length, 'Tables') + card(busiest ? busiest.name.replace('vinax_', '') : '—', 'Busiest in 24 h') + '</div>' +
@@ -2842,10 +2976,10 @@
     apiMemo('/api/admin/audit').then(function (d) {
       if (!d || active !== 'audit') return;
       var items = d.items || [];
-      exportRows = items; exportName = 'audit'; $('csv').hidden = !items.length;
+      exportRows = items; exportName = 'audit'; $f('csv').hidden = !items.length;
       var paint = function (q) {
         var rows = items.filter(function (it) { return !q || ((it.kind || '') + ' ' + (it.text || '')).toLowerCase().indexOf(q) >= 0; });
-        $('audit-rows').innerHTML = rows.length ? rows.map(function (it) { var text = it.text || ''; if (it.kind === 'announcement') { try { var j = JSON.parse(text); text = (j.title || '') + ' — ' + (j.body || ''); } catch (e) { /* raw */ } } return '<tr><td><span class="pill">' + esc(it.kind) + '</span></td><td>' + esc(text) + '</td><td class="muted" title="' + esc(it.at) + '">' + ago(it.at) + '</td></tr>'; }).join('') : '<tr><td colspan="3" class="empty">Nothing matches.</td></tr>';
+        $('audit-rows').innerHTML = rows.length ? rows.map(function (it) { var text = it.text || ''; if (it.kind === 'announcement') { try { var j = JSON.parse(text); text = (j.title || '') + ' — ' + (j.body || ''); } catch (e) { /* raw */ } } return '<tr><td><span class="pill">' + esc(it.kind) + '</span></td><td>' + esc(text) + '</td><td class="muted" title="' + esc(it.at) + '">' + ago(it.at) + '</td></tr>'; }).join('') : '<tr class="table-empty"><td colspan="3"><div class="state state-empty empty" role="status"><div class="state-title">Nothing matches</div><div class="state-hint">Clear the search or try a shorter word.</div></div></td></tr>';
       };
       $('view').innerHTML = '<div class="card"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Audit trail</h3><span class="muted">' + items.length + ' entries</span><div class="spacer"></div><input id="audit-q" class="inp" placeholder="Filter…" style="min-width:200px" /></div><table style="margin-top:12px"><thead><tr><th>Kind</th><th>What</th><th>When</th></tr></thead><tbody id="audit-rows"></tbody></table></div>';
       paint('');
@@ -2861,7 +2995,7 @@
     { key: 'aiHome', label: 'AI-designed Home shelves', note: 'Off hides the “Designed for you” block on Home for everyone.' }
   ];
   function renderFlagsSection() {
-    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
+    $('view').innerHTML = stateLoading('panel');
     cfgGet('flags').then(function (d) {
       if (active !== 'flags') return;
       if (d && d.configured === false) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
@@ -2875,7 +3009,7 @@
         KNOWN_FLAGS.map(function (f) { return '<tr><td><code>' + f.key + '</code><div class="muted">' + esc(f.label) + '</div></td><td class="muted">' + esc(f.note) + '</td><td>' + toggle(f.key, flags[f.key] !== false) + '</td></tr>'; }).join('') +
         custom.map(function (k) { return '<tr><td><code>' + esc(k) + '</code><div class="muted">custom</div></td><td class="muted">Read by <code>useFeatureFlags()</code> in the app.</td><td>' + toggle(k, flags[k] !== false) + ' <button class="ghost" data-del="' + esc(k) + '">Remove</button></td></tr>'; }).join('') +
         '</tbody></table>' +
-        '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><input id="flag-new" class="inp" placeholder="New flag name (letters, digits, - _)" style="min-width:220px" /><button class="ghost" id="flag-add">Add flag (off)</button><div class="spacer"></div><button id="flag-save">Publish flags</button><span class="muted" id="flag-out" style="font-size:12px"></span></div></div>';
+        '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><input id="flag-new" class="inp" placeholder="New flag name (letters, digits, - _)" style="min-width:220px" /><button class="ghost" id="flag-add">Add flag (off)</button><div class="spacer"></div><button class="btn btn-primary" id="flag-save">Publish flags</button><span class="muted" id="flag-out" style="font-size:12px"></span></div></div>';
       var state = {}; Object.keys(flags).forEach(function (k) { state[k] = flags[k] !== false; });
       KNOWN_FLAGS.forEach(function (f) { if (!(f.key in state)) state[f.key] = true; });
       Array.prototype.forEach.call(document.querySelectorAll('#flag-rows [data-flag]'), function (l) { l.addEventListener('click', function () { var k = l.getAttribute('data-flag'); state[k] = !state[k]; l.querySelector('.track').classList.toggle('on', state[k]); }); });
@@ -2888,21 +3022,21 @@
 
   // 11. Runbook — operator notes that live with the console, not in someone's chat.
   function renderRunbookSection() {
-    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
+    $('view').innerHTML = stateLoading('panel');
     cfgGet('runbook').then(function (d) {
       if (active !== 'runbook') return;
       if (d && d.configured === false) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       var notes = (d && Array.isArray(d.value)) ? d.value : [];
       var save = function (next, msg) { $('rb-out').textContent = 'Saving…'; return cfgSet('runbook', next).then(function (r) { if (r && r.ok) { notes = next; paint(); $('rb-out').textContent = msg || 'Saved ✓'; } else $('rb-out').textContent = 'Failed'; }).catch(function () { $('rb-out').textContent = 'Failed'; }); };
       var paint = function () {
-        $('rb-list').innerHTML = notes.length ? notes.map(function (n, i) { return '<div class="card" style="margin-bottom:10px"><div class="row" style="align-items:center;gap:8px"><h3 style="margin:0">' + esc(n.title) + '</h3><span class="muted">' + ago(n.updatedAt) + '</span><div class="spacer"></div><button class="ghost" data-edit="' + i + '">Edit</button><button class="ghost" data-del="' + i + '">Delete</button></div><pre class="codebox" style="white-space:pre-wrap;margin:8px 0 0">' + esc(n.body) + '</pre></div>'; }).join('') : '<div class="empty">No notes yet. Write down what to do when things break — the next person on call will thank you.</div>';
+        $('rb-list').innerHTML = notes.length ? notes.map(function (n, i) { return '<div class="card" style="margin-bottom:10px"><div class="row" style="align-items:center;gap:8px"><h3 style="margin:0">' + esc(n.title) + '</h3><span class="muted">' + ago(n.updatedAt) + '</span><div class="spacer"></div><button class="ghost" data-edit="' + i + '">Edit</button><button class="ghost" data-del="' + i + '">Delete</button></div><pre class="codebox" style="white-space:pre-wrap;margin:8px 0 0">' + esc(n.body) + '</pre></div>'; }).join('') : '<div class="state state-empty empty" role="status"><div class="state-title">No notes yet</div><div class="state-hint">Write down what to do when things break — the next person on call will thank you.</div></div>';
         Array.prototype.forEach.call($('rb-list').querySelectorAll('[data-edit]'), function (b) { b.addEventListener('click', function () { var n = notes[+b.getAttribute('data-edit')]; $('rb-title').value = n.title; $('rb-body').value = n.body; $('rb-idx').value = b.getAttribute('data-edit'); $('rb-title').focus(); }); });
         Array.prototype.forEach.call($('rb-list').querySelectorAll('[data-del]'), function (b) { b.addEventListener('click', function () { var i = +b.getAttribute('data-del'); vxConfirm('Delete “' + notes[i].title + '”?', { title: 'Runbook', danger: true, okText: 'Delete' }).then(function (ok) { if (ok) save(notes.filter(function (_, j) { return j !== i; }), 'Deleted'); }); }); });
       };
       $('view').innerHTML =
         '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Runbook</h3><p class="muted" style="margin-top:0">Incident steps, secrets locations (never the secrets), who to call. Stored in the app config store and visible only here.</p>' +
         '<input type="hidden" id="rb-idx" value="" /><input id="rb-title" class="inp" placeholder="Title — e.g. App stuck on “Updating…”" /><textarea id="rb-body" rows="6" class="inp" style="margin-top:8px" placeholder="Steps…"></textarea>' +
-        '<div class="row" style="gap:8px;margin-top:10px"><button id="rb-save">Save note</button><button class="ghost" id="rb-clear">Clear</button><span class="muted" id="rb-out" style="font-size:12px"></span></div></div><div id="rb-list"></div>';
+        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn btn-primary" id="rb-save">Save note</button><button class="ghost" id="rb-clear">Clear</button><span class="muted" id="rb-out" style="font-size:12px"></span></div></div><div id="rb-list"></div>';
       paint();
       $('rb-clear').addEventListener('click', function () { $('rb-idx').value = ''; $('rb-title').value = ''; $('rb-body').value = ''; });
       $('rb-save').addEventListener('click', function () {
@@ -2921,8 +3055,8 @@
   function renderBackupSection() {
     $('view').innerHTML =
       '<div class="card"><h3 style="margin-top:0">Config backup</h3><p class="muted" style="margin-top:0">Everything the console has published — banners, festival override, status note, feature flags, runbook and trending pins — as one JSON file. Restore it here after a mistake, or move it to another environment.</p>' +
-      '<div class="row" style="gap:8px;flex-wrap:wrap"><button id="bk-export">Download backup</button><label class="ghost" style="cursor:pointer;display:inline-flex;align-items:center;padding:6px 12px;border:1px solid var(--border);border-radius:8px">Restore from file<input id="bk-file" type="file" accept="application/json" hidden /></label><span class="muted" id="bk-out" style="font-size:12px"></span></div>' +
-      '<table style="margin-top:12px"><thead><tr><th>Key</th><th>Last published</th><th>Size</th></tr></thead><tbody id="bk-rows"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody></table></div>';
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" id="bk-export">Download backup</button><label class="ghost" style="cursor:pointer;display:inline-flex;align-items:center;padding:6px 12px;border:1px solid var(--border);border-radius:8px">Restore from file<input id="bk-file" type="file" accept="application/json" hidden /></label><span class="muted" id="bk-out" style="font-size:12px"></span></div>' +
+      '<table style="margin-top:12px"><thead><tr><th>Key</th><th>Last published</th><th>Size</th></tr></thead><tbody id="bk-rows"><tr><td colspan="3">' + stateLoading('table') + '</td></tr></tbody></table></div>';
     var snapshot = {};
     Promise.all(BACKUP_KEYS.map(function (k) { return cfgGet(k).then(function (d) { return { key: k, d: d }; }).catch(function () { return { key: k, d: null }; }); })).then(function (rs) {
       if (active !== 'backup') return;
@@ -2931,7 +3065,7 @@
     });
     $('bk-export').addEventListener('click', function () {
       var blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), config: snapshot }, null, 2)], { type: 'application/json' });
-      var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = 'vinax-config-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = 'vinax-config-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); toast('Download started — ' + a.download, 'info'); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     });
     $('bk-file').addEventListener('change', function () {
       var f = $('bk-file').files[0]; if (!f) return;
@@ -2950,7 +3084,7 @@
 
   // 13. Trending pins — curated chips under the search bar, ahead of the organic list.
   function renderTrendingPinsSection() {
-    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
+    $('view').innerHTML = stateLoading('panel');
     Promise.all([cfgGet('trending-pins'), fetch('/api/trending-searches?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).catch(function () { return null; })]).then(function (rs) {
       if (active !== 'trendpins') return;
       var d = rs[0], live = rs[1];
@@ -2959,7 +3093,7 @@
       $('view').innerHTML =
         '<div class="card"><h3 style="margin-top:0">Trending pins</h3><p class="muted" style="margin-top:0">Up to six searches to show first in the “Trending” chips under the search bar — a new release, a festival, a film. Organic community searches fill the remaining slots. Public within about ten minutes.</p>' +
         '<textarea id="tp-text" rows="6" class="inp" placeholder="One search per line…">' + esc(pins.join('\n')) + '</textarea>' +
-        '<div class="row" style="gap:8px;margin-top:10px"><button id="tp-save">Publish pins</button><button class="ghost" id="tp-clear">Remove all pins</button><span class="muted" id="tp-out" style="font-size:12px"></span></div></div>' +
+        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn btn-primary" id="tp-save">Publish pins</button><button class="ghost" id="tp-clear">Remove all pins</button><span class="muted" id="tp-out" style="font-size:12px"></span></div></div>' +
         '<div class="card"><h3 style="margin-top:0">What listeners see now</h3><div class="chips">' + (live && live.queries && live.queries.length ? live.queries.map(function (q) { return '<span class="pill">' + esc(q) + '</span>'; }).join(' ') : '<span class="muted">No trending chips are being served right now.</span>') + '</div></div>';
       var publish = function (list) { $('tp-out').textContent = 'Publishing…'; cfgSet('trending-pins', list).then(function (r) { $('tp-out').textContent = r && r.ok ? 'Published ✓' : 'Failed'; }).catch(function () { $('tp-out').textContent = 'Failed'; }); };
       $('tp-save').addEventListener('click', function () { var list = $('tp-text').value.split('\n').map(function (s) { return s.trim().slice(0, 40); }).filter(function (s, i, a) { return s.length >= 2 && a.indexOf(s) === i; }).slice(0, 6); $('tp-text').value = list.join('\n'); publish(list); });
@@ -2970,7 +3104,7 @@
 
   // 14. Status note — the owner-written incident line on /api/status and the status page.
   function renderStatusNoteSection() {
-    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
+    $('view').innerHTML = stateLoading('panel');
     cfgGet('status-note').then(function (d) {
       if (active !== 'statusnote') return;
       if (d && d.configured === false) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
@@ -2978,7 +3112,7 @@
       $('view').innerHTML =
         '<div class="card"><h3 style="margin-top:0">Status note</h3><p class="muted" style="margin-top:0">A plain sentence for listeners during an incident (“Search is slow while a source recovers”). Shown by <code>/api/status</code> and the status page; empty means all clear.' + (d && d.updated_at ? ' Last changed ' + ago(d.updated_at) + '.' : '') + '</p>' +
         '<textarea id="sn-text" rows="3" class="inp" maxlength="280" placeholder="All clear — leave empty">' + esc(note) + '</textarea>' +
-        '<div class="row" style="gap:8px;margin-top:10px"><button id="sn-save">Publish note</button><button class="ghost" id="sn-clear">All clear</button><a class="ghost" href="/api/status" target="_blank" rel="noopener" style="padding:6px 12px">View /api/status</a><span class="muted" id="sn-out" style="font-size:12px"></span></div></div>';
+        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn btn-primary" id="sn-save">Publish note</button><button class="ghost" id="sn-clear">All clear</button><a class="ghost" href="/api/status" target="_blank" rel="noopener" style="padding:6px 12px">View /api/status</a><span class="muted" id="sn-out" style="font-size:12px"></span></div></div>';
       var publish = function (text) { $('sn-out').textContent = 'Publishing…'; cfgSet('status-note', text).then(function (r) { $('sn-out').textContent = r && r.ok ? 'Published ✓' : 'Failed'; }).catch(function () { $('sn-out').textContent = 'Failed'; }); };
       $('sn-save').addEventListener('click', function () { publish($('sn-text').value.trim().slice(0, 280)); });
       $('sn-clear').addEventListener('click', function () { $('sn-text').value = ''; publish(''); });
@@ -2993,16 +3127,16 @@
   // ==========================================================================
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   function wwwOrigin() { return location.origin.replace('admin.', 'www.'); }
-  function stampOut(id, text, isErr) { var o = $(id); if (o) { o.textContent = text; o.style.color = isErr ? 'var(--danger)' : ''; } }
+  function stampOut(id, text, isErr) { var o = $(id); if (o) { o.textContent = text; o.style.color = isErr ? 'var(--bad)' : ''; o.setAttribute('role', isErr ? 'alert' : 'status'); } }
   // Small config editor scaffold: loads a key, renders a form via `form(value)`,
   // wires `#<id>-save` to `read()` → publish. Keeps every editor ~20 lines.
   function cfgEditor(opts) {
-    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
+    $('view').innerHTML = stateLoading('panel');
     cfgGet(opts.key).then(function (d) {
       if (active !== opts.sec) return;
       var value = d && d.configured ? d.value : null;
       $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">' + esc(opts.title) + '</h3><p class="muted" style="margin-top:-4px">' + opts.help + '</p>' + opts.form(value) +
-        '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px"><button id="' + opts.sec + '-save">' + esc(opts.saveLabel || 'Publish') + '</button>' +
+        '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn-primary" id="' + opts.sec + '-save">' + esc(opts.saveLabel || 'Publish') + '</button>' +
         (opts.clearable ? '<button id="' + opts.sec + '-clear" class="ghost">Clear</button>' : '') +
         '<span class="muted" id="' + opts.sec + '-out" style="font-size:12px">' + (d && d.updated_at ? 'Last published ' + ago(d.updated_at) : 'Never published') + '</span></div></div>' + (opts.after ? opts.after(value) : '');
       if (opts.wire) opts.wire(value);
@@ -3034,7 +3168,7 @@
     apiMemo('/api/admin/usage?days=' + rangeDays).then(function (d) {
       if (!d || active !== 'usage') return;
       if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
-      exportRows = d.byType; exportName = 'feature-usage'; $('csv').hidden = false;
+      exportRows = d.byType; exportName = 'feature-usage'; $f('csv').hidden = false;
       var total = d.byType.reduce(function (a, x) { return a + x.n; }, 0) || 1;
       $('view').innerHTML =
         '<div class="cards">' + card(d.sampled.toLocaleString(), (d.source === 'exact' ? 'Events counted · exact · ' : 'Events sampled · ') + d.days + ' d') + card(d.byType.length, 'Event kinds') + card(d.byPlatform[0] ? d.byPlatform[0].platform : '—', 'Top platform') + '</div>' +
@@ -3061,7 +3195,7 @@
     apiMemo('/api/admin/funnel?days=' + rangeDays).then(function (d) {
       if (!d || active !== 'funnel') return;
       if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
-      exportRows = d.steps; exportName = 'funnel'; $('csv').hidden = false;
+      exportRows = d.steps; exportName = 'funnel'; $f('csv').hidden = false;
       $('view').innerHTML =
         '<div class="cards">' + card(d.steps[0] ? d.steps[0].devices.toLocaleString() : 0, 'Devices that opened the app') + card((d.steps[2] ? d.steps[2].pct : 0) + '%', 'Went on to play') + card((d.steps[3] ? d.steps[3].pct : 0) + '%', 'Finished a song') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Funnel <span class="muted">· distinct devices, last ' + d.days + ' d · ' + (d.source === 'exact' ? 'exact (rollup)' : 'sample of ' + d.sampled.toLocaleString() + ' events') + '</span></h3>' +
@@ -3072,23 +3206,23 @@
   // ---- Catalog ------------------------------------------------------------
   // 4. Song drilldown.
   function renderSongStatsSection() {
-    $('view').innerHTML = '<div class="card"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Song drilldown</h3><input id="ss-q" class="inp" placeholder="Song id or title…" style="min-width:260px" /><button id="ss-go">Look up</button><span class="muted" style="font-size:12px">plays, skips, listeners, countries · last ' + rangeDays + ' d</span></div></div><div id="ss-out"></div>';
+    $('view').innerHTML = '<div class="card"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Song drilldown</h3><input id="ss-q" class="inp" placeholder="Song id or title…" style="min-width:260px" /><button class="btn btn-primary" id="ss-go">Look up</button><span class="muted" style="font-size:12px">plays, skips, listeners, countries · last ' + rangeDays + ' d</span></div></div><div id="ss-out"></div>';
     function run() {
       var q = $('ss-q').value.trim(); if (!q) return;
-      $('ss-out').innerHTML = '<div class="empty">Looking up…</div>';
+      $('ss-out').innerHTML = stateLoading('rows', 'Looking up…');
       api('/api/admin/songstats?q=' + encodeURIComponent(q) + '&days=' + rangeDays).then(function (d) {
         if (!d || active !== 'songstats') return;
-        if (!d.match) { $('ss-out').innerHTML = '<div class="empty">No plays for that in the last ' + rangeDays + ' days.</div>'; return; }
+        if (!d.match) { $('ss-out').innerHTML = '<div class="state state-empty empty" role="status"><div class="state-title">No plays for that in the last ' + rangeDays + ' days</div><div class="state-hint">Check the spelling or widen the date range.</div></div>'; return; }
         var m = d.match;
-        exportRows = d.byDay; exportName = 'song-' + m.id; $('csv').hidden = false;
+        exportRows = d.byDay; exportName = 'song-' + m.id; $f('csv').hidden = false;
         $('ss-out').innerHTML =
           '<div class="card"><div class="row" style="gap:12px;align-items:center">' + (m.image ? '<img class="thumb-sm" src="' + esc(m.image) + '" alt="" />' : '') + '<div><b>' + esc(m.title) + '</b><div class="muted">' + esc(m.artist) + ' · <code>' + esc(m.id) + '</code></div></div><div class="spacer"></div>' + (d.candidates.length ? '<span class="muted" style="font-size:12px">Also matched: ' + d.candidates.map(function (c) { return '<a href="#" data-ss="' + esc(c.id) + '">' + esc(c.title) + '</a>'; }).join(', ') + '</span>' : '') + '</div></div>' +
           '<div class="cards">' + card(d.totals.plays, 'Plays') + card(d.totals.listeners, 'Listeners') + card(d.skipRate == null ? '—' : d.skipRate + '%', 'Skip rate') + card(d.totals.completes, 'Completions') + card(d.totals.favorites, 'Likes') + '</div>' +
           '<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap"><div class="card" style="flex:2;min-width:300px"><h3 style="margin-top:0">Plays per day</h3>' + dayChart(d.byDay, 'plays') + '</div>' +
           '<div class="card" style="flex:1;min-width:220px"><h3 style="margin-top:0">Countries</h3>' + bars(d.countries, function (x) { return esc(x.country); }, function (x) { return x.n; }) + '</div>' +
           '<div class="card" style="flex:1;min-width:220px"><h3 style="margin-top:0">Platforms</h3>' + bars(d.platforms, function (x) { return esc(x.platform); }, function (x) { return x.n; }) + '</div></div>';
-        Array.prototype.forEach.call(document.querySelectorAll('[data-ss]'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); $('ss-q').value = a.getAttribute('data-ss'); run(); }); });
-      }).catch(function () { $('ss-out').innerHTML = '<div class="empty">Lookup failed.</div>'; });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-ss]'), function (a) { a.setAttribute('role', 'button'); a.addEventListener('click', function (e) { e.preventDefault(); $('ss-q').value = a.getAttribute('data-ss'); run(); }); });
+      }).catch(function () { $('ss-out').innerHTML = stateError('Lookup failed.', run); });
     }
     $('ss-go').addEventListener('click', run);
     $('ss-q').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
@@ -3098,9 +3232,9 @@
     apiMemo('/api/admin/skips?days=' + rangeDays).then(function (d) {
       if (!d || active !== 'skips') return;
       if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
-      exportRows = d.items; exportName = 'skips'; $('csv').hidden = !d.items.length;
+      exportRows = d.items; exportName = 'skips'; $f('csv').hidden = !d.items.length;
       $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Most skipped <span class="muted">· songs with ≥' + d.min + ' plays in ' + d.days + ' d, ranked by skip rate \u00b7 ' + (d.source === 'exact' ? 'exact' : 'sampled') + '</span></h3><table><thead><tr><th></th><th>Song</th><th>Plays</th><th>Skips</th><th>Rate</th><th></th></tr></thead><tbody>' +
-        (d.items.length ? d.items.map(function (s) { return '<tr><td>' + (s.image ? '<img class="thumb-sm" src="' + esc(s.image) + '" alt="" />' : '') + '</td><td><b>' + esc(s.title) + '</b><div class="muted">' + esc(s.artist) + '</div></td><td>' + s.plays + '</td><td>' + s.skips + '</td>' + pctCell(s.rate) + '<td><button class="ghost" data-block="' + esc(s.id) + '" data-title="' + esc(s.title) + '">Block</button> <button class="ghost" data-ss2="' + esc(s.id) + '">Drilldown</button></td></tr>'; }).join('') : '<tr><td colspan="6" class="empty">Nothing skipped enough to report.</td></tr>') + '</tbody></table></div>';
+        (d.items.length ? d.items.map(function (s) { return '<tr><td>' + (s.image ? '<img class="thumb-sm" src="' + esc(s.image) + '" alt="" />' : '') + '</td><td><b>' + esc(s.title) + '</b><div class="muted">' + esc(s.artist) + '</div></td><td>' + s.plays + '</td><td>' + s.skips + '</td>' + pctCell(s.rate) + '<td><button class="ghost" data-block="' + esc(s.id) + '" data-title="' + esc(s.title) + '">Block</button> <button class="ghost" data-ss2="' + esc(s.id) + '">Drilldown</button></td></tr>'; }).join('') : '<tr class="table-empty"><td colspan="6"><div class="state state-empty empty" role="status"><div class="state-title">Nothing skipped enough to report</div><div class="state-hint">Songs appear here once they have enough plays and a high skip rate.</div></div></td></tr>') + '</tbody></table></div>';
       Array.prototype.forEach.call(document.querySelectorAll('[data-block]'), function (b) { b.addEventListener('click', function () { doBlock(b.getAttribute('data-block'), b.getAttribute('data-title')); }); });
       Array.prototype.forEach.call(document.querySelectorAll('[data-ss2]'), function (b) { b.addEventListener('click', function () { setSection('songstats'); setTimeout(function () { var q = $('ss-q'); if (q) { q.value = b.getAttribute('data-ss2'); $('ss-go').click(); } }, 50); }); });
     }).catch(function () { if (active === 'skips') showFail(); });
@@ -3138,12 +3272,12 @@
   // 9. Blocklist import / export.
   function renderBlocklistIoSection() {
     $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Blocklist import / export</h3><p class="muted">Export the current blocklist as JSON, or import one (<code>[{"songId":"…","title":"…"}]</code>). Import adds; it never removes existing blocks.</p>' +
-      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button id="bl-export">Download blocklist</button><label class="ghost" style="cursor:pointer;display:inline-flex;align-items:center;padding:6px 12px;border:1px solid var(--border);border-radius:8px">Import JSON<input id="bl-file" type="file" accept="application/json" hidden /></label><span class="muted" id="bl-out" style="font-size:12px"></span></div></div>';
+      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" id="bl-export">Download blocklist</button><label class="ghost" style="cursor:pointer;display:inline-flex;align-items:center;padding:6px 12px;border:1px solid var(--border);border-radius:8px">Import JSON<input id="bl-file" type="file" accept="application/json" hidden /></label><span class="muted" id="bl-out" style="font-size:12px"></span></div></div>';
     $('bl-export').addEventListener('click', function () {
       api('/api/admin/content').then(function (d) {
         var list = (d && (d.blocked || d.blocklist || d.items)) || [];
         var blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), blocked: list }, null, 2)], { type: 'application/json' });
-        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'vinax-blocklist-' + new Date().toISOString().slice(0, 10) + '.json'; a.click();
+        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'vinax-blocklist-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); toast('Download started — ' + a.download, 'info');
         stampOut('bl-out', list.length + ' entries exported');
       }).catch(function () { stampOut('bl-out', 'Export failed', true); });
     });
@@ -3218,9 +3352,9 @@
         '<div class="card"><h3 style="margin-top:0">90-day uptime</h3>' +
         (comps.length ? comps.map(function (c) {
           var days = c.days || [];
-          var bars = days.map(function (x) { var up = x.total ? x.up / x.total : (x.ok === false ? 0 : 1); var col = up >= 0.999 ? 'var(--ok)' : up >= 0.98 ? 'var(--warn)' : 'var(--danger)'; return '<i title="' + esc(x.day || '') + ' · ' + Math.round(up * 100) + '%" style="display:inline-block;width:6px;height:22px;margin-right:1px;border-radius:2px;background:' + col + ';opacity:' + (x.total ? 1 : 0.3) + '"></i>'; }).join('');
+          var bars = days.map(function (x) { var up = x.total ? x.up / x.total : (x.ok === false ? 0 : 1); var col = up >= 0.999 ? 'var(--ok)' : up >= 0.98 ? 'var(--warn)' : 'var(--bad)'; return '<i title="' + esc(x.day || '') + ' · ' + Math.round(up * 100) + '%" style="display:inline-block;width:6px;height:22px;margin-right:1px;border-radius:2px;background:' + col + ';opacity:' + (x.total ? 1 : 0.3) + '"></i>'; }).join('');
           return '<div style="margin:10px 0"><div class="row" style="align-items:center;gap:8px"><b>' + esc(c.name || c.id) + '</b>' + okPill(c.status === 'up', c.status || 'unknown') + '<span class="muted">' + (c.uptime90 != null ? c.uptime90 + '% over 90 d' : '') + (c.latencyMs != null ? ' \u00b7 ' + c.latencyMs + ' ms' : '') + (c.checkedAt ? ' \u00b7 checked ' + ago(c.checkedAt) : '') + '</span>' + '</div><div style="margin-top:4px;white-space:nowrap;overflow:hidden">' + bars + '</div></div>';
-        }).join('') : '<div class="empty">No components reported.</div>') +
+        }).join('') : '<div class="state state-empty empty" role="status"><div class="state-title">No components reported</div><div class="state-hint">The status endpoint returned nothing. Check that the Worker is deployed.</div></div>') +
         '<p class="muted" style="font-size:11px">Source: the public status endpoint. Ticks come from the status-tick workflow every 30 min.</p></div>';
     }).catch(function () { if (active === 'statushist') showFail('Could not reach /api/status.'); });
   }
@@ -3231,7 +3365,7 @@
       var groups = {}; d.items.forEach(function (i) { (groups[i.group] = groups[i.group] || []).push(i); });
       $('view').innerHTML =
         '<div class="cards">' + card(d.items.filter(function (i) { return i.set; }).length + '/' + d.items.length, 'Configured') + card(d.missingRequired.length, 'Required missing') + '</div>' +
-        (d.missingRequired.length ? '<div class="card" style="border-color:var(--danger)"><b>Missing required:</b> ' + d.missingRequired.map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(' ') + '</div>' : '') +
+        (d.missingRequired.length ? '<div class="card" style="border-color:var(--bad)"><b>Missing required:</b> ' + d.missingRequired.map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(' ') + '</div>' : '') +
         Object.keys(groups).map(function (g) { return '<div class="card"><h3 style="margin-top:0">' + esc(g) + '</h3><table><tbody>' + groups[g].map(function (i) { return '<tr><td><code>' + esc(i.name) + '</code></td><td>' + okPill(i.set, i.set ? 'set' : (i.required ? 'missing' : 'not set')) + '</td><td class="muted">' + esc(i.note) + (i.required ? ' · required' : '') + '</td></tr>'; }).join('') + '</tbody></table></div>'; }).join('') +
         '<p class="muted" style="font-size:11px">Names only — values never leave the Worker. Set with <code>wrangler secret put NAME</code>.</p>';
     }).catch(function () { if (active === 'envcheck') showFail(); });
@@ -3256,8 +3390,8 @@
       $('view').innerHTML =
         '<div class="ops-center-hero"><div><span class="ops-eyebrow">VINAX / OPERATIONS CENTER</span><h2>' + esc(overall) + '</h2><p class="muted">Service health, scheduled work and release readiness.</p></div><button class="ghost" id="ops-refresh">Refresh signals</button></div>' +
         '<div class="cards ops-center-cards">' + card(components.length ? components.length - down + '/' + components.length : '—', 'Services healthy') + card(overdue, 'Overdue jobs') + card(missing, 'Required secrets missing') + card(overallOk ? 'Ready' : 'Review', 'Release posture') + '</div>' +
-        '<div class="ops-center-grid"><div class="card"><div class="row"><h3 style="margin-top:0">Service pulse</h3><span class="spacer"></span><span class="muted">' + (status.generatedAt ? 'checked ' + ago(status.generatedAt) : 'no timestamp') + '</span></div>' + (components.length ? components.map(function (c) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (c.status === 'up' ? 'ok' : 'bad') + '"></span><b>' + esc(c.name || c.id) + '</b><span class="spacer"></span>' + okPill(c.status === 'up', c.status || 'unknown') + (c.latencyMs != null ? '<span class="muted">' + c.latencyMs + ' ms</span>' : '') + '</div>'; }).join('') : '<div class="empty">Status endpoint returned no components.</div>') + '</div>' +
-        '<div class="card"><div class="row"><h3 style="margin-top:0">Scheduled work</h3><span class="spacer"></span><a class="ghost" href="#cron">Open cron health</a></div>' + (jobs.length ? jobs.map(function (j) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (j.ok === false ? 'bad' : 'ok') + '"></span><b>' + esc(j.label || j.id) + '</b><span class="spacer"></span>' + okPill(j.ok !== false, j.ok === false ? 'overdue' : 'on time') + '<span class="muted">' + (j.lastAt ? ago(j.lastAt) : 'never') + '</span></div>'; }).join('') : '<div class="empty">No schedule telemetry yet.</div>') + '</div></div>' +
+        '<div class="ops-center-grid"><div class="card"><div class="row"><h3 style="margin-top:0">Service pulse</h3><span class="spacer"></span><span class="muted">' + (status.generatedAt ? 'checked ' + ago(status.generatedAt) : 'no timestamp') + '</span></div>' + (components.length ? components.map(function (c) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (c.status === 'up' ? 'ok' : 'bad') + '"></span><b>' + esc(c.name || c.id) + '</b><span class="spacer"></span>' + okPill(c.status === 'up', c.status || 'unknown') + (c.latencyMs != null ? '<span class="muted">' + c.latencyMs + ' ms</span>' : '') + '</div>'; }).join('') : '<div class="state state-empty empty" role="status"><div class="state-title">Status endpoint returned no components</div><div class="state-hint">Check that the Worker is deployed, then refresh.</div></div>') + '</div>' +
+        '<div class="card"><div class="row"><h3 style="margin-top:0">Scheduled work</h3><span class="spacer"></span><a class="ghost" href="#cron">Open cron health</a></div>' + (jobs.length ? jobs.map(function (j) { return '<div class="ops-signal"><span class="ops-signal-dot ' + (j.ok === false ? 'bad' : 'ok') + '"></span><b>' + esc(j.label || j.id) + '</b><span class="spacer"></span>' + okPill(j.ok !== false, j.ok === false ? 'overdue' : 'on time') + '<span class="muted">' + (j.lastAt ? ago(j.lastAt) : 'never') + '</span></div>'; }).join('') : '<div class="state state-empty empty" role="status"><div class="state-title">No schedule telemetry yet</div><div class="state-hint">Scheduled jobs report here after their first run.</div></div>') + '</div></div>' +
         '<div class="card"><div class="row"><h3 style="margin-top:0">Preflight shortcuts</h3><span class="spacer"></span><span class="muted">safe links — no changes are made</span></div><div class="ops-shortcuts"><a href="#envcheck"><b>Environment checklist</b><span>' + (missing ? missing + ' required item' + (missing === 1 ? '' : 's') + ' to resolve' : 'All required names present') + '</span></a><a href="#statushist"><b>Status history</b><span>Review the 90-day reliability trail</span></a><a href="#releases"><b>Releases &amp; CI</b><span>Inspect the latest build and workflow</span></a><a href="#audit"><b>Audit trail</b><span>See who changed configuration</span></a></div></div>';
       $('ops-refresh').addEventListener('click', loadOpsCenter);
       stamp();
@@ -3279,7 +3413,7 @@
     var values = { all: s.total || s.listeners || d.sampled || 0, new: s.new_7d || s.new || s.newUsers || 0, returning: s.returning_7d || s.returning || 0, power: s.power_users || s.power || 0, inactive: s.inactive_30d || s.inactive || 0 };
     var top = Array.isArray(d.topListeners) ? d.topListeners : [], shown = audienceSegment === 'all' ? top : top.slice(0, Math.max(1, Math.round(top.length / 2)));
     setExport('audience-segments', shown);
-    $('view').innerHTML = '<div class="ops-center-hero"><div><span class="ops-eyebrow">VINAX / AUDIENCE STUDIO</span><h2>Know who to design for next</h2><p class="muted">Useful cohorts for programming, messaging and retention work. Counts are aggregate and anonymous.</p></div><span class="pill">Last ' + rangeDays + ' days</span></div><div class="seg" id="aud-segs">' + Object.keys(labels).map(function (k) { return '<button data-audseg="' + k + '"' + (k === audienceSegment ? ' class="active"' : '') + '>' + labels[k] + '</button>'; }).join('') + '</div><div class="cards segment-cards">' + Object.keys(labels).filter(function (k) { return k !== 'all'; }).map(function (k) { return card(Number(values[k] || 0).toLocaleString(), labels[k]); }).join('') + '</div><div class="card"><div class="row"><h3 style="margin-top:0">' + esc(labels[audienceSegment]) + '</h3><span class="spacer"></span><button class="ghost" id="aud-export">Export visible</button></div>' + (shown.length ? '<table><thead><tr><th>Listener</th><th>Platform</th><th>Plays</th><th>Last active</th></tr></thead><tbody>' + shown.map(function (u) { return '<tr><td>' + esc(u.name || u.user_name || 'Anonymous') + '</td><td>' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</td><td>' + Number(u.plays || u.play_count || 0).toLocaleString() + '</td><td class="muted">' + (u.last_seen ? ago(u.last_seen) : '—') + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">No listener rows in this cohort yet.</div>') + '</div>';
+    $('view').innerHTML = '<div class="ops-center-hero"><div><span class="ops-eyebrow">VINAX / AUDIENCE STUDIO</span><h2>Know who to design for next</h2><p class="muted">Useful cohorts for programming, messaging and retention work. Counts are aggregate and anonymous.</p></div><span class="pill">Last ' + rangeDays + ' days</span></div><div class="seg" id="aud-segs">' + Object.keys(labels).map(function (k) { return '<button data-audseg="' + k + '"' + (k === audienceSegment ? ' class="active"' : '') + '>' + labels[k] + '</button>'; }).join('') + '</div><div class="cards segment-cards">' + Object.keys(labels).filter(function (k) { return k !== 'all'; }).map(function (k) { return card(Number(values[k] || 0).toLocaleString(), labels[k]); }).join('') + '</div><div class="card"><div class="row"><h3 style="margin-top:0">' + esc(labels[audienceSegment]) + '</h3><span class="spacer"></span><button class="ghost" id="aud-export">Export visible</button></div>' + (shown.length ? '<table><thead><tr><th>Listener</th><th>Platform</th><th>Plays</th><th>Last active</th></tr></thead><tbody>' + shown.map(function (u) { return '<tr><td>' + esc(u.name || u.user_name || 'Anonymous') + '</td><td>' + platIcon(u.platform) + ' ' + esc(u.platform || 'web') + '</td><td>' + Number(u.plays || u.play_count || 0).toLocaleString() + '</td><td class="muted">' + (u.last_seen ? ago(u.last_seen) : '—') + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="state state-empty empty" role="status"><div class="state-title">No listener rows in this cohort yet</div><div class="state-hint">Pick another cohort or widen the date range.</div></div>') + '</div>';
     Array.prototype.forEach.call(document.querySelectorAll('[data-audseg]'), function (b) { b.addEventListener('click', function () { audienceSegment = b.getAttribute('data-audseg'); renderAudienceSegments(d); }); });
     $('aud-export').addEventListener('click', downloadCsv); stamp();
   }
@@ -3290,18 +3424,18 @@
       '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><select id="qc-table" class="inp">' + TABLES.map(function (t) { return '<option>' + t + '</option>'; }).join('') + '</select>' +
       '<select id="qc-hours" class="inp"><option value="1">1 h</option><option value="24" selected>24 h</option><option value="168">7 d</option><option value="720">30 d</option><option value="2160">90 d</option></select>' +
       inp('qc-col', '', 'column (optional)', 'style="width:150px"') + inp('qc-val', '', 'equals value', 'style="width:180px"') +
-      '<select id="qc-limit" class="inp"><option>50</option><option selected>200</option><option>500</option></select><button id="qc-run">Run</button><span class="muted" id="qc-out" style="font-size:12px"></span></div></div><div id="qc-rows"></div>';
+      '<select id="qc-limit" class="inp"><option>50</option><option selected>200</option><option>500</option></select><button class="btn btn-primary" id="qc-run">Run</button><span class="muted" id="qc-out" style="font-size:12px"></span></div></div><div id="qc-rows"></div>';
     function run() {
       var p = new URLSearchParams({ table: $('qc-table').value, hours: $('qc-hours').value, limit: $('qc-limit').value });
       if ($('qc-col').value.trim()) { p.set('col', $('qc-col').value.trim()); p.set('val', $('qc-val').value.trim()); }
-      $('qc-rows').innerHTML = '<div class="empty">Running…</div>';
+      $('qc-rows').innerHTML = stateLoading('rows', 'Running…');
       fetch('/api/admin/query?' + p.toString(), { headers: { 'x-admin-token': sessionStorage.getItem(TOKEN_KEY) || '' }, cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
-        if (d.error) { $('qc-rows').innerHTML = '<div class="empty">' + esc(d.error) + '</div>'; return; }
-        exportRows = d.rows; exportName = d.table; $('csv').hidden = !d.rows.length;
+        if (d.error) { $('qc-rows').innerHTML = stateError(String(d.error), run); return; }
+        exportRows = d.rows; exportName = d.table; $f('csv').hidden = !d.rows.length;
         stampOut('qc-out', d.rows.length + ' rows' + (d.truncated ? ' (truncated — narrow the filter)' : ''));
         $('qc-rows').innerHTML = '<div class="card" style="overflow:auto"><table><thead><tr>' + d.columns.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-          (d.rows.length ? d.rows.map(function (r) { return '<tr>' + d.columns.map(function (c) { var v = r[c]; var t = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); return '<td title="' + esc(t) + '" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.slice(0, 140)) + '</td>'; }).join('') + '</tr>'; }).join('') : '<tr><td colspan="' + d.columns.length + '" class="empty">No rows.</td></tr>') + '</tbody></table></div>';
-      }).catch(function () { $('qc-rows').innerHTML = '<div class="empty">Query failed.</div>'; });
+          (d.rows.length ? d.rows.map(function (r) { return '<tr>' + d.columns.map(function (c) { var v = r[c]; var t = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); return '<td title="' + esc(t) + '" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.slice(0, 140)) + '</td>'; }).join('') + '</tr>'; }).join('') : '<tr class="table-empty"><td colspan="' + d.columns.length + '"><div class="state state-empty empty" role="status"><div class="state-title">No rows</div><div class="state-hint">The query ran and matched nothing. Loosen the filter and run it again.</div></div></td></tr>') + '</tbody></table></div>';
+      }).catch(function () { $('qc-rows').innerHTML = stateError('Query failed.', run); });
     }
     $('qc-run').addEventListener('click', run);
     $('qc-val').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
@@ -3379,7 +3513,7 @@
       // Shelves the owner turned off for every listener. Listeners can reorder
       // and hide more on their own Home, but can never re-enable these.
       var hidden = Array.isArray(value.hidden) ? value.hidden.filter(function (x) { return defaults.order.indexOf(x) >= 0; }) : [];
-      $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Home Layout Studio</h3><p class="muted">Set the production default for the listener Home. Changes are validated by the public config endpoint.</p>' + lbl('Headline', inp('home-title', value.title || defaults.title, '', 'style="width:100%;max-width:640px" maxlength="60"')) + lbl('Description', '<textarea id="home-desc" class="inp" maxlength="160" style="width:100%;max-width:640px;min-height:70px">' + esc(value.description || defaults.description) + '</textarea>') + '<h4>Shelf order and visibility</h4><p class="muted">Unticked shelves are turned off for everyone; listeners keep their own order and can hide more, but cannot turn these back on.</p><div id="home-order">' + order.map(function (key, i) { var off = hidden.indexOf(key) >= 0; return '<div class="row home-admin-row" data-key="' + esc(key) + '" style="gap:8px;padding:8px 0;border-bottom:1px solid var(--border)' + (off ? ';opacity:.6' : '') + '"><code style="width:24px">' + String(i + 1).padStart(2, '0') + '</code><label style="flex:1;display:flex;align-items:center;gap:8px"><input type="checkbox" data-home-show="' + esc(key) + '"' + (off ? '' : ' checked') + ' aria-label="Show ' + esc(LABELS[key] || key) + '"><b>' + esc(LABELS[key] || key) + '</b><span class="muted">' + esc(key) + (off ? ' · off for everyone' : '') + '</span></label><button class="ghost" data-home-up="' + esc(key) + '"' + (i === 0 ? ' disabled' : '') + '>↑</button><button class="ghost" data-home-down="' + esc(key) + '"' + (i === order.length - 1 ? ' disabled' : '') + '>↓</button></div>'; }).join('') + '</div><div class="row" style="gap:8px;margin-top:16px"><button id="home-save">Publish layout</button><button class="ghost" id="home-reset">Restore balanced</button><span class="muted" id="home-msg"></span></div></div>';
+      $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Home Layout Studio</h3><p class="muted">Set the production default for the listener Home. Changes are validated by the public config endpoint.</p>' + lbl('Headline', inp('home-title', value.title || defaults.title, '', 'style="width:100%;max-width:640px" maxlength="60"')) + lbl('Description', '<textarea id="home-desc" class="inp" maxlength="160" style="width:100%;max-width:640px;min-height:70px">' + esc(value.description || defaults.description) + '</textarea>') + '<h4>Shelf order and visibility</h4><p class="muted">Unticked shelves are turned off for everyone; listeners keep their own order and can hide more, but cannot turn these back on.</p><div id="home-order">' + order.map(function (key, i) { var off = hidden.indexOf(key) >= 0; return '<div class="row home-admin-row" data-key="' + esc(key) + '" style="gap:8px;padding:8px 0;border-bottom:1px solid var(--border)' + (off ? ';opacity:.6' : '') + '"><code style="width:24px">' + String(i + 1).padStart(2, '0') + '</code><label style="flex:1;display:flex;align-items:center;gap:8px"><input type="checkbox" data-home-show="' + esc(key) + '"' + (off ? '' : ' checked') + ' aria-label="Show ' + esc(LABELS[key] || key) + '"><b>' + esc(LABELS[key] || key) + '</b><span class="muted">' + esc(key) + (off ? ' · off for everyone' : '') + '</span></label><button class="ghost" data-home-up="' + esc(key) + '"' + (i === 0 ? ' disabled' : '') + '>↑</button><button class="ghost" data-home-down="' + esc(key) + '"' + (i === order.length - 1 ? ' disabled' : '') + '>↓</button></div>'; }).join('') + '</div><div class="row" style="gap:8px;margin-top:16px"><button class="btn btn-primary" id="home-save">Publish layout</button><button class="ghost" id="home-reset">Restore balanced</button><span class="muted" id="home-msg"></span></div></div>';
       function currentHidden() { return order.filter(function (key) { var cb = document.querySelector('[data-home-show="' + key + '"]'); return cb && !cb.checked; }); }
       document.querySelectorAll('[data-home-up],[data-home-down]').forEach(function (b) { b.addEventListener('click', function () { var key = b.getAttribute('data-home-up') || b.getAttribute('data-home-down'), step = b.hasAttribute('data-home-up') ? -1 : 1, next = order.slice(), i = next.indexOf(key); if (i < 0 || !next[i + step]) return; next[i] = next[i + step]; next[i + step] = key; cfgSet('home-layout', Object.assign({}, value, { order: next, hidden: currentHidden() })).then(function () { renderHomeBuilderSection(); }); }); });
       document.querySelectorAll('[data-home-show]').forEach(function (cb) { cb.addEventListener('change', function () { var h = currentHidden(); if (h.length >= order.length) { cb.checked = true; $('home-msg').textContent = 'At least one shelf must stay on.'; return; } $('home-msg').textContent = 'Unpublished changes — press Publish layout.'; }); });
@@ -3401,7 +3535,7 @@
   function renderAnnounceSection() {
     $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Announcement composer</h3><p class="muted">An in-app announcement listeners pick up the next time they open the app (native shows it as a local notification; web shows it in the app). Retract from Notifications → Sent log.</p>' +
       lbl('Title', inp('an-title', '', 'Big update: 43 festival themes', 'style="width:100%" maxlength="80"')) + lbl('Body', '<textarea id="an-body" class="inp" rows="4" style="width:100%" maxlength="300" placeholder="What changed and why it matters"></textarea>') + lbl('Link (optional in-app path)', inp('an-link', '', '/settings', 'style="width:280px"')) +
-      '<div class="row" style="gap:8px;align-items:center;margin-top:12px"><button id="an-send">Publish announcement</button><span class="muted" id="an-out" style="font-size:12px"></span></div></div>';
+      '<div class="row" style="gap:8px;align-items:center;margin-top:12px"><button class="btn btn-primary" id="an-send">Publish announcement</button><span class="muted" id="an-out" style="font-size:12px"></span></div></div>';
     $('an-send').addEventListener('click', function () {
       var title = $('an-title').value.trim(), body = $('an-body').value.trim(), link = $('an-link').value.trim();
       if (!title || !body) { stampOut('an-out', 'Title and body are required', true); return; }
@@ -3430,7 +3564,7 @@
     var pins = getPins();
     var all = Object.keys(TITLES).sort(function (a, b) { return TITLES[a].localeCompare(TITLES[b]); });
     $('view').innerHTML = '<div class="card"><h3 style="margin-top:0">Pinned tools</h3><p class="muted">Pin the panels you open most; they appear at the top of the sidebar on this browser. Keyboard: ⌘K searches every tool.</p><div class="chips">' +
-      all.map(function (s) { var on = pins.indexOf(s) >= 0; return '<button class="' + (on ? '' : 'ghost') + '" data-pintoggle="' + esc(s) + '" style="margin:3px">' + (on ? '★ ' : '') + esc(TITLES[s]) + '</button>'; }).join('') + '</div></div>';
+      all.map(function (s) { var on = pins.indexOf(s) >= 0; return '<button type="button" aria-pressed="' + on + '" class="' + (on ? 'btn btn-primary' : 'ghost') + '" data-pintoggle="' + esc(s) + '" style="margin:3px">' + (on ? '★ ' : '') + esc(TITLES[s]) + '</button>'; }).join('') + '</div></div>';
     Array.prototype.forEach.call(document.querySelectorAll('[data-pintoggle]'), function (b) {
       b.addEventListener('click', function () { var s = b.getAttribute('data-pintoggle'); var p = getPins(); var i = p.indexOf(s); if (i >= 0) p.splice(i, 1); else if (p.length < 8) p.push(s); localStorage.setItem(PINS_KEY, JSON.stringify(p)); applyPins(); renderPinsSection(); });
     });
@@ -3445,12 +3579,12 @@
       if (!d.configured) { showFail('The database is not configured for this Worker. Add the database binding, then reload this panel.'); return; }
       var tt = d.tokensTotal || { prompt: 0, completion: 0 };
       var cost = (d.byModel || []).reduce(function (a, m) { return a + (m.cost || 0); }, 0);
-      exportRows = d.byModel || []; exportName = 'ai-cost'; $('csv').hidden = !exportRows.length;
+      exportRows = d.byModel || []; exportName = 'ai-cost'; $f('csv').hidden = !exportRows.length;
       $('view').innerHTML =
         '<div class="cards">' + card(fmtN(tt.prompt), 'Prompt tokens · ' + d.days + ' d') + card(fmtN(tt.completion), 'Completion tokens') + card(d.unpriced ? '—' : '$' + cost.toFixed(2), d.unpriced ? 'Cost · set prices below' : 'Estimated cost') + card((d.sampled || 0).toLocaleString(), 'Calls counted') + '</div>' +
         (tt.prompt + tt.completion === 0 ? '<div class="card" style="border-color:var(--warn)"><b>No token counts yet.</b> <span class="muted">Apply the tokens migration (frontend/supabase/migrations) and new calls start logging usage.</span></div>' : '') +
         '<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap"><div class="card" style="flex:2;min-width:320px"><h3 style="margin-top:0">By model</h3><table><thead><tr><th>Model</th><th>Calls</th><th>Prompt</th><th>Completion</th><th>Cost</th></tr></thead><tbody>' +
-        ((d.byModel || []).length ? d.byModel.map(function (m) { return '<tr><td><code>' + esc(m.model) + '</code></td><td>' + fmtN(m.calls) + '</td><td>' + fmtN(m.prompt) + '</td><td>' + fmtN(m.completion) + '</td><td>' + (m.cost == null ? '<span class="muted">unpriced</span>' : '$' + m.cost.toFixed(3)) + '</td></tr>'; }).join('') : '<tr><td colspan="5" class="empty">Nothing logged in this window.</td></tr>') + '</tbody></table></div>' +
+        ((d.byModel || []).length ? d.byModel.map(function (m) { return '<tr><td><code>' + esc(m.model) + '</code></td><td>' + fmtN(m.calls) + '</td><td>' + fmtN(m.prompt) + '</td><td>' + fmtN(m.completion) + '</td><td>' + (m.cost == null ? '<span class="muted">unpriced</span>' : '$' + m.cost.toFixed(3)) + '</td></tr>'; }).join('') : '<tr class="table-empty"><td colspan="5"><div class="state state-empty empty" role="status"><div class="state-title">Nothing logged in this window</div><div class="state-hint">Widen the time window, or check back after the next request.</div></div></td></tr>') + '</tbody></table></div>' +
         '<div class="card" style="flex:1;min-width:260px"><h3 style="margin-top:0">Tokens per day</h3>' + dayChart((d.byDay || []).map(function (x) { return { day: x.day, n: (x.prompt || 0) + (x.completion || 0) }; }), 'n') + '</div></div>' +
         '<div id="aiprices-host"></div>';
       renderAiPricesEditor();
@@ -3462,7 +3596,7 @@
       if (active !== 'aicost') return;
       var v = d && d.configured && d.value && typeof d.value === 'object' ? d.value : {};
       var lines = Object.keys(v).map(function (k) { return k + ' = ' + (v[k].in != null ? v[k].in : 0) + ' / ' + (v[k].out != null ? v[k].out : 0); });
-      host.innerHTML = '<div class="card"><h3 style="margin-top:0">Prices <span class="muted">· USD per 1M tokens, one per line as <code>model-prefix = in / out</code></span></h3><textarea id="aip-text" class="inp" rows="6" style="width:100%;font-family:ui-monospace,monospace">' + esc(lines.join('\n')) + '</textarea><div class="row" style="gap:8px;align-items:center;margin-top:10px"><button id="aip-save">Publish prices</button><span class="muted" id="aip-out" style="font-size:12px">Longest prefix wins. Leave empty to show tokens only.</span></div></div>';
+      host.innerHTML = '<div class="card"><h3 style="margin-top:0">Prices <span class="muted">· USD per 1M tokens, one per line as <code>model-prefix = in / out</code></span></h3><textarea id="aip-text" class="inp" rows="6" style="width:100%;font-family:ui-monospace,monospace">' + esc(lines.join('\n')) + '</textarea><div class="row" style="gap:8px;align-items:center;margin-top:10px"><button class="btn btn-primary" id="aip-save">Publish prices</button><span class="muted" id="aip-out" style="font-size:12px">Longest prefix wins. Leave empty to show tokens only.</span></div></div>';
       $('aip-save').addEventListener('click', function () {
         var out = {};
         $('aip-text').value.split('\n').forEach(function (l) { var m = /^\s*([^=]+?)\s*=\s*([0-9.]+)\s*\/\s*([0-9.]+)\s*$/.exec(l); if (m) out[m[1]] = { in: parseFloat(m[2]), out: parseFloat(m[3]) }; });
@@ -3590,7 +3724,7 @@
     var light = mode === 'light';
     document.documentElement.classList.toggle('light', light);
     var tv = $('themeVal'); if (tv) tv.textContent = light ? 'Light' : 'Dark';
-    var tb = $('theme'); if (tb) tb.setAttribute('aria-label', 'Theme: ' + (light ? 'light' : 'dark') + '. Switch to ' + (light ? 'dark' : 'light') + '.');
+    var tb = $('theme'); if (tb) { var tl = 'Switch to ' + (light ? 'dark' : 'light') + ' theme'; tb.setAttribute('aria-label', tl); tb.title = tl; }
   }
 
   // ---------- sidebar: icon rail on desktop, off-canvas drawer below 1024px ----------
@@ -3601,7 +3735,7 @@
   var SB_KEY = 'vinax_admin_sidebar';
   var rootEl = document.documentElement;
   var drawerMq = null;
-  try { drawerMq = window.matchMedia('(max-width: 1023px)'); } catch (e) {}
+  try { drawerMq = window.matchMedia('(max-width: 899px)'); } catch (e) {}
   function isDrawerMode() { return !!(drawerMq && drawerMq.matches); }
   function isRail() { return !isDrawerMode() && rootEl.classList.contains('sb-rail'); }
   function drawerOpen() { return rootEl.classList.contains('sb-open'); }
@@ -3701,6 +3835,7 @@
   // Failed reads render as unavailable with the server's reason, never as zeros.
   var SECTION_HELPERS = {
     api: api, apiMemo: apiMemo, postApi: postApi, esc: esc, html: html, $: $,
+    stateLoading: stateLoading, stateEmpty: stateEmpty, stateError: stateError, toast: toast,
     view: function (markup) { $('view').innerHTML = markup; },
     stamp: stamp, setExport: setExport, days: function () { return rangeDays; },
     isActive: function (key) { return active === key; }, navigate: function (key) { setSection(key); },
@@ -3817,19 +3952,24 @@
   function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
   function setSection(sec) {
     memoReset();
+    retryFns = {};
     active = sec;
     try { if (location.hash !== '#' + sec) location.hash = sec; localStorage.setItem('vinax_admin_sec', sec); } catch (e) {}
     Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-sec]'), function (b) {
       var on = b.getAttribute('data-sec') === sec;
       b.classList.toggle('active', on);
-      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      // A pinned shortcut repeats the tool: only the real nav item is the current page.
+      if (on && !b.hasAttribute('data-pin')) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
     // Icon rail: the category that holds the active tool stays highlighted.
     Array.prototype.forEach.call(document.querySelectorAll('#nav button.nav-group-label'), function (g) { g.classList.toggle('current', g.getAttribute('data-group') === CATS[sec]); });
     closeDrawer();
     // Keep the active tool visible inside the sidebar's own scroller.
     try { var ab = document.querySelector('#nav button.active'); if (ab && ab.scrollIntoView) ab.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {}
-    $('secTitle').textContent = TITLES[sec] || '';
+    var titleEl = $('secTitle');
+    if (titleEl) titleEl.textContent = TITLES[sec] || '';
+    try { document.title = (TITLES[sec] ? TITLES[sec] + ' · ' : '') + 'VinaX Console'; } catch (e) {}
+    paintEnvChip();
     var crumbEl = $('secCrumb');
     if (crumbEl) crumbEl.textContent = CATS[sec] || '';
     var descEl = $('secDesc');
@@ -3839,22 +3979,38 @@
     var hdrRef = $('hdrRefresh');
     if (hdrRef) { var hdrMod = sectionModule(sec); hdrRef.hidden = sec === 'workspace' || !!LOCAL_SECTIONS[sec] || !!(hdrMod && hdrMod.local); }
     applyNavGroups();
-    var v = $('view'); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
-    $('range').hidden = !USES_RANGE[sec];
-    $('csv').hidden = true;
-    $('view').innerHTML = '<div class="astra-admin-loading" role="status" aria-label="Loading panel"><p>Connecting your workspace…</p><div class="cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div></div>';
+    var v = $('view'); if (!v) return;
+    v.classList.remove('enter', 'panel-enter'); void v.offsetWidth; v.classList.add('enter', 'panel-enter');
+    var rangeEl = $('range'); if (rangeEl) rangeEl.hidden = !USES_RANGE[sec];
+    var csvEl = $('csv'); if (csvEl) csvEl.hidden = true;
+    $('view').innerHTML = stateLoading('panel');
     if (sec === 'users') userOffset = 0;
     refreshActive();
     startAuto();
   }
+  // Top-bar environment chip: which deployment this console is looking at.
+  function paintEnvChip() {
+    var chip = $('envChip'); if (!chip) return;
+    var host = location.hostname || '';
+    var env = (host === 'localhost' || host === '127.0.0.1' || host === '[::1]') ? 'Local' : (/\.pages\.dev$/.test(host) ? 'Preview' : 'Production');
+    var st = $('stale'), stale = !!(st && !st.hidden);
+    chip.textContent = env + (stale ? ' · stale' : '');
+    chip.classList.toggle('warn', stale);
+  }
+  // After a section change made from the nav, move focus to the page heading
+  // so keyboard and screen-reader users land on the new content.
+  function focusSection() {
+    var el = $('secTitle') || $('view'); if (!el) return;
+    try { if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); } catch (e) {}
+  }
   function buildRange() {
     var opts = [[1, '24h'], [7, '7d'], [30, '30d'], [90, '90d']];
-    $('range').innerHTML = opts.map(function (o) { return '<button type="button" data-d="' + o[0] + '" aria-pressed="' + (o[0] === rangeDays) + '"' + (o[0] === rangeDays ? ' class="active"' : '') + '>' + o[1] + '</button>'; }).join('');
-    Array.prototype.forEach.call($('range').querySelectorAll('button'), function (b) {
+    $f('range').innerHTML = opts.map(function (o) { return '<button type="button" data-d="' + o[0] + '" aria-pressed="' + (o[0] === rangeDays) + '"' + (o[0] === rangeDays ? ' class="active"' : '') + '>' + o[1] + '</button>'; }).join('');
+    Array.prototype.forEach.call($f('range').querySelectorAll('button'), function (b) {
       b.addEventListener('click', function () { rangeDays = parseInt(b.getAttribute('data-d'), 10); buildRange(); refreshActive(); });
     });
   }
-  function setAuto(on) { autoRefresh = on; $('autoTrack').classList.toggle('on', on); $('autoWrap').setAttribute('aria-pressed', String(on)); document.body.classList.toggle('live', on); if (on) startAuto(); else stopAuto(); }
+  function setAuto(on) { autoRefresh = on; $f('autoTrack').classList.toggle('on', on); $f('autoWrap').setAttribute('aria-pressed', String(on)); document.body.classList.toggle('live', on); if (on) startAuto(); else stopAuto(); }
 
   // ---------- table search / sort / pagination (auto-applied to big tables) ----------
   function cellVal(r, i) {
@@ -3884,27 +4040,58 @@
       rows.forEach(function (r) { r.cells[c].classList.add('num'); });
     }
   }
+  // 11.0 — every data table: scroll wrapper, column-scoped headers, and one
+  // guidance row when the body is empty (kept in sync as rows come and go).
+  function frameTable(tbl) {
+    var p = tbl.parentNode;
+    if (p && !(p.classList && p.classList.contains('table-wrap'))) {
+      var w = document.createElement('div'); w.className = 'table-wrap';
+      if (tbl.style.marginTop) { w.style.marginTop = tbl.style.marginTop; tbl.style.marginTop = ''; }
+      p.insertBefore(w, tbl); w.appendChild(tbl);
+    }
+    Array.prototype.forEach.call(tbl.querySelectorAll('thead th'), function (th) { if (!th.hasAttribute('scope')) th.setAttribute('scope', 'col'); });
+  }
+  function syncEmptyRows(root) {
+    Array.prototype.forEach.call(root.querySelectorAll('table[data-enh]'), function (tbl) {
+      var body = tbl.tBodies[0]; if (!body) return;
+      var auto = body.querySelector('tr.table-empty[data-auto]');
+      if (auto && body.rows.length > 1) { body.removeChild(auto); return; }
+      if (!auto && !body.rows.length) {
+        var tr = document.createElement('tr'); tr.className = 'table-empty'; tr.setAttribute('data-auto', '1');
+        var td = document.createElement('td'); td.colSpan = (tbl.tHead && tbl.tHead.rows[0] ? tbl.tHead.rows[0].cells.length : 1) || 1;
+        td.textContent = tbl.getAttribute('data-empty') || 'No rows to show. Widen the date range or clear the search, then refresh.';
+        tr.appendChild(td); body.appendChild(tr);
+      }
+    });
+  }
   function enhanceTables() {
+    try {
+      var mb = $('modalBody');
+      if (mb) { Array.prototype.forEach.call(mb.querySelectorAll('table:not([data-enh])'), function (t) { t.setAttribute('data-enh', '1'); frameTable(t); markNumericColumns(t); }); syncEmptyRows(mb); if (!$('modal').hidden) labelModal(); }
+    } catch (e) {}
+    try { syncEmptyRows($('view')); } catch (e) {}
     try {
       var tables = $('view').querySelectorAll('table:not([data-enh])');
       Array.prototype.forEach.call(tables, function (tbl) {
         tbl.setAttribute('data-enh', '1');
+        frameTable(tbl);
         var tbody = tbl.tBodies[0];
         if (!tbody) return;
         markNumericColumns(tbl);
-        var allRows = Array.prototype.slice.call(tbody.rows).filter(function (r) { return !r.querySelector('.empty'); });
+        var allRows = Array.prototype.slice.call(tbody.rows).filter(function (r) { return !r.querySelector('.empty') && !/\btable-empty\b/.test(r.className); });
         if (allRows.length < 8) return;
         var st = { q: '', sortCol: -1, dir: 1, page: 0, per: 25 };
         var bar = document.createElement('div');
         bar.style.cssText = 'display:flex;gap:8px;align-items:center;margin:0 0 8px;flex-wrap:wrap';
         var search = document.createElement('input');
-        search.type = 'search'; search.placeholder = 'Filter ' + allRows.length + ' rows…';
+        search.type = 'search'; search.placeholder = 'Filter ' + allRows.length + ' rows…'; search.setAttribute('aria-label', 'Filter table rows');
         search.style.cssText = 'flex:1;min-width:160px;max-width:300px;padding:7px 12px;font-size:13px';
         var prev = document.createElement('button'); prev.className = 'ghost'; prev.textContent = '‹'; prev.style.padding = '4px 13px';
         var next = document.createElement('button'); next.className = 'ghost'; next.textContent = '›'; next.style.padding = '4px 13px';
         var info = document.createElement('span'); info.className = 'muted'; info.style.fontSize = '12px';
         bar.appendChild(search); bar.appendChild(prev); bar.appendChild(next); bar.appendChild(info);
-        tbl.parentNode.insertBefore(bar, tbl);
+        var tblAnchor = (tbl.parentNode.classList && tbl.parentNode.classList.contains('table-wrap')) ? tbl.parentNode : tbl;
+        tblAnchor.parentNode.insertBefore(bar, tblAnchor);
         function apply() {
           var q = st.q.toLowerCase();
           var rows = allRows.filter(function (r) { return !q || r.textContent.toLowerCase().indexOf(q) >= 0; });
@@ -3940,10 +4127,30 @@
     } catch (e) { /* never break the dashboard */ }
   }
 
+  /** Accessible names: a control nobody labelled takes its name from the label beside it, else its placeholder,
+   *  else the short caption just above it, else its card's heading. Runs on every render of the view and the dialog. */
+  function nameControls(root) {
+    try {
+      var list = root ? root.querySelectorAll('input:not([type=hidden]):not([type=button]):not([type=submit]),select,textarea') : [];
+      for (var i = 0; i < list.length; i++) {
+        var el = list[i];
+        if (el.hasAttribute('aria-label') || el.hasAttribute('aria-labelledby') || el.title || el.closest('label')) continue;
+        if (el.labels && el.labels.length) continue;
+        var prev = el.previousElementSibling, name = '';
+        if (prev && prev.tagName === 'LABEL' && !prev.htmlFor) name = prev.textContent;
+        if (!name) name = el.getAttribute('placeholder') || '';
+        if (!name && prev && !prev.querySelector('input,select,textarea,button') && prev.textContent.trim().length <= 60) name = prev.textContent;
+        if (!name) { var card = el.closest('.card,.field,form,section'); var hd = card && card.querySelector('h2,h3,h4,label,.l'); if (hd) name = hd.textContent; }
+        name = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        if (name) el.setAttribute('aria-label', name);
+      }
+    } catch (e) { /* never break the dashboard */ }
+  }
+
   var enhInit = false;
   function initEnhancements() {
     if (enhInit) return; enhInit = true;
-    try { new MutationObserver(function () { enhanceTables(); }).observe($('view'), { childList: true }); } catch (e) {}
+    try { var tblObs = new MutationObserver(function () { enhanceTables(); nameControls($('view')); nameControls($('modalBody')); }); tblObs.observe($('view'), { childList: true, subtree: true }); if ($('modalBody')) tblObs.observe($('modalBody'), { childList: true, subtree: true }); } catch (e) {}
     try {
       var sel = document.createElement('select');
       sel.title = 'Auto-refresh interval';
@@ -3975,7 +4182,7 @@
     $('view').addEventListener('click', function (e) {
       if (e.target && e.target.id === 'hrecheck') {
         var el = document.getElementById('healthbox');
-        if (el) el.innerHTML = '<div class="empty">Re-checking…</div>';
+        if (el) el.innerHTML = stateLoading('rows', 'Re-checking…');
         api('/api/admin/health').then(function (h) { var b = document.getElementById('healthbox'); if (b) b.innerHTML = healthHtml(h); }).catch(noop);
       }
     });
@@ -3988,28 +4195,30 @@
     });
 
     // ---- JSON export of the current panel ----
-    $('json').disabled = true;
-    $('json').addEventListener('click', function () {
+    $f('json').disabled = true;
+    $f('json').addEventListener('click', function () {
       if (!lastJson) { vxAlert('No data loaded yet — open any dashboard first.', { title: 'Export' }); return; }
       var blob = new Blob([JSON.stringify(lastJson, null, 2)], { type: 'application/json' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
-      a.href = url; a.download = 'vinax-' + active + '-' + new Date().toISOString().slice(0, 10) + '.json'; a.click();
+      a.href = url; a.download = 'vinax-' + active + '-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); toast('Download started — ' + a.download, 'info');
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     });
 
     // ---- Copy day report ----
     $('report').addEventListener('click', function () {
-      apiMemo('/api/admin/overview').then(function (d) {
-        if (!d || !d.summary) return;
+      // api, not apiMemo: the memo resolves null for an unchanged payload, which
+      // made this button do nothing whenever the overview was already on screen.
+      api('/api/admin/overview').then(function (d) {
+        if (!d || !d.summary) { toast('Nothing copied — the overview has no summary to report yet.', 'info'); return; }
         var s = d.summary;
         var txt = 'VinaX day report — ' + new Date().toLocaleDateString('en-IN') + '\n' +
           'Listening now: ' + (s.active_now || 0) + '\n' +
           'Plays today: ' + (s.plays_today || 0) + ' · 7d: ' + (s.plays_7d || 0) + '\n' +
           'Users: ' + (s.total_users || 0) + ' total · +' + (s.new_today || 0) + ' today · DAU ' + (s.dau || 0) + ' / WAU ' + (s.wau || 0) + ' / MAU ' + (s.mau || 0) + '\n' +
           'Errors (24h): ' + (s.errors_24h || 0) + ' · New feedback: ' + (s.feedback_new || 0);
-        try { navigator.clipboard.writeText(txt).then(function () { setBtnLabel($('report'), 'Copied'); setTimeout(function () { setBtnLabel($('report'), 'Report'); }, 1200); }); } catch (err) { vxPrompt('Copy the report text below:', { title: 'Day report', value: txt, okText: 'Done' }); }
-      }).catch(noop);
+        try { navigator.clipboard.writeText(txt).then(function () { setBtnLabel($('report'), 'Copied'); toast('Copied — the day report is on the clipboard.', 'ok'); setTimeout(function () { setBtnLabel($('report'), 'Report'); }, 1200); }, function () { vxPrompt('Copy the report text below:', { title: 'Day report', value: txt, okText: 'Done' }); }); } catch (err) { vxPrompt('Copy the report text below:', { title: 'Day report', value: txt, okText: 'Done' }); }
+      }).catch(function () { toast('Failed — the overview could not be read, so nothing was copied.', 'bad'); });
     });
 
     // ---- Error notifications (opt-in) ----
@@ -4021,7 +4230,7 @@
       notifyOn = !notifyOn;
       try { localStorage.setItem('vinax_admin_notify', notifyOn ? '1' : ''); } catch (err) {}
       if (notifyOn && typeof Notification !== 'undefined') {
-        if (Notification.permission === 'default') Notification.requestPermission();
+        if (Notification.permission === 'default') { var np = Notification.requestPermission(); if (np && np.then) np.then(function (p) { toast(p === 'granted' ? 'Allowed — this browser will show console alerts.' : 'Blocked — alerts stay off until notifications are allowed for this site.', p === 'granted' ? 'ok' : 'bad'); }, noop); }
         else if (Notification.permission === 'denied') vxAlert('Notifications are blocked for this site in the browser settings.', { title: 'Notifications' });
       }
       paintNotify();
@@ -4031,7 +4240,7 @@
     // The stored choice wins; with none stored the console follows the
     // system preference, live. theme-boot.js applies the same rule pre-paint.
     applyTheme(storedTheme() || systemTheme());
-    $('theme').addEventListener('click', function () {
+    $f('theme').addEventListener('click', function () {
       var next = document.documentElement.classList.contains('light') ? 'dark' : 'light';
       try { localStorage.setItem(THEME_KEY, next); localStorage.removeItem('vinax_admin_light'); } catch (err) {}
       applyTheme(next);
@@ -4048,7 +4257,7 @@
       apiMemo('/api/admin/overview', 'kpi:overview').then(function (d) {
         if (!d || !d.summary) return;
         var s = d.summary;
-        $('kpis').innerHTML =
+        $f('kpis').innerHTML =
           '<span class="k"><span class="kg" aria-hidden="true">●</span><b>' + (s.active_now || 0) + '</b><span class="kl">now</span></span>' +
           '<span class="k"><span class="kg" aria-hidden="true">▶</span><b>' + (s.plays_today || 0) + '</b><span class="kl">today</span></span>' +
           '<span class="k"><span class="kg" aria-hidden="true">⚠</span><b>' + (s.errors_24h || 0) + '</b><span class="kl">errors</span></span>';
@@ -4066,6 +4275,7 @@
       var st = $('stale');
       if (!st) return;
       st.hidden = !(autoRefresh && !formFocused() && Date.now() - lastStampAt > Math.max(3 * refreshMs, 30_000));
+      paintEnvChip();
     }, 5000);
 
     // ---- Sidebar search filter (Task 5) ----
@@ -4120,7 +4330,7 @@
     setSection(TITLES[initial] ? initial : (localStorage.getItem('vinax_admin_sec') || HOME_SEC));
   }
 
-  Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-sec]'), function (b) { b.addEventListener('click', function () { setSection(b.getAttribute('data-sec')); }); });
+  Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-sec]'), function (b) { b.addEventListener('click', function () { setSection(b.getAttribute('data-sec')); focusSection(); }); });
   Array.prototype.forEach.call(document.querySelectorAll('#nav .nav-group-label'), function (g) { g.addEventListener('click', function () {
     var name = g.getAttribute('data-group');
     if (isRail()) { setRail(false); if (closedGroups().indexOf(name) >= 0) toggleNavGroup(name); try { g.scrollIntoView({ block: 'start' }); } catch (e) {} return; }
@@ -4129,12 +4339,12 @@
   applyNavGroups();
   $('enter').addEventListener('click', function () { var t = $('token').value.trim(); if (!t) { $('loginErr').textContent = 'Enter a token.'; return; } sessionStorage.setItem(TOKEN_KEY, t); start(); });
   $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('enter').click(); });
-  $('logout').addEventListener('click', function () { closeDrawer(false); sessionStorage.removeItem(TOKEN_KEY); showLogin(''); });
-  $('refresh').addEventListener('click', refreshActive);
-  if ($('hdrRefresh')) $('hdrRefresh').addEventListener('click', refreshActive);
-  $('csv').addEventListener('click', downloadCsv);
-  $('autoWrap').addEventListener('click', function () { setAuto(!autoRefresh); });
-  $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
+  $f('logout').addEventListener('click', function () { closeDrawer(false); sessionStorage.removeItem(TOKEN_KEY); showLogin(''); });
+  $f('refresh').addEventListener('click', refreshActive);
+  if ($('hdrRefresh')) $f('hdrRefresh').addEventListener('click', refreshActive);
+  $f('csv').addEventListener('click', downloadCsv);
+  $f('autoWrap').addEventListener('click', function () { setAuto(!autoRefresh); });
+  var modalEl = $('modal'); if (modalEl) modalEl.addEventListener('click', function (e) { if (e.target === modalEl) closeModal(); });
 
   // Theme before the login card paints (theme-boot.js already did this
   // pre-paint; repeated here so a cached page without it still lands right).
