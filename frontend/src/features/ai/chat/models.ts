@@ -110,8 +110,13 @@ export function parseCatalogResponse(body: unknown): Provider[] {
 
 export const MEDIA_KINDS: readonly MediaKind[] = ['image', 'speech', 'transcription', 'music', 'embedding'];
 const isMediaKind = (v: unknown): v is MediaKind => typeof v === 'string' && (MEDIA_KINDS as readonly string[]).includes(v);
-/** The tool id for running code. Web search is not a tool VinaX uses (10.2). */
+/** The tool id for running code. */
 export const CODE_TOOL = 'code_execution';
+/** 11.0 — the web search tool: the Gemini provider's own search grounding on
+ *  its 2.5 Flash models, the only web tool VinaX AI uses. No switch — the
+ *  server grounds a listener's pick of such a model, and Auto when the
+ *  question is about now. */
+export const WEB_TOOL = 'web_search';
 
 /** A provider's non-chat models; malformed rows and unknown kinds are dropped. */
 function parseMedia(list: unknown): MediaModel[] {
@@ -137,14 +142,14 @@ function parseTools(list: unknown): ProviderTool[] {
   for (const rt of Array.isArray(list) ? list : []) {
     if (!rt || typeof rt !== 'object') continue;
     const t = rt as Record<string, unknown>;
-    if (t.id !== CODE_TOOL || out.some((o) => o.id === t.id)) continue;
+    if ((t.id !== CODE_TOOL && t.id !== WEB_TOOL) || out.some((o) => o.id === t.id)) continue;
     const models = Array.isArray(t.models) ? t.models.filter(validSlug) : [];
-    out.push({ id: CODE_TOOL, name: text(t.name, 60) ?? 'Code execution', models });
+    out.push({ id: t.id, name: text(t.name, 60) ?? (t.id === CODE_TOOL ? 'Code execution' : 'Web search'), models });
   }
   return out;
 }
 
-export const NO_FEATURES: AiFeatures = { image: false, speech: false, transcription: false, music: false, code: false };
+export const NO_FEATURES: AiFeatures = { image: false, speech: false, transcription: false, music: false, code: false, web: false };
 
 /** Shape-tolerant read of the top-level `features` of GET /api/aimodels. An
  *  older server sends none: every feature reads as off and nothing new shows. */
@@ -152,12 +157,15 @@ export function parseFeatures(body: unknown): AiFeatures {
   const f = (body as { features?: unknown } | null)?.features;
   if (!f || typeof f !== 'object') return NO_FEATURES;
   const r = f as Record<string, unknown>;
-  return { image: r.image === true, speech: r.speech === true, transcription: r.transcription === true, music: r.music === true, code: r.code === true };
+  return { image: r.image === true, speech: r.speech === true, transcription: r.transcription === true, music: r.music === true, code: r.code === true, web: r.web === true };
 }
 
 /** The chat model can run code (it is in its provider's code tool list). */
 export const canRunCode = (providers: readonly Provider[], provider: ProviderId, model: string): boolean =>
   !!providers.find((p) => p.id === provider)?.tools?.some((t) => t.id === CODE_TOOL && t.models.includes(model));
+/** 11.0 — the chat model searches the web (it is in its provider's web search tool list). */
+export const canSearchWeb = (providers: readonly Provider[], provider: ProviderId, model: string): boolean =>
+  !!providers.find((p) => p.id === provider)?.tools?.some((t) => t.id === WEB_TOOL && t.models.includes(model));
 
 /** Every configured provider's models of one kind, in menu order — the
  *  groups of a media picker. Providers with none are left out. */
@@ -186,6 +194,8 @@ export interface MenuRow {
   vision: boolean;
   /** 10.3 — the model can run code (its provider lists it under the code tool). */
   code: boolean;
+  /** 11.0 — the model searches the web (its provider lists it under the web search tool). */
+  web: boolean;
   /** Logo shown on the row itself — recents only; a provider section has it in its heading. */
   provider: ProviderId | null;
 }
@@ -206,6 +216,8 @@ export interface MenuSection {
 export const MAX_RECENTS = 5;
 /** 10.3 — the tag on a chat model that can run code. */
 export const RUNS_CODE = 'Runs code';
+/** 11.0 — the tag on a model that searches the web. */
+export const SEARCHES_WEB = 'Searches the web';
 export const NOT_AVAILABLE = 'Not available right now';
 
 const matches = (q: string[], ...hay: Array<string | null>): boolean => {
@@ -218,13 +230,14 @@ const modelHint = (m: ProviderModel, withProvider?: ProviderId): string => {
   const ctx = contextBadge(m.context);
   return [withProvider ? PROVIDER_LABEL[withProvider] : null, m.maker, ctx ? `${ctx} context` : null].filter(Boolean).join(' · ');
 };
-const modelRow = (section: string, provider: ProviderId, m: ProviderModel, recent = false, code = false): MenuRow => ({
+const modelRow = (section: string, provider: ProviderId, m: ProviderModel, recent = false, code = false, web = false): MenuRow => ({
   id: `${section}-${provider}-${m.id}`,
   choice: { mode: 'model', provider, model: m.id, name: m.name },
   label: m.name,
   hint: modelHint(m, recent ? provider : undefined),
   vision: m.vision,
   code,
+  web,
   provider: recent ? provider : null,
 });
 const section = (s: Omit<MenuSection, 'note' | 'retry' | 'provider'> & Partial<MenuSection>): MenuSection => ({
@@ -254,7 +267,7 @@ export function buildModelMenu(input: {
         id: 'auto',
         title: '',
         label: AUTO_LABEL,
-        rows: [{ id: 'auto', choice: AUTO, label: AUTO_LABEL, hint: AUTO_HINT, vision: false, code: false, provider: null }],
+        rows: [{ id: 'auto', choice: AUTO, label: AUTO_LABEL, hint: AUTO_HINT, vision: false, code: false, web: false, provider: null }],
       }),
     );
   }
@@ -273,6 +286,7 @@ export function buildModelMenu(input: {
           live ?? { id: r.model, name: r.name ?? slugLabel(r.model), maker: null, context: null, vision: false },
           true,
           canRunCode(providers, r.provider, r.model),
+          canSearchWeb(providers, r.provider, r.model),
         ),
       );
     }
@@ -293,10 +307,10 @@ export function buildModelMenu(input: {
     }
     // 10.3 — "runs code" finds the models that can run code.
     const models = p?.configured
-      ? p.models.filter((m) => matches(q, m.name, m.maker, m.id, title, canRunCode(providers, id, m.id) ? RUNS_CODE : null))
+      ? p.models.filter((m) => matches(q, m.name, m.maker, m.id, title, canRunCode(providers, id, m.id) ? RUNS_CODE : null, canSearchWeb(providers, id, m.id) ? SEARCHES_WEB : null))
       : [];
     if (models.length) {
-      sections.push(section({ ...base, rows: models.map((m) => modelRow(id, id, m, false, canRunCode(providers, id, m.id))) }));
+      sections.push(section({ ...base, rows: models.map((m) => modelRow(id, id, m, false, canRunCode(providers, id, m.id), canSearchWeb(providers, id, m.id))) }));
     } else if (!q.length) {
       sections.push(section({ ...base, rows: [], note: NOT_AVAILABLE }));
     }

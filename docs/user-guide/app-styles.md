@@ -43,7 +43,7 @@ The welcome also offers the same choice as its **Pick your look** step, and Help
 
 ## Styles and the theme
 
-**Settings → Appearance → Theme** still chooses between Dark, Black, Light, System and Auto (light by day, dark at night). Every style has its own dark look and its own light look. Black is true black in every style, which suits screens that switch dark pixels off.
+**Settings → Appearance → Theme** still chooses between Dark, Black, Light, System and Auto (light by day, dark at night). Every style has its own dark look and its own light look. Black is true black in every style, which suits screens that switch dark pixels off. In Light, the bars, sheets and cards are frosted glass over three soft lights — the style's colour, its second colour and the artwork of the song playing — so the look changes gently with your music.
 
 ## Styles and the accent colour
 

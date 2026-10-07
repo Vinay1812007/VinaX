@@ -301,7 +301,7 @@ describe('GET /api/aimodels — media, tools and features', () => {
   it('keeps every chat field and adds media and tools per provider, plus top-level features', async () => {
     const body = await load(ALL_KEYS);
     expect(Object.keys(body).sort()).toEqual(['features', 'fetchedAt', 'providers']);
-    expect(body.features).toEqual({ image: true, speech: true, transcription: true, music: true, code: true });
+    expect(body.features).toEqual({ image: true, speech: true, transcription: true, music: true, code: true, web: false });
     for (const p of body.providers) {
       expect(Object.keys(p).sort()).toEqual(['configured', 'id', 'label', 'media', 'models', 'tools']);
       for (const m of p.models) expect(Object.keys(m).sort()).toEqual(['context', 'id', 'maker', 'name', 'vision']);
@@ -322,11 +322,11 @@ describe('GET /api/aimodels — media, tools and features', () => {
 
   it('a missing key is an empty provider; features are false when nobody offers the kind', async () => {
     const none = await load({});
-    expect(none.features).toEqual({ image: false, speech: false, transcription: false, music: false, code: false });
+    expect(none.features).toEqual({ image: false, speech: false, transcription: false, music: false, code: false, web: false });
     for (const p of none.providers) expect([p.configured, p.models, p.media, p.tools]).toEqual([false, [], [], []]);
     lists.openrouter = OPENROUTER_NO_FREE_MUSIC;
     const groqOnly = await load({ GROQ_API_KEY: 'gq' });
-    expect(groqOnly.features).toEqual({ image: false, speech: true, transcription: true, music: false, code: true });
+    expect(groqOnly.features).toEqual({ image: false, speech: true, transcription: true, music: false, code: true, web: false });
   });
 
   it('reads the keys under their primary names and, during the switch, their previous names', async () => {

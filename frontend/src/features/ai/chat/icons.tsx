@@ -97,6 +97,13 @@ export const MemoryIcon = ({ className }: P): ReactNode => (
   </svg>
 );
 /** 10.3 — the Run code connector: angle brackets around a slash. */
+/** 11.0 — a small globe: web search was on for a reply. */
+export const GlobeIcon = ({ className }: P): ReactNode => (
+  <svg {...line(className)}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17" />
+  </svg>
+);
 export const CodeIcon = ({ className }: P): ReactNode => (
   <svg {...line(className)}>
     <path d="M8 7.5 3.5 12 8 16.5M16 7.5l4.5 4.5-4.5 4.5M13.5 5l-3 14" />

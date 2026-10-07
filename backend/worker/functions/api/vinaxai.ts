@@ -66,13 +66,13 @@ import {
   aiGate,
   logAiRefusal,
 } from '../_lib/ai';
-import { catalogDefaultModel, codeExecutionModels, describeModel, fetchCatalog, findCatalogModel, normaliseProvider, type CatalogModel } from '../_lib/catalog';
+import { catalogDefaultModel, codeExecutionModels, describeModel, fetchCatalog, findCatalogModel, normaliseProvider, searchCapable, type CatalogModel } from '../_lib/catalog';
 import { APP_KNOWLEDGE } from '../_lib/appknowledge';
 import { readJsonCapped } from '../_lib/body';
 import { methodNotAllowed, rateLimitAsync } from '../_lib/ratelimit';
 import { MUSIC_CONDUCT, tasteBlock } from '../_lib/taste';
 import { houseRules, readConfig } from '../_lib/clientConfig';
-import { placeContextLines, readCoarsePlace } from '../_lib/place';
+import { placeContextLines, requestPlace } from '../_lib/place';
 import { type SupabaseEnv } from '../_lib/supabase';
 import { codeBlock, maestroFetch, maestroModelFor, outputBlock } from '../_lib/maestro';
 
@@ -185,6 +185,9 @@ const TEMP_BY_MODE: Record<Mode, number> = {
 /** 10.2 — the assistant cannot look anything up, and says so instead of pretending. Exported for tests. */
 export const NO_LIVE_WEB =
   'You have no live web access. For anything that changes week to week (news, prices, scores, schedules, new releases), answer from what you know and say plainly that it may be out of date. Never claim to have searched, and never invent sources or citations.';
+/** 11.0 — what replaces NO_LIVE_WEB on an attempt that carries Gemini's search grounding. Exported for tests. */
+export const WEB_TOOL_LINE =
+  'For this reply you have a built-in web search tool. Use it for anything that changes week to week (news, prices, scores, schedules, new releases, dates) and base such answers on what it returns; say plainly when it found nothing. Never invent sources.';
 /** Where the identity line goes; replaced per attempt (see identityLine). */
 const IDENTITY_SLOT = '{{MODEL_IDENTITY}}';
 const SYSTEM_PROMPT = `You are VinaX AI, the assistant inside the VinaX music app. Answer as you naturally would, at whatever length and in whatever form the question calls for.
@@ -251,6 +254,20 @@ export function pickAutoMode(q: string): Mode {
   return 'muse';
 }
 
+
+/** 11.0 — a conservative "this is about now" detector for Auto: a time, news,
+ * money or schedule cue in the latest user message. When it fires (and the
+ * Gemini key and a search-capable model exist), a grounded Gemini 2.5 Flash
+ * attempt leads the Auto ladder for that request. Pure; exported for tests. */
+const WEB_CUES = [
+  /\b(today|tonight|yesterday|tomorrow|latest|news|now|current(?:ly)?|weather|price|prices|stock|stocks|release date|this (?:week|month|year)|who won|live score|score)\b/i,
+  /\bis\b[^.?!\n]{1,40}\bopen\b/i,
+  /\b20(?:2[5-9]|[3-9]\d)\b/,
+];
+export function wantsWeb(q: string): boolean {
+  const s = q.trim();
+  return !!s && WEB_CUES.some((re) => re.test(s));
+}
 
 interface Env extends AiEnv, SupabaseEnv {}
 
@@ -487,12 +504,14 @@ async function handleChat(
     typeof body.profile === 'string'
       ? [...body.profile].filter((ch) => ch === '\n' || ch === '\t' || ch.charCodeAt(0) >= 32).join('').trim().slice(0, 1500)
       : '';
-  // 9.1.0 — coarse place context, when the client chose to send it. The client
-  // sends nothing while the listener's region-inference setting is off, and this
-  // route never infers a place of its own: with no `place`, the prompt opens with
-  // the IST clock exactly as 9.0 did for everyone. Validated hard — only country,
-  // region, approximate city and an IANA zone survive readCoarsePlace.
-  const place = readCoarsePlace(body.place);
+  // 9.1.0 — coarse place context. Validated hard — only country, region,
+  // approximate city and an IANA zone survive readCoarsePlace.
+  // 11.0 — a client that sends `{ off: true }` (its region setting is off)
+  // gets no place and the IST clock, as 9.0 did; one that sends nothing usable
+  // gets the edge's coarse place (request.cf, the /api/geo fields), so local
+  // dates and times are right without a switch. The prompt says it is
+  // approximate and came from the connection.
+  const place = requestPlace(body.place, request);
 
   const turns = (Array.isArray(body.messages) ? body.messages : [])
     .filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string')
@@ -576,7 +595,19 @@ async function handleChat(
     const best = groqCode.find((m) => m.endsWith('gpt-oss-120b')) ?? groqCode[0];
     codeLead = best ? providerAttempt(env, 'groq', best) : null;
   }
-  const lead = pick ?? codeLead;
+  // 11.0 — Auto on a question about now (news, prices, scores, dates…): a
+  // Gemini 2.5 Flash model with the provider's own search grounding leads, when
+  // the Gemini key exists and the live catalogue lists one. Code wins when both
+  // are wanted (grounding and code execution are not combined). Think on Auto
+  // keeps its deep seat. The rest of the ladder follows as fallback.
+  const webCue = reqMode === 'auto' && !thinkOnAuto && wantsWeb(lastUserRaw.slice(0, 2000));
+  let webLead: LaneAttempt | null = null;
+  if (webCue && !wantCode && providerKey(env, 'gemini')) {
+    const ids = (await fetchCatalog(env, 'gemini').catch(() => [] as CatalogModel[])).map((m) => m.id).filter(searchCapable);
+    const best = ids.find((id) => /^gemini-2\.5-flash$/i.test(id)) ?? ids.find((id) => !/lite/i.test(id)) ?? ids[0];
+    webLead = best ? providerAttempt(env, 'gemini', best) : null;
+  }
+  const lead = pick ?? codeLead ?? webLead;
   const allAttempts = lead ? [lead, ...ladder.filter((a) => !sameCall(a, lead))] : ladder;
   // The attempts that carry the tool: every one whose model can run it. A
   // pick that cannot answers without it.
@@ -585,6 +616,14 @@ async function handleChat(
   // Attempts that refused the tool (a 400) and were asked again without it.
   const codeDropped = new Set<LaneAttempt>();
   const runsCode = (a: LaneAttempt): boolean => codeOn.has(a) && !codeDropped.has(a);
+  // 11.0 — search grounding rides a Gemini 2.5 Flash attempt when the listener
+  // picked one (regardless of the question) or when Auto saw a question about
+  // now; never alongside code, never on a 3.x model (not free), never on the
+  // internal seats. Attempts that refused it (or hit the grounding quota) are
+  // asked again without it.
+  const searchDropped = new Set<LaneAttempt>();
+  const runsSearch = (a: LaneAttempt): boolean =>
+    (reqMode === 'model' || webCue) && !searchDropped.has(a) && !runsCode(a) && isMaestroEndpoint(a.endpoint) && searchCapable(attemptModel(a).id);
   if (!allAttempts.length) return jsonErr({ error: 'ai_not_configured' }, 503);
   // 8.2.0 — the same cooldown table chat() obeys: a lane+model that answered
   // 429 / model-gone / key-rejected / 5xx recently is not asked again until it
@@ -680,7 +719,7 @@ async function handleChat(
   // 11.0 — the opt-out is per attempt (a later fallback keeps its usage
   // chunk), and the Gemini transport never carries the option at all.
   const usageDropped = new Set<LaneAttempt>();
-  const payloadFor = (m: string, endpoint: string, messages: OutMsg[], code = false, usageOptIn = true): Record<string, unknown> => {
+  const payloadFor = (m: string, endpoint: string, messages: OutMsg[], code = false, usageOptIn = true, search = false): Record<string, unknown> => {
     const p: Record<string, unknown> = {
       model: m,
       messages,
@@ -688,9 +727,11 @@ async function handleChat(
       max_tokens: MAXTOK_BY_MODE[mode],
       stream: true,
     };
-    // 10.3 — the code tool, in each provider's own shape; nothing else is
-    // ever put in `tools` (no search, no browsing, no web plugin — 10.2).
+    // 10.3 — the code tool, in each provider's own shape. 11.0 — and Gemini's
+    // own search grounding (native transport). Nothing else is ever put in
+    // `tools`: no browsing, no web plugin, no third-party search.
     if (code && isMaestroEndpoint(endpoint)) p.code_execution = true;
+    if (search && !code && isMaestroEndpoint(endpoint)) p.web_search = true;
     if (code && isGroqEndpoint(endpoint)) p.tools = [{ type: 'code_interpreter' }];
     if (usageOptIn && !isGroqEndpoint(endpoint)) p.stream_options = { include_usage: true };
     // Default-base-only knob: the external hosts reject reasoning_effort with
@@ -716,7 +757,9 @@ async function handleChat(
   const withIdentity = (a: LaneAttempt, messages: OutMsg[]): OutMsg[] => {
     const head = messages[0];
     if (head?.role !== 'system' || typeof head.content !== 'string' || !head.content.includes(IDENTITY_SLOT)) return messages;
-    return [{ ...head, content: head.content.replace(IDENTITY_SLOT, identityLine(a)) }, ...messages.slice(1)];
+    const content = head.content.replace(IDENTITY_SLOT, identityLine(a));
+    // 11.0 — a grounded attempt is told it can search; every other keeps NO_LIVE_WEB.
+    return [{ ...head, content: runsSearch(a) ? content.replace(NO_LIVE_WEB, WEB_TOOL_LINE) : content }, ...messages.slice(1)];
   };
   const callStream = async (a: LaneAttempt, messagesIn: OutMsg[], ms = 30_000): Promise<Response> => {
     const controller = new AbortController();
@@ -726,7 +769,7 @@ async function handleChat(
       if (isMaestroEndpoint(a.endpoint)) {
         // 8.1.0 — its own transport (native streaming). 10.3 — an exact
         // catalogue pick is never swapped for another model.
-        const p = payloadFor(a.model, a.endpoint, messages, runsCode(a), false);
+        const p = payloadFor(a.model, a.endpoint, messages, runsCode(a), false, runsSearch(a));
         delete p.stream_options;
         return await maestroFetch(a.key, a.model, p, controller.signal, !a.exact);
       }
@@ -801,6 +844,22 @@ async function handleChat(
           res = await callStream(a, messages, leash);
         } catch {
           res = null;
+        }
+      }
+      // 11.0 — a 400 while grounding rode the request, or a 429 that names the
+      // grounding quota (the day's free grounded prompts are spent): ask the
+      // same model once more without the tool. The plain model still answers,
+      // so this is not a lane failure; any other 429 is one, as before.
+      if (res && (res.status === 400 || res.status === 429) && runsSearch(a)) {
+        const text = await res.clone().text().catch(() => '');
+        if (res.status === 400 || /ground|search/i.test(text)) {
+          void res.body?.cancel().catch(() => undefined);
+          searchDropped.add(a);
+          try {
+            res = await callStream(a, messages, leash);
+          } catch {
+            res = null;
+          }
         }
       }
       if (res?.ok && res.body) return { up: res, used: a };
@@ -998,6 +1057,13 @@ async function handleChat(
                 // 10.3 — executed code and its output, before the text that follows them.
                 const ran = executedToolsText(j.choices?.[0]?.delta?.executed_tools ?? j.choices?.[0]?.message?.executed_tools, toolShown);
                 if (ran) onDelta(ran);
+                // 11.0 — the pages a grounded Gemini answer drew on (the maestro
+                // transport's extra frame): one additive `sources` event, which
+                // older clients ignore. Never produced by any other provider.
+                // Only for an attempt that asked for grounding: pages an
+                // unasked model volunteers are never passed on.
+                const g = (j as { grounding?: unknown }).grounding;
+                if (g && typeof g === 'object' && Array.isArray((g as { items?: unknown }).items) && runsSearch(usedAttempt)) send({ sources: g });
                 const delta = j.choices?.[0]?.delta?.content;
                 if (typeof delta === 'string' && delta) onDelta(delta);
                 // The usage chunk (opt-in on the default base, unasked on the
@@ -1034,13 +1100,14 @@ async function handleChat(
         return full;
       };
 
-      // 10.2 — meta names the engine and seat only: there are no web results or
-      // sources to report.
+      // 10.2 — meta names the engine and seat (and, 10.3/11.0, the tools that
+      // were on for it); a grounded answer's sources travel in their own event.
       // 10.3 — the engine is the REAL model: its published name, its exact
       // slug and its provider, for whichever attempt is streaming.
       const sendMeta = (a: LaneAttempt): void => {
         const m = attemptModel(a);
-        send({ meta: { model: m.name, modelId: m.id, provider: m.provider, mode: reqMode, ...(runsCode(a) ? { tools: ['code_execution'] } : {}) } });
+        const tools = [...(runsCode(a) ? ['code_execution'] : []), ...(runsSearch(a) ? ['web_search'] : [])];
+        send({ meta: { model: m.name, modelId: m.id, provider: m.provider, mode: reqMode, ...(tools.length ? { tools } : {}) } });
       };
       sendMeta(usedAttempt);
       let full = await drain(upBody);

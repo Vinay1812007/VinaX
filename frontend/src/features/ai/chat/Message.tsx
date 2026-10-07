@@ -25,11 +25,11 @@ import { hideFollowupLine } from '@/features/ai/followups';
 import { readAloud, readAloudSupported } from '@/features/ai/readAloud';
 import { cn } from '@/utils/cn';
 import { reducedMotion } from '@/utils/motion';
-import { CheckIcon, CodeIcon } from './icons';
+import { CheckIcon, CodeIcon, GlobeIcon } from './icons';
 import { MediaCard } from './MediaCard';
-import { CODE_TOOL, isProviderId } from './models';
+import { CODE_TOOL, isProviderId, WEB_TOOL } from './models';
 import { ProviderLogo } from './ProviderLogo';
-import type { Msg } from './types';
+import type { Msg, MsgSources } from './types';
 
 /** Everything a message can ask the page to do. The object is stable (see
  *  useStableHandlers), so memoised messages do not re-render with the page. */
@@ -157,6 +157,51 @@ const CREATING: Record<'image' | 'music', string[]> = {
 /** 10.3 — the reply ran code: the Run code tool was on for the model that
  *  answered AND the reply holds a code block (the code and its output). */
 export const ranCode = (m: Pick<Msg, 'tools' | 'content'>): boolean => !!m.tools?.includes(CODE_TOOL) && m.content.includes('```');
+/** 11.0 — web search was on for the model that answered (stream meta). */
+export const searchedWeb = (m: Pick<Msg, 'tools'>): boolean => !!m.tools?.includes(WEB_TOOL);
+
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+};
+
+/** 11.0 — the pages a web-grounded reply drew on: up to 8 pills (the page's
+ *  title, else its host; no favicons, no remote images) opening in a new tab,
+ *  a "Searched the web" caption when the model ran queries, and the provider's
+ *  search-suggestion snippet in a sealed frame (empty sandbox: no scripts, no
+ *  same-origin, no navigation) — showing that snippet is a condition of the
+ *  grounding service. Exported for tests. */
+export function Sources({ s }: { s: MsgSources }): ReactNode {
+  if (!s.items.length && !s.entry) return null;
+  return (
+    <div className="ai-sources" role="group" aria-label="Sources">
+      {s.queries.length > 0 && (
+        <span className="ai-sources-cap">
+          <GlobeIcon className="w-3.5 h-3.5" />
+          Searched the web
+        </span>
+      )}
+      {s.items.length > 0 && (
+        <ul className="ai-sources-list">
+          {s.items.slice(0, 8).map((it) => {
+            const host = hostOf(it.url);
+            return (
+              <li key={it.url}>
+                <a className="ai-source" href={it.url} target="_blank" rel="noopener noreferrer" title={it.title ? `${it.title} — ${host}` : host}>
+                  {it.title || host}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {s.entry && <iframe className="ai-sources-entry" sandbox="" srcDoc={s.entry} title="Search suggestions" tabIndex={-1} loading="lazy" />}
+    </div>
+  );
+}
 
 /** The pause before the first token: beside it the VinaX mark turns slowly
  *  and breathes in the Marigold → Rose glow (.ai-msg-mark.is-waiting), and this
@@ -331,6 +376,8 @@ export const AssistantMessage = memo(function AssistantMessage({
               <RichContent text={streaming ? hideFollowupLine(m.content) : m.content} streaming={streaming} />
               {streaming && <span className="ai-caret" aria-hidden />}
             </div>
+            {/* 11.0 — the pages a web-grounded reply drew on, once it has finished. */}
+            {!streaming && m.sources && <Sources s={m.sources} />}
             {!busy && (
               <div className="ai-toolbar mt-2 -ml-2 flex flex-wrap items-center gap-0.5" role="group" aria-label="Reply actions">
                 <CopyButton text={m.content} />
@@ -400,6 +447,13 @@ export const AssistantMessage = memo(function AssistantMessage({
                   <span className="ai-engine-chip ai-ran-code" title="The model ran code for this reply">
                     <CodeIcon className="w-3.5 h-3.5" />
                     Ran code
+                  </span>
+                )}
+                {/* 11.0 — web search was on for this reply: a small globe. */}
+                {searchedWeb(m) && (
+                  <span className="ai-engine-chip ai-web-chip" title="Web search was on for this reply">
+                    <GlobeIcon className="w-3.5 h-3.5" />
+                    <span className="sr-only">Web search on</span>
                   </span>
                 )}
                 {m.engine ? (

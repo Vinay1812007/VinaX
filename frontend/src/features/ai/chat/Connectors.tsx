@@ -5,34 +5,22 @@ import {
   codeConnectorOn,
   connectorViews,
   onConnectorsChange,
-  placeConnectorOn,
   setCodeConnectorOn,
-  setPlaceConnectorOn,
   type CodeSupport,
   type ConnectorId,
   type ConnectorView,
 } from '@/features/ai/connectors';
 import { loadMemories, memoryEnabled, setMemoryEnabled } from '@/features/ai/memory';
-import { assistantPlace, type AssistantPlace } from '@/services/location/assistantPlace';
 import { usePlayerStore } from '@/store/playerStore';
-import { useSettingsStore } from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
-import { BulbIcon, CodeIcon, MemoryIcon, PlaceIcon } from './icons';
+import { BulbIcon, CodeIcon, MemoryIcon } from './icons';
 
 const ICON: Record<ConnectorId, (p: { className?: string }) => ReactNode> = {
   think: BulbIcon,
   nowPlaying: MusicIcon,
   memory: MemoryIcon,
-  place: PlaceIcon,
   code: CodeIcon,
 };
-
-/** "Hyderabad, Telangana, IN · Asia/Kolkata" — what the place connector would send. */
-export function placeLabel(p: AssistantPlace | undefined): string | null {
-  if (!p) return null;
-  const where = [p.city, p.region, p.country].filter(Boolean).join(', ');
-  return [where, p.timezone].filter(Boolean).join(' · ') || null;
-}
 
 /** The page-owned switches the composer passes through. */
 export interface TurnConnectors {
@@ -46,10 +34,9 @@ export interface TurnConnectors {
 }
 
 /** The connectors kept on the device. */
-const readStored = (): { memoryOn: boolean; memoryCount: number; placeOn: boolean; codeOn: boolean } => ({
+const readStored = (): { memoryOn: boolean; memoryCount: number; codeOn: boolean } => ({
   memoryOn: memoryEnabled(),
   memoryCount: loadMemories().length,
-  placeOn: placeConnectorOn(),
   codeOn: codeConnectorOn(),
 });
 
@@ -58,7 +45,7 @@ const ARM_MS = 5000;
 
 /**
  * 10.0 — every connector's state in one place: the page's per-turn switches as
- * given, plus the two that are stored on the device (memory, place), kept in
+ * given, plus the two that are stored on the device (memory, code), kept in
  * step with the settings dialog through the connectors event.
  *
  * Switching Memory OFF forgets every saved line (that is what the switch has
@@ -82,9 +69,6 @@ export function useConnectors(turn: TurnConnectors): {
     const t = window.setTimeout(() => setArmed(null), ARM_MS);
     return () => window.clearTimeout(t);
   }, [armed]);
-  // The app-wide region setting decides whether there is a place to send at
-  // all. Selected as one string, so only a change to it re-renders.
-  const place = useSettingsStore(() => placeLabel(assistantPlace()));
   // Read, not subscribed: the title only matters while the menu is open, and
   // a subscription would re-render the composer on every track change.
   const st = usePlayerStore.getState();
@@ -96,8 +80,6 @@ export function useConnectors(turn: TurnConnectors): {
     song,
     memoryOn: stored.memoryOn,
     memoryCount: stored.memoryCount,
-    placeOn: stored.placeOn,
-    placeLabel: place,
     codeAvailable: turn.code?.available === true,
     codeOn: stored.codeOn,
     codeSupport: turn.code?.support,
@@ -115,9 +97,6 @@ export function useConnectors(turn: TurnConnectors): {
           return;
         case 'nowPlaying':
           turn.onNowPlaying(on);
-          return;
-        case 'place':
-          setPlaceConnectorOn(on);
           return;
         case 'code':
           setCodeConnectorOn(on);

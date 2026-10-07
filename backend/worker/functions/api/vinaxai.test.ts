@@ -150,17 +150,21 @@ describe('10.2 — no live web', () => {
     expect(NO_LIVE_WEB).toMatch(/Never claim to have searched/);
   });
 
-  it('the flagship seat is never grounded, and outside pages in its answer never reach meta', async () => {
+  // 11.0 — grounding exists now, but only on the Gemini 2.5 Flash family and
+  // (on Auto) only for a question about now — see aiWebSearch.test.ts. The
+  // flagship pin is a 3.x model, so a plain question is never grounded, and
+  // pages a model volunteers unasked are never passed on.
+  it('the flagship seat is not grounded for a plain question, and unasked outside pages never reach the client', async () => {
     answer = () =>
       new Response(
         `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Plain answer.' }] }, groundingMetadata: { groundingChunks: [{ web: { uri: 'https://news.example/x', title: 'X' } }] } }] })}\n\n`,
         { status: 200, headers: { 'content-type': 'text/event-stream' } },
       );
-    const { status, frames } = await run({ web: true, mode: 'maestro', messages: [{ role: 'user', content: 'what happened today?' }] }, { VINAX_GGL_GEMINI_API_KEY: 'AQ.k' });
+    const { status, frames } = await run({ web: true, mode: 'maestro', messages: [{ role: 'user', content: 'tell me about the raga Kalyani' }] }, { VINAX_GGL_GEMINI_API_KEY: 'AQ.k' });
     expect(status).toBe(200);
     expect(outbound).toHaveLength(1);
     expect(outbound[0].body?.tools).toBeUndefined();
-    expect(JSON.stringify(outbound[0].body)).not.toContain('google_search');
+    expect(JSON.stringify(outbound[0].body)).not.toMatch(/google_?search/i);
     expect(JSON.stringify(frames)).not.toContain('news.example');
     for (const f of frames.filter((x) => 'meta' in x)) expect(Object.keys(f.meta as object).sort()).toEqual(['mode', 'model', 'modelId', 'provider']);
   });

@@ -807,6 +807,8 @@ export default function VinaXAIPage(): ReactNode {
       engine: engine || undefined,
       engineProvider: engine ? engineProvider : undefined,
       tools: engine && state.tools.length ? state.tools : undefined,
+      // 11.0 — the pages a web-grounded reply drew on, kept with the chat.
+      sources: engine && state.sources ? state.sources : undefined,
       followups: split.followups.length ? split.followups : undefined,
     }));
     if (!voiceIsOurs) return;

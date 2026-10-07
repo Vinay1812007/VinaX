@@ -532,8 +532,8 @@ export interface MediaModel {
 
 /** One free non-web tool and the chat models on the provider that can run it. */
 export interface ToolEntry {
-  id: 'code_execution';
-  name: 'Code execution';
+  id: 'code_execution' | 'web_search';
+  name: 'Code execution' | 'Web search';
   /** Chat model ids on this provider that run it in the provider's own sandbox. */
   models: string[];
 }
@@ -746,9 +746,24 @@ export function codeExecutionModels(provider: CatalogProvider, models: Array<{ i
   return [];
 }
 
+/** 11.0 — search grounding: the provider's OWN web search, free on the
+ *  Gemini 2.5 Flash family (incl. -lite) up to 500 grounded prompts a day. It
+ *  is not free on Gemini 3.x, so those are never search-capable here. This is
+ *  the only web tool VinaX sends; no third-party search, no URL fetching. */
+export function searchCapable(model: string): boolean {
+  return /^gemini-2\.5-flash/i.test(model.trim());
+}
+export function webSearchModels(provider: CatalogProvider, models: Array<{ id: string }>): string[] {
+  return provider === 'gemini' ? models.filter((m) => searchCapable(m.id)).map((m) => m.id) : [];
+}
+
 export function toolsFor(provider: CatalogProvider, models: Array<{ id: string }>): ToolEntry[] {
   const ids = codeExecutionModels(provider, models);
-  return ids.length ? [{ id: 'code_execution', name: 'Code execution', models: ids }] : [];
+  const web = webSearchModels(provider, models);
+  return [
+    ...(ids.length ? [{ id: 'code_execution' as const, name: 'Code execution' as const, models: ids }] : []),
+    ...(web.length ? [{ id: 'web_search' as const, name: 'Web search' as const, models: web }] : []),
+  ];
 }
 
 /** 10.3 — one provider's free media models, cached with its chat list. NVIDIA's
@@ -801,10 +816,13 @@ export interface AiFeatureFlags {
   transcription: boolean;
   music: boolean;
   code: boolean;
+  /** 11.0 — some chat model can search the web (Gemini 2.5 Flash grounding). */
+  web: boolean;
 }
 export function featureFlags(media: MediaModel[][], tools: ToolEntry[][]): AiFeatureFlags {
   const has = (k: MediaKind): boolean => media.some((list) => list.some((m) => m.kind === k));
-  return { image: has('image'), speech: has('speech'), transcription: has('transcription'), music: has('music'), code: tools.some((t) => t.some((x) => x.models.length > 0)) };
+  return { image: has('image'), speech: has('speech'), transcription: has('transcription'), music: has('music'), code: tools.some((t) => t.some((x) => x.id === 'code_execution' && x.models.length > 0)),
+    web: tools.some((t) => t.some((x) => x.id === 'web_search' && x.models.length > 0)) };
 }
 
 // ---------------------------------------------------------------------------

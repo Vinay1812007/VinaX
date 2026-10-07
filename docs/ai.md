@@ -13,7 +13,7 @@ Backend paths are relative to `backend/worker/functions/`; frontend paths are re
 | AI proposes; code decides. | Every AI answer is parsed, clipped and validated on the server, then validated again on the device. |
 | Every AI feature has a non-AI result. | See [When every provider is down](#when-every-provider-is-down). |
 | Model output is untrusted. | Display text with markup or links is rejected; song suggestions are resolved against the catalogue. |
-| No live web access. | No route searches or fetches the web, and models that browse on their own (`WEB_BROWSING_SLUGS` in `_lib/catalog.ts`) are left out of every list. The chat prompt says so, and tells the model to flag answers that may be out of date. |
+| Web search only through a provider's own free tool. | Since 11.0 the one web tool is Gemini's search grounding, free on the free tier for the Gemini 2.5 Flash family (see [Web search](#web-search)). No route searches or fetches the web itself, no third-party search engine is called, and models that browse on their own (`WEB_BROWSING_SLUGS` in `_lib/catalog.ts`) stay out of every list. Replies that could not use the tool are told to flag answers that may be out of date. |
 
 ## Providers and keys
 
@@ -100,7 +100,7 @@ Always four providers, in the order `nvidia`, `openrouter`, `groq`, `gemini`. `i
 1. A seat lane is chosen: the pick's provider lane for `mode: 'model'`; for Auto, `pickAutoMode()` reads the question's shape, and the flagship lane leads when `flagshipReady()`.
 2. `laneAttempts(env, seatLane, seatDefault)` builds the plan: the seat's model, its secondary, then the default ladder above. For the `scholar` and `router` seats the lead model is the live catalogue default (`catalogDefaultModel`).
 3. **The OpenRouter lane (11.0).** When `OPENROUTER_API_KEY` is set and the plan has no `router` attempt, one is inserted just ahead of the `home` attempt — a late fallback before the slow reserve. When there is no `home` attempt it goes at the end, which makes it the lead when OpenRouter is the only key. Its model is the live catalogue default, with the `router` pin as the last resort.
-4. A picked model goes first. On Auto with code execution requested, a code-capable model leads: the flagship if it is already first, otherwise the best `gpt-oss` model Groq lists (`codeExecutionModels`).
+4. A picked model goes first. On Auto with a time-sensitive question and a Gemini key, a search-capable Gemini 2.5 Flash model leads (see [Web search](#web-search)). On Auto with code execution requested, a code-capable model leads: the flagship if it is already first, otherwise the best `gpt-oss` model Groq lists (`codeExecutionModels`).
 5. Pairs that are cooling down are removed, unless that would empty the plan. An empty plan answers `503 ai_not_configured`.
 
 Time limits: 40 s to get response headers from some engine (22 s for `expert` and `voice`), then 90 s for the stream.
@@ -112,6 +112,15 @@ A turn with images walks `visionLadder()` instead: the `vision` seat, then `visi
 ### Code execution
 
 A model runs code only when its provider lists the tool for it (`attemptRunsCode`): Gemini, and the Groq models that support the provider's code interpreter. The code runs in the provider's sandbox, never in the Worker. An attempt that refuses the tool with a 400 is asked again without it. A pick that cannot run code answers without it. `meta.tools` is `['code_execution']` when the answering model had the tool.
+
+### Web search
+
+The only web tool is the Gemini provider's search grounding, and only on models where it is free: `searchCapable()` in `_lib/catalog.ts` is true for ids starting `gemini-2.5-flash` (including `-lite`) and false for everything else — Gemini 3.x grounding, Groq's browser search and OpenRouter's web plugin are paid and are never used. The free tier allows 500 grounded prompts a day, shared across those models.
+
+- **When it runs** (`runsSearch()` in `api/vinaxai.ts`): always for a listener's exact pick of a 2.5 Flash model; on Auto only when `wantsWeb()` fires — the latest message carries a time, news, price, weather, score or "is … open" cue, or a year of 2025 or later — and then a 2.5 Flash attempt from the live Gemini catalogue is placed first on the ladder (`webLead`), the rest following as usual. Never with code execution (code wins), never on the internal seats, never with Think on Auto.
+- **How it is sent:** `tools: [{ googleSearch: {} }]` in the native request (`_lib/maestro.ts`, beside `codeExecution`). A 400, or a 429 that names the grounding quota, is retried once without the tool; that is not a lane failure and starts no cooldown.
+- **What comes back:** the transport reads `candidates[0].groundingMetadata` and `groundingSources()` reduces it to at most 8 pages (http(s) only, de-duplicated, titles clipped), the queries the model ran, and the provider's search-suggestion snippet (`searchEntryPoint.renderedContent`). The chat route forwards it as one `{ sources }` frame (below) and adds `web_search` to `meta.tools`. Showing the snippet is a condition of the free grounding service; the client renders it in a sandboxed frame.
+- `GET /api/aimodels` lists `{ id: 'web_search', name: 'Web search', models: [...] }` under the gemini provider's `tools`, and `features.web` is true when any model has it. The model menu shows those models with a "Searches the web" tag.
 
 ### Status codes
 
@@ -138,6 +147,7 @@ A success is a server-sent event stream, one JSON object per `data:` frame.
 | --- | --- |
 | `{ meta: { model, modelId, provider, mode, tools? } }` | Published name, slug and provider of the model answering, and the requested mode. Sent again when a failover hop changes the model. |
 | `{ delta: "text" }` | The next piece of the reply |
+| `{ sources: { items: [{ url, title }], queries: [...], entry: html \| null } }` | 11.0 — what a grounded reply drew on (see [Web search](#web-search)); sent once, before `done`, only for an attempt that asked for grounding. Older clients ignore it. |
 | `{ done: true }` | The end |
 | `{ done: true, truncated: true }` | The reply was cut short |
 

@@ -4,10 +4,9 @@ import { getSong } from '@/services/api';
 import { detectSongLinks, prefRuleMessage, songContextBlock } from '@/features/ai/replyPrefs';
 import type { Song } from '@/types';
 import type { ModelChoice, Msg } from './types';
-import { assistantPlace } from '@/services/location/assistantPlace';
+import { assistantPlaceRequest } from '@/services/location/assistantPlace';
 import { trimThread } from './longThread';
 import { memoryBlock } from '../memory';
-import { placeConnectorOn } from '../connectors';
 import { projectBlock, projectById } from '../projects';
 
 const VOICE_RULE =
@@ -119,8 +118,12 @@ export async function buildChatRequest(s: TurnSettings, t: TurnInput): Promise<R
     // falls back to the IST line. Country, region, approximate city and an IANA
     // zone only — never an IP, never coordinates. The listener's languages are
     // sent separately (in `taste`) and always outrank this.
-    // 10.0 — the Place connector (composer + menu) can hold it back for the
-    // chat as well; it is on unless the listener switched it off there.
-    place: placeConnectorOn() ? assistantPlace() : undefined,
+    // 11.0 — the chat-only Place switch is gone: the app-wide region setting
+    // decides alone. With it OFF the request says so (`{ off: true }`) and the
+    // server uses no place at all; with it on and nothing resolved, the server
+    // may read a coarse place from the connection itself (country, region,
+    // approximate city, time zone — never an IP). A stored
+    // `vinax.ai.placeOn` from 10.x is simply ignored.
+    place: assistantPlaceRequest(),
   };
 }

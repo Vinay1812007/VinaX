@@ -66,6 +66,8 @@ export interface AiFeatures {
   transcription: boolean;
   music: boolean;
   code: boolean;
+  /** 11.0 — some chat model can search the web (the Gemini provider's own grounding). */
+  web: boolean;
 }
 
 /** 10.3 — one exact non-chat model: a provider and the model's slug, with
@@ -99,6 +101,15 @@ export type ModelChoice =
   | { mode: 'auto' }
   | { mode: 'model'; provider: ProviderId; model: string; name?: string };
 
+/** 11.0 — what a web-grounded reply drew on (the stream's `sources` event):
+ *  the pages, the queries the model ran, and the provider's search-suggestion
+ *  snippet (HTML, shown in a sealed frame). Kept with the chat. */
+export interface MsgSources {
+  items: Array<{ url: string; title: string }>;
+  queries: string[];
+  entry: string | null;
+}
+
 export interface Msg {
   role: 'user' | 'assistant';
   content: string;
@@ -110,6 +121,8 @@ export interface Msg {
   engineProvider?: ProviderId;
   /** 10.3 — tools that were on for the model that answered (stream meta). */
   tools?: string[];
+  /** 11.0 — the pages a web-grounded reply drew on. */
+  sources?: MsgSources;
   /** 10.3 — a picture or a music clip made with Create image / Create music clip. */
   media?: MsgMedia;
   /** 10.3 — a picture or clip is being made for this (still empty) reply. */

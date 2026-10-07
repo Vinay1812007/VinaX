@@ -74,14 +74,17 @@ describe('the catalogue: media, tools and features (10.3)', () => {
     expect(providers[2].media?.[0]).toMatchObject({ kind: 'speech', voices: ['autumn', 'troy'] });
   });
 
-  it('keeps only the code tool — never a web tool', () => {
-    expect(providers[0].tools).toEqual([{ id: CODE_TOOL, name: 'Code execution', models: ['lab/alpha-70b'] }]);
+  it('keeps the code tool and (11.0) the web search tool; any other tool is dropped', () => {
+    expect(providers[0].tools).toEqual([
+      { id: CODE_TOOL, name: 'Code execution', models: ['lab/alpha-70b'] },
+      { id: 'web_search', name: 'Search', models: ['lab/alpha-70b'] },
+    ]);
     expect(canRunCode(providers, 'nvidia', 'lab/alpha-70b')).toBe(true);
     expect(canRunCode(providers, 'nvidia', 'lab/beta-8b')).toBe(false);
   });
 
   it('reads features, and an older server without them as all off', () => {
-    expect(parseFeatures(BODY)).toEqual({ image: true, speech: true, transcription: true, music: false, code: true });
+    expect(parseFeatures(BODY)).toEqual({ image: true, speech: true, transcription: true, music: false, code: true, web: false });
     expect(parseFeatures({ providers: [] })).toEqual(NO_FEATURES);
     expect(parseFeatures(null)).toEqual(NO_FEATURES);
     // An older body: no media or tools on any provider, nothing crashes.
