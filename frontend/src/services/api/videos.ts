@@ -33,7 +33,7 @@ export interface Video {
   artists: VideoArtistRef[];
 }
 
-const BASE = 'https://vinax-saavan-api.onrender.com/api';
+const BASE = 'https://vinaxmusicapi.sirimillavinay.online/api';
 
 /** The upstream titles arrive HTML-encoded ("Tested, Approved &amp; Trusted"). */
 function decodeEntities(s: string): string {
