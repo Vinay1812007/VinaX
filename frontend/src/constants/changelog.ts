@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.0.3': {
+    title: 'Easier to find',
+    changes: [
+      { type: 'fixed', text: 'On days the server was busy, search engines could not read VinaX’s crawl rules at sirimillavinay.online and stopped visiting the site altogether, so new songs and pages were not picked up. That address now always forwards to www.sirimillavinay.online straight away, whatever the server is doing.' },
+    ],
+  },
   '11.0.2': {
     title: 'Steadier mornings',
     changes: [

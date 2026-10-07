@@ -7,11 +7,11 @@ This is the runbook for keeping VinaX running: how each piece deploys and how to
 | Piece | Where it runs | How it deploys |
 | --- | --- | --- |
 | Static frontend (`frontend/dist`) | The static-hosting project `vinax` (`vinax.pages.dev`, the `ASSETS_HOST` in `wrangler.toml`) | The host's Git integration builds `frontend/` on every push to `main` |
-| Worker `vinax-api` (`backend/worker`) | The edge, on the routes in `backend/worker/wrangler.toml`: `/api/*`, the apex, `/song/*`, `/album/*`, `/artist/*`, `/playlist/*`, the language-and-mood landing pages, `/sitemap*`, `/img`, `/apk`, and the `update.` and `admin.` hosts | The **Deploy Worker** workflow (the path that works), and the host's own Git build (currently broken, see below) |
+| Worker `vinax-api` (`backend/worker`) | The edge, on the routes in `backend/worker/wrangler.toml`: `/api/*`, the language-and-mood landing pages, `/sitemap*`, `/img`, `/apk`, and the `update.` and `admin.` hosts | The **Deploy Worker** workflow (the path that works), and the host's own Git build (currently broken, see below) |
 | Android package | Built by workflow, published as a repository release | **Build Android APK** on every push to `main`; **Release APK** on a pushed tag ([android.md](android.md)) |
 | Database | A hosted Postgres service reached with the service key | SQL files in `frontend/supabase/migrations/`, pasted into the database's SQL editor by the owner |
 
-Production host: `www.sirimillavinay.online`. The Worker owns the apex (it redirects to `www`), `admin.` (to `/admin/`) and `update.` (to the package download). `status.` is redirected to `/status/` by `frontend/public/_redirects`.
+Production host: `www.sirimillavinay.online`. The Worker owns `admin.` (to `/admin/`) and `update.` (to the package download). The apex is redirected to `www` by the static site (`frontend/public/_redirects`), not the Worker: when the apex was a Worker route, a Worker over its daily quota answered 429 for `https://sirimillavinay.online/robots.txt`, and Search Console reported "Robots.txt unreachable" and stopped crawling the whole domain (fixed in 11.0.3). Keep anything a crawler needs before it can crawl — robots.txt on every host — off Worker routes. `status.` is redirected to `/status/` by `frontend/public/_redirects`.
 
 ## Deploying, and telling whether the Worker is current
 

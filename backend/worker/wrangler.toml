@@ -13,9 +13,15 @@ routes = [
   # /api/admin/*, /api/cron/*, /api/push/*
   { pattern = "www.sirimillavinay.online/api/*", zone_name = "sirimillavinay.online" },
 
-  # Apex: catch-all so _middleware's 301 canonicalization to www runs at the
-  # edge for every apex URL (no duplicate second origin).
-  { pattern = "sirimillavinay.online/*", zone_name = "sirimillavinay.online" },
+  # 11.0.3 — the apex (sirimillavinay.online/*) is NOT a Worker route any more.
+  # It was a catch-all only so _middleware could 301 it to www, which made the
+  # apex's robots.txt depend on the Worker's daily quota: once the quota ran out
+  # (error 1027) every apex URL, robots.txt included, answered 429, and Google
+  # stopped crawling the whole domain ("Robots.txt unreachable", site-wide).
+  # The static host does the same 301 for free and without a limit:
+  # `https://sirimillavinay.online/*  https://www.sirimillavinay.online/:splat 301`
+  # in frontend/public/_redirects (the apex is attached to the Pages project).
+  # Do not add the apex back — nothing on it needs the Worker.
 
   # 11.0.2 — /song/*, /album/*, /artist/* and /playlist/* are NOT Worker
   # routes any more. They are served by the static host as the ordinary app
