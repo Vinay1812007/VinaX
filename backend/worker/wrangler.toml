@@ -17,11 +17,19 @@ routes = [
   # edge for every apex URL (no duplicate second origin).
   { pattern = "sirimillavinay.online/*", zone_name = "sirimillavinay.online" },
 
-  # Edge-rendered SEO entity pages
-  { pattern = "www.sirimillavinay.online/song/*", zone_name = "sirimillavinay.online" },
-  { pattern = "www.sirimillavinay.online/album/*", zone_name = "sirimillavinay.online" },
-  { pattern = "www.sirimillavinay.online/artist/*", zone_name = "sirimillavinay.online" },
-  { pattern = "www.sirimillavinay.online/playlist/*", zone_name = "sirimillavinay.online" },
+  # 11.0.2 — /song/*, /album/*, /artist/* and /playlist/* are NOT Worker
+  # routes any more. They are served by the static host as the ordinary app
+  # (`/*  /index.html  200` in frontend/public/_redirects), which is free and
+  # has no daily request limit. Since 2026-10-04 a scraper rotating thousands
+  # of IPv6 addresses fetched these pages around the clock: ~98% of the Worker's
+  # requests, the free daily quota gone within hours of each reset, and every
+  # /api/* call failing for real listeners for the rest of the day. A routed
+  # request is counted before any code runs, so only removing the route stops
+  # that. The cost: crawlers and link previewers get the app shell, not the
+  # pre-rendered song text and share card. The handlers in functions/song,
+  # album, artist and playlist stay in the code; to bring the pages back, put
+  # the four patterns here again — and put a challenge rule in front of them
+  # first (docs/operations.md, "Scraper traffic on entity pages").
 
   # Sitemaps: /sitemap.xml, /sitemap-*.xml AND the paginated /sitemaps/*
   { pattern = "www.sirimillavinay.online/sitemap*", zone_name = "sirimillavinay.online" },

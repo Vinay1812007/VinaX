@@ -78,6 +78,10 @@ Diagnosis:
 
 ### Scraper traffic on entity pages
 
+**Current state (11.0.2): the entity pages are not Worker routes.** `/song/*`, `/album/*`, `/artist/*` and `/playlist/*` were removed from `routes` in `backend/worker/wrangler.toml`, so those URLs are served by the static site as the ordinary app (`/*  /index.html  200` in `frontend/public/_redirects`). Static requests are free and unlimited, so a scraper on those paths costs the Worker nothing, and no challenge is shown to anyone. What it costs: crawlers, the ad crawler and link previewers get the app shell, not the pre-rendered song text, track list and share card; ranking for individual songs may fall over time, shared links show the generic VinaX card, and the 8.4.0 ad-review content depth no longer applies to those pages. The hub pages (`/<lang>-<mood>-songs`) and the sitemaps are still Worker routes.
+
+To bring server rendering back, put the four patterns into `routes` again **and** put a zone rule in front of them first, or the quota drain returns. The rest of this section describes those rules and the in-Worker guard for that case.
+
 Two layers, and only the first one saves quota:
 
 **1. Zone edge rules (the fix).** A request on a Worker route is counted the moment it arrives, before any cache or code runs, so only a rule in front of the Worker stops the count. `backend/scripts/cf-edge-rules.mjs` creates two WAF custom rules and keeps them in step (it matches by description, so it is safe to run again):

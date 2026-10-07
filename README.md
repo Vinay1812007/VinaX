@@ -10,7 +10,7 @@ VinaX is a free music app with no sign-up: it plays from a public catalogue, lea
 | --- | --- | --- |
 | Listener app | `frontend/` | A static single-page app (Vite, React 19, Tailwind, zustand). Every page is a lazy chunk; a service worker keeps the shell and saved audio available offline. |
 | Android wrapper | `frontend/native-android/`, `frontend/scripts/patch-android.js` | The same bundle in a generated Capacitor project, with a native media service, widgets, downloads and in-app updates. |
-| Worker | `backend/worker/` | `vinax-api`: `/api/*`, edge-rendered song, album, artist and playlist pages, sitemaps, the image proxy and the Android package download. Anything it does not match goes to the static site. |
+| Worker | `backend/worker/` | `vinax-api`: `/api/*`, edge-rendered hub pages, sitemaps, the image proxy and the Android package download. Anything it does not match goes to the static site. |
 | Owner console | `frontend/public/admin/` | A separate static page for the owner: monitoring, feature flags, Home layout, trend review. Sign-in is checked by the Worker. |
 
 ## What a listener can do
