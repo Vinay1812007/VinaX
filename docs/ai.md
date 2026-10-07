@@ -128,7 +128,7 @@ A model runs code only when its provider lists the tool for it (`attemptRunsCode
 | 503 | `ai_disabled` / `ai_over_budget` | The owner's controls refused the call |
 | 503 | `engine_unreachable` | No engine returned headers in time |
 
-The other routes that map "every engine is rate-limited" to 429 are listed with their contracts below. Only `/api/vinaxai` sets a `Retry-After` header on that answer.
+The other routes that map "every engine is rate-limited" to 429 are listed with their contracts below. Only `/api/vinaxai` sets a `Retry-After` header on that answer; the per-route rate limiter (`_lib/ratelimit.ts`) is the one other place in the Worker that sets the header, on its own `429 rate_limited` (see [Rate limits and body caps](#rate-limits-and-body-caps)).
 
 ### Stream events
 
@@ -153,10 +153,10 @@ Each route sits behind its owner switch, a rate limit and a body cap, and valida
 | Route | Request | Answer |
 | --- | --- | --- |
 | `POST /api/image` | `{ prompt, provider?, model? }` | `{ image, model, modelId, provider }`, `image` a `data:image/` URL |
-| `GET /api/voices` | — | The voice list, with `providers: [{ id, label, models: [{ id, name, voices }] }]` |
+| `GET /api/voices` | — | `{ fetchedAt, configured, models, personas, providers }`: `configured` is whether the default speech key is set, `models` the speech models the keys serve (empty means the device voice only), `personas` the DJ voice personas (empty when there are no models), and `providers: [{ id, label, models: [{ id, name, voices }] }]` |
 | `POST /api/tts` | `{ text, provider?, model?, voice? }` | Audio. `400 text_required`, `413 too_large`, `502 unreachable`, `503` |
 | `POST /api/transcribe` | `{ audio, mime?, provider?, model?, language? }` | `{ text, model, modelId, provider }` |
-| `POST /api/music` | `{ prompt, provider?, model? }` | `{ audio, mime, model, modelId, provider }` |
+| `POST /api/music` | `{ prompt, provider?, model? }` | `{ audio, mime, model, modelId, provider }`, `audio` a `data:` URL of the `mime` type |
 
 **Default speech (11.0).** A `/api/tts` request that names no provider used to need the Groq key. It now falls to any provider with a free speech model, and answers `503 not_configured` only when none can speak.
 

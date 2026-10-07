@@ -104,7 +104,7 @@ The chat has its own, scoped styling layer; the app shell around it keeps the li
 
 1. `frontend/src/utils/theme.ts` — add the id to `TemplateId` and its `[dark, light]` canvas to `TEMPLATE_CANVAS`.
 2. `frontend/index.html` — add the same pair to the table in the pre-paint script.
-3. `frontend/src/constants/templates.ts` — add the entry (id, name, one-line description, miniature colours).
+3. `frontend/src/constants/templates.ts` — add the `TemplateOption` entry: `id`, `label`, `tagline` (one line under the name), `traits` (what changes) and `swatch` (`canvas`, `raised`, `accent`, `second`; dark look). `templates.test.ts` asserts the number of styles ("has six styles with unique ids and names") and that no entry names another product, so change the count there too.
 4. `frontend/src/styles/templates/<id>.css` — the colour blocks (dark and light, each with `:not([class*='fest-'])`), the accent block limited to the default accent, the dial values, then only the layout rules that are the style's own.
 5. `frontend/src/styles/templates/index.css` — import the file.
 6. `frontend/src/styles/pages/settings.css` — draw its miniature for the picker (the `.vx-tpl-*` rules).
@@ -198,7 +198,7 @@ The rule: the visual box may be 36 or 40px, but the touch target is at least 44p
 
 ## Focus and states
 
-- `:focus-visible` draws a 2px `--vx-focus` outline with a 4px offset, in both themes.
+- `:focus-visible` draws a 2px `ember-500` outline with a 2px offset and a soft 5px halo (`ember-500` at 32%) in every theme (`index.css`; the `--vx-focus` token exists but the ring does not read it). Text-like inputs use a quieter border shift instead.
 - Buttons: hover brightens, active scales to 0.98, disabled is 45% opacity with no transform. `.btn-premium` is an alias of `.btn-primary`.
 - Loading uses the `Skeletons` components; empty and error states use `States` (`EmptyState`, `ErrorState` with retry).
 - The current track row is tinted with `ember-500` at 8%. Toggles announce state through `aria-pressed`, not colour alone.
@@ -251,8 +251,8 @@ It also skips events an overlay already handled (`defaultPrevented`). The rule f
 | Left — where you are | Right — what you can do |
 | --- | --- |
 | Back and forward buttons (from `md` up); the app icon linking Home (phones) | The page's own actions (the slot) |
-| The context label: the matching `PRIMARY_NAV` label, or "Your music" on other routes | The command-palette key (from `lg` up) |
-| | The settings link ("Your space" label from `2xl` up) |
+| The context label: the matching `PRIMARY_NAV` or `NAV_GROUPS` item label, or "VinaX" on other routes | The command-palette key (from `lg` up) |
+| | The avatar, a link to Settings labelled "Local profile and settings" |
 
 A page adds actions to the bar with `<TopBarActions>` instead of rendering a button row of its own:
 

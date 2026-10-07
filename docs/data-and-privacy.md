@@ -38,8 +38,10 @@ The app style and the chat style are display preferences only. No request builde
 | --- | --- | --- |
 | Browsing, searching, opening a song, album, artist, playlist, chart or video page | The catalogue source, directly or through the Worker's catalogue routes | Search words, ids, language and page parameters |
 | Playing a song | The audio host named in the song's stream URL | A normal media request |
-| Showing artwork | The artwork host; the Worker's image route only when a share card needs a same-origin copy | Image URLs |
+| Showing artwork | The artwork host; the Worker's image route only when a share card needs a same-origin copy | Image URLs. The content-security policy (`frontend/public/_headers`) allows images from any `https:` host plus `data:` and `blob:`; it names no specific image host, so there is no unused host to remove, and `frontend/index.html` sets no `img-src` of its own |
 | Opening lyrics | An open lyrics database, then the catalogue source as fallback | Track title, artist and duration |
+| Searching by lyric words (Search page) | The same open lyrics database (`services/lyrics/lrclib.ts`) | The words typed |
+| Running code VinaX AI wrote (the Run button, `POST /api/preview`) | The Worker, which serves it back into a sandboxed frame and stores nothing | The HTML, SVG or JavaScript being run |
 | App config, flags, festival window, announcements, blocklist, site mode, version and update check, experiment list, model and voice lists, trending searches | The Worker | Nothing personal |
 | Trends shelves (`/api/trends`) | The Worker | A two-letter region code, a language and a limit, when set |
 | Region guess (`/api/geo`) | The Worker | Nothing beyond the request itself. The answer is a country code, a region name, the edge's approximate city and a time zone. Asked only while region inference is allowed (`allowRegionInference` in settings) and no manual override is set, and at most once every 12 hours unless the listener refreshes it. The answer is cached on the device under the region key. |

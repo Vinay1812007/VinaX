@@ -217,7 +217,7 @@ A matched module with no handler for the request method answers `405`.
 
 ## Owner console
 
-`frontend/public/admin/` is a separate static page (plain scripts, no build step) that ships inside the frontend build and is served at `/admin/`. It holds no secrets. Every read and write goes to `/api/admin/*`, where the Worker checks the admin session on each request. What the owner publishes there — feature flags, the Home layout, banners, search synonyms, disabled catalogue bases, announcements — reaches the app through `/api/appconfig` and related public routes, which the app reads with a 5-minute stale time (`features/home/useAppConfig.ts`). [admin-console.md](admin-console.md) has the details.
+`frontend/public/admin/` is a separate static page (plain scripts, no build step) that ships inside the frontend build and is served at `/admin/`. It holds no secrets. `index.html` carries the frame (a `<header id="topbar">` and the section workspace), `console.css` the styling, and `app.js` publishes shared helpers on `window.VXA` (`stateLoading`, `stateEmpty`, `stateError`, `toast`, `esc`, `html`) that the section scripts in `sections/` use for their loading, empty and error states and their notices. Every read and write goes to `/api/admin/*`, where the Worker checks the admin session on each request. What the owner publishes there — feature flags, the Home layout, banners, search synonyms, disabled catalogue bases, announcements — reaches the app through `/api/appconfig` and related public routes, which the app reads with a 5-minute stale time (`features/home/useAppConfig.ts`). [admin-console.md](admin-console.md) has the details.
 
 ## How a play flows
 

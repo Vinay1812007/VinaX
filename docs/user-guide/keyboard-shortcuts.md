@@ -79,11 +79,11 @@ These keys apply while Flow is open. See [Flow](flow.md).
 
 | Key | Action |
 |---|---|
-| `Ctrl` + `K` or `⌘` + `K` | Start a new chat |
-| `Ctrl` + `B` or `⌘` + `B` | Show or hide the chat list |
-| `Esc` | Stop a reply |
+| `Esc` | Close the open tool panel in the message box |
 | `Enter` | Send the message. `Shift` + `Enter` adds a new line. |
-| `/` | Open the commands in the message box |
+| `/` at the start of the message, then `Tab` | Complete the command you started typing |
+
+`Ctrl` + `K` (or `⌘` + `K`) opens the app's command palette here as everywhere else; VinaX AI has no chat-list shortcut.
 
 If you change the send setting in VinaX AI, the keys swap: `Ctrl` + `Enter` or `⌘` + `Enter` sends and `Enter` adds a new line. The hint under the message box always shows the current keys. See [VinaX AI](vinax-ai.md).
 

@@ -105,8 +105,8 @@ Inside **Player tools**:
 - **Speed** changes the playback speed.
 - **Loop a passage** repeats the part of the song between two points you set.
 - **Marks** saves a moment in the song so you can jump back to it.
-- **More → Share this moment** shares or copies a link that opens the song at the current position.
-- **More → Ambient mode** is a switch. When it is on and you leave the player untouched for 45 seconds while music plays, the screen changes to artwork and a clock.
+- **Player tools → Share this moment** shares or copies a link that opens the song at the current position.
+- **Player tools → Ambient mode** is a switch (the pill reads "Ambient mode on" or "off"). When it is on and you leave the player untouched for 45 seconds while music plays, the screen changes to artwork and a clock.
 
 ## Sleep timer
 
