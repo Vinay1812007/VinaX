@@ -35,6 +35,7 @@ import * as m_api_admin_content from './functions/api/admin/content';
 import * as m_api_admin_dataquality from './functions/api/admin/dataquality';
 import * as m_api_admin_digest from './functions/api/admin/digest';
 import * as m_api_admin_edge from './functions/api/admin/edge';
+import { guardVerdict, isEntityPage, isHubPage, plainShell } from './functions/_lib/pageGuard';
 import * as m_api_admin_cron from './functions/api/admin/cron';
 import * as m_api_admin_envcheck from './functions/api/admin/envcheck';
 import * as m_api_admin_funnel from './functions/api/admin/funnel';
@@ -337,6 +338,14 @@ const route = async (request: Request, env: Env, ctx: ExecCtx): Promise<Response
 
   const handler = pickHandler(mod, request.method);
   if (!handler) return new Response('Method Not Allowed', { status: 405 });
+
+  // 11.0 — the edge-rendered catalogue pages sit behind a guard: a browser
+  // impostor, or a network reading pages faster than people do, gets the
+  // plain app shell instead of a rendered page (_lib/pageGuard.ts).
+  if (request.method === 'GET' && (isEntityPage(path) || isHubPage(path))) {
+    const verdict = await guardVerdict(request, env);
+    if (verdict !== 'render') return plainShell(request, assetsFetch(env), verdict);
+  }
 
   const context = {
     request,

@@ -24,6 +24,9 @@ export const CHANGELOG_V2: Record<string, VersionInfo> = {
       { type: 'improved', text: 'Attached files show as small chips with a “Show contents” link instead of filling your message, the chat stays at the bottom when a reply finishes, and a message that cannot be sent as it is offers “Edit message”.' },
       { type: 'improved', text: 'A new welcome for first-time listeners, in short steps with Back and Skip, including “Pick your look”. The guided tours in Help were rewritten, with three new ones: Change the app’s look, Festival themes, and VinaX AI: models and chat styles.' },
       { type: 'fixed', text: 'On phones, the Listen together page ran off the right edge and hid its Start button; on the narrowest phones a search panel and the Open queue link did too. In the Black theme, page text showed through the top bar while scrolling. All fixed.' },
+      { type: 'improved', text: 'The Light theme is glass now, in every app style: three soft lights sit behind the panes — the style’s accent, its second colour and the playing artwork — and the bars, sheets, cards and tiles are frosted white over them instead of flat paint. Text on every bar still clears the accessibility contrast floor, whatever scrolls underneath.' },
+      { type: 'fixed', text: 'The + menu in VinaX AI could run off the bottom of the screen on an empty chat; it now opens where there is room and scrolls inside it.' },
+      { type: 'fixed', text: 'Song, album, artist and playlist pages fetched by a scraper pretending to be a browser, or by a network reading pages far faster than any person, now get the plain app instead of a rendered page — so a robot cannot keep the catalogue servers busy. People, search engines and link previews are unaffected.' },
     ],
   },
   '10.3.0': {

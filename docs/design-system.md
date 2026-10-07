@@ -78,6 +78,8 @@ An app style ("template" in the code) is a complete look chosen in Settings → 
 
 The `theme` setting is one of `dark`, `light`, `amoled` (shown as Black), `system` or `auto`. `resolveTheme` turns the last two into a concrete theme: `system` follows the device, `auto` is light from 07:00 to 18:59 and dark otherwise. Black also carries `.dark`, so dark rules apply and only the surfaces change. High contrast is a separate setting that adds `.hc`.
 
+Since 11.0 the light theme is glass as well. `styles/templates/base.css` gives every style's light look three soft lights behind the panes (the accent low on the left, the second colour top right, the playing artwork top left, painted once on `.vx-shell::before`), a frosted workspace sheet, translucent white cards and tiles, and bluer, more saturated frost on the bars. The fills where text sits keep the 10.1 floors — chrome at 80% white, thick at 86% — because 80% is the thinnest white on which muted text still clears 4.5:1 over a black cover; `constants/templates.test.ts` asserts that per style. The flat styles (Pulse, Marquee) keep their opaque bars in light as in dark; their cards and canvas take the lights.
+
 ## Accents
 
 - **Style colour** is the first swatch. Its stored id is `crimson`, and it means "whatever the app style's accent is".

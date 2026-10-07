@@ -36,6 +36,11 @@ interface Bucket {
 const buckets = new Map<string, Bucket>();
 const MAX_BUCKETS = 5000;
 
+/** Tests only: forget every bucket between cases. */
+export function _resetRateLimitsForTests(): void {
+  buckets.clear();
+}
+
 // Any object env accepted; we only look for a TELEMETRY_PEPPER string on it.
 // Kept as an opaque type to avoid structural-match errors with caller Env types.
 type PepperEnv = object;
