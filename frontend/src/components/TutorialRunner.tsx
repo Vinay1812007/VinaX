@@ -3,7 +3,6 @@ import { router } from '@/router';
 import { useTutorialStore } from '@/store/tutorialStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { tutorialById } from '@/features/tutorials/tutorials';
-import { cn } from '@/utils/cn';
 import { scrollBehavior } from '@/utils/motion';
 
 /**
@@ -11,9 +10,20 @@ import { scrollBehavior } from '@/utils/motion';
  * TutorialHost. Spotlights the real control for each step (a box with a huge
  * box-shadow dims everything else), places the card beside it, and runs the
  * step's action (navigate, start music) before looking the target up.
- * Keyboard: → / Enter next, ← back, Esc leave.
+ * Keyboard: → / Enter next, ← back, Esc leave; Tab stays inside the card.
+ *
+ * 11.0 rewrite — the target is kept clear of the bottom chrome (the phone tab
+ * bar, a flat bar or a floating island depending on the app style, and the
+ * mini player), the card is placed from its measured height, a step whose
+ * anchor is missing is skipped instead of pointing at nothing, each step is
+ * announced through a live region, and focus returns to the opener on close.
  */
 interface Rect { top: number; left: number; width: number; height: number }
+
+/** How long a step waits for its anchor before it is skipped. */
+const ANCHOR_WAIT_MS = 2500;
+/** Bottom chrome that can cover a target: the phone tab bar and the player bar. */
+const CHROME = '.vx-dock, [data-tour="player"]';
 
 function findTarget(selector: string | undefined): Element | null {
   if (!selector) return null;
@@ -25,6 +35,37 @@ function findTarget(selector: string | undefined): Element | null {
   }) ?? null;
 }
 
+/** The y above which a target is clear of the tab bar and mini player. */
+function clearBottom(target: Element): number {
+  let y = window.innerHeight;
+  document.querySelectorAll(CHROME).forEach((el) => {
+    if (el.contains(target) || target.contains(el)) return;
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0 && r.top > window.innerHeight / 2) y = Math.min(y, r.top);
+  });
+  return y;
+}
+
+/** Scroll the target's own scroller so it sits above the bottom chrome and below the top bar. */
+function keepClear(target: Element): void {
+  const r = target.getBoundingClientRect();
+  const bar = document.querySelector('.vx-topbar')?.getBoundingClientRect();
+  const top = bar && bar.bottom < window.innerHeight / 2 && !document.querySelector('.vx-topbar')?.contains(target) ? bar.bottom : 0;
+  const over = r.bottom + 14 - clearBottom(target);
+  const under = top + 14 - r.top;
+  const by = over > 0 ? over : under > 0 ? -under : 0;
+  if (!by) return;
+  let el = target.parentElement;
+  while (el) {
+    const o = getComputedStyle(el).overflowY;
+    if ((o === 'auto' || o === 'scroll') && el.scrollHeight > el.clientHeight + 1) break;
+    el = el.parentElement;
+  }
+  (el ?? window).scrollBy({ top: by, behavior: 'auto' });
+}
+
+const pause = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
+
 export default function TutorialRunner() {
   const activeId = useTutorialStore((s) => s.activeId);
   const step = useTutorialStore((s) => s.step);
@@ -34,126 +75,208 @@ export default function TutorialRunner() {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const tutorial = tutorialById(activeId);
   const current = tutorial?.steps[step];
+  const total = tutorial?.steps.length ?? 0;
   const [rect, setRect] = useState<Rect | null>(null);
   const [ready, setReady] = useState(false);
+  const [cardH, setCardH] = useState(240);
+  const [vp, setVp] = useState({ w: window.innerWidth, h: window.innerHeight });
   const cardRef = useRef<HTMLDivElement>(null);
   const runId = useRef(0);
+  /** Direction of travel, so a missing anchor is skipped the way the listener was going. */
+  const dir = useRef<1 | -1>(1);
 
-  // Enter a step: route, action, then look the target up (up to 4 s).
+  // Focus returns to whatever opened the tour (the Help tile, the welcome sheet's button).
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    return () => {
+      if (opener?.isConnected) opener.focus?.({ preventScroll: true });
+    };
+  }, []);
+
+  // Enter a step: route, action, then wait for the anchor.
   useEffect(() => {
     if (!tutorial || !current) return;
     const id = ++runId.current;
     setReady(false);
     setRect(null);
     let cancelled = false;
+    const live = () => !cancelled && id === runId.current;
     (async () => {
       if (current.route && window.location.pathname !== current.route) {
         await router.navigate(current.route);
-        await new Promise((r) => window.setTimeout(r, 350));
+        await pause(350);
       }
-      if (cancelled || id !== runId.current) return;
+      if (!live()) return;
       try {
         await current.action?.();
       } catch {
         /* a failed action never blocks the walkthrough */
       }
-      if (cancelled || id !== runId.current) return;
-      const deadline = Date.now() + 4000;
-      let el = findTarget(current.target);
-      while (!el && current.target && Date.now() < deadline && !cancelled) {
-        await new Promise((r) => window.setTimeout(r, 120));
-        el = findTarget(current.target);
-      }
-      if (cancelled || id !== runId.current) return;
-      if (el) {
-        el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: scrollBehavior() });
-        await new Promise((r) => window.setTimeout(r, 250));
+      if (!live()) return;
+      if (current.target) {
+        const deadline = Date.now() + ANCHOR_WAIT_MS;
+        let el = findTarget(current.target);
+        while (!el && Date.now() < deadline && live()) {
+          await pause(120);
+          el = findTarget(current.target);
+        }
+        if (!live()) return;
+        if (!el) {
+          // The anchor is not on this screen (a control that is hidden for this
+          // listener, a layout that dropped it). Move on in the direction of
+          // travel; at either end the card is shown centred, with no spotlight.
+          const to = step + dir.current;
+          if (to >= 0 && to < total) {
+            go(to);
+            return;
+          }
+        } else {
+          el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: scrollBehavior() });
+          await pause(250);
+          if (!live()) return;
+          keepClear(el);
+        }
       }
       setReady(true);
     })();
     return () => {
       cancelled = true;
+      try {
+        current.leave?.();
+      } catch {
+        /* leaving a step never throws into React */
+      }
     };
-  }, [tutorial, current, step]);
+  }, [tutorial, current, step, total, go]);
 
-  // Track the target's box while the step is shown (scroll, resize, layout).
+  // Follow the target's box while the step is shown (scroll, resize, layout shifts).
   useLayoutEffect(() => {
     if (!ready || !current?.target) return;
     let raf = 0;
+    let last = '';
     const tick = () => {
       const el = findTarget(current.target);
-      if (el) {
-        const r = el.getBoundingClientRect();
-        setRect({ top: r.top - 6, left: r.left - 6, width: r.width + 12, height: r.height + 12 });
-      } else setRect(null);
+      const r = el?.getBoundingClientRect();
+      const next = r ? { top: r.top - 6, left: r.left - 6, width: r.width + 12, height: r.height + 12 } : null;
+      const key = next ? `${next.top}|${next.left}|${next.width}|${next.height}` : '';
+      if (key !== last) {
+        last = key;
+        setRect(next);
+      }
       raf = window.requestAnimationFrame(tick);
     };
     raf = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(raf);
   }, [ready, current]);
 
-  const total = tutorial?.steps.length ?? 0;
+  // The card is placed from the real viewport and its own measured height.
+  useEffect(() => {
+    const onResize = () => setVp({ w: window.innerWidth, h: window.visualViewport?.height ?? window.innerHeight });
+    window.addEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('resize', onResize);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const h = cardRef.current?.offsetHeight;
+    if (h && Math.abs(h - cardH) > 1) setCardH(h);
+  }, [step, ready, rect, vp, cardH]);
+
   const next = useCallback(() => {
     if (!tutorial) return;
+    dir.current = 1;
     if (step >= total - 1) finish();
     else go(step + 1);
   }, [tutorial, step, total, finish, go]);
-  const back = useCallback(() => go(step - 1), [go, step]);
+  const back = useCallback(() => {
+    if (step <= 0) return;
+    dir.current = -1;
+    go(step - 1);
+  }, [go, step]);
 
   useEffect(() => {
     if (!tutorial) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      if (e.key === 'Escape') { e.preventDefault(); stop(); }
-      else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); next(); }
-      else if (e.key === 'ArrowLeft' && step > 0) { e.preventDefault(); back(); }
+      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); stop(); return; }
+      if (e.key === 'Tab') {
+        // Keep Tab inside the card: the page behind is dimmed, not operable by keyboard.
+        const stops = Array.from(cardRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? []);
+        if (!stops.length) return;
+        const at = stops.indexOf(document.activeElement as HTMLElement);
+        e.preventDefault();
+        stops[(at + (e.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
+        return;
+      }
+      if (typing) return;
+      // Enter on a focused button is that button's own click.
+      if (e.key === 'Enter' && t?.closest('button, a')) return;
+      if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); next(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); back(); }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [tutorial, step, next, back, stop]);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [tutorial, next, back, stop]);
 
+  // Focus enters the card once per step, unless it is already on one of its buttons.
   useEffect(() => {
-    cardRef.current?.focus();
+    if (!cardRef.current?.contains(document.activeElement)) cardRef.current?.focus({ preventScroll: true });
   }, [step, ready]);
 
   if (!tutorial || !current) return null;
 
-  // Card placement: beside the spotlight when there is one, else centred.
-  const cardW = Math.min(380, window.innerWidth - 24);
-  // Centred with `inset-0 m-auto h-fit`, NOT a translate: the card's enter
-  // animation animates `transform`, which overrode an inline translate and
-  // threw the card off-centre for the length of the animation.
+  const cardW = Math.min(380, vp.w - 24);
+  // Without a spotlight the card is centred with `inset-0 m-auto h-fit`, NOT a
+  // translate: the enter animation animates `transform` and would override it.
   let cardStyle: React.CSSProperties = { width: cardW };
   if (rect) {
-    const below = current.placement !== 'top' && rect.top + rect.height + 220 < window.innerHeight;
-    const above = current.placement === 'top' || !below;
-    const left = Math.max(12, Math.min(window.innerWidth - cardW - 12, rect.left + rect.width / 2 - cardW / 2));
-    cardStyle = above
-      ? { left, bottom: Math.max(12, window.innerHeight - rect.top + 12), width: cardW }
-      : { left, top: rect.top + rect.height + 12, width: cardW };
+    const gap = 12;
+    const roomBelow = vp.h - (rect.top + rect.height) - gap * 2;
+    const roomAbove = rect.top - gap * 2;
+    const below = current.placement === 'top'
+      ? roomAbove < cardH && roomBelow > roomAbove
+      : roomBelow >= cardH || roomBelow >= roomAbove;
+    const top = below ? rect.top + rect.height + gap : rect.top - gap - cardH;
+    cardStyle = {
+      width: cardW,
+      left: Math.max(12, Math.min(vp.w - cardW - 12, rect.left + rect.width / 2 - cardW / 2)),
+      top: Math.max(12, Math.min(vp.h - cardH - 12, top)),
+    };
   }
+  const titleId = `vx-tut-title-${step}`;
+  const showBody = ready || !current.target;
 
   return (
-    <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label={`Tutorial: ${tutorial.title}`}>
+    <div
+      className="vx-tut fixed inset-0 z-[90]"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Tutorial: ${tutorial.title}`}
+      data-step={step}
+      data-ready={ready ? 'true' : 'false'}
+      data-anchor={!current.target ? 'none' : rect ? 'found' : 'pending'}
+    >
       {/* Spotlight: the box-shadow dims everything but the target; the target stays clickable. */}
       {rect ? (
         <div
           aria-hidden
-          className="fixed rounded-xl pointer-events-none transition-[top,left,width,height] duration-200 motion-reduce:transition-none"
-          style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height, boxShadow: '0 0 0 9999px rgba(0,0,0,0.62), 0 0 0 2px rgb(var(--ember-500))' }}
+          className="vx-tut-spot fixed pointer-events-none"
+          style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height }}
         />
       ) : (
         <div aria-hidden className="fixed inset-0 bg-black/62" onClick={stop} />
       )}
+      <p className="sr-only" role="status" aria-live="polite">
+        {showBody ? `Step ${step + 1} of ${total}. ${current.title}. ${current.body}` : ''}
+      </p>
       <div
         ref={cardRef}
         tabIndex={-1}
-        className={cn(
-          'fixed bg-ink-950 dark:bg-ink-850 border border-[color:var(--vx-border)] rounded-2xl p-5 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.65)] outline-none animate-fade-up max-h-[calc(100dvh-24px)] overflow-y-auto',
-          !rect && 'inset-0 m-auto h-fit max-w-[calc(100vw-24px)]',
-          !ready && 'opacity-90',
-        )}
+        aria-labelledby={titleId}
+        className={`vx-tut-card vx-mat-thick fixed outline-none animate-fade-up${rect ? '' : ' inset-0 m-auto h-fit max-w-[calc(100vw-24px)]'}`}
         style={cardStyle}
       >
         <div className="flex items-center justify-between gap-3 mb-2">
@@ -164,21 +287,21 @@ export default function TutorialRunner() {
             <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-ink-300"><span className="w-1.5 h-1.5 rounded-full bg-ember-500" /> Playing</span>
           )}
         </div>
-        <h2 className="text-[18px] font-[750] tracking-[-0.015em]">{current.title}</h2>
-        <p className="mt-1.5 text-[14px] text-ink-200 leading-relaxed">{ready || !current.target ? current.body : 'Getting things ready…'}</p>
-        {current.tip && <p className="mt-2 text-[13px] text-ink-400">{current.tip}</p>}
+        <h2 id={titleId} className="text-[18px] font-[750] tracking-[-0.015em]">{current.title}</h2>
+        <p className="mt-1.5 text-[14px] text-ink-200 leading-relaxed">{showBody ? current.body : 'Getting things ready…'}</p>
+        {current.tip && showBody && <p className="mt-2 text-[13px] text-ink-400">{current.tip}</p>}
         <div className="mt-3 flex items-center gap-1.5" aria-hidden>
           {tutorial.steps.map((_, i) => (
             <span key={i} className={i === step ? 'w-4 h-1 rounded-full bg-ember-500' : 'w-1 h-1 rounded-full bg-ink-100/25'} />
           ))}
         </div>
         <div className="mt-4 flex items-center gap-2">
-          <button onClick={stop} className="-ml-2 min-h-[44px] px-2 text-[13px] font-bold text-ink-400 hover:text-ink-100">Skip</button>
+          <button type="button" onClick={stop} className="-ml-2 min-h-[44px] px-2 text-[13px] font-bold text-ink-400 hover:text-ink-100">Close</button>
           <div className="flex-1" />
           {step > 0 && (
-            <button onClick={back} className="btn-secondary px-4 min-h-[40px] text-[14px]">Back</button>
+            <button type="button" onClick={back} className="btn-secondary px-4 min-h-[44px] text-[14px]">Back</button>
           )}
-          <button onClick={next} className="btn-primary px-5 min-h-[40px] text-[14px]">{step >= total - 1 ? 'Done' : 'Next'}</button>
+          <button type="button" onClick={next} className="btn-primary px-5 min-h-[44px] text-[14px]">{step >= total - 1 ? 'Done' : 'Next'}</button>
         </div>
       </div>
     </div>

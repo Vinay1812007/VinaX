@@ -35,7 +35,7 @@
  *
  *   POST { context: {..., style?}, pool: [{ id?, title, artist, language?, album?, year?, known? }], count?, discover?, maxDiscover? }
  *   → 200 { intro, songs: [{ songId, title, artist, reason, segue, confidence, fromPool }], model }
- *   → 400 bad_request | 503 ai_not_configured | 500 { error }
+ *   → 400 bad_request | 503 ai_not_configured | 429 engines rate limited | 500 { error }
  */
 import { aiBlockCode, aiGate, chat, extractJson, gather, isAiBlocked, logAiEvent, logAiRefusal, providerKey, type AiBlock, type AiEnv } from '../_lib/ai';
 import { readJsonCapped } from '../_lib/body';
@@ -409,6 +409,7 @@ async function handlePost(context: { request: Request; env: DjEnv; waitUntil?: (
     if (typeof context.waitUntil === 'function') context.waitUntil(log);
   }
   if (r.error === 'not_configured') return json({ error: 'ai_not_configured' }, 503);
-  if (!songs.length) return json({ error: r.error ?? 'empty', status: r.status ?? null }, 500);
+  // An upstream rate limit (or every lane cooling down) is "busy", not a crash.
+  if (!songs.length) return json({ error: r.error ?? 'empty', status: r.status ?? null }, r.error && r.status === 429 ? 429 : 500);
   return json({ intro, songs, model: r.model ?? null });
 }

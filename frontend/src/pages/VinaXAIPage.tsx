@@ -1,17 +1,20 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import '@/styles/ai.css';
+import '@/styles/ai-styles.css';
 import { ChevronDownIcon, DownloadIcon, PlusIcon, SettingsIcon } from '@/components/Icons';
 import { Toasts } from '@/components/Toasts';
 import { SavedPromptsSheet } from '@/components/ai/AiExtras';
-import { droppedFiles, attachmentText, type Attachment } from '@/features/ai/attachments';
+import { droppedFiles, foldAttachments, type Attachment } from '@/features/ai/attachments';
 import { splitFollowups } from '@/features/ai/followups';
 import { onSpeakingChange, readAloud, readAloudSupported, setReadAloudVoice } from '@/features/ai/readAloud';
 import { parseSlash } from '@/features/ai/slashCommands';
 import { Composer, type ComposerHandle } from '@/features/ai/chat/Composer';
 import { Greeting, Suggestions, type QuickAction } from '@/features/ai/chat/EmptyState';
 import { LiveVoiceHost } from '@/features/ai/chat/LiveVoiceHost';
-import { MessageList } from '@/features/ai/chat/MessageList';
+import { MessageList, followAfterScroll } from '@/features/ai/chat/MessageList';
 import type { MessageHandlers } from '@/features/ai/chat/Message';
+import { ChatStyleContext, useChatStyle } from '@/features/ai/chat/ChatStyleScope';
+import { layoutAttrs } from '@/features/ai/chat/chatStyle';
 import { ModelMenu } from '@/features/ai/chat/ModelMenu';
 import { SettingsDialog } from '@/features/ai/chat/SettingsDialog';
 import { CreateBar } from '@/features/ai/chat/CreateBar';
@@ -38,6 +41,8 @@ import {
   pushRecent,
   saveDefaultChoice,
   saveLastChoice,
+  forgetChoice,
+  AUTO,
   saveRecents,
 } from '@/features/ai/chat/models';
 import { tryMusicCommand } from '@/features/ai/chat/musicCommands';
@@ -56,8 +61,9 @@ import {
   readPref,
   writeFlag,
   writePref,
+  titleFromMessage,
 } from '@/features/ai/chat/storage';
-import { canRetry, failureMessage, runChatStream, type ChatStreamResult } from '@/features/ai/chat/streamClient';
+import { canRetry, failureMessage, needsEdit, runChatStream, type ChatStreamResult } from '@/features/ai/chat/streamClient';
 import { initialStreamState } from '@/features/ai/chat/streamReducer';
 import type { Conversation, MediaPick, ModelChoice, Msg } from '@/features/ai/chat/types';
 import { useModelCatalog } from '@/features/ai/chat/useModelCatalog';
@@ -93,6 +99,14 @@ type FontSize = 's' | 'm' | 'l';
 const readFontSize = (): FontSize => {
   const v = readPref(PREF.fontSize, 'm');
   return v === 's' || v === 'l' ? v : 'm';
+};
+
+/** 11.0 — a fresh id for each turn (unique across reloads, so a stored tag
+ *  can never match a later turn). */
+let turnCount = 0;
+const nextTurnNumber = (): number => {
+  turnCount += 1;
+  return turnCount;
 };
 
 export default function VinaXAIPage(): ReactNode {
@@ -217,6 +231,11 @@ export default function VinaXAIPage(): ReactNode {
     const t = setTimeout(() => persistChats(chats), 500);
     return () => clearTimeout(t);
   }, [chats]);
+  // 11.0 — leaving the page inside those 500ms used to drop the last write
+  // (the timer is cancelled on unmount): flush what is on screen on the way out.
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
+  useEffect(() => () => persistChats(chatsRef.current), []);
   useEffect(() => {
     const onHide = (): void => persistChats(chats);
     window.addEventListener('pagehide', onHide);
@@ -235,14 +254,27 @@ export default function VinaXAIPage(): ReactNode {
   /** A smooth "Jump to latest" is under way: its own scroll events must not
    *  bring the pill straight back. */
   const jumpingRef = useRef(false);
+  /** Where the last scroll event left the thread — tells a reader scrolling
+   *  up from a thread that grew under them. */
+  const lastTopRef = useRef(0);
   const measureBottom = useCallback((): void => {
     const list = listRef.current;
     if (!list) return;
-    const near = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
-    if (jumpingRef.current && !near) return;
+    // 11.0 — the thread growing under a pinned reader is not the reader
+    // leaving the bottom (see followAfterScroll).
+    const follow = followAfterScroll({
+      top: list.scrollTop,
+      lastTop: lastTopRef.current,
+      height: list.scrollHeight,
+      client: list.clientHeight,
+      pinned: stickRef.current,
+    });
+    lastTopRef.current = list.scrollTop;
+    if (jumpingRef.current && !follow.pinned) return;
     jumpingRef.current = false;
-    stickRef.current = near;
-    setAtBottom(near);
+    stickRef.current = follow.pinned;
+    setAtBottom(follow.pinned);
+    if (follow.rescroll) list.scrollTo({ top: list.scrollHeight, behavior: 'auto' });
   }, []);
   useEffect(() => {
     const list = listRef.current;
@@ -330,6 +362,7 @@ export default function VinaXAIPage(): ReactNode {
   // 10.3 — the chip reads the model's original name (live once the list is
   // known, else the name saved with the pick) beside its provider's logo.
   const modelLabel = choiceLabel(choice, catalog.providers);
+  const chatStyle = useChatStyle(choice, catalog.providers);
   const modelProvider = choiceProvider(choice);
   // 10.3 — can the model in use run code? Nothing is claimed before the list is read.
   const codeSupport: CodeSupport =
@@ -385,7 +418,12 @@ export default function VinaXAIPage(): ReactNode {
   const stopRef = useRef<() => void>(() => undefined);
   const voice = useLiveVoice({
     getServerVoice: serverVoice,
-    onUserFinal: (text) => void sendRef.current(text),
+    onUserFinal: (text) => {
+      // 11.0 — speaking over a reply that is still arriving ends that reply
+      // first; the new utterance used to be dropped while the turn was busy.
+      if (turnRef.current) stopRef.current();
+      void sendRef.current(text);
+    },
     onStopReply: () => stopRef.current(),
   });
   const voiceEngineRef = voice.engineRef;
@@ -404,11 +442,25 @@ export default function VinaXAIPage(): ReactNode {
     setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, messages: fn(c.messages), updatedAt: Date.now() } : c)));
   };
   const setActiveMessages = (fn: (prev: Msg[]) => Msg[]): void => updateMessages(active?.id ?? '', fn);
-  const replaceLastAssistant = (chatId: string, patch: (m: Msg) => Msg): void =>
+  /* 11.0 — one turn at a time, and each turn owns its own reply. A turn tags
+     the placeholder it adds; only that turn may patch it, so a stopped turn
+     that finishes late can never write into the next turn's bubble, and it
+     only clears `busy` when it is still the turn in flight. */
+  const turnRef = useRef('');
+  const [turnChatId, setTurnChatId] = useState('');
+  const endTurn = (turn: string, controller: AbortController): void => {
+    if (abortRef.current === controller) abortRef.current = null;
+    if (turnRef.current !== turn) return;
+    turnRef.current = '';
+    setBusy(false);
+  };
+  /** A newer turn has begun since `turn` started (not merely: it was stopped). */
+  const superseded = (turn: string): boolean => turnRef.current !== '' && turnRef.current !== turn;
+  const patchTurn = (chatId: string, turn: string, patch: (m: Msg) => Msg): void =>
     updateMessages(chatId, (prev) => {
       const next = [...prev];
       for (let k = next.length - 1; k >= 0; k -= 1) {
-        if (next[k].role === 'assistant') {
+        if (next[k].role === 'assistant' && next[k].turn === turn) {
           next[k] = patch(next[k]);
           break;
         }
@@ -447,6 +499,7 @@ export default function VinaXAIPage(): ReactNode {
   const stop = (): void => {
     abortRef.current?.abort();
     abortRef.current = null;
+    turnRef.current = '';
     setBusy(false);
   };
   stopRef.current = stop;
@@ -566,11 +619,16 @@ export default function VinaXAIPage(): ReactNode {
         const chatId = active?.id ?? '';
         const langs = useSettingsStore.getState().pinnedLanguages;
         const muted = useSettingsStore.getState().mutedLanguages ?? [];
-        updateMessages(chatId, (prev) => [...prev, { role: 'user', content: `/playlist ${arg}` }, { role: 'assistant', content: '' }]);
+        const turn = `${Date.now().toString(36)}-${nextTurnNumber()}`;
+        const controller = new AbortController();
+        turnRef.current = turn;
+        abortRef.current = controller;
+        setTurnChatId(chatId);
         setBusy(true);
+        updateMessages(chatId, (prev) => [...prev, { role: 'user', content: `/playlist ${arg}` }, { role: 'assistant', content: '', turn }]);
         let reply = 'The playlist engine didn’t answer — try again in a moment.';
         try {
-          const r = await generatePlaylist(arg, langs, muted);
+          const r = await generatePlaylist(arg, langs, muted, controller.signal);
           const ok = r.ok ? r.playlist : null;
           const lines = ok ? ok.songs.map((sg, i) => `${i + 1}. ${sg.title} — ${sg.artists?.[0]?.name ?? sg.subtitle}`).join('\n') : '';
           reply =
@@ -580,8 +638,9 @@ export default function VinaXAIPage(): ReactNode {
         } catch {
           /* the honest fallback line above */
         }
-        replaceLastAssistant(chatId, () => ({ role: 'assistant', content: reply }));
-        setBusy(false);
+        if (controller.signal.aborted) reply = 'Stopped before the playlist was ready.';
+        patchTurn(chatId, turn, () => ({ role: 'assistant', content: reply }));
+        endTurn(turn, controller);
         return true;
       }
       default:
@@ -593,36 +652,49 @@ export default function VinaXAIPage(): ReactNode {
   const send = async (
     raw: string,
     attachments: Attachment[] = [],
-    retry?: { history: Msg[]; previousReply: string; user: Msg },
+    retry?: { history: Msg[]; previousReply: string; user: Msg; media?: 'image' | 'music' },
   ): Promise<void> => {
     const chatId = active?.id ?? '';
     const conversation = retry?.history ?? messages;
     const q = raw.trim();
-    if ((!q && attachments.length === 0) || busy) return;
+    // The ref, not the `busy` state: a turn stopped a moment ago (speaking over
+    // a reply) is over at once, before the next render.
+    if ((!q && attachments.length === 0) || turnRef.current) return;
 
     // 10.3 — Create image / Create music clip: one prompt → one picture or one
     // clip, made by the model in the bar and shown in the thread. Before the
     // slash and music commands, so "play a sitar loop" makes a clip.
-    if (createKind && !retry) {
+    // 11.0 — asking again for a picture or clip that failed goes back to the
+    // maker (`retry.media`), not to the chat model.
+    const mediaKind = retry ? retry.media : createKind;
+    if (mediaKind) {
       if (!q) return;
-      const kind = createKind;
+      const kind = mediaKind;
+      // Create works from the prompt alone: say so instead of dropping files silently.
+      if (attachments.length) showToast('Attached files aren’t used when creating a picture or clip — only your prompt was sent');
       const pick = resolveMediaPick(catalog.providers, kind, createPicks[kind]);
+      const turn = `${Date.now().toString(36)}-${nextTurnNumber()}`;
       const controller = new AbortController();
+      turnRef.current = turn;
       abortRef.current = controller;
+      setTurnChatId(chatId);
       setBusy(true);
-      updateMessages(chatId, (prev) => [...prev, { role: 'user', content: q }, { role: 'assistant', content: '', creating: kind }]);
+      updateMessages(chatId, (prev) => [
+        ...(retry ? retry.history : prev),
+        { role: 'user', content: q },
+        { role: 'assistant', content: '', creating: kind, turn },
+      ]);
       setChats((prev) =>
-        prev.map((c) => (c.id === chatId && (c.title === 'New chat' || !c.messages.length) ? { ...c, title: q.slice(0, 42) } : c)),
+        prev.map((c) => (c.id === chatId && (c.title === 'New chat' || !c.messages.length) ? { ...c, title: titleFromMessage(q) } : c)),
       );
       stickRef.current = true;
       const res = await createMedia(kind, q, pick, controller.signal);
-      if (abortRef.current === controller) abortRef.current = null;
-      replaceLastAssistant(chatId, () =>
+      patchTurn(chatId, turn, () =>
         res.ok
           ? { role: 'assistant', content: `${kind === 'image' ? 'Made a picture' : 'Made a music clip'} for: ${q}`, media: res.media }
-          : { role: 'assistant', content: res.line },
+          : { role: 'assistant', content: res.line, mediaKind: kind },
       );
-      setBusy(false);
+      endTurn(turn, controller);
       return;
     }
 
@@ -633,14 +705,22 @@ export default function VinaXAIPage(): ReactNode {
     const imgs = retry
       ? (retry.user.images ?? []).filter(Boolean)
       : attachments.filter((p) => p.kind === 'image' && p.dataUrl).map((p) => p.dataUrl as string);
-    let content = q;
-    if (!retry) for (const f of attachments.filter((p) => p.kind === 'text')) content += attachmentText(f);
+    // 11.0 — text files AND the text read out of PDFs go to the model.
+    const content = retry ? q : foldAttachments(q, attachments);
 
     const userMsg: Msg = { role: 'user', content: content || '(image)', images: imgs.length ? imgs : undefined };
-    updateMessages(chatId, () => [...conversation, userMsg, { role: 'assistant', content: '' }]);
+    const turn = `${Date.now().toString(36)}-${nextTurnNumber()}`;
+    const controller = new AbortController();
+    turnRef.current = turn;
+    abortRef.current = controller;
+    setTurnChatId(chatId);
+    setBusy(true);
+    updateMessages(chatId, () => [...conversation, userMsg, { role: 'assistant', content: '', turn }]);
     setChats((prev) =>
       prev.map((c) =>
-        c.id === chatId && (c.title === 'New chat' || !c.messages.length) ? { ...c, title: (q || 'Image chat').slice(0, 42) } : c,
+        c.id === chatId && (c.title === 'New chat' || !c.messages.length)
+          ? { ...c, title: titleFromMessage(q || (imgs.length ? 'Image chat' : (attachments[0]?.name ?? 'New chat'))) }
+          : c,
       ),
     );
     // The listener just spoke: the thread follows them to the bottom (instantly,
@@ -654,9 +734,6 @@ export default function VinaXAIPage(): ReactNode {
     const now = stateRef.current;
     const voiceLive = Boolean(voiceEngineRef.current);
     const player = usePlayerStore.getState();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setBusy(true);
 
     // Anything that goes wrong while the request is being put together is a
     // failed turn with an honest line in the thread — never a stuck spinner.
@@ -684,15 +761,24 @@ export default function VinaXAIPage(): ReactNode {
         headers: clientHeaders(),
         body,
         signal: controller.signal,
-        onDelta: (delta) => voiceEngineRef.current?.feed(delta),
-        onUpdate: (st) => replaceLastAssistant(chatId, (m) => ({ ...m, content: st.text })),
+        onDelta: (delta) => {
+          if (!superseded(turn)) voiceEngineRef.current?.feed(delta);
+        },
+        onUpdate: (st) => patchTurn(chatId, turn, (m) => ({ ...m, content: st.text })),
       });
     } catch {
       result = { state: initialStreamState(), failure: 'unavailable', aborted: controller.signal.aborted };
     }
 
-    if (abortRef.current === controller) abortRef.current = null;
-    setBusy(false);
+    // A newer turn (the listener spoke over this one) owns the voice now.
+    const voiceIsOurs = !superseded(turn);
+    endTurn(turn, controller);
+    // 11.0 — the server no longer lists the picked model: forget it everywhere
+    // and fall back to Auto, so Retry (and every later message) works.
+    if (result.failure === 'bad_model' && now.choice.mode === 'model') {
+      setRecents(forgetChoice(now.choice));
+      setChoice(AUTO);
+    }
     const { state } = result;
     const split = splitFollowups(state.text.trim().replace(/\n{3,}/g, '\n\n'));
     const text =
@@ -711,9 +797,11 @@ export default function VinaXAIPage(): ReactNode {
     // 9.0 — nothing arrived and waiting cannot help (switched off, or the
     // day's limit): presentation only, the thread points back to the music.
     const unavailable = !result.aborted && !state.text && !canRetry(result.failure);
-    replaceLastAssistant(chatId, (m) => ({
+    patchTurn(chatId, turn, (m) => ({
       ...m,
+      turn: undefined,
       failed: failed || undefined,
+      needsEdit: (failed && needsEdit(result.failure)) || undefined,
       unavailable: unavailable || undefined,
       content: finalText || '…',
       engine: engine || undefined,
@@ -721,6 +809,7 @@ export default function VinaXAIPage(): ReactNode {
       tools: engine && state.tools.length ? state.tools : undefined,
       followups: split.followups.length ? split.followups : undefined,
     }));
+    if (!voiceIsOurs) return;
     if (voiceEngineRef.current) {
       if (split.body) voiceEngineRef.current.finish(finalText);
       else voiceEngineRef.current.cancelTurn();
@@ -741,7 +830,9 @@ export default function VinaXAIPage(): ReactNode {
     const lastReply = [...messages].reverse().find((m) => m.role === 'assistant');
     // A failed turn is asked again as it was, not "differently from" a failure line.
     const previousReply = lastReply && !lastReply.failed ? lastReply.content : '';
-    void send(lastUser.content, [], { history: messages.slice(0, messages.lastIndexOf(lastUser)), previousReply, user: lastUser });
+    // A picture or clip (made, or failed) is asked for again from the maker.
+    const media = lastReply?.media?.kind ?? lastReply?.mediaKind;
+    void send(lastUser.content, [], { history: messages.slice(0, messages.lastIndexOf(lastUser)), previousReply, user: lastUser, media });
   };
   const rewriteLast = (how: 'shorter' | 'longer' | 'simpler'): void => {
     if (busy) return;
@@ -792,6 +883,17 @@ export default function VinaXAIPage(): ReactNode {
     togglePin: (idx: number) => setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, pinned: !m.pinned } : m))),
     branch: branchFrom,
     regenerate,
+    // 11.0 — a message that was turned away (too large, refused as it is):
+    // the failed turn leaves the thread and its text returns to the box.
+    reviseLast: () => {
+      if (busy) return;
+      const at = messages.map((m) => m.role).lastIndexOf('user');
+      if (at < 0) return;
+      const text = messages[at].content;
+      setActiveMessages((prev) => prev.slice(0, at));
+      composerRef.current?.setText(text);
+      composerRef.current?.focus();
+    },
     continueReply: () => {
       if (!busy) void send('Continue exactly from where you stopped.');
     },
@@ -883,7 +985,8 @@ export default function VinaXAIPage(): ReactNode {
 
   return (
     /* VinaX conversation surface, with theme-aware reading contrast. */
-    <div className="ai-root ai-shell">
+    <div className="ai-root ai-shell" data-chat-style={chatStyle.style} data-style-tick={chatStyle.tick} {...layoutAttrs(chatStyle.style)}>
+      <ChatStyleContext.Provider value={chatStyle}>
       <Sidebar
         chats={chats}
         activeId={active?.id ?? ''}
@@ -1095,6 +1198,7 @@ export default function VinaXAIPage(): ReactNode {
                 chatId={active?.id ?? ''}
                 messages={messages}
                 busy={busy}
+                streamingHere={turnChatId === (active?.id ?? '')}
                 speakingId={speakingId}
                 handlers={messageHandlers}
               />
@@ -1215,6 +1319,7 @@ export default function VinaXAIPage(): ReactNode {
       <div className="ai-app-toasts">
         <Toasts />
       </div>
+      </ChatStyleContext.Provider>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   parseFeatures,
 } from './models';
 import {
+  CREATE_PROMPT_MAX,
   createFailureLine,
   createMedia,
   createRequestBody,
@@ -125,8 +126,8 @@ describe('create image / music — picks, bodies, responses', () => {
   });
 
   it('builds { prompt, provider, model } for /api/image and /api/music', () => {
-    expect(createRequestBody('  a red kite  ', { provider: 'nvidia', model: 'lab/pixel-1' })).toEqual({ prompt: 'a red kite', provider: 'nvidia', model: 'lab/pixel-1' });
-    expect(createRequestBody('a red kite', null)).toEqual({ prompt: 'a red kite' });
+    expect(createRequestBody('image', '  a red kite  ', { provider: 'nvidia', model: 'lab/pixel-1' })).toEqual({ prompt: 'a red kite', provider: 'nvidia', model: 'lab/pixel-1' });
+    expect(createRequestBody('music', 'a red kite', null)).toEqual({ prompt: 'a red kite' });
   });
 
   it('reads a picture and a clip, and refuses anything that is not one', () => {
@@ -151,6 +152,44 @@ describe('create image / music — picks, bodies, responses', () => {
     expect(createFailureLine('music', 400, 'unknown_model')).toMatch(/pick another one/);
     expect(createFailureLine('music', 429, null)).toMatch(/Too many requests/);
     expect(createFailureLine('image', 503, null)).toMatch(/image model didn’t answer/);
+  });
+
+  it('11.0 — names the failures that trying again can never fix', () => {
+    // Before 11.0 every one of these read "didn’t answer — try once more".
+    expect(createFailureLine('image', 422, 'content_filtered')).toBe('The image model turned that description down — reword it and try again.');
+    expect(createFailureLine('music', 502, 'content_filtered')).toBe('The music model turned that description down — reword it and try again.');
+    expect(createFailureLine('image', 503, 'not_configured')).toBe('Creating images isn’t set up yet — no image model is available.');
+    expect(createFailureLine('music', 503, 'not_configured')).toBe('Creating music isn’t set up yet — no music model is available.');
+    expect(createFailureLine('image', 413, 'too_large')).toBe('That description is too long — shorten it and try again.');
+    expect(createFailureLine('music', 502, 'too_large')).toBe('The clip came out too large to send — ask for something shorter or pick another model.');
+    expect(createFailureLine('image', 400, 'bad_request')).toBe('That’s too short to make a picture from — describe it in a few words.');
+    expect(createFailureLine('music', 400, 'bad_request')).toBe('That’s too short to make a clip from — describe it in a few words.');
+    for (const line of [createFailureLine('image', 422, 'content_filtered'), createFailureLine('image', 503, 'not_configured'), createFailureLine('image', 400, 'bad_request')]) {
+      expect(line).not.toMatch(/didn’t answer/);
+    }
+    // A model that really did not answer still says so.
+    expect(createFailureLine('image', 502, 'engine_unreachable')).toMatch(/image model didn’t answer/);
+  });
+
+  it('11.0 — a description under three characters is refused here, without a request', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await createMedia('image', '  a ', null)).toEqual({ ok: false, line: 'That’s too short to make a picture from — describe it in a few words.' });
+    expect(await createMedia('music', 'om', null)).toEqual({ ok: false, line: 'That’s too short to make a clip from — describe it in a few words.' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('11.0 — sends no more of the description than the server keeps (600 image, 1000 music)', () => {
+    const long = 'స'.repeat(2500);
+    expect(CREATE_PROMPT_MAX).toEqual({ image: 600, music: 1000 });
+    expect(createRequestBody('image', long, null).prompt).toHaveLength(600);
+    const music = createRequestBody('music', long, { provider: 'gemini', model: 'g/tune' });
+    expect(music.prompt).toHaveLength(1000);
+    // The music route reads at most 4000 bytes of body; 2000 characters of a
+    // three-byte script used to overflow it (413) before the model was asked.
+    expect(new TextEncoder().encode(JSON.stringify(music)).length).toBeLessThan(4000);
+    const made = readCreateResponse('image', { image: 'data:image/png;base64,AAAA' }, long, null);
+    expect(made?.prompt).toHaveLength(600);
   });
 
   it('posts the body and returns the media, or a line — never throws', async () => {

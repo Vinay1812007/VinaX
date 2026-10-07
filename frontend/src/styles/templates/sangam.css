@@ -1,0 +1,101 @@
+/* ============================================================================
+   Sangam — warm, roomy and colourful.
+
+   The plum and marigold VinaX grew up in, with a peacock-teal second colour.
+   Everything is generous: big rounded artwork, colour-washed tiles, section
+   titles led by a small marigold bar, the sidebar and the phone tab bar as
+   floating rounded islands. The display face carries the titles. Motion is
+   gentle and rises.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+/* The inks are the base plum / cream scale (index.css); only the second
+   colour changes. */
+html[data-template='sangam']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --tide-500: 38 198 186;
+  --tide-400: 110 224 212;
+}
+html.light[data-template='sangam']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --tide-500: 0 118 110;
+  --tide-400: 0 100 94;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='sangam'] {
+  --tpl-r-art: 22px;
+  --tpl-r-art-sm: 14px;
+  --tpl-r-play: 20px;
+  --tpl-r-play-sm: 16px;
+  --tpl-r-row: 18px;
+  --tpl-r-tile: 20px;
+  --tpl-r-input: 18px;
+  --tpl-r-deck: 28px;
+  --tpl-r-mini: 22px;
+  --tpl-r-np-art: 30px;
+  --vx-type-section: 1.5rem;
+  --tpl-card-title-weight: 700;
+  --tpl-enter: tplRise;
+  --tpl-enter-dur: 340ms;
+  --vx-radius-panel: 26px;
+  --vx-radius-card: 20px;
+  --vx-shelf-gap: 48px;
+  --vx-card-gap: 20px;
+  --ease-calm: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (max-width: 767px) {
+  html[data-template='sangam'] { --vx-shelf-gap: 38px; --vx-card-gap: 14px; }
+}
+
+/* ------------------------------------------------------------------ shell */
+/* The sidebar and the workspace are two rounded islands on the canvas. */
+@media (min-width: 768px) {
+  html[data-template='sangam'] .vx-sidebar { margin: 10px 4px 0 10px; border-radius: var(--vx-radius-panel) var(--vx-radius-panel) 0 0; }
+  html[data-template='sangam'] .vx-workspace { margin: 10px 10px 0 6px; }
+}
+html[data-template='sangam'] .vx-nav-link { min-height: 48px; font-weight: 700; }
+html[data-template='sangam'] .vx-lib-row { min-height: 60px; }
+html[data-template='sangam'] .vx-lib-art { width: 46px; height: 46px; }
+
+/* Phone tab bar: a floating island, clear of the screen edges. */
+@media (max-width: 767px) {
+  html[data-template='sangam'] .vx-dock {
+    margin: 0 10px 8px;
+    border-radius: 26px;
+    box-shadow: inset 0 1px 0 var(--vx-mat-specular), inset 0 0 0 1px var(--vx-mat-hairline), 0 14px 30px -16px rgb(0 0 0 / 0.6);
+    overflow: hidden;
+  }
+  html[data-template='sangam'] .vx-dock-item { min-height: 62px; }
+  html[data-template='sangam'] .vx-dock-pill { width: 60px; height: 32px; }
+}
+
+/* ------------------------------------------------------- pages and cards */
+/* Section titles are led by a small marigold bar. */
+html[data-template='sangam'] :is(.vx-section-header h2, .vxh-head h2)::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 0.82em;
+  margin-right: 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgb(var(--ember-400)), rgb(var(--tide-500)));
+  vertical-align: -0.06em;
+}
+html[data-template='sangam'] .vx-media-title { margin-top: 14px; font-size: 15px; }
+@media (hover: hover) {
+  html[data-template='sangam'] .vx-media-card:hover .vx-media-art { transform: translateY(-5px); box-shadow: 0 18px 34px -18px rgb(0 0 0 / 0.75); }
+}
+html[data-template='sangam'] .card-play { width: 50px; height: 50px; right: 12px; bottom: 12px; }
+/* Home tiles and chips take turns through the palette. */
+html[data-template='sangam']:not([class*='fest-']) .vxh-tile:nth-child(4n + 1) { background: rgb(var(--ember-500) / 0.16); }
+html[data-template='sangam']:not([class*='fest-']) .vxh-tile:nth-child(4n + 2) { background: rgb(var(--tide-500) / 0.15); }
+html[data-template='sangam']:not([class*='fest-']) .vxh-tile:nth-child(4n + 3) { background: rgb(var(--vxh-t4) / 0.3); }
+html[data-template='sangam']:not([class*='fest-']) .vxh-tile:nth-child(4n + 4) { background: rgb(var(--vxh-t3) / 0.24); }
+html.light[data-template='sangam']:not([class*='fest-']) .vxh-tile:nth-child(4n + 3) { background: rgb(var(--vxh-t4) / 0.12); }
+html.light[data-template='sangam']:not([class*='fest-']) .vxh-tile:nth-child(4n + 4) { background: rgb(var(--vxh-t3) / 0.1); }
+html[data-template='sangam'] .vxh-tile { min-height: 64px; }
+html[data-template='sangam'] .vxh-tile img { width: 64px; height: 64px; }
+html[data-template='sangam'] .vxh-chip { min-height: 40px; padding: 0 16px; box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.3); background: rgb(var(--ember-500) / 0.08); }
+html[data-template='sangam'] .vxh-chip:nth-child(even) { box-shadow: inset 0 0 0 1px rgb(var(--tide-500) / 0.34); background: rgb(var(--tide-500) / 0.08); }
+html[data-template='sangam'] .vxh-hero { border-radius: 28px; }
+html[data-template='sangam'] .vx-track-row { min-height: 64px; }
+html[data-template='sangam'] .vx-track-art { width: 46px; height: 46px; }

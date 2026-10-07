@@ -11,7 +11,7 @@ This package is the `vinax-api` Worker. It serves everything dynamic on the Vina
 | `worker/functions/_lib/` | Shared code: AI lanes (`ai.ts`, `models.ts`, `laneHealth.ts`), admin auth (`admin.ts`), catalogue, rate limits, push, rendering |
 | `worker/functions/_middleware.ts` | Host-level redirects |
 | `worker/wrangler.toml` | Worker name, routes, `[vars]`, bindings |
-| `worker/__tests__/` | Cross-cutting tests, including router coverage and AI failover |
+| `worker/__tests__/` | Cross-cutting tests, including router coverage, AI failover and the AI chat audit suites (`aiChatAudit.test.ts`, `aiAuditSweep.test.ts`) |
 | `index.html` | A snapshot of the app shell used only as a test fixture (`_lib/render.test.ts`). Refresh it from `../frontend/index.html` when the shell's meta tags change. |
 
 A new handler under `worker/functions/api/` needs an import and an exact-path entry in `worker/index.ts`. `worker/__tests__/routerCoverage.test.ts` fails without them.

@@ -1,491 +1,312 @@
 # Evaluation
 
-This document covers how VinaX's next-song selection is measured: the offline
-evaluation harness (`frontend/eval/`), what its fixtures contain, how the
-current pipeline was compared against the 7.1 baseline, the numbers from that
-comparison, the two opt-in telemetry events that record what really happened,
-and how to read an A/B result from them without fooling yourself.
+This document covers the offline evaluation of VinaX's next-song selection: a harness in `frontend/eval/` that runs the real recommendation engine against synthetic listeners with the network replaced, and reports rule compliance, diversity mechanics, fallback behaviour and latency. It exists so that a change to the engine can be compared with the engine before it, on the same inputs, in a few minutes. It does not measure whether anyone enjoys the songs; the last sections say what it cannot see and where that evidence comes from instead. The engine itself is described in [recommendations.md](recommendations.md).
 
-**What these numbers are.** Rule compliance, diversity mechanics, fallback
-behaviour and latency, measured against synthetic fixtures with the network
-replaced. **What they are not.** Evidence that anyone enjoys the songs. A
-queue can break no rule, space every artist, open with a familiar song, ship
-in a millisecond — and still be a bad half hour of music. Nothing in this
-document is a quality claim about the listening; only real listeners answer
-that, and the only honest source for it is the opt-in telemetry described
-under [Reading an A/B result](#reading-an-ab-result).
+## The model in one page
 
-## The harness
+| Step | What happens | Where |
+| --- | --- | --- |
+| 1. Fixtures | 29 synthetic listeners, each with a seed song, a profile, a history, settings and a pool of fictional songs | `frontend/eval/fixtures/index.ts` — `buildFixtures(now)` |
+| 2. Mocks | Five network-facing modules are replaced; everything else is the app's own code | `frontend/eval/lib/mocks.ts`, wired by `vi.mock` in `frontend/eval/recs.eval.ts` |
+| 3. Sittings | Each fixture runs once per salt (12 by default). A sitting is four continuations of five songs, a queue of twenty | `runSession` in `frontend/eval/lib/run.ts` |
+| 4. Measuring | Every queued song is checked against rules written out again for the harness | `frontend/eval/lib/rules.ts` |
+| 5. Extra runs | One determinism re-run, one "asked again from the same song" run, eight latency conditions | `frontend/eval/recs.eval.ts` |
+| 6. Aggregation | Counts, shares and percentiles, overall and per fixture | `summarise` in `frontend/eval/lib/metrics.ts` |
+| 7. Gate | Three assertions; the process exits 0 or 1 | `frontend/eval/recs.eval.ts`, `frontend/scripts/eval-recs.mjs` |
+| 8. Reports | A JSON file per pipeline, a combined JSON file and a Markdown file | `frontend/scripts/eval-recs.mjs` |
+
+A default run plans 1 308 continuations in 348 sittings and takes a little over three minutes.
+
+## Running it
+
+There is no npm script and no workflow for the evaluation. It runs on demand, from `frontend/`:
 
 ```sh
 cd frontend
-node scripts/eval-recs.mjs                 # current + the 7.1 baseline, JSON + Markdown reports
-node scripts/eval-recs.mjs --no-baseline   # the current pipeline only
-node scripts/eval-recs.mjs --quick         # 3 salts, 3 latency runs (a smoke run)
-node scripts/eval-recs.mjs --report-only   # rebuild the reports from the last run
-npx vitest run --config eval/vitest.config.ts   # the harness alone, current pipeline
+node scripts/eval-recs.mjs --no-baseline            # the working tree only
+node scripts/eval-recs.mjs --baseline <commit>      # the working tree, then that commit, side by side
+node scripts/eval-recs.mjs --help                   # the header comment of the script
+npx vitest run --config eval/vitest.config.ts       # the harness alone, no summary, no Markdown
+npx tsc --noEmit -p eval/tsconfig.json              # type-check the harness (the root tsconfig only covers src/)
 ```
 
-Reports land in `frontend/eval/reports/` (git-ignored): `recs-eval.json` (both
-pipelines, every metric) and `recs-eval.md` (the tables below). The default
-unit-test gate does not collect any of this: `npx vitest run` looks for
-`*.test.ts` / `*.spec.ts`, and every file here is `*.eval.ts` or plain
-support code, so the evaluation only ever runs on demand. `vite.config.ts` is
-untouched.
+The default unit-test run does not collect the evaluation: `npx vitest run` looks for `*.test.*` and `*.spec.*`, and `eval/vitest.config.ts` includes only `eval/**/*.eval.ts`.
 
-| Piece | Where |
+| Flag | Effect | Default |
+| --- | --- | --- |
+| `--no-baseline` | Run the working tree only | off |
+| `--baseline <commit>` | The commit to compare against | `7c4e2f5` (see [Comparing with a baseline](#comparing-with-a-baseline): this default no longer loads) |
+| `--quick` | 3 salts and 3 latency runs | off |
+| `--salts <n>` | Salts per fixture | 12 |
+| `--latency-runs <n>` | Runs per latency condition | 8 |
+| `--cap-ms <n>` | Upper bound on any single latency run | 12000 |
+| `--out <dir>` | Where the reports go, relative to the current directory | `frontend/eval/reports` |
+| `--report-only` | Rebuild the combined reports and the summary from the per-pipeline JSON of the last run | off |
+
+An unknown flag exits with code 2. The runner passes these on as environment variables (`EVAL_PIPELINE`, `EVAL_REF`, `EVAL_OUT`, `EVAL_SALTS`, `EVAL_LATENCY_RUNS`, `EVAL_LATENCY_CAP_MS`, `EVAL_ASSERT`, `EVAL_SRC`), which `recs.eval.ts` and `eval/vitest.config.ts` read.
+
+### Files it writes
+
+| File | Written by |
 | --- | --- |
-| Fixtures (versioned, deterministic) | `eval/fixtures/` — `EVAL_FIXTURES_VERSION` |
-| The measuring stick (rules, identity, repetition) | `eval/lib/rules.ts` |
-| The sitting simulator and the pipeline adapters | `eval/lib/run.ts` |
-| Aggregation (percentiles, shares, counts) | `eval/lib/metrics.ts` |
-| The network-facing mocks | `eval/lib/mocks.ts` |
-| The run itself | `eval/recs.eval.ts` — `EVAL_HARNESS_VERSION` |
-| Runner and report writer | `frontend/scripts/eval-recs.mjs` |
+| `<out>/recs-eval-current.json`, `<out>/recs-eval-baseline.json` | Each harness run (`EVAL_OUT`) |
+| `<out>/recs-eval.json`, `<out>/recs-eval.md` | The runner, after the runs |
+| `frontend/eval/reports/current.json` | A direct `npx vitest run --config eval/vitest.config.ts`, which has no `EVAL_OUT` |
+| `frontend/eval/.cache/baseline-<commit>/` | A baseline run: the `frontend/src` of that commit, extracted with `git archive`, its test files deleted |
 
-### What is real and what is replaced
+`frontend/eval/reports/` and `frontend/eval/.cache/` are git-ignored (`frontend/eval/.gitignore`). Nothing tracked is written. The cache is kept between runs and can be deleted at any time.
 
-The harness runs the REAL pipeline through its public entry points —
-`planNextSongs` (7.2) or `recommendNextSongs` (the baseline's only one) — so
-it keeps working when the modules underneath them change. Five
-network-facing modules are replaced, and nothing else:
+## Fixtures
 
-| Replaced | By |
-| --- | --- |
-| `@/services/api` (the catalogue client) | The fixture's pool, with scripted failures, delays and never-settling calls |
-| `@/services/ai/recommendations` | A classifier that never answers, and the re-rank the real client returns when the curator is unreachable |
-| `@/services/ai/dj` | A scripted DJ: unavailable, timing out, answering with an order of its own, or proposing songs that break the rules |
-| `@/services/queryClient` | No cached owner flags |
-| `@/services/ai/embeddings` (8.2) | No learned vectors on the device and no network: the taste fit runs on the on-device vectors alone, and a background warm-up can never make two runs differ |
-
-The catalogue mock answers the 8.2 sources too, and since 9.0 (harness 1.2.0) it answers them the way the catalogue does. `getAlbum` returns the fixture's album page, when it lists one (`albums`), and nothing otherwise. `getArtist` returns an artist page with the fixture's "similar artists" for that artist (`similarArtists`) and the artist's top songs. `getArtistTopSongs` returns the songs of the pool that credit the artist, plus any songs only an artist page lists (`artistSongs`). A search for an artist's exact name answers with that artist's songs. (Until 9.0 every search answered with the generic pool, so the favourite-artist source appeared to supply other artists' songs, with its boost, and crowded out the related-artist source.) The embeddings mock returns the learned vectors a fixture says the device holds (`embeddings`), and none otherwise. A fixture can mark songs the catalogue cannot stream: they come in a response that carries stream URLs for the others. With `memory: true` the harness commits every accepted continuation and records the outcomes of its first four songs (three finished, one skipped), so the seed and proven-pick memories fill as the sitting goes; otherwise it clears `localStorage` before each continuation, and neither memory fills. A fixture can also list songs Home showed this week (`served`), which the harness records before each continuation, so the served-recently penalty fires.
-
-Mocking one level below `candidates.ts` is deliberate: the candidate stage
-carries rules of its own (soft mutes, Kid mode, blocked songs, junk titles),
-so replacing the whole module would have taken those out of the measurement.
-Filtering, scoring, diversity, sequencing, validation and the stores are the
-app's own code at the commit under test.
-
-### One sitting, four continuations
-
-Each run simulates what the player does: plan five songs, queue them, let the
-sitting play down to the song with one left after it, then plan the next five
-with everything queued excluded — four times, for a queue of twenty. The seed
-for each continuation is the song the player would be playing at that moment
-(`queue[length − 2]`), and the songs before it count as played, so the taste
-history, the recency window and the "known artists" set grow as they would in
-a real sitting.
-
-Every fixture runs with twelve fixed salts (the app's per-session rotation
-seed). The clock is frozen at one instant, fixtures never read it, and the
-harness re-runs one fixture at the end to prove the same salt still yields the
-same songs; the report carries `deterministic: true` (or both orders, when it
-does not).
-
-### The measuring stick
-
-The rules are written out again in `eval/lib/rules.ts` from
-[recommendations.md](recommendations.md) rather than imported from the
-pipeline, so the evaluation cannot agree with a bug by sharing its code. The
-one exception is song identity (`canonicalKey` / `recordingKey` in
-`services/recommendation/identityCore.ts`), which is a published contract
-shared with the Worker and pinned by `shared/identity-vectors.json`: both
-pipelines are measured with the CURRENT contract, so "another cut of a song
-played minutes ago" means the same thing on both sides.
-
-| Metric | Definition |
-| --- | --- |
-| Hard-rule violation | A queued song that is explicit under Kid mode, in a muted language, by a hidden or soft-muted artist, hidden by id, another cut of one of the last twenty plays, skipped in this sitting (9.0), unplayable (9.0), or a second cut of a song already in the queue |
-| Off-language under the lock | A queued song in a known language other than the seed's. Counted as a violation only when at least three in-language candidates were still available; otherwise it is the documented relaxation |
-| The mix rules (8.1) | For a fixture with `queueLanguages: 'mix'` there is no lock. A queued song in a known language outside the listener's languages (pinned, played, the seed's; muted ones removed) is `off-language`; a song in another language in slot 1 or 2 is `language-opening`; two off-lead songs back to back are `language-run`. All three count as hard violations |
-| Repetition | The same lead artist back to back (the boundary between two continuations included), the same lead within three songs, the same identity twice in a sitting |
-| Artist coverage | Distinct lead artists per continuation, and per sitting as a share of its songs |
-| Discovery share | Songs whose lead artist this listener has never played, against the mode's allocation (5 / 20 / 45 % plus the sitting's appetite). The pipeline's own count (`plan.discoveryIds`) is recorded next to it |
-| Familiar-first | Slot 1 (and slot 2 of a stretch of four or more) is not a discovery, counted only where a familiar, eligible candidate existed |
-| Fallback | `plan.fallback` and the refinement's outcome: `deadline`, `ai_timeout`, `ai_unavailable`, `ai_rejected`, `error`, or none |
-| Queue-ready latency | Wall time from the call to a list the player could queue. For 7.2 that is the local plan; for the baseline it is the whole call, AI included |
-| Retrieval depth (9.0) | Queued songs only an album page or an artist page could supply (no search or suggestion returns them), as a share of songs queued |
-| Declared-taste agreement (9.0) | For fixtures that declare a taste (`tasteTargets`), the share of each continuation in it. Agreement with what a synthetic fixture says — not evidence of enjoyment |
-| Sitting-avoided artists (9.0) | Queued songs by an artist the sitting's intent pushed away (pull ≤ −0.6), counted in continuations where another lead artist was eligible |
-| Served (9.0) | For fixtures that record songs Home showed, the share of queued songs that were among them |
-| Seed-memory replay (9.0) | Plan from the `warm` seed, then again from the same seed: how many of the first three songs repeat, without a commit and with one |
-
-## The fixtures (version 1.3.0)
-
-Twenty-nine fixtures (nineteen at 7.2; 8.1 added `mixed-queue`, 8.3 the DJ-remix and folk sittings, 9.0 the seven below `soft-muted`), each a pure
-function of the timestamp the harness passes in. Songs, titles and artists
-are fictional, written in Telugu, Hindi, Tamil, Punjabi, Malayalam and Latin
-scripts.
+`buildFixtures(now)` returns 29 fixtures, each a pure function of the timestamp the harness passes in (`NOW = 1_800_000_000_000`). Songs, titles and artists are fictional, in Telugu, Hindi, Tamil, Punjabi, Malayalam and Latin scripts (`frontend/eval/fixtures/catalogue.ts`). `EVAL_FIXTURES_VERSION` is `1.3.0`; bump it whenever a fixture changes, because two reports with different fixture versions are not comparable.
 
 | Fixture | What it is for |
 | --- | --- |
-| `cold` | A cold listener: no profile, no history, no favourites |
-| `warm` | A full profile with the AI DJ answering with an order of its own |
-| `familiar` | Familiar mode: a 5 % discovery allocation, known ground as a source |
+| `cold` | No profile, no history, no favourites |
+| `warm` | A full profile; the AI DJ answers with an order of its own |
+| `familiar` | Familiar mode: a 5 % discovery allocation |
 | `discover` | Discover mode (Hindi), AI unavailable |
-| `tamil` | Tamil, the DJ times out |
+| `tamil` | Tamil; the DJ times out |
 | `punjabi` | Punjabi, AI off |
 | `malayalam` | Malayalam, Familiar mode |
-| `mixed` | A listener who plays Hindi, Telugu and Tamil, with a mixed pool and a DJ that proposes an off-language song, an explicit one and a hidden artist |
-| `mixed-queue` | 8.1: the same listener with Queue languages on "Your languages" (`queueLanguages: 'mix'`): a Hindi seed, Hindi, Telugu and Tamil pinned, and a pool that also holds Punjabi, which the listener never chose. The queue may change language within the mix rules; Punjabi must stay out |
-| `prefs` | Mixed preferences: a quiet cluster and a loud one in one pool |
+| `mixed` | A listener who plays Hindi, Telugu and Tamil; the DJ proposes an off-language song, an explicit one and a hidden artist |
+| `mixed-queue` | The same listener with `queueLanguages: 'mix'`: Hindi seed, three languages pinned, and Punjabi in the pool, which must stay out |
+| `prefs` | A quiet cluster and a loud one in one pool |
 | `skips` | A skip streak of three, with the skipped songs in the pool |
 | `partial-outage` | The seed-suggestions source throws; the searches answer |
 | `offline` | Every source throws |
 | `sparse` | No energy, tempo, mood, genre, year or duration |
-| `versions` | One work in six cuts, plus a zero-width joiner, a Latin accent and a featured credit |
+| `versions` | One work in several cuts, plus a zero-width joiner, a Latin accent and a featured credit |
 | `small-catalogue` | Six candidates for a sitting that wants twenty |
 | `kid-mode` | Kid mode with explicit songs in the pool and a DJ proposing more |
 | `muted-languages` | Hindi and English muted, with a pool full of them |
-| `hidden-artists` | Two hidden artists (one in an Indic script, one Latin) and two hidden songs |
+| `hidden-artists` | Two hidden artists (one in an Indic script, one Latin) and hidden songs |
 | `soft-muted` | Two lead artists under "show fewer like this" |
-| `dj-session`, `folk-session` | 8.3: a DJ-remix sitting and a folk sitting (folk only in the album name); the folk DJ answers with an order of its own |
-| `deep-sources` | 9.0: thin suggestions for a film song; the album page holds the rest of the soundtrack and the lead artist's page lists two similar artists whose songs no search returns. Declares that soundtrack and those artists as its taste |
-| `embeddings` / `embeddings-off` | 9.0: the device holds learned vectors for the taste songs and a 60-song pool; only the vectors tell the fitting half apart. Declares that half as its taste. `-off` is the same listener with no vectors (the control) |
-| `served` | 9.0: eight of the strongest suggestions were shown on Home this week |
-| `memory` | 9.0: every continuation is committed and its songs end (three finished, one skipped): the seed and outcome memories fill during the sitting |
-| `unplayable` | 9.0: the suggestions response streams half its songs; the other half can never be queued (`no-audio`) |
-| `sparse-history` | 9.0: three plays, no favourites, one pinned language |
+| `dj-session`, `folk-session` | A DJ-remix sitting and a folk sitting; what follows should stay in style |
+| `deep-sources` | Thin suggestions; the album page and two similar artists' pages hold songs no search returns. Declares those as its taste |
+| `embeddings`, `embeddings-off` | The device holds learned vectors that tell the fitting half of a 60-song pool apart; `-off` is the same listener without them |
+| `served` | Eight of the strongest suggestions were shown on Home this week |
+| `memory` | Every continuation is committed and its first four songs end (three finished, one skipped) |
+| `unplayable` | The suggestions response can stream only half its songs |
+| `sparse-history` | Three plays, no favourites, one pinned language |
 
-Two more fixtures serve the latency conditions: the warm Telugu listener, and
-the same listener with a production-sized pool (104 songs).
+Two more fixtures serve the latency conditions only: `latencyFixture` (a warm Telugu listener, pool of 26) and `largePoolFixture` (the same listener, pool of 104).
 
-## 9.0 versus 8.6
+## How the real engine is loaded
 
-**Method.** As below, with the 8.6.0 release (`733cd77`) as the baseline:
-`node scripts/eval-recs.mjs --baseline 733cd77`, fixtures 1.3.0, harness
-1.2.0, 12 salts per fixture. Both sides run the 9.0 harness and fixtures,
-including the 9.0 measuring stick: a song skipped in this sitting and an
-unplayable song are rule breaks (`skipped-this-sitting`, `no-audio`), and a
-batch's "familiar songs were free" no longer counts songs skipped this sitting
-as free.
+`recs.eval.ts` imports `@/services/recommendation/engine` and calls `planNextSongs` when the tree exports it, otherwise `recommendNextSongs`. The `@` alias points at `frontend/src`, or at `EVAL_SRC` for a baseline. Five modules are replaced, and nothing else:
 
-| Metric | 8.6.0 `733cd77` | 9.0 |
-| --- | ---: | ---: |
-| Continuations planned / songs queued | 1 308 / 5 760 | 1 308 / 5 772 |
-| Empty continuations | 96 | 84 |
-| **Hard-rule violations** | **12** (`no-audio`, `unplayable`) | **0** |
-| Same lead artist back to back | 48 | 36 |
-| …avoidable (another lead artist was eligible) | 36 | 24 |
-| Same lead artist within three songs | 1 776 | 1 764 |
-| Distinct lead artists per continuation | 4.00 | 3.94 |
-| Discovery share / the modes' allocation | 35.5 % / 18.4 % | 36.1 % / 18.1 % |
-| Familiar-first compliance (slot 1) | 94.8 % | 94.8 % |
-| Style continuity (DJ / folk sittings) | 75.0 % | 75.0 % |
-| Songs only an album or artist page could supply | 0.4 % of songs | 1.5 % |
-| Declared-taste agreement (fixtures that declare one) | 40.0 % | 51.7 % |
-| …`deep-sources` (album and related artists) | 13.3 % | 55.0 % |
-| …`embeddings` / `embeddings-off` | 55.0 % / 45.0 % | 55.0 % / 45.0 % |
-| Songs by an artist this sitting pushed away, another lead eligible (`skips`) | 48 | 0 |
-| Songs Home showed this week, queued anyway (`served`) | 35.0 % | 35.0 % |
-| Asked again from one song: opening songs repeated, of 3 (no memory / committed) | 3 / 2 | 3 / 1 |
-| Reproducible (same salts, same songs) | **no** | yes |
+| Replaced | By |
+| --- | --- |
+| `@/services/api` (the catalogue client) | The fixture's pool, with scripted failures, delays and never-settling calls. Album pages, artist pages, artist top songs and exact-name artist searches answer as the catalogue does |
+| `@/services/ai/recommendations` | A classifier that never answers, and the re-rank the real client returns when the curator is unreachable |
+| `@/services/ai/dj` | A scripted DJ: off, unavailable, timing out, never answering, re-ordering, or proposing songs that break the rules |
+| `@/services/queryClient` | No cached data |
+| `@/services/ai/embeddings` | Only the vectors a fixture says the device holds; no network |
 
-Reading it:
+The mock sits one level below `candidates.ts` on purpose: the candidate stage has rules of its own (soft mutes, Kid mode, blocked songs), and replacing the whole module would remove them from the measurement.
 
-- **The 12 hard violations were a real 8.6 defect**, one per `unplayable`
-  sitting: an unplayable song found again by a source whose response carried
-  no stream URLs lost its mark when the copies merged. See
-  [recommendations.md](recommendations.md#stage-1--candidate-sources).
-- **8.6 is not reproducible on these fixtures** because its served memory
-  outlived `localStorage.clear()` (an in-memory fallback), so the `served`
-  fixture leaked "shown recently" penalties into every later fixture and into
-  the determinism re-run. 9.0 fixed the fallback; read the 8.6 numbers of the
-  fixtures after `served` (`memory`, `unplayable`, `sparse-history`) with that
-  in mind.
-- **Pushed-away artists, 48 → 0**, is the sitting-avoid rule. Its cost is
-  visible in two rows: the repeated-skip sitting ships shorter stretches near
-  the end of its small pool (distinct artists per continuation 4.00 → 3.94
-  overall), because the rule ends a stretch rather than put a pushed-away
-  artist back to back.
-- **Declared-taste agreement** is agreement with what each synthetic fixture
-  says its listener likes. It shows that a signal is used — the album and
-  related-artist sources now follow the song each stretch continues from, so
-  `deep-sources` stops running dry after its first stretch — and nothing more.
-  The embedding refinement already worked in 8.6 (10 points over the
-  control) and is unchanged.
-- **The served penalty is small on purpose** (0.04): songs Home showed are
-  held back a little, never removed, so the share is unchanged.
-- The long-term / recent taste cap and the sitting damping of the long-term
-  profile do not move these numbers: the fixtures' long-term tastes weigh less
-  than the cap's threshold, and the harness does not run the profile updater.
-  Unit tests pin both (`vectors.test.ts`, `updater.test.ts`).
+Before each continuation `applyFixture` clears `localStorage` and `sessionStorage`, resets the transition memory and the candidate cache, and writes the fixture's settings and library into the stores. The `memory` fixture is the exception: its state is applied once and kept for the sitting. The clock is frozen at `NOW` for the quality runs and real for the latency runs.
 
-## 7.2 versus 7.1
+### One sitting
 
-**Method.** The baseline is VinaX 7.1 at commit `7c4e2f5` — the whole
-`frontend/src` of that commit, extracted with `git archive` into
-`eval/.cache/` (git-ignored) and run by the same harness, against the same
-fixtures, with the same mocks and the same measuring stick. The only
-difference between the two runs is where the `@` alias points
-(`EVAL_SRC`). Nothing of the baseline is committed, and the working tree is
-never touched. The baseline has no `planNextSongs`, so the harness calls
-`recommendNextSongs`, which is that version's whole continuation — AI
-included — in one call.
+`runSession` does what the player does. It plans five songs (`LIMIT`), appends them to the queue, and plans again, four times (`batches: 4`). The seed of each later continuation is `queue[length - 2]`, the song the player would be on with one left after it. Songs before the seed count as played and are added to the history. Every continuation is called with `excludeIds` and `excludeKeys` for the whole queue so far. The salt is the per-session rotation seed the app passes to the engine.
 
-Run on `19ee9ec` (7.2, with the concurrently merged retrieval, ranking and
-validation work), fixtures 1.0.0, harness 1.0.0, 12 salts per fixture. The
-numbers below predate the `mixed-queue` fixture: both pipelines were measured
-on the nineteen fixtures of that time, and a context without `queueLanguages`
-keeps the lock, so the baseline and the current pipeline speak one language
-in every row.
+## Metrics
 
-| Metric | Baseline `7c4e2f5` | Current `19ee9ec` | Samples |
-| --- | ---: | ---: | --- |
-| Continuations planned | 828 | 816 | 19 fixtures × 12 salts × ≤ 4 |
-| Songs queued | 3 492 | 3 420 | — |
-| Empty continuations | 72 | 84 | of the above |
-| **Hard-rule violations** | **72** | **0** | 3 420 songs |
-| …in the order queued first (before any AI refinement) | 72 | 0 | — |
-| — hidden artist | 48 | 0 | `mixed`, `hidden-artists` |
-| — another cut of a recent play | 12 | 0 | `versions` |
-| — a second cut of a queued song | 12 | 0 | `versions` |
-| — explicit under Kid mode / muted language / soft mute | 0 | 0 | `kid-mode`, `muted-languages`, `soft-muted` |
-| Off-language songs under a relaxed lock (allowed) | 48 | 48 | `mixed` |
-| Same lead artist back to back | 59 | 60 | 3 420 hand-offs |
-| …of those, at the boundary between two continuations | 36 | 48 | 816 boundaries |
-| Same lead artist within three songs | 1 173 | 1 098 | — |
-| Same identity back to back | 12 | 0 | — |
-| A song identity heard twice in one sitting | 24 | 0 | 228 sittings |
-| Distinct lead artists per continuation | 3.77 | 3.87 | of five |
-| Distinct lead artists per sitting | 50.2 % | 50.6 % | of its songs |
-| Discovery share | 38.0 % | 38.4 % | — |
-| …the mode's allocation | 16.8 % | 17.6 % | — |
-| Continuations over that allocation with familiar songs free | 64 | 60 | — |
-| Familiar-first compliance (slot 1) | 89.5 % | 93.0 % | 716 / 684 opportunities |
-| Queue-ready latency p50 / p95 (instant sources) | 0.8 / 1.5 ms | 0.8 / 1.5 ms | 828 / 816 |
+The rules are written out again in `eval/lib/rules.ts` rather than imported from the engine, so the harness cannot agree with a bug by sharing its code. The one shared piece is song identity (`canonicalKey` and `recordingKey` from `services/recommendation/identityCore.ts`), a contract pinned by `shared/identity-vectors.json`.
 
-Every row above except the last is identical between runs — the harness proves
-that on each run. The latency row is not: it moves by a few tenths of a
-millisecond with the machine's load (a later run of the same commit read
-1.0 / 2.8 ms). Read it as an order of magnitude, not a constant.
+| Metric | Exact definition |
+| --- | --- |
+| Hard-rule violation | A queued song that is: explicit under Kid mode; in a muted language; credited to a hidden artist; hidden by id; led by a soft-muted artist; the same id or work as one of the last 20 plays; skipped in this sitting; unplayable; or the same id or work as a song already in the queue or earlier in the same continuation (`breaksRule`, `violationsOf`) |
+| Off-language under the lock | A queued song in a known language other than the lock's. Excused when fewer than three eligible in-language candidates were left for that continuation; otherwise a hard violation |
+| Mix rules (`queueLanguages: 'mix'`) | `off-language`: a known language outside the listener's set. `language-opening`: slot 1 or 2 not in the lead language. `language-run`: two off-lead songs in a row. Hard violations unless the engine reported the `language-mix` relaxation |
+| Queue-ready violations | The same count on the order the player could queue first, before any AI refinement |
+| Same lead back to back | Adjacent queue entries with the same lead artist. Also counted: those at a boundary between two continuations, and those "avoidable" because another lead artist was still eligible |
+| Same lead within three | The lead artist also leads one of the three songs before, when not already counted as back to back |
+| Identity repeats | The same work adjacent, or anywhere earlier in the sitting |
+| Artist coverage | Distinct lead artists per continuation; distinct lead artists per sitting as a share of its songs |
+| Discovery share | Songs whose lead artist the listener has never played, over songs queued. The allocation is `DISCOVERY_SHARE` (familiar 0.05, balanced 0.2, discover 0.45) times the continuation's length, rounded. A continuation is "over the allocation" only when familiar candidates were available |
+| Familiar-first | Slot 1 is not a discovery, counted where a familiar eligible candidate existed. Slot 2 is tracked for continuations of four or more |
+| Pickers, fallbacks, relaxations | Who chose the final order (`local`, `ai`), `plan.fallback`, and the relaxations the engine reported |
+| Style continuity | For `dj-session` and `folk-session`: the share of a continuation in the sitting's style, and how many continuations held at least ⌈0.8 n⌉ in style |
+| Retrieval depth | Queued songs only an album page or an artist page could supply, over songs queued |
+| Declared-taste agreement | For fixtures with `tasteTargets`: the share of each continuation inside the declared taste |
+| Pushed-away artists | Queued songs led by an artist with a sitting pull of −0.6 or below, where another lead was eligible |
+| Served | For `served`: the share of queued songs Home had shown |
+| Seed-memory replay | On `warm`: plan from the seed, plan again from the same seed, count how many of the first three songs repeat. Once without a commit, once with `commit` called on the first plan |
+| Latency | `performance.now()` around the entry point, to the queueable order ("queue-ready") and to the final order. p50 and p95 |
 
-| Relaxations reported to the caller | not exposed | `language-lock` ×12 | — |
+### Latency conditions
 
-Reading the table:
+Each runs sequentially on one fixture with salt 7. A run that hits its cap is "cut off": its time is a floor, not a measurement.
 
-- **The 72 fewer songs are the 72 rule breaks.** The current pipeline ships
-  fewer songs in exactly three fixtures — `mixed` (216 vs 240), `versions`
-  (120 vs 144) and `hidden-artists` (180 vs 204) — and exactly those
-  differences are songs the baseline queued in breach of a rule. The extra
-  twelve empty continuations are `hidden-artists` running out of pool once
-  its hidden artists are actually excluded.
-- **The hidden-artist failures are the Indic-script bug.** At 7.1 the
-  never-play key folded a name written in an Indic script to the empty
-  string, so those artists could not be hidden at all; 7.2's Unicode-safe
-  identity fixed it. The `versions` failures are the same story for titles: a
-  zero-width joiner, a Latin accent and a "feat." credit each used to make
-  one work look like two.
-- **Nothing else regressed into a violation.** Kid mode, muted languages and
-  soft mutes were already airtight at 7.1 under these fixtures, and the AI's
-  rule-breaking proposals (`mixed`, `kid-mode`) never reached a queue in
-  either version.
-- **One thing got worse:** same-artist hand-offs at the boundary between two
-  continuations, 36 → 48. See the findings below.
-- **Latency is unchanged when nothing is wrong**, and completely different
-  when something is. See the next table.
+| Condition | What is scripted | Runs | Cap |
+| --- | --- | ---: | ---: |
+| `instant-sources` | Every source answers at once, AI off | 24 | 12 s |
+| `slow-sources` | Every catalogue call answers after 140–900 ms | 8 | 12 s |
+| `source-throws` | The seed-suggestions source fails at once | 8 | 12 s |
+| `source-never-settles` | A search never settles, pool of 26 | 5 | 10 s |
+| `source-never-settles-large-pool` | Later searches never settle, pool of 104 | 5 | 10 s |
+| `source-never-settles-urgent` | The same with `deadlineMs: 3_500`; current pipeline only | 5 | 6 s |
+| `ai-slow` | The DJ answers after 2 s | 8 | 8 s |
+| `ai-never` | The DJ never answers | 5 | 8 s |
 
-### Latency
+## The gate
 
-Wall time from the call to a list the player could queue ("queue-ready") and
-to the final order ("final"), measured with `performance.now()` around the
-public entry point. Sequential runs, one fixture, one salt; the AI and the
-sources are scripted per run. A run marked "cut off" hit the harness cap for
-that condition: its latency is a floor, not a measurement.
+`recs.eval.ts` has three assertions and no thresholds on any other metric:
 
-| Condition | Runs | Pool | Cap | Baseline queue-ready p50 / p95 | Current queue-ready p50 / p95 | Current final order p50 / p95 | Songs (base → cur) |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Every source answers at once, AI off | 24 | 26 | 12 s | 1.3 / 1.6 ms | 1.4 / 2.2 ms | same | 5 → 5 |
-| Every call answers after 140–900 ms | 8 | 26 | 12 s | 908 / 910 ms | 429 / 950 ms | same | 5 → 5 |
-| The seed-suggestions source throws | 8 | 26 | 12 s | 2.6 / 6.2 ms | 2.7 / 4.9 ms | same | 5 → 5 |
-| A search never settles, small pool | 5 | 26 | 10 s | never returns (cut off ×5) | 7 302 / 7 307 ms | same | 0 → 0 |
-| A search never settles, production-sized pool | 5 | 104 | 10 s | never returns (cut off ×5) | 6.9 / 2 543 ms | same | 0 → 5 |
-| A search never settles, urgent deadline | 5 | 26 | 6 s | no deadline option | 2 801 / 2 802 ms | same | — → 0 |
-| The AI DJ answers after 2 s | 8 | 26 | 8 s | 2 011 / 2 021 ms | 2.9 / 9.6 ms | 2 005 / 2 013 ms | 5 → 5 |
-| The AI DJ never answers | 5 | 26 | 8 s | nothing within 8 s (cut off ×5) | 7.8 / 11.4 ms | cut off at 8 s | 0 → 5 |
+| Assertion | Protects |
+| --- | --- |
+| `quality.overall.batches > 0` | The run produced data |
+| `deterministic === true` | The second fixture (`warm`) with salt 1, run again at the end, queues the same song ids. Without this, no two reports are comparable |
+| `hardViolations === 0` | No hard rule was broken. Skipped when `EVAL_ASSERT` is `0`, which the runner sets for a baseline: a baseline is measured, not judged |
 
-The two rows that matter most for a listener waiting at the end of a queue:
+`eval-recs.mjs` exits 0 when the current pipeline's test run exits 0, and 1 otherwise. It also exits 1 when a run writes no report. Everything else in the summary is a measurement to read, not a gate.
 
-- **A slow or dead AI no longer delays anything.** At 7.1 the continuation
-  *was* the AI call: a DJ answering in 2 s made the listener wait 2 s, and a
-  DJ that never answered held the whole continuation (its client's own leash
-  is 30 s). At 7.2 the on-device order is ready in single-digit milliseconds
-  and the AI is a refinement that may replace the automatic tail later, or
-  never.
-- **A never-settling catalogue source still costs the whole deadline when
-  the rest of the pool is small.** `planNextSongs` calls
-  `generateNextCandidates` without the new gather options, so the gather's own
-  hard deadline (8 s) lands after the engine's budget (8 s − 700 ms), the
-  plan ships empty and the player falls back to its reserve. With a
-  production-sized pool the gather's soft deadline does its job and the plan
-  is ready in milliseconds. At 7.1 the same failure hung the continuation
-  outright.
+## Reading the output
 
-### Findings worth acting on
+`node scripts/eval-recs.mjs --no-baseline` on the working tree prints:
 
-None of these are blockers, and none of them are mine to fix (the engine and
-the player are owned elsewhere), so they are recorded here:
+```
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
 
-1. **Same artist across a continuation boundary (48 of 816).** Validation
-   forbids the same lead artist back to back and counts the seed as the
-   previous song — but the player seeds a continuation with the song it is
-   *playing* (`queue[index]`), while the new songs are appended after the
-   *last* song in the queue. Nothing checks that pair. It shows up wherever a
-   few artists dominate a pool, and it got more common at 7.2 because an
-   applied AI refinement rewrites the tail without that check either.
-2. **The gather's deadlines are not wired to the engine's.** Passing
-   `hardDeadlineMs` (and a smaller `minPool`) from `planNextSongs` would turn
-   the empty plan above into a short one.
-3. **The discovery share runs above the mode's allocation** (38 % against
-   17.6 %) in both versions. The sequencer's budget only holds while
-   non-discovery candidates remain, and the validated reserve tops a short
-   stretch up from the ranked pool without one. In 60 of 816 continuations
-   familiar, eligible songs were still available when the budget was
-   exceeded. With these fixtures' small artist sets this is mostly pool
-   exhaustion, not a policy failure — but it is worth a look with a real
-   catalogue.
+── summary ──────────────────────────────────────────
+fixtures 1.3.0 · harness 1.2.0 · 12 salts · entry planNextSongs · alg 9.0.0/1.3.0
+continuations 1308 · songs 5760 · empty 84 · reproducible yes
+hard-rule violations 0 (queue-ready 0) · off-language under a relaxed lock 54
+same lead back to back 36 (batch boundary 12, avoidable 24) · identity repeats 0
+distinct artists per continuation 3.944 · discovery 35.8 % against an allocation of 17.9 %
+familiar-first compliance 95.4 % · pickers {"local":1236,"ai":72} · fallbacks {"none":1308}
+queue-ready latency p50 12.3 ms · p95 196 ms (instant sources, 1308 samples)
+declared-taste agreement 48.3 % (synthetic) · album/artist-page songs 1.5 % · pushed-away artists queued 0 · served songs queued 37.5 %
+asked again from one song: 3 of 3 opening songs repeat without memory, 1 with it
+style continuity 75.0 % of a DJ / folk stretch in its style · 72/72 stretches held four of five
+```
 
-### Limitations
+Every line except the latency line is identical from run to run on the same tree. Latency moves with the machine's load: the figures above were taken on a machine that was busy with other work. Read latency as an order of magnitude, and compare two trees only when they were measured in the same run.
 
-- Synthetic pools of 6–104 songs; a real catalogue returns hundreds, and
-  several metrics (discovery share, artist coverage, empty continuations)
-  are bounded by pool size as much as by policy.
-- The AI is scripted. "AI rejected" and "AI applied" counts describe the
-  scripts, not how a real model behaves.
-- The classifier never answers, so mood, energy and tempo are only what the
-  fixture provides.
-- Latency is measured on one machine, in one process, with the network
-  removed. It is the cost of the on-device work plus the scripted waits,
-  not a field measurement.
-- The harness measures the engine's output, not the player's admission gate,
-  which filters once more before anything is queued.
-- The baseline comparison is faithful for the recommendation pipeline and its
-  stores, because the whole `frontend/src` of the baseline commit is used.
-  It is not a comparison of the app as a whole.
+The per-condition latency of the same run (`recs-eval.md`, "Latency"):
 
-## Real outcomes: what the events record
+| Condition | Queue-ready p50 / p95 | Final order p50 / p95 | Songs |
+| --- | ---: | ---: | ---: |
+| `instant-sources` | 31.6 / 416 ms | same | 5 |
+| `slow-sources` | 967 / 2 929 ms | same | 5 |
+| `source-throws` | 31.8 / 242 ms | same | 5 |
+| `source-never-settles` | 7 435 / 7 500 ms | same | 5 |
+| `source-never-settles-large-pool` | 56.7 / 2 083 ms | same | 5 |
+| `source-never-settles-urgent` | 2 804 / 2 805 ms | same | 5 |
+| `ai-slow` | 3.9 / 7.8 ms | 2 005 / 2 009 ms | 5 |
+| `ai-never` | 2.8 / 5.7 ms | cut off at 8 s | 5 |
 
-Two consent-gated events (`services/analytics/recTelemetry.ts`) record what
-actually happened, for listeners who opted in. Exactly what they contain is
-in [data-and-privacy.md](data-and-privacy.md#what-leaves-the-device-and-when)
-and on the Privacy page; the shape matters here because it is what an A/B
-result can be read from.
+Two things to take from it. A slow or silent AI does not delay the queue: the local order is ready in milliseconds and the refinement arrives later or never. A catalogue source that never settles costs the whole deadline when the rest of the pool is small, and almost nothing when the pool is large.
+
+### When the gate fails
+
+| Symptom | Where to look |
+| --- | --- |
+| `hard-rule violations` above 0 | `quality.overall.violations` in the JSON names the kind; `quality.perFixture` names the fixture. If `queue-ready` is 0 and the total is not, the AI refinement let the song in |
+| `reproducible NO` | `determinismDiff` in the JSON holds both orders. Look for state that survives `localStorage.clear()` (module-level memory), an unfrozen clock, or randomness not derived from the salt |
+| `No report written for <pipeline>` | The harness did not start. The runner prints the test output; an unresolved import in the tree under test is the usual cause |
+| A metric moved and no gate failed | Compare `quality.perFixture` between the two JSON files to find which fixture moved, then read that fixture's notes |
+
+## Changing the engine safely
+
+1. Run the unit tests next to the module you changed (`npx vitest run src/services/recommendation`), see [testing.md](testing.md).
+2. Run the evaluation on the tree before the change and on the tree after it, and compare. The gate must pass; then read every line of the summary for movement you did not intend.
+3. If the change touches repetition, novelty or any memory of what was already shown, run the acceptance test below. The evaluation cannot see it.
+4. If a fixture or a metric definition changes, bump `EVAL_FIXTURES_VERSION` or `EVAL_HARNESS_VERSION` and do not compare across the bump.
+
+### Comparing with a baseline
+
+`--baseline <commit>` extracts that commit's `frontend/src` into `eval/.cache/` and runs the same harness, fixtures, mocks and rules against it, with `@` pointing at the extracted tree. The working tree is not touched. The summary gains one `baseline <commit>:` line and `recs-eval.md` puts both pipelines side by side.
+
+The baseline commit must contain `frontend/src/services/recommendation/recMemory.ts`. The harness imports that module dynamically, and the import is resolved when the file is transformed, so a tree without it fails before any test runs. Check with `git cat-file -e <commit>:frontend/src/services/recommendation/recMemory.ts`. The built-in default, `7c4e2f5`, does not contain it: a plain `node scripts/eval-recs.mjs` measures the working tree, then exits 1 with `No report written for baseline`. Pass `--baseline` with a recent commit, or run `--no-baseline --out <dir>` on each tree and compare the two JSON files. A run with a recent release commit as the baseline completes and exits 0:
+
+```
+baseline b008f26: hard violations 0 · identity repeats 0 · same lead back to back 9 (avoidable 6) · style continuity 75.0 % (18/18 held)
+```
+
+(That line is from a `--quick` run, so its counts are a quarter of a full run's.)
+
+### The repetition acceptance test
+
+`frontend/src/services/recommendation/repetition.accept.test.ts` is the tool for a repetition change. It is part of the normal unit-test run.
+
+```sh
+cd frontend
+npx vitest run src/services/recommendation/repetition.accept.test.ts
+```
+
+It mocks a catalogue of 120 playable songs in one language by 24 artists, so a missed target can never be blamed on a dry pool, and calls `planNextSongs` for 20 songs at a time, committing each plan as the player does. It asserts:
+
+| Assertion | Threshold |
+| --- | --- |
+| The fixture has enough distinct songs | at least 100 |
+| A second 20-song continuation from the same seed introduces new songs | at least 12 of 20 |
+| The same after a reload (module state dropped, `vinax.recs.exposure.v1` kept in `localStorage`) | at least 12 of 20 |
+| No identity repeats inside one continuation | 0, over three salts |
+| Artists stay varied | no lead back to back; no artist above ⌈n / 3⌉; at least 6 artists |
+| A muted language, a hidden song and a hidden artist never ship | 0 |
+| An exhausted pool returns fewer songs rather than breaking a restriction | fewer than 20 |
+| What the queue surfaced is in the exposure ledger for other surfaces, and what Home showed costs the queue | fewer than 10 of those songs come back |
+| A liked song may come back | cooling is lifted |
+| Familiar, Balanced and Discover differ on the same pool | Familiar's discovery share below 0.1 |
+| A single-artist request is respected | diversity does not override it |
+
+Why the evaluation cannot do this job. Its repetition metrics saturate, for three reasons found in the code:
+
+- Every continuation is called with the whole queue as `excludeIds` and `excludeKeys` (`eval/lib/run.ts`, `runSession`). A repeat inside a sitting is excluded by the caller, so "identity repeats" reads 0 whatever the engine remembers.
+- `applyFixture` clears `localStorage`, where the exposure ledger lives, before every continuation of every fixture except `memory`. A plan is committed only in `memory` and in one arm of the seed-memory replay. In the other 27 fixtures the engine always plans with an empty ledger.
+- Each sitting starts from the fixture's state, and no metric compares the songs of one sitting with the songs of another. The harness contains no reference to the ledger at all.
+
+The one number that touches the subject is the seed-memory replay (the opening three songs, on one fixture). It cannot tell a build that brings back most of a 20-song list from one that does not.
+
+## What the evaluation cannot see
+
+- **Enjoyment.** A queue can break no rule, space every artist and ship in a millisecond, and still be a bad half hour of music. "Declared-taste agreement" is agreement with what a synthetic fixture says, nothing more.
+- **Repetition across sittings and surfaces.** See above.
+- **A real catalogue.** Pools hold 6 to 104 songs. Discovery share, artist coverage and empty continuations are bounded by pool size as much as by policy.
+- **A real AI.** The DJ is scripted; `ai` picker counts describe the scripts. The classifier never answers, so mood, energy and tempo are only what a fixture provides.
+- **The profile updater and the player's admission gate.** The harness measures the engine's output; the player filters once more before queuing.
+- **Field latency.** One machine, one process, no network.
+
+### Real outcomes
+
+Evidence about real listening comes only from two consent-gated events in `services/analytics/recTelemetry.ts`, sent for listeners who opted in. What they contain is in [data-and-privacy.md](data-and-privacy.md).
 
 | Event | When | `meta` |
 | --- | --- | --- |
-| `rec_served` | Once per automatic continuation, when its final picker is known | `alg`, `picker` (`local` / `ai` / `reserve`), `fallback`, `latencyMs` (queue-ready), `n`, `discovery`, `languageViolations`, `distinctArtists`, `relaxed`, `exp` |
-| `rec_outcome` | When a playback instance of an automatic entry ends | `alg`, `picker`, `pos`, `heardSec`, `durationSec`, `outcome` (`complete` / `skip` / `early_skip` / `partial`), `liked`, `exp` |
+| `rec_served` | Once per automatic continuation, when its final picker is known | `alg`, `picker`, `fallback`, `latencyMs`, `n`, `discovery`, `languageViolations`, `distinctArtists`, `relaxed`, `exp` |
+| `rec_outcome` | When a playback of an automatic entry ends | `alg`, `picker`, `pos`, `heardSec`, `durationSec`, `outcome` (`complete`, `skip`, `early_skip`, `partial`), `liked`, `exp` |
 
-`outcome` uses the playback session's own thresholds — heard seconds, never
-the playhead — so it agrees with what the taste profile learned from the same
-play. Failed playback reports nothing. Neither event carries a song, a song
-id, a queue or a batch number.
+Neither event carries a song or a song id. The client rate-limits them: a bucket of `REC_BUCKET` (12), one more every `REC_REFILL_MS` (5 s), an outbox of `REC_OUTBOX_CAP` (40), `REC_SESSION_CAP` (400) per session.
 
-## Experiments: assignment, then exposure
+`features/experiments/recExperiment.ts` ties an outcome to an experiment. Assignment is the pure hash `pickVariant` (`features/experiments/useExperiment.ts`, mirrored by `backend/worker/functions/_lib/experiments.ts`). `decideRecVariant(key)` is the decision point: it returns the variant and records that the continuation being planned depends on it. `claimExposure` turns pending decisions into the `exp` map of a continuation that was actually served, and `exposureOf` returns it for that continuation's outcomes. A decision for a plan that is never served expires after `PENDING_DECISION_TTL_MS` (60 s). An owner tuning rollout rides in the same map as `rec-config`. Call `decideRecVariant` in every arm, control included, while planning: only an exposed control is a comparison group.
 
-`features/experiments/recExperiment.ts` is the recommendation half of the
-existing A/B machinery:
+### Reading an A/B result
 
-| Call | What it does |
-| --- | --- |
-| `loadRecExperiments()` | Reads the anonymous `/api/experiments` config once per session |
-| `recVariant(key)` | This device's variant, or `'control'` when it is not in the experiment. A pure read: it exposes nothing |
-| `activeRecVariants()` | Every recommendation experiment this device is assigned to, plus an applied owner tuning rollout |
-| `decideRecVariant(key)` | **The decision point.** Returns the variant and records that the continuation being planned depends on it |
-| `claimExposure(batch, …)` | Called when a continuation is actually served: the pending decisions become that continuation's `exp` |
-| `exposureOf(batch)` | The `exp` map of a served continuation, for the outcomes of its songs |
+1. Pick one primary metric before looking, for example completion rate: `complete ÷ (complete + skip + early_skip + partial)`.
+2. Aggregate per device first, then compare the arms' distributions of device rates (a bootstrap over devices). Rows from one listener are not independent.
+3. Report an interval, not a point. For a rate over `n` independent trials use the Wilson score interval.
+4. Have enough samples. For a completion rate near 40 %, at 95 % confidence and 80 % power:
 
-Assignment is the existing pure hash (`pickVariant`, FNV-1a over
-`installId:key`, mirrored by the Worker's `functions/_lib/experiments.ts`), so
-no identifier is created and nothing extra is stored. The owner's
-recommendation-tuning rollout rides in the same map as `rec-config`
-(its variant name, or `all` for a rollout to everyone).
-
-**Exposure is not assignment.** A device assigned to a variant that never
-changed anything it heard tells you nothing. `exp` is non-empty only when a
-decision point read the variant *and* the continuation it shaped was actually
-served. Two rules follow for whoever wires a treatment into the engine:
-
-1. Call `decideRecVariant(key)` in **every** arm, control included, at the
-   point where the treatment would change (or, under control, would have
-   changed) the plan. Only the exposed control is a comparison group.
-2. Call it while planning the continuation, not at app start. A decision for
-   a plan that was discarded expires after a minute and exposes nobody.
-
-No experiment is wired into the engine yet, so every `exp` map today is empty
-or carries only an owner rollout, and **no A/B result exists to report.**
-
-## Reading an A/B result
-
-Once a treatment does call `decideRecVariant`, this is how to read what comes
-back. Do the arithmetic per variant, over `rec_outcome` rows whose `exp` names
-the experiment.
-
-1. **Pick one primary metric before looking.** The obvious one is the
-   completion rate: `complete ÷ (complete + skip + early_skip + partial)`.
-   `early_skip` (a flip-past before the play counted) and `skip` move together
-   but mean different things; decide up front which you are reading, and keep
-   `liked` and the served metrics (`latencyMs`, `discovery`,
-   `languageViolations`) as secondary, never as a substitute when the primary
-   disappoints.
-2. **Aggregate per listener first.** One listener produces dozens of
-   outcomes, and their plays are not independent draws. Compute each device's
-   rate, then compare the two arms' distributions of device rates
-   (a bootstrap over devices: resample devices with replacement 10 000 times,
-   take the 2.5th and 97.5th percentile of the difference of means). Treating
-   every row as an independent trial makes the interval far too narrow and
-   turns noise into a result.
-3. **Report an interval, never a point.** For a rate over `n` independent
-   trials the Wilson score interval is the right one at these sizes:
-
-   ```
-   centre = (p̂ + z²/2n) / (1 + z²/n)
-   half   = z/(1 + z²/n) × √( p̂(1−p̂)/n + z²/4n² )      z = 1.96 for 95 %
-   ```
-
-   Two arms differ only when their intervals are read together — overlapping
-   intervals are not a decision, and non-overlapping ones on clustered data
-   are not either (see 2).
-4. **Have enough samples before you look at all.** For a completion rate
-   near 40 %, at 95 % confidence and 80 % power:
-
-   | Difference you want to detect | Outcomes per arm | Roughly, listeners per arm |
+   | Difference to detect | Outcomes per arm | Roughly, listeners per arm |
    | --- | ---: | ---: |
-   | 5 points (40 % → 45 %) | ≈ 1 500 | ≈ 100 |
-   | 3 points (40 % → 43 %) | ≈ 4 200 | ≈ 300 |
-   | 1 point (40 % → 41 %) | ≈ 37 000 | ≈ 2 500 |
+   | 5 points | ≈ 1 500 | ≈ 100 |
+   | 3 points | ≈ 4 200 | ≈ 300 |
+   | 1 point | ≈ 37 000 | ≈ 2 500 |
 
-   The listener column assumes a listener contributes about fifteen outcomes
-   and inflates for clustering; it is a planning number, not a guarantee.
-   Below these sizes, say "not enough data" — that is a finding too.
-5. **Fix the reading date in advance.** Checking every day until the
-   interval clears zero manufactures a result. One planned read, or a
-   sequential method chosen beforehand.
-6. **Remember who is in the data.** Telemetry is opt-in and off by default.
-   The listeners in it are the ones who turned it on; they may skew by
-   region, by device, by how the app was introduced to them. An A/B result
-   from this data is an estimate for *those* listeners, and the honest write-
-   up says so. It also cannot be checked against "everyone who used VinaX",
-   because nothing about the others is collected — by design.
-7. **Watch the guardrails.** A treatment that raises completions by shipping
-   fewer songs (`n`), by leaning on the reserve (`picker: 'reserve'`), by
-   relaxing the language lock (`relaxed`), by pushing latency up
-   (`latencyMs`) or by narrowing artists (`distinctArtists`) has not made the
-   queue better. Read those alongside the primary metric.
-8. **Sampling loss is real.** The client rate-limits these events (a bucket
-   of 12, one more every 5 s, an outbox of 40, 400 per session). A burst of
-   skips can lose rows, and the loss is not random — it hits the most
-   restless sittings hardest, which biases skip rates down. Do not read tiny
-   differences; the size table above assumes the events arrived.
+5. Fix the reading date in advance.
+6. Remember who is in the data: only listeners who turned telemetry on.
+7. Watch the guardrails in `rec_served`: `n`, `picker`, `relaxed`, `latencyMs`, `distinctArtists`.
+8. Rate limiting loses rows from the most restless sittings first, which biases skip rates down. Do not read tiny differences.
 
-## Tests
+## History that still matters
 
-The harness has no assertions about taste. It fails only when the run is not
-reproducible, when it produces no data, or — for the current pipeline — when
-a hard rule was broken (since 8.1 that includes the mix rules of
-`mixed-queue`: a language outside the listener's, an off-lead opening, or two
-changes of language in a row). The unit tests that pin the rules themselves live next
-to the modules (see [testing.md](testing.md)); the telemetry and experiment
-contracts are pinned by `services/analytics/recTelemetry.test.ts`,
-`services/analytics/telemetry.test.ts` and
-`features/experiments/recExperiment.test.ts`.
+- **The default baseline is the 7.1 release (`7c4e2f5`).** The harness was built to compare 7.2 with it, which is why the runner still falls back to `recommendNextSongs` and why a baseline run does not assert the rules. That commit can no longer be loaded (see [Comparing with a baseline](#comparing-with-a-baseline)). Audit and progress records from that time are in [history/progress-7.2.md](history/progress-7.2.md), [history/audit-7.2.md](history/audit-7.2.md) and [history/audit-9.1.md](history/audit-9.1.md).
+- **Discovery share runs at about twice the allocation** (35.8 % against 17.9 %) and has since the first comparison. The sequencer's budget holds only while familiar candidates remain, and with these small artist sets late continuations exhaust them. 72 continuations were over the allocation with familiar songs still available; the engine reports `discovery-share` as a relaxation.
+- **Same lead back to back is 36, of which 24 avoidable, and same lead within three is 1 806.** Neither is gated. The fixtures have small artist sets, so late continuations have few leads to choose from; the engine reports `artist-spacing` (234 continuations) and `artist-cap` (48) as relaxations. Treat these as numbers to hold steady across a change, not as targets met.
+- **The seed-memory replay reads "3 of 3 without memory".** That is the expected value, not a defect: without a commit the engine has nothing to remember. The number to watch is the committed one.
+- **The algorithm version string in the summary** (`alg 9.0.0/1.3.0`) is the engine's own (`algorithmVersion()`), not the app's release number.

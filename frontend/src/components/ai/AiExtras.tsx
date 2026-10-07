@@ -5,6 +5,7 @@ import { ChevronDownIcon, DotsIcon, XIcon } from '@/components/Icons';
 import { type SlashCommand } from '@/features/ai/slashCommands';
 import { addPrompt, loadPrompts, removePrompt, type SavedPrompt } from '@/features/ai/savedPrompts';
 import { REPLY_LANGS, REPLY_STYLES } from '@/features/ai/replyPrefs';
+import { ChatStyleMark } from '@/features/ai/chat/ChatStyleScope';
 
 /* v5.16.0 — small companions for the VinaX AI page, kept out of the 1.8k-line
    page module: slash menu, follow-up chips, saved prompts, the
@@ -109,6 +110,7 @@ export function SavedPromptsSheet({ onClose, onUse, draft }: { onClose(): void; 
   const [text, setText] = useState(draft);
   return (
     <Sheet onClose={onClose} label="Saved prompts" size="lg" maxHeight="medium" className="ai-scope">
+      <ChatStyleMark />
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="ai-prompts-title ai-t1">Saved prompts</h2>

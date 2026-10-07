@@ -1,0 +1,196 @@
+/* ============================================================================
+   Marquee — black canvas, picture first.
+
+   True-black chrome with an ice accent and a warm second colour. The
+   pictures do the talking: large square-cornered artwork, plain system type,
+   hairlines instead of panels, outlined chips that invert when chosen, a
+   white play button, and a player bar that spans the screen with its
+   progress drawn along the top edge. No glass. Motion is nearly absent.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='marquee']:not([class*='fest-']) {
+  --ink-950: 0 0 0;
+  --ink-900: 12 12 13;
+  --ink-850: 22 22 24;
+  --ink-800: 34 34 37;
+  --ink-700: 54 54 58;
+  --ink-600: 100 100 106;
+  --ink-500: 152 152 158;
+  --ink-400: 176 176 182;
+  --ink-300: 202 202 207;
+  --ink-200: 232 232 236;
+  --ink-100: 255 255 255;
+}
+html.light[data-template='marquee']:not([class*='fest-']) {
+  --ink-950: 255 255 255;
+  --ink-900: 249 249 249;
+  --ink-850: 241 241 242;
+  --ink-800: 231 231 233;
+  --ink-700: 210 210 213;
+  --ink-600: 140 140 145;
+  --ink-500: 96 96 101;
+  --ink-400: 84 84 89;
+  --ink-300: 62 62 66;
+  --ink-200: 28 28 31;
+  --ink-100: 10 10 12;
+  --art: 150 150 154;
+}
+html[data-template='marquee']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 0 168 204;
+  --ember-500: 46 208 240;
+  --ember-400: 120 226 248;
+  --ember-300: 180 240 252;
+  --tide-500: 255 122 89;
+  --tide-400: 255 160 134;
+  --vx-on-accent: #001a22;
+  --art: 90 90 96;
+}
+html.light[data-template='marquee']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 0 66 84;
+  --ember-500: 0 90 112;
+  --ember-400: 0 84 106;
+  --ember-300: 0 104 130;
+  --tide-500: 190 56 24;
+  --tide-400: 168 46 18;
+  --vx-on-accent: #fff;
+  --art: 150 150 154;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='marquee'] {
+  --tpl-r-art: 4px;
+  --tpl-r-art-sm: 2px;
+  --tpl-r-control: 8px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 4px;
+  --tpl-r-tile: 4px;
+  --tpl-r-input: 8px;
+  --tpl-r-deck: 0px;
+  --tpl-r-mini: 0px;
+  --tpl-r-np-art: 4px;
+  --tpl-font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --vx-font-display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --vx-type-page: clamp(1.75rem, 2.8vw, 2.5rem);
+  --vx-type-section: 1.5rem;
+  --tpl-title-weight: 700;
+  --tpl-title-tracking: -0.02em;
+  --tpl-section-weight: 700;
+  --tpl-section-tracking: -0.015em;
+  --tpl-card-title-weight: 500;
+  --tpl-enter: tplFade;
+  --tpl-enter-dur: 120ms;
+  --tpl-press: 0.97;
+  --vx-radius-panel: 0px;
+  --vx-radius-card: 8px;
+  --vx-deck-gap: 0px;
+  --vx-card-gap: 20px;
+  --vx-art-shadow: none;
+  --vx-deck-shadow: none;
+  --transition-fast: 90ms linear;
+  --transition-normal: 130ms linear;
+}
+/* Flat: the materials are opaque, whatever colours are on — a festival skin
+   repaints the inks, and a see-through bar with no blur would let page text
+   run through the tab bar. */
+html[data-template='marquee'] {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-850));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-850));
+  --vx-mat-specular: transparent;
+  --vx-mat-art: 0;
+}
+html.light[data-template='marquee'] {
+  --vx-mat-regular: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-950));
+}
+html[data-template='marquee'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-template='marquee'] body { letter-spacing: 0; }
+
+/* ------------------------------------------------------------------ shell */
+html[data-template='marquee']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+/* One faint light from the playing artwork at the very top; black below. */
+html[data-template='marquee']:not([class*='fest-']) .vx-workspace {
+  background:
+    radial-gradient(1200px 260px at 50% -140px, rgb(var(--art) / 0.3), transparent 70%) local,
+    rgb(var(--ink-900));
+}
+@media (min-width: 768px) {
+  html[data-template='marquee'] .vx-sidebar { margin: 0; max-height: 100dvh; border-radius: 0; box-shadow: inset -1px 0 0 var(--vx-border); }
+  html[data-template='marquee'] .vx-workspace { margin: 0; }
+}
+html[data-template='marquee'] .vx-library { background: transparent; border-radius: 0; margin: 10px 0 0; box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='marquee'] .vx-brand { font-family: var(--vx-font-display); font-weight: 700; letter-spacing: -0.03em; }
+html[data-template='marquee'] .vx-nav-link { min-height: 44px; font-weight: 500; color: rgb(var(--ink-100)); }
+html[data-template='marquee'] .vx-nav-link:hover { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='marquee'] :is(.vx-nav-active, .vx-nav-active:hover) { background: rgb(var(--ink-100) / 0.12); color: rgb(var(--ink-100)); box-shadow: none; font-weight: 700; }
+html[data-template='marquee'] :is(.vx-lib-row:hover, .vx-track-row:hover) { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='marquee'] .vx-topbar.is-scrolled { box-shadow: inset 0 -1px 0 var(--vx-border); }
+
+/* Phone tab bar: plain, hairline on top, the active tab simply white. */
+html[data-template='marquee'] .vx-dock { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='marquee'] .vx-dock-pill { height: 26px; }
+html[data-template='marquee'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='marquee'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ink-100)); font-weight: 600; }
+html[data-template='marquee'] .vx-dock-item { gap: 2px; min-height: 54px; font-size: 10.5px; font-weight: 500; }
+
+/* Player: a bar across the screen, progress drawn along its top edge. */
+html[data-template='marquee'] .vx-deck { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='marquee'] .vx-deck::before,
+html[data-template='marquee'] .vx-deck::after { display: none; }
+html[data-template='marquee'] .np-play-desktop { background: transparent; color: rgb(var(--ink-100)); box-shadow: none; width: 48px; height: 48px; }
+html[data-template='marquee'] .np-play-desktop svg { width: 28px; height: 28px; }
+html[data-template='marquee'] .np-play-desktop:hover { background: rgb(var(--ink-100) / 0.1); transform: none; }
+@media (max-width: 1023px) {
+  html[data-template='marquee'] [data-tour='player'] { padding: 0; }
+}
+html[data-template='marquee'] .np-mini { --mat-tint: none; box-shadow: inset 0 -1px 0 var(--vx-border); }
+html[data-template='marquee'] .np-mini-progress { top: 0; bottom: auto; left: 0; right: 0; border-radius: 0; }
+html[data-template='marquee'] .np-mini-progress > i { border-radius: 0; background: rgb(var(--ember-500)); }
+html[data-template='marquee'] .np-mini .np-mini-play { background: transparent; color: rgb(var(--ink-100)); }
+
+/* ------------------------------------------------------- pages and cards */
+html[data-template='marquee'] .vx-section-link { box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.2); color: rgb(var(--ink-100)); font-weight: 500; border-radius: 999px; }
+html[data-template='marquee'] .vx-section-link:hover { background: rgb(var(--ink-100) / 0.1); color: rgb(var(--ink-100)); }
+/* Bigger pictures in every shelf. */
+html[data-template='marquee'] .vx-media-rail > .vx-media-card { width: 11.5rem; }
+@media (min-width: 640px) {
+  html[data-template='marquee'] .vx-media-rail > .vx-media-card { width: 13rem; }
+}
+@media (min-width: 1024px) {
+  html[data-template='marquee'] .vx-media-rail.vx-media-grid { grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); }
+  html[data-template='marquee'] .vx-media-grid > .vx-media-card { width: 100%; }
+}
+html[data-template='marquee'] .vx-media-title { margin-top: 10px; font-size: 15px; }
+@media (hover: hover) {
+  html[data-template='marquee'] .vx-media-card:hover .vx-media-art { transform: none; }
+  html[data-template='marquee'] .vx-media-card:hover .vx-media-art img { filter: brightness(0.7); }
+}
+/* Play is white on black; the accent is kept for progress, links and focus. */
+html[data-template='marquee'] :is(.vx-play-fab, .vx-np-play, .card-play) { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); box-shadow: none; }
+html[data-template='marquee'] :is(.vx-play-fab, .vx-np-play, .card-play):hover { background: rgb(var(--ink-200)); }
+/* Chips: outlined; the chosen one inverts. */
+html[data-template='marquee'] :is(.vx-chip-idle, .vxh-chip) { background: rgb(var(--ink-100) / 0.08); box-shadow: inset 0 0 0 1px rgb(var(--ink-100) / 0.12); font-weight: 500; }
+html[data-template='marquee'] .vx-chip-on { background: rgb(var(--ink-100)); border-color: rgb(var(--ink-100)); color: rgb(var(--ink-950)); }
+/* Lists: hairlines between rows. */
+html[data-template='marquee'] .vx-track-row + .vx-track-row { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='marquee'] .vx-track-row.is-current { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='marquee'] .vx-track-row.is-current::before { display: none; }
+html[data-template='marquee'] .vxh-tile { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='marquee'] .vxh-tile img { border-radius: 0; }
+html[data-template='marquee'] .vxh-hero { border-radius: 8px; box-shadow: none; background: rgb(var(--ink-850)); }
+html[data-template='marquee'] :is(.btn-primary, .btn-premium) { border-radius: 999px; }
+html[data-template='marquee'] .btn-secondary { border-radius: 999px; }
+html[data-template='marquee'] .vx-np-tabs [role='tab'] { border-radius: 0; }
+html[data-template='marquee'] .vx-np-tabs [role='tab'][aria-selected='true'] { background: transparent; color: rgb(var(--ink-100)); box-shadow: inset 0 -2px 0 rgb(var(--ink-100)); }
+
+/* Now Playing: black, with the artwork's light only at the top. */
+html[data-template='marquee']:not([class*='fest-']) .vx-np-bg-art { display: none; }
+html[data-template='marquee']:not([class*='fest-']) .vx-np-bg-wash { background: linear-gradient(180deg, color-mix(in srgb, var(--np-warm, rgb(var(--art))) 38%, rgb(var(--ink-950))), rgb(var(--ink-950)) 46%); }
+html[data-template='marquee']:not([class*='fest-']) .vx-np-bg-scrim:not(.is-canvas) { background: none; }
+html[data-template='marquee'] .vx-np-art-img { box-shadow: none; }

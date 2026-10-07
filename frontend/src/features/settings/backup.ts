@@ -633,6 +633,7 @@ const extrasCategory: BackupCategory = {
     { key: 'vinax.aiFontSize', raw: true },
     { key: 'vinax.aiReplyLang', raw: true },
     { key: 'vinax.aiReplyStyle', raw: true },
+    { key: 'vinax.ai.chatStyle', raw: true },
   ],
   sanitize: (values, ctx) => {
     const out: CategoryValues = {};

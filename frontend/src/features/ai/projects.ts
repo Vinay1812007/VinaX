@@ -47,7 +47,9 @@ const newId = (): string =>
 
 /** Control characters out (newlines kept for instructions and files), clipped. */
 export function cleanText(text: string, max: number, keepNewlines = true): string {
-  return [...String(text ?? '')]
+  // CRLF is ONE line break. Mapping \r and \n separately double-spaced every
+  // line of a file saved with those endings, eating the character budget.
+  return [...String(text ?? '').replace(/\r\n?/g, '\n')]
     .map((ch) => {
       const c = ch.charCodeAt(0);
       if (c === 10 || c === 13) return keepNewlines ? '\n' : ' ';
@@ -83,10 +85,13 @@ export function loadProjects(): Project[] {
   }
 }
 
-function save(projects: Project[]): void {
+/** False when the device refused the write (storage full, private mode). */
+function save(projects: Project[]): boolean {
   try {
     window.localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects.slice(0, MAX_PROJECTS)));
+    return true;
   } catch {
+    return false;
     /* private mode: the project does not persist */
   }
 }
@@ -103,7 +108,8 @@ export function createProject(name: string, now = Date.now()): Project | null {
   const projects = loadProjects();
   if (projects.length >= MAX_PROJECTS) return null;
   const project: Project = { id: newId(), name: clean, instructions: '', files: [], createdAt: now };
-  save([...projects, project]);
+  // Never report a project that was not stored: the caller would open a ghost.
+  if (!save([...projects, project])) return null;
   return project;
 }
 
@@ -126,7 +132,9 @@ export function addProjectFile(id: string, name: string, text: string): ProjectF
   const project = projects.find((p) => p.id === id);
   if (!project || project.files.length >= MAX_FILES_PER_PROJECT) return null;
   const file: ProjectFile = { id: newId(), name: cleanName, text: cleanBody };
-  save(projects.map((p) => (p.id === id ? { ...p, files: [...p.files, file] } : p)));
+  // A refused write returns null, so the form keeps the text instead of
+  // clearing it as though the file had been saved.
+  if (!save(projects.map((p) => (p.id === id ? { ...p, files: [...p.files, file] } : p)))) return null;
   return file;
 }
 

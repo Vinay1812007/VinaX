@@ -50,18 +50,20 @@ export default function AboutPage() {
 
       <div className="vx-sec-block vx-doc">
         <p>
-          VinaX is free music with no login and no account. It plays across 12 Indian languages and English, and
-          learns what you love right here on your device.
+          VinaX is free music with no login and no account. It plays music in Indian languages and English, and
+          learns what you like on your device.
         </p>
         <p>
-          No paywalls and no premium tiers. Personalization is computed on your device, nothing you type is stored on
-          our servers, and your IP address is never kept. The only data we receive is optional, anonymous usage you
-          can switch off — see what VinaX knows on your <Link to="/taste-profile">taste profile</Link>.
+          There are no paywalls and no premium tiers. Your favourites, playlists, history and taste profile live on
+          your device. Searches and song requests go to the catalogue so music can play, and VinaX AI receives what
+          you ask it. Anonymous usage statistics are sent only if you opt in. See what VinaX has learned on
+          your <Link to="/taste-profile">taste profile</Link>; the Privacy page below lists what leaves your device.
         </p>
         <p>
-          Inside: VinaX AI with Think and voice chat, synced karaoke lyrics, Listen Together rooms, offline
-          downloads in the Android app, Drive mode, weekly mixes and a Ctrl+K command palette. Music streams from
-          independent public catalogs with automatic failover.
+          Inside: six app styles that change the whole look, festival themes, VinaX AI with Think and voice chat,
+          synced lyrics, Listen Together, offline downloads in the Android app, Drive mode, weekly mixes and a
+          Ctrl+K command palette. Music streams from independent public catalogues, and VinaX tries another source
+          when one is unavailable.
         </p>
       </div>
 

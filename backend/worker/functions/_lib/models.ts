@@ -198,7 +198,7 @@ export const AI_MODEL_REGISTRY: Record<string, ModelSpec> = {
     notes: 'Probed 2026-09-09: the KEY works, but the pinned llama-3.3-70b-versatile (and its llama-3.1-8b-instant secondary) had been RETIRED upstream, so every call 404d. Fixed in v5.23.0 by resolving the model from the live free list instead of pinning one — a catalog key must never carry a fixed slug. The id above is only the synchronous-ladder fallback.',
   },
   'openrouter-catalog': {
-    id: 'meta-llama/llama-3.3-70b-instruct:free', envKey: PROVIDER_ENV.openrouter, display_name: 'OpenRouter free catalogue', provider: 'openrouter',
+    id: 'nvidia/nemotron-3-super-120b-a12b:free', envKey: PROVIDER_ENV.openrouter, display_name: 'OpenRouter free catalogue', provider: 'openrouter',
     role: 'Aggregator key — a whole marketplace of zero-cost chat models behind one key, selectable per message',
     capabilities: ['generation', 'reasoning', 'creative'], latency_class: 'medium', quality_class: 'high',
     cost_class: 'low', output_format: 'json', chat_capable: true, catalog_key: true,

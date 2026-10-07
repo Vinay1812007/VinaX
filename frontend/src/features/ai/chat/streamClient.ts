@@ -13,8 +13,20 @@
 import { initialStreamState, reduceFrame, splitFrames, type StreamState } from './streamReducer';
 
 /** Why a turn produced no stream at all. `disabled` = switched off or not set
- *  up on this server; `over_budget` = today's allowance is used up. */
-export type StreamFailure = 'offline' | 'busy' | 'unavailable' | 'disabled' | 'over_budget';
+ *  up on this server; `over_budget` = today's allowance is used up.
+ *  11.0 — three refusals that asking again cannot change: `bad_model` = the
+ *  picked model is no longer on the server's list; `too_large` = the message
+ *  (usually a picture) is over the size limit; `rejected` = the request itself
+ *  was refused. None of them is re-asked automatically. */
+export type StreamFailure =
+  | 'offline'
+  | 'busy'
+  | 'unavailable'
+  | 'disabled'
+  | 'over_budget'
+  | 'bad_model'
+  | 'too_large'
+  | 'rejected';
 
 export interface ChatStreamResult {
   state: StreamState;
@@ -50,6 +62,11 @@ const RETRYABLE: ReadonlySet<StreamFailure> = new Set<StreamFailure>(['busy', 'u
 export function failureFromResponse(status: number, code: unknown): StreamFailure {
   if (code === 'ai_disabled' || code === 'ai_not_configured') return 'disabled';
   if (code === 'ai_over_budget') return 'over_budget';
+  if (code === 'unknown_model') return 'bad_model';
+  if (status === 413 || code === 'image_too_large' || code === 'too_large') return 'too_large';
+  if (status === 400) return 'rejected';
+  // 429 = every engine is rate-limited; anything else (500, 502, 503) is a
+  // passing upstream failure. Both are worth the one automatic re-ask.
   return status === 429 ? 'busy' : 'unavailable';
 }
 
@@ -124,7 +141,16 @@ export function failureMessage(failure: StreamFailure | null): string {
   if (failure === 'busy') return 'That was a lot of messages at once — give it a moment, then try again.';
   if (failure === 'disabled') return 'VinaX AI is switched off right now — the rest of the app works as usual.';
   if (failure === 'over_budget') return 'VinaX AI has reached its limit for today — please try again later.';
+  if (failure === 'bad_model') return 'That model is no longer available — switched to Auto.';
+  if (failure === 'too_large') return 'That picture or file is too large to send — try a smaller one.';
+  if (failure === 'rejected') return 'That message couldn’t be sent as it is — try rewording it or removing an attachment.';
   return 'The assistant paused — please try again.';
+}
+
+/** 11.0 — the same message would only be turned away again (too large, or
+ *  refused as it is): the next step is to change it, not to Retry. */
+export function needsEdit(failure: StreamFailure | null): boolean {
+  return failure === 'too_large' || failure === 'rejected';
 }
 
 /** 8.2.0 — for a turn that produced no text: true when asking again could

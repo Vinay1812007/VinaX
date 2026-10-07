@@ -1,102 +1,87 @@
-# AI music experience (8.5)
+# AI music experience
 
-This document describes the personalization and AI music features as of 8.5.0 (API 5.20.0): what each one does, where its data lives, and the contract of every endpoint — request and response schemas, authentication, validation, errors and an example. The lane / failover layer underneath is in [ai.md](ai.md); the on-device recommender in [recommendations.md](recommendations.md); what is stored where in [data-and-privacy.md](data-and-privacy.md).
+This file covers the music features that use personal taste or an AI model: the catalogue recommendation routes (`/api/recommendations`), the three routes under `/api/ai/` (described search, playlist, DJ), the taste data the app keeps on the device and what it sends with a request, and the rules that stop a model from inventing songs or facts. For each route it gives the method, request and response fields, limits, status codes and caching. The provider keys, lanes, failover, cooldowns and owner switches underneath are in [ai.md](ai.md); the on-device recommender is in [recommendations.md](recommendations.md); what is stored where is in [data-and-privacy.md](data-and-privacy.md).
 
 Backend paths are relative to `backend/worker/functions/`; frontend paths to `frontend/src/`.
 
-## Architecture decisions
+## Routes at a glance
 
-| Decision | Why |
-| --- | --- |
-| **Listening history and the taste profile stay on the device.** No new server tables. | VinaX has no accounts: an install is a random device id. History, likes, playlists and the taste profile were already local, and the recommender already runs on the device. Moving them to the server would need accounts or device-keyed personal data, sync, row-level security and a deletion flow — and would store more personal data, which the spec asks to minimise. The owner chose on-device (2026-09-30). |
-| **The server personalises only from what a request carries.** | The AI routes receive a bounded taste snapshot (`_lib/taste.ts`) or seed song ids per request and keep none of it. `/api/recommendations` takes seeds chosen on the device. |
-| **The catalogue is the music database.** | VinaX proxies an upstream catalogue (`api/cat/[[path]].ts`); there is no songs / artists / albums table. "Only songs that exist" therefore means: every id returned is one the catalogue served in the same request, or one the app already holds. |
-| **AI fills filters or proposes; code decides.** | Search: the model only fills a filter object from fixed vocabularies. Playlist and DJ: every proposal is matched to a catalogue song by title and credited artist, or dropped — never swapped for a different song. |
-| **Every AI feature has a non-AI answer.** | Search falls back to the rules reading, the playlist to a catalogue playlist, the DJ to the on-device queue, recommendations are catalogue-only. |
-| **No cross-user collaborative filtering (yet).** | "Co-play" is item-to-item within one listener's own history (`services/recommendation/coplay.ts`). Anonymous cross-user pairs from consented events were considered and deferred by the owner. |
-| **Installed app builds keep working.** | `/api/playlist` and `/api/dj` answer exactly as before; the `/api/ai/*` routes are additions. |
+| Route | Uses a model | Called by the app today | When the model cannot answer |
+| --- | --- | --- | --- |
+| `GET /api/recommendations/similar/:songId` | No | No (public API only) | Not applicable |
+| `GET /api/recommendations?seeds=…` | No | No (public API only) | Not applicable |
+| `POST /api/ai/search` | Yes, to fill filters | Yes — `services/ai/searchReading.ts` | `200` with the rules reading (`source: "rules"`) |
+| `POST /api/ai/playlist` | Yes | No — the app calls `/api/playlist` (`services/ai/playlist.ts`) and resolves titles itself | `200` with a catalogue playlist (`source: "catalogue"`) |
+| `POST /api/ai/dj` | Yes | No — the app calls `/api/dj` (`services/ai/dj.ts`); both paths run the same handler | `503`, `429` or `500`; the app keeps its on-device order |
 
-### Where the spec's data model lives
+The app reaches the same generation through `/api/playlist` and `/api/dj`, which are described in [ai.md](ai.md). The `/api/ai/playlist` and `/api/recommendations` routes return catalogue song ids directly, so a caller needs no matching code of its own.
 
-| Spec entity | In VinaX |
-| --- | --- |
-| Users | No accounts. `services/identity/installId.ts` (random id); a signed id for `/api/events` and `/api/username`. |
-| Songs, artists, albums, genres | The upstream catalogue via `/api/cat/*`. Genre and mood are inferred (`services/recommendation/profiles.ts`, `mood.ts`) or classified by `/api/curate`. |
-| Playlists | `store/libraryStore.ts` `collections` (device). |
-| User likes | `libraryStore.favorites` + `TasteProfile.likedSongIds` (device). |
-| Listening history | `store/historyStore.ts` (150 entries) + the IndexedDB event log (`services/storage/idb.ts`) (device). With analytics consent only, events are also sent to `vinax_events` (see `/api/events`). |
-| Skips | `TasteProfile.skippedSongIds`, per-artist/language skip counts, the session intent (device). |
-| User taste profile | `services/personalization/profile.ts` `TasteProfile` (device, localStorage). |
+## Rules every feature follows
 
-## 1. Listening-event tracking
+- **Listening history and the taste profile stay on the device.** There are no accounts and no per-listener tables on the server. A route personalises only from what one request carries (a bounded taste snapshot, a listening context, or seed song ids) and stores none of it.
+- **The catalogue is the music database.** VinaX proxies an upstream catalogue (`api/cat/[[path]].ts`). "Only songs that exist" means every id a route returns was served by the catalogue in that same request, or is one the app already holds.
+- **The model proposes; code decides.** In search the model only fills a filter object from fixed vocabularies and never names songs. In the playlist and the DJ every proposal is matched to a catalogue song by title and credited artist, or dropped. A missing song is never replaced by a different one.
+- **Track fields come from the catalogue**, never from the model. The only model-written text that reaches a listener is a playlist title and description, a per-track reason, and the DJ's intro and segues.
+- **Every feature has an answer without a model**: the rules reading for search, a catalogue playlist, the on-device queue for the DJ. The recommendation routes use no model at all.
+- **No cross-listener collaborative filtering.** "Co-play" is item-to-item inside one listener's own history (`services/recommendation/coplay.ts`).
 
-`services/personalization/updater.ts` turns player and library actions into profile updates, one weight table in `eventWeights.ts` (`EVENT_WEIGHTS_VERSION` 1.2.0):
+## Behaviour shared by all five routes
 
-| Event | Weight | Source |
+- **Auth:** none. CORS allows any origin (`access-control-allow-origin: *`).
+- **Per-client rate limit:** `_lib/ratelimit.ts`, keyed by client address. Each route has a token bucket (the "burst" and "per minute" figures below) plus a platform rate-limit binding tier (`RATE_LIMIT_10`, `_30`, `_60`, `_300`). Over the limit: `429 { "error": "rate_limited", "retryAfter": <seconds> }` with a `retry-after` header.
+- **Wrong method:** `405 { "error": "method_not_allowed" }` with an `allow` header.
+- **Unexpected failure:** `500 { "error": "internal" }`.
+- **Caching:** `cache-control: no-store` on everything except the two successful recommendation answers, noted below.
+- **Oversized body** (POST routes): `413 { "error": "too_large" }`; unreadable or invalid body: `400 { "error": "bad_request" }`.
+
+## When the AI is busy: 429 or 500
+
+Since 11.0, a route that finds every engine rate-limited or cooling down answers `429` instead of `500`, so a client can say "busy" rather than "something went wrong". Other upstream failures keep `500`. How this applies to the routes in this file:
+
+| Route | Every engine rate-limited | Notes |
 | --- | --- | --- |
-| play (≥ 5 s) | +1.0 | player |
-| complete (≥ 70 %) | +2.0 | player |
-| skip (< 30 %) | −0.75, and the play bump is taken back | player |
-| favourite / unfavourite | ±3.0 | library |
-| queue add | +0.5 | queue |
-| search → play | +1.5 | search |
-| "Less like this" | −3.75 and a 14-day soft mute | track menu |
-| **8.5 — "Not interested"** (hide a song) | −1.5 for the song and its artists; **language untouched**; not counted as a skip; undo only forgets the song (scores are floored at zero, so handing points back would net a gain) | track menu → `libraryStore.toggleHidden(id, song)` → `recordDislike` |
-| **8.5 — add to your own playlist** | +1.0 for song, artists, language (a signal, not a play). Bulk imports are not counted. | `libraryStore.addToCollection` → `recordPlaylistAdd` |
+| `/api/ai/dj` and `/api/dj` | `429 { "error": …, "status": 429 }` | `api/dj.ts`. The body is not the rate limiter's body and **no `retry-after` header is set**. The app backs off 60 s on any non-OK answer, so it treats this 429 and a 500 alike. |
+| `/api/playlist` | `429 { "error": …, "status": 429 }` | `api/playlist.ts` `runPlaylist()`. Also without a `retry-after` header. The app maps any 429 to "busy" (`failureReason` in `services/ai/playlist.ts`). |
+| `/api/ai/playlist` | `200` catalogue playlist | It calls `runPlaylist()` and treats "busy" like any unavailable AI, so this 429 never reaches the caller. Its only 429 is the per-client rate limit. |
+| `/api/ai/search` | `200` with `source: "rules"` | Never fails because of the model. Its only 429 is the per-client rate limit. |
+| `/api/recommendations*` | Not applicable | No model. Their only 429 is the per-client rate limit. |
 
-Listening duration (`services/analytics/listenClock.ts`), hour and weekday histograms and per-language hour buckets are recorded with every play. Decay: positive scores halve every 14 days, skips every 30.
+A caller that needs to tell the two 429s apart can read the body: the per-client limit answers `error: "rate_limited"` with `retryAfter`; the busy answer carries a `status` field and no `retryAfter`. A `retry-after` header on the busy answer exists only on the chat route, described in [ai.md](ai.md).
 
-With analytics consent, the same actions are sent as events (`dislike` and `playlist_add` are new types; the endpoint accepts any non-reserved type):
+## Recommendations from the catalogue
 
-### `POST /api/events` (existing — the listening-event API)
-
-- **Auth:** none (no accounts). Written only with the header `x-vinax-consent: analytics`; without it the route answers 204 and writes nothing. Identity is the signed device id (`_lib/identity.ts`). CORS: the app's own origins.
-- **Rate limit:** 60 / minute per client address.
-- **Request:** `{ type (≤ 24 chars), song?: { id, title, artist, language, image }, platform?, name?, appVersion?, errorKind?, message?, meta? }` — every string clipped; `meta` only for `rec_served` / `rec_outcome`, whitelisted keys, ≤ 1 KB. Reserved admin types are dropped with the same 204.
-- **Response:** 204.
-- A duplicate `/api/listening-event` was not added: this route already is that API, and a second one would split the log.
-
-## 2. Taste profile
-
-`TasteProfile` (device) holds languages, artists and songs with decayed affinity; hour / weekday histograms; energy preference; recent, skipped, liked and (8.5) disliked song ids; soft mutes; the four taste dials; totals (8.5 adds `dislikes`, `playlistAdds`). `normalizeProfile` keeps every field through a reload.
-
-8.5 surfaces on the Taste profile page (`features/taste-profile/useTasteInsights.ts`): **skip rate** (skips per counted play), **new-to-you share** (share of the last 30 days' plays whose lead artist has ≤ 3 counted plays; null under 10 plays), the **discovery mode**, **top moods** and **genres / vibes**.
-
-## 3. Recommendations
-
-The engine (`services/recommendation/*`, unchanged in 8.5) is hybrid: content features (language, mood, energy, era, hashed text vectors), catalogue-side similarity (the catalogue's similar songs and similar artists), within-listener co-play, session intent and time of day, followed by diversity re-ranking, hard filters and validation. Shelves: **Made For You** (the spec's "Recommended for you"), **Because you listened to / liked**, **Daily Mix N**, **Fresh Picks**, the weekly discovery mix, **Similar tracks** on song pages, and (8.5) **Similar artists** on Home (`features/home/useSimilarArtists.ts`: the catalogue's similar-artist lists for the three most-played artists, minus artists already played, blocked or muted).
-
-Measure any ranking change with `node frontend/scripts/eval-recs.mjs` ([evaluation.md](evaluation.md)).
+Both routes are anonymous and use no model. Logic lives in `_lib/recs.ts`. Candidates come from two pools, in this order: the catalogue's similar-songs list for the seed (`reason: "similar"`), then songs the catalogue **credits** to the seed's lead artist (`reason: "same_artist"`; a text match on the name is not enough). At most `max(2, ⌈limit / 5⌉)` songs per artist.
 
 ### `GET /api/recommendations/similar/:songId`
 
-- **Auth:** none; anonymous and stateless — nothing about the caller is read or kept. **Cache:** `public, max-age=600, s-maxage=3600`.
-- **Rate limit:** 30 / minute per client address.
-- **Query:** `limit` 1–30 (default 20), `languages` comma list (letters, ≤ 6).
-- **Validation:** `songId` must match `^[A-Za-z0-9_-]{2,40}$`.
-- **Response 200:**
+- **Path:** `songId` must match `^[A-Za-z0-9_-]{2,40}$`, otherwise `400 invalid_song_id`.
+- **Query:** `limit` 1–30 (default 20); `languages`, a comma list of at most 6 lower-case names (letters only, 2–20 characters each). A value outside these gives `400 bad_request`.
+- **Rate limit:** 30 burst, 30 per minute.
+- **200**, cached `public, max-age=600, s-maxage=3600`:
 
   ```json
   {
     "seed": { "id": "a1B2c3D4", "title": "Evening Song", "artist": "Lead Singer", "language": "telugu" },
     "tracks": [
-      { "id": "x9Y8z7W6", "title": "Night Road", "artist": "Artist A", "artists": ["Artist A"], "album": "Night Road", "language": "telugu", "year": 2021, "durationSec": 243, "reason": "similar", "reasonText": "Similar to “Evening Song”", "seedId": "a1B2c3D4" },
-      { "id": "q1W2e3R4", "title": "Morning Song", "artist": "Lead Singer", "artists": ["Lead Singer"], "album": null, "language": "telugu", "year": 2019, "durationSec": 201, "reason": "same_artist", "reasonText": "More by Lead Singer", "seedId": "a1B2c3D4" }
+      { "id": "x9Y8z7W6", "title": "Night Road", "artist": "Artist A", "artists": ["Artist A"], "album": "Night Road", "language": "telugu", "year": 2021, "durationSec": 243, "reason": "similar", "reasonText": "Similar to “Evening Song”", "seedId": "a1B2c3D4" }
     ],
     "source": "catalogue"
   }
   ```
 
-- **Sources:** the catalogue's similar-songs list, then songs the catalogue **credits** to the seed's lead artist (a text match is not enough). The seed's other releases are folded away; at most `max(2, ⌈limit/5⌉)` songs per artist.
-- **Errors:** 400 `invalid_song_id` / `bad_request`; 404 `song_not_found`; 429 `rate_limited` (+ `retryAfter`); 502 `catalogue_unavailable`; 405 for other methods.
+  `artists` holds at most four names. `reasonText` is "Similar to “<seed title>”" or "More by <seed artist>".
+- **Errors:** `400 invalid_song_id` / `bad_request`; `404 song_not_found`; `429 rate_limited`; `502 catalogue_unavailable`; `405` for POST.
 
 ### `GET /api/recommendations?seeds=…`
 
-- Songs like a few songs **the app names** (for example the listener's most-played ids, chosen on the device). Same auth, track shape and errors as above; **cache** `private, max-age=600`; **rate limit** 10 / minute.
-- **Query:** `seeds` 1–5 ids (required), `limit` 1–30, `languages`, `exclude` ≤ 100 ids never to return.
-- **Response 200:** `{ "seeds": [ {id, title, artist, language} ], "tracks": [ … ], "source": "catalogue" }`. Seeds take turns (round robin) so one seed never fills the list; seeds themselves and `exclude` never come back; unknown seeds are skipped (404 only when none exist).
+Songs like a few songs the caller names, for example a listener's most-played ids chosen on the device.
 
-## 4. AI music search
+- **Query:** `seeds`, 1–5 song ids (required); `limit` and `languages` as above; `exclude`, up to 100 ids never to return. A missing `seeds`, a malformed id or an over-long list gives `400 bad_request`.
+- **Rate limit:** 10 burst, 10 per minute.
+- **200**, cached `private, max-age=600`: `{ "seeds": [ { id, title, artist, language } ], "tracks": [ … ], "source": "catalogue" }` with the same track shape. Seeds take turns (round robin) so one seed cannot fill the list. Seeds and `exclude` ids never come back. Unknown seeds are skipped.
+- **Errors:** as above, except there is no `invalid_song_id` (a bad id is `bad_request`), and `404 song_not_found` only when none of the seeds exist.
+
+## Described search
 
 Two readers produce one `SearchFilters` object (`_lib/searchFilters.ts`):
 
@@ -104,22 +89,21 @@ Two readers produce one `SearchFilters` object (`_lib/searchFilters.ts`):
 { languages: string[]; moods: ('romantic'|'energetic'|'chill'|'melancholy'|'devotional')[];
   activity: 'workout'|'party'|'wedding'|'drive'|'focus'|'sleep'|'rain'|'travel'|null;
   energy: 'high'|'low'|null; tempo: 'slow'|'fast'|null;
-  yearFrom: number|null; yearTo: number|null;             // "the 2000s" → 2000–2009
+  yearFrom: number|null; yearTo: number|null;      // inclusive; "the 2000s" → 2000–2009
   seed: { text: string; kind: 'song'|'artist'|'unknown' }|null;   // "songs like <name>"
-  instrumental: boolean; style: 'dj'|'folk'|'devotional'|null; keywords: string[] }
+  instrumental: boolean; style: 'dj'|'folk'|'devotional'|null;
+  keywords: string[] }                              // at most five
 ```
 
-- **Rules** (`rulesFilters`) — deterministic, always available. Words inside a seed name are not cues ("songs like Love Story" is not a romance request); "but more upbeat" is a modifier, not part of the name; pronouns ("more like this") are never a seed.
-- **Model** — reads the same shape. Its JSON is untrusted: `sanitizeFilters` keeps only vocabulary values, clips strings (seed 80, keyword 30 chars), drops year ranges over 30 years and anything else (a `songs` array it adds is ignored). `mergeFilters`: what the rules read literally wins; the model fills gaps.
-- **Catalogue phrasings** (`catalogueQueries`) — only phrasings probed live: `<lang> instrumental`, `<lang> acoustic songs`, `<lang> unplugged` (probed 2026-09-30, 20/20 in-language) and the existing `dance / mass / sad / romantic / devotional / melody songs`, `evergreen hits` (pre-2000 only). `<lang> slow songs` is deliberately not used: the catalogue matches it to titles such as "Slow Motion".
-
-In the app (`features/search/semanticSearch.ts`), a described search runs the on-device reading and asks the server for its reading in parallel (`services/ai/searchReading.ts`: `withTracks: false`, 2.5 s leash, off with the listener's AI switch, backs off after failures). What the server adds is fetched too (≤ 2 more searches). A seed resolves to the catalogue's similar songs (`seedSearch.ts`); a named decade filters by year whenever ≥ 5 candidates carry one. "Songs that match" says whose similar songs are shown, or that the named song is not in the catalogue.
+- **Rules** (`rulesFilters`) are deterministic and always available.
+- **Model**: reads the same shape on the `fast` lane with a 4.5 s budget. Its JSON is untrusted: `sanitizeFilters` keeps only vocabulary values (at most three languages and three moods) and drops a year range wider than 30 years. `mergeFilters` lets what the rules read literally win; the model fills gaps.
+- **Catalogue phrasings** (`catalogueQueries`) turn filters into search phrases the catalogue is known to answer well, such as `<language> instrumental` or `<language> romantic songs`.
 
 ### `POST /api/ai/search`
 
-- **Auth:** none. **Rate limit:** 20 / minute burst, 10 / minute refill. **Owner switch:** `search` (AI controls).
-- **Request:** `{ "query": string (2–200 chars), "languages"?: string[] (fallback when the query names none, ≤ 3), "limit"?: 1–30 (default 20), "withTracks"?: boolean (default true) }` — body ≤ 4 KB.
-- **Response 200:**
+- **Request** (body ≤ 4 KB): `{ "query": string (2–200 characters), "languages"?: string[] (used only when the query names none; at most 3 kept), "limit"?: integer 1–30 (default 20), "withTracks"?: boolean (default true) }`.
+- **Rate limit:** 20 burst, 10 per minute. Model calls are logged under feature `search`, which is also the name of its owner switch (see [ai.md](ai.md)).
+- **200:**
 
   ```json
   {
@@ -132,20 +116,26 @@ In the app (`features/search/semanticSearch.ts`), a described search runs the on
   }
   ```
 
-  `source` is `rules` when the model was off, over budget, slow (4.5 s budget) or unusable — the reading never fails with a 5xx. `checked` lists what was verified on catalogue fields (`language`, `year`, `seed`); mood, energy and tempo choose the phrasings but cannot be verified (the catalogue exposes no audio features). A year filter keeps only songs whose catalogue year is inside it. `seed` is `{ id, title, artist, kind }` when the name matched a song whose title IS the name ("<title> by <artist>" also checks the artist) or an artist credited under exactly that name; otherwise the name is searched as words, never guessed. With `withTracks: false`, `tracks` is absent and no catalogue call is made.
-- **Errors:** 400 `bad_request`; 413 `too_large`; 429 `rate_limited`; 502 `catalogue_unavailable` (only with tracks); 405 for GET.
+  - `source` is `"ai"` when the model's reading was used, `"rules"` when the model was off, over budget, not configured, slow or unusable.
+  - `checked` lists the filters verified on the catalogue's own fields: `language`, `year`, `seed`. Mood, energy and tempo choose the phrasings but cannot be verified, because the catalogue exposes no audio features.
+  - `seed` is `{ id, title, artist, kind: "song" | "artist" }` when the named song or artist was found in the catalogue, else `null`.
+  - Track `reason` is `similar`, `by_artist` or `match`.
+  - With `withTracks: false` the answer has `checked: []`, `seed: null`, no `tracks`, and no catalogue call is made.
+- **Errors:** `400 bad_request`; `413 too_large`; `429 rate_limited`; `502 catalogue_unavailable` (only when tracks were asked for); `405` for GET.
 
-## 5. AI playlist
+### How the app uses it
 
-`api/playlist.ts` `runPlaylist()` generates (gather + curate on the playlist lanes, 31 s budget) — unchanged except that the curator now writes a per-track `reason` about fit only (mood, tempo, language, moment; never facts about the artist, film, awards or dates).
+`features/search/semanticSearch.ts` runs the on-device reading and asks the server for its reading in parallel. `services/ai/searchReading.ts` sends `withTracks: false`, waits at most 2.5 s, and does nothing when the listener's AI switch is off. After a failure it backs off: 30 minutes for 404 or 405 (the deployed Worker has no such route), 60 s for 429, otherwise 30 s doubling up to 15 minutes. When the server's reading adds something, the app runs at most two more catalogue searches. A seed resolves to the catalogue's similar songs (`features/search/seedSearch.ts`).
 
-8.5 removed a quiet substitution in the app: when no catalogue result matched a suggestion, the first search hit (a different song) stood in. Now the suggestion is dropped and the catalogue pool, ranked against the request, fills the gap (`services/ai/playlist.ts`; the music expert shares it). AI Playlist shows each pick's reason.
+## Playlist from a description
+
+Generation is `runPlaylist()` in `api/playlist.ts`: a gather pass and a curate pass inside a 31 s budget. The curator writes a per-track `reason` (at most 120 characters). `avoidTitles` ride the prompt and are also enforced in code (`filterAvoided`), unless the listener's own prompt names the song.
 
 ### `POST /api/ai/playlist`
 
-- **Auth:** none. **Rate limit:** shares the `/api/playlist` bucket (6 burst, 3 / minute), so alternating routes never doubles the budget. **Owner switch:** `playlist`.
-- **Request:** `{ "prompt": string (1–500), "languages"?: string[], "taste"?: <taste snapshot>, "avoidTitles"?: string[] (≤ 60), "limit"?: 10–30 (default 25) }` — body ≤ 32 KB.
-- **Response 200** (the spec's shape, plus display metadata):
+- **Request** (body ≤ 32 KB): `{ "prompt": string (1–500 characters, trimmed), "languages"?: string[] (at most 5 kept), "taste"?: <taste snapshot, below>, "avoidTitles"?: string[] (first 60 kept, 90 characters each), "limit"?: integer 10–30 (default 25) }`. A `limit` outside 10–30 gives `400`.
+- **Rate limit:** shares one bucket with `/api/playlist` (6 burst, 3 per minute), so alternating the two routes does not double the budget.
+- **200:**
 
   ```json
   {
@@ -160,59 +150,110 @@ In the app (`features/search/semanticSearch.ts`), a described search runs the on
   }
   ```
 
-- **Validation:** every suggestion is looked up in the catalogue on the server (`_lib/playlistResolve.ts`, the app's `matchesProposal` rule: identical canonical title + artist, or a title holding every suggested word whose credits name the suggested artist; dialogue / BGM / jukebox cuts never match). No match → dropped and counted in `dropped`. A language the request names is enforced. Fewer than 12 picks are topped up with catalogue songs for the request's own filters (`source: "catalogue"` on those tracks).
-- **Fallback:** AI not configured, switched off, over budget or unusable → `200` with a catalogue playlist (`source: "catalogue"`, a plain title such as "Focus Mix") instead of an error.
-- **Errors:** 400 `bad_request`; 413 `too_large`; 429 `rate_limited`; 502 `catalogue_unavailable`; 405 for GET.
-- `/api/playlist` (installed builds) still answers `{ name, description, songs: [{ title, artist, reason? }], reading, model }`, resolved on the device.
+- **No substitution:** every suggestion is looked up in the catalogue on the server (`_lib/playlistResolve.ts`, `matchesSuggestion`, inside a 9 s budget). A suggestion with no matching song is dropped and counted in `dropped`. A language the request names is enforced.
+- **Top-up:** fewer than 12 resolved picks (or fewer than `limit` when that is smaller) are topped up with catalogue songs for the request's own filters; those tracks carry `source: "catalogue"`. The top-level `source` is `"ai"` when at least one track came from the model.
+- **Fallback:** when the AI is not configured, switched off, over budget, busy or unusable, the answer is still `200`: a catalogue playlist with `source: "catalogue"`, `dropped: 0`, a plain title built from the request's filters and the description "Songs from the VinaX catalogue that match your request."
+- **Errors:** `400 bad_request`; `413 too_large`; `429 rate_limited`; `502 catalogue_unavailable`; `405` for GET.
 
-## 6. AI DJ / personalized queue
+### How the app builds a playlist
 
-The queue is the on-device engine; the DJ (`api/dj.ts`, `services/ai/dj.ts`) refines its order and may propose capped discoveries, each verified in the catalogue before it can play. It reads recent plays and completions, skips, likes, top songs, preferred and avoided artists; keeps one artist from playing twice in a row; places discoveries in the second half with a familiar song at least every fourth; and is rejected when it makes the energy arc worse. Two skips in the automatic tail re-plan it with surer picks; **8.5: a like on the playing song rebuilds the automatic tail right away** (`services/recommendation/adaptive.ts` `noteLikeAndMaybeReplan`; shared 90 s cooldown; hand-queued songs untouched).
+The app calls `/api/playlist`, which answers `{ name, description, songs: [{ title, artist, reason? }], reading, model }`, and resolves each title in the catalogue itself (`services/ai/playlist.ts`, using `matchesProposal` from `services/ai/dj.ts`). The same rule applies: an unmatched suggestion is dropped and the catalogue pool, ranked against the request, fills the gap. The app waits at most 34 s. It remembers up to 100 recently used titles under the localStorage key `vinax.aiplaylist.avoid.v1` and sends them as `avoidTitles`.
 
-**8.5 grounding** (`_lib/grounding.ts`, prompt rule 16): the intro, reasons and segues are removed when they claim something that needs a source (awards, charts, stream / view counts, box office, births, debuts…), hold a number the pool does not carry, or name someone or something mid-sentence that is not a pool title, artist, album or language. Dropping a line is always safe: the set plays without a segue.
+## AI DJ
 
-### `POST /api/ai/dj` (same handler as `/api/dj`)
+The queue is built by the on-device engine. The DJ refines its order and, when asked, proposes a few songs from outside the pool. The handler is `api/dj.ts`; `api/ai/dj.ts` only re-exports it, so `/api/ai/dj` and `/api/dj` behave identically. The prompt, sequencing rules and lanes are in [ai.md](ai.md).
 
-- **POST, not GET:** the listening context lives on the device and is sent per request. GET answers 405 (`allow: POST, OPTIONS`).
-- **Auth:** none. **Rate limit:** 15 burst, 8 / minute. **Owner switch:** `dj`.
-- **Request:** `{ "context": { "recentlyPlayed": [], "recentlyCompleted": [], "skippedSongs": [], "likedSongs": [], "topSongs": [], "preferredArtists": [], "avoidArtists": [], "currentLanguage": "telugu", … }, "pool": [ { "id", "title", "artist", "language"?, "album"?, "year"?, "known"?, "mood"?, "energy"?, "tempo"? } ] (3–60), "count"?: 1–20, "discover"?: boolean, "maxDiscover"?: 0–6, "wantSegues"?: boolean }` — body ≤ 48 KB.
-- **Response 200:** `{ "intro": "Easing into something gentler for the late hours.", "songs": [ { "songId": "p1", "title": "…", "artist": "…", "reason": "same warm vocals, smoother tempo", "segue": "", "confidence": 0.8, "fromPool": true } ], "model": "…" }`
-- **Errors:** 400 `bad_request` / `empty_context` / `pool_too_small`; 413 `too_large`; 429; 503 `ai_not_configured` / `ai_disabled` / `ai_over_budget` (the app keeps its on-device order); 500 when no engine produced a usable set.
+### `POST /api/ai/dj`
 
-## Safety and reliability summary
+POST, not GET, because the listening context lives on the device and is sent with each request.
 
-| Requirement | Where |
+- **Request** (body ≤ 48 KB): `{ "context": object (must be non-empty: recentlyPlayed, recentlyCompleted, skippedSongs, likedSongs, topSongs, preferredArtists, avoidArtists, …), "pool": [ { "id"?, "title", "artist", "language"?, "album"?, "year"?, "known"?, "mood"?, "energy"?, "tempo"? } ], "count"?: 1–20 (default 8), "discover"?: boolean, "maxDiscover"?: 0–6 (default 4, forced to 0 without `discover`), "wantSegues"?: boolean (default true) }`. Pool entries without a title and artist are ignored, the first 60 are kept, and at least 3 must remain. Out-of-range numbers are clamped, not rejected.
+- **Rate limit:** 15 burst, 8 per minute. Owner switch and log feature: `dj`.
+- **200:** `{ "intro": string, "songs": [ { "songId": string | null, "title", "artist", "reason", "segue", "confidence", "fromPool": boolean } ], "model": string | null }`. A pool pick is matched back to the pool by id or by canonical title and artist. A discovery has `songId: null` and `fromPool: false`; the app must find it in the catalogue before it can play.
+- **Errors:** `400 bad_request` / `empty_context` / `pool_too_small`; `413 too_large`; `429 rate_limited`; `503 ai_not_configured` / `ai_disabled` / `ai_over_budget`; `429` or `500` with `{ error, status }` when no engine produced a usable set (see "When the AI is busy"); `405` for GET.
+- **Budget:** 26 s on the server.
+
+### Grounding of spoken lines
+
+`_lib/grounding.ts` (`buildFacts`, `groundedLine`) checks the intro (at most 200 characters), every reason (120) and every segue (160). A line is replaced by an empty string when it makes a claim that needs a source (awards, charts, sales, stream or view counts, box office, births, debuts), holds a number the pool does not carry, or names someone or something mid-sentence that is not a pool title, artist, album or language. Dropping a line is always safe: the set plays without it.
+
+### How the app uses it
+
+`services/ai/dj.ts` sends at most 40 pool songs and `maxDiscover: 4`, sets `wantSegues` from the DJ voice setting, and waits at most 30 s. On `503` with `ai_not_configured` or `ai_disabled` it stops asking for the session; `ai_over_budget` backs off 15 minutes; 404 or 405 backs off 10 minutes; any other failure, including 429, backs off 60 s. In every case the on-device order plays. Two skips in the automatic tail re-plan it, and a like on the playing song rebuilds the tail (`services/recommendation/adaptive.ts`, `noteLikeAndMaybeReplan`); both share a 90 s cooldown.
+
+## Taste on the device
+
+### Signals
+
+`services/personalization/updater.ts` turns player and library actions into profile updates. The weights are one table in `services/personalization/eventWeights.ts` (`EVENT_WEIGHTS_VERSION` 1.2.0):
+
+| Signal | Weight |
 | --- | --- |
-| Never fabricate songs | Search: filters only. Playlist: server resolution, no substitution (server and app). DJ: pool picks matched by id / canonical key; discoveries verified in the catalogue. Recommendations: catalogue lists only. |
-| Never fabricate metadata | Track fields come from the catalogue answer, never from the model. DJ lines grounded (`_lib/grounding.ts`); playlist reasons are about fit only. |
-| No private data exposed to others | History and profile never leave the device except the per-request taste snapshot (not stored). `/api/recommendations` with seeds is `private` cache; the similar route has no personal input. |
-| Minimise personal data | No new tables or stored fields on the server. |
-| Rate limits | Every route above; per client address (`_lib/ratelimit.ts`), per isolate plus the platform binding tier. |
-| AI failures | Lane ladder with cooldowns (`_lib/ai.ts`); `accept` checks send unusable JSON to the next engine; each route has a non-AI answer. |
-| Owner control | AI controls switches (`search` is new in 8.5), spend caps, emergency stop. |
+| Play | +1.0 |
+| Complete | +2.0 |
+| Skip | −0.75, and the play's +1.0 is taken back |
+| Favourite | +3.0 |
+| Queue add | +0.5 |
+| Search, then play | +1.5 |
+| "Less like this" | −3.75 and a 14-day soft mute of the artist |
+| "Not interested" (hide a song) | −1.5 |
+| Add to your own playlist | +1.0 |
 
-## Environment
+Positive scores halve every 14 days, skips every 30. Hiding and playlist adds are raised by `store/libraryStore.ts` (`toggleHidden`, `recordDislike`, `recordPlaylistAdd`).
 
-No new variables or secrets. The routes use the existing lane keys (`VINAX_*`, see [operations.md](operations.md)), `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (AI controls and AI event logs), `TELEMETRY_PEPPER` (rate-limit keys) and the `RATE_LIMIT_*` bindings. No database migration.
+### Where it is stored
+
+The key names are the `KEYS` table in `constants/storage-keys.ts`.
+
+| Data | Place |
+| --- | --- |
+| Taste profile (`TasteProfile` in `services/personalization/profile.ts`) | localStorage `vinax.profile.v1`; Kid mode uses `vinax.profile.kid.v1` |
+| Listening history (150 entries, `store/historyStore.ts`) | localStorage `vinax.history.v1` |
+| Favourites, playlists, hidden songs (`store/libraryStore.ts`) | localStorage `vinax.library.v1` |
+| Device id and its signed form | localStorage `vinax.device-id`, `vinax.signed-device-id` |
+
+With analytics consent only, the same actions are also sent to `POST /api/events` (header `x-vinax-consent: analytics`; 60 per minute; a written or ignored event answers `204`). That route is described in [data-and-privacy.md](data-and-privacy.md).
+
+### What a request carries
+
+`services/ai/taste.ts` `buildTasteSnapshot()` builds the snapshot sent as `taste`; the server reads it with `_lib/taste.ts` `tasteBlock()` and keeps only these fields, each string clipped to 90 characters:
+
+| Field | Most entries kept |
+| --- | --- |
+| `preferredLanguages`, `avoidLanguages` | 5 each |
+| `topArtists` | 10 |
+| `topSongs`, `likedSongs` | 8 each |
+| `recentlyPlayed` | 10 |
+| `alreadyRecommendedThisChat` | 32 |
+| `tasteDials` | 4 |
+| `timeOfDay`, `sessionVibe` | one string each, 30 characters |
+
+Anything else in the object is ignored, and nothing is stored.
+
+### Taste profile page and Home
+
+`features/taste-profile/useTasteInsights.ts` shows the skip rate, the top moods and the new-to-you share: the share of the last 30 days' plays whose lead artist has at most 3 counted plays, shown only from 10 plays. `features/home/useSimilarArtists.ts` builds the Similar artists shelf from the catalogue's similar-artist lists for the 3 most-played artists.
 
 ## Tests
 
-| Area | Tests |
+| Area | Files |
 | --- | --- |
-| Signals, taste | `services/personalization/updater.test.ts`, `store/libraryStore.test.ts`, `features/taste-profile/useTasteInsights.test.ts` |
-| Recommendations | `features/home/useSimilarArtists.test.ts`, `backend … api/recommendations.test.ts` |
-| Search | `services/ai/musicIntent.test.ts`, `features/search/semanticSearch.test.ts`, `backend … api/ai/search.test.ts` |
-| Playlist | `services/ai/playlist.test.ts`, `backend … api/ai/playlist.test.ts` |
-| DJ | `services/recommendation/adaptive.test.ts`, `backend … _lib/grounding.test.ts`, existing `dj.test.ts`, `styleLock.test.ts` |
-| Routing | `backend … __tests__/routerCoverage.test.ts` (every handler is routed) |
+| Signals and taste | `frontend/src/services/personalization/updater.test.ts`, `store/libraryStore.test.ts`, `features/taste-profile/useTasteInsights.test.ts` |
+| Recommendation routes | `backend/worker/functions/api/recommendations.test.ts`; `frontend/src/features/home/useSimilarArtists.test.ts` |
+| Search | `backend/worker/functions/api/ai/search.test.ts`; `frontend/src/services/ai/musicIntent.test.ts`, `features/search/semanticSearch.test.ts` |
+| Playlist, no substitution, catalogue fallback | `backend/worker/functions/api/ai/playlist.test.ts`; `frontend/src/services/ai/playlist.test.ts` |
+| DJ and grounding | `backend/worker/functions/api/dj.test.ts`, `api/styleLock.test.ts`, `_lib/grounding.test.ts`; `frontend/src/services/ai/dj.test.ts`, `services/recommendation/adaptive.test.ts` |
+| Busy is 429, other failures stay 500 (`/api/dj`, `/api/playlist`) | `backend/worker/__tests__/aiAuditSweep.test.ts` |
+| Every handler is routed | `backend/worker/__tests__/routerCoverage.test.ts` |
 
-## After deploying
+To measure a ranking change, run `node frontend/scripts/eval-recs.mjs` ([evaluation.md](evaluation.md)). How to run the test suites is in [testing.md](testing.md).
 
-Probe the new routes on the live Worker before relying on them (a 404 or 405 on a POST route means the deployed Worker predates 8.5):
+## Checking a deployment
 
-```sh
-curl -s 'https://www.sirimillavinay.online/api/recommendations/similar/<a real song id>?limit=5'
-curl -s -X POST https://www.sirimillavinay.online/api/ai/search -H 'content-type: application/json' -d '{"query":"upbeat telugu songs","withTracks":false}'
-```
+After a Worker deploy, request `GET /api/recommendations/similar/<a real song id>?limit=5` and `POST /api/ai/search` with `{"query":"upbeat telugu songs","withTracks":false}` on the live site. A `404`, or a `405` on the POST, means the deployed Worker predates these routes. The owner console lists the `search`, `playlist` and `dj` switches ([admin-console.md](admin-console.md)); secrets and bindings are in [operations.md](operations.md).
 
-The AI Operations console lists the new `search` switch; its calls are logged under feature `search`.
+## Known gaps
+
+- The busy `429` from `/api/dj`, `/api/ai/dj` and `/api/playlist` has no `retry-after` header, so a client has to choose its own wait.
+- The app can send up to 140 `avoidTitles` to `/api/playlist`, but the server keeps the first 60. Titles the app adds at the end of the list (locked and excluded songs) can be cut off when the remembered list is long.
+- No app code calls `/api/recommendations`, `/api/recommendations/similar/:songId`, `/api/ai/playlist` or `/api/ai/dj`. They are covered by backend tests only.

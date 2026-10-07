@@ -1,114 +1,61 @@
 # VinaX AI
 
-This page covers the VinaX AI destination: what the chat can do, the connectors in the + menu, what it can and cannot know, the model menu, slash commands, songs you can play from a reply, controlling the player by message, chat settings, when a reply does not arrive, AI Playlist, and what is sent to the AI service. The engineering description is in [ai](../ai.md).
+This page is for listeners. It explains how to use VinaX AI, the assistant inside VinaX: choosing a model, the look of the chat, attaching files and pictures, voice, the tools in the + menu, and what to do when a reply does not arrive. Open it from the app's navigation; it needs no sign-up.
 
-## The chat
+## Ask something
 
-Open **VinaX AI** from the tab bar or sidebar. The composer takes any question: writing, code, maths, translation, or music.
+Type in the box and send. The reply appears as it is written; press Stop to end it early. Under a reply you can copy it, ask for it again, or have it read aloud. If you ask for music, the songs in the reply can be played or queued directly.
 
-| Control | What it does |
-|---|---|
-| **+** (Attach and tools) | Upload files or a folder, and switch the **connectors** on or off (below). Saved prompts open from the same menu. Files stay on your device until you send. |
-| Model button | Opens the model menu |
-| Live voice chat / Voice input | Talk hands-free, or dictate a message, when the device supports speech |
-| Send / Stop | Send the message, or stop a reply that is being written (`Esc` also stops) |
+## Pick a model, or leave it on Auto
 
-### Connectors
+The model chip opens the model menu. **Auto** picks a model for each question and moves to another one by itself if the first is busy. Below it are the models you used recently, then every free model from NVIDIA, OpenRouter, Groq and Gemini that is available right now, under its real name. Use the search field to find one.
 
-The + menu lists the **connectors**: what a reply may draw on. Each row says in one line what it does or what it shares. The ones that are on show as chips above the message box; tap a chip's × to turn it off.
+- Choose a model when you want one in particular. If it later disappears from the list, the chat tells you "That model is no longer available — switched to Auto." and carries on with Auto.
+- To start every chat with the same model, open chat settings → **General** → **Default model**.
 
-| Connector | What it does |
-|---|---|
-| Think | Sends the message to a slower, more careful engine |
-| Now playing | Sends the song playing now — its title, artist, album, year, language and its first lyric lines — with your message, so you can ask about it |
-| Memory | The lines you asked VinaX AI to remember (see below). Switching it off forgets them, so with lines saved it asks for a second tap |
-| Place | Your coarse place and time zone, for local dates and times. It is greyed out when region sharing is off in Settings, and switching it off here keeps it out of your chats only |
+## Chat style
 
-### While it answers
+The chat changes its look to suit the maker of the model you picked: the shape of the message box, where the greeting sits, how messages are drawn, and the colours. Auto uses the VinaX look.
 
-While VinaX AI is thinking, its mark breathes gently and new text fades in, with a small spark where the reply is being written. All of it holds still when reduced motion is on.
+To change it, or to stop it changing: open chat settings → **General** → **Chat style**.
 
-### What it can and cannot know
+- **Match the model** (the default) — the chat follows the model you pick.
+- **Always VinaX** — the VinaX look whatever the model.
+- **Mono, Spectrum, Paper, Loop, Void, Forge, Circuit, Deep** — one fixed look.
 
-VinaX AI does not search the web. It answers from what its engine already knows, so anything that changes week to week — news, new releases, scores, prices, schedules — may be out of date. It is instructed to say so plainly, never to claim it checked and never to invent sources. Songs it names are still looked up in the VinaX catalogue before they become playable.
+If the chat suddenly looks different, you changed model; choose **Always VinaX** to keep one look. The choice is kept on this device and is part of a backup.
 
-Chats are kept on this device. The chat list lets you search, rename, pin and delete chats; the header exports the current chat. `Ctrl/⌘ + K` starts a new chat and `Ctrl/⌘ + B` shows or hides the chat list.
+## Attach files and pictures
 
-### Artifacts
+Use the + menu, or drag files onto the chat.
 
-When a reply writes something whole — a page, a document, a block of code — it
-also lands in the **Artifacts** panel, from the button in the header. Each one is
-listed once with **every version kept**, so "make that shorter" three times leaves
-you four versions you can go back to. Copy it, download it, jump to where it was
-written, and for a page or a drawing, see it running.
+- **Pictures** — up to 6 per message, 4 MB each. Some models read only one picture at a time; when you send several, VinaX AI asks a model that can read them all first.
+- **Text and code files** — up to 2 MB each.
+- **PDF** — up to 8 MB. The text of the PDF is read on your device and sent with your message. A scanned PDF has no text to read; you are told so, and can paste the part you need instead.
+- Up to 24 files per message.
 
-A preview runs **sealed off from VinaX**: it cannot read your chats, your library,
-your settings or anything else on the device.
+Attached files show as small chips on your message. Choose **Show contents** on a chip to see exactly what was sent, and **Hide contents** to fold it away. Send waits until every file has been read.
 
-### Projects
+## Voice
 
-A **project** is a group of chats that share standing instructions and reference
-files. Set it up once — "you are helping me write liner notes; here is the track
-list" — and every chat in the project starts there instead of you explaining it
-again. Open **Projects** in the sidebar to make one, write its instructions,
-attach files, and put the current chat in it. It all stays on this device.
+- **Dictation** — the microphone in the message box writes what you say into the box, after whatever you have already typed. Stop works at any moment.
+- **Live voice** — a spoken conversation; choose the voice in chat settings → **Voice**.
+- **Read aloud** — on any reply.
 
-### Things VinaX AI remembers
+## Tools in the + menu
 
-In **Settings → Replies** you can switch on **Let VinaX AI remember things** and
-write lines you would otherwise repeat — "I play the veena, keep examples
-practical". They travel with every chat. You can edit any line, delete any line,
-and switching the feature off **forgets all of them**. VinaX AI never adds a line
-by itself.
+- **Create image** — describe a picture and a free image model draws it. The result says which model made it. You are told plainly when a prompt is too short, was filtered, is too long, or when image creation is not set up.
+- **Create music clip** — shown only when a free music model is available.
+- **Run code** — lets a model that supports it run code to work something out. When the model you picked cannot run code, the chip says so and the reply is written without it.
+- **Saved prompts** — keep prompts you reuse and insert them with one tap.
 
-### Temporary chat
+## Projects, memory and temporary chats
 
-**Temporary chat** in the sidebar starts a chat that is never written to this
-device: it is gone when you close the tab, it never appears in your chat list
-again, and it is not part of an export.
+- A **project** groups chats and gives them standing instructions and up to 10 reference files.
+- **Memory** is off until you switch it on. You write the lines yourself, and you can edit or remove any of them; the assistant never adds to it.
+- A **temporary chat** is never saved to the device.
 
-### Editing what you asked
-
-Editing one of your own messages puts it back in the box so you can change it.
-The conversation as it was — including the answers that followed — is kept as its
-own chat named “… · before edit”, so nothing you may want back is thrown away.
-
-### Very long chats
-
-A long conversation eventually outgrows what any engine can read at once. VinaX AI
-keeps the recent part word for word and carries the earlier **questions** along as
-a short list. It will tell you plainly that it no longer has the text of an older
-answer rather than inventing one, so if you need an old answer, paste the part
-that matters.
-
-### Where you are
-
-If you allow it (**Settings → Region & privacy → Allow region inference**), VinaX AI knows
-roughly where you are: your country, your state, an approximate city and your time
-zone. That is what makes dates and times in a reply (“what is on this evening”)
-use *your* clock instead of India's.
-
-It is coarse on purpose and never an address. It is never used to guess what
-language you want — your language settings decide that. Switch the setting off and
-nothing about your location is sent at all.
-
-### Attaching files
-
-Images, text and code files, and **PDFs** — VinaX reads a PDF's text and attaches
-that. Where a PDF cannot be read — it is a scan, it is password-protected, or its
-text is stored in a way that cannot be decoded — VinaX tells you which file and
-why, rather than quietly leaving it out. While files are being read you can see
-which one is in progress and press **Stop**; anything already read stays attached.
-
-Long files are trimmed to fit the message, and VinaX says when it trimmed one.
-
-## The model menu
-
-The model button in the composer opens one menu with a search field over every model VinaX can reach. Recently used models come first, then the recommended ones (Auto, VinaX Maestro, Balanced, Fast, Deep, Creative, Translate), then the other VinaX engines, then one section for each live catalogue with every model in it. Arrow keys move, Enter picks, Esc closes.
-
-**Auto** answers with VinaX Maestro whenever that engine is available and not resting after a recent failure, and otherwise picks an engine from the shape of the question. **VinaX Maestro** is the flagship engine: its replies stream as they are written. The chip under a reply names the engine that actually answered.
-
-A chat opens on your default model, else the model you used last, else Auto. **Chat settings → General → Default model** sets the default.
+Chats are kept on your device, at most 50. Chat settings → **Data** exports and imports them.
 
 ## Slash commands
 
@@ -132,25 +79,25 @@ A line in a reply written as “Title — Artist” becomes a playable card once
 
 You can also control the player by message: “play *song*”, “queue *song*”, “pause”, “resume”, “next” and “previous”.
 
-## Chat settings
-
-The gear in the chat header opens a dialog with five tabs.
-
-| Tab | What is there |
-|---|---|
-| General | Text size, default model, Send with Enter |
-| Replies | Reply language, reply style, and an optional “About you” note. The note stays on this device and is sent with each message so replies fit you. |
-| Voice | The voice for spoken replies, a preview, and reading replies aloud automatically |
-| Data | Storage used, export all chats, import chats, clear all chats (with a short Undo) |
-| Shortcuts | The chat's keyboard shortcuts |
-
-Saved prompts and reply preferences are included in a backup; see [Library and backup](library-and-backup.md).
 
 ## When a reply does not arrive
 
-If an engine fails or runs out of allowance, VinaX moves to another one by itself, and the chip under the reply names the engine that answered. If no reply starts at all because the service was briefly busy, VinaX asks once more by itself after a moment. If that fails too, the reply says so and offers **Retry**, which asks the same question again.
+| You see | What it means | What to do |
+| --- | --- | --- |
+| "You’re offline — reconnect and ask again." | The device has no connection. | Reconnect, then **Retry**. |
+| "That was a lot of messages at once — give it a moment, then try again." | Every model is busy. VinaX AI has already asked a second time. | Wait a little, then **Retry**. |
+| "The assistant paused — please try again." | A passing fault. | **Retry**. |
+| "VinaX AI is switched off right now — the rest of the app works as usual." | The assistant is turned off or not set up. | Nothing to do; music keeps working. |
+| "VinaX AI has reached its limit for today — please try again later." | The day's allowance is used up. | Try again later. |
+| "That model is no longer available — switched to Auto." | The model you picked was withdrawn. | Ask again; Auto answers. |
+| "That picture or file is too large to send — try a smaller one." | The message is over the size limit. | **Edit message** and remove or shrink the attachment. |
+| "That message couldn’t be sent as it is — try rewording it or removing an attachment." | The message was refused as written. | **Edit message**. |
+| "This answer was cut short — ask me to continue." | The reply stopped early. | Ask it to continue. |
+| "No reply — try again" | The page was reloaded while a reply was being written. | **Retry**. |
 
-Two answers are not worth retrying, so they have no Retry: “VinaX AI is switched off right now” and “VinaX AI has reached its limit for today”. The rest of the app works as usual either way.
+## What it can and cannot know
+
+VinaX AI has no live web access. It answers from what the model learned, so news, charts and release dates may be out of date, and it is asked to say so. It knows your music taste only as far as the app sends it with a question, and it can use the song playing now only if you switch that on.
 
 ## AI Playlist
 
@@ -177,6 +124,7 @@ duration is approximate, because VinaX does not know how long each song is until
 finds it — so it says "about". If not enough songs really fit your idea, you get
 fewer and a line saying why, rather than a full list padded with near-misses.
 
-## What is sent
 
-To answer, the AI service receives the messages in the chat, anything you attached, and, when relevant, a short taste summary, your coarse region if you allow it and the Place connector is on, your memory lines if Memory is on, or the song that is playing if Now playing is on. Nothing is sent to a search service. Your library, history and playlists are not uploaded. If the AI service cannot answer, the chat says so (see [When a reply does not arrive](#when-a-reply-does-not-arrive)); music playback and on-device recommendations keep working. See [data and privacy](../data-and-privacy.md).
+## Privacy
+
+VinaX has no accounts. Your chats, projects, memory lines and settings stay on your device. When you send a message, the message, the recent part of the chat, any files or pictures you attached and a short summary of your taste go to the AI provider whose model answers, through VinaX's own server; that is the only way a model can reply. [Data and privacy](../data-and-privacy.md) lists exactly what leaves the device and when.

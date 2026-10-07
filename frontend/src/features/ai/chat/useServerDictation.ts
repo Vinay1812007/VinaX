@@ -56,7 +56,9 @@ export function useServerDictation(opts: {
   onText: (text: string) => void;
   onFallback: (why: ServerDictationFailure) => void;
 }): {
-  state: 'idle' | 'recording' | 'sending';
+  /** 'starting' = waiting for the microphone (the permission prompt, a slow
+   *  device); nothing is being recorded yet. */
+  state: 'idle' | 'starting' | 'recording' | 'sending';
   elapsed: number;
   start: () => void;
   /** Stop recording and send what was said. */
@@ -64,7 +66,7 @@ export function useServerDictation(opts: {
   /** Stop and throw the recording away. */
   cancel: () => void;
 } {
-  const [state, setState] = useState<'idle' | 'recording' | 'sending'>('idle');
+  const [state, setState] = useState<'idle' | 'starting' | 'recording' | 'sending'>('idle');
   const [elapsed, setElapsed] = useState(0);
   const optsRef = useRef(opts);
   optsRef.current = opts;
@@ -72,6 +74,12 @@ export function useServerDictation(opts: {
   const streamRef = useRef<MediaStream | null>(null);
   const tickRef = useRef(0);
   const discardRef = useRef(false);
+  // 11.0 — the start that is still waiting for its microphone (0 = none).
+  // Stop / Cancel clear it, so a stream that arrives afterwards is released
+  // instead of quietly starting a recording nobody can see; a second start
+  // while one is pending is ignored.
+  const startSeq = useRef(0);
+  const pendingStart = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const alive = useRef(true);
 
@@ -83,12 +91,19 @@ export function useServerDictation(opts: {
   };
 
   const stop = useCallback((): void => {
+    if (pendingStart.current) {
+      // Nothing was recorded yet: there is nothing to send.
+      pendingStart.current = 0;
+      setState('idle');
+      return;
+    }
     const rec = recRef.current;
     if (rec && rec.state !== 'inactive') rec.stop();
   }, []);
 
   const cancel = useCallback((): void => {
     discardRef.current = true;
+    pendingStart.current = 0;
     abortRef.current?.abort();
     const rec = recRef.current;
     if (rec && rec.state !== 'inactive') rec.stop();
@@ -104,17 +119,22 @@ export function useServerDictation(opts: {
       optsRef.current.onFallback('unsupported');
       return;
     }
-    if (recRef.current) return;
+    if (recRef.current || pendingStart.current) return;
     discardRef.current = false;
+    const token = ++startSeq.current;
+    pendingStart.current = token;
     setElapsed(0);
-    setState('recording');
+    setState('starting');
     void navigator.mediaDevices.getUserMedia({ audio: true }).then(
       (stream) => {
-        if (!alive.current || discardRef.current) {
+        if (!alive.current || pendingStart.current !== token) {
+          // Stopped, cancelled or unmounted while the mic was opening: let it
+          // go. (The state already belongs to whatever happened since.)
           stream.getTracks().forEach((t) => t.stop());
-          setState('idle');
           return;
         }
+        pendingStart.current = 0;
+        setState('recording');
         streamRef.current = stream;
         let rec: MediaRecorder;
         try {
@@ -172,7 +192,8 @@ export function useServerDictation(opts: {
         }
       },
       (err: unknown) => {
-        if (!alive.current) return;
+        if (!alive.current || pendingStart.current !== token) return;
+        pendingStart.current = 0;
         setState('idle');
         const name = (err as { name?: string } | null)?.name;
         optsRef.current.onFallback(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'unsupported');
@@ -184,6 +205,7 @@ export function useServerDictation(opts: {
     alive.current = true;
     return () => {
       alive.current = false;
+      pendingStart.current = 0;
       discardRef.current = true;
       abortRef.current?.abort();
       const rec = recRef.current;

@@ -105,7 +105,7 @@ describe('frosted materials keep text legible over any backdrop', () => {
     expect(index).toContain('--vx-mat-chrome: rgb(255 253 250 / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97))');
     expect(index).toContain('--vx-mat-thick: rgb(255 253 250 / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98))');
     expect(shell).toContain('--mat-fill: rgb(var(--ink-800) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98))');
-    expect(shell).toContain('--mat-fill: rgb(255 253 250 / clamp(0.92, calc(var(--glass-alpha) + 0.16), 0.98))');
+    expect(shell).toContain('--mat-fill: rgb(var(--ink-950) / clamp(0.92, calc(var(--glass-alpha) + 0.16), 0.98))');
   });
 
   it('dark: muted text on the chrome, body text on menus and snackbars clear AA over a white cover', () => {

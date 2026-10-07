@@ -47,12 +47,35 @@ function dropRetiredFields(c: Conversation): Conversation {
   };
 }
 
+/**
+ * 11.0 — a reply that was still being written when the page was reloaded or
+ * left is stored as an empty placeholder. Nothing is writing it any more, so
+ * on load it becomes a failed turn (the thread shows “No reply — try again”
+ * with Retry) instead of a thinking mark that never ends. The in-flight turn
+ * tag never outlives the visit that made it.
+ */
+function settleInterrupted(c: Conversation): Conversation {
+  if (!c || !Array.isArray(c.messages)) return c;
+  const stale = (m: Msg): boolean => !!m && m.role === 'assistant' && ('turn' in m || 'creating' in m || (!m.content && !m.media && !m.player && !m.failed));
+  if (!c.messages.some(stale)) return c;
+  return {
+    ...c,
+    messages: c.messages.map((m) => {
+      if (!stale(m)) return m;
+      const rest: Msg = { ...m };
+      delete rest.turn;
+      delete rest.creating;
+      return rest.content || rest.media || rest.player ? rest : { ...rest, failed: true };
+    }),
+  };
+}
+
 export function loadChats(): Conversation[] {
   if (typeof localStorage === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORE_KEY);
     const arr = raw ? (JSON.parse(raw) as Conversation[]) : [];
-    return Array.isArray(arr) ? arr.map(dropRetiredFields) : [];
+    return Array.isArray(arr) ? arr.map(dropRetiredFields).map(settleInterrupted) : [];
   } catch {
     return [];
   }
@@ -235,6 +258,7 @@ function reviveMsg(raw: unknown): Msg | null {
   if (r.rating === 'up' || r.rating === 'down') m.rating = r.rating;
   if (r.pinned === true) m.pinned = true;
   if (r.failed === true) m.failed = true;
+  if (r.needsEdit === true) m.needsEdit = true;
   if (r.unavailable === true) m.unavailable = true;
   if (Array.isArray(r.followups)) {
     const f = r.followups.filter((t): t is string => typeof t === 'string').map((t) => t.slice(0, 200)).slice(0, 3);
@@ -352,3 +376,29 @@ export const PREF = {
   autoRead: 'vinax.aiAutoRead',
   sidebarCollapsed: 'vinax.aiSidebarCollapsed',
 } as const;
+
+/**
+ * 11.0 — a chat's title from its first message: one line, cut at a word
+ * boundary with an ellipsis (it used to stop mid-word at 42 code units, which
+ * could also split a conjunct in an Indian script or an emoji in half).
+ * Counted in graphemes — what a reader sees as one character.
+ */
+export function titleFromMessage(text: string, max = 42): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  // The project's TypeScript library set predates Intl.Segmenter; an engine
+  // without it falls back to code points (emoji stay whole, a conjunct may not).
+  type Graphemes = new (locale?: string, options?: { granularity: 'grapheme' }) => { segment(text: string): Iterable<{ segment: string }> };
+  const Segmenter = typeof Intl !== 'undefined' ? (Intl as { Segmenter?: Graphemes }).Segmenter : undefined;
+  const parts = Segmenter
+    ? Array.from(new Segmenter(undefined, { granularity: 'grapheme' }).segment(clean), (s) => s.segment)
+    : Array.from(clean);
+  if (parts.length <= max) return clean;
+  let cut = max;
+  // Mid-word at the limit: step back to the last space, unless that would
+  // throw away more than half the title (one very long word).
+  if (parts[max] !== ' ') {
+    const space = parts.lastIndexOf(' ', max - 1);
+    if (space >= max / 2) cut = space;
+  }
+  return `${parts.slice(0, cut).join('').replace(/[\s,;:.!?\-–—]+$/, '')}…`;
+}

@@ -135,7 +135,28 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
 
-  const dictation = useDictation(setText);
+  // 11.0 — this device's dictation hands over a rolling transcript of the
+  // whole utterance, so it is written AFTER what was in the box when listening
+  // began, not over it. Sending closes the gate (null), so a result that
+  // lands late cannot refill the box that was just emptied.
+  const textRef = useRef(text);
+  textRef.current = text;
+  const dictationDraft = useRef<string | null>(null);
+  // 11.0 — and what is typed WHILE listening stays too: each result replaces
+  // only the words dictation wrote last time, in the box as it is now.
+  const heardRef = useRef<Heard>({ at: -1, text: '', said: '', skip: 0 });
+  const dictation = useDictation((t) => {
+    if (dictationDraft.current === null) return;
+    const merged = mergeDictation(textRef.current, heardRef.current, t);
+    heardRef.current = merged.heard;
+    textRef.current = merged.text;
+    setText(merged.text);
+  });
+  const startDictation = (): void => {
+    dictationDraft.current = textRef.current;
+    heardRef.current = { at: -1, text: '', said: '', skip: 0 };
+    dictation.start();
+  };
   // 10.3 — a server dictation model, when one is chosen: record, send, insert.
   // Any failure falls back to this device's dictation with a quiet note.
   const [serverNote, setServerNote] = useState('');
@@ -153,7 +174,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             ? 'Microphone access is blocked for recording — trying this device’s dictation instead.'
             : 'The dictation model didn’t work this time — listening on this device instead.',
         );
-        dictation.start();
+        startDictation();
       } else {
         setServerNote(
           why === 'denied'
@@ -171,14 +192,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const useServerMic = !!dictationPick && recorderSupported();
   const showMic = canSpeech || useServerMic;
   const recording = recorder.state === 'recording';
+  // 11.0 — the microphone is still opening (permission prompt, slow device).
+  const micStarting = recorder.state === 'starting';
   const transcribing = recorder.state === 'sending';
   const onMic = (): void => {
-    if (recording) return recorder.stop();
+    if (recording || micStarting) return recorder.stop();
     if (transcribing) return;
     if (dictation.listening) return dictation.stop();
     setServerNote('');
     if (useServerMic) recorder.start();
-    else dictation.start();
+    else startDictation();
   };
   const connectors = useConnectors({
     think,
@@ -242,7 +265,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   );
 
   const submit = (value: string): void => {
-    if (busy || (!value.trim() && pending.length === 0)) return;
+    // 11.0 — files still being read are not in `pending` yet: sending now
+    // would leave them behind, so wait for the read (or its Stop).
+    if (busy || reading || (!value.trim() && pending.length === 0)) return;
+    // A dictation result that lands after this must not refill the box.
+    dictationDraft.current = null;
+    if (dictation.listening) dictation.stop();
     const files = pending;
     setText('');
     setPending([]);
@@ -282,7 +310,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     <div className={cn('ai-composer-wrap', docked && 'ai-composer-docked')}>
       <div className="ai-column">
         {reading && (
-          <div className="ai-attachment-status ai-t2" role="status">
+          <div id="ai-composer-reading" className="ai-attachment-status ai-t2" role="status">
             <span className="vx-wave-loader" aria-hidden="true">
               <i />
               <i />
@@ -306,13 +334,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         <ConnectorChips active={connectors.active} armed={connectors.armed} memoryCount={connectors.memoryCount} onToggle={connectors.toggle} />
         {createBar}
         {/* 10.3 — recording for a server dictation model: a timer and Stop. */}
-        {(recording || transcribing) && (
+        {(micStarting || recording || transcribing) && (
           <div className="ai-record" role="status">
             <span className={cn('ai-record-dot', transcribing && 'is-sending')} aria-hidden />
             <span className="ai-record-time">
-              {transcribing ? 'Turning your voice into text…' : `Recording ${formatClock(recorder.elapsed)} / ${formatClock(MAX_RECORD_MS)}`}
+              {micStarting ? 'Waiting for the microphone…' : transcribing ? 'Turning your voice into text…' : `Recording ${formatClock(recorder.elapsed)} / ${formatClock(MAX_RECORD_MS)}`}
             </span>
             <span className="flex-1" />
+            {micStarting && (
+              <button type="button" className="ai-btn ai-record-cancel" onClick={recorder.cancel}>
+                Cancel
+              </button>
+            )}
             {recording && (
               <>
                 <button type="button" className="ai-btn ai-record-cancel" onClick={recorder.cancel}>
@@ -558,9 +591,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               <button
                 type="button"
                 onClick={onMic}
-                aria-label={recording ? 'Stop recording' : 'Voice input'}
-                aria-pressed={dictation.listening || recording}
-                title={recording ? 'Stop and turn into text' : 'Speak'}
+                aria-label={recording ? 'Stop recording' : micStarting ? 'Cancel voice input' : 'Voice input'}
+                aria-pressed={dictation.listening || recording || micStarting}
+                title={recording ? 'Stop and turn into text' : micStarting ? 'Cancel' : 'Speak'}
                 disabled={transcribing}
                 className={cn('ai-icon-btn ai-round', (dictation.listening || recording) && 'ai-icon-btn-on ai-pulse')}
               >
@@ -572,7 +605,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 <StopIcon className="w-4 h-4" />
               </button>
             ) : (
-              <button type="button" onClick={() => submit(text)} disabled={!text.trim() && pending.length === 0} aria-label="Send" title="Send" className="ai-send">
+              <button
+                type="button"
+                onClick={() => submit(text)}
+                disabled={reading || (!text.trim() && pending.length === 0)}
+                aria-label="Send"
+                aria-describedby={reading ? 'ai-composer-reading' : undefined}
+                title={reading ? 'Send unlocks when your files have been read' : 'Send'}
+                className="ai-send"
+              >
                 <SendIcon className="w-4 h-4" />
               </button>
             )}
@@ -596,3 +637,24 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     </div>
   );
 });
+
+/** 11.0 — what device dictation last wrote into the box: where, which words,
+ *  the whole utterance at that moment, and how much of the utterance to leave
+ *  out from now on (the part the listener has since rewritten by hand). */
+type Heard = { at: number; text: string; said: string; skip: number };
+
+/** Device dictation reports the whole utterance so far, each time. Put it in
+ *  the box as the box is NOW: replace the words written last time (wherever
+ *  typing has moved them) and keep everything else. If those words are gone —
+ *  the listener rewrote them — only what is said from here on is added. */
+function mergeDictation(box: string, prev: Heard, said: string): { text: string; heard: Heard } {
+  const at = !prev.text ? -1 : box.startsWith(prev.text, prev.at) ? prev.at : box.lastIndexOf(prev.text);
+  if (at >= 0) {
+    const piece = prev.skip ? said.slice(prev.skip).trimStart() : said;
+    return { text: box.slice(0, at) + piece + box.slice(at + prev.text.length), heard: { ...prev, at, text: piece, said } };
+  }
+  const skip = prev.text ? Math.min(prev.said.length, said.length) : prev.skip;
+  const piece = skip ? said.slice(skip).trimStart() : said;
+  const head = box.trim() ? `${box.replace(/\s+$/, '')} ` : '';
+  return { text: piece ? head + piece : box, heard: { at: head.length, text: piece, said, skip } };
+}

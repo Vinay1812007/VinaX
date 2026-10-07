@@ -195,7 +195,7 @@
           state.thresholds.errors_24h +
           '" required></label><label>Feedback threshold<input type="number" name="feedback" min="0" max="1000000" value="' +
           state.thresholds.feedback_new +
-          '" required></label><button>Save thresholds</button></form><p class="muted">Evaluated on refresh in this browser; no background notifications.</p>',
+          '" required></label><button class="btn btn-primary">Save thresholds</button></form><p class="muted">Evaluated on refresh in this browser; no background notifications.</p>',
       ) +
       panel(
         'Today’s listening goal',
@@ -209,7 +209,7 @@
           Math.min(plays || 0, state.goal) +
           '"></progress><form id="ops-goal" class="ops-form"><label>Daily goal<input name="goal" type="number" min="1" max="10000000" value="' +
           state.goal +
-          '" required></label><button>Update goal</button></form>',
+          '" required></label><button class="btn btn-primary">Update goal</button></form>',
       ) +
       '</div>' +
       panel(
@@ -402,7 +402,7 @@
     return (
       panel(
         'Create a follow-up',
-        '<form id="ops-new-task" class="ops-form"><label class="ops-grow">Task<input name="title" maxlength="180" placeholder="What needs attention?" required></label><label>Owner<input name="owner" maxlength="60" placeholder="Name or team"></label><label>Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select></label><label>Due date<input name="due" type="date"></label><button>Add task</button></form><p class="muted">Local task board · assigning a name does not notify anyone. Up to 100 tasks.</p>',
+        '<form id="ops-new-task" class="ops-form"><label class="ops-grow">Task<input name="title" maxlength="180" placeholder="What needs attention?" required></label><label>Owner<input name="owner" maxlength="60" placeholder="Name or team"></label><label>Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select></label><label>Due date<input name="due" type="date"></label><button class="btn btn-primary">Add task</button></form><p class="muted">Local task board · assigning a name does not notify anyone. Up to 100 tasks.</p>',
       ) +
       '<div class="ops-task-filters"><label>Search tasks<input id="ops-task-filter" type="search" value="' +
       esc(filter) +
@@ -452,7 +452,7 @@
         'Handover notes',
         '<form id="ops-notes"><label for="ops-note-text">Context for your next session</label><textarea id="ops-note-text" name="notes" rows="7" maxlength="10000" placeholder="What changed? What should be watched?">' +
           esc(state.notes) +
-          '</textarea><button>Save notes</button></form>',
+          '</textarea><button class="btn btn-primary">Save notes</button></form>',
       ) +
       '</div>' +
       panel(
@@ -483,12 +483,14 @@
         : 'Sources have not been checked yet') +
       '</span><span>Preferences, tasks and notes stay in this browser</span></div><div class="ops-hero-actions">' +
       button('Download handover', 'report') +
-      button(busy ? 'Refreshing…' : 'Refresh sources', 'refresh', busy ? 'disabled' : '').replace('class="ghost" ', '') +
+      button(busy ? 'Refreshing…' : 'Refresh sources', 'refresh', busy ? 'disabled' : '').replace('class="ghost" ', 'class="btn btn-primary" ') +
       '</div></div>' +
       (storageFailed
         ? '<p class="ops-warning" role="alert">Browser storage is unavailable. These changes will be lost on reload. Download a handover to keep a copy.</p>'
         : '') +
-      (failures.length
+      (failures.length >= 2 && window.VXA && window.VXA.stateError
+        ? window.VXA.stateError('Audience metrics and search analytics could not be read. Nothing is shown as zero; the task board below still works.', refresh)
+        : failures.length
         ? '<p class="ops-warning" role="status">Unavailable: ' +
           failures.map(esc).join(', ') +
           '. Other workspace tools remain available.</p>'
@@ -517,7 +519,7 @@
         })
         .join('') +
       '</div>' +
-      '<div class="ops-saved-views"><form id="ops-save-view"><input name="name" maxlength="50" aria-label="Saved view name" placeholder="Name this view" required><button>Save view</button></form>' +
+      '<div class="ops-saved-views"><form id="ops-save-view"><input name="name" maxlength="50" aria-label="Saved view name" placeholder="Name this view" required><button class="btn btn-primary">Save view</button></form>' +
       state.views
         .map(function (v) {
           return (
@@ -635,6 +637,7 @@
     a.href = url;
     a.download = 'vinax-handover-' + new Date().toISOString().slice(0, 10) + '.json';
     a.click();
+    if (window.VXA && window.VXA.toast) window.VXA.toast('Download started — ' + a.download, 'info');
     setTimeout(function () {
       URL.revokeObjectURL(url);
     }, 1000);

@@ -58,7 +58,7 @@ export function ResetTasteSheet({ onClose, onDone, showDataLink = true }: { onCl
           <>
             {' '}
             <Link to="/settings#your-data" className="vx-tap font-semibold text-ink-100 underline decoration-[rgb(var(--tide-400)/0.6)] underline-offset-[3px] hover:decoration-current">
-              More backup options in Settings → Your Data
+              More backup options in Settings → Your data
             </Link>
             .
           </>

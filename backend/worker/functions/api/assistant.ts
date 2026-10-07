@@ -135,6 +135,7 @@ async function handlePost(context: {
     if (typeof context.waitUntil === 'function') context.waitUntil(log);
   }
   if (r.error === 'not_configured') return json({ error: 'ai_not_configured' }, 503);
-  if (!reply) return json({ error: r.error ?? 'empty', status: r.status }, 500);
+  // An upstream rate limit (or every lane cooling down) is "busy", not a crash.
+  if (!reply) return json({ error: r.error ?? 'empty', status: r.status }, r.status === 429 ? 429 : 500);
   return json({ reply, model: r.model });
 }

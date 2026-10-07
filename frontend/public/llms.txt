@@ -1,6 +1,6 @@
 # VinaX
 
-> No-login music-streaming web app (PWA) and Android app. Personalization lives on your device; play albums and playlists in order, with synced lyrics, offline downloads and shared listening. Tuned for regional and Indian music — Telugu, Hindi, Tamil and more.
+> Free music-streaming web app and Android app with no sign-up and no login. Recommendations are worked out on your device. Play songs, albums and playlists with synced lyrics, a queue that builds itself from the song you tap, shared listening sessions, an AI chat that can play music, and offline downloads in the Android app. Tuned for regional and Indian music: Telugu, Hindi, Tamil and more.
 
 ## Pages
 
@@ -12,7 +12,7 @@
 - [For You This Week](https://www.sirimillavinay.online/weekly): A personalized weekly mix
 - [AI Playlist](https://www.sirimillavinay.online/ai-playlist): Build a playlist from a text prompt
 - [About](https://www.sirimillavinay.online/about): What VinaX is and who makes it
-- [Help](https://www.sirimillavinay.online/help): Help and FAQ
+- [Help](https://www.sirimillavinay.online/help): Step-by-step guides, answers to common questions, keyboard shortcuts and gestures
 
 ## Language hubs
 
@@ -29,8 +29,20 @@
 - [Gujarati Songs](https://www.sirimillavinay.online/gujarati-songs)
 - [Urdu Songs](https://www.sirimillavinay.online/urdu-songs)
 
+## What a listener can do
+
+- Tap any song and VinaX lines up the next five, led by that song's language; songs queued by hand play first.
+- Choose how adventurous the queue is: Familiar, Balanced or Discover.
+- Search by title, by description ("sad telugu songs for rain") or by a line of lyrics.
+- Change the whole look in Settings → Appearance → App style: Aura, Pulse, Sangam, Nocturne, Marquee or Vibe. Theme (Dark, Black, Light, System, Auto) and accent colour are separate choices.
+- On festival days the app takes that festival's colours and shows a greeting once; Settings → Appearance can preview any festival or switch festival themes off.
+- Listen Together: start a session and share a link, a QR code or a room code.
+- Back up the library and settings to one file, restore it, or move to a new device with a one-time code.
+
 ## Notes
 
+- VinaX is free: no subscription and no premium tier.
 - No account or login is required to use VinaX.
+- Favourites, playlists, history and the taste profile are kept on the listener's device.
 - Audio is sourced from public music APIs and is not hosted by VinaX.
 - Canonical origin is https://www.sirimillavinay.online (with www).

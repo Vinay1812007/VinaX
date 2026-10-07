@@ -3,7 +3,7 @@
  *  the voice-mode reply path again. If feed() delivers a sentence but speak()
  *  is never called, or finish() doesn't drain the tail, this test fails. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LiveVoiceEngine, isLikelyEcho } from './liveVoiceEngine';
+import { LiveVoiceEngine, SERVER_TTS_LEASH_MS, isLikelyEcho } from './liveVoiceEngine';
 
 interface FakeUtter {
   text: string;
@@ -266,6 +266,60 @@ describe('LiveVoiceEngine — voice-mode reply wiring (v2.5.2 lock)', () => {
     expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
     expect(played).toEqual([]);
     expect(fatals).toEqual([]);
+    engine.destroy();
+  });
+});
+
+describe('11.0 — the server voice gets a realistic leash', () => {
+  const makeEngine = (): LiveVoiceEngine =>
+    new LiveVoiceEngine(
+      { lang: 'en-IN', getVoice: () => null, toSpoken: (s) => s },
+      { onState: () => {}, onLevel: () => {}, onUserInterim: () => {}, onUserFinal: () => {}, onAssistantCaption: () => {}, onFatal: () => {} },
+    );
+  /** A voice that answers after `ms` (null = never) and honours the abort. */
+  const slowVoice = (ms: number | null): ReturnType<typeof vi.fn> =>
+    vi.fn(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise((resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          if (ms !== null) {
+            setTimeout(
+              () => resolve({ ok: true, headers: { get: () => 'audio/wav' }, blob: () => Promise.resolve({ size: 64 } as unknown as Blob) } as unknown as Response),
+              ms,
+            );
+          }
+        }),
+    );
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a voice that needs five seconds is played — the device voice stays silent', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', slowVoice(5000));
+    const engine = makeEngine();
+    (engine as unknown as { beginTurn: () => void }).beginTurn();
+    engine.feed('Hi there.');
+    engine.finish();
+    await vi.advanceTimersByTimeAsync(5200);
+    expect(played.length).toBeGreaterThanOrEqual(1);
+    expect(spoken).toEqual([]);
+    engine.destroy();
+  });
+
+  it('a voice that never answers still falls back to the device voice', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', slowVoice(null));
+    const engine = makeEngine();
+    (engine as unknown as { beginTurn: () => void }).beginTurn();
+    engine.feed('Hi there.');
+    engine.finish();
+    await vi.advanceTimersByTimeAsync(SERVER_TTS_LEASH_MS - 100);
+    expect(spoken).toEqual([]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(spoken.map((u) => u.text)).toContain('Hi there.');
+    expect(played).toEqual([]);
     engine.destroy();
   });
 });

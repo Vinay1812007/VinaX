@@ -153,12 +153,15 @@ export function memoryBlock(entries = loadMemories()): string {
   if (!entries.length) return '';
   const lines: string[] = [];
   let used = 0;
-  // Oldest first reads more naturally as a list of standing facts.
-  for (const entry of [...entries].reverse()) {
+  // Oldest first reads more naturally as a list of standing facts — but the
+  // budget is spent on the NEWEST lines (`entries` is newest first). Filling it
+  // from the oldest meant that once it was used up, nothing the listener added
+  // afterwards ever reached the assistant.
+  for (const entry of entries) {
     const line = `- ${entry.text}`;
     if (used + line.length > MEMORY_BUDGET) break;
     used += line.length;
-    lines.push(line);
+    lines.unshift(line);
   }
   if (!lines.length) return '';
   return [

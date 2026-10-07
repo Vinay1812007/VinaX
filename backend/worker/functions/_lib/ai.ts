@@ -260,7 +260,9 @@ export const LANE_MODEL: Record<Lane, string> = {
   // Resolved live per request — see the scholar note. The marketplace
   // re-publishes slugs constantly, so this value is deliberately never
   // trusted on its own: every call site resolves the catalog first.
-  router: 'nvidia/nemotron-3-super:free',
+  // 11.0 — re-pinned: the earlier slug was not on the provider's public list
+  // (checked 2026-10-06); this one is listed there at zero cost.
+  router: 'nvidia/nemotron-3-super-120b-a12b:free',
   // 8.0.0 — VINAX_MAESTRO_MODEL overrides the pin.
   // 8.0.2 — the provider retired 2.5 flash for new accounts and names this
   // successor; if it is retired too, _lib/maestro.ts follows the provider's
@@ -713,7 +715,9 @@ export async function chat(
       // nemotron a3b-family models leak BARE chain-of-thought unless reasoning
       // is switched off at the chat-template level (probed live — see
       // reasoningOffParams). Model-gated: a no-op for every other pin.
-      Object.assign(payload, reasoningOffParams(model));
+      // NVIDIA base only: the same model family is listed under matching names
+      // on the other hosts, which reject or ignore chat_template_kwargs.
+      if (!isExternalEndpoint(endpoint)) Object.assign(payload, reasoningOffParams(model));
       // Force valid JSON (no preamble / markdown fences): fewer parse failures
       // and fewer wasted output tokens.
       if (useJson) payload.response_format = { type: 'json_object' };

@@ -1,29 +1,19 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { festivalClass, resolveFestival, resolveFestivalTheme, type Festival } from '@/constants/festivals';
-import { festivalVisual, type FestivalConfetti } from '@/constants/festivalVisuals';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { festivalClass, type Festival } from '@/constants/festivals';
+import { festivalVisual, particleCount } from '@/constants/festivalVisuals';
+import { FestivalEmblem } from '@/components/FestivalEmblem';
+import { useFestivalNow } from '@/features/festival/festivalPreview';
 import { useSettingsStore } from '@/store/settingsStore';
-import { useFestivalOverride } from '@/features/home/useAppConfig';
 import { getLocal, setLocal } from '@/services/storage/local';
 import { STORAGE_PREFIX } from '@/constants/storage-keys';
 
 const SEEN_KEY = `${STORAGE_PREFIX}.festival-splash`;
 
-interface Piece {
-  left: number;
-  delay: number;
-  duration: number;
-  size: number;
-  color: string;
-  rotate: number;
-  shape: FestivalConfetti;
-}
+/** The two national days fly the flag instead of the generic emblem watermark. */
+const FLAG_DAYS = new Set(['independence', 'republic']);
 
-const festVars = (visual: ReturnType<typeof festivalVisual>): CSSProperties => ({
-  '--fest-image': `url("${visual.image}")`,
-  '--fest-image-position': visual.position ?? 'center',
-} as CSSProperties);
-
-/** 24-spoke Ashoka Chakra, drawn inline — spins slowly via CSS. */
+/** 24-spoke chakra, drawn inline; turns slowly via CSS. */
 function Chakra() {
   return (
     <svg className="fest-chakra" viewBox="-50 -50 100 100" aria-hidden>
@@ -40,217 +30,203 @@ function Chakra() {
 }
 
 /**
- * 80th Independence Day living backdrop (owner request, 4.17.4): a waving
- * tricolor in the air (nine cloth strips rippling with staggered delays,
- * chakra turning slowly) and tricolor balls drifting upward. Everything is
- * transform/opacity only (compositor-friendly), pointer-events-none, behind
- * the app content, and neutralised by the global reduced-motion cascade.
+ * Independence Day living backdrop (owner request, 4.17.4): a waving tricolour
+ * in the air (nine cloth strips rippling one after another, the chakra turning
+ * slowly) and, on Independence Day only, tricolour balls drifting upward.
+ * Transform/opacity only, behind content, pointer-events none. Not rendered
+ * under reduced motion (either switch) or data saver.
  */
-function IndependenceBackdrop() {
-  const visual = festivalVisual('independence');
+function FlagBackdrop({ balls }: { balls: number }) {
   return (
-    <div className="fest-sky" style={festVars(visual)} aria-hidden>
-      <div className="fest-flag">
+    <>
+      <div className="fest-flag" data-testid="fest-flag">
         {Array.from({ length: 9 }, (_, i) => (
           <i key={i} style={{ animationDelay: `${i * 0.14}s` }} />
         ))}
         <Chakra />
       </div>
-      {Array.from({ length: 14 }, (_, i) => (
-        <b
-          key={i}
-          className={`fest-ball fest-shape-ribbon fb${i % 3}`}
-          style={{
-            left: `${(i * 73 + 9) % 96}%`,
-            width: 14 + ((i * 5) % 18),
-            height: 14 + ((i * 5) % 18),
-            animationDelay: `${(i * 1.9) % 11}s`,
-            animationDuration: `${10 + (i % 6) * 2.5}s`,
-          }}
-        />
-      ))}
-    </div>
+      {balls > 0 && (
+        <div className="fest-particles">
+          {Array.from({ length: balls }, (_, i) => (
+            <b
+              key={i}
+              className={`fest-ball fb${i % 3}`}
+              style={{
+                left: `${(i * 73 + 9) % 96}%`,
+                width: 14 + ((i * 5) % 18),
+                height: 14 + ((i * 5) % 18),
+                animationDelay: `${-((i * 1.9) % 11)}s`,
+                animationDuration: `${10 + (i % 6) * 2.5}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
 /**
- * Generic living backdrop (festival redesign, 5.2.x): every festival now has
- * its own ambience — photographic backdrops with shape-based particles rising
- * (lamps, lanterns, fireworks),
- * falling (marigolds, snow, colour powder) or drifting across (kites,
- * peacock feathers), over a per-festival glow painted by `.fest-sky::before`
- * in the stylesheet. Deterministic arithmetic (no Math.random) keeps renders
- * stable; transforms/opacity only; hidden entirely under reduced-motion.
+ * The ambient layer behind the whole app while a skin is on: glow + motif
+ * (CSS), one large emblem watermark and a short particle system. Particles are
+ * transform/opacity only, capped (see particleCount), paused while the tab is
+ * hidden, and absent under reduced motion (either switch) and data saver.
  */
-function FestBackdrop({ festival }: { festival: Festival }) {
-  const bd = festival.backdrop;
+export function FestBackdrop({ festival }: { festival: Festival }) {
+  const reduceMotion = useSettingsStore((s) => s.reduceMotion);
+  const dataSaver = useSettingsStore((s) => s.dataSaver);
+  const [paused, setPaused] = useState(() => typeof document !== 'undefined' && document.hidden);
+  useEffect(() => {
+    const sync = () => setPaused(document.hidden);
+    document.addEventListener('visibilitychange', sync);
+    return () => document.removeEventListener('visibilitychange', sync);
+  }, []);
   const visual = festivalVisual(festival.id);
-  const shape = visual.confetti;
-  const pieces = (() => {
-    if (!bd) return [];
-    const base = bd.density ?? 14;
-    const count = typeof window !== 'undefined' && window.innerWidth < 640 ? Math.round(base * 0.6) : base;
-    return Array.from({ length: count }, (_, i) => ({
-      shape,
-      left: (i * 61 + 7) % 94,
-      size: 14 + ((i * 7) % 16),
-      delay: (i * 2.3) % 12,
-      duration: 11 + (i % 6) * 2.8,
-      sway: i % 2 === 0 ? 1 : -1,
-    }));
-  })();
-  if (!bd) return null;
+  const motion = festival.backdrop?.motion ?? 'rise';
+  const still = reduceMotion || dataSaver
+    || (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  const count = still ? 0 : particleCount(festival.backdrop?.density, window.innerWidth);
+  const flag = !still && FLAG_DAYS.has(festival.id);
+  const balls = festival.id === 'independence' ? Math.min(14, Math.max(8, count)) : 0;
   return (
-    <div className="fest-sky" style={festVars(visual)} aria-hidden>
-      {pieces.map((p, i) => (
-        <span
-          key={i}
-          className={`fxp fxp-${bd.motion} fxp-shape-${p.shape}${p.sway > 0 ? '' : ' fxp-alt'}`}
-          style={{
-            left: `${p.left}%`,
-            fontSize: p.size,
-            animationDelay: `${p.delay}s`,
-            animationDuration: `${p.duration}s`,
-          }}
-        />
-      ))}
+    <div className={`fest-sky${paused ? ' is-paused' : ''}`} data-festival={festival.id} aria-hidden>
+      {flag ? <FlagBackdrop balls={balls} /> : <FestivalEmblem id={visual.emblem} className="fest-wm" />}
+      {count > 0 && !(flag && balls > 0) && (
+        <div className="fest-particles">
+          {Array.from({ length: count }, (_, i) => (
+            <span
+              key={i}
+              className={`fest-p fest-p-${motion} fest-p-${visual.particle}${i % 2 ? ' fest-p-alt' : ''}`}
+              style={{
+                left: `${(i * 61 + 7) % 94}%`,
+                top: motion === 'drift' ? `${8 + ((i * 37) % 58)}%` : undefined,
+                fontSize: 9 + ((i * 7) % 9),
+                animationDelay: `${-((i * 2.3) % 12)}s`,
+                animationDuration: `${motion === 'drift' ? 6 + (i % 5) * 1.5 : 13 + (i % 6) * 2.6}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-/** 3-second festival opening: themed confetti + greeting, once per day. */
-export function FestiveSplash() {
-  // Admin override (Festival Themes panel). Until the config answers, the
-  // built-in calendar drives everything exactly as before — a forced or
-  // suppressed festival simply catches up a moment after boot.
-  const { data: serverOverride } = useFestivalOverride();
-  // 5.14.0 — the listener's own switch (Settings → Festival themes) wins over
-  // the calendar and the console: off means the plain theme all year.
-  const skinsOn = useSettingsStore((s) => s.festivalSkins);
-  const override = useMemo(() => (skinsOn ? serverOverride : { mode: 'off' as const }), [skinsOn, serverOverride]);
-  const festival = useMemo(() => resolveFestival(override), [override]);
-  const todayKey = `${festival?.id ?? ''}-${new Date().toDateString()}`;
-  const [visible, setVisible] = useState(
-    () => !!resolveFestival(null) && getLocal<string>(SEEN_KEY, '') !== todayKey,
-  );
-  const [leaving, setLeaving] = useState(false);
+/** How long the real greeting waits after boot for the other first-open sheets to decide. */
+export const SETTLE_MS = 1200;
 
-  // A festival arriving AFTER mount (admin force landing post-boot) still
-  // gets its once-per-day splash; state initializers only run once.
+/**
+ * True while a modal dialog other than the greeting card is in the page (the
+ * welcome sheet, What's new, any sheet). Watches the DOM, because those
+ * surfaces keep their open state to themselves.
+ */
+function useOtherDialogOpen(watch: boolean): boolean {
+  const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (festival && getLocal<string>(SEEN_KEY, '') !== todayKey) {
-      setLeaving(false);
-      setVisible(true);
-    }
-    if (!festival) setVisible(false);
-  }, [festival, todayKey]);
+    if (!watch) { setOpen(false); return; }
+    const check = () => setOpen(
+      Array.from(document.querySelectorAll('[aria-modal="true"]')).some((el) => !el.closest('.fest-splash')),
+    );
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, [watch]);
+  return open;
+}
 
-  const pieces = useMemo<Piece[]>(() => {
-    if (!festival) return [];
-    const visual = festivalVisual(festival.id);
-    // 4.17.9 boot-cost pass: confetti density scales with the screen that
-    // shows it — phones get 40 pieces, larger screens 64.
-    const pieceCount = window.innerWidth < 640 ? 40 : 64;
-    return Array.from({ length: pieceCount }, () => ({
-      left: Math.random() * 100,
-      delay: Math.random() * 1.2,
-      duration: 1.8 + Math.random() * 1.4,
-      size: 6 + Math.random() * 8,
-      color: festival.colors[Math.floor(Math.random() * festival.colors.length)],
-      rotate: Math.random() * 360,
-      shape: visual.confetti,
-    }));
-  }, [festival]);
+export function FestiveSplash() {
+  const { festival, theme, preview } = useFestivalNow();
+  const navigate = useNavigate();
+  // Once per festival per year (a preview always shows, and is never recorded).
+  const seenKey = festival ? `${festival.id}-${new Date().getFullYear()}` : '';
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  // Only watched while the greeting is still owed, so the observer is gone once it has been seen.
+  const owed = !!festival && !preview && getLocal<string>(SEEN_KEY, '') !== seenKey;
+  const busy = useOtherDialogOpen(owed);
 
-  // Festival skin: EVERY festival themes the whole app — accent ramp + top
-  // ribbon + photo backdrop + ambient glow — via one html class (fest-<id>) the
-  // stylesheet keys on. The skin runs from the day BEFORE the festival
-  // through its last day (or per the admin override), then auto-reverts.
+  // A preview opens at once. The real greeting waits a beat (the first-run
+  // welcome and the What's-new sheet decide to open just after boot) and then
+  // for as long as any other dialog is up, so two dialogs never stack.
+  useEffect(() => {
+    if (!festival) { setOpenFor(null); return; }
+    if (preview) { setOpenFor(festival.id); return; }
+    if (getLocal<string>(SEEN_KEY, '') === seenKey) return;
+    const id = festival.id;
+    const t = window.setTimeout(() => setOpenFor(id), SETTLE_MS);
+    return () => window.clearTimeout(t);
+  }, [festival, preview, seenKey]);
+
+  // The skin class: from the day before the festival through its last day.
   useEffect(() => {
     const root = document.documentElement;
-    const themeFest = resolveFestivalTheme(override);
-    const wanted = themeFest ? festivalClass(themeFest.id) : null;
+    const wanted = theme ? festivalClass(theme.id) : null;
     for (const c of Array.from(root.classList)) if (c.startsWith('fest-') && c !== wanted) root.classList.remove(c);
     if (wanted) root.classList.add(wanted);
     return () => {
-      for (const c of Array.from(document.documentElement.classList))
-        if (c.startsWith('fest-')) document.documentElement.classList.remove(c);
+      for (const c of Array.from(root.classList)) if (c.startsWith('fest-')) root.classList.remove(c);
     };
-  }, [festival, override]);
+  }, [theme]);
 
+  const visible = !!festival && openFor === festival.id && (preview || !busy);
+  const close = useCallback(() => {
+    if (festival && !preview) setLocal(SEEN_KEY, seenKey);
+    setOpenFor(null);
+  }, [festival, preview, seenKey]);
+
+  // Focus moves into the card and returns to where it was.
   useEffect(() => {
-    if (!visible || !festival) return;
-    setLocal(SEEN_KEY, todayKey);
-    const fade = window.setTimeout(() => setLeaving(true), 2500);
-    const done = window.setTimeout(() => setVisible(false), 3000);
-    return () => {
-      window.clearTimeout(fade);
-      window.clearTimeout(done);
-    };
-  }, [visible, festival, todayKey]);
+    if (!visible) return;
+    const before = document.activeElement as HTMLElement | null;
+    cardRef.current?.querySelector<HTMLElement>('button')?.focus();
+    return () => before?.focus?.();
+  }, [visible]);
 
-  // 4.17.9: mount the living backdrop AFTER boot instead of at t=0. While
-  // the splash is up the backdrop sits invisible behind a 95%-opaque
-  // overlay, so it arrives as the splash starts fading (2.5 s) — a seamless
-  // reveal — or, on splash-free visits, after the main thread first goes
-  // idle. Applies to every festival's backdrop, not just Independence Day.
-  const [backdropOn, setBackdropOn] = useState(false);
+  // Escape and the Tab trap listen on the document (capture), so they work even
+  // if another surface underneath is holding focus when the card opens.
   useEffect(() => {
-    setBackdropOn(false);
-    if (!festival || (festival.id !== 'independence' && !festival.backdrop)) return;
-    if (visible) {
-      const t = window.setTimeout(() => setBackdropOn(true), 2500);
-      return () => window.clearTimeout(t);
-    }
-    let timer = 0;
-    const arm = () => { timer = window.setTimeout(() => setBackdropOn(true), 1200); };
-    const idle = 'requestIdleCallback' in window ? window.requestIdleCallback(arm, { timeout: 2500 }) : (arm(), 0);
-    return () => {
-      if (idle && 'cancelIdleCallback' in window) window.cancelIdleCallback(idle);
-      window.clearTimeout(timer);
+    if (!visible) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
+    if (e.key !== 'Tab') return;
+    const items = Array.from(cardRef.current?.querySelectorAll<HTMLElement>('button') ?? []);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const at = document.activeElement;
+    if (e.shiftKey && (at === first || !cardRef.current?.contains(at))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (at === last || !cardRef.current?.contains(at))) { e.preventDefault(); first.focus(); }
     };
-  }, [festival, visible]);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [visible, close]);
 
-  const backdrop = !festival || !backdropOn
-    ? null
-    : festival.id === 'independence'
-      ? <IndependenceBackdrop />
-      : <FestBackdrop festival={festival} />;
-  if (!visible || !festival) return backdrop;
+  const visual = useMemo(() => (festival ? festivalVisual(festival.id) : null), [festival]);
+  const backdrop = theme ? <FestBackdrop festival={theme} /> : null;
+  if (!visible || !festival || !visual) return backdrop;
+  const short = festival.name.split(' · ')[0].replace(/\s*\(.*\)$/, '');
 
   return (
-   <>
-    {backdrop}
-    <div
-      className={`fixed inset-0 z-[90] flex items-center justify-center bg-ink-950/95 overflow-hidden pointer-events-none transition-opacity duration-500 ${leaving ? 'opacity-0' : 'opacity-100'}`}
-      aria-hidden
-    >
-      <div
-        className="fest-splash-photo"
-        style={festVars(festivalVisual(festival.id))}
-        aria-hidden
-      />
-      {pieces.map((p, i) => (
-        <span
-          key={i}
-          className={`absolute top-[-4%] animate-confetti will-change-transform fest-confetti fest-shape-${p.shape}`}
-          style={{
-            left: `${p.left}%`,
-            width: p.size,
-            height: p.size,
-            background: p.color,
-            animationDelay: `${p.delay}s`,
-            animationDuration: `${p.duration}s`,
-            transform: `rotate(${p.rotate}deg)`,
-          }}
-        />
-      ))}
-      <div className="text-center animate-fade-up">
-        <div className="fest-splash-rule" aria-hidden />
-        <p className="text-[32px] font-extrabold tracking-[-0.025em]">{festival.greeting}!</p>
-        <p className="text-[14px] font-medium text-ink-300 mt-2">{festival.name}</p>
+    <>
+      {backdrop}
+      <div className="fest-splash" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
+        <div ref={cardRef} className="fest-card vx-mat-thick" role="dialog" aria-modal="true" aria-labelledby="fest-title" aria-describedby="fest-blurb" data-festival={festival.id}>
+          <FestivalEmblem id={visual.emblem} />
+          <h2 id="fest-title">{festival.greeting}</h2>
+          <p id="fest-blurb">{visual.blurb}</p>
+          <div className="fest-actions">
+            <button
+              type="button"
+              className="fest-btn fest-btn-primary"
+              onClick={() => { close(); navigate(`/search/${encodeURIComponent(visual.query)}`); }}
+            >
+              Play {short} songs
+            </button>
+            <button type="button" className="fest-btn" onClick={close}>Continue</button>
+          </div>
+        </div>
       </div>
-    </div>
-   </>
+    </>
   );
 }

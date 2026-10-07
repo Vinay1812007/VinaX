@@ -1,0 +1,178 @@
+/* ============================================================================
+   Nocturne — midnight gradients and glow.
+
+   Deep indigo with an orchid accent and an aqua second colour. The canvas is
+   a slow vertical gradient; pages open under a band of colour; titles carry
+   the orchid-to-aqua gradient; play buttons glow; the active destination is
+   marked by a bar of light, tabs by an underline. Corners are modest
+   rounded rectangles. Motion is slow and settles.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='nocturne']:not([class*='fest-']) {
+  --ink-950: 9 8 24;
+  --ink-900: 14 13 34;
+  --ink-850: 22 20 48;
+  --ink-800: 32 29 64;
+  --ink-700: 52 48 92;
+  --ink-600: 98 94 138;
+  --ink-500: 150 146 186;
+  --ink-400: 176 172 208;
+  --ink-300: 200 197 226;
+  --ink-200: 228 226 244;
+  --ink-100: 246 245 255;
+}
+html.light[data-template='nocturne']:not([class*='fest-']) {
+  --ink-950: 255 255 255;
+  --ink-900: 247 246 253;
+  --ink-850: 239 237 250;
+  --ink-800: 229 226 245;
+  --ink-700: 208 204 232;
+  --ink-600: 140 135 170;
+  --ink-500: 94 88 126;
+  --ink-400: 82 76 114;
+  --ink-300: 62 56 94;
+  --ink-200: 32 27 60;
+  --ink-100: 16 12 38;
+  --art: 160 150 200;
+}
+html[data-template='nocturne']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 150 92 240;
+  --ember-500: 180 132 255;
+  --ember-400: 204 170 255;
+  --ember-300: 226 206 255;
+  --tide-500: 70 210 255;
+  --tide-400: 130 226 255;
+  --vx-on-accent: #150a2e;
+  --art: 150 92 240;
+}
+html.light[data-template='nocturne']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 66 24 150;
+  --ember-500: 90 40 190;
+  --ember-400: 86 36 182;
+  --ember-300: 104 54 206;
+  --tide-500: 0 110 150;
+  --tide-400: 0 94 130;
+  --vx-on-accent: #fff;
+  --art: 160 150 200;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='nocturne'] {
+  --tpl-r-art: 10px;
+  --tpl-r-art-sm: 8px;
+  --tpl-r-control: 10px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 10px;
+  --tpl-r-tile: 12px;
+  --tpl-r-input: 10px;
+  --tpl-r-deck: 14px;
+  --tpl-r-mini: 12px;
+  --tpl-r-np-art: 12px;
+  --vx-type-section: 1.3rem;
+  --tpl-title-tracking: -0.03em;
+  --tpl-section-weight: 700;
+  --tpl-enter: tplZoom;
+  --tpl-enter-dur: 380ms;
+  --vx-radius-panel: 16px;
+  --vx-radius-card: 12px;
+  --ease-calm: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --transition-normal: 260ms var(--ease-calm);
+}
+
+/* ------------------------------------------------------------------ shell */
+html[data-template='nocturne']:not([class*='fest-']) .vx-shell {
+  background:
+    radial-gradient(60% 50% at 100% 0%, rgb(var(--tide-500) / 0.1), transparent 70%),
+    radial-gradient(70% 55% at 0% 0%, rgb(var(--art) / 0.22), transparent 72%),
+    linear-gradient(180deg, rgb(var(--ink-850)), rgb(var(--ink-950)) 60%);
+}
+html.light[data-template='nocturne']:not([class*='fest-']) .vx-shell {
+  background:
+    radial-gradient(70% 55% at 0% 0%, rgb(var(--art) / 0.24), transparent 72%),
+    linear-gradient(180deg, rgb(var(--ink-800)), rgb(var(--ink-850)) 60%);
+}
+/* Every page opens under a band of the accent, the artwork glowing through. */
+html[data-template='nocturne']:not([class*='fest-']) .vx-workspace {
+  background:
+    radial-gradient(900px 300px at 85% -120px, rgb(var(--tide-500) / 0.12), transparent 70%) local,
+    linear-gradient(180deg, rgb(var(--ember-600) / 0.3), rgb(var(--art) / 0.08) 220px, transparent 420px) local,
+    rgb(var(--ink-900));
+}
+html.light[data-template='nocturne']:not([class*='fest-']) .vx-workspace {
+  background:
+    linear-gradient(180deg, rgb(var(--ember-500) / 0.16), rgb(var(--art) / 0.06) 220px, transparent 420px) local,
+    rgb(var(--ink-900));
+}
+/* The active destination: a bar of light on the leading edge. */
+html[data-template='nocturne'] .vx-nav-link { border-radius: 10px; min-height: 44px; }
+html[data-template='nocturne'] .vx-nav-link:hover { background: rgb(var(--ember-500) / 0.1); }
+html[data-template='nocturne'] :is(.vx-nav-active, .vx-nav-active:hover) {
+  color: rgb(var(--ink-100));
+  background: linear-gradient(90deg, rgb(var(--ember-500) / 0.26), rgb(var(--ember-500) / 0.04));
+  box-shadow: inset 3px 0 0 rgb(var(--ember-400)), 0 0 24px -10px rgb(var(--ember-500) / 0.9);
+}
+html[data-template='nocturne'] .vx-nav-active svg { color: rgb(var(--ember-400)); }
+html[data-template='nocturne'] .vx-library { background: rgb(var(--ink-950) / 0.45); box-shadow: inset 0 0 0 1px var(--vx-border); }
+
+/* Phone tab bar: the active tab is lit from underneath. */
+html[data-template='nocturne'] .vx-dock { box-shadow: inset 0 1px 0 rgb(var(--ember-500) / 0.28); }
+html[data-template='nocturne'] .vx-dock-pill { position: relative; height: 28px; }
+html[data-template='nocturne'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ember-400)); filter: drop-shadow(0 0 8px rgb(var(--ember-500) / 0.8)); }
+html[data-template='nocturne'] .vx-dock-active .vx-dock-pill::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -27px;
+  width: 22px;
+  height: 3px;
+  margin-left: -11px;
+  border-radius: 3px 3px 0 0;
+  background: rgb(var(--ember-400));
+  box-shadow: 0 0 12px rgb(var(--ember-500));
+}
+html[data-template='nocturne'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ink-100)); }
+html[data-template='nocturne'] .vx-dock-item { gap: 3px; min-height: 58px; }
+
+/* Player: play glows. */
+html[data-template='nocturne'] :is(.np-play-desktop, .np-mini .np-mini-play, .card-play) {
+  box-shadow: 0 0 0 5px rgb(var(--ember-500) / 0.16), 0 0 26px -2px rgb(var(--ember-500) / 0.65);
+}
+html[data-template='nocturne'] :is(.vx-play-fab, .vx-np-play) {
+  background: linear-gradient(135deg, rgb(var(--ember-400)), rgb(var(--ember-600)));
+  box-shadow: 0 0 0 7px rgb(var(--ember-500) / 0.16), 0 0 40px -4px rgb(var(--ember-500) / 0.7);
+}
+html.light[data-template='nocturne'] :is(.vx-play-fab, .vx-np-play) { background: linear-gradient(135deg, rgb(var(--ember-300)), rgb(var(--ember-600))); }
+html[data-template='nocturne'] .vx-deck { box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.22), var(--vx-deck-shadow); }
+
+/* ------------------------------------------------------- pages and cards */
+/* Page titles in the gradient. */
+html[data-template='nocturne'] :is(.vx-page-header h1, .vx-page-title, .vxh-greet h1) {
+  background: linear-gradient(100deg, rgb(var(--ink-100)) 10%, rgb(var(--ember-300)) 55%, rgb(var(--tide-400)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  padding-bottom: 0.06em;
+}
+html.light[data-template='nocturne'] :is(.vx-page-header h1, .vx-page-title, .vxh-greet h1) {
+  background-image: linear-gradient(100deg, rgb(var(--ink-100)) 10%, rgb(var(--ember-500)) 60%, rgb(var(--tide-500)));
+}
+@media (forced-colors: active) {
+  html[data-template='nocturne'] :is(.vx-page-header h1, .vx-page-title, .vxh-greet h1) { background: none; color: CanvasText; -webkit-text-fill-color: CanvasText; }
+}
+/* A thin rule of light under each section title. */
+html[data-template='nocturne'] .vx-section-header { padding-bottom: 10px; background: linear-gradient(90deg, rgb(var(--ember-500) / 0.5), rgb(var(--tide-500) / 0.2) 40%, transparent 75%) bottom left / 100% 1px no-repeat; }
+html[data-template='nocturne'] .vx-section-link { border-radius: 8px; color: rgb(var(--tide-400)); }
+html[data-template='nocturne'] .vx-media-art { box-shadow: 0 14px 30px -18px rgb(0 0 0 / 0.85); }
+@media (hover: hover) {
+  html[data-template='nocturne'] .vx-media-card:hover .vx-media-art { transform: none; box-shadow: 0 0 0 2px rgb(var(--ember-500) / 0.7), 0 0 34px -6px rgb(var(--ember-500) / 0.6); }
+}
+html[data-template='nocturne'] :is(.vx-chip-idle, .vxh-chip) { background: rgb(var(--ember-500) / 0.1); box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.22); }
+html[data-template='nocturne'] .vxh-tile { background: linear-gradient(120deg, rgb(var(--ink-800)), rgb(var(--ink-850))); box-shadow: inset 0 0 0 1px var(--vx-border); }
+html[data-template='nocturne'] .vxh-hero { border-radius: 16px; box-shadow: inset 0 0 0 1px rgb(var(--ember-500) / 0.25), 0 30px 60px -40px rgb(var(--ember-500) / 0.6); }
+html[data-template='nocturne'] .vx-track-row.is-current { box-shadow: inset 3px 0 0 rgb(var(--ember-400)); }
+/* Tabs underline instead of filling. */
+html[data-template='nocturne'] .vx-np-tabs [role='tab'] { border-radius: 0; }
+html[data-template='nocturne'] .vx-np-tabs [role='tab'][aria-selected='true'] { background: transparent; color: rgb(var(--ink-100)); box-shadow: inset 0 -2px 0 rgb(var(--ember-400)); }

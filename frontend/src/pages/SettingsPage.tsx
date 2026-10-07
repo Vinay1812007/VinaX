@@ -35,7 +35,10 @@ import { DISCOVERY_OPTIONS, QUEUE_LANGUAGE_OPTIONS, intensityWords } from '@/fea
 import { PersonalizationPreview } from '@/features/personalization/PersonalizationPreview';
 import { SoftMuteList } from '@/features/personalization/SoftMuteList';
 import { ACCENT_OPTIONS } from '@/constants/accents';
-import { activeFestival, nextFestival } from '@/constants/festivals';
+import { TemplatePicker } from '@/features/settings/TemplatePicker';
+import { templateOption } from '@/constants/templates';
+import { FESTIVALS, activeFestival, nextFestival } from '@/constants/festivals';
+import { useFestivalPreview } from '@/features/festival/festivalPreview';
 import { applyGlassLevel } from '@/utils/theme';
 import { COUNTRIES, REGIONS } from '@/constants/regions';
 import { KEYS } from '@/constants/storage-keys';
@@ -325,6 +328,8 @@ function UsernameRow() {
 function FestivalRow() {
   const on = useSettingsStore((x) => x.festivalSkins);
   const setOn = useSettingsStore((x) => x.setFestivalSkins);
+  const previewId = useFestivalPreview((x) => x.id);
+  const setPreviewId = useFestivalPreview((x) => x.setId);
   const today = activeFestival();
   const next = nextFestival();
   const line = today
@@ -333,9 +338,24 @@ function FestivalRow() {
       ? `Next: ${next.festival.name} in ${next.inDays} day${next.inDays === 1 ? '' : 's'}`
       : 'No festival on the calendar';
   return (
-    <Row label="Festival themes" note={`${line}.`} keywords="every festival brings its own look accent background glow greeting">
-      <Toggle on={on} onChange={setOn} label="Festival themes" />
-    </Row>
+    <>
+      <Row label="Festival themes" note={`${line}.`} keywords="every festival brings its own look accent background glow greeting">
+        <Toggle on={on} onChange={setOn} label="Festival themes" />
+      </Row>
+      <Row label="Preview a festival" note="See any festival look now. Lasts until you stop it or reload." keywords="festival preview try skin diwali holi christmas eid">
+        <select
+          aria-label="Preview a festival"
+          value={previewId ?? ''}
+          onChange={(e) => setPreviewId(e.target.value || null)}
+          className="vx-set-select"
+        >
+          <option value="">{previewId ? 'Stop preview' : 'Off'}</option>
+          {FESTIVALS.map((f) => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+      </Row>
+    </>
   );
 }
 
@@ -419,7 +439,10 @@ export default function SettingsPage() {
           {!wide && !q && <SectionJump sections={sections} />}
           {q && <SearchStatus q={q} />}
 
-          <Section title="Appearance" id="appearance" lede="Language, theme, colour and size.">
+          <Section title="Appearance" id="appearance" lede="App style, language, theme, colour and size.">
+            <Block label="App style" note="Six complete looks: colours, type, shapes, the navigation and the player all change. Your music, library and settings stay as they are." keywords="template look design layout skin ui ux aura pulse sangam nocturne marquee vibe redesign appearance">
+              <TemplatePicker value={s.template} onChange={s.setTemplate} />
+            </Block>
             <Row stack label="App language" keywords="display language interface">
               <Segmented label="App language" value={s.uiLanguage} onChange={s.setUiLanguage} options={UI_LANGS.map((l) => ({ value: l.id, label: l.label }))} />
             </Row>
@@ -439,8 +462,8 @@ export default function SettingsPage() {
             </Row>
             <FestivalRow />
             <Group title="Colour">
-              <Block label="Accent color" note="Play buttons, progress, focus and everything you have chosen." keywords="colour highlight buttons links player marigold copper">
-                <AccentSwatches value={s.accent} onChange={s.setAccent} />
+              <Block label="Accent color" note="Play buttons, progress, focus and everything you have chosen. The first swatch is the app style’s own colour." keywords="colour highlight buttons links player marigold copper style">
+                <AccentSwatches value={s.accent} onChange={s.setAccent} template={s.template} />
               </Block>
               <Row stack label="Custom accent" note="Any colour. VinaX builds a readable palette from it." keywords="colour color palette hex">
                 <div className="flex items-center gap-2">
@@ -977,7 +1000,9 @@ export default function SettingsPage() {
 }
 
 /** Ten preset accents as one radio group (arrow keys move the choice), with the chosen one's name under it. */
-function AccentSwatches({ value, onChange }: { value: string; onChange: (id: (typeof ACCENT_OPTIONS)[number]['id']) => void }) {
+function AccentSwatches({ value, onChange, template }: { value: string; onChange: (id: (typeof ACCENT_OPTIONS)[number]['id']) => void; template: string }) {
+  // The default accent is the app style's own colour: show that style's swatch.
+  const styleDot = templateOption(template).swatch.accent;
   const ids = ACCENT_OPTIONS.map((a) => a.id);
   const at = ids.indexOf(value as (typeof ids)[number]);
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -1007,7 +1032,7 @@ function AccentSwatches({ value, onChange }: { value: string; onChange: (id: (ty
             onKeyDown={(e) => move(e, i)}
             onClick={() => onChange(a.id)}
             className="vx-set-swatch"
-            style={{ backgroundColor: a.dot }}
+            style={{ backgroundColor: a.id === 'crimson' ? styleDot : a.dot }}
           />
         ))}
       </div>

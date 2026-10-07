@@ -71,9 +71,19 @@ export function resolveMediaPick(providers: readonly Provider[], kind: MediaKind
 
 /* ---------- create image / music ---------- */
 
+/** 11.0 — the server's own limits (functions/api/image.ts and music.ts): it
+ *  keeps the first 600 characters of an image description and 1000 of a music
+ *  one, and refuses anything under three. The client used to send up to 2000,
+ *  which a non-Latin script could push past the music route's body cap. */
+export const CREATE_PROMPT_MAX: Record<CreateKind, number> = { image: 600, music: 1000 };
+export const CREATE_PROMPT_MIN = 3;
+
+/** The description as the server will read it. */
+export const createPrompt = (kind: CreateKind, prompt: string): string => prompt.trim().slice(0, CREATE_PROMPT_MAX[kind]);
+
 /** POST /api/image and POST /api/music take the same body. */
-export function createRequestBody(prompt: string, pick: MediaPick | null): { prompt: string; provider?: string; model?: string } {
-  const p = prompt.trim().slice(0, 2000);
+export function createRequestBody(kind: CreateKind, prompt: string, pick: MediaPick | null): { prompt: string; provider?: string; model?: string } {
+  const p = createPrompt(kind, prompt);
   return pick ? { prompt: p, provider: pick.provider, model: pick.model } : { prompt: p };
 }
 
@@ -94,7 +104,7 @@ export function readCreateResponse(kind: CreateKind, body: unknown, prompt: stri
     ...(kind === 'music' && mime ? { mime } : {}),
     model: str(b.model, 120) || pick?.name || str(b.modelId) || (kind === 'image' ? 'Image model' : 'Music model'),
     ...(provider ? { provider } : {}),
-    prompt: prompt.trim().slice(0, 2000),
+    prompt: createPrompt(kind, prompt),
   };
 }
 
@@ -104,6 +114,22 @@ export function createFailureLine(kind: CreateKind, status: number, error: strin
   if (error === 'ai_over_budget') return 'VinaX AI has reached today’s limit — try again tomorrow.';
   if (error === 'unknown_model') return 'That model isn’t available any more — pick another one and try again.';
   if (status === 429 || error === 'rate_limited') return 'Too many requests just now — wait a moment and try again.';
+  // 11.0 — failures that trying "once more" can never fix get their own line.
+  if (error === 'content_filtered' || status === 422)
+    return kind === 'image'
+      ? 'The image model turned that description down — reword it and try again.'
+      : 'The music model turned that description down — reword it and try again.';
+  if (error === 'not_configured')
+    return kind === 'image' ? 'Creating images isn’t set up yet — no image model is available.' : 'Creating music isn’t set up yet — no music model is available.';
+  if (status === 413) return 'That description is too long — shorten it and try again.';
+  if (error === 'too_large')
+    return kind === 'image'
+      ? 'The picture came out too large to send — try a simpler description or another model.'
+      : 'The clip came out too large to send — ask for something shorter or pick another model.';
+  if (error === 'bad_request')
+    return kind === 'image'
+      ? 'That’s too short to make a picture from — describe it in a few words.'
+      : 'That’s too short to make a clip from — describe it in a few words.';
   if (status === 404 || status === 405) return kind === 'image' ? 'Creating images isn’t available right now.' : 'Creating music isn’t available right now.';
   return kind === 'image'
     ? 'The image model didn’t answer — try once more in a moment.'
@@ -114,11 +140,14 @@ export type CreateResult = { ok: true; media: MsgMedia } | { ok: false; line: st
 
 /** Ask for one picture or one clip. Never throws. */
 export async function createMedia(kind: CreateKind, prompt: string, pick: MediaPick | null, signal?: AbortSignal): Promise<CreateResult> {
+  // The server refuses a description under three characters (400): say so
+  // without the round trip.
+  if (createPrompt(kind, prompt).length < CREATE_PROMPT_MIN) return { ok: false, line: createFailureLine(kind, 400, 'bad_request') };
   try {
     const r = await fetch(kind === 'image' ? IMAGE_ENDPOINT : MUSIC_ENDPOINT, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...clientHeaders() },
-      body: JSON.stringify(createRequestBody(prompt, pick)),
+      body: JSON.stringify(createRequestBody(kind, prompt, pick)),
       signal,
     });
     const j = (await r.json().catch(() => null)) as unknown;

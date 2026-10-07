@@ -12,6 +12,20 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.0.0': {
+    title: 'Six new looks, redrawn festival themes and a steadier VinaX AI',
+    changes: [
+      { type: 'new', text: 'App styles: six complete looks for VinaX, in Settings → Appearance → App style. Aura (the new default) is clean glass with large titles; Pulse is dense and flat; Sangam is the warm plum and marigold you know; Nocturne is midnight gradients and glow; Marquee is true black with big pictures; Vibe is round, bold and springy. Each one changes the colours, type, shapes, the tab bar, the player and how pages move. Your music, library and settings stay exactly as they are.' },
+      { type: 'improved', text: 'Every style works in Dark, Light and Black, and with any accent colour. The first accent swatch is now the style’s own colour, and Marigold is there as a colour of its own, so you can keep it in any style. If you want the look from before this update, pick Sangam.' },
+      { type: 'new', text: 'Festival themes, redrawn. Each of the 43 festivals now has its own drawn emblem, colours and a quiet backdrop, and nothing is fetched from a photo site any more. On the day you get one greeting card with a button to play that festival’s songs, and a small strip on Home. Preview any festival, any day, in Settings → Appearance.' },
+      { type: 'new', text: 'VinaX AI now dresses the chat to match the model you pick: the message box, your messages, the replies, the starter prompts and the motion all change with the model’s maker. Choose “Always VinaX” or one fixed style in VinaX AI settings → General → Chat style.' },
+      { type: 'fixed', text: 'VinaX AI: a reply with a checklist could freeze the page; attached PDFs were never read; a model that had been withdrawn broke every message until you picked another; dictation wiped what you had typed; a reply cut off by a reload said “thinking” for ever; and a stopped request could overwrite your next answer. All fixed.' },
+      { type: 'fixed', text: 'VinaX AI: pictures you attach are now read by whichever AI provider is available, not just one; Auto can use every provider that is set up; when every engine is busy the chat says so and waits, instead of reporting a failure; and read-aloud works with more voice providers.' },
+      { type: 'improved', text: 'Attached files show as small chips with a “Show contents” link instead of filling your message, the chat stays at the bottom when a reply finishes, and a message that cannot be sent as it is offers “Edit message”.' },
+      { type: 'improved', text: 'A new welcome for first-time listeners, in short steps with Back and Skip, including “Pick your look”. The guided tours in Help were rewritten, with three new ones: Change the app’s look, Festival themes, and VinaX AI: models and chat styles.' },
+      { type: 'fixed', text: 'On phones, the Listen together page ran off the right edge and hid its Start button; on the narrowest phones a search panel and the Open queue link did too. In the Black theme, page text showed through the top bar while scrolling. All fixed.' },
+    ],
+  },
   '10.3.0': {
     title: 'Every free model and tool, under its own name',
     changes: [

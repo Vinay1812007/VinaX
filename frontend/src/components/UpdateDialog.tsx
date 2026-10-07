@@ -91,7 +91,7 @@ export function UpdateDialog() {
               </li>
               <li className="pl-1"><b>Uninstall VinaX</b>, then run the installer below.</li>
               <li className="pl-1">
-                Open the new app → Settings → Your Data → <b>Import</b> that file.
+                Open the new app → Settings → Your data → <b>Restore a backup (quick)</b> and choose that file.
               </li>
             </ol>
             <div className="space-y-2">

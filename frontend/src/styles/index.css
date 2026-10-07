@@ -390,6 +390,13 @@ html.amoled body {
    need much darker accents to stay AA; those ramps are generated from the
    Tailwind palettes and GATED in src/__tests__/contrast.test.ts.
    --------------------------------------------------------------------------- */
+/* 11.0 — "Marigold", by name: the :root ramp as an accent a listener can
+   keep in any app style (the default id 'crimson' now means "the style's own
+   colour", so Marigold needs an id of its own). */
+html[data-accent='marigold'] {
+  --ember-600: 236 132 20; --ember-500: 255 164 46; --ember-400: 255 192 102; --ember-300: 255 218 158;
+  --tide-500: 255 99 132; --tide-400: 255 145 168;
+}
 html[data-accent='ember'] {
   /* 10.0 — "Copper": re-pitched redder and deeper so it no longer reads as the Marigold default. */
   --ember-600: 176 90 52; --ember-500: 214 120 78; --ember-400: 230 152 116; --ember-300: 242 192 166;
@@ -437,6 +444,10 @@ html[data-accent='azure'] {
    (must clear 4.5:1 on ink-900 AND ink-800), 300 one shade lighter, 500/600
    progressively darker. Values are Tailwind palette shades chosen by an AA
    solver; contrast.test.ts re-derives the math and fails on any regression. */
+html.light[data-accent='marigold'] {
+  --ember-600: 128 54 2; --ember-500: 168 74 4; --ember-400: 156 68 4; --ember-300: 180 84 8;
+  --tide-500: 196 32 96; --tide-400: 176 24 80;
+}
 html.light[data-accent='ember'] {
   --ember-600: 84 32 14; --ember-500: 128 48 22; --ember-400: 140 52 24; --ember-300: 158 62 30;
   --tide-500: 15 118 110; --tide-400: 17 94 89;
@@ -1657,164 +1668,8 @@ html.boot-still *, html.boot-still *::before, html.boot-still *::after {
   transition-property: none !important;
 }
 
-/* ============================================================================
-   80th Independence Day skin (owner request, 4.17.3). Active only while
-   html.fest-ind is set (FestiveSplash toggles it inside the Aug 14-15
-   window; auto-reverts at midnight into Aug 16). Two strokes, both cheap:
-   a fixed flag ribbon along the top, and the accent ramp swapped to
-   saffron. Light-theme values are darkened for WCAG AA on white.
-   ========================================================================= */
-
-/* --- 4.17.4: Independence living backdrop (flag in the air + rising balls).
-   Transform/opacity only; sits behind content; reduced-motion cascade stops
-   every animation. Rendered only inside the festival window. --- */
-.fest-sky {
-  position: fixed;
-  inset: 0;
-  z-index: -5;
-  overflow: hidden;
-  pointer-events: none;
-  /* 4.17.9: the backdrop now mounts AFTER boot (deferred out of the LCP/TBT
-     window), so it eases in instead of popping — same living theme, none of
-     its raster cost spent while the page is still painting its first frames. */
-  animation: festSkyIn 1.1s ease-out both;
-}
-@keyframes festSkyIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-/* Negative-z layers paint BELOW the body's own background (body bg does not
-   propagate to the canvas because <html> carries the pre-paint background).
-   During the festival window the body goes transparent — the identical html
-   canvas colour shows through and the sky becomes visible behind content. */
-html.fest-ind body { background: transparent; }
-.fest-flag {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(72vw, 600px);
-  aspect-ratio: 3 / 2;
-  display: flex;
-  opacity: 0.3;
-  transform: translate(-50%, -50%) rotate(-5deg);
-  animation: festSway 9s ease-in-out infinite;
-}
-html.light .fest-flag { opacity: 0.34; }
-.fest-flag i {
-  flex: 1;
-  background: linear-gradient(180deg, #ff9933 0 33.4%, #f2f2f2 33.4% 66.7%, #138808 66.7% 100%);
-  animation: festWave 2.8s ease-in-out infinite;
-  will-change: transform;
-}
-.fest-chakra {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 21%;
-  color: #0a3d91;
-  transform: translate(-50%, -50%);
-  animation: festSpin 36s linear infinite;
-}
-.fest-ball {
-  position: absolute;
-  bottom: -70px;
-  border-radius: 50%;
-  opacity: 0;
-  animation-name: festRise;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  will-change: transform;
-}
-.fb0 { background: radial-gradient(circle at 32% 28%, #ffcf9e, #ff9933 70%); }
-.fb1 { background: radial-gradient(circle at 32% 28%, #ffffff, #cfd8e3 75%); }
-.fb2 { background: radial-gradient(circle at 32% 28%, #8fd96b, #138808 72%); }
-html.light .fest-ball { opacity: 0; }
-@keyframes festSway {
-  0%, 100% { transform: translate(-50%, -50%) rotate(-5deg); }
-  50% { transform: translate(-50%, calc(-50% - 14px)) rotate(-2.5deg); }
-}
-@keyframes festWave {
-  0%, 100% { transform: translateY(0) scaleY(1); }
-  50% { transform: translateY(4.5%) scaleY(0.965); }
-}
-@keyframes festSpin {
-  to { transform: translate(-50%, -50%) rotate(360deg); }
-}
-@keyframes festRise {
-  0% { transform: translateY(0) translateX(0); opacity: 0; }
-  7% { opacity: 0.32; }
-  88% { opacity: 0.26; }
-  100% { transform: translateY(-118vh) translateX(5vw); opacity: 0; }
-}
-
-/* ============================================================================
-   Festival skins for the full Indian calendar (owner request). Same cheap
-   two-stroke treatment the Independence skin pioneered — a 3px top ribbon +
-   the accent ramp recolored — plus a visual photo treatment. One
-   class per festival (html.fest-<id>, applied by FestiveSplash from the day
-   BEFORE the festival through its last day; index.html pre-paints it).
-   Light-theme ramps are darkened for WCAG AA on white. Republic Day shares
-   the tricolor with fest-ind.
-   ========================================================================= */
-html[class*='fest-'] body::after {
-  content: '';
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  z-index: 80;
-  pointer-events: none;
-}
-
-
-
-
-
-
-
-
-
-
-/* Regional additions (Festival Themes panel, 5.2.x): Telugu-first set —
-   Maha Shivaratri, Ugadi, Bonalu, Krishna Janmashtami, Bathukamma, and the
-   force-only Karthika Masam. Same contract as above: top ribbon + accent. */
-
-
-
-
-
-
-/* New festivals (redesign pass): Sri Rama Navami, Easter, Hanuman Jayanti,
-   Varalakshmi Vratam, Nagula Chavithi, Vaikunta Ekadasi. */
-
-
-
-
-
-
-/* ============================================================
-   Living backdrops (festival redesign): photographic ambience + shape particles.
-   FestBackdrop mounts .fest-sky with .fxp spans; each festival
-   paints its own ambience via .fest-sky::before. All transform/
-   opacity; hidden under reduced-motion; dimmed in light mode.
-   ============================================================ */
-html[class*='fest-'] .fest-sky::before { content: ''; position: absolute; inset: 0; }
-html.light .fest-sky { opacity: 0.55; }
-.fxp { position: absolute; opacity: 0; will-change: transform; user-select: none; }
-.fxp-rise { bottom: -8%; animation: fxpRise linear infinite; }
-.fxp-rise.fxp-alt { animation-name: fxpRiseAlt; }
-.fxp-fall { top: -10%; animation: fxpFall linear infinite; }
-.fxp-fall.fxp-alt { animation-name: fxpFallAlt; }
-.fxp-drift { animation: fxpFloat ease-in-out infinite alternate; opacity: 0.5; }
-.fxp-drift.fxp-alt { animation-direction: alternate-reverse; }
-.fxp-drift:nth-child(3n) { top: 8%; }
-.fxp-drift:nth-child(3n + 1) { top: 27%; }
-.fxp-drift:nth-child(3n + 2) { top: 56%; }
-@keyframes fxpRise { 0% { transform: translate(0, 0); opacity: 0; } 8% { opacity: 0.55; } 88% { opacity: 0.4; } 100% { transform: translate(3vw, -118vh); opacity: 0; } }
-@keyframes fxpRiseAlt { 0% { transform: translate(0, 0); opacity: 0; } 8% { opacity: 0.55; } 88% { opacity: 0.4; } 100% { transform: translate(-3vw, -118vh); opacity: 0; } }
-@keyframes fxpFall { 0% { transform: translate(0, 0) rotate(0deg); opacity: 0; } 8% { opacity: 0.55; } 88% { opacity: 0.4; } 100% { transform: translate(4vw, 118vh) rotate(200deg); opacity: 0; } }
-@keyframes fxpFallAlt { 0% { transform: translate(0, 0) rotate(0deg); opacity: 0; } 8% { opacity: 0.55; } 88% { opacity: 0.4; } 100% { transform: translate(-4vw, 118vh) rotate(-200deg); opacity: 0; } }
-@keyframes fxpFloat { 0% { transform: translate(0, 0) rotate(-4deg); } 100% { transform: translate(26px, -20px) rotate(5deg); } }
-@media (prefers-reduced-motion: reduce) { .fxp { display: none; } html[class*='fest-'] .fest-sky::before { opacity: 0.5; } }
+/* Festival skins (accent, canvas, ribbon, backdrop, flag, greeting card) are
+   generated into src/styles/festivals.css: run `npm run gen:festivals`. */
 
 
 

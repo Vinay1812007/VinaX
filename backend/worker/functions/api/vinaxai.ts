@@ -46,6 +46,8 @@ import {
   isGroqEndpoint,
   isMaestroEndpoint,
   laneAttempts,
+  laneEndpoint,
+  laneKey,
   laneCoolingDown,
   laneModel,
   logAiEvent,
@@ -339,11 +341,52 @@ export function executedToolsText(raw: unknown, shown: Map<number, { code: boole
  * model that reads images goes in front (the `pick` argument). Pairs that are
  * resting are left out (unless every one is). Empty without the NVIDIA key.
  */
-export function visionLadder(env: AiEnv, pick?: LaneAttempt | null): LaneAttempt[] {
-  const out = laneAttempts(env, VISION_LANE, undefined, ['vision90']);
+export function visionLadder(env: AiEnv, pick?: LaneAttempt | null, multi = false, extra: LaneAttempt[] = []): LaneAttempt[] {
+  const seats = laneAttempts(env, VISION_LANE, undefined, ['vision90']);
+  // 11.0 — Gemini reads images too (several in one turn), and so does any
+  // catalogue model flagged `vision` (`extra`): they follow the two vision
+  // seats, so a photo is still read when the NVIDIA key is missing or both
+  // seats are down. A turn with more than one image asks them FIRST — the two
+  // seats take a single image per request (see singleImageFor).
+  const others = [...laneAttempts(env, 'maestro', undefined, []), ...extra];
+  const all = multi ? [...others, ...seats] : [...seats, ...others];
+  const out = all.filter((a, i) => all.findIndex((b) => sameCall(a, b)) === i);
   const plan = pick ? [pick, ...out.filter((a) => !sameCall(a, pick))] : out;
   const live = plan.filter((a) => !laneCoolingDown(a.role, a.model));
   return live.length ? live : plan;
+}
+
+/** 11.0 — the two NVIDIA vision seats take ONE image per request; sent six,
+ * the request is refused. They get the most recent image only. Every other
+ * attempt (Gemini, a catalogue vision model) keeps the full set. */
+function singleImageFor(a: LaneAttempt, messages: OutMsg[]): OutMsg[] {
+  // A listener's pick of the same model family rides another lane role.
+  if (a.role !== 'vision' && a.role !== 'vision90' && !/llama-3\.2-\d+b-vision/.test(a.model)) return messages;
+  const last = messages[messages.length - 1];
+  if (!last || typeof last.content === 'string') return messages;
+  const pics = last.content.filter((p) => p.type === 'image_url');
+  if (pics.length <= 1) return messages;
+  const keep = pics[pics.length - 1];
+  return [...messages.slice(0, -1), { ...last, content: last.content.filter((p) => p.type !== 'image_url' || p === keep) }];
+}
+
+/** 11.0 — a total size budget for the thread. Forty turns of 24k characters
+ * is ~960k characters, several times the smallest context window on the
+ * ladder (~128k tokens), so a long thread failed on every engine. The oldest
+ * turns are dropped until the thread fits; the latest user turn always stays
+ * whole. 120k characters fits that smallest window even in scripts that cost
+ * about a token per character. */
+export const HISTORY_CHAR_BUDGET = 120_000;
+export function trimHistory<T extends { role: string; content: string }>(history: T[], budget = HISTORY_CHAR_BUDGET): T[] {
+  let total = history.reduce((n, m) => n + m.content.length, 0);
+  let trimmed = false;
+  while (history.length > 1 && total > budget) {
+    total -= (history.shift() as T).content.length;
+    trimmed = true;
+  }
+  // A trimmed thread must not open on a reply whose question was dropped.
+  if (trimmed && history.length > 1 && history[0].role === 'assistant') history.shift();
+  return history;
 }
 
 /** Request-body ceiling: the 6 MB inline-image budget plus a long pasted thread. */
@@ -472,6 +515,7 @@ async function handleChat(
   if (!history.length || history[history.length - 1].role !== 'user') {
     return jsonErr({ error: 'bad_request' }, 400);
   }
+  trimHistory(history);
   const images = Array.isArray(body.images)
     ? (body.images as unknown[])
         .filter((s): s is string =>
@@ -512,6 +556,16 @@ async function handleChat(
   // model degrades to a healthy sibling instead of failing the chat.
   // 10.3 — a picked model runs first; the seat's ladder follows it.
   const ladder = laneAttempts(env, seatLane, seatDefault ?? undefined);
+  // 11.0 — the OpenRouter lane is on the ladder: a late fallback (ahead of the
+  // slow 550B reserve) when other keys exist, and the lead when it is the only
+  // key — an OpenRouter-only setup used to answer ai_not_configured. Its model
+  // is the live catalogue default; the pin is only the last resort.
+  const routerKey = laneKey(env, 'router');
+  if (routerKey && !ladder.some((a) => a.role === 'router')) {
+    const routerModel = (await catalogDefaultModel(env, 'openrouter').catch(() => null)) ?? laneModel(env, 'router');
+    const at = ladder.findIndex((a) => a.role === 'home');
+    ladder.splice(at < 0 ? ladder.length : at, 0, { key: routerKey, model: routerModel, role: 'router', endpoint: laneEndpoint(env, 'router') });
+  }
   // 10.3 — code execution, for the listener's own seats only (Auto or a pick).
   const wantCode = (reqMode === 'auto' || reqMode === 'model') && requestTools(body.tools).length > 0;
   // On Auto, a code-capable model leads: the flagship when it is ready (it is
@@ -603,7 +657,18 @@ async function handleChat(
   // 10.3 — a picked model that reads images (catalogue `vision: true`) is
   // asked first, with the image; one that does not is left to answer the
   // text-only fallback below if every vision engine is down.
-  const vision = useVision ? visionLadder(env, picked?.vision ? pick : null) : [];
+  // 11.0 — plus Gemini and the first vision-flagged model on each catalogue
+  // key, so the photo is read whichever key is configured.
+  const visionExtra: LaneAttempt[] = [];
+  if (useVision) {
+    for (const p of ['groq', 'openrouter'] as const) {
+      if (!providerKey(env, p)) continue;
+      const seer = (await fetchCatalog(env, p).catch(() => [])).find((m) => m.vision);
+      const attempt = seer ? providerAttempt(env, p, seer.id) : null;
+      if (attempt) visionExtra.push(attempt);
+    }
+  }
+  const vision = useVision ? visionLadder(env, picked?.vision ? pick : null, images.length > 1, visionExtra) : [];
 
   // v5.16.0 — ask the default base to append a usage chunk to the stream so
   // the AI Cost panel sees real token counts. The scholar lane's external
@@ -612,8 +677,10 @@ async function handleChat(
   // unasked anyway). Should the default base ever refuse the option, the
   // first 400 flips this off for the rest of the request and the same pair
   // is re-asked plainly, so the stream itself never depends on it.
-  let usageOptIn = true;
-  const payloadFor = (m: string, endpoint: string, messages: OutMsg[], code = false): Record<string, unknown> => {
+  // 11.0 — the opt-out is per attempt (a later fallback keeps its usage
+  // chunk), and the Gemini transport never carries the option at all.
+  const usageDropped = new Set<LaneAttempt>();
+  const payloadFor = (m: string, endpoint: string, messages: OutMsg[], code = false, usageOptIn = true): Record<string, unknown> => {
     const p: Record<string, unknown> = {
       model: m,
       messages,
@@ -633,7 +700,9 @@ async function handleChat(
     // no <think> wrapper for the SSE gate to strip — unless its reasoning is
     // switched off at the chat-template level (probed live — see
     // reasoningOffParams). Model-gated: a no-op for every other pin.
-    Object.assign(p, reasoningOffParams(m));
+    // 11.0 — chat_template_kwargs is an NVIDIA-only field: the same model name
+    // on another provider's endpoint must not carry it.
+    if (!isExternalEndpoint(endpoint)) Object.assign(p, reasoningOffParams(m));
     return p;
   };
 
@@ -652,19 +721,19 @@ async function handleChat(
   const callStream = async (a: LaneAttempt, messagesIn: OutMsg[], ms = 30_000): Promise<Response> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), ms);
-    const messages = withIdentity(a, messagesIn);
+    const messages = withIdentity(a, singleImageFor(a, messagesIn));
     try {
       if (isMaestroEndpoint(a.endpoint)) {
         // 8.1.0 — its own transport (native streaming). 10.3 — an exact
         // catalogue pick is never swapped for another model.
-        const p = payloadFor(a.model, a.endpoint, messages, runsCode(a));
+        const p = payloadFor(a.model, a.endpoint, messages, runsCode(a), false);
         delete p.stream_options;
         return await maestroFetch(a.key, a.model, p, controller.signal, !a.exact);
       }
       return await fetch(a.endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${a.key}` },
-        body: JSON.stringify(payloadFor(a.model, a.endpoint, messages, runsCode(a))),
+        body: JSON.stringify(payloadFor(a.model, a.endpoint, messages, runsCode(a), !usageDropped.has(a))),
         signal: controller.signal,
       });
     } finally {
@@ -714,9 +783,9 @@ async function handleChat(
       // rest of this request and re-ask the SAME pair once, so token accounting
       // can never cost a listener their answer. A degraded key 400s again and
       // the ladder walks on as before.
-      if (res?.status === 400 && usageOptIn && !isGroqEndpoint(a.endpoint)) {
+      if (res?.status === 400 && !usageDropped.has(a) && !isGroqEndpoint(a.endpoint) && !isMaestroEndpoint(a.endpoint)) {
         void res.body?.cancel().catch(() => undefined);
-        usageOptIn = false;
+        usageDropped.add(a);
         try {
           res = await callStream(a, messages, leash);
         } catch {
@@ -803,16 +872,41 @@ async function handleChat(
           latency_ms: Date.now() - t0,
         }),
       );
-    // 500, not 502: Cloudflare swallows origin 502 bodies (DQA-02).
+    // 11.0 — an upstream rate limit answers 429 (the client's "busy" line and
+    // its longer pause key on that status). Anything else stays a 500, not a
+    // 502: Cloudflare swallows origin 502 bodies (DQA-02).
+    if (status === 429) {
+      const retryAfter = Number(up.headers.get('retry-after'));
+      const res = jsonErr({ error: 'upstream', status }, 429);
+      res.headers.set('retry-after', String(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(Math.ceil(retryAfter), 60) : 5));
+      return res;
+    }
     return jsonErr({ error: 'upstream', status }, 500);
   }
   const served: LaneAttempt = used;
 
   const upBody = up.body;
   const encoder = new TextEncoder();
+  // 11.0 — the listener went away (closed the tab, pressed stop): stop reading
+  // the upstream at once instead of draining it to the stream budget.
+  let gone = false;
+  let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   const stream = new ReadableStream<Uint8Array>({
+    cancel() {
+      gone = true;
+      activeReader?.cancel().catch(() => undefined);
+    },
     async start(controller) {
-      const send = (obj: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      const send = (obj: unknown): void => {
+        if (gone) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        } catch {
+          gone = true; // the stream was closed under us
+        }
+      };
+      // 11.0 — reasoning a model never closed (see the end of drain).
+      const thinkBox: { text: string } = { text: '' };
       // Drain an upstream SSE body, forward each content delta to the client
       // and return the full text so we can detect an empty answer (a 200 with
       // no content — some lanes intermittently return this) and fail over.
@@ -830,6 +924,7 @@ async function handleChat(
       const cutBox: { truncated: boolean } = { truncated: false };
       const drain = async (body: ReadableStream<Uint8Array>): Promise<string> => {
         const reader = body.getReader();
+        activeReader = reader;
         const decoder = new TextDecoder();
         let buf = '';
         let full = '';
@@ -889,7 +984,7 @@ async function handleChat(
         try {
           for (;;) {
             const { done, value } = await reader.read();
-            if (done || cut) break;
+            if (done || cut || gone) break;
             buf += decoder.decode(value, { stream: true });
             let nl: number;
             while ((nl = buf.indexOf('\n')) >= 0) {
@@ -928,6 +1023,11 @@ async function handleChat(
         // A stream that ended inside <think> is discarded: an unclosed
         // chain-of-thought is not an answer; the empty-stream failover runs.
         if (gate === 'probe' && pending) forward(pending);
+        // 11.0 — a <think> block that never closed (the model spent its whole
+        // budget reasoning): remember that it happened, so the failover is
+        // logged for what it is and the reply can be marked cut short.
+        if ((gate as string) === 'think' && !full) thinkBox.text = pending.replace(/^\s*<think>/, '').trim();
+        if (gone) reader.cancel().catch(() => undefined);
         // Partial text + a cut stream = a truncated answer. A cut with nothing
         // forwarded stays an empty stream, which the failover ladder handles.
         if (cut && full) cutBox.truncated = true;
@@ -959,7 +1059,7 @@ async function handleChat(
               model: `${usedModel} @${keyRole}`,
               ok: false,
               status: 200,
-              error: 'empty_stream_fallback',
+              error: thinkBox.text ? 'unclosed_think_fallback' : 'empty_stream_fallback',
               client: isApp ? 'app' : 'web',
               latency_ms: Date.now() - t0,
             }),
@@ -968,7 +1068,7 @@ async function handleChat(
         // that has not already failed this request and is not resting, while
         // the reply's overall budget still has room for a hop.
         for (const a of activePlan) {
-          if (full) break;
+          if (full || gone) break;
           if (a === served || failed.has(a)) continue;
           if (obeyCooldown && laneCoolingDown(a.role, a.model)) continue;
           if (streamDeadline - Date.now() < STREAM_MIN_DRAIN_MS) break;
@@ -992,8 +1092,19 @@ async function handleChat(
       }
 
       // `truncated` is additive: clients that only read `done` are unaffected.
+      // 11.0 — nobody else answered and the only text is unclosed reasoning:
+      // a chain of thought is still not an answer, so none is sent — but the
+      // reply is marked cut short, so the app can say so instead of showing
+      // nothing at all.
+      if (!full && thinkBox.text) cutBox.truncated = true;
       send(cutBox.truncated ? { done: true, truncated: true } : { done: true });
-      controller.close();
+      if (!gone) {
+        try {
+          controller.close();
+        } catch {
+          /* already closed by a cancel */
+        }
+      }
       if (waitUntil) {
         waitUntil(
           logAiEvent(env, {

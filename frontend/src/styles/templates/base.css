@@ -1,0 +1,162 @@
+/* ============================================================================
+   VinaX 11 — app styles ("templates"): the shared layer.
+
+   A template is `html[data-template='<id>']` (set before first paint by the
+   script in index.html, kept live by utils/theme.ts). Six ship: aura (the
+   default), pulse, sangam, nocturne, marquee, vibe — one file each beside
+   this one. This file is what they have in common:
+
+   1. the shape, type and motion DIALS (--tpl-*) and the rules that make the
+      shell and the shared primitives read them, so a template is mostly a
+      block of values plus the handful of layout rules that are its own;
+   2. the tokens that are derived from the ink scale (glass fills, solid
+      surfaces), re-derived so a template only has to state its inks;
+   3. the switches that must keep winning over any template: AMOLED (true
+      black), high contrast, and a festival skin.
+
+   The contract (asserted in src/constants/templates.test.ts):
+   - a template's COLOURS (tokens and canvas paint) stand down while a
+     festival skin is on — every colour block carries
+     `:not([class*='fest-'])`; its layout, shape, type and motion stay;
+   - a template's accent applies only while the listener has not picked one
+     (no data-accent, or the default 'crimson');
+   - every template has a dark and a light look; text and accent tiers clear
+     WCAG AA on its canvas and raised surface;
+   - page stylesheets load after this file (they ship with their lazy page),
+     so every rule here wins by specificity, never by order.
+   ========================================================================= */
+
+/* ------------------------------------------------------------------ dials */
+html[data-template] {
+  /* Shape. */
+  --tpl-r-art: 16px;        /* artwork on cards */
+  --tpl-r-art-sm: 12px;     /* artwork in rows, the library, the mini player */
+  --tpl-r-control: 999px;   /* chips, pills, nav rows, section links */
+  --tpl-r-play: 18px;       /* the big play button */
+  --tpl-r-play-sm: 15px;    /* play on cards, the deck, the mini player */
+  --tpl-r-row: 14px;        /* track rows, library rows */
+  --tpl-r-tile: 14px;       /* Home tiles and cards */
+  --tpl-r-input: 14px;
+  --tpl-r-deck: 22px;       /* desktop player deck */
+  --tpl-r-mini: 16px;       /* phone mini player */
+  --tpl-r-np-art: 22px;     /* Now Playing artwork */
+  /* Type. */
+  --tpl-font-body: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --tpl-title-weight: 800;
+  --tpl-title-tracking: -0.035em;
+  --tpl-section-weight: 750;
+  --tpl-section-tracking: -0.03em;
+  --tpl-card-title-weight: 650;
+  /* Motion: the page entrance and how far a press sinks. */
+  --tpl-enter: tplRise;
+  --tpl-enter-dur: 260ms;
+  --tpl-press: 0.96;
+}
+
+/* Derived from the inks, so a template states its inks once. */
+html[data-template]:not([class*='fest-']) {
+  --glass-bg: rgb(var(--ink-850) / var(--glass-alpha));
+  --glass-bg-strong: rgb(var(--ink-800) / var(--glass-alpha));
+  --glass-bg-muted: rgb(var(--ink-900) / var(--glass-alpha));
+  --glass-bg-hover: rgb(var(--ink-800) / max(var(--glass-alpha), 0.85));
+  --glass-bg-active: rgb(var(--ink-700) / max(var(--glass-alpha), 0.9));
+  --surface-solid: rgb(var(--ink-900));
+  --gradient-secondary: linear-gradient(180deg, rgb(var(--ink-700)), rgb(var(--ink-800)));
+  --aura-violet: var(--ember-500);
+  --aura-cyan: var(--tide-500);
+}
+html.light[data-template]:not([class*='fest-']) {
+  --glass-bg: rgb(var(--ink-950) / var(--glass-alpha));
+  --glass-bg-strong: rgb(var(--ink-950) / var(--glass-alpha));
+  --glass-bg-muted: rgb(var(--ink-900) / var(--glass-alpha));
+  --glass-bg-hover: rgb(var(--ink-850) / max(var(--glass-alpha), 0.85));
+  --glass-bg-active: rgb(var(--ink-800) / max(var(--glass-alpha), 0.9));
+  --glass-border: rgb(var(--ink-100) / 0.09);
+  --glass-border-strong: rgb(var(--ink-100) / 0.16);
+  --glass-shadow: 0 4px 12px -6px rgb(var(--ink-100) / 0.12);
+  --glass-shadow-strong: 0 -8px 20px -8px rgb(var(--ink-100) / 0.12);
+  --vx-mat-thin: rgb(var(--ink-950) / calc(var(--glass-alpha) * 0.6));
+  --vx-mat-regular: rgb(var(--ink-950) / clamp(0.5, calc(var(--glass-alpha) - 0.1), 0.92));
+  --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.06), 0.97));
+  --vx-mat-thick: rgb(var(--ink-950) / clamp(0.86, calc(var(--glass-alpha) + 0.12), 0.98));
+  --vx-mat-hairline: rgb(var(--ink-100) / 0.1);
+  --surface-solid: rgb(var(--ink-950));
+  --surface-input: rgb(var(--ink-850));
+  --surface-navbar: rgb(var(--ink-950));
+  --surface-sidebar: rgb(var(--ink-950));
+  --surface-modal: rgb(var(--ink-950));
+  --surface-player: rgb(var(--ink-950));
+  --vx-art-shadow: 0 10px 24px -14px rgb(var(--ink-100) / 0.35);
+  --vx-deck-shadow: 0 16px 36px -18px rgb(var(--ink-100) / 0.35);
+}
+html.light[data-template]:not([class*='fest-']) body { background-color: rgb(var(--ink-900)); }
+
+/* ------------------------------------------ switches that outrank a template */
+/* AMOLED is true black in every style: only the deepest tiers move, the
+   style's own greys, accent, shapes and layout stay. `:not(#_)` lifts these
+   two blocks above every template block without !important. */
+html.amoled[data-template]:not(#_) {
+  --ink-950: 0 0 0;
+  --ink-900: 2 2 3;
+  --ink-850: 9 9 12;
+  --ink-800: 17 18 23;
+  --glass-bg: rgb(8 8 11);
+  --glass-bg-muted: rgb(3 3 5);
+  --surface-solid: rgb(0 0 0);
+  --surface-navbar: rgb(0 0 0);
+  --surface-sidebar: rgb(0 0 0);
+  --surface-player: rgb(3 3 5);
+  --surface-modal: rgb(6 6 9);
+  --vx-mat-thin: rgb(0 0 0);
+  --vx-mat-regular: rgb(9 9 12);
+  --vx-mat-chrome: rgb(0 0 0);
+  --vx-mat-thick: rgb(9 9 12);
+  --vx-mat-specular: rgb(255 255 255 / 0.05);
+  --vx-mat-art: 0;
+}
+html.amoled[data-template]:not(#_) .vx-shell { background: #000; }
+html.amoled[data-template]:not(#_):not([class*='fest-']) .vx-workspace {
+  background: radial-gradient(900px 320px at 30% -160px, rgb(var(--ember-500) / 0.1), transparent 70%) local, #000;
+}
+html.hc[data-template]:not(#_) { --ink-300: 230 230 230; --ink-400: 205 205 205; --ink-500: 170 170 170; --glass-alpha: 0.98; }
+html.hc.light[data-template]:not(#_) { --ink-300: 40 40 40; --ink-400: 60 60 60; --ink-500: 80 80 80; }
+
+/* ------------------------------------------------- the dials, wired to hooks */
+html[data-template] body { font-family: var(--tpl-font-body); }
+
+/* Shape. */
+html[data-template] .vx-media-art { border-radius: var(--tpl-r-art); }
+html[data-template] .vx-media-art.is-artist { border-radius: 50%; }
+html[data-template] :is(.vx-track-art, .vx-lib-art:not(.rounded-full), .vx-pb-art, .np-mini-thumb, .np-mini-thumb img) { border-radius: var(--tpl-r-art-sm); }
+html[data-template] :is(.vx-nav-link, .vx-library-title, .vx-section-link, .vx-chip-idle, .vx-chip-on, .vxh-chip, .vxh-pill, .vxh-mini, .btn-primary, .btn-secondary, .btn-premium) { border-radius: var(--tpl-r-control); }
+html[data-template] :is(.vx-play-fab, .vx-np-play) { border-radius: var(--tpl-r-play); }
+html[data-template] :is(.card-play, .np-play-desktop, .np-mini .np-mini-play, .vx-np-play.is-compact) { border-radius: var(--tpl-r-play-sm); }
+html[data-template] :is(.vx-track-row, .vx-lib-row) { border-radius: var(--tpl-r-row); }
+html[data-template] :is(.vxh-tile, .vxh-card, .vxh-shortcut, .vxh-disclose, .glass-card, .glass-panel) { border-radius: var(--tpl-r-tile); }
+html[data-template] :is(.glass-input, .glass-search) { border-radius: var(--tpl-r-input); }
+html[data-template] .vx-deck { border-radius: var(--tpl-r-deck); }
+html[data-template] .np-mini { border-radius: var(--tpl-r-mini); }
+html[data-template] .vx-np-art-img { border-radius: var(--tpl-r-np-art); }
+
+/* Type. */
+html[data-template] :is(.vx-page-header h1, .vx-page-title, .vx-display, .vxh-greet h1) {
+  font-weight: var(--tpl-title-weight);
+  letter-spacing: var(--tpl-title-tracking);
+}
+html[data-template] :is(.vx-section-header h2, .vxh-head h2, .vxh-explore-head h2) {
+  font-weight: var(--tpl-section-weight);
+  letter-spacing: var(--tpl-section-tracking);
+}
+html[data-template] .vx-media-title { font-weight: var(--tpl-card-title-weight); }
+
+/* Motion: every page arrives the template's way; a press sinks its depth. */
+html[data-template] .animate-fade-up { animation: var(--tpl-enter) var(--tpl-enter-dur) var(--ease-calm) backwards; }
+html[data-template] :is(.vx-play-fab, .np-play-desktop, .vx-np-play, .card-play):active { transform: scale(var(--tpl-press)); }
+@keyframes tplRise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes tplFade { from { opacity: 0; } }
+@keyframes tplZoom { from { opacity: 0; transform: scale(0.985); } }
+@keyframes tplSlide { from { opacity: 0; transform: translateX(14px); } }
+@keyframes tplPop { 0% { opacity: 0; transform: translateY(14px) scale(0.97); } 70% { opacity: 1; transform: translateY(-2px) scale(1.004); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  html[data-template] .animate-fade-up { animation: none !important; }
+}

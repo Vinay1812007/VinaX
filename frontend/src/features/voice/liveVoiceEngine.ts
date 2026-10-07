@@ -166,8 +166,13 @@ const WAVE_BARS = 32;
 /** Server voice route — POST { text }, audio/wav back (see functions/api/tts.ts). */
 const SERVER_TTS_PATH = '/api/tts';
 /** Per-chunk leash: fetch + full audio download. Prefetch hides this for every
- *  chunk after the first; a miss flips the turn to the browser voice. */
-const SERVER_TTS_LEASH_MS = 3500;
+ *  chunk after the first; a miss flips the turn to the browser voice.
+ *  11.0 — the Worker's own leash is 6s on its fast speech route and 25s on
+ *  the slower ones; at the old 3.5s here, a voice that needed four seconds
+ *  was always thrown away. 12s outlasts the fast route with room to spare
+ *  and gives a slower voice a fair chance, without leaving a conversation
+ *  silent for half a minute before the device voice takes over. */
+export const SERVER_TTS_LEASH_MS = 12_000;
 /** The server voice takes at most 200 chars per request — split just under it
  *  at word boundaries. (Short pieces also suit the browser fallback: they
  *  dodge Chrome's long-utterance cutoff.) */

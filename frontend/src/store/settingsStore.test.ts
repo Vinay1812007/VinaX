@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, it } from 'vitest';
 import { KEYS } from '@/constants/storage-keys';
-import { resolveDiscoveryMode, useSettingsStore } from './settingsStore';
+import { resolveDiscoveryMode, useSettingsStore, pickSettings } from './settingsStore';
 
 it('migrates retired queue and Home controls while preserving listener preferences', async () => {
   localStorage.setItem('vinax.home.shown.v1', '[]');
@@ -37,4 +37,27 @@ it('turns the old explore switch into the three-way discovery mode, and keeps th
   expect(useSettingsStore.getState().discoveryMode).toBe('balanced');
   expect(resolveDiscoveryMode({ exploreMode: true })).toBe('discover');
   expect(resolveDiscoveryMode({ discoveryMode: 'nonsense', exploreMode: false })).toBe('balanced');
+});
+
+it('11.0 — the app style defaults to Aura, survives a reload, and never takes an unknown id', async () => {
+  useSettingsStore.getState().resetSettings();
+  expect(useSettingsStore.getState().template).toBe('aura');
+  useSettingsStore.getState().setTemplate('vibe');
+  expect(useSettingsStore.getState().template).toBe('vibe');
+  useSettingsStore.getState().setTemplate('not-a-style');
+  expect(useSettingsStore.getState().template).toBe('aura');
+  // A record from before 11.0 has no style: the default applies.
+  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 4, state: { theme: 'light' } }));
+  await useSettingsStore.persist.rehydrate();
+  expect(useSettingsStore.getState()).toMatchObject({ theme: 'light', template: 'aura' });
+  // A stored style comes back; a damaged one is ignored.
+  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 4, state: { template: 'marquee' } }));
+  await useSettingsStore.persist.rehydrate();
+  expect(useSettingsStore.getState().template).toBe('marquee');
+  localStorage.setItem(KEYS.settings, JSON.stringify({ version: 4, state: { template: 'constructor' } }));
+  await useSettingsStore.persist.rehydrate();
+  expect(useSettingsStore.getState().template).toBe('marquee');
+  expect(pickSettings({ template: 'sangam' })).toEqual({ template: 'sangam' });
+  expect(pickSettings({ template: 7 })).toEqual({});
+  useSettingsStore.getState().resetSettings();
 });

@@ -1,57 +1,76 @@
 # Search
 
-This page covers the Search destination: suggestions as you type, the Top result and the results filters, sorting, searching by description, lyrics search, voice search, recent and trending searches, and the shortcut grid on Discover for when you would rather browse.
+This page covers the Search destination: suggestions as you type, the results and their filters, sorting, searching by description, searching by lyrics, voice search, recent and trending searches, and the shortcut grid on Discover for when you would rather browse.
 
-## Searching
+## Find a song
 
-Search is one of the five destinations. The top bar has no search box; the field is on the Search page, and `Ctrl/⌘ + K` opens the command palette from anywhere.
+Search is one of the five main destinations: Home, Discover, **Search**, Library and VinaX AI. The search field is on the Search page.
 
-1. Type a song, an artist, a film or a mood, in any script. After a short pause, suggestions open under the field: first **completions** — your recent searches, trending searches and titles, with the part you typed in bold — then **songs**, **artists** and **albums**. Tap a song to play it straight away. On a keyboard, `↑` and `↓` move through every row, `Enter` picks the highlighted one, and `Esc` closes the list.
-2. Press Enter (or tap a completion) to open the full results. They lead with a large **Top result** card — the best song or artist, with its own play button — then **Songs** (five), **Artists**, **Albums** and **Playlists**, each with **See all**.
-3. Use the filters under the field to see one kind only: **All**, **Songs**, **Albums**, **Artists**, **Playlists**.
+1. Open **Search** and type a song, an artist, a film or a mood.
+2. Suggestions open under the field. Tap a song to play it straight away, or tap an artist or album to open it.
+3. Press `Enter`, or tap a suggested search, to open the full results.
 
-Search answers fast because VinaX asks the quickest of its catalogue sources first and, if that one is slow, asks the next as well and takes whichever answers first.
+With a keyboard, `↑` and `↓` move through the suggestions, `Enter` picks the highlighted one, and `Esc` closes the list.
 
-On the **Songs** tab you can sort by relevance, popularity, newest, longest, shortest or A to Z, then **Play all** or **Queue all**.
+## Read the results
 
-If a search finds no songs, VinaX may offer **Did you mean …?** based on trending searches, your recent searches and common names.
+The results open with a **Top result** card, then **Songs**, **Artists**, **Albums** and **Playlists**. Each group has **See all**.
 
-Tapping a song from search results starts it and the DJ builds the next five from it, like anywhere else. See [The player and the queue](player-and-queue.md).
+- To see one kind only, use the filters under the field: **All**, **Songs**, **Albums**, **Artists**, **Playlists**.
+- On the **Songs** filter you can sort by relevance, popularity, newest, longest, shortest or A to Z.
+- **Play all** plays the songs you are looking at. **Queue all** adds them to the queue.
+- If a search finds no songs, VinaX may offer **Did you mean …?** with a close match. Tap it to search that instead.
+
+Songs in your pinned languages are placed a little higher. Tapping a song starts it, and the DJ builds what follows, as anywhere else in the app. See [The player and the queue](player-and-queue.md).
 
 ## Search by description
 
-Describe what you want to hear, such as “sad telugu songs for rain” or “90s hindi dance”. When a search has three or more words and names a mood, an activity, an era or an energy, the results open with **Songs that match**: songs ranked by how well each fits your words, drawn from the results, your liked and recent songs, and catalogue searches for the language and mood you named. **Play all** plays them. **Artists that fit** and **Playlists that fit** follow when there are any.
+Describe what you want to hear, such as "sad telugu songs for rain" or "90s hindi dance". When your search has three or more words and names a mood, an activity or a decade, the results open with **Songs that match**. **Play all** plays them. **Artists that fit** and **Playlists that fit** follow when there are any.
 
-To rank them, VinaX sends your words and short song descriptions (title, artists, album, language, year, genre, mood) to its AI service; when that service is busy or switched off, the ranking is done on your device. If no title uses your exact words, **Ask AI instead** asks the music expert.
+**Ask AI instead** hands your words to VinaX AI's music expert and shows its answer as **Expert picks**. For a longer conversation about music, see [VinaX AI](vinax-ai.md).
 
 ## Search by lyrics
 
-Type a line you remember. When the search is five words or longer, VinaX offers **Search by lyrics**. Matches show the lyric snippet. When the lyrics service has no match, VinaX falls back to a title search, because many songs are titled by their first line.
+To find a song from a line you remember:
+
+1. Type the line. Five words or more work best; once your search is that long, VinaX suggests lyrics search.
+2. Tap **Search by lyrics**.
+3. The matches appear under **Songs with those words**.
+
+**Search titles instead** takes you back to an ordinary search. If no song has those words, VinaX says so and asks you to try a longer line.
 
 ## Voice search
 
-When the browser or device supports speech recognition, a microphone button appears in the search field. If microphone access is blocked, VinaX says so and you can keep typing.
+When your browser or phone supports speech recognition, the search field shows a **Voice search** button. Tap it and say what you want; VinaX searches for what it heard.
+
+If microphone access is blocked, VinaX tells you. Allow the microphone in your settings, or keep typing.
 
 ## Recent and trending searches
 
-- **Recent searches** sit under the field. Hover or long-press one to pin it; up to five pinned searches stay at the front.
-- **Trending searches** are chips of what listeners are searching for now. Tap one to search it.
-- Before you type, the page also shows example searches in your pinned languages and a **Trending now** list you can play.
+Before you type, the Search page can show:
+
+- **Recent searches.** Tap one to run it again. To pin one, use the pin button that appears when you point at it or reach it with the keyboard; on a touch screen, long-press it. You can pin up to five, and pinned searches stay in front.
+- **Trending searches.** Tap one to search it.
+- **Try searching.** Example searches to start from.
+- **Trending now.** A list of songs you can play.
+- **Browse all.** The same shortcut grid as Discover, described below.
 
 ## Browse instead: Discover
 
-Discover opens with a shortcut grid: three large tiles — Charts, Languages and Moods — then the others.
+Open **Discover** when you do not have a song in mind. It starts with a shortcut grid: three large tiles first, then six smaller ones.
 
 | Shortcut | What it opens |
 |---|---|
-| Charts | Top and viral charts |
-| Languages | A hub for each language |
+| Charts | What is popular right now |
+| Languages | A page for each language |
 | Moods | Mood pages |
-| Regions | Music by region |
+| Regions | Local favourites |
 | Movies | Film soundtracks |
 | Videos | Music videos |
-| Made for you | Your mixes |
-| Your week | The weekly mix |
-| AI playlist | Describe a moment and get a playlist to play or save |
+| Made for you | Mixes from your listening |
+| Your week | Your weekly mix |
+| AI playlist | Describe a moment and get a playlist |
 
-Below the grid, choose a language and a mood to change Discover's shelves: trending, mood picks, playlists, new releases, film soundtracks, and a corner for a language you have not tried.
+Further down, **Any mood, your language** lets you pick a language and then a mood.
+
+Discover and the rest of the app look different in each app style, but the shortcuts and labels are the same. See [App styles](app-styles.md).

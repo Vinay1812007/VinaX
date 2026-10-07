@@ -295,8 +295,14 @@ html.light .vx-lib-glyph.is-later { color: #fff; background: rgb(var(--tide-500)
    chrome material once content scrolls under it (TopBar watches a sentinel
    with an IntersectionObserver and adds .vx-mat-chrome). A bar across the
    whole width wants one hairline, along the bottom only. */
+/* The fill is restated here: `.vx-topbar { background: transparent }` above
+   has the same weight as `.vx-mat-chrome` and comes later, so without this
+   the scrolled bar had blur but no fill — and where blur is off (AMOLED,
+   the flat app styles) page text ran straight through the title. */
 .vx-topbar.is-scrolled {
   --mat-tint: linear-gradient(90deg, rgb(var(--art) / var(--vx-mat-art)), transparent 60%);
+  background-color: var(--mat-fill);
+  background-image: var(--mat-tint, none);
   box-shadow: inset 0 -1px 0 var(--vx-mat-hairline);
 }
 /* A zero-height marker 8px into the page: once it leaves the scroller, the
@@ -679,7 +685,7 @@ html.light .vx-popover { --mat-lift: 0 16px 40px -16px rgb(48 22 34 / 0.3), 0 2p
   animation: vx-snack-in 220ms var(--vx-ease-out) backwards;
 }
 html.light .vx-snack {
-  --mat-fill: rgb(255 253 250 / clamp(0.92, calc(var(--glass-alpha) + 0.16), 0.98));
+  --mat-fill: rgb(var(--ink-950) / clamp(0.92, calc(var(--glass-alpha) + 0.16), 0.98));
   --mat-lift: 0 14px 32px -14px rgb(48 22 34 / 0.35), 0 2px 8px -2px rgb(48 22 34 / 0.12);
 }
 html.amoled .vx-snack { --mat-fill: rgb(var(--ink-800)); }

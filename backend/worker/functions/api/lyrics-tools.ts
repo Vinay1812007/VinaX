@@ -119,7 +119,8 @@ async function handlePost(context: {
       if (typeof context.waitUntil === 'function') context.waitUntil(log);
     }
     if (r.error === 'not_configured') return json({ error: 'not_configured' }, 503);
-    if (!summary) return json({ error: r.error ?? 'explain_failed' }, 500);
+    // An upstream rate limit (or every lane cooling down) is "busy", not a crash.
+    if (!summary) return json({ error: r.error ?? 'explain_failed' }, r.error && r.status === 429 ? 429 : 500);
     return json({ summary, mood, themes, model: r.model });
   }
 
@@ -143,7 +144,7 @@ async function handlePost(context: {
     if (typeof context.waitUntil === 'function') context.waitUntil(log);
   }
   if (r.error === 'not_configured') return json({ error: 'not_configured' }, 503);
-  if (r.error) return json({ error: r.error }, 500);
+  if (r.error) return json({ error: r.error }, r.status === 429 ? 429 : 500);
   if (out) return json({ lines: out, model: r.model });
   return json({ error: 'transform_failed' }, 500);
 }

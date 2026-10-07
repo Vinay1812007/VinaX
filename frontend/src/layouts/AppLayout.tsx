@@ -157,6 +157,7 @@ export function AppLayout() {
   const navigationType = useNavigationType();
   const theme = useSettingsStore((s) => s.theme);
   const accent = useSettingsStore((s) => s.accent);
+  const template = useSettingsStore((s) => s.template);
   const glassLevel = useSettingsStore((s) => s.glassLevel);
   const glassBlur = useSettingsStore((s) => s.glassBlur);
   const dynamicTheme = useSettingsStore((s) => s.dynamicTheme);
@@ -354,7 +355,7 @@ export function AppLayout() {
   useEffect(() => {
     const apply = () => {
       const resolved = resolveTheme(theme, window.matchMedia('(prefers-color-scheme: dark)').matches);
-      applyThemeClasses(resolved);
+      applyThemeClasses(resolved, document.documentElement, template);
       document.documentElement.dataset.accent = accent;
       document.documentElement.dataset.density = density;
       // v5.17.0 — custom accent (one hex → derived ramps), display size, high contrast.
@@ -389,7 +390,7 @@ export function AppLayout() {
       mq.removeEventListener('change', apply);
       if (clock !== null) window.clearInterval(clock);
     };
-  }, [theme, accent, density, glassLevel, glassBlur, dynamicTheme, currentAccent, accentCustom, uiScale, highContrast]);
+  }, [theme, template, accent, density, glassLevel, glassBlur, dynamicTheme, currentAccent, accentCustom, uiScale, highContrast]);
 
   // Per-route canonical + index/noindex strategy (search & personal pages noindex).
   useEffect(() => {

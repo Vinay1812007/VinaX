@@ -62,7 +62,7 @@ function PagePreview({ html, title }: { html: string; title: string }) {
         >
           Open in a new tab
         </button>
-        {blocked && <span className="text-amber-300">Your browser blocked the new tab.</span>}
+        {blocked && <span className="text-[color:var(--vx-danger)]">Your browser blocked the new tab.</span>}
         <span>Runs isolated — it cannot reach anything in VinaX.</span>
       </div>
     </>

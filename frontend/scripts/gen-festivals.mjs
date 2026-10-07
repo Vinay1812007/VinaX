@@ -18,9 +18,11 @@ async function loadTs(rel) {
 
 const { FESTIVALS } = await loadTs('src/constants/festivals.ts');
 const { FESTIVAL_THEMES } = await loadTs('src/constants/festivalThemes.ts');
+const { FESTIVAL_VISUALS } = await loadTs('src/constants/festivalVisuals.ts');
+const { emblemSvg } = await loadTs('src/constants/festivalEmblems.ts');
 
 writeFileSync(join(ROOT, 'src/styles/festivals.css'), buildCss(FESTIVALS, FESTIVAL_THEMES));
-writeFileSync(join(ROOT, 'public/admin/festivals.js'), buildAdminJs(FESTIVALS, FESTIVAL_THEMES));
+writeFileSync(join(ROOT, 'public/admin/festivals.js'), buildAdminJs(FESTIVALS, FESTIVAL_THEMES, FESTIVAL_VISUALS, emblemSvg));
 
 const fw = buildWindowJs(FESTIVALS);
 for (const html of [join(ROOT, 'index.html'), join(ROOT, '..', 'backend', 'index.html')]) {

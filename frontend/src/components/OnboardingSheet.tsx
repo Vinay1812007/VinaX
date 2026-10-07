@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { TemplatePicker } from '@/features/settings/TemplatePicker';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LANGUAGES } from '@/constants/languages';
 import { KEYS } from '@/constants/storage-keys';
@@ -19,19 +20,12 @@ import { toast } from '@/store/toastStore';
 import { claimHandle, pendingClaim, USERNAME_RE } from '@/features/identity/handleClaim';
 import type { Song } from '@/types';
 import { Chip } from './Chip';
-import {
-  SparkleIcon,
-  HomeIcon,
-  PlayIcon,
-  HeartIcon,
-  CompassIcon,
-  QueueIcon,
-  SearchIcon,
-  UsersIcon,
-} from './Icons';
+import { SparkleIcon, PlayIcon, HeartIcon, CompassIcon } from './Icons';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
 import '@/styles/overlays.css';
+// The app-style picker's miniatures are styled in the Settings sheet (this chunk is lazy).
+import '@/styles/pages/settings.css';
 
 /** Small pill for keyboard shortcut hints ("Space", "⌘K", etc). */
 const KEY_CHIP = 'inline-flex items-center min-w-[24px] justify-center px-1.5 py-0.5 rounded-md bg-ink-100/10 text-[11px] font-bold text-ink-200';
@@ -58,11 +52,9 @@ interface TourSlide {
 }
 
 /**
- * The Welcome tour (rewritten for 7.1). Ground rules for editing:
- *  - Every claim must be TRUE today. No version numbers in titles: the tour
- *    is evergreen, What's New handles releases.
- *  - A slide is a title of at most 6 words and at most 22 words of lines in
- *    total. The user is 10 seconds from music.
+ * The closing slides (11.0: four, down from eight — the guided tours in Help
+ * carry the detail). Ground rules: every claim is true today, no version
+ * numbers, a title of at most 5 words and one or two plain sentences.
  */
 const TOUR: TourSlide[] = [
   {
@@ -70,68 +62,39 @@ const TOUR: TourSlide[] = [
     title: 'Five places to go',
     lines: [
       'Home, Discover, Search, Library and VinaX AI are always one tap away.',
-      'The top bar shows where you are and your actions.',
-    ],
-  },
-  {
-    icon: <HomeIcon className="w-7 h-7" />,
-    title: 'Home learns your taste',
-    lines: [
-      'The Aura Mix on Home plays a mix built from your languages and listening.',
-      'Popular picks for you puts popular songs in your order.',
+      'The top bar shows where you are and holds that page’s actions.',
     ],
   },
   {
     icon: <PlayIcon className="w-7 h-7" />,
     title: 'Tap one song',
     lines: [
-      'Tap any song. The DJ lines up five more, led by its language, familiar first.',
-      'Songs you queue yourself go first.',
+      'Tap any song and VinaX lines up five more, led by its language, familiar first.',
+      'Songs you queue yourself play before those.',
     ],
     shortcuts: [{ combo: 'Space', label: 'play / pause' }, { combo: 'N', label: 'next song' }, { combo: 'F', label: 'favourite' }],
   },
   {
-    icon: <QueueIcon className="w-7 h-7" />,
-    title: 'Steer what plays next',
-    lines: [
-      'In the player, Pin a mood or Tune this queue. Up Next rebuilds at once.',
-      'Settings offers Familiar, Balanced or Discover.',
-    ],
-  },
-  {
-    icon: <SearchIcon className="w-7 h-7" />,
-    title: 'Find something new',
-    lines: [
-      'Search suggests as you type and puts the top result first.',
-      'Discover has charts, languages, moods, films and mixes.',
-    ],
-  },
-  {
     icon: <SparkleIcon className="w-7 h-7" />,
-    title: 'Ask VinaX AI',
+    title: 'Change it any time',
     lines: [
-      'Chat, ask anything, play songs from a reply.',
-      'Messages go to the AI service; your library stays here.',
-    ],
-  },
-  {
-    icon: <UsersIcon className="w-7 h-7" />,
-    title: 'Listen with friends',
-    lines: [
-      'Listen Together plays the same song on every phone, in step.',
-      'A Live pill keeps you in the room on every page.',
+      'Settings → Appearance holds the app style, theme, accent colour and festival themes.',
+      'In VinaX AI, the chat takes the style of the model you pick.',
     ],
   },
   {
     icon: <HeartIcon className="w-7 h-7" />,
     title: 'Yours to keep',
     lines: [
-      'Library keeps favourites and playlists on this device.',
-      'Back up from Settings → Your data; a restore can be undone.',
+      'Favourites and playlists stay on this device.',
+      'Back up from Settings → Your data. A restore can be undone.',
     ],
   },
 ];
 
+/** 11.0 — the welcome is one linear sequence of stages. `t0…` are TOUR slides. */
+type Stage = 'you' | 'langs' | 'look' | 'songs' | `t${number}`;
+const TOUR_STAGES: Stage[] = TOUR.map((_, i) => `t${i}` as Stage);
 
 /**
  * First-open flow: pick languages (cold-start signal), then an A→Z tour of
@@ -159,7 +122,9 @@ export function OnboardingSheet() {
   // profile, onboarded flag included). Leaving /handoff without importing
   // brings the sheet straight back.
   const open = (firstRun || handleOnly || tourOpen) && location.pathname !== '/handoff';
-  const [step, setStep] = useState(-1); // -1 = language pick, 0..n = tour
+  const [stage, setStage] = useState<Stage>('you');
+  const template = useSettingsStore((st) => st.template);
+  const setTemplate = useSettingsStore((st) => st.setTemplate);
   const detected = readBrowserSignals().languages;
   const [picked, setPicked] = useState<string[]>(detected.length ? detected : ['hindi', 'english']);
   const [name, setName] = useState<string>(() => getLocal<string>(KEYS.userName, ''));
@@ -174,7 +139,7 @@ export function OnboardingSheet() {
   const [handleEdited, setHandleEdited] = useState(false);
   const [handleErr, setHandleErr] = useState<string | null>(() => {
     const p = pendingClaim();
-    return p?.status === 'taken' ? `@${p.username} already exists — pick another username.` : null;
+    return p?.status === 'taken' ? `@${p.username} is taken. Pick another username.` : null;
   });
   const [handleSuggestions, setHandleSuggestions] = useState<string[]>(() => pendingClaim()?.suggestions ?? []);
   const [claiming, setClaiming] = useState(false);
@@ -185,7 +150,8 @@ export function OnboardingSheet() {
   // Package A7/D1 — the 10-song taste-seed step. Sits between the language
   // picker and the tour. Liking a handful jumps the cold profile's confidence
   // from ~0 to ~0.5, so Home has something to work with on the very first open.
-  const [seedOpen, setSeedOpen] = useState(false);
+  // 'none' = the catalogue could not supply songs, so the step is left out.
+  const [seed, setSeed] = useState<'idle' | 'loading' | 'ready' | 'none'>('idle');
   const [seedSongs, setSeedSongs] = useState<Song[]>([]);
   const [seedLiked, setSeedLiked] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -214,9 +180,48 @@ export function OnboardingSheet() {
     }
   };
 
+  // Help → "Replay the welcome tour": the look step, then the slides.
   useEffect(() => {
-    if (tourOpen) setStep(0);
+    if (tourOpen) setStage('look');
   }, [tourOpen]);
+
+  // 11.0 — keep the sheet above the on-screen keyboard. Browsers that overlay
+  // the keyboard shrink only the VISUAL viewport, so the overlay is sized to it.
+  const [vv, setVv] = useState<{ h: number; top: number; kb: boolean } | null>(null);
+  useEffect(() => {
+    const v = window.visualViewport;
+    if (!open || !v) return;
+    const update = () => {
+      const gap = window.innerHeight - v.height;
+      setVv(gap > 1 ? { h: v.height, top: v.offsetTop, kb: gap > 120 } : null);
+    };
+    update();
+    v.addEventListener('resize', update);
+    v.addEventListener('scroll', update);
+    return () => {
+      v.removeEventListener('resize', update);
+      v.removeEventListener('scroll', update);
+    };
+  }, [open]);
+
+  // A new step starts at its heading: focus moves there (screen readers read
+  // it) and the body scrolls back to the top. The first paint is left to the
+  // focus trap's own initial focus.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const firstPaint = useRef(true);
+  useEffect(() => {
+    if (!open) {
+      firstPaint.current = true;
+      return;
+    }
+    if (firstPaint.current) {
+      firstPaint.current = false;
+      return;
+    }
+    bodyRef.current?.scrollTo?.({ top: 0 });
+    titleRef.current?.focus();
+  }, [stage, open]);
 
   // Preselect the regional language from the visitor's coarse IP region —
   // country + state only, from the edge; the IP itself never reaches us.
@@ -312,8 +317,6 @@ export function OnboardingSheet() {
     // Ask for the notification permission lock-screen lyrics + media controls need.
     if (isNativePlatform()) void ensureNotificationPermission();
   };
-  // Route the ref to the current finish so the keydown effect stays stable.
-  escapeRef.current = finish;
 
   /** vinay mac → vinay_mac_k4x — editable suggestion, never empty. */
   const genHandle = (from: string): string => {
@@ -333,7 +336,22 @@ export function OnboardingSheet() {
     if (!handleEdited) setHandle(v.trim().length >= 2 ? genHandle(v) : '');
   };
 
-  const continueFromWelcome = async () => {
+  // The sequence the listener walks. A returning listener who only owes a
+  // username sees that one step; a replay starts at the look.
+  const seq: Stage[] = handleOnly
+    ? ['you']
+    : firstRun
+      ? ['you', 'langs', 'look', ...(seed === 'none' ? [] : (['songs'] as Stage[])), ...TOUR_STAGES]
+      : ['look', ...TOUR_STAGES];
+  const pos = Math.max(0, seq.indexOf(stage));
+  const required = handleOnly || (firstRun && (stage === 'you' || stage === 'langs'));
+  // Escape closes the sheet only once the required steps are behind: leaving
+  // earlier would skip the username and the usage-sharing choice.
+  escapeRef.current = required ? () => undefined : finish;
+  const goNext = () => (pos < seq.length - 1 ? setStage(seq[pos + 1]) : finish());
+  const goBack = () => pos > 0 && setStage(seq[pos - 1]);
+
+  const continueFromYou = async () => {
     const trimmed = name.trim();
     if (trimmed.length < 2) {
       setNameErr(true);
@@ -342,32 +360,38 @@ export function OnboardingSheet() {
     setNameErr(false);
     const username = handle.trim().toLowerCase();
     if (!USERNAME_RE.test(username)) {
-      setHandleErr('Username is mandatory — 3–20 letters, numbers or _ only.');
+      setHandleErr('Enter a username: 3 to 20 letters, numbers or underscores.');
       return;
     }
     if (handleAvail === 'taken') {
-      setHandleErr(`@${username} already exists — pick another username.`);
+      setHandleErr(`@${username} is taken. Pick another username.`);
       return;
     }
     setHandleErr(null);
-    setClaiming(true);
-    const outcome = await claimHandle(username, trimmed);
-    setClaiming(false);
-    if (outcome.status === 'taken') {
-      setHandleErr(`@${username} already exists — pick another username.`);
-      setHandleSuggestions(outcome.suggestions);
-      return;
-    }
-    // 'confirmed' stored the handle; 'pending' parked it for retry. Either
-    // way onboarding continues — a flaky network must not block the tour,
-    // but it must not pretend the name is confirmed either.
-    if (outcome.status === 'pending') {
-      toast(
-        outcome.reason === 'offline'
-          ? `You're offline — @${username} will be confirmed when you reconnect.`
-          : `Couldn't confirm @${username} yet — VinaX will keep trying.`,
-        { duration: 5000 },
-      );
+    // Coming Back to this step with the same, already-claimed username must
+    // not claim it a second time.
+    const p = pendingClaim();
+    const mine = username === getLocal<string>(KEYS.userHandle, '') || (p?.status === 'pending' && p.username === username);
+    if (!mine) {
+      setClaiming(true);
+      const outcome = await claimHandle(username, trimmed);
+      setClaiming(false);
+      if (outcome.status === 'taken') {
+        setHandleErr(`@${username} is taken. Pick another username.`);
+        setHandleSuggestions(outcome.suggestions);
+        return;
+      }
+      // 'confirmed' stored the handle; 'pending' parked it for retry. Either
+      // way the welcome continues — a flaky network must not block it, but it
+      // must not pretend the name is confirmed either.
+      if (outcome.status === 'pending') {
+        toast(
+          outcome.reason === 'offline'
+            ? `You are offline. @${username} will be confirmed when you reconnect.`
+            : `@${username} is not confirmed yet. VinaX will keep trying.`,
+          { duration: 5000 },
+        );
+      }
     }
     setLocal(KEYS.userName, trimmed);
     if (handleOnly) {
@@ -375,6 +399,10 @@ export function OnboardingSheet() {
       setHandleOnly(false);
       return;
     }
+    setStage('langs');
+  };
+
+  const continueFromLangs = () => {
     setLocal(KEYS.analyticsConsent, consent);
     if (picked.length) useSettingsStore.getState().setPinnedLanguages(picked);
     // Register this (anonymous) device + name with the backend, if consented.
@@ -382,24 +410,26 @@ export function OnboardingSheet() {
     // AppLayout's idle init ran before consent existed — start insights now so
     // a fresh opt-in is covered from this session, not the next reload.
     initSessionInsights();
-    // Open the taste-seed step and fetch a dozen trending songs in the top
-    // picked language. If the catalog is unreachable or returns too few, we
-    // silently skip straight to the tour — the seed step never blocks setup.
-    const top = picked[0] ?? 'hindi';
-    setSeedOpen(true);
-    void searchSongs(trendingSeed(top), 14)
+    // Fetch a dozen trending songs in the first picked language for the
+    // "songs" step while the listener picks a look. If the catalogue is
+    // unreachable or returns too few, that step is left out — it never blocks.
+    setSeed('loading');
+    setSeedSongs([]);
+    setSeedLiked([]);
+    const drop = () => {
+      setSeed('none');
+      setStage((st) => (st === 'songs' ? TOUR_STAGES[0] : st));
+    };
+    void searchSongs(trendingSeed(picked[0] ?? 'hindi'), 14)
       .then((songs) => {
-        const clean = songs.filter((s) => s.images && s.images.length).slice(0, 12);
-        if (clean.length >= 6) setSeedSongs(clean);
-        else {
-          setSeedOpen(false);
-          setStep(0);
-        }
+        const clean = songs.filter((x) => x.images && x.images.length).slice(0, 12);
+        if (clean.length >= 6) {
+          setSeedSongs(clean);
+          setSeed('ready');
+        } else drop();
       })
-      .catch(() => {
-        setSeedOpen(false);
-        setStep(0);
-      });
+      .catch(drop);
+    setStage('look');
   };
 
   const toggleSeed = (id: string) =>
@@ -412,100 +442,63 @@ export function OnboardingSheet() {
       const store = useLibraryStore.getState();
       for (const s of seedSongs) if (seedLiked.includes(s.id)) store.toggleFavorite(s);
     }
-    setSeedOpen(false);
-    setStep(0);
+    setStage(TOUR_STAGES[0]);
   };
 
-  const slide = step >= 0 ? TOUR[step] : null;
-
+  const slideIdx = stage.startsWith('t') ? Number(stage.slice(1)) : -1;
+  const slide = slideIdx >= 0 ? TOUR[slideIdx] : null;
+  const last = pos === seq.length - 1;
   const shownLangs = moreLangs ? LANGUAGES : LANGUAGES.filter((l, i) => i < FIRST_LANGS || picked.includes(l.id));
+  const title = (text: string, big = false) => (
+    <h2 id="vx-onboarding-title" ref={titleRef} tabIndex={-1} className={cn('vx-welcome-title outline-none', !big && 'is-sm')}>{text}</h2>
+  );
+  const lede = (text: string) => <p className="mt-2 text-[14.5px] leading-snug text-ink-300">{text}</p>;
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-6"
+      className={cn('vx-welcome-scrim fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6', stage === 'look' && 'is-look')}
+      style={vv ? { height: vv.h, top: vv.top, bottom: 'auto' } : undefined}
+      data-keyboard={vv?.kb ? 'open' : undefined}
       role="dialog"
       aria-modal="true"
       aria-labelledby="vx-onboarding-title"
     >
-      <div ref={dialogRef} className="vx-sheet vx-mat-thick vx-welcome w-full sm:max-w-[440px] max-h-[94dvh] overflow-y-auto overscroll-contain">
+      <div ref={dialogRef} data-stage={stage} className="vx-sheet vx-mat-thick vx-welcome w-full sm:max-w-[460px]">
         <span aria-hidden className="vx-sheet-grab" />
-        {seedOpen ? (
-          <div className="vx-welcome-body">
-            <div className="flex items-start justify-between gap-3 mb-1">
-              <h2 id="vx-onboarding-title" className="vx-welcome-title is-sm">Tap a few you love</h2>
-              <button onClick={() => finishSeed(false)} className="vx-welcome-skip">
-                Skip
+        {seq.length > 1 && (
+          <div className="vx-welcome-steps">
+            <p className="vx-welcome-count" aria-live="polite">Step {pos + 1} of {seq.length}</p>
+            <div className="vx-welcome-track" aria-hidden>
+              {seq.map((id, i) => <span key={id} className={cn(i < pos && 'is-done', i === pos && 'is-on')} />)}
+            </div>
+            {!required && !last && (
+              <button type="button" onClick={stage === 'look' || stage === 'songs' ? goNext : finish} className="vx-welcome-skip">
+                {stage === 'look' || stage === 'songs' ? 'Skip' : 'Skip the rest'}
               </button>
-            </div>
-            <p className="text-[14px] text-ink-400 mb-5">Home learns from these. They stay on this device.</p>
-            {seedSongs.length === 0 ? (
-              <div className="grid grid-cols-3 gap-3" aria-hidden>
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="aspect-square rounded-lg skeleton" />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-3">
-                {seedSongs.map((s) => {
-                  const liked = seedLiked.includes(s.id);
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => toggleSeed(s.id)}
-                      aria-pressed={liked}
-                      aria-label={`${liked ? 'Unlike' : 'Like'} ${s.title}`}
-                      className={cn('vx-seed', liked && 'is-liked')}
-                    >
-                      <img
-                        src={bestImage(s.images, 150)}
-                        onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)}
-                        alt=""
-                        loading="lazy"
-                      />
-                      <span className="vx-seed-heart" aria-hidden>
-                        <HeartIcon filled={liked} className="w-4 h-4" />
-                      </span>
-                      <span className="vx-seed-title">{s.title}</span>
-                    </button>
-                  );
-                })}
-              </div>
             )}
-            <button
-              onClick={() => finishSeed(true)}
-              disabled={seedSongs.length === 0}
-              className="mt-6 w-full h-12 rounded-full btn-primary text-[15px] font-bold disabled:opacity-50"
-            >
-              {seedLiked.length ? `Continue with ${seedLiked.length} liked` : 'Continue'}
-            </button>
           </div>
-        ) : step === -1 ? (
-          <>
-            <div className="vx-welcome-art" aria-hidden>
-              <div className="vx-welcome-scripts">
-                {[0, 1, 2].map((row) => (
-                  <p key={row}>
-                    {SCRIPTS.slice(row * 4, row * 4 + 4).concat(SCRIPTS.slice(row * 4, row * 4 + 4)).map((w, i) => (
-                      <span key={i}>{w}</span>
-                    ))}
-                  </p>
-                ))}
+        )}
+        <div ref={bodyRef} className="vx-welcome-body">
+          {stage === 'you' ? (
+            <>
+              <div className="vx-welcome-art" aria-hidden>
+                <div className="vx-welcome-scripts">
+                  {[0, 1, 2].map((row) => (
+                    <p key={row}>
+                      {SCRIPTS.slice(row * 4, row * 4 + 4).concat(SCRIPTS.slice(row * 4, row * 4 + 4)).map((w, i) => (
+                        <span key={i}>{w}</span>
+                      ))}
+                    </p>
+                  ))}
+                </div>
+                <img src="/icons/icon.svg" alt="" className="vx-welcome-logo" />
+                <span className="vx-welcome-badge">Free forever</span>
               </div>
-              <img src="/icons/icon.svg" alt="" className="vx-welcome-logo" />
-              <span className="vx-welcome-badge">Free forever</span>
-            </div>
-            <div className="vx-welcome-body">
-              {/* 10.0.0 — the first thing a new listener reads is the promise. */}
-              <h2 id="vx-onboarding-title" className="vx-welcome-title">Free. No sign-up.</h2>
-              <p className="mt-2 text-[14.5px] leading-snug text-ink-300">
-                {handleOnly
-                  ? 'One quick thing: pick a username. Still no email, no password, nothing to pay.'
-                  : 'No email, no password, nothing to pay. Pick a name and your languages, and you’re in. Your listening stays on this device.'}
-              </p>
-
-              <label className="vx-welcome-label mt-6" htmlFor="vx-name">
-                What should we call you?
-              </label>
+              {title('Free. No sign-up.', true)}
+              {lede(handleOnly
+                ? 'One thing is missing: a username. There is still no email, no password and nothing to pay.'
+                : 'No email, no password and nothing to pay. Choose a name and a username. Your listening stays on this device.')}
+              <label className="vx-welcome-label mt-5" htmlFor="vx-name">Your name</label>
               <input
                 id="vx-name"
                 value={name}
@@ -516,10 +509,8 @@ export function OnboardingSheet() {
                 aria-invalid={nameErr}
                 className={cn(INPUT, nameErr && INPUT_BAD)}
               />
-              {nameErr && <p className="vx-welcome-msg is-bad">Enter a name for your listening profile.</p>}
-              <label className="vx-welcome-label mt-4" htmlFor="vx-username">
-                Username
-              </label>
+              {nameErr && <p className="vx-welcome-msg is-bad">Enter a name of at least two letters.</p>}
+              <label className="vx-welcome-label mt-4" htmlFor="vx-username">Username</label>
               <div className="relative">
                 <span aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] text-ink-400">@</span>
                 <input
@@ -537,148 +528,168 @@ export function OnboardingSheet() {
                   autoCorrect="off"
                   spellCheck={false}
                   aria-invalid={handleErr != null}
+                  aria-describedby="vx-username-msg"
                   className={cn(INPUT, 'pl-9', handleErr && INPUT_BAD)}
                 />
               </div>
-              {handleErr ? (
-                <p className="vx-welcome-msg is-bad">{handleErr}</p>
-              ) : handleAvail === 'taken' ? (
-                <p className="vx-welcome-msg is-bad">@{handle} already exists — pick another username.</p>
-              ) : handleAvail === 'free' ? (
-                <p className="vx-welcome-msg is-good">@{handle} is available.</p>
-              ) : handleAvail === 'checking' ? (
-                <p className="vx-welcome-msg">Checking availability…</p>
-              ) : null}
+              <div id="vx-username-msg" aria-live="polite">
+                {handleErr ? (
+                  <p className="vx-welcome-msg is-bad">{handleErr}</p>
+                ) : handleAvail === 'taken' ? (
+                  <p className="vx-welcome-msg is-bad">@{handle} is taken. Pick another username.</p>
+                ) : handleAvail === 'free' ? (
+                  <p className="vx-welcome-msg is-good">@{handle} is available.</p>
+                ) : handleAvail === 'checking' ? (
+                  <p className="vx-welcome-msg">Checking availability…</p>
+                ) : (
+                  <p className="vx-welcome-msg">Other listeners find you by this. 3 to 20 letters, numbers or underscores.</p>
+                )}
+              </div>
               {handleSuggestions.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className="text-[12px] font-semibold text-ink-400">Available:</span>
-                  {handleSuggestions.map((s) => (
-                    <Chip
-                      key={s}
-                      onClick={() => {
-                        setHandleEdited(true);
-                        setHandle(s);
-                        setHandleErr(null);
-                        setHandleSuggestions([]);
-                      }}
-                    >
-                      @{s}
+                  {handleSuggestions.map((sug) => (
+                    <Chip key={sug} onClick={() => { setHandleEdited(true); setHandle(sug); setHandleErr(null); setHandleSuggestions([]); }}>
+                      @{sug}
                     </Chip>
                   ))}
                 </div>
               )}
               {!handleOnly && (
-                <>
-                  <div className="flex items-center justify-between gap-3 mt-6 mb-2.5">
-                    <p className="vx-welcome-label !mb-0">Your languages</p>
-                    <button
-                      onClick={() => setPicked(picked.length === LANGUAGES.length ? [] : LANGUAGES.map((l) => l.id))}
-                      className="vx-welcome-skip"
-                    >
-                      {picked.length === LANGUAGES.length ? 'Clear' : 'All languages'}
-                    </button>
-                  </div>
-                  <div className="vx-welcome-langs">
-                    {shownLangs.map((l) => (
-                      <Chip key={l.id} active={picked.includes(l.id)} onClick={() => toggle(l.id)}>
-                        {l.label}
-                      </Chip>
-                    ))}
-                    {!moreLangs && shownLangs.length < LANGUAGES.length && (
-                      <button type="button" onClick={() => setMoreLangs(true)} className="vx-welcome-more">
-                        More languages
-                      </button>
-                    )}
-                  </div>
-                  <label className="vx-welcome-consent">
-                    <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-                    <span>Share anonymous usage (city-level location, no account) and session insights with on-screen text masked, to help improve VinaX. Change it anytime in Settings.</span>
-                  </label>
-                </>
+                <div className="mt-5 pt-4 border-t border-[color:var(--vx-border)] flex items-center justify-center gap-1 flex-wrap text-[13px] text-ink-400">
+                  <span>Already use VinaX elsewhere?</span>
+                  <button type="button" onClick={() => navigate('/handoff?mode=receive')} className="vx-welcome-link">Move from old device</button>
+                  <span aria-hidden>·</span>
+                  <button type="button" onClick={() => fileRef.current?.click()} className="vx-welcome-link">Import a file</button>
+                </div>
               )}
-              <div className="vx-welcome-cta">
-                <button
-                  onClick={() => void continueFromWelcome()}
-                  disabled={claiming}
-                  className="w-full h-12 rounded-full btn-primary text-[15px] font-bold disabled:opacity-60"
-                >
-                  {claiming ? 'Checking username…' : 'Continue'}
-                </button>
-              </div>
-              <div className="mt-2 pt-4 border-t border-[color:var(--vx-border)] flex items-center justify-center gap-1 flex-wrap text-[13px] text-ink-400">
-                <span>On VinaX elsewhere?</span>
-                <button onClick={() => navigate('/handoff?mode=receive')} className="vx-welcome-link">
-                  Move from old device
-                </button>
-                <span aria-hidden>·</span>
-                <button onClick={() => fileRef.current?.click()} className="vx-welcome-link">
-                  Import a file
-                </button>
-              </div>
               <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} />
               {importErr && (
                 <p className="vx-welcome-msg is-bad text-center">
-                  Couldn’t read that file. Export it from Settings → Your data on the other device, then import the .json here.
+                  That file could not be read. Export it from Settings → Your data on the other device, then import the .json here.
                 </p>
               )}
-            </div>
-          </>
-        ) : slide ? (
-          <div className="vx-welcome-body">
-            <div className="flex items-center justify-between mb-6">
-              <span className="text-[13px] font-semibold text-ink-400 tabular-nums">
-                {step + 1} of {TOUR.length}
-              </span>
-              <button onClick={finish} className="vx-welcome-skip">
-                Skip
-              </button>
-            </div>
-            <div className="vx-tour-art" aria-hidden>{slide.icon}</div>
-            <h2 id="vx-onboarding-title" className="vx-welcome-title is-sm mt-5">{slide.title}</h2>
-            <div className="mt-2 space-y-1.5">
-              {slide.lines.map((line) => (
-                <p key={line} className="text-[15px] leading-relaxed text-ink-300">{line}</p>
-              ))}
-            </div>
-            {slide.visual}
-            {slide.shortcuts && (
-              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
-                {slide.shortcuts.map((s) => (
-                  <span key={s.combo} className="inline-flex items-center gap-1.5 text-[13px] text-ink-400">
-                    <KeyChip>{s.combo}</KeyChip>
-                    <span>{s.label}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="flex items-center gap-1.5 mt-7 mb-5" aria-hidden>
-              {TOUR.map((_, i) => (
-                <span key={i} className={cn('h-1.5 rounded-full transition-all', i === step ? 'w-5 bg-ember-500' : 'w-1.5 bg-ink-100/25')} />
-              ))}
-            </div>
-            <div className="flex gap-2">
-              {step > 0 && (
-                <button onClick={() => setStep(step - 1)} className="h-12 px-5 rounded-full btn-secondary text-[15px]">
-                  Back
-                </button>
-              )}
-              {step === TOUR.length - 1 && (
+            </>
+          ) : stage === 'langs' ? (
+            <>
+              {title('Choose your languages')}
+              {lede('Home, charts and the songs VinaX lines up start from these. Change them later in Settings.')}
+              <div className="flex items-center justify-between gap-3 mt-5 mb-2.5">
+                <p className="vx-welcome-label !mb-0">{picked.length ? `${picked.length} selected` : 'None selected'}</p>
                 <button
-                  onClick={() => { finish(); useTutorialStore.getState().start('first-song'); }}
-                  className="flex-1 h-12 rounded-full btn-secondary text-[15px]"
+                  type="button"
+                  onClick={() => setPicked(picked.length === LANGUAGES.length ? [] : LANGUAGES.map((l) => l.id))}
+                  className="vx-welcome-skip"
                 >
-                  Live walkthrough
+                  {picked.length === LANGUAGES.length ? 'Clear' : 'All languages'}
                 </button>
+              </div>
+              <div className="vx-welcome-langs" role="group" aria-label="Your languages">
+                {shownLangs.map((l) => (
+                  <Chip key={l.id} active={picked.includes(l.id)} onClick={() => toggle(l.id)}>{l.label}</Chip>
+                ))}
+                {!moreLangs && shownLangs.length < LANGUAGES.length && (
+                  <button type="button" onClick={() => setMoreLangs(true)} className="vx-welcome-more">More languages</button>
+                )}
+              </div>
+              <label className="vx-welcome-consent">
+                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+                <span>Share anonymous usage (city-level location, no account) and session insights with on-screen text masked, to help improve VinaX. Change it anytime in Settings.</span>
+              </label>
+            </>
+          ) : stage === 'look' ? (
+            <>
+              {title('Pick your look')}
+              {lede('Each style changes the colours, type, shapes, navigation and player. It applies as you choose, and your music and library stay the same.')}
+              <div className="vx-welcome-look">
+                <TemplatePicker value={template} onChange={setTemplate} />
+              </div>
+              <p className="vx-welcome-msg">Change it later in Settings → Appearance → App style.</p>
+            </>
+          ) : stage === 'songs' ? (
+            <>
+              {title('Tap songs you like')}
+              {lede('Home starts from the songs you pick here. They are saved to Liked songs on this device.')}
+              {seedSongs.length === 0 ? (
+                <div className="grid grid-cols-3 gap-3 mt-5" aria-hidden>
+                  {Array.from({ length: 12 }).map((_, i) => <div key={i} className="aspect-square rounded-lg skeleton" />)}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3 mt-5">
+                  {seedSongs.map((song) => {
+                    const liked = seedLiked.includes(song.id);
+                    return (
+                      <button
+                        key={song.id}
+                        type="button"
+                        onClick={() => toggleSeed(song.id)}
+                        aria-pressed={liked}
+                        aria-label={`${liked ? 'Unlike' : 'Like'} ${song.title}`}
+                        className={cn('vx-seed', liked && 'is-liked')}
+                      >
+                        <img src={bestImage(song.images, 150)} onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_ART)} alt="" loading="lazy" />
+                        <span className="vx-seed-heart" aria-hidden><HeartIcon filled={liked} className="w-4 h-4" /></span>
+                        <span className="vx-seed-title">{song.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-              <button
-                onClick={() => (step < TOUR.length - 1 ? setStep(step + 1) : finish())}
-                className="flex-1 h-12 rounded-full btn-primary text-[15px] font-bold"
-              >
-                {step < TOUR.length - 1 ? 'Next' : 'Start listening'}
-              </button>
-            </div>
-          </div>
-        ) : null}
+            </>
+          ) : slide ? (
+            <>
+              <div className="vx-tour-art" aria-hidden>{slide.icon}</div>
+              <div className="mt-5">{title(slide.title)}</div>
+              <div className="mt-2 space-y-1.5">
+                {slide.lines.map((line) => <p key={line} className="text-[15px] leading-relaxed text-ink-300">{line}</p>)}
+              </div>
+              {slide.visual}
+              {slide.shortcuts && (
+                <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+                  {slide.shortcuts.map((sc) => (
+                    <span key={sc.combo} className="inline-flex items-center gap-1.5 text-[13px] text-ink-400">
+                      <KeyChip>{sc.combo}</KeyChip>
+                      <span>{sc.label}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : null}
+        </div>
+        <div className="vx-welcome-foot">
+          {pos > 0 && (
+            <button type="button" onClick={goBack} className="h-12 px-5 rounded-full btn-secondary text-[15px]">Back</button>
+          )}
+          {slide && last && (
+            <button
+              type="button"
+              onClick={() => { finish(); useTutorialStore.getState().start('first-song'); }}
+              className="flex-1 h-12 rounded-full btn-secondary text-[15px]"
+            >
+              Take a tour
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (stage === 'you') void continueFromYou();
+              else if (stage === 'langs') continueFromLangs();
+              else if (stage === 'songs') finishSeed(true);
+              else goNext();
+            }}
+            disabled={claiming || (stage === 'songs' && seedSongs.length === 0)}
+            className="flex-1 h-12 rounded-full btn-primary text-[15px] font-bold disabled:opacity-60"
+          >
+            {claiming
+              ? 'Checking username…'
+              : stage === 'songs' && seedLiked.length
+                ? `Continue with ${seedLiked.length} liked`
+                : slide
+                  ? last ? 'Start listening' : 'Next'
+                  : stage === 'look' ? 'Use this look' : 'Continue'}
+          </button>
+        </div>
       </div>
     </div>
   );

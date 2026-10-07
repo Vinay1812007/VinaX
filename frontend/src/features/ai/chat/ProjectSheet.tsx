@@ -13,6 +13,7 @@ import {
   setInstructions,
   type Project,
 } from '../projects';
+import { ChatStyleMark } from './ChatStyleScope';
 
 /**
  * 9.1.0 — managing projects: create one, write its standing instructions, attach
@@ -51,6 +52,7 @@ export function ProjectSheet({
     // The app's own sheet: focus trap, back-button dismissal, body-scroll lock
     // and the phone/desktop shapes all come with it (components/Sheet.tsx).
     <Sheet onClose={onClose} labelledBy="ai-proj-title" size="lg" className="ai-scope ai-proj">
+      <ChatStyleMark />
       <SheetHeader id="ai-proj-title" title="Projects" onClose={onClose} closeLabel="Close projects" />
       <p className="ai-proj-lede">
           A project holds instructions and reference files that every chat inside it starts with, so you do not explain the same context again.
@@ -62,7 +64,7 @@ export function ProjectSheet({
           onSubmit={(e) => {
             e.preventDefault();
             const made = createProject(newName);
-            if (!made) return say('Give the project a name (or you have reached the limit).');
+            if (!made) return say(newName.trim() ? 'That project could not be saved — the limit is reached or this device\u2019s storage is full.' : 'Give the project a name.');
             setNewName('');
             setOpenId(made.id);
             refresh();
@@ -173,7 +175,8 @@ export function ProjectSheet({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (!addProjectFile(open.id, fileName || 'reference.txt', fileBody)) return say('Paste some text for the file first.');
+                  if (!addProjectFile(open.id, fileName || 'reference.txt', fileBody))
+                    return say(fileBody.trim() ? 'That file could not be saved — this device\u2019s storage is full. Remove a file or a project and try again.' : 'Paste some text for the file first.');
                   setFileName('');
                   setFileBody('');
                   refresh();

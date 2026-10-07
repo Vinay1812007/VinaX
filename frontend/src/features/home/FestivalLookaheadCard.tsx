@@ -7,7 +7,6 @@ import { toast } from '@/store/toastStore';
 import { PlayIcon, SettingsIcon } from '@/components/Icons';
 import { localDateKey } from '@/features/home/useBecauseYouLiked';
 import { festivalLookahead, ribbonGradient } from '@/features/home/festivalLookahead';
-import { festivalVisual } from '@/constants/festivalVisuals';
 
 /**
  * v5.19.0 — "Coming up" card in Home's personal band: the next festival when
@@ -22,7 +21,6 @@ export function FestivalLookaheadCard() {
   const info = useMemo(() => festivalLookahead(new Date(`${dateKey}T12:00:00`), skinsOn), [dateKey, skinsOn]);
   const [busy, setBusy] = useState(false);
   if (!info) return null;
-  const visual = festivalVisual(info.festival.id);
 
   const play = async () => {
     if (busy) return;
@@ -45,8 +43,8 @@ export function FestivalLookaheadCard() {
     <div className="vxh-card">
       <span aria-hidden className="vxh-card-ribbon" style={{ background: ribbonGradient(info.ribbon) }} />
       <span
-        className="vxh-card-art bg-cover bg-center"
-        style={{ backgroundImage: `url("${visual.image}")`, backgroundPosition: visual.position }}
+        className="vxh-card-art"
+        style={{ background: ribbonGradient(info.ribbon) }}
         aria-hidden
       />
       <span className="min-w-0 flex-1">

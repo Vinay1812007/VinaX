@@ -15,6 +15,9 @@
   var days = null;
 
   function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  // 11.0 — the error state component comes from app.js; a host that does not
+  // hand it over (a unit test, an older shell) still gets the message as text.
+  function errState(h, msg) { return typeof h.stateError === 'function' ? h.stateError(msg) : '<div class="state state-error empty" role="alert"><div class="state-hint">' + h.esc(msg) + '</div></div>'; }
   function n0(v) { return typeof v === 'number' && isFinite(v) ? v : 0; }
   function pct(x) { return Math.round(x * 100); }
   function fmtCount(v) { return typeof v === 'number' && isFinite(v) ? v.toLocaleString() : '—'; }
@@ -41,9 +44,9 @@
   }
 
   function windowBar(h) {
-    return '<div class="row" role="group" aria-label="Window" style="gap:6px;margin:0 0 14px;flex-wrap:wrap">' + WINDOWS.map(function (w) {
+    return '<div class="seg" role="group" aria-label="Window" style="margin-bottom:var(--s-4)">' + WINDOWS.map(function (w) {
       var on = w[0] === days;
-      return h.html`<button type="button" class="${on ? '' : 'ghost'}" data-rq-days="${w[0]}" aria-pressed="${on ? 'true' : 'false'}">${w[1]}</button>`;
+      return h.html`<button type="button" class="seg-btn" data-rq-days="${w[0]}" aria-pressed="${on ? 'true' : 'false'}">${w[1]}</button>`;
     }).join('') + '</div>';
   }
 
@@ -63,7 +66,7 @@
   function breakdown(h, title, list, minDevices) {
     var rows = Array.isArray(list) ? list : [];
     var head = '<thead><tr><th>Group</th><th>Devices</th><th>Continuations</th><th>Songs started</th><th>Completion</th><th>Early skip</th><th>Skip</th><th>Likes</th><th>Repeats</th><th>Median heard</th><th>Fallback</th><th>Language violations</th><th>Latency p50 / p95</th></tr></thead>';
-    var body = rows.length ? rows.map(function (g) { return groupRow(h, isObj(g) ? Object.assign({ minDevices: minDevices }, g) : g); }).join('') : '<tr><td colspan="13" class="empty">No telemetry in this window.</td></tr>';
+    var body = rows.length ? rows.map(function (g) { return groupRow(h, isObj(g) ? Object.assign({ minDevices: minDevices }, g) : g); }).join('') : '<tr class="table-empty"><td colspan="13"><div class="state state-empty empty" role="status"><div class="state-title">No telemetry in this window</div><div class="state-hint">Recommendation telemetry arrives as listeners play suggested songs. Widen the window to look further back.</div></div></td></tr>';
     return h.html`<div class="card" style="margin-bottom:14px;overflow-x:auto"><h3 style="margin-top:0">${title}</h3>` + '<table>' + head + '<tbody>' + body + '</tbody></table></div>';
   }
 
@@ -107,8 +110,8 @@
   }
 
   function paint(h, d) {
-    if (!isObj(d)) { h.view('<div class="empty">Unexpected response from the server.</div>'); return; }
-    if (d.configured === false) { h.view('<div class="empty">The database is not configured on this Worker.</div>'); return; }
+    if (!isObj(d)) { h.view(errState(h, 'Unexpected response from the server.')); return; }
+    if (d.configured === false) { h.view('<div class="state state-empty empty" role="status"><div class="state-title">The database is not configured on this Worker</div><div class="state-hint">Bind the database to the Worker, deploy, then reload this page.</div></div>'); return; }
     var scope = h.html`<div class="card" style="margin-bottom:14px;border-color:var(--warn)"><b>Opt-in telemetry only — ${fmtCount(n0(d.devices))} devices.</b> <span class="muted">These numbers describe listeners who turned on usage sharing, not all listeners. Aggregates only: no individual listening history is read out. Groups with fewer than ${n0(d.minDevices) || 3} devices show counts only.</span></div>`;
     if (d.provisioned === false) {
       h.view(scope + windowBar(h) + h.html`<div class="card"><b>Not provisioned.</b> <span class="muted">${d.note || 'The events table cannot hold recommendation telemetry yet.'}</span></div>`);
@@ -116,7 +119,7 @@
       h.stamp();
       return;
     }
-    if (!isObj(d.overall)) { h.view(scope + '<div class="empty">Unexpected response from the server.</div>'); return; }
+    if (!isObj(d.overall)) { h.view(scope + errState(h, 'Unexpected response from the server.')); return; }
     var g = d.overall;
     var o = isObj(g.outcomes) ? g.outcomes : {};
     var s = isObj(g.served) ? g.served : {};

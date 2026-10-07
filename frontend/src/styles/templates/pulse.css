@@ -1,0 +1,202 @@
+/* ============================================================================
+   Pulse — dense, flat and fast.
+
+   Neutral black with a volt accent. No glass: every bar is a solid panel.
+   Tight corners, compact rows and tiles, a page header washed in the playing
+   artwork's colour, a round play button, a solid player bar across the
+   bottom, and a tab bar that fades out of the content instead of boxing it.
+   Motion is short and never slides.
+   ========================================================================= */
+
+/* ----------------------------------------------------------------- colour */
+html[data-template='pulse']:not([class*='fest-']) {
+  --ink-950: 8 8 8;
+  --ink-900: 18 18 18;
+  --ink-850: 26 26 26;
+  --ink-800: 36 36 36;
+  --ink-700: 56 56 56;
+  --ink-600: 96 96 96;
+  --ink-500: 150 150 150;
+  --ink-400: 176 176 176;
+  --ink-300: 200 200 200;
+  --ink-200: 230 230 230;
+  --ink-100: 250 250 250;
+}
+html.light[data-template='pulse']:not([class*='fest-']) {
+  --ink-950: 255 255 255;
+  --ink-900: 247 247 245;
+  --ink-850: 240 240 237;
+  --ink-800: 230 230 226;
+  --ink-700: 210 210 205;
+  --ink-600: 140 140 136;
+  --ink-500: 96 96 92;
+  --ink-400: 84 84 80;
+  --ink-300: 62 62 58;
+  --ink-200: 30 30 28;
+  --ink-100: 12 12 10;
+  --art: 150 150 146;
+}
+html[data-template='pulse']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 160 205 30;
+  --ember-500: 200 245 60;
+  --ember-400: 216 250 110;
+  --ember-300: 232 252 164;
+  --tide-500: 168 130 255;
+  --tide-400: 196 170 255;
+  --vx-on-accent: #0c1200;
+  --art: 96 96 96;
+}
+html.light[data-template='pulse']:not([class*='fest-']):is(:not([data-accent]), [data-accent='crimson']) {
+  --ember-600: 46 70 0;
+  --ember-500: 62 94 0;
+  --ember-400: 56 86 0;
+  --ember-300: 72 108 0;
+  --tide-500: 104 60 220;
+  --tide-400: 88 46 196;
+  --vx-on-accent: #fff;
+  --art: 150 150 146;
+}
+
+/* ------------------------------------------------------------------ dials */
+html[data-template='pulse'] {
+  --tpl-r-art: 6px;
+  --tpl-r-art-sm: 4px;
+  --tpl-r-play: 50%;
+  --tpl-r-play-sm: 50%;
+  --tpl-r-row: 6px;
+  --tpl-r-tile: 6px;
+  --tpl-r-input: 999px;
+  --tpl-r-deck: 0px;
+  --tpl-r-mini: 8px;
+  --tpl-r-np-art: 8px;
+  --vx-font-display: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --vx-type-page: clamp(2rem, 3.6vw, 3.25rem);
+  --vx-type-section: 1.375rem;
+  --tpl-title-weight: 800;
+  --tpl-title-tracking: -0.045em;
+  --tpl-section-weight: 800;
+  --tpl-section-tracking: -0.035em;
+  --tpl-card-title-weight: 700;
+  --tpl-enter: tplFade;
+  --tpl-enter-dur: 160ms;
+  --tpl-press: 0.94;
+  --vx-radius-panel: 8px;
+  --vx-radius-card: 8px;
+  --vx-shelf-gap: 34px;
+  --vx-card-gap: 14px;
+  --vx-deck-gap: 0px;
+  --vx-player-h: 72px;
+  --vx-art-shadow: none;
+  --vx-deck-shadow: none;
+  --transition-fast: 110ms var(--ease-calm);
+  --transition-normal: 150ms var(--ease-calm);
+}
+/* Flat: the materials are opaque, whatever colours are on — a festival skin
+   repaints the inks, and a see-through bar with no blur would let page text
+   run through the tab bar. */
+html[data-template='pulse'] {
+  --vx-mat-thin: rgb(var(--ink-950));
+  --vx-mat-regular: rgb(var(--ink-850));
+  --vx-mat-chrome: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-850));
+  --vx-mat-specular: transparent;
+  --vx-mat-art: 0;
+}
+html.light[data-template='pulse'] {
+  --vx-mat-regular: rgb(var(--ink-950));
+  --vx-mat-thick: rgb(var(--ink-950));
+}
+html[data-template='pulse'] :is(.vx-mat-thin, .vx-mat-regular, .vx-mat-chrome, .vx-mat-thick) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (max-width: 767px) {
+  html[data-template='pulse'] { --vx-shelf-gap: 28px; --vx-card-gap: 10px; }
+}
+
+/* ------------------------------------------------------------------ shell */
+html[data-template='pulse']:not([class*='fest-']) .vx-shell { background: rgb(var(--ink-950)); }
+/* The page opens on a wash of the playing artwork's colour. */
+html[data-template='pulse']:not([class*='fest-']) .vx-workspace {
+  background:
+    linear-gradient(180deg, rgb(var(--art) / 0.34), rgb(var(--art) / 0.1) 190px, transparent 380px) local,
+    rgb(var(--ink-900));
+}
+html.light[data-template='pulse']:not([class*='fest-']) .vx-workspace {
+  background:
+    linear-gradient(180deg, rgb(var(--art) / 0.26), rgb(var(--art) / 0.08) 190px, transparent 380px) local,
+    rgb(var(--ink-900));
+}
+html[data-template='pulse'] .vx-sidebar { box-shadow: none; }
+@media (min-width: 768px) {
+  html[data-template='pulse'] .vx-sidebar { margin: 8px 0 0 8px; border-radius: 8px 8px 0 0; }
+  html[data-template='pulse'] .vx-workspace { margin: 8px 8px 0 8px; }
+}
+html[data-template='pulse'] .vx-library { background: rgb(var(--ink-900)); border-radius: 8px; margin: 8px 8px 0; }
+html[data-template='pulse'] .vx-brand { font-size: 21px; letter-spacing: -0.05em; }
+/* Navigation is type, not shapes: the active row is simply brighter. */
+html[data-template='pulse'] .vx-nav-link { min-height: 42px; border-radius: 6px; font-weight: 700; color: rgb(var(--ink-400)); }
+html[data-template='pulse'] .vx-nav-link:hover { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='pulse'] :is(.vx-nav-active, .vx-nav-active:hover) { background: transparent; color: rgb(var(--ink-100)); box-shadow: none; font-weight: 800; }
+html[data-template='pulse'] .vx-lib-row { min-height: 52px; }
+html[data-template='pulse'] :is(.vx-lib-row:hover, .vx-track-row:hover) { background: rgb(var(--ink-100) / 0.08); }
+html[data-template='pulse'] .vx-lib-row.is-active { background: rgb(var(--ink-100) / 0.12); }
+html[data-template='pulse'] .vx-lib-row.is-active .vx-lib-title { color: rgb(var(--ember-400)); }
+html[data-template='pulse'] .vx-topbar.is-scrolled { box-shadow: none; }
+
+/* Phone tab bar: no box — it fades up out of the page. */
+html[data-template='pulse'] .vx-dock {
+  background-color: transparent;
+  background-image: linear-gradient(180deg, rgb(var(--ink-950) / 0), rgb(var(--ink-950) / 0.92) 34%, rgb(var(--ink-950)));
+  box-shadow: none;
+  padding-top: 6px;
+}
+html[data-template='pulse'] .vx-dock-pill { height: 26px; }
+html[data-template='pulse'] .vx-dock-active .vx-dock-pill { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='pulse'] :is(.vx-dock-active, .vx-dock-active:hover) { color: rgb(var(--ink-100)); }
+html[data-template='pulse'] .vx-dock-item { gap: 2px; min-height: 54px; font-size: 10.5px; }
+
+/* Player: a solid bar edge to edge; the mini player takes the artwork's colour. */
+html[data-template='pulse'] .vx-deck { box-shadow: inset 0 1px 0 var(--vx-border); }
+html[data-template='pulse'] .vx-deck::before,
+html[data-template='pulse'] .vx-deck::after { display: none; }
+html[data-template='pulse'] .np-play-desktop { width: 38px; height: 38px; background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); box-shadow: none; }
+html[data-template='pulse'] .np-play-desktop:hover { background: rgb(var(--ink-100)); transform: scale(1.06); }
+html[data-template='pulse']:not([class*='fest-']) .np-mini {
+  --mat-tint: none;
+  background-color: color-mix(in srgb, rgb(var(--art)) 34%, rgb(var(--ink-850)));
+  box-shadow: none;
+}
+html[data-template='pulse'] .np-mini .np-mini-play { background: transparent; color: rgb(var(--ink-100)); }
+html[data-template='pulse'] .np-mini-progress { left: 8px; right: 8px; }
+html[data-template='pulse'] .np-mini-progress > i { background: rgb(var(--ink-100)); }
+
+/* ------------------------------------------------------- pages and cards */
+html[data-template='pulse'] .vx-page-header { margin-bottom: 22px; }
+html[data-template='pulse'] .vx-section-header { margin-bottom: 10px; }
+html[data-template='pulse'] .vx-section-link { color: rgb(var(--ink-400)); font-weight: 800; padding-inline: 4px; }
+html[data-template='pulse'] .vx-section-link:hover { background: transparent; color: rgb(var(--ink-100)); text-decoration: underline; text-underline-offset: 3px; }
+/* A card is a panel: it lights up whole on hover, the artwork does not move. */
+html[data-template='pulse'] .vx-media-card { border-radius: 8px; transition: background-color 150ms var(--ease-calm), box-shadow 150ms var(--ease-calm); }
+@media (hover: hover) {
+  html[data-template='pulse'] .vx-media-card:hover { background: rgb(var(--ink-100) / 0.07); box-shadow: 0 0 0 10px rgb(var(--ink-100) / 0.07); }
+  html[data-template='pulse'] .vx-media-card:hover .vx-media-art { transform: none; }
+}
+html[data-template='pulse'] .vx-media-title { margin-top: 10px; }
+html[data-template='pulse'] .card-play { width: 44px; height: 44px; box-shadow: 0 8px 16px -6px rgb(0 0 0 / 0.6); }
+html[data-template='pulse'] :is(.vx-play-fab, .vx-np-play) { box-shadow: none; }
+html[data-template='pulse'] .vx-np-play { background: rgb(var(--ink-100)); color: rgb(var(--ink-950)); width: 64px; height: 64px; }
+html[data-template='pulse'] :is(.vx-chip-idle, .vxh-chip) { background: rgb(var(--ink-100) / 0.1); font-weight: 700; }
+html[data-template='pulse'] .vx-track-row { min-height: 54px; }
+html[data-template='pulse'] :is(.vxh-tile, .vxh-card) { box-shadow: none; }
+html[data-template='pulse'] .vxh-tile { background: rgb(var(--ink-100) / 0.09); min-height: 56px; }
+html[data-template='pulse'] .vxh-tile:hover { background: rgb(var(--ink-100) / 0.16); }
+html[data-template='pulse'] .vxh-tile img { width: 56px; height: 56px; border-radius: 0; }
+html[data-template='pulse'] .vxh-hero { border-radius: 8px; box-shadow: none; }
+html[data-template='pulse'] :is(.btn-primary, .btn-secondary) { font-weight: 800; }
+
+/* Now Playing: the artwork's colour falling to black, not a blurred photo. */
+html[data-template='pulse']:not([class*='fest-']) .vx-np-bg-art { display: none; }
+html[data-template='pulse']:not([class*='fest-']) .vx-np-bg-wash { background: linear-gradient(180deg, color-mix(in srgb, var(--np-warm, rgb(var(--art))) 62%, rgb(var(--ink-950))), rgb(var(--ink-950)) 78%); }
+html[data-template='pulse']:not([class*='fest-']) .vx-np-bg-scrim:not(.is-canvas) { background: none; }
+html[data-template='pulse'] .vx-np-art-img { box-shadow: 0 18px 44px -18px rgb(0 0 0 / 0.7); }

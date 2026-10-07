@@ -77,7 +77,7 @@ export default function HelpPage() {
     setSending(false);
     if (ok) {
       setMessage('');
-      toast('Thanks! Your feedback was sent.');
+      toast('Thanks. Your feedback was sent.');
     } else {
       toast('Could not send — check your connection and try again.');
     }
@@ -114,7 +114,7 @@ export default function HelpPage() {
         <section className="vx-sec-block" aria-label="Live tutorials">
           <SectionHeader
             title="Live tutorials"
-            explanation="Each one runs inside the real app and points at the real buttons."
+            explanation="Each one runs inside the real app and points at the real buttons. Press Esc to leave one."
             action={<span className="vx-sec-meta">{done.length} of {TUTORIALS.length} done</span>}
           />
           <div className="grid sm:grid-cols-2 gap-3">

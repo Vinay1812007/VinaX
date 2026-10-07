@@ -1,24 +1,120 @@
-# Design system — "Marigold" (10.0) and frosted glass (10.1)
+# Design system
 
-This document covers how the listener app looks and behaves at the component level: where the tokens live, the colour, type and radius scales, the medium control scale and the 44px hit-area rule, how overlays are built and why they carry `data-vx-overlay`, the motion rules, and the top bar's actions slot. 10.0 "Marigold" is a new identity on the frame 9.0 "Encore" built: new token values, a display face, a recoloured mark, and a first visit that says plainly what VinaX costs (nothing). 10.1 adds a frosted material scale for the chrome and overlays, a drifting artwork backdrop on Now Playing, snackbars and the notifications inbox. The owner console has its own standalone stylesheet and is covered in [admin-console.md](admin-console.md).
+This document describes how VinaX looks and how that look is built: the token contract every stylesheet reads, the six app styles and the rules they obey, themes, accents, festival skins, the separate styling layer of the VinaX AI chat, and the shared components and rules (materials, control scale, hit areas, overlays, focus, motion). It ends with a checklist for adding an app style.
 
-## 10.0 "Marigold"
+## How the layers stack
 
-Marigold is warm where Encore was cool: the colour of marigold garlands and of a lamp at dusk, over a plum-black night. It exists to make one thing obvious at a glance — VinaX is free, with no sign-up — and to feel like music from home.
+A page is painted by five layers, each allowed to change less than the one before it can undo:
 
-- **Colour.** The ink ramp is plum-black with cream text: `ink-950` `13 9 15` is the chrome (sidebar, player deck, tab bar), `ink-900` `19 14 22` the workspace, `ink-850` / `ink-800` the raised tiers, `ink-100` `251 245 236` the text. The light theme is warm cream paper (`ink-950` `255 252 247`, `ink-900` `250 245 237`) with plum text. **Marigold** (`--ember-*`, default `255 164 46`) is for play, the active destination, progress, focus and primary calls to action; labels on it use `--vx-on-accent` (`#1a0e06`, a deep brown, in dark; white on the darker light-theme ramp). **Rose** (`--tide-*`, default `255 99 132`) marks live and AI moments. The one brand gradient is Marigold → Rose (`--vx-glow`): the avatar, Liked songs, the AI shortcut glyph, the word "Free." in the welcome, the deck's top hairline. Token values live in `index.css` and are asserted by `theme.test.ts` and `contrast.test.ts`.
-- **Type.** Two families. **Bricolage Grotesque** (`--vx-font-display`, Tailwind `font-display`; SIL OFL, self-hosted at `/fonts/bricolage-var.woff2`, fetched only when a display-styled element renders) for page titles (`.vx-page-header h1`, `.vx-page-title`), display type (`.vx-display`, `.text-display`), section titles (`.vx-section-header h2`, Home's `.vxh-head h2`), the sidebar wordmark, the top bar's page name, the Home greeting and welcome headline, and the onboarding sheet's titles. The same face also sets Home's feature tiles, listening guide and "Free, and how it stays free" title, the Queue and Drive mode titles, the lyrics hero, the Listen Together title and song name, the browse lanes' headings, and VinaX AI's empty-state greeting. **Manrope** for everything else: body copy, labels, buttons, metadata. Display sizes run at 750–800 with tight tracking (−0.03em to −0.045em).
-- **Shape.** Unchanged from Encore: pills for actions, filters and now the active destination; squircles for play buttons (`.vx-play-fab` 56px / radius 18, the deck's play button 44px / radius 15) and artwork; circles for people. The Home welcome panel is radius 28 (24 on phones), feature tiles 18, the free card 24.
-- **The frame.** The sidebar's wordmark is set in the display face beside a small "Free" tag (hidden on the rail). The active destination is a solid Marigold pill with a deep-brown label and a soft Marigold shadow; hovers in the chrome are a breath of Marigold (`--vx-hover-warm`, 10% / 8% in light) rather than grey. The phone tab bar's active icon sits in a solid Marigold pill under a cream label. The floating deck is plum chrome with a Marigold → Rose hairline on its top edge and a Marigold play squircle; the compact phone player's play button is Marigold too. The workspace carries a gradient mesh at its top: Marigold from the top left, Rose from the top right, the playing artwork's glow between them, painted with the content (`background-attachment: local`), so it scrolls away and costs nothing on scroll. 10.0 kept blur light (12–16px) and only on surfaces that were already nearly opaque; 10.1 replaced that with the frosted material scale ([below](#101-frosted-glass-materials-and-snackbars)), still only on fixed or sticky chrome and overlays.
-- **First visit.** Before anything has been played on a device, Home opens with the welcome (`features/home/HomeWelcome.tsx`): a "Free forever" tag, the headline "All the music you love. Free." in the display face (preceded, inside the same heading, by "Welcome, <first name>." when the listener gave a name), one line on languages and what is not asked for (no subscription, no email, no password), "Start listening" (plays the opening mix the page already holds; no extra request) and "Pick your languages". The Aura Mix sits beside it, and "Everything included, all free" follows: six tiles to VinaX AI, AI Radio, Listen Together, synced lyrics (Karaoke), offline downloads on Android and the language pages. Returning listeners get the short greeting and their shelves. Home ends with "Free, and how it stays free": four plain facts, each true today (no subscription or in-app purchase; no sign-up; one labelled ad on the website's content pages only; listening data stays on the device).
-- **Onboarding.** The welcome sheet leads with "Free. No sign-up." over a plum header lit by the Marigold → Rose mesh, the language names set in staggered rows behind the mark in their own scripts (static, decorative), and a "Free forever" tag. Its tour slides use the display face, and the step dots are Marigold.
-- **Motion.** 140–240ms on `--ease-calm`. Feature tiles and the welcome's call to action rise 1–2px on hover; the sidebar mark tilts a few degrees. No bounce and no animated gradients. A few deliberate slow loops exist, each opacity and transform only: VinaX AI's thinking motion (10.0: the reply mark breathes over 2.4 s, the "Thinking" label shimmers, a caret blinks where text arrives — see [ai.md](ai.md#the-chat-page)), and Now Playing's drifting artwork backdrop (10.1, below). Nothing moves under either reduced-motion switch.
-- **Accents.** The picker's default is **Marigold** (stored id `crimson`, which has no CSS block and rides the `:root` ramp). The older orange ramp (`ember`) is labelled **Copper** and re-coloured (`214 120 78`) so it no longer reads as a second Marigold; a saved choice is kept because ids never change (`constants/accents.ts`).
-- **Contrast.** Every pairing above clears WCAG AA: deep brown on Marigold is 9.6:1, cream on the plum workspace is AAA, and the letter-avatar hues (marigold, rose, gold, coral, orchid) each clear 5.7:1 on their plum tile.
+| Layer | Switch on `<html>` | Lives in | May change |
+| --- | --- | --- | --- |
+| Base tokens and frame | — | `frontend/src/styles/index.css`, `shell.css`, `features.css`, `pages/*.css` | Everything, as defaults |
+| App style | `data-template='<id>'` | `frontend/src/styles/templates/` | Token values, the `--tpl-*` dials, shell and card layout rules of its own |
+| Theme | `.dark`, `.light`, `.amoled` (with `.dark`), `.hc` | `index.css`, `templates/base.css` | Which ramp a style uses; true black; high contrast |
+| Accent | `data-accent='<id>'` or inline custom ramp | `index.css`, `frontend/src/utils/accentRamp.ts` | The ember ramp only |
+| Festival skin | `.fest-<id>` | `frontend/src/styles/festivals.css` (generated) | Accent ramp, canvas tint, ribbon, backdrop — never layout |
 
-## 10.1 frosted glass: materials and snackbars
+`main.tsx` imports the global sheets in this order: `index.css`, `shell.css`, `features.css`, `templates/index.css`, `festivals.css`. Page stylesheets ship with their lazy page and therefore load later than all of them.
 
-10.1 makes the chrome and the overlays frosted glass, in a fixed scale of four materials, so that a translucent surface always means the same thing and always stays readable.
+## The token contract
+
+Components read tokens; they do not state colours. Colour tokens hold space-separated RGB channels so alpha can be applied at the point of use.
+
+| Token | Use | Written as |
+| --- | --- | --- |
+| `--ink-950`, `900`, `850`, `800`, `700` | Surfaces, darkest to raised. `--ink-900` is the page canvas | `rgb(var(--ink-900))` |
+| `--ink-100` … `--ink-500` | Text, strongest to faintest | `rgb(var(--ink-200))` |
+| `--ember-300` … `--ember-600` | The accent ramp | `rgb(var(--ember-500))` |
+| `--tide-400`, `--tide-500` | The secondary accent | `rgb(var(--tide-400))` |
+| `--vx-on-accent` | The label colour on an accent fill | `var(--vx-on-accent)` |
+| `--art` | The playing artwork's colour, for washes and backdrops | `rgb(var(--art))` |
+| `--vx-radius-control`, `--vx-radius-card`, `--vx-radius-panel`; `--radius-sm` … `--radius-pill` | Radii | `var(…)` |
+| `--vx-control-h` and the control scale | Control sizes (see below) | `var(…)` |
+| `--ease-calm`, `--vx-ease-out` | Easing | `var(…)` |
+
+The tokens are declared in `index.css` (`--vx-ease-out` in `shell.css`). The ink names keep their meaning in the light theme: `--ink-900` is still the canvas and `--ink-100` still the strongest text, so one rule serves every theme. Tailwind's colour names map to the same variables (`frontend/tailwind.config.ts`).
+
+## App styles
+
+An app style ("template" in the code) is a complete look chosen in Settings → Appearance → App style. Six ship, listed in `frontend/src/constants/templates.ts`: `aura` (the default), `pulse`, `sangam`, `nocturne`, `marquee` and `vibe`. The setting is `template` in `frontend/src/store/settingsStore.ts`; the picker is `frontend/src/features/settings/TemplatePicker.tsx`.
+
+**A style may change** the ink, ember and tide values for dark and light, the body typeface, radii, title weight and tracking, press and entrance motion, how the navigation, mini player, cards and Now Playing backdrop are shaped, and whether the chrome is glass or solid. **A style may not change** what a control does, which settings exist, hit areas, focus visibility, or anything while the listener has asked for true black or high contrast.
+
+### The dials
+
+`frontend/src/styles/templates/base.css` declares the shared dials on `html[data-template]` and wires them to the shell and the shared primitives, so most of a style is a block of values.
+
+| Dials | Control |
+| --- | --- |
+| `--tpl-r-art`, `--tpl-r-art-sm`, `--tpl-r-np-art` | Artwork corners: cards, rows and the mini player, Now Playing |
+| `--tpl-r-control`, `--tpl-r-input`, `--tpl-r-row`, `--tpl-r-tile` | Chips and pills, inputs, track rows, Home tiles and cards |
+| `--tpl-r-play`, `--tpl-r-play-sm` | The large play button; play on cards, the deck and the mini player |
+| `--tpl-r-deck`, `--tpl-r-mini` | The desktop player deck; the mini player |
+| `--tpl-font-body` | The body typeface |
+| `--tpl-title-weight`, `--tpl-title-tracking`, `--tpl-section-weight`, `--tpl-section-tracking`, `--tpl-card-title-weight` | Page titles, section headings, card titles |
+| `--tpl-press`, `--tpl-enter`, `--tpl-enter-dur` | Press feedback and the page entrance |
+
+`base.css` also re-derives the tokens that follow from the ink scale (glass fills, solid surfaces), so a style states its inks and gets those for free.
+
+### The selector contract
+
+`frontend/src/constants/templates.test.ts` asserts each of these against the stylesheets.
+
+- **A style's file styles only its own selector.** Every rule in `<id>.css` starts from `html[data-template='<id>']`, and the file is imported by `templates/index.css`.
+- **Colour blocks carry `:not([class*='fest-'])`.** Token values and canvas paint stand down while a festival skin is on, so festival CSS only has to beat the base theme. Layout, shape, type and motion rules do not carry it and stay.
+- **Accent blocks apply only to the default accent** — no `data-accent`, or `crimson`. A listener who picked a named or custom accent keeps it in every style.
+- **Win by specificity, never by order.** Page stylesheets load after the style sheets, so a style rule must out-specify the page rule it replaces; `html[data-template='<id>']` in front of the page's own selector does that.
+- **True black and high contrast outrank every style.** `base.css` writes them as `html.amoled[data-template]:not(#_)` and `html.hc[data-template]:not(#_)`; the `:not(#_)` adds id-level specificity without matching anything. In the Black theme `--ink-950` is `0 0 0` and the shell is `#000` in all six styles.
+- **Every style has a dark and a light look that clear WCAG AA** for text and accent tiers on its canvas and raised surface, and every named accent is contrast-checked in every style and both themes.
+- **The pre-paint canvas equals the style's `--ink-900`**, per theme (see the next section).
+
+### From setting to paint
+
+1. The inline script in `frontend/index.html` reads `vinax.settings.v1` before first paint, sets `data-template` (falling back to `aura`), and stamps the canvas colour from its own copy of the canvas table, so there is no flash of another style.
+2. `AppLayout.tsx` calls `applyThemeClasses(resolved, root, template)` (`frontend/src/utils/theme.ts`) whenever theme or style changes. It toggles `.light`, `.dark`, `.amoled`, normalises the id with `normalizeTemplate` (unknown ids become `DEFAULT_TEMPLATE`), sets `data-template`, and writes the canvas to `<html>`'s background and the `theme-color` meta from `TEMPLATE_CANVAS` — `#000000` for the Black theme.
+3. CSS does the rest. The picker cross-fades with a view transition where the browser supports one and switches at once under reduced motion.
+
+## Themes
+
+The `theme` setting is one of `dark`, `light`, `amoled` (shown as Black), `system` or `auto`. `resolveTheme` turns the last two into a concrete theme: `system` follows the device, `auto` is light from 07:00 to 18:59 and dark otherwise. Black also carries `.dark`, so dark rules apply and only the surfaces change. High contrast is a separate setting that adds `.hc`.
+
+## Accents
+
+- **Style colour** is the first swatch. Its stored id is `crimson`, and it means "whatever the app style's accent is".
+- **Named accents** set `data-accent` and replace the ember ramp in every style: `marigold`, `ember`, `sunset`, `gold`, `emerald`, `ocean`, `azure`, `violet`, `rose`, `aurora`, `mono`. The blocks are in `index.css`.
+- **Custom accent.** `accent: 'custom'` with a colour in `accentCustom`; `applyCustomAccent` in `utils/accentRamp.ts` builds a ramp for the current theme and writes it inline.
+- **Dynamic accent.** With `dynamicTheme` on, the accent follows the playing artwork. `--art` carries the artwork colour whether or not this is on.
+
+## Festival skins
+
+On a festival's days `<html>` gains `fest-<id>` (the window table is inlined in `index.html` so the class is there before first paint). A skin supplies an accent ramp for dark and an AA-safe light one, a tinted canvas, a top ribbon and an ambient backdrop; because style colour blocks stand down, the skin looks the same over all six styles while each style's layout stays. The definitions are in `frontend/src/constants/festivals.ts`, `festivalThemes.ts`, `festivalVisuals.ts` and `festivalEmblems.ts`. Do not edit `festivals.css` by hand: change the definitions and run `npm run gen:festivals` (`frontend/scripts/gen-festivals.mjs`, core in `festivals-gen-core.mjs`), which rewrites `src/styles/festivals.css`, `public/admin/festivals.js` and the table in `index.html`. The backdrop's particles are not rendered under either reduced-motion switch or with Data saver on. Settings → Appearance → Preview a festival applies any skin for the session (`frontend/src/features/festival/festivalPreview.ts`).
+
+## VinaX AI chat styles
+
+The chat has its own, scoped styling layer; the app shell around it keeps the listener's app style. `frontend/src/features/ai/chat/chatStyle.ts` defines nine styles (`CHAT_STYLE_IDS`): `vinax`, `mono`, `spectrum`, `paper`, `loop`, `void`, `forge`, `circuit` and `deep`. Each is an original design mapped to one or more maker families of models; `makerFamily` classifies the selected model and `styleForFamily` picks the style, falling back to `deep`.
+
+- **Scope.** `ChatStyleScope.tsx` puts `data-chat-style='<id>'` on the chat surface (`.ai-root`) and on portalled sheets (`.ai-scope`). `frontend/src/styles/ai-styles.css` matches only those.
+- **Colour.** A chat style re-points the ink and accent ramps that `ai.css` already reads, with dark as the base and `html.light` and `html.amoled` blocks for every style. `vinax` has no ramp of its own and reads the app's tokens.
+- **Layout.** Each style also has layout facts (`ChatLayout`): composer shape, dock, greeting alignment, starter layout, user and assistant message treatment, avatar, model-chip position, density, engine. `layoutAttrs` emits them as `data-cs-*` attributes and the CSS keys on those, so two styles that share a composer shape share its rules. Shape variables are named `--cs-*`.
+- **Preference.** VinaX AI settings → General → Chat style stores `match` (the default), or one fixed style id, under `vinax.ai.chatStyle`. `resolveChatStyle` combines the preference with the selected model.
+
+`chatStyle.test.ts` guards the mapping and the list.
+
+## Adding an app style
+
+1. `frontend/src/utils/theme.ts` — add the id to `TemplateId` and its `[dark, light]` canvas to `TEMPLATE_CANVAS`.
+2. `frontend/index.html` — add the same pair to the table in the pre-paint script.
+3. `frontend/src/constants/templates.ts` — add the `TemplateOption` entry: `id`, `label`, `tagline` (one line under the name), `traits` (what changes) and `swatch` (`canvas`, `raised`, `accent`, `second`; dark look). `templates.test.ts` asserts the number of styles ("has six styles with unique ids and names") and that no entry names another product, so change the count there too.
+4. `frontend/src/styles/templates/<id>.css` — the colour blocks (dark and light, each with `:not([class*='fest-'])`), the accent block limited to the default accent, the dial values, then only the layout rules that are the style's own.
+5. `frontend/src/styles/templates/index.css` — import the file.
+6. `frontend/src/styles/pages/settings.css` — draw its miniature for the picker (the `.vx-tpl-*` rules).
+7. Run `npx vitest run src/constants/templates.test.ts src/utils/theme.test.ts src/features/settings/TemplatePicker.test.tsx src/__tests__/contrast.test.ts`. The failures name what was missed: an unimported file, a colour block without the festival guard, an accent that overrides a chosen one, a canvas that differs from `--ink-900`, a contrast shortfall.
+8. Build, then run `node scripts/csp-hashes.mjs`: the inline script changed, so its hash in `public/_headers` must change, and `src/__tests__/cspHashes.test.ts` fails until it does.
+9. Look at it: every destination, phone and desktop width, dark, light and Black, a festival preview on, reduced motion on.
+
+## Materials
+
+Translucent chrome and overlays use a fixed scale of four frosted materials, so a translucent surface always means the same thing and stays readable. A style may replace them with solid fills (Pulse and Marquee do); Settings → Glass effect scales them through `--glass-alpha` and `--glass-blur-boost` (`applyGlassLevel` in `utils/theme.ts`).
 
 ### The material scale
 
@@ -32,7 +128,7 @@ Tokens in `:root` of `index.css`; the utilities `.vx-mat-thin`, `.vx-mat-regular
 | `thick` | `ink-850`, 86–98% | 24px + up to 40px | Anything that carries a block of text: sheets and dialogs (`<Sheet>`), the song menu, the right-click popover, snackbars |
 
 - **Both Settings dials drive them.** Glass effect sets `--glass-alpha`, which the fills follow; Background blur sets `--glass-blur-boost`, which the blur follows. The fills are **floored** (`clamp`) on the tiers that carry text, so muted text on the chrome and body text on menus and snackbars keep WCAG AA even over a white cover in dark and a black cover in light (`src/__tests__/glass.test.ts`).
-- **Light theme.** The fills are white glass (`255 253 250`) with a plum hairline and a strong specular line.
+- **Light theme.** The fills are white glass (`255 253 250`) with a tinted hairline and a strong specular line.
 - **Fallbacks.** The Black theme keeps every material solid with no backdrop filter. Where `backdrop-filter` is unsupported, and under `prefers-reduced-transparency`, each material falls back to `--surface-solid`. Phones (`max-width: 767px`) get a lower blur cap so bars stay cheap to composite while a list scrolls under them.
 - **The rule.** Never put a material on a row inside a scrolling list: fixed or sticky chrome and overlays only.
 - **The top bar** turns to chrome glass only once content is under it. `TopBar` watches a sentinel with an `IntersectionObserver` rooted on the workspace (no scroll listener) and adds `is-scrolled vx-mat-chrome`.
@@ -52,110 +148,12 @@ Tokens in `:root` of `index.css`; the utilities `.vx-mat-thin`, `.vx-mat-regular
 
 The bell in Home's top bar opens `NotificationSheet`: a `thick` glass sheet whose rows lead with artwork (an announcement's own image, else a music or megaphone glyph), grouped under day headings — Today, Yesterday, then the date — and then a "From VinaX" group with the three newest release notes. On Android it also offers "Mute alerts for 7 days".
 
-## 9.0 "Encore" (the frame Marigold builds on)
-
-Encore was the 9.0 identity: violet and cyan over deep charcoal. Its token values were replaced in 10.0; its structure — the frame, the shapes, the hierarchy rules below — still holds. Where a line below names Iris or Lagoon, read Marigold and Rose.
-
-- **Colour.** Surfaces are charcoal tiers with a cool undertone: `ink-950` chrome (sidebar, player deck, tab bar), `ink-900` workspace, `ink-850` / `ink-800` raised. **Iris** (`--ember-*`, default `140 120 255`) is for play buttons, progress, the active destination, chosen filters and focus. **Lagoon** (`--tide-*`, default `34 211 238`) marks live and AI moments and secondary links. The one gradient is Iris → Lagoon (`--vx-glow`, `--gradient-aurora`), used sparingly: the avatar, Liked songs, AI accents. The playing artwork tints the top of the workspace and the left edge of the player deck through `--art`, at low alpha.
-- **Shape.** Pills for actions and filters (`.btn-primary`, outline `.btn-secondary`, `Chip`), squircles for play buttons and artwork (`.vx-play-fab` 56px / radius 18, `.vx-play-fab.is-lg` 64px, the card play button 46px / radius 15, artwork radius 16 on cards and 10–12 in rows), circles for people. Radii: `--vx-radius-control` 10px, `--vx-radius-card` 14px, `--vx-radius-panel` 20px; sheets 24px at the top, dialogs 22px.
-- **Type.** Manrope only. Display `clamp(2.25rem, 4vw, 3.75rem)` at 800, page titles `clamp(1.875rem, 3vw, 2.625rem)`, section titles 1.375rem at 780, cards 14px at 650, meta 13px at 500. Sentence case. No letter-spaced uppercase eyebrows.
-- **Hierarchy.** Artwork leads and copy follows; size and weight make the hierarchy, not boxes. A section has a title, at most one line of explanation, and at most a "Show all" pill link. Hairlines only between rows and around inputs.
-- **Space.** 8px grid. `--vx-gutter` 32 / 16px, `--vx-shelf-gap` 44 / 36px, `--vx-card-gap` 18 / 12px (desktop / phone).
-- **Motion.** 140–220ms on `--ease-calm`; cards lift 3px on hover and their play button rises in. Every transition and animation stops under `prefers-reduced-motion` and the in-app "Reduce motion" setting (`html.reduce-motion`); scripted scrolls ask `utils/motion.ts`.
-- **States.** Hover `--vx-hover` (6% of the text colour), pressed `--vx-pressed` (10%), selected `--vx-accent-wash` (14% Iris). The playing track row has an Iris bar on its leading edge and an Iris title. Focus is a 2px `--vx-focus` outline, 3px offset.
-
-### The frame
-
-| Width | Frame |
-| --- | --- |
-| Phone (< 768px) | Top bar (mark, page name once scrolled, page actions, avatar); the page; the compact player floating above the five-tab bar (the active tab's icon sits in an Iris pill). Safe-area insets are applied once, on the fixed bottom wrapper |
-| Tablet (768–1099px) | The sidebar is always the 80px rail; the compact player floats at the bottom |
-| Desktop (≥ 1100px) | Sidebar (264px, or the 80px rail when the listener collapses it): destinations, then the library in its own rounded panel ("Your collections", "Playlists & saved"). The workspace is a rounded sheet inside the chrome. From 1024px the player is the floating three-zone deck; from 1280px the Now Playing panel sits beside the workspace while something plays |
-
-### Where the styles live
-
-| File | What it owns |
-| --- | --- |
-| `styles/index.css` | Every token (`:root`), the light / black / accent overrides, the glass and button primitives, the reduced-motion kill switch |
-| `styles/shell.css` | The frame and the shared primitives: workspace canvas, sidebar and library list (`.vx-lib-*`), top bar, phone tab bar (`.vx-dock`, `.vx-dock-pill`), the player deck (`.vx-deck`, `.vx-pb-*`) and compact player (`.np-mini`), page and section headers, rails and grids, `.vx-play-fab`, chips, `.vx-tap`, focus and motion switches. Replaces 8.0's `stage.css` and the shell half of `flow.css` |
-| `styles/features.css` | Global feature surfaces without a page stylesheet of their own (Home Studio, the listening guide, the destination grid). A feature that gets its own page stylesheet takes its rules with it (the entity heroes went to `pages/library.css`, the AI pieces to `ai.css` and `pages/radio.css`, the player's surfaces and the queue's ownership marker to `pages/player.css`, the language grid to `pages/browse.css`) |
-| `styles/pages/tracklist.css` | Track rows, the track-list header and media cards — the only place they are styled. Imported by `SongRow` and `MediaCard` |
-| `styles/overlays.css` | Sheets, dialogs, menus and the welcome sheet. Imported by `Sheet`, `TrackMenu` and `OnboardingSheet`, not by `main.tsx` |
-| `styles/pages/*.css` | One stylesheet per area (`home`, `browse`, `library`, `player`, `radio`, `settings`, `secondary`, and 10.0's `together`, which the Listen Together page and the Live pill share), each imported by its page or component, so it ships in that lazy chunk and never in the first load |
-
-Page stylesheets scope their rules under the page's root class (`.vx-home`, `.vx-browse`, …) so two lazy chunks loaded in one session cannot restyle each other; `browse.css`'s shared pieces are the `bx-*` family (the browse tiles — chart covers fanned, language scripts, mood emoji — the hub covers and the pinned search field).
-| `styles/ai.css` | VinaX AI, which renders outside the main shell |
-
-Shell components: `Sidebar`, `TopBar`, `BottomNav`, `PlayerBar` (compact player on phones and tablets, the deck from 1024px), `NowPlayingRail`, and `EntityHeader` (artwork-coloured header with type label, display title, meta line and the action row, shared by album, playlist, collection and library-list pages). Icons have a 1.8 stroke; `HomeIcon`, `CompassIcon`, `SearchIcon`, `LibraryIcon` and `SparkleIcon` take `filled` for the active destination.
-
-## Where things live
-
-| File | What it owns |
-| --- | --- |
-| `frontend/src/styles/index.css` | Every token (`:root`), the light / black / accent overrides, the glass and button primitives, the reduced-motion kill switch |
-| `frontend/src/styles/shell.css` | The frame and shared primitives (see the table above). It defines no theme tokens, with one exception: it re-computes `--vx-topbar-h` for phones |
-| `frontend/src/styles/festivals.css` | The festival themes. (8.0 removed `discovery.css`; Search and Discover styles live in `styles/pages/browse.css`) |
-| `frontend/tailwind.config.ts` | Maps the tokens to utility classes (`bg-ink-900`, `text-ember-400`, `text-page-title`, `rounded-card`, `min-h-touch`) |
-| `frontend/src/components/*` | The primitives: `Button`, `IconButton`, `Chip`, `Sheet`, `TopBar`, `PageHeader`, `SectionHeader`, `Shelf`, `MediaCard`, `SongRow`, `TrackMenu`, `Skeletons`, `States`, `Toasts` |
-
-Rules of the cascade:
-
-- Tokens are defined once, in `:root` of `index.css`. Themes swap values; components read tokens and never redefine them.
-- `tailwind.config.ts` declares each theme key exactly once. A duplicate key silently discards the earlier one, and the file is outside the type-checker's include, so `npm run lint` (`no-dupe-keys`) is its only gate.
-- Token values are asserted by `frontend/src/utils/theme.test.ts` and `frontend/src/__tests__/contrast.test.ts`. Change a value and those tests must change with it.
-
-## Themes
-
-`frontend/src/utils/theme.ts` resolves the listener's preference to one of three painted themes and sets classes on `<html>`.
-
-| Preference | Resolves to | Classes on `<html>` |
-| --- | --- | --- |
-| `dark` | dark | `dark` |
-| `light` | light | `light` |
-| `amoled` | black | `dark amoled` |
-| `system` | follows the OS colour scheme | as above |
-| `auto` | light from 07:00 to 18:59, dark otherwise | as above |
-
-An inline pre-paint script in `frontend/index.html` applies the same classes before first paint; it mirrors `applyThemeClasses()` and the two must stay in sync. The black theme overrides only the deepest surface tiers.
-
-Two more attributes are set on `<html>` by `AppLayout`: `data-accent` (one of `ember` — labelled Copper since 10.0 — `ocean`, `violet`, `rose`, `emerald`, `sunset`, `aurora`, `mono`, `gold`, `azure`; the default, `crimson`, labelled Marigold, has no block and uses the `:root` ramp) and `data-density` (`compact` tightens track rows and shelf spacing). Every accent has a dark block and a light twin; the contrast test fails if one is missing.
-
-## Colour
-
-Raw ramps are stored as space-separated RGB triplets so Tailwind can apply alpha (`rgb(var(--ink-900) / 0.8)`).
-
-| Ramp | Steps | Use |
-| --- | --- | --- |
-| `--ink-*` | 950, 900, 850, 800, 700 | Canvases and cards |
-| | 600, 500 | Dividers, disabled, decorative icons |
-| | 400, 300 | Muted and secondary text. 400 is the floor for meaningful copy |
-| | 200, 100 | Body and primary text |
-| `--ember-*` | 600, 500, 400, 300 | The accent, "Marigold": play, progress, focus, the active destination, primary calls to action, chosen filters. 400 is the accent text tier. Default `255 164 46` |
-| `--tide-*` | 500, 400 | "Rose", the support colour: live and AI moments, the Marigold → Rose gradient. Default `255 99 132` |
-
-In the light theme the ink ramp inverts and every accent ramp re-pitches darker so accent text stays readable on a light canvas.
-
-Components use the semantic layer on top of the ramps:
-
-| Token | Dark value |
-| --- | --- |
-| `--vx-bg-base` | `ink-950` — shell, sidebar, player bar |
-| `--vx-bg-elevated` | `ink-900` — the workspace and the top bar |
-| `--vx-bg-hover` | `ink-800` |
-| `--vx-surface` / `--vx-surface-raised` | `ink-900` / `ink-850` |
-| `--vx-border` | `--glass-border` (a 6% white hairline in dark, an 8% dark hairline in light) |
-| `--vx-text-primary` / `-secondary` / `-muted` | `ink-100` / `ink-300` / `ink-400` |
-| `--vx-accent` / `--vx-accent-hover` | `ember-500` / `ember-400` |
-| `--vx-on-accent` | `#1a0e06` (deep brown) in dark, `#fff` in light |
-| `--vx-focus` | `ember-400` |
-| `--vx-danger` / `--vx-success` | `#fda4af` / `#86efac` in dark; `#be123c` / `#166534` in light |
-| `--vx-art-accent` | `--art`, the colour extracted from the playing artwork |
-
-Hairlines use `border-glass` or `border-glass-strong`, never a white-alpha border: white alpha disappears on light surfaces.
 
 ## Type
 
-Two families since 10.0: Manrope variable for body and interface text (self-hosted at `/fonts/manrope-var.woff2`, weights 200–800), and Bricolage Grotesque variable for display type (`--vx-font-display`, `font-display`; `/fonts/bricolage-var.woff2`, weights 200–800, SIL OFL). See 10.0 "Marigold" above for where the display face is used.
+An app style may swap the body face through `--tpl-font-body`; what follows is the base.
+
+Two families: Manrope variable for body and interface text (self-hosted at `/fonts/manrope-var.woff2`, weights 200–800), and Bricolage Grotesque variable for display type (`--vx-font-display`, `font-display`; `/fonts/bricolage-var.woff2`, weights 200–800, SIL OFL). See 10.0 "Marigold" above for where the display face is used.
 
 | Token | Value | Tailwind class | Used for |
 | --- | --- | --- | --- |
@@ -172,12 +170,12 @@ Headings track tight (`-0.035em` for display and page, `-0.025em` for sections) 
 ## Spacing, radii, elevation
 
 - Spacing: `--vx-space-1` to `--vx-space-16` on a 4px grid (4, 8, 12, 16, 20, 24, 32, 40, 48, 64). Tailwind's default spacing scale matches it.
-- Radii: `--vx-radius-control` 10px (inputs, tiles), `--vx-radius-card` 14px (cards), `--vx-radius-panel` 20px (heroes, panels, the workspace sheet); actions and filters are pills, play buttons and artwork squircles (see 9.0 Encore above). Tailwind adds `rounded-card` (0.75rem), `rounded-sheet` (1.25rem), `rounded-2xl` (0.875rem), `rounded-3xl` (1rem) and `rounded-pill`. Artist artwork is a circle.
+- Radii: `--vx-radius-control` 10px (inputs, tiles), `--vx-radius-card` 14px (cards), `--vx-radius-panel` 20px (heroes, panels, the workspace sheet); actions and filters are pills, play buttons and artwork squircles. Tailwind adds `rounded-card` (0.75rem), `rounded-sheet` (1.25rem), `rounded-2xl` (0.875rem), `rounded-3xl` (1rem) and `rounded-pill`. Artist artwork is a circle.
 - Elevation is mostly flat: `shell.css` removes shadows from glass cards and panels; separation comes from surface tiers and hairlines. The floating player deck and artwork carry a soft shadow (`--vx-deck-shadow`, `--vx-art-shadow`). Overlays use `--vx-shadow-overlay`. Tailwind's `shadow-card`, `shadow-float` and `shadow-lift` are contact shadows only.
 
 ## The medium control scale
 
-These four tokens describe what a control looks like. They were introduced in 7.0.1 so every surface uses the same sizes.
+These four tokens describe what a control looks like. They exist so every surface uses the same sizes.
 
 | Token | Value | Read by |
 | --- | --- | --- |
@@ -195,19 +193,19 @@ The rule: the visual box may be 36 or 40px, but the touch target is at least 44p
 - `IconButton` adds an invisible `::after` pad: `-inset-1` for `sm` (36 → 44px) and `-inset-0.5` for `md` (40 → 44px). `lg` is 48px and needs none. Use `IconButton` for every icon-only control; it also requires a `label`, defaults to `type="button"`, and forwards `aria-pressed`, `aria-expanded` and `aria-controls`.
 - Rows and links that are their own target set `min-height: 44px` directly: sidebar links, section links, the profile link, Home Studio buttons, player tabs, library inputs. Tailwind exposes this as `min-h-touch` / `min-w-touch`.
 - Dock items are 56px tall. The card play button is a 44px disc.
-- `Chip` is 36px tall with an `::after` pad that extends the hit box 4px above and below (44px). 7.0.1 shipped the smaller chip without the pad; 7.1 adds it, and `components/Chip.test.tsx` asserts it.
+- `Chip` is 36px tall with an `::after` pad that extends the hit box 4px above and below (44px). `components/Chip.test.tsx` asserts the pad.
 - On coarse pointers (`html.pointer-coarse`, set in `main.tsx`) range inputs get a 44px min-height, and hover-only affordances (`.card-play`, `.hover-reveal`) are always visible.
 
 ## Focus and states
 
-- `:focus-visible` draws a 2px `--vx-focus` outline with a 4px offset, in both themes.
+- `:focus-visible` draws a 2px `ember-500` outline with a 2px offset and a soft 5px halo (`ember-500` at 32%) in every theme (`index.css`; the `--vx-focus` token exists but the ring does not read it). Text-like inputs use a quieter border shift instead.
 - Buttons: hover brightens, active scales to 0.98, disabled is 45% opacity with no transform. `.btn-premium` is an alias of `.btn-primary`.
 - Loading uses the `Skeletons` components; empty and error states use `States` (`EmptyState`, `ErrorState` with retry).
 - The current track row is tinted with `ember-500` at 8%. Toggles announce state through `aria-pressed`, not colour alone.
 
 ## Overlays
 
-`<Sheet>` (`frontend/src/components/Sheet.tsx`) is the one overlay shell: a bottom sheet on phones, a centred dialog from the `sm` breakpoint up. Since 10.1 its panel is the `thick` frosted material (see above).
+`<Sheet>` (`frontend/src/components/Sheet.tsx`) is the one overlay shell: a bottom sheet on phones, a centred dialog from the `sm` breakpoint up. Its panel is the `thick` frosted material (see above).
 
 | It owns | Detail |
 | --- | --- |
@@ -240,11 +238,11 @@ It also skips events an overlay already handled (`defaultPrevented`). The rule f
 ## Motion
 
 - One easing, `--ease-calm` (`cubic-bezier(0.32, 0.72, 0, 1)`), and three durations: 140ms (`--vx-motion-fast`), 200ms (`--vx-motion-normal`), 320ms (`--transition-slow`).
-- Marigold, like Encore before it, is quiet by design: no bounce, no pulsing glow; cards lift 3px on hover and their play button rises in. Shell and Home transitions run 140–240ms.
+- The base motion is quiet by design: no bounce, no pulsing glow; cards lift 3px on hover and their play button rises in. Shell and Home transitions run 140–240ms.
 - Two switches silence motion: the OS `prefers-reduced-motion` setting and the in-app "Reduce motion" setting, which sets `html.reduce-motion`. `index.css` collapses every animation and transition under that class; `shell.css` does the same for `.vx-shell` and `.ai-root` under either switch. Marquee text falls back to an ellipsis.
 - CSS cannot stop a scripted scroll. Every scripted scroll asks `frontend/src/utils/motion.ts` first: `reducedMotion()` is true for either switch, and `scrollBehavior()` returns `'auto'` or `'smooth'` accordingly. Pass `behavior: scrollBehavior()` to `scrollIntoView`, `scrollTo` and `scrollBy`; never hard-code `'smooth'`. The shelf arrows, synced lyrics, the tutorial runner and the VinaX AI thread already do.
-- `prefers-reduced-transparency` replaces glass surfaces, the 10.1 materials included, with solid ones.
-- 10.1's moving parts follow the same switches: Now Playing's drifting backdrop and the snackbars' entry and exit stop under either one.
+- `prefers-reduced-transparency` replaces glass surfaces with solid ones.
+- Moving parts follow the same switches: Now Playing's drifting backdrop and the snackbars' entry and exit stop under either one.
 
 ## Top bar and the actions slot
 
@@ -253,8 +251,8 @@ It also skips events an overlay already handled (`defaultPrevented`). The rule f
 | Left — where you are | Right — what you can do |
 | --- | --- |
 | Back and forward buttons (from `md` up); the app icon linking Home (phones) | The page's own actions (the slot) |
-| The context label: the matching `PRIMARY_NAV` label, or "Your music" on other routes | The command-palette key (from `lg` up) |
-| | The settings link ("Your space" label from `2xl` up) |
+| The context label: the matching `PRIMARY_NAV` or `NAV_GROUPS` item label, or "VinaX" on other routes | The command-palette key (from `lg` up) |
+| | The avatar, a link to Settings labelled "Local profile and settings" |
 
 A page adds actions to the bar with `<TopBarActions>` instead of rendering a button row of its own:
 
@@ -270,11 +268,12 @@ import { TopBarActions } from '@/components/TopBar';
 
 ## Hard rules
 
-1. No raw hex values in components. The standing exceptions are canvas share cards and chart palettes.
+1. No raw hex values in components. The standing exceptions are canvas share cards, chart palettes and the canvas table that the pre-paint script needs.
 2. No white-alpha borders or text; use the ink ramp and the glass hairlines.
-3. No arbitrary radii; use the three radius tokens or the Tailwind names above.
+3. No arbitrary radii; use the radius tokens, the `--tpl-r-*` dials or the Tailwind names above.
 4. Icon-only controls use `IconButton`. Touch targets are at least 44px.
 5. New overlays use `<Sheet>`. A custom portal marks its root with `data-vx-overlay`.
 6. Scripted scrolling uses `scrollBehavior()`.
 7. Anything sticky under the top bar reads `--vx-topbar-h`.
-8. A theme-affecting change keeps `theme.test.ts` and `contrast.test.ts` green. See [testing.md](testing.md).
+8. Every animation has an answer for both reduced-motion switches: `html.reduce-motion` (the setting) and `@media (prefers-reduced-motion: reduce)`.
+9. A change that affects the look keeps `theme.test.ts`, `contrast.test.ts` and `templates.test.ts` green. See [testing.md](testing.md).

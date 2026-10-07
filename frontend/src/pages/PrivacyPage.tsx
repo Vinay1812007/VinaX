@@ -15,7 +15,7 @@ export default function PrivacyPage() {
         <p>
           Everything personal: your name, favorites, listening history, downloads, queue, taste profile, streaks,
           settings and every VinaX AI chat. None of it is uploaded, synced or backed up by us — which also means only
-          you can lose it, and only you can export it (Settings → Your Data).
+          you can lose it, and only you can export it (Settings → Your data).
         </p>
         <H>What we receive — only if you opt in</H>
         <p>
@@ -92,7 +92,7 @@ export default function PrivacyPage() {
         </p>
         <H>Your controls</H>
         <p>
-          Settings → Your Data can export your entire profile as one file, import it on a new device, or erase
+          Settings → Your data can export your entire profile as one file, import it on a new device, or erase
           everything in one tap. Because nothing personal is on our servers, local erase is total erase.
         </p>
         <p className="vx-doc-end">
