@@ -6,7 +6,10 @@
  *   reasons in Search Console, and apex visitors accumulated a separate
  *   service worker + cache that could wedge independently of www (the
  *   2026-08-17 stuck-shell screenshots were on the apex). Permanent
- *   redirect, path + query preserved.
+ *   redirect, path + query preserved. Since 11.0.3 the apex is not a Worker
+ *   route (see wrangler.toml): the static host's _redirects does this 301, so
+ *   the apex never depends on the Worker's quota. This branch stays as a
+ *   fallback for any apex request that does reach the Worker.
  *   update.<domain>/*  → 302 to /api/apk (streams the newest APK from the
  *   private repo via the server-side token; nothing needs manual uploading).
  *   admin.<domain>/    → 302 to /admin/ (the token-gated admin dashboard).
