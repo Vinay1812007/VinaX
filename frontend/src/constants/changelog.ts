@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.0.2': {
+    title: 'Steadier mornings',
+    changes: [
+      { type: 'fixed', text: 'Search, Home and VinaX AI could stop working for the rest of the day, most often from mid-morning: automated traffic on song, album and artist pages used up the server’s daily allowance. Those pages now open straight from the app, so they no longer use that allowance and the server stays available to you all day.' },
+    ],
+  },
   '11.0.1': {
     title: 'Search suggestions keep your pick',
     changes: [

@@ -29,7 +29,7 @@ This document is a map of VinaX: the two deployed services, the app shell and it
 │  host middleware ─ exact routes ─ dynamic routes ─ /api/cat/* ─ hubs │
 │  anything unmatched ─► the static site                               │
 │  /api/*  AI lanes, catalogue proxy, events, push, rooms, admin       │
-│  /song /album /artist /playlist  edge-rendered pages for crawlers    │
+│  hub pages (/<lang>-<mood>-songs)  edge-rendered for crawlers        │
 │  /sitemap*  /img  /apk                                               │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -199,7 +199,7 @@ The build emits `/precache-manifest.json` (a small plugin in `vite.config.ts`) w
 
 1. Host middleware (`functions/_middleware.ts`): the apex host redirects to `www`, the `update.` host redirects to the APK download, the `admin.` host redirects to `/admin/`.
 2. An exact-path table for every `/api/**` handler, `/apk`, `/img` and the sitemaps. A test (`worker/__tests__/routerCoverage.test.ts`) fails when a handler file has no entry.
-3. Dynamic entity routes: `/song/:id`, `/album/:id`, `/artist/:id`, `/playlist/:id`, `/sitemaps/:map`.
+3. Dynamic entity routes: `/song/:id`, `/album/:id`, `/artist/:id`, `/playlist/:id`, `/sitemaps/:map`. Since 11.0.2 the first four are not Worker routes in `wrangler.toml`, so production never sends them here: the static site serves them as the ordinary app. The handlers remain for the day the routes come back.
 4. `/api/cat/*`, the self-hosted catalogue. It speaks the same route dialect as the other catalogue bases. Stream URLs are resolved at play time and answered with a redirect, so audio bytes do not pass through the Worker.
 5. Single-segment paths go to the hub allow-list (`functions/[hub].ts`).
 6. Anything else is fetched from the static site named by `ASSETS_HOST` in `wrangler.toml`.

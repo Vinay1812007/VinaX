@@ -1,6 +1,6 @@
 # VinaX backend
 
-This package is the `vinax-api` Worker. It serves everything dynamic on the VinaX domain: `/api/*`, edge-rendered song, album, artist, playlist and hub pages, the sitemaps, the image proxy (`/img`), the Android package download (`/apk`) and the host redirects. Any URL it does not claim is passed to the static frontend. This file covers the layout and the everyday commands; routes, AI lanes, secrets and deployment are in [../docs/](../docs/README.md).
+This package is the `vinax-api` Worker. It serves everything dynamic on the VinaX domain: `/api/*`, edge-rendered hub pages (song, album, artist and playlist pages are served by the static site since 11.0.2 — see `wrangler.toml`), the sitemaps, the image proxy (`/img`), the Android package download (`/apk`) and the host redirects. Any URL it does not claim is passed to the static frontend. This file covers the layout and the everyday commands; routes, AI lanes, secrets and deployment are in [../docs/](../docs/README.md).
 
 ## Layout
 
