@@ -2,6 +2,7 @@ import { KEYS } from '@/constants/storage-keys';
 import { getLocal, removeLocal, setLocal } from '@/services/storage/local';
 import { installId } from '@/services/identity/installId';
 import { isNativePlatform } from '@/services/native';
+import { oneShotHumanToken, turnstileEnabled } from '@/services/turnstile';
 
 /**
  * Username claim state machine.
@@ -35,7 +36,7 @@ export interface PendingClaim {
 export type ClaimOutcome =
   | { status: 'confirmed'; username: string }
   | { status: 'taken'; username: string; suggestions: string[] }
-  | { status: 'pending'; username: string; reason: 'offline' | 'server' };
+  | { status: 'pending'; username: string; reason: 'offline' | 'server' | 'check' };
 
 export function pendingClaim(): PendingClaim | null {
   const p = getLocal<PendingClaim | null>(KEYS.userHandlePending, null);
@@ -77,10 +78,20 @@ interface ClaimReply {
  * 2xx `ok`; a 409 reports `taken`; anything else (offline, 5xx, malformed
  * reply) parks the claim as PENDING so it can be retried and the UI can say
  * so truthfully.
+ *
+ * 11.1.0 — the claim carries a human-check token. `humanToken` supplies it
+ * from a widget already on screen (onboarding); without one, a temporary
+ * widget is shown only if the check needs a tap. A refused check (403) is
+ * parked like a server error: the welcome must not stall on it, and the next
+ * retry brings a fresh token.
  */
-export async function claimHandle(username: string, name: string): Promise<ClaimOutcome> {
+export async function claimHandle(
+  username: string,
+  name: string,
+  humanToken?: () => Promise<string | null>,
+): Promise<ClaimOutcome> {
   const u = username.trim().toLowerCase();
-  const park = (reason: 'offline' | 'server'): ClaimOutcome => {
+  const park = (reason: 'offline' | 'server' | 'check'): ClaimOutcome => {
     const prev = pendingClaim();
     setLocal<PendingClaim>(KEYS.userHandlePending, {
       username: u,
@@ -93,6 +104,7 @@ export async function claimHandle(username: string, name: string): Promise<Claim
   };
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return park('offline');
   try {
+    const token = turnstileEnabled() ? await (humanToken ?? (() => oneShotHumanToken('username')))() : null;
     const res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -102,6 +114,7 @@ export async function claimHandle(username: string, name: string): Promise<Claim
         signed_device_id: getLocal<string>(KEYS.signedDeviceId, '') || undefined,
         deviceId: installId(),
         current_username: confirmedHandle() ?? undefined,
+        turnstile_token: token ?? undefined,
       }),
     });
     if (res.status === 409) {
@@ -111,6 +124,7 @@ export async function claimHandle(username: string, name: string): Promise<Claim
       setLocal<PendingClaim>(KEYS.userHandlePending, { username: u, name, since: Date.now(), status: 'taken', suggestions, lastTry: Date.now() });
       return { status: 'taken', username: u, suggestions };
     }
+    if (res.status === 403) return park('check');
     if (!res.ok) return park('server');
     const j = (await res.json().catch(() => null)) as ClaimReply | null;
     if (!j?.ok) return park('server');

@@ -12,6 +12,13 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.1.0': {
+    title: 'A quiet check against fake accounts',
+    changes: [
+      { type: 'new', text: 'Choosing your username now includes a quick check that you are a person, so scripts cannot grab usernames in bulk. Almost everyone sees nothing; if the check needs a tap, a small box appears under the username.' },
+      { type: 'improved', text: 'If the check cannot finish, the welcome still carries on and VinaX confirms your username later, as it already does when you are offline.' },
+    ],
+  },
   '11.0.4': {
     title: 'Music now comes from our own address',
     changes: [

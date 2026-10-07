@@ -55,7 +55,8 @@ describe('OnboardingSheet (11.0 welcome)', () => {
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'tester_one' } });
     press('Continue');
     await heading('Choose your languages');
-    expect(claimHandle).toHaveBeenCalledWith('tester_one', 'Tester');
+    // The third argument hands over the on-screen human check's token (11.1.0).
+    expect(claimHandle).toHaveBeenCalledWith('tester_one', 'Tester', expect.any(Function));
     expect(getLocal<string>(KEYS.userName, '')).toBe('Tester');
 
     // Back, then Continue with the same username: it is not claimed twice.

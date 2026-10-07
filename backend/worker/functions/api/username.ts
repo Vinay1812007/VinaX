@@ -10,10 +10,11 @@
  * shared by every client behind one network + browser build).
  *
  *   GET  /api/username?u=<handle>            → { available: boolean }
- *   POST /api/username { username, name?, signed_device_id?, deviceId?, current_username? }
+ *   POST /api/username { username, name?, signed_device_id?, deviceId?, current_username?, turnstile_token? }
  *        → 200 { ok, username, signed_device_id_next? }
  *        → 409 { error: "taken", suggestions: [...] }   (already exists)
  *        → 400 { error: "invalid" }                     (bad format)
+ *        → 403 { error: "challenge" }                   (human check missing or failed)
  *        → 503 { error: "unavailable" }                 (store unreachable)
  *
  * Uniqueness is enforced case-insensitively: application-level check here
@@ -23,8 +24,9 @@
 import { sbSelect, sbSelectRes, sbUpsert, supabaseConfigured, type SupabaseEnv } from '../_lib/supabase';
 import { mintFreshIdentity, resolveIdentity, type IdentityEnv, type ResolvedIdentity } from '../_lib/identity';
 import { rateLimit } from '../_lib/ratelimit';
+import { verifyTurnstile, type TurnstileEnv } from '../_lib/turnstile';
 
-type Env = SupabaseEnv & IdentityEnv;
+type Env = SupabaseEnv & IdentityEnv & TurnstileEnv;
 
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
@@ -137,6 +139,11 @@ export const onRequestPost = async (ctx: { request: Request; env: Env }): Promis
   if (!body) return json({ error: 'invalid' }, 400);
   const username = normalize(body.username);
   if (!username) return json({ error: 'invalid' }, 400);
+  // 11.1.0 — a claim writes a row, so a script must not be able to mint
+  // handles in bulk. Checked before any store read. Off while
+  // TURNSTILE_SECRET_KEY is unset (_lib/turnstile.ts).
+  const human = await verifyTurnstile(env, request, body.turnstile_token, 'username');
+  if (human === 'missing' || human === 'invalid') return json({ error: 'challenge' }, 403);
 
   const claimer = await resolveClaimer(request, env, body);
   if (!claimer) return json({ error: 'unavailable' }, 503);
