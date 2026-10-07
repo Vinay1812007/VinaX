@@ -488,7 +488,9 @@
       (storageFailed
         ? '<p class="ops-warning" role="alert">Browser storage is unavailable. These changes will be lost on reload. Download a handover to keep a copy.</p>'
         : '') +
-      (failures.length
+      (failures.length >= 2 && window.VXA && window.VXA.stateError
+        ? window.VXA.stateError('Audience metrics and search analytics could not be read. Nothing is shown as zero; the task board below still works.', refresh)
+        : failures.length
         ? '<p class="ops-warning" role="status">Unavailable: ' +
           failures.map(esc).join(', ') +
           '. Other workspace tools remain available.</p>'

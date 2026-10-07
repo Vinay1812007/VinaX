@@ -71,6 +71,33 @@
     if (typeof onRetry === 'function') retryFns[id] = onRetry;
     return '<div class="state state-error" role="alert"><div class="state-title">Could not load this</div><div class="state-hint">' + esc(message || 'Check the connection, then try again.') + '</div><button type="button" class="btn state-retry" data-retry="' + id + '">Try again</button></div>';
   }
+  // 11.0 — every field gets an accessible name. Sections build their forms as
+  // HTML strings in ~40 places; rather than chase each one, name the field from
+  // its placeholder, a wrapping <label>, the text right before it, or the
+  // nearest heading. Runs after every repaint of #view and the dialog.
+  function nameFields(root) {
+    if (!root || !root.querySelectorAll) return;
+    var list = root.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]), select, textarea');
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i];
+      if (f.getAttribute('aria-label') || f.getAttribute('aria-labelledby') || f.getAttribute('title')) continue;
+      if (f.id && root.querySelector('label[for="' + f.id.replace(/"/g, '') + '"]')) continue;
+      var lab = f.closest('label'), text = '';
+      if (lab) text = (lab.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text) text = (f.getAttribute('placeholder') || '').trim();
+      if (!text) { var p = f.previousSibling; while (p && p.nodeType === 3 && !p.textContent.trim()) p = p.previousSibling; if (p && (p.nodeType === 3 || /^(SPAN|B|LABEL|SMALL)$/.test(p.nodeName))) text = (p.textContent || '').replace(/\s+/g, ' ').trim(); }
+      if (!text && f.tagName === 'SELECT' && f.options.length) text = (f.options[0].textContent || '').trim();
+      if (!text) { var h = f.closest('.card, section, #view'); var hh = h && h.querySelector('h2, h3, h4'); text = hh ? (hh.childNodes[0] && hh.childNodes[0].textContent || hh.textContent).trim() : ''; if (text) text += f.tagName === 'SELECT' ? ' — choice' : ' — field'; }
+      if (!text) text = f.tagName === 'SELECT' ? 'Choice' : f.getAttribute('name') || 'Text field';
+      f.setAttribute('aria-label', text.slice(0, 120));
+    }
+  }
+  try {
+    var nfTimer = 0, nfTargets = [document.getElementById('view'), document.getElementById('modalBody')].filter(Boolean);
+    var nfObs = new MutationObserver(function () { clearTimeout(nfTimer); nfTimer = setTimeout(function () { nfTargets.forEach(nameFields); }, 30); });
+    nfTargets.forEach(function (t) { nfObs.observe(t, { childList: true, subtree: true }); });
+    nfTargets.forEach(nameFields);
+  } catch (_nf) {}
   document.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button.state-retry') : null;
     if (!b || b.disabled) return;
@@ -506,6 +533,7 @@
       if (r[0]) lastWorldLoc = r[0];
       if (r[1]) lastWorldLive = r[1];
       if (active !== 'world') return;
+      if (!r[0] && !r[1] && !lastWorldLoc && !lastWorldLive) { showFail('Unavailable — location and live listening could not be read. Nothing is shown as zero while the read is failing; try again shortly.'); return; }
       // Repaint only when something changed OR the section was just entered
       // (view still shows "Loading…"). Unchanged auto-ticks skip the repaint
       // so map pan/zoom isn't reset every 10 s.
@@ -2474,7 +2502,7 @@
       if (!rows) { host.innerHTML = emptyState('empty_music','No curated data yet','As listens accrue, top tracks from /api/admin/music will seed each list here.'); return; }
       host.innerHTML = '<h3>Live seed from /api/admin/music — ' + esc(tabs.filter(function(t){return t[0]===plTab;})[0][1]) + '</h3>' +
         '<table><thead><tr><th>Title</th><th>Artist</th><th>Plays</th></tr></thead><tbody>' + rows + '</tbody></table>';
-    }).catch(noop);
+    }).catch(function () { var host = active === 'playlists' && $('pl-live-box'); if (host) host.innerHTML = stateError('The curation preview could not be read. Check the connection, then try again.', renderPlaylistsSection); });
     stamp();
   }
 
@@ -2521,9 +2549,13 @@
         bnSaved = (d && Array.isArray(d.value)) ? d.value : [];
         if (active === 'banners') renderBannersSection();
       }).catch(function () {
-        bnSaved = [];
+        bnSaved = 'failed';
         if (active === 'banners') renderBannersSection();
       });
+      return;
+    }
+    if (bnSaved === 'failed') {
+      $('view').innerHTML = stateError('Published banners could not be read. Nothing is shown as empty while the read is failing; try again shortly.', function () { bnSaved = null; renderBannersSection(); });
       return;
     }
     var saved = bnSaved;
@@ -3060,6 +3092,7 @@
     var snapshot = {};
     Promise.all(BACKUP_KEYS.map(function (k) { return cfgGet(k).then(function (d) { return { key: k, d: d }; }).catch(function () { return { key: k, d: null }; }); })).then(function (rs) {
       if (active !== 'backup') return;
+      if (rs.every(function (r) { return r.d === null; })) { var bkCard = $('bk-rows') && $('bk-rows').closest('.card'); if (bkCard) { bkCard.innerHTML = stateError('Published settings could not be read. Nothing is shown as empty while the read is failing; try again shortly.', renderBackupSection); } return; }
       $('bk-rows').innerHTML = rs.map(function (r) { var v = r.d && r.d.value; if (v != null) snapshot[r.key] = v; var size = v == null ? 0 : JSON.stringify(v).length; return '<tr><td><code>' + esc(r.key) + '</code></td><td class="muted">' + (r.d && r.d.updated_at ? ago(r.d.updated_at) : '—') + '</td><td class="muted">' + (size ? (size / 1024).toFixed(1) + ' KB' : 'empty') + '</td></tr>'; }).join('');
       stamp();
     });
@@ -3344,7 +3377,7 @@
   }
   // 14. Status history — the public status API, 90 days.
   function loadStatusHistory() {
-    fetch(wwwOrigin() + '/api/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    fetch(wwwOrigin() + '/api/status', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('status ' + r.status); return r.json(); }).then(function (d) {
       if (active !== 'statushist') return;
       var comps = d.components || [];
       $('view').innerHTML =
@@ -3379,6 +3412,7 @@
       api('/api/status').catch(function () { return null; })
     ]).then(function (all) {
       if (active !== 'opscenter') return;
+      if (!all[0] && !all[1] && !all[2]) { showFail('Unavailable — cron, environment and status could not be read. Nothing is shown as healthy while the reads are failing; try again shortly.'); return; }
       var cron = all[0] || {}, env = all[1] || {}, status = all[2] || {};
       var jobs = Array.isArray(cron.jobs) ? cron.jobs : [];
       var components = Array.isArray(status.components) ? status.components : [];
@@ -3442,7 +3476,7 @@
   }
   // 17. Release notes — the app's own update cards.
   function loadReleaseNotes() {
-    fetch(wwwOrigin() + '/changelog.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    fetch(wwwOrigin() + '/changelog.json', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('status ' + r.status); return r.json(); }).then(function (d) {
       if (active !== 'relnotes') return;
       var rel = d.releases || [];
       $('view').innerHTML = '<div class="cards">' + card(rel.length, 'Releases with cards') + card(rel[0] ? 'v' + rel[0].version : '—', 'Latest') + card(d.generatedAt ? ago(d.generatedAt) : '—', 'Built') + '</div>' +

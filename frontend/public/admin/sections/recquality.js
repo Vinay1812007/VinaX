@@ -46,7 +46,7 @@
   function windowBar(h) {
     return '<div class="seg" role="group" aria-label="Window" style="margin-bottom:var(--s-4)">' + WINDOWS.map(function (w) {
       var on = w[0] === days;
-      return h.html`<button type="button" data-rq-days="${w[0]}" aria-pressed="${on ? 'true' : 'false'}">${w[1]}</button>`;
+      return h.html`<button type="button" class="seg-btn" data-rq-days="${w[0]}" aria-pressed="${on ? 'true' : 'false'}">${w[1]}</button>`;
     }).join('') + '</div>';
   }
 
