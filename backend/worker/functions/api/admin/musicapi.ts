@@ -17,7 +17,7 @@ const QUERY = 'search/songs?query=telugu&limit=1';
 const MIRRORS = [
   // v5.6.6 — the owner's own hosted wrapper (Render free tier: expect a slow
   // first ping after idle; that cold-start showing here is the honest truth).
-  { id: 'vinax-render', label: 'vinax-saavan-api.onrender.com', base: 'https://vinax-saavan-api.onrender.com/api' },
+  { id: 'vinax-render', label: 'vinaxmusicapi.sirimillavinay.online', base: 'https://vinaxmusicapi.sirimillavinay.online/api' },
   { id: 'saavn-sumit', label: 'saavn.sumit.co', base: 'https://saavn.sumit.co/api' },
   { id: 'saavn-dev', label: 'saavn.dev', base: 'https://saavn.dev/api' },
   { id: 'nepotune', label: 'nepotuneapi.vercel.app', base: 'https://nepotuneapi.vercel.app/api' },

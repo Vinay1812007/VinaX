@@ -128,7 +128,7 @@
           var q = 'top ' + lang + ' songs ' + new Date().getFullYear();
           // v5.6.7 — the prefetch must hit the FIRST ranked base so the
           // orchestrator consumes it by exact URL match: the VinaX Music API.
-          var url = 'https://vinax-saavan-api.onrender.com/api/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
+          var url = 'https://vinaxmusicapi.sirimillavinay.online/api/search/songs?query=' + encodeURIComponent(q) + '&limit=20';
           window.__vxBoot = {
             url: url,
             json: fetch(url, { headers: { Accept: 'application/json' } })

@@ -24,7 +24,7 @@ describe('boot prefetch consumption', () => {
     const fetchSpy = vi.fn(() => Promise.reject(new Error('network should not be hit')));
     vi.stubGlobal('fetch', fetchSpy);
     w.__vxBoot = {
-      url: 'https://vinax-saavan-api.onrender.com/api/search/songs?query=top%20hindi%20songs%202099&limit=20',
+      url: 'https://vinaxmusicapi.sirimillavinay.online/api/search/songs?query=top%20hindi%20songs%202099&limit=20',
       json: Promise.resolve({ marker: 'prefetched' }),
     };
     const out = await orchestratedRequest<{ marker: string }>({
@@ -41,7 +41,7 @@ describe('boot prefetch consumption', () => {
       Promise.resolve(new Response(JSON.stringify({ marker: 'network' }), { headers: { 'content-type': 'application/json' } })),
     );
     vi.stubGlobal('fetch', fetchSpy);
-    w.__vxBoot = { url: 'https://vinax-saavan-api.onrender.com/api/other', json: Promise.resolve({ marker: 'prefetched' }) };
+    w.__vxBoot = { url: 'https://vinaxmusicapi.sirimillavinay.online/api/other', json: Promise.resolve({ marker: 'prefetched' }) };
     const out = await orchestratedRequest<{ marker: string }>({
       paths: ['/search/songs?query=x&limit=20'],
       validate: (j) => (j && typeof (j as { marker?: string }).marker === 'string' ? (j as { marker: string }) : null),
@@ -56,7 +56,7 @@ describe('boot prefetch consumption', () => {
     );
     vi.stubGlobal('fetch', fetchSpy);
     w.__vxBoot = {
-      url: 'https://vinax-saavan-api.onrender.com/api/search/songs?query=x&limit=20',
+      url: 'https://vinaxmusicapi.sirimillavinay.online/api/search/songs?query=x&limit=20',
       json: Promise.resolve(null),
     };
     const out = await orchestratedRequest<{ marker: string }>({

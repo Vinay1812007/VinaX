@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.0.4': {
+    title: 'Music now comes from our own address',
+    changes: [
+      { type: 'improved', text: 'Songs, search and videos now load from VinaX’s own music server address, vinaxmusicapi.sirimillavinay.online, instead of a borrowed one. Nothing changes in how you use the app.' },
+    ],
+  },
   '11.0.3': {
     title: 'Easier to find',
     changes: [
