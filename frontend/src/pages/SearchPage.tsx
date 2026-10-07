@@ -65,6 +65,8 @@ import { candidatePool, COMMON_NAMES, didYouMean } from '@/features/search/didYo
 import { useQuickResults } from '@/features/search/useQuickResults';
 import { putCachedQuick } from '@/features/search/quickResults';
 import {
+  indexOfKey,
+  itemKey,
   optionId,
   SearchTypeahead,
   stepSelection,
@@ -535,8 +537,14 @@ export default function SearchPage() {
     (taItems.length > 0 || (quick.loading && !lyricsMode));
   // Keyboard-first (P2-30): ↑/↓ walk every row, Enter picks the highlighted
   // one (or commits the typed text), Esc closes.
-  const [taSel, setTaSel] = useState(-1);
-  useEffect(() => setTaSel(-1), [typedNow, focused]);
+  // 11.0.1 — the highlight is held by the row's identity (itemKey), so rows that
+  // arrive or move while the listener is on the arrow keys can never put a
+  // different row under Enter. A highlighted row that leaves the list simply
+  // loses the highlight.
+  const [taKey, setTaKey] = useState<string | null>(null);
+  const taSel = indexOfKey(taItems, taKey);
+  const setTaSel = useCallback((i: number) => setTaKey(i >= 0 && i < taItems.length ? itemKey(taItems[i]) : null), [taItems]);
+  useEffect(() => setTaKey(null), [typedNow, focused]);
   const activeOption = showPanel && taSel >= 0 && taSel < taItems.length ? optionId('search-suggest', taSel) : undefined;
   useEffect(() => {
     if (activeOption) document.getElementById(activeOption)?.scrollIntoView({ block: 'nearest' });
@@ -715,7 +723,7 @@ export default function SearchPage() {
             onKeyDown={(e) => {
               if (showPanel && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
                 e.preventDefault();
-                setTaSel((v) => stepSelection(v, e.key === 'ArrowDown' ? 1 : -1, taItems.length));
+                setTaSel(stepSelection(taSel, e.key === 'ArrowDown' ? 1 : -1, taItems.length));
               } else if (e.key === 'Escape' && showPanel) {
                 e.preventDefault();
                 setClosedFor(typedNow);
