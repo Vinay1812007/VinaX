@@ -88,7 +88,7 @@ describe('OnboardingSheet (11.0 welcome)', () => {
     press('Next');
     press('Next');
     await heading('Yours to keep');
-    expect(screen.getByRole('button', { name: 'Live walkthrough' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Take a tour' })).toBeTruthy();
     press('Start listening');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(getLocal<boolean>(KEYS.onboarded, false)).toBe(true);

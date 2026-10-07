@@ -1,82 +1,107 @@
 # Library and backup
 
-This page covers what the Library holds, how playlists and Listen Later work, and how to keep all of it safe: exporting a backup, restoring with Merge or Replace, undoing a restore, moving to a new device and erasing data. VinaX has no login, so everything here lives on your device. The technical description is in [data and privacy](../data-and-privacy.md).
+This page covers what the Library holds, how to save music for later, and how to keep everything safe: making a backup, restoring one, moving to a new device and erasing data. VinaX has no sign-up, so your library lives on your device. A backup file, or a move to a new device, is the only way to carry it somewhere else. What leaves the device, and when, is listed in [data and privacy](../data-and-privacy.md).
 
 ## What the Library holds
 
-The Library page opens with shortcuts to **Favorites**, **Listen Later**, **Downloads**, **History**, **Your VinaX** (stats) and **Taste Profile**. Below them are your playlists, saved albums and artists, smart collections and **Listen Together**.
+Open **Library**. At the top are six shortcuts: **Liked songs**, **Listen later**, **Downloads**, **History**, **Your VinaX** (your listening in numbers) and **Taste profile**. Below them are your playlists, saved artists and saved albums, then **Smart collections**, **Listen Together**, **Recently deleted** and a **Keep it with you** block with the Backup Center.
 
-| Tool | How |
+| To do this | Do this |
 |---|---|
-| Search and sort | The search field filters favourites, saved music and playlists; sort by recently added or A–Z |
-| Listen Later | **Listen later** in any song menu, or swipe a song row left on a touch screen |
-| Playlists | Pin, tag and filter by tag, sort, shuffle-play, remove duplicates |
-| Import from text | Paste one song per line as “Title — Artist”. You review every match before anything is saved. |
-| Smart collections | Rules over the music already on this device, for example favourites in one language played this month |
-| Recently deleted | A deleted playlist can be restored for seven days |
-| Downloaded only | In the Android app, filters the Library to songs that play offline |
+| Find something | Type in the search field. It searches liked songs, saved music and playlists. |
+| Narrow the list | Use the chips: **All**, **Playlists**, **Artists**, **Albums**. Once you have playlists with tags, a tag filter appears too. |
+| Sort | Choose **Recently added** or **A to Z**. You can also switch between list and grid view. |
+| Make a playlist | Press **Create playlist**, or **Import from text** to start from a pasted list of songs. |
+| Save a song for later | Open the song's menu and choose **Listen later**. On a touch screen you can also swipe the song row left. |
+| Tidy a playlist | Open the playlist. Its menu offers **Remove duplicates** when it finds any, and **Shuffle play** plays it in random order. |
+| Get a deleted playlist back | Open **Recently deleted**. A deleted playlist stays there for 7 days. |
+| See only offline music | In the Android app, once you have downloads, tap the **Downloaded** chip. See [Android](android.md). |
+
+Smart collections are saved rules that build a list from the music already on your device: your liked songs, playlists, Listen later and history.
 
 ## What a backup includes
 
-A backup is one JSON file named `vinax-backup-<date>.json` (format `vinax-backup`, schema 2).
+A backup is one file. It holds these categories:
 
 | Category | Contents |
 |---|---|
-| Settings & preferences | Theme, accent, playback, sound, languages, accessibility and recommendation choices |
-| Library | Favourites, playlists (with tags, pins and descriptions), Listen Later, saved albums and artists, hidden songs |
+| Settings & preferences | Every setting: theme, accent, your [app style](app-styles.md), playback, sound, languages, accessibility and recommendation choices |
+| Library | Liked songs, playlists (with tags, pins and descriptions), Listen later, saved albums and artists, hidden songs and artists |
 | Smart collections | Your saved rules |
-| Listening history | Your last 150 plays, with completion marks |
-| Taste profile | The on-device taste summary and the Kid-mode profile |
-| Saved & recent searches | Saved search presets, pinned and recent searches |
+| Listening history | Your last 150 plays |
+| Taste profile | The taste summary kept on your device, and the Kid-mode profile |
+| Saved & recent searches | Saved searches, pinned and recent searches, and the compact results choice |
 | Song bookmarks | Moments you marked inside songs |
-| Home layout | Shelf order, hidden shelves and headline from Home Studio |
+| Home layout | Shelf order, hidden shelves and headline |
 | Name & username | Your display name and the username you chose |
-| Alarm, lyrics, streak & app preferences | Wake-up alarm, lyric sync offsets, karaoke history, streak, saved AI prompts, AI reply preferences |
-| VinaX AI chats | Conversation history; attachments are never stored |
+| Alarm, lyrics, streak & app preferences | Wake-up alarm, lyric timing adjustments, karaoke history, listening streak, sidebar groups, saved AI prompts, and your VinaX AI preferences, including the chat style |
+| VinaX AI chats | Your conversations. Attachments are never stored. |
 
-## What it leaves out, and why
+## What a backup leaves out
 
 | Left out | Why |
 |---|---|
-| Downloaded audio and download paths | Files stay on the device that saved them |
-| Device identity and the service-issued token | Identity is per install; **Move to a new device** carries it across |
-| Listen Together host keys | Credentials for rooms you host on this device |
-| Usage-sharing choice | Made per device on the welcome screen; a restore does not change it |
-| Queue, playback position and caches | Rebuilt on the next open |
-| Update reminders and What's New read state | Device-specific |
+| Downloaded audio | The files stay on the phone that saved them |
+| Device identity | It belongs to one install. **Move to a new device** carries it across. |
+| Listen Together host keys | They only work for sessions hosted on this device |
+| Your usage-sharing choice | It is asked again on each device. Sharing stays off after a restore until you turn it on. |
+| Queue, playback position and caches | They are rebuilt the next time you open VinaX |
+| Update reminders and What's New read state | They belong to this device |
 
-The username in a backup is a claim. After a restore VinaX confirms it with the service again; if it has been taken, you are asked to choose another.
+Your username is confirmed again after a restore. If someone else has taken it meanwhile, you choose another.
 
-## Export
+## Make a backup
 
-**Settings → Your Data → Export a backup**, or **Backup Center → Export a backup now**. The file is not encrypted; keep it where you keep other personal files. Files larger than 8 MB are refused on restore.
+1. Open **Settings** and go to **Your data**.
+2. Next to **Export a backup**, press **Export**.
 
-## Restore, with a preview
+The file downloads to your device. You can also open the **Backup Center** (from the same section, or from the bottom of the Library) and press **Export a backup now**.
 
-1. **Settings → Your Data → Backup Center → Choose a backup file…**
-2. VinaX reads the file and shows each category next to what is on this device. Damaged categories are listed and left out. Older export formats are migrated. Nothing has changed yet.
-3. Choose how to apply it:
+The file is not encrypted. Keep it where you keep other personal files.
+
+## Restore a backup
+
+1. Open **Settings → Your data → Backup Center** and press **Open**.
+2. Under **Restore from a file**, press **Choose a backup file…** and pick your file. Nothing changes yet.
+3. VinaX shows each category in the file next to what is on this device. Damaged categories are listed and left out.
+4. Under **How to apply**, choose **Merge** or **Replace**.
+5. Untick any category you do not want.
+6. If you want a way back, press **Download a safety copy first**.
+7. Press the **Merge** or **Replace** button. VinaX restores and reloads.
 
 | Mode | Result |
 |---|---|
-| Merge | Keeps everything on this device and adds what the file has. A song, playlist, bookmark or saved search already here is never added twice. Your alarm, Home layout and lyric timings stay as they are, the taste profile that has learned more is kept, and settings from the file win. |
+| Merge | Keeps everything on this device and adds what the file has. A song, playlist, bookmark or saved search that is already here is not added twice. Your alarm, Home layout and lyric timings stay as they are. |
 | Replace | The chosen categories become exactly what the file holds. Anything in those categories that is only on this device is removed. |
 
-4. Untick any category you do not want. **Download a safety copy first** saves the current state to a file.
-5. Restore. The app reloads.
+A file larger than 8 MB is refused. So is a file made by a newer VinaX than the one you are running; update first.
 
-### Undo
+### Undo a restore
 
-Open the Backup Center again **in the same tab** and use **Undo that restore**. The previous data is kept in the tab until you close it; after that, the safety copy is the way back.
+Open the Backup Center again in the same tab and press **Undo that restore**. The previous data is kept only until you close the tab. After that, the safety copy is the way back.
 
 ### Quick restore
 
-**Settings → Your Data → Restore a backup (quick)** replaces the categories in the file without a preview. A damaged file changes nothing. **Import a file** on the welcome screen does the same for a fresh install.
+**Settings → Your data → Restore a backup (quick)** replaces the categories in the file without a preview. A damaged file changes nothing. On a fresh install, **Import a file** on the welcome screen restores a backup before you start.
 
 ## Move to a new device
 
-**Settings → Your Data → Move to a new device** creates a one-time handoff, shown as a QR and a 10-character code. On the new device, tap **Move from old device** on the welcome screen and scan the QR or type the code. Your profile is encrypted on the old device before it is sent; the relay only holds the encrypted copy, for at most 10 minutes, and deletes it on first read. Unlike a backup file it also carries the device identity, so the new device continues as the old one.
+1. On the old device, open **Settings → Your data → Move to a new device** and press **Create a transfer**.
+2. VinaX shows a QR code, a 10-character code and six secret words.
+3. On the new device, tap **Move from old device** on the welcome screen. Scan the QR code, or type the code and the words.
+
+Your profile is encrypted on the old device before it is sent. The encrypted copy waits for 10 minutes at most and is destroyed as soon as the new device reads it. The import replaces what is on the new device and reloads. Unlike a backup file, a move also carries the device identity.
 
 ## Erase
 
-**Settings → Your Data** has separate rows to clear history, favourites, the queue, cached metadata and the taste profile. Clearing history or favourites offers Undo. **Reset taste profile** offers to download a backup first and lists what it erases (languages, artists, habits, dials and “Less like this” mutes) and what it keeps (favourites, playlists, history, Never play and your settings). **Reset app state** erases everything VinaX stores on this device and reloads. Downloaded audio in the Android app is managed from Downloads.
+**Settings → Your data** has a **Clear and reset** group:
+
+- **Clear history** and **Clear favorites** each offer Undo right after.
+- **Clear queue** empties the queue.
+- **Reset app state** erases everything VinaX stores on this device and reloads.
+
+**Clear cached metadata** is in the **Storage** group of the same section.
+
+To start your recommendations again without losing your library, use **Settings → Recommendations → Reset taste profile**. It shows what goes and what stays, and offers a backup first. There is no undo.
+
+Downloaded songs in the Android app are removed from **Library → Downloads**.

@@ -1,6 +1,6 @@
 # Testing
 
-This document covers how VinaX is tested: unit tests in both packages, the browser end-to-end suite and how its harness serves the built app, the shapes test fixtures must use, the bundle budget and the `core` chunk group, and a recipe for verifying one commit in a throw-away git worktree when other people are editing the same checkout. Every command here exists in `frontend/package.json`, `backend/package.json`, `frontend/scripts/` or `.github/workflows/`.
+This document covers how VinaX is tested: the gates CI runs, unit tests in both packages, the contract tests that lock the app-style, chat-style, festival and content-security rules, the browser end-to-end suite and how its harness serves the built app, the shapes test fixtures must use, the bundle budget and the `core` chunk group, and a recipe for verifying one commit in a throw-away git worktree.
 
 ## The gates
 
@@ -25,6 +25,8 @@ npm test
 npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/wrangler-dry
 ```
 
+`npm run build` starts by deleting `dist/` and the build caches of the folder it runs in; do not run it in a checkout whose dev server someone else is using — use the worktree recipe below.
+
 The browser suite has its own workflow (`.github/workflows/e2e.yml`): install the test browser, `npm run build`, `npm run e2e`. A separate workflow runs accessibility and search-engine checks against the prerendered routes on pushes to `main` (`lighthouse.yml`); its performance scores are advisory.
 
 ## Unit tests
@@ -36,7 +38,24 @@ Both packages use `vitest`.
 
 `frontend/src/__fixtures__/songs.ts` holds deterministic fixtures (`makeSong` and friends) for recommendation, player and Home tests. They use no randomness and no clock; a test that needs "now" passes its own timestamp.
 
-Some tests lock rules rather than behaviour: `cspHashes.test.ts` (inline-script hashes in `public/_headers`), `contrast.test.ts` (token contrast), `swShell.test.ts` (service-worker shell list), `sessionInsights.test.ts` (consent gating).
+## Contract tests
+
+Some tests lock a rule rather than a behaviour. They read source files and stylesheets, so they fail on the change that breaks the rule, not later in a browser.
+
+| Test | What each block guards |
+| --- | --- |
+| `frontend/src/constants/templates.test.ts` | **The list:** six app styles with unique ids and names, the default among them; unknown ids fall back to the default; no entry names another product. **Per style:** its file is imported by `templates/index.css` and styles only its own selector; its colour blocks stand down while a festival skin is on; its accent applies only while the listener has not chosen one; the canvas stamped before first paint equals its `--ink-900`. **Styles × accents:** every accent block is found and contrast-checked in every style and both themes. **The shared layer:** Black stays true black and high contrast stays above every style; the page entrance has a reduced-motion answer; the pre-paint script defaults to the same style as the app. |
+| `frontend/src/utils/theme.test.ts`, `src/__tests__/contrast.test.ts` | Theme resolution and class application; token contrast |
+| `frontend/src/features/settings/TemplatePicker.test.tsx` | The app-style picker |
+| `frontend/src/features/ai/chat/chatStyle.test.ts` | The chat-style list, the maker-family mapping and the stored preference |
+| `frontend/src/constants/festivals.test.ts`, `festivalVisuals.test.ts`, `src/components/FestiveSplash.test.tsx`, `src/features/home/festivalLookahead.test.ts`, `src/services/recommendation/festival.test.ts` | Festival dates, every festival having visuals, the greeting card, the look-ahead on Home, the festival signal in recommendations |
+| `frontend/src/features/tutorials/tutorials.test.ts`, `src/components/TutorialRunner.test.tsx`, `src/components/OnboardingSheet.test.tsx` | The tour list, the tour runner, the welcome sheet |
+| `frontend/src/__tests__/cspHashes.test.ts` | The inline-script hashes in `public/_headers` match `index.html`. After changing an inline script (the app-style canvas table and the festival window table are inside one), build and run `node scripts/csp-hashes.mjs` |
+| `frontend/src/__tests__/swShell.test.ts`, `sessionInsights.test.ts` | The service-worker shell list; consent gating |
+| `backend/worker/__tests__/routerCoverage.test.ts` | Every handler file is routed in `worker/index.ts` |
+| `backend/worker/__tests__/aiChatAudit.test.ts`, `aiAuditSweep.test.ts` | The Worker-side findings of the VinaX AI audit: the chat handler and the other AI routes, driven with mocked upstreams |
+
+Run one file with `npx vitest run <path>` from the package folder.
 
 ## Browser end-to-end tests
 
@@ -52,16 +71,16 @@ Some tests lock rules rather than behaviour: `cspHashes.test.ts` (inline-script 
 - One browser instance per spec file, a fresh context per test. Specs abort every request that is not to localhost and answer `/api/**` themselves with `page.route`. A red run means the app broke, not the network.
 - Three files are excluded from the run: `smoke.spec.ts` (replaced by the smoke script), `a11y.spec.ts` (needs a package that is not installed) and `qa-sweep.spec.ts` (an on-demand harness).
 
-### The 10.0 and 10.1 specs
+### Feature specs
 
 | Spec | What it proves | How |
 | --- | --- | --- |
 | `e2e/v100-together.spec.ts` | Listen Together across the app: a guest follows the host while both move to other pages, stays within the sync threshold, and a guest's request reaches the host as a **playable** song; a host who reloads the tab is still hosting | Two browser contexts (host and guest) talk through an in-memory stand-in for `/api/room` that keeps the server's contract (a `now` clock in every poll, guest requests as id/title stubs). The audio is a generated four-minute silent WAV served with byte ranges, so the guest can really seek. A spec clicks **Tap to start listening** when the browser asks for a gesture |
 | `e2e/v101-search.spec.ts` | The typeahead opens as you type with completions (typed part in bold) and song, artist and album hits, and is a real combobox (↑/↓ move the active option, Enter picks, Escape closes); the results lead with the **Top result** card and its play button plays; **allotment**: when the first catalogue endpoint stalls, an interactive search is hedged to the next and answers long before the stall ends | Two catalogue hosts are mocked with route handlers (the primary remote catalogue and the same-origin one); everything else off localhost is aborted |
 
-Unit tests that pin the same features: `services/api/allotment.test.ts` (ranking, hedge and abort, Retry-After, weighted spreading, the concurrency cap, de-duplication), `features/together/sync.test.ts` and `engine.test.ts`, `services/together/session.test.ts`, `features/ai/chat/Connectors.test.tsx`, `store/toastStore.test.ts` and `components/Toasts.test.tsx` (snackbars, keyed replacement), `__tests__/glass.test.ts` (the materials keep AA over any cover), and in the backend `__tests__/roomSync.test.ts`. (10.2 deleted the web search, live discovery and tool timeline tests with the code they covered.)
+Unit tests that pin the same features: `services/api/allotment.test.ts` (ranking, hedge and abort, Retry-After, weighted spreading, the concurrency cap, de-duplication), `features/together/sync.test.ts` and `engine.test.ts`, `services/together/session.test.ts`, `features/ai/chat/Connectors.test.tsx`, `store/toastStore.test.ts` and `components/Toasts.test.tsx` (snackbars, keyed replacement), `__tests__/glass.test.ts` (the materials keep AA over any cover), and in the backend `__tests__/roomSync.test.ts`.
 
-The guided tours (`features/tutorials/tutorials.ts`) have no spec of their own. After changing a tour, build, serve `dist/` (`npx vite preview`) and walk each tour in a real browser at a phone and a desktop size: every step with a `target` must spotlight a visible element, and its card must sit fully on screen. A target near the top of the screen needs `placement: 'bottom'`; a target further down a long page needs the step's `reveal` action, because the runner only accepts a match that is already in view.
+The guided tours (`features/tutorials/tutorials.ts`) have unit tests but no browser spec. After changing a tour, build, serve `dist/` (`npx vite preview`) and walk each tour in a real browser at a phone and a desktop size: every step with a `target` must spotlight a visible element, and its card must sit fully on screen. A target near the top of the screen needs `placement: 'bottom'`; a target further down a long page needs the step's `reveal` action, because the runner only accepts a match that is already in view.
 
 The test browser comes from `npx playwright-core install chromium`. To use an installed binary, set `E2E_CHROMIUM_PATH`. `E2E_PRINT_REQUESTS=1` makes `e2e/home-requests.spec.ts` print how many requests each endpoint received while Home loads:
 
@@ -137,5 +156,5 @@ Notes:
 | Question | How to answer it |
 | --- | --- |
 | Is the live catalogue or an AI lane up? | The status page, and the owner console's monitoring panels ([admin-console.md](admin-console.md)) |
-| Did the deploy land? | `GET /api/version` and the served `changelog.json` ([operations.md](operations.md)) |
+| Did the deploy land? | `/api/status`, the served `/changelog.json`, and a route the change added ([operations.md](operations.md)). `/api/version` reports the Android release, not the Worker build |
 | Do lock-screen controls, downloads and updates work on a phone? | A device run of [qa-device-script.md](qa-device-script.md); see [android.md](android.md) |

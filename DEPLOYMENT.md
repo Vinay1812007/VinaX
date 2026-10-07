@@ -44,7 +44,7 @@ npm ci
 npm run deploy:pages     # npm run build && wrangler pages deploy dist --project-name vinax
 ```
 
-`frontend/public/_headers` carries the content-security policy, including hashes of the inline scripts in `index.html`. If you change an inline script, build, then run `node scripts/csp-hashes.mjs`, which recomputes the hashes from `dist/index.html` and writes them to `dist/_headers` and back to `public/_headers`; `src/__tests__/cspHashes.test.ts` fails when they drift.
+`frontend/public/_headers` carries the content-security policy, including hashes of the inline scripts in `index.html`. The pre-paint script holds the app-style canvas table and the generated festival window table, so adding an app style or running `npm run gen:festivals` changes it. If you change an inline script, build, then run `node scripts/csp-hashes.mjs`, which recomputes the hashes from `dist/index.html` and writes them to `dist/_headers` and back to `public/_headers`; `src/__tests__/cspHashes.test.ts` fails when they drift.
 
 ## Backend — the Worker
 
@@ -83,7 +83,7 @@ The **Deploy Worker** workflow is the second deploy path. It needs the repositor
 | What you see | Where to look |
 | --- | --- |
 | The app is new, AI features are silent, `/api/curate` answers `405` | [The stale-Worker runbook](docs/operations.md#runbook-the-app-is-newer-than-the-api) |
-| "Workers Builds: vinax-api" is red on every commit | [The known-red dashboard build check](docs/operations.md#the-known-red-dashboard-build-check) — harmless while **Deploy Worker** is green |
+| "Workers Builds: vinax-api" is red on every commit | [The known-red dashboard build check](docs/operations.md#the-known-red-check) — harmless while **Deploy Worker** is green |
 | **Deploy Worker** fails at "Verify the Cloudflare token" | Rotate `CLOUDFLARE_API_TOKEN` (same runbook, fix 1) |
 | Visitors are stuck on the boot splash after a deploy | [Rollback](docs/operations.md#rollback): purge the edge cache, or bump the asset URL epoch |
 | Something must be undone now | [Rollback](docs/operations.md#rollback) |

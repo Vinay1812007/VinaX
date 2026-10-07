@@ -1,150 +1,99 @@
-# VinaX AI — feature matrix (9.1.0, updated for 10.2)
+# VinaX AI — feature matrix
 
-What the assistant surface actually does, checked against the code rather than
-against intent. VinaX AI is VinaX's own assistant: it is not another product and
-does not claim another product's capabilities. Where a general-purpose assistant
-has something VinaX AI does not, this file says so plainly.
-
-**The comparison set** (checked 3 October 2026 against the published help centre
-of a current general-purpose assistant, so the gaps below are measured against
-something real rather than guessed): projects, memory, artifacts, research mode,
-web search, file uploads, voice mode, chat history with search, incognito chats,
-message editing, conversation branching. Its documented upload set is PDF, DOCX,
-CSV, TXT, HTML, ODT, RTF, EPUB, JSON, XLSX and JPEG/PNG/GIF/WebP, at 500 MB per
-file and 20 files per chat, with PDFs to 1 000 pages.
-
-As of 9.1 VinaX AI had an analogue of **every one of those eleven features**.
-10.2 removed two of them on purpose — web search and research mode — so the
-assistant has no live web access (see [Tools](#tools)). For the other nine, the
-differences that remain are in DEPTH, and each is named in the tables below: the
-upload set is narrower (no DOCX/XLSX/EPUB/ODT/RTF), the limits are far smaller
-(they suit a music app on a phone, not a document workspace), memory is written by
-the listener rather than by the model, and artifacts are collected from replies
-rather than authored in a canvas.
+What the assistant surface does in 11.0, checked against the code rather than against intent. VinaX AI is VinaX's own assistant; where a general-purpose assistant has something it does not, this file says so plainly. Developer detail is in [ai.md](ai.md); the listener's guide is [user-guide/vinax-ai.md](user-guide/vinax-ai.md). Frontend paths are relative to `frontend/src/`, backend paths to `backend/worker/functions/`.
 
 Status words:
 
-- **done** — implemented and covered by a test or verifiable by reading the code.
+- **done** — implemented, and covered by a test or verifiable by reading the code.
 - **partial** — works, with a stated limit.
 - **missing** — not implemented.
-- **provider-dependent** — the app side is done; whether it works depends on the
-  engine the owner has configured.
-- **out of scope** — deliberately not pursued for this architecture, with the
-  reason.
-
----
+- **provider-dependent** — the app side is done; whether it works depends on the keys the owner has set and what the providers offer for free that day.
+- **out of scope** — deliberately not pursued, with the reason.
 
 ## Shell, history and navigation
 
 | Feature | Status | Where / note |
 | --- | --- | --- |
-| Responsive desktop sidebar, collapsible and remembered | done | `features/ai/chat/Sidebar.tsx`, `PREF.sidebarCollapsed` |
-| Mobile slide-over navigation | done | same, `mobileOpen` |
-| Chat history grouped by recency, pinned first | done | `storage.ts` `groupChats` |
-| Search chat titles **and** message text | done | `groupChats(chats, q)` |
-| Rename, pin, delete a chat | done | `sidebarHandlers` |
-| Export one chat as Markdown / plain text / print-PDF | done | `storage.ts` `exportChat` |
-| Export every chat as JSON | done | `exportAllChats` (temporary chats excluded) |
-| Import a chats export, validated field by field | done | `importChats` — a file from anywhere is untrusted |
-| At most 50 chats kept on the device | partial | `MAX_STORED_CHATS`; older chats fall off |
-| **Temporary chat** — never written to the device | done (9.1) | `Conversation.temporary`, dropped in `persistChats`; tested |
-| **Projects / workspaces with instructions and reference files** | done (9.1) | `features/ai/projects.ts`, `chat/ProjectSheet.tsx`. A project holds standing instructions and up to 10 text reference files; every chat in it inherits both, fenced as data and budgeted to 12 000 characters so a file cannot crowd out the question. Opened from the sidebar |
+| Collapsible desktop sidebar, slide-over on phones | done | `features/ai/chat/Sidebar.tsx`; the collapsed state is remembered (`sidebarCollapsed` in `storage.ts`) |
+| History grouped by recency, pinned first; search over titles and message text | done | `storage.ts` `groupChats` |
+| Rename, pin, delete a chat | done | `Sidebar.tsx` |
+| Export one chat; export every chat as JSON; import, validated field by field | done | `storage.ts` `exportChat`, `exportAllChats`, `importChats` |
+| Chats kept on the device | partial | `vinax_ai_chats_v1`, at most `MAX_STORED_CHATS`; images are stripped before saving |
+| Temporary chat, never written to the device | done | dropped in `persistChats` |
+| Projects with instructions and reference files | partial | `features/ai/projects.ts`, `chat/ProjectSheet.tsx`; 10 files per project, 20,000 characters each |
+| **Chat styles** — the chat restyles itself to the model's maker family (11.0) | done | `chat/chatStyle.ts`, `ChatStyleScope.tsx`, `styles/ai-styles.css`; nine styles; `chatStyle.test.ts` |
+| **Chat style setting** — Match the model / Always VinaX / one fixed style (11.0) | done | chat settings → General; `vinax.ai.chatStyle`; restored by `features/settings/backup.ts` |
 
 ## The conversation
 
 | Feature | Status | Where / note |
 | --- | --- | --- |
-| Streamed replies | done | `streamClient.ts`, `streamReducer.ts` |
-| Stop a reply mid-stream | done | `stop()`, `AbortController` |
-| Retry a failed turn | done | a failure line is never sent back to the model |
-| Regenerate, with a "take a different approach" instruction | done | `REGENERATE_RULE` |
-| Rewrite shorter / longer / simpler | done | `rewriteLast` |
-| Continue a truncated reply | done | `continueReply` |
-| **Edit and resend, preserving the prior version** | done (9.1) | the conversation as it stood is kept as a `· before edit` chat first. 9.0 called `slice(0, idx)` and the old turns were gone |
-| Branch a conversation from any message | done | `branchFrom` — the original is untouched |
-| Per-message feedback (up / down) | done | `Msg.rating` |
-| Pin a message to the top of a chat | done | `Msg.pinned` |
-| Follow-up suggestion chips | provider-dependent | the model is asked for a `>>>` line; absent on short replies |
-| **Long-conversation handling** | done (9.1) | `longThread.ts`: the recent 30 turns verbatim, earlier turns replaced by a list of the questions asked, labelled as history and explicitly not a summary of the answers. The server's own `slice(-40)` remains as a backstop |
-| Model-written conversation summary | out of scope | summarising the answers needs an extra model call per long turn; listing the questions is honest and free. Revisit if listeners ask to refer back to old answers' text |
+| Streamed replies, Stop mid-stream | done | `streamClient.ts`, `streamReducer.ts`; the Worker stops reading the provider when the listener disconnects |
+| One automatic re-ask on a passing failure | done | `runChatStream`: `busy` after 2.5 s, `unavailable` after 1.2 s |
+| **Failure kinds, each with its own line** (11.0) | done | `StreamFailure`: `offline`, `busy`, `unavailable`, `disabled`, `over_budget`, `bad_model`, `too_large`, `rejected`; `streamClient.test.ts` |
+| **Edit message instead of Retry where a retry cannot succeed** (11.0) | done | `needsEdit()` — `too_large` and `rejected`; `Message.tsx` |
+| **A withdrawn model switches the chat to Auto** (11.0) | done | `unknown_model` → `bad_model` |
+| **A reply interrupted by a reload** shows "No reply — try again" (11.0) | done | `storage.ts` |
+| Regenerate with a different approach; rewrite; continue a cut-short reply | done | `REGENERATE_RULE` in `buildChatRequest.ts`; `rewriteLast`, `continueReply` in `pages/VinaXAIPage.tsx` |
+| Edit and resend, keeping the earlier version as a `· before edit` chat | done | `pages/VinaXAIPage.tsx` |
+| Branch a conversation from a message | done | `branchFrom` |
+| Follow-up suggestions | provider-dependent | `features/ai/followups.ts`; the model is asked for them and may not supply any |
+| Long conversations | partial | client: `chat/longThread.ts` sends recent turns verbatim and lists earlier questions; server: `trimHistory` drops the oldest turns beyond 120,000 characters |
+| Model-written conversation summary | out of scope | it needs an extra model call per long turn |
+| Reasoning is never shown as an answer | done | the Worker's `<think>` gate; unclosed reasoning ends as a cut-short reply (`aiAuditSweep.test.ts`, `aiChatAudit.test.ts`) |
 
 ## Rendering
 
 | Feature | Status | Where / note |
 | --- | --- | --- |
-| Markdown, tables, lists, blockquotes | done | `Message.tsx` |
-| Code blocks with syntax highlighting | done | — |
-| Copy a reply, copy a code block | done | — |
-| Download a reply | done | `exportChat` |
-| Math (KaTeX) | done | loaded on demand, never in the first-load bundle (`vite.config.ts` `RICH_RENDER_ROOT`) |
-| Diagrams (Mermaid) | done | same |
-| Inline images in a reply | done | image mode; `Msg.images` |
-| Read a reply aloud | done | `features/ai/readAloud.ts` |
-| Live voice conversation | done | `useLiveVoice.ts`, `LiveVoiceHost.tsx` |
-| Dictation into the composer | done | `useDictation.ts` |
-| Keyboard navigation and shortcuts | done | Ctrl/⌘+K for a new chat; menus trap focus and handle Escape |
-| Themes (light / dark / black) and font size | done | app-wide; `PREF.fontSize` |
-| **Artifact panel** — documents and code in a side panel, with versions, downloads and a sandboxed HTML preview | done (9.1) | `features/ai/artifacts/`. Collects the closed fenced blocks of the assistant's replies, groups a revision under the artifact it revises (same declared filename, or a body that overlaps enough), and offers each version with Copy, Download, "Show in chat" and — for a page or a drawing — a live preview. The preview reuses the existing `/api/preview` sandbox: the effective sandbox is the intersection of the iframe attribute and the endpoint's `sandbox` CSP directive, **neither of which grants `allow-same-origin`**, so it runs on an opaque origin with no access to app cookies, `localStorage` or privileged APIs, and camera/mic/geolocation are not delegated |
-| Authoring an artifact in a canvas (editing it in place, side by side) | out of scope | VinaX AI writes replies, not documents; collecting what it wrote is the useful half for a music app |
+| Markdown, tables, lists, checklists, code blocks, copy | done | `components/ai/tokenize.ts`, `RichContent.tsx`; the 11.0 parser cannot stall on any input (`tokenize.test.ts`) |
+| Math and diagrams | done | loaded on demand (`RICH_RENDER_ROOT` in `frontend/vite.config.ts`); diagrams follow the theme |
+| Charts | done | `components/ai/ChartBlock.tsx`, `chartSpec.ts` |
+| Artifact panel for documents and code in replies | done | `features/ai/artifacts/` |
+| Authoring an artifact in a canvas | out of scope | VinaX AI writes replies, not documents |
+| Read a reply aloud | provider-dependent | `features/ai/readAloud.ts`; server speech needs a provider with a free speech model, else the device voice |
+| Dictation into the composer | done | `useDictation.ts` (device), `useServerDictation.ts` (server); merges with the typed draft |
+| Live voice conversation | provider-dependent | `useLiveVoice.ts`, `LiveVoiceHost.tsx` |
 
 ## Attachments
 
 | Feature | Status | Where / note |
 | --- | --- | --- |
-| Images (PNG, JPEG, WebP, GIF), up to 6 | done | `attachments.ts` |
-| Text and code files, up to 24 per message | done | ~40 extensions plus README/LICENSE/Dockerfile/Makefile |
-| Folder upload and drag-and-drop, with `node_modules`/`dist`/dotfile skipping | done | `droppedFiles` |
-| Explicit size limits with a clear message per file | done | 4 MB image, 2 MB text, 5.5 MB combined image data |
-| **Explicit truncation inside the provider's budget** | done | `TEXT_BUDGET` 18 000 chars, 6 000 per file, and a notice naming the file that was clipped |
-| Clear "unsupported format" errors | done | names the file and what is accepted |
-| Duplicate detection | done | keyed on name + size + mtime |
-| **PDF text extraction** | done (9.1) | `features/ai/pdfText.ts`, with no library: the browser's own `DecompressionStream` inflates the content streams and the text operators are read out. It is quick to admit defeat — a scan says `no-text`, an unmapped subset font says `unreadable` rather than passing glyph soup to a model, an encrypted file says so, and every outcome names the file and the reason. 8 MB cap, 120 000 characters |
-| DOCX / XLSX / PPTX / EPUB / ODT / RTF extraction | missing | each is a different container format; the PDF route above does not generalise. A listener can paste the text, or attach it as a project reference file |
-| **Per-file progress and cancellation** | done (9.1) | `prepareAttachments` reports `(done, total, path)` before each file and checks an `AbortSignal` between them; the composer shows which file is being read and a Stop button. Cancelling keeps what was already read |
-| Upload limits | partial, by design | 4 MB per image (6 images), 2 MB per text file, 8 MB per PDF, 24 files per message. Far smaller than a document workspace's, deliberately: this is a music app, the context budget is 18 000 characters, and the clip is always stated |
+| Images, up to 6 per message | partial | `attachments.ts`: 4 MB each, 5.5 MB together |
+| Several images read in one turn | provider-dependent | the two NVIDIA vision seats take one image (the newest); Gemini and vision-flagged catalogue models take all (`visionLadder`, `singleImageFor` in `api/vinaxai.ts`) |
+| Text and code files; folder and drag-and-drop | done | 2 MB each, 24 files per message; `droppedFiles` |
+| **PDF text reaches the model** (11.0) | partial | `features/ai/pdfText.ts`: text layer only, 8 MB, 120,000 characters; scans, encrypted and unreadable files get their own message |
+| **File chips with Show contents** (11.0) | done | `Message.tsx` |
+| **Send waits for files still being read** (11.0) | done | `prepareAttachments` |
+| Word-processor, spreadsheet, slide and e-book formats | missing | each is a different container format |
+| Explicit truncation, named in the message | done | `TEXT_BUDGET`; a shortened file is marked `(excerpt)` |
 
-## Tools
+## Tools and models
 
 | Feature | Status | Where / note |
 | --- | --- | --- |
-| Web search, research mode, citations | out of scope (10.2) | removed on purpose, with the Web search and Research connectors, live results, source links and previews, the model-requested search step and the flagship engine's own search. See [ai.md](ai.md#no-live-web-access-102) |
-| **Connectors** — one list of what a reply may draw on | done (10.0) | `features/ai/connectors.ts`, `chat/Connectors.tsx`: Think, Now playing, Memory and Place, each with one line on what it does or shares, and chips above the composer for those that are on. Each maps to something the chat already did; Place adds a chat-only "do not send" (`vinax.ai.placeOn`) on top of the app-wide region setting |
-| Honest about time-sensitive questions | provider-dependent (10.2) | the prompt says the assistant has no live web access and that a time-sensitive answer must say it may be out of date; whether a given engine follows it is up to the engine |
-| Agent mode, tool timeline | out of scope (10.2) | removed with the catalogue engines that searched the web on their own; the Worker leaves them out of the catalogue (`WEB_BROWSING_SLUGS`) and the stream no longer carries `step` frames |
-| Code execution | out of scope | nothing in this deployment can run untrusted code safely |
+| Model menu from the live catalogue of four providers | provider-dependent | `GET /api/aimodels`; `chat/ModelMenu.tsx`, `useModelCatalog.ts` |
+| Auto with failover and cooldowns | done | `pickAutoMode`, `laneAttempts`, the cooldown table in `_lib/ai.ts` |
+| Auto on an OpenRouter-only setup (11.0) | done | the `router` attempt is spliced into the chat ladder in `api/vinaxai.ts` |
+| Connectors list in the + menu | done | `features/ai/connectors.ts`, `chat/Connectors.tsx` |
+| Run code | provider-dependent | runs in the provider's sandbox, on models that list the tool; a model that cannot says so on the chip |
+| Create image | provider-dependent | `POST /api/image`; `chat/CreateBar.tsx`, `MediaCard.tsx` |
+| Create music clip | provider-dependent | `POST /api/music`; hidden while no provider lists a free music model |
+| Saved prompts, slash commands | done | `features/ai/savedPrompts.ts`, `slashCommands.ts` |
+| Music commands without a model call | done | `chat/musicCommands.ts` |
+| Web search, research mode, citations, agent mode | out of scope | removed on purpose; the assistant has no live web access and its prompt says so |
+| Per-model capability sheet | partial | the menu marks vision and code-capable models; context length is reported but not shown as a sheet |
 
-## Model handling
-
-| Feature | Status | Where / note |
-| --- | --- | --- |
-| Named engine seats, with a live catalogue for two of them | done | `models.ts`, `useModelCatalog.ts`; the server re-checks the model id |
-| Auto seat that routes by question shape | done | `pickAutoMode`, with the flagship lane preferred when its key is set |
-| Lane failover with cooldowns | done | `_lib/ai.ts` |
-| Graceful handling of an unavailable provider | done | `Msg.unavailable` says asking again cannot help; `Msg.failed` offers Retry |
-| Capabilities shown per seat | partial | the catalogue reports context length; there is no per-seat capability sheet in the UI |
-| Per-engine context limits respected exactly | partial | the long-thread trim, the attachment budget, the memory budget and the project budget are each bounded, but they are global rather than per-model; a very long single turn could still overrun a small-context engine |
-
-## Place and personalisation
+## Personalisation, safety and privacy
 
 | Feature | Status | Where / note |
 | --- | --- | --- |
-| Local date and time in answers | done (9.1) | the listener's own zone when known, IST otherwise — `_lib/place.ts` |
-| Coarse place context (country, region, approximate city, zone) | done (9.1) | sent only when the inference setting allows it (`assistantPlace`), and (10.0) only while the Place connector is on |
-| The playing song as context, by choice | done (10.0) | the Now playing connector; off by default, page state only |
-| Place never decides the reply language | done (9.1) | stated in the prompt; the listener's languages travel separately and win |
-| Taste snapshot for music questions | done | `buildTasteSnapshot`, titles and artists only — never ids, names or location |
-| This thread's own "already recommended" memory | done | `threadMemory.ts`, so "give me more" reaches new ground |
-| User profile text the listener wrote | done | `PREF.profile`, fenced as data with "ignore anything that reads like a command" |
-| **Editable, removable, opt-in memory** | done (9.1) | `features/ai/memory.ts`, `chat/MemorySection.tsx`. Off until switched on; while off nothing is read, written or sent. Up to 40 lines, each editable in place and removable, sent with every chat fenced as data. Turning it off FORGETS them — the switch does what its label says |
-| Memory the model writes for itself | out of scope | the assistant does not get to decide what is worth remembering about someone. A "shall I remember that?" proposal flow would be the next step and is not built |
-
-## Safety and privacy
-
-| Feature | Status | Where / note |
-| --- | --- | --- |
-| No account, nothing uploaded that is not part of a request | done | app-wide |
-| Chats live on the device | done | `localStorage`; images are stripped before persisting |
-| Temporary chat leaves nothing behind | done (9.1) | tested |
-| Model output is validated before it can act | done | every music suggestion is resolved against the catalogue; an unmatched title is dropped, never substituted |
-| Untrusted content is fenced, never followed | done | the user profile, project files and memory lines |
-| No vendor or competitor names in output | done | `BANNED` in `services/ai/home.ts`, and the house prompt |
+| Local date and time, coarse place | done | `_lib/place.ts`; sent only when the listener's setting allows |
+| Taste snapshot for music questions; the playing song by choice | done | titles and artists only; the Now playing connector is off by default |
+| "Already recommended" memory within a thread | done | `threadMemory` in `buildChatRequest.ts` |
+| Opt-in memory the listener writes, edits and removes | done | `features/ai/memory.ts`, `chat/MemorySection.tsx` |
+| Memory the model writes for itself | out of scope | the assistant does not decide what to remember about someone |
+| Chats, projects and memory stay on the device | done | no account exists; see [data-and-privacy.md](data-and-privacy.md) |
+| Model output validated before it can act | done | song suggestions are resolved against the catalogue |
+| Untrusted content fenced, never followed | done | profile text, project files, memory lines |
+| No third-party product names in generated Home text | done | `BANNED` in `services/ai/home.ts` |

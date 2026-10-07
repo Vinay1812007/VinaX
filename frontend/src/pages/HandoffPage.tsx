@@ -201,7 +201,7 @@ export default function HandoffPage() {
           {recv === 'rate' && <p className="vx-handoff-error">Too many attempts — wait a minute, then try again.</p>}
           {recv === 'unavailable' && (
             <p className="vx-handoff-error">
-              Instant transfer isn&rsquo;t enabled on this server yet. Use the file route instead: Settings → Your Data →
+              Instant transfer isn&rsquo;t enabled on this server yet. Use the file route instead: Settings → Your data →
               Export on the old device, then Import here.
             </p>
           )}
@@ -321,7 +321,7 @@ export default function HandoffPage() {
           <div className="vx-panel">
             <p className="text-[15px] font-semibold text-ink-100 mb-1">Instant transfer isn&rsquo;t enabled on this server yet.</p>
             <p className="text-[14px] text-ink-400">
-              You can still move everything with a file: Settings → Your Data → <b className="text-ink-100">Export</b> here, then <b className="text-ink-100">Import</b> on
+              You can still move everything with a file: Settings → Your data → <b className="text-ink-100">Export</b> here, then <b className="text-ink-100">Import</b> on
               the new device.
             </p>
           </div>
@@ -358,7 +358,7 @@ export default function HandoffPage() {
       {!receiveFirst && receiveBox}
 
       <p className="vx-sec-foot mt-10">
-        Prefer a file? <Link to="/settings#your-data" className="vx-link">Settings → Your Data</Link> has
+        Prefer a file? <Link to="/settings#your-data" className="vx-link">Settings → Your data</Link> has
         Export / Import — works fully offline.
       </p>
     </div>

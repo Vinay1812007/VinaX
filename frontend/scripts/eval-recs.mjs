@@ -27,7 +27,7 @@ const FRONTEND = resolve(HERE, '..');
 const REPO = resolve(FRONTEND, '..');
 
 function parseArgs(argv) {
-  const out = { baseline: '7c4e2f5', withBaseline: true, quick: false, out: null, salts: null, latencyRuns: null, cap: null, reportOnly: false };
+  const out = { baseline: 'b008f26', withBaseline: true, quick: false, out: null, salts: null, latencyRuns: null, cap: null, reportOnly: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--report-only') out.reportOnly = true;

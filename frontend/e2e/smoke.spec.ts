@@ -81,7 +81,7 @@ test('Settings renders its control surface', async ({ page }) => {
   await discovery.getByRole('radio', { name: 'Discover' }).click();
   await expect(discovery.getByRole('radio', { name: 'Discover' })).toHaveAttribute('aria-checked', 'true');
   await expect(discovery.getByRole('radio', { name: 'Balanced' })).toHaveAttribute('aria-checked', 'false');
-  await expect(page.getByRole('heading', { name: 'Your Data' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your data' })).toBeVisible();
   await expect(page.getByText('Move to a new device', { exact: true }).first()).toBeVisible();
 });
 

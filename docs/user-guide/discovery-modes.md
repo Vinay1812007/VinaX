@@ -1,109 +1,89 @@
 # Discovery modes
 
-This page explains the recommendation settings a listener can change: Familiar, Balanced and Discover, the intensity slider, the AI switches, pinned languages, and the song-menu choices that steer recommendations. All of them are in **Settings → Recommendations** unless noted. The engineering description is in [recommendations](../recommendations.md).
+This page explains the recommendation settings you can change: Familiar, Balanced and Discover, the trending slider, queue languages, pinned and muted languages, the AI switches, the song-menu choices that steer what you hear, Fewer repeats, and how to start over. Everything here is in **Settings → Recommendations** unless noted.
 
 ## What VinaX thinks you like
 
-**Settings → Recommendations** opens with a short summary of what the app believes about you: your top languages and artists, the discovery mode, how confident the profile is, which artists are being played less, and how many are blocked. It is read from this device and never uploaded.
+**Settings → Recommendations** opens with **What VinaX thinks you like**, a short summary read from this device.
 
-Two buttons sit under it:
-
-- **Pick languages & artists** — the optional setup step. Tap the languages you listen in, then tap artists you love from what is popular in those languages. Each artist you pick counts as much as liking one of their songs. You can open it any time; nothing is recorded until you press Save.
-- **See the full taste profile** — the Taste Profile page, with the dials, the bars and the same list of muted artists.
+- To tell VinaX your languages and favourite artists: tap **Pick languages & artists**.
+- To see everything it has learned: tap **See the full taste profile**. The same page is at **Library → Taste profile**.
 
 ## Familiar, Balanced, Discover
 
-**Settings → Recommendations → Discovery** has three modes, each with its own line saying what it changes. Balanced is the middle setting.
+To choose how much new music you hear: **Settings → Recommendations → How far to roam → Discovery**.
 
 | Mode | What changes |
 |---|---|
-| Familiar | Mostly songs and artists you already play. New artists are rare. |
-| Balanced | Your taste first, with about one new artist in every four or five songs. What you skip and finish in a sitting tips it either way. |
-| Discover | Up to half of a queue from artists you have never played. Home adds picks from languages you have not tried. |
+| **Familiar** | Mostly artists you already play. About 5% of a queue is someone new to you. |
+| **Balanced** | Your taste first, with about 20% of a queue from artists you have never played. |
+| **Discover** | About 45% of a queue from artists you have never played, and Home adds new languages. |
 
-Two rules hold in every mode:
+The shares are approximate. What you skip and what you finish in a sitting moves them a little.
 
-1. The language of the song that is playing leads the queue. Whether your other languages may follow is the **Queue languages** setting below, not the mode.
-2. A queue opens with a familiar hand-off; new artists come after it.
+**Trending vs. your taste**, in the same group, is a slider. It sets how much VinaX leans on what is popular right now against your own listening. The line under the slider describes the position you are on.
 
-So Discover changes *how much* is new, not *where* a queue starts or which language leads it. To change language on purpose, use **Tune this queue → Switch language** (see [The player and the queue](player-and-queue.md)).
-
-## What VinaX learns from, in one sitting and over time
-
-| Signal | Effect |
-|---|---|
-| Finishing a song, liking it, queueing it by hand | Counts for the song, its artist and its language |
-| Skipping | Counts against; a skip also takes back the play it would have counted |
-| A play | Counts after five seconds of listening |
-| This sitting's skips, completions, likes, searches and queue-adds | Steer the current session only; they fade and are not written into your long-term taste |
-
-The taste profile is computed and stored on this device. **Taste Profile** (Library shortcuts) shows what it learned and lets you adjust it.
-
-## The other switches
+## Languages
 
 | Setting | What it does |
 |---|---|
-| Trending vs. your taste | How much Home and the DJ lean on what is popular right now against your own listening. The line under the slider says what the setting you are on means. |
-| Queue languages | **Your languages** (the default): the playing song's language leads — the first two songs and at least half of every five — and songs from your other languages can follow, never two changes in a row; a language you never pinned or played stays out. **One language**: every queue stays in the language of the song that is playing. |
-| AI DJ | Lets the AI service order what plays next and suggest a few extra songs, each checked against the catalogue before it can play. Off keeps the on-device order. |
-| DJ builds every queue | Tap a song and the DJ builds what follows. Off makes playback follow the list you tapped. The **Smart Queue** switch on the Queue page turns this and Autoplay on together. |
-| AI-designed shelves on Home | Shows the “Designed for you” block and lets VinaX AI order “Popular picks for you”. Off hides the block and keeps Popular picks in your on-device taste order. |
-| Kid mode | Hides songs the catalogue marks explicit and keeps a separate taste profile |
-| Preferred languages | Pinned languages are boosted everywhere |
+| **Queue languages → Your languages** | The playing song's language leads. Songs from your other languages can follow, never two switches in a row. |
+| **Queue languages → One language** | Every queue stays in the language of the song that is playing. |
+| **Pinned languages** | The languages you listen in. They are favoured across the app, including in search results. |
+| **Muted languages** | Never recommended anywhere. Muting a language unpins it. |
 
-## Steering from a song menu
+To change language for the songs coming up without touching these settings, use **Tune this queue → Switch language**. See [The player and the queue](player-and-queue.md).
 
-| Menu item | Effect | How long |
-|---|---|---|
-| More like this | A nudge for this sitting, and the DJ picks are rebuilt at once — towards the song's mood when it has one, otherwise towards its artist | This sitting |
-| Less like this… | Asks for 7, 14 or 30 days, then plays that artist less everywhere. If DJ picks by them were already queued, the picks are rebuilt without them | Until the day you chose |
-| Snooze this song… | Asks for 7, 14 or 30 days, then keeps **that song** out of everything — every release of it, so the remaster and the remix go quiet too. The artist is untouched | Until the day you chose |
-| Why this song? | Shows why a recommended song was picked (appears on recommended songs) | — |
-| Open the source | On a song a real chart named: says which chart it is and when VinaX last checked | — |
-| Not interested | Hides that song | Until you undo it |
-| Never play *artist* | Blocks that artist everywhere | Until you allow them again |
+## The AI switches
 
-The first two steer; the last two block, and they sit in a separate group in the menu. Each shows an **Undo**.
+These are under **Settings → Recommendations → AI**.
 
-### Artists you are playing less
+| Setting | What it does |
+|---|---|
+| **AI in recommendations** | Lets AI engines tag songs, re-rank what plays next, run the DJ and read descriptions you type in Search. Off keeps every pick on your device, and nothing about your listening is sent for recommendations. |
+| **AI DJ** | Lets the AI help choose and order what plays next. |
+| **DJ builds every queue** | Tap a song and the DJ builds what follows. Off makes playback follow the list you tapped. |
+| **AI-designed shelves on Home** | Shows the **Designed for you** shelves on Home. |
 
-**Settings → Recommendations → Playing less of** lists every artist under a “Less like this”, with the date each one comes back and how many days are left. **Unmute** ends one (with Undo), **Unmute all** ends them all. The same list is on the Taste Profile page.
+The **Smart Queue** switch on the Queue page is a quicker way to turn the DJ on and off. See [The player and the queue](player-and-queue.md).
 
-The permanent block is a different list: **Settings → Appearance & Playback → Never play**.
+## Steer from a song menu
+
+Open a song's menu with the ⋯ button on the song.
+
+| Menu item | Effect |
+|---|---|
+| **More like this** | Nudges what comes next towards this song. |
+| **Less like this…** | Asks for 7, 14 or 30 days, then plays that artist less for that long. |
+| **Snooze this song…** | Asks for 7, 14 or 30 days, then keeps that song out for that long. |
+| **Why this song?** | Says why a recommended song was picked. |
+| **Not interested** | Hides that song. |
+| **Never play** *artist* | Blocks that artist. |
+
+The choices that reduce or hide something show an **Undo** right after you choose them.
+
+## Hearing less
+
+**Settings → Recommendations → Hearing less** keeps the lists these choices create.
+
+- **Playing less of** lists the artists under a "Less like this". You can end one early, or use **Unmute all**.
+- **Never play** is the permanent block list.
+- **Kid mode** is in the same group.
 
 ## Fewer repeats
 
-If what you are being shown feels too familiar, **Fewer repeats** asks for one
-build that leaves out everything you have heard or been shown lately — not just
-the songs still cooling off, but everything VinaX remembers putting in front of
-you. It sits next to **Refresh Home** on Home, and next to **Build it again** on
-an AI playlist.
+If Home feels too familiar, tap **Fewer repeats**, next to **Refresh Home**. Home is rebuilt once, leaving out what you have heard or been shown lately. The same button sits next to **Build it again** on an AI playlist.
 
-Shelves and lists can come out **shorter** as a result, and VinaX says so. That
-is the point: if the catalogue has little else to offer for what you asked, a
-short honest list beats a long one padded with songs you already know.
+VinaX keeps this memory of what it has put in front of you on your device. It holds up to 600 songs and forgets a song after 45 days without any contact.
 
-### What VinaX remembers putting in front of you
+## Start over
 
-One memory, shared by everything — what plays next, the AI DJ, Radio, your mixes,
-Home and AI playlists. It keeps these apart, because they do not mean the same
-thing:
+To erase what VinaX has learned about your taste: **Settings → Recommendations → Start over → Reset taste profile**. The same reset is at the foot of the Taste profile page as **Reset personalization**. Read what the confirmation says it keeps and removes before you agree.
 
-- a song **shown** on a shelf, which is cheap to show again in a few days;
-- a song the queue **took**, which was about to play;
-- a song **played**, and separately one you **finished**;
-- a song you **skipped** — and three skips count for more than one;
-- a song you **liked**, which is allowed to come back: repeating a favourite is
-  the point of a favourite;
-- a song you asked to **play again**, which clears its cooling-off entirely.
+To erase everything VinaX stores on this device: **Settings → Your data → Clear and reset → Reset app state**. Take a backup first; see [Library and backup](library-and-backup.md).
 
-It holds 600 songs, forgets anything untouched for 45 days, never leaves your
-device, and **Reset taste profile** and **Erase everything** both clear it.
+## Related pages
 
-## Starting over
-
-**Settings → Your Data → Reset taste profile** (or **Reset personalization** at the foot of the Taste Profile page) erases what VinaX learned: languages, artists, habits, the dials and any “Less like this” mutes. It offers to download a backup first, and says what stays — favourites, playlists, history, the Never play list and your settings. There is no undo, so take the backup.
-
-## Popular picks for you
-
-Home's **Popular picks for you** shelf is what is popular in the catalogue, in the order your taste suggests. With AI-designed shelves on, VinaX AI orders it instead; the shelf's subtitle says which one did. Home shows a song once: a song that appeared in an earlier shelf is left out of later ones.
+- [The player and the queue](player-and-queue.md)
+- [Search](search.md)
+- [App styles](app-styles.md) change how the app looks. They do not change what is recommended.

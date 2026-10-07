@@ -53,9 +53,9 @@ export function applyThemeClasses(resolved: ResolvedTheme, root: HTMLElement = d
 }
 
 // ---------------------------------------------------------------------------
-// Adjustable iOS-style glass (Settings → Glass effect). Lives here rather
-// than its own module: theme.ts is already in the first-load graph, and the
-// 161KB budget has zero headroom for another module wrapper.
+// Adjustable glass (Settings → Glass effect). Lives here rather than in its
+// own module: theme.ts is already in the first-load graph, and the first-load
+// budget (scripts/check-bundle-size.mjs) has little room for another wrapper.
 // Keep the formula in sync with the pre-paint script in index.html.
 // ---------------------------------------------------------------------------
 

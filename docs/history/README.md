@@ -27,6 +27,9 @@ Dates are the date stated in the document, or the date it was first committed wh
 | [audit-2026-08-delta.md](audit-2026-08-delta.md) | Delta audit of UX, design system, themes, navigation state, accessibility and search at 4.0.0 | 2026-08 | historical — describes the product at that time |
 | [qa-report-2026-08-10.md](qa-report-2026-08-10.md) | Production QA report for 4.3.0, run against the built bundle | 2026-08-10 | historical — describes the product at that time |
 | [release-audit-2026-07-11.md](release-audit-2026-07-11.md) | Pre-release audit of the whole repository at 1.2.0 | 2026-07-11 | historical — describes the product at that time |
+| [audit-9.1.md](audit-9.1.md) | The 9.1 review: confirmed causes of repeated recommendations, the live-discovery and location gaps of that time, before/after measurements | 2026-10-03 (first committed) | historical — describes the product at that time |
+| [audit-7.2.md](audit-7.2.md) | The 7.2 review: every finding with severity, evidence, reproduction, fix and validation | 2026-09-21 (first committed) | historical — describes the product at that time |
+| [progress-7.2.md](progress-7.2.md) | What 7.2 landed, what was deferred and why, and the decisions then owed by the owner | 2026-09-21 (first committed) | historical — describes the product at that time |
 
 ## Rebuild phases (five-phase plan, mid-2026)
 

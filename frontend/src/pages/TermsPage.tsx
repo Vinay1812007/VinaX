@@ -57,7 +57,7 @@ export default function TermsPage() {
         <p>
           Features may change, improve or be retired at any time — the in-app changelog documents every release. If
           VinaX ever had to shut down, your data would not be lost: it&rsquo;s already on your device, and Settings →
-          Your Data exports everything.
+          Your data exports everything.
         </p>
         <H>No warranty</H>
         <p>

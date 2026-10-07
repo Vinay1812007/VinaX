@@ -211,6 +211,9 @@ html.light .vx-menu.is-sheet .vx-menu-head { background: rgb(var(--ink-950) / 0.
 .vx-welcome-track span.is-done { background: rgb(var(--ember-500) / 0.5); }
 .vx-welcome-track span.is-on { background: rgb(var(--ember-500)); }
 .vx-welcome-foot { flex: none; display: flex; gap: 8px; padding: 12px 24px max(16px, var(--safe-bottom)); border-top: 1px solid var(--vx-border); }
+/* Three buttons on the last step: none may be clipped on a narrow phone. */
+.vx-welcome-foot > button { min-width: 0; padding-inline: 14px; white-space: nowrap; }
+@media (max-width: 359px) { .vx-welcome-foot { flex-wrap: wrap; } }
 .vx-welcome-body > .vx-welcome-art { margin: -20px -24px 18px; }
 .vx-welcome-look { margin-top: 16px; }
 .vx-welcome-look .vx-tpl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }

@@ -1,48 +1,36 @@
 # VinaX
 
-VinaX is a free music app with no login: it plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, with an edge Worker behind it for the catalogue gateway, AI features and the owner console.
-
-This README covers the free promise, what the product does as of 10.1, how to run it locally in five minutes, where things are in the repository, how personalisation and privacy work in brief, the validation commands, how a release reaches production, and links to every other document.
+VinaX is a free music app with no sign-up: it plays from a public catalogue, learns a listener's taste on their own device, and builds what plays next from that. It ships as a web app and an Android app from one codebase, backed by one edge Worker. This README says what is in the repository, what a listener can do, how to run and verify it, how a release is made, and where the rest of the documentation is.
 
 [Documentation index](docs/README.md) · [User guide](docs/user-guide/README.md) · [Deployment](DEPLOYMENT.md)
 
-## Free, and how it stays free
+## What is in the box
 
-The first thing a new listener sees (Home's first-visit welcome and the welcome sheet, 10.0) is the promise, and every part of it is true in the code today:
+| Part | Where | What it is |
+| --- | --- | --- |
+| Listener app | `frontend/` | A static single-page app (Vite, React 19, Tailwind, zustand). Every page is a lazy chunk; a service worker keeps the shell and saved audio available offline. |
+| Android wrapper | `frontend/native-android/`, `frontend/scripts/patch-android.js` | The same bundle in a generated Capacitor project, with a native media service, widgets, downloads and in-app updates. |
+| Worker | `backend/worker/` | `vinax-api`: `/api/*`, edge-rendered song, album, artist and playlist pages, sitemaps, the image proxy and the Android package download. Anything it does not match goes to the static site. |
+| Owner console | `frontend/public/admin/` | A separate static page for the owner: monitoring, feature flags, Home layout, trend review. Sign-in is checked by the Worker. |
 
-- **Nothing to pay.** No subscription, no premium tier, no in-app purchase.
-- **No sign-up.** No email, no password, no login: pick a name and your languages and press play.
-- **One labelled ad, on the website only.** At the end of song, artist, album, language and mood pages. Never in the player, the queue, VinaX AI, the library, the Android app or Kid mode.
-- **Your taste stays yours.** Listening history, favourites and the taste profile stay on the device and are never shared with advertisers.
+## What a listener can do
 
-## Features
+- **Press play without an account.** Pick a name and languages; there is nothing to pay and no email or password. The website shows one labelled ad at the end of song, artist, album, language and mood pages, and nowhere else.
+- **Find music.** Home, Discover, Search, Library and VinaX AI are the five destinations. Search suggests as you type and leads its results with a Top result; Discover has charts, languages, moods, regions and films.
+- **Let the queue build itself.** Tap a song and the next five follow from it, led by that song's language. AI Radio plays endlessly from a song, an artist, a mood or a few words. Pin a mood or Tune this queue rebuilds Up Next at once. Familiar, Balanced and Discover change how adventurous the picks are.
+- **Use a full player.** Reorderable queue, synced lyrics where available, sleep timer, crossfade, sound settings, lock-screen and headset controls, casting, drive mode and karaoke. Flow is a full-screen feed of song previews.
+- **Keep a library.** Favourites, playlists, Listen Later, smart collections, history, listening stats, and one-file backup with preview, merge or replace, and Undo.
+- **Listen Together.** A room with a code, a QR and an invite link; the session follows the listener across the app and guests stay in time with the host.
+- **Choose an app style.** Settings → Appearance → App style offers six complete looks — Aura (the default), Pulse, Sangam, Nocturne, Marquee and Vibe. A style changes colours, type, shapes, the navigation and mini-player layout, cards and motion; it never changes music, library, queue or settings. Each has a dark, a light and a true-black look, and works with every accent.
+- **See festival themes.** On a festival's days the app wears that festival's colours, a ribbon, an emblem and a quiet backdrop over whichever style is chosen, and offers a greeting card once. Any of the 43 skins can be previewed from Settings → Appearance.
+- **Talk to VinaX AI.** A chat that knows the listener's taste summary, can play music from the conversation, accepts attachments and offers a choice of models. The chat restyles itself to match the family of the selected model — nine original chat styles — or stays on one style the listener picks.
+- **Stay comfortable.** Keyboard shortcuts, reduced motion, high contrast, display size, Kid mode, app language, guided tours.
 
-| Area | What a listener can do |
-| --- | --- |
-| Five destinations | Home, Discover, Search, Library and VinaX AI sit in the dock on phones and in the sidebar on wide screens. The top bar shows where you are on the left and the page's actions on the right; it has no search box. |
-| Home | On a first visit (nothing played yet on the device), a welcome that says it plainly — "All the music you love. Free.", no subscription, no email, no password — with **Start listening** and six tiles to what is included; returning listeners get a greeting instead. Then an Aura Mix, a shortcut row that always starts with AI Radio, shelves built from taste and the catalogue (Your playlists, Your top genres, "Popular picks for you" — the catalogue's popular songs in the listener's order), Trending and Lyrics chips, optional AI-designed shelves, and Customise Home (Home Studio) to reorder or hide shelves. Until someone chooses an order, Home orders its sections once per visit from the time of day, the sections the listener uses, how songs started from them went, and genre taste; nothing moves while the page is open. |
-| Discover | A shortcut grid — Charts, Languages, Moods, Regions, Movies, Videos, Made For You, Your Week, AI Playlist — then trending, mood, new-release and film shelves for a chosen language. |
-| Search | Its own page and field. Suggestions open as you type (10.1): completions with the typed part in bold, then songs (tap to play), artists and albums, driven by ↑/↓, Enter and Esc. Results lead with a large **Top result**, then Songs, Artists, Albums and Playlists, each with See all. Understands "song + singer" and Indic scripts, tolerates misspellings, and offers trending searches as chips, recent, pinned and saved searches. Catalogue calls go to the fastest healthy endpoint and are hedged to the next when it is slow. A search that reads like a description ("sad telugu songs for rain") adds **Songs that match**, with artists and playlists that fit. |
-| The next five | Tap any song and the DJ builds the next five songs, led by that song's language, the most familiar hand-off first and newer artists later. The picks draw on the song's album, artists similar to its artist, its genre and earlier picks the listener finished or liked, and lean toward songs that resemble the listener's favourites. Settings → Recommendations → Queue languages decides whether songs from the listener's other languages may follow (never two changes in a row) or every queue stays in one language. More arrive as the queue runs down. |
-| AI Radio | Endless music from a song, an artist, a mood or a few words ("Telugu 90s melodies"), at `/radio`, from Home, from an empty queue, and as **Start AI Radio** in every song menu and on artist pages. The first songs come from catalogue searches (a request they cannot answer goes to the playlist builder); the DJ keeps adding more. |
-| Steering the queue | **Pin a mood** (full-screen player) and **Tune this queue** (Queue page and player) fetch songs for that choice and rebuild Up Next at once. The queue says which songs the DJ picked and which you added; **Keep this song** makes a pick yours, **Refresh up next** rebuilds only the automatic ones, the **Smart Queue** switch turns Autoplay and "DJ builds every queue" on together, remove offers Undo, and rows reorder from the keyboard. **More like this** and **Less like this** (7, 14 or 30 days, with Undo) steer from any song menu. |
-| Charts | Public charts with their source, region, update time and a link to check, when a provider is configured; otherwise the catalogue's popular songs, labelled as that. |
-| Discovery modes | Familiar, Balanced or Discover in Settings → Recommendations changes ranking and how many never-played artists a queue admits. |
-| Player | Queue with reorder and Queue Builder, synced lyrics where available, sleep timer, crossfade, sound settings, DJ voice, lock-screen and headset controls, casting, a drive mode and karaoke. |
-| Library | Favourites, playlists with search and multi-select edits, Listen Later, smart collections, history, listening stats and recap, downloads (Android). |
-| Backup | Export one file from Settings → Your Data. The Backup Center previews a file, restores by merge or replace, and offers Undo. "Move to a new device" transfers everything through an encrypted one-use hand-off. |
-| VinaX AI | A chat that knows the listener's taste summary (Connectors in the + menu: Think, Now playing, Memory and Place), can play music from the conversation, accepts attachments and offers a choice of models, led by VinaX Maestro, which streams its replies. It has no live web access (10.2 removed web search): it answers from what the model knows and says plainly when an answer may be out of date. A reply that fails is asked again once by itself, then offers **Retry**. AI Playlist turns a description into a playlist of catalogue-verified songs, filled out to 25, and still builds one from catalogue searches when the AI is busy. |
-| Flow | 10.1: a full-screen feed of song previews. Each card starts at the chorus when the lyrics show one, with the lyrics on screen. Swipe or scroll for the next, double-tap to like, **Play full song** to keep it. The listener's own queue is set aside and restored when Flow closes. |
-| Listen Together | Rooms with a code, a QR and an invite link. Since 10.0 a session runs across the whole app and survives a reload, with a **Live** pill on every other page; guests follow the host to the same moment by the server's clock, **Tap to start listening** appears when a browser holds back sound, and songs guests add are playable. |
-| Look and feel | 10.0 **Marigold**: warm plum backgrounds and cream text, a marigold accent (Copper, Sunset, Gold, Emerald, Ocean, Azure, Violet, Rose, Mono or any colour instead), a bolder display typeface, and a warm cream light theme. 10.1 **frosted glass**: bars, menus and sheets are frosted panes tuned by two sliders, Now Playing has a slowly drifting artwork backdrop, confirmations are snackbars with the song's cover and one action, and the bell opens a notifications inbox grouped by day. |
-| Android | The same app with a native media service, home-screen widgets, downloads (the best quality that exists, with the reason when one fails), background notifications and in-app updates. |
-| Accessibility and comfort | Keyboard shortcuts, reduced motion, themes, display size, high contrast, Kid mode, app language. |
+Music and AI results depend on the catalogue and the AI providers configured for the deployment. When AI is slow, down or not configured, features that use it fall back to an on-device path.
 
-Music and AI results depend on the catalogue and the AI lanes configured for the deployment. When AI is slow, down or not configured, every feature that uses it falls back to an on-device path.
+## Quick start
 
-## Run it locally
-
-You need **Node.js 22 or newer** and npm. Start the backend first, then the frontend.
+You need Node.js 22 or newer and npm. Start the Worker first, then the app.
 
 ```sh
 # Terminal 1 — the Worker on port 8787
@@ -58,63 +46,9 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. The dev server proxies `/api`, `/img` and `/apk` to the Worker on port 8787.
+Open `http://localhost:5173`. The dev server proxies `/api`, `/img` and `/apk` to port 8787. Secrets are optional for a first run: without them the catalogue works, AI routes answer "not configured", and the owner console cannot sign in. Local secrets go in `backend/worker/.dev.vars`; the names are listed in `backend/.env.example`.
 
-Secrets are optional for a first run. Without them the catalogue still works, AI routes answer "not configured" and the app uses its on-device paths, and the owner console cannot sign in. To add them, create `backend/worker/.dev.vars` with `NAME=value` lines using the names in [backend/.env.example](backend/.env.example). Keep that file untracked, and never put a key in a `VITE_*` variable — those are visible to every visitor.
-
-## Project map
-
-```text
-frontend/                       the app (web and Android share this bundle)
-  src/main.tsx                  boot: migrations, render, device classes, service worker
-  src/router/                   routes; every page is a lazy chunk
-  src/layouts/AppLayout.tsx     shell: sidebar, top bar, dock, player bar, overlays
-  src/pages/                    routed pages
-  src/components/               shared UI (Sheet, TopBar, SongRow, welcome sheet, tour runner)
-  src/features/                 feature folders (home, queue, settings/backup, tutorials, ai, nav, …)
-  src/store/                    zustand stores (player, settings, library, history, …)
-  src/services/recommendation/  the next-song pipeline
-  src/services/personalization/ taste profile, event weights, session intent
-  src/services/api/             catalogue client with the fallback ladder
-  src/services/ai/              DJ, curation, playlist, taste-snapshot and embedding clients, natural-language ranking
-  src/services/audio/           the audio engine and effects
-  src/services/media-session/   lock-screen and headset controls, native plugin bridge
-  src/services/storage/         guarded localStorage, IndexedDB event log, migrations
-  src/styles/                   design tokens (index.css), the shell (shell.css), page styles (pages/)
-  public/sw.js                  service worker
-  public/admin/                 owner console (static page)
-  native-android/               Java sources copied into the generated Android project
-  scripts/                      build, prerender, bundle budget, e2e smoke, Android patch
-  e2e/                          browser test specs and their harness
-backend/
-  worker/index.ts               router
-  worker/functions/api/         public, AI, cron and admin endpoints
-  worker/functions/_lib/        AI lanes, admin auth, catalogue, rate limits, push
-  worker/wrangler.toml          Worker name, routes, vars
-docs/                           current documentation; docs/history/ holds dated records
-.github/workflows/              CI, E2E, Worker deploy, Android builds, scheduled jobs
-```
-
-## How personalisation works
-
-VinaX builds a taste profile on the device from what is played, finished, skipped, liked and queued. A play counts after five seconds of **listening** — seeks, pauses and buffering do not count, and one song looped all evening teaches the profile once (`services/playback/session.ts`). The profile is stored only on the device; AI features receive a bounded summary of it with each request.
-
-The next-song engine is one ten-stage pipeline: candidate generation, hard filtering, feature extraction, context scoring, diversity and repeat penalties, session adjustment, exploration tuning, ranking, sequencing and validation. A continuation is the next five songs, led by the seed song's language (with Queue languages on "Your languages", songs in the listener's other languages may follow, never two changes in a row; "One language" keeps the whole queue in one), with the most familiar hand-off first. Candidates come from the seed's suggestions, its album, related artists (the catalogue's similar artists, else co-credited ones), its genre, the listener's artists and languages, and earlier automatic picks that were finished or liked; a taste-fit term scores how closely each resembles the listener's favourites and recent plays, using small hashed vectors computed on the device (learned embeddings refine it when the device already holds them). A session-intent layer follows the current sitting — skips, finishes, likes, searches, hand queue-adds — without writing it into long-term taste. The AI DJ may re-order the pool or propose a few catalogue-verified songs, but its output passes the same final validation, and the on-device order plays whenever AI is slow or unavailable.
-
-On Home, "Popular picks for you" only re-orders what the catalogue reports as popular, and a song shown on one shelf is not repeated on a later one. When neither the listener nor the owner has set an order, Home orders its sections once per session from signals kept on the device (`features/home/homeOrder.ts`). Public charts — with their source, region, update time and stale state — are a separate thing, on the Charts page: see [docs/trends.md](docs/trends.md).
-
-The full description, with the real weights, is in [docs/recommendations.md](docs/recommendations.md). The AI side is in [docs/ai.md](docs/ai.md). Add `?debug=recs` to any URL (it is always on in a development build) to see why each song was selected, passed over or rejected.
-
-## Privacy in plain words
-
-- No account. Library, history, settings, taste profile and AI chats stay on the device. Clearing site or app data removes them, so export a backup first (Settings → Your Data).
-- "On the device" does not mean "no network". Searching sends search words to the catalogue. AI features send a bounded summary of taste and recent listening — song titles and artist names, no identity. Natural-language search, AI Playlist and the next-song taste fit also send search words and short song descriptions (title, artists, album, language, year, genre, mood) to the Worker's embedding route. Choosing a username checks it with the service.
-- Usage statistics and session insights are sent only when the listener opts in. The box on the welcome sheet is unticked by default, and **Settings → Region & Privacy → Share anonymous usage** changes the choice at any time.
-- A backup file never contains credentials, the device identity, downloads or the queue.
-
-Details, including the backup format and a table of every request that leaves the device: [docs/data-and-privacy.md](docs/data-and-privacy.md).
-
-## Validation
+Verify a change with the same commands CI runs:
 
 ```sh
 cd frontend
@@ -123,7 +57,7 @@ npm run typecheck
 npm test
 npm run build
 node scripts/check-bundle-size.mjs
-npm run e2e
+npm run e2e          # needs the build above and a test browser
 ```
 
 ```sh
@@ -131,43 +65,74 @@ cd backend
 npm run lint
 npm run typecheck
 npm test
-npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/vinax-worker-dry
+npx wrangler deploy --config worker/wrangler.toml --dry-run --outdir /tmp/wrangler-dry
 ```
 
-The browser suite needs its test browser (`npx playwright-core install chromium`, or set `E2E_CHROMIUM_PATH` to an installed binary) and a fresh `npm run build`, because it serves `frontend/dist/`. It runs against mocked APIs: it does not prove the live catalogue, credentials, Android playback or release signing. [docs/testing.md](docs/testing.md) explains the harness, fixture shapes, the bundle budget and how to verify a single commit in a throw-away worktree.
+`npm run build` deletes `dist/` and the build caches first, so stop a dev server that shares the folder or build in a worktree. [docs/testing.md](docs/testing.md) explains the browser suite, the fixtures and the worktree recipe.
 
-## How releases work
+## Repository layout
 
-1. Work on a branch and open a pull request.
-2. CI runs lint, typecheck, unit tests, the build and the bundle budget for the frontend, and lint, typecheck, tests and a Worker dry-run for the backend. A second workflow builds the app and runs the browser suite.
-3. Merge to `main`.
-4. The static host builds `frontend/` from `main` and publishes the site. When `backend/**` changed, the **Deploy Worker** workflow runs the backend gates again and deploys the Worker. A third workflow builds the Android package.
-5. Verify production. A merged commit is not proof of a deploy: the two halves deploy separately, and either can fail on its own.
-
-Settings, manual commands, release checks and what to do when a deploy does not land are in [DEPLOYMENT.md](DEPLOYMENT.md) and [docs/operations.md](docs/operations.md). Do not commit secrets, generated build folders or personal exports.
+```text
+frontend/
+  index.html                    shell markup and the pre-paint script (theme, app style, festival)
+  src/main.tsx                  boot: migrations, global styles, render, service worker
+  src/router/                   routes; every page is a lazy chunk
+  src/layouts/AppLayout.tsx     the frame: sidebar, top bar, dock, player, overlays; applies the look
+  src/pages/  src/components/   routed pages and shared UI
+  src/features/                 feature folders (home, settings, ai, together, tutorials, festival, …)
+  src/store/                    zustand stores (player, settings, library, history, …)
+  src/services/                 recommendation, personalization, api, ai, audio, media-session, storage
+  src/constants/                app styles, festivals, version, the What's New card
+  src/styles/                   tokens (index.css), frame (shell.css), templates/, festivals.css, pages/
+  public/sw.js  public/admin/   service worker; owner console
+  native-android/  scripts/  e2e/
+backend/
+  worker/index.ts               router
+  worker/functions/api/         public, AI, cron and admin endpoints
+  worker/functions/_lib/        AI lanes, admin auth, catalogue, rate limits, push
+  worker/wrangler.toml          Worker name, routes, vars, bindings, cron triggers
+docs/                           current documentation; docs/history/ holds dated records
+.github/workflows/              CI, browser suite, Worker deploy, Android builds, scheduled jobs
+```
 
 ## Documentation
 
 | Document | What it covers |
 | --- | --- |
-| [docs/README.md](docs/README.md) | The index |
-| [docs/architecture.md](docs/architecture.md) | The pieces and how data flows between them |
-| [docs/recommendations.md](docs/recommendations.md) | The next-song pipeline, weights, session intent, discovery modes, the queue rules |
-| [docs/ai.md](docs/ai.md) | AI lanes, failover and cooldowns, each AI route's contract (embeddings included), budgets, behaviour with every provider down |
-| [docs/trends.md](docs/trends.md) | Verified trend ingestion: providers, what each one's rules allow, matching, momentum, admin review |
-| [docs/evaluation.md](docs/evaluation.md) | The offline evaluation of next-song selection, and how to read an A/B result honestly |
-| [docs/audit-7.2.md](docs/audit-7.2.md) | The 7.2 review: findings, evidence, fixes and validation |
-| [docs/progress-7.2.md](docs/progress-7.2.md) | What 7.2 landed, what is deferred, and the decisions still owed |
-| [docs/design-system.md](docs/design-system.md) | The Marigold tokens and display face, the frosted material scale, snackbars, control scale, overlays, motion, the top bar actions slot |
-| [docs/data-and-privacy.md](docs/data-and-privacy.md) | What is stored where, the backup format, restore rules, what leaves the device |
-| [docs/testing.md](docs/testing.md) | Unit and browser tests, fixtures, the bundle budget, verifying a commit in a worktree |
-| [docs/admin-console.md](docs/admin-console.md) | The owner console: sections, server-side auth, flags, Home layout publishing |
-| [docs/android.md](docs/android.md) | The Android project, native media service, downloads, updates, device-only checks |
-| [docs/operations.md](docs/operations.md) | Secrets, scheduled jobs, monitoring, runbooks, rollback |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Hosting settings, deploy commands, release checks |
-| [docs/fcm-push-setup.md](docs/fcm-push-setup.md) | Setting up Android background notifications |
-| [docs/qa-device-script.md](docs/qa-device-script.md) | The real-device checklist |
-| [docs/legal-copyright.md](docs/legal-copyright.md) | Legal and copyright notes |
+| [docs/README.md](docs/README.md) | The full index |
+| [docs/architecture.md](docs/architecture.md) | The pieces and how data flows, including the look pipeline |
+| [docs/design-system.md](docs/design-system.md) | Tokens, app styles, themes, accents, festival skins, chat styles, shared components |
+| [docs/recommendations.md](docs/recommendations.md) | How the next song is chosen |
+| [docs/ai.md](docs/ai.md) | AI lanes, failover, route contracts |
+| [docs/data-and-privacy.md](docs/data-and-privacy.md) | What is stored where and what leaves the device |
+| [docs/testing.md](docs/testing.md) | Gates, contract tests, the browser suite, the bundle budget |
+| [docs/android.md](docs/android.md) | The Android project and what needs a device |
+| [DEPLOYMENT.md](DEPLOYMENT.md), [docs/operations.md](docs/operations.md) | Deploying, secrets, scheduled jobs, runbooks |
+| [docs/admin-console.md](docs/admin-console.md) | The owner console |
 | [docs/user-guide/README.md](docs/user-guide/README.md) | The guide for listeners |
-| [frontend/README.md](frontend/README.md), [backend/README.md](backend/README.md) | Short per-package notes |
-| [docs/history/README.md](docs/history/README.md) | Dated release write-ups, audits and phase plans, kept as written |
+| [frontend/README.md](frontend/README.md), [backend/README.md](backend/README.md) | Per-package notes |
+
+## How releases work
+
+1. Work on a branch. A release changes these together: `version` in `frontend/package.json` (and the root entry of its `package-lock.json`), `version` in `backend/package.json` when the Worker changed, `LATEST_VERSION` and `DISPLAY_VERSION` in `frontend/src/constants/version.ts`, and a new What's New card at the top of `frontend/src/constants/changelog.ts`.
+2. Open a pull request. `ci.yml` runs lint, typecheck, unit tests, the build and the bundle budget for the frontend, and lint, typecheck, tests and a Worker dry-run for the backend. `e2e.yml` builds the app and runs the browser suite.
+3. Merge to `main`. The static host builds `frontend/` and publishes the site. When `backend/**` changed, the Deploy Worker workflow deploys the Worker. Another workflow builds the Android package.
+4. Verify production. The two halves deploy separately and either can fail alone; a merged commit is not proof of a deploy. See [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Contributing rules that are enforced
+
+| Rule | Enforced by |
+| --- | --- |
+| No lint warnings, no type errors | `npm run lint` (`--max-warnings 0`) and `npm run typecheck` in both packages, in CI |
+| Tests pass | `npm test` in both packages; `npm run e2e` in its own workflow |
+| First-load JavaScript stays under 188 KB gzipped (80 KB per first-load chunk, 160 KB per on-demand chunk) | `node scripts/check-bundle-size.mjs` in CI |
+| Inline scripts in `index.html` match the content-security policy | `frontend/src/__tests__/cspHashes.test.ts`; after changing an inline script, build and run `node scripts/csp-hashes.mjs` |
+| Every app style keeps its contract (contrast, festival stand-down, pre-paint canvas, no other product's name) | `frontend/src/constants/templates.test.ts` |
+| Every Worker handler is routed | `backend/worker/__tests__/routerCoverage.test.ts` |
+| No third-party product or company names in interface text, comments, tests or documents | Review; the style and chat-style tests check their own lists. The documentation conventions in [docs/README.md](docs/README.md) state the exceptions |
+
+Do not commit secrets, generated build folders or personal exports.
+
+## Privacy and legal
+
+There is no account. Library, history, settings, the taste profile and AI chats stay on the device; searching and AI features send only what [docs/data-and-privacy.md](docs/data-and-privacy.md) lists, and usage statistics are sent only when the listener opts in. The repository carries no licence file; the legal position on content, takedowns and listener data is in [docs/legal-copyright.md](docs/legal-copyright.md).

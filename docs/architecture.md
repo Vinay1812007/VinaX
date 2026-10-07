@@ -1,6 +1,6 @@
 # Architecture
 
-This document names the pieces of VinaX and shows how data moves between them: the app shell and its routes, the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, the service worker, the Worker's routes and the owner console. It describes the code as of 10.2: the shell and Home sections were updated for 9.0 and 10.0, the catalogue client for 10.1's allotment, the Listen Together engine is new in 10.0, and 10.2 removed the web search pipeline and the host behind it; the rest has held since 7.2. Deep dives live in [recommendations.md](recommendations.md), [ai.md](ai.md), [data-and-privacy.md](data-and-privacy.md), [design-system.md](design-system.md), [android.md](android.md) and [admin-console.md](admin-console.md).
+This document is a map of VinaX: the two deployed services, the app shell and its routes, how the look is applied (app style, theme, accent, festival skin, and the chat styles of VinaX AI), the stores and how they persist, the catalogue client, the audio engine with its media session and native bridge, Listen Together, the service worker, the Worker's routes and the owner console. Each section names the files to open.
 
 ## The pieces
 
@@ -34,7 +34,7 @@ This document names the pieces of VinaX and shows how data moves between them: t
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-VinaX deploys as two services: the static site and the Worker. (Until 10.2 there was a third, the owner's web search instance; it is retired, see [operations.md](operations.md#retired-web-search-102).) The frontend is a static build. The Worker owns every dynamic URL on the same domain, so the app calls same-origin paths and needs no cross-origin setup on the web. The Android app runs the same bundle from a local origin, so its clients call the production origin by absolute URL (see `isNativePlatform()` checks in `src/services/ai/*.ts` and `src/services/analytics/telemetry.ts`).
+VinaX deploys as two services: the static site and the Worker. The frontend is a static build. The Worker owns every dynamic URL on the same domain, so the app calls same-origin paths and needs no cross-origin setup on the web. The Android app runs the same bundle from a local origin, so its clients call the production origin by absolute URL (see `isNativePlatform()` checks in `src/services/ai/*.ts` and `src/services/analytics/telemetry.ts`).
 
 | Layer | Packages (from `frontend/package.json` and `backend/package.json`) |
 | --- | --- |
@@ -49,15 +49,38 @@ VinaX deploys as two services: the static site and the Worker. (Until 10.2 there
 `src/main.tsx` runs in this order:
 
 1. Imports `services/storage/earlyMigrations` first, so renamed storage keys are in place before any store rehydrates.
-2. Renders `<App />` and loads the four global style sheets: `index.css` (tokens and base primitives), `shell.css` (the frame and shared primitives), `features.css` (a few global feature surfaces) and `festivals.css`. Since 9.0 `shell.css` replaces 8.0's `flow.css` + `stage.css` pair. Page styles load with their lazy page chunks (see [design-system.md](design-system.md)).
+2. Renders `<App />` and loads the five global style sheets in this order: `index.css` (tokens and base primitives), `shell.css` (the frame and shared primitives), `features.css` (a few global feature surfaces), `templates/index.css` (the app styles) and `festivals.css` (generated festival skins). Page styles in `styles/pages/` ship with their lazy page.
 3. Removes the `boot-still` class after the first painted frame, and clears the boot-recovery counters in `sessionStorage`.
 4. Listens for `vite:preloadError`. When a lazy chunk fails to load after a deploy, the page reloads once per session. It does not reload when offline.
 5. Sets `device-phone|tablet|desktop|tv` and `pointer-coarse|pointer-fine` classes on `<html>`, so styles can key on capability instead of width alone.
 6. Registers `/sw.js` in production builds on the web, and asks it to precache the full asset graph on every boot and whenever the network returns.
 
-`src/layouts/AppLayout.tsx` is the frame for every route except VinaX AI. It renders the sidebar (from 768px; always the 80px rail below 1100px), the top bar, the routed page inside an error boundary (the workspace is a rounded sheet inside the chrome), the player (a compact card above the five-destination tab bar on phones and tablets, the floating deck from 1024px), the Now Playing panel on wide workspaces, snackbars (`components/Toasts.tsx`, 10.1), the welcome sheet, the command palette and — only while a Listen Together session is live — the lazily loaded `TogetherController` (see [Listen Together](#listen-together-100)). It also runs the one-time bootstrap: storage migrations, `initEngine()` on the player store, downloads, telemetry (consent-gated), lock-screen lyrics, TV spatial navigation, the alarm, the output watcher, the DJ voice and cast. A module-level flag keeps that bootstrap from running again when the layout remounts after a visit to `/VinaXAI`.
+`src/layouts/AppLayout.tsx` is the frame for every route except VinaX AI. It renders the sidebar (from 768px; always the 80px rail below 1100px), the top bar, the routed page inside an error boundary (the workspace is a rounded sheet inside the chrome), the player (a compact card above the five-destination tab bar on phones and tablets, the floating deck from 1024px), the Now Playing panel on wide workspaces, snackbars (`components/Toasts.tsx`), the welcome sheet, the command palette and — only while a Listen Together session is live — the lazily loaded `TogetherController` (see [Listen Together](#listen-together)). It also runs the one-time bootstrap: storage migrations, `initEngine()` on the player store, downloads, telemetry (consent-gated), lock-screen lyrics, TV spatial navigation, the alarm, the output watcher, the DJ voice and cast. A module-level flag keeps that bootstrap from running again when the layout remounts after a visit to `/VinaXAI`.
 
 The layout also owns scroll memory per history entry, hardware-back handling for overlays, and the wheel rescue described in [design-system.md](design-system.md#overlays).
+
+## The look: app style, theme, accent, festival
+
+Four settings and the calendar decide how the app is painted. The rules are in [design-system.md](design-system.md); this is the path the data takes.
+
+```text
+settingsStore (vinax.settings.v1): template, theme, accent, accentCustom, dynamicTheme, highContrast
+      │
+      ├─ before first paint: inline script in frontend/index.html
+      │     reads the stored settings ─► html[data-template], theme classes, canvas colour,
+      │     and html.fest-<id> from the inlined festival window table
+      │
+      └─ at run time: an effect in src/layouts/AppLayout.tsx
+            resolveTheme(pref) ─► applyThemeClasses(resolved, root, template)   (src/utils/theme.ts)
+                 .light / .dark / .amoled, data-template, <html> background, theme-color meta
+            data-accent, or a custom ramp from src/utils/accentRamp.ts
+            ▼
+      CSS: styles/index.css ─► shell.css ─► features.css ─► templates/ ─► festivals.css ─► lazy pages/*.css
+```
+
+- **App style.** `src/constants/templates.ts` lists the six styles; `TEMPLATE_CANVAS` in `utils/theme.ts` and the table in the pre-paint script hold each style's canvas and must agree. `src/features/settings/TemplatePicker.tsx` writes the setting; the welcome sheet's "Pick your look" step writes the same one. The setting is part of a backup.
+- **Festival.** `src/constants/festivals.ts` holds the dates, `festivalThemes.ts` the palettes, `festivalVisuals.ts` and `festivalEmblems.ts` the emblem, particles, blurb and search query. `npm run gen:festivals` turns them into `src/styles/festivals.css`, `public/admin/festivals.js` and the window table in `index.html`. At run time `components/FestiveSplash.tsx` shows the greeting card, `features/home/FestivalBanner.tsx` the Home strip, `features/festival/festivalPreview.ts` the session-only preview, and `services/recommendation/festival.ts` lets the date inform picks.
+- **VinaX AI chat styles.** The chat page is outside `AppLayout` and has a second, scoped layer: `src/features/ai/chat/chatStyle.ts` maps the selected model's maker family to one of nine styles, `ChatStyleScope.tsx` writes `data-chat-style` and the `data-cs-*` layout attributes on `.ai-root` and `.ai-scope`, and `src/styles/ai-styles.css` styles only those. The preference is stored under `vinax.ai.chatStyle`.
 
 ## Routing and lazy chunks
 
@@ -105,7 +128,7 @@ Catalogue reads go through `orchestratedRequest()` in `src/services/api/client.t
 
 **The fallback ladder.** `constants/endpoints.ts` lists the catalogue bases: a dedicated catalogue API host, the same-origin Worker catalogue at `/api/cat` (web only), and the production origin's `/api/cat`. `VITE_API_BASES` replaces the list at build time, and the owner console can switch individual bases off (`setDisabledSources`). For each request the client:
 
-1. **Allots** the request across the bases with the in-memory health registry (`services/api/health.ts`, rewritten in 10.1). Each base is ranked by its **expected time to success**: its latency average (an exponentially weighted mean of answer times), plus the odds of failing — a recency-weighted success rate, smoothed so a fresh base counts as 50/50 — times what a failure costs (at least 2 s, or the base's own latency), stretched by half again for each consecutive failure. A fast base that fails half the time therefore ranks behind a slower one that always answers. Bases with a free slot come first, full ones next, cooling ones last. Three failures in a row cool a base for 60 seconds; all bases are still tried when every one is cooling.
+1. **Allots** the request across the bases with the in-memory health registry (`services/api/health.ts`). Each base is ranked by its **expected time to success**: its latency average (an exponentially weighted mean of answer times), plus the odds of failing — a recency-weighted success rate, smoothed so a fresh base counts as 50/50 — times what a failure costs (at least 2 s, or the base's own latency), stretched by half again for each consecutive failure. A fast base that fails half the time therefore ranks behind a slower one that always answers. Bases with a free slot come first, full ones next, cooling ones last. Three failures in a row cool a base for 60 seconds; all bases are still tried when every one is cooling.
 2. Picks the order by **priority** (`RequestPriority`, set by the caller):
    - `interactive` — the Search page, the typeahead and song lookups (`getSong`): best base first, **hedged**. If that base has not answered within its own p75 answer time (the latency average plus 0.675 of its deviation, bounded to 350–900 ms), the same request starts on the next base; the first valid answer wins and the other is aborted. An aborted loser counts as slow, never as failed. One hedge per pass.
    - `background` — shelves, recommendations and prefetch (the default for catalogue searches): the first base is **drawn at random, weighted by health** (1 / expected time) among the ready ones, so prefetch traffic spreads instead of queueing on the top base; the rest follow in rank order. Never hedged.
@@ -115,7 +138,7 @@ Catalogue reads go through `orchestratedRequest()` in `src/services/api/client.t
 5. Walks each allotted base, trying each path dialect the caller listed, and runs the caller's validator on the payload. A payload the validator rejects is a soft miss: the next dialect is tried and the base takes no health strike. An HTTP 404 is treated the same way — the route is missing there, the base is not down. Any other failure records a health strike and moves to the next base.
 6. Makes up to two full passes, pausing 600 ms before the second.
 
-**Sharing identical calls (10.1).** A caller can pass `cacheMs`. Catalogue searches and song lookups use 5 seconds (`SEARCH_MEMO_MS`): identical requests in flight at the same time share one network call (each caller can still cancel its own share; the call is aborted only when every sharer has left), and an answer is reused for 5 seconds (at most 40 kept). This is what lets the Search page's typeahead and its All tab ask the same combined search once.
+**Sharing identical calls.** A caller can pass `cacheMs`. Catalogue searches and song lookups use 5 seconds (`SEARCH_MEMO_MS`): identical requests in flight at the same time share one network call (each caller can still cancel its own share; the call is aborted only when every sharer has left), and an answer is reused for 5 seconds (at most 40 kept). This is what lets the Search page's typeahead and its All tab ask the same combined search once.
 
 **Deadlines.** Each attempt has an 8-second timeout (`REQUEST_TIMEOUT_MS`). The whole ladder has a 20-second budget (`REQUEST_DEADLINE_MS`, overridable per request). The last attempt before the deadline only gets the time that is left, and an attempt cut short by the deadline does not count against the base's health.
 
@@ -137,7 +160,7 @@ Payloads are normalised in `services/api/normalize.ts`. The catalogue API descri
 
 `src/services/native/index.ts` is the small bridge for everything else native: platform checks, notification permission, and helpers used by downloads and updates. [android.md](android.md) covers the native side.
 
-## Listen Together (10.0)
+## Listen Together
 
 Before 10.0 a session lived in the Listen Together page's component state: a host who opened Search to pick the next song, or a guest who opened the lyrics, unmounted the page, and the host stopped broadcasting or the guest stopped following, with nothing on screen saying so. A reload lost the room. 10.0 moves the session to the app.
 
@@ -155,7 +178,7 @@ Before 10.0 a session lived in the Listen Together page's component state: a hos
 
 **Reactions.** Each poll returns the last few seconds of reactions; `ReactionFeed` identifies them by stamp and emoji instead of comparing server time with the device clock, primes on the first poll so nothing from before you arrived floats, and skips the echo of your own tap.
 
-**Server.** `functions/api/room.ts` keeps rooms and members in the database. 10.0 sizes its per-address rate limits for a room on one Wi-Fi (about six devices behind one address: 200 GETs, 90 heartbeats, 60 updates, 30 requests and 30 reactions a minute), and when the database lacks the atomic request-append function it falls back to a read-modify-write instead of failing every guest request.
+**Server.** `functions/api/room.ts` keeps rooms and members in the database. It sizes its per-address rate limits for a room on one Wi-Fi (about six devices behind one address: 200 GETs, 90 heartbeats, 60 updates, 30 requests and 30 reactions a minute), and when the database lacks the atomic request-append function it falls back to a read-modify-write instead of failing every guest request.
 
 ## Service worker
 

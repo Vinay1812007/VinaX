@@ -609,7 +609,7 @@ export function OnboardingSheet() {
           ) : stage === 'songs' ? (
             <>
               {title('Tap songs you like')}
-              {lede('Home starts from the songs you pick here. They are saved to Favorites on this device.')}
+              {lede('Home starts from the songs you pick here. They are saved to Liked songs on this device.')}
               {seedSongs.length === 0 ? (
                 <div className="grid grid-cols-3 gap-3 mt-5" aria-hidden>
                   {Array.from({ length: 12 }).map((_, i) => <div key={i} className="aspect-square rounded-lg skeleton" />)}
@@ -667,7 +667,7 @@ export function OnboardingSheet() {
               onClick={() => { finish(); useTutorialStore.getState().start('first-song'); }}
               className="flex-1 h-12 rounded-full btn-secondary text-[15px]"
             >
-              Live walkthrough
+              Take a tour
             </button>
           )}
           <button
