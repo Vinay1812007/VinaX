@@ -165,12 +165,12 @@ describe('maestro transport — streaming (8.1.0)', () => {
     expect((calls[0].body.generationConfig as Record<string, unknown>).responseMimeType).toBe('application/json');
   });
 
-  it('10.2 — an answer that lists outside pages never passes them on', async () => {
+  it('11.0 — grounding metadata comes back as a structured `grounding` field, never inside the text', async () => {
     install(() => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Plain' }] }, groundingMetadata: { groundingChunks: [{ web: { uri: 'https://news.example/x', title: 'X' } }] } }] }), { status: 200 }));
     const res = await maestroFetch('AQ.k', 'm', payload);
     const j = (await res.json()) as Record<string, unknown>;
     expect((j.choices as Array<{ message: { content: string } }>)[0].message.content).toBe('Plain');
-    expect(JSON.stringify(j)).not.toContain('news.example');
+    expect(j.grounding).toEqual({ items: [{ url: 'https://news.example/x', title: 'X' }], queries: [], entry: null });
   });
 
   it('the OpenAI-compatible endpoint streams as served', async () => {

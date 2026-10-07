@@ -91,6 +91,78 @@ html.light[data-template]:not([class*='fest-']) {
 }
 html.light[data-template]:not([class*='fest-']) body { background-color: rgb(var(--ink-900)); }
 
+/* ------------------------------------------------- 11.0 — light is glass too */
+/* The light theme used to be white panes on a near-white canvas: frost over
+   white reads as paint, however much blur it carries. Light now has a canvas
+   worth seeing through — the style's accent, its second colour and the
+   playing artwork as three soft lights behind everything — and thinner,
+   bluer frost on every bar and sheet, so the glass is the look rather than a
+   setting. The fills where text sits keep the 10.1 floors (chrome 0.8,
+   thick 0.86): muted text on 80% white over a black cover is exactly where
+   AA (4.5:1) still holds — asserted per style in constants/templates.test.ts.
+   The glass comes from the lights behind, the saturation and the blur, not
+   from thinner frost. */
+html.light[data-template]:not([class*='fest-']) {
+  --vx-mat-thin: rgb(var(--ink-950) / calc(var(--glass-alpha) * 0.5));
+  --vx-mat-regular: rgb(var(--ink-950) / clamp(0.4, calc(var(--glass-alpha) - 0.25), 0.85));
+  --vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.02), 0.94));
+  --vx-mat-thick: rgb(var(--ink-950) / clamp(0.86, calc(var(--glass-alpha) + 0.08), 0.96));
+  --vx-mat-thin-blur: calc(18px + var(--glass-blur-boost) * 30px);
+  --vx-mat-chrome-blur: calc(22px + var(--glass-blur-boost) * 36px);
+  --vx-mat-thick-blur: calc(28px + var(--glass-blur-boost) * 40px);
+  --vx-mat-sat: calc(150% + (1 - var(--glass-alpha)) * 60%);
+  --vx-mat-specular: rgb(255 255 255 / 0.95);
+  --vx-mat-hairline: rgb(var(--ink-100) / 0.08);
+  --vx-mat-art: 0.16;
+  --vx-mesh-ember: 0.22;
+  --vx-mesh-tide: 0.16;
+  /* Raised surfaces in light are translucent white, not paint. */
+  --vxh-tile-bg: rgb(var(--ink-950) / 0.62);
+  --vxh-tile-hover: rgb(var(--ink-950) / 0.86);
+  --glass-bg: rgb(var(--ink-950) / clamp(0.5, calc(var(--glass-alpha) - 0.2), 0.9));
+  --glass-border: rgb(255 255 255 / 0.7);
+  --vx-border: rgb(var(--ink-100) / 0.08);
+}
+/* The three lights behind the panes: accent low left, second colour top
+   right, the playing artwork top left. Painted once on the shell; the panes'
+   frost reads them. */
+html.light[data-template]:not([class*='fest-']) .vx-shell {
+  position: relative;
+  isolation: isolate;
+}
+html.light[data-template]:not([class*='fest-']) .vx-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(55% 48% at 4% 96%, rgb(var(--ember-500) / 0.26), transparent 70%),
+    radial-gradient(50% 44% at 96% 4%, rgb(var(--tide-500) / 0.22), transparent 70%),
+    radial-gradient(60% 50% at 14% 10%, rgb(var(--art) / 0.34), transparent 72%),
+    radial-gradient(40% 40% at 70% 70%, rgb(var(--ember-300) / 0.14), transparent 70%);
+}
+/* The workspace sheet is frost over the lights, not a solid page. */
+html.light[data-template]:not([class*='fest-']) .vx-workspace {
+  background:
+    radial-gradient(820px 320px at 12% -140px, rgb(var(--ember-500) / var(--vx-mesh-ember)), transparent 70%) local,
+    radial-gradient(700px 300px at 92% -140px, rgb(var(--tide-500) / var(--vx-mesh-tide)), transparent 70%) local,
+    rgb(var(--ink-900) / 0.55);
+}
+/* Cards and tiles: translucent white with a lit edge; no blur on scrolling
+   content (that is the one rule of the material system). */
+html.light[data-template]:not([class*='fest-']) :is(.vxh-tile, .vxh-card, .vxh-shortcut, .vxh-disclose, .glass-card, .glass-panel, .vx-lt-card, .vx-help-tile, .vx-panel) {
+  background: rgb(var(--ink-950) / 0.62);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(var(--ink-100) / 0.06);
+}
+html.light[data-template]:not([class*='fest-']) :is(.vxh-tile, .vxh-card, .vxh-shortcut):hover { background: rgb(var(--ink-950) / 0.86); }
+html.light[data-template]:not([class*='fest-']) .vxh-hero { background: rgb(var(--ink-950) / 0.6); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(var(--ink-100) / 0.06), 0 24px 60px -36px rgb(var(--ink-100) / 0.3); }
+html.light[data-template]:not([class*='fest-']) .vx-library { background: rgb(var(--ink-950) / 0.5); }
+html.light[data-template]:not([class*='fest-']) .vx-settings { --set-card: rgb(var(--ink-950) / 0.66); }
+html.light[data-template]:not([class*='fest-']) :is(.glass-input, .glass-search, .vx-set-input) { background: rgb(var(--ink-950) / 0.7); }
+/* Prefers-reduced-transparency and no-backdrop-filter fallbacks in index.css
+   still force solid surfaces; nothing here outranks them. */
+
 /* ------------------------------------------ switches that outrank a template */
 /* AMOLED is true black in every style: only the deepest tiers move, the
    style's own greys, accent, shapes and layout stay. `:not(#_)` lifts these

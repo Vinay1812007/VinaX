@@ -97,7 +97,7 @@ You can also control the player by message: “play *song*”, “queue *song*�
 
 ## What it can and cannot know
 
-VinaX AI has no live web access. It answers from what the model learned, so news, charts and release dates may be out of date, and it is asked to say so. It knows your music taste only as far as the app sends it with a question, and it can use the song playing now only if you switch that on.
+VinaX AI can look things up on the web in one case: when the model answering is **Gemini 2.5 Flash** (or Flash-Lite) — pick it in the model menu, or leave Auto on and ask about something current (news, prices, weather, scores, "today", "latest", a recent year). The reply then shows a **Sources** row: the pages it drew on, a "Searched the web" note, and the provider's search suggestions. There is nothing to switch on. Other models answer from what they learned, so news, charts and release dates may be out of date, and they are asked to say so. Local dates and times follow your coarse location when **Settings → Region & privacy → Allow region inference** is on; there is no separate Place switch any more.
 
 ## AI Playlist
 

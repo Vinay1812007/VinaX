@@ -63,6 +63,26 @@ html.light .ai-scope {
   --ai-composer-shadow: 0 1px 2px rgb(48 22 34 / 0.06), 0 16px 36px -22px rgb(48 22 34 / 0.28);
   --ai-menu-shadow: 0 16px 36px -12px rgb(48 22 34 / 0.22), 0 2px 6px rgb(48 22 34 / 0.08);
 }
+/* 11.0 — light is glass on the AI page too: the same three lights as the
+   app shell behind the chat list, a frosted conversation sheet and a frosted
+   composer (see styles/templates/base.css for the app-wide rule). Tokens
+   only: a chat style's own light palette still wins (ai-styles.css loads
+   later), and the fills stay at or above the 10.1 floors where text sits. */
+html.light .ai-shell.ai-root {
+  --ai-chrome: transparent;
+  --ai-bg: rgb(var(--ink-900) / 0.62);
+  --ai-panel: rgb(var(--ink-950) / 0.55);
+  --ai-raised: rgb(var(--ink-950) / 0.72);
+  --ai-raised-hover: rgb(var(--ink-950) / 0.92);
+  --ai-composer: rgb(var(--ink-950) / 0.86);
+  background:
+    radial-gradient(55% 48% at 4% 96%, rgb(var(--ember-500) / 0.22), transparent 70%),
+    radial-gradient(50% 44% at 96% 4%, rgb(var(--tide-500) / 0.2), transparent 70%),
+    radial-gradient(60% 50% at 14% 10%, rgb(var(--art) / 0.3), transparent 72%),
+    rgb(var(--ink-800));
+}
+html.light .ai-root .ai-sidebar { -webkit-backdrop-filter: blur(24px) saturate(150%); backdrop-filter: blur(24px) saturate(150%); }
+html.light .ai-root .ai-composer { -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%); }
 .ai-shell.ai-root {
   background: var(--ai-chrome);
   font-weight: 500;
@@ -1186,7 +1206,8 @@ button.ai-track-main:focus-visible .ai-track-over { opacity: 1; }
   left: 0;
   z-index: 50;
   width: min(21rem, calc(100vw - 2.5rem));
-  max-height: min(72dvh, 38rem);
+  /* 11.0 — the composer measures the room on each open (--ai-menu-max). */
+  max-height: min(var(--ai-menu-max, 72dvh), 38rem);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -2193,7 +2214,7 @@ html.reduce-motion .ai-thinking-text { background: none; color: var(--ai-text-2)
    of the screen; keep it on screen (it scrolls) so Run code and the Create
    entries at its end stay reachable. */
 @media (max-width: 639px) {
-  .ai-tools-menu-down { max-height: min(50dvh, 38rem); }
+  .ai-tools-menu-down { max-height: min(var(--ai-menu-max, 50dvh), 38rem); }
 }
 /* The Runs code tag in the model menu, and Run code's quiet chip note. */
 .ai-badge-code { background: var(--vx-accent-wash); color: rgb(var(--ember-300)); }
@@ -2201,6 +2222,49 @@ html.light .ai-badge-code { color: rgb(var(--ember-500)); }
 .ai-conn-chip-note { color: var(--ai-text-3); font-weight: 550; }
 .ai-ran-code { gap: 4px; color: rgb(var(--ember-300)); background: var(--vx-accent-wash); }
 html.light .ai-ran-code { color: rgb(var(--ember-500)); }
+/* 11.0 — a model row's tags wrap as one group on the right, so the name keeps
+   at least half the row even with Vision, Runs code and Searches the web. */
+.ai-model-badges { display: flex; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 50%; }
+/* 11.0 — the Searches the web tag in the model menu, and the globe chip on a reply. */
+.ai-badge-web { background: rgb(var(--tide-500) / 0.14); color: rgb(var(--tide-400)); }
+html.light .ai-badge-web { color: rgb(var(--tide-500)); }
+.ai-web-chip { gap: 0; padding: 0 6px; color: rgb(var(--tide-400)); background: rgb(var(--tide-500) / 0.12); }
+html.light .ai-web-chip { color: rgb(var(--tide-500)); }
+
+/* 11.0 — Sources under a web-grounded reply: a caption, up to eight pills and
+   the provider's search-suggestion snippet in a sealed frame. Tokens only, so
+   every chat style keeps it readable; the row wraps inside the reply column
+   and never widens it or pushes the composer. */
+.ai-sources { display: grid; gap: 0.5rem; min-width: 0; max-width: 100%; margin-top: 0.75rem; }
+.ai-sources-cap { display: inline-flex; align-items: center; gap: 0.375rem; color: var(--ai-text-3); font-size: 11.5px; font-weight: 650; letter-spacing: 0.01em; }
+.ai-sources-list { display: flex; flex-wrap: wrap; gap: 0.375rem; margin: 0; padding: 0; list-style: none; }
+.ai-sources-list li { min-width: 0; max-width: 100%; }
+.ai-source {
+  display: inline-block;
+  max-width: min(18rem, 100%);
+  min-height: 1.75rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--ai-line);
+  border-radius: 9999px;
+  background: rgb(var(--ink-100) / 0.05);
+  color: var(--ai-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background-color 140ms var(--ease-calm), border-color 140ms var(--ease-calm);
+}
+.ai-source:hover { background: var(--ai-hover); border-color: var(--ai-line-strong); color: var(--ai-text); }
+.ai-source:focus-visible { outline: 2px solid rgb(var(--ember-500)); outline-offset: 2px; }
+/* The frame's own colour scheme is left neutral so it stays transparent on a
+   dark page (a mismatched scheme paints an opaque white canvas); the snippet
+   brings its own light and dark styling. */
+.ai-sources-entry { display: block; width: 100%; max-width: 100%; height: 64px; max-height: 72px; border: 0; border-radius: 12px; background: transparent; color-scheme: normal; overflow: hidden; }
+html.reduce-motion .ai-source { transition: none; }
+@media (prefers-reduced-motion: reduce) { .ai-source { transition: none; } }
 
 /* Create image / Create music clip: what the next message makes, and by whom. */
 .ai-create-bar {

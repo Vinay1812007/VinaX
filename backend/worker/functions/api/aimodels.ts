@@ -20,11 +20,14 @@
  *     media: [ { id, name, maker, kind: 'image' | 'speech' | 'transcription'
  *                | 'music' | 'embedding', voices?: string[] } ],
  *     tools: [ { id: 'code_execution', name: 'Code execution',
- *                models: string[] } ]          // chat ids that can run it
- *   features: { image, speech, transcription, music, code }   // booleans
+ *                models: string[] },           // chat ids that can run it
+ *              { id: 'web_search', name: 'Web search',
+ *                models: string[] } ]          // 11.0: Gemini 2.5 Flash ids
+ *   features: { image, speech, transcription, music, code, web }   // booleans
  *
- * Same rules as the chat list (see _lib/catalog.ts "Media and tools"). No
- * web tool is ever listed (10.2).
+ * Same rules as the chat list (see _lib/catalog.ts "Media and tools"). The
+ * only web tool is the Gemini provider's own search grounding (11.0); no
+ * third-party search or browsing system is listed.
  *
  * Always the four providers, in that order. `name` is the model's original
  * published name and `maker` who made it; `id` is the exact slug to send back

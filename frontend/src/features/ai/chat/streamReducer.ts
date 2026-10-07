@@ -8,6 +8,8 @@
  *             tools? } }           sent again if a failover changes engine.
  *                                  `tools` (10.3): tools that were on for it
  *   { delta: "text" }              the next piece of the reply
+ *   { sources: { items, queries,   11.0: the pages a web-grounded reply drew
+ *                entry } }          on (Gemini 2.5 Flash only); old clients ignore it
  *   { done: true, truncated? }     the end; `truncated` = cut short mid-reply
  *
  * Parsing used to live inline in the page's send() loop, tangled with React
@@ -17,6 +19,8 @@
  * is covered by a unit test instead of by hope. Fields this build does not
  * know (an older server's extra meta, any other frame kind) are ignored.
  */
+
+import type { MsgSources } from './types';
 
 export interface StreamState {
   /** The reply so far. */
@@ -29,6 +33,8 @@ export interface StreamState {
   provider: string;
   /** 10.3 — tools that were on for the answering model (`['code_execution']`). */
   tools: string[];
+  /** 11.0 — the pages a grounded reply drew on (null until the event arrives). */
+  sources: MsgSources | null;
   /** The service said the reply was cut short. */
   truncated: boolean;
   done: boolean;
@@ -42,6 +48,7 @@ export const initialStreamState = (): StreamState => ({
   modelId: '',
   provider: '',
   tools: [],
+  sources: null,
   truncated: false,
   done: false,
   malformed: 0,
@@ -72,6 +79,27 @@ export function splitFrames(buffer: string): { frames: unknown[]; rest: string }
   return { frames, rest: buf };
 }
 
+/** 11.0 — a `sources` payload, validated: http(s) urls only, de-duplicated, at
+ *  most 8, titles clipped; queries as strings; the snippet as a string or null.
+ *  Null when nothing usable is in it. Exported for tests. */
+export function readSources(raw: unknown): MsgSources | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as { items?: unknown; queries?: unknown; entry?: unknown };
+  const items: MsgSources['items'] = [];
+  const seen = new Set<string>();
+  for (const it of Array.isArray(r.items) ? r.items : []) {
+    const url = typeof (it as { url?: unknown })?.url === 'string' ? (it as { url: string }).url.trim() : '';
+    if (!/^https?:\/\/\S+$/i.test(url) || seen.has(url)) continue;
+    seen.add(url);
+    const t = (it as { title?: unknown }).title;
+    items.push({ url, title: typeof t === 'string' ? t.replace(/\s+/g, ' ').trim().slice(0, 120) : '' });
+    if (items.length >= 8) break;
+  }
+  const queries = (Array.isArray(r.queries) ? r.queries : []).filter((q): q is string => typeof q === 'string' && !!q.trim()).slice(0, 8);
+  const entry = typeof r.entry === 'string' && r.entry.trim() ? r.entry : null;
+  return items.length || queries.length || entry ? { items, queries, entry } : null;
+}
+
 /** Fold one frame into the state. Never throws; returns the SAME object when
  *  the frame changed nothing, so callers can skip a re-render. */
 export function reduceFrame(state: StreamState, frame: unknown): StreamState {
@@ -83,6 +111,7 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     done?: unknown;
     truncated?: unknown;
     meta?: { model?: unknown; modelId?: unknown; provider?: unknown; tools?: unknown } | null;
+    sources?: unknown;
   };
   let next = state;
   const set = (patch: Partial<StreamState>): void => {
@@ -103,6 +132,10 @@ export function reduceFrame(state: StreamState, frame: unknown): StreamState {
     }
   }
   if (typeof f.delta === 'string' && f.delta) set({ text: next.text + f.delta });
+  if (f.sources !== undefined) {
+    const sources = readSources(f.sources);
+    if (sources) set({ sources });
+  }
   if (f.done === true && !next.done) set({ done: true });
   return next;
 }

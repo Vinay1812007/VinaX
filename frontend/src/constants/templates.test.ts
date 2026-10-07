@@ -188,6 +188,27 @@ describe('app styles × accents', () => {
   });
 });
 
+describe('app styles: light glass keeps text legible', () => {
+  // 11.0 — in the light theme every bar is frost (base.css floors: chrome
+  // 0.62, thick 0.72 of the style's white). Whatever scrolls under it — a
+  // black cover at worst — the text on it must clear AA. (0.8 is the lowest
+  // white that keeps muted text at 4.5:1 over black; thinner frost fails.)
+  const shared = read('../styles/templates/base.css');
+  it('declares the floors', () => {
+    expect(shared).toContain('--vx-mat-chrome: rgb(var(--ink-950) / clamp(0.8, calc(var(--glass-alpha) + 0.02), 0.94));');
+    expect(shared).toContain('--vx-mat-thick: rgb(var(--ink-950) / clamp(0.86, calc(var(--glass-alpha) + 0.08), 0.96));');
+  });
+  const over = (fill: RGB, alpha: number, backdrop: RGB): RGB => fill.map((c, i) => c * alpha + backdrop[i] * (1 - alpha)) as RGB;
+  it.each(TEMPLATE_IDS.map((id) => [id]))('%s: muted text on the chrome and body text on sheets, over a black cover', (id) => {
+    const t = resolved(id).light;
+    const black: RGB = [0, 0, 0];
+    expect(ratio(t['ink-400'], over(t['ink-950'], 0.8, black)), `${id} ink-400 on chrome`).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(t['ink-100'], over(t['ink-950'], 0.86, black)), `${id} ink-100 on thick`).toBeGreaterThanOrEqual(7);
+    expect(ratio(t['ink-400'], over(t['ink-950'], 0.86, black)), `${id} ink-400 on thick`).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(t['ember-400'], over(t['ink-950'], 0.86, black)), `${id} accent text on thick`).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe('app styles: the shared layer', () => {
   const shared = read('../styles/templates/base.css');
   it('keeps AMOLED black and high contrast above every style', () => {

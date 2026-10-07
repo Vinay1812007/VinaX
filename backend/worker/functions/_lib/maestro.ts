@@ -57,6 +57,9 @@ interface ChatPayload {
   /** 10.3 — run Gemini's code execution tool (the provider's own sandbox,
    * never the Worker). Native endpoints only; never a web tool. */
   code_execution?: unknown;
+  /** 11.0 — Gemini's search grounding (the provider's own web search). Native
+   * endpoints only. Code execution wins when both are asked for. */
+  web_search?: unknown;
 }
 
 /** 10.3 — executed code and its output as fenced Markdown, so every client
@@ -134,15 +137,50 @@ export function toNativeRequest(payload: ChatPayload, withThinking = true): Reco
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     contents: contents.length ? contents : [{ role: 'user', parts: [{ text: ' ' }] }],
     generationConfig,
-    // 10.3 — the code execution tool, when asked. Nothing else is ever put in
-    // `tools`: no search, no URL context (10.2).
-    ...(payload.code_execution === true ? { tools: [{ codeExecution: {} }] } : {}),
+    // 10.3 — the code execution tool, when asked. 11.0 — or the provider's own
+    // search grounding (`googleSearch`, lowerCamelCase like `codeExecution`;
+    // the REST JSON accepts both spellings). Grounding and code execution are
+    // not combined: code wins when both are asked for. Nothing else is ever
+    // put in `tools` (no URL context, no third-party search).
+    ...(payload.code_execution === true ? { tools: [{ codeExecution: {} }] } : payload.web_search === true ? { tools: [{ googleSearch: {} }] } : {}),
   };
 }
 
 interface NativeAnswer {
-  candidates?: Array<{ content?: { parts?: NativePart[] }; finishReason?: unknown }>;
+  candidates?: Array<{ content?: { parts?: NativePart[] }; finishReason?: unknown; groundingMetadata?: unknown }>;
   usageMetadata?: { promptTokenCount?: unknown; candidatesTokenCount?: unknown; thoughtsTokenCount?: unknown };
+}
+
+/** 11.0 — what a grounded answer drew on, as VinaX forwards it to the client:
+ * the pages (de-duplicated by url, http(s) only, at most 8, titles clipped),
+ * the queries the model ran, and the provider's search-suggestion snippet
+ * (`searchEntryPoint.renderedContent`, HTML the client shows in a sandbox —
+ * showing it is a condition of the free grounding service). */
+export interface GroundingSources {
+  items: Array<{ url: string; title: string }>;
+  queries: string[];
+  entry: string | null;
+}
+export function groundingSources(raw: unknown): GroundingSources | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const g = raw as { groundingChunks?: unknown; webSearchQueries?: unknown; searchEntryPoint?: { renderedContent?: unknown } | null };
+  const items: Array<{ url: string; title: string }> = [];
+  const seen = new Set<string>();
+  for (const c of Array.isArray(g.groundingChunks) ? g.groundingChunks : []) {
+    const web = (c as { web?: { uri?: unknown; title?: unknown } } | null)?.web;
+    const url = typeof web?.uri === 'string' ? web.uri.trim() : '';
+    if (!/^https?:\/\/\S+$/i.test(url) || seen.has(url)) continue;
+    seen.add(url);
+    items.push({ url, title: (typeof web?.title === 'string' ? web.title : '').replace(/\s+/g, ' ').trim().slice(0, 120) });
+    if (items.length >= 8) break;
+  }
+  const queries = (Array.isArray(g.webSearchQueries) ? g.webSearchQueries : [])
+    .filter((q): q is string => typeof q === 'string' && !!q.trim())
+    .map((q) => q.trim().slice(0, 200))
+    .slice(0, 8);
+  const rendered = g.searchEntryPoint?.renderedContent;
+  const entry = typeof rendered === 'string' && rendered.trim() ? rendered.slice(0, 20_000) : null;
+  return items.length || queries.length || entry ? { items, queries, entry } : null;
 }
 
 /** A native answer as a chat-completions body (thought parts dropped). */
@@ -152,10 +190,12 @@ export function fromNativeAnswer(answer: NativeAnswer, model: string): Record<st
   const u = answer.usageMetadata;
   const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   const finish = typeof cand?.finishReason === 'string' ? cand.finishReason.toLowerCase() : 'stop';
+  const grounding = groundingSources(cand?.groundingMetadata);
   return {
     model,
     choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: finish === 'max_tokens' ? 'length' : finish }],
     ...(u ? { usage: { prompt_tokens: num(u.promptTokenCount), completion_tokens: num(u.candidatesTokenCount) + num(u.thoughtsTokenCount) } } : {}),
+    ...(grounding ? { grounding } : {}),
   };
 }
 
@@ -170,7 +210,8 @@ const json = (body: unknown, status = 200): Response => new Response(JSON.string
 function asSse(body: Record<string, unknown>): Response {
   const choices = body.choices as Array<{ message?: { content?: string } }> | undefined;
   const text = choices?.[0]?.message?.content ?? '';
-  const chunks = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n${body.usage ? `data: ${JSON.stringify({ choices: [], usage: body.usage })}\n\n` : ''}data: [DONE]\n\n`;
+  const grounding = body.grounding ? `data: ${JSON.stringify({ choices: [], grounding: body.grounding })}\n\n` : '';
+  const chunks = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n${grounding}${body.usage ? `data: ${JSON.stringify({ choices: [], usage: body.usage })}\n\n` : ''}data: [DONE]\n\n`;
   return new Response(chunks, { status: 200, headers: { 'content-type': 'text/event-stream' } });
 }
 
@@ -185,6 +226,8 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
   const encoder = new TextEncoder();
   let buf = '';
   let usage: Record<string, unknown> | null = null;
+  // 11.0 — grounding metadata (usually on the last chunk); the fullest wins.
+  let grounding: GroundingSources | null = null;
   const frame = (obj: unknown): Uint8Array => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
   const handle = (line: string, controller: TransformStreamDefaultController<Uint8Array>): void => {
     if (!line.startsWith('data:')) return;
@@ -199,6 +242,8 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
     const parts = j.candidates?.[0]?.content?.parts ?? [];
     const text = parts.map(partText).join('');
     if (text) controller.enqueue(frame({ choices: [{ delta: { content: text } }] }));
+    const g = groundingSources(j.candidates?.[0]?.groundingMetadata);
+    if (g && (!grounding || g.items.length >= grounding.items.length)) grounding = g;
     const u = j.usageMetadata;
     if (u && typeof u.promptTokenCount === 'number') {
       const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -218,6 +263,9 @@ function nativeStreamToSse(upstream: ReadableStream<Uint8Array>): ReadableStream
       },
       flush(controller) {
         if (buf.trim()) handle(buf.trim(), controller);
+        // One extra OpenAI-shaped frame with no delta: the chat route turns it
+        // into its own `sources` event.
+        if (grounding) controller.enqueue(frame({ choices: [], grounding }));
         if (usage) controller.enqueue(frame({ choices: [], usage }));
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       },
@@ -229,8 +277,9 @@ async function tryMode(mode: MaestroMode, key: string, model: string, payload: C
   const stream = payload.stream === true;
   if (mode === 'openai') {
     // The OpenAI-compatible endpoint streams OpenAI-shaped SSE itself.
-    const { code_execution: _code, ...plain } = payload;
+    const { code_execution: _code, web_search: _web, ...plain } = payload;
     void _code;
+    void _web;
     return fetch(OPENAI_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
@@ -357,8 +406,9 @@ export async function maestroFetch(rawKey: string, requested: string, payload: C
   // A pasted secret often carries a trailing newline or spaces.
   const key = rawKey.trim();
   const model = swap ? maestroModelFor(requested) : requested;
-  // 10.3 — code execution is a native-API tool: the OpenAI-compatible door is skipped for it.
-  const modes = payload.code_execution === true ? maestroModes(key).filter((m) => m !== 'openai') : maestroModes(key);
+  // 10.3 — code execution is a native-API tool: the OpenAI-compatible door is
+  // skipped for it. 11.0 — so is search grounding.
+  const modes = payload.code_execution === true || payload.web_search === true ? maestroModes(key).filter((m) => m !== 'openai') : maestroModes(key);
   let last: Response | null = null;
   for (let i = 0; i < modes.length; i += 1) {
     const mode = modes[i];

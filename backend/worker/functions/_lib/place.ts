@@ -11,9 +11,12 @@
  * send (see src/features/ai/chat/buildChatRequest.ts). Three rules hold it
  * honest:
  *
- *   1. Nothing is sent unless the listener's region-inference setting allows it,
- *      and nothing here infers a place from a request. If the client sends no
- *      place, the prompt falls back to IST exactly as 9.0 did.
+ *   1. Nothing is sent unless the listener's region-inference setting allows it.
+ *      11.0 — a client that sends no usable place gets the EDGE's coarse place
+ *      instead (edgePlace: the same four fields /api/geo returns, read from
+ *      request.cf), so local dates and times are right without a switch; a
+ *      client that says `{ off: true }` (the region setting is off) gets none,
+ *      and the prompt falls back to IST exactly as 9.0 did.
  *   2. It is never presented as precise. A city is labelled "approximate", and
  *      the model is told plainly that this is a coarse network-level hint, not
  *      the listener's address or their whereabouts right now.
@@ -24,6 +27,8 @@
  * No IP address ever reaches this module (or the client that feeds it): /api/geo
  * returns coarse fields only.
  */
+
+import { placeName, readCountry, readTimezone } from '../api/geo';
 
 /** A coarse place, as the client may send it. Every field optional. */
 export interface CoarsePlace {
@@ -68,6 +73,30 @@ export function readCoarsePlace(raw: unknown): CoarsePlace | null {
   const city = country ? name(p.city, 80) : null;
   if (!country && !timezone) return null;
   return { country, region, city, timezone, source };
+}
+
+/** 11.0 — the client said, explicitly, "send no place" (`{ off: true }`). */
+export function placeOptOut(raw: unknown): boolean {
+  return !!raw && typeof raw === 'object' && !Array.isArray(raw) && (raw as { off?: unknown }).off === true;
+}
+
+/** 11.0 — a coarse place from the edge request: `request.cf` country / region /
+ * approximate city / time zone — exactly what /api/geo returns, with the same
+ * readers — tagged `source: 'edge'`. Null when the edge could not place the
+ * connection. No IP address is read or kept. */
+export function edgePlace(request: Request): CoarsePlace | null {
+  const cf = (request as Request & { cf?: { country?: unknown; region?: unknown; city?: unknown; timezone?: unknown } }).cf ?? {};
+  const country = readCountry(request.headers.get('CF-IPCountry')) ?? readCountry(cf.country);
+  const timezone = readTimezone(cf.timezone);
+  if (!country && !timezone) return null;
+  return { country, region: country ? placeName(cf.region, 60) : null, city: country ? placeName(cf.city, 80) : null, timezone, source: 'edge' };
+}
+
+/** 11.0 — the place for one chat request: an explicit opt-out → none (the IST
+ * line); a valid client place → that; a missing or invalid one → the edge's. */
+export function requestPlace(raw: unknown, request: Request): CoarsePlace | null {
+  if (placeOptOut(raw)) return null;
+  return readCoarsePlace(raw) ?? edgePlace(request);
 }
 
 /** Is this zone one ICU will accept? A bad zone must not throw mid-request. */
@@ -118,7 +147,7 @@ export function placeContextLines(place: CoarsePlace | null, now: Date = new Dat
       ? 'the listener set this themselves in Settings'
       : place.source === 'browser'
         ? 'derived from their device locale and time zone'
-        : 'a coarse network-level hint from the edge, accurate to a region at best';
+        : 'approximate — derived from the network connection by the edge, accurate to a region at best, not confirmed by the listener';
   return [
     clock,
     `LISTENER PLACE (${how}): ${bits.join(', ')}.`,

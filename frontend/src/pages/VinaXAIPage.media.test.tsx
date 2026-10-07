@@ -146,7 +146,9 @@ describe('VinaX AI — media and tools (10.3)', () => {
     catalog = OLD;
     mount();
     const menu = await openPlus();
-    await waitFor(() => expect(within(menu).getByRole('switch', { name: 'Place' })).toBeTruthy());
+    // 11.0 — the Place row is gone (place follows the app-wide region setting); Memory is the stored connector that is always listed.
+    await waitFor(() => expect(within(menu).getByRole('switch', { name: 'Memory' })).toBeTruthy());
+    expect(within(menu).queryByRole('switch', { name: 'Place' })).toBeNull();
     // Give the list a moment to arrive; still nothing new.
     await act(async () => {
       await Promise.resolve();

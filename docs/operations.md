@@ -71,11 +71,33 @@ This section records platform behaviour seen in production (most recently on 202
 - When the allowance is spent, the platform stops running the Worker until its daily reset and answers those routes with its own error page (error **1027**). The static app shell still loads; every `/api/*` call fails, so search, Home shelves and AI features fail or fall back to on-device paths, and shared song links show the error page.
 - It is not a code failure and a redeploy does not help.
 
-Diagnosis and fix:
+Diagnosis:
 
-1. In the hosting dashboard, open the Worker's request analytics and group the day's requests by path and by client network. The dashboard's analytics API gives the same breakdown with the operator's own `wrangler` login.
-2. Look for one path family or one client range taking most of the day. On 2026-10-06 it was a crawler rotating through addresses on the edge-rendered entity pages.
-3. Fix it at the firewall (a challenge rule for that traffic on those paths), not in code. The in-code rate limiter below runs inside the Worker, so a request it refuses has already been counted.
+1. In the hosting dashboard, open the Worker's request analytics and group the day's requests by path and by client network. The dashboard's analytics API gives the same breakdown with the operator's own `wrangler` login (the login expires; sign in again if the API answers 401).
+2. Look for one path family or one client range taking most of the day. On 2026-10-06 it was a scraper rotating fake desktop-browser user agents through thousands of IPv6 addresses on the edge-rendered entity pages: about ten requests per address, a handful of /32 prefixes, half a million requests in a week, a spike every day at the quota reset (00:00 UTC, 05:30 IST).
+
+### Scraper traffic on entity pages
+
+Two layers, and only the first one saves quota:
+
+**1. Zone edge rules (the fix).** A request on a Worker route is counted the moment it arrives, before any cache or code runs, so only a rule in front of the Worker stops the count. `backend/scripts/cf-edge-rules.mjs` creates two WAF custom rules and keeps them in step (it matches by description, so it is safe to run again):
+
+| Rule | Action | Matches |
+| --- | --- | --- |
+| VinaX entity pages: browser impostors | block | `/song/`, `/album/`, `/artist/`, `/playlist/` requests whose user agent claims a Chromium browser but carry no `sec-ch-ua` header (every real Chromium has sent it since 2020; Safari, Firefox and Chrome on iOS never say "Chrome/"), and that are not a verified bot |
+| VinaX entity pages: unverified automation | managed challenge (opt-in, `--challenge`) | the same paths for anything that is not a verified bot or a link previewer — a person sees one interstitial per browser |
+
+```sh
+# needs a token with Zone → Firewall Services → Edit for the production zone
+# (the Worker deploy token does not have it; create one in the dashboard, use it, revoke it)
+CLOUDFLARE_ZONE_TOKEN=… node backend/scripts/cf-edge-rules.mjs --dry-run   # prints the expressions
+CLOUDFLARE_ZONE_TOKEN=… node backend/scripts/cf-edge-rules.mjs             # creates / updates the block rule
+CLOUDFLARE_ZONE_TOKEN=… node backend/scripts/cf-edge-rules.mjs --challenge # also enables the challenge rule
+```
+
+The free plan allows five custom rules and no regular expressions; the script uses two rules and `starts_with()`. Verified search engines (`cf.client.bot`) are never matched, so indexing is unaffected. After running it, the Workers request graph should flatten within the hour; if a new scraper signature appears, extend the expressions in the script rather than editing the rule in the dashboard, so the repository stays the record.
+
+**2. The in-Worker guard (`backend/worker/functions/_lib/pageGuard.ts`, 11.0).** For every entity-page and hub request the Worker still receives, it decides in a few microseconds whether to render at all. A browser impostor (the same header test as the rule above), or a network reading entity pages faster than people do (30 pages a minute per address, 200 then 100 a minute per IPv6 /32 or IPv4 /24, counted with the rate-limit bindings in `wrangler.toml`), is answered with the plain app shell: one asset fetch, no catalogue subrequests, no rendered text, `cache-control: private, no-store`, header `x-vinax-page: impostor|address|network`. The request still counts against the quota — this layer protects the catalogue mirrors and the Worker's CPU, and makes the scrape worthless. Search engines and link previewers are exempt by user agent and by the platform's verified-bot flag, so a person who ever trips the budget simply gets the ordinary app for that load.
 
 ## Secrets
 

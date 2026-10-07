@@ -8,25 +8,24 @@
  *   think     — the deep engine reasons it through first     (page state)
  *   nowPlaying— the song playing now rides with the message (page state)
  *   memory    — the lines the listener asked it to remember  (./memory.ts)
- *   place     — coarse place + time zone (assistantPlace)    (this module)
  *   code      — 10.3: the model may run code to work things out (this module)
+ *
+ * 11.0 — the Place row is gone: place follows the app-wide region setting
+ * alone (src/services/location/assistantPlace.ts), and the server reads a
+ * coarse place from the connection when the client sends none. A stored
+ * `vinax.ai.placeOn` from 10.x is ignored.
  *
  * Run code is the one connector that is a TOOL rather than context: it asks
  * the answering model to run short programs, and the code and its output come
  * back inside the reply. It is listed only when the server says some model
  * can (`features.code` from GET /api/aimodels), and it is off by default.
  *
- * Place had no switch of its own: it followed the app-wide region setting.
- * That setting still decides whether a place EXISTS to send; the connector
- * adds a chat-only "do not send it" on top, on by default so nothing changes
- * for anyone who never touches it.
  */
 
-export const PLACE_ON_KEY = 'vinax.ai.placeOn';
 /** 10.3 — Run code, '1' when on. Off unless the listener switched it on. */
 export const CODE_ON_KEY = 'vinax.ai.codeOn';
 
-/** Fired on window whenever a stored connector (memory, place) changes, so a
+/** Fired on window whenever a stored connector (memory, code) changes, so a
  *  second view of the same switch (the settings dialog, the chip row) follows. */
 export const CONNECTORS_EVENT = 'vinax:ai-connectors';
 
@@ -41,24 +40,6 @@ export function notifyConnectors(): void {
 export function onConnectorsChange(cb: () => void): () => void {
   window.addEventListener(CONNECTORS_EVENT, cb);
   return () => window.removeEventListener(CONNECTORS_EVENT, cb);
-}
-
-/** The place connector: on unless the listener switched it off here. */
-export function placeConnectorOn(): boolean {
-  try {
-    return window.localStorage.getItem(PLACE_ON_KEY) !== '0';
-  } catch {
-    return true;
-  }
-}
-
-export function setPlaceConnectorOn(on: boolean): void {
-  try {
-    window.localStorage.setItem(PLACE_ON_KEY, on ? '1' : '0');
-  } catch {
-    /* private mode: the setting simply does not persist */
-  }
-  notifyConnectors();
 }
 
 /** 10.3 — Run code: off unless the listener switched it on. */
@@ -90,7 +71,7 @@ export function codeChipNote(support: CodeSupport): string | null {
   return support === 'unsupported' ? 'not available with this model' : null;
 }
 
-export type ConnectorId = 'think' | 'nowPlaying' | 'memory' | 'place' | 'code';
+export type ConnectorId = 'think' | 'nowPlaying' | 'memory' | 'code';
 
 /** One row of the Connectors list, as the menu and the chip row draw it. */
 export interface ConnectorView {
@@ -112,10 +93,6 @@ export interface ConnectorInputs {
   song?: string | null;
   memoryOn: boolean;
   memoryCount: number;
-  placeOn: boolean;
-  /** What would be sent ("Hyderabad, IN · Asia/Kolkata"), or null when the
-   *  app-wide region setting leaves nothing to send. */
-  placeLabel: string | null;
   /** 10.3 — the server can run code for some model (`features.code`). Run
    *  code is only listed when it can. */
   codeAvailable?: boolean;
@@ -144,9 +121,6 @@ export function connectorViews(s: ConnectorInputs): ConnectorView[] {
         : 'Lines you ask it to remember, kept on this device',
       on: s.memoryOn,
     },
-    s.placeLabel
-      ? { id: 'place', name: 'Place', description: `${s.placeLabel}, for local dates and times`, on: s.placeOn }
-      : { id: 'place', name: 'Place', description: 'Off in Settings: region sharing is switched off', on: false, disabled: true },
     ...(s.codeAvailable ? [codeView(s.codeOn === true, s.codeSupport ?? 'unknown')] : []),
   ];
 }

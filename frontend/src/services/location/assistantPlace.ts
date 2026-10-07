@@ -31,6 +31,24 @@ export interface AssistantPlace {
   source: 'manual' | 'edge' | 'browser';
 }
 
+/** 11.0 — what a chat request carries in `place`, now that the chat has no
+ *  Place switch of its own:
+ *    a place            — the listener allows one (manual, or inference on);
+ *    `{ off: true }`    — region inference is OFF and no override is set: the
+ *                         server then uses no place at all (not even the
+ *                         edge's) and opens with the IST clock;
+ *    undefined          — inference is on but nothing was resolved: the server
+ *                         may use the edge's coarse place for local time. */
+export function assistantPlaceRequest(): AssistantPlace | { off: true } | undefined {
+  const p = assistantPlace();
+  if (p) return p;
+  try {
+    return useSettingsStore.getState().allowRegionInference ? undefined : { off: true };
+  } catch {
+    return undefined;
+  }
+}
+
 export function assistantPlace(): AssistantPlace | undefined {
   let settings: ReturnType<typeof useSettingsStore.getState>;
   try {

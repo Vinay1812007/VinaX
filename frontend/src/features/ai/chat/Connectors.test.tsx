@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/services/location/browserSignals', () => ({ readBrowserSignals: () => ({ country: 'IN', languages: [], timezone: 'Asia/Kolkata' }) }));
 
-import { CODE_ON_KEY, PLACE_ON_KEY, activeConnectors, codeChipNote, codeConnectorOn, connectorViews, placeConnectorOn, type CodeSupport } from '@/features/ai/connectors';
+import { CODE_ON_KEY, activeConnectors, codeChipNote, codeConnectorOn, connectorViews, type CodeSupport } from '@/features/ai/connectors';
 import { MEMORY_ENABLED_KEY, MEMORY_KEY, addMemory, loadMemories, memoryEnabled, setMemoryEnabled } from '@/features/ai/memory';
 import { useSettingsStore } from '@/store/settingsStore';
 import { ConnectorChips, ConnectorList, useConnectors } from './Connectors';
@@ -50,12 +50,11 @@ describe('Connectors', () => {
     const names = within(list)
       .getAllByRole('switch')
       .map((el) => el.getAttribute('aria-labelledby') && document.getElementById(el.getAttribute('aria-labelledby')!)?.textContent);
-    expect(names).toEqual(['Think', 'Now playing', 'Memory', 'Place']);
-    // Each one has a one-line description, and Place says what it would send.
-    expect(document.getElementById(sw('Place').getAttribute('aria-describedby')!)?.textContent).toContain('Hyderabad, Telangana, IN');
-    // Defaults: everything off except Place, which has always been sent.
-    expect(within(list).getAllByRole('switch').map((el) => el.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'true']);
-    expect(chips()).toEqual(['place']);
+    // 11.0 — no Place row: place follows the app-wide region setting alone.
+    expect(names).toEqual(['Think', 'Now playing', 'Memory']);
+    // Defaults: everything off.
+    expect(within(list).getAllByRole('switch').map((el) => el.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false']);
+    expect(chips()).toEqual([]);
   });
 
   it('switches page connectors on and off, and shows the active ones as removable chips', () => {
@@ -63,25 +62,22 @@ describe('Connectors', () => {
     fireEvent.click(sw('Think'));
     fireEvent.click(sw('Now playing'));
     expect(sw('Think').getAttribute('aria-checked')).toBe('true');
-    expect(chips()).toEqual(['think', 'nowPlaying', 'place']);
+    expect(chips()).toEqual(['think', 'nowPlaying']);
     fireEvent.click(screen.getByRole('button', { name: 'Turn off Think' }));
     expect(sw('Think').getAttribute('aria-checked')).toBe('false');
-    expect(chips()).toEqual(['nowPlaying', 'place']);
+    expect(chips()).toEqual(['nowPlaying']);
   });
 
-  it('Place is a chat-only switch that sticks, and is disabled when the region setting leaves nothing to send', () => {
+  it('11.0 — there is no Place row whatever the region setting says, and a stored 10.x placeOn value changes nothing', () => {
+    localStorage.setItem('vinax.ai.placeOn', '0');
     render(<Harness />);
-    fireEvent.click(sw('Place'));
-    expect(placeConnectorOn()).toBe(false);
-    expect(localStorage.getItem(PLACE_ON_KEY)).toBe('0');
-    expect(sw('Place').getAttribute('aria-checked')).toBe('false');
+    expect(screen.queryByText('Place')).toBeNull();
+    expect(chips()).toEqual([]);
     cleanup();
     act(() => useSettingsStore.setState({ allowRegionInference: false }));
     render(<Harness />);
-    expect(sw('Place').getAttribute('aria-disabled')).toBe('true');
-    expect(document.getElementById(sw('Place').getAttribute('aria-describedby')!)?.textContent).toMatch(/region sharing is switched off/);
-    fireEvent.click(sw('Place'));
-    expect(sw('Place').getAttribute('aria-checked')).toBe('false');
+    expect(screen.queryByText('Place')).toBeNull();
+    expect(within(screen.getByRole('group', { name: 'Connectors' })).getAllByRole('switch')).toHaveLength(3);
   });
 
   it('Memory: on in one tap; off asks for a second tap before it forgets saved lines', () => {
@@ -132,14 +128,15 @@ describe('Connectors', () => {
 });
 
 describe('connectorViews / activeConnectors', () => {
-  const base = { think: false, nowPlaying: false, song: null, memoryOn: false, memoryCount: 0, placeOn: true, placeLabel: 'IN' };
+  const base = { think: false, nowPlaying: false, song: null, memoryOn: false, memoryCount: 0 };
   it('names the song that would be shared', () => {
     const v = connectorViews({ ...base, nowPlaying: true, song: 'Srivalli' }).find((x) => x.id === 'nowPlaying')!;
     expect(v.description).toBe('Share “Srivalli” with your message');
   });
-  it('never lists a disabled connector as active', () => {
-    const views = connectorViews({ ...base, placeLabel: null });
+  it('lists nothing as active when nothing is on, and never a Place row', () => {
+    const views = connectorViews(base);
     expect(activeConnectors(views).map((v) => v.id)).toEqual([]);
+    expect(views.map((v) => v.id)).toEqual(['think', 'nowPlaying', 'memory']);
   });
 });
 
@@ -189,7 +186,7 @@ describe('Run code (10.3)', () => {
     expect(codeChipNote('auto')).toBeNull();
     expect(codeChipNote('ok')).toBeNull();
     expect(codeChipNote('unknown')).toBeNull();
-    const base = { think: false, nowPlaying: false, song: null, memoryOn: false, memoryCount: 0, placeOn: false, placeLabel: 'IN' };
+    const base = { think: false, nowPlaying: false, song: null, memoryOn: false, memoryCount: 0 };
     expect(connectorViews(base).map((v) => v.id)).not.toContain('code');
     expect(connectorViews({ ...base, codeAvailable: true, codeOn: true, codeSupport: 'ok' }).find((v) => v.id === 'code')).toMatchObject({ name: 'Run code', on: true, note: null });
   });

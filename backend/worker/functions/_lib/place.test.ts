@@ -84,7 +84,7 @@ describe('placeContextLines', () => {
   it('says how the place was arrived at', () => {
     expect(placeContextLines({ country: 'LK', region: null, city: null, timezone: null, source: 'manual' }, NOW)).toMatch(/set this themselves/i);
     expect(placeContextLines({ country: 'GB', region: null, city: null, timezone: null, source: 'browser' }, NOW)).toMatch(/device locale/i);
-    expect(placeContextLines({ country: 'IN', region: null, city: null, timezone: null, source: 'edge' }, NOW)).toMatch(/coarse network-level hint/i);
+    expect(placeContextLines({ country: 'IN', region: null, city: null, timezone: null, source: 'edge' }, NOW)).toMatch(/approximate — derived from the network connection/i);
   });
 
   it('falls back to IST for a zone ICU cannot use, rather than throwing', () => {

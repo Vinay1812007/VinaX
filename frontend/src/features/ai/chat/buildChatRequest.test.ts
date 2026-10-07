@@ -2,12 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const PLACE = { country: 'IN', region: 'Telangana', city: 'Hyderabad', timezone: 'Asia/Kolkata', source: 'edge' as const };
-vi.mock('@/services/location/assistantPlace', () => ({ assistantPlace: () => PLACE }));
+let placeRequest: unknown = PLACE;
+vi.mock('@/services/location/assistantPlace', () => ({ assistantPlace: () => PLACE, assistantPlaceRequest: () => placeRequest }));
 vi.mock('@/services/ai/taste', () => ({ buildTasteSnapshot: () => ({}) }));
 vi.mock('@/services/ai/threadMemory', () => ({ extractRecommendedFromThread: () => [] }));
 vi.mock('@/services/api', () => ({ getSong: () => Promise.resolve(null) }));
 
-import { setPlaceConnectorOn } from '../connectors';
 import { buildChatRequest, type TurnSettings } from './buildChatRequest';
 
 const SETTINGS: TurnSettings = {
@@ -21,20 +21,24 @@ const SETTINGS: TurnSettings = {
 };
 const turn = { conversation: [], userMsg: { role: 'user' as const, content: 'what time is it' }, query: 'what time is it', images: [] };
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  placeRequest = PLACE;
+});
 
-describe('buildChatRequest — the Place connector', () => {
-  it('sends the place by default, exactly as before the connector existed', async () => {
+describe('buildChatRequest — place (11.0: no chat switch, the region setting alone)', () => {
+  it('sends the place the region setting allows', async () => {
     const body = await buildChatRequest(SETTINGS, turn);
     expect(body.place).toEqual(PLACE);
   });
 
-  it('sends no place once the listener switches the connector off', async () => {
-    setPlaceConnectorOn(false);
-    const body = await buildChatRequest(SETTINGS, turn);
-    expect(body.place).toBeUndefined();
-    setPlaceConnectorOn(true);
+  it('sends { off: true } when the region setting is off, and a stored 10.x placeOn value is ignored', async () => {
+    localStorage.setItem('vinax.ai.placeOn', '0');
     expect((await buildChatRequest(SETTINGS, turn)).place).toEqual(PLACE);
+    placeRequest = { off: true };
+    expect((await buildChatRequest(SETTINGS, turn)).place).toEqual({ off: true });
+    placeRequest = undefined;
+    expect((await buildChatRequest(SETTINGS, turn)).place).toBeUndefined();
   });
 });
 

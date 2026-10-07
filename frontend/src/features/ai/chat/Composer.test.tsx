@@ -59,7 +59,7 @@ function setup(over: Partial<ComposerProps> = {}): { onSend: ReturnType<typeof v
       createKind={null}
       onCreateKind={() => {}}
       createBar={null}
-      features={{ image: false, speech: false, transcription: false, music: false, code: false }}
+      features={{ image: false, speech: false, transcription: false, music: false, code: false, web: false }}
       onToolsOpen={() => {}}
       codeSupport="unknown"
       dictationPick={null}

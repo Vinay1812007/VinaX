@@ -1,14 +1,4 @@
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ChevronDownIcon, PlusIcon, WaveformIcon, XIcon } from '@/components/Icons';
 import { SlashMenu } from '@/components/ai/AiExtras';
 import {
@@ -128,6 +118,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const [progress, setProgress] = useState<{ done: number; total: number; path: string } | null>(null);
   const readAbort = useRef<AbortController | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
+  // 11.0 — where the + menu opens and how tall it may be, measured from the
+  // composer on each open: below when there is room (an empty chat has the
+  // composer mid-screen), above when it would run off the bottom, and never
+  // taller than the space on that side.
+  const [toolsPlace, setToolsPlace] = useState<{ up: boolean; maxHeight: number }>({ up: false, maxHeight: 480 });
+  const composerRef = useRef<HTMLDivElement | null>(null);
+  const measureTools = useCallback((): void => {
+    const el = composerRef.current;
+    if (!el || typeof window === 'undefined') return;
+    const r = el.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom - 20;
+    const above = r.top - 20;
+    const up = below < 320 && above > below;
+    setToolsPlace({ up, maxHeight: Math.max(200, Math.min(608, up ? above : below)) });
+  }, []);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
@@ -383,7 +388,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </div>
         )}
 
-        <div className="ai-composer">
+        <div className="ai-composer" ref={composerRef}>
           <SlashMenu
             items={slashItems}
             onPick={(c: SlashCommand) => {
@@ -456,7 +461,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 ref={toolsBtnRef}
                 type="button"
                 onClick={() => {
-                  if (!toolsOpen) onToolsOpen();
+                  if (!toolsOpen) {
+                    measureTools();
+                    onToolsOpen();
+                  }
                   setToolsOpen((v) => !v);
                 }}
                 aria-label="Attach and tools"
@@ -474,7 +482,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     ref={toolsMenuRef}
                     role="dialog"
                     aria-label="Attach and tools"
-                    className={cn('ai-popover ai-tools-menu ai-pop', docked ? 'ai-tools-menu-up' : 'ai-tools-menu-down')}
+                    className={cn('ai-popover ai-tools-menu ai-pop', docked || toolsPlace.up ? 'ai-tools-menu-up' : 'ai-tools-menu-down')}
+                    style={{ '--ai-menu-max': `${toolsPlace.maxHeight}px` } as React.CSSProperties}
                   >
                     <div role="group" aria-label="Attach">
                       <button

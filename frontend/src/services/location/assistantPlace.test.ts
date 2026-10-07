@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./browserSignals', () => ({ readBrowserSignals: () => ({ country: 'GB', languages: [], timezone: 'Europe/London' }) }));
 
-import { assistantPlace } from './assistantPlace';
+import { assistantPlace, assistantPlaceRequest } from './assistantPlace';
 import { useSettingsStore } from '@/store/settingsStore';
 
 const EDGE = { country: 'IN', regionLabel: 'Telangana', city: 'Hyderabad', timezone: 'Asia/Kolkata', source: 'edge' as const };
@@ -16,6 +16,15 @@ describe('assistantPlace — nothing leaves the device unless the listener allow
   it('sends NOTHING when inference is off and no override is set', () => {
     useSettingsStore.setState({ allowRegionInference: false, inferredRegion: EDGE });
     expect(assistantPlace()).toBeUndefined();
+  });
+
+  it('11.0 — the request form: the place when allowed, { off: true } when the setting is off, undefined when on but unresolved', () => {
+    useSettingsStore.setState({ allowRegionInference: true, inferredRegion: EDGE });
+    expect(assistantPlaceRequest()).toMatchObject({ country: 'IN', source: 'edge' });
+    useSettingsStore.setState({ allowRegionInference: false, inferredRegion: EDGE });
+    expect(assistantPlaceRequest()).toEqual({ off: true });
+    useSettingsStore.setState({ allowRegionInference: false, manualCountry: 'LK' });
+    expect(assistantPlaceRequest()).toMatchObject({ country: 'LK', source: 'manual' });
   });
 
   it('sends a manual override even when inference is off — the listener typed it', () => {

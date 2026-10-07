@@ -81,7 +81,8 @@ Status words:
 | Create music clip | provider-dependent | `POST /api/music`; hidden while no provider lists a free music model |
 | Saved prompts, slash commands | done | `features/ai/savedPrompts.ts`, `slashCommands.ts` |
 | Music commands without a model call | done | `chat/musicCommands.ts` |
-| Web search, research mode, citations, agent mode | out of scope | removed on purpose; the assistant has no live web access and its prompt says so |
+| Web search | provider-dependent | 11.0: Gemini's free search grounding on the 2.5 Flash family only (your pick, or Auto for a time-sensitive question); sources and the provider's search suggestions show under the reply. No third-party search engine, no URL fetching. |
+| Research mode, agent mode | out of scope | removed on purpose in 10.2; not re-added |
 | Per-model capability sheet | partial | the menu marks vision and code-capable models; context length is reported but not shown as a sheet |
 
 ## Personalisation, safety and privacy
