@@ -236,6 +236,10 @@ Nothing new to configure: 11.0 adds no secret, no binding, no schedule and no da
 3. Send one message in VinaX AI on Auto, and one with a model picked from a second provider.
 4. Expect different numbers on dashboards: when every engine is rate-limited, `/api/vinaxai` now answers `429` with a `retry-after` of 5 to 60 seconds, where it used to answer `500`. `/api/assistant`, `/api/dj`, `/api/playlist` and `/api/lyrics-tools` also answer `429` for an upstream rate limit. Other upstream failures are still `500`. An alert keyed on `500`s will fire less; add `429` to anything that tracks AI availability.
 5. Open the status page and the console's Overview once.
+6. **Run the edge rules once** — this is what stops the daily quota drain from the entity-page scraper: create a token with Zone → Firewall Services → Edit for the production zone, run `CLOUDFLARE_ZONE_TOKEN=… node backend/scripts/cf-edge-rules.mjs`, then revoke the token. See [Scraper traffic on entity pages](#scraper-traffic-on-entity-pages). Over the next day the Worker request graph should lose its spike at the 00:00 UTC reset.
+7. Check the page guard: `curl -sI -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" https://www.sirimillavinay.online/song/x-1 | grep -i x-vinax-page` should print `x-vinax-page: impostor` (with the block rule from step 6 live, the edge blocks it before that). A real browser, or Googlebot's user agent, gets the rendered page and no such header.
+8. Web search: `GET /api/aimodels` shows a `web_search` tool under the gemini provider when that key's catalogue lists a 2.5 Flash model, and `features.web` is true. Pick Gemini 2.5 Flash and ask about today's weather: the reply should carry a Sources row. A key with no 2.5 Flash model shows no tag and no web search; nothing breaks.
+9. Ask VinaX AI "what time is it?" with region inference on: the answer should use your local time zone.
 
 ## Search indexing checklist
 

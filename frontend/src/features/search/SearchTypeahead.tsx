@@ -51,6 +51,31 @@ export function stepSelection(current: number, delta: 1 | -1, length: number): n
 
 export const optionId = (listId: string, i: number) => `${listId}-opt-${i}`;
 
+/**
+ * 11.0.1 — a row's identity, independent of where it sits. The highlight is
+ * kept by identity, not by position: suggestions keep arriving while the
+ * listener uses the arrow keys (a slow phone, a slow network), and a list
+ * that reshapes under a positional highlight made Enter act on whatever row
+ * now sat there — a song the listener picked started a text search instead.
+ */
+export function itemKey(item: TypeaheadItem): string {
+  switch (item.kind) {
+    case 'query':
+      return `q:${item.text.trim().toLowerCase()}`;
+    case 'song':
+      return `s:${item.song.id}`;
+    case 'artist':
+      return `ar:${item.artist.id}`;
+    case 'album':
+      return `al:${item.album.id}`;
+  }
+}
+
+/** Where a highlighted row is now: its index in the current list, or -1 when it has gone. */
+export function indexOfKey(items: readonly TypeaheadItem[], key: string | null): number {
+  return key === null ? -1 : items.findIndex((it) => itemKey(it) === key);
+}
+
 type GraphemeSegmenter = new (locale?: string, options?: { granularity: 'grapheme' }) => {
   segment(input: string): Iterable<{ index: number; segment: string }>;
 };

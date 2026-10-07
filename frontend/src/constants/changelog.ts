@@ -12,6 +12,12 @@ export interface VersionInfo {
 
 /** Structured changelog for v2.0.0+; older versions use plain string arrays. */
 export const CHANGELOG_V2: Record<string, VersionInfo> = {
+  '11.0.1': {
+    title: 'Search suggestions keep your pick',
+    changes: [
+      { type: 'fixed', text: 'Search suggestions: on a slow phone or network, pressing Enter on a song you had picked with the arrow keys could start a text search instead, because new suggestions had arrived and shifted the list. The highlight now stays on the row you chose.' },
+    ],
+  },
   '11.0.0': {
     title: 'Six new looks, redrawn festival themes and a steadier VinaX AI',
     changes: [
