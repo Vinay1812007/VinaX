@@ -58,6 +58,13 @@ export default function PrivacyPage() {
           Voice chat and mic dictation use your device&rsquo;s speech engine — in supporting browsers and in the
           Android app, speech is recognised on your device — and VinaX never stores audio.
         </p>
+        <H>Username check</H>
+        <p>
+          When you choose a username, a security provider checks that a person, not a script, is asking. It looks at
+          technical signals from your browser and network for that one check, does not use cookies to follow you
+          across sites, and never receives your name, your username or your listening. Most people see nothing; some
+          are asked to tap a box.
+        </p>
         <H>Listen Together</H>
         <p>
           Rooms are ephemeral: a room code, first names, and the shared queue exist while the session lives and are

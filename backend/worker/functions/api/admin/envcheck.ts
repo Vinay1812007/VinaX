@@ -23,6 +23,7 @@ export const ENV_ITEMS: Array<{ name: string; group: string; required: boolean; 
   { name: 'SUPABASE_SERVICE_ROLE_KEY', group: 'Data', required: true, note: 'server-side Supabase writes' },
   { name: 'DEVICE_ID_SECRET', group: 'Data', required: true, note: 'signed device ids for telemetry' },
   { name: 'TELEMETRY_PEPPER', group: 'Data', required: false, note: 'device id hashing (falls back to DEVICE_ID_SECRET)' },
+  { name: 'TURNSTILE_SECRET_KEY', group: 'Data', required: false, note: 'human check on username claims (off when unset)' },
   { name: 'CRON_SECRET', group: 'Cron', required: true, note: 'GitHub Actions → cron endpoints' },
   { name: 'VAPID_PUBLIC_KEY', group: 'Push', required: false, note: 'web push' },
   { name: 'VAPID_PRIVATE_KEY', group: 'Push', required: false, note: 'web push' },

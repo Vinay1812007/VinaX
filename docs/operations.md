@@ -122,6 +122,7 @@ The value is typed at the prompt, never pasted into a file or a chat. `npx wrang
 | Web push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Browser notifications cannot be sent |
 | Android background push | `FCM_SERVICE_ACCOUNT` | Tokens are stored, nothing is sent ([fcm-push-setup.md](fcm-push-setup.md)) |
 | Identity signing | `TELEMETRY_PEPPER`, `DEVICE_ID_SECRET` | Fallbacks are described in `backend/.env.example` |
+| Username human check | `TURNSTILE_SECRET_KEY` | Claims are not checked; see "Human check on usernames" below |
 | Scheduled jobs | `CRON_SECRET` (also a repository Actions secret with the same value) | `/api/cron/*` rejects every call |
 | Trends | `YOUTUBE_API_KEY` and the optional `TRENDS_*` settings | See [trends.md](trends.md) |
 | Optional | `GITHUB_TOKEN` (Android update source), `NVIDIA_BASE_URL`, `VINAX_MAESTRO_MODEL`, `NOTIFY_MIN_GAP_HOURS` | Defaults apply; the update lookup is rate-limited without the token |
@@ -143,6 +144,23 @@ Four keys, one per provider; every free model and tool that provider offers runs
 
 - `GET /api/aimodels` shows which providers are configured (`configured: true|false` for each of the four). The console's env checklist shows which name each provider is using.
 - Once a provider is on its current name, its older name can be deleted with `npx wrangler secret delete <NAME> --config worker/wrangler.toml`. Nothing reads any other secret beginning `VINAX_` except `VINAX_MAESTRO_MODEL`; per-model keys left from before 10.3 can be deleted the same way.
+
+### Human check on usernames
+
+Since 11.1.0 the onboarding username claim (`POST /api/username`) carries a Turnstile token. The widget runs in interaction-only mode, so most listeners see nothing; if the check needs a tap, a small box appears under the username field. A parked claim retried later gets a temporary floating box instead.
+
+| Piece | Where |
+| --- | --- |
+| Site key (public) | `TURNSTILE_SITE_KEY` in `frontend/src/services/turnstile.ts` (or `VITE_TURNSTILE_SITE_KEY` at build time) |
+| Secret key | Worker secret `TURNSTILE_SECRET_KEY` |
+| Server check | `backend/worker/functions/_lib/turnstile.ts`, action `username` |
+| CSP | `https://challenges.cloudflare.com` in `script-src` and `frame-src` (`frontend/public/_headers`) |
+
+Widget settings (Cloudflare dashboard → Turnstile → Add widget): hostname `sirimillavinay.online` (subdomains are included), mode **Managed**, pre-clearance **off**.
+
+Turn it on in this order: ship the app with the site key first, then set the secret. With the secret set and an app that sends no token, every claim is refused (`403 challenge`) and parks as pending until the listener updates. Turn it off by deleting the secret (`npx wrangler secret delete TURNSTILE_SECRET_KEY --config worker/wrangler.toml`).
+
+It fails open where the listener is not at fault: siteverify unreachable, a 5xx, or a wrong secret (`invalid-input-secret`) lets the claim through and logs `[turnstile]` in the Worker log. A missing, forged, reused or expired token, or one minted for another action, is refused. On the app side, a refused check never stops the welcome: the claim parks and is retried with a fresh token at the next start or reconnect.
 
 ## Scheduled jobs
 

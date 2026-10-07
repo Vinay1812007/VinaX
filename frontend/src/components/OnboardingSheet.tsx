@@ -18,6 +18,7 @@ import { bestImage, FALLBACK_ART } from '@/utils/images';
 import { useLibraryStore } from '@/store/libraryStore';
 import { toast } from '@/store/toastStore';
 import { claimHandle, pendingClaim, USERNAME_RE } from '@/features/identity/handleClaim';
+import { mountHumanCheck, type HumanCheck } from '@/services/turnstile';
 import type { Song } from '@/types';
 import { Chip } from './Chip';
 import { SparkleIcon, PlayIcon, HeartIcon, CompassIcon } from './Icons';
@@ -269,6 +270,22 @@ export function OnboardingSheet() {
   // other overlays share the reference implementation instead of having none.
   useFocusTrap(dialogRef, open, () => escapeRef.current());
 
+  // 11.1.0 — the human check for the username claim. Mounted as soon as the
+  // first step shows, so the token is normally ready before Continue; the
+  // slot stays empty unless the check needs a tap.
+  const humanSlotRef = useRef<HTMLDivElement>(null);
+  const humanCheckRef = useRef<HumanCheck | null>(null);
+  useEffect(() => {
+    const slot = humanSlotRef.current;
+    if (!open || stage !== 'you' || !slot) return;
+    const check = mountHumanCheck(slot, 'username');
+    humanCheckRef.current = check;
+    return () => {
+      check.remove();
+      if (humanCheckRef.current === check) humanCheckRef.current = null;
+    };
+  }, [open, stage]);
+
   // Debounced live "already exists?" probe — the error shows while typing,
   // not only after Continue. The POST claim remains the authority.
   useEffect(() => {
@@ -374,7 +391,7 @@ export function OnboardingSheet() {
     const mine = username === getLocal<string>(KEYS.userHandle, '') || (p?.status === 'pending' && p.username === username);
     if (!mine) {
       setClaiming(true);
-      const outcome = await claimHandle(username, trimmed);
+      const outcome = await claimHandle(username, trimmed, () => humanCheckRef.current?.token() ?? Promise.resolve(null));
       setClaiming(false);
       if (outcome.status === 'taken') {
         setHandleErr(`@${username} is taken. Pick another username.`);
@@ -388,7 +405,9 @@ export function OnboardingSheet() {
         toast(
           outcome.reason === 'offline'
             ? `You are offline. @${username} will be confirmed when you reconnect.`
-            : `@${username} is not confirmed yet. VinaX will keep trying.`,
+            : outcome.reason === 'check'
+              ? `VinaX could not check that you are a person, so @${username} is not confirmed yet. It will try again.`
+              : `@${username} is not confirmed yet. VinaX will keep trying.`,
           { duration: 5000 },
         );
       }
@@ -545,6 +564,7 @@ export function OnboardingSheet() {
                   <p className="vx-welcome-msg">Other listeners find you by this. 3 to 20 letters, numbers or underscores.</p>
                 )}
               </div>
+              <div ref={humanSlotRef} className="vx-welcome-human" />
               {handleSuggestions.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className="text-[12px] font-semibold text-ink-400">Available:</span>

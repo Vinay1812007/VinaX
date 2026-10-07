@@ -8,7 +8,7 @@
  * Alice's handle silently vanished. These tests drive the real handler over
  * an in-memory stand-in for the two Supabase calls it makes.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface Row { device_id: string; username?: string | null; name?: string; last_seen?: string }
 const table = new Map<string, Row>();
@@ -148,5 +148,71 @@ describe('username claims from two clients sharing ip + user-agent', () => {
     expect(a.status).toBe(503);
     expect(a.json.error).toBe('unavailable');
     expect(rows()).toHaveLength(0);
+  });
+});
+
+describe('11.1.0 — the human check on claims', () => {
+  const guarded = { ...env, TURNSTILE_SECRET_KEY: 'turnstile-secret' };
+  /** siteverify stand-in: answers per token, records what it was sent. */
+  const verdicts: Record<string, { success: boolean; action?: string; 'error-codes'?: string[] }> = {
+    good: { success: true, action: 'username' },
+    other_form: { success: true, action: 'feedback' },
+    used: { success: false, 'error-codes': ['timeout-or-duplicate'] },
+    bad_secret: { success: false, 'error-codes': ['invalid-input-secret'] },
+  };
+  let sent: { secret: string | null; response: string | null; remoteip: string | null }[] = [];
+  let siteverifyDown = false;
+
+  beforeEach(() => {
+    sent = [];
+    siteverifyDown = false;
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+      if (siteverifyDown) throw new TypeError('network down');
+      const form = init.body as FormData;
+      const token = form.get('response') as string;
+      sent.push({ secret: form.get('secret') as string, response: token, remoteip: form.get('remoteip') as string });
+      return new Response(JSON.stringify(verdicts[token] ?? { success: false, 'error-codes': ['invalid-input-response'] }));
+    });
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function guardedClaim(body: Record<string, unknown>): Promise<{ status: number; json: ClaimReply }> {
+    const req = new Request('https://www.example.test/api/username', {
+      method: 'POST',
+      headers: { ...SHARED, 'cf-connecting-ip': testIp },
+      body: JSON.stringify(body),
+    });
+    const res = await onRequestPost({ request: req, env: guarded });
+    return { status: res.status, json: (await res.json()) as ClaimReply };
+  }
+
+  it('claims with a valid token, and siteverify gets the secret, token and ip', async () => {
+    const r = await guardedClaim({ username: 'alice', turnstile_token: 'good' });
+    expect(r.status).toBe(200);
+    expect(sent).toEqual([{ secret: 'turnstile-secret', response: 'good', remoteip: testIp }]);
+    expect(rows().map((x) => x.username)).toEqual(['alice']);
+  });
+
+  it('refuses a claim without a token, a rejected token, or a token for another action — before writing', async () => {
+    for (const turnstile_token of [undefined, '', 'forged', 'used', 'other_form', 'x'.repeat(2049)]) {
+      const r = await guardedClaim({ username: 'alice', turnstile_token });
+      expect(r.status).toBe(403);
+      expect(r.json.error).toBe('challenge');
+    }
+    expect(rows()).toHaveLength(0);
+  });
+
+  it('lets the claim through when siteverify is unreachable or the secret is wrong', async () => {
+    siteverifyDown = true;
+    expect((await guardedClaim({ username: 'alice', turnstile_token: 'good' })).status).toBe(200);
+    siteverifyDown = false;
+    expect((await guardedClaim({ username: 'bob', turnstile_token: 'bad_secret' })).status).toBe(200);
+  });
+
+  it('is off when no secret is set: no token needed, siteverify never called', async () => {
+    const r = await claim({ username: 'alice' });
+    expect(r.status).toBe(200);
+    expect(sent).toHaveLength(0);
   });
 });
