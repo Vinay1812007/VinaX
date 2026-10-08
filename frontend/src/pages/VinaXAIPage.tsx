@@ -13,6 +13,7 @@ import { Greeting, Suggestions, type QuickAction } from '@/features/ai/chat/Empt
 import { LiveVoiceHost } from '@/features/ai/chat/LiveVoiceHost';
 import { MessageList, followAfterScroll } from '@/features/ai/chat/MessageList';
 import type { MessageHandlers } from '@/features/ai/chat/Message';
+import { editedMessage, showVersion } from '@/features/ai/chat/versions';
 import { ChatStyleContext, useChatStyle } from '@/features/ai/chat/ChatStyleScope';
 import { layoutAttrs } from '@/features/ai/chat/chatStyle';
 import { ModelMenu } from '@/features/ai/chat/ModelMenu';
@@ -667,6 +668,11 @@ export default function VinaXAIPage(): ReactNode {
     // 11.0 — asking again for a picture or clip that failed goes back to the
     // maker (`retry.media`), not to the chat model.
     const mediaKind = retry ? retry.media : createKind;
+    // 11.2 — asking again (Retry, Regenerate, or an edit in place) keeps the
+    // message's earlier versions on it.
+    const keptVersions: Pick<Msg, 'versions' | 'version'> = retry?.user.versions?.length
+      ? { versions: retry.user.versions, version: retry.user.version }
+      : {};
     if (mediaKind) {
       if (!q) return;
       const kind = mediaKind;
@@ -681,7 +687,7 @@ export default function VinaXAIPage(): ReactNode {
       setBusy(true);
       updateMessages(chatId, (prev) => [
         ...(retry ? retry.history : prev),
-        { role: 'user', content: q },
+        { role: 'user', content: q, ...keptVersions },
         { role: 'assistant', content: '', creating: kind, turn },
       ]);
       setChats((prev) =>
@@ -708,7 +714,7 @@ export default function VinaXAIPage(): ReactNode {
     // 11.0 — text files AND the text read out of PDFs go to the model.
     const content = retry ? q : foldAttachments(q, attachments);
 
-    const userMsg: Msg = { role: 'user', content: content || '(image)', images: imgs.length ? imgs : undefined };
+    const userMsg: Msg = { role: 'user', content: content || '(image)', images: imgs.length ? imgs : undefined, ...keptVersions };
     const turn = `${Date.now().toString(36)}-${nextTurnNumber()}`;
     const controller = new AbortController();
     turnRef.current = turn;
@@ -879,25 +885,28 @@ export default function VinaXAIPage(): ReactNode {
 
   const messageHandlers = useStableHandlers<MessageHandlers>({
     /**
-     * Edit and resend. 9.1.0 — the version being replaced is PRESERVED: the
-     * conversation as it stands is kept as a branch chat before this one is
-     * truncated, so an edit can never destroy an answer the listener may want
-     * back. (9.0 called `slice(0, idx)` and the old turns were simply gone.)
-     * A temporary chat is the exception — keeping a branch of it on the device
-     * would defeat the point, so it is edited in place.
+     * 11.2 — Edit, in place. The message gets the new text, everything after
+     * it is asked again in THIS chat (the same path as Retry, so the model,
+     * the project and the tools behave the same), and the version it replaced
+     * — the old text and the turns that followed — stays on the message
+     * (./versions.ts), one ‹ › away. No chat is ever created by an edit (9.1.0
+     * kept a "· before edit" copy of the chat instead; editing the first
+     * message emptied the chat back to the greeting).
      */
     edit: (idx: number, content: string) => {
-      if (busy || !active) return;
-      if (!active.temporary && active.messages.length > idx) {
-        const kept: Conversation = {
-          ...freshChat(),
-          title: `${active.title} · before edit`,
-          messages: active.messages.map((m) => ({ ...m, pinned: undefined })),
-        };
-        setChats((prev) => [kept, ...prev]);
-      }
-      setActiveMessages((prev) => prev.slice(0, idx));
-      composerRef.current?.setText(content);
+      if (busy || turnRef.current || !active) return;
+      const at = active.messages[idx];
+      const text = content.trim();
+      if (!at || at.role !== 'user' || !text) return;
+      const user = editedMessage(active.messages, idx, text);
+      const next = active.messages[idx + 1];
+      // A picture or clip prompt that was edited goes back to the maker.
+      const media = next?.role === 'assistant' ? (next.media?.kind ?? next.mediaKind) : undefined;
+      void send(text, [], { history: active.messages.slice(0, idx), previousReply: '', user, media });
+    },
+    switchVersion: (idx: number, target: number) => {
+      if (busy) return;
+      setActiveMessages((prev) => showVersion(prev, idx, target) ?? prev);
     },
     rate: (idx: number, rating: 'up' | 'down') =>
       setActiveMessages((prev) => prev.map((m, k) => (k === idx ? { ...m, rating: m.rating === rating ? undefined : rating } : m))),

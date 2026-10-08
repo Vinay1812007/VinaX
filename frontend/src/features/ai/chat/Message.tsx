@@ -1,8 +1,8 @@
-import { memo, useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { EngineContext } from './ChatStyleScope';
 import { Link } from 'react-router-dom';
 import { ChatPlayerCard } from '@/components/ChatPlayerCard';
-import { SparkleIcon, WaveIcon } from '@/components/Icons';
+import { ChevronRightIcon, SparkleIcon, WaveIcon } from '@/components/Icons';
 import { RichContent } from '@/components/ai/RichContent';
 import {
   BranchIcon,
@@ -32,11 +32,17 @@ import { ProviderLogo } from './ProviderLogo';
 import type { ModelChoice, Msg, MsgSources } from './types';
 import { readPickIssue } from './streamClient';
 import { AUTO } from './models';
+import { versionOf } from './versions';
 
 /** Everything a message can ask the page to do. The object is stable (see
  *  useStableHandlers), so memoised messages do not re-render with the page. */
 export type MessageHandlers = {
+  /** 11.2 — the user message at `index` was edited to `content` (the full
+   *  text, attached-file text included): replace it and what follows, keep
+   *  the old version, and ask again. Same chat, always. */
   edit: (index: number, content: string) => void;
+  /** 11.2 — show version `target` of the edited user message at `index`. */
+  switchVersion: (index: number, target: number) => void;
   rate: (index: number, rating: 'up' | 'down') => void;
   togglePin: (index: number) => void;
   branch: (index: number) => void;
@@ -118,6 +124,72 @@ function AttachedFile({ file }: { file: AttachedText }): ReactNode {
   );
 }
 
+/** 11.2 — the listener's message edited in place: the bubble becomes a box
+ *  with the typed text (attached files and pictures stay with the message and
+ *  go out again), Cancel and Send. Enter sends, Shift+Enter is a new line,
+ *  Esc cancels. */
+function InlineEditor({
+  initial,
+  busy,
+  onCancel,
+  onSend,
+  children,
+}: {
+  initial: string;
+  busy: boolean;
+  onCancel: () => void;
+  onSend: (text: string) => void;
+  children?: ReactNode;
+}): ReactNode {
+  const [draft, setDraft] = useState(initial);
+  const box = useRef<HTMLTextAreaElement>(null);
+  // Grow with the text (up to the CSS max-height, then it scrolls).
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft]);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
+  const canSend = !busy && draft.trim().length > 0;
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancel();
+    } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      if (canSend) onSend(draft);
+    }
+  };
+  return (
+    <div className="ai-user-editor">
+      {children}
+      <textarea
+        ref={box}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={onKeyDown}
+        rows={1}
+        aria-label="Edit your message"
+        className="ai-field ai-user-editor-box"
+      />
+      <div className="ai-user-editor-actions">
+        <button type="button" onClick={onCancel} className="ai-btn" aria-label="Cancel edit">
+          Cancel
+        </button>
+        <button type="button" onClick={() => onSend(draft)} disabled={!canSend} className="ai-btn ai-btn-accent" aria-label="Send edited message">
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export const UserMessage = memo(function UserMessage({
   m,
   index,
@@ -130,23 +202,74 @@ export const UserMessage = memo(function UserMessage({
   handlers: MessageHandlers;
 }): ReactNode {
   const { typed, files } = splitAttachedText(m.content);
+  const [editing, setEditing] = useState(false);
+  const { at, count } = versionOf(m);
+  const startEdit = (): void => {
+    if (!busy) setEditing(true);
+  };
+  // The typed part is edited; the attached-file text rides along unchanged.
+  const sendEdit = (text: string): void => {
+    if (busy || !text.trim()) return;
+    setEditing(false);
+    handlers.edit(index, text.trim() + m.content.slice(typed.length));
+  };
   return (
-    <div id={`ai-msg-${index}`} className="ai-msg ai-msg-user ai-enter">
-      <div className="ai-user-bubble" onDoubleClick={() => handlers.edit(index, m.content)} title="Double-tap to edit & resend">
-        <Images images={m.images} />
-        {typed.trim() ? <p className="whitespace-pre-wrap">{typed}</p> : null}
-        {files.map((f, k) => (
-          <AttachedFile key={k} file={f} />
-        ))}
-      </div>
+    <div id={`ai-msg-${index}`} className={cn('ai-msg ai-msg-user ai-enter', editing && 'is-editing')}>
       {/* Beside the bubble, not under it: the thread keeps one rhythm. */}
-      {!busy && (
+      {!busy && !editing && (
         <div className="ai-toolbar">
-          <button type="button" onClick={() => handlers.edit(index, m.content)} className="ai-tool" title="Edit and resend">
+          <button type="button" onClick={startEdit} className="ai-tool" title="Edit this message">
             <PencilIcon /> Edit
           </button>
         </div>
       )}
+      <div className="ai-user-stack">
+        {editing ? (
+          <InlineEditor initial={typed} busy={busy} onCancel={() => setEditing(false)} onSend={sendEdit}>
+            <Images images={m.images} />
+            {files.map((f, k) => (
+              <AttachedFile key={k} file={f} />
+            ))}
+          </InlineEditor>
+        ) : (
+          <div className="ai-user-bubble" onDoubleClick={startEdit} title="Double-tap to edit">
+            <Images images={m.images} />
+            {typed.trim() ? <p className="whitespace-pre-wrap">{typed}</p> : null}
+            {files.map((f, k) => (
+              <AttachedFile key={k} file={f} />
+            ))}
+          </div>
+        )}
+        {/* 11.2 — an edited message keeps its earlier versions: ‹ 2 / 2 ›. */}
+        {count > 1 && !editing && (
+          <div className="ai-versions" role="group" aria-label="Message versions">
+            <button
+              type="button"
+              onClick={() => handlers.switchVersion(index, at - 1)}
+              disabled={busy || at === 0}
+              aria-label="Previous version"
+              title="Previous version"
+              className="ai-tool"
+            >
+              <ChevronRightIcon className="w-3.5 h-3.5 rotate-180" />
+            </button>
+            <span className="ai-versions-count" aria-live="polite">
+              <span className="sr-only">Version </span>
+              {at + 1} / {count}
+            </span>
+            <button
+              type="button"
+              onClick={() => handlers.switchVersion(index, at + 1)}
+              disabled={busy || at === count - 1}
+              aria-label="Next version"
+              title="Next version"
+              className="ai-tool"
+            >
+              <ChevronRightIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 });

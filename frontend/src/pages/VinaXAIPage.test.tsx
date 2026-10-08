@@ -389,3 +389,98 @@ describe('11.0 — turns that end badly', () => {
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
   });
 });
+
+describe('11.2 — Edit changes the message in place, in the same chat', () => {
+  const seed = (temporary = false): void =>
+    localStorage.setItem(
+      'vinax_ai_chats_v1',
+      JSON.stringify([
+        {
+          id: 'c1',
+          title: 'Two turns',
+          updatedAt: Date.now(),
+          ...(temporary ? { temporary: true } : {}),
+          messages: [
+            { role: 'user', content: 'first question' },
+            { role: 'assistant', content: 'first answer' },
+            { role: 'user', content: 'second question' },
+            { role: 'assistant', content: 'second answer' },
+          ],
+        },
+      ]),
+    );
+  const stored = (): Array<{ title: string; messages: Array<{ content: string; version?: number; versions?: unknown[] }> }> =>
+    JSON.parse(localStorage.getItem('vinax_ai_chats_v1') ?? '[]');
+
+  it('editing the FIRST message keeps the chat and its title, replaces what follows, asks again, and keeps the old version', async () => {
+    seed();
+    const { unmount } = mount();
+    await screen.findByText('second answer');
+    fireEvent.click(screen.getAllByTitle('Edit this message')[0]);
+    const editor = screen.getByRole('textbox', { name: 'Edit your message' }) as HTMLTextAreaElement;
+    expect(editor.value).toBe('first question');
+    // The chat has not changed just by opening the editor.
+    expect(screen.getByText('second answer')).toBeTruthy();
+    fireEvent.change(editor, { target: { value: 'a better question' } });
+    await act(async () => {
+      fireEvent.keyDown(editor, { key: 'Enter' });
+    });
+    await waitFor(() => expect(posted).toHaveLength(1));
+    const wire = JSON.stringify(posted[0]);
+    expect(wire).toContain('a better question');
+    expect(wire).not.toContain('first answer');
+    expect(wire).not.toContain('second question');
+    await screen.findByText('short');
+    expect(screen.queryByText('second answer')).toBeNull();
+    expect(screen.queryByText('first question')).toBeNull();
+    expect(screen.getByText('a better question')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('before edit');
+    expect(document.body.textContent).toContain('Version 2 / 2');
+
+    // ‹ brings the old message and every turn after it back, in place.
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Previous version' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous version' }));
+    expect(screen.getByText('first question')).toBeTruthy();
+    expect(screen.getByText('second answer')).toBeTruthy();
+    expect(screen.queryByText('a better question')).toBeNull();
+    expect(document.body.textContent).toContain('Version 1 / 2');
+    fireEvent.click(screen.getByRole('button', { name: 'Next version' }));
+    expect(screen.getByText('a better question')).toBeTruthy();
+    expect(screen.queryByText('second answer')).toBeNull();
+    expect(posted).toHaveLength(1);
+
+    unmount();
+    const chats = stored();
+    expect(chats).toHaveLength(1);
+    expect(chats[0].title).toBe('Two turns');
+    expect(chats[0].messages[0].content).toBe('a better question');
+    expect(chats[0].messages[0].version).toBe(1);
+    expect(chats[0].messages[0].versions).toHaveLength(2);
+  });
+
+  it('editing a later message keeps the turns before it; Esc changes nothing; a temporary chat edits the same way', async () => {
+    seed(true);
+    mount();
+    await screen.findByText('second answer');
+    fireEvent.click(screen.getAllByTitle('Edit this message')[1]);
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit your message' }), { key: 'Escape' });
+    expect(screen.queryByRole('textbox', { name: 'Edit your message' })).toBeNull();
+    expect(screen.getByText('second answer')).toBeTruthy();
+    expect(posted).toHaveLength(0);
+    fireEvent.click(screen.getAllByTitle('Edit this message')[1]);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit your message' }), { target: { value: 'second, rephrased' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send edited message' }));
+    });
+    await waitFor(() => expect(posted).toHaveLength(1));
+    const wire = JSON.stringify(posted[0]);
+    expect(wire).toContain('first answer');
+    expect(wire).toContain('second, rephrased');
+    expect(wire).not.toContain('second answer');
+    await screen.findByText('short');
+    expect(screen.getByText('first question')).toBeTruthy();
+    expect(screen.getByText('first answer')).toBeTruthy();
+    expect(screen.queryByText('second answer')).toBeNull();
+    expect(document.body.textContent).not.toContain('before edit');
+  });
+});

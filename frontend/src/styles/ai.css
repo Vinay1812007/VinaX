@@ -525,6 +525,52 @@ html.amoled .ai-main { background: #000; }
   gap: 0.25rem;
 }
 .ai-msg-user .ai-toolbar { order: -1; flex-shrink: 0; }
+/* 11.2 — the bubble, and under it the ‹ 2 / 2 › of a message edited in
+   place; while it is edited the bubble is a box as wide as the column. */
+.ai-user-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  max-width: min(85%, 36rem);
+}
+.ai-root .ai-user-stack > .ai-user-bubble { max-width: 100%; }
+.ai-msg-user.is-editing .ai-user-stack { width: min(100%, 36rem); max-width: 100%; }
+.ai-user-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem;
+  border-radius: 22px 22px 8px 22px;
+  background: var(--ai-user);
+}
+.ai-root .ai-user-editor-box {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  max-height: 50vh;
+  padding: 0.5rem 0.75rem;
+  overflow-y: auto;
+  resize: none;
+  color: var(--ai-text);
+  font: inherit;
+  line-height: 1.6;
+}
+.ai-root .ai-user-editor-box:focus { outline: none; }
+.ai-user-editor-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.ai-root .ai-user-editor-actions .ai-btn:disabled,
+.ai-root .ai-versions .ai-tool:disabled { opacity: 0.45; cursor: not-allowed; }
+.ai-versions {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  margin-top: 0.25rem;
+  color: var(--ai-text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ai-versions-count { min-width: 2.5rem; text-align: center; }
 .ai-root .ai-user-bubble {
   min-width: 0;
   max-width: min(85%, 36rem);
