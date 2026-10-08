@@ -8,6 +8,7 @@ import { followAfterScroll } from './MessageList';
 
 const handlers = (): MessageHandlers => ({
   edit: vi.fn(),
+  switchVersion: vi.fn(),
   rate: vi.fn(),
   togglePin: vi.fn(),
   branch: vi.fn(),
@@ -50,9 +51,13 @@ describe('attached files in the listener’s bubble (11.0)', () => {
     fireEvent(details, new Event('toggle'));
     expect(screen.getByText('Hide contents')).toBeTruthy();
     expect(container.querySelector('pre')?.textContent).toContain('row 150');
-    // Edit hands back everything that was sent — the file text goes out again.
-    fireEvent.click(screen.getByTitle('Edit and resend'));
-    expect(h.edit).toHaveBeenCalledWith(0, content);
+    // 11.2 — Edit opens the typed text in place; the file text goes out again with it.
+    fireEvent.click(screen.getByTitle('Edit this message'));
+    const editor = screen.getByRole('textbox', { name: 'Edit your message' }) as HTMLTextAreaElement;
+    expect(editor.value).toBe('Summarise this');
+    fireEvent.change(editor, { target: { value: 'Summarise this, briefly' } });
+    fireEvent.keyDown(editor, { key: 'Enter' });
+    expect(h.edit).toHaveBeenCalledWith(0, content.replace('Summarise this', 'Summarise this, briefly'));
   });
 
   it('a chat stored before 11.0 (file text already inside the message) and a file-only message both read cleanly', () => {
@@ -110,3 +115,69 @@ describe('following the newest reply (11.0)', () => {
     expect(at({ top: 960, lastTop: 400, pinned: false })).toEqual({ pinned: true, rescroll: false });
   });
 });
+
+describe('11.2 — editing a message in place', () => {
+  it('opens an editor in the bubble: focused, Esc cancels, Shift+Enter does not send, empty cannot send', () => {
+    const h = handlers();
+    render(<UserMessage m={{ role: 'user', content: 'hello there' }} index={2} busy={false} handlers={h} />);
+    fireEvent.click(screen.getByTitle('Edit this message'));
+    const editor = screen.getByRole('textbox', { name: 'Edit your message' }) as HTMLTextAreaElement;
+    expect(document.activeElement).toBe(editor);
+    expect(editor.value).toBe('hello there');
+    fireEvent.keyDown(editor, { key: 'Enter', shiftKey: true });
+    expect(h.edit).not.toHaveBeenCalled();
+    fireEvent.change(editor, { target: { value: '   ' } });
+    expect((screen.getByRole('button', { name: 'Send edited message' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(editor, { key: 'Enter' });
+    expect(h.edit).not.toHaveBeenCalled();
+    fireEvent.keyDown(editor, { key: 'Escape' });
+    expect(screen.queryByRole('textbox', { name: 'Edit your message' })).toBeNull();
+    expect(screen.getByText('hello there')).toBeTruthy();
+    expect(h.edit).not.toHaveBeenCalled();
+    // Cancel does the same; Send sends the new text for this message.
+    fireEvent.click(screen.getByTitle('Edit this message'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel edit' }));
+    expect(screen.queryByRole('textbox', { name: 'Edit your message' })).toBeNull();
+    fireEvent.click(screen.getByTitle('Edit this message'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit your message' }), { target: { value: 'hello again' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send edited message' }));
+    expect(h.edit).toHaveBeenCalledWith(2, 'hello again');
+    expect(screen.queryByRole('textbox', { name: 'Edit your message' })).toBeNull();
+  });
+
+  it('no Edit while a reply is being written, and the editor cannot send then', () => {
+    const h = handlers();
+    const { rerender } = render(<UserMessage m={{ role: 'user', content: 'hi' }} index={0} busy={false} handlers={h} />);
+    fireEvent.click(screen.getByTitle('Edit this message'));
+    rerender(<UserMessage m={{ role: 'user', content: 'hi' }} index={0} busy handlers={h} />);
+    expect((screen.getByRole('button', { name: 'Send edited message' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit your message' }), { key: 'Enter' });
+    expect(h.edit).not.toHaveBeenCalled();
+    cleanup();
+    render(<UserMessage m={{ role: 'user', content: 'hi' }} index={0} busy handlers={h} />);
+    expect(screen.queryByTitle('Edit this message')).toBeNull();
+  });
+
+  it('shows ‹ 2 / 2 › under an edited message, announced, and switches by index', () => {
+    const h = handlers();
+    const m = {
+      role: 'user' as const,
+      content: 'new',
+      version: 1,
+      versions: [
+        { content: 'old', after: [] },
+        { content: 'new', after: [] },
+      ],
+    };
+    const { container } = render(<UserMessage m={m} index={4} busy={false} handlers={h} />);
+    const count = container.querySelector('[aria-live="polite"]');
+    expect(count?.textContent).toBe('Version 2 / 2');
+    expect((screen.getByRole('button', { name: 'Next version' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Previous version' }));
+    expect(h.switchVersion).toHaveBeenCalledWith(4, 0);
+    cleanup();
+    render(<UserMessage m={{ role: 'user', content: 'never edited' }} index={0} busy={false} handlers={h} />);
+    expect(screen.queryByRole('button', { name: 'Previous version' })).toBeNull();
+  });
+});
+

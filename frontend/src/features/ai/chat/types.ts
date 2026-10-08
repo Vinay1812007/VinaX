@@ -110,6 +110,15 @@ export interface MsgSources {
   entry: string | null;
 }
 
+/** 11.2 — one version of an edited user message (./versions.ts): its text,
+ *  its pictures, and the turns that followed it. The version on screen keeps
+ *  `after: []` — its turns are the thread itself. */
+export interface MsgVersion {
+  content: string;
+  images?: string[];
+  after: Msg[];
+}
+
 export interface Msg {
   role: 'user' | 'assistant';
   content: string;
@@ -151,6 +160,10 @@ export interface Msg {
    *  is switched off, or has reached its limit for the day). Presentation
    *  only: the thread shows a notice that points back to the music. */
   unavailable?: boolean;
+  /** 11.2 — a user message edited in place: every version, oldest first (at
+   *  most 10), and which one is on screen. Absent until the first edit. */
+  versions?: MsgVersion[];
+  version?: number;
 }
 
 export interface Conversation {
